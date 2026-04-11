@@ -99,6 +99,10 @@ interface ElectronAPI {
   git: {
     getBranches: (repoPath: string) => Promise<string[]>
     getCurrentBranch: (repoPath: string) => Promise<string>
+    getStatus: (
+      repoPath: string,
+    ) => Promise<Array<{ status: string; file: string }>>
+    getDiff: (repoPath: string, filePath?: string) => Promise<string>
   }
   session: {
     create: (input: CreateSessionInput) => Promise<SessionData>

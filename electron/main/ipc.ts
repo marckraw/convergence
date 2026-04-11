@@ -88,6 +88,16 @@ export function registerIpcHandlers(
     gitService.getCurrentBranch(repoPath),
   )
 
+  ipcMain.handle('git:getStatus', async (_event, repoPath: string) =>
+    gitService.getStatus(repoPath),
+  )
+
+  ipcMain.handle(
+    'git:getDiff',
+    async (_event, repoPath: string, filePath?: string) =>
+      gitService.getDiff(repoPath, filePath),
+  )
+
   // Session handlers
   ipcMain.handle('session:create', (_event, input: CreateSessionInput) =>
     sessionService.create(input),

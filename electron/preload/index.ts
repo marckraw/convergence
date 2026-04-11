@@ -25,6 +25,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.invoke('git:getBranches', repoPath),
     getCurrentBranch: (repoPath: string) =>
       ipcRenderer.invoke('git:getCurrentBranch', repoPath),
+    getStatus: (repoPath: string) =>
+      ipcRenderer.invoke('git:getStatus', repoPath),
+    getDiff: (repoPath: string, filePath?: string) =>
+      ipcRenderer.invoke('git:getDiff', repoPath, filePath),
   },
   session: {
     create: (input: {

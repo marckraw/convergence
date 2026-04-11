@@ -54,6 +54,44 @@ export class GitService {
     await exec('git', args, repoPath)
   }
 
+  async getStatus(
+    repoPath: string,
+  ): Promise<Array<{ status: string; file: string }>> {
+    try {
+      const output = await exec(
+        'git',
+        ['status', '--porcelain', '-u'],
+        repoPath,
+      )
+      if (!output) return []
+      return output
+        .split('\n')
+        .filter(Boolean)
+        .map((line) => ({
+          status: line.substring(0, 2).trim(),
+          file: line.substring(3),
+        }))
+    } catch {
+      return []
+    }
+  }
+
+  async getDiff(repoPath: string, filePath?: string): Promise<string> {
+    try {
+      const args = ['diff', '--no-color']
+      if (filePath) args.push('--', filePath)
+      const staged = await exec(
+        'git',
+        [...args.slice(0, 1), '--cached', ...args.slice(1)],
+        repoPath,
+      ).catch(() => '')
+      const unstaged = await exec('git', args, repoPath).catch(() => '')
+      return [staged, unstaged].filter(Boolean).join('\n')
+    } catch {
+      return ''
+    }
+  }
+
   async removeWorktree(repoPath: string, worktreePath: string): Promise<void> {
     try {
       await exec(
