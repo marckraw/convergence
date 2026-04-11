@@ -12,6 +12,20 @@ export interface AppStateRow {
   value: string
 }
 
+export interface SessionRow {
+  id: string
+  project_id: string
+  workspace_id: string | null
+  provider_id: string
+  name: string
+  status: string
+  attention: string
+  working_directory: string
+  transcript: string
+  created_at: string
+  updated_at: string
+}
+
 export interface WorkspaceRow {
   id: string
   project_id: string

@@ -3,6 +3,7 @@ import type { Project } from '@/entities/project'
 import { Welcome } from '@/widgets/welcome'
 import { ProjectHeader } from '@/widgets/project-header'
 import { WorkspaceList } from '@/widgets/workspace-list'
+import { SessionList } from '@/widgets/session-list'
 
 interface AppShellProps {
   activeProject: Project | null
@@ -35,9 +36,9 @@ export const AppShell: FC<AppShellProps> = ({ activeProject, loading }) => {
           </p>
         </div>
         <WorkspaceList project={activeProject} />
-        <p className="mt-12 text-sm text-muted-foreground">
-          Sessions and agent tools will appear here in future phases.
-        </p>
+        <div className="mt-8 w-full max-w-2xl border-t pt-8">
+          <SessionList project={activeProject} />
+        </div>
       </main>
     </div>
   )

@@ -256,22 +256,25 @@ Co-located with source files:
 
 Each phase is self-contained and leaves the app testable end-to-end. A detailed spec is written at the start of each phase — not all upfront.
 
-| Phase | Name                       | Objective                               | Key Deliverable                   |
-| ----- | -------------------------- | --------------------------------------- | --------------------------------- |
-| 0     | Repository Bootstrap       | Disciplined repo with working toolchain | App opens, test gate passes       |
-| 1     | Project Foundation         | Project as the central domain entity    | Create/open/persist projects      |
-| 2     | Copy & Workspace           | Preserve Divergence copy workflow       | Copy repo with skip list          |
-| 3     | Agent Runtime Core         | Provider-neutral session backbone       | Fake sessions with event bus      |
-| 4     | UI-First Session Surface   | Transcript, composer, attention routing | Multi-session UX with "needs you" |
-| 5     | Real Provider Integrations | Claude Code + Codex adapters            | Run real agents against repos     |
-| 6     | Project-Aware Tooling      | Changed files, project metadata panels  | Session-to-project linking        |
-| 7     | Multi-Repo Projects        | Multiple repository roots per project   | Multi-repo project model          |
-| 8     | Terminal Surface           | Embedded terminal (deferred)            | Terminal in project context       |
+| Phase | Name                       | Objective                                 | Key Deliverable                   |
+| ----- | -------------------------- | ----------------------------------------- | --------------------------------- |
+| 0     | Repository Bootstrap       | Disciplined repo with working toolchain   | App opens, test gate passes       |
+| 1     | Project Foundation         | Project as the central domain entity      | Create/open/persist projects      |
+| 2     | Workspaces (Git Worktrees) | Parallel branch work via worktrees        | Create/manage worktrees           |
+| 3     | Agent Runtime Core         | Provider-neutral session backbone         | Fake sessions with event bus      |
+| 4     | UI-First Session Surface   | Transcript, composer, attention routing   | Multi-session UX with "needs you" |
+| 5     | Real Provider Integrations | Claude Code + Codex adapters              | Run real agents against repos     |
+| 6     | Project-Aware Tooling      | Changed files, project metadata panels    | Session-to-project linking        |
+| 7     | Multi-Agent Orchestration  | Agent-to-agent collaboration and handoffs | Conductor workflows, agent chains |
+| 8     | Multi-Repo Projects        | Multiple repository roots per project     | Multi-repo project model          |
+| 9     | Terminal Surface           | Embedded terminal (deferred)              | Terminal in project context       |
 
 ### Phase dependency chain
 
 ```
-0 → 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8
+0 → 1 → 2 → 3 → 4 → 5 → 6 ─→ 7 → 8 → 9
+                                ↑
+                          requires real providers
 ```
 
 Each phase builds on the previous. No phase should require rewriting a prior phase's core model.
@@ -282,6 +285,40 @@ Each phase builds on the previous. No phase should require rewriting a prior pha
 - tmux integration
 - Full multi-repo support from day one
 - Broad provider matrix beyond Claude Code and Codex
+- Multi-agent orchestration before real providers work (Phase 7 depends on Phase 5)
+
+## Multi-Agent Collaboration Vision
+
+Convergence's long-term differentiator: agents that collaborate, not just coexist.
+
+### The problem
+
+Today, AI coding agents work in isolation. You can run Claude Code and Codex side by side, but they don't know about each other. If Agent A writes code and Agent B should review it, _you_ are the message bus — copying context between them manually.
+
+### The solution (Phase 7)
+
+Convergence becomes the orchestration layer. Sessions can communicate, and the user defines collaboration patterns:
+
+**Level 1 — Implicit collaboration (file-level):**
+Multiple sessions on the same workspace see each other's file changes through the shared filesystem. No special wiring needed — already supported by the workspace model.
+
+**Level 2 — Explicit message passing:**
+Sessions can send messages to each other. A "conductor" (automated or user-triggered) reads output from Session A and injects it as input to Session B. The `sendMessage()` method on `SessionHandle` already supports this.
+
+**Level 3 — Orchestrated workflows:**
+User-defined workflows that chain agents: "Claude Code implements → Codex reviews → Claude Code fixes review comments → repeat until clean." The app manages handoffs and pings the user only when the cycle gets stuck or finishes.
+
+**Level 4 — Agent pipelines:**
+Declarative pipelines where output of one session feeds the next. Like CI but with agents: "Implement → Review → Fix → Test → Ship."
+
+### Architectural implications for earlier phases
+
+These decisions keep the door open for multi-agent collaboration:
+
+1. **Sessions are handles with `sendMessage()`** — a conductor is just code that calls this method
+2. **Sessions know about siblings** — query all sessions on a workspace to coordinate
+3. **Provider-neutral events** — all providers emit the same transcript format, so cross-provider collaboration works naturally
+4. **Attention model as coordination signal** — "finished" from Session A can trigger "start" on Session B
 
 ## Always-on Product Rules
 
@@ -293,6 +330,7 @@ These apply across all phases:
 4. **Provider-neutral above the adapter boundary** — session model never couples to Claude/Codex specifics
 5. **Every phase leaves the app testable end-to-end** — no phase ships a broken intermediate state
 6. **UI-first** — the transcript is the primary surface; debug panels, changed files, and metadata are secondary
+7. **Multi-agent ready** — session model and event system must support future agent-to-agent collaboration without rewrites
 
 ## Open Questions
 

@@ -3,8 +3,11 @@ import { ProjectService } from '../backend/project/project.service'
 import { StateService } from '../backend/state/state.service'
 import { WorkspaceService } from '../backend/workspace/workspace.service'
 import { GitService } from '../backend/git/git.service'
+import { SessionService } from '../backend/session/session.service'
+import { ProviderRegistry } from '../backend/provider/provider-registry'
 import type { CreateProjectInput } from '../backend/project/project.types'
 import type { CreateWorkspaceInput } from '../backend/workspace/workspace.types'
+import type { CreateSessionInput } from '../backend/session/session.types'
 
 const ACTIVE_PROJECT_KEY = 'active_project_id'
 
@@ -13,6 +16,8 @@ export function registerIpcHandlers(
   stateService: StateService,
   workspaceService: WorkspaceService,
   gitService: GitService,
+  sessionService: SessionService,
+  providerRegistry: ProviderRegistry,
 ): void {
   // Project handlers
   ipcMain.handle('project:create', (_event, input: CreateProjectInput) => {
@@ -21,13 +26,11 @@ export function registerIpcHandlers(
     return project
   })
 
-  ipcMain.handle('project:getAll', () => {
-    return projectService.getAll()
-  })
+  ipcMain.handle('project:getAll', () => projectService.getAll())
 
-  ipcMain.handle('project:getById', (_event, id: string) => {
-    return projectService.getById(id)
-  })
+  ipcMain.handle('project:getById', (_event, id: string) =>
+    projectService.getById(id),
+  )
 
   ipcMain.handle('project:delete', async (_event, id: string) => {
     const activeId = stateService.get(ACTIVE_PROJECT_KEY)
@@ -53,12 +56,10 @@ export function registerIpcHandlers(
   ipcMain.handle('dialog:selectDirectory', async (event) => {
     const window = BrowserWindow.fromWebContents(event.sender)
     if (!window) return null
-
     const result = await dialog.showOpenDialog(window, {
       properties: ['openDirectory'],
       title: 'Select a Git Repository',
     })
-
     if (result.canceled || result.filePaths.length === 0) return null
     return result.filePaths[0]
   })
@@ -66,25 +67,76 @@ export function registerIpcHandlers(
   // Workspace handlers
   ipcMain.handle(
     'workspace:create',
-    async (_event, input: CreateWorkspaceInput) => {
-      return workspaceService.create(input)
-    },
+    async (_event, input: CreateWorkspaceInput) =>
+      workspaceService.create(input),
   )
 
-  ipcMain.handle('workspace:getByProjectId', (_event, projectId: string) => {
-    return workspaceService.getByProjectId(projectId)
-  })
+  ipcMain.handle('workspace:getByProjectId', (_event, projectId: string) =>
+    workspaceService.getByProjectId(projectId),
+  )
 
   ipcMain.handle('workspace:delete', async (_event, id: string) => {
     await workspaceService.delete(id)
   })
 
   // Git handlers
-  ipcMain.handle('git:getBranches', async (_event, repoPath: string) => {
-    return gitService.getBranches(repoPath)
+  ipcMain.handle('git:getBranches', async (_event, repoPath: string) =>
+    gitService.getBranches(repoPath),
+  )
+
+  ipcMain.handle('git:getCurrentBranch', async (_event, repoPath: string) =>
+    gitService.getCurrentBranch(repoPath),
+  )
+
+  // Session handlers
+  ipcMain.handle('session:create', (_event, input: CreateSessionInput) =>
+    sessionService.create(input),
+  )
+
+  ipcMain.handle('session:getByProjectId', (_event, projectId: string) =>
+    sessionService.getByProjectId(projectId),
+  )
+
+  ipcMain.handle('session:getById', (_event, id: string) =>
+    sessionService.getById(id),
+  )
+
+  ipcMain.handle('session:delete', (_event, id: string) => {
+    sessionService.delete(id)
   })
 
-  ipcMain.handle('git:getCurrentBranch', async (_event, repoPath: string) => {
-    return gitService.getCurrentBranch(repoPath)
+  ipcMain.handle('session:start', (_event, id: string, message: string) => {
+    sessionService.start(id, message)
+  })
+
+  ipcMain.handle('session:sendMessage', (_event, id: string, text: string) => {
+    sessionService.sendMessage(id, text)
+  })
+
+  ipcMain.handle('session:approve', (_event, id: string) => {
+    sessionService.approve(id)
+  })
+
+  ipcMain.handle('session:deny', (_event, id: string) => {
+    sessionService.deny(id)
+  })
+
+  ipcMain.handle('session:stop', (_event, id: string) => {
+    sessionService.stop(id)
+  })
+
+  // Provider handlers
+  ipcMain.handle('provider:getAll', () =>
+    providerRegistry.getAll().map((p) => ({ id: p.id, name: p.name })),
+  )
+
+  // Session update event forwarding
+  sessionService.setUpdateListener((session) => {
+    const windows = BrowserWindow.getAllWindows()
+    for (const win of windows) {
+      if (!win.isDestroyed()) {
+        win.webContents.send('session:updated', session)
+      }
+    }
   })
 }

@@ -2,6 +2,7 @@ import { describe, expect, it, vi, beforeEach } from 'vitest'
 import { render, screen, waitFor } from '@testing-library/react'
 import { useProjectStore } from '@/entities/project'
 import { useWorkspaceStore } from '@/entities/workspace'
+import { useSessionStore } from '@/entities/session'
 import { App } from './App.container'
 
 vi.mock('sonner', () => ({
@@ -27,9 +28,7 @@ const mockElectronAPI = {
     getActive: vi.fn(),
     setActive: vi.fn(),
   },
-  dialog: {
-    selectDirectory: vi.fn(),
-  },
+  dialog: { selectDirectory: vi.fn() },
   workspace: {
     create: vi.fn(),
     getByProjectId: vi.fn().mockResolvedValue([]),
@@ -38,6 +37,21 @@ const mockElectronAPI = {
   git: {
     getBranches: vi.fn().mockResolvedValue([]),
     getCurrentBranch: vi.fn().mockResolvedValue('main'),
+  },
+  session: {
+    create: vi.fn(),
+    getByProjectId: vi.fn().mockResolvedValue([]),
+    getById: vi.fn(),
+    delete: vi.fn(),
+    start: vi.fn(),
+    sendMessage: vi.fn(),
+    approve: vi.fn(),
+    deny: vi.fn(),
+    stop: vi.fn(),
+    onSessionUpdate: vi.fn().mockReturnValue(() => {}),
+  },
+  provider: {
+    getAll: vi.fn().mockResolvedValue([{ id: 'fake', name: 'Fake Provider' }]),
   },
 }
 
@@ -61,6 +75,12 @@ describe('App', () => {
       loading: false,
       error: null,
     })
+    useSessionStore.setState({
+      sessions: [],
+      activeSessionId: null,
+      providers: [],
+      error: null,
+    })
   })
 
   it('shows welcome screen when no active project', async () => {
@@ -82,7 +102,7 @@ describe('App', () => {
     expect(screen.getByText('Loading...')).toBeInTheDocument()
   })
 
-  it('shows project view with workspaces section', async () => {
+  it('shows project view with sessions section', async () => {
     mockElectronAPI.project.getActive.mockResolvedValue(mockProject)
     mockElectronAPI.project.getAll.mockResolvedValue([mockProject])
 
@@ -91,7 +111,6 @@ describe('App', () => {
     await waitFor(() => {
       expect(screen.getByText('my-project')).toBeInTheDocument()
     })
-    expect(screen.getByText('/tmp/my-project')).toBeInTheDocument()
-    expect(screen.getByText('Workspaces')).toBeInTheDocument()
+    expect(screen.getByText('Sessions')).toBeInTheDocument()
   })
 })

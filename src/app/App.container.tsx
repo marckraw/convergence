@@ -1,6 +1,7 @@
 import { useEffect } from 'react'
 import { useProjectStore } from '@/entities/project'
 import { useWorkspaceStore } from '@/entities/workspace'
+import { useSessionStore } from '@/entities/session'
 import { Toaster, toast } from 'sonner'
 import { AppShell } from './App.presentational'
 
@@ -12,6 +13,8 @@ export function App() {
   const clearProjectError = useProjectStore((s) => s.clearError)
   const workspaceError = useWorkspaceStore((s) => s.error)
   const clearWorkspaceError = useWorkspaceStore((s) => s.clearError)
+  const sessionError = useSessionStore((s) => s.error)
+  const clearSessionError = useSessionStore((s) => s.clearError)
 
   useEffect(() => {
     loadActiveProject()
@@ -30,6 +33,13 @@ export function App() {
       clearWorkspaceError()
     }
   }, [workspaceError, clearWorkspaceError])
+
+  useEffect(() => {
+    if (sessionError) {
+      toast.error(sessionError)
+      clearSessionError()
+    }
+  }, [sessionError, clearSessionError])
 
   return (
     <>

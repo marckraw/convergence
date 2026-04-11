@@ -5,6 +5,9 @@ import { ProjectService } from '../backend/project/project.service'
 import { StateService } from '../backend/state/state.service'
 import { WorkspaceService } from '../backend/workspace/workspace.service'
 import { GitService } from '../backend/git/git.service'
+import { SessionService } from '../backend/session/session.service'
+import { ProviderRegistry } from '../backend/provider/provider-registry'
+import { FakeProvider } from '../backend/provider/fake-provider'
 import { registerIpcHandlers } from './ipc'
 
 function createWindow(): void {
@@ -36,14 +39,19 @@ app.whenReady().then(() => {
   const projectService = new ProjectService(db)
   const stateService = new StateService(db)
   const workspaceService = new WorkspaceService(db, gitService, workspacesRoot)
+  const providerRegistry = new ProviderRegistry()
+  const sessionService = new SessionService(db, providerRegistry)
 
   projectService.setWorkspaceService(workspaceService)
+  providerRegistry.register(new FakeProvider())
 
   registerIpcHandlers(
     projectService,
     stateService,
     workspaceService,
     gitService,
+    sessionService,
+    providerRegistry,
   )
 
   createWindow()
