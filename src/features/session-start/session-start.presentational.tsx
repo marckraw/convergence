@@ -39,19 +39,17 @@ export const SessionStartForm: FC<SessionStartFormProps> = ({
         placeholder="Session name..."
         className="flex-1"
       />
-      {providers.length > 1 && (
-        <select
-          value={selectedProviderId}
-          onChange={(e) => onProviderChange(e.target.value)}
-          className="rounded-md border border-input bg-transparent px-2 text-sm"
-        >
-          {providers.map((p) => (
-            <option key={p.id} value={p.id}>
-              {p.name}
-            </option>
-          ))}
-        </select>
-      )}
+      <select
+        value={selectedProviderId}
+        onChange={(e) => onProviderChange(e.target.value)}
+        className="rounded-md border border-input bg-background px-2 text-sm text-foreground"
+      >
+        {providers.map((p) => (
+          <option key={p.id} value={p.id}>
+            {p.name}
+          </option>
+        ))}
+      </select>
     </div>
     <div className="flex gap-2">
       <Input

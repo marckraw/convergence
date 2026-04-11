@@ -3,6 +3,7 @@ import type { FC } from 'react'
 import type { Project } from '@/entities/project'
 import type { Workspace } from '@/entities/workspace'
 import type { Session } from '@/entities/session'
+import { SessionCreateInline } from '@/features/session-create-inline'
 import { Input } from '@/shared/ui/input'
 import { SessionBadge } from '@/shared/ui/session-badge.presentational'
 import { cn } from '@/shared/lib/cn.pure'
@@ -53,26 +54,27 @@ export const ProjectTree: FC<ProjectTreeProps> = ({
       <p className="mb-1 truncate text-sm font-medium">{project.name}</p>
 
       {/* Root sessions (on main branch) */}
-      {rootSessions.length > 0 && (
-        <div className="mb-1 ml-2 border-l border-border pl-2">
-          <p className="mb-0.5 text-xs text-muted-foreground">
-            main ({rootSessions.length})
-          </p>
-          {rootSessions.map((session) => (
-            <button
-              key={session.id}
-              onClick={() => onSelectSession(session.id)}
-              className={cn(
-                'flex w-full items-center gap-1.5 rounded px-1.5 py-1 text-left text-sm transition-colors hover:bg-accent',
-                activeSessionId === session.id && 'bg-accent',
-              )}
-            >
-              <SessionBadge attention={session.attention} />
-              <span className="truncate">{session.name}</span>
-            </button>
-          ))}
+      <div className="mb-1 ml-2 border-l border-border pl-2">
+        <p className="mb-0.5 text-xs text-muted-foreground">
+          main{rootSessions.length > 0 ? ` (${rootSessions.length})` : ''}
+        </p>
+        {rootSessions.map((session) => (
+          <button
+            key={session.id}
+            onClick={() => onSelectSession(session.id)}
+            className={cn(
+              'flex w-full items-center gap-1.5 rounded px-1.5 py-1 text-left text-sm transition-colors hover:bg-accent',
+              activeSessionId === session.id && 'bg-accent',
+            )}
+          >
+            <SessionBadge attention={session.attention} />
+            <span className="truncate">{session.name}</span>
+          </button>
+        ))}
+        <div className="mt-1">
+          <SessionCreateInline projectId={project.id} workspaceId={null} />
         </div>
-      )}
+      </div>
 
       {/* Workspaces */}
       {workspaces.map((ws) => {
@@ -115,6 +117,12 @@ export const ProjectTree: FC<ProjectTreeProps> = ({
                     <span className="truncate">{session.name}</span>
                   </button>
                 ))}
+                <div className="mt-1">
+                  <SessionCreateInline
+                    projectId={project.id}
+                    workspaceId={ws.id}
+                  />
+                </div>
               </div>
             )}
           </div>

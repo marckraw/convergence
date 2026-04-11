@@ -5,6 +5,11 @@ import { tmpdir } from 'os'
 import { getDatabase, closeDatabase, resetDatabase } from '../database/database'
 import { ProviderRegistry } from '../provider/provider-registry'
 import { FakeProvider } from '../provider/fake-provider'
+import type {
+  Provider,
+  SessionHandle,
+  SessionStatus,
+} from '../provider/provider.types'
 import { SessionService } from './session.service'
 
 describe('SessionService', () => {
@@ -178,5 +183,51 @@ describe('SessionService', () => {
 
     expect(updates.length).toBeGreaterThan(0)
     expect(updates.every((id) => id === session.id)).toBe(true)
+  })
+
+  it('keeps continuation-capable sessions active after completion', () => {
+    const db = getDatabase()
+    const registry = new ProviderRegistry()
+
+    let statusListener: ((status: SessionStatus) => void) | null = null
+    const sendMessage = vi.fn()
+
+    const handle: SessionHandle = {
+      onTranscriptEntry: () => {},
+      onStatusChange: (listener) => {
+        statusListener = listener
+      },
+      onAttentionChange: () => {},
+      sendMessage,
+      approve: () => {},
+      deny: () => {},
+      stop: () => {},
+    }
+
+    const provider: Provider = {
+      id: 'continuable',
+      name: 'Continuable Provider',
+      supportsContinuation: true,
+      start: () => handle,
+    }
+
+    registry.register(provider)
+
+    const continuationService = new SessionService(db, registry)
+    const session = continuationService.create({
+      projectId,
+      workspaceId: null,
+      providerId: 'continuable',
+      name: 'continuation test',
+    })
+
+    continuationService.start(session.id, 'Start here')
+    expect(statusListener).not.toBeNull()
+    ;(statusListener as unknown as (status: SessionStatus) => void)('completed')
+
+    expect(() =>
+      continuationService.sendMessage(session.id, 'Follow up'),
+    ).not.toThrow()
+    expect(sendMessage).toHaveBeenCalledWith('Follow up')
   })
 })

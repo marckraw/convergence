@@ -1,0 +1,336 @@
+import { spawn, type ChildProcess } from 'child_process'
+import type {
+  Provider,
+  SessionStartConfig,
+  SessionHandle,
+  TranscriptEntry,
+  SessionStatus,
+  AttentionState,
+} from '../provider.types'
+import { parseJsonLines } from '../line-parser'
+
+function now(): string {
+  return new Date().toISOString()
+}
+
+interface ClaudeStreamEvent {
+  type: string
+  session_id?: string
+  event?: {
+    type: string
+    delta?: { type: string; text?: string }
+  }
+  message?: {
+    content?: Array<{
+      type: string
+      text?: string
+      name?: string
+      input?: unknown
+      tool_use_id?: string
+      content?: string | Array<{ type: string; text?: string }>
+    }>
+  }
+  is_error?: boolean
+  result?: string
+}
+
+export class ClaudeCodeProvider implements Provider {
+  id = 'claude-code'
+  name = 'Claude Code'
+  supportsContinuation = true
+
+  constructor(private binaryPath: string) {}
+
+  start(config: SessionStartConfig): SessionHandle {
+    const binaryPath = this.binaryPath
+    const listeners = {
+      transcript: [] as ((entry: TranscriptEntry) => void)[],
+      status: [] as ((status: SessionStatus) => void)[],
+      attention: [] as ((attention: AttentionState) => void)[],
+    }
+
+    let child: ChildProcess | null = null
+    let stopped = false
+    let claudeSessionId: string | null = null
+    let assistantTextBuffer = ''
+    let currentTurnHasAssistantText = false
+
+    function emit(entry: TranscriptEntry): void {
+      listeners.transcript.forEach((cb) => cb(entry))
+    }
+
+    function setStatus(status: SessionStatus): void {
+      listeners.status.forEach((cb) => cb(status))
+    }
+
+    function setAttention(attention: AttentionState): void {
+      listeners.attention.forEach((cb) => cb(attention))
+    }
+
+    function flushAssistantBuffer(): void {
+      if (assistantTextBuffer) {
+        emit({ type: 'assistant', text: assistantTextBuffer, timestamp: now() })
+        assistantTextBuffer = ''
+        currentTurnHasAssistantText = true
+      }
+    }
+
+    function handleEvent(data: unknown): void {
+      if (stopped) return
+      const event = data as ClaudeStreamEvent
+
+      // Skip non-essential event types
+      if (event.type === 'rate_limit_event') return
+
+      switch (event.type) {
+        case 'system': {
+          // Skip hook events — they're internal
+          const subtype = (event as unknown as Record<string, unknown>)
+            .subtype as string | undefined
+          if (
+            subtype === 'hook_started' ||
+            subtype === 'hook_response' ||
+            subtype === 'rate_limit_event'
+          ) {
+            break
+          }
+          if (subtype === 'init' && event.session_id) {
+            const isNewSession = claudeSessionId !== event.session_id
+            claudeSessionId = event.session_id
+            if (!isNewSession) {
+              break
+            }
+            emit({
+              type: 'system',
+              text: `Session started`,
+              timestamp: now(),
+            })
+          }
+          break
+        }
+
+        case 'stream_event':
+          if (
+            event.event?.type === 'content_block_delta' &&
+            event.event.delta?.type === 'text_delta' &&
+            event.event.delta?.text
+          ) {
+            assistantTextBuffer += event.event.delta.text
+          }
+          break
+
+        case 'assistant': {
+          // If we already streamed text via stream_events, flush that
+          // and skip text blocks in the assistant message (they're duplicates)
+          const hadStreamedText = assistantTextBuffer.length > 0
+          flushAssistantBuffer()
+          if (event.message?.content) {
+            for (const block of event.message.content) {
+              if (block.type === 'tool_use' && block.name) {
+                emit({
+                  type: 'tool-use',
+                  tool: block.name,
+                  input:
+                    typeof block.input === 'string'
+                      ? block.input
+                      : JSON.stringify(block.input, null, 2),
+                  timestamp: now(),
+                })
+              } else if (
+                block.type === 'text' &&
+                block.text &&
+                !hadStreamedText &&
+                !currentTurnHasAssistantText
+              ) {
+                emit({ type: 'assistant', text: block.text, timestamp: now() })
+                currentTurnHasAssistantText = true
+              }
+            }
+          }
+          break
+        }
+
+        case 'user':
+          if (event.message?.content) {
+            for (const block of event.message.content) {
+              if (block.type === 'tool_result') {
+                const resultText =
+                  typeof block.content === 'string'
+                    ? block.content
+                    : Array.isArray(block.content)
+                      ? block.content
+                          .filter((c) => c.type === 'text')
+                          .map((c) => c.text)
+                          .join('\n')
+                      : 'Done'
+                emit({
+                  type: 'tool-result',
+                  result: resultText,
+                  timestamp: now(),
+                })
+              }
+            }
+          }
+          break
+
+        case 'result':
+          flushAssistantBuffer()
+          if (event.is_error) {
+            emit({
+              type: 'system',
+              text: `Error: ${event.result ?? 'Unknown error'}`,
+              timestamp: now(),
+            })
+            setStatus('failed')
+            setAttention('failed')
+          } else {
+            if (!currentTurnHasAssistantText && event.result?.trim()) {
+              emit({
+                type: 'assistant',
+                text: event.result,
+                timestamp: now(),
+              })
+            }
+            setStatus('completed')
+            setAttention('finished')
+          }
+          break
+      }
+    }
+
+    function startTurn(message: string): void {
+      if (stopped || child) return
+
+      assistantTextBuffer = ''
+      currentTurnHasAssistantText = false
+      emit({ type: 'user', text: message, timestamp: now() })
+      setStatus('running')
+      setAttention('none')
+
+      const args = [
+        '-p',
+        '--output-format',
+        'stream-json',
+        '--verbose',
+        '--dangerously-skip-permissions',
+        '--include-partial-messages',
+      ]
+      if (claudeSessionId) {
+        args.push('--resume', claudeSessionId)
+      }
+
+      child = spawn(binaryPath, args, {
+        cwd: config.workingDirectory,
+        stdio: ['pipe', 'pipe', 'pipe'],
+        env: { ...process.env },
+      })
+
+      if (child.stdout) {
+        parseJsonLines(child.stdout, handleEvent, (err) => {
+          if (!stopped) {
+            emit({
+              type: 'system',
+              text: `Stream error: ${err.message}`,
+              timestamp: now(),
+            })
+          }
+        })
+      }
+
+      if (child.stderr) {
+        let stderrBuffer = ''
+        child.stderr.on('data', (chunk: Buffer) => {
+          stderrBuffer += chunk.toString()
+        })
+        child.stderr.on('end', () => {
+          if (stderrBuffer.trim() && !stopped) {
+            // Only log significant stderr
+            const significant = stderrBuffer
+              .split('\n')
+              .filter((l) => l.trim() && !l.includes('DEBUG'))
+              .join('\n')
+              .trim()
+            if (significant) {
+              emit({ type: 'system', text: significant, timestamp: now() })
+            }
+          }
+        })
+      }
+
+      // Write prompt and close stdin
+      if (child.stdin) {
+        child.stdin.write(message + '\n')
+        child.stdin.end()
+      }
+
+      child.on('exit', (code) => {
+        if (stopped) return
+        flushAssistantBuffer()
+        if (code !== 0 && code !== null) {
+          emit({
+            type: 'system',
+            text: `Process exited with code ${code}`,
+            timestamp: now(),
+          })
+          setStatus('failed')
+          setAttention('failed')
+        }
+        child = null
+      })
+
+      child.on('error', (err) => {
+        if (stopped) return
+        emit({
+          type: 'system',
+          text: `Process error: ${err.message}`,
+          timestamp: now(),
+        })
+        setStatus('failed')
+        setAttention('failed')
+        child = null
+      })
+    }
+
+    // Spawn after a tick so listeners can be attached
+    setTimeout(() => {
+      startTurn(config.initialMessage)
+    }, 10)
+
+    const handle: SessionHandle = {
+      onTranscriptEntry: (cb) => {
+        listeners.transcript.push(cb)
+      },
+      onStatusChange: (cb) => {
+        listeners.status.push(cb)
+      },
+      onAttentionChange: (cb) => {
+        listeners.attention.push(cb)
+      },
+      sendMessage: (text) => {
+        startTurn(text)
+      },
+      approve: () => {
+        // Using --dangerously-skip-permissions, no approvals needed
+      },
+      deny: () => {
+        // Using --dangerously-skip-permissions, no approvals needed
+      },
+      stop: () => {
+        stopped = true
+        if (child) {
+          child.kill('SIGTERM')
+          setTimeout(() => {
+            if (child && !child.killed) {
+              child.kill('SIGKILL')
+            }
+          }, 3000)
+          child = null
+        }
+        setStatus('failed')
+        setAttention('failed')
+      },
+    }
+
+    return handle
+  }
+}

@@ -44,5 +44,6 @@ export interface SessionHandle {
 export interface Provider {
   id: string
   name: string
+  supportsContinuation: boolean
   start: (config: SessionStartConfig) => SessionHandle
 }

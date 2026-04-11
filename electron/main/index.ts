@@ -8,6 +8,9 @@ import { GitService } from '../backend/git/git.service'
 import { SessionService } from '../backend/session/session.service'
 import { ProviderRegistry } from '../backend/provider/provider-registry'
 import { FakeProvider } from '../backend/provider/fake-provider'
+import { ClaudeCodeProvider } from '../backend/provider/claude-code/claude-code-provider'
+import { CodexProvider } from '../backend/provider/codex/codex-provider'
+import { detectProviders } from '../backend/provider/detect'
 import { registerIpcHandlers } from './ipc'
 
 function createWindow(): void {
@@ -35,7 +38,7 @@ function createWindow(): void {
   }
 }
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
   const dbPath = join(app.getPath('userData'), 'convergence.db')
   const workspacesRoot = join(app.getPath('userData'), 'workspaces')
   const db = getDatabase(dbPath)
@@ -48,7 +51,26 @@ app.whenReady().then(() => {
   const sessionService = new SessionService(db, providerRegistry)
 
   projectService.setWorkspaceService(workspaceService)
+
+  // Register FakeProvider for development
   providerRegistry.register(new FakeProvider())
+
+  // Detect and register real providers
+  const detected = await detectProviders()
+  for (const p of detected) {
+    if (p.id === 'claude-code') {
+      providerRegistry.register(new ClaudeCodeProvider(p.binaryPath))
+    } else if (p.id === 'codex') {
+      providerRegistry.register(new CodexProvider(p.binaryPath))
+    }
+  }
+
+  console.log(
+    `Providers: ${providerRegistry
+      .getAll()
+      .map((p) => p.name)
+      .join(', ')}`,
+  )
 
   registerIpcHandlers(
     projectService,

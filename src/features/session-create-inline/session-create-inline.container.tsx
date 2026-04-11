@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import type { FC } from 'react'
 import { useSessionStore } from '@/entities/session'
 import { Input } from '@/shared/ui/input'
@@ -17,7 +17,15 @@ export const SessionCreateInline: FC<SessionCreateInlineProps> = ({
   const [name, setName] = useState('')
   const [message, setMessage] = useState('')
   const [expanded, setExpanded] = useState(false)
+  const providers = useSessionStore((s) => s.providers)
+  const loadProviders = useSessionStore((s) => s.loadProviders)
   const createAndStartSession = useSessionStore((s) => s.createAndStartSession)
+
+  useEffect(() => {
+    loadProviders()
+  }, [loadProviders])
+
+  const defaultProviderId = providers[0]?.id ?? 'fake'
 
   if (!expanded) {
     return (
@@ -39,7 +47,7 @@ export const SessionCreateInline: FC<SessionCreateInlineProps> = ({
         createAndStartSession(
           projectId,
           workspaceId,
-          'fake',
+          defaultProviderId,
           name.trim(),
           message.trim(),
         )

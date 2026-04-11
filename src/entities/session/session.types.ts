@@ -41,4 +41,5 @@ export interface Session {
 export interface ProviderInfo {
   id: string
   name: string
+  supportsContinuation: boolean
 }

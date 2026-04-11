@@ -21,6 +21,7 @@ interface SessionActions {
   ) => Promise<void>
   approveSession: (id: string) => Promise<void>
   denySession: (id: string) => Promise<void>
+  sendMessageToSession: (id: string, text: string) => Promise<void>
   stopSession: (id: string) => Promise<void>
   deleteSession: (id: string, projectId: string) => Promise<void>
   setActiveSession: (id: string | null) => void
@@ -93,6 +94,17 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     }
   },
 
+  sendMessageToSession: async (id: string, text: string) => {
+    set({ error: null })
+    try {
+      await sessionApi.sendMessage(id, text)
+    } catch (err) {
+      set({
+        error: err instanceof Error ? err.message : 'Failed to send message',
+      })
+    }
+  },
+
   stopSession: async (id: string) => {
     try {
       await sessionApi.stop(id)
@@ -123,7 +135,9 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
 
   handleSessionUpdate: (session: Session) => {
     set((state) => ({
-      sessions: state.sessions.map((s) => (s.id === session.id ? session : s)),
+      sessions: state.sessions.some((s) => s.id === session.id)
+        ? state.sessions.map((s) => (s.id === session.id ? session : s))
+        : [session, ...state.sessions],
     }))
   },
 

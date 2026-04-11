@@ -14,6 +14,7 @@ function now(): string {
 export class FakeProvider implements Provider {
   id = 'fake'
   name = 'Fake Provider'
+  supportsContinuation = false
 
   start(config: SessionStartConfig): SessionHandle {
     const listeners = {

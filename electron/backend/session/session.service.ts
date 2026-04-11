@@ -111,7 +111,9 @@ export class SessionService {
 
     handle.onStatusChange((status: SessionStatus) => {
       this.updateField(id, 'status', status)
-      if (status === 'completed' || status === 'failed') {
+      if (status === 'failed') {
+        this.activeHandles.delete(id)
+      } else if (status === 'completed' && !provider.supportsContinuation) {
         this.activeHandles.delete(id)
       }
     })

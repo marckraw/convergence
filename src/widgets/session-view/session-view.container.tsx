@@ -1,19 +1,20 @@
-import { useEffect, useRef, useState, useCallback } from 'react'
+import { useEffect, useRef, useCallback } from 'react'
 import type { FC } from 'react'
+import { useProjectStore } from '@/entities/project'
 import { useSessionStore } from '@/entities/session'
+import { ComposerContainer } from '@/features/composer'
 import { Button } from '@/shared/ui/button'
-import { Input } from '@/shared/ui/input'
-import { Square, Send } from 'lucide-react'
+import { Square } from 'lucide-react'
 import { AttentionIndicator } from '@/shared/ui/attention-indicator.presentational'
 import { TranscriptEntryView } from './transcript-entry.presentational'
 
 export const SessionView: FC = () => {
+  const activeProject = useProjectStore((s) => s.activeProject)
   const activeSessionId = useSessionStore((s) => s.activeSessionId)
   const sessions = useSessionStore((s) => s.sessions)
   const approveSession = useSessionStore((s) => s.approveSession)
   const denySession = useSessionStore((s) => s.denySession)
   const stopSession = useSessionStore((s) => s.stopSession)
-  const [message, setMessage] = useState('')
   const transcriptEndRef = useRef<HTMLDivElement>(null)
 
   const session = sessions.find((s) => s.id === activeSessionId) ?? null
@@ -26,29 +27,36 @@ export const SessionView: FC = () => {
     scrollToBottom()
   }, [session?.transcript.length, scrollToBottom])
 
-  const handleSendMessage = (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!message.trim() || !session) return
-    useSessionStore.getState().loadSessions(session.projectId)
-    setMessage('')
-  }
-
+  // Empty state — centered composer
   if (!session) {
     return (
-      <div className="flex h-full flex-col items-center justify-center text-muted-foreground">
-        <p className="text-lg">No session selected</p>
-        <p className="mt-2 text-sm">
-          Select a session from the sidebar or start a new one.
-        </p>
+      <div className="flex h-full flex-col">
+        <div
+          className="h-12 shrink-0 border-b border-border"
+          style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
+        />
+        <div className="flex flex-1 flex-col items-center justify-center px-4">
+          <p className="mb-1 text-lg font-medium">Convergence</p>
+          <p className="mb-8 text-sm text-muted-foreground">
+            What would you like to work on?
+          </p>
+          {activeProject && (
+            <ComposerContainer
+              projectId={activeProject.id}
+              workspaceId={null}
+              activeSessionId={null}
+            />
+          )}
+        </div>
       </div>
     )
   }
 
   return (
     <div className="flex h-full flex-col">
-      {/* Header — also a drag region */}
+      {/* Header */}
       <div
-        className="flex h-12 items-center justify-between border-b border-border/50 px-4"
+        className="flex h-12 shrink-0 items-center justify-between border-b border-border px-4"
         style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
       >
         <div
@@ -105,31 +113,14 @@ export const SessionView: FC = () => {
       </div>
 
       {/* Composer */}
-      <div className="border-t px-4 py-3">
-        <form
-          onSubmit={handleSendMessage}
-          className="mx-auto flex max-w-2xl gap-2"
-        >
-          <Input
-            value={message}
-            onChange={(e) => setMessage(e.target.value)}
-            placeholder="Send a message..."
-            disabled={
-              session.status === 'completed' || session.status === 'failed'
-            }
+      <div className="shrink-0 px-4 py-3">
+        {activeProject && (
+          <ComposerContainer
+            projectId={activeProject.id}
+            workspaceId={session.workspaceId}
+            activeSessionId={session.id}
           />
-          <Button
-            type="submit"
-            size="icon"
-            disabled={
-              !message.trim() ||
-              session.status === 'completed' ||
-              session.status === 'failed'
-            }
-          >
-            <Send className="h-4 w-4" />
-          </Button>
-        </form>
+        )}
       </div>
     </div>
   )

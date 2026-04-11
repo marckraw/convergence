@@ -51,7 +51,11 @@ const mockElectronAPI = {
     onSessionUpdate: vi.fn().mockReturnValue(() => {}),
   },
   provider: {
-    getAll: vi.fn().mockResolvedValue([{ id: 'fake', name: 'Fake Provider' }]),
+    getAll: vi
+      .fn()
+      .mockResolvedValue([
+        { id: 'fake', name: 'Fake Provider', supportsContinuation: false },
+      ]),
   },
 }
 

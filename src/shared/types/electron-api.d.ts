@@ -76,6 +76,7 @@ interface CreateSessionInput {
 interface ProviderInfo {
   id: string
   name: string
+  supportsContinuation: boolean
 }
 
 interface ElectronAPI {

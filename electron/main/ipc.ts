@@ -127,7 +127,11 @@ export function registerIpcHandlers(
 
   // Provider handlers
   ipcMain.handle('provider:getAll', () =>
-    providerRegistry.getAll().map((p) => ({ id: p.id, name: p.name })),
+    providerRegistry.getAll().map((p) => ({
+      id: p.id,
+      name: p.name,
+      supportsContinuation: p.supportsContinuation,
+    })),
   )
 
   // Session update event forwarding
