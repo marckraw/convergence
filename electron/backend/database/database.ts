@@ -14,6 +14,17 @@ const SCHEMA = `
     key TEXT PRIMARY KEY,
     value TEXT NOT NULL
   );
+
+  CREATE TABLE IF NOT EXISTS workspaces (
+    id TEXT PRIMARY KEY,
+    project_id TEXT NOT NULL,
+    branch_name TEXT NOT NULL,
+    path TEXT NOT NULL,
+    type TEXT NOT NULL DEFAULT 'worktree',
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE(project_id, branch_name),
+    FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE
+  );
 `
 
 let db: Database.Database | null = null

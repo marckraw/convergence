@@ -12,6 +12,20 @@ interface CreateProjectInput {
   name?: string
 }
 
+interface WorkspaceData {
+  id: string
+  projectId: string
+  branchName: string
+  path: string
+  type: 'worktree'
+  createdAt: string
+}
+
+interface CreateWorkspaceInput {
+  projectId: string
+  branchName: string
+}
+
 interface ElectronAPI {
   project: {
     create: (input: CreateProjectInput) => Promise<ProjectData>
@@ -23,6 +37,15 @@ interface ElectronAPI {
   }
   dialog: {
     selectDirectory: () => Promise<string | null>
+  }
+  workspace: {
+    create: (input: CreateWorkspaceInput) => Promise<WorkspaceData>
+    getByProjectId: (projectId: string) => Promise<WorkspaceData[]>
+    delete: (id: string) => Promise<void>
+  }
+  git: {
+    getBranches: (repoPath: string) => Promise<string[]>
+    getCurrentBranch: (repoPath: string) => Promise<string>
   }
 }
 

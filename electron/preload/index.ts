@@ -13,4 +13,17 @@ contextBridge.exposeInMainWorld('electronAPI', {
   dialog: {
     selectDirectory: () => ipcRenderer.invoke('dialog:selectDirectory'),
   },
+  workspace: {
+    create: (input: { projectId: string; branchName: string }) =>
+      ipcRenderer.invoke('workspace:create', input),
+    getByProjectId: (projectId: string) =>
+      ipcRenderer.invoke('workspace:getByProjectId', projectId),
+    delete: (id: string) => ipcRenderer.invoke('workspace:delete', id),
+  },
+  git: {
+    getBranches: (repoPath: string) =>
+      ipcRenderer.invoke('git:getBranches', repoPath),
+    getCurrentBranch: (repoPath: string) =>
+      ipcRenderer.invoke('git:getCurrentBranch', repoPath),
+  },
 })

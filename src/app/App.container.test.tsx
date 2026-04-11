@@ -1,6 +1,7 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest'
 import { render, screen, waitFor } from '@testing-library/react'
 import { useProjectStore } from '@/entities/project'
+import { useWorkspaceStore } from '@/entities/workspace'
 import { App } from './App.container'
 
 vi.mock('sonner', () => ({
@@ -29,6 +30,15 @@ const mockElectronAPI = {
   dialog: {
     selectDirectory: vi.fn(),
   },
+  workspace: {
+    create: vi.fn(),
+    getByProjectId: vi.fn().mockResolvedValue([]),
+    delete: vi.fn(),
+  },
+  git: {
+    getBranches: vi.fn().mockResolvedValue([]),
+    getCurrentBranch: vi.fn().mockResolvedValue('main'),
+  },
 }
 
 describe('App', () => {
@@ -42,6 +52,12 @@ describe('App', () => {
     useProjectStore.setState({
       projects: [],
       activeProject: null,
+      loading: false,
+      error: null,
+    })
+    useWorkspaceStore.setState({
+      workspaces: [],
+      currentBranch: null,
       loading: false,
       error: null,
     })
@@ -66,7 +82,7 @@ describe('App', () => {
     expect(screen.getByText('Loading...')).toBeInTheDocument()
   })
 
-  it('shows project view when project is active', async () => {
+  it('shows project view with workspaces section', async () => {
     mockElectronAPI.project.getActive.mockResolvedValue(mockProject)
     mockElectronAPI.project.getAll.mockResolvedValue([mockProject])
 
@@ -76,5 +92,6 @@ describe('App', () => {
       expect(screen.getByText('my-project')).toBeInTheDocument()
     })
     expect(screen.getByText('/tmp/my-project')).toBeInTheDocument()
+    expect(screen.getByText('Workspaces')).toBeInTheDocument()
   })
 })

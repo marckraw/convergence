@@ -1,0 +1,147 @@
+{
+  "extends": [
+    "chaperone/pure-functions",
+    "chaperone/presentational-components"
+  ],
+  "rules": {
+    "custom": [
+      {
+        "id": "retire-src-components-dir",
+        "type": "retired-path",
+        "severity": "error",
+        "paths": [
+          {
+            "pattern": "src/components/**/*",
+            "reason": "Use FSD-lite layers and shared design-system ownership",
+            "migratedTo": "src/shared/ui/ or FSD slices"
+          }
+        ]
+      },
+      {
+        "id": "retire-src-hooks-dir",
+        "type": "retired-path",
+        "severity": "error",
+        "paths": [
+          {
+            "pattern": "src/hooks/**/*",
+            "reason": "Use FSD-lite layers for hooks",
+            "migratedTo": "src/shared/hooks/ or FSD slice hooks"
+          }
+        ]
+      },
+      {
+        "id": "retire-src-lib-dir",
+        "type": "retired-path",
+        "severity": "error",
+        "paths": [
+          {
+            "pattern": "src/lib/**/*",
+            "reason": "Use shared lib folder",
+            "migratedTo": "src/shared/lib/"
+          }
+        ]
+      },
+      {
+        "id": "renderer-fsd-lite-boundaries",
+        "type": "import-boundary",
+        "severity": "error",
+        "layers": {
+          "shared": {
+            "files": "src/shared/**/*.{ts,tsx}",
+            "allowImportsFrom": []
+          },
+          "entities": {
+            "files": "src/entities/**/*.{ts,tsx}",
+            "allowImportsFrom": ["shared", "entities"]
+          },
+          "features": {
+            "files": "src/features/**/*.{ts,tsx}",
+            "allowImportsFrom": ["shared", "entities"]
+          },
+          "widgets": {
+            "files": "src/widgets/**/*.{ts,tsx}",
+            "allowImportsFrom": ["shared", "entities", "features"]
+          },
+          "app": {
+            "files": "src/app/**/*.{ts,tsx}",
+            "allowImportsFrom": ["shared", "entities", "features", "widgets"]
+          }
+        }
+      },
+      {
+        "id": "presentational-no-effects",
+        "type": "regex",
+        "severity": "error",
+        "files": "src/**/*.presentational.tsx",
+        "pattern": "\\buse(Effect|LayoutEffect|InsertionEffect)\\b",
+        "forbidden": true,
+        "message": "Presentational components must not use useEffect/useLayoutEffect/useInsertionEffect. Move effects to *.container.tsx."
+      },
+      {
+        "id": "presentational-no-electron",
+        "type": "regex",
+        "severity": "error",
+        "files": "src/**/*.presentational.tsx",
+        "pattern": "from\\s+['\"]electron['\"]",
+        "forbidden": true,
+        "message": "Presentational components must not import electron."
+      },
+      {
+        "id": "renderer-no-direct-electron",
+        "type": "regex",
+        "severity": "error",
+        "files": "src/**/*.{ts,tsx}",
+        "pattern": "from\\s+['\"]electron['\"]",
+        "forbidden": true,
+        "message": "Renderer code must not import electron directly. Use preload-exposed APIs via *.api.ts wrappers."
+      },
+      {
+        "id": "pure-files-need-sibling-tests",
+        "type": "relationship",
+        "severity": "error",
+        "when": {
+          "files": "src/**/*.pure.ts"
+        },
+        "then": [
+          {
+            "mustHaveCompanion": {
+              "pair": {
+                "from": "\\.pure\\.ts$",
+                "to": ".pure.test.ts"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "id": "pure-functions-tested",
+        "type": "symbol-reference",
+        "severity": "error",
+        "sourceFiles": "src/**/*.pure.ts",
+        "targetFiles": "src/**/*.pure.test.ts",
+        "targetPair": {
+          "from": "\\.pure\\.ts$",
+          "to": ".pure.test.ts"
+        },
+        "symbolKinds": ["function-declaration", "function-variable"],
+        "message": "Exported pure functions must be referenced in sibling unit tests"
+      },
+      {
+        "id": "no-raw-button-outside-shared",
+        "type": "regex",
+        "severity": "warning",
+        "files": "src/{app,widgets,features,entities}/**/*.tsx",
+        "pattern": "<button[\\s>]",
+        "message": "Use Button from src/shared/ui/ instead of raw <button>"
+      },
+      {
+        "id": "no-raw-input-outside-shared",
+        "type": "regex",
+        "severity": "warning",
+        "files": "src/{app,widgets,features,entities}/**/*.tsx",
+        "pattern": "<input[\\s>]",
+        "message": "Use Input from src/shared/ui/ instead of raw <input>"
+      }
+    ]
+  }
+}

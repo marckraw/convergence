@@ -11,3 +11,12 @@ export interface AppStateRow {
   key: string
   value: string
 }
+
+export interface WorkspaceRow {
+  id: string
+  project_id: string
+  branch_name: string
+  path: string
+  type: string
+  created_at: string
+}

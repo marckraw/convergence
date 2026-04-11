@@ -1,0 +1,89 @@
+import { join } from 'path'
+import { randomUUID } from 'crypto'
+import type Database from 'better-sqlite3'
+import type { WorkspaceRow } from '../database/database.types'
+import { GitService } from '../git/git.service'
+import {
+  workspaceFromRow,
+  type Workspace,
+  type CreateWorkspaceInput,
+} from './workspace.types'
+
+export class WorkspaceService {
+  constructor(
+    private db: Database.Database,
+    private git: GitService,
+    private workspacesRoot: string,
+  ) {}
+
+  async create(input: CreateWorkspaceInput): Promise<Workspace> {
+    const project = this.db
+      .prepare('SELECT repository_path FROM projects WHERE id = ?')
+      .get(input.projectId) as { repository_path: string } | undefined
+
+    if (!project) {
+      throw new Error(`Project not found: ${input.projectId}`)
+    }
+
+    const repoPath = project.repository_path
+    const id = randomUUID()
+    const worktreePath = join(this.workspacesRoot, input.projectId, id)
+
+    const branchExists = await this.git.branchExists(repoPath, input.branchName)
+
+    await this.git.addWorktree(
+      repoPath,
+      worktreePath,
+      input.branchName,
+      !branchExists,
+    )
+
+    this.db
+      .prepare(
+        `INSERT INTO workspaces (id, project_id, branch_name, path, type)
+         VALUES (?, ?, ?, ?, 'worktree')`,
+      )
+      .run(id, input.projectId, input.branchName, worktreePath)
+
+    const row = this.db
+      .prepare('SELECT * FROM workspaces WHERE id = ?')
+      .get(id) as WorkspaceRow
+
+    return workspaceFromRow(row)
+  }
+
+  getByProjectId(projectId: string): Workspace[] {
+    const rows = this.db
+      .prepare(
+        'SELECT * FROM workspaces WHERE project_id = ? ORDER BY created_at DESC',
+      )
+      .all(projectId) as WorkspaceRow[]
+
+    return rows.map(workspaceFromRow)
+  }
+
+  async delete(id: string): Promise<void> {
+    const row = this.db
+      .prepare('SELECT * FROM workspaces WHERE id = ?')
+      .get(id) as WorkspaceRow | undefined
+
+    if (!row) return
+
+    const project = this.db
+      .prepare('SELECT repository_path FROM projects WHERE id = ?')
+      .get(row.project_id) as { repository_path: string } | undefined
+
+    if (project) {
+      await this.git.removeWorktree(project.repository_path, row.path)
+    }
+
+    this.db.prepare('DELETE FROM workspaces WHERE id = ?').run(id)
+  }
+
+  async deleteAllForProject(projectId: string): Promise<void> {
+    const workspaces = this.getByProjectId(projectId)
+    for (const ws of workspaces) {
+      await this.delete(ws.id)
+    }
+  }
+}

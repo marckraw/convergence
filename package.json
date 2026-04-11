@@ -4,8 +4,8 @@
   "description": "UI-first desktop app for managing agent work across local codebases",
   "main": "out/main/index.js",
   "scripts": {
-    "dev": "electron-rebuild -o better-sqlite3 && electron-vite dev",
-    "build": "electron-rebuild -o better-sqlite3 && electron-vite build",
+    "dev": "electron-rebuild --force -o better-sqlite3 && electron-vite dev",
+    "build": "electron-rebuild --force -o better-sqlite3 && electron-vite build",
     "build:preview": "electron-vite build && electron-vite preview",
     "test": "npm rebuild better-sqlite3 > /dev/null 2>&1; vitest run",
     "test:pure": "npm rebuild better-sqlite3 > /dev/null 2>&1; vitest run --config vitest.pure.config.ts",

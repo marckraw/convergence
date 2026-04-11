@@ -3,6 +3,8 @@ import { join } from 'path'
 import { getDatabase } from '../backend/database/database'
 import { ProjectService } from '../backend/project/project.service'
 import { StateService } from '../backend/state/state.service'
+import { WorkspaceService } from '../backend/workspace/workspace.service'
+import { GitService } from '../backend/git/git.service'
 import { registerIpcHandlers } from './ipc'
 
 function createWindow(): void {
@@ -27,11 +29,22 @@ function createWindow(): void {
 
 app.whenReady().then(() => {
   const dbPath = join(app.getPath('userData'), 'convergence.db')
+  const workspacesRoot = join(app.getPath('userData'), 'workspaces')
   const db = getDatabase(dbPath)
+
+  const gitService = new GitService()
   const projectService = new ProjectService(db)
   const stateService = new StateService(db)
+  const workspaceService = new WorkspaceService(db, gitService, workspacesRoot)
 
-  registerIpcHandlers(projectService, stateService)
+  projectService.setWorkspaceService(workspaceService)
+
+  registerIpcHandlers(
+    projectService,
+    stateService,
+    workspaceService,
+    gitService,
+  )
 
   createWindow()
 

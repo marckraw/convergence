@@ -3,6 +3,7 @@ import { basename, resolve } from 'path'
 import { randomUUID } from 'crypto'
 import type Database from 'better-sqlite3'
 import type { ProjectRow } from '../database/database.types'
+import type { WorkspaceService } from '../workspace/workspace.service'
 import {
   projectFromRow,
   type Project,
@@ -10,7 +11,13 @@ import {
 } from './project.types'
 
 export class ProjectService {
+  private workspaceService: WorkspaceService | null = null
+
   constructor(private db: Database.Database) {}
+
+  setWorkspaceService(ws: WorkspaceService): void {
+    this.workspaceService = ws
+  }
 
   create(input: CreateProjectInput): Project {
     const resolvedPath = resolve(input.repositoryPath)
@@ -50,7 +57,10 @@ export class ProjectService {
     return row ? projectFromRow(row) : null
   }
 
-  delete(id: string): void {
+  async delete(id: string): Promise<void> {
+    if (this.workspaceService) {
+      await this.workspaceService.deleteAllForProject(id)
+    }
     this.db.prepare('DELETE FROM projects WHERE id = ?').run(id)
   }
 

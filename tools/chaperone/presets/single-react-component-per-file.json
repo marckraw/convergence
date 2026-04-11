@@ -1,0 +1,21 @@
+{
+  "rules": {
+    "custom": [
+      {
+        "id": "single-react-component-per-file",
+        "type": "command",
+        "severity": "error",
+        "command": "node",
+        "args": [
+          "tools/chaperone/check-single-react-component-per-file.mjs",
+          "--scope",
+          "src",
+          "--exclude-dir",
+          "ui"
+        ],
+        "expectedExitCode": 0,
+        "message": "Keep exactly one React component definition per file"
+      }
+    ]
+  }
+}
