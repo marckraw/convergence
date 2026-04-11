@@ -1,4 +1,2 @@
-export { Welcome } from './welcome'
-export { ProjectHeader } from './project-header'
-export { WorkspaceList } from './workspace-list'
-export { SessionList } from './session-list'
+export { Sidebar } from './sidebar'
+export { SessionView } from './session-view'

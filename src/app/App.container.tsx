@@ -3,7 +3,8 @@ import { useProjectStore } from '@/entities/project'
 import { useWorkspaceStore } from '@/entities/workspace'
 import { useSessionStore } from '@/entities/session'
 import { Toaster, toast } from 'sonner'
-import { AppShell } from './App.presentational'
+import { applyTheme, getStoredTheme } from '@/shared/lib/theme'
+import { AppShell } from './App.layout'
 
 export function App() {
   const loadActiveProject = useProjectStore((s) => s.loadActiveProject)
@@ -15,10 +16,26 @@ export function App() {
   const clearWorkspaceError = useWorkspaceStore((s) => s.clearError)
   const sessionError = useSessionStore((s) => s.error)
   const clearSessionError = useSessionStore((s) => s.clearError)
+  const activeSessionId = useSessionStore((s) => s.activeSessionId)
+  const setActiveSession = useSessionStore((s) => s.setActiveSession)
+  const handleSessionUpdate = useSessionStore((s) => s.handleSessionUpdate)
+
+  useEffect(() => {
+    applyTheme(getStoredTheme())
+  }, [])
 
   useEffect(() => {
     loadActiveProject()
   }, [loadActiveProject])
+
+  useEffect(() => {
+    const unsubscribe = window.electronAPI.session.onSessionUpdate(
+      (session) => {
+        handleSessionUpdate(session)
+      },
+    )
+    return unsubscribe
+  }, [handleSessionUpdate])
 
   useEffect(() => {
     if (projectError) {
@@ -43,7 +60,12 @@ export function App() {
 
   return (
     <>
-      <AppShell activeProject={activeProject} loading={loading} />
+      <AppShell
+        activeSessionId={activeSessionId}
+        onSelectSession={setActiveSession}
+        loading={loading}
+        hasProject={!!activeProject}
+      />
       <Toaster position="bottom-right" />
     </>
   )

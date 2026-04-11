@@ -83,7 +83,7 @@ describe('App', () => {
     })
   })
 
-  it('shows welcome screen when no active project', async () => {
+  it('shows welcome message when no project', async () => {
     mockElectronAPI.project.getActive.mockResolvedValue(null)
     mockElectronAPI.project.getAll.mockResolvedValue([])
 
@@ -94,7 +94,7 @@ describe('App', () => {
     })
   })
 
-  it('shows loading state initially', () => {
+  it('shows loading state', () => {
     mockElectronAPI.project.getActive.mockReturnValue(new Promise(() => {}))
 
     render(<App />)
@@ -102,7 +102,7 @@ describe('App', () => {
     expect(screen.getByText('Loading...')).toBeInTheDocument()
   })
 
-  it('shows project view with sessions section', async () => {
+  it('shows sidebar with project when loaded', async () => {
     mockElectronAPI.project.getActive.mockResolvedValue(mockProject)
     mockElectronAPI.project.getAll.mockResolvedValue([mockProject])
 
@@ -111,6 +111,5 @@ describe('App', () => {
     await waitFor(() => {
       expect(screen.getByText('my-project')).toBeInTheDocument()
     })
-    expect(screen.getByText('Sessions')).toBeInTheDocument()
   })
 })

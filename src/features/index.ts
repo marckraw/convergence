@@ -1,3 +1,5 @@
 export { ProjectCreate } from './project-create'
 export { WorkspaceCreate } from './workspace-create'
 export { SessionStart } from './session-start'
+export { SessionCreateInline } from './session-create-inline'
+export { ThemeToggleButton } from './theme-toggle'

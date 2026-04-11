@@ -11,10 +11,15 @@ import { FakeProvider } from '../backend/provider/fake-provider'
 import { registerIpcHandlers } from './ipc'
 
 function createWindow(): void {
+  const isMac = process.platform === 'darwin'
+
   const mainWindow = new BrowserWindow({
     width: 1200,
     height: 800,
     title: 'Convergence',
+    titleBarStyle: isMac ? 'hiddenInset' : 'default',
+    trafficLightPosition: isMac ? { x: 16, y: 16 } : undefined,
+    backgroundColor: '#232326',
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       contextIsolation: true,
