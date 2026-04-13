@@ -1,0 +1,17 @@
+appId: com.marckraw.convergence
+productName: Convergence
+directories:
+  output: release
+artifactName: ${productName}-${version}-${arch}.${ext}
+asar: true
+asarUnpack:
+  - '**/*.node'
+npmRebuild: false
+files:
+  - package.json
+  - out/**/*
+mac:
+  category: public.app-category.developer-tools
+  target:
+    - target: dmg
+    - target: zip

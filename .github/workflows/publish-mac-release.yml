@@ -1,0 +1,57 @@
+name: Publish Mac Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Verify tag matches package version
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          if [ "v$VERSION" != "$GITHUB_REF_NAME" ]; then
+            echo "Tag $GITHUB_REF_NAME does not match package version v$VERSION"
+            exit 1
+          fi
+
+      - name: Extract release notes
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          npm run release:notes -- "$VERSION" release-notes.md
+
+      - name: Build macOS artifacts
+        run: npm run package:mac
+
+      - name: Publish GitHub Release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" \
+            release/Convergence-*.dmg \
+            release/Convergence-*.zip \
+            release/*.blockmap \
+            release/latest-mac.yml \
+            --title "$GITHUB_REF_NAME" \
+            --notes-file release-notes.md \
+            --verify-tag
