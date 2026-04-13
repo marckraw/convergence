@@ -57,14 +57,15 @@ export const ProjectTree: FC<ProjectTreeProps> = ({
         activeSessionId === session.id && 'bg-accent',
       )}
     >
-      <button
+      <Button
         type="button"
+        variant="ghost"
         onClick={() => onSelectSession(session.id)}
-        className="flex min-w-0 flex-1 items-center gap-1.5 px-1.5 py-1 text-left text-sm"
+        className="h-auto min-w-0 flex-1 justify-start gap-1.5 px-1.5 py-1 text-left text-sm font-normal"
       >
         <SessionBadge attention={session.attention} />
         <span className="truncate">{session.name}</span>
-      </button>
+      </Button>
       <Button
         type="button"
         variant="ghost"
@@ -104,9 +105,11 @@ export const ProjectTree: FC<ProjectTreeProps> = ({
         return (
           <div key={ws.id} className="ml-2 border-l border-border pl-2">
             <div className="group/workspace flex items-center gap-1 rounded pr-1 transition-colors hover:bg-accent">
-              <button
+              <Button
+                type="button"
+                variant="ghost"
                 onClick={() => toggleWorkspace(ws.id)}
-                className="flex min-w-0 flex-1 items-center gap-1 py-1 text-left text-sm hover:text-foreground"
+                className="h-auto min-w-0 flex-1 justify-start gap-1 py-1 text-left text-sm font-normal hover:text-foreground"
               >
                 <ChevronRight
                   className={cn(
@@ -121,7 +124,7 @@ export const ProjectTree: FC<ProjectTreeProps> = ({
                     {wsSessions.length}
                   </span>
                 )}
-              </button>
+              </Button>
               <Button
                 type="button"
                 variant="ghost"
@@ -176,13 +179,15 @@ export const ProjectTree: FC<ProjectTreeProps> = ({
             />
           </form>
         ) : (
-          <button
+          <Button
+            type="button"
+            variant="ghost"
             onClick={() => setShowNewBranch(true)}
-            className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+            className="h-auto items-center gap-1 px-0 py-0 text-xs font-normal text-muted-foreground hover:text-foreground"
           >
             <Plus className="h-3 w-3" />
             New workspace
-          </button>
+          </Button>
         )}
       </div>
     </div>

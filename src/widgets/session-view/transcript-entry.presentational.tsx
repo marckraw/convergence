@@ -9,7 +9,7 @@ import {
   Info,
   ChevronRight,
 } from 'lucide-react'
-import { cn } from '@/shared/lib/cn.pure'
+import { Button } from '@/shared/ui/button'
 import { Markdown } from '@/shared/ui/markdown.presentational'
 
 interface TranscriptEntryViewProps {
@@ -116,21 +116,12 @@ export const TranscriptEntryView: FC<TranscriptEntryViewProps> = ({
               />
               {onApprove && onDeny && (
                 <div className="mt-3 flex gap-2">
-                  <button
-                    onClick={onApprove}
-                    className={cn(
-                      'rounded-md px-3 py-1.5 text-sm font-medium transition-colors',
-                      'bg-primary text-primary-foreground hover:bg-primary/90',
-                    )}
-                  >
+                  <Button size="sm" onClick={onApprove}>
                     Approve
-                  </button>
-                  <button
-                    onClick={onDeny}
-                    className="rounded-md px-3 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-accent"
-                  >
+                  </Button>
+                  <Button variant="ghost" size="sm" onClick={onDeny}>
                     Deny
-                  </button>
+                  </Button>
                 </div>
               )}
             </div>
