@@ -25,6 +25,21 @@ export function App() {
   }, [])
 
   useEffect(() => {
+    const fallbackPlatform = navigator.userAgent.includes('Mac')
+      ? 'darwin'
+      : 'unknown'
+    const systemInfo = window.electronAPI.system?.getInfo?.() ?? {
+      platform: fallbackPlatform,
+      prefersReducedTransparency: false,
+    }
+    const { platform, prefersReducedTransparency } = systemInfo
+    document.documentElement.dataset.platform = platform
+    document.documentElement.dataset.reducedTransparency = String(
+      prefersReducedTransparency,
+    )
+  }, [])
+
+  useEffect(() => {
     loadActiveProject()
   }, [loadActiveProject])
 

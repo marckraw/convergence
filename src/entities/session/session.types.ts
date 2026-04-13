@@ -5,6 +5,27 @@ export type AttentionState =
   | 'needs-approval'
   | 'finished'
   | 'failed'
+export type ReasoningEffort =
+  | 'none'
+  | 'minimal'
+  | 'low'
+  | 'medium'
+  | 'high'
+  | 'max'
+  | 'xhigh'
+
+export interface ProviderEffortOption {
+  id: ReasoningEffort
+  label: string
+  description?: string
+}
+
+export interface ProviderModelOption {
+  id: string
+  label: string
+  defaultEffort: ReasoningEffort | null
+  effortOptions: ProviderEffortOption[]
+}
 
 export type TranscriptEntry =
   | { type: 'user'; text: string; timestamp: string }
@@ -29,6 +50,8 @@ export interface Session {
   projectId: string
   workspaceId: string | null
   providerId: string
+  model: string | null
+  effort: ReasoningEffort | null
   name: string
   status: SessionStatus
   attention: AttentionState
@@ -41,5 +64,8 @@ export interface Session {
 export interface ProviderInfo {
   id: string
   name: string
+  vendorLabel: string
   supportsContinuation: boolean
+  defaultModelId: string
+  modelOptions: ProviderModelOption[]
 }

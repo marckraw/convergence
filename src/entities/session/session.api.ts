@@ -1,10 +1,12 @@
-import type { Session, ProviderInfo } from './session.types'
+import type { Session, ProviderInfo, ReasoningEffort } from './session.types'
 
 export const sessionApi = {
   create: (input: {
     projectId: string
     workspaceId: string | null
     providerId: string
+    model: string | null
+    effort: ReasoningEffort | null
     name: string
   }): Promise<Session> => window.electronAPI.session.create(input),
 

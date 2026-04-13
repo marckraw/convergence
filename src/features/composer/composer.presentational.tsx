@@ -1,22 +1,23 @@
 import type { FC } from 'react'
-import type { ProviderInfo } from '@/entities/session'
+import type {
+  ProviderInfo,
+  ReasoningEffort,
+  ResolvedProviderSelection,
+} from '@/entities/session'
 import { Button } from '@/shared/ui/button'
-import { ArrowUp, ChevronDown } from 'lucide-react'
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@/shared/ui/dropdown-menu'
+import { ArrowUp } from 'lucide-react'
+import { ComposerSelect } from './composer-select.presentational'
 
 interface ComposerProps {
   value: string
   onChange: (value: string) => void
   onSubmit: () => void
   providers: ProviderInfo[]
-  selectedProviderId: string
+  selection: ResolvedProviderSelection
   onProviderChange: (id: string) => void
-  providerSelectionDisabled?: boolean
+  onModelChange: (id: string) => void
+  onEffortChange: (id: ReasoningEffort | '') => void
+  selectionDisabled?: boolean
   placeholder?: string
   disabled?: boolean
 }
@@ -26,14 +27,14 @@ export const Composer: FC<ComposerProps> = ({
   onChange,
   onSubmit,
   providers,
-  selectedProviderId,
+  selection,
   onProviderChange,
-  providerSelectionDisabled = false,
+  onModelChange,
+  onEffortChange,
+  selectionDisabled = false,
   placeholder = 'Ask anything, @tag files/folders, or use / to show available commands...',
   disabled = false,
 }) => {
-  const selectedProvider = providers.find((p) => p.id === selectedProviderId)
-
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
       e.preventDefault()
@@ -49,6 +50,27 @@ export const Composer: FC<ComposerProps> = ({
     target.style.height = `${Math.min(target.scrollHeight, 200)}px`
   }
 
+  const providerItems = providers.map((provider) => ({
+    id: provider.id,
+    label: provider.vendorLabel || provider.name,
+    description:
+      provider.vendorLabel && provider.vendorLabel !== provider.name
+        ? provider.name
+        : undefined,
+  }))
+  const modelItems =
+    selection.provider?.modelOptions.map((model) => ({
+      id: model.id,
+      label: model.label,
+      description: model.id,
+    })) ?? []
+  const effortItems =
+    selection.model?.effortOptions.map((effort) => ({
+      id: effort.id,
+      label: effort.label,
+      description: effort.description,
+    })) ?? []
+
   return (
     <div className="mx-auto w-full max-w-2xl">
       <div className="rounded-xl border border-border bg-card p-3">
@@ -63,37 +85,36 @@ export const Composer: FC<ComposerProps> = ({
           className="w-full resize-none bg-transparent text-sm text-foreground placeholder:text-muted-foreground focus:outline-none disabled:opacity-50"
         />
         <div className="mt-2 flex items-center justify-between">
-          <div className="flex items-center gap-1">
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <button
-                  type="button"
-                  disabled={providerSelectionDisabled}
-                  className="flex items-center gap-1 rounded-md px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-                >
-                  <span className="h-1.5 w-1.5 rounded-full bg-green-500" />
-                  {selectedProvider?.name ?? 'Select provider'}
-                  <ChevronDown className="h-3 w-3" />
-                </button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="start">
-                {providers.map((p) => (
-                  <DropdownMenuItem
-                    key={p.id}
-                    onClick={() => onProviderChange(p.id)}
-                    className="text-xs"
-                  >
-                    <span className="h-1.5 w-1.5 rounded-full bg-green-500" />
-                    {p.name}
-                    {p.id === selectedProviderId && (
-                      <span className="ml-auto text-muted-foreground">✓</span>
-                    )}
-                  </DropdownMenuItem>
-                ))}
-              </DropdownMenuContent>
-            </DropdownMenu>
+          <div className="flex min-w-0 flex-wrap items-center gap-1">
+            <ComposerSelect
+              selectedId={selection.providerId}
+              value={selection.providerLabel || 'Select provider'}
+              items={providerItems}
+              onChange={onProviderChange}
+              disabled={selectionDisabled}
+              className="gap-1.5 px-2 text-xs text-muted-foreground hover:text-foreground"
+            />
+            <ComposerSelect
+              selectedId={selection.modelId}
+              value={selection.model?.label ?? 'Select model'}
+              items={modelItems}
+              onChange={onModelChange}
+              disabled={selectionDisabled || !selection.provider}
+              className="px-2 text-xs text-muted-foreground hover:text-foreground"
+            />
+            {effortItems.length > 0 && (
+              <ComposerSelect
+                selectedId={selection.effortId}
+                value={selection.effort?.label ?? 'Select effort'}
+                items={effortItems}
+                onChange={(id) => onEffortChange(id as ReasoningEffort)}
+                disabled={selectionDisabled || !selection.model}
+                className="px-2 text-xs text-muted-foreground hover:text-foreground"
+              />
+            )}
           </div>
           <Button
+            type="button"
             size="icon"
             className="h-8 w-8 rounded-full"
             disabled={!value.trim() || disabled}

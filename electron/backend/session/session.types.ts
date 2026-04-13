@@ -3,15 +3,18 @@ import type {
   SessionStatus,
   AttentionState,
   TranscriptEntry,
+  ReasoningEffort,
 } from '../provider/provider.types'
 
-export type { SessionStatus, AttentionState, TranscriptEntry }
+export type { SessionStatus, AttentionState, TranscriptEntry, ReasoningEffort }
 
 export interface Session {
   id: string
   projectId: string
   workspaceId: string | null
   providerId: string
+  model: string | null
+  effort: ReasoningEffort | null
   name: string
   status: SessionStatus
   attention: AttentionState
@@ -25,6 +28,8 @@ export interface CreateSessionInput {
   projectId: string
   workspaceId: string | null
   providerId: string
+  model: string | null
+  effort: ReasoningEffort | null
   name: string
 }
 
@@ -34,6 +39,8 @@ export function sessionFromRow(row: SessionRow): Session {
     projectId: row.project_id,
     workspaceId: row.workspace_id,
     providerId: row.provider_id,
+    model: row.model,
+    effort: row.effort as ReasoningEffort | null,
     name: row.name,
     status: row.status as SessionStatus,
     attention: row.attention as AttentionState,

@@ -49,17 +49,16 @@ export const AppShell: FC<AppShellProps> = ({
 
   if (loading) {
     return (
-      <div className="flex h-screen items-center justify-center bg-background text-foreground">
+      <div className="app-chrome flex h-screen items-center justify-center text-foreground">
         <p className="text-muted-foreground">Loading...</p>
       </div>
     )
   }
 
   return (
-    <div className="flex h-screen bg-background text-foreground">
-      {/* Sidebar */}
+    <div className="app-chrome flex h-screen overflow-hidden text-foreground">
       <div
-        className="shrink-0 border-r bg-sidebar"
+        className="app-sidebar-panel shrink-0 border-r border-white/10"
         style={{ width: sidebarWidth }}
       >
         <Sidebar
@@ -68,16 +67,14 @@ export const AppShell: FC<AppShellProps> = ({
         />
       </div>
 
-      {/* Resize handle */}
       <div
         onMouseDown={handleMouseDown}
         className={cn(
-          'w-px shrink-0 cursor-col-resize transition-colors hover:bg-foreground/20',
+          'app-resize-handle w-px shrink-0 cursor-col-resize transition-colors hover:bg-white/10',
         )}
       />
 
-      {/* Main content */}
-      <div className="min-w-0 flex-1">
+      <div className="app-main-panel min-w-0 flex-1">
         {hasProject ? (
           <SessionView />
         ) : (

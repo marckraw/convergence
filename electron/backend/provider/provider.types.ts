@@ -5,6 +5,14 @@ export type AttentionState =
   | 'needs-approval'
   | 'finished'
   | 'failed'
+export type ReasoningEffort =
+  | 'none'
+  | 'minimal'
+  | 'low'
+  | 'medium'
+  | 'high'
+  | 'max'
+  | 'xhigh'
 
 export type TranscriptEntry =
   | { type: 'user'; text: string; timestamp: string }
@@ -28,6 +36,30 @@ export interface SessionStartConfig {
   sessionId: string
   workingDirectory: string
   initialMessage: string
+  model: string | null
+  effort: ReasoningEffort | null
+}
+
+export interface ProviderEffortOption {
+  id: ReasoningEffort
+  label: string
+  description?: string
+}
+
+export interface ProviderModelOption {
+  id: string
+  label: string
+  defaultEffort: ReasoningEffort | null
+  effortOptions: ProviderEffortOption[]
+}
+
+export interface ProviderDescriptor {
+  id: string
+  name: string
+  vendorLabel: string
+  supportsContinuation: boolean
+  defaultModelId: string
+  modelOptions: ProviderModelOption[]
 }
 
 export interface SessionHandle {
@@ -45,5 +77,6 @@ export interface Provider {
   id: string
   name: string
   supportsContinuation: boolean
+  describe: () => Promise<ProviderDescriptor>
   start: (config: SessionStartConfig) => SessionHandle
 }

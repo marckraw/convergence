@@ -1,6 +1,10 @@
 import { useState, useEffect } from 'react'
 import type { FC } from 'react'
-import { useSessionStore } from '@/entities/session'
+import {
+  resolveProviderSelection,
+  useSessionStore,
+  type ReasoningEffort,
+} from '@/entities/session'
 import { Composer } from './composer.presentational'
 
 interface ComposerContainerProps {
@@ -16,6 +20,8 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
 }) => {
   const [value, setValue] = useState('')
   const [providerId, setProviderId] = useState('')
+  const [modelId, setModelId] = useState('')
+  const [effortId, setEffortId] = useState<ReasoningEffort | ''>('')
   const providers = useSessionStore((s) => s.providers)
   const loadProviders = useSessionStore((s) => s.loadProviders)
   const createAndStartSession = useSessionStore((s) => s.createAndStartSession)
@@ -29,22 +35,38 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
     !!activeSession &&
     activeSession.status !== 'failed' &&
     !!activeProvider?.supportsContinuation
+  const selection = resolveProviderSelection(
+    providers,
+    activeSession?.providerId ?? providerId,
+    activeSession?.model ?? modelId,
+    activeSession?.effort ?? (effortId || null),
+  )
 
   useEffect(() => {
     loadProviders()
   }, [loadProviders])
 
   useEffect(() => {
-    if (activeSession?.providerId) {
+    if (activeSession) {
       setProviderId(activeSession.providerId)
+      setModelId(activeSession.model ?? '')
+      setEffortId(activeSession.effort ?? '')
       return
     }
 
-    if (providers.length > 0 && !providerId) {
-      const real = providers.find((p) => p.id !== 'fake')
-      setProviderId(real?.id ?? providers[0].id)
+    if (!selection.providerId) {
+      return
     }
-  }, [activeSession?.providerId, providers, providerId])
+
+    setProviderId((current) => current || selection.providerId)
+    setModelId((current) => current || selection.modelId)
+    setEffortId((current) => current || selection.effortId)
+  }, [
+    activeSession,
+    selection.providerId,
+    selection.modelId,
+    selection.effortId,
+  ])
 
   const isSessionDone =
     !activeSession ||
@@ -56,7 +78,7 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
 
   const handleSubmit = () => {
     const trimmed = value.trim()
-    if (!trimmed || !providerId) return
+    if (!trimmed || !selection.providerId || !selection.modelId) return
 
     if (activeSession && canContinueActiveSession) {
       sendMessageToSession(activeSession.id, trimmed)
@@ -66,8 +88,39 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
 
     const name =
       trimmed.length > 40 ? trimmed.substring(0, 40) + '...' : trimmed
-    createAndStartSession(projectId, workspaceId, providerId, name, trimmed)
+    createAndStartSession(
+      projectId,
+      workspaceId,
+      selection.providerId,
+      selection.modelId,
+      selection.effort?.id ?? null,
+      name,
+      trimmed,
+    )
     setValue('')
+  }
+
+  const handleProviderChange = (nextProviderId: string) => {
+    const nextSelection = resolveProviderSelection(
+      providers,
+      nextProviderId,
+      null,
+      null,
+    )
+    setProviderId(nextSelection.providerId)
+    setModelId(nextSelection.modelId)
+    setEffortId(nextSelection.effortId)
+  }
+
+  const handleModelChange = (nextModelId: string) => {
+    const nextSelection = resolveProviderSelection(
+      providers,
+      selection.providerId,
+      nextModelId,
+      null,
+    )
+    setModelId(nextSelection.modelId)
+    setEffortId(nextSelection.effortId)
   }
 
   return (
@@ -76,9 +129,11 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
       onChange={setValue}
       onSubmit={handleSubmit}
       providers={providers}
-      selectedProviderId={providerId}
-      onProviderChange={setProviderId}
-      providerSelectionDisabled={canContinueActiveSession}
+      selection={selection}
+      onProviderChange={handleProviderChange}
+      onModelChange={handleModelChange}
+      onEffortChange={setEffortId}
+      selectionDisabled={canContinueActiveSession}
       placeholder={
         activeSession?.attention === 'needs-input'
           ? 'Respond to the agent...'

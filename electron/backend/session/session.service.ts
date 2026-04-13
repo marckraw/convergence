@@ -48,14 +48,25 @@ export class SessionService {
 
     this.db
       .prepare(
-        `INSERT INTO sessions (id, project_id, workspace_id, provider_id, name, working_directory)
-         VALUES (?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO sessions (
+           id,
+           project_id,
+           workspace_id,
+           provider_id,
+           model,
+           effort,
+           name,
+           working_directory
+         )
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
       )
       .run(
         id,
         input.projectId,
         input.workspaceId,
         input.providerId,
+        input.model,
+        input.effort,
         input.name,
         workingDirectory,
       )
@@ -101,6 +112,8 @@ export class SessionService {
       sessionId: id,
       workingDirectory: session.workingDirectory,
       initialMessage: message,
+      model: session.model,
+      effort: session.effort,
     })
 
     this.activeHandles.set(id, handle)

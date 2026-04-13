@@ -12,6 +12,7 @@ import { ChangedFilesPanel } from './changed-files-panel.container'
 export const SessionView: FC = () => {
   const activeProject = useProjectStore((s) => s.activeProject)
   const activeSessionId = useSessionStore((s) => s.activeSessionId)
+  const draftWorkspaceId = useSessionStore((s) => s.draftWorkspaceId)
   const sessions = useSessionStore((s) => s.sessions)
   const approveSession = useSessionStore((s) => s.approveSession)
   const denySession = useSessionStore((s) => s.denySession)
@@ -56,7 +57,7 @@ export const SessionView: FC = () => {
           {activeProject && (
             <ComposerContainer
               projectId={activeProject.id}
-              workspaceId={null}
+              workspaceId={draftWorkspaceId}
               activeSessionId={null}
             />
           )}
@@ -114,7 +115,7 @@ export const SessionView: FC = () => {
         </div>
 
         {/* Transcript */}
-        <div className="flex-1 overflow-y-auto px-4">
+        <div className="app-scrollbar flex-1 overflow-y-auto px-4">
           <div className="mx-auto max-w-2xl py-4">
             {session.transcript.map((entry, i) => {
               const isLastApproval =

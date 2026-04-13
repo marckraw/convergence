@@ -1,6 +1,13 @@
-import { contextBridge, ipcRenderer } from 'electron'
+import { contextBridge, ipcRenderer, nativeTheme } from 'electron'
 
 contextBridge.exposeInMainWorld('electronAPI', {
+  system: {
+    getInfo: () => ({
+      platform: process.platform,
+      prefersReducedTransparency:
+        nativeTheme?.prefersReducedTransparency ?? false,
+    }),
+  },
   project: {
     create: (input: { repositoryPath: string; name?: string }) =>
       ipcRenderer.invoke('project:create', input),
@@ -35,6 +42,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
       projectId: string
       workspaceId: string | null
       providerId: string
+      model: string | null
+      effort: string | null
       name: string
     }) => ipcRenderer.invoke('session:create', input),
     getByProjectId: (projectId: string) =>

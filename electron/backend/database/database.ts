@@ -20,6 +20,8 @@ const SCHEMA = `
     project_id TEXT NOT NULL,
     workspace_id TEXT,
     provider_id TEXT NOT NULL,
+    model TEXT,
+    effort TEXT,
     name TEXT NOT NULL,
     status TEXT NOT NULL DEFAULT 'idle',
     attention TEXT NOT NULL DEFAULT 'none',
@@ -45,6 +47,21 @@ const SCHEMA = `
 
 let db: Database.Database | null = null
 
+function ensureSessionColumns(database: Database.Database): void {
+  const columns = database
+    .prepare("PRAGMA table_info('sessions')")
+    .all() as Array<{ name: string }>
+  const columnNames = new Set(columns.map((column) => column.name))
+
+  if (!columnNames.has('model')) {
+    database.exec('ALTER TABLE sessions ADD COLUMN model TEXT')
+  }
+
+  if (!columnNames.has('effort')) {
+    database.exec('ALTER TABLE sessions ADD COLUMN effort TEXT')
+  }
+}
+
 export function getDatabase(dbPath?: string): Database.Database {
   if (db) return db
 
@@ -52,6 +69,7 @@ export function getDatabase(dbPath?: string): Database.Database {
   db.pragma('journal_mode = WAL')
   db.pragma('foreign_keys = ON')
   db.exec(SCHEMA)
+  ensureSessionColumns(db)
 
   return db
 }

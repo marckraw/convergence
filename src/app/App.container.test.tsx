@@ -20,6 +20,12 @@ const mockProject = {
 }
 
 const mockElectronAPI = {
+  system: {
+    getInfo: vi.fn().mockReturnValue({
+      platform: 'darwin',
+      prefersReducedTransparency: false,
+    }),
+  },
   project: {
     create: vi.fn(),
     getAll: vi.fn(),
@@ -51,11 +57,27 @@ const mockElectronAPI = {
     onSessionUpdate: vi.fn().mockReturnValue(() => {}),
   },
   provider: {
-    getAll: vi
-      .fn()
-      .mockResolvedValue([
-        { id: 'fake', name: 'Fake Provider', supportsContinuation: false },
-      ]),
+    getAll: vi.fn().mockResolvedValue([
+      {
+        id: 'claude-code',
+        name: 'Claude Code',
+        vendorLabel: 'Anthropic',
+        supportsContinuation: true,
+        defaultModelId: 'sonnet',
+        modelOptions: [
+          {
+            id: 'sonnet',
+            label: 'Claude Sonnet',
+            defaultEffort: 'medium',
+            effortOptions: [
+              { id: 'low', label: 'Low' },
+              { id: 'medium', label: 'Medium' },
+              { id: 'high', label: 'High' },
+            ],
+          },
+        ],
+      },
+    ]),
   },
 }
 
@@ -67,6 +89,8 @@ describe('App', () => {
       writable: true,
       configurable: true,
     })
+    delete document.documentElement.dataset.platform
+    delete document.documentElement.dataset.reducedTransparency
     useProjectStore.setState({
       projects: [],
       activeProject: null,
@@ -82,6 +106,7 @@ describe('App', () => {
     useSessionStore.setState({
       sessions: [],
       activeSessionId: null,
+      draftWorkspaceId: null,
       providers: [],
       error: null,
     })
@@ -96,6 +121,8 @@ describe('App', () => {
     await waitFor(() => {
       expect(screen.getByText('Welcome to Convergence')).toBeInTheDocument()
     })
+    expect(document.documentElement.dataset.platform).toBe('darwin')
+    expect(document.documentElement.dataset.reducedTransparency).toBe('false')
   })
 
   it('shows loading state', () => {
@@ -104,6 +131,19 @@ describe('App', () => {
     render(<App />)
 
     expect(screen.getByText('Loading...')).toBeInTheDocument()
+  })
+
+  it('falls back cleanly when system info is unavailable', async () => {
+    mockElectronAPI.system.getInfo.mockReturnValueOnce(undefined)
+    mockElectronAPI.project.getActive.mockResolvedValue(null)
+    mockElectronAPI.project.getAll.mockResolvedValue([])
+
+    render(<App />)
+
+    await waitFor(() => {
+      expect(screen.getByText('Welcome to Convergence')).toBeInTheDocument()
+    })
+    expect(document.documentElement.dataset.reducedTransparency).toBe('false')
   })
 
   it('shows sidebar with project when loaded', async () => {

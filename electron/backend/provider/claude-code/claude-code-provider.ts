@@ -8,6 +8,8 @@ import type {
   AttentionState,
 } from '../provider.types'
 import { parseJsonLines } from '../line-parser'
+import { buildClaudeDescriptor } from '../provider-descriptor.pure'
+import type { ProviderDescriptor } from '../provider.types'
 
 function now(): string {
   return new Date().toISOString()
@@ -40,6 +42,10 @@ export class ClaudeCodeProvider implements Provider {
   supportsContinuation = true
 
   constructor(private binaryPath: string) {}
+
+  async describe(): Promise<ProviderDescriptor> {
+    return buildClaudeDescriptor()
+  }
 
   start(config: SessionStartConfig): SessionHandle {
     const binaryPath = this.binaryPath
@@ -217,6 +223,12 @@ export class ClaudeCodeProvider implements Provider {
       ]
       if (claudeSessionId) {
         args.push('--resume', claudeSessionId)
+      }
+      if (config.model?.trim()) {
+        args.push('--model', config.model.trim())
+      }
+      if (config.effort?.trim()) {
+        args.push('--effort', config.effort.trim())
       }
 
       child = spawn(binaryPath, args, {

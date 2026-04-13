@@ -4,10 +4,11 @@ import type { Project } from '@/entities/project'
 import type { Workspace } from '@/entities/workspace'
 import type { Session } from '@/entities/session'
 import { SessionCreateInline } from '@/features/session-create-inline'
+import { Button } from '@/shared/ui/button'
 import { Input } from '@/shared/ui/input'
 import { SessionBadge } from '@/shared/ui/session-badge.presentational'
 import { cn } from '@/shared/lib/cn.pure'
-import { ChevronRight, GitBranch, Plus } from 'lucide-react'
+import { ChevronRight, GitBranch, Plus, Trash2 } from 'lucide-react'
 
 interface ProjectTreeProps {
   project: Project
@@ -15,6 +16,7 @@ interface ProjectTreeProps {
   sessions: Session[]
   activeSessionId: string | null
   onSelectSession: (id: string) => void
+  onDeleteSession: (id: string) => void
   onCreateWorkspace: (branchName: string) => void
 }
 
@@ -24,6 +26,7 @@ export const ProjectTree: FC<ProjectTreeProps> = ({
   sessions,
   activeSessionId,
   onSelectSession,
+  onDeleteSession,
   onCreateWorkspace,
 }) => {
   const [expandedWorkspaces, setExpandedWorkspaces] = useState<Set<string>>(
@@ -45,6 +48,39 @@ export const ProjectTree: FC<ProjectTreeProps> = ({
   const getWorkspaceSessions = (wsId: string) =>
     sessions.filter((s) => s.workspaceId === wsId)
 
+  const renderSessionRow = (session: Session) => (
+    <div
+      key={session.id}
+      className={cn(
+        'group/session flex items-center gap-1 rounded pr-1 transition-colors hover:bg-accent',
+        activeSessionId === session.id && 'bg-accent',
+      )}
+    >
+      <button
+        type="button"
+        onClick={() => onSelectSession(session.id)}
+        className="flex min-w-0 flex-1 items-center gap-1.5 px-1.5 py-1 text-left text-sm"
+      >
+        <SessionBadge attention={session.attention} />
+        <span className="truncate">{session.name}</span>
+      </button>
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon"
+        className="h-6 w-6 shrink-0 text-muted-foreground opacity-0 transition-opacity hover:text-destructive group-hover/session:opacity-100 focus-visible:opacity-100"
+        onClick={(event) => {
+          event.stopPropagation()
+          onDeleteSession(session.id)
+        }}
+        aria-label={`Delete session ${session.name}`}
+        title="Delete session"
+      >
+        <Trash2 className="h-3.5 w-3.5" />
+      </Button>
+    </div>
+  )
+
   return (
     <div className="px-3">
       <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
@@ -58,21 +94,9 @@ export const ProjectTree: FC<ProjectTreeProps> = ({
         <p className="mb-0.5 text-xs text-muted-foreground">
           main{rootSessions.length > 0 ? ` (${rootSessions.length})` : ''}
         </p>
-        {rootSessions.map((session) => (
-          <button
-            key={session.id}
-            onClick={() => onSelectSession(session.id)}
-            className={cn(
-              'flex w-full items-center gap-1.5 rounded px-1.5 py-1 text-left text-sm transition-colors hover:bg-accent',
-              activeSessionId === session.id && 'bg-accent',
-            )}
-          >
-            <SessionBadge attention={session.attention} />
-            <span className="truncate">{session.name}</span>
-          </button>
-        ))}
+        {rootSessions.map(renderSessionRow)}
         <div className="mt-1">
-          <SessionCreateInline projectId={project.id} workspaceId={null} />
+          <SessionCreateInline workspaceId={null} />
         </div>
       </div>
 
@@ -104,24 +128,9 @@ export const ProjectTree: FC<ProjectTreeProps> = ({
 
             {isExpanded && (
               <div className="ml-4 space-y-0.5">
-                {wsSessions.map((session) => (
-                  <button
-                    key={session.id}
-                    onClick={() => onSelectSession(session.id)}
-                    className={cn(
-                      'flex w-full items-center gap-1.5 rounded px-1.5 py-1 text-left text-sm transition-colors hover:bg-accent',
-                      activeSessionId === session.id && 'bg-accent',
-                    )}
-                  >
-                    <SessionBadge attention={session.attention} />
-                    <span className="truncate">{session.name}</span>
-                  </button>
-                ))}
+                {wsSessions.map(renderSessionRow)}
                 <div className="mt-1">
-                  <SessionCreateInline
-                    projectId={project.id}
-                    workspaceId={ws.id}
-                  />
+                  <SessionCreateInline workspaceId={ws.id} />
                 </div>
               </div>
             )}

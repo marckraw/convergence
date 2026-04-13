@@ -4,13 +4,181 @@ import { join } from 'path'
 import { tmpdir } from 'os'
 import { getDatabase, closeDatabase, resetDatabase } from '../database/database'
 import { ProviderRegistry } from '../provider/provider-registry'
-import { FakeProvider } from '../provider/fake-provider'
 import type {
   Provider,
   SessionHandle,
   SessionStatus,
+  TranscriptEntry,
+  AttentionState,
 } from '../provider/provider.types'
 import { SessionService } from './session.service'
+
+function now(): string {
+  return new Date().toISOString()
+}
+
+function createTestProvider(): Provider {
+  return {
+    id: 'test-provider',
+    name: 'Test Provider',
+    supportsContinuation: false,
+    describe: async () => ({
+      id: 'test-provider',
+      name: 'Test Provider',
+      vendorLabel: 'Test',
+      supportsContinuation: false,
+      defaultModelId: 'test-model',
+      modelOptions: [
+        {
+          id: 'test-model',
+          label: 'Test Model',
+          defaultEffort: null,
+          effortOptions: [],
+        },
+      ],
+    }),
+    start(config) {
+      const listeners = {
+        transcript: [] as Array<(entry: TranscriptEntry) => void>,
+        status: [] as Array<(status: SessionStatus) => void>,
+        attention: [] as Array<(attention: AttentionState) => void>,
+      }
+
+      const timers: ReturnType<typeof setTimeout>[] = []
+      let stopped = false
+      let approveResolve: (() => void) | null = null
+
+      const emitTranscript = (entry: TranscriptEntry) => {
+        listeners.transcript.forEach((cb) => cb(entry))
+      }
+
+      const emitStatus = (status: SessionStatus) => {
+        listeners.status.forEach((cb) => cb(status))
+      }
+
+      const emitAttention = (attention: AttentionState) => {
+        listeners.attention.forEach((cb) => cb(attention))
+      }
+
+      const schedule = (callback: () => void, delay: number) => {
+        if (stopped) return
+        timers.push(
+          setTimeout(() => {
+            if (!stopped) callback()
+          }, delay),
+        )
+      }
+
+      schedule(() => {
+        emitStatus('running')
+        emitTranscript({
+          type: 'user',
+          text: config.initialMessage,
+          timestamp: now(),
+        })
+
+        schedule(() => {
+          emitTranscript({
+            type: 'assistant',
+            text: 'Starting analysis...',
+            timestamp: now(),
+          })
+        }, 300)
+
+        schedule(() => {
+          emitTranscript({
+            type: 'assistant',
+            text: 'Preparing an edit.',
+            timestamp: now(),
+          })
+        }, 800)
+
+        schedule(() => {
+          emitTranscript({
+            type: 'approval-request',
+            description: 'Edit src/main.ts',
+            timestamp: now(),
+          })
+          emitAttention('needs-approval')
+
+          new Promise<void>((resolve) => {
+            approveResolve = resolve
+          }).then(() => {
+            if (stopped) return
+            emitAttention('none')
+
+            emitTranscript({
+              type: 'tool-use',
+              tool: 'edit_file',
+              input: 'src/main.ts',
+              timestamp: now(),
+            })
+
+            schedule(() => {
+              emitTranscript({
+                type: 'tool-result',
+                result: 'Edited src/main.ts',
+                timestamp: now(),
+              })
+            }, 400)
+
+            schedule(() => {
+              emitTranscript({
+                type: 'assistant',
+                text: 'Done.',
+                timestamp: now(),
+              })
+            }, 800)
+
+            schedule(() => {
+              emitStatus('completed')
+              emitAttention('finished')
+            }, 1000)
+          })
+        }, 1500)
+      }, 50)
+
+      return {
+        onTranscriptEntry: (cb) => {
+          listeners.transcript.push(cb)
+        },
+        onStatusChange: (cb) => {
+          listeners.status.push(cb)
+        },
+        onAttentionChange: (cb) => {
+          listeners.attention.push(cb)
+        },
+        sendMessage: (text) => {
+          if (stopped) return
+          emitTranscript({ type: 'user', text, timestamp: now() })
+        },
+        approve: () => {
+          approveResolve?.()
+          approveResolve = null
+        },
+        deny: () => {
+          if (stopped) return
+          approveResolve = null
+          emitTranscript({
+            type: 'system',
+            text: 'User denied the action.',
+            timestamp: now(),
+          })
+          emitStatus('completed')
+          emitAttention('finished')
+        },
+        stop: () => {
+          stopped = true
+          timers.forEach(clearTimeout)
+          timers.length = 0
+          approveResolve = null
+          emitStatus('failed')
+          emitAttention('failed')
+        },
+      }
+    },
+  }
+}
 
 describe('SessionService', () => {
   let service: SessionService
@@ -21,7 +189,7 @@ describe('SessionService', () => {
     vi.useFakeTimers()
     const db = getDatabase()
     const registry = new ProviderRegistry()
-    registry.register(new FakeProvider())
+    registry.register(createTestProvider())
 
     service = new SessionService(db, registry)
 
@@ -47,7 +215,9 @@ describe('SessionService', () => {
     const session = service.create({
       projectId,
       workspaceId: null,
-      providerId: 'fake',
+      providerId: 'test-provider',
+      model: 'test-model',
+      effort: null,
       name: 'test session',
     })
 
@@ -62,13 +232,17 @@ describe('SessionService', () => {
     service.create({
       projectId,
       workspaceId: null,
-      providerId: 'fake',
+      providerId: 'test-provider',
+      model: 'test-model',
+      effort: null,
       name: 'session 1',
     })
     service.create({
       projectId,
       workspaceId: null,
-      providerId: 'fake',
+      providerId: 'test-provider',
+      model: 'test-model',
+      effort: null,
       name: 'session 2',
     })
 
@@ -80,7 +254,9 @@ describe('SessionService', () => {
     const session = service.create({
       projectId,
       workspaceId: null,
-      providerId: 'fake',
+      providerId: 'test-provider',
+      model: 'test-model',
+      effort: null,
       name: 'streaming test',
     })
 
@@ -100,7 +276,9 @@ describe('SessionService', () => {
     const session = service.create({
       projectId,
       workspaceId: null,
-      providerId: 'fake',
+      providerId: 'test-provider',
+      model: 'test-model',
+      effort: null,
       name: 'approval test',
     })
 
@@ -122,7 +300,9 @@ describe('SessionService', () => {
     const session = service.create({
       projectId,
       workspaceId: null,
-      providerId: 'fake',
+      providerId: 'test-provider',
+      model: 'test-model',
+      effort: null,
       name: 'stop test',
     })
 
@@ -140,7 +320,9 @@ describe('SessionService', () => {
     const session = service.create({
       projectId,
       workspaceId: null,
-      providerId: 'fake',
+      providerId: 'test-provider',
+      model: 'test-model',
+      effort: null,
       name: 'delete test',
     })
 
@@ -152,7 +334,9 @@ describe('SessionService', () => {
     const session = service.create({
       projectId,
       workspaceId: null,
-      providerId: 'fake',
+      providerId: 'test-provider',
+      model: 'test-model',
+      effort: null,
       name: 'persist test',
     })
 
@@ -174,7 +358,9 @@ describe('SessionService', () => {
     const session = service.create({
       projectId,
       workspaceId: null,
-      providerId: 'fake',
+      providerId: 'test-provider',
+      model: 'test-model',
+      effort: null,
       name: 'notify test',
     })
 
@@ -208,6 +394,21 @@ describe('SessionService', () => {
       id: 'continuable',
       name: 'Continuable Provider',
       supportsContinuation: true,
+      describe: async () => ({
+        id: 'continuable',
+        name: 'Continuable Provider',
+        vendorLabel: 'Test',
+        supportsContinuation: true,
+        defaultModelId: 'continuable-model',
+        modelOptions: [
+          {
+            id: 'continuable-model',
+            label: 'Continuable Model',
+            defaultEffort: null,
+            effortOptions: [],
+          },
+        ],
+      }),
       start: () => handle,
     }
 
@@ -218,6 +419,8 @@ describe('SessionService', () => {
       projectId,
       workspaceId: null,
       providerId: 'continuable',
+      model: 'continuable-model',
+      effort: null,
       name: 'continuation test',
     })
 

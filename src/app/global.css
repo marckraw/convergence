@@ -49,6 +49,14 @@
   --ring: oklch(0.708 0 0);
   --sidebar: oklch(0.96 0 0);
   --sidebar-foreground: oklch(0.145 0 0);
+  --chrome-edge: rgba(255, 255, 255, 0.48);
+  --chrome-shadow: rgba(15, 23, 42, 0.12);
+  --sidebar-surface: rgba(255, 255, 255, 0.76);
+  --sidebar-sheen: rgba(255, 255, 255, 0.48);
+  --main-surface: rgba(252, 252, 253, 0.86);
+  --scrollbar-track: rgba(255, 255, 255, 0.08);
+  --scrollbar-thumb: rgba(17, 24, 39, 0.2);
+  --scrollbar-thumb-hover: rgba(17, 24, 39, 0.3);
 }
 
 .dark {
@@ -73,15 +81,148 @@
   --ring: oklch(0.5 0 0);
   --sidebar: oklch(0.17 0.005 260);
   --sidebar-foreground: oklch(0.82 0 0);
+  --chrome-edge: rgba(255, 255, 255, 0.12);
+  --chrome-shadow: rgba(0, 0, 0, 0.38);
+  --sidebar-surface: rgba(16, 19, 27, 0.62);
+  --sidebar-sheen: rgba(255, 255, 255, 0.08);
+  --main-surface: rgba(22, 25, 33, 0.82);
+  --scrollbar-track: rgba(255, 255, 255, 0.04);
+  --scrollbar-thumb: rgba(255, 255, 255, 0.14);
+  --scrollbar-thumb-hover: rgba(255, 255, 255, 0.22);
+}
+
+:root[data-platform='darwin'][data-reduced-transparency='false'] {
+  --sidebar-surface: rgba(255, 255, 255, 0.62);
+  --main-surface: rgba(250, 250, 252, 0.78);
+}
+
+.dark[data-platform='darwin'][data-reduced-transparency='false'] {
+  --sidebar-surface: rgba(14, 17, 25, 0.42);
+  --sidebar-sheen: rgba(255, 255, 255, 0.1);
+  --main-surface: rgba(19, 22, 30, 0.72);
+  --scrollbar-track: rgba(255, 255, 255, 0.035);
+  --scrollbar-thumb: rgba(255, 255, 255, 0.16);
+  --scrollbar-thumb-hover: rgba(255, 255, 255, 0.26);
 }
 
 @layer base {
+  html,
+  body,
+  #root {
+    min-height: 100%;
+  }
+
   * {
     @apply border-border;
   }
   body {
-    @apply bg-background text-foreground;
+    @apply text-foreground;
+    background: transparent;
     font-family: -apple-system, 'SF Pro Text', system-ui, sans-serif;
     -webkit-font-smoothing: antialiased;
+  }
+}
+
+@layer components {
+  .app-chrome {
+    background:
+      radial-gradient(
+        circle at top left,
+        color-mix(in srgb, var(--foreground) 10%, transparent),
+        transparent 34%
+      ),
+      linear-gradient(
+        180deg,
+        color-mix(in srgb, var(--background) 62%, transparent),
+        color-mix(in srgb, var(--background) 86%, black 10%)
+      );
+  }
+
+  .app-sidebar-panel {
+    position: relative;
+    background: linear-gradient(
+      180deg,
+      var(--sidebar-surface),
+      color-mix(in srgb, var(--sidebar-surface) 84%, var(--background) 16%)
+    );
+    box-shadow:
+      inset -1px 0 0 var(--chrome-edge),
+      24px 0 48px -34px var(--chrome-shadow);
+  }
+
+  .app-sidebar-panel::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background: linear-gradient(
+      180deg,
+      var(--sidebar-sheen),
+      transparent 18%,
+      transparent 82%,
+      color-mix(in srgb, var(--sidebar-sheen) 60%, transparent)
+    );
+  }
+
+  .app-main-panel {
+    background: linear-gradient(
+      180deg,
+      var(--main-surface),
+      color-mix(in srgb, var(--main-surface) 90%, var(--background) 10%)
+    );
+  }
+
+  .app-resize-handle {
+    background: linear-gradient(
+      180deg,
+      transparent,
+      color-mix(in srgb, var(--chrome-edge) 80%, transparent),
+      transparent
+    );
+  }
+
+  .app-sidebar-topbar,
+  .app-sidebar-footer {
+    background: color-mix(in srgb, var(--sidebar-surface) 86%, transparent);
+  }
+
+  .app-scrollbar {
+    scrollbar-width: thin;
+    scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
+  }
+
+  .app-scrollbar::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+
+  .app-scrollbar::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .app-scrollbar::-webkit-scrollbar-thumb {
+    background: linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--scrollbar-thumb) 92%, white 8%),
+      var(--scrollbar-thumb)
+    );
+    border: 2px solid transparent;
+    border-radius: 999px;
+    background-clip: padding-box;
+    min-height: 36px;
+  }
+
+  .app-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--scrollbar-thumb-hover) 88%, white 12%),
+      var(--scrollbar-thumb-hover)
+    );
+    border: 2px solid transparent;
+    background-clip: padding-box;
+  }
+
+  .app-scrollbar::-webkit-scrollbar-corner {
+    background: transparent;
   }
 }

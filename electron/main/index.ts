@@ -1,4 +1,4 @@
-import { app, BrowserWindow } from 'electron'
+import { app, BrowserWindow, nativeTheme } from 'electron'
 import { join } from 'path'
 import { getDatabase } from '../backend/database/database'
 import { ProjectService } from '../backend/project/project.service'
@@ -7,22 +7,21 @@ import { WorkspaceService } from '../backend/workspace/workspace.service'
 import { GitService } from '../backend/git/git.service'
 import { SessionService } from '../backend/session/session.service'
 import { ProviderRegistry } from '../backend/provider/provider-registry'
-import { FakeProvider } from '../backend/provider/fake-provider'
 import { ClaudeCodeProvider } from '../backend/provider/claude-code/claude-code-provider'
 import { CodexProvider } from '../backend/provider/codex/codex-provider'
 import { detectProviders } from '../backend/provider/detect'
 import { registerIpcHandlers } from './ipc'
+import { getWindowAppearanceOptions } from './window-effects.pure'
 
 function createWindow(): void {
-  const isMac = process.platform === 'darwin'
-
   const mainWindow = new BrowserWindow({
     width: 1200,
     height: 800,
     title: 'Convergence',
-    titleBarStyle: isMac ? 'hiddenInset' : 'default',
-    trafficLightPosition: isMac ? { x: 16, y: 16 } : undefined,
-    backgroundColor: '#232326',
+    ...getWindowAppearanceOptions({
+      platform: process.platform,
+      prefersReducedTransparency: nativeTheme.prefersReducedTransparency,
+    }),
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       contextIsolation: true,
@@ -51,9 +50,6 @@ app.whenReady().then(async () => {
   const sessionService = new SessionService(db, providerRegistry)
 
   projectService.setWorkspaceService(workspaceService)
-
-  // Register FakeProvider for development
-  providerRegistry.register(new FakeProvider())
 
   // Detect and register real providers
   const detected = await detectProviders()

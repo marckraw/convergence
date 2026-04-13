@@ -1,10 +1,11 @@
 import { create } from 'zustand'
-import type { Session, ProviderInfo } from './session.types'
+import type { Session, ProviderInfo, ReasoningEffort } from './session.types'
 import { sessionApi, providerApi } from './session.api'
 
 interface SessionState {
   sessions: Session[]
   activeSessionId: string | null
+  draftWorkspaceId: string | null
   providers: ProviderInfo[]
   error: string | null
 }
@@ -16,6 +17,8 @@ interface SessionActions {
     projectId: string,
     workspaceId: string | null,
     providerId: string,
+    model: string | null,
+    effort: ReasoningEffort | null,
     name: string,
     message: string,
   ) => Promise<void>
@@ -24,6 +27,7 @@ interface SessionActions {
   sendMessageToSession: (id: string, text: string) => Promise<void>
   stopSession: (id: string) => Promise<void>
   deleteSession: (id: string, projectId: string) => Promise<void>
+  beginSessionDraft: (workspaceId: string | null) => void
   setActiveSession: (id: string | null) => void
   handleSessionUpdate: (session: Session) => void
   clearError: () => void
@@ -34,6 +38,7 @@ export type SessionStore = SessionState & SessionActions
 export const useSessionStore = create<SessionStore>((set, get) => ({
   sessions: [],
   activeSessionId: null,
+  draftWorkspaceId: null,
   providers: [],
   error: null,
 
@@ -51,6 +56,8 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     projectId,
     workspaceId,
     providerId,
+    model,
+    effort,
     name,
     message,
   ) => {
@@ -60,12 +67,15 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
         projectId,
         workspaceId,
         providerId,
+        model,
+        effort,
         name,
       })
       await sessionApi.start(session.id, message)
       set((state) => ({
         sessions: [session, ...state.sessions],
         activeSessionId: session.id,
+        draftWorkspaceId: null,
       }))
     } catch (err) {
       set({
@@ -123,6 +133,8 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
       set({
         sessions,
         activeSessionId: activeSessionId === id ? null : activeSessionId,
+        draftWorkspaceId:
+          activeSessionId === id ? null : get().draftWorkspaceId,
       })
     } catch (err) {
       set({
@@ -131,7 +143,17 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     }
   },
 
-  setActiveSession: (id) => set({ activeSessionId: id }),
+  beginSessionDraft: (workspaceId) =>
+    set({
+      activeSessionId: null,
+      draftWorkspaceId: workspaceId,
+    }),
+
+  setActiveSession: (id) =>
+    set({
+      activeSessionId: id,
+      draftWorkspaceId: null,
+    }),
 
   handleSessionUpdate: (session: Session) => {
     set((state) => ({

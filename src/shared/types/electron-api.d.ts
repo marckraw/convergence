@@ -33,6 +33,27 @@ type AttentionState =
   | 'needs-approval'
   | 'finished'
   | 'failed'
+type ReasoningEffort =
+  | 'none'
+  | 'minimal'
+  | 'low'
+  | 'medium'
+  | 'high'
+  | 'max'
+  | 'xhigh'
+
+interface ProviderEffortOption {
+  id: ReasoningEffort
+  label: string
+  description?: string
+}
+
+interface ProviderModelOption {
+  id: string
+  label: string
+  defaultEffort: ReasoningEffort | null
+  effortOptions: ProviderEffortOption[]
+}
 
 type TranscriptEntry =
   | { type: 'user'; text: string; timestamp: string }
@@ -57,6 +78,8 @@ interface SessionData {
   projectId: string
   workspaceId: string | null
   providerId: string
+  model: string | null
+  effort: ReasoningEffort | null
   name: string
   status: SessionStatus
   attention: AttentionState
@@ -70,16 +93,29 @@ interface CreateSessionInput {
   projectId: string
   workspaceId: string | null
   providerId: string
+  model: string | null
+  effort: ReasoningEffort | null
   name: string
 }
 
 interface ProviderInfo {
   id: string
   name: string
+  vendorLabel: string
   supportsContinuation: boolean
+  defaultModelId: string
+  modelOptions: ProviderModelOption[]
+}
+
+interface SystemInfo {
+  platform: NodeJS.Platform
+  prefersReducedTransparency: boolean
 }
 
 interface ElectronAPI {
+  system: {
+    getInfo: () => SystemInfo
+  }
   project: {
     create: (input: CreateProjectInput) => Promise<ProjectData>
     getAll: () => Promise<ProjectData[]>

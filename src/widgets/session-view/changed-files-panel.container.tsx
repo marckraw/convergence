@@ -87,7 +87,7 @@ export const ChangedFilesPanel: FC<ChangedFilesPanelProps> = ({
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto">
+      <div className="app-scrollbar flex-1 overflow-y-auto">
         {files.length === 0 ? (
           <p className="p-3 text-xs text-muted-foreground">
             {loading ? 'Loading...' : 'No changes detected'}
@@ -118,7 +118,7 @@ export const ChangedFilesPanel: FC<ChangedFilesPanelProps> = ({
 
         {selectedFile && diff && (
           <div className="border-t p-2">
-            <pre className="max-h-64 overflow-auto rounded bg-background p-2 font-mono text-[11px] leading-relaxed text-muted-foreground">
+            <pre className="app-scrollbar max-h-64 overflow-auto rounded bg-background p-2 font-mono text-[11px] leading-relaxed text-muted-foreground">
               {diff.split('\n').map((line, i) => (
                 <div
                   key={i}

@@ -26,6 +26,7 @@ export const Sidebar: FC<SidebarProps> = ({
   const createWorkspace = useWorkspaceStore((s) => s.createWorkspace)
   const sessions = useSessionStore((s) => s.sessions)
   const loadSessions = useSessionStore((s) => s.loadSessions)
+  const deleteSession = useSessionStore((s) => s.deleteSession)
 
   useEffect(() => {
     if (activeProject) {
@@ -41,9 +42,8 @@ export const Sidebar: FC<SidebarProps> = ({
 
   return (
     <div className="flex h-full flex-col">
-      {/* Titlebar drag region — accounts for traffic lights on macOS */}
       <div
-        className="flex h-12 items-center justify-end border-b border-border px-3"
+        className="app-sidebar-topbar flex h-12 items-center justify-end border-b border-white/10 px-3"
         style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
       >
         <div style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
@@ -51,7 +51,7 @@ export const Sidebar: FC<SidebarProps> = ({
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto py-3">
+      <div className="app-scrollbar flex-1 overflow-y-auto py-3">
         <NeedsYou
           sessions={needsYouSessions}
           activeSessionId={activeSessionId}
@@ -69,6 +69,9 @@ export const Sidebar: FC<SidebarProps> = ({
             sessions={sessions}
             activeSessionId={activeSessionId}
             onSelectSession={onSelectSession}
+            onDeleteSession={(sessionId: string) =>
+              deleteSession(sessionId, activeProject.id)
+            }
             onCreateWorkspace={(branchName: string) =>
               createWorkspace(activeProject.id, branchName)
             }
@@ -82,7 +85,7 @@ export const Sidebar: FC<SidebarProps> = ({
         )}
       </div>
 
-      <div className="border-t p-3">
+      <div className="app-sidebar-footer border-t border-white/10 p-3">
         <Button
           variant="outline"
           size="sm"

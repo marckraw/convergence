@@ -17,6 +17,8 @@ export interface SessionRow {
   project_id: string
   workspace_id: string | null
   provider_id: string
+  model: string | null
+  effort: string | null
   name: string
   status: string
   attention: string

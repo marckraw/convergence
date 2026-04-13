@@ -8,6 +8,16 @@ import type {
   AttentionState,
 } from '../provider.types'
 import { JsonRpcClient } from './jsonrpc'
+import {
+  buildFallbackCodexDescriptor,
+  normalizeProviderDescriptor,
+} from '../provider-descriptor.pure'
+import type {
+  ProviderDescriptor,
+  ProviderEffortOption,
+  ProviderModelOption,
+  ReasoningEffort,
+} from '../provider.types'
 
 function now(): string {
   return new Date().toISOString()
@@ -17,8 +27,19 @@ export class CodexProvider implements Provider {
   id = 'codex'
   name = 'Codex'
   supportsContinuation = true
+  private descriptorPromise: Promise<ProviderDescriptor> | null = null
 
   constructor(private binaryPath: string) {}
+
+  describe(): Promise<ProviderDescriptor> {
+    if (!this.descriptorPromise) {
+      this.descriptorPromise = this.fetchDescriptor().catch(() =>
+        buildFallbackCodexDescriptor(),
+      )
+    }
+
+    return this.descriptorPromise
+  }
 
   start(config: SessionStartConfig): SessionHandle {
     const listeners = {
@@ -143,6 +164,8 @@ export class CodexProvider implements Provider {
 
         await rpc.request('turn/start', {
           threadId,
+          model: config.model,
+          effort: config.effort,
           input: [
             {
               type: 'text',
@@ -454,6 +477,8 @@ export class CodexProvider implements Provider {
         rpc
           .request('turn/start', {
             threadId,
+            model: config.model,
+            effort: config.effort,
             input: [{ type: 'text', text, text_elements: [] }],
           })
           .catch(() => {})
@@ -500,5 +525,168 @@ export class CodexProvider implements Provider {
     }
 
     return handle
+  }
+
+  private async fetchDescriptor(): Promise<ProviderDescriptor> {
+    const fallback = buildFallbackCodexDescriptor()
+
+    const child = spawn(this.binaryPath, ['app-server'], {
+      cwd: process.cwd(),
+      stdio: ['pipe', 'pipe', 'pipe'],
+      env: { ...process.env },
+    })
+
+    if (!child.stdin || !child.stdout) {
+      child.kill('SIGTERM')
+      return fallback
+    }
+
+    const rpc = new JsonRpcClient(child.stdin, child.stdout)
+    if (child.stderr) {
+      child.stderr.on('data', () => {
+        // Drain stderr so discovery cannot block.
+      })
+    }
+
+    try {
+      await rpc.request('initialize', {
+        clientInfo: {
+          name: 'convergence',
+          title: 'Convergence',
+          version: '0.0.0',
+        },
+        capabilities: {
+          experimentalApi: true,
+        },
+      })
+      rpc.notify('initialized')
+
+      const result = (await rpc.request('model/list', {
+        includeHidden: false,
+        limit: 100,
+      })) as { data?: unknown }
+      const models = Array.isArray(result?.data) ? result.data : []
+
+      if (models.length === 0) {
+        return fallback
+      }
+
+      const modelOptions = models
+        .map((model) => this.toModelOption(model))
+        .filter((option): option is ProviderModelOption => option !== null)
+
+      if (modelOptions.length === 0) {
+        return fallback
+      }
+
+      const defaultModelId =
+        this.readDefaultModelId(models) ??
+        modelOptions[0]?.id ??
+        fallback.defaultModelId
+
+      return normalizeProviderDescriptor({
+        ...fallback,
+        defaultModelId,
+        modelOptions,
+      })
+    } finally {
+      rpc.destroy()
+      child.kill('SIGTERM')
+    }
+  }
+
+  private toModelOption(model: unknown): ProviderModelOption | null {
+    if (!model || typeof model !== 'object') return null
+    const record = model as {
+      model?: unknown
+      displayName?: unknown
+      hidden?: unknown
+      defaultReasoningEffort?: unknown
+      supportedReasoningEfforts?: Array<{
+        reasoningEffort?: unknown
+        description?: unknown
+      }>
+    }
+
+    if (record.hidden === true || typeof record.model !== 'string') {
+      return null
+    }
+
+    const effortOptions =
+      record.supportedReasoningEfforts?.reduce<ProviderEffortOption[]>(
+        (options, effort) => {
+          const id = this.readReasoningEffort(effort?.reasoningEffort)
+          if (!id) {
+            return options
+          }
+
+          options.push({
+            id,
+            label: this.formatEffortLabel(id),
+            description:
+              typeof effort?.description === 'string'
+                ? effort.description
+                : undefined,
+          })
+          return options
+        },
+        [],
+      ) ?? []
+
+    return {
+      id: record.model,
+      label:
+        typeof record.displayName === 'string' && record.displayName.trim()
+          ? record.displayName
+          : record.model,
+      defaultEffort: this.readReasoningEffort(record.defaultReasoningEffort),
+      effortOptions,
+    }
+  }
+
+  private readDefaultModelId(models: unknown[]): string | null {
+    for (const model of models) {
+      if (!model || typeof model !== 'object') continue
+      const record = model as { isDefault?: unknown; model?: unknown }
+      if (record.isDefault === true && typeof record.model === 'string') {
+        return record.model
+      }
+    }
+
+    return null
+  }
+
+  private readReasoningEffort(value: unknown): ReasoningEffort | null {
+    switch (value) {
+      case 'none':
+      case 'minimal':
+      case 'low':
+      case 'medium':
+      case 'high':
+      case 'max':
+      case 'xhigh':
+        return value
+      default:
+        return null
+    }
+  }
+
+  private formatEffortLabel(effort: ReasoningEffort): string {
+    switch (effort) {
+      case 'none':
+        return 'None'
+      case 'minimal':
+        return 'Minimal'
+      case 'low':
+        return 'Low'
+      case 'medium':
+        return 'Medium'
+      case 'high':
+        return 'High'
+      case 'max':
+        return 'Max'
+      case 'xhigh':
+        return 'Very High'
+    }
   }
 }
