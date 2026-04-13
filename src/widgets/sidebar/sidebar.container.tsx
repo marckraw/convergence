@@ -32,9 +32,13 @@ export const Sidebar: FC<SidebarProps> = ({
   const deleteWorkspace = useWorkspaceStore((s) => s.deleteWorkspace)
   const sessions = useSessionStore((s) => s.sessions)
   const globalSessions = useSessionStore((s) => s.globalSessions)
+  const dismissedNeedsYou = useSessionStore((s) => s.dismissedNeedsYou)
   const loadSessions = useSessionStore((s) => s.loadSessions)
   const loadGlobalSessions = useSessionStore((s) => s.loadGlobalSessions)
   const deleteSession = useSessionStore((s) => s.deleteSession)
+  const dismissNeedsYouSession = useSessionStore(
+    (s) => s.dismissNeedsYouSession,
+  )
   const prepareForProject = useSessionStore((s) => s.prepareForProject)
   const setActiveSession = useSessionStore((s) => s.setActiveSession)
 
@@ -54,6 +58,10 @@ export const Sidebar: FC<SidebarProps> = ({
     .map((session) => {
       const summary = buildNeedsYouSummary(session)
       if (!summary) {
+        return null
+      }
+
+      if (dismissedNeedsYou[session.id] === session.updatedAt) {
         return null
       }
 
@@ -144,6 +152,7 @@ export const Sidebar: FC<SidebarProps> = ({
           sessions={needsYouSessions}
           activeSessionId={activeSessionId}
           onSelect={handleSelectNeedsYouSession}
+          onDismiss={dismissNeedsYouSession}
         />
 
         {needsYouSessions.length > 0 && (

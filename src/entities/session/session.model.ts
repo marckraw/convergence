@@ -5,6 +5,7 @@ import { sessionApi, providerApi } from './session.api'
 interface SessionState {
   sessions: Session[]
   globalSessions: Session[]
+  dismissedNeedsYou: Record<string, string>
   currentProjectId: string | null
   activeSessionId: string | null
   draftWorkspaceId: string | null
@@ -16,6 +17,7 @@ interface SessionActions {
   loadSessions: (projectId: string) => Promise<void>
   loadGlobalSessions: () => Promise<void>
   loadProviders: () => Promise<void>
+  dismissNeedsYouSession: (id: string) => void
   createAndStartSession: (
     projectId: string,
     workspaceId: string | null,
@@ -42,6 +44,7 @@ export type SessionStore = SessionState & SessionActions
 export const useSessionStore = create<SessionStore>((set, get) => ({
   sessions: [],
   globalSessions: [],
+  dismissedNeedsYou: {},
   currentProjectId: null,
   activeSessionId: null,
   draftWorkspaceId: null,
@@ -78,12 +81,37 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
 
   loadGlobalSessions: async () => {
     const globalSessions = await sessionApi.getAll()
-    set({ globalSessions })
+    set((state) => ({
+      globalSessions,
+      dismissedNeedsYou: Object.fromEntries(
+        Object.entries(state.dismissedNeedsYou).filter(
+          ([sessionId, updatedAt]) =>
+            globalSessions.some(
+              (session) =>
+                session.id === sessionId && session.updatedAt === updatedAt,
+            ),
+        ),
+      ),
+    }))
   },
 
   loadProviders: async () => {
     const providers = await providerApi.getAll()
     set({ providers })
+  },
+
+  dismissNeedsYouSession: (id: string) => {
+    const session = get().globalSessions.find((entry) => entry.id === id)
+    if (!session) {
+      return
+    }
+
+    set((state) => ({
+      dismissedNeedsYou: {
+        ...state.dismissedNeedsYou,
+        [id]: session.updatedAt,
+      },
+    }))
   },
 
   createAndStartSession: async (
@@ -110,6 +138,11 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
         currentProjectId: projectId,
         sessions: [session, ...state.sessions],
         globalSessions: [session, ...state.globalSessions],
+        dismissedNeedsYou: Object.fromEntries(
+          Object.entries(state.dismissedNeedsYou).filter(
+            ([sessionId]) => sessionId !== session.id,
+          ),
+        ),
         activeSessionId: session.id,
         draftWorkspaceId: null,
       }))
@@ -172,6 +205,11 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
       set({
         sessions,
         globalSessions,
+        dismissedNeedsYou: Object.fromEntries(
+          Object.entries(get().dismissedNeedsYou).filter(
+            ([sessionId]) => sessionId !== id,
+          ),
+        ),
         activeSessionId: activeSessionId === id ? null : activeSessionId,
         draftWorkspaceId:
           activeSessionId === id ? null : get().draftWorkspaceId,
@@ -206,6 +244,12 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
   handleSessionUpdate: (session: Session) => {
     const currentProjectId = get().currentProjectId
     set((state) => ({
+      dismissedNeedsYou: Object.fromEntries(
+        Object.entries(state.dismissedNeedsYou).filter(
+          ([sessionId, updatedAt]) =>
+            sessionId !== session.id || updatedAt === session.updatedAt,
+        ),
+      ),
       globalSessions: state.globalSessions.some((s) => s.id === session.id)
         ? state.globalSessions.map((s) => (s.id === session.id ? session : s))
         : [session, ...state.globalSessions],

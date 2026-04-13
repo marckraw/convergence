@@ -31,6 +31,7 @@ describe('useSessionStore', () => {
     useSessionStore.setState({
       sessions: [],
       globalSessions: [],
+      dismissedNeedsYou: {},
       currentProjectId: null,
       activeSessionId: null,
       draftWorkspaceId: null,
@@ -59,6 +60,7 @@ describe('useSessionStore', () => {
         },
       ],
       globalSessions: [],
+      dismissedNeedsYou: {},
       currentProjectId: 'project-1',
       activeSessionId: 'session-1',
       draftWorkspaceId: 'workspace-1',
@@ -72,6 +74,7 @@ describe('useSessionStore', () => {
     expect(state.currentProjectId).toBe('project-2')
     expect(state.sessions).toEqual([])
     expect(state.globalSessions).toEqual([])
+    expect(state.dismissedNeedsYou).toEqual({})
     expect(state.activeSessionId).toBeNull()
     expect(state.draftWorkspaceId).toBeNull()
   })
@@ -80,6 +83,7 @@ describe('useSessionStore', () => {
     useSessionStore.setState({
       sessions: [],
       globalSessions: [],
+      dismissedNeedsYou: {},
       currentProjectId: 'project-1',
       activeSessionId: null,
       draftWorkspaceId: null,
@@ -147,5 +151,57 @@ describe('useSessionStore', () => {
 
     expect(mockElectronAPI.session.getAll).toHaveBeenCalledOnce()
     expect(useSessionStore.getState().globalSessions).toHaveLength(2)
+  })
+
+  it('dismisses a needs-you session until the session updates again', () => {
+    useSessionStore.setState({
+      sessions: [],
+      globalSessions: [
+        {
+          id: 'session-1',
+          projectId: 'project-1',
+          workspaceId: null,
+          providerId: 'claude-code',
+          model: 'sonnet',
+          effort: 'medium',
+          name: 'Needs input session',
+          status: 'running',
+          attention: 'needs-input',
+          workingDirectory: '/tmp/project-1',
+          transcript: [],
+          createdAt: '2026-01-01T00:00:00.000Z',
+          updatedAt: '2026-01-01T00:00:00.000Z',
+        },
+      ],
+      dismissedNeedsYou: {},
+      currentProjectId: 'project-1',
+      activeSessionId: null,
+      draftWorkspaceId: null,
+      providers: [],
+      error: null,
+    })
+
+    useSessionStore.getState().dismissNeedsYouSession('session-1')
+    expect(useSessionStore.getState().dismissedNeedsYou).toEqual({
+      'session-1': '2026-01-01T00:00:00.000Z',
+    })
+
+    useSessionStore.getState().handleSessionUpdate({
+      id: 'session-1',
+      projectId: 'project-1',
+      workspaceId: null,
+      providerId: 'claude-code',
+      model: 'sonnet',
+      effort: 'medium',
+      name: 'Needs input session',
+      status: 'running',
+      attention: 'needs-input',
+      workingDirectory: '/tmp/project-1',
+      transcript: [],
+      createdAt: '2026-01-01T00:00:00.000Z',
+      updatedAt: '2026-01-01T00:01:00.000Z',
+    })
+
+    expect(useSessionStore.getState().dismissedNeedsYou).toEqual({})
   })
 })

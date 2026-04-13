@@ -79,6 +79,7 @@ describe('NeedsYou', () => {
 
   it('renders project context and selects attention sessions', () => {
     const onSelect = vi.fn()
+    const onDismiss = vi.fn()
 
     render(
       <NeedsYou
@@ -106,6 +107,7 @@ describe('NeedsYou', () => {
         ]}
         activeSessionId={null}
         onSelect={onSelect}
+        onDismiss={onDismiss}
       />,
     )
 
@@ -113,8 +115,51 @@ describe('NeedsYou', () => {
     expect(screen.getByText('Finished')).toBeInTheDocument()
     expect(screen.getByText('RoomFinder')).toBeInTheDocument()
 
-    fireEvent.click(screen.getByRole('button', { name: /review roomfinder/i }))
+    fireEvent.click(screen.getByText('Review RoomFinder').closest('button')!)
 
     expect(onSelect).toHaveBeenCalledWith('session-1')
+    expect(onDismiss).not.toHaveBeenCalled()
+  })
+
+  it('dismisses an item without selecting the session', () => {
+    const onSelect = vi.fn()
+    const onDismiss = vi.fn()
+
+    render(
+      <NeedsYou
+        sessions={[
+          {
+            session: {
+              id: 'session-1',
+              projectId: 'project-1',
+              workspaceId: null,
+              providerId: 'claude-code',
+              model: 'sonnet',
+              effort: 'medium',
+              name: 'Review RoomFinder',
+              status: 'completed',
+              attention: 'finished',
+              workingDirectory: '/tmp/project-1',
+              transcript: [],
+              createdAt: '2026-01-01T00:00:00.000Z',
+              updatedAt: '2026-01-01T00:00:00.000Z',
+            },
+            projectName: 'RoomFinder',
+            summary: 'Finished',
+            priority: 3,
+          },
+        ]}
+        activeSessionId={null}
+        onSelect={onSelect}
+        onDismiss={onDismiss}
+      />,
+    )
+
+    fireEvent.click(
+      screen.getByRole('button', { name: /dismiss review roomfinder/i }),
+    )
+
+    expect(onDismiss).toHaveBeenCalledWith('session-1')
+    expect(onSelect).not.toHaveBeenCalled()
   })
 })
