@@ -28,7 +28,7 @@ export const DiffViewer: FC<DiffViewerProps> = ({
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <div className="border-b border-border px-3 py-2">
+      <div className="shrink-0 border-b border-border px-3 py-2">
         <p
           title={file}
           className="truncate font-mono text-[11px] text-foreground"
@@ -39,7 +39,7 @@ export const DiffViewer: FC<DiffViewerProps> = ({
           Current workspace diff
         </p>
       </div>
-      <pre className="app-scrollbar flex-1 overflow-auto bg-background/60 p-3 font-mono text-[11px] leading-relaxed text-muted-foreground">
+      <pre className="app-scrollbar min-h-0 flex-1 overflow-auto bg-background/60 p-3 font-mono text-[11px] leading-relaxed text-muted-foreground">
         {diff.split('\n').map((line, i) => (
           <div
             key={i}

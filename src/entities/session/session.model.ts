@@ -4,6 +4,7 @@ import { sessionApi, providerApi } from './session.api'
 
 interface SessionState {
   sessions: Session[]
+  currentProjectId: string | null
   activeSessionId: string | null
   draftWorkspaceId: string | null
   providers: ProviderInfo[]
@@ -27,6 +28,7 @@ interface SessionActions {
   sendMessageToSession: (id: string, text: string) => Promise<void>
   stopSession: (id: string) => Promise<void>
   deleteSession: (id: string, projectId: string) => Promise<void>
+  prepareForProject: (projectId: string | null) => void
   beginSessionDraft: (workspaceId: string | null) => void
   setActiveSession: (id: string | null) => void
   handleSessionUpdate: (session: Session) => void
@@ -37,14 +39,38 @@ export type SessionStore = SessionState & SessionActions
 
 export const useSessionStore = create<SessionStore>((set, get) => ({
   sessions: [],
+  currentProjectId: null,
   activeSessionId: null,
   draftWorkspaceId: null,
   providers: [],
   error: null,
 
   loadSessions: async (projectId: string) => {
+    const previousProjectId = get().currentProjectId
+    if (previousProjectId !== projectId) {
+      set({
+        currentProjectId: projectId,
+        sessions: [],
+        activeSessionId: null,
+        draftWorkspaceId: null,
+      })
+    }
+
     const sessions = await sessionApi.getByProjectId(projectId)
-    set({ sessions })
+    set((state) => ({
+      currentProjectId: projectId,
+      sessions,
+      activeSessionId: sessions.some(
+        (session) => session.id === state.activeSessionId,
+      )
+        ? state.activeSessionId
+        : null,
+      draftWorkspaceId: sessions.some(
+        (session) => session.id === state.activeSessionId,
+      )
+        ? state.draftWorkspaceId
+        : null,
+    }))
   },
 
   loadProviders: async () => {
@@ -73,6 +99,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
       })
       await sessionApi.start(session.id, message)
       set((state) => ({
+        currentProjectId: projectId,
         sessions: [session, ...state.sessions],
         activeSessionId: session.id,
         draftWorkspaceId: null,
@@ -143,6 +170,14 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     }
   },
 
+  prepareForProject: (projectId) =>
+    set({
+      currentProjectId: projectId,
+      sessions: [],
+      activeSessionId: null,
+      draftWorkspaceId: null,
+    }),
+
   beginSessionDraft: (workspaceId) =>
     set({
       activeSessionId: null,
@@ -156,6 +191,11 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     }),
 
   handleSessionUpdate: (session: Session) => {
+    const currentProjectId = get().currentProjectId
+    if (!currentProjectId || session.projectId !== currentProjectId) {
+      return
+    }
+
     set((state) => ({
       sessions: state.sessions.some((s) => s.id === session.id)
         ? state.sessions.map((s) => (s.id === session.id ? session : s))

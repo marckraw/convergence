@@ -32,6 +32,7 @@ export const Sidebar: FC<SidebarProps> = ({
   const sessions = useSessionStore((s) => s.sessions)
   const loadSessions = useSessionStore((s) => s.loadSessions)
   const deleteSession = useSessionStore((s) => s.deleteSession)
+  const prepareForProject = useSessionStore((s) => s.prepareForProject)
   const setActiveSession = useSessionStore((s) => s.setActiveSession)
 
   useEffect(() => {
@@ -63,6 +64,11 @@ export const Sidebar: FC<SidebarProps> = ({
     }
   }
 
+  const handleSelectProject = async (projectId: string) => {
+    prepareForProject(projectId)
+    await setActiveProject(projectId)
+  }
+
   return (
     <div className="flex h-full flex-col">
       <div
@@ -89,7 +95,7 @@ export const Sidebar: FC<SidebarProps> = ({
           <ProjectSwitcher
             projects={projects}
             activeProjectId={activeProject?.id ?? null}
-            onSelectProject={setActiveProject}
+            onSelectProject={handleSelectProject}
             onCreateProject={createProject}
           />
         )}

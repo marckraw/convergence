@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import type { FC } from 'react'
+import type { FC, MouseEvent as ReactMouseEvent } from 'react'
 import type { Session } from '@/entities/session'
 import { Button } from '@/shared/ui/button'
 import {
@@ -96,23 +96,31 @@ export const ChangedFilesPanel: FC<ChangedFilesPanelProps> = ({
     setSelectedFile((current) => (current === file ? null : file))
   }
 
+  const stopPanelControlEvent = (event: ReactMouseEvent) => {
+    event.stopPropagation()
+  }
+
   return (
     <div
       className={cn(
-        'flex h-full flex-col bg-card',
+        'flex h-full flex-col overflow-hidden bg-card',
         side === 'right' ? 'border-l' : 'border-r',
       )}
+      style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
+      onMouseDown={stopPanelControlEvent}
     >
-      <div className="flex h-12 items-center justify-between border-b px-3">
+      <div className="flex h-12 shrink-0 items-center justify-between border-b px-3">
         <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
           Changed Files ({files.length})
         </span>
         <div className="flex items-center gap-1">
           <Button
+            type="button"
             variant="ghost"
             size="icon"
             className="h-6 w-6"
             onClick={onToggleSide}
+            onMouseDown={stopPanelControlEvent}
             title={side === 'right' ? 'Move panel left' : 'Move panel right'}
           >
             {side === 'right' ? (
@@ -122,28 +130,34 @@ export const ChangedFilesPanel: FC<ChangedFilesPanelProps> = ({
             )}
           </Button>
           <Button
+            type="button"
             variant="ghost"
             size="icon"
             className="h-6 w-6"
             onClick={onToggleExpanded}
+            onMouseDown={stopPanelControlEvent}
             title={expanded ? 'Use compact width' : 'Use wide width'}
           >
             <PanelRight className={cn('h-3 w-3', expanded && 'scale-x-125')} />
           </Button>
           <Button
+            type="button"
             variant="ghost"
             size="icon"
             className="h-6 w-6"
             onClick={loadFiles}
+            onMouseDown={stopPanelControlEvent}
             disabled={loading}
           >
             <RefreshCw className={cn('h-3 w-3', loading && 'animate-spin')} />
           </Button>
           <Button
+            type="button"
             variant="ghost"
             size="icon"
             className="h-6 w-6"
             onClick={onClose}
+            onMouseDown={stopPanelControlEvent}
           >
             <X className="h-3 w-3" />
           </Button>
@@ -164,7 +178,7 @@ export const ChangedFilesPanel: FC<ChangedFilesPanelProps> = ({
             </p>
           </div>
         ) : (
-          <div className="border-b border-border p-2">
+          <div className="shrink-0 border-b border-border px-3 py-2">
             <p className="text-[11px] text-muted-foreground">
               Current git changes in this session workspace.
             </p>
@@ -172,25 +186,35 @@ export const ChangedFilesPanel: FC<ChangedFilesPanelProps> = ({
         )}
 
         {files.length > 0 && (
-          <div
-            className={cn(
-              'app-scrollbar overflow-y-auto p-1',
-              expanded ? 'max-h-80' : 'max-h-64',
-            )}
-          >
-            {files.map((f) => (
-              <ChangedFileItem
-                key={f.file}
-                status={f.status}
-                file={f.file}
-                selected={selectedFile === f.file}
-                onSelect={() => handleFileClick(f.file)}
-              />
-            ))}
+          <div className="shrink-0 border-b border-border">
+            <div className="flex items-center justify-between px-3 py-2">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                Files
+              </p>
+              <p className="text-[10px] text-muted-foreground">
+                {files.length} changed
+              </p>
+            </div>
+            <div
+              className={cn(
+                'app-scrollbar overflow-y-auto px-1 pb-2',
+                expanded ? 'h-56' : 'h-44',
+              )}
+            >
+              {files.map((f) => (
+                <ChangedFileItem
+                  key={f.file}
+                  status={f.status}
+                  file={f.file}
+                  selected={selectedFile === f.file}
+                  onSelect={() => handleFileClick(f.file)}
+                />
+              ))}
+            </div>
           </div>
         )}
 
-        <div className="min-h-0 border-t">
+        <div className="min-h-0 flex-1">
           <DiffViewer file={selectedFile} diff={diff} loading={diffLoading} />
         </div>
       </div>

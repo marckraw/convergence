@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
-import type { FC } from 'react'
+import type { FC, MouseEvent as ReactMouseEvent } from 'react'
 import { useProjectStore } from '@/entities/project'
 import { useSessionStore } from '@/entities/session'
 import { ComposerContainer } from '@/features/composer'
@@ -9,6 +9,12 @@ import { AttentionIndicator } from '@/shared/ui/attention-indicator.presentation
 import { cn } from '@/shared/lib/cn.pure'
 import { TranscriptEntryView } from './transcript-entry.presentational'
 import { ChangedFilesPanel } from './changed-files-panel.container'
+
+const CHANGED_FILES_MIN_WIDTH = 320
+const CHANGED_FILES_MAX_WIDTH = 960
+const CHANGED_FILES_COMPACT_WIDTH = 320
+const CHANGED_FILES_DEFAULT_EXPANDED_WIDTH = 720
+type ChangedFilesMode = 'docked' | 'overlay'
 
 export const SessionView: FC = () => {
   const activeProject = useProjectStore((s) => s.activeProject)
@@ -22,9 +28,15 @@ export const SessionView: FC = () => {
   const [changedFilesSide, setChangedFilesSide] = useState<'left' | 'right'>(
     'right',
   )
-  const [changedFilesExpanded, setChangedFilesExpanded] = useState(false)
+  const [changedFilesMode, setChangedFilesMode] =
+    useState<ChangedFilesMode>('docked')
+  const [changedFilesWidth, setChangedFilesWidth] = useState(
+    CHANGED_FILES_COMPACT_WIDTH,
+  )
   const [branchName, setBranchName] = useState<string | null>(null)
+  const changedFilesDraggingRef = useRef(false)
   const transcriptEndRef = useRef<HTMLDivElement>(null)
+  const changedFilesExpanded = changedFilesMode === 'overlay'
 
   const session = sessions.find((s) => s.id === activeSessionId) ?? null
 
@@ -36,6 +48,16 @@ export const SessionView: FC = () => {
     scrollToBottom()
   }, [session?.transcript.length, scrollToBottom])
 
+  useEffect(() => {
+    if (!changedFilesExpanded) {
+      return
+    }
+
+    setChangedFilesWidth((current) =>
+      Math.max(current, getExpandedDrawerWidth()),
+    )
+  }, [changedFilesExpanded])
+
   // Load branch name for the session's working directory
   useEffect(() => {
     if (session?.workingDirectory) {
@@ -45,6 +67,64 @@ export const SessionView: FC = () => {
         .catch(() => setBranchName(null))
     }
   }, [session?.workingDirectory])
+
+  const handleChangedFilesResizeStart = useCallback(
+    (event: ReactMouseEvent<HTMLDivElement>) => {
+      event.preventDefault()
+      changedFilesDraggingRef.current = true
+      document.body.style.cursor = 'col-resize'
+      document.body.style.userSelect = 'none'
+
+      const handleMouseMove = (moveEvent: MouseEvent) => {
+        if (!changedFilesDraggingRef.current) {
+          return
+        }
+
+        const nextWidth =
+          changedFilesSide === 'right'
+            ? window.innerWidth - moveEvent.clientX
+            : moveEvent.clientX
+
+        setChangedFilesWidth(clampChangedFilesWidth(nextWidth))
+      }
+
+      const handleMouseUp = () => {
+        changedFilesDraggingRef.current = false
+        document.body.style.cursor = ''
+        document.body.style.userSelect = ''
+        window.removeEventListener('mousemove', handleMouseMove)
+        window.removeEventListener('mouseup', handleMouseUp)
+      }
+
+      window.addEventListener('mousemove', handleMouseMove)
+      window.addEventListener('mouseup', handleMouseUp)
+    },
+    [changedFilesSide],
+  )
+
+  const handleToggleExpanded = useCallback(() => {
+    setChangedFilesMode((current) => {
+      if (current === 'overlay') {
+        setChangedFilesWidth(CHANGED_FILES_COMPACT_WIDTH)
+        return 'docked'
+      }
+
+      setChangedFilesWidth((width) => Math.max(width, getExpandedDrawerWidth()))
+      return 'overlay'
+    })
+  }, [])
+
+  const handleToggleChangedFiles = useCallback(() => {
+    setShowChangedFiles((current) => {
+      if (current) {
+        setChangedFilesMode('docked')
+        setChangedFilesWidth(CHANGED_FILES_COMPACT_WIDTH)
+        return false
+      }
+
+      return true
+    })
+  }, [])
 
   // Empty state
   if (!session) {
@@ -71,31 +151,34 @@ export const SessionView: FC = () => {
     )
   }
 
+  const renderChangedFilesPanel = () => (
+    <ChangedFilesPanel
+      session={session}
+      side={changedFilesSide}
+      expanded={changedFilesExpanded}
+      onClose={() => {
+        setShowChangedFiles(false)
+        setChangedFilesMode('docked')
+        setChangedFilesWidth(CHANGED_FILES_COMPACT_WIDTH)
+      }}
+      onToggleSide={() =>
+        setChangedFilesSide((current) =>
+          current === 'right' ? 'left' : 'right',
+        )
+      }
+      onToggleExpanded={handleToggleExpanded}
+    />
+  )
+
   return (
-    <div className="flex h-full">
-      {showChangedFiles && changedFilesSide === 'left' && (
-        <div
-          className={cn(
-            'shrink-0',
-            changedFilesExpanded ? 'w-[28rem]' : 'w-80',
-          )}
-        >
-          <ChangedFilesPanel
-            session={session}
-            side={changedFilesSide}
-            expanded={changedFilesExpanded}
-            onClose={() => setShowChangedFiles(false)}
-            onToggleSide={() =>
-              setChangedFilesSide((current) =>
-                current === 'right' ? 'left' : 'right',
-              )
-            }
-            onToggleExpanded={() =>
-              setChangedFilesExpanded((current) => !current)
-            }
-          />
-        </div>
-      )}
+    <div className="relative flex h-full overflow-hidden">
+      {showChangedFiles &&
+        changedFilesSide === 'left' &&
+        !changedFilesExpanded && (
+          <div className={cn('shrink-0', 'w-80')}>
+            {renderChangedFilesPanel()}
+          </div>
+        )}
 
       {/* Main session area */}
       <div className="flex min-w-0 flex-1 flex-col">
@@ -125,7 +208,7 @@ export const SessionView: FC = () => {
               variant="ghost"
               size="icon"
               className="h-7 w-7"
-              onClick={() => setShowChangedFiles(!showChangedFiles)}
+              onClick={handleToggleChangedFiles}
               title="Changed files"
             >
               <FileCode className="h-3.5 w-3.5" />
@@ -184,29 +267,57 @@ export const SessionView: FC = () => {
       </div>
 
       {/* Changed files side panel */}
-      {showChangedFiles && changedFilesSide === 'right' && (
+      {showChangedFiles &&
+        changedFilesSide === 'right' &&
+        !changedFilesExpanded && (
+          <div className={cn('shrink-0', 'w-80')}>
+            {renderChangedFilesPanel()}
+          </div>
+        )}
+
+      {showChangedFiles && changedFilesExpanded && (
         <div
           className={cn(
-            'shrink-0',
-            changedFilesExpanded ? 'w-[28rem]' : 'w-80',
+            'absolute inset-y-0 z-20 flex overflow-hidden shadow-2xl',
+            changedFilesSide === 'right'
+              ? 'right-0 flex-row'
+              : 'left-0 flex-row-reverse',
           )}
+          style={
+            {
+              width: changedFilesWidth,
+              WebkitAppRegion: 'no-drag',
+            } as React.CSSProperties
+          }
         >
-          <ChangedFilesPanel
-            session={session}
-            side={changedFilesSide}
-            expanded={changedFilesExpanded}
-            onClose={() => setShowChangedFiles(false)}
-            onToggleSide={() =>
-              setChangedFilesSide((current) =>
-                current === 'right' ? 'left' : 'right',
-              )
-            }
-            onToggleExpanded={() =>
-              setChangedFilesExpanded((current) => !current)
-            }
+          <div
+            onMouseDown={handleChangedFilesResizeStart}
+            className={cn(
+              'app-resize-handle w-1 shrink-0 cursor-col-resize transition-colors hover:bg-white/10',
+              changedFilesSide === 'right'
+                ? 'border-r border-border/40'
+                : 'border-l border-border/40',
+            )}
           />
+          <div className="min-w-0 flex-1">{renderChangedFilesPanel()}</div>
         </div>
       )}
     </div>
+  )
+}
+
+function clampChangedFilesWidth(width: number): number {
+  return Math.min(
+    CHANGED_FILES_MAX_WIDTH,
+    Math.max(CHANGED_FILES_MIN_WIDTH, width),
+  )
+}
+
+function getExpandedDrawerWidth(): number {
+  return clampChangedFilesWidth(
+    Math.max(
+      CHANGED_FILES_DEFAULT_EXPANDED_WIDTH,
+      Math.floor(window.innerWidth * 0.68),
+    ),
   )
 }

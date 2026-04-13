@@ -2,6 +2,7 @@ import type { FC } from 'react'
 import type { TranscriptEntry } from '@/entities/session'
 import { User, Bot, Wrench, Terminal, AlertTriangle, Info } from 'lucide-react'
 import { cn } from '@/shared/lib/cn.pure'
+import { Markdown } from '@/shared/ui/markdown.presentational'
 
 interface TranscriptEntryViewProps {
   entry: TranscriptEntry
@@ -23,7 +24,11 @@ export const TranscriptEntryView: FC<TranscriptEntryViewProps> = ({
           </div>
           <div className="min-w-0 flex-1 pt-0.5">
             <p className="text-xs font-medium text-muted-foreground">You</p>
-            <p className="mt-1 text-sm whitespace-pre-wrap">{entry.text}</p>
+            <Markdown
+              className="mt-1 text-foreground"
+              content={entry.text}
+              size="sm"
+            />
           </div>
         </div>
       )
@@ -36,7 +41,11 @@ export const TranscriptEntryView: FC<TranscriptEntryViewProps> = ({
           </div>
           <div className="min-w-0 flex-1 pt-0.5">
             <p className="text-xs font-medium text-muted-foreground">Agent</p>
-            <p className="mt-1 text-sm whitespace-pre-wrap">{entry.text}</p>
+            <Markdown
+              className="mt-1 text-foreground"
+              content={entry.text}
+              size="sm"
+            />
           </div>
         </div>
       )
@@ -76,9 +85,11 @@ export const TranscriptEntryView: FC<TranscriptEntryViewProps> = ({
             <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-500" />
             <div className="flex-1">
               <p className="text-sm font-medium">Approval needed</p>
-              <p className="mt-1 text-sm text-muted-foreground">
-                {entry.description}
-              </p>
+              <Markdown
+                className="mt-1 text-muted-foreground"
+                content={entry.description}
+                size="sm"
+              />
               {onApprove && onDeny && (
                 <div className="mt-3 flex gap-2">
                   <button
@@ -110,9 +121,11 @@ export const TranscriptEntryView: FC<TranscriptEntryViewProps> = ({
             <Info className="mt-0.5 h-5 w-5 shrink-0 text-blue-500" />
             <div className="flex-1">
               <p className="text-sm font-medium">Input needed</p>
-              <p className="mt-1 text-sm text-muted-foreground">
-                {entry.prompt}
-              </p>
+              <Markdown
+                className="mt-1 text-muted-foreground"
+                content={entry.prompt}
+                size="sm"
+              />
             </div>
           </div>
         </div>
@@ -121,7 +134,11 @@ export const TranscriptEntryView: FC<TranscriptEntryViewProps> = ({
     case 'system':
       return (
         <div className="py-2 text-center">
-          <p className="text-xs italic text-muted-foreground">{entry.text}</p>
+          <Markdown
+            className="text-xs italic text-muted-foreground"
+            content={entry.text}
+            size="sm"
+          />
         </div>
       )
 

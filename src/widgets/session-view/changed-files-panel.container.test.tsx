@@ -58,6 +58,8 @@ describe('ChangedFilesPanel', () => {
     expect(
       screen.getByText('Current git changes in this session workspace.'),
     ).toBeInTheDocument()
+    expect(screen.getByText('Files')).toBeInTheDocument()
+    expect(screen.getByText('2 changed')).toBeInTheDocument()
 
     await waitFor(() => {
       expect(screen.getByText('Current workspace diff')).toBeInTheDocument()

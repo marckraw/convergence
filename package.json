@@ -5,6 +5,7 @@
   "main": "out/main/index.js",
   "scripts": {
     "dev": "electron-rebuild --force -o better-sqlite3 && electron-vite dev",
+    "dev:clean": "node tools/dev-clean.mjs",
     "build": "electron-rebuild --force -o better-sqlite3 && electron-vite build",
     "build:preview": "electron-vite build && electron-vite preview",
     "test": "npm rebuild better-sqlite3 > /dev/null 2>&1; vitest run",
@@ -33,6 +34,8 @@
     "lucide-react": "^1.8.0",
     "react": "^19.2.5",
     "react-dom": "^19.2.5",
+    "react-markdown": "^10.1.0",
+    "remark-gfm": "^4.0.1",
     "sonner": "^2.0.7",
     "tailwind-merge": "^3.5.0",
     "zustand": "^5.0.12"
