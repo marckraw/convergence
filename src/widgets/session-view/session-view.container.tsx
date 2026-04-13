@@ -196,7 +196,7 @@ export const SessionView: FC = () => {
             className="flex items-center gap-2"
             style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
           >
-            <span className="font-medium">{session.name}</span>
+            <span className="text-sm font-medium">{session.name}</span>
             <AttentionIndicator attention={session.attention} />
             {branchName && (
               <span className="flex items-center gap-1 text-xs text-muted-foreground">
