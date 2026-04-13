@@ -1,5 +1,12 @@
 # convergence
 
+## 0.1.1
+
+### Patch Changes
+
+- ffa53c7: Automate release tag creation after version bumps land on `master`, and
+  slightly reduce the session header title size for a cleaner main-area header.
+
 ## 0.1.0
 
 ### Minor Changes
