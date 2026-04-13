@@ -37,6 +37,37 @@ jobs:
       - name: Run unit tests
         run: npm run test:unit
 
+      - name: Install Chaperone
+        env:
+          CHAPERONE_VERSION: v0.7.1
+          CHAPERONE_REPO: marckraw/chaperone-cli
+        run: |
+          case "$(uname -m)" in
+            aarch64|arm64) CHAPERONE_ASSET="chaperone-linux-arm64" ;;
+            x86_64) CHAPERONE_ASSET="chaperone-linux-x64" ;;
+            *) echo "Unsupported Linux architecture: $(uname -m)" && exit 1 ;;
+          esac
+
+          curl -fsSL \
+            -o "$RUNNER_TEMP/chaperone" \
+            "https://github.com/${CHAPERONE_REPO}/releases/download/${CHAPERONE_VERSION}/${CHAPERONE_ASSET}"
+          curl -fsSL \
+            -o "$RUNNER_TEMP/SHA256SUMS.txt" \
+            "https://github.com/${CHAPERONE_REPO}/releases/download/${CHAPERONE_VERSION}/SHA256SUMS.txt"
+
+          CHAPERONE_SHA="$(awk "/ ${CHAPERONE_ASSET}\$/ {print \$1}" "$RUNNER_TEMP/SHA256SUMS.txt")"
+          if [ -z "$CHAPERONE_SHA" ]; then
+            echo "Missing SHA256 entry for ${CHAPERONE_ASSET}"
+            exit 1
+          fi
+          echo "${CHAPERONE_SHA}  $RUNNER_TEMP/chaperone" | sha256sum -c -
+
+          chmod +x "$RUNNER_TEMP/chaperone"
+          mkdir -p "$HOME/.local/bin"
+          mv "$RUNNER_TEMP/chaperone" "$HOME/.local/bin/chaperone"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          chaperone version
+
       - name: Run chaperone
         run: chaperone check --fix
 
