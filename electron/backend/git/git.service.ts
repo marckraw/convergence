@@ -1,5 +1,6 @@
 import { execFile } from 'child_process'
 import { existsSync } from 'fs'
+import { join } from 'path'
 
 function exec(command: string, args: string[], cwd: string): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -7,8 +8,26 @@ function exec(command: string, args: string[], cwd: string): Promise<string> {
       if (error) {
         reject(new Error(stderr.trim() || error.message))
       } else {
-        resolve(stdout.trim())
+        resolve(stdout.trimEnd())
       }
+    })
+  })
+}
+
+function execAllowExitCodes(
+  command: string,
+  args: string[],
+  cwd: string,
+  allowedExitCodes: number[],
+): Promise<string> {
+  return new Promise((resolve, reject) => {
+    execFile(command, args, { cwd }, (error, stdout, stderr) => {
+      const code = error && 'code' in error ? Number(error.code) : 0
+      if (error && !allowedExitCodes.includes(code)) {
+        reject(new Error(stderr.trim() || error.message))
+        return
+      }
+      resolve(stdout.trimEnd())
     })
   })
 }
@@ -86,7 +105,42 @@ export class GitService {
         repoPath,
       ).catch(() => '')
       const unstaged = await exec('git', args, repoPath).catch(() => '')
-      return [staged, unstaged].filter(Boolean).join('\n')
+      if (!filePath) {
+        return [staged, unstaged].filter(Boolean).join('\n')
+      }
+
+      const tracked = await exec(
+        'git',
+        ['ls-files', '--error-unmatch', '--', filePath],
+        repoPath,
+      )
+        .then(() => true)
+        .catch(() => false)
+
+      if (tracked) {
+        return [staged, unstaged].filter(Boolean).join('\n')
+      }
+
+      const absoluteFilePath = join(repoPath, filePath)
+      if (!existsSync(absoluteFilePath)) {
+        return [staged, unstaged].filter(Boolean).join('\n')
+      }
+
+      const untracked = await execAllowExitCodes(
+        'git',
+        [
+          'diff',
+          '--no-index',
+          '--no-color',
+          '--',
+          '/dev/null',
+          absoluteFilePath,
+        ],
+        repoPath,
+        [0, 1],
+      ).catch(() => '')
+
+      return [staged, unstaged, untracked].filter(Boolean).join('\n')
     } catch {
       return ''
     }

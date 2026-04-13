@@ -6,6 +6,7 @@ import { ComposerContainer } from '@/features/composer'
 import { Button } from '@/shared/ui/button'
 import { Square, FileCode, GitBranch } from 'lucide-react'
 import { AttentionIndicator } from '@/shared/ui/attention-indicator.presentational'
+import { cn } from '@/shared/lib/cn.pure'
 import { TranscriptEntryView } from './transcript-entry.presentational'
 import { ChangedFilesPanel } from './changed-files-panel.container'
 
@@ -18,6 +19,10 @@ export const SessionView: FC = () => {
   const denySession = useSessionStore((s) => s.denySession)
   const stopSession = useSessionStore((s) => s.stopSession)
   const [showChangedFiles, setShowChangedFiles] = useState(false)
+  const [changedFilesSide, setChangedFilesSide] = useState<'left' | 'right'>(
+    'right',
+  )
+  const [changedFilesExpanded, setChangedFilesExpanded] = useState(false)
   const [branchName, setBranchName] = useState<string | null>(null)
   const transcriptEndRef = useRef<HTMLDivElement>(null)
 
@@ -68,6 +73,30 @@ export const SessionView: FC = () => {
 
   return (
     <div className="flex h-full">
+      {showChangedFiles && changedFilesSide === 'left' && (
+        <div
+          className={cn(
+            'shrink-0',
+            changedFilesExpanded ? 'w-[28rem]' : 'w-80',
+          )}
+        >
+          <ChangedFilesPanel
+            session={session}
+            side={changedFilesSide}
+            expanded={changedFilesExpanded}
+            onClose={() => setShowChangedFiles(false)}
+            onToggleSide={() =>
+              setChangedFilesSide((current) =>
+                current === 'right' ? 'left' : 'right',
+              )
+            }
+            onToggleExpanded={() =>
+              setChangedFilesExpanded((current) => !current)
+            }
+          />
+        </div>
+      )}
+
       {/* Main session area */}
       <div className="flex min-w-0 flex-1 flex-col">
         {/* Header */}
@@ -155,11 +184,26 @@ export const SessionView: FC = () => {
       </div>
 
       {/* Changed files side panel */}
-      {showChangedFiles && (
-        <div className="w-72 shrink-0">
+      {showChangedFiles && changedFilesSide === 'right' && (
+        <div
+          className={cn(
+            'shrink-0',
+            changedFilesExpanded ? 'w-[28rem]' : 'w-80',
+          )}
+        >
           <ChangedFilesPanel
             session={session}
+            side={changedFilesSide}
+            expanded={changedFilesExpanded}
             onClose={() => setShowChangedFiles(false)}
+            onToggleSide={() =>
+              setChangedFilesSide((current) =>
+                current === 'right' ? 'left' : 'right',
+              )
+            }
+            onToggleExpanded={() =>
+              setChangedFilesExpanded((current) => !current)
+            }
           />
         </div>
       )}

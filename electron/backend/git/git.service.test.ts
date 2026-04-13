@@ -1,5 +1,5 @@
 import { describe, expect, it, beforeEach, afterEach } from 'vitest'
-import { mkdtempSync, existsSync } from 'fs'
+import { mkdtempSync, existsSync, writeFileSync } from 'fs'
 import { rmSync } from 'fs'
 import { join } from 'path'
 import { tmpdir } from 'os'
@@ -105,6 +105,43 @@ describe('GitService', () => {
       await expect(
         service.removeWorktree(repoPath, wtPath),
       ).resolves.not.toThrow()
+    })
+  })
+
+  describe('getStatus', () => {
+    it('returns working tree file status entries', async () => {
+      writeFileSync(join(repoPath, 'tracked.txt'), 'hello\n')
+      execFileSync('git', ['add', 'tracked.txt'], { cwd: repoPath })
+      execFileSync('git', ['commit', '-m', 'tracked'], { cwd: repoPath })
+      writeFileSync(join(repoPath, 'tracked.txt'), 'changed\n')
+
+      const status = await service.getStatus(repoPath)
+
+      expect(status).toEqual([{ status: 'M', file: 'tracked.txt' }])
+    })
+  })
+
+  describe('getDiff', () => {
+    it('returns a diff for tracked modified files', async () => {
+      writeFileSync(join(repoPath, 'tracked.txt'), 'hello\n')
+      execFileSync('git', ['add', 'tracked.txt'], { cwd: repoPath })
+      execFileSync('git', ['commit', '-m', 'tracked'], { cwd: repoPath })
+      writeFileSync(join(repoPath, 'tracked.txt'), 'changed\n')
+
+      const diff = await service.getDiff(repoPath, 'tracked.txt')
+
+      expect(diff).toContain('tracked.txt')
+      expect(diff).toContain('+changed')
+    })
+
+    it('returns a synthetic diff for untracked files', async () => {
+      writeFileSync(join(repoPath, 'new-file.txt'), 'new file\n')
+
+      const diff = await service.getDiff(repoPath, 'new-file.txt')
+
+      expect(diff).toContain('new-file.txt')
+      expect(diff).toContain('/dev/null')
+      expect(diff).toContain('+new file')
     })
   })
 })
