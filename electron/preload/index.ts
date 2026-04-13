@@ -48,6 +48,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     }) => ipcRenderer.invoke('session:create', input),
     getByProjectId: (projectId: string) =>
       ipcRenderer.invoke('session:getByProjectId', projectId),
+    getAll: () => ipcRenderer.invoke('session:getAll'),
     getById: (id: string) => ipcRenderer.invoke('session:getById', id),
     delete: (id: string) => ipcRenderer.invoke('session:delete', id),
     start: (id: string, message: string) =>

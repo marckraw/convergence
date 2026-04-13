@@ -110,6 +110,8 @@ export function registerIpcHandlers(
     sessionService.getByProjectId(projectId),
   )
 
+  ipcMain.handle('session:getAll', () => sessionService.getAll())
+
   ipcMain.handle('session:getById', (_event, id: string) =>
     sessionService.getById(id),
   )

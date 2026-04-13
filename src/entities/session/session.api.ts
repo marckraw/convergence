@@ -13,6 +13,8 @@ export const sessionApi = {
   getByProjectId: (projectId: string): Promise<Session[]> =>
     window.electronAPI.session.getByProjectId(projectId),
 
+  getAll: (): Promise<Session[]> => window.electronAPI.session.getAll(),
+
   getById: (id: string): Promise<Session | null> =>
     window.electronAPI.session.getById(id),
 

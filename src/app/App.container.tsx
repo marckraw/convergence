@@ -46,14 +46,11 @@ export function App() {
   useEffect(() => {
     const unsubscribe = window.electronAPI.session.onSessionUpdate(
       (session) => {
-        if (!activeProject || session.projectId !== activeProject.id) {
-          return
-        }
         handleSessionUpdate(session)
       },
     )
     return unsubscribe
-  }, [activeProject, handleSessionUpdate])
+  }, [handleSessionUpdate])
 
   useEffect(() => {
     if (projectError) {

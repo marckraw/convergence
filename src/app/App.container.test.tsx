@@ -46,6 +46,7 @@ const mockElectronAPI = {
   },
   session: {
     create: vi.fn(),
+    getAll: vi.fn().mockResolvedValue([]),
     getByProjectId: vi.fn().mockResolvedValue([]),
     getById: vi.fn(),
     delete: vi.fn(),
@@ -105,6 +106,8 @@ describe('App', () => {
     })
     useSessionStore.setState({
       sessions: [],
+      globalSessions: [],
+      currentProjectId: null,
       activeSessionId: null,
       draftWorkspaceId: null,
       providers: [],

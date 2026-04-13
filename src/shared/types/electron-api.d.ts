@@ -143,6 +143,7 @@ interface ElectronAPI {
   session: {
     create: (input: CreateSessionInput) => Promise<SessionData>
     getByProjectId: (projectId: string) => Promise<SessionData[]>
+    getAll: () => Promise<SessionData[]>
     getById: (id: string) => Promise<SessionData | null>
     delete: (id: string) => Promise<void>
     start: (id: string, message: string) => Promise<void>

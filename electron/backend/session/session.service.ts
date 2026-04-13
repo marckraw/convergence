@@ -84,6 +84,14 @@ export class SessionService {
     return rows.map(sessionFromRow)
   }
 
+  getAll(): Session[] {
+    const rows = this.db
+      .prepare('SELECT * FROM sessions ORDER BY created_at DESC')
+      .all() as SessionRow[]
+
+    return rows.map(sessionFromRow)
+  }
+
   getById(id: string): Session | null {
     const row = this.db
       .prepare('SELECT * FROM sessions WHERE id = ?')

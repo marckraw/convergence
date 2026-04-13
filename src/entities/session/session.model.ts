@@ -4,6 +4,7 @@ import { sessionApi, providerApi } from './session.api'
 
 interface SessionState {
   sessions: Session[]
+  globalSessions: Session[]
   currentProjectId: string | null
   activeSessionId: string | null
   draftWorkspaceId: string | null
@@ -13,6 +14,7 @@ interface SessionState {
 
 interface SessionActions {
   loadSessions: (projectId: string) => Promise<void>
+  loadGlobalSessions: () => Promise<void>
   loadProviders: () => Promise<void>
   createAndStartSession: (
     projectId: string,
@@ -39,6 +41,7 @@ export type SessionStore = SessionState & SessionActions
 
 export const useSessionStore = create<SessionStore>((set, get) => ({
   sessions: [],
+  globalSessions: [],
   currentProjectId: null,
   activeSessionId: null,
   draftWorkspaceId: null,
@@ -73,6 +76,11 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     }))
   },
 
+  loadGlobalSessions: async () => {
+    const globalSessions = await sessionApi.getAll()
+    set({ globalSessions })
+  },
+
   loadProviders: async () => {
     const providers = await providerApi.getAll()
     set({ providers })
@@ -101,6 +109,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
       set((state) => ({
         currentProjectId: projectId,
         sessions: [session, ...state.sessions],
+        globalSessions: [session, ...state.globalSessions],
         activeSessionId: session.id,
         draftWorkspaceId: null,
       }))
@@ -156,9 +165,13 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     try {
       await sessionApi.delete(id)
       const sessions = await sessionApi.getByProjectId(projectId)
+      const globalSessions = get().globalSessions.filter(
+        (session) => session.id !== id,
+      )
       const { activeSessionId } = get()
       set({
         sessions,
+        globalSessions,
         activeSessionId: activeSessionId === id ? null : activeSessionId,
         draftWorkspaceId:
           activeSessionId === id ? null : get().draftWorkspaceId,
@@ -192,14 +205,15 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
 
   handleSessionUpdate: (session: Session) => {
     const currentProjectId = get().currentProjectId
-    if (!currentProjectId || session.projectId !== currentProjectId) {
-      return
-    }
-
     set((state) => ({
+      globalSessions: state.globalSessions.some((s) => s.id === session.id)
+        ? state.globalSessions.map((s) => (s.id === session.id ? session : s))
+        : [session, ...state.globalSessions],
       sessions: state.sessions.some((s) => s.id === session.id)
         ? state.sessions.map((s) => (s.id === session.id ? session : s))
-        : [session, ...state.sessions],
+        : currentProjectId && session.projectId === currentProjectId
+          ? [session, ...state.sessions]
+          : state.sessions,
     }))
   },
 

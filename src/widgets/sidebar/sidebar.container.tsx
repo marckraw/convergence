@@ -5,6 +5,7 @@ import { useWorkspaceStore } from '@/entities/workspace'
 import { useSessionStore } from '@/entities/session'
 import { ThemeToggleButton } from '@/features/theme-toggle'
 import { NeedsYou } from './needs-you.presentational'
+import { buildNeedsYouSummary } from './needs-you.presentational'
 import { ProjectTree } from './project-tree.container'
 import { ProjectSwitcher } from './project-switcher.presentational'
 import { Button } from '@/shared/ui/button'
@@ -30,10 +31,16 @@ export const Sidebar: FC<SidebarProps> = ({
   const createWorkspace = useWorkspaceStore((s) => s.createWorkspace)
   const deleteWorkspace = useWorkspaceStore((s) => s.deleteWorkspace)
   const sessions = useSessionStore((s) => s.sessions)
+  const globalSessions = useSessionStore((s) => s.globalSessions)
   const loadSessions = useSessionStore((s) => s.loadSessions)
+  const loadGlobalSessions = useSessionStore((s) => s.loadGlobalSessions)
   const deleteSession = useSessionStore((s) => s.deleteSession)
   const prepareForProject = useSessionStore((s) => s.prepareForProject)
   const setActiveSession = useSessionStore((s) => s.setActiveSession)
+
+  useEffect(() => {
+    loadGlobalSessions()
+  }, [loadGlobalSessions])
 
   useEffect(() => {
     if (activeProject) {
@@ -43,9 +50,60 @@ export const Sidebar: FC<SidebarProps> = ({
     }
   }, [activeProject, loadWorkspaces, loadCurrentBranch, loadSessions])
 
-  const needsYouSessions = sessions.filter(
-    (s) => s.attention === 'needs-approval' || s.attention === 'needs-input',
-  )
+  const needsYouSessions = globalSessions
+    .map((session) => {
+      const summary = buildNeedsYouSummary(session)
+      if (!summary) {
+        return null
+      }
+
+      const projectName =
+        projects.find((project) => project.id === session.projectId)?.name ??
+        'Unknown project'
+
+      return {
+        session,
+        projectName,
+        summary: summary.summary,
+        priority: summary.priority,
+      }
+    })
+    .filter((value) => value !== null)
+    .sort((left, right) => {
+      if (left.priority !== right.priority) {
+        return left.priority - right.priority
+      }
+
+      return right.session.updatedAt.localeCompare(left.session.updatedAt)
+    })
+
+  const handleSelectNeedsYouSession = async (sessionId: string) => {
+    const targetSession = globalSessions.find(
+      (session) => session.id === sessionId,
+    )
+    if (!targetSession) {
+      return
+    }
+
+    if (activeProject?.id !== targetSession.projectId) {
+      const targetProject = projects.find(
+        (project) => project.id === targetSession.projectId,
+      )
+      prepareForProject(targetSession.projectId)
+      await setActiveProject(targetSession.projectId)
+      if (targetProject) {
+        await Promise.all([
+          loadWorkspaces(targetProject.id),
+          loadCurrentBranch(targetProject.repositoryPath),
+          loadSessions(targetProject.id),
+        ])
+      } else {
+        await loadSessions(targetSession.projectId)
+      }
+    }
+
+    onSelectSession(sessionId)
+  }
 
   const handleDeleteWorkspace = async (workspaceId: string) => {
     if (!activeProject) {
@@ -58,6 +116,7 @@ export const Sidebar: FC<SidebarProps> = ({
 
     await deleteWorkspace(workspaceId, activeProject.id)
     await loadSessions(activeProject.id)
+    await loadGlobalSessions()
 
     if (activeSessionId && deletedSessionIds.includes(activeSessionId)) {
       setActiveSession(null)
@@ -84,7 +143,7 @@ export const Sidebar: FC<SidebarProps> = ({
         <NeedsYou
           sessions={needsYouSessions}
           activeSessionId={activeSessionId}
-          onSelect={onSelectSession}
+          onSelect={handleSelectNeedsYouSession}
         />
 
         {needsYouSessions.length > 0 && (
