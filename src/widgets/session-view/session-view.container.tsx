@@ -35,6 +35,7 @@ export const SessionView: FC = () => {
   )
   const [branchName, setBranchName] = useState<string | null>(null)
   const changedFilesDraggingRef = useRef(false)
+  const sessionRootRef = useRef<HTMLDivElement>(null)
   const transcriptEndRef = useRef<HTMLDivElement>(null)
   const changedFilesExpanded = changedFilesMode === 'overlay'
 
@@ -75,6 +76,10 @@ export const SessionView: FC = () => {
       document.body.style.cursor = 'col-resize'
       document.body.style.userSelect = 'none'
 
+      const containerRect = sessionRootRef.current?.getBoundingClientRect()
+      const containerLeft = containerRect?.left ?? 0
+      const containerRight = containerRect?.right ?? window.innerWidth
+
       const handleMouseMove = (moveEvent: MouseEvent) => {
         if (!changedFilesDraggingRef.current) {
           return
@@ -82,8 +87,8 @@ export const SessionView: FC = () => {
 
         const nextWidth =
           changedFilesSide === 'right'
-            ? window.innerWidth - moveEvent.clientX
-            : moveEvent.clientX
+            ? containerRight - moveEvent.clientX
+            : moveEvent.clientX - containerLeft
 
         setChangedFilesWidth(clampChangedFilesWidth(nextWidth))
       }
@@ -171,7 +176,7 @@ export const SessionView: FC = () => {
   )
 
   return (
-    <div className="relative flex h-full overflow-hidden">
+    <div ref={sessionRootRef} className="relative flex h-full overflow-hidden">
       {showChangedFiles &&
         changedFilesSide === 'left' &&
         !changedFilesExpanded && (
@@ -292,11 +297,10 @@ export const SessionView: FC = () => {
         >
           <div
             onMouseDown={handleChangedFilesResizeStart}
+            onDoubleClick={handleToggleExpanded}
             className={cn(
-              'app-resize-handle w-1 shrink-0 cursor-col-resize transition-colors hover:bg-white/10',
-              changedFilesSide === 'right'
-                ? 'border-r border-border/40'
-                : 'border-l border-border/40',
+              'app-resize-handle relative z-10 w-px shrink-0 cursor-col-resize border-x-[6px] border-x-transparent bg-clip-content transition-colors hover:bg-white/10',
+              changedFilesSide === 'right' ? '-ml-1.5' : '-mr-1.5',
             )}
           />
           <div className="min-w-0 flex-1">{renderChangedFilesPanel()}</div>

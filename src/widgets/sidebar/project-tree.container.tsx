@@ -6,6 +6,7 @@ import { SessionCreateInline } from '@/features/session-create-inline'
 import { Button } from '@/shared/ui/button'
 import { Input } from '@/shared/ui/input'
 import { SessionBadge } from '@/shared/ui/session-badge.presentational'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/shared/ui/tooltip'
 import { cn } from '@/shared/lib/cn.pure'
 import { ChevronRight, GitBranch, Plus, Trash2 } from 'lucide-react'
 
@@ -53,19 +54,24 @@ export const ProjectTree: FC<ProjectTreeProps> = ({
     <div
       key={session.id}
       className={cn(
-        'group/session flex items-center gap-1 rounded pr-1 transition-colors hover:bg-accent',
+        'group/session flex min-w-0 items-center gap-1 rounded pr-1 transition-colors hover:bg-accent',
         activeSessionId === session.id && 'bg-accent',
       )}
     >
-      <Button
-        type="button"
-        variant="ghost"
-        onClick={() => onSelectSession(session.id)}
-        className="h-auto min-w-0 flex-1 justify-start gap-1.5 px-1.5 py-1 text-left text-sm font-normal"
-      >
-        <SessionBadge attention={session.attention} />
-        <span className="truncate">{session.name}</span>
-      </Button>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button
+            type="button"
+            variant="ghost"
+            onClick={() => onSelectSession(session.id)}
+            className="h-auto min-w-0 flex-1 justify-start gap-1.5 px-1.5 py-1 text-left text-sm font-normal"
+          >
+            <SessionBadge attention={session.attention} />
+            <span className="truncate">{session.name}</span>
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent side="right">{session.name}</TooltipContent>
+      </Tooltip>
       <Button
         type="button"
         variant="ghost"
@@ -87,10 +93,17 @@ export const ProjectTree: FC<ProjectTreeProps> = ({
     <div className="px-3">
       {/* Root sessions (on main branch) */}
       <div className="mb-1 ml-2 border-l border-border pl-2">
-        <p className="mb-0.5 text-xs text-muted-foreground">
-          {(baseBranchName || 'main') +
-            (rootSessions.length > 0 ? ` (${rootSessions.length})` : '')}
-        </p>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <p className="mb-0.5 truncate text-xs text-muted-foreground">
+              {(baseBranchName || 'main') +
+                (rootSessions.length > 0 ? ` (${rootSessions.length})` : '')}
+            </p>
+          </TooltipTrigger>
+          <TooltipContent side="right">
+            {baseBranchName || 'main'}
+          </TooltipContent>
+        </Tooltip>
         {rootSessions.map(renderSessionRow)}
         <div className="mt-1">
           <SessionCreateInline workspaceId={null} />
@@ -104,27 +117,32 @@ export const ProjectTree: FC<ProjectTreeProps> = ({
 
         return (
           <div key={ws.id} className="ml-2 border-l border-border pl-2">
-            <div className="group/workspace flex items-center gap-1 rounded pr-1 transition-colors hover:bg-accent">
-              <Button
-                type="button"
-                variant="ghost"
-                onClick={() => toggleWorkspace(ws.id)}
-                className="h-auto min-w-0 flex-1 justify-start gap-1 py-1 text-left text-sm font-normal hover:text-foreground"
-              >
-                <ChevronRight
-                  className={cn(
-                    'h-3 w-3 shrink-0 transition-transform',
-                    isExpanded && 'rotate-90',
-                  )}
-                />
-                <GitBranch className="h-3 w-3 shrink-0 text-muted-foreground" />
-                <span className="truncate">{ws.branchName}</span>
-                {wsSessions.length > 0 && (
-                  <span className="ml-auto text-xs text-muted-foreground">
-                    {wsSessions.length}
-                  </span>
-                )}
-              </Button>
+            <div className="group/workspace flex min-w-0 items-center gap-1 rounded pr-1 transition-colors hover:bg-accent">
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    onClick={() => toggleWorkspace(ws.id)}
+                    className="h-auto min-w-0 flex-1 justify-start gap-1 py-1 text-left text-sm font-normal hover:text-foreground"
+                  >
+                    <ChevronRight
+                      className={cn(
+                        'h-3 w-3 shrink-0 transition-transform',
+                        isExpanded && 'rotate-90',
+                      )}
+                    />
+                    <GitBranch className="h-3 w-3 shrink-0 text-muted-foreground" />
+                    <span className="truncate">{ws.branchName}</span>
+                    {wsSessions.length > 0 && (
+                      <span className="ml-auto shrink-0 text-xs text-muted-foreground">
+                        {wsSessions.length}
+                      </span>
+                    )}
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="right">{ws.branchName}</TooltipContent>
+              </Tooltip>
               <Button
                 type="button"
                 variant="ghost"
