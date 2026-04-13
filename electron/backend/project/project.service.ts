@@ -24,6 +24,12 @@ export class ProjectService {
 
     this.validateRepositoryPath(resolvedPath)
 
+    const existing = this.findRowByRepositoryPath(resolvedPath)
+
+    if (existing) {
+      return projectFromRow(existing)
+    }
+
     const id = randomUUID()
     const name = input.name ?? basename(resolvedPath)
 
@@ -57,6 +63,12 @@ export class ProjectService {
     return row ? projectFromRow(row) : null
   }
 
+  getByRepositoryPath(repositoryPath: string): Project | null {
+    const resolvedPath = resolve(repositoryPath)
+    const row = this.findRowByRepositoryPath(resolvedPath)
+    return row ? projectFromRow(row) : null
+  }
+
   async delete(id: string): Promise<void> {
     if (this.workspaceService) {
       await this.workspaceService.deleteAllForProject(id)
@@ -78,5 +90,13 @@ export class ProjectService {
     if (!existsSync(gitPath)) {
       throw new Error(`Not a git repository: ${path}`)
     }
+  }
+
+  private findRowByRepositoryPath(repositoryPath: string): ProjectRow | null {
+    const row = this.db
+      .prepare('SELECT * FROM projects WHERE repository_path = ?')
+      .get(repositoryPath) as ProjectRow | undefined
+
+    return row ?? null
   }
 }

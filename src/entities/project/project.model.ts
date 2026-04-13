@@ -51,9 +51,17 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
       const path = await dialogApi.selectDirectory()
       if (!path) return
 
+      const { activeProject, projects: currentProjects } = get()
       const project = await projectApi.create({ repositoryPath: path })
       const projects = await projectApi.getAll()
-      set({ activeProject: project, projects })
+      const alreadyKnown = currentProjects.some(
+        (item) => item.id === project.id,
+      )
+
+      set({
+        activeProject: alreadyKnown && activeProject ? activeProject : project,
+        projects,
+      })
     } catch (err) {
       set({
         error: err instanceof Error ? err.message : 'Failed to create project',

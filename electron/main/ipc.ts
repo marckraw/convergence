@@ -21,8 +21,11 @@ export function registerIpcHandlers(
 ): void {
   // Project handlers
   ipcMain.handle('project:create', (_event, input: CreateProjectInput) => {
+    const existing = projectService.getByRepositoryPath(input.repositoryPath)
     const project = projectService.create(input)
-    stateService.set(ACTIVE_PROJECT_KEY, project.id)
+    if (!existing) {
+      stateService.set(ACTIVE_PROJECT_KEY, project.id)
+    }
     return project
   })
 

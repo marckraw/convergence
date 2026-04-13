@@ -93,6 +93,33 @@ describe('useProjectStore', () => {
     expect(mockElectronAPI.project.create).not.toHaveBeenCalled()
   })
 
+  it('createProject keeps the current active project when the repo already exists', async () => {
+    const secondProject = {
+      ...mockProject,
+      id: '2',
+      name: 'other-repo',
+      repositoryPath: '/tmp/other-repo',
+    }
+
+    useProjectStore.setState({
+      projects: [mockProject, secondProject],
+      activeProject: secondProject,
+      loading: false,
+      error: null,
+    })
+
+    mockElectronAPI.dialog.selectDirectory.mockResolvedValue('/tmp/test-repo')
+    mockElectronAPI.project.create.mockResolvedValue(mockProject)
+    mockElectronAPI.project.getAll.mockResolvedValue([
+      mockProject,
+      secondProject,
+    ])
+
+    await useProjectStore.getState().createProject()
+
+    expect(useProjectStore.getState().activeProject).toEqual(secondProject)
+  })
+
   it('createProject sets error on failure', async () => {
     mockElectronAPI.dialog.selectDirectory.mockResolvedValue('/bad/path')
     mockElectronAPI.project.create.mockRejectedValue(

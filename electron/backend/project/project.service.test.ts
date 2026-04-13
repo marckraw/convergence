@@ -60,10 +60,12 @@ describe('ProjectService', () => {
     )
   })
 
-  it('throws for duplicate repository path', () => {
-    service.create({ repositoryPath: gitRepoPath })
+  it('returns the existing project for a duplicate repository path', () => {
+    const first = service.create({ repositoryPath: gitRepoPath })
+    const duplicate = service.create({ repositoryPath: gitRepoPath })
 
-    expect(() => service.create({ repositoryPath: gitRepoPath })).toThrow()
+    expect(duplicate.id).toBe(first.id)
+    expect(service.getAll()).toHaveLength(1)
   })
 
   it('lists all projects', () => {

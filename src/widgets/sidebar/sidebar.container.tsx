@@ -6,6 +6,7 @@ import { useSessionStore } from '@/entities/session'
 import { ThemeToggleButton } from '@/features/theme-toggle'
 import { NeedsYou } from './needs-you.presentational'
 import { ProjectTree } from './project-tree.container'
+import { ProjectSwitcher } from './project-switcher.presentational'
 import { Button } from '@/shared/ui/button'
 import { Plus } from 'lucide-react'
 
@@ -18,15 +19,20 @@ export const Sidebar: FC<SidebarProps> = ({
   onSelectSession,
   activeSessionId,
 }) => {
+  const projects = useProjectStore((s) => s.projects)
   const activeProject = useProjectStore((s) => s.activeProject)
   const createProject = useProjectStore((s) => s.createProject)
+  const setActiveProject = useProjectStore((s) => s.setActiveProject)
   const workspaces = useWorkspaceStore((s) => s.workspaces)
+  const currentBranch = useWorkspaceStore((s) => s.currentBranch)
   const loadWorkspaces = useWorkspaceStore((s) => s.loadWorkspaces)
   const loadCurrentBranch = useWorkspaceStore((s) => s.loadCurrentBranch)
   const createWorkspace = useWorkspaceStore((s) => s.createWorkspace)
+  const deleteWorkspace = useWorkspaceStore((s) => s.deleteWorkspace)
   const sessions = useSessionStore((s) => s.sessions)
   const loadSessions = useSessionStore((s) => s.loadSessions)
   const deleteSession = useSessionStore((s) => s.deleteSession)
+  const setActiveSession = useSessionStore((s) => s.setActiveSession)
 
   useEffect(() => {
     if (activeProject) {
@@ -39,6 +45,23 @@ export const Sidebar: FC<SidebarProps> = ({
   const needsYouSessions = sessions.filter(
     (s) => s.attention === 'needs-approval' || s.attention === 'needs-input',
   )
+
+  const handleDeleteWorkspace = async (workspaceId: string) => {
+    if (!activeProject) {
+      return
+    }
+
+    const deletedSessionIds = sessions
+      .filter((session) => session.workspaceId === workspaceId)
+      .map((session) => session.id)
+
+    await deleteWorkspace(workspaceId, activeProject.id)
+    await loadSessions(activeProject.id)
+
+    if (activeSessionId && deletedSessionIds.includes(activeSessionId)) {
+      setActiveSession(null)
+    }
+  }
 
   return (
     <div className="flex h-full flex-col">
@@ -62,9 +85,18 @@ export const Sidebar: FC<SidebarProps> = ({
           <div className="mx-3 mb-3 border-t border-border/50" />
         )}
 
+        {projects.length > 0 && (
+          <ProjectSwitcher
+            projects={projects}
+            activeProjectId={activeProject?.id ?? null}
+            onSelectProject={setActiveProject}
+            onCreateProject={createProject}
+          />
+        )}
+
         {activeProject ? (
           <ProjectTree
-            project={activeProject}
+            baseBranchName={currentBranch}
             workspaces={workspaces}
             sessions={sessions}
             activeSessionId={activeSessionId}
@@ -72,6 +104,7 @@ export const Sidebar: FC<SidebarProps> = ({
             onDeleteSession={(sessionId: string) =>
               deleteSession(sessionId, activeProject.id)
             }
+            onDeleteWorkspace={handleDeleteWorkspace}
             onCreateWorkspace={(branchName: string) =>
               createWorkspace(activeProject.id, branchName)
             }

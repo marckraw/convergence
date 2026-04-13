@@ -1,6 +1,5 @@
 import { useState } from 'react'
 import type { FC } from 'react'
-import type { Project } from '@/entities/project'
 import type { Workspace } from '@/entities/workspace'
 import type { Session } from '@/entities/session'
 import { SessionCreateInline } from '@/features/session-create-inline'
@@ -11,22 +10,24 @@ import { cn } from '@/shared/lib/cn.pure'
 import { ChevronRight, GitBranch, Plus, Trash2 } from 'lucide-react'
 
 interface ProjectTreeProps {
-  project: Project
+  baseBranchName: string | null
   workspaces: Workspace[]
   sessions: Session[]
   activeSessionId: string | null
   onSelectSession: (id: string) => void
   onDeleteSession: (id: string) => void
+  onDeleteWorkspace: (workspaceId: string) => void
   onCreateWorkspace: (branchName: string) => void
 }
 
 export const ProjectTree: FC<ProjectTreeProps> = ({
-  project,
+  baseBranchName,
   workspaces,
   sessions,
   activeSessionId,
   onSelectSession,
   onDeleteSession,
+  onDeleteWorkspace,
   onCreateWorkspace,
 }) => {
   const [expandedWorkspaces, setExpandedWorkspaces] = useState<Set<string>>(
@@ -83,16 +84,11 @@ export const ProjectTree: FC<ProjectTreeProps> = ({
 
   return (
     <div className="px-3">
-      <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-        Project
-      </p>
-
-      <p className="mb-1 truncate text-sm font-medium">{project.name}</p>
-
       {/* Root sessions (on main branch) */}
       <div className="mb-1 ml-2 border-l border-border pl-2">
         <p className="mb-0.5 text-xs text-muted-foreground">
-          main{rootSessions.length > 0 ? ` (${rootSessions.length})` : ''}
+          {(baseBranchName || 'main') +
+            (rootSessions.length > 0 ? ` (${rootSessions.length})` : '')}
         </p>
         {rootSessions.map(renderSessionRow)}
         <div className="mt-1">
@@ -107,24 +103,40 @@ export const ProjectTree: FC<ProjectTreeProps> = ({
 
         return (
           <div key={ws.id} className="ml-2 border-l border-border pl-2">
-            <button
-              onClick={() => toggleWorkspace(ws.id)}
-              className="flex w-full items-center gap-1 py-1 text-left text-sm hover:text-foreground"
-            >
-              <ChevronRight
-                className={cn(
-                  'h-3 w-3 shrink-0 transition-transform',
-                  isExpanded && 'rotate-90',
+            <div className="group/workspace flex items-center gap-1 rounded pr-1 transition-colors hover:bg-accent">
+              <button
+                onClick={() => toggleWorkspace(ws.id)}
+                className="flex min-w-0 flex-1 items-center gap-1 py-1 text-left text-sm hover:text-foreground"
+              >
+                <ChevronRight
+                  className={cn(
+                    'h-3 w-3 shrink-0 transition-transform',
+                    isExpanded && 'rotate-90',
+                  )}
+                />
+                <GitBranch className="h-3 w-3 shrink-0 text-muted-foreground" />
+                <span className="truncate">{ws.branchName}</span>
+                {wsSessions.length > 0 && (
+                  <span className="ml-auto text-xs text-muted-foreground">
+                    {wsSessions.length}
+                  </span>
                 )}
-              />
-              <GitBranch className="h-3 w-3 shrink-0 text-muted-foreground" />
-              <span className="truncate">{ws.branchName}</span>
-              {wsSessions.length > 0 && (
-                <span className="ml-auto text-xs text-muted-foreground">
-                  {wsSessions.length}
-                </span>
-              )}
-            </button>
+              </button>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="h-6 w-6 shrink-0 text-muted-foreground opacity-0 transition-opacity hover:text-destructive group-hover/workspace:opacity-100 focus-visible:opacity-100"
+                onClick={(event) => {
+                  event.stopPropagation()
+                  onDeleteWorkspace(ws.id)
+                }}
+                aria-label={`Delete workspace ${ws.branchName}`}
+                title="Delete workspace"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+              </Button>
+            </div>
 
             {isExpanded && (
               <div className="ml-4 space-y-0.5">
