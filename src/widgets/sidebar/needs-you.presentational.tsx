@@ -9,6 +9,7 @@ import {
 } from 'lucide-react'
 import { cn } from '@/shared/lib/cn.pure'
 import { Button } from '@/shared/ui/button'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/shared/ui/tooltip'
 
 interface NeedsYouSession {
   session: Session
@@ -42,35 +43,43 @@ export const NeedsYou: FC<NeedsYouProps> = ({
           <div
             key={session.id}
             className={cn(
-              'group flex items-start gap-1 rounded-md transition-colors hover:bg-accent',
+              'group flex min-w-0 items-start gap-1 rounded-md transition-colors hover:bg-accent',
               activeSessionId === session.id && 'bg-accent',
             )}
           >
-            <Button
-              type="button"
-              variant="ghost"
-              onClick={() => onSelect(session.id)}
-              className="h-auto flex-1 items-start justify-start gap-2 px-2 py-1.5 text-left text-sm"
-            >
-              {session.attention === 'needs-approval' ? (
-                <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-500" />
-              ) : session.attention === 'needs-input' ? (
-                <MessageSquare className="mt-0.5 h-3.5 w-3.5 shrink-0 text-blue-500" />
-              ) : session.attention === 'failed' ? (
-                <CircleAlert className="mt-0.5 h-3.5 w-3.5 shrink-0 text-destructive" />
-              ) : (
-                <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-500" />
-              )}
-              <div className="min-w-0 flex-1">
-                <p className="truncate font-medium">{session.name}</p>
-                <p className="truncate text-xs text-muted-foreground">
-                  {summary}
-                </p>
-                <p className="truncate text-[11px] text-muted-foreground/80">
-                  {projectName}
-                </p>
-              </div>
-            </Button>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  onClick={() => onSelect(session.id)}
+                  className="h-auto min-w-0 flex-1 items-start justify-start gap-2 px-2 py-1.5 text-left text-sm"
+                >
+                  {session.attention === 'needs-approval' ? (
+                    <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-500" />
+                  ) : session.attention === 'needs-input' ? (
+                    <MessageSquare className="mt-0.5 h-3.5 w-3.5 shrink-0 text-blue-500" />
+                  ) : session.attention === 'failed' ? (
+                    <CircleAlert className="mt-0.5 h-3.5 w-3.5 shrink-0 text-destructive" />
+                  ) : (
+                    <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-500" />
+                  )}
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate font-medium">{session.name}</p>
+                    <p className="truncate text-xs text-muted-foreground">
+                      {summary}
+                    </p>
+                    <p className="truncate text-[11px] text-muted-foreground/80">
+                      {projectName}
+                    </p>
+                  </div>
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="right">
+                <p>{session.name}</p>
+                <p className="text-[11px] opacity-70">{projectName}</p>
+              </TooltipContent>
+            </Tooltip>
             <Button
               type="button"
               variant="ghost"

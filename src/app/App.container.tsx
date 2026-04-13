@@ -3,6 +3,7 @@ import { useProjectStore } from '@/entities/project'
 import { useWorkspaceStore } from '@/entities/workspace'
 import { useSessionStore } from '@/entities/session'
 import { Toaster, toast } from 'sonner'
+import { TooltipProvider } from '@/shared/ui/tooltip'
 import { applyTheme, getStoredTheme } from '@/shared/lib/theme'
 import { AppShell } from './App.layout'
 
@@ -74,7 +75,7 @@ export function App() {
   }, [sessionError, clearSessionError])
 
   return (
-    <>
+    <TooltipProvider delayDuration={1500}>
       <AppShell
         activeSessionId={activeSessionId}
         onSelectSession={setActiveSession}
@@ -82,6 +83,6 @@ export function App() {
         hasProject={!!activeProject}
       />
       <Toaster position="bottom-right" />
-    </>
+    </TooltipProvider>
   )
 }

@@ -69,8 +69,9 @@ export const AppShell: FC<AppShellProps> = ({
 
       <div
         onMouseDown={handleMouseDown}
+        onDoubleClick={() => setSidebarWidth(DEFAULT_SIDEBAR)}
         className={cn(
-          'app-resize-handle w-px shrink-0 cursor-col-resize transition-colors hover:bg-white/10',
+          'app-resize-handle relative z-10 -mx-1.5 w-px shrink-0 cursor-col-resize border-x-[6px] border-x-transparent bg-clip-content transition-colors hover:bg-white/10',
         )}
       />
 

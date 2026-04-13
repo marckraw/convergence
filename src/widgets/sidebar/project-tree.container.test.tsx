@@ -1,5 +1,6 @@
 import { fireEvent, render, screen } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
+import { TooltipProvider } from '@/shared/ui/tooltip'
 import { ProjectTree } from './project-tree.container'
 
 describe('ProjectTree', () => {
@@ -8,32 +9,34 @@ describe('ProjectTree', () => {
     const onDeleteSession = vi.fn()
 
     render(
-      <ProjectTree
-        baseBranchName="master"
-        workspaces={[]}
-        sessions={[
-          {
-            id: 'session-1',
-            projectId: 'project-1',
-            workspaceId: null,
-            providerId: 'claude-code',
-            model: 'sonnet',
-            effort: 'medium',
-            name: 'hey there',
-            status: 'completed',
-            attention: 'finished',
-            workingDirectory: '/tmp/roomfinder',
-            transcript: [],
-            createdAt: '2026-01-01T00:00:00.000Z',
-            updatedAt: '2026-01-01T00:00:00.000Z',
-          },
-        ]}
-        activeSessionId={null}
-        onSelectSession={onSelectSession}
-        onDeleteSession={onDeleteSession}
-        onDeleteWorkspace={vi.fn()}
-        onCreateWorkspace={vi.fn()}
-      />,
+      <TooltipProvider>
+        <ProjectTree
+          baseBranchName="master"
+          workspaces={[]}
+          sessions={[
+            {
+              id: 'session-1',
+              projectId: 'project-1',
+              workspaceId: null,
+              providerId: 'claude-code',
+              model: 'sonnet',
+              effort: 'medium',
+              name: 'hey there',
+              status: 'completed',
+              attention: 'finished',
+              workingDirectory: '/tmp/roomfinder',
+              transcript: [],
+              createdAt: '2026-01-01T00:00:00.000Z',
+              updatedAt: '2026-01-01T00:00:00.000Z',
+            },
+          ]}
+          activeSessionId={null}
+          onSelectSession={onSelectSession}
+          onDeleteSession={onDeleteSession}
+          onDeleteWorkspace={vi.fn()}
+          onCreateWorkspace={vi.fn()}
+        />
+      </TooltipProvider>,
     )
 
     fireEvent.click(
@@ -48,25 +51,27 @@ describe('ProjectTree', () => {
     const onDeleteWorkspace = vi.fn()
 
     render(
-      <ProjectTree
-        baseBranchName="staging"
-        workspaces={[
-          {
-            id: 'workspace-1',
-            projectId: 'project-1',
-            branchName: 'feature-branch',
-            path: '/tmp/roomfinder-workspace',
-            type: 'worktree',
-            createdAt: '2026-01-01T00:00:00.000Z',
-          },
-        ]}
-        sessions={[]}
-        activeSessionId={null}
-        onSelectSession={vi.fn()}
-        onDeleteSession={vi.fn()}
-        onDeleteWorkspace={onDeleteWorkspace}
-        onCreateWorkspace={vi.fn()}
-      />,
+      <TooltipProvider>
+        <ProjectTree
+          baseBranchName="staging"
+          workspaces={[
+            {
+              id: 'workspace-1',
+              projectId: 'project-1',
+              branchName: 'feature-branch',
+              path: '/tmp/roomfinder-workspace',
+              type: 'worktree',
+              createdAt: '2026-01-01T00:00:00.000Z',
+            },
+          ]}
+          sessions={[]}
+          activeSessionId={null}
+          onSelectSession={vi.fn()}
+          onDeleteSession={vi.fn()}
+          onDeleteWorkspace={onDeleteWorkspace}
+          onCreateWorkspace={vi.fn()}
+        />
+      </TooltipProvider>,
     )
 
     fireEvent.click(
