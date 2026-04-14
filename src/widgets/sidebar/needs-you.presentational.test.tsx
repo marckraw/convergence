@@ -1,7 +1,11 @@
 import { fireEvent, render, screen } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 import { TooltipProvider } from '@/shared/ui/tooltip'
-import { NeedsYou, buildNeedsYouSummary } from './needs-you.presentational'
+import {
+  NeedsYou,
+  buildNeedsYouSummary,
+  getNeedsYouAction,
+} from './needs-you.presentational'
 
 describe('NeedsYou', () => {
   it('builds summaries for all meaningful attention states', () => {
@@ -76,6 +80,44 @@ describe('NeedsYou', () => {
         updatedAt: '2026-01-01T00:00:00.000Z',
       })?.summary,
     ).toBe('Session failed')
+  })
+
+  it('uses snooze for active attention and acknowledge for terminal attention', () => {
+    expect(
+      getNeedsYouAction({
+        id: 'session-1',
+        projectId: 'project-1',
+        workspaceId: null,
+        providerId: 'claude-code',
+        model: 'sonnet',
+        effort: 'medium',
+        name: 'Approval',
+        status: 'running',
+        attention: 'needs-approval',
+        workingDirectory: '/tmp/project-1',
+        transcript: [],
+        createdAt: '2026-01-01T00:00:00.000Z',
+        updatedAt: '2026-01-01T00:00:00.000Z',
+      }).label,
+    ).toBe('Snooze')
+
+    expect(
+      getNeedsYouAction({
+        id: 'session-2',
+        projectId: 'project-1',
+        workspaceId: null,
+        providerId: 'claude-code',
+        model: 'sonnet',
+        effort: 'medium',
+        name: 'Finished',
+        status: 'completed',
+        attention: 'finished',
+        workingDirectory: '/tmp/project-1',
+        transcript: [],
+        createdAt: '2026-01-01T00:00:00.000Z',
+        updatedAt: '2026-01-01T00:00:00.000Z',
+      }).label,
+    ).toBe('Acknowledge')
   })
 
   it('renders project context and selects attention sessions', () => {
@@ -161,10 +203,54 @@ describe('NeedsYou', () => {
     )
 
     fireEvent.click(
-      screen.getByRole('button', { name: /dismiss review roomfinder/i }),
+      screen.getByRole('button', { name: /acknowledge review roomfinder/i }),
     )
 
     expect(onDismiss).toHaveBeenCalledWith('session-1')
+    expect(onSelect).not.toHaveBeenCalled()
+  })
+
+  it('snoozes active needs-you items without selecting the session', () => {
+    const onSelect = vi.fn()
+    const onDismiss = vi.fn()
+
+    render(
+      <TooltipProvider>
+        <NeedsYou
+          sessions={[
+            {
+              session: {
+                id: 'session-2',
+                projectId: 'project-2',
+                workspaceId: null,
+                providerId: 'claude-code',
+                model: 'sonnet',
+                effort: 'medium',
+                name: 'Need approval',
+                status: 'running',
+                attention: 'needs-approval',
+                workingDirectory: '/tmp/project-2',
+                transcript: [],
+                createdAt: '2026-01-01T00:00:00.000Z',
+                updatedAt: '2026-01-01T00:00:00.000Z',
+              },
+              projectName: 'Convergence',
+              summary: 'Approval needed',
+              priority: 0,
+            },
+          ]}
+          activeSessionId={null}
+          onSelect={onSelect}
+          onDismiss={onDismiss}
+        />
+      </TooltipProvider>,
+    )
+
+    fireEvent.click(
+      screen.getByRole('button', { name: /snooze need approval/i }),
+    )
+
+    expect(onDismiss).toHaveBeenCalledWith('session-2')
     expect(onSelect).not.toHaveBeenCalled()
   })
 })

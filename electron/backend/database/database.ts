@@ -22,6 +22,7 @@ const SCHEMA = `
     provider_id TEXT NOT NULL,
     model TEXT,
     effort TEXT,
+    continuation_token TEXT,
     name TEXT NOT NULL,
     status TEXT NOT NULL DEFAULT 'idle',
     attention TEXT NOT NULL DEFAULT 'none',
@@ -59,6 +60,10 @@ function ensureSessionColumns(database: Database.Database): void {
 
   if (!columnNames.has('effort')) {
     database.exec('ALTER TABLE sessions ADD COLUMN effort TEXT')
+  }
+
+  if (!columnNames.has('continuation_token')) {
+    database.exec('ALTER TABLE sessions ADD COLUMN continuation_token TEXT')
   }
 }
 

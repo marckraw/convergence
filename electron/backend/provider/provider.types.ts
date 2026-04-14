@@ -38,6 +38,7 @@ export interface SessionStartConfig {
   initialMessage: string
   model: string | null
   effort: ReasoningEffort | null
+  continuationToken: string | null
 }
 
 export interface ProviderEffortOption {
@@ -66,6 +67,7 @@ export interface SessionHandle {
   onTranscriptEntry: (callback: (entry: TranscriptEntry) => void) => void
   onStatusChange: (callback: (status: SessionStatus) => void) => void
   onAttentionChange: (callback: (attention: AttentionState) => void) => void
+  onContinuationToken: (callback: (token: string) => void) => void
 
   sendMessage: (text: string) => void
   approve: () => void

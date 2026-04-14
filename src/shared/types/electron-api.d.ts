@@ -41,6 +41,14 @@ type ReasoningEffort =
   | 'high'
   | 'max'
   | 'xhigh'
+type NeedsYouDisposition = 'snoozed' | 'acknowledged'
+type NeedsYouDismissals = Record<
+  string,
+  {
+    updatedAt: string
+    disposition: NeedsYouDisposition
+  }
+>
 
 interface ProviderEffortOption {
   id: ReasoningEffort
@@ -151,6 +159,8 @@ interface ElectronAPI {
     approve: (id: string) => Promise<void>
     deny: (id: string) => Promise<void>
     stop: (id: string) => Promise<void>
+    getNeedsYouDismissals: () => Promise<NeedsYouDismissals>
+    setNeedsYouDismissals: (dismissals: NeedsYouDismissals) => Promise<void>
     onSessionUpdate: (callback: (session: SessionData) => void) => () => void
   }
   provider: {

@@ -1,11 +1,17 @@
 import { create } from 'zustand'
-import type { Session, ProviderInfo, ReasoningEffort } from './session.types'
+import type {
+  Session,
+  ProviderInfo,
+  ReasoningEffort,
+  NeedsYouDismissals,
+  NeedsYouDisposition,
+} from './session.types'
 import { sessionApi, providerApi } from './session.api'
 
 interface SessionState {
   sessions: Session[]
   globalSessions: Session[]
-  dismissedNeedsYou: Record<string, string>
+  needsYouDismissals: NeedsYouDismissals
   currentProjectId: string | null
   activeSessionId: string | null
   draftWorkspaceId: string | null
@@ -17,7 +23,7 @@ interface SessionActions {
   loadSessions: (projectId: string) => Promise<void>
   loadGlobalSessions: () => Promise<void>
   loadProviders: () => Promise<void>
-  dismissNeedsYouSession: (id: string) => void
+  dismissNeedsYouSession: (id: string) => Promise<void>
   createAndStartSession: (
     projectId: string,
     workspaceId: string | null,
@@ -41,10 +47,39 @@ interface SessionActions {
 
 export type SessionStore = SessionState & SessionActions
 
+function resolveNeedsYouDisposition(
+  session: Session,
+): NeedsYouDisposition | null {
+  switch (session.attention) {
+    case 'needs-approval':
+    case 'needs-input':
+      return 'snoozed'
+    case 'failed':
+    case 'finished':
+      return 'acknowledged'
+    default:
+      return null
+  }
+}
+
+function pruneNeedsYouDismissals(
+  dismissals: NeedsYouDismissals,
+  sessions: Session[],
+): NeedsYouDismissals {
+  return Object.fromEntries(
+    Object.entries(dismissals).filter(([sessionId, dismissal]) =>
+      sessions.some(
+        (session) =>
+          session.id === sessionId && session.updatedAt === dismissal.updatedAt,
+      ),
+    ),
+  )
+}
+
 export const useSessionStore = create<SessionStore>((set, get) => ({
   sessions: [],
   globalSessions: [],
-  dismissedNeedsYou: {},
+  needsYouDismissals: {},
   currentProjectId: null,
   activeSessionId: null,
   draftWorkspaceId: null,
@@ -81,18 +116,22 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
 
   loadGlobalSessions: async () => {
     const globalSessions = await sessionApi.getAll()
-    set((state) => ({
+    const persistedDismissals = await sessionApi.getNeedsYouDismissals()
+    const nextDismissals = pruneNeedsYouDismissals(
+      persistedDismissals,
       globalSessions,
-      dismissedNeedsYou: Object.fromEntries(
-        Object.entries(state.dismissedNeedsYou).filter(
-          ([sessionId, updatedAt]) =>
-            globalSessions.some(
-              (session) =>
-                session.id === sessionId && session.updatedAt === updatedAt,
-            ),
-        ),
-      ),
-    }))
+    )
+
+    if (
+      JSON.stringify(nextDismissals) !== JSON.stringify(persistedDismissals)
+    ) {
+      await sessionApi.setNeedsYouDismissals(nextDismissals)
+    }
+
+    set({
+      globalSessions,
+      needsYouDismissals: nextDismissals,
+    })
   },
 
   loadProviders: async () => {
@@ -100,18 +139,37 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     set({ providers })
   },
 
-  dismissNeedsYouSession: (id: string) => {
+  dismissNeedsYouSession: async (id: string) => {
     const session = get().globalSessions.find((entry) => entry.id === id)
     if (!session) {
       return
     }
 
-    set((state) => ({
-      dismissedNeedsYou: {
-        ...state.dismissedNeedsYou,
-        [id]: session.updatedAt,
+    const disposition = resolveNeedsYouDisposition(session)
+    if (!disposition) {
+      return
+    }
+
+    const nextDismissals = {
+      ...get().needsYouDismissals,
+      [id]: {
+        updatedAt: session.updatedAt,
+        disposition,
       },
-    }))
+    }
+
+    set({ needsYouDismissals: nextDismissals })
+
+    try {
+      await sessionApi.setNeedsYouDismissals(nextDismissals)
+    } catch (err) {
+      set({
+        error:
+          err instanceof Error
+            ? err.message
+            : 'Failed to persist needs-you dismissal',
+      })
+    }
   },
 
   createAndStartSession: async (
@@ -138,8 +196,8 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
         currentProjectId: projectId,
         sessions: [session, ...state.sessions],
         globalSessions: [session, ...state.globalSessions],
-        dismissedNeedsYou: Object.fromEntries(
-          Object.entries(state.dismissedNeedsYou).filter(
+        needsYouDismissals: Object.fromEntries(
+          Object.entries(state.needsYouDismissals).filter(
             ([sessionId]) => sessionId !== session.id,
           ),
         ),
@@ -202,14 +260,16 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
         (session) => session.id !== id,
       )
       const { activeSessionId } = get()
+      const nextDismissals = Object.fromEntries(
+        Object.entries(get().needsYouDismissals).filter(
+          ([sessionId]) => sessionId !== id,
+        ),
+      )
+      await sessionApi.setNeedsYouDismissals(nextDismissals)
       set({
         sessions,
         globalSessions,
-        dismissedNeedsYou: Object.fromEntries(
-          Object.entries(get().dismissedNeedsYou).filter(
-            ([sessionId]) => sessionId !== id,
-          ),
-        ),
+        needsYouDismissals: nextDismissals,
         activeSessionId: activeSessionId === id ? null : activeSessionId,
         draftWorkspaceId:
           activeSessionId === id ? null : get().draftWorkspaceId,
@@ -243,22 +303,41 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
 
   handleSessionUpdate: (session: Session) => {
     const currentProjectId = get().currentProjectId
-    set((state) => ({
-      dismissedNeedsYou: Object.fromEntries(
-        Object.entries(state.dismissedNeedsYou).filter(
-          ([sessionId, updatedAt]) =>
-            sessionId !== session.id || updatedAt === session.updatedAt,
-        ),
-      ),
-      globalSessions: state.globalSessions.some((s) => s.id === session.id)
-        ? state.globalSessions.map((s) => (s.id === session.id ? session : s))
-        : [session, ...state.globalSessions],
-      sessions: state.sessions.some((s) => s.id === session.id)
-        ? state.sessions.map((s) => (s.id === session.id ? session : s))
-        : currentProjectId && session.projectId === currentProjectId
-          ? [session, ...state.sessions]
-          : state.sessions,
-    }))
+    const state = get()
+    const nextGlobalSessions = state.globalSessions.some(
+      (s) => s.id === session.id,
+    )
+      ? state.globalSessions.map((s) => (s.id === session.id ? session : s))
+      : [session, ...state.globalSessions]
+    const nextSessions = state.sessions.some((s) => s.id === session.id)
+      ? state.sessions.map((s) => (s.id === session.id ? session : s))
+      : currentProjectId && session.projectId === currentProjectId
+        ? [session, ...state.sessions]
+        : state.sessions
+    const nextDismissals = pruneNeedsYouDismissals(
+      state.needsYouDismissals,
+      nextGlobalSessions,
+    )
+
+    set({
+      needsYouDismissals: nextDismissals,
+      globalSessions: nextGlobalSessions,
+      sessions: nextSessions,
+    })
+
+    if (
+      JSON.stringify(nextDismissals) !==
+      JSON.stringify(state.needsYouDismissals)
+    ) {
+      void sessionApi.setNeedsYouDismissals(nextDismissals).catch((err) => {
+        set({
+          error:
+            err instanceof Error
+              ? err.message
+              : 'Failed to persist needs-you dismissal state',
+        })
+      })
+    }
   },
 
   clearError: () => set({ error: null }),

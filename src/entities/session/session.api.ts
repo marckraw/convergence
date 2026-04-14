@@ -1,4 +1,9 @@
-import type { Session, ProviderInfo, ReasoningEffort } from './session.types'
+import type {
+  Session,
+  ProviderInfo,
+  ReasoningEffort,
+  NeedsYouDismissals,
+} from './session.types'
 
 export const sessionApi = {
   create: (input: {
@@ -32,6 +37,12 @@ export const sessionApi = {
   deny: (id: string): Promise<void> => window.electronAPI.session.deny(id),
 
   stop: (id: string): Promise<void> => window.electronAPI.session.stop(id),
+
+  getNeedsYouDismissals: (): Promise<NeedsYouDismissals> =>
+    window.electronAPI.session.getNeedsYouDismissals(),
+
+  setNeedsYouDismissals: (dismissals: NeedsYouDismissals): Promise<void> =>
+    window.electronAPI.session.setNeedsYouDismissals(dismissals),
 
   onSessionUpdate: (callback: (session: Session) => void): (() => void) =>
     window.electronAPI.session.onSessionUpdate(callback),

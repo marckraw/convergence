@@ -10,6 +10,58 @@ import type { CreateWorkspaceInput } from '../backend/workspace/workspace.types'
 import type { CreateSessionInput } from '../backend/session/session.types'
 
 const ACTIVE_PROJECT_KEY = 'active_project_id'
+const NEEDS_YOU_DISMISSALS_KEY = 'needs_you_dismissals_v1'
+
+type NeedsYouDismissalRecord = Record<
+  string,
+  {
+    updatedAt: string
+    disposition: 'snoozed' | 'acknowledged'
+  }
+>
+
+function parseNeedsYouDismissals(
+  value: string | null,
+): NeedsYouDismissalRecord {
+  if (!value) {
+    return {}
+  }
+
+  try {
+    const parsed = JSON.parse(value) as Record<string, unknown>
+
+    return Object.fromEntries(
+      Object.entries(parsed).flatMap(([sessionId, dismissal]) => {
+        const candidate = dismissal as {
+          updatedAt?: unknown
+          disposition?: unknown
+        }
+
+        if (
+          typeof dismissal !== 'object' ||
+          dismissal === null ||
+          typeof candidate.updatedAt !== 'string' ||
+          (candidate.disposition !== 'snoozed' &&
+            candidate.disposition !== 'acknowledged')
+        ) {
+          return []
+        }
+
+        return [
+          [
+            sessionId,
+            {
+              updatedAt: candidate.updatedAt,
+              disposition: candidate.disposition,
+            },
+          ],
+        ]
+      }),
+    )
+  } catch {
+    return {}
+  }
+}
 
 export function registerIpcHandlers(
   projectService: ProjectService,
@@ -111,6 +163,17 @@ export function registerIpcHandlers(
   )
 
   ipcMain.handle('session:getAll', () => sessionService.getAll())
+
+  ipcMain.handle('session:getNeedsYouDismissals', () =>
+    parseNeedsYouDismissals(stateService.get(NEEDS_YOU_DISMISSALS_KEY)),
+  )
+
+  ipcMain.handle(
+    'session:setNeedsYouDismissals',
+    (_event, dismissals: NeedsYouDismissalRecord) => {
+      stateService.set(NEEDS_YOU_DISMISSALS_KEY, JSON.stringify(dismissals))
+    },
+  )
 
   ipcMain.handle('session:getById', (_event, id: string) =>
     sessionService.getById(id),

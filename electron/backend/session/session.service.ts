@@ -93,9 +93,7 @@ export class SessionService {
   }
 
   getById(id: string): Session | null {
-    const row = this.db
-      .prepare('SELECT * FROM sessions WHERE id = ?')
-      .get(id) as SessionRow | undefined
+    const row = this.getRowById(id)
 
     return row ? sessionFromRow(row) : null
   }
@@ -113,41 +111,35 @@ export class SessionService {
     const session = this.getById(id)
     if (!session) throw new Error(`Session not found: ${id}`)
 
-    const provider = this.providers.get(session.providerId)
-    if (!provider) throw new Error(`Provider not found: ${session.providerId}`)
-
-    const handle = provider.start({
-      sessionId: id,
-      workingDirectory: session.workingDirectory,
-      initialMessage: message,
-      model: session.model,
-      effort: session.effort,
-    })
-
-    this.activeHandles.set(id, handle)
-
-    handle.onTranscriptEntry((entry: TranscriptEntry) => {
-      this.appendTranscript(id, entry)
-    })
-
-    handle.onStatusChange((status: SessionStatus) => {
-      this.updateField(id, 'status', status)
-      if (status === 'failed') {
-        this.activeHandles.delete(id)
-      } else if (status === 'completed' && !provider.supportsContinuation) {
-        this.activeHandles.delete(id)
-      }
-    })
-
-    handle.onAttentionChange((attention: AttentionState) => {
-      this.updateField(id, 'attention', attention)
-    })
+    this.startHandle(session, message, this.getContinuationToken(id))
   }
 
   sendMessage(id: string, text: string): void {
     const handle = this.activeHandles.get(id)
-    if (!handle) throw new Error(`Session not active: ${id}`)
-    handle.sendMessage(text)
+    if (handle) {
+      handle.sendMessage(text)
+      return
+    }
+
+    const session = this.getById(id)
+    if (!session) throw new Error(`Session not found: ${id}`)
+
+    const provider = this.providers.get(session.providerId)
+    if (!provider) throw new Error(`Provider not found: ${session.providerId}`)
+
+    const continuationToken = this.getContinuationToken(id)
+    if (provider.supportsContinuation && continuationToken) {
+      this.startHandle(session, text, continuationToken)
+      return
+    }
+
+    if (provider.supportsContinuation) {
+      throw new Error(
+        `Session cannot be resumed: missing continuation state. Start a new session.`,
+      )
+    }
+
+    throw new Error(`Session not active: ${id}`)
   }
 
   approve(id: string): void {
@@ -202,5 +194,64 @@ export class SessionService {
       const session = this.getById(id)
       if (session) this.onUpdate(session)
     }
+  }
+
+  private getRowById(id: string): SessionRow | undefined {
+    return this.db.prepare('SELECT * FROM sessions WHERE id = ?').get(id) as
+      | SessionRow
+      | undefined
+  }
+
+  private getContinuationToken(id: string): string | null {
+    return this.getRowById(id)?.continuation_token ?? null
+  }
+
+  private updateContinuationToken(id: string, token: string): void {
+    this.db
+      .prepare('UPDATE sessions SET continuation_token = ? WHERE id = ?')
+      .run(token, id)
+  }
+
+  private startHandle(
+    session: Session,
+    initialMessage: string,
+    continuationToken: string | null,
+  ): void {
+    const provider = this.providers.get(session.providerId)
+    if (!provider) throw new Error(`Provider not found: ${session.providerId}`)
+
+    const handle = provider.start({
+      sessionId: session.id,
+      workingDirectory: session.workingDirectory,
+      initialMessage,
+      model: session.model,
+      effort: session.effort,
+      continuationToken,
+    })
+
+    this.activeHandles.set(session.id, handle)
+
+    handle.onTranscriptEntry((entry: TranscriptEntry) => {
+      this.appendTranscript(session.id, entry)
+    })
+
+    handle.onStatusChange((status: SessionStatus) => {
+      this.updateField(session.id, 'status', status)
+      if (status === 'failed') {
+        this.activeHandles.delete(session.id)
+      } else if (status === 'completed' && !provider.supportsContinuation) {
+        this.activeHandles.delete(session.id)
+      }
+    })
+
+    handle.onAttentionChange((attention: AttentionState) => {
+      this.updateField(session.id, 'attention', attention)
+    })
+
+    handle.onContinuationToken((token: string) => {
+      if (token.trim()) {
+        this.updateContinuationToken(session.id, token)
+      }
+    })
   }
 }

@@ -1,7 +1,7 @@
 import type { FC } from 'react'
 import {
   Loader2,
-  CheckCircle,
+  CheckCircle2,
   XCircle,
   AlertTriangle,
   MessageSquare,
@@ -14,14 +14,14 @@ interface SessionBadgeProps {
 export const SessionBadge: FC<SessionBadgeProps> = ({ attention }) => {
   switch (attention) {
     case 'needs-approval':
-      return <AlertTriangle className="h-3 w-3 text-amber-500" />
+      return <AlertTriangle className="shrink-0 text-amber-500" />
     case 'needs-input':
-      return <MessageSquare className="h-3 w-3 text-blue-500" />
+      return <MessageSquare className="shrink-0 text-blue-500" />
     case 'finished':
-      return <CheckCircle className="h-3 w-3 text-green-500" />
+      return <CheckCircle2 className="shrink-0 text-emerald-500" />
     case 'failed':
-      return <XCircle className="h-3 w-3 text-red-500" />
+      return <XCircle className="shrink-0 text-red-500" />
     default:
-      return <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />
+      return <Loader2 className="shrink-0 animate-spin text-muted-foreground" />
   }
 }

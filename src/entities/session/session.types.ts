@@ -14,6 +14,15 @@ export type ReasoningEffort =
   | 'max'
   | 'xhigh'
 
+export type NeedsYouDisposition = 'snoozed' | 'acknowledged'
+
+export interface NeedsYouDismissal {
+  updatedAt: string
+  disposition: NeedsYouDisposition
+}
+
+export type NeedsYouDismissals = Record<string, NeedsYouDismissal>
+
 export interface ProviderEffortOption {
   id: ReasoningEffort
   label: string

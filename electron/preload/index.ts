@@ -58,6 +58,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
     approve: (id: string) => ipcRenderer.invoke('session:approve', id),
     deny: (id: string) => ipcRenderer.invoke('session:deny', id),
     stop: (id: string) => ipcRenderer.invoke('session:stop', id),
+    getNeedsYouDismissals: () =>
+      ipcRenderer.invoke('session:getNeedsYouDismissals'),
+    setNeedsYouDismissals: (dismissals: unknown) =>
+      ipcRenderer.invoke('session:setNeedsYouDismissals', dismissals),
     onSessionUpdate: (callback: (session: unknown) => void) => {
       const handler = (_event: unknown, session: unknown) => callback(session)
       ipcRenderer.on('session:updated', handler)

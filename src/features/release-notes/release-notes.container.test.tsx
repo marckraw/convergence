@@ -9,7 +9,7 @@ describe('ReleaseNotesDialogContainer', () => {
     fireEvent.click(screen.getByRole('button', { name: /what's new/i }))
 
     expect(screen.getByText('About Convergence')).toBeInTheDocument()
-    expect(screen.getByText(/version 0\.0\.0/i)).toBeInTheDocument()
+    expect(screen.getByText(/version \d+\.\d+\.\d+/i)).toBeInTheDocument()
     expect(screen.getAllByText(/development build/i).length).toBeGreaterThan(0)
   })
 

@@ -53,11 +53,12 @@ export class ClaudeCodeProvider implements Provider {
       transcript: [] as ((entry: TranscriptEntry) => void)[],
       status: [] as ((status: SessionStatus) => void)[],
       attention: [] as ((attention: AttentionState) => void)[],
+      continuationToken: [] as ((token: string) => void)[],
     }
 
     let child: ChildProcess | null = null
     let stopped = false
-    let claudeSessionId: string | null = null
+    let claudeSessionId: string | null = config.continuationToken
     let assistantTextBuffer = ''
     let currentTurnHasAssistantText = false
 
@@ -71,6 +72,15 @@ export class ClaudeCodeProvider implements Provider {
 
     function setAttention(attention: AttentionState): void {
       listeners.attention.forEach((cb) => cb(attention))
+    }
+
+    function setContinuationToken(token: string): void {
+      if (claudeSessionId === token) {
+        return
+      }
+
+      claudeSessionId = token
+      listeners.continuationToken.forEach((cb) => cb(token))
     }
 
     function flushAssistantBuffer(): void {
@@ -102,7 +112,7 @@ export class ClaudeCodeProvider implements Provider {
           }
           if (subtype === 'init' && event.session_id) {
             const isNewSession = claudeSessionId !== event.session_id
-            claudeSessionId = event.session_id
+            setContinuationToken(event.session_id)
             if (!isNewSession) {
               break
             }
@@ -317,6 +327,12 @@ export class ClaudeCodeProvider implements Provider {
       },
       onAttentionChange: (cb) => {
         listeners.attention.push(cb)
+      },
+      onContinuationToken: (cb) => {
+        listeners.continuationToken.push(cb)
+        if (claudeSessionId) {
+          cb(claudeSessionId)
+        }
       },
       sendMessage: (text) => {
         startTurn(text)

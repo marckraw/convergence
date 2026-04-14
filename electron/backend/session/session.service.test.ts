@@ -148,6 +148,7 @@ function createTestProvider(): Provider {
         onAttentionChange: (cb) => {
           listeners.attention.push(cb)
         },
+        onContinuationToken: () => {},
         sendMessage: (text) => {
           if (stopped) return
           emitTranscript({ type: 'user', text, timestamp: now() })
@@ -384,6 +385,7 @@ describe('SessionService', () => {
         statusListener = listener
       },
       onAttentionChange: () => {},
+      onContinuationToken: () => {},
       sendMessage,
       approve: () => {},
       deny: () => {},
@@ -432,5 +434,101 @@ describe('SessionService', () => {
       continuationService.sendMessage(session.id, 'Follow up'),
     ).not.toThrow()
     expect(sendMessage).toHaveBeenCalledWith('Follow up')
+  })
+
+  it('rehydrates continuation-capable sessions after restart', async () => {
+    const db = getDatabase()
+    const startConfigs: Array<{
+      initialMessage: string
+      continuationToken: string | null
+    }> = []
+
+    const createContinuableProvider = (): Provider => ({
+      id: 'continuable-rehydrate',
+      name: 'Continuable Rehydrate Provider',
+      supportsContinuation: true,
+      describe: async () => ({
+        id: 'continuable-rehydrate',
+        name: 'Continuable Rehydrate Provider',
+        vendorLabel: 'Test',
+        supportsContinuation: true,
+        defaultModelId: 'continuable-model',
+        modelOptions: [
+          {
+            id: 'continuable-model',
+            label: 'Continuable Model',
+            defaultEffort: null,
+            effortOptions: [],
+          },
+        ],
+      }),
+      start: (config) => {
+        startConfigs.push({
+          initialMessage: config.initialMessage,
+          continuationToken: config.continuationToken,
+        })
+
+        let continuationListener: ((token: string) => void) | null = null
+        let statusListener: ((status: SessionStatus) => void) | null = null
+
+        setTimeout(() => {
+          continuationListener?.('resume-token-1')
+          statusListener?.('completed')
+        }, 0)
+
+        return {
+          onTranscriptEntry: () => {},
+          onStatusChange: (listener) => {
+            statusListener = listener
+          },
+          onAttentionChange: () => {},
+          onContinuationToken: (listener) => {
+            continuationListener = listener
+            if (config.continuationToken) {
+              listener(config.continuationToken)
+            }
+          },
+          sendMessage: () => {},
+          approve: () => {},
+          deny: () => {},
+          stop: () => {},
+        }
+      },
+    })
+
+    const registry = new ProviderRegistry()
+    registry.register(createContinuableProvider())
+
+    const firstService = new SessionService(db, registry)
+    const session = firstService.create({
+      projectId,
+      workspaceId: null,
+      providerId: 'continuable-rehydrate',
+      model: 'continuable-model',
+      effort: null,
+      name: 'rehydrate me',
+    })
+
+    firstService.start(session.id, 'Initial prompt')
+    await vi.advanceTimersByTimeAsync(1)
+
+    const rehydratedRegistry = new ProviderRegistry()
+    rehydratedRegistry.register(createContinuableProvider())
+    const restartedService = new SessionService(db, rehydratedRegistry)
+
+    expect(() =>
+      restartedService.sendMessage(session.id, 'Follow up after restart'),
+    ).not.toThrow()
+
+    expect(startConfigs).toEqual([
+      {
+        initialMessage: 'Initial prompt',
+        continuationToken: null,
+      },
+      {
+        initialMessage: 'Follow up after restart',
+        continuationToken: 'resume-token-1',
+      },
+    ])
   })
 })

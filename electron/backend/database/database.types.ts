@@ -19,6 +19,7 @@ export interface SessionRow {
   provider_id: string
   model: string | null
   effort: string | null
+  continuation_token: string | null
   name: string
   status: string
   attention: string

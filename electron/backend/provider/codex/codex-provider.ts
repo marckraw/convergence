@@ -42,16 +42,18 @@ export class CodexProvider implements Provider {
   }
 
   start(config: SessionStartConfig): SessionHandle {
+    const binaryPath = this.binaryPath
     const listeners = {
       transcript: [] as ((entry: TranscriptEntry) => void)[],
       status: [] as ((status: SessionStatus) => void)[],
       attention: [] as ((attention: AttentionState) => void)[],
+      continuationToken: [] as ((token: string) => void)[],
     }
 
     let child: ChildProcess | null = null
     let rpc: JsonRpcClient | null = null
     let stopped = false
-    let threadId: string | null = null
+    let threadId: string | null = config.continuationToken
     let assistantTextBuffer = ''
     let resolveThreadReady: (() => void) | null = null
 
@@ -69,6 +71,16 @@ export class CodexProvider implements Provider {
 
     function setAttention(attention: AttentionState): void {
       listeners.attention.forEach((cb) => cb(attention))
+    }
+
+    function setContinuationToken(token: string): void {
+      if (threadId === token) {
+        return
+      }
+
+      threadId = token
+      listeners.continuationToken.forEach((cb) => cb(token))
+      resolveThreadReady?.()
     }
 
     function flushAssistantBuffer(): void {
@@ -125,7 +137,7 @@ export class CodexProvider implements Provider {
       })
     }
 
-    async function initialize(): Promise<void> {
+    async function initialize(initialMessage: string): Promise<void> {
       if (!rpc || stopped) return
 
       try {
@@ -142,22 +154,26 @@ export class CodexProvider implements Provider {
         })
         rpc.notify('initialized')
 
-        // Start thread
-        const threadResult = await rpc.request('thread/start', {
-          cwd: config.workingDirectory,
-          approvalPolicy: 'on-request',
-          sandbox: 'workspace-write',
-        })
-
-        threadId = readThreadId(threadResult) ?? threadId
         if (!threadId) {
-          threadId = await waitForThreadId()
+          const threadResult = await rpc.request('thread/start', {
+            cwd: config.workingDirectory,
+            approvalPolicy: 'on-request',
+            sandbox: 'workspace-write',
+          })
+
+          const discoveredThreadId = readThreadId(threadResult)
+          if (discoveredThreadId) {
+            setContinuationToken(discoveredThreadId)
+          }
+          if (!threadId) {
+            threadId = await waitForThreadId()
+          }
         }
 
         // Emit user message and start turn
         emit({
           type: 'user',
-          text: config.initialMessage,
+          text: initialMessage,
           timestamp: now(),
         })
         setStatus('running')
@@ -169,7 +185,7 @@ export class CodexProvider implements Provider {
           input: [
             {
               type: 'text',
-              text: config.initialMessage,
+              text: initialMessage,
               text_elements: [],
             },
           ],
@@ -186,11 +202,11 @@ export class CodexProvider implements Provider {
       }
     }
 
-    // Spawn after a tick so listeners can be attached
-    setTimeout(() => {
+    function spawnServer(initialMessage: string): void {
       if (stopped) return
+      if (child || rpc) return
 
-      child = spawn(this.binaryPath, ['app-server'], {
+      child = spawn(binaryPath, ['app-server'], {
         cwd: config.workingDirectory,
         stdio: ['pipe', 'pipe', 'pipe'],
         env: { ...process.env },
@@ -216,8 +232,14 @@ export class CodexProvider implements Provider {
 
         switch (method) {
           case 'thread/started':
-            threadId = readThreadId(params) ?? threadId
-            resolveThreadReady?.()
+            {
+              const discoveredThreadId = readThreadId(params)
+              if (discoveredThreadId) {
+                setContinuationToken(discoveredThreadId)
+              } else {
+                resolveThreadReady?.()
+              }
+            }
             break
 
           case 'turn/started':
@@ -441,7 +463,12 @@ export class CodexProvider implements Provider {
         child = null
       })
 
-      initialize()
+      void initialize(initialMessage)
+    }
+
+    // Spawn after a tick so listeners can be attached
+    setTimeout(() => {
+      spawnServer(config.initialMessage)
     }, 10)
 
     const handle: SessionHandle = {
@@ -454,9 +481,18 @@ export class CodexProvider implements Provider {
       onAttentionChange: (cb) => {
         listeners.attention.push(cb)
       },
+      onContinuationToken: (cb) => {
+        listeners.continuationToken.push(cb)
+        if (threadId) {
+          cb(threadId)
+        }
+      },
       sendMessage: (text) => {
-        if (stopped || !rpc || !threadId) return
-        emit({ type: 'user', text, timestamp: now() })
+        if (stopped) return
+        if (!rpc) {
+          spawnServer(text)
+          return
+        }
 
         const pendingUserInput = pendingUserInputs.entries().next().value as
           | [number, string[]]
@@ -472,6 +508,12 @@ export class CodexProvider implements Provider {
           return
         }
 
+        if (!threadId) {
+          spawnServer(text)
+          return
+        }
+
+        emit({ type: 'user', text, timestamp: now() })
         setStatus('running')
         setAttention('none')
         rpc

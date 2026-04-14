@@ -32,9 +32,7 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
     (p) => p.id === activeSession?.providerId,
   )
   const canContinueActiveSession =
-    !!activeSession &&
-    activeSession.status !== 'failed' &&
-    !!activeProvider?.supportsContinuation
+    !!activeSession && !!activeProvider?.supportsContinuation
   const selection = resolveProviderSelection(
     providers,
     activeSession?.providerId ?? providerId,
