@@ -6,6 +6,7 @@ import type {
   TranscriptEntry,
   SessionStatus,
   AttentionState,
+  SessionContextWindow,
 } from '../provider.types'
 import { JsonRpcClient } from './jsonrpc'
 import {
@@ -18,6 +19,7 @@ import type {
   ProviderModelOption,
   ReasoningEffort,
 } from '../provider.types'
+import { deriveCodexContextWindow } from '../context-window.pure'
 
 function now(): string {
   return new Date().toISOString()
@@ -48,6 +50,7 @@ export class CodexProvider implements Provider {
       status: [] as ((status: SessionStatus) => void)[],
       attention: [] as ((attention: AttentionState) => void)[],
       continuationToken: [] as ((token: string) => void)[],
+      contextWindow: [] as ((contextWindow: SessionContextWindow) => void)[],
     }
 
     let child: ChildProcess | null = null
@@ -81,6 +84,10 @@ export class CodexProvider implements Provider {
       threadId = token
       listeners.continuationToken.forEach((cb) => cb(token))
       resolveThreadReady?.()
+    }
+
+    function setContextWindow(contextWindow: SessionContextWindow): void {
+      listeners.contextWindow.forEach((cb) => cb(contextWindow))
     }
 
     function flushAssistantBuffer(): void {
@@ -247,6 +254,19 @@ export class CodexProvider implements Provider {
             setAttention('none')
             break
 
+          case 'thread/tokenUsage/updated': {
+            const contextWindow = deriveCodexContextWindow(
+              (p.tokenUsage ?? p.usage ?? params) as {
+                last?: { inputTokens?: unknown; cachedInputTokens?: unknown }
+                modelContextWindow?: unknown
+              },
+            )
+            if (contextWindow) {
+              setContextWindow(contextWindow)
+            }
+            break
+          }
+
           case 'item/agentMessage/delta':
             if (typeof p.delta === 'string') {
               assistantTextBuffer += p.delta
@@ -257,6 +277,24 @@ export class CodexProvider implements Provider {
 
           case 'turn/completed':
             flushAssistantBuffer()
+            {
+              const contextWindow = deriveCodexContextWindow(
+                (p.usage ??
+                  (typeof p.turn === 'object' && p.turn !== null
+                    ? (p.turn as { usage?: unknown }).usage
+                    : null) ??
+                  params) as {
+                  last?: {
+                    inputTokens?: unknown
+                    cachedInputTokens?: unknown
+                  }
+                  modelContextWindow?: unknown
+                },
+              )
+              if (contextWindow) {
+                setContextWindow(contextWindow)
+              }
+            }
             if (typeof p.turn === 'object' && p.turn !== null) {
               const turn = p.turn as {
                 status?: unknown
@@ -486,6 +524,9 @@ export class CodexProvider implements Provider {
         if (threadId) {
           cb(threadId)
         }
+      },
+      onContextWindowChange: (cb) => {
+        listeners.contextWindow.push(cb)
       },
       sendMessage: (text) => {
         if (stopped) return

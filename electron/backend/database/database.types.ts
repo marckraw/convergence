@@ -25,6 +25,7 @@ export interface SessionRow {
   attention: string
   working_directory: string
   transcript: string
+  context_window: string | null
   created_at: string
   updated_at: string
 }

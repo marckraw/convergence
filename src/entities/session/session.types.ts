@@ -14,6 +14,23 @@ export type ReasoningEffort =
   | 'max'
   | 'xhigh'
 
+export type ContextWindowSource = 'provider' | 'estimated'
+
+export type SessionContextWindow =
+  | {
+      availability: 'available'
+      source: ContextWindowSource
+      usedTokens: number
+      windowTokens: number
+      usedPercentage: number
+      remainingPercentage: number
+    }
+  | {
+      availability: 'unavailable'
+      source: ContextWindowSource
+      reason: string
+    }
+
 export type NeedsYouDisposition = 'snoozed' | 'acknowledged'
 
 export interface NeedsYouDismissal {
@@ -66,6 +83,7 @@ export interface Session {
   attention: AttentionState
   workingDirectory: string
   transcript: TranscriptEntry[]
+  contextWindow?: SessionContextWindow | null
   createdAt: string
   updatedAt: string
 }

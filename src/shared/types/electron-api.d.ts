@@ -1,3 +1,5 @@
+import type { ProjectMcpVisibility } from './mcp.types'
+
 interface ProjectData {
   id: string
   name: string
@@ -41,6 +43,21 @@ type ReasoningEffort =
   | 'high'
   | 'max'
   | 'xhigh'
+type ContextWindowSource = 'provider' | 'estimated'
+type SessionContextWindow =
+  | {
+      availability: 'available'
+      source: ContextWindowSource
+      usedTokens: number
+      windowTokens: number
+      usedPercentage: number
+      remainingPercentage: number
+    }
+  | {
+      availability: 'unavailable'
+      source: ContextWindowSource
+      reason: string
+    }
 type NeedsYouDisposition = 'snoozed' | 'acknowledged'
 type NeedsYouDismissals = Record<
   string,
@@ -93,6 +110,7 @@ interface SessionData {
   attention: AttentionState
   workingDirectory: string
   transcript: TranscriptEntry[]
+  contextWindow?: SessionContextWindow | null
   createdAt: string
   updatedAt: string
 }
@@ -165,6 +183,9 @@ interface ElectronAPI {
   }
   provider: {
     getAll: () => Promise<ProviderInfo[]>
+  }
+  mcp: {
+    listByProjectId: (projectId: string) => Promise<ProjectMcpVisibility>
   }
 }
 

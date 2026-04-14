@@ -1,11 +1,15 @@
 {
-  "currentVersion": "0.0.0",
-  "generatedAt": "2026-04-13T17:27:41.310Z",
+  "currentVersion": "0.1.1",
   "releases": [
     {
-      "version": "0.0.0",
+      "version": "0.1.1",
       "date": null,
-      "notes": "Development build.\n\nRelease notes will appear here once versioned releases are generated."
+      "notes": "### Patch Changes\n\n- ffa53c7: Automate release tag creation after version bumps land on `master`, and\n  slightly reduce the session header title size for a cleaner main-area header."
+    },
+    {
+      "version": "0.1.0",
+      "date": null,
+      "notes": "### Minor Changes\n\n- 38e2cec: Add the first release foundation for Convergence with Changesets, macOS packaging,\n  GitHub Actions release workflows, and a bundled in-app \"What's New\" surface.\n\n  Also polish core desktop ergonomics with tooltip-driven sidebar truncation fixes,\n  better resize handles, and improved session/project scanning in the sidebar."
     }
   ]
 }

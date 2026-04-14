@@ -1,5 +1,6 @@
 export { ProjectCreate } from './project-create'
 export { ReleaseNotesDialogContainer } from './release-notes'
+export { McpServersDialogContainer } from './mcp-servers'
 export { WorkspaceCreate } from './workspace-create'
 export { SessionStart } from './session-start'
 export { SessionCreateInline } from './session-create-inline'

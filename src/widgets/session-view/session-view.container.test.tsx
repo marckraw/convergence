@@ -2,6 +2,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useProjectStore } from '@/entities/project'
 import { useSessionStore } from '@/entities/session'
+import { TooltipProvider } from '@/shared/ui/tooltip'
 import { SessionView } from './session-view.container'
 
 vi.mock('@/features/composer', () => ({
@@ -46,6 +47,14 @@ describe('SessionView changed files drawer', () => {
           attention: 'finished',
           workingDirectory: '/tmp/project',
           transcript: [],
+          contextWindow: {
+            availability: 'available',
+            source: 'provider',
+            usedTokens: 40000,
+            windowTokens: 200000,
+            usedPercentage: 20,
+            remainingPercentage: 80,
+          },
           createdAt: '2026-01-01T00:00:00.000Z',
           updatedAt: '2026-01-01T00:00:00.000Z',
         },
@@ -92,7 +101,13 @@ describe('SessionView changed files drawer', () => {
   })
 
   it('toggles changed files between docked and overlay modes', async () => {
-    render(<SessionView />)
+    render(
+      <TooltipProvider>
+        <SessionView />
+      </TooltipProvider>,
+    )
+
+    expect(screen.getByText('80% left')).toBeInTheDocument()
 
     fireEvent.click(screen.getByRole('button', { name: 'Changed files' }))
 

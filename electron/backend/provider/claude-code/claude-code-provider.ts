@@ -6,10 +6,17 @@ import type {
   TranscriptEntry,
   SessionStatus,
   AttentionState,
+  SessionContextWindow,
 } from '../provider.types'
 import { parseJsonLines } from '../line-parser'
 import { buildClaudeDescriptor } from '../provider-descriptor.pure'
 import type { ProviderDescriptor } from '../provider.types'
+import {
+  createUnavailableContextWindow,
+  deriveClaudeContextWindow,
+  deriveClaudeEstimatedContextWindow,
+} from '../context-window.pure'
+import { readClaudeLoggedContextWindow } from './claude-context-log.service'
 
 function now(): string {
   return new Date().toISOString()
@@ -23,6 +30,12 @@ interface ClaudeStreamEvent {
     delta?: { type: string; text?: string }
   }
   message?: {
+    model?: string
+    usage?: {
+      input_tokens?: number
+      cache_creation_input_tokens?: number
+      cache_read_input_tokens?: number
+    }
     content?: Array<{
       type: string
       text?: string
@@ -34,6 +47,12 @@ interface ClaudeStreamEvent {
   }
   is_error?: boolean
   result?: string
+  usage?: {
+    input_tokens?: number
+    cache_creation_input_tokens?: number
+    cache_read_input_tokens?: number
+  }
+  model?: string
 }
 
 export class ClaudeCodeProvider implements Provider {
@@ -54,6 +73,7 @@ export class ClaudeCodeProvider implements Provider {
       status: [] as ((status: SessionStatus) => void)[],
       attention: [] as ((attention: AttentionState) => void)[],
       continuationToken: [] as ((token: string) => void)[],
+      contextWindow: [] as ((contextWindow: SessionContextWindow) => void)[],
     }
 
     let child: ChildProcess | null = null
@@ -83,6 +103,26 @@ export class ClaudeCodeProvider implements Provider {
       listeners.continuationToken.forEach((cb) => cb(token))
     }
 
+    function setContextWindow(contextWindow: SessionContextWindow): void {
+      listeners.contextWindow.forEach((cb) => cb(contextWindow))
+    }
+
+    function refreshContextWindowFromLogs(): void {
+      if (!claudeSessionId) {
+        return
+      }
+
+      const contextWindow = readClaudeLoggedContextWindow({
+        sessionId: claudeSessionId,
+        workingDirectory: config.workingDirectory,
+        fallbackModel: config.model,
+      })
+
+      if (contextWindow) {
+        setContextWindow(contextWindow)
+      }
+    }
+
     function flushAssistantBuffer(): void {
       if (assistantTextBuffer) {
         emit({ type: 'assistant', text: assistantTextBuffer, timestamp: now() })
@@ -94,6 +134,15 @@ export class ClaudeCodeProvider implements Provider {
     function handleEvent(data: unknown): void {
       if (stopped) return
       const event = data as ClaudeStreamEvent
+      if (event.session_id) {
+        setContinuationToken(event.session_id)
+      }
+      const contextWindow =
+        deriveClaudeContextWindow(event) ??
+        deriveClaudeEstimatedContextWindow(event, config.model)
+      if (contextWindow) {
+        setContextWindow(contextWindow)
+      }
 
       // Skip non-essential event types
       if (event.type === 'rate_limit_event') return
@@ -191,6 +240,7 @@ export class ClaudeCodeProvider implements Provider {
 
         case 'result':
           flushAssistantBuffer()
+          refreshContextWindowFromLogs()
           if (event.is_error) {
             emit({
               type: 'system',
@@ -222,6 +272,11 @@ export class ClaudeCodeProvider implements Provider {
       emit({ type: 'user', text: message, timestamp: now() })
       setStatus('running')
       setAttention('none')
+      setContextWindow(
+        createUnavailableContextWindow(
+          'Waiting for Claude turn usage. When available, Convergence will show an estimated context value because Claude headless mode does not expose exact live context telemetry yet.',
+        ),
+      )
 
       const args = [
         '-p',
@@ -288,6 +343,7 @@ export class ClaudeCodeProvider implements Provider {
       child.on('exit', (code) => {
         if (stopped) return
         flushAssistantBuffer()
+        refreshContextWindowFromLogs()
         if (code !== 0 && code !== null) {
           emit({
             type: 'system',
@@ -333,6 +389,9 @@ export class ClaudeCodeProvider implements Provider {
         if (claudeSessionId) {
           cb(claudeSessionId)
         }
+      },
+      onContextWindowChange: (cb) => {
+        listeners.contextWindow.push(cb)
       },
       sendMessage: (text) => {
         startTurn(text)

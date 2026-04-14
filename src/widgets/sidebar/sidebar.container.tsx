@@ -3,7 +3,11 @@ import type { FC } from 'react'
 import { useProjectStore } from '@/entities/project'
 import { useWorkspaceStore } from '@/entities/workspace'
 import { useSessionStore } from '@/entities/session'
-import { ReleaseNotesDialogContainer, ThemeToggleButton } from '@/features'
+import {
+  McpServersDialogContainer,
+  ReleaseNotesDialogContainer,
+  ThemeToggleButton,
+} from '@/features'
 import { NeedsYou } from './needs-you.presentational'
 import { buildNeedsYouSummary } from './needs-you.presentational'
 import { ProjectTree } from './project-tree.container'
@@ -202,6 +206,12 @@ export const Sidebar: FC<SidebarProps> = ({
           <Plus className="h-4 w-4" />
           {activeProject ? 'New Project' : 'Create Project'}
         </Button>
+        <div className="mt-2">
+          <McpServersDialogContainer
+            projectId={activeProject?.id ?? null}
+            projectName={activeProject?.name ?? null}
+          />
+        </div>
         <div className="mt-2">
           <ReleaseNotesDialogContainer />
         </div>

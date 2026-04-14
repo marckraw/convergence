@@ -7,6 +7,7 @@ export type {
   NeedsYouDismissals,
   TranscriptEntry,
   ProviderInfo,
+  SessionContextWindow,
   ReasoningEffort,
   ProviderEffortOption,
   ProviderModelOption,

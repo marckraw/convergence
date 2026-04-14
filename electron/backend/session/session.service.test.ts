@@ -10,6 +10,7 @@ import type {
   SessionStatus,
   TranscriptEntry,
   AttentionState,
+  SessionContextWindow,
 } from '../provider/provider.types'
 import { SessionService } from './session.service'
 
@@ -42,6 +43,9 @@ function createTestProvider(): Provider {
         transcript: [] as Array<(entry: TranscriptEntry) => void>,
         status: [] as Array<(status: SessionStatus) => void>,
         attention: [] as Array<(attention: AttentionState) => void>,
+        contextWindow: [] as Array<
+          (contextWindow: SessionContextWindow) => void
+        >,
       }
 
       const timers: ReturnType<typeof setTimeout>[] = []
@@ -60,6 +64,10 @@ function createTestProvider(): Provider {
         listeners.attention.forEach((cb) => cb(attention))
       }
 
+      const emitContextWindow = (contextWindow: SessionContextWindow) => {
+        listeners.contextWindow.forEach((cb) => cb(contextWindow))
+      }
+
       const schedule = (callback: () => void, delay: number) => {
         if (stopped) return
         timers.push(
@@ -71,6 +79,14 @@ function createTestProvider(): Provider {
 
       schedule(() => {
         emitStatus('running')
+        emitContextWindow({
+          availability: 'available',
+          source: 'provider',
+          usedTokens: 2048,
+          windowTokens: 200000,
+          usedPercentage: 1,
+          remainingPercentage: 99,
+        })
         emitTranscript({
           type: 'user',
           text: config.initialMessage,
@@ -147,6 +163,9 @@ function createTestProvider(): Provider {
         },
         onAttentionChange: (cb) => {
           listeners.attention.push(cb)
+        },
+        onContextWindowChange: (cb) => {
+          listeners.contextWindow.push(cb)
         },
         onContinuationToken: () => {},
         sendMessage: (text) => {
@@ -227,6 +246,7 @@ describe('SessionService', () => {
     expect(session.status).toBe('idle')
     expect(session.attention).toBe('none')
     expect(session.transcript).toEqual([])
+    expect(session.contextWindow).toBeNull()
   })
 
   it('lists sessions by project', () => {
@@ -350,6 +370,11 @@ describe('SessionService', () => {
     expect(loaded.transcript.length).toBeGreaterThan(3)
     expect(loaded.transcript.some((e) => e.type === 'tool-use')).toBe(true)
     expect(loaded.transcript.some((e) => e.type === 'tool-result')).toBe(true)
+    expect(loaded.contextWindow).toMatchObject({
+      availability: 'available',
+      usedTokens: 2048,
+      windowTokens: 200000,
+    })
   })
 
   it('notifies update listener on changes', async () => {
@@ -385,6 +410,7 @@ describe('SessionService', () => {
         statusListener = listener
       },
       onAttentionChange: () => {},
+      onContextWindowChange: () => {},
       onContinuationToken: () => {},
       sendMessage,
       approve: () => {},
@@ -482,6 +508,7 @@ describe('SessionService', () => {
             statusListener = listener
           },
           onAttentionChange: () => {},
+          onContextWindowChange: () => {},
           onContinuationToken: (listener) => {
             continuationListener = listener
             if (config.continuationToken) {
