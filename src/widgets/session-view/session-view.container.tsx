@@ -6,6 +6,7 @@ import { ComposerContainer } from '@/features/composer'
 import { Button } from '@/shared/ui/button'
 import { Square, FileCode, GitBranch } from 'lucide-react'
 import { AttentionIndicator } from '@/shared/ui/attention-indicator.presentational'
+import { ContextWindowIndicator } from '@/shared/ui/context-window-indicator.presentational'
 import { cn } from '@/shared/lib/cn.pure'
 import { TranscriptEntryView } from './transcript-entry.presentational'
 import { ChangedFilesPanel } from './changed-files-panel.container'
@@ -204,6 +205,7 @@ export const SessionView: FC = () => {
                 {branchName}
               </span>
             )}
+            <ContextWindowIndicator contextWindow={session.contextWindow} />
           </div>
           <div
             className="flex items-center gap-1"

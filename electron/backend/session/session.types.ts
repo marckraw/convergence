@@ -4,9 +4,16 @@ import type {
   AttentionState,
   TranscriptEntry,
   ReasoningEffort,
+  SessionContextWindow,
 } from '../provider/provider.types'
 
-export type { SessionStatus, AttentionState, TranscriptEntry, ReasoningEffort }
+export type {
+  SessionStatus,
+  AttentionState,
+  TranscriptEntry,
+  ReasoningEffort,
+  SessionContextWindow,
+}
 
 export interface Session {
   id: string
@@ -20,6 +27,7 @@ export interface Session {
   attention: AttentionState
   workingDirectory: string
   transcript: TranscriptEntry[]
+  contextWindow: SessionContextWindow | null
   createdAt: string
   updatedAt: string
 }
@@ -46,6 +54,9 @@ export function sessionFromRow(row: SessionRow): Session {
     attention: row.attention as AttentionState,
     workingDirectory: row.working_directory,
     transcript: JSON.parse(row.transcript) as TranscriptEntry[],
+    contextWindow: row.context_window
+      ? (JSON.parse(row.context_window) as SessionContextWindow)
+      : null,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   }

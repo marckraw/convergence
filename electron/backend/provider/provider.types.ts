@@ -14,6 +14,23 @@ export type ReasoningEffort =
   | 'max'
   | 'xhigh'
 
+export type ContextWindowSource = 'provider' | 'estimated'
+
+export type SessionContextWindow =
+  | {
+      availability: 'available'
+      source: ContextWindowSource
+      usedTokens: number
+      windowTokens: number
+      usedPercentage: number
+      remainingPercentage: number
+    }
+  | {
+      availability: 'unavailable'
+      source: ContextWindowSource
+      reason: string
+    }
+
 export type TranscriptEntry =
   | { type: 'user'; text: string; timestamp: string }
   | {
@@ -68,6 +85,9 @@ export interface SessionHandle {
   onStatusChange: (callback: (status: SessionStatus) => void) => void
   onAttentionChange: (callback: (attention: AttentionState) => void) => void
   onContinuationToken: (callback: (token: string) => void) => void
+  onContextWindowChange: (
+    callback: (contextWindow: SessionContextWindow) => void,
+  ) => void
 
   sendMessage: (text: string) => void
   approve: () => void

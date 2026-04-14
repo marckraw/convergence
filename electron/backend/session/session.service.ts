@@ -7,6 +7,7 @@ import type {
   TranscriptEntry,
   SessionStatus,
   AttentionState,
+  SessionContextWindow,
 } from '../provider/provider.types'
 import {
   sessionFromRow,
@@ -189,6 +190,19 @@ export class SessionService {
     this.notifyUpdate(id)
   }
 
+  private updateContextWindow(
+    id: string,
+    contextWindow: SessionContextWindow,
+  ): void {
+    this.db
+      .prepare(
+        "UPDATE sessions SET context_window = ?, updated_at = datetime('now') WHERE id = ?",
+      )
+      .run(JSON.stringify(contextWindow), id)
+
+    this.notifyUpdate(id)
+  }
+
   private notifyUpdate(id: string): void {
     if (this.onUpdate) {
       const session = this.getById(id)
@@ -252,6 +266,10 @@ export class SessionService {
       if (token.trim()) {
         this.updateContinuationToken(session.id, token)
       }
+    })
+
+    handle.onContextWindowChange((contextWindow: SessionContextWindow) => {
+      this.updateContextWindow(session.id, contextWindow)
     })
   }
 }
