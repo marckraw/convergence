@@ -5,6 +5,7 @@ import { WorkspaceService } from '../backend/workspace/workspace.service'
 import { GitService } from '../backend/git/git.service'
 import { SessionService } from '../backend/session/session.service'
 import { ProviderRegistry } from '../backend/provider/provider-registry'
+import { McpService } from '../backend/mcp/mcp.service'
 import type { CreateProjectInput } from '../backend/project/project.types'
 import type { CreateWorkspaceInput } from '../backend/workspace/workspace.types'
 import type { CreateSessionInput } from '../backend/session/session.types'
@@ -70,6 +71,7 @@ export function registerIpcHandlers(
   gitService: GitService,
   sessionService: SessionService,
   providerRegistry: ProviderRegistry,
+  mcpService: McpService,
 ): void {
   // Project handlers
   ipcMain.handle('project:create', (_event, input: CreateProjectInput) => {
@@ -206,6 +208,10 @@ export function registerIpcHandlers(
   // Provider handlers
   ipcMain.handle('provider:getAll', async () =>
     Promise.all(providerRegistry.getAll().map((p) => p.describe())),
+  )
+
+  ipcMain.handle('mcp:listByProjectId', (_event, projectId: string) =>
+    mcpService.listByProjectId(projectId),
   )
 
   // Session update event forwarding

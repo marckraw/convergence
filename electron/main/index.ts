@@ -10,6 +10,7 @@ import { ProviderRegistry } from '../backend/provider/provider-registry'
 import { ClaudeCodeProvider } from '../backend/provider/claude-code/claude-code-provider'
 import { CodexProvider } from '../backend/provider/codex/codex-provider'
 import { detectProviders } from '../backend/provider/detect'
+import { McpService } from '../backend/mcp/mcp.service'
 import { registerIpcHandlers } from './ipc'
 import { getWindowAppearanceOptions } from './window-effects.pure'
 
@@ -68,6 +69,8 @@ app.whenReady().then(async () => {
       .join(', ')}`,
   )
 
+  const mcpService = new McpService(projectService, detected)
+
   registerIpcHandlers(
     projectService,
     stateService,
@@ -75,6 +78,7 @@ app.whenReady().then(async () => {
     gitService,
     sessionService,
     providerRegistry,
+    mcpService,
   )
 
   createWindow()
