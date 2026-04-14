@@ -39,7 +39,7 @@ export const ReleaseNotesDialog: FC<ReleaseNotesProps> = ({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="app-scrollbar max-h-[55vh] overflow-y-auto px-6 py-5">
+        <div className="app-scrollbar min-h-0 flex-1 overflow-y-auto px-6 py-5">
           {latest ? (
             <section className="mb-8">
               <p className="mb-2 text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
