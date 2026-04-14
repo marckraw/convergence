@@ -64,7 +64,7 @@ export const ProjectTree: FC<ProjectTreeProps> = ({
             type="button"
             variant="ghost"
             onClick={() => onSelectSession(session.id)}
-            className="h-auto min-w-0 flex-1 justify-start gap-1.5 px-1.5 py-1 text-left text-sm font-normal"
+            className="h-auto min-w-0 flex-1 justify-start gap-1.5 px-1.5 py-1 text-left text-xs font-normal"
           >
             <SessionBadge attention={session.attention} />
             <span className="truncate">{session.name}</span>

@@ -1,11 +1,20 @@
 import type { FC } from 'react'
-import {
-  Loader2,
-  CheckCircle,
-  XCircle,
-  AlertTriangle,
-  MessageSquare,
-} from 'lucide-react'
+import { Loader2 } from 'lucide-react'
+import { SessionBadge } from '@/shared/ui/session-badge.presentational'
+
+const labelMap: Record<string, string> = {
+  'needs-approval': 'Needs Approval',
+  'needs-input': 'Needs Input',
+  finished: 'Finished',
+  failed: 'Failed',
+}
+
+const pillStyleMap: Record<string, string> = {
+  'needs-approval': 'bg-amber-500/10 text-amber-500',
+  'needs-input': 'bg-blue-500/10 text-blue-500',
+  finished: 'bg-emerald-500/10 text-emerald-500',
+  failed: 'bg-red-500/10 text-red-500',
+}
 
 interface AttentionIndicatorProps {
   attention: string
@@ -14,41 +23,24 @@ interface AttentionIndicatorProps {
 export const AttentionIndicator: FC<AttentionIndicatorProps> = ({
   attention,
 }) => {
-  switch (attention) {
-    case 'needs-approval':
-      return (
-        <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/10 px-2 py-0.5 text-xs font-medium text-amber-500">
-          <AlertTriangle className="h-3 w-3" />
-          Needs Approval
-        </span>
-      )
-    case 'needs-input':
-      return (
-        <span className="inline-flex items-center gap-1 rounded-full bg-blue-500/10 px-2 py-0.5 text-xs font-medium text-blue-500">
-          <MessageSquare className="h-3 w-3" />
-          Needs Input
-        </span>
-      )
-    case 'finished':
-      return (
-        <span className="inline-flex items-center gap-1 rounded-full bg-green-500/10 px-2 py-0.5 text-xs font-medium text-green-500">
-          <CheckCircle className="h-3 w-3" />
-          Finished
-        </span>
-      )
-    case 'failed':
-      return (
-        <span className="inline-flex items-center gap-1 rounded-full bg-red-500/10 px-2 py-0.5 text-xs font-medium text-red-500">
-          <XCircle className="h-3 w-3" />
-          Failed
-        </span>
-      )
-    default:
-      return (
-        <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">
-          <Loader2 className="h-3 w-3 animate-spin" />
-          Running
-        </span>
-      )
+  const label = labelMap[attention]
+  const pillStyle = pillStyleMap[attention]
+
+  if (!label || !pillStyle) {
+    return (
+      <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground [&_svg]:size-3">
+        <Loader2 className="animate-spin" />
+        Running
+      </span>
+    )
   }
+
+  return (
+    <span
+      className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium [&_svg]:size-3 ${pillStyle}`}
+    >
+      <SessionBadge attention={attention} />
+      {label}
+    </span>
+  )
 }
