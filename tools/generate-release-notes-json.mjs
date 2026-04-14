@@ -52,9 +52,15 @@ if (releases.length === 0) {
 
 const payload = {
   currentVersion: packageJson.version,
-  generatedAt: new Date().toISOString(),
   releases,
 }
 
 mkdirSync(resolve(root, 'src/shared/generated'), { recursive: true })
-writeFileSync(outputPath, `${JSON.stringify(payload, null, 2)}\n`)
+const nextOutput = `${JSON.stringify(payload, null, 2)}\n`
+const currentOutput = existsSync(outputPath)
+  ? readFileSync(outputPath, 'utf8')
+  : null
+
+if (currentOutput !== nextOutput) {
+  writeFileSync(outputPath, nextOutput)
+}

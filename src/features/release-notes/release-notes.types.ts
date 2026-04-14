@@ -6,6 +6,5 @@ export interface ReleaseNotesEntry {
 
 export interface ReleaseNotesBundle {
   currentVersion: string
-  generatedAt: string
   releases: ReleaseNotesEntry[]
 }
