@@ -87,12 +87,16 @@ jobs:
       - name: Verify signing identities
         env:
           APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_ID_PASSWORD: ${{ secrets.APPLE_ID_PASSWORD }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD || secrets.APPLE_ID_PASSWORD }}
           APPLE_TEAM_ID: BBDY3ZEHGH
         run: |
           echo "APPLE_ID length: ${#APPLE_ID}"
-          echo "APPLE_ID_PASSWORD length: ${#APPLE_ID_PASSWORD}"
+          echo "APPLE_APP_SPECIFIC_PASSWORD length: ${#APPLE_APP_SPECIFIC_PASSWORD}"
           echo "APPLE_TEAM_ID: $APPLE_TEAM_ID"
+          if [ -z "$APPLE_APP_SPECIFIC_PASSWORD" ]; then
+            echo "Missing Apple app-specific password secret. Set APPLE_APP_SPECIFIC_PASSWORD."
+            exit 1
+          fi
           security find-identity -v -p codesigning
 
       - name: Verify tag matches package version
@@ -112,8 +116,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_ID_PASSWORD: ${{ secrets.APPLE_ID_PASSWORD }}
-          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_ID_PASSWORD }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD || secrets.APPLE_ID_PASSWORD }}
           APPLE_TEAM_ID: BBDY3ZEHGH
 
       - name: Publish GitHub Release

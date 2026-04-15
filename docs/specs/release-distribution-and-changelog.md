@@ -237,7 +237,7 @@ That should be additive only. The bundled changelog remains the canonical in-app
 - import the `Developer ID Application` certificate into a temporary CI keychain
 - download Apple intermediate certificates during the release workflow
 - enable hardened runtime, entitlements, signing, and notarization
-- notarize using `APPLE_ID`, the Apple app-specific password, and `APPLE_TEAM_ID`
+- notarize using `APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD`, and `APPLE_TEAM_ID`
 - publish signed/notarized DMG and ZIP assets to GitHub Releases
 
 Required GitHub secrets:
@@ -245,7 +245,7 @@ Required GitHub secrets:
 - `APPLE_CERTIFICATE`
 - `APPLE_CERTIFICATE_PASSWORD`
 - `APPLE_ID`
-- `APPLE_ID_PASSWORD`
+- `APPLE_APP_SPECIFIC_PASSWORD`
 
 ## Open Questions
 
