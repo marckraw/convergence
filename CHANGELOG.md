@@ -1,5 +1,11 @@
 # convergence
 
+## 0.2.1
+
+### Patch Changes
+
+- edf6ae3: Enable signed and notarized macOS release builds in GitHub Actions while keeping separate unsigned local packaging commands for owner-only development builds.
+
 ## 0.2.0
 
 ### Minor Changes
