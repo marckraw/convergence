@@ -11,6 +11,7 @@ import { ClaudeCodeProvider } from '../backend/provider/claude-code/claude-code-
 import { CodexProvider } from '../backend/provider/codex/codex-provider'
 import { detectProviders } from '../backend/provider/detect'
 import { McpService } from '../backend/mcp/mcp.service'
+import { hydrateProcessPathFromShell } from '../backend/environment/shell-path.service'
 import { registerIpcHandlers } from './ipc'
 import { getWindowAppearanceOptions } from './window-effects.pure'
 
@@ -39,6 +40,8 @@ function createWindow(): void {
 }
 
 app.whenReady().then(async () => {
+  await hydrateProcessPathFromShell()
+
   const dbPath = join(app.getPath('userData'), 'convergence.db')
   const workspacesRoot = join(app.getPath('userData'), 'workspaces')
   const db = getDatabase(dbPath)
