@@ -1,5 +1,11 @@
 # convergence
 
+## 0.3.0
+
+### Minor Changes
+
+- 1cfc295: Add proper macOS app icon assets generated from the Convergence logo and show Claude Code/Codex runtime availability in a new provider status dialog inside the app.
+
 ## 0.2.3
 
 ### Patch Changes
