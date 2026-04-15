@@ -1,5 +1,11 @@
 # convergence
 
+## 0.2.2
+
+### Patch Changes
+
+- 8b63b41: Fix macOS notarization workflow credentials by using the app-specific password secret explicitly during release publishing.
+
 ## 0.2.1
 
 ### Patch Changes
