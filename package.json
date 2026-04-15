@@ -4,6 +4,7 @@
   "description": "UI-first desktop app for managing agent work across local codebases",
   "main": "out/main/index.js",
   "scripts": {
+    "prepare:icons": "node tools/generate-app-icons.mjs",
     "prepare:release-notes": "node tools/generate-release-notes-json.mjs",
     "dev": "npm run prepare:release-notes && electron-rebuild --force -o better-sqlite3 && electron-vite dev",
     "dev:clean": "node tools/dev-clean.mjs",

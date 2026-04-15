@@ -71,6 +71,16 @@ export interface ProviderModelOption {
   effortOptions: ProviderEffortOption[]
 }
 
+export interface ProviderStatusInfo {
+  id: string
+  name: string
+  vendorLabel: string
+  availability: 'available' | 'unavailable'
+  statusLabel: string
+  binaryPath: string | null
+  reason: string | null
+}
+
 export interface ProviderDescriptor {
   id: string
   name: string

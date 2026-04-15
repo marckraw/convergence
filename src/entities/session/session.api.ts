@@ -1,6 +1,7 @@
 import type {
   Session,
   ProviderInfo,
+  ProviderStatusInfo,
   ReasoningEffort,
   NeedsYouDismissals,
 } from './session.types'
@@ -50,4 +51,6 @@ export const sessionApi = {
 
 export const providerApi = {
   getAll: (): Promise<ProviderInfo[]> => window.electronAPI.provider.getAll(),
+  getStatuses: (): Promise<ProviderStatusInfo[]> =>
+    window.electronAPI.provider.getStatuses(),
 }

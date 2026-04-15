@@ -7,6 +7,7 @@ export type {
   NeedsYouDismissals,
   TranscriptEntry,
   ProviderInfo,
+  ProviderStatusInfo,
   SessionContextWindow,
   ReasoningEffort,
   ProviderEffortOption,
@@ -19,3 +20,4 @@ export {
   resolveProviderSelection,
 } from './provider-selection.pure'
 export type { ResolvedProviderSelection } from './provider-selection.pure'
+export { providerApi } from './session.api'

@@ -96,3 +96,13 @@ export interface ProviderInfo {
   defaultModelId: string
   modelOptions: ProviderModelOption[]
 }
+
+export interface ProviderStatusInfo {
+  id: string
+  name: string
+  vendorLabel: string
+  availability: 'available' | 'unavailable'
+  statusLabel: string
+  binaryPath: string | null
+  reason: string | null
+}

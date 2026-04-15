@@ -5,6 +5,7 @@ import { useWorkspaceStore } from '@/entities/workspace'
 import { useSessionStore } from '@/entities/session'
 import {
   McpServersDialogContainer,
+  ProviderStatusDialogContainer,
   ReleaseNotesDialogContainer,
   ThemeToggleButton,
 } from '@/features'
@@ -206,6 +207,9 @@ export const Sidebar: FC<SidebarProps> = ({
           <Plus className="h-4 w-4" />
           {activeProject ? 'New Project' : 'Create Project'}
         </Button>
+        <div className="mt-2">
+          <ProviderStatusDialogContainer />
+        </div>
         <div className="mt-2">
           <McpServersDialogContainer
             projectId={activeProject?.id ?? null}
