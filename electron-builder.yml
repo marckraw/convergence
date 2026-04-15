@@ -2,6 +2,7 @@ appId: com.marckraw.convergence
 productName: Convergence
 directories:
   output: release
+  buildResources: build
 artifactName: ${productName}-${version}-${arch}.${ext}
 asar: true
 asarUnpack:
@@ -12,6 +13,11 @@ files:
   - out/**/*
 mac:
   category: public.app-category.developer-tools
+  darkModeSupport: true
+  hardenedRuntime: true
+  gatekeeperAssess: false
+  entitlements: build/entitlements.mac.plist
+  entitlementsInherit: build/entitlements.mac.plist
   target:
     - target: dmg
     - target: zip
