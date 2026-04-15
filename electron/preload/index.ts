@@ -72,6 +72,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   },
   provider: {
     getAll: () => ipcRenderer.invoke('provider:getAll'),
+    getStatuses: () => ipcRenderer.invoke('provider:getStatuses'),
   },
   mcp: {
     listByProjectId: (projectId: string) =>

@@ -1,4 +1,5 @@
 import { app, BrowserWindow, nativeTheme } from 'electron'
+import { existsSync } from 'fs'
 import { join } from 'path'
 import { getDatabase } from '../backend/database/database'
 import { ProjectService } from '../backend/project/project.service'
@@ -16,10 +17,13 @@ import { registerIpcHandlers } from './ipc'
 import { getWindowAppearanceOptions } from './window-effects.pure'
 
 function createWindow(): void {
+  const runtimeIconPath = resolveRuntimeIconPath()
+
   const mainWindow = new BrowserWindow({
     width: 1200,
     height: 800,
     title: 'Convergence',
+    icon: runtimeIconPath,
     ...getWindowAppearanceOptions({
       platform: process.platform,
       prefersReducedTransparency: nativeTheme.prefersReducedTransparency,
@@ -37,6 +41,15 @@ function createWindow(): void {
   } else {
     mainWindow.loadFile(join(__dirname, '../renderer/index.html'))
   }
+}
+
+function resolveRuntimeIconPath(): string | undefined {
+  const candidates = [
+    join(app.getAppPath(), 'build', 'icon.png'),
+    join(process.cwd(), 'build', 'icon.png'),
+  ]
+
+  return candidates.find((candidate) => existsSync(candidate))
 }
 
 app.whenReady().then(async () => {
@@ -83,6 +96,11 @@ app.whenReady().then(async () => {
     providerRegistry,
     mcpService,
   )
+
+  const runtimeIconPath = resolveRuntimeIconPath()
+  if (process.platform === 'darwin' && runtimeIconPath) {
+    app.dock?.setIcon(runtimeIconPath)
+  }
 
   createWindow()
 

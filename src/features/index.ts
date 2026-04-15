@@ -1,6 +1,7 @@
 export { ProjectCreate } from './project-create'
 export { ReleaseNotesDialogContainer } from './release-notes'
 export { McpServersDialogContainer } from './mcp-servers'
+export { ProviderStatusDialogContainer } from './provider-status'
 export { WorkspaceCreate } from './workspace-create'
 export { SessionStart } from './session-start'
 export { SessionCreateInline } from './session-create-inline'

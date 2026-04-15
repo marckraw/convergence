@@ -1,6 +1,26 @@
 {
-  "currentVersion": "0.1.1",
+  "currentVersion": "0.2.3",
   "releases": [
+    {
+      "version": "0.2.3",
+      "date": null,
+      "notes": "### Patch Changes\n\n- ed9efd4: Fix packaged macOS app startup so provider detection and MCP discovery can find installed `claude` and `codex` binaries outside of `npm run dev`."
+    },
+    {
+      "version": "0.2.2",
+      "date": null,
+      "notes": "### Patch Changes\n\n- 8b63b41: Fix macOS notarization workflow credentials by using the app-specific password secret explicitly during release publishing."
+    },
+    {
+      "version": "0.2.1",
+      "date": null,
+      "notes": "### Patch Changes\n\n- edf6ae3: Enable signed and notarized macOS release builds in GitHub Actions while keeping separate unsigned local packaging commands for owner-only development builds."
+    },
+    {
+      "version": "0.2.0",
+      "date": null,
+      "notes": "### Minor Changes\n\n- 6a9e26a: Add read-only MCP server visibility for active projects and provider-aware context window telemetry in sessions.\n  - show available global and project MCP servers for Claude Code and Codex\n  - add Codex exact context window telemetry in the session header\n  - add Claude estimated context window fallback with clearer hover details\n  - improve shared dialog and tooltip polish for the new surfaces"
+    },
     {
       "version": "0.1.1",
       "date": null,

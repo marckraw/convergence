@@ -210,6 +210,12 @@ export function registerIpcHandlers(
     Promise.all(providerRegistry.getAll().map((p) => p.describe())),
   )
 
+  ipcMain.handle('provider:getStatuses', async () => {
+    const { inspectProviderStatuses } =
+      await import('../backend/provider/detect')
+    return inspectProviderStatuses()
+  })
+
   ipcMain.handle('mcp:listByProjectId', (_event, projectId: string) =>
     mcpService.listByProjectId(projectId),
   )

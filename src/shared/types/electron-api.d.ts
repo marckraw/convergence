@@ -133,6 +133,16 @@ interface ProviderInfo {
   modelOptions: ProviderModelOption[]
 }
 
+interface ProviderStatusInfo {
+  id: string
+  name: string
+  vendorLabel: string
+  availability: 'available' | 'unavailable'
+  statusLabel: string
+  binaryPath: string | null
+  reason: string | null
+}
+
 interface SystemInfo {
   platform: NodeJS.Platform
   prefersReducedTransparency: boolean
@@ -183,6 +193,7 @@ interface ElectronAPI {
   }
   provider: {
     getAll: () => Promise<ProviderInfo[]>
+    getStatuses: () => Promise<ProviderStatusInfo[]>
   }
   mcp: {
     listByProjectId: (projectId: string) => Promise<ProjectMcpVisibility>

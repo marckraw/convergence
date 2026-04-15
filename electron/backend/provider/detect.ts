@@ -1,4 +1,6 @@
 import { execFile } from 'child_process'
+import type { ProviderStatusInfo } from './provider.types'
+import { buildProviderStatus, getKnownProviders } from './provider-status.pure'
 
 function which(binary: string): Promise<string | null> {
   const cmd = process.platform === 'win32' ? 'where' : 'which'
@@ -19,26 +21,28 @@ export interface DetectedProvider {
   binaryPath: string
 }
 
+export async function inspectProviderStatuses(): Promise<ProviderStatusInfo[]> {
+  const statuses = await Promise.all(
+    getKnownProviders().map(async (provider) =>
+      buildProviderStatus(provider, await which(provider.binaryName)),
+    ),
+  )
+
+  return statuses
+}
+
 export async function detectProviders(): Promise<DetectedProvider[]> {
-  const detected: DetectedProvider[] = []
+  const statuses = await inspectProviderStatuses()
 
-  const claudePath = await which('claude')
-  if (claudePath) {
-    detected.push({
-      id: 'claude-code',
-      name: 'Claude Code',
-      binaryPath: claudePath,
-    })
-  }
-
-  const codexPath = await which('codex')
-  if (codexPath) {
-    detected.push({
-      id: 'codex',
-      name: 'Codex',
-      binaryPath: codexPath,
-    })
-  }
-
-  return detected
+  return statuses.flatMap((provider) =>
+    provider.binaryPath
+      ? [
+          {
+            id: provider.id,
+            name: provider.name,
+            binaryPath: provider.binaryPath,
+          },
+        ]
+      : [],
+  )
 }
