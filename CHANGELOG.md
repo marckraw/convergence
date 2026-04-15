@@ -1,5 +1,11 @@
 # convergence
 
+## 0.2.3
+
+### Patch Changes
+
+- ed9efd4: Fix packaged macOS app startup so provider detection and MCP discovery can find installed `claude` and `codex` binaries outside of `npm run dev`.
+
 ## 0.2.2
 
 ### Patch Changes
