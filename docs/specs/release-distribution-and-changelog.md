@@ -30,19 +30,19 @@ Today the repo has:
 2. GitHub Releases is the public release surface.
 3. The app should ship with a bundled changelog, not depend on GitHub availability at runtime.
 4. macOS packaging comes first.
-5. Signing and notarization are deferred initially because the first release target is the project owner, not public distribution.
+5. Public GitHub Releases use Developer ID signing and notarization, while unsigned local packaging remains available for owner-only builds.
 
 ## Decision: Unsigned macOS Releases First
 
 ### Short-term decision
 
-For the initial Convergence release system, unsigned and unnotarized macOS builds are acceptable.
+For local owner-only packaging, unsigned and unnotarized macOS builds are still acceptable.
 
 This is only acceptable because:
 
-- the app is for personal/internal use
-- the install audience is effectively one trusted operator
-- public distribution is not the current goal
+- the app can still be built locally for personal/internal use
+- unsigned artifacts remain explicitly separated from public releases
+- GitHub Releases will follow the signed/notarized path
 
 ### Tradeoff
 
@@ -54,7 +54,7 @@ Unsigned/unnotarized macOS builds will not pass the default Gatekeeper trust pat
 
 This is acceptable for now, but it is not the long-term distribution model.
 
-In practice, the local packaging commands should disable macOS signing auto-discovery explicitly rather than relying on machine state.
+In practice, Convergence keeps separate unsigned packaging commands for local builds instead of relying on machine state.
 
 ### Future rule
 
@@ -92,12 +92,14 @@ Responsibilities:
 
 - build app bundles
 - create installable macOS artifacts
-- later handle signing/notarization when credentials exist
+- sign and notarize public release artifacts in GitHub Actions
 
-Initial packaging scripts:
+Packaging scripts:
 
-- `npm run package:mac` — build unsigned macOS DMG + ZIP artifacts
-- `npm run package:mac:dir` — build an unpacked macOS app directory for faster local verification
+- `npm run package:mac` — build signed/notarized-release-ready macOS DMG + ZIP artifacts
+- `npm run package:mac:dir` — build a signed/notarized-release-ready unpacked app directory
+- `npm run package:mac:unsigned` — build unsigned macOS DMG + ZIP artifacts for local-only use
+- `npm run package:mac:dir:unsigned` — build an unsigned unpacked macOS app directory
 
 ### Release publishing
 
@@ -230,10 +232,20 @@ That should be additive only. The bundled changelog remains the canonical in-app
 - generate bundled release notes at build time
 - add `About` / `What's New` UI
 
-### Step 5: Signing/notarization later
+### Step 5: Public signing/notarization
 
-- add Apple credentials only when public distribution begins
-- enable hardened runtime, signing, notarization, stapling
+- import the `Developer ID Application` certificate into a temporary CI keychain
+- download Apple intermediate certificates during the release workflow
+- enable hardened runtime, entitlements, signing, and notarization
+- notarize using `APPLE_ID`, the Apple app-specific password, and `APPLE_TEAM_ID`
+- publish signed/notarized DMG and ZIP assets to GitHub Releases
+
+Required GitHub secrets:
+
+- `APPLE_CERTIFICATE`
+- `APPLE_CERTIFICATE_PASSWORD`
+- `APPLE_ID`
+- `APPLE_ID_PASSWORD`
 
 ## Open Questions
 
@@ -256,7 +268,6 @@ Implement in this order:
 Do not block the first release system on:
 
 - auto-update
-- notarization
 - universal mac binaries
 - live GitHub release fetching
 
