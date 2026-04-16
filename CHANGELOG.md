@@ -1,5 +1,11 @@
 # convergence
 
+## 0.3.1
+
+### Patch Changes
+
+- 6039e51: Add Claude Opus 4.7 to the hardcoded Claude Code provider model list, matching the latest model released by Anthropic (API ID: claude-opus-4-7).
+
 ## 0.3.0
 
 ### Minor Changes
