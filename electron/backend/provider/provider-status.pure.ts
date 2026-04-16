@@ -29,6 +29,7 @@ export function getKnownProviders(): KnownProvider[] {
 export function buildProviderStatus(
   provider: KnownProvider,
   binaryPath: string | null,
+  version: string | null = null,
 ): ProviderStatusInfo {
   if (binaryPath) {
     return {
@@ -38,6 +39,7 @@ export function buildProviderStatus(
       availability: 'available',
       statusLabel: 'Available',
       binaryPath,
+      version,
       reason: null,
     }
   }
@@ -49,6 +51,7 @@ export function buildProviderStatus(
     availability: 'unavailable',
     statusLabel: 'Not found',
     binaryPath: null,
+    version: null,
     reason: `${provider.binaryName} is not available on PATH for the app runtime.`,
   }
 }

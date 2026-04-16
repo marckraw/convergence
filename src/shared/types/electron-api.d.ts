@@ -140,6 +140,7 @@ interface ProviderStatusInfo {
   availability: 'available' | 'unavailable'
   statusLabel: string
   binaryPath: string | null
+  version: string | null
   reason: string | null
 }
 

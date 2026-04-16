@@ -62,14 +62,24 @@ function renderProviderRow(provider: ProviderStatusInfo) {
 
       <div className="mt-2 rounded-md border border-border/50 bg-background/40 px-2.5 py-2 text-xs text-muted-foreground">
         {provider.binaryPath ? (
-          <div className="space-y-1">
-            <p className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground/80">
-              <Wrench className="h-3.5 w-3.5" />
-              Binary path
-            </p>
-            <p className="break-all text-foreground/80">
-              {provider.binaryPath}
-            </p>
+          <div className="space-y-2">
+            {provider.version && (
+              <div className="space-y-1">
+                <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground/80">
+                  Version
+                </p>
+                <p className="text-foreground/80">{provider.version}</p>
+              </div>
+            )}
+            <div className="space-y-1">
+              <p className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground/80">
+                <Wrench className="h-3.5 w-3.5" />
+                Binary path
+              </p>
+              <p className="break-all text-foreground/80">
+                {provider.binaryPath}
+              </p>
+            </div>
           </div>
         ) : (
           <p>{provider.reason ?? 'Provider binary is unavailable.'}</p>
