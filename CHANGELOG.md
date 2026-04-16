@@ -1,5 +1,11 @@
 # convergence
 
+## 0.4.0
+
+### Minor Changes
+
+- 5dc70cb: Show CLI version in the provider status dialog. Convergence now runs `--version` on detected provider binaries (Claude Code, Codex) and displays the result alongside the binary path.
+
 ## 0.3.1
 
 ### Patch Changes
