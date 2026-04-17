@@ -4,6 +4,7 @@ import { useProjectStore } from '@/entities/project'
 import { useWorkspaceStore } from '@/entities/workspace'
 import { useSessionStore } from '@/entities/session'
 import {
+  AppSettingsDialogContainer,
   McpServersDialogContainer,
   ProviderStatusDialogContainer,
   ReleaseNotesDialogContainer,
@@ -14,7 +15,7 @@ import { buildNeedsYouSummary } from './needs-you.presentational'
 import { ProjectTree } from './project-tree.container'
 import { ProjectSwitcher } from './project-switcher.presentational'
 import { Button } from '@/shared/ui/button'
-import { Plus } from 'lucide-react'
+import { Plus, Settings } from 'lucide-react'
 
 interface SidebarProps {
   onSelectSession: (id: string) => void
@@ -147,7 +148,23 @@ export const Sidebar: FC<SidebarProps> = ({
         className="app-sidebar-topbar flex h-12 items-center justify-end border-b border-white/10 px-3"
         style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
       >
-        <div style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
+        <div
+          className="flex items-center gap-1"
+          style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
+        >
+          <AppSettingsDialogContainer
+            trigger={
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8"
+                title="Settings"
+                aria-label="Open settings"
+              >
+                <Settings className="h-4 w-4" />
+              </Button>
+            }
+          />
           <ThemeToggleButton />
         </div>
       </div>

@@ -59,6 +59,15 @@ const mockElectronAPI = {
     stop: vi.fn(),
     onSessionUpdate: vi.fn().mockReturnValue(() => {}),
   },
+  appSettings: {
+    get: vi.fn().mockResolvedValue({
+      defaultProviderId: null,
+      defaultModelId: null,
+      defaultEffortId: null,
+    }),
+    set: vi.fn().mockImplementation(async (input) => input),
+    onUpdated: vi.fn().mockReturnValue(() => {}),
+  },
   provider: {
     getAll: vi.fn().mockResolvedValue([
       {
