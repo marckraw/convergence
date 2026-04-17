@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import type { FC } from 'react'
 import { useProjectStore } from '@/entities/project'
 import { useWorkspaceStore } from '@/entities/workspace'
@@ -57,6 +57,26 @@ export const Sidebar: FC<SidebarProps> = ({
   )
   const prepareForProject = useSessionStore((s) => s.prepareForProject)
   const setActiveSession = useSessionStore((s) => s.setActiveSession)
+  const [regeneratingSessionIds, setRegeneratingSessionIds] = useState<
+    ReadonlySet<string>
+  >(() => new Set())
+
+  const handleRegenerateSessionName = useCallback((sessionId: string) => {
+    setRegeneratingSessionIds((prev) => {
+      if (prev.has(sessionId)) return prev
+      const next = new Set(prev)
+      next.add(sessionId)
+      return next
+    })
+    sessionApi.regenerateName(sessionId).finally(() => {
+      setRegeneratingSessionIds((prev) => {
+        if (!prev.has(sessionId)) return prev
+        const next = new Set(prev)
+        next.delete(sessionId)
+        return next
+      })
+    })
+  }, [])
 
   useEffect(() => {
     loadGlobalSessions()
@@ -231,9 +251,8 @@ export const Sidebar: FC<SidebarProps> = ({
             onRenameSession={(sessionId: string, name: string) =>
               sessionApi.rename(sessionId, name).catch(() => undefined)
             }
-            onRegenerateSessionName={(sessionId: string) =>
-              sessionApi.regenerateName(sessionId).catch(() => undefined)
-            }
+            regeneratingSessionIds={regeneratingSessionIds}
+            onRegenerateSessionName={handleRegenerateSessionName}
             onDeleteWorkspace={handleDeleteWorkspace}
             onCreateWorkspace={(branchName: string) =>
               createWorkspace(activeProject.id, branchName)
