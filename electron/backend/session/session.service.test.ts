@@ -307,7 +307,7 @@ describe('SessionService', () => {
       name: 'activity test',
     })
 
-    service.start(session.id, 'Go')
+    service.start(session.id, { text: 'Go' })
     await vi.advanceTimersByTimeAsync(200)
     expect(service.getById(session.id)!.activity).toBe('streaming')
 
