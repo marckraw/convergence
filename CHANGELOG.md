@@ -1,5 +1,11 @@
 # convergence
 
+## 0.7.0
+
+### Minor Changes
+
+- a89a84f: Add archive and unarchive session lifecycle support, split the attention surface into waiting-on-you and needs-review sections, and surface archived sessions separately from the active working set.
+
 ## 0.6.0
 
 ### Minor Changes
