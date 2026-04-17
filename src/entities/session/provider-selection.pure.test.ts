@@ -93,4 +93,76 @@ describe('resolveProviderSelection', () => {
     expect(selection.modelId).toBe('gpt-5.4')
     expect(selection.effortId).toBe('medium')
   })
+
+  it('uses stored defaults when explicit selections are missing', () => {
+    const selection = resolveProviderSelection(providers, null, null, null, {
+      providerId: 'codex',
+      modelId: 'gpt-5.3-codex',
+      effortId: 'xhigh',
+    })
+
+    expect(selection.providerId).toBe('codex')
+    expect(selection.modelId).toBe('gpt-5.3-codex')
+    expect(selection.effortId).toBe('xhigh')
+  })
+
+  it('ignores stored provider when it is not registered', () => {
+    const selection = resolveProviderSelection(providers, null, null, null, {
+      providerId: 'ghost',
+      modelId: 'something',
+      effortId: 'high',
+    })
+
+    expect(selection.providerId).toBe('claude-code')
+    expect(selection.modelId).toBe('sonnet')
+    expect(selection.effortId).toBe('medium')
+  })
+
+  it('ignores stored model when it does not belong to the resolved provider', () => {
+    const selection = resolveProviderSelection(
+      providers,
+      'claude-code',
+      null,
+      null,
+      {
+        providerId: 'codex',
+        modelId: 'gpt-5.3-codex',
+        effortId: 'xhigh',
+      },
+    )
+
+    expect(selection.providerId).toBe('claude-code')
+    expect(selection.modelId).toBe('sonnet')
+    expect(selection.effortId).toBe('medium')
+  })
+
+  it('ignores stored effort when it is not offered by the resolved model', () => {
+    const selection = resolveProviderSelection(providers, null, null, null, {
+      providerId: 'codex',
+      modelId: 'gpt-5.4',
+      effortId: 'xhigh',
+    })
+
+    expect(selection.providerId).toBe('codex')
+    expect(selection.modelId).toBe('gpt-5.4')
+    expect(selection.effortId).toBe('medium')
+  })
+
+  it('explicit selection still wins over stored defaults', () => {
+    const selection = resolveProviderSelection(
+      providers,
+      'claude-code',
+      'sonnet',
+      'high',
+      {
+        providerId: 'codex',
+        modelId: 'gpt-5.3-codex',
+        effortId: 'xhigh',
+      },
+    )
+
+    expect(selection.providerId).toBe('claude-code')
+    expect(selection.modelId).toBe('sonnet')
+    expect(selection.effortId).toBe('high')
+  })
 })

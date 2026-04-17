@@ -19,5 +19,8 @@ export {
   getProviderDisplayLabel,
   resolveProviderSelection,
 } from './provider-selection.pure'
-export type { ResolvedProviderSelection } from './provider-selection.pure'
+export type {
+  ResolvedProviderSelection,
+  StoredProviderDefaults,
+} from './provider-selection.pure'
 export { providerApi } from './session.api'

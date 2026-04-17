@@ -78,4 +78,19 @@ contextBridge.exposeInMainWorld('electronAPI', {
     listByProjectId: (projectId: string) =>
       ipcRenderer.invoke('mcp:listByProjectId', projectId),
   },
+  appSettings: {
+    get: () => ipcRenderer.invoke('appSettings:get'),
+    set: (input: {
+      defaultProviderId: string | null
+      defaultModelId: string | null
+      defaultEffortId: string | null
+    }) => ipcRenderer.invoke('appSettings:set', input),
+    onUpdated: (callback: (settings: unknown) => void) => {
+      const handler = (_event: unknown, settings: unknown) => callback(settings)
+      ipcRenderer.on('appSettings:updated', handler)
+      return () => {
+        ipcRenderer.removeListener('appSettings:updated', handler)
+      }
+    },
+  },
 })
