@@ -9,7 +9,10 @@ import type {
   SessionStatus,
   TranscriptEntry,
 } from '../provider.types'
-import { buildFallbackPiDescriptor } from '../provider-descriptor.pure'
+import {
+  buildFallbackPiDescriptor,
+  normalizeProviderDescriptor,
+} from '../provider-descriptor.pure'
 import { PiRpcClient, type PiEvent, type PiExtensionUiRequest } from './pi-rpc'
 import {
   derivePiContextWindow,
@@ -17,6 +20,8 @@ import {
   extractToolCallFromEnd,
   extractToolResultText,
 } from './pi-event-mapping.pure'
+import { mapEffortToPiThinking, mapPiModels } from './pi-models.pure'
+import { probePiAvailableModels } from './pi-models.service'
 
 function now(): string {
   return new Date().toISOString()
@@ -33,9 +38,24 @@ export class PiProvider implements Provider {
 
   describe(): Promise<ProviderDescriptor> {
     if (!this.descriptorPromise) {
-      this.descriptorPromise = Promise.resolve(buildFallbackPiDescriptor())
+      this.descriptorPromise = this.fetchDescriptor().catch(() =>
+        buildFallbackPiDescriptor(),
+      )
     }
     return this.descriptorPromise
+  }
+
+  private async fetchDescriptor(): Promise<ProviderDescriptor> {
+    const fallback = buildFallbackPiDescriptor()
+    const rawModels = await probePiAvailableModels(this.binaryPath)
+    const modelOptions = mapPiModels(rawModels)
+    if (modelOptions.length === 0) return fallback
+
+    return normalizeProviderDescriptor({
+      ...fallback,
+      defaultModelId: modelOptions[0]?.id ?? fallback.defaultModelId,
+      modelOptions,
+    })
   }
 
   start(config: SessionStartConfig): SessionHandle {
@@ -325,6 +345,13 @@ export class PiProvider implements Provider {
       const args = ['--mode', 'rpc']
       if (sessionFile) {
         args.push('--session', sessionFile)
+      }
+      if (config.model && config.model.includes('/')) {
+        args.push('--model', config.model)
+      }
+      const thinking = mapEffortToPiThinking(config.effort)
+      if (thinking) {
+        args.push('--thinking', thinking)
       }
 
       child = spawn(binaryPath, args, {
