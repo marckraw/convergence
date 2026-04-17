@@ -20,6 +20,7 @@ import type {
   ReasoningEffort,
 } from '../provider.types'
 import { deriveCodexContextWindow } from '../context-window.pure'
+import { buildTurnFailureEntry } from './codex-errors.pure'
 
 function now(): string {
   return new Date().toISOString()
@@ -564,7 +565,12 @@ export class CodexProvider implements Provider {
             effort: config.effort,
             input: [{ type: 'text', text, text_elements: [] }],
           })
-          .catch(() => {})
+          .catch((err) => {
+            if (stopped) return
+            emit(buildTurnFailureEntry(err, now()))
+            setStatus('failed')
+            setAttention('failed')
+          })
       },
       approve: () => {
         if (!rpc) return

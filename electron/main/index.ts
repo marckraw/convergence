@@ -1,4 +1,4 @@
-import { app, BrowserWindow, nativeTheme } from 'electron'
+import { app, BrowserWindow, dialog, nativeTheme } from 'electron'
 import { existsSync } from 'fs'
 import { join } from 'path'
 import { getDatabase } from '../backend/database/database'
@@ -15,6 +15,7 @@ import { McpService } from '../backend/mcp/mcp.service'
 import { hydrateProcessPathFromShell } from '../backend/environment/shell-path.service'
 import { registerIpcHandlers } from './ipc'
 import { getWindowAppearanceOptions } from './window-effects.pure'
+import { formatStartupFailure } from './startup-failure.pure'
 
 function createWindow(): void {
   const runtimeIconPath = resolveRuntimeIconPath()
@@ -52,7 +53,7 @@ function resolveRuntimeIconPath(): string | undefined {
   return candidates.find((candidate) => existsSync(candidate))
 }
 
-app.whenReady().then(async () => {
+async function startApp(): Promise<void> {
   await hydrateProcessPathFromShell()
 
   const dbPath = join(app.getPath('userData'), 'convergence.db')
@@ -109,7 +110,16 @@ app.whenReady().then(async () => {
       createWindow()
     }
   })
-})
+}
+
+function handleStartupFailure(err: unknown): void {
+  console.error('Convergence startup failed:', err)
+  const { title, body } = formatStartupFailure(err)
+  dialog.showErrorBox(title, body)
+  app.quit()
+}
+
+app.whenReady().then(startApp).catch(handleStartupFailure)
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
