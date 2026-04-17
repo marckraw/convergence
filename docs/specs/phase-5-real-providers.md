@@ -88,7 +88,7 @@ Bidirectional JSON-RPC. Long-lived process with multiple turns per session.
 - Session resume (`--resume` for Claude, `thread/resume` for Codex) — add later
 - Model selection per provider — use defaults for Phase 5
 - Provider capability discovery beyond basic detection
-- Attachments (images, files)
+- ~~Attachments (images, files)~~ — delivered in `docs/specs/session-attachments.md`
 - Plan mode
 
 ## Tech Decisions

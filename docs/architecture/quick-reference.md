@@ -99,7 +99,24 @@ Requirements:
 - safe handling of large or generated directories
 - project metadata that records source and copied locations
 
-### 7. Verification rules
+### 7. Session attachments
+
+Sessions support image, PDF, and UTF-8 text attachments on outgoing messages:
+
+- **Entity:** `src/entities/attachment/` (types, api, zustand draft store keyed by session id)
+- **Backend:** `electron/backend/attachments/` handles ingest-from-bytes / ingest-from-paths, EXIF stripping, MIME sniffing, per-session directory storage under `userData/attachments/{sessionId}/`, orphan sweep on boot, and FK-cascade deletion
+- **Provider serializers** live next to each adapter:
+  - `claude-code/claude-code-message.pure.ts` → Anthropic `content[]` blocks (image/document/text)
+  - `codex/codex-message.pure.ts` → `UserInput[]` (`localImage` + inline text)
+  - `pi/pi-message.pure.ts` → `{message, images?}` per Pi rpc schema
+- **Capability matrix** is exposed on `ProviderDescriptor.attachments`; renderer gates on `selection.provider.attachments` via `src/features/composer/attachment-capability.pure.ts`
+- **UI surface:** composer `+` button (file picker), textarea `onPaste`, composer root drag-and-drop, chip row with preview modal
+- **Persistence:** `TranscriptEntry` of kind `user` carries optional `attachmentIds: string[]`; attachment rows live in dedicated `attachments` table
+- **PDFs are Claude-Code-only**; Codex and Pi providers report `supportsPdf: false` and the composer surfaces a capability error with red chip outline + send-disabled state
+
+Full spec: `docs/specs/session-attachments.md`.
+
+### 8. Verification rules
 
 After every finished task, the expected verification flow is:
 
