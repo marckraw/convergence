@@ -6,6 +6,7 @@ describe('provider-status.pure', () => {
     expect(getKnownProviders().map((provider) => provider.id)).toEqual([
       'claude-code',
       'codex',
+      'pi',
     ])
   })
 
