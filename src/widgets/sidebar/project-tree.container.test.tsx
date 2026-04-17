@@ -4,7 +4,7 @@ import { TooltipProvider } from '@/shared/ui/tooltip'
 import { ProjectTree } from './project-tree.container'
 
 describe('ProjectTree', () => {
-  it('archives a session without selecting it', () => {
+  it('archives a session without selecting it', async () => {
     const onSelectSession = vi.fn()
     const onArchiveSession = vi.fn()
 
@@ -42,16 +42,18 @@ describe('ProjectTree', () => {
       </TooltipProvider>,
     )
 
-    fireEvent.click(
+    fireEvent.pointerDown(
       screen.getByRole('button', { name: /session actions hey there/i }),
     )
-    fireEvent.click(screen.getByRole('menuitem', { name: /archive session/i }))
+    fireEvent.click(
+      await screen.findByRole('menuitem', { name: /archive session/i }),
+    )
 
     expect(onArchiveSession).toHaveBeenCalledWith('session-1')
     expect(onSelectSession).not.toHaveBeenCalled()
   })
 
-  it('unarchives a session from the archived section', () => {
+  it('unarchives a session from the archived section', async () => {
     const onUnarchiveSession = vi.fn()
 
     render(
@@ -89,11 +91,11 @@ describe('ProjectTree', () => {
     )
 
     fireEvent.click(screen.getByRole('button', { name: /archived/i }))
-    fireEvent.click(
+    fireEvent.pointerDown(
       screen.getByRole('button', { name: /session actions archived note/i }),
     )
     fireEvent.click(
-      screen.getByRole('menuitem', { name: /unarchive session/i }),
+      await screen.findByRole('menuitem', { name: /unarchive session/i }),
     )
 
     expect(onUnarchiveSession).toHaveBeenCalledWith('session-archived')
