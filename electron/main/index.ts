@@ -14,6 +14,7 @@ import { PiProvider } from '../backend/provider/pi/pi-provider'
 import { detectProviders } from '../backend/provider/detect'
 import { McpService } from '../backend/mcp/mcp.service'
 import { AppSettingsService } from '../backend/app-settings/app-settings.service'
+import { AttachmentsService } from '../backend/attachments/attachments.service'
 import { hydrateProcessPathFromShell } from '../backend/environment/shell-path.service'
 import { registerIpcHandlers } from './ipc'
 import { getWindowAppearanceOptions } from './window-effects.pure'
@@ -60,6 +61,7 @@ async function startApp(): Promise<void> {
 
   const dbPath = join(app.getPath('userData'), 'convergence.db')
   const workspacesRoot = join(app.getPath('userData'), 'workspaces')
+  const attachmentsRoot = join(app.getPath('userData'), 'attachments')
   const db = getDatabase(dbPath)
 
   const gitService = new GitService()
@@ -68,8 +70,17 @@ async function startApp(): Promise<void> {
   const workspaceService = new WorkspaceService(db, gitService, workspacesRoot)
   const providerRegistry = new ProviderRegistry()
   const sessionService = new SessionService(db, providerRegistry)
+  const attachmentsService = new AttachmentsService(db, attachmentsRoot)
+  sessionService.setAttachmentsService(attachmentsService)
 
   projectService.setWorkspaceService(workspaceService)
+
+  try {
+    const liveSessionIds = sessionService.getAll().map((s) => s.id)
+    await attachmentsService.sweepOrphans(liveSessionIds)
+  } catch (err) {
+    console.warn('Attachment orphan sweep failed:', err)
+  }
 
   // Detect and register real providers
   const detected = await detectProviders()
@@ -105,6 +116,7 @@ async function startApp(): Promise<void> {
     providerRegistry,
     mcpService,
     appSettingsService,
+    attachmentsService,
   )
 
   const runtimeIconPath = resolveRuntimeIconPath()

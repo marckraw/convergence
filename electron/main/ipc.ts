@@ -7,10 +7,24 @@ import { SessionService } from '../backend/session/session.service'
 import { ProviderRegistry } from '../backend/provider/provider-registry'
 import { McpService } from '../backend/mcp/mcp.service'
 import { AppSettingsService } from '../backend/app-settings/app-settings.service'
+import type { AttachmentsService } from '../backend/attachments/attachments.service'
+import type { IngestFileInput } from '../backend/attachments/attachments.types'
 import type { AppSettingsInput } from '../backend/app-settings/app-settings.types'
 import type { CreateProjectInput } from '../backend/project/project.types'
 import type { CreateWorkspaceInput } from '../backend/workspace/workspace.types'
 import type { CreateSessionInput } from '../backend/session/session.types'
+
+interface IngestFileIpcInput {
+  name: string
+  bytes: Uint8Array | ArrayBuffer | number[]
+  mimeType?: string
+}
+
+function toUint8Array(input: Uint8Array | ArrayBuffer | number[]): Uint8Array {
+  if (input instanceof Uint8Array) return input
+  if (input instanceof ArrayBuffer) return new Uint8Array(input)
+  return new Uint8Array(input)
+}
 
 const ACTIVE_PROJECT_KEY = 'active_project_id'
 const NEEDS_YOU_DISMISSALS_KEY = 'needs_you_dismissals_v1'
@@ -75,6 +89,7 @@ export function registerIpcHandlers(
   providerRegistry: ProviderRegistry,
   mcpService: McpService,
   appSettingsService: AppSettingsService,
+  attachmentsService: AttachmentsService,
 ): void {
   // Project handlers
   ipcMain.handle('project:create', (_event, input: CreateProjectInput) => {
@@ -221,12 +236,72 @@ export function registerIpcHandlers(
     sessionService.delete(id)
   })
 
-  ipcMain.handle('session:start', (_event, id: string, message: string) => {
-    sessionService.start(id, message)
+  ipcMain.handle(
+    'session:start',
+    (_event, id: string, input: { text: string; attachmentIds?: string[] }) => {
+      sessionService.start(id, {
+        text: input.text,
+        attachmentIds: input.attachmentIds,
+      })
+    },
+  )
+
+  ipcMain.handle(
+    'session:sendMessage',
+    (_event, id: string, input: { text: string; attachmentIds?: string[] }) => {
+      sessionService.sendMessage(id, {
+        text: input.text,
+        attachmentIds: input.attachmentIds,
+      })
+    },
+  )
+
+  // Attachments handlers
+  ipcMain.handle(
+    'attachments:ingestFiles',
+    async (_event, sessionId: string, files: IngestFileIpcInput[]) => {
+      const normalized: IngestFileInput[] = files.map((f) => ({
+        name: f.name,
+        bytes: toUint8Array(f.bytes),
+        mimeType: f.mimeType,
+      }))
+      return attachmentsService.ingestFiles(sessionId, normalized)
+    },
+  )
+
+  ipcMain.handle(
+    'attachments:ingestFromPaths',
+    async (_event, sessionId: string, paths: string[]) => {
+      return attachmentsService.ingestFromPaths(sessionId, paths)
+    },
+  )
+
+  ipcMain.handle('attachments:getForSession', (_event, sessionId: string) =>
+    attachmentsService.getForSession(sessionId),
+  )
+
+  ipcMain.handle('attachments:getById', (_event, id: string) =>
+    attachmentsService.getById(id),
+  )
+
+  ipcMain.handle('attachments:readBytes', async (_event, id: string) => {
+    const bytes = await attachmentsService.readBytes(id)
+    return bytes
   })
 
-  ipcMain.handle('session:sendMessage', (_event, id: string, text: string) => {
-    sessionService.sendMessage(id, text)
+  ipcMain.handle('attachments:delete', async (_event, id: string) => {
+    await attachmentsService.delete(id)
+  })
+
+  ipcMain.handle('attachments:showOpenDialog', async (event) => {
+    const window = BrowserWindow.fromWebContents(event.sender)
+    if (!window) return null
+    const result = await dialog.showOpenDialog(window, {
+      properties: ['openFile', 'multiSelections'],
+      title: 'Select attachments',
+    })
+    if (result.canceled || result.filePaths.length === 0) return null
+    return result.filePaths
   })
 
   ipcMain.handle('session:approve', (_event, id: string) => {

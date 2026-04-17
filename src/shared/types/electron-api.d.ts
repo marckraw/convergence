@@ -80,8 +80,59 @@ interface ProviderModelOption {
   effortOptions: ProviderEffortOption[]
 }
 
+type AttachmentKind = 'image' | 'pdf' | 'text'
+
+interface AttachmentData {
+  id: string
+  sessionId: string
+  kind: AttachmentKind
+  mimeType: string
+  filename: string
+  sizeBytes: number
+  storagePath: string
+  thumbnailPath: string | null
+  textPreview: string | null
+  createdAt: string
+}
+
+interface ProviderAttachmentCapability {
+  supportsImage: boolean
+  supportsPdf: boolean
+  supportsText: boolean
+  maxImageBytes: number
+  maxPdfBytes: number
+  maxTextBytes: number
+  maxTotalBytes: number
+}
+
+interface AttachmentIngestRejection {
+  filename: string
+  reason: string
+}
+
+interface AttachmentIngestResult {
+  attachments: AttachmentData[]
+  rejections: AttachmentIngestRejection[]
+}
+
+interface AttachmentIngestFileInput {
+  name: string
+  bytes: Uint8Array | ArrayBuffer | number[]
+  mimeType?: string
+}
+
+interface SendSessionMessageInput {
+  text: string
+  attachmentIds?: string[]
+}
+
 type TranscriptEntry =
-  | { type: 'user'; text: string; timestamp: string }
+  | {
+      type: 'user'
+      text: string
+      timestamp: string
+      attachmentIds?: string[]
+    }
   | {
       type: 'assistant'
       text: string
@@ -132,6 +183,7 @@ interface ProviderInfo {
   supportsContinuation: boolean
   defaultModelId: string
   modelOptions: ProviderModelOption[]
+  attachments: ProviderAttachmentCapability
 }
 
 interface ProviderStatusInfo {
@@ -186,8 +238,14 @@ interface ElectronAPI {
     archive: (id: string) => Promise<void>
     unarchive: (id: string) => Promise<void>
     delete: (id: string) => Promise<void>
-    start: (id: string, message: string) => Promise<void>
-    sendMessage: (id: string, text: string) => Promise<void>
+    start: (
+      id: string,
+      input: SendSessionMessageInput | string,
+    ) => Promise<void>
+    sendMessage: (
+      id: string,
+      input: SendSessionMessageInput | string,
+    ) => Promise<void>
     approve: (id: string) => Promise<void>
     deny: (id: string) => Promise<void>
     stop: (id: string) => Promise<void>
@@ -201,6 +259,21 @@ interface ElectronAPI {
   }
   mcp: {
     listByProjectId: (projectId: string) => Promise<ProjectMcpVisibility>
+  }
+  attachments: {
+    ingestFiles: (
+      sessionId: string,
+      files: AttachmentIngestFileInput[],
+    ) => Promise<AttachmentIngestResult>
+    ingestFromPaths: (
+      sessionId: string,
+      paths: string[],
+    ) => Promise<AttachmentIngestResult>
+    getForSession: (sessionId: string) => Promise<AttachmentData[]>
+    getById: (id: string) => Promise<AttachmentData | null>
+    readBytes: (id: string) => Promise<Uint8Array>
+    delete: (id: string) => Promise<void>
+    showOpenDialog: () => Promise<string[] | null>
   }
   appSettings: {
     get: () => Promise<AppSettingsData>
