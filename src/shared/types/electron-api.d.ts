@@ -140,6 +140,7 @@ interface ProviderStatusInfo {
   availability: 'available' | 'unavailable'
   statusLabel: string
   binaryPath: string | null
+  version: string | null
   reason: string | null
 }
 
@@ -198,6 +199,17 @@ interface ElectronAPI {
   mcp: {
     listByProjectId: (projectId: string) => Promise<ProjectMcpVisibility>
   }
+  appSettings: {
+    get: () => Promise<AppSettingsData>
+    set: (input: AppSettingsData) => Promise<AppSettingsData>
+    onUpdated: (callback: (settings: AppSettingsData) => void) => () => void
+  }
+}
+
+interface AppSettingsData {
+  defaultProviderId: string | null
+  defaultModelId: string | null
+  defaultEffortId: ReasoningEffort | null
 }
 
 declare global {

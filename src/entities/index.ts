@@ -11,3 +11,6 @@ export type {
   TranscriptEntry,
 } from './session'
 export { useSessionStore } from './session'
+
+export type { AppSettings, AppSettingsInput } from './app-settings'
+export { useAppSettingsStore } from './app-settings'

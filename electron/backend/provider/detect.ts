@@ -16,6 +16,18 @@ function which(binary: string): Promise<string | null> {
   })
 }
 
+function getVersion(binaryPath: string): Promise<string | null> {
+  return new Promise((resolve) => {
+    execFile(binaryPath, ['--version'], { timeout: 5_000 }, (error, stdout) => {
+      if (error || !stdout.trim()) {
+        resolve(null)
+      } else {
+        resolve(stdout.trim().split('\n')[0])
+      }
+    })
+  })
+}
+
 export interface DetectedProvider {
   id: string
   name: string
@@ -25,10 +37,9 @@ export interface DetectedProvider {
 export async function inspectProviderStatuses(): Promise<ProviderStatusInfo[]> {
   const statuses = await Promise.all(
     getKnownProviders().map(async (provider) => {
-      const status = buildProviderStatus(
-        provider,
-        await which(provider.binaryName),
-      )
+      const binaryPath = await which(provider.binaryName)
+      const version = binaryPath ? await getVersion(binaryPath) : null
+      const status = buildProviderStatus(provider, binaryPath, version)
       if (
         provider.id === 'pi' &&
         status.availability === 'available' &&

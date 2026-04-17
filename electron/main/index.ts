@@ -13,6 +13,7 @@ import { CodexProvider } from '../backend/provider/codex/codex-provider'
 import { PiProvider } from '../backend/provider/pi/pi-provider'
 import { detectProviders } from '../backend/provider/detect'
 import { McpService } from '../backend/mcp/mcp.service'
+import { AppSettingsService } from '../backend/app-settings/app-settings.service'
 import { hydrateProcessPathFromShell } from '../backend/environment/shell-path.service'
 import { registerIpcHandlers } from './ipc'
 import { getWindowAppearanceOptions } from './window-effects.pure'
@@ -91,6 +92,10 @@ async function startApp(): Promise<void> {
 
   const mcpService = new McpService(projectService, detected)
 
+  const appSettingsService = new AppSettingsService(stateService, async () =>
+    Promise.all(providerRegistry.getAll().map((p) => p.describe())),
+  )
+
   registerIpcHandlers(
     projectService,
     stateService,
@@ -99,6 +104,7 @@ async function startApp(): Promise<void> {
     sessionService,
     providerRegistry,
     mcpService,
+    appSettingsService,
   )
 
   const runtimeIconPath = resolveRuntimeIconPath()

@@ -58,6 +58,12 @@ export function buildClaudeDescriptor(): ProviderDescriptor {
         effortOptions: buildEffortOptions(['low', 'medium', 'high']),
       },
       {
+        id: 'claude-opus-4-7',
+        label: 'Claude Opus 4.7',
+        defaultEffort: 'medium',
+        effortOptions: buildEffortOptions(['low', 'medium', 'high', 'max']),
+      },
+      {
         id: 'claude-opus-4-6',
         label: 'Claude Opus 4.6',
         defaultEffort: 'medium',

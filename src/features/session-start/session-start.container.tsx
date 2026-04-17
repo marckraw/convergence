@@ -1,10 +1,11 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import type { FC } from 'react'
 import {
   resolveProviderSelection,
   useSessionStore,
   type ReasoningEffort,
 } from '@/entities/session'
+import { useAppSettingsStore } from '@/entities/app-settings'
 import { SessionStartForm } from './session-start.presentational'
 
 interface SessionStartProps {
@@ -24,11 +25,25 @@ export const SessionStart: FC<SessionStartProps> = ({
   const providers = useSessionStore((s) => s.providers)
   const loadProviders = useSessionStore((s) => s.loadProviders)
   const createAndStartSession = useSessionStore((s) => s.createAndStartSession)
+  const appSettings = useAppSettingsStore((s) => s.settings)
+  const storedDefaults = useMemo(
+    () => ({
+      providerId: appSettings.defaultProviderId,
+      modelId: appSettings.defaultModelId,
+      effortId: appSettings.defaultEffortId,
+    }),
+    [
+      appSettings.defaultProviderId,
+      appSettings.defaultModelId,
+      appSettings.defaultEffortId,
+    ],
+  )
   const selection = resolveProviderSelection(
     providers,
     providerId,
     modelId,
     effortId || null,
+    storedDefaults,
   )
 
   useEffect(() => {
@@ -73,6 +88,7 @@ export const SessionStart: FC<SessionStartProps> = ({
       nextProviderId,
       null,
       null,
+      storedDefaults,
     )
     setProviderId(nextSelection.providerId)
     setModelId(nextSelection.modelId)
@@ -85,6 +101,7 @@ export const SessionStart: FC<SessionStartProps> = ({
       selection.providerId,
       nextModelId,
       null,
+      storedDefaults,
     )
     setModelId(nextSelection.modelId)
     setEffortId(nextSelection.effortId)
