@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { useProjectStore } from '@/entities/project'
+import { DEFAULT_PROJECT_SETTINGS, useProjectStore } from '@/entities/project'
 import { useSessionStore } from '@/entities/session'
 import { TooltipProvider } from '@/shared/ui/tooltip'
 import { SessionView } from './session-view.container'
@@ -19,7 +19,7 @@ describe('SessionView changed files drawer', () => {
         id: 'project-1',
         name: 'convergence',
         repositoryPath: '/tmp/project',
-        settings: {},
+        settings: DEFAULT_PROJECT_SETTINGS,
         createdAt: '2026-01-01T00:00:00.000Z',
         updatedAt: '2026-01-01T00:00:00.000Z',
       },
@@ -30,6 +30,7 @@ describe('SessionView changed files drawer', () => {
       createProject: vi.fn(),
       deleteProject: vi.fn(),
       setActiveProject: vi.fn(),
+      updateProjectSettings: vi.fn(),
       clearError: vi.fn(),
     })
 

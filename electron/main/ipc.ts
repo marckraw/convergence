@@ -9,6 +9,7 @@ import { McpService } from '../backend/mcp/mcp.service'
 import type { CreateProjectInput } from '../backend/project/project.types'
 import type { CreateWorkspaceInput } from '../backend/workspace/workspace.types'
 import type { CreateSessionInput } from '../backend/session/session.types'
+import type { ProjectSettings } from '../backend/project/project-settings.pure'
 
 const ACTIVE_PROJECT_KEY = 'active_project_id'
 const NEEDS_YOU_DISMISSALS_KEY = 'needs_you_dismissals_v1'
@@ -108,6 +109,12 @@ export function registerIpcHandlers(
     if (!project) throw new Error(`Project not found: ${id}`)
     stateService.set(ACTIVE_PROJECT_KEY, id)
   })
+
+  ipcMain.handle(
+    'project:updateSettings',
+    (_event, id: string, settings: ProjectSettings) =>
+      projectService.updateSettings(id, settings),
+  )
 
   // Dialog handlers
   ipcMain.handle('dialog:selectDirectory', async (event) => {

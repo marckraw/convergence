@@ -1,4 +1,5 @@
 export { ProjectCreate } from './project-create'
+export { ProjectSettingsDialogContainer } from './project-settings'
 export { ReleaseNotesDialogContainer } from './release-notes'
 export { McpServersDialogContainer } from './mcp-servers'
 export { ProviderStatusDialogContainer } from './provider-status'
