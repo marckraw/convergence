@@ -461,7 +461,7 @@ describe('SessionService', () => {
     expect(updates.every((id) => id === session.id)).toBe(true)
   })
 
-  it('keeps continuation-capable sessions active after completion', () => {
+  it('keeps continuation-capable sessions active after completion', async () => {
     const db = getDatabase()
     const registry = new ProviderRegistry()
 
@@ -518,13 +518,13 @@ describe('SessionService', () => {
       name: 'continuation test',
     })
 
-    continuationService.start(session.id, { text: 'Start here' })
+    await continuationService.start(session.id, { text: 'Start here' })
     expect(statusListener).not.toBeNull()
     ;(statusListener as unknown as (status: SessionStatus) => void)('completed')
 
-    expect(() =>
+    await expect(
       continuationService.sendMessage(session.id, { text: 'Follow up' }),
-    ).not.toThrow()
+    ).resolves.not.toThrow()
     expect(sendMessage).toHaveBeenCalledWith('Follow up', undefined)
   })
 
@@ -604,18 +604,18 @@ describe('SessionService', () => {
       name: 'rehydrate me',
     })
 
-    firstService.start(session.id, { text: 'Initial prompt' })
+    await firstService.start(session.id, { text: 'Initial prompt' })
     await vi.advanceTimersByTimeAsync(1)
 
     const rehydratedRegistry = new ProviderRegistry()
     rehydratedRegistry.register(createContinuableProvider())
     const restartedService = new SessionService(db, rehydratedRegistry)
 
-    expect(() =>
+    await expect(
       restartedService.sendMessage(session.id, {
         text: 'Follow up after restart',
       }),
-    ).not.toThrow()
+    ).resolves.not.toThrow()
 
     expect(startConfigs).toEqual([
       {
@@ -831,11 +831,11 @@ describe('SessionService attachments integration', () => {
       name: 's4',
     })
 
-    expect(() =>
+    await expect(
       service.start(session.id, {
         text: 'hi',
         attachmentIds: ['does-not-exist'],
       }),
-    ).toThrow(/Attachment\(s\) not found/)
+    ).rejects.toThrow(/Attachment\(s\) not found/)
   })
 })

@@ -184,7 +184,7 @@ export class SessionService {
     this.updateArchiveState(id, null)
   }
 
-  start(id: string, input: SendMessageInput): void {
+  async start(id: string, input: SendMessageInput): Promise<void> {
     const session = this.getById(id)
     if (!session) throw new Error(`Session not found: ${id}`)
 
@@ -192,6 +192,7 @@ export class SessionService {
       this.updateArchiveState(id, null)
     }
 
+    await this.rebindDraftAttachments(id, input.attachmentIds)
     const attachments = this.resolveAttachments(input.attachmentIds)
     this.startHandle(
       session,
@@ -202,7 +203,7 @@ export class SessionService {
     )
   }
 
-  sendMessage(id: string, input: SendMessageInput): void {
+  async sendMessage(id: string, input: SendMessageInput): Promise<void> {
     const session = this.getById(id)
     if (!session) throw new Error(`Session not found: ${id}`)
 
@@ -210,6 +211,7 @@ export class SessionService {
       this.updateArchiveState(id, null)
     }
 
+    await this.rebindDraftAttachments(id, input.attachmentIds)
     const attachments = this.resolveAttachments(input.attachmentIds)
 
     const handle = this.activeHandles.get(id)
@@ -244,6 +246,15 @@ export class SessionService {
   }
 
   private pendingUserAttachmentIds = new Map<string, string[]>()
+
+  private async rebindDraftAttachments(
+    sessionId: string,
+    attachmentIds: string[] | undefined,
+  ): Promise<void> {
+    if (!attachmentIds || attachmentIds.length === 0) return
+    if (!this.attachments) return
+    await this.attachments.rebindToSession(attachmentIds, sessionId)
+  }
 
   private resolveAttachments(
     attachmentIds: string[] | undefined,

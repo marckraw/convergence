@@ -21,6 +21,13 @@ export const MAX_PDF_BYTES = 20 * 1024 * 1024
 export const MAX_TEXT_BYTES = 1 * 1024 * 1024
 export const MAX_TOTAL_BYTES = 50 * 1024 * 1024
 
+// Sentinel session id used by the composer when no real session exists yet
+// (see `src/features/composer/composer.container.tsx` DRAFT_KEY_NEW).
+// Attachments created with this id live under `{rootDir}/__new__/` until the
+// session is created, at which point `rebindToSession` moves them into the
+// real session directory. Must match the renderer sentinel.
+export const DRAFT_SESSION_ID = '__new__'
+
 const EXTENSION_BY_MIME: Record<string, string> = {
   'image/png': '.png',
   'image/jpeg': '.jpg',
@@ -327,6 +334,21 @@ export class AttachmentsService {
 
   async sweepOrphans(liveSessionIds: Iterable<string>): Promise<number> {
     const live = new Set(liveSessionIds)
+
+    // Purge DB rows whose session_id is no longer live (includes draft rows
+    // with session_id === DRAFT_SESSION_ID, since draft state lives in the
+    // renderer Zustand store and does not survive restarts).
+    if (live.size > 0) {
+      const placeholders = Array.from(live, () => '?').join(',')
+      this.db
+        .prepare(
+          `DELETE FROM attachments WHERE session_id NOT IN (${placeholders})`,
+        )
+        .run(...Array.from(live))
+    } else {
+      this.db.prepare('DELETE FROM attachments').run()
+    }
+
     let removed = 0
     let entries: string[]
     try {
@@ -342,5 +364,62 @@ export class AttachmentsService {
       removed += 1
     }
     return removed
+  }
+
+  async rebindToSession(
+    attachmentIds: string[],
+    newSessionId: string,
+  ): Promise<void> {
+    if (attachmentIds.length === 0) return
+    if (newSessionId === DRAFT_SESSION_ID) {
+      throw new Error('rebindToSession requires a real session id')
+    }
+
+    const rows = this.db
+      .prepare(
+        `SELECT * FROM attachments WHERE id IN (${attachmentIds.map(() => '?').join(',')})`,
+      )
+      .all(...attachmentIds) as AttachmentRow[]
+
+    const toMove = rows.filter((row) => row.session_id !== newSessionId)
+    if (toMove.length === 0) return
+
+    const targetDir = join(this.rootDir, newSessionId)
+    await fs.mkdir(targetDir, { recursive: true })
+
+    const updateStmt = this.db.prepare(
+      `UPDATE attachments
+       SET session_id = ?, storage_path = ?, thumbnail_path = ?
+       WHERE id = ?`,
+    )
+
+    for (const row of toMove) {
+      const storageExt = extname(row.storage_path)
+      const newStoragePath = join(targetDir, `${row.id}${storageExt}`)
+      await moveFile(row.storage_path, newStoragePath)
+
+      let newThumbPath: string | null = null
+      if (row.thumbnail_path) {
+        const thumbExt = extname(row.thumbnail_path)
+        newThumbPath = join(targetDir, `${row.id}.thumb${thumbExt}`)
+        await moveFile(row.thumbnail_path, newThumbPath)
+      }
+
+      updateStmt.run(newSessionId, newStoragePath, newThumbPath, row.id)
+    }
+  }
+}
+
+async function moveFile(from: string, to: string): Promise<void> {
+  if (from === to) return
+  try {
+    await fs.rename(from, to)
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'EXDEV') {
+      await fs.copyFile(from, to)
+      await fs.rm(from, { force: true })
+      return
+    }
+    throw error
   }
 }

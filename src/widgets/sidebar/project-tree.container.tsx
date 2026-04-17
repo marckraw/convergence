@@ -19,6 +19,7 @@ import {
   Archive,
   ChevronRight,
   GitBranch,
+  Loader2,
   MoreHorizontal,
   Pencil,
   Plus,
@@ -32,6 +33,7 @@ interface ProjectTreeProps {
   workspaces: Workspace[]
   sessions: Session[]
   activeSessionId: string | null
+  regeneratingSessionIds?: ReadonlySet<string>
   onSelectSession: (id: string) => void
   onArchiveSession: (id: string) => void
   onUnarchiveSession: (id: string) => void
@@ -47,6 +49,7 @@ export const ProjectTree: FC<ProjectTreeProps> = ({
   workspaces,
   sessions,
   activeSessionId,
+  regeneratingSessionIds,
   onSelectSession,
   onArchiveSession,
   onUnarchiveSession,
@@ -101,6 +104,7 @@ export const ProjectTree: FC<ProjectTreeProps> = ({
 
   const renderSessionActions = (session: Session) => {
     const isArchived = !!session.archivedAt
+    const isRegeneratingName = regeneratingSessionIds?.has(session.id) ?? false
 
     return (
       <DropdownMenu>
@@ -130,10 +134,17 @@ export const ProjectTree: FC<ProjectTreeProps> = ({
           </DropdownMenuItem>
           <DropdownMenuItem
             className="gap-2"
+            disabled={isRegeneratingName}
             onClick={() => onRegenerateSessionName(session.id)}
           >
-            <Sparkles className="h-3.5 w-3.5" />
-            <span>Regenerate name</span>
+            {isRegeneratingName ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <Sparkles className="h-3.5 w-3.5" />
+            )}
+            <span>
+              {isRegeneratingName ? 'Regenerating name…' : 'Regenerate name'}
+            </span>
           </DropdownMenuItem>
           <DropdownMenuSeparator />
           {isArchived ? (
@@ -168,6 +179,7 @@ export const ProjectTree: FC<ProjectTreeProps> = ({
 
   const renderSessionRow = (session: Session) => {
     const isRenaming = renamingSessionId === session.id
+    const isRegeneratingName = regeneratingSessionIds?.has(session.id) ?? false
 
     return (
       <div
@@ -216,9 +228,19 @@ export const ProjectTree: FC<ProjectTreeProps> = ({
               >
                 <SessionBadge attention={session.attention} />
                 <span className="truncate">{session.name}</span>
+                {isRegeneratingName && (
+                  <Loader2
+                    className="ml-auto h-3 w-3 shrink-0 animate-spin text-muted-foreground"
+                    aria-label="Regenerating name"
+                  />
+                )}
               </Button>
             </TooltipTrigger>
-            <TooltipContent side="right">{session.name}</TooltipContent>
+            <TooltipContent side="right">
+              {isRegeneratingName
+                ? `${session.name} (regenerating name…)`
+                : session.name}
+            </TooltipContent>
           </Tooltip>
         )}
         {renderSessionActions(session)}

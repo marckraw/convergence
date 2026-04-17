@@ -59,12 +59,51 @@ const SCHEMA = `
     storage_path TEXT NOT NULL,
     thumbnail_path TEXT,
     text_preview TEXT,
-    created_at TEXT NOT NULL DEFAULT (datetime('now')),
-    FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
   );
 
   CREATE INDEX IF NOT EXISTS idx_attachments_session ON attachments(session_id);
 `
+
+function ensureAttachmentsTableNoFk(database: Database.Database): void {
+  // Drafts live under a sentinel session id before the real session exists, so
+  // the attachments table must not FK to sessions(id). If an older schema with
+  // the FK is present, rebuild without it.
+  const row = database
+    .prepare(
+      "SELECT sql FROM sqlite_master WHERE type='table' AND name='attachments'",
+    )
+    .get() as { sql: string } | undefined
+
+  if (!row) return
+  if (!/FOREIGN\s+KEY[^)]*REFERENCES\s+sessions/i.test(row.sql)) return
+
+  database.exec(`
+    DROP INDEX IF EXISTS idx_attachments_session;
+    ALTER TABLE attachments RENAME TO attachments_old;
+    CREATE TABLE attachments (
+      id TEXT PRIMARY KEY,
+      session_id TEXT NOT NULL,
+      kind TEXT NOT NULL,
+      mime_type TEXT NOT NULL,
+      filename TEXT NOT NULL,
+      size_bytes INTEGER NOT NULL,
+      storage_path TEXT NOT NULL,
+      thumbnail_path TEXT,
+      text_preview TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    INSERT INTO attachments (
+      id, session_id, kind, mime_type, filename, size_bytes,
+      storage_path, thumbnail_path, text_preview, created_at
+    )
+    SELECT id, session_id, kind, mime_type, filename, size_bytes,
+           storage_path, thumbnail_path, text_preview, created_at
+    FROM attachments_old;
+    DROP TABLE attachments_old;
+    CREATE INDEX IF NOT EXISTS idx_attachments_session ON attachments(session_id);
+  `)
+}
 
 let db: Database.Database | null = null
 
@@ -113,6 +152,7 @@ export function getDatabase(dbPath?: string): Database.Database {
   db.pragma('foreign_keys = ON')
   db.exec(SCHEMA)
   ensureSessionColumns(db)
+  ensureAttachmentsTableNoFk(db)
 
   return db
 }
