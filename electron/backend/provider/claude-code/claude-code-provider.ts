@@ -7,6 +7,9 @@ import type {
   SessionStatus,
   AttentionState,
   SessionContextWindow,
+  ActivitySignal,
+  OneShotInput,
+  OneShotResult,
 } from '../provider.types'
 import { parseJsonLines } from '../line-parser'
 import { buildClaudeDescriptor } from '../provider-descriptor.pure'
@@ -17,6 +20,7 @@ import {
   deriveClaudeEstimatedContextWindow,
 } from '../context-window.pure'
 import { readClaudeLoggedContextWindow } from './claude-context-log.service'
+import { deriveClaudeActivity } from './claude-code-activity.pure'
 
 function now(): string {
   return new Date().toISOString()
@@ -55,6 +59,82 @@ interface ClaudeStreamEvent {
   model?: string
 }
 
+function runClaudeOneShot(
+  binaryPath: string,
+  input: OneShotInput,
+): Promise<OneShotResult> {
+  return new Promise((resolve, reject) => {
+    const args = [
+      '-p',
+      '--output-format',
+      'json',
+      '--dangerously-skip-permissions',
+      '--model',
+      input.modelId,
+    ]
+    const child = spawn(binaryPath, args, {
+      cwd: input.workingDirectory,
+      stdio: ['pipe', 'pipe', 'pipe'],
+      env: { ...process.env },
+    })
+
+    let stdout = ''
+    let stderr = ''
+    let settled = false
+
+    const timeout = setTimeout(() => {
+      if (settled) return
+      settled = true
+      child.kill('SIGTERM')
+      reject(new Error('claude oneShot timed out'))
+    }, input.timeoutMs ?? 20000)
+
+    child.stdout?.on('data', (chunk: Buffer) => {
+      stdout += chunk.toString()
+    })
+    child.stderr?.on('data', (chunk: Buffer) => {
+      stderr += chunk.toString()
+    })
+
+    child.on('error', (err) => {
+      if (settled) return
+      settled = true
+      clearTimeout(timeout)
+      reject(err)
+    })
+
+    child.on('exit', (code) => {
+      if (settled) return
+      settled = true
+      clearTimeout(timeout)
+      if (code !== 0) {
+        reject(
+          new Error(
+            `claude oneShot exited with code ${code}: ${stderr.trim() || 'no stderr'}`,
+          ),
+        )
+        return
+      }
+      try {
+        const parsed = JSON.parse(stdout) as { result?: unknown }
+        const text = typeof parsed.result === 'string' ? parsed.result : ''
+        resolve({ text })
+      } catch (err) {
+        reject(
+          err instanceof Error
+            ? err
+            : new Error('failed to parse claude oneShot output'),
+        )
+      }
+    })
+
+    if (child.stdin) {
+      child.stdin.write(input.prompt + '\n')
+      child.stdin.end()
+    }
+  })
+}
+
 export class ClaudeCodeProvider implements Provider {
   id = 'claude-code'
   name = 'Claude Code'
@@ -66,6 +146,10 @@ export class ClaudeCodeProvider implements Provider {
     return buildClaudeDescriptor()
   }
 
+  async oneShot(input: OneShotInput): Promise<OneShotResult> {
+    return runClaudeOneShot(this.binaryPath, input)
+  }
+
   start(config: SessionStartConfig): SessionHandle {
     const binaryPath = this.binaryPath
     const listeners = {
@@ -74,6 +158,7 @@ export class ClaudeCodeProvider implements Provider {
       attention: [] as ((attention: AttentionState) => void)[],
       continuationToken: [] as ((token: string) => void)[],
       contextWindow: [] as ((contextWindow: SessionContextWindow) => void)[],
+      activity: [] as ((activity: ActivitySignal) => void)[],
     }
 
     let child: ChildProcess | null = null
@@ -107,6 +192,13 @@ export class ClaudeCodeProvider implements Provider {
       listeners.contextWindow.forEach((cb) => cb(contextWindow))
     }
 
+    let lastActivity: ActivitySignal = null
+    function setActivity(activity: ActivitySignal): void {
+      if (activity === lastActivity) return
+      lastActivity = activity
+      listeners.activity.forEach((cb) => cb(activity))
+    }
+
     function refreshContextWindowFromLogs(): void {
       if (!claudeSessionId) {
         return
@@ -134,6 +226,10 @@ export class ClaudeCodeProvider implements Provider {
     function handleEvent(data: unknown): void {
       if (stopped) return
       const event = data as ClaudeStreamEvent
+      const activityDelta = deriveClaudeActivity(data)
+      if (activityDelta !== 'keep') {
+        setActivity(activityDelta)
+      }
       if (event.session_id) {
         setContinuationToken(event.session_id)
       }
@@ -272,6 +368,7 @@ export class ClaudeCodeProvider implements Provider {
       emit({ type: 'user', text: message, timestamp: now() })
       setStatus('running')
       setAttention('none')
+      setActivity(null)
       setContextWindow(
         createUnavailableContextWindow(
           'Waiting for Claude turn usage. When available, Convergence will show an estimated context value because Claude headless mode does not expose exact live context telemetry yet.',
@@ -392,6 +489,9 @@ export class ClaudeCodeProvider implements Provider {
       },
       onContextWindowChange: (cb) => {
         listeners.contextWindow.push(cb)
+      },
+      onActivityChange: (cb) => {
+        listeners.activity.push(cb)
       },
       sendMessage: (text) => {
         startTurn(text)

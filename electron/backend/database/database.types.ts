@@ -26,6 +26,9 @@ export interface SessionRow {
   working_directory: string
   transcript: string
   context_window: string | null
+  activity: string | null
+  archived_at: string | null
+  name_auto_generated: number
   created_at: string
   updated_at: string
 }

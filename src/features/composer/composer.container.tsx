@@ -1,10 +1,11 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import type { FC } from 'react'
 import {
   resolveProviderSelection,
   useSessionStore,
   type ReasoningEffort,
 } from '@/entities/session'
+import { useAppSettingsStore } from '@/entities/app-settings'
 import { Composer } from './composer.presentational'
 
 interface ComposerContainerProps {
@@ -33,11 +34,25 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
   )
   const canContinueActiveSession =
     !!activeSession && !!activeProvider?.supportsContinuation
+  const appSettings = useAppSettingsStore((s) => s.settings)
+  const storedDefaults = useMemo(
+    () => ({
+      providerId: appSettings.defaultProviderId,
+      modelId: appSettings.defaultModelId,
+      effortId: appSettings.defaultEffortId,
+    }),
+    [
+      appSettings.defaultProviderId,
+      appSettings.defaultModelId,
+      appSettings.defaultEffortId,
+    ],
+  )
   const selection = resolveProviderSelection(
     providers,
     activeSession?.providerId ?? providerId,
     activeSession?.model ?? modelId,
     activeSession?.effort ?? (effortId || null),
+    activeSession ? undefined : storedDefaults,
   )
 
   useEffect(() => {
@@ -104,6 +119,7 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
       nextProviderId,
       null,
       null,
+      activeSession ? undefined : storedDefaults,
     )
     setProviderId(nextSelection.providerId)
     setModelId(nextSelection.modelId)
@@ -116,6 +132,7 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
       selection.providerId,
       nextModelId,
       null,
+      activeSession ? undefined : storedDefaults,
     )
     setModelId(nextSelection.modelId)
     setEffortId(nextSelection.effortId)

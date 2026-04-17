@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, nativeTheme } from 'electron'
+import { app, BrowserWindow, dialog, nativeTheme, shell } from 'electron'
 import { existsSync } from 'fs'
 import { join } from 'path'
 import { getDatabase } from '../backend/database/database'
@@ -10,10 +10,14 @@ import { SessionService } from '../backend/session/session.service'
 import { ProviderRegistry } from '../backend/provider/provider-registry'
 import { ClaudeCodeProvider } from '../backend/provider/claude-code/claude-code-provider'
 import { CodexProvider } from '../backend/provider/codex/codex-provider'
+import { PiProvider } from '../backend/provider/pi/pi-provider'
 import { detectProviders } from '../backend/provider/detect'
 import { McpService } from '../backend/mcp/mcp.service'
+import { AppSettingsService } from '../backend/app-settings/app-settings.service'
+import { SessionNamingService } from '../backend/session/naming/session-naming.service'
 import { hydrateProcessPathFromShell } from '../backend/environment/shell-path.service'
 import { registerIpcHandlers } from './ipc'
+import { shouldOpenInSystemBrowser } from './external-links.pure'
 import { getWindowAppearanceOptions } from './window-effects.pure'
 import { formatStartupFailure } from './startup-failure.pure'
 
@@ -42,6 +46,32 @@ function createWindow(): void {
   } else {
     mainWindow.loadFile(join(__dirname, '../renderer/index.html'))
   }
+
+  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+    if (
+      shouldOpenInSystemBrowser({
+        currentUrl: mainWindow.webContents.getURL(),
+        targetUrl: url,
+      })
+    ) {
+      void shell.openExternal(url)
+      return { action: 'deny' }
+    }
+
+    return { action: 'allow' }
+  })
+
+  mainWindow.webContents.on('will-navigate', (event, url) => {
+    if (
+      shouldOpenInSystemBrowser({
+        currentUrl: mainWindow.webContents.getURL(),
+        targetUrl: url,
+      })
+    ) {
+      event.preventDefault()
+      void shell.openExternal(url)
+    }
+  })
 }
 
 function resolveRuntimeIconPath(): string | undefined {
@@ -76,6 +106,8 @@ async function startApp(): Promise<void> {
       providerRegistry.register(new ClaudeCodeProvider(p.binaryPath))
     } else if (p.id === 'codex') {
       providerRegistry.register(new CodexProvider(p.binaryPath))
+    } else if (p.id === 'pi') {
+      providerRegistry.register(new PiProvider(p.binaryPath))
     }
   }
 
@@ -88,6 +120,16 @@ async function startApp(): Promise<void> {
 
   const mcpService = new McpService(projectService, detected)
 
+  const appSettingsService = new AppSettingsService(stateService, async () =>
+    Promise.all(providerRegistry.getAll().map((p) => p.describe())),
+  )
+
+  const namingService = new SessionNamingService({
+    providers: providerRegistry,
+    appSettings: appSettingsService,
+  })
+  sessionService.setNamer(namingService)
+
   registerIpcHandlers(
     projectService,
     stateService,
@@ -96,6 +138,7 @@ async function startApp(): Promise<void> {
     sessionService,
     providerRegistry,
     mcpService,
+    appSettingsService,
   )
 
   const runtimeIconPath = resolveRuntimeIconPath()

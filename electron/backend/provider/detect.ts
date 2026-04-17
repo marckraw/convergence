@@ -1,11 +1,24 @@
 import { execFile } from 'child_process'
 import type { ProviderStatusInfo } from './provider.types'
 import { buildProviderStatus, getKnownProviders } from './provider-status.pure'
+import { isPiAuthConfigured } from './pi/pi-auth-status'
 
 function which(binary: string): Promise<string | null> {
   const cmd = process.platform === 'win32' ? 'where' : 'which'
   return new Promise((resolve) => {
     execFile(cmd, [binary], (error, stdout) => {
+      if (error || !stdout.trim()) {
+        resolve(null)
+      } else {
+        resolve(stdout.trim().split('\n')[0])
+      }
+    })
+  })
+}
+
+function getVersion(binaryPath: string): Promise<string | null> {
+  return new Promise((resolve) => {
+    execFile(binaryPath, ['--version'], { timeout: 5_000 }, (error, stdout) => {
       if (error || !stdout.trim()) {
         resolve(null)
       } else {
@@ -23,9 +36,23 @@ export interface DetectedProvider {
 
 export async function inspectProviderStatuses(): Promise<ProviderStatusInfo[]> {
   const statuses = await Promise.all(
-    getKnownProviders().map(async (provider) =>
-      buildProviderStatus(provider, await which(provider.binaryName)),
-    ),
+    getKnownProviders().map(async (provider) => {
+      const binaryPath = await which(provider.binaryName)
+      const version = binaryPath ? await getVersion(binaryPath) : null
+      const status = buildProviderStatus(provider, binaryPath, version)
+      if (
+        provider.id === 'pi' &&
+        status.availability === 'available' &&
+        !isPiAuthConfigured()
+      ) {
+        return {
+          ...status,
+          statusLabel: 'Needs login',
+          reason: 'Run `pi /login` in your terminal.',
+        }
+      }
+      return status
+    }),
   )
 
   return statuses

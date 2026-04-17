@@ -1,5 +1,64 @@
 # convergence
 
+## 0.9.1
+
+### Patch Changes
+
+- 8625781: Open external app links in the system browser instead of spawning a new Convergence window.
+
+## 0.9.0
+
+### Minor Changes
+
+- 8e0a1f7: Add a global status bar across the bottom of the app that surfaces agent activity across every project.
+  - Aggregate counters for running sessions and sessions that need the user, with a popover grouped by project.
+  - Per-project chips for projects with active or attention-needing sessions, clickable to switch project.
+  - Recency badge for the most recently completed or failed session.
+  - New `activity` signal on sessions (`streaming`, `thinking`, `tool:<name>`, `waiting-approval`, or `null`) derived from provider events for Claude Code, Codex, and Pi, persisted on the session row and shown per-session in the project popover.
+
+## 0.8.0
+
+### Minor Changes
+
+- 6e4d7bc: Automatically name sessions after the first assistant response using each provider's fast model, with inline rename and regenerate-name actions in the sidebar and a per-provider naming model picker in app settings.
+
+## 0.7.0
+
+### Minor Changes
+
+- a89a84f: Add archive and unarchive session lifecycle support, split the attention surface into waiting-on-you and needs-review sections, and surface archived sessions separately from the active working set.
+
+## 0.6.0
+
+### Minor Changes
+
+- fad2f4d: Add Pi Agent (by Mario Zechner) as a third first-class provider alongside Claude Code and Codex. Convergence detects the `pi` binary on PATH, registers a `PiProvider` that drives `pi --mode rpc` via its custom JSONL protocol, and maps pi's streaming events (message_update text/tool-call deltas, tool_execution_end, turn_end stats, agent_end stop reasons, compaction/auto-retry) onto the existing transcript model. Auth is delegated to the CLI — when `pi` is installed but `~/.pi/agent/auth.json` is empty or missing, the provider status dialog shows "Needs login" with guidance to run `pi /login` in a terminal. Effort levels map to pi's thinking ladder (off/minimal/low/medium/high/xhigh). The default model descriptor is a single "Pi default" entry; dynamic model enumeration is deferred to a follow-up.
+- 42f8a87: Enumerate Pi Agent models dynamically from the installed `pi` binary. When the provider descriptor is requested, Convergence now spawns a short-lived `pi --mode rpc --no-session` subprocess, sends `get_available_models`, and maps every returned Model to a `ProviderModelOption` with id `"provider/modelId"` and label `"Vendor · Name"`. Models flagged `reasoning: true` receive the full effort ladder (`none → high`), plus `xhigh` for OpenAI-provider models; non-reasoning models receive no effort options. If the probe times out, the binary fails to spawn, or pi returns an empty list (no credentials configured), Convergence falls back to the static `Pi default` descriptor so the picker stays usable. Session spawn now passes `--model <provider/id>` and `--thinking <level>` when the user picks something other than the fallback.
+
+## 0.5.0
+
+### Minor Changes
+
+- f7b1a46: Add global app settings for default provider, model, and reasoning effort. Opens from a cog icon in the sidebar topbar, persists through the backend `app_settings` key, broadcasts updates across renderer surfaces, and seeds session-start and composer with the stored defaults when starting new sessions.
+
+## 0.4.1
+
+### Patch Changes
+
+- 646589e: Surface Codex turn-start failures and main-process startup failures to the user. Previously a rejected `turn/start` JSON-RPC call in the Codex provider was silently swallowed, leaving the session stuck in `running` with no feedback; it now emits a system transcript entry and transitions the session to `failed`. Unhandled rejections during Electron main-process init (database open, provider detection, IPC registration) would leave the app running with no window; they now show a native error dialog and quit cleanly.
+
+## 0.4.0
+
+### Minor Changes
+
+- 5dc70cb: Show CLI version in the provider status dialog. Convergence now runs `--version` on detected provider binaries (Claude Code, Codex) and displays the result alongside the binary path.
+
+## 0.3.1
+
+### Patch Changes
+
+- 6039e51: Add Claude Opus 4.7 to the hardcoded Claude Code provider model list, matching the latest model released by Anthropic (API ID: claude-opus-4-7).
+
 ## 0.3.0
 
 ### Minor Changes

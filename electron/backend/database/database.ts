@@ -29,6 +29,9 @@ const SCHEMA = `
     working_directory TEXT NOT NULL,
     transcript TEXT NOT NULL DEFAULT '[]',
     context_window TEXT,
+    activity TEXT,
+    archived_at TEXT,
+    name_auto_generated INTEGER NOT NULL DEFAULT 0,
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
     updated_at TEXT NOT NULL DEFAULT (datetime('now')),
     FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
@@ -69,6 +72,20 @@ function ensureSessionColumns(database: Database.Database): void {
 
   if (!columnNames.has('context_window')) {
     database.exec('ALTER TABLE sessions ADD COLUMN context_window TEXT')
+  }
+
+  if (!columnNames.has('activity')) {
+    database.exec('ALTER TABLE sessions ADD COLUMN activity TEXT')
+  }
+
+  if (!columnNames.has('archived_at')) {
+    database.exec('ALTER TABLE sessions ADD COLUMN archived_at TEXT')
+  }
+
+  if (!columnNames.has('name_auto_generated')) {
+    database.exec(
+      'ALTER TABLE sessions ADD COLUMN name_auto_generated INTEGER NOT NULL DEFAULT 0',
+    )
   }
 }
 

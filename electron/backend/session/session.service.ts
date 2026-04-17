@@ -8,6 +8,7 @@ import type {
   SessionStatus,
   AttentionState,
   SessionContextWindow,
+  ActivitySignal,
 } from '../provider/provider.types'
 import {
   sessionFromRow,
@@ -15,14 +16,64 @@ import {
   type CreateSessionInput,
 } from './session.types'
 
+export interface SessionNamer {
+  generateName(session: Session): Promise<string | null>
+}
+
 export class SessionService {
   private activeHandles = new Map<string, SessionHandle>()
   private onUpdate: ((session: Session) => void) | null = null
+  private namer: SessionNamer | null = null
 
   constructor(
     private db: Database.Database,
     private providers: ProviderRegistry,
   ) {}
+
+  setNamer(namer: SessionNamer): void {
+    this.namer = namer
+  }
+
+  rename(id: string, name: string): Session {
+    const trimmed = name.trim()
+    if (!trimmed || trimmed.length > 120) {
+      throw new Error('Session name must be 1-120 characters')
+    }
+    const session = this.getById(id)
+    if (!session) throw new Error(`Session not found: ${id}`)
+    this.db
+      .prepare(
+        "UPDATE sessions SET name = ?, name_auto_generated = 1, updated_at = datetime('now') WHERE id = ?",
+      )
+      .run(trimmed, id)
+    this.notifyUpdate(id)
+    return this.getById(id)!
+  }
+
+  async regenerateName(id: string): Promise<void> {
+    const session = this.getById(id)
+    if (!session) throw new Error(`Session not found: ${id}`)
+    await this.runNaming(session)
+  }
+
+  private async runNaming(session: Session): Promise<void> {
+    if (!this.namer) return
+    const title = await this.namer.generateName(session)
+    if (!title) return
+    this.db
+      .prepare(
+        "UPDATE sessions SET name = ?, name_auto_generated = 1, updated_at = datetime('now') WHERE id = ?",
+      )
+      .run(title, session.id)
+    this.notifyUpdate(session.id)
+  }
+
+  private hasBeenAutoNamed(id: string): boolean {
+    const row = this.db
+      .prepare('SELECT name_auto_generated FROM sessions WHERE id = ?')
+      .get(id) as { name_auto_generated: number } | undefined
+    return (row?.name_auto_generated ?? 0) === 1
+  }
 
   setUpdateListener(listener: (session: Session) => void): void {
     this.onUpdate = listener
@@ -108,22 +159,40 @@ export class SessionService {
     this.db.prepare('DELETE FROM sessions WHERE id = ?').run(id)
   }
 
+  archive(id: string): void {
+    if (!this.getById(id)) throw new Error(`Session not found: ${id}`)
+    this.updateArchiveState(id, new Date().toISOString())
+  }
+
+  unarchive(id: string): void {
+    if (!this.getById(id)) throw new Error(`Session not found: ${id}`)
+    this.updateArchiveState(id, null)
+  }
+
   start(id: string, message: string): void {
     const session = this.getById(id)
     if (!session) throw new Error(`Session not found: ${id}`)
+
+    if (session.archivedAt) {
+      this.updateArchiveState(id, null)
+    }
 
     this.startHandle(session, message, this.getContinuationToken(id))
   }
 
   sendMessage(id: string, text: string): void {
+    const session = this.getById(id)
+    if (!session) throw new Error(`Session not found: ${id}`)
+
+    if (session.archivedAt) {
+      this.updateArchiveState(id, null)
+    }
+
     const handle = this.activeHandles.get(id)
     if (handle) {
       handle.sendMessage(text)
       return
     }
-
-    const session = this.getById(id)
-    if (!session) throw new Error(`Session not found: ${id}`)
 
     const provider = this.providers.get(session.providerId)
     if (!provider) throw new Error(`Provider not found: ${session.providerId}`)
@@ -169,6 +238,9 @@ export class SessionService {
     if (!row) return
 
     const transcript = JSON.parse(row.transcript) as TranscriptEntry[]
+    const priorAssistantCount = transcript.filter(
+      (item) => item.type === 'assistant',
+    ).length
     transcript.push(entry)
 
     this.db
@@ -178,9 +250,22 @@ export class SessionService {
       .run(JSON.stringify(transcript), id)
 
     this.notifyUpdate(id)
+
+    if (
+      entry.type === 'assistant' &&
+      priorAssistantCount === 0 &&
+      !this.hasBeenAutoNamed(id)
+    ) {
+      const session = this.getById(id)
+      if (session) {
+        void this.runNaming(session).catch(() => {
+          // Naming failures are silent per spec.
+        })
+      }
+    }
   }
 
-  private updateField(id: string, field: string, value: string): void {
+  private updateField(id: string, field: string, value: string | null): void {
     this.db
       .prepare(
         `UPDATE sessions SET ${field} = ?, updated_at = datetime('now') WHERE id = ?`,
@@ -201,6 +286,48 @@ export class SessionService {
       .run(JSON.stringify(contextWindow), id)
 
     this.notifyUpdate(id)
+  }
+
+  private updateActivity(id: string, activity: ActivitySignal): void {
+    this.db
+      .prepare(
+        "UPDATE sessions SET activity = ?, updated_at = datetime('now') WHERE id = ?",
+      )
+      .run(activity, id)
+
+    this.notifyUpdate(id)
+  }
+
+  private updateArchiveState(id: string, archivedAt: string | null): void {
+    this.db
+      .prepare(
+        "UPDATE sessions SET archived_at = ?, updated_at = datetime('now') WHERE id = ?",
+      )
+      .run(archivedAt, id)
+
+    this.notifyUpdate(id)
+  }
+
+  private updateAttention(id: string, attention: AttentionState): void {
+    const row = this.getRowById(id)
+    if (!row) {
+      return
+    }
+
+    if (
+      row.archived_at &&
+      (attention === 'needs-approval' || attention === 'needs-input')
+    ) {
+      this.db
+        .prepare(
+          "UPDATE sessions SET attention = ?, archived_at = NULL, updated_at = datetime('now') WHERE id = ?",
+        )
+        .run(attention, id)
+      this.notifyUpdate(id)
+      return
+    }
+
+    this.updateField(id, 'attention', attention)
   }
 
   private notifyUpdate(id: string): void {
@@ -251,6 +378,9 @@ export class SessionService {
 
     handle.onStatusChange((status: SessionStatus) => {
       this.updateField(session.id, 'status', status)
+      if (status !== 'running') {
+        this.updateActivity(session.id, null)
+      }
       if (status === 'failed') {
         this.activeHandles.delete(session.id)
       } else if (status === 'completed' && !provider.supportsContinuation) {
@@ -259,7 +389,7 @@ export class SessionService {
     })
 
     handle.onAttentionChange((attention: AttentionState) => {
-      this.updateField(session.id, 'attention', attention)
+      this.updateAttention(session.id, attention)
     })
 
     handle.onContinuationToken((token: string) => {
@@ -270,6 +400,10 @@ export class SessionService {
 
     handle.onContextWindowChange((contextWindow: SessionContextWindow) => {
       this.updateContextWindow(session.id, contextWindow)
+    })
+
+    handle.onActivityChange((activity: ActivitySignal) => {
+      this.updateActivity(session.id, activity)
     })
   }
 }

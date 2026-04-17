@@ -2,6 +2,7 @@ import { useEffect } from 'react'
 import { useProjectStore } from '@/entities/project'
 import { useWorkspaceStore } from '@/entities/workspace'
 import { useSessionStore } from '@/entities/session'
+import { useAppSettingsStore } from '@/entities/app-settings'
 import { Toaster, toast } from 'sonner'
 import { TooltipProvider } from '@/shared/ui/tooltip'
 import { applyTheme, getStoredTheme } from '@/shared/lib/theme'
@@ -20,6 +21,7 @@ export function App() {
   const activeSessionId = useSessionStore((s) => s.activeSessionId)
   const setActiveSession = useSessionStore((s) => s.setActiveSession)
   const handleSessionUpdate = useSessionStore((s) => s.handleSessionUpdate)
+  const loadAppSettings = useAppSettingsStore((s) => s.load)
 
   useEffect(() => {
     applyTheme(getStoredTheme())
@@ -43,6 +45,10 @@ export function App() {
   useEffect(() => {
     loadActiveProject()
   }, [loadActiveProject])
+
+  useEffect(() => {
+    void loadAppSettings()
+  }, [loadAppSettings])
 
   useEffect(() => {
     const unsubscribe = window.electronAPI.session.onSessionUpdate(

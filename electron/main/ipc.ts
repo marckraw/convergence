@@ -6,6 +6,8 @@ import { GitService } from '../backend/git/git.service'
 import { SessionService } from '../backend/session/session.service'
 import { ProviderRegistry } from '../backend/provider/provider-registry'
 import { McpService } from '../backend/mcp/mcp.service'
+import { AppSettingsService } from '../backend/app-settings/app-settings.service'
+import type { AppSettingsInput } from '../backend/app-settings/app-settings.types'
 import type { CreateProjectInput } from '../backend/project/project.types'
 import type { CreateWorkspaceInput } from '../backend/workspace/workspace.types'
 import type { CreateSessionInput } from '../backend/session/session.types'
@@ -73,6 +75,7 @@ export function registerIpcHandlers(
   sessionService: SessionService,
   providerRegistry: ProviderRegistry,
   mcpService: McpService,
+  appSettingsService: AppSettingsService,
 ): void {
   // Project handlers
   ipcMain.handle('project:create', (_event, input: CreateProjectInput) => {
@@ -162,9 +165,34 @@ export function registerIpcHandlers(
       gitService.getDiff(repoPath, filePath),
   )
 
+  // App settings handlers
+  ipcMain.handle('appSettings:get', () => appSettingsService.getAppSettings())
+
+  ipcMain.handle('appSettings:set', async (_event, input: AppSettingsInput) => {
+    const stored = await appSettingsService.setAppSettings(input)
+    for (const win of BrowserWindow.getAllWindows()) {
+      if (!win.isDestroyed()) {
+        win.webContents.send('appSettings:updated', stored)
+      }
+    }
+    return stored
+  })
+
   // Session handlers
-  ipcMain.handle('session:create', (_event, input: CreateSessionInput) =>
-    sessionService.create(input),
+  ipcMain.handle(
+    'session:create',
+    async (_event, input: CreateSessionInput) => {
+      const defaults = await appSettingsService.resolveSessionDefaults()
+      const resolved: CreateSessionInput = defaults
+        ? {
+            ...input,
+            providerId: input.providerId || defaults.providerId,
+            model: input.model ?? defaults.modelId,
+            effort: input.effort ?? defaults.effortId,
+          }
+        : input
+      return sessionService.create(resolved)
+    },
   )
 
   ipcMain.handle('session:getByProjectId', (_event, projectId: string) =>
@@ -188,6 +216,14 @@ export function registerIpcHandlers(
     sessionService.getById(id),
   )
 
+  ipcMain.handle('session:archive', (_event, id: string) => {
+    sessionService.archive(id)
+  })
+
+  ipcMain.handle('session:unarchive', (_event, id: string) => {
+    sessionService.unarchive(id)
+  })
+
   ipcMain.handle('session:delete', (_event, id: string) => {
     sessionService.delete(id)
   })
@@ -210,6 +246,14 @@ export function registerIpcHandlers(
 
   ipcMain.handle('session:stop', (_event, id: string) => {
     sessionService.stop(id)
+  })
+
+  ipcMain.handle('session:rename', (_event, id: string, name: string) => {
+    sessionService.rename(id, name)
+  })
+
+  ipcMain.handle('session:regenerateName', async (_event, id: string) => {
+    await sessionService.regenerateName(id)
   })
 
   // Provider handlers

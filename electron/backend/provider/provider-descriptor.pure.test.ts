@@ -3,6 +3,7 @@ import {
   buildClaudeDescriptor,
   buildEffortOptions,
   buildFallbackCodexDescriptor,
+  buildFallbackPiDescriptor,
   normalizeProviderDescriptor,
 } from './provider-descriptor.pure'
 
@@ -19,6 +20,22 @@ describe('provider-descriptor', () => {
   it('returns the expected built-in provider descriptors', () => {
     expect(buildClaudeDescriptor().vendorLabel).toBe('Anthropic')
     expect(buildFallbackCodexDescriptor().vendorLabel).toBe('OpenAI')
+    expect(buildFallbackPiDescriptor().vendorLabel).toBe('Mario Zechner')
+  })
+
+  it('exposes pi-compatible effort options on the pi fallback descriptor', () => {
+    const descriptor = buildFallbackPiDescriptor()
+    const effortIds = descriptor.modelOptions[0]?.effortOptions.map(
+      (option) => option.id,
+    )
+    expect(effortIds).toEqual([
+      'none',
+      'minimal',
+      'low',
+      'medium',
+      'high',
+      'xhigh',
+    ])
   })
 
   it('normalizes invalid default model and effort values', () => {

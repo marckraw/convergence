@@ -32,6 +32,7 @@ export function buildClaudeDescriptor(): ProviderDescriptor {
     vendorLabel: 'Anthropic',
     supportsContinuation: true,
     defaultModelId: 'sonnet',
+    fastModelId: 'haiku',
     modelOptions: [
       {
         id: 'sonnet',
@@ -58,6 +59,12 @@ export function buildClaudeDescriptor(): ProviderDescriptor {
         effortOptions: buildEffortOptions(['low', 'medium', 'high']),
       },
       {
+        id: 'claude-opus-4-7',
+        label: 'Claude Opus 4.7',
+        defaultEffort: 'medium',
+        effortOptions: buildEffortOptions(['low', 'medium', 'high', 'max']),
+      },
+      {
         id: 'claude-opus-4-6',
         label: 'Claude Opus 4.6',
         defaultEffort: 'medium',
@@ -80,6 +87,7 @@ export function buildFallbackCodexDescriptor(): ProviderDescriptor {
     vendorLabel: 'OpenAI',
     supportsContinuation: true,
     defaultModelId: 'gpt-5.4',
+    fastModelId: 'gpt-5.4-mini',
     modelOptions: [
       {
         id: 'gpt-5.4',
@@ -110,6 +118,31 @@ export function buildFallbackCodexDescriptor(): ProviderDescriptor {
         label: 'GPT-5.2',
         defaultEffort: 'medium',
         effortOptions: buildEffortOptions(['low', 'medium', 'high', 'xhigh']),
+      },
+    ],
+  }
+}
+
+export function buildFallbackPiDescriptor(): ProviderDescriptor {
+  return {
+    id: 'pi',
+    name: 'Pi Agent',
+    vendorLabel: 'Mario Zechner',
+    supportsContinuation: true,
+    defaultModelId: 'default',
+    modelOptions: [
+      {
+        id: 'default',
+        label: 'Pi default',
+        defaultEffort: 'medium',
+        effortOptions: buildEffortOptions([
+          'none',
+          'minimal',
+          'low',
+          'medium',
+          'high',
+          'xhigh',
+        ]),
       },
     ],
   }

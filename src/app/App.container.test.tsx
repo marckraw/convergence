@@ -52,6 +52,8 @@ const mockElectronAPI = {
     getByProjectId: vi.fn().mockResolvedValue([]),
     getById: vi.fn(),
     getNeedsYouDismissals: vi.fn().mockResolvedValue({}),
+    archive: vi.fn(),
+    unarchive: vi.fn(),
     delete: vi.fn(),
     start: vi.fn(),
     sendMessage: vi.fn(),
@@ -60,6 +62,15 @@ const mockElectronAPI = {
     deny: vi.fn(),
     stop: vi.fn(),
     onSessionUpdate: vi.fn().mockReturnValue(() => {}),
+  },
+  appSettings: {
+    get: vi.fn().mockResolvedValue({
+      defaultProviderId: null,
+      defaultModelId: null,
+      defaultEffortId: null,
+    }),
+    set: vi.fn().mockImplementation(async (input) => input),
+    onUpdated: vi.fn().mockReturnValue(() => {}),
   },
   provider: {
     getAll: vi.fn().mockResolvedValue([

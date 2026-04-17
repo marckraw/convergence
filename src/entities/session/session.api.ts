@@ -24,6 +24,12 @@ export const sessionApi = {
   getById: (id: string): Promise<Session | null> =>
     window.electronAPI.session.getById(id),
 
+  archive: (id: string): Promise<void> =>
+    window.electronAPI.session.archive(id),
+
+  unarchive: (id: string): Promise<void> =>
+    window.electronAPI.session.unarchive(id),
+
   delete: (id: string): Promise<void> => window.electronAPI.session.delete(id),
 
   start: (id: string, message: string): Promise<void> =>
@@ -38,6 +44,12 @@ export const sessionApi = {
   deny: (id: string): Promise<void> => window.electronAPI.session.deny(id),
 
   stop: (id: string): Promise<void> => window.electronAPI.session.stop(id),
+
+  rename: (id: string, name: string): Promise<void> =>
+    window.electronAPI.session.rename(id, name),
+
+  regenerateName: (id: string): Promise<void> =>
+    window.electronAPI.session.regenerateName(id),
 
   getNeedsYouDismissals: (): Promise<NeedsYouDismissals> =>
     window.electronAPI.session.getNeedsYouDismissals(),
