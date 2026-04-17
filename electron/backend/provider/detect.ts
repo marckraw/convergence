@@ -1,6 +1,7 @@
 import { execFile } from 'child_process'
 import type { ProviderStatusInfo } from './provider.types'
 import { buildProviderStatus, getKnownProviders } from './provider-status.pure'
+import { isPiAuthConfigured } from './pi/pi-auth-status'
 
 function which(binary: string): Promise<string | null> {
   const cmd = process.platform === 'win32' ? 'where' : 'which'
@@ -38,7 +39,19 @@ export async function inspectProviderStatuses(): Promise<ProviderStatusInfo[]> {
     getKnownProviders().map(async (provider) => {
       const binaryPath = await which(provider.binaryName)
       const version = binaryPath ? await getVersion(binaryPath) : null
-      return buildProviderStatus(provider, binaryPath, version)
+      const status = buildProviderStatus(provider, binaryPath, version)
+      if (
+        provider.id === 'pi' &&
+        status.availability === 'available' &&
+        !isPiAuthConfigured()
+      ) {
+        return {
+          ...status,
+          statusLabel: 'Needs login',
+          reason: 'Run `pi /login` in your terminal.',
+        }
+      }
+      return status
     }),
   )
 

@@ -10,6 +10,7 @@ import { SessionService } from '../backend/session/session.service'
 import { ProviderRegistry } from '../backend/provider/provider-registry'
 import { ClaudeCodeProvider } from '../backend/provider/claude-code/claude-code-provider'
 import { CodexProvider } from '../backend/provider/codex/codex-provider'
+import { PiProvider } from '../backend/provider/pi/pi-provider'
 import { detectProviders } from '../backend/provider/detect'
 import { McpService } from '../backend/mcp/mcp.service'
 import { AppSettingsService } from '../backend/app-settings/app-settings.service'
@@ -77,6 +78,8 @@ async function startApp(): Promise<void> {
       providerRegistry.register(new ClaudeCodeProvider(p.binaryPath))
     } else if (p.id === 'codex') {
       providerRegistry.register(new CodexProvider(p.binaryPath))
+    } else if (p.id === 'pi') {
+      providerRegistry.register(new PiProvider(p.binaryPath))
     }
   }
 

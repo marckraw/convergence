@@ -20,6 +20,12 @@ const KNOWN_PROVIDERS: KnownProvider[] = [
     vendorLabel: 'OpenAI',
     binaryName: 'codex',
   },
+  {
+    id: 'pi',
+    name: 'Pi Agent',
+    vendorLabel: 'Mario Zechner',
+    binaryName: 'pi',
+  },
 ]
 
 export function getKnownProviders(): KnownProvider[] {

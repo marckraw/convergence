@@ -121,6 +121,31 @@ export function buildFallbackCodexDescriptor(): ProviderDescriptor {
   }
 }
 
+export function buildFallbackPiDescriptor(): ProviderDescriptor {
+  return {
+    id: 'pi',
+    name: 'Pi Agent',
+    vendorLabel: 'Mario Zechner',
+    supportsContinuation: true,
+    defaultModelId: 'default',
+    modelOptions: [
+      {
+        id: 'default',
+        label: 'Pi default',
+        defaultEffort: 'medium',
+        effortOptions: buildEffortOptions([
+          'none',
+          'minimal',
+          'low',
+          'medium',
+          'high',
+          'xhigh',
+        ]),
+      },
+    ],
+  }
+}
+
 export function normalizeProviderDescriptor(
   descriptor: ProviderDescriptor,
 ): ProviderDescriptor {
