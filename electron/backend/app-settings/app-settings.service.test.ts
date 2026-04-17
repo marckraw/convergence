@@ -1,8 +1,21 @@
 import { describe, expect, it, beforeEach, afterEach } from 'vitest'
 import { getDatabase, closeDatabase, resetDatabase } from '../database/database'
 import { StateService } from '../state/state.service'
-import type { ProviderDescriptor } from '../provider/provider.types'
+import type {
+  ProviderAttachmentCapability,
+  ProviderDescriptor,
+} from '../provider/provider.types'
 import { AppSettingsService, APP_SETTINGS_KEY } from './app-settings.service'
+
+const TEST_ATTACHMENT_CAPABILITY: ProviderAttachmentCapability = {
+  supportsImage: true,
+  supportsPdf: false,
+  supportsText: true,
+  maxImageBytes: 10 * 1024 * 1024,
+  maxPdfBytes: 0,
+  maxTextBytes: 1024 * 1024,
+  maxTotalBytes: 50 * 1024 * 1024,
+}
 
 function buildDescriptors(): ProviderDescriptor[] {
   return [
@@ -35,6 +48,7 @@ function buildDescriptors(): ProviderDescriptor[] {
           ],
         },
       ],
+      attachments: TEST_ATTACHMENT_CAPABILITY,
     },
     {
       id: 'codex',
@@ -55,6 +69,7 @@ function buildDescriptors(): ProviderDescriptor[] {
           ],
         },
       ],
+      attachments: TEST_ATTACHMENT_CAPABILITY,
     },
   ]
 }

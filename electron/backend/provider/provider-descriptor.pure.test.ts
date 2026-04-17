@@ -4,6 +4,7 @@ import {
   buildEffortOptions,
   buildFallbackCodexDescriptor,
   buildFallbackPiDescriptor,
+  CODEX_ATTACHMENT_CAPABILITY,
   normalizeProviderDescriptor,
 } from './provider-descriptor.pure'
 
@@ -56,6 +57,7 @@ describe('provider-descriptor', () => {
           ],
         },
       ],
+      attachments: CODEX_ATTACHMENT_CAPABILITY,
     })
 
     expect(normalized.defaultModelId).toBe('gpt-5.4')

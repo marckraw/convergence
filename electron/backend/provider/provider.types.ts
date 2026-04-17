@@ -1,3 +1,10 @@
+import type {
+  Attachment,
+  ProviderAttachmentCapability,
+} from '../attachments/attachments.types'
+
+export type { Attachment, ProviderAttachmentCapability }
+
 export type SessionStatus = 'idle' | 'running' | 'completed' | 'failed'
 export type AttentionState =
   | 'none'
@@ -32,7 +39,12 @@ export type SessionContextWindow =
     }
 
 export type TranscriptEntry =
-  | { type: 'user'; text: string; timestamp: string }
+  | {
+      type: 'user'
+      text: string
+      timestamp: string
+      attachmentIds?: string[]
+    }
   | {
       type: 'assistant'
       text: string
@@ -53,6 +65,7 @@ export interface SessionStartConfig {
   sessionId: string
   workingDirectory: string
   initialMessage: string
+  initialAttachments?: Attachment[]
   model: string | null
   effort: ReasoningEffort | null
   continuationToken: string | null
@@ -89,6 +102,7 @@ export interface ProviderDescriptor {
   supportsContinuation: boolean
   defaultModelId: string
   modelOptions: ProviderModelOption[]
+  attachments: ProviderAttachmentCapability
 }
 
 export interface SessionHandle {
@@ -100,7 +114,7 @@ export interface SessionHandle {
     callback: (contextWindow: SessionContextWindow) => void,
   ) => void
 
-  sendMessage: (text: string) => void
+  sendMessage: (text: string, attachments?: Attachment[]) => void
   approve: () => void
   deny: () => void
   stop: () => void
