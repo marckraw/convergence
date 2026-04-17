@@ -67,16 +67,14 @@ const SCHEMA = `
 
 function ensureAttachmentsTableNoFk(database: Database.Database): void {
   // Drafts live under a sentinel session id before the real session exists, so
-  // the attachments table must not FK to sessions(id). If an older schema with
-  // the FK is present, rebuild without it.
-  const row = database
-    .prepare(
-      "SELECT sql FROM sqlite_master WHERE type='table' AND name='attachments'",
-    )
-    .get() as { sql: string } | undefined
+  // the attachments table must not FK to sessions(id). Detect the FK from
+  // SQLite metadata instead of parsing CREATE TABLE SQL, which can vary across
+  // older databases and quoted schemas.
+  const foreignKeys = database
+    .prepare("PRAGMA foreign_key_list('attachments')")
+    .all() as Array<{ table: string }>
 
-  if (!row) return
-  if (!/FOREIGN\s+KEY[^)]*REFERENCES\s+sessions/i.test(row.sql)) return
+  if (!foreignKeys.some((fk) => fk.table === 'sessions')) return
 
   database.exec(`
     DROP INDEX IF EXISTS idx_attachments_session;
@@ -156,6 +154,8 @@ export function getDatabase(dbPath?: string): Database.Database {
 
   return db
 }
+
+export { ensureAttachmentsTableNoFk }
 
 export function closeDatabase(): void {
   if (db) {
