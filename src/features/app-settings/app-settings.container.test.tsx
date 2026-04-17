@@ -5,6 +5,16 @@ import { useAppSettingsStore } from '@/entities/app-settings'
 import { Button } from '@/shared/ui/button'
 import { AppSettingsDialogContainer } from './app-settings.container'
 
+const TEST_ATTACHMENTS = {
+  supportsImage: true,
+  supportsPdf: true,
+  supportsText: true,
+  maxImageBytes: 10 * 1024 * 1024,
+  maxPdfBytes: 20 * 1024 * 1024,
+  maxTextBytes: 1024 * 1024,
+  maxTotalBytes: 50 * 1024 * 1024,
+}
+
 const providers = [
   {
     id: 'claude-code',
@@ -24,6 +34,7 @@ const providers = [
         ],
       },
     ],
+    attachments: TEST_ATTACHMENTS,
   },
   {
     id: 'codex',
@@ -43,6 +54,7 @@ const providers = [
         ],
       },
     ],
+    attachments: TEST_ATTACHMENTS,
   },
 ]
 

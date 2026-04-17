@@ -1,12 +1,15 @@
-import type { FC } from 'react'
+import type { FC, ClipboardEvent, DragEvent } from 'react'
 import type {
   ProviderInfo,
   ReasoningEffort,
   ResolvedProviderSelection,
 } from '@/entities/session'
+import type { Attachment } from '@/entities/attachment'
 import { Button } from '@/shared/ui/button'
-import { ArrowUp } from 'lucide-react'
+import { cn } from '@/shared/lib/cn.pure'
+import { ArrowUp, Paperclip } from 'lucide-react'
 import { ComposerSelect } from './composer-select.presentational'
+import { AttachmentsRow } from './attachments-row.presentational'
 
 interface ComposerProps {
   value: string
@@ -20,6 +23,19 @@ interface ComposerProps {
   selectionDisabled?: boolean
   placeholder?: string
   disabled?: boolean
+  attachments: Attachment[]
+  attachmentErrorByAttachmentId: Record<string, string>
+  hasAttachmentErrors: boolean
+  attachmentsIngestInFlight: boolean
+  isDragging: boolean
+  onAttachmentAdd: () => void
+  onAttachmentRemove: (attachmentId: string) => void
+  onAttachmentOpen: (attachment: Attachment) => void
+  onDragEnter: (e: DragEvent<HTMLDivElement>) => void
+  onDragLeave: (e: DragEvent<HTMLDivElement>) => void
+  onDragOver: (e: DragEvent<HTMLDivElement>) => void
+  onDrop: (e: DragEvent<HTMLDivElement>) => void
+  onPaste: (e: ClipboardEvent<HTMLTextAreaElement>) => void
 }
 
 export const Composer: FC<ComposerProps> = ({
@@ -34,11 +50,28 @@ export const Composer: FC<ComposerProps> = ({
   selectionDisabled = false,
   placeholder = 'Ask anything, @tag files/folders, or use / to show available commands...',
   disabled = false,
+  attachments,
+  attachmentErrorByAttachmentId,
+  hasAttachmentErrors,
+  attachmentsIngestInFlight,
+  isDragging,
+  onAttachmentAdd,
+  onAttachmentRemove,
+  onAttachmentOpen,
+  onDragEnter,
+  onDragLeave,
+  onDragOver,
+  onDrop,
+  onPaste,
 }) => {
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
       e.preventDefault()
-      if (value.trim() && !disabled) {
+      if (
+        (value.trim() || attachments.length > 0) &&
+        !disabled &&
+        !hasAttachmentErrors
+      ) {
         onSubmit()
       }
     }
@@ -71,14 +104,37 @@ export const Composer: FC<ComposerProps> = ({
       description: effort.description,
     })) ?? []
 
+  const canSend =
+    !disabled &&
+    !hasAttachmentErrors &&
+    !attachmentsIngestInFlight &&
+    (value.trim().length > 0 || attachments.length > 0)
+
   return (
     <div className="mx-auto w-full max-w-2xl">
-      <div className="rounded-xl border border-border bg-card p-3">
+      <div
+        className={cn(
+          'rounded-xl border bg-card p-3 transition-colors',
+          isDragging ? 'border-primary border-dashed' : 'border-border',
+        )}
+        onDragEnter={onDragEnter}
+        onDragLeave={onDragLeave}
+        onDragOver={onDragOver}
+        onDrop={onDrop}
+        data-testid="composer-root"
+      >
+        <AttachmentsRow
+          attachments={attachments}
+          errorByAttachmentId={attachmentErrorByAttachmentId}
+          onOpen={onAttachmentOpen}
+          onRemove={onAttachmentRemove}
+        />
         <textarea
           value={value}
           onChange={(e) => onChange(e.target.value)}
           onKeyDown={handleKeyDown}
           onInput={handleInput}
+          onPaste={onPaste}
           placeholder={placeholder}
           disabled={disabled}
           rows={1}
@@ -86,6 +142,17 @@ export const Composer: FC<ComposerProps> = ({
         />
         <div className="mt-2 flex items-center justify-between">
           <div className="flex min-w-0 flex-wrap items-center gap-1">
+            <Button
+              type="button"
+              size="icon"
+              variant="ghost"
+              className="h-7 w-7"
+              aria-label="Add attachment"
+              onClick={onAttachmentAdd}
+              disabled={disabled || attachmentsIngestInFlight}
+            >
+              <Paperclip className="h-3.5 w-3.5" />
+            </Button>
             <ComposerSelect
               selectedId={selection.providerId}
               value={selection.providerLabel || 'Select provider'}
@@ -117,7 +184,7 @@ export const Composer: FC<ComposerProps> = ({
             type="button"
             size="icon"
             className="h-8 w-8 rounded-full"
-            disabled={!value.trim() || disabled}
+            disabled={!canSend}
             onClick={onSubmit}
           >
             <ArrowUp className="h-4 w-4" />
