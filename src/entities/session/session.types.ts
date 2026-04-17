@@ -14,6 +14,13 @@ export type ReasoningEffort =
   | 'max'
   | 'xhigh'
 
+export type ActivitySignal =
+  | null
+  | 'streaming'
+  | 'thinking'
+  | 'waiting-approval'
+  | `tool:${string}`
+
 export type ContextWindowSource = 'provider' | 'estimated'
 
 export type SessionContextWindow =
@@ -84,6 +91,7 @@ export interface Session {
   workingDirectory: string
   transcript: TranscriptEntry[]
   contextWindow?: SessionContextWindow | null
+  activity?: ActivitySignal
   archivedAt?: string | null
   createdAt: string
   updatedAt: string

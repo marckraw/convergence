@@ -5,6 +5,7 @@ import type {
   TranscriptEntry,
   ReasoningEffort,
   SessionContextWindow,
+  ActivitySignal,
 } from '../provider/provider.types'
 
 export type {
@@ -13,6 +14,7 @@ export type {
   TranscriptEntry,
   ReasoningEffort,
   SessionContextWindow,
+  ActivitySignal,
 }
 
 export interface Session {
@@ -28,6 +30,7 @@ export interface Session {
   workingDirectory: string
   transcript: TranscriptEntry[]
   contextWindow: SessionContextWindow | null
+  activity: ActivitySignal
   archivedAt: string | null
   createdAt: string
   updatedAt: string
@@ -40,6 +43,21 @@ export interface CreateSessionInput {
   model: string | null
   effort: ReasoningEffort | null
   name: string
+}
+
+function parseActivity(value: string | null): ActivitySignal {
+  if (!value) return null
+  if (
+    value === 'streaming' ||
+    value === 'thinking' ||
+    value === 'waiting-approval'
+  ) {
+    return value
+  }
+  if (value.startsWith('tool:')) {
+    return value as ActivitySignal
+  }
+  return null
 }
 
 export function sessionFromRow(row: SessionRow): Session {
@@ -58,6 +76,7 @@ export function sessionFromRow(row: SessionRow): Session {
     contextWindow: row.context_window
       ? (JSON.parse(row.context_window) as SessionContextWindow)
       : null,
+    activity: parseActivity(row.activity),
     archivedAt: row.archived_at,
     createdAt: row.created_at,
     updatedAt: row.updated_at,

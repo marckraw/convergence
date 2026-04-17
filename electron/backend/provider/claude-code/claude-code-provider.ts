@@ -7,6 +7,7 @@ import type {
   SessionStatus,
   AttentionState,
   SessionContextWindow,
+  ActivitySignal,
   OneShotInput,
   OneShotResult,
 } from '../provider.types'
@@ -19,6 +20,7 @@ import {
   deriveClaudeEstimatedContextWindow,
 } from '../context-window.pure'
 import { readClaudeLoggedContextWindow } from './claude-context-log.service'
+import { deriveClaudeActivity } from './claude-code-activity.pure'
 
 function now(): string {
   return new Date().toISOString()
@@ -156,6 +158,7 @@ export class ClaudeCodeProvider implements Provider {
       attention: [] as ((attention: AttentionState) => void)[],
       continuationToken: [] as ((token: string) => void)[],
       contextWindow: [] as ((contextWindow: SessionContextWindow) => void)[],
+      activity: [] as ((activity: ActivitySignal) => void)[],
     }
 
     let child: ChildProcess | null = null
@@ -189,6 +192,13 @@ export class ClaudeCodeProvider implements Provider {
       listeners.contextWindow.forEach((cb) => cb(contextWindow))
     }
 
+    let lastActivity: ActivitySignal = null
+    function setActivity(activity: ActivitySignal): void {
+      if (activity === lastActivity) return
+      lastActivity = activity
+      listeners.activity.forEach((cb) => cb(activity))
+    }
+
     function refreshContextWindowFromLogs(): void {
       if (!claudeSessionId) {
         return
@@ -216,6 +226,10 @@ export class ClaudeCodeProvider implements Provider {
     function handleEvent(data: unknown): void {
       if (stopped) return
       const event = data as ClaudeStreamEvent
+      const activityDelta = deriveClaudeActivity(data)
+      if (activityDelta !== 'keep') {
+        setActivity(activityDelta)
+      }
       if (event.session_id) {
         setContinuationToken(event.session_id)
       }
@@ -354,6 +368,7 @@ export class ClaudeCodeProvider implements Provider {
       emit({ type: 'user', text: message, timestamp: now() })
       setStatus('running')
       setAttention('none')
+      setActivity(null)
       setContextWindow(
         createUnavailableContextWindow(
           'Waiting for Claude turn usage. When available, Convergence will show an estimated context value because Claude headless mode does not expose exact live context telemetry yet.',
@@ -474,6 +489,9 @@ export class ClaudeCodeProvider implements Provider {
       },
       onContextWindowChange: (cb) => {
         listeners.contextWindow.push(cb)
+      },
+      onActivityChange: (cb) => {
+        listeners.activity.push(cb)
       },
       sendMessage: (text) => {
         startTurn(text)

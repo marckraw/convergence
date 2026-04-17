@@ -7,6 +7,7 @@ import type {
   SessionStatus,
   AttentionState,
   SessionContextWindow,
+  ActivitySignal,
   OneShotInput,
   OneShotResult,
 } from '../provider.types'
@@ -23,6 +24,11 @@ import type {
 } from '../provider.types'
 import { deriveCodexContextWindow } from '../context-window.pure'
 import { buildTurnFailureEntry } from './codex-errors.pure'
+import {
+  initialCodexActivityState,
+  reduceCodexActivity,
+  type CodexActivityState,
+} from './codex-activity.pure'
 
 function now(): string {
   return new Date().toISOString()
@@ -139,6 +145,7 @@ export class CodexProvider implements Provider {
       attention: [] as ((attention: AttentionState) => void)[],
       continuationToken: [] as ((token: string) => void)[],
       contextWindow: [] as ((contextWindow: SessionContextWindow) => void)[],
+      activity: [] as ((activity: ActivitySignal) => void)[],
     }
 
     let child: ChildProcess | null = null
@@ -176,6 +183,17 @@ export class CodexProvider implements Provider {
 
     function setContextWindow(contextWindow: SessionContextWindow): void {
       listeners.contextWindow.forEach((cb) => cb(contextWindow))
+    }
+
+    let activityState: CodexActivityState = initialCodexActivityState()
+    function applyActivity(
+      input: Parameters<typeof reduceCodexActivity>[1],
+    ): void {
+      const { state, activity } = reduceCodexActivity(activityState, input)
+      activityState = state
+      if (activity !== 'keep') {
+        listeners.activity.forEach((cb) => cb(activity))
+      }
     }
 
     function flushAssistantBuffer(): void {
@@ -323,6 +341,7 @@ export class CodexProvider implements Provider {
       // Handle notifications (no response needed)
       rpc.onNotification((method, params) => {
         if (stopped) return
+        applyActivity({ kind: 'notification', method, params })
         const p = params as Record<string, unknown>
 
         switch (method) {
@@ -487,6 +506,7 @@ export class CodexProvider implements Provider {
       // Handle server requests (need response — approvals)
       rpc.onServerRequest((method, params, id) => {
         if (stopped) return
+        applyActivity({ kind: 'request', method, params, requestId: id })
         const p = params as Record<string, unknown>
 
         if (
@@ -563,6 +583,7 @@ export class CodexProvider implements Provider {
       child.on('exit', (code) => {
         if (stopped) return
         flushAssistantBuffer()
+        applyActivity({ kind: 'close' })
         if (code !== 0 && code !== null) {
           emit({
             type: 'system',
@@ -615,6 +636,9 @@ export class CodexProvider implements Provider {
       },
       onContextWindowChange: (cb) => {
         listeners.contextWindow.push(cb)
+      },
+      onActivityChange: (cb) => {
+        listeners.activity.push(cb)
       },
       sendMessage: (text) => {
         if (stopped) return
