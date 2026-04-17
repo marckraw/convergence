@@ -36,6 +36,8 @@ describe('ProjectTree', () => {
           onArchiveSession={onArchiveSession}
           onUnarchiveSession={vi.fn()}
           onDeleteSession={vi.fn()}
+          onRenameSession={vi.fn()}
+          onRegenerateSessionName={vi.fn()}
           onDeleteWorkspace={vi.fn()}
           onCreateWorkspace={vi.fn()}
         />
@@ -84,6 +86,8 @@ describe('ProjectTree', () => {
           onArchiveSession={vi.fn()}
           onUnarchiveSession={onUnarchiveSession}
           onDeleteSession={vi.fn()}
+          onRenameSession={vi.fn()}
+          onRegenerateSessionName={vi.fn()}
           onDeleteWorkspace={vi.fn()}
           onCreateWorkspace={vi.fn()}
         />
@@ -124,6 +128,8 @@ describe('ProjectTree', () => {
           onArchiveSession={vi.fn()}
           onUnarchiveSession={vi.fn()}
           onDeleteSession={vi.fn()}
+          onRenameSession={vi.fn()}
+          onRegenerateSessionName={vi.fn()}
           onDeleteWorkspace={onDeleteWorkspace}
           onCreateWorkspace={vi.fn()}
         />

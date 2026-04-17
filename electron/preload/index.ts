@@ -16,6 +16,15 @@ contextBridge.exposeInMainWorld('electronAPI', {
     delete: (id: string) => ipcRenderer.invoke('project:delete', id),
     getActive: () => ipcRenderer.invoke('project:getActive'),
     setActive: (id: string) => ipcRenderer.invoke('project:setActive', id),
+    updateSettings: (
+      id: string,
+      settings: {
+        workspaceCreation: {
+          startStrategy: 'base-branch' | 'current-head'
+          baseBranchName: string | null
+        }
+      },
+    ) => ipcRenderer.invoke('project:updateSettings', id, settings),
   },
   dialog: {
     selectDirectory: () => ipcRenderer.invoke('dialog:selectDirectory'),
@@ -74,6 +83,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
     approve: (id: string) => ipcRenderer.invoke('session:approve', id),
     deny: (id: string) => ipcRenderer.invoke('session:deny', id),
     stop: (id: string) => ipcRenderer.invoke('session:stop', id),
+    rename: (id: string, name: string) =>
+      ipcRenderer.invoke('session:rename', id, name),
+    regenerateName: (id: string) =>
+      ipcRenderer.invoke('session:regenerateName', id),
     getNeedsYouDismissals: () =>
       ipcRenderer.invoke('session:getNeedsYouDismissals'),
     setNeedsYouDismissals: (dismissals: unknown) =>
@@ -118,6 +131,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
       defaultProviderId: string | null
       defaultModelId: string | null
       defaultEffortId: string | null
+      namingModelByProvider: Record<string, string>
     }) => ipcRenderer.invoke('appSettings:set', input),
     onUpdated: (callback: (settings: unknown) => void) => {
       const handler = (_event: unknown, settings: unknown) => callback(settings)

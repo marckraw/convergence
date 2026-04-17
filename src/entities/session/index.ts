@@ -9,6 +9,7 @@ export type {
   ProviderInfo,
   ProviderStatusInfo,
   SessionContextWindow,
+  ActivitySignal,
   ReasoningEffort,
   ProviderEffortOption,
   ProviderModelOption,
@@ -24,4 +25,7 @@ export type {
   ResolvedProviderSelection,
   StoredProviderDefaults,
 } from './provider-selection.pure'
-export { providerApi } from './session.api'
+export { selectGlobalStatus } from './session.selectors.pure'
+export type { GlobalStatus, ProjectActivity } from './session.selectors.pure'
+export { formatActivityLabel } from './session.activity.pure'
+export { providerApi, sessionApi } from './session.api'

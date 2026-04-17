@@ -53,6 +53,12 @@ export const sessionApi = {
 
   stop: (id: string): Promise<void> => window.electronAPI.session.stop(id),
 
+  rename: (id: string, name: string): Promise<void> =>
+    window.electronAPI.session.rename(id, name),
+
+  regenerateName: (id: string): Promise<void> =>
+    window.electronAPI.session.regenerateName(id),
+
   getNeedsYouDismissals: (): Promise<NeedsYouDismissals> =>
     window.electronAPI.session.getNeedsYouDismissals(),
 

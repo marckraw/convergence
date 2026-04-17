@@ -82,7 +82,7 @@ function primeStores(stored: {
     error: null,
   })
   useAppSettingsStore.setState({
-    settings: stored,
+    settings: { ...stored, namingModelByProvider: {} },
     isLoaded: true,
     isSaving: false,
     error: null,
@@ -128,6 +128,7 @@ describe('AppSettingsDialogContainer', () => {
         defaultProviderId: 'codex',
         defaultModelId: 'gpt-5.4',
         defaultEffortId: 'high',
+        namingModelByProvider: {},
       })
     })
   })
@@ -153,6 +154,7 @@ describe('AppSettingsDialogContainer', () => {
         defaultProviderId: 'claude-code',
         defaultModelId: 'sonnet',
         defaultEffortId: 'medium',
+        namingModelByProvider: {},
       })
     })
   })

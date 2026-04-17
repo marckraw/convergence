@@ -65,6 +65,7 @@ export function buildClaudeDescriptor(): ProviderDescriptor {
     vendorLabel: 'Anthropic',
     supportsContinuation: true,
     defaultModelId: 'sonnet',
+    fastModelId: 'haiku',
     modelOptions: [
       {
         id: 'sonnet',
@@ -120,6 +121,7 @@ export function buildFallbackCodexDescriptor(): ProviderDescriptor {
     vendorLabel: 'OpenAI',
     supportsContinuation: true,
     defaultModelId: 'gpt-5.4',
+    fastModelId: 'gpt-5.4-mini',
     modelOptions: [
       {
         id: 'gpt-5.4',

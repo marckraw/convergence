@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import type { Project } from './project.types'
 import { projectApi, dialogApi } from './project.api'
+import type { ProjectSettings } from './project-settings.pure'
 
 interface ProjectState {
   projects: Project[]
@@ -15,6 +16,10 @@ interface ProjectActions {
   createProject: () => Promise<void>
   deleteProject: (id: string) => Promise<void>
   setActiveProject: (id: string) => Promise<void>
+  updateProjectSettings: (
+    id: string,
+    settings: ProjectSettings,
+  ) => Promise<void>
   clearError: () => void
 }
 
@@ -98,6 +103,28 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
       set({
         error: err instanceof Error ? err.message : 'Failed to switch project',
       })
+    }
+  },
+
+  updateProjectSettings: async (id: string, settings: ProjectSettings) => {
+    try {
+      const updated = await projectApi.updateSettings(id, settings)
+      const { projects, activeProject } = get()
+
+      set({
+        projects: projects.map((project) =>
+          project.id === id ? updated : project,
+        ),
+        activeProject: activeProject?.id === id ? updated : activeProject,
+      })
+    } catch (err) {
+      set({
+        error:
+          err instanceof Error
+            ? err.message
+            : 'Failed to update project settings',
+      })
+      throw err
     }
   },
 

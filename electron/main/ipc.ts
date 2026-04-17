@@ -13,6 +13,7 @@ import type { AppSettingsInput } from '../backend/app-settings/app-settings.type
 import type { CreateProjectInput } from '../backend/project/project.types'
 import type { CreateWorkspaceInput } from '../backend/workspace/workspace.types'
 import type { CreateSessionInput } from '../backend/session/session.types'
+import type { ProjectSettings } from '../backend/project/project-settings.pure'
 
 interface IngestFileIpcInput {
   name: string
@@ -126,6 +127,12 @@ export function registerIpcHandlers(
     if (!project) throw new Error(`Project not found: ${id}`)
     stateService.set(ACTIVE_PROJECT_KEY, id)
   })
+
+  ipcMain.handle(
+    'project:updateSettings',
+    (_event, id: string, settings: ProjectSettings) =>
+      projectService.updateSettings(id, settings),
+  )
 
   // Dialog handlers
   ipcMain.handle('dialog:selectDirectory', async (event) => {
@@ -314,6 +321,14 @@ export function registerIpcHandlers(
 
   ipcMain.handle('session:stop', (_event, id: string) => {
     sessionService.stop(id)
+  })
+
+  ipcMain.handle('session:rename', (_event, id: string, name: string) => {
+    sessionService.rename(id, name)
+  })
+
+  ipcMain.handle('session:regenerateName', async (_event, id: string) => {
+    await sessionService.regenerateName(id)
   })
 
   // Provider handlers

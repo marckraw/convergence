@@ -1,5 +1,33 @@
 # convergence
 
+## 0.9.2
+
+### Patch Changes
+
+- 31608f5: New workspaces now branch from the project's configured base branch by default instead of inheriting whatever commit the source repository currently has checked out. Convergence also adds a project setting that lets you switch workspace creation back to the previous current-HEAD strategy and optionally pin the base branch name explicitly.
+
+## 0.9.1
+
+### Patch Changes
+
+- 8625781: Open external app links in the system browser instead of spawning a new Convergence window.
+
+## 0.9.0
+
+### Minor Changes
+
+- 8e0a1f7: Add a global status bar across the bottom of the app that surfaces agent activity across every project.
+  - Aggregate counters for running sessions and sessions that need the user, with a popover grouped by project.
+  - Per-project chips for projects with active or attention-needing sessions, clickable to switch project.
+  - Recency badge for the most recently completed or failed session.
+  - New `activity` signal on sessions (`streaming`, `thinking`, `tool:<name>`, `waiting-approval`, or `null`) derived from provider events for Claude Code, Codex, and Pi, persisted on the session row and shown per-session in the project popover.
+
+## 0.8.0
+
+### Minor Changes
+
+- 6e4d7bc: Automatically name sessions after the first assistant response using each provider's fast model, with inline rename and regenerate-name actions in the sidebar and a per-provider naming model picker in app settings.
+
 ## 0.7.0
 
 ### Minor Changes

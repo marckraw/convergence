@@ -2,10 +2,11 @@ import { useEffect } from 'react'
 import type { FC } from 'react'
 import { useProjectStore } from '@/entities/project'
 import { useWorkspaceStore } from '@/entities/workspace'
-import { useSessionStore, type Session } from '@/entities/session'
+import { sessionApi, useSessionStore, type Session } from '@/entities/session'
 import {
   AppSettingsDialogContainer,
   McpServersDialogContainer,
+  ProjectSettingsDialogContainer,
   ProviderStatusDialogContainer,
   ReleaseNotesDialogContainer,
   ThemeToggleButton,
@@ -227,6 +228,12 @@ export const Sidebar: FC<SidebarProps> = ({
             onDeleteSession={(sessionId: string) =>
               deleteSession(sessionId, activeProject.id)
             }
+            onRenameSession={(sessionId: string, name: string) =>
+              sessionApi.rename(sessionId, name).catch(() => undefined)
+            }
+            onRegenerateSessionName={(sessionId: string) =>
+              sessionApi.regenerateName(sessionId).catch(() => undefined)
+            }
             onDeleteWorkspace={handleDeleteWorkspace}
             onCreateWorkspace={(branchName: string) =>
               createWorkspace(activeProject.id, branchName)
@@ -251,6 +258,9 @@ export const Sidebar: FC<SidebarProps> = ({
           <Plus className="h-4 w-4" />
           {activeProject ? 'New Project' : 'Create Project'}
         </Button>
+        <div className="mt-2">
+          <ProjectSettingsDialogContainer />
+        </div>
         <div className="mt-2">
           <ProviderStatusDialogContainer />
         </div>

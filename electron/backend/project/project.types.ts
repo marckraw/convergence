@@ -1,4 +1,8 @@
 import type { ProjectRow } from '../database/database.types'
+import {
+  normalizeProjectSettings,
+  type ProjectSettings,
+} from './project-settings.pure'
 
 export interface Project {
   id: string
@@ -7,10 +11,6 @@ export interface Project {
   settings: ProjectSettings
   createdAt: string
   updatedAt: string
-}
-
-export interface ProjectSettings {
-  [key: string]: unknown
 }
 
 export interface CreateProjectInput {
@@ -23,7 +23,7 @@ export function projectFromRow(row: ProjectRow): Project {
     id: row.id,
     name: row.name,
     repositoryPath: row.repository_path,
-    settings: JSON.parse(row.settings) as ProjectSettings,
+    settings: normalizeProjectSettings(JSON.parse(row.settings) as unknown),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   }

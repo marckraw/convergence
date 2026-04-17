@@ -33,6 +33,15 @@ function execAllowExitCodes(
 }
 
 export class GitService {
+  private async refExists(repoPath: string, ref: string): Promise<boolean> {
+    try {
+      await exec('git', ['rev-parse', '--verify', ref], repoPath)
+      return true
+    } catch {
+      return false
+    }
+  }
+
   async getBranches(repoPath: string): Promise<string[]> {
     const output = await exec(
       'git',
@@ -48,16 +57,61 @@ export class GitService {
   }
 
   async branchExists(repoPath: string, branchName: string): Promise<boolean> {
-    try {
-      await exec(
-        'git',
-        ['rev-parse', '--verify', `refs/heads/${branchName}`],
-        repoPath,
-      )
-      return true
-    } catch {
-      return false
+    return this.refExists(repoPath, `refs/heads/${branchName}`)
+  }
+
+  async getDefaultBranch(repoPath: string): Promise<string> {
+    const remoteHead = await exec(
+      'git',
+      ['symbolic-ref', '--quiet', '--short', 'refs/remotes/origin/HEAD'],
+      repoPath,
+    )
+      .then((output) => output.replace(/^origin\//, ''))
+      .catch(() => null)
+
+    if (remoteHead) {
+      return remoteHead
     }
+
+    if (await this.branchExists(repoPath, 'master')) {
+      return 'master'
+    }
+
+    if (await this.branchExists(repoPath, 'main')) {
+      return 'main'
+    }
+
+    return this.getCurrentBranch(repoPath)
+  }
+
+  async resolveBaseBranchStartPoint(
+    repoPath: string,
+    preferredBaseBranchName: string | null,
+  ): Promise<string> {
+    const baseBranchName =
+      preferredBaseBranchName?.trim() || (await this.getDefaultBranch(repoPath))
+
+    const hasOrigin = await exec('git', ['remote'], repoPath)
+      .then((output) => output.split('\n').includes('origin'))
+      .catch(() => false)
+
+    if (hasOrigin) {
+      await exec('git', ['fetch', 'origin', baseBranchName], repoPath).catch(
+        () => {},
+      )
+
+      if (
+        await this.refExists(repoPath, `refs/remotes/origin/${baseBranchName}`)
+      ) {
+        return `origin/${baseBranchName}`
+      }
+    }
+
+    if (await this.branchExists(repoPath, baseBranchName)) {
+      return baseBranchName
+    }
+
+    throw new Error(`Base branch not found: ${baseBranchName}`)
   }
 
   async addWorktree(
@@ -65,10 +119,15 @@ export class GitService {
     worktreePath: string,
     branchName: string,
     createBranch: boolean,
+    startPoint?: string,
   ): Promise<void> {
     const args = createBranch
       ? ['worktree', 'add', worktreePath, '-b', branchName]
       : ['worktree', 'add', worktreePath, branchName]
+
+    if (createBranch && startPoint) {
+      args.push(startPoint)
+    }
 
     await exec('git', args, repoPath)
   }

@@ -21,6 +21,13 @@ export type ReasoningEffort =
   | 'max'
   | 'xhigh'
 
+export type ActivitySignal =
+  | null
+  | 'streaming'
+  | 'thinking'
+  | 'waiting-approval'
+  | `tool:${string}`
+
 export type ContextWindowSource = 'provider' | 'estimated'
 
 export type SessionContextWindow =
@@ -101,8 +108,20 @@ export interface ProviderDescriptor {
   vendorLabel: string
   supportsContinuation: boolean
   defaultModelId: string
+  fastModelId?: string | null
   modelOptions: ProviderModelOption[]
   attachments: ProviderAttachmentCapability
+}
+
+export interface OneShotInput {
+  prompt: string
+  modelId: string
+  workingDirectory: string
+  timeoutMs?: number
+}
+
+export interface OneShotResult {
+  text: string
 }
 
 export interface SessionHandle {
@@ -113,6 +132,7 @@ export interface SessionHandle {
   onContextWindowChange: (
     callback: (contextWindow: SessionContextWindow) => void,
   ) => void
+  onActivityChange: (callback: (activity: ActivitySignal) => void) => void
 
   sendMessage: (text: string, attachments?: Attachment[]) => void
   approve: () => void
@@ -126,4 +146,5 @@ export interface Provider {
   supportsContinuation: boolean
   describe: () => Promise<ProviderDescriptor>
   start: (config: SessionStartConfig) => SessionHandle
+  oneShot?: (input: OneShotInput) => Promise<OneShotResult>
 }

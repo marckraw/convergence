@@ -1,6 +1,7 @@
 import { spawn, type ChildProcess } from 'child_process'
 import { promises as fs } from 'fs'
 import type {
+  ActivitySignal,
   Attachment,
   AttentionState,
   Provider,
@@ -25,6 +26,12 @@ import {
 import { mapEffortToPiThinking, mapPiModels } from './pi-models.pure'
 import { probePiAvailableModels } from './pi-models.service'
 import { buildPiPromptPayload, type PiMessagePart } from './pi-message.pure'
+import {
+  initialPiActivityState,
+  reducePiActivity,
+  type PiActivityInput,
+  type PiActivityState,
+} from './pi-activity.pure'
 
 function now(): string {
   return new Date().toISOString()
@@ -69,6 +76,7 @@ export class PiProvider implements Provider {
       attention: [] as ((attention: AttentionState) => void)[],
       continuationToken: [] as ((token: string) => void)[],
       contextWindow: [] as ((contextWindow: SessionContextWindow) => void)[],
+      activity: [] as ((activity: ActivitySignal) => void)[],
     }
 
     let child: ChildProcess | null = null
@@ -99,6 +107,15 @@ export class PiProvider implements Provider {
     }
     function setContextWindow(window: SessionContextWindow): void {
       listeners.contextWindow.forEach((cb) => cb(window))
+    }
+
+    let activityState: PiActivityState = initialPiActivityState()
+    function applyActivity(input: PiActivityInput): void {
+      const { state, activity } = reducePiActivity(activityState, input)
+      activityState = state
+      if (activity !== 'keep') {
+        listeners.activity.forEach((cb) => cb(activity))
+      }
     }
     function flushText(): void {
       if (textBuffer) {
@@ -147,6 +164,12 @@ export class PiProvider implements Provider {
 
       if (deltaType === 'text_delta') {
         if (typeof event.delta === 'string') textBuffer += event.delta
+        applyActivity({ kind: 'text_delta' })
+        return
+      }
+
+      if (deltaType === 'thinking_delta') {
+        applyActivity({ kind: 'thinking_delta' })
         return
       }
 
@@ -162,6 +185,7 @@ export class PiProvider implements Provider {
         const id = typeof tc?.id === 'string' ? tc.id : null
         const name = typeof tc?.name === 'string' ? tc.name : 'tool'
         if (id) pendingToolCallArgs.set(id, { name, args: '' })
+        applyActivity({ kind: 'tool_start', name })
         return
       }
 
@@ -205,6 +229,7 @@ export class PiProvider implements Provider {
           isStreaming = true
           setStatus('running')
           setAttention('none')
+          applyActivity({ kind: 'agent_start' })
           void captureContinuationToken()
           break
 
@@ -225,16 +250,19 @@ export class PiProvider implements Provider {
             result: isError ? `Error: ${text}` : text,
             timestamp: now(),
           })
+          applyActivity({ kind: 'tool_end' })
           break
         }
 
         case 'turn_end':
           flushText()
+          applyActivity({ kind: 'turn_end' })
           void refreshContextWindow()
           break
 
         case 'agent_end': {
           flushText()
+          applyActivity({ kind: 'agent_end' })
           isStreaming = false
           const stopReason = extractLastAssistantStopReason(event)
           if (stopReason === 'aborted') {
@@ -437,6 +465,7 @@ export class PiProvider implements Provider {
       child.on('exit', (code) => {
         if (stopped) return
         flushText()
+        applyActivity({ kind: 'close' })
         if (code !== 0 && code !== null) {
           emit({
             type: 'system',
@@ -489,6 +518,9 @@ export class PiProvider implements Provider {
       },
       onContextWindowChange: (cb) => {
         listeners.contextWindow.push(cb)
+      },
+      onActivityChange: (cb) => {
+        listeners.activity.push(cb)
       },
       sendMessage: (text, attachments) => {
         if (stopped) return

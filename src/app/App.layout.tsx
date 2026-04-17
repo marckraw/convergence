@@ -2,6 +2,7 @@ import { useState, useCallback, useRef } from 'react'
 import type { FC } from 'react'
 import { Sidebar } from '@/widgets/sidebar'
 import { SessionView } from '@/widgets/session-view'
+import { GlobalStatusBar } from '@/widgets/global-status-bar'
 import { cn } from '@/shared/lib/cn.pure'
 
 interface AppShellProps {
@@ -56,39 +57,43 @@ export const AppShell: FC<AppShellProps> = ({
   }
 
   return (
-    <div className="app-chrome flex h-screen overflow-hidden text-foreground">
-      <div
-        className="app-sidebar-panel shrink-0 border-r border-white/10"
-        style={{ width: sidebarWidth }}
-      >
-        <Sidebar
-          onSelectSession={onSelectSession}
-          activeSessionId={activeSessionId}
+    <div className="app-chrome flex h-screen flex-col overflow-hidden text-foreground">
+      <div className="flex min-h-0 flex-1 overflow-hidden">
+        <div
+          className="app-sidebar-panel shrink-0 border-r border-white/10"
+          style={{ width: sidebarWidth }}
+        >
+          <Sidebar
+            onSelectSession={onSelectSession}
+            activeSessionId={activeSessionId}
+          />
+        </div>
+
+        <div
+          onMouseDown={handleMouseDown}
+          onDoubleClick={() => setSidebarWidth(DEFAULT_SIDEBAR)}
+          className={cn(
+            'app-resize-handle relative z-10 -mx-1.5 w-px shrink-0 cursor-col-resize border-x-[6px] border-x-transparent bg-clip-content transition-colors hover:bg-white/10',
+          )}
         />
+
+        <div className="app-main-panel min-w-0 flex-1">
+          {hasProject ? (
+            <SessionView />
+          ) : (
+            <div className="flex h-full flex-col items-center justify-center">
+              <h1 className="text-2xl font-bold tracking-tight">
+                Welcome to Convergence
+              </h1>
+              <p className="mt-2 text-sm text-muted-foreground">
+                Create a project to get started.
+              </p>
+            </div>
+          )}
+        </div>
       </div>
 
-      <div
-        onMouseDown={handleMouseDown}
-        onDoubleClick={() => setSidebarWidth(DEFAULT_SIDEBAR)}
-        className={cn(
-          'app-resize-handle relative z-10 -mx-1.5 w-px shrink-0 cursor-col-resize border-x-[6px] border-x-transparent bg-clip-content transition-colors hover:bg-white/10',
-        )}
-      />
-
-      <div className="app-main-panel min-w-0 flex-1">
-        {hasProject ? (
-          <SessionView />
-        ) : (
-          <div className="flex h-full flex-col items-center justify-center">
-            <h1 className="text-2xl font-bold tracking-tight">
-              Welcome to Convergence
-            </h1>
-            <p className="mt-2 text-sm text-muted-foreground">
-              Create a project to get started.
-            </p>
-          </div>
-        )}
-      </div>
+      <GlobalStatusBar />
     </div>
   )
 }
