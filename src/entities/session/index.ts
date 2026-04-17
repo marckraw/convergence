@@ -27,4 +27,4 @@ export type {
 export { selectGlobalStatus } from './session.selectors.pure'
 export type { GlobalStatus, ProjectActivity } from './session.selectors.pure'
 export { formatActivityLabel } from './session.activity.pure'
-export { providerApi } from './session.api'
+export { providerApi, sessionApi } from './session.api'

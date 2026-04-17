@@ -2,7 +2,7 @@ import { useEffect } from 'react'
 import type { FC } from 'react'
 import { useProjectStore } from '@/entities/project'
 import { useWorkspaceStore } from '@/entities/workspace'
-import { useSessionStore } from '@/entities/session'
+import { sessionApi, useSessionStore, type Session } from '@/entities/session'
 import {
   AppSettingsDialogContainer,
   McpServersDialogContainer,
@@ -20,6 +20,13 @@ import { Plus, Settings } from 'lucide-react'
 interface SidebarProps {
   onSelectSession: (id: string) => void
   activeSessionId: string | null
+}
+
+interface AttentionSession {
+  session: Session
+  projectName: string
+  summary: string
+  priority: number
 }
 
 export const Sidebar: FC<SidebarProps> = ({
@@ -41,6 +48,8 @@ export const Sidebar: FC<SidebarProps> = ({
   const needsYouDismissals = useSessionStore((s) => s.needsYouDismissals)
   const loadSessions = useSessionStore((s) => s.loadSessions)
   const loadGlobalSessions = useSessionStore((s) => s.loadGlobalSessions)
+  const archiveSession = useSessionStore((s) => s.archiveSession)
+  const unarchiveSession = useSessionStore((s) => s.unarchiveSession)
   const deleteSession = useSessionStore((s) => s.deleteSession)
   const dismissNeedsYouSession = useSessionStore(
     (s) => s.dismissNeedsYouSession,
@@ -60,8 +69,12 @@ export const Sidebar: FC<SidebarProps> = ({
     }
   }, [activeProject, loadWorkspaces, loadCurrentBranch, loadSessions])
 
-  const needsYouSessions = globalSessions
+  const attentionSessions = globalSessions
     .map((session) => {
+      if (session.archivedAt) {
+        return null
+      }
+
       const summary = buildNeedsYouSummary(session)
       if (!summary) {
         return null
@@ -82,7 +95,7 @@ export const Sidebar: FC<SidebarProps> = ({
         priority: summary.priority,
       }
     })
-    .filter((value) => value !== null)
+    .filter((value): value is AttentionSession => value !== null)
     .sort((left, right) => {
       if (left.priority !== right.priority) {
         return left.priority - right.priority
@@ -90,6 +103,16 @@ export const Sidebar: FC<SidebarProps> = ({
 
       return right.session.updatedAt.localeCompare(left.session.updatedAt)
     })
+
+  const waitingSessions = attentionSessions.filter(
+    ({ session }) =>
+      session.attention === 'needs-approval' ||
+      session.attention === 'needs-input',
+  )
+  const reviewSessions = attentionSessions.filter(
+    ({ session }) =>
+      session.attention === 'finished' || session.attention === 'failed',
+  )
 
   const handleSelectNeedsYouSession = async (sessionId: string) => {
     const targetSession = globalSessions.find(
@@ -171,13 +194,15 @@ export const Sidebar: FC<SidebarProps> = ({
 
       <div className="app-scrollbar flex-1 overflow-x-hidden overflow-y-auto py-3">
         <NeedsYou
-          sessions={needsYouSessions}
+          waitingSessions={waitingSessions}
+          reviewSessions={reviewSessions}
           activeSessionId={activeSessionId}
           onSelect={handleSelectNeedsYouSession}
           onDismiss={dismissNeedsYouSession}
+          onArchive={archiveSession}
         />
 
-        {needsYouSessions.length > 0 && (
+        {attentionSessions.length > 0 && (
           <div className="mx-3 mb-3 border-t border-border/50" />
         )}
 
@@ -197,8 +222,16 @@ export const Sidebar: FC<SidebarProps> = ({
             sessions={sessions}
             activeSessionId={activeSessionId}
             onSelectSession={onSelectSession}
+            onArchiveSession={archiveSession}
+            onUnarchiveSession={unarchiveSession}
             onDeleteSession={(sessionId: string) =>
               deleteSession(sessionId, activeProject.id)
+            }
+            onRenameSession={(sessionId: string, name: string) =>
+              sessionApi.rename(sessionId, name).catch(() => undefined)
+            }
+            onRegenerateSessionName={(sessionId: string) =>
+              sessionApi.regenerateName(sessionId).catch(() => undefined)
             }
             onDeleteWorkspace={handleDeleteWorkspace}
             onCreateWorkspace={(branchName: string) =>

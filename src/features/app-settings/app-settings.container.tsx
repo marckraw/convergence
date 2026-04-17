@@ -19,12 +19,15 @@ interface Draft {
 }
 
 const EMPTY_DRAFT: Draft = { providerId: '', modelId: '', effortId: '' }
+const EMPTY_NAMING_DRAFT: Record<string, string> = {}
 
 export const AppSettingsDialogContainer: FC<AppSettingsContainerProps> = ({
   trigger,
 }) => {
   const [open, setOpen] = useState(false)
   const [draft, setDraft] = useState<Draft>(EMPTY_DRAFT)
+  const [namingDraft, setNamingDraft] =
+    useState<Record<string, string>>(EMPTY_NAMING_DRAFT)
 
   const providers = useSessionStore((s) => s.providers)
   const loadProviders = useSessionStore((s) => s.loadProviders)
@@ -50,6 +53,7 @@ export const AppSettingsDialogContainer: FC<AppSettingsContainerProps> = ({
       modelId: settings.defaultModelId ?? '',
       effortId: settings.defaultEffortId ?? '',
     })
+    setNamingDraft({ ...settings.namingModelByProvider })
     clearError()
   }, [open, settings, clearError])
 
@@ -105,6 +109,13 @@ export const AppSettingsDialogContainer: FC<AppSettingsContainerProps> = ({
     [],
   )
 
+  const handleNamingModelChange = useCallback(
+    (providerId: string, modelId: string) => {
+      setNamingDraft((current) => ({ ...current, [providerId]: modelId }))
+    },
+    [],
+  )
+
   const handleRestoreDefaults = useCallback(() => {
     const fallback = resolveProviderSelection(providers, null, null, null)
     setDraft({
@@ -124,12 +135,13 @@ export const AppSettingsDialogContainer: FC<AppSettingsContainerProps> = ({
         defaultProviderId: selection.providerId || null,
         defaultModelId: selection.modelId || null,
         defaultEffortId: selection.effort?.id ?? null,
+        namingModelByProvider: namingDraft,
       })
       setOpen(false)
     } catch {
       // error already surfaced on store
     }
-  }, [saveSettings, selection])
+  }, [saveSettings, selection, namingDraft])
 
   return (
     <AppSettingsDialog
@@ -138,11 +150,13 @@ export const AppSettingsDialogContainer: FC<AppSettingsContainerProps> = ({
       trigger={trigger}
       providers={providers}
       selection={selection}
+      namingDraft={namingDraft}
       isSaving={isSaving}
       error={error}
       onProviderChange={handleProviderChange}
       onModelChange={handleModelChange}
       onEffortChange={handleEffortChange}
+      onNamingModelChange={handleNamingModelChange}
       onSave={handleSave}
       onCancel={handleCancel}
       onRestoreDefaults={handleRestoreDefaults}

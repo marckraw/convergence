@@ -8,6 +8,8 @@ const mockElectronAPI = {
     getByProjectId: vi.fn(),
     getById: vi.fn(),
     getNeedsYouDismissals: vi.fn().mockResolvedValue({}),
+    archive: vi.fn().mockResolvedValue(undefined),
+    unarchive: vi.fn().mockResolvedValue(undefined),
     delete: vi.fn(),
     start: vi.fn(),
     sendMessage: vi.fn(),
@@ -297,5 +299,53 @@ describe('useSessionStore', () => {
         disposition: 'acknowledged',
       },
     })
+  })
+
+  it('archives a session and clears any persisted dismissal', async () => {
+    useSessionStore.setState({
+      sessions: [],
+      globalSessions: [
+        {
+          id: 'session-2',
+          projectId: 'project-2',
+          workspaceId: null,
+          providerId: 'codex',
+          model: 'gpt-5.4',
+          effort: 'high',
+          name: 'Finished session',
+          status: 'completed',
+          attention: 'finished',
+          workingDirectory: '/tmp/project-2',
+          transcript: [],
+          createdAt: '2026-01-01T00:00:00.000Z',
+          updatedAt: '2026-01-01T00:00:00.000Z',
+        },
+      ],
+      needsYouDismissals: {
+        'session-2': {
+          updatedAt: '2026-01-01T00:00:00.000Z',
+          disposition: 'acknowledged',
+        },
+      },
+      currentProjectId: 'project-2',
+      activeSessionId: null,
+      draftWorkspaceId: null,
+      providers: [],
+      error: null,
+    })
+
+    await useSessionStore.getState().archiveSession('session-2')
+
+    expect(useSessionStore.getState().needsYouDismissals).toEqual({})
+    expect(mockElectronAPI.session.setNeedsYouDismissals).toHaveBeenCalledWith(
+      {},
+    )
+    expect(mockElectronAPI.session.archive).toHaveBeenCalledWith('session-2')
+  })
+
+  it('unarchives a session', async () => {
+    await useSessionStore.getState().unarchiveSession('session-2')
+
+    expect(mockElectronAPI.session.unarchive).toHaveBeenCalledWith('session-2')
   })
 })

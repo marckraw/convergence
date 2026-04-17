@@ -92,6 +92,7 @@ export interface Session {
   transcript: TranscriptEntry[]
   contextWindow?: SessionContextWindow | null
   activity?: ActivitySignal
+  archivedAt?: string | null
   createdAt: string
   updatedAt: string
 }
@@ -102,6 +103,7 @@ export interface ProviderInfo {
   vendorLabel: string
   supportsContinuation: boolean
   defaultModelId: string
+  fastModelId?: string | null
   modelOptions: ProviderModelOption[]
 }
 

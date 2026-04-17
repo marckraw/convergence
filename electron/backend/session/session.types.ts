@@ -31,6 +31,7 @@ export interface Session {
   transcript: TranscriptEntry[]
   contextWindow: SessionContextWindow | null
   activity: ActivitySignal
+  archivedAt: string | null
   createdAt: string
   updatedAt: string
 }
@@ -76,6 +77,7 @@ export function sessionFromRow(row: SessionRow): Session {
       ? (JSON.parse(row.context_window) as SessionContextWindow)
       : null,
     activity: parseActivity(row.activity),
+    archivedAt: row.archived_at,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   }

@@ -209,6 +209,14 @@ export function registerIpcHandlers(
     sessionService.getById(id),
   )
 
+  ipcMain.handle('session:archive', (_event, id: string) => {
+    sessionService.archive(id)
+  })
+
+  ipcMain.handle('session:unarchive', (_event, id: string) => {
+    sessionService.unarchive(id)
+  })
+
   ipcMain.handle('session:delete', (_event, id: string) => {
     sessionService.delete(id)
   })
@@ -231,6 +239,14 @@ export function registerIpcHandlers(
 
   ipcMain.handle('session:stop', (_event, id: string) => {
     sessionService.stop(id)
+  })
+
+  ipcMain.handle('session:rename', (_event, id: string, name: string) => {
+    sessionService.rename(id, name)
+  })
+
+  ipcMain.handle('session:regenerateName', async (_event, id: string) => {
+    await sessionService.regenerateName(id)
   })
 
   // Provider handlers

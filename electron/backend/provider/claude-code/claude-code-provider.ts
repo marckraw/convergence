@@ -8,6 +8,8 @@ import type {
   AttentionState,
   SessionContextWindow,
   ActivitySignal,
+  OneShotInput,
+  OneShotResult,
 } from '../provider.types'
 import { parseJsonLines } from '../line-parser'
 import { buildClaudeDescriptor } from '../provider-descriptor.pure'
@@ -57,6 +59,82 @@ interface ClaudeStreamEvent {
   model?: string
 }
 
+function runClaudeOneShot(
+  binaryPath: string,
+  input: OneShotInput,
+): Promise<OneShotResult> {
+  return new Promise((resolve, reject) => {
+    const args = [
+      '-p',
+      '--output-format',
+      'json',
+      '--dangerously-skip-permissions',
+      '--model',
+      input.modelId,
+    ]
+    const child = spawn(binaryPath, args, {
+      cwd: input.workingDirectory,
+      stdio: ['pipe', 'pipe', 'pipe'],
+      env: { ...process.env },
+    })
+
+    let stdout = ''
+    let stderr = ''
+    let settled = false
+
+    const timeout = setTimeout(() => {
+      if (settled) return
+      settled = true
+      child.kill('SIGTERM')
+      reject(new Error('claude oneShot timed out'))
+    }, input.timeoutMs ?? 20000)
+
+    child.stdout?.on('data', (chunk: Buffer) => {
+      stdout += chunk.toString()
+    })
+    child.stderr?.on('data', (chunk: Buffer) => {
+      stderr += chunk.toString()
+    })
+
+    child.on('error', (err) => {
+      if (settled) return
+      settled = true
+      clearTimeout(timeout)
+      reject(err)
+    })
+
+    child.on('exit', (code) => {
+      if (settled) return
+      settled = true
+      clearTimeout(timeout)
+      if (code !== 0) {
+        reject(
+          new Error(
+            `claude oneShot exited with code ${code}: ${stderr.trim() || 'no stderr'}`,
+          ),
+        )
+        return
+      }
+      try {
+        const parsed = JSON.parse(stdout) as { result?: unknown }
+        const text = typeof parsed.result === 'string' ? parsed.result : ''
+        resolve({ text })
+      } catch (err) {
+        reject(
+          err instanceof Error
+            ? err
+            : new Error('failed to parse claude oneShot output'),
+        )
+      }
+    })
+
+    if (child.stdin) {
+      child.stdin.write(input.prompt + '\n')
+      child.stdin.end()
+    }
+  })
+}
+
 export class ClaudeCodeProvider implements Provider {
   id = 'claude-code'
   name = 'Claude Code'
@@ -66,6 +144,10 @@ export class ClaudeCodeProvider implements Provider {
 
   async describe(): Promise<ProviderDescriptor> {
     return buildClaudeDescriptor()
+  }
+
+  async oneShot(input: OneShotInput): Promise<OneShotResult> {
+    return runClaudeOneShot(this.binaryPath, input)
   }
 
   start(config: SessionStartConfig): SessionHandle {

@@ -50,6 +50,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.invoke('session:getByProjectId', projectId),
     getAll: () => ipcRenderer.invoke('session:getAll'),
     getById: (id: string) => ipcRenderer.invoke('session:getById', id),
+    archive: (id: string) => ipcRenderer.invoke('session:archive', id),
+    unarchive: (id: string) => ipcRenderer.invoke('session:unarchive', id),
     delete: (id: string) => ipcRenderer.invoke('session:delete', id),
     start: (id: string, message: string) =>
       ipcRenderer.invoke('session:start', id, message),
@@ -58,6 +60,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
     approve: (id: string) => ipcRenderer.invoke('session:approve', id),
     deny: (id: string) => ipcRenderer.invoke('session:deny', id),
     stop: (id: string) => ipcRenderer.invoke('session:stop', id),
+    rename: (id: string, name: string) =>
+      ipcRenderer.invoke('session:rename', id, name),
+    regenerateName: (id: string) =>
+      ipcRenderer.invoke('session:regenerateName', id),
     getNeedsYouDismissals: () =>
       ipcRenderer.invoke('session:getNeedsYouDismissals'),
     setNeedsYouDismissals: (dismissals: unknown) =>
@@ -84,6 +90,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
       defaultProviderId: string | null
       defaultModelId: string | null
       defaultEffortId: string | null
+      namingModelByProvider: Record<string, string>
     }) => ipcRenderer.invoke('appSettings:set', input),
     onUpdated: (callback: (settings: unknown) => void) => {
       const handler = (_event: unknown, settings: unknown) => callback(settings)
