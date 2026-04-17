@@ -15,6 +15,7 @@ import {
 } from '@/shared/ui/dialog'
 import { Button } from '@/shared/ui/button'
 import { SessionDefaultsFields } from './session-defaults.presentational'
+import { NamingModelDefaultsFields } from './naming-model-defaults.presentational'
 
 interface AppSettingsDialogProps {
   open: boolean
@@ -22,11 +23,13 @@ interface AppSettingsDialogProps {
   trigger: ReactNode
   providers: ProviderInfo[]
   selection: ResolvedProviderSelection
+  namingDraft: Record<string, string>
   isSaving: boolean
   error: string | null
   onProviderChange: (id: string) => void
   onModelChange: (id: string) => void
   onEffortChange: (id: ReasoningEffort | '') => void
+  onNamingModelChange: (providerId: string, modelId: string) => void
   onSave: () => void
   onCancel: () => void
   onRestoreDefaults: () => void
@@ -38,11 +41,13 @@ export const AppSettingsDialog: FC<AppSettingsDialogProps> = ({
   trigger,
   providers,
   selection,
+  namingDraft,
   isSaving,
   error,
   onProviderChange,
   onModelChange,
   onEffortChange,
+  onNamingModelChange,
   onSave,
   onCancel,
   onRestoreDefaults,
@@ -77,6 +82,19 @@ export const AppSettingsDialog: FC<AppSettingsDialogProps> = ({
             />
           )}
         </section>
+
+        {providers.length > 0 && (
+          <section className="space-y-3">
+            <h3 className="text-xs font-semibold tracking-wide uppercase text-muted-foreground">
+              Session naming
+            </h3>
+            <NamingModelDefaultsFields
+              providers={providers}
+              namingDraft={namingDraft}
+              onNamingModelChange={onNamingModelChange}
+            />
+          </section>
+        )}
 
         {error && (
           <p className="text-xs text-destructive" role="alert">

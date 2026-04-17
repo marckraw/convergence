@@ -15,14 +15,64 @@ import {
   type CreateSessionInput,
 } from './session.types'
 
+export interface SessionNamer {
+  generateName(session: Session): Promise<string | null>
+}
+
 export class SessionService {
   private activeHandles = new Map<string, SessionHandle>()
   private onUpdate: ((session: Session) => void) | null = null
+  private namer: SessionNamer | null = null
 
   constructor(
     private db: Database.Database,
     private providers: ProviderRegistry,
   ) {}
+
+  setNamer(namer: SessionNamer): void {
+    this.namer = namer
+  }
+
+  rename(id: string, name: string): Session {
+    const trimmed = name.trim()
+    if (!trimmed || trimmed.length > 120) {
+      throw new Error('Session name must be 1-120 characters')
+    }
+    const session = this.getById(id)
+    if (!session) throw new Error(`Session not found: ${id}`)
+    this.db
+      .prepare(
+        "UPDATE sessions SET name = ?, name_auto_generated = 1, updated_at = datetime('now') WHERE id = ?",
+      )
+      .run(trimmed, id)
+    this.notifyUpdate(id)
+    return this.getById(id)!
+  }
+
+  async regenerateName(id: string): Promise<void> {
+    const session = this.getById(id)
+    if (!session) throw new Error(`Session not found: ${id}`)
+    await this.runNaming(session)
+  }
+
+  private async runNaming(session: Session): Promise<void> {
+    if (!this.namer) return
+    const title = await this.namer.generateName(session)
+    if (!title) return
+    this.db
+      .prepare(
+        "UPDATE sessions SET name = ?, name_auto_generated = 1, updated_at = datetime('now') WHERE id = ?",
+      )
+      .run(title, session.id)
+    this.notifyUpdate(session.id)
+  }
+
+  private hasBeenAutoNamed(id: string): boolean {
+    const row = this.db
+      .prepare('SELECT name_auto_generated FROM sessions WHERE id = ?')
+      .get(id) as { name_auto_generated: number } | undefined
+    return (row?.name_auto_generated ?? 0) === 1
+  }
 
   setUpdateListener(listener: (session: Session) => void): void {
     this.onUpdate = listener
@@ -187,6 +237,9 @@ export class SessionService {
     if (!row) return
 
     const transcript = JSON.parse(row.transcript) as TranscriptEntry[]
+    const priorAssistantCount = transcript.filter(
+      (item) => item.type === 'assistant',
+    ).length
     transcript.push(entry)
 
     this.db
@@ -196,6 +249,19 @@ export class SessionService {
       .run(JSON.stringify(transcript), id)
 
     this.notifyUpdate(id)
+
+    if (
+      entry.type === 'assistant' &&
+      priorAssistantCount === 0 &&
+      !this.hasBeenAutoNamed(id)
+    ) {
+      const session = this.getById(id)
+      if (session) {
+        void this.runNaming(session).catch(() => {
+          // Naming failures are silent per spec.
+        })
+      }
+    }
   }
 
   private updateField(id: string, field: string, value: string | null): void {

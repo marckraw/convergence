@@ -23,4 +23,4 @@ export type {
   ResolvedProviderSelection,
   StoredProviderDefaults,
 } from './provider-selection.pure'
-export { providerApi } from './session.api'
+export { providerApi, sessionApi } from './session.api'

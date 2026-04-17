@@ -14,6 +14,7 @@ import { PiProvider } from '../backend/provider/pi/pi-provider'
 import { detectProviders } from '../backend/provider/detect'
 import { McpService } from '../backend/mcp/mcp.service'
 import { AppSettingsService } from '../backend/app-settings/app-settings.service'
+import { SessionNamingService } from '../backend/session/naming/session-naming.service'
 import { hydrateProcessPathFromShell } from '../backend/environment/shell-path.service'
 import { registerIpcHandlers } from './ipc'
 import { getWindowAppearanceOptions } from './window-effects.pure'
@@ -95,6 +96,12 @@ async function startApp(): Promise<void> {
   const appSettingsService = new AppSettingsService(stateService, async () =>
     Promise.all(providerRegistry.getAll().map((p) => p.describe())),
   )
+
+  const namingService = new SessionNamingService({
+    providers: providerRegistry,
+    appSettings: appSettingsService,
+  })
+  sessionService.setNamer(namingService)
 
   registerIpcHandlers(
     projectService,

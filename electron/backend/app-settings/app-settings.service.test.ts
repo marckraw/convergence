@@ -83,6 +83,7 @@ describe('AppSettingsService', () => {
         defaultProviderId: null,
         defaultModelId: null,
         defaultEffortId: null,
+        namingModelByProvider: {},
       })
     })
 
@@ -91,12 +92,14 @@ describe('AppSettingsService', () => {
         defaultProviderId: 'codex',
         defaultModelId: 'gpt-5.4',
         defaultEffortId: 'high',
+        namingModelByProvider: {},
       })
       const settings = await service.getAppSettings()
       expect(settings).toEqual({
         defaultProviderId: 'codex',
         defaultModelId: 'gpt-5.4',
         defaultEffortId: 'high',
+        namingModelByProvider: {},
       })
     })
 
@@ -114,6 +117,7 @@ describe('AppSettingsService', () => {
         defaultProviderId: null,
         defaultModelId: null,
         defaultEffortId: null,
+        namingModelByProvider: {},
       })
     })
 
@@ -131,6 +135,7 @@ describe('AppSettingsService', () => {
         defaultProviderId: 'claude-code',
         defaultModelId: null,
         defaultEffortId: null,
+        namingModelByProvider: {},
       })
     })
 
@@ -148,6 +153,7 @@ describe('AppSettingsService', () => {
         defaultProviderId: 'claude-code',
         defaultModelId: 'sonnet',
         defaultEffortId: null,
+        namingModelByProvider: {},
       })
     })
 
@@ -158,6 +164,7 @@ describe('AppSettingsService', () => {
         defaultProviderId: null,
         defaultModelId: null,
         defaultEffortId: null,
+        namingModelByProvider: {},
       })
     })
   })
@@ -169,6 +176,7 @@ describe('AppSettingsService', () => {
           defaultProviderId: 'ghost',
           defaultModelId: null,
           defaultEffortId: null,
+          namingModelByProvider: {},
         }),
       ).rejects.toThrow(/Unknown provider id/)
     })
@@ -208,6 +216,7 @@ describe('AppSettingsService', () => {
         defaultProviderId: null,
         defaultModelId: null,
         defaultEffortId: null,
+        namingModelByProvider: {},
       })
     })
 

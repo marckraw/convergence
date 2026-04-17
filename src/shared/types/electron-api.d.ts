@@ -131,6 +131,7 @@ interface ProviderInfo {
   vendorLabel: string
   supportsContinuation: boolean
   defaultModelId: string
+  fastModelId?: string | null
   modelOptions: ProviderModelOption[]
 }
 
@@ -191,6 +192,8 @@ interface ElectronAPI {
     approve: (id: string) => Promise<void>
     deny: (id: string) => Promise<void>
     stop: (id: string) => Promise<void>
+    rename: (id: string, name: string) => Promise<void>
+    regenerateName: (id: string) => Promise<void>
     getNeedsYouDismissals: () => Promise<NeedsYouDismissals>
     setNeedsYouDismissals: (dismissals: NeedsYouDismissals) => Promise<void>
     onSessionUpdate: (callback: (session: SessionData) => void) => () => void
@@ -213,6 +216,7 @@ interface AppSettingsData {
   defaultProviderId: string | null
   defaultModelId: string | null
   defaultEffortId: ReasoningEffort | null
+  namingModelByProvider: Record<string, string>
 }
 
 declare global {

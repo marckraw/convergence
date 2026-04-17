@@ -7,6 +7,8 @@ import type {
   SessionStatus,
   AttentionState,
   SessionContextWindow,
+  OneShotInput,
+  OneShotResult,
 } from '../provider.types'
 import { JsonRpcClient } from './jsonrpc'
 import {
@@ -26,6 +28,87 @@ function now(): string {
   return new Date().toISOString()
 }
 
+function runCodexOneShot(
+  binaryPath: string,
+  input: OneShotInput,
+): Promise<OneShotResult> {
+  return new Promise((resolve, reject) => {
+    const args = [
+      'exec',
+      '--skip-git-repo-check',
+      '--model',
+      input.modelId,
+      input.prompt,
+    ]
+    const child = spawn(binaryPath, args, {
+      cwd: input.workingDirectory,
+      stdio: ['ignore', 'pipe', 'pipe'],
+      env: { ...process.env },
+    })
+
+    let stdout = ''
+    let stderr = ''
+    let settled = false
+
+    const timeout = setTimeout(() => {
+      if (settled) return
+      settled = true
+      child.kill('SIGTERM')
+      reject(new Error('codex oneShot timed out'))
+    }, input.timeoutMs ?? 20000)
+
+    child.stdout?.on('data', (chunk: Buffer) => {
+      stdout += chunk.toString()
+    })
+    child.stderr?.on('data', (chunk: Buffer) => {
+      stderr += chunk.toString()
+    })
+
+    child.on('error', (err) => {
+      if (settled) return
+      settled = true
+      clearTimeout(timeout)
+      reject(err)
+    })
+
+    child.on('exit', (code) => {
+      if (settled) return
+      settled = true
+      clearTimeout(timeout)
+      if (code !== 0) {
+        reject(
+          new Error(
+            `codex oneShot exited with code ${code}: ${stderr.trim() || 'no stderr'}`,
+          ),
+        )
+        return
+      }
+      resolve({ text: extractCodexExecText(stdout) })
+    })
+  })
+}
+
+function extractCodexExecText(raw: string): string {
+  const trimmed = raw.trim()
+  if (!trimmed) return ''
+
+  const lines = trimmed.split(/\r?\n/)
+  const lastMarkerIndex = lines
+    .map((line, index) => ({ line, index }))
+    .filter(({ line }) => /^\s*\[.*codex\s*\]\s*$/i.test(line))
+    .map(({ index }) => index)
+    .pop()
+
+  if (lastMarkerIndex !== undefined) {
+    return lines
+      .slice(lastMarkerIndex + 1)
+      .join('\n')
+      .trim()
+  }
+
+  return trimmed
+}
+
 export class CodexProvider implements Provider {
   id = 'codex'
   name = 'Codex'
@@ -42,6 +125,10 @@ export class CodexProvider implements Provider {
     }
 
     return this.descriptorPromise
+  }
+
+  async oneShot(input: OneShotInput): Promise<OneShotResult> {
+    return runCodexOneShot(this.binaryPath, input)
   }
 
   start(config: SessionStartConfig): SessionHandle {

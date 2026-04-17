@@ -13,11 +13,23 @@ export const APP_SETTINGS_KEY = 'app_settings'
 
 type ProviderDescriptorLoader = () => Promise<ProviderDescriptor[]>
 
+function parseNamingMap(value: unknown): Record<string, string> {
+  if (!value || typeof value !== 'object') return {}
+  const entries = Object.entries(value as Record<string, unknown>).flatMap(
+    ([providerId, modelId]) =>
+      typeof modelId === 'string' && modelId.length > 0
+        ? [[providerId, modelId] as const]
+        : [],
+  )
+  return Object.fromEntries(entries)
+}
+
 function parse(raw: string | null): AppSettings {
   const empty: AppSettings = {
     defaultProviderId: null,
     defaultModelId: null,
     defaultEffortId: null,
+    namingModelByProvider: {},
   }
 
   if (!raw) return empty
@@ -37,16 +49,41 @@ function parse(raw: string | null): AppSettings {
         typeof parsed.defaultEffortId === 'string'
           ? (parsed.defaultEffortId as ReasoningEffort)
           : null,
+      namingModelByProvider: parseNamingMap(parsed.namingModelByProvider),
     }
   } catch {
     return empty
   }
 }
 
+function validateNamingMap(
+  map: Record<string, string>,
+  descriptors: ProviderDescriptor[],
+): Record<string, string> {
+  const byId = new Map(
+    descriptors.map((descriptor) => [descriptor.id, descriptor]),
+  )
+  const validated: Record<string, string> = {}
+  for (const [providerId, modelId] of Object.entries(map)) {
+    const descriptor = byId.get(providerId)
+    if (!descriptor) continue
+    const hasModel = descriptor.modelOptions.some(
+      (option) => option.id === modelId,
+    )
+    if (hasModel) validated[providerId] = modelId
+  }
+  return validated
+}
+
 function validateAgainst(
   settings: AppSettings,
   descriptors: ProviderDescriptor[],
 ): AppSettings {
+  const namingModelByProvider = validateNamingMap(
+    settings.namingModelByProvider,
+    descriptors,
+  )
+
   const provider = descriptors.find(
     (item) => item.id === settings.defaultProviderId,
   )
@@ -55,6 +92,7 @@ function validateAgainst(
       defaultProviderId: null,
       defaultModelId: null,
       defaultEffortId: null,
+      namingModelByProvider,
     }
   }
 
@@ -66,6 +104,7 @@ function validateAgainst(
       defaultProviderId: provider.id,
       defaultModelId: null,
       defaultEffortId: null,
+      namingModelByProvider,
     }
   }
 
@@ -76,6 +115,7 @@ function validateAgainst(
     defaultProviderId: provider.id,
     defaultModelId: model.id,
     defaultEffortId: effort ? effort.id : null,
+    namingModelByProvider,
   }
 }
 
@@ -125,15 +165,44 @@ export class AppSettingsService {
       }
     }
 
+    const namingModelByProvider = validateNamingMap(
+      input.namingModelByProvider ?? {},
+      descriptors,
+    )
+
     const toStore: AppSettings = {
       defaultProviderId: provider ? provider.id : null,
       defaultModelId: model ? model.id : null,
       defaultEffortId:
         model && input.defaultEffortId !== null ? input.defaultEffortId : null,
+      namingModelByProvider,
     }
 
     this.stateService.set(APP_SETTINGS_KEY, JSON.stringify(toStore))
     return toStore
+  }
+
+  async resolveNamingModel(providerId: string): Promise<string | null> {
+    const descriptors = await this.loadDescriptors()
+    const descriptor = descriptors.find((item) => item.id === providerId)
+    if (!descriptor) return null
+
+    const stored = validateAgainst(
+      parse(this.stateService.get(APP_SETTINGS_KEY)),
+      descriptors,
+    )
+
+    const override = stored.namingModelByProvider[providerId]
+    if (override) return override
+
+    if (descriptor.fastModelId) {
+      const exists = descriptor.modelOptions.some(
+        (option) => option.id === descriptor.fastModelId,
+      )
+      if (exists) return descriptor.fastModelId
+    }
+
+    return descriptor.defaultModelId ?? null
   }
 
   async resolveSessionDefaults(): Promise<ResolvedSessionDefaults | null> {
