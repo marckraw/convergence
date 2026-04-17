@@ -1,5 +1,11 @@
 # convergence
 
+## 0.8.0
+
+### Minor Changes
+
+- 6e4d7bc: Automatically name sessions after the first assistant response using each provider's fast model, with inline rename and regenerate-name actions in the sidebar and a per-provider naming model picker in app settings.
+
 ## 0.7.0
 
 ### Minor Changes
