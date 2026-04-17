@@ -245,8 +245,12 @@ export function registerIpcHandlers(
 
   ipcMain.handle(
     'session:start',
-    (_event, id: string, input: { text: string; attachmentIds?: string[] }) => {
-      sessionService.start(id, {
+    async (
+      _event,
+      id: string,
+      input: { text: string; attachmentIds?: string[] },
+    ) => {
+      await sessionService.start(id, {
         text: input.text,
         attachmentIds: input.attachmentIds,
       })
@@ -255,8 +259,12 @@ export function registerIpcHandlers(
 
   ipcMain.handle(
     'session:sendMessage',
-    (_event, id: string, input: { text: string; attachmentIds?: string[] }) => {
-      sessionService.sendMessage(id, {
+    async (
+      _event,
+      id: string,
+      input: { text: string; attachmentIds?: string[] },
+    ) => {
+      await sessionService.sendMessage(id, {
         text: input.text,
         attachmentIds: input.attachmentIds,
       })
