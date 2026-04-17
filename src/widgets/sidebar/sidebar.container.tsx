@@ -6,6 +6,7 @@ import { sessionApi, useSessionStore, type Session } from '@/entities/session'
 import {
   AppSettingsDialogContainer,
   McpServersDialogContainer,
+  ProjectSettingsDialogContainer,
   ProviderStatusDialogContainer,
   ReleaseNotesDialogContainer,
   ThemeToggleButton,
@@ -257,6 +258,9 @@ export const Sidebar: FC<SidebarProps> = ({
           <Plus className="h-4 w-4" />
           {activeProject ? 'New Project' : 'Create Project'}
         </Button>
+        <div className="mt-2">
+          <ProjectSettingsDialogContainer />
+        </div>
         <div className="mt-2">
           <ProviderStatusDialogContainer />
         </div>

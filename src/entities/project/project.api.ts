@@ -1,4 +1,5 @@
 import type { Project } from './project.types'
+import type { ProjectSettings } from './project-settings.pure'
 
 export const projectApi = {
   create: (input: {
@@ -18,6 +19,9 @@ export const projectApi = {
 
   setActive: (id: string): Promise<void> =>
     window.electronAPI.project.setActive(id),
+
+  updateSettings: (id: string, settings: ProjectSettings): Promise<Project> =>
+    window.electronAPI.project.updateSettings(id, settings),
 }
 
 export const dialogApi = {

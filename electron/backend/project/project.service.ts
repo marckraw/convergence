@@ -5,6 +5,11 @@ import type Database from 'better-sqlite3'
 import type { ProjectRow } from '../database/database.types'
 import type { WorkspaceService } from '../workspace/workspace.service'
 import {
+  DEFAULT_PROJECT_SETTINGS,
+  normalizeProjectSettings,
+  type ProjectSettings,
+} from './project-settings.pure'
+import {
   projectFromRow,
   type Project,
   type CreateProjectInput,
@@ -36,9 +41,9 @@ export class ProjectService {
     this.db
       .prepare(
         `INSERT INTO projects (id, name, repository_path, settings)
-         VALUES (?, ?, ?, '{}')`,
+         VALUES (?, ?, ?, ?)`,
       )
-      .run(id, name, resolvedPath)
+      .run(id, name, resolvedPath, JSON.stringify(DEFAULT_PROJECT_SETTINGS))
 
     const row = this.db
       .prepare('SELECT * FROM projects WHERE id = ?')
@@ -61,6 +66,32 @@ export class ProjectService {
       .get(id) as ProjectRow | undefined
 
     return row ? projectFromRow(row) : null
+  }
+
+  updateSettings(id: string, settings: ProjectSettings): Project {
+    const existing = this.db
+      .prepare('SELECT * FROM projects WHERE id = ?')
+      .get(id) as ProjectRow | undefined
+
+    if (!existing) {
+      throw new Error(`Project not found: ${id}`)
+    }
+
+    const normalizedSettings = normalizeProjectSettings(settings)
+
+    this.db
+      .prepare(
+        `UPDATE projects
+         SET settings = ?, updated_at = datetime('now')
+         WHERE id = ?`,
+      )
+      .run(JSON.stringify(normalizedSettings), id)
+
+    const updated = this.db
+      .prepare('SELECT * FROM projects WHERE id = ?')
+      .get(id) as ProjectRow
+
+    return projectFromRow(updated)
   }
 
   getByRepositoryPath(repositoryPath: string): Project | null {

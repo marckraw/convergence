@@ -1,11 +1,12 @@
 import { describe, expect, it, beforeEach, vi } from 'vitest'
 import { useProjectStore } from './project.model'
+import { DEFAULT_PROJECT_SETTINGS } from './project-settings.pure'
 
 const mockProject = {
   id: '1',
   name: 'test-repo',
   repositoryPath: '/tmp/test-repo',
-  settings: {},
+  settings: DEFAULT_PROJECT_SETTINGS,
   createdAt: '2026-01-01T00:00:00.000Z',
   updatedAt: '2026-01-01T00:00:00.000Z',
 }
@@ -18,6 +19,7 @@ const mockElectronAPI = {
     delete: vi.fn(),
     getActive: vi.fn(),
     setActive: vi.fn(),
+    updateSettings: vi.fn(),
   },
   dialog: {
     selectDirectory: vi.fn(),
@@ -135,5 +137,36 @@ describe('useProjectStore', () => {
     useProjectStore.setState({ error: 'some error' })
     useProjectStore.getState().clearError()
     expect(useProjectStore.getState().error).toBeNull()
+  })
+
+  it('updateProjectSettings updates the active project and project list', async () => {
+    const updatedProject = {
+      ...mockProject,
+      settings: {
+        workspaceCreation: {
+          startStrategy: 'current-head' as const,
+          baseBranchName: 'master',
+        },
+      },
+    }
+
+    useProjectStore.setState({
+      projects: [mockProject],
+      activeProject: mockProject,
+      loading: false,
+      error: null,
+    })
+
+    mockElectronAPI.project.updateSettings.mockResolvedValue(updatedProject)
+
+    await useProjectStore.getState().updateProjectSettings(updatedProject.id, {
+      workspaceCreation: {
+        startStrategy: 'current-head',
+        baseBranchName: 'master',
+      },
+    })
+
+    expect(useProjectStore.getState().activeProject).toEqual(updatedProject)
+    expect(useProjectStore.getState().projects).toEqual([updatedProject])
   })
 })

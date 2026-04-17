@@ -4,9 +4,20 @@ interface ProjectData {
   id: string
   name: string
   repositoryPath: string
-  settings: Record<string, unknown>
+  settings: ProjectSettings
   createdAt: string
   updatedAt: string
+}
+
+type WorkspaceStartStrategy = 'base-branch' | 'current-head'
+
+interface WorkspaceCreationSettings {
+  startStrategy: WorkspaceStartStrategy
+  baseBranchName: string | null
+}
+
+interface ProjectSettings {
+  workspaceCreation: WorkspaceCreationSettings
 }
 
 interface CreateProjectInput {
@@ -162,6 +173,10 @@ interface ElectronAPI {
     delete: (id: string) => Promise<void>
     getActive: () => Promise<ProjectData | null>
     setActive: (id: string) => Promise<void>
+    updateSettings: (
+      id: string,
+      settings: ProjectSettings,
+    ) => Promise<ProjectData>
   }
   dialog: {
     selectDirectory: () => Promise<string | null>

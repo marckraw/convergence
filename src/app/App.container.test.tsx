@@ -4,6 +4,7 @@ import { useProjectStore } from '@/entities/project'
 import { useWorkspaceStore } from '@/entities/workspace'
 import { useSessionStore } from '@/entities/session'
 import { App } from './App.container'
+import { DEFAULT_PROJECT_SETTINGS } from '@/entities/project'
 
 vi.mock('sonner', () => ({
   Toaster: () => null,
@@ -14,7 +15,7 @@ const mockProject = {
   id: '1',
   name: 'my-project',
   repositoryPath: '/tmp/my-project',
-  settings: {},
+  settings: DEFAULT_PROJECT_SETTINGS,
   createdAt: '2026-01-01T00:00:00.000Z',
   updatedAt: '2026-01-01T00:00:00.000Z',
 }
@@ -33,6 +34,7 @@ const mockElectronAPI = {
     delete: vi.fn(),
     getActive: vi.fn(),
     setActive: vi.fn(),
+    updateSettings: vi.fn(),
   },
   dialog: { selectDirectory: vi.fn() },
   workspace: {

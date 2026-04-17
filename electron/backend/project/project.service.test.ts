@@ -4,6 +4,7 @@ import { join } from 'path'
 import { tmpdir } from 'os'
 import { getDatabase, closeDatabase, resetDatabase } from '../database/database'
 import { ProjectService } from './project.service'
+import { DEFAULT_PROJECT_SETTINGS } from './project-settings.pure'
 
 describe('ProjectService', () => {
   let service: ProjectService
@@ -32,7 +33,7 @@ describe('ProjectService', () => {
     expect(project.id).toBeDefined()
     expect(project.name).toBe('my-repo')
     expect(project.repositoryPath).toBe(gitRepoPath)
-    expect(project.settings).toEqual({})
+    expect(project.settings).toEqual(DEFAULT_PROJECT_SETTINGS)
     expect(project.createdAt).toBeDefined()
   })
 
@@ -99,5 +100,23 @@ describe('ProjectService', () => {
 
     const found = service.getById(created.id)
     expect(found).toBeNull()
+  })
+
+  it('updates project settings', () => {
+    const created = service.create({ repositoryPath: gitRepoPath })
+
+    const updated = service.updateSettings(created.id, {
+      workspaceCreation: {
+        startStrategy: 'current-head',
+        baseBranchName: 'develop',
+      },
+    })
+
+    expect(updated.settings).toEqual({
+      workspaceCreation: {
+        startStrategy: 'current-head',
+        baseBranchName: 'develop',
+      },
+    })
   })
 })

@@ -16,6 +16,15 @@ contextBridge.exposeInMainWorld('electronAPI', {
     delete: (id: string) => ipcRenderer.invoke('project:delete', id),
     getActive: () => ipcRenderer.invoke('project:getActive'),
     setActive: (id: string) => ipcRenderer.invoke('project:setActive', id),
+    updateSettings: (
+      id: string,
+      settings: {
+        workspaceCreation: {
+          startStrategy: 'base-branch' | 'current-head'
+          baseBranchName: string | null
+        }
+      },
+    ) => ipcRenderer.invoke('project:updateSettings', id, settings),
   },
   dialog: {
     selectDirectory: () => ipcRenderer.invoke('dialog:selectDirectory'),

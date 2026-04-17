@@ -3,6 +3,7 @@ import { randomUUID } from 'crypto'
 import type Database from 'better-sqlite3'
 import type { WorkspaceRow } from '../database/database.types'
 import { GitService } from '../git/git.service'
+import { normalizeProjectSettings } from '../project/project-settings.pure'
 import {
   workspaceFromRow,
   type Workspace,
@@ -18,24 +19,36 @@ export class WorkspaceService {
 
   async create(input: CreateWorkspaceInput): Promise<Workspace> {
     const project = this.db
-      .prepare('SELECT repository_path FROM projects WHERE id = ?')
-      .get(input.projectId) as { repository_path: string } | undefined
+      .prepare('SELECT repository_path, settings FROM projects WHERE id = ?')
+      .get(input.projectId) as
+      | { repository_path: string; settings: string }
+      | undefined
 
     if (!project) {
       throw new Error(`Project not found: ${input.projectId}`)
     }
 
     const repoPath = project.repository_path
+    const settings = normalizeProjectSettings(JSON.parse(project.settings))
     const id = randomUUID()
     const worktreePath = join(this.workspacesRoot, input.projectId, id)
 
     const branchExists = await this.git.branchExists(repoPath, input.branchName)
+    const createBranch = !branchExists
+    const startPoint =
+      createBranch && settings.workspaceCreation.startStrategy === 'base-branch'
+        ? await this.git.resolveBaseBranchStartPoint(
+            repoPath,
+            settings.workspaceCreation.baseBranchName,
+          )
+        : undefined
 
     await this.git.addWorktree(
       repoPath,
       worktreePath,
       input.branchName,
-      !branchExists,
+      createBranch,
+      startPoint,
     )
 
     this.db
