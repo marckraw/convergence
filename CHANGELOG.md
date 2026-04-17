@@ -1,5 +1,11 @@
 # convergence
 
+## 0.9.1
+
+### Patch Changes
+
+- 8625781: Open external app links in the system browser instead of spawning a new Convergence window.
+
 ## 0.9.0
 
 ### Minor Changes
