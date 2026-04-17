@@ -2,6 +2,7 @@ import { randomUUID } from 'crypto'
 import { promises as fs } from 'fs'
 import { join, extname } from 'path'
 import type Database from 'better-sqlite3'
+import { ensureAttachmentsTableNoFk } from '../database/database'
 import type {
   Attachment,
   AttachmentKind,
@@ -148,6 +149,31 @@ export class AttachmentsService {
     return { attachments, rejections }
   }
 
+  private insertAttachmentRow(
+    sessionId: string,
+    attachment: Omit<Attachment, 'sessionId'>,
+  ): void {
+    this.db
+      .prepare(
+        `INSERT INTO attachments (
+          id, session_id, kind, mime_type, filename, size_bytes,
+          storage_path, thumbnail_path, text_preview, created_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      )
+      .run(
+        attachment.id,
+        sessionId,
+        attachment.kind,
+        attachment.mimeType,
+        attachment.filename,
+        attachment.sizeBytes,
+        attachment.storagePath,
+        attachment.thumbnailPath,
+        attachment.textPreview,
+        attachment.createdAt,
+      )
+  }
+
   async ingestFromPaths(
     sessionId: string,
     paths: string[],
@@ -242,29 +268,8 @@ export class AttachmentsService {
         : null
     const createdAt = new Date().toISOString()
 
-    this.db
-      .prepare(
-        `INSERT INTO attachments (
-          id, session_id, kind, mime_type, filename, size_bytes,
-          storage_path, thumbnail_path, text_preview, created_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      )
-      .run(
-        id,
-        sessionId,
-        kind,
-        mimeType,
-        filename,
-        bytes.length,
-        storagePath,
-        null,
-        textPreview,
-        createdAt,
-      )
-
-    return {
+    const attachmentRecord = {
       id,
-      sessionId,
       kind,
       mimeType,
       filename,
@@ -273,6 +278,34 @@ export class AttachmentsService {
       thumbnailPath: null,
       textPreview,
       createdAt,
+    } as const
+
+    try {
+      this.insertAttachmentRow(sessionId, attachmentRecord)
+    } catch (error) {
+      if (
+        sessionId === DRAFT_SESSION_ID &&
+        error instanceof Error &&
+        /FOREIGN KEY constraint failed/i.test(error.message)
+      ) {
+        ensureAttachmentsTableNoFk(this.db)
+        this.insertAttachmentRow(sessionId, attachmentRecord)
+      } else {
+        throw error
+      }
+    }
+
+    return {
+      id: attachmentRecord.id,
+      sessionId,
+      kind: attachmentRecord.kind,
+      mimeType: attachmentRecord.mimeType,
+      filename: attachmentRecord.filename,
+      sizeBytes: attachmentRecord.sizeBytes,
+      storagePath: attachmentRecord.storagePath,
+      thumbnailPath: attachmentRecord.thumbnailPath,
+      textPreview: attachmentRecord.textPreview,
+      createdAt: attachmentRecord.createdAt,
     }
   }
 
