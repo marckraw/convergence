@@ -62,10 +62,24 @@ contextBridge.exposeInMainWorld('electronAPI', {
     archive: (id: string) => ipcRenderer.invoke('session:archive', id),
     unarchive: (id: string) => ipcRenderer.invoke('session:unarchive', id),
     delete: (id: string) => ipcRenderer.invoke('session:delete', id),
-    start: (id: string, message: string) =>
-      ipcRenderer.invoke('session:start', id, message),
-    sendMessage: (id: string, text: string) =>
-      ipcRenderer.invoke('session:sendMessage', id, text),
+    start: (
+      id: string,
+      input: { text: string; attachmentIds?: string[] } | string,
+    ) =>
+      ipcRenderer.invoke(
+        'session:start',
+        id,
+        typeof input === 'string' ? { text: input } : input,
+      ),
+    sendMessage: (
+      id: string,
+      input: { text: string; attachmentIds?: string[] } | string,
+    ) =>
+      ipcRenderer.invoke(
+        'session:sendMessage',
+        id,
+        typeof input === 'string' ? { text: input } : input,
+      ),
     approve: (id: string) => ipcRenderer.invoke('session:approve', id),
     deny: (id: string) => ipcRenderer.invoke('session:deny', id),
     stop: (id: string) => ipcRenderer.invoke('session:stop', id),
@@ -92,6 +106,24 @@ contextBridge.exposeInMainWorld('electronAPI', {
   mcp: {
     listByProjectId: (projectId: string) =>
       ipcRenderer.invoke('mcp:listByProjectId', projectId),
+  },
+  attachments: {
+    ingestFiles: (
+      sessionId: string,
+      files: Array<{
+        name: string
+        bytes: Uint8Array | ArrayBuffer | number[]
+        mimeType?: string
+      }>,
+    ) => ipcRenderer.invoke('attachments:ingestFiles', sessionId, files),
+    ingestFromPaths: (sessionId: string, paths: string[]) =>
+      ipcRenderer.invoke('attachments:ingestFromPaths', sessionId, paths),
+    getForSession: (sessionId: string) =>
+      ipcRenderer.invoke('attachments:getForSession', sessionId),
+    getById: (id: string) => ipcRenderer.invoke('attachments:getById', id),
+    readBytes: (id: string) => ipcRenderer.invoke('attachments:readBytes', id),
+    delete: (id: string) => ipcRenderer.invoke('attachments:delete', id),
+    showOpenDialog: () => ipcRenderer.invoke('attachments:showOpenDialog'),
   },
   appSettings: {
     get: () => ipcRenderer.invoke('appSettings:get'),

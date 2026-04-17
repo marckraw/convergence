@@ -6,6 +6,7 @@ import { getDatabase, closeDatabase, resetDatabase } from '../database/database'
 import { ProviderRegistry } from '../provider/provider-registry'
 import type {
   ActivitySignal,
+  Attachment,
   Provider,
   SessionHandle,
   SessionStatus,
@@ -13,7 +14,19 @@ import type {
   AttentionState,
   SessionContextWindow,
 } from '../provider/provider.types'
+import type { ProviderAttachmentCapability } from '../provider/provider.types'
+import { AttachmentsService } from '../attachments/attachments.service'
 import { SessionService } from './session.service'
+
+const TEST_ATTACHMENT_CAPABILITY: ProviderAttachmentCapability = {
+  supportsImage: true,
+  supportsPdf: true,
+  supportsText: true,
+  maxImageBytes: 10 * 1024 * 1024,
+  maxPdfBytes: 20 * 1024 * 1024,
+  maxTextBytes: 1024 * 1024,
+  maxTotalBytes: 50 * 1024 * 1024,
+}
 
 function now(): string {
   return new Date().toISOString()
@@ -38,6 +51,7 @@ function createTestProvider(): Provider {
           effortOptions: [],
         },
       ],
+      attachments: TEST_ATTACHMENT_CAPABILITY,
     }),
     start(config) {
       const listeners = {
@@ -293,7 +307,7 @@ describe('SessionService', () => {
       name: 'activity test',
     })
 
-    service.start(session.id, 'Go')
+    service.start(session.id, { text: 'Go' })
     await vi.advanceTimersByTimeAsync(200)
     expect(service.getById(session.id)!.activity).toBe('streaming')
 
@@ -314,7 +328,7 @@ describe('SessionService', () => {
       name: 'streaming test',
     })
 
-    service.start(session.id, 'Fix the bug')
+    service.start(session.id, { text: 'Fix the bug' })
     await vi.advanceTimersByTimeAsync(1200)
 
     const updated = service.getById(session.id)!
@@ -336,7 +350,7 @@ describe('SessionService', () => {
       name: 'approval test',
     })
 
-    service.start(session.id, 'Do something')
+    service.start(session.id, { text: 'Do something' })
     await vi.advanceTimersByTimeAsync(2000)
 
     let updated = service.getById(session.id)!
@@ -360,7 +374,7 @@ describe('SessionService', () => {
       name: 'stop test',
     })
 
-    service.start(session.id, 'Do something')
+    service.start(session.id, { text: 'Do something' })
     await vi.advanceTimersByTimeAsync(500)
 
     service.stop(session.id)
@@ -411,7 +425,7 @@ describe('SessionService', () => {
       name: 'persist test',
     })
 
-    service.start(session.id, 'Hello')
+    service.start(session.id, { text: 'Hello' })
     await vi.advanceTimersByTimeAsync(2000)
     service.approve(session.id)
     await vi.advanceTimersByTimeAsync(2000)
@@ -440,7 +454,7 @@ describe('SessionService', () => {
       name: 'notify test',
     })
 
-    service.start(session.id, 'Go')
+    service.start(session.id, { text: 'Go' })
     await vi.advanceTimersByTimeAsync(2000)
 
     expect(updates.length).toBeGreaterThan(0)
@@ -487,6 +501,7 @@ describe('SessionService', () => {
             effortOptions: [],
           },
         ],
+        attachments: TEST_ATTACHMENT_CAPABILITY,
       }),
       start: () => handle,
     }
@@ -503,14 +518,14 @@ describe('SessionService', () => {
       name: 'continuation test',
     })
 
-    continuationService.start(session.id, 'Start here')
+    continuationService.start(session.id, { text: 'Start here' })
     expect(statusListener).not.toBeNull()
     ;(statusListener as unknown as (status: SessionStatus) => void)('completed')
 
     expect(() =>
-      continuationService.sendMessage(session.id, 'Follow up'),
+      continuationService.sendMessage(session.id, { text: 'Follow up' }),
     ).not.toThrow()
-    expect(sendMessage).toHaveBeenCalledWith('Follow up')
+    expect(sendMessage).toHaveBeenCalledWith('Follow up', undefined)
   })
 
   it('rehydrates continuation-capable sessions after restart', async () => {
@@ -538,6 +553,7 @@ describe('SessionService', () => {
             effortOptions: [],
           },
         ],
+        attachments: TEST_ATTACHMENT_CAPABILITY,
       }),
       start: (config) => {
         startConfigs.push({
@@ -588,7 +604,7 @@ describe('SessionService', () => {
       name: 'rehydrate me',
     })
 
-    firstService.start(session.id, 'Initial prompt')
+    firstService.start(session.id, { text: 'Initial prompt' })
     await vi.advanceTimersByTimeAsync(1)
 
     const rehydratedRegistry = new ProviderRegistry()
@@ -596,7 +612,9 @@ describe('SessionService', () => {
     const restartedService = new SessionService(db, rehydratedRegistry)
 
     expect(() =>
-      restartedService.sendMessage(session.id, 'Follow up after restart'),
+      restartedService.sendMessage(session.id, {
+        text: 'Follow up after restart',
+      }),
     ).not.toThrow()
 
     expect(startConfigs).toEqual([
@@ -621,7 +639,7 @@ describe('SessionService', () => {
       name: 'auto-unarchive test',
     })
 
-    service.start(session.id, 'Do something')
+    service.start(session.id, { text: 'Do something' })
     await vi.advanceTimersByTimeAsync(500)
 
     service.archive(session.id)
@@ -632,5 +650,192 @@ describe('SessionService', () => {
     const updated = service.getById(session.id)!
     expect(updated.attention).toBe('needs-approval')
     expect(updated.archivedAt).toBeNull()
+  })
+})
+
+describe('SessionService attachments integration', () => {
+  let service: SessionService
+  let attachments: AttachmentsService
+  let tempDir: string
+  let attachmentsRoot: string
+  let projectId: string
+  const received: {
+    initial?: Attachment[]
+    send?: Attachment[]
+  } = {}
+
+  function createCapturingProvider(): Provider {
+    return {
+      id: 'capture',
+      name: 'Capture',
+      supportsContinuation: false,
+      describe: async () => ({
+        id: 'capture',
+        name: 'Capture',
+        vendorLabel: 'Test',
+        supportsContinuation: false,
+        defaultModelId: 'm',
+        modelOptions: [
+          {
+            id: 'm',
+            label: 'M',
+            defaultEffort: null,
+            effortOptions: [],
+          },
+        ],
+        attachments: TEST_ATTACHMENT_CAPABILITY,
+      }),
+      start(config) {
+        received.initial = config.initialAttachments
+        const transcriptListeners: Array<(entry: TranscriptEntry) => void> = []
+        setTimeout(() => {
+          transcriptListeners.forEach((cb) =>
+            cb({ type: 'user', text: config.initialMessage, timestamp: now() }),
+          )
+        }, 0)
+        return {
+          onTranscriptEntry: (cb) => {
+            transcriptListeners.push(cb)
+          },
+          onStatusChange: () => {},
+          onAttentionChange: () => {},
+          onContinuationToken: () => {},
+          onContextWindowChange: () => {},
+          onActivityChange: () => {},
+          sendMessage: (text, atts) => {
+            received.send = atts
+            transcriptListeners.forEach((cb) =>
+              cb({ type: 'user', text, timestamp: now() }),
+            )
+          },
+          approve: () => {},
+          deny: () => {},
+          stop: () => {},
+        }
+      },
+    }
+  }
+
+  beforeEach(() => {
+    vi.useRealTimers()
+    const db = getDatabase()
+    const registry = new ProviderRegistry()
+    registry.register(createCapturingProvider())
+
+    tempDir = mkdtempSync(join(tmpdir(), 'convergence-session-attach-'))
+    attachmentsRoot = join(tempDir, 'attachments')
+    mkdirSync(attachmentsRoot)
+
+    service = new SessionService(db, registry)
+    attachments = new AttachmentsService(db, attachmentsRoot)
+    service.setAttachmentsService(attachments)
+
+    const repoPath = join(tempDir, 'repo')
+    mkdirSync(repoPath)
+    mkdirSync(join(repoPath, '.git'))
+
+    projectId = 'attach-project'
+    db.prepare(
+      "INSERT INTO projects (id, name, repository_path) VALUES (?, 'a', ?)",
+    ).run(projectId, repoPath)
+
+    received.initial = undefined
+    received.send = undefined
+  })
+
+  afterEach(() => {
+    closeDatabase()
+    resetDatabase()
+    rmSync(tempDir, { recursive: true, force: true })
+  })
+
+  const PNG_BYTES = new Uint8Array([
+    0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 13, 73, 72, 68, 82,
+    0, 0, 0, 1, 0, 0, 0, 1, 8, 6, 0, 0, 0, 31, 21, 196, 137,
+  ])
+
+  async function seedImage(sessionId: string): Promise<string> {
+    const result = await attachments.ingestFiles(sessionId, [
+      { name: 'img.png', bytes: PNG_BYTES },
+    ])
+    return result.attachments[0]!.id
+  }
+
+  it('resolves attachment ids and threads to provider start', async () => {
+    const session = service.create({
+      projectId,
+      workspaceId: null,
+      providerId: 'capture',
+      model: 'm',
+      effort: null,
+      name: 's',
+    })
+
+    const id = await seedImage(session.id)
+    service.start(session.id, { text: 'hi', attachmentIds: [id] })
+    await new Promise((r) => setTimeout(r, 10))
+
+    expect(received.initial).toBeDefined()
+    expect(received.initial?.[0]?.id).toBe(id)
+  })
+
+  it('persists attachmentIds on the user transcript entry', async () => {
+    const session = service.create({
+      projectId,
+      workspaceId: null,
+      providerId: 'capture',
+      model: 'm',
+      effort: null,
+      name: 's2',
+    })
+
+    const id = await seedImage(session.id)
+    service.start(session.id, { text: 'hi', attachmentIds: [id] })
+    await new Promise((r) => setTimeout(r, 10))
+
+    const loaded = service.getById(session.id)!
+    const userEntry = loaded.transcript.find((e) => e.type === 'user') as {
+      type: 'user'
+      text: string
+      attachmentIds?: string[]
+    }
+    expect(userEntry.attachmentIds).toEqual([id])
+  })
+
+  it('cascades attachment cleanup on session delete', async () => {
+    const session = service.create({
+      projectId,
+      workspaceId: null,
+      providerId: 'capture',
+      model: 'm',
+      effort: null,
+      name: 's3',
+    })
+
+    const id = await seedImage(session.id)
+    expect(attachments.getById(id)).not.toBeNull()
+
+    service.delete(session.id)
+    await new Promise((r) => setTimeout(r, 20))
+
+    expect(attachments.getById(id)).toBeNull()
+  })
+
+  it('throws on start if an attachment id is unknown', async () => {
+    const session = service.create({
+      projectId,
+      workspaceId: null,
+      providerId: 'capture',
+      model: 'm',
+      effort: null,
+      name: 's4',
+    })
+
+    expect(() =>
+      service.start(session.id, {
+        text: 'hi',
+        attachmentIds: ['does-not-exist'],
+      }),
+    ).toThrow(/Attachment\(s\) not found/)
   })
 })

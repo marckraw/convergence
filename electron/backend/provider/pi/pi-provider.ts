@@ -1,6 +1,8 @@
 import { spawn, type ChildProcess } from 'child_process'
+import { promises as fs } from 'fs'
 import type {
   ActivitySignal,
+  Attachment,
   AttentionState,
   Provider,
   ProviderDescriptor,
@@ -23,6 +25,7 @@ import {
 } from './pi-event-mapping.pure'
 import { mapEffortToPiThinking, mapPiModels } from './pi-models.pure'
 import { probePiAvailableModels } from './pi-models.service'
+import { buildPiPromptPayload, type PiMessagePart } from './pi-message.pure'
 import {
   initialPiActivityState,
   reducePiActivity,
@@ -332,15 +335,43 @@ export class PiProvider implements Provider {
       }
     }
 
-    function sendPrompt(message: string): void {
+    async function loadPiParts(
+      attachments: Attachment[] | undefined,
+    ): Promise<PiMessagePart[]> {
+      if (!attachments || attachments.length === 0) return []
+      const parts: PiMessagePart[] = []
+      for (const att of attachments) {
+        const needsBytes = att.kind === 'image' || att.kind === 'text'
+        let bytes: Uint8Array | undefined
+        if (needsBytes) {
+          const buf = await fs.readFile(att.storagePath)
+          bytes = new Uint8Array(buf.buffer, buf.byteOffset, buf.byteLength)
+        }
+        parts.push({
+          kind: att.kind,
+          mimeType: att.mimeType,
+          filename: att.filename,
+          storagePath: att.storagePath,
+          bytes,
+        })
+      }
+      return parts
+    }
+
+    function sendPromptFromPayload(
+      message: string,
+      images: ReturnType<typeof buildPiPromptPayload>['images'],
+    ): void {
       if (!rpc || stopped) return
 
       const command: {
         type: string
         message: string
         streamingBehavior?: string
+        images?: ReturnType<typeof buildPiPromptPayload>['images']
       } = { type: 'prompt', message }
       if (isStreaming) command.streamingBehavior = 'steer'
+      if (images && images.length > 0) command.images = images
 
       rpc.request(command).then(
         (response) => {
@@ -367,7 +398,33 @@ export class PiProvider implements Provider {
       )
     }
 
-    function spawnPi(initialMessage: string): void {
+    function sendPromptWithAttachments(
+      text: string,
+      attachments?: Attachment[],
+    ): void {
+      if (!rpc || stopped) return
+      loadPiParts(attachments)
+        .then((parts) => {
+          if (stopped) return
+          const payload = buildPiPromptPayload({ text, parts })
+          sendPromptFromPayload(payload.message, payload.images)
+        })
+        .catch((err) => {
+          if (stopped) return
+          emit({
+            type: 'system',
+            text: `Failed to send attachments: ${err instanceof Error ? err.message : String(err)}`,
+            timestamp: now(),
+          })
+          setStatus('failed')
+          setAttention('failed')
+        })
+    }
+
+    function spawnPi(
+      initialMessage: string,
+      initialAttachments?: Attachment[],
+    ): void {
       if (stopped || child || rpc) return
 
       const args = ['--mode', 'rpc']
@@ -437,10 +494,13 @@ export class PiProvider implements Provider {
 
       emit({ type: 'user', text: initialMessage, timestamp: now() })
       setStatus('running')
-      sendPrompt(initialMessage)
+      sendPromptWithAttachments(initialMessage, initialAttachments)
     }
 
-    setTimeout(() => spawnPi(config.initialMessage), 10)
+    setTimeout(
+      () => spawnPi(config.initialMessage, config.initialAttachments),
+      10,
+    )
 
     const handle: SessionHandle = {
       onTranscriptEntry: (cb) => {
@@ -462,16 +522,16 @@ export class PiProvider implements Provider {
       onActivityChange: (cb) => {
         listeners.activity.push(cb)
       },
-      sendMessage: (text) => {
+      sendMessage: (text, attachments) => {
         if (stopped) return
         if (!rpc) {
-          spawnPi(text)
+          spawnPi(text, attachments)
           return
         }
         emit({ type: 'user', text, timestamp: now() })
         setStatus('running')
         setAttention('none')
-        sendPrompt(text)
+        sendPromptWithAttachments(text, attachments)
       },
       approve: () => {
         // Pi has no built-in approval flow in v1 (extension_ui_request is auto-cancelled).

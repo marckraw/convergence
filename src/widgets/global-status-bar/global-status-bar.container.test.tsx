@@ -26,6 +26,16 @@ const projects: Project[] = [
   },
 ]
 
+const TEST_ATTACHMENTS = {
+  supportsImage: true,
+  supportsPdf: true,
+  supportsText: true,
+  maxImageBytes: 10 * 1024 * 1024,
+  maxPdfBytes: 20 * 1024 * 1024,
+  maxTextBytes: 1024 * 1024,
+  maxTotalBytes: 50 * 1024 * 1024,
+}
+
 const providers: ProviderInfo[] = [
   {
     id: 'claude-code',
@@ -34,6 +44,7 @@ const providers: ProviderInfo[] = [
     supportsContinuation: true,
     defaultModelId: 'sonnet',
     modelOptions: [],
+    attachments: TEST_ATTACHMENTS,
   },
   {
     id: 'codex',
@@ -42,6 +53,7 @@ const providers: ProviderInfo[] = [
     supportsContinuation: true,
     defaultModelId: 'gpt-5',
     modelOptions: [],
+    attachments: TEST_ATTACHMENTS,
   },
 ]
 

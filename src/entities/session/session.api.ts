@@ -32,11 +32,19 @@ export const sessionApi = {
 
   delete: (id: string): Promise<void> => window.electronAPI.session.delete(id),
 
-  start: (id: string, message: string): Promise<void> =>
-    window.electronAPI.session.start(id, message),
+  start: (
+    id: string,
+    message: string,
+    attachmentIds?: string[],
+  ): Promise<void> =>
+    window.electronAPI.session.start(id, { text: message, attachmentIds }),
 
-  sendMessage: (id: string, text: string): Promise<void> =>
-    window.electronAPI.session.sendMessage(id, text),
+  sendMessage: (
+    id: string,
+    text: string,
+    attachmentIds?: string[],
+  ): Promise<void> =>
+    window.electronAPI.session.sendMessage(id, { text, attachmentIds }),
 
   approve: (id: string): Promise<void> =>
     window.electronAPI.session.approve(id),

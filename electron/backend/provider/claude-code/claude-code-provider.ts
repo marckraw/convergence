@@ -1,4 +1,5 @@
 import { spawn, type ChildProcess } from 'child_process'
+import { promises as fs } from 'fs'
 import type {
   Provider,
   SessionStartConfig,
@@ -7,6 +8,7 @@ import type {
   SessionStatus,
   AttentionState,
   SessionContextWindow,
+  Attachment,
   ActivitySignal,
   OneShotInput,
   OneShotResult,
@@ -14,6 +16,10 @@ import type {
 import { parseJsonLines } from '../line-parser'
 import { buildClaudeDescriptor } from '../provider-descriptor.pure'
 import type { ProviderDescriptor } from '../provider.types'
+import {
+  buildClaudeUserMessageLine,
+  type ClaudeMessagePart,
+} from './claude-code-message.pure'
 import {
   createUnavailableContextWindow,
   deriveClaudeContextWindow,
@@ -360,7 +366,24 @@ export class ClaudeCodeProvider implements Provider {
       }
     }
 
-    function startTurn(message: string): void {
+    async function loadAttachmentParts(
+      attachments: Attachment[] | undefined,
+    ): Promise<ClaudeMessagePart[]> {
+      if (!attachments || attachments.length === 0) return []
+      const parts: ClaudeMessagePart[] = []
+      for (const att of attachments) {
+        const buf = await fs.readFile(att.storagePath)
+        parts.push({
+          kind: att.kind,
+          mimeType: att.mimeType,
+          filename: att.filename,
+          bytes: new Uint8Array(buf.buffer, buf.byteOffset, buf.byteLength),
+        })
+      }
+      return parts
+    }
+
+    function startTurn(message: string, attachments?: Attachment[]): void {
       if (stopped || child) return
 
       assistantTextBuffer = ''
@@ -377,6 +400,8 @@ export class ClaudeCodeProvider implements Provider {
 
       const args = [
         '-p',
+        '--input-format',
+        'stream-json',
         '--output-format',
         'stream-json',
         '--verbose',
@@ -431,10 +456,33 @@ export class ClaudeCodeProvider implements Provider {
         })
       }
 
-      // Write prompt and close stdin
-      if (child.stdin) {
-        child.stdin.write(message + '\n')
-        child.stdin.end()
+      const stdin = child.stdin
+      if (stdin) {
+        loadAttachmentParts(attachments)
+          .then((parts) => {
+            if (stopped || stdin.destroyed) return
+            const line = buildClaudeUserMessageLine({
+              text: message,
+              parts,
+            })
+            stdin.write(line + '\n')
+            stdin.end()
+          })
+          .catch((err) => {
+            if (stopped) return
+            emit({
+              type: 'system',
+              text: `Failed to send attachments: ${err instanceof Error ? err.message : String(err)}`,
+              timestamp: now(),
+            })
+            setStatus('failed')
+            setAttention('failed')
+            try {
+              stdin.end()
+            } catch {
+              // ignore
+            }
+          })
       }
 
       child.on('exit', (code) => {
@@ -468,7 +516,7 @@ export class ClaudeCodeProvider implements Provider {
 
     // Spawn after a tick so listeners can be attached
     setTimeout(() => {
-      startTurn(config.initialMessage)
+      startTurn(config.initialMessage, config.initialAttachments)
     }, 10)
 
     const handle: SessionHandle = {
@@ -493,8 +541,8 @@ export class ClaudeCodeProvider implements Provider {
       onActivityChange: (cb) => {
         listeners.activity.push(cb)
       },
-      sendMessage: (text) => {
-        startTurn(text)
+      sendMessage: (text, attachments) => {
+        startTurn(text, attachments)
       },
       approve: () => {
         // Using --dangerously-skip-permissions, no approvals needed

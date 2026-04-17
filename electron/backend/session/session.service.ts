@@ -3,6 +3,7 @@ import type Database from 'better-sqlite3'
 import type { SessionRow } from '../database/database.types'
 import type { ProviderRegistry } from '../provider/provider-registry'
 import type {
+  Attachment,
   SessionHandle,
   TranscriptEntry,
   SessionStatus,
@@ -10,11 +11,17 @@ import type {
   SessionContextWindow,
   ActivitySignal,
 } from '../provider/provider.types'
+import type { AttachmentsService } from '../attachments/attachments.service'
 import {
   sessionFromRow,
   type Session,
   type CreateSessionInput,
 } from './session.types'
+
+export interface SendMessageInput {
+  text: string
+  attachmentIds?: string[]
+}
 
 export interface SessionNamer {
   generateName(session: Session): Promise<string | null>
@@ -23,12 +30,17 @@ export interface SessionNamer {
 export class SessionService {
   private activeHandles = new Map<string, SessionHandle>()
   private onUpdate: ((session: Session) => void) | null = null
+  private attachments: AttachmentsService | null = null
   private namer: SessionNamer | null = null
 
   constructor(
     private db: Database.Database,
     private providers: ProviderRegistry,
   ) {}
+
+  setAttachmentsService(service: AttachmentsService): void {
+    this.attachments = service
+  }
 
   setNamer(namer: SessionNamer): void {
     this.namer = namer
@@ -157,6 +169,9 @@ export class SessionService {
       this.activeHandles.delete(id)
     }
     this.db.prepare('DELETE FROM sessions WHERE id = ?').run(id)
+    if (this.attachments) {
+      void this.attachments.deleteForSession(id)
+    }
   }
 
   archive(id: string): void {
@@ -169,7 +184,7 @@ export class SessionService {
     this.updateArchiveState(id, null)
   }
 
-  start(id: string, message: string): void {
+  start(id: string, input: SendMessageInput): void {
     const session = this.getById(id)
     if (!session) throw new Error(`Session not found: ${id}`)
 
@@ -177,20 +192,30 @@ export class SessionService {
       this.updateArchiveState(id, null)
     }
 
-    this.startHandle(session, message, this.getContinuationToken(id))
+    const attachments = this.resolveAttachments(input.attachmentIds)
+    this.startHandle(
+      session,
+      input.text,
+      this.getContinuationToken(id),
+      attachments,
+      input.attachmentIds,
+    )
   }
 
-  sendMessage(id: string, text: string): void {
+  sendMessage(id: string, input: SendMessageInput): void {
     const session = this.getById(id)
     if (!session) throw new Error(`Session not found: ${id}`)
 
     if (session.archivedAt) {
       this.updateArchiveState(id, null)
     }
+
+    const attachments = this.resolveAttachments(input.attachmentIds)
 
     const handle = this.activeHandles.get(id)
     if (handle) {
-      handle.sendMessage(text)
+      this.pendingUserAttachmentIds.set(id, input.attachmentIds ?? [])
+      handle.sendMessage(input.text, attachments)
       return
     }
 
@@ -199,7 +224,13 @@ export class SessionService {
 
     const continuationToken = this.getContinuationToken(id)
     if (provider.supportsContinuation && continuationToken) {
-      this.startHandle(session, text, continuationToken)
+      this.startHandle(
+        session,
+        input.text,
+        continuationToken,
+        attachments,
+        input.attachmentIds,
+      )
       return
     }
 
@@ -210,6 +241,26 @@ export class SessionService {
     }
 
     throw new Error(`Session not active: ${id}`)
+  }
+
+  private pendingUserAttachmentIds = new Map<string, string[]>()
+
+  private resolveAttachments(
+    attachmentIds: string[] | undefined,
+  ): Attachment[] | undefined {
+    if (!attachmentIds || attachmentIds.length === 0) return undefined
+    if (!this.attachments) {
+      throw new Error(
+        'Attachments service is not configured; cannot resolve attachment ids',
+      )
+    }
+    const resolved = this.attachments.getMany(attachmentIds)
+    if (resolved.length !== attachmentIds.length) {
+      const resolvedIds = new Set(resolved.map((a) => a.id))
+      const missing = attachmentIds.filter((id) => !resolvedIds.has(id))
+      throw new Error(`Attachment(s) not found: ${missing.join(', ')}`)
+    }
+    return resolved
   }
 
   approve(id: string): void {
@@ -237,11 +288,20 @@ export class SessionService {
       .get(id) as { transcript: string } | undefined
     if (!row) return
 
+    let annotated: TranscriptEntry = entry
+    if (entry.type === 'user') {
+      const pending = this.pendingUserAttachmentIds.get(id)
+      if (pending && pending.length > 0) {
+        annotated = { ...entry, attachmentIds: pending }
+      }
+      this.pendingUserAttachmentIds.delete(id)
+    }
+
     const transcript = JSON.parse(row.transcript) as TranscriptEntry[]
     const priorAssistantCount = transcript.filter(
       (item) => item.type === 'assistant',
     ).length
-    transcript.push(entry)
+    transcript.push(annotated)
 
     this.db
       .prepare(
@@ -357,9 +417,15 @@ export class SessionService {
     session: Session,
     initialMessage: string,
     continuationToken: string | null,
+    initialAttachments?: Attachment[],
+    initialAttachmentIds?: string[],
   ): void {
     const provider = this.providers.get(session.providerId)
     if (!provider) throw new Error(`Provider not found: ${session.providerId}`)
+
+    if (initialAttachmentIds && initialAttachmentIds.length > 0) {
+      this.pendingUserAttachmentIds.set(session.id, initialAttachmentIds)
+    }
 
     const handle = provider.start({
       sessionId: session.id,
@@ -368,6 +434,7 @@ export class SessionService {
       model: session.model,
       effort: session.effort,
       continuationToken,
+      initialAttachments,
     })
 
     this.activeHandles.set(session.id, handle)

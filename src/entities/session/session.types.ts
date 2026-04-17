@@ -61,7 +61,12 @@ export interface ProviderModelOption {
 }
 
 export type TranscriptEntry =
-  | { type: 'user'; text: string; timestamp: string }
+  | {
+      type: 'user'
+      text: string
+      timestamp: string
+      attachmentIds?: string[]
+    }
   | {
       type: 'assistant'
       text: string
@@ -97,6 +102,16 @@ export interface Session {
   updatedAt: string
 }
 
+export interface ProviderAttachmentCapability {
+  supportsImage: boolean
+  supportsPdf: boolean
+  supportsText: boolean
+  maxImageBytes: number
+  maxPdfBytes: number
+  maxTextBytes: number
+  maxTotalBytes: number
+}
+
 export interface ProviderInfo {
   id: string
   name: string
@@ -105,6 +120,7 @@ export interface ProviderInfo {
   defaultModelId: string
   fastModelId?: string | null
   modelOptions: ProviderModelOption[]
+  attachments: ProviderAttachmentCapability
 }
 
 export interface ProviderStatusInfo {

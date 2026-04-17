@@ -1,4 +1,5 @@
 import { spawn, type ChildProcess } from 'child_process'
+import { promises as fs } from 'fs'
 import type {
   Provider,
   SessionStartConfig,
@@ -7,6 +8,7 @@ import type {
   SessionStatus,
   AttentionState,
   SessionContextWindow,
+  Attachment,
   ActivitySignal,
   OneShotInput,
   OneShotResult,
@@ -25,10 +27,36 @@ import type {
 import { deriveCodexContextWindow } from '../context-window.pure'
 import { buildTurnFailureEntry } from './codex-errors.pure'
 import {
+  buildCodexUserInput,
+  partFromAttachment,
+  type CodexMessagePart,
+} from './codex-message.pure'
+import {
   initialCodexActivityState,
   reduceCodexActivity,
   type CodexActivityState,
 } from './codex-activity.pure'
+
+async function loadCodexParts(
+  attachments: Attachment[] | undefined,
+): Promise<CodexMessagePart[]> {
+  if (!attachments || attachments.length === 0) return []
+  const parts: CodexMessagePart[] = []
+  for (const att of attachments) {
+    if (att.kind === 'text') {
+      const buf = await fs.readFile(att.storagePath)
+      parts.push(
+        partFromAttachment(
+          att,
+          new Uint8Array(buf.buffer, buf.byteOffset, buf.byteLength),
+        ),
+      )
+    } else {
+      parts.push(partFromAttachment(att))
+    }
+  }
+  return parts
+}
 
 function now(): string {
   return new Date().toISOString()
@@ -250,7 +278,10 @@ export class CodexProvider implements Provider {
       })
     }
 
-    async function initialize(initialMessage: string): Promise<void> {
+    async function initialize(
+      initialMessage: string,
+      initialAttachments?: Attachment[],
+    ): Promise<void> {
       if (!rpc || stopped) return
 
       try {
@@ -291,17 +322,12 @@ export class CodexProvider implements Provider {
         })
         setStatus('running')
 
+        const parts = await loadCodexParts(initialAttachments)
         await rpc.request('turn/start', {
           threadId,
           model: config.model,
           effort: config.effort,
-          input: [
-            {
-              type: 'text',
-              text: initialMessage,
-              text_elements: [],
-            },
-          ],
+          input: buildCodexUserInput({ text: initialMessage, parts }),
         })
       } catch (err) {
         if (stopped) return
@@ -315,7 +341,10 @@ export class CodexProvider implements Provider {
       }
     }
 
-    function spawnServer(initialMessage: string): void {
+    function spawnServer(
+      initialMessage: string,
+      initialAttachments?: Attachment[],
+    ): void {
       if (stopped) return
       if (child || rpc) return
 
@@ -610,12 +639,12 @@ export class CodexProvider implements Provider {
         child = null
       })
 
-      void initialize(initialMessage)
+      void initialize(initialMessage, initialAttachments)
     }
 
     // Spawn after a tick so listeners can be attached
     setTimeout(() => {
-      spawnServer(config.initialMessage)
+      spawnServer(config.initialMessage, config.initialAttachments)
     }, 10)
 
     const handle: SessionHandle = {
@@ -640,10 +669,10 @@ export class CodexProvider implements Provider {
       onActivityChange: (cb) => {
         listeners.activity.push(cb)
       },
-      sendMessage: (text) => {
+      sendMessage: (text, attachments) => {
         if (stopped) return
         if (!rpc) {
-          spawnServer(text)
+          spawnServer(text, attachments)
           return
         }
 
@@ -662,20 +691,23 @@ export class CodexProvider implements Provider {
         }
 
         if (!threadId) {
-          spawnServer(text)
+          spawnServer(text, attachments)
           return
         }
 
         emit({ type: 'user', text, timestamp: now() })
         setStatus('running')
         setAttention('none')
-        rpc
-          .request('turn/start', {
-            threadId,
-            model: config.model,
-            effort: config.effort,
-            input: [{ type: 'text', text, text_elements: [] }],
-          })
+        const activeRpc = rpc
+        loadCodexParts(attachments)
+          .then((parts) =>
+            activeRpc.request('turn/start', {
+              threadId,
+              model: config.model,
+              effort: config.effort,
+              input: buildCodexUserInput({ text, parts }),
+            }),
+          )
           .catch((err) => {
             if (stopped) return
             emit(buildTurnFailureEntry(err, now()))

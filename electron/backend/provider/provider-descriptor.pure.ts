@@ -1,8 +1,41 @@
 import type {
+  ProviderAttachmentCapability,
   ProviderDescriptor,
   ProviderEffortOption,
   ReasoningEffort,
 } from './provider.types'
+
+const MB = 1024 * 1024
+
+export const CLAUDE_CODE_ATTACHMENT_CAPABILITY: ProviderAttachmentCapability = {
+  supportsImage: true,
+  supportsPdf: true,
+  supportsText: true,
+  maxImageBytes: 10 * MB,
+  maxPdfBytes: 20 * MB,
+  maxTextBytes: 1 * MB,
+  maxTotalBytes: 50 * MB,
+}
+
+export const CODEX_ATTACHMENT_CAPABILITY: ProviderAttachmentCapability = {
+  supportsImage: true,
+  supportsPdf: false,
+  supportsText: true,
+  maxImageBytes: 10 * MB,
+  maxPdfBytes: 0,
+  maxTextBytes: 1 * MB,
+  maxTotalBytes: 50 * MB,
+}
+
+export const PI_ATTACHMENT_CAPABILITY: ProviderAttachmentCapability = {
+  supportsImage: true,
+  supportsPdf: false,
+  supportsText: true,
+  maxImageBytes: 10 * MB,
+  maxPdfBytes: 0,
+  maxTextBytes: 1 * MB,
+  maxTotalBytes: 50 * MB,
+}
 
 const EFFORT_LABELS: Record<ReasoningEffort, string> = {
   none: 'None',
@@ -77,6 +110,7 @@ export function buildClaudeDescriptor(): ProviderDescriptor {
         effortOptions: buildEffortOptions(['low', 'medium', 'high']),
       },
     ],
+    attachments: CLAUDE_CODE_ATTACHMENT_CAPABILITY,
   }
 }
 
@@ -120,6 +154,7 @@ export function buildFallbackCodexDescriptor(): ProviderDescriptor {
         effortOptions: buildEffortOptions(['low', 'medium', 'high', 'xhigh']),
       },
     ],
+    attachments: CODEX_ATTACHMENT_CAPABILITY,
   }
 }
 
@@ -145,6 +180,7 @@ export function buildFallbackPiDescriptor(): ProviderDescriptor {
         ]),
       },
     ],
+    attachments: PI_ATTACHMENT_CAPABILITY,
   }
 }
 
