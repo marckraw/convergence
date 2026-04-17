@@ -32,10 +32,15 @@ interface SessionActions {
     effort: ReasoningEffort | null,
     name: string,
     message: string,
+    attachmentIds?: string[],
   ) => Promise<void>
   approveSession: (id: string) => Promise<void>
   denySession: (id: string) => Promise<void>
-  sendMessageToSession: (id: string, text: string) => Promise<void>
+  sendMessageToSession: (
+    id: string,
+    text: string,
+    attachmentIds?: string[],
+  ) => Promise<void>
   stopSession: (id: string) => Promise<void>
   archiveSession: (id: string) => Promise<void>
   unarchiveSession: (id: string) => Promise<void>
@@ -191,6 +196,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     effort,
     name,
     message,
+    attachmentIds,
   ) => {
     set({ error: null })
     try {
@@ -202,7 +208,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
         effort,
         name,
       })
-      await sessionApi.start(session.id, message)
+      await sessionApi.start(session.id, message, attachmentIds)
       set((state) => ({
         currentProjectId: projectId,
         sessions: [session, ...state.sessions],
@@ -242,10 +248,14 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     }
   },
 
-  sendMessageToSession: async (id: string, text: string) => {
+  sendMessageToSession: async (
+    id: string,
+    text: string,
+    attachmentIds?: string[],
+  ) => {
     set({ error: null })
     try {
-      await sessionApi.sendMessage(id, text)
+      await sessionApi.sendMessage(id, text, attachmentIds)
     } catch (err) {
       set({
         error: err instanceof Error ? err.message : 'Failed to send message',

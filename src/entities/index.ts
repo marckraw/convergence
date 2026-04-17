@@ -14,3 +14,13 @@ export { useSessionStore } from './session'
 
 export type { AppSettings, AppSettingsInput } from './app-settings'
 export { useAppSettingsStore } from './app-settings'
+
+export type {
+  Attachment,
+  AttachmentKind,
+  AttachmentIngestFileInput,
+  AttachmentIngestRejection,
+  AttachmentIngestResult,
+  DraftAttachments,
+} from './attachment'
+export { useAttachmentStore, attachmentApi } from './attachment'

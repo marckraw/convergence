@@ -3,6 +3,17 @@ import {
   getProviderDisplayLabel,
   resolveProviderSelection,
 } from './provider-selection.pure'
+import type { ProviderAttachmentCapability } from './session.types'
+
+const TEST_ATTACHMENTS: ProviderAttachmentCapability = {
+  supportsImage: true,
+  supportsPdf: true,
+  supportsText: true,
+  maxImageBytes: 10 * 1024 * 1024,
+  maxPdfBytes: 20 * 1024 * 1024,
+  maxTextBytes: 1024 * 1024,
+  maxTotalBytes: 50 * 1024 * 1024,
+}
 
 const providers = [
   {
@@ -23,6 +34,7 @@ const providers = [
         ],
       },
     ],
+    attachments: TEST_ATTACHMENTS,
   },
   {
     id: 'codex',
@@ -53,6 +65,7 @@ const providers = [
         ],
       },
     ],
+    attachments: TEST_ATTACHMENTS,
   },
 ]
 

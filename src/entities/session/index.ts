@@ -12,6 +12,7 @@ export type {
   ReasoningEffort,
   ProviderEffortOption,
   ProviderModelOption,
+  ProviderAttachmentCapability,
 } from './session.types'
 export { useSessionStore } from './session.model'
 export type { SessionStore } from './session.model'
