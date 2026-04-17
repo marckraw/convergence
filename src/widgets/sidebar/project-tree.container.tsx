@@ -4,11 +4,26 @@ import type { Workspace } from '@/entities/workspace'
 import type { Session } from '@/entities/session'
 import { SessionCreateInline } from '@/features/session-create-inline'
 import { Button } from '@/shared/ui/button'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/shared/ui/dropdown-menu'
 import { Input } from '@/shared/ui/input'
 import { SessionBadge } from '@/shared/ui/session-badge.presentational'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/shared/ui/tooltip'
 import { cn } from '@/shared/lib/cn.pure'
-import { ChevronRight, GitBranch, Plus, Trash2 } from 'lucide-react'
+import {
+  Archive,
+  ChevronRight,
+  GitBranch,
+  MoreHorizontal,
+  Plus,
+  Trash2,
+  Undo2,
+} from 'lucide-react'
 
 interface ProjectTreeProps {
   baseBranchName: string | null
@@ -16,6 +31,8 @@ interface ProjectTreeProps {
   sessions: Session[]
   activeSessionId: string | null
   onSelectSession: (id: string) => void
+  onArchiveSession: (id: string) => void
+  onUnarchiveSession: (id: string) => void
   onDeleteSession: (id: string) => void
   onDeleteWorkspace: (workspaceId: string) => void
   onCreateWorkspace: (branchName: string) => void
@@ -27,6 +44,8 @@ export const ProjectTree: FC<ProjectTreeProps> = ({
   sessions,
   activeSessionId,
   onSelectSession,
+  onArchiveSession,
+  onUnarchiveSession,
   onDeleteSession,
   onDeleteWorkspace,
   onCreateWorkspace,
@@ -34,6 +53,7 @@ export const ProjectTree: FC<ProjectTreeProps> = ({
   const [expandedWorkspaces, setExpandedWorkspaces] = useState<Set<string>>(
     new Set(),
   )
+  const [showArchivedSessions, setShowArchivedSessions] = useState(false)
   const [newBranch, setNewBranch] = useState('')
   const [showNewBranch, setShowNewBranch] = useState(false)
 
@@ -46,9 +66,62 @@ export const ProjectTree: FC<ProjectTreeProps> = ({
     })
   }
 
-  const rootSessions = sessions.filter((s) => !s.workspaceId)
+  const archivedSessions = sessions.filter((s) => s.archivedAt)
+  const activeArchivedSession = archivedSessions.some(
+    (session) => session.id === activeSessionId,
+  )
+  const rootSessions = sessions.filter((s) => !s.workspaceId && !s.archivedAt)
   const getWorkspaceSessions = (wsId: string) =>
-    sessions.filter((s) => s.workspaceId === wsId)
+    sessions.filter((s) => s.workspaceId === wsId && !s.archivedAt)
+
+  const renderSessionActions = (session: Session) => {
+    const isArchived = !!session.archivedAt
+
+    return (
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="h-6 w-6 shrink-0 text-muted-foreground opacity-0 transition-opacity hover:text-foreground group-hover/session:opacity-100 focus-visible:opacity-100"
+            aria-label={`Session actions ${session.name}`}
+            title="Session actions"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <MoreHorizontal className="h-3.5 w-3.5" />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end">
+          {isArchived ? (
+            <DropdownMenuItem
+              className="gap-2"
+              onClick={() => onUnarchiveSession(session.id)}
+            >
+              <Undo2 className="h-3.5 w-3.5" />
+              <span>Unarchive session</span>
+            </DropdownMenuItem>
+          ) : (
+            <DropdownMenuItem
+              className="gap-2"
+              onClick={() => onArchiveSession(session.id)}
+            >
+              <Archive className="h-3.5 w-3.5" />
+              <span>Archive session</span>
+            </DropdownMenuItem>
+          )}
+          <DropdownMenuSeparator />
+          <DropdownMenuItem
+            className="gap-2 text-destructive focus:text-destructive"
+            onClick={() => onDeleteSession(session.id)}
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+            <span>Delete session</span>
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+    )
+  }
 
   const renderSessionRow = (session: Session) => (
     <div
@@ -72,20 +145,7 @@ export const ProjectTree: FC<ProjectTreeProps> = ({
         </TooltipTrigger>
         <TooltipContent side="right">{session.name}</TooltipContent>
       </Tooltip>
-      <Button
-        type="button"
-        variant="ghost"
-        size="icon"
-        className="h-6 w-6 shrink-0 text-muted-foreground opacity-0 transition-opacity hover:text-destructive group-hover/session:opacity-100 focus-visible:opacity-100"
-        onClick={(event) => {
-          event.stopPropagation()
-          onDeleteSession(session.id)
-        }}
-        aria-label={`Delete session ${session.name}`}
-        title="Delete session"
-      >
-        <Trash2 className="h-3.5 w-3.5" />
-      </Button>
+      {renderSessionActions(session)}
     </div>
   )
 
@@ -170,6 +230,43 @@ export const ProjectTree: FC<ProjectTreeProps> = ({
           </div>
         )
       })}
+
+      {archivedSessions.length > 0 && (
+        <div className="mt-3 ml-2 border-l border-border pl-2">
+          <div className="group/workspace flex min-w-0 items-center gap-1 rounded pr-1 transition-colors hover:bg-accent">
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  onClick={() => setShowArchivedSessions((current) => !current)}
+                  className="h-auto min-w-0 flex-1 justify-start gap-1 py-1 text-left text-sm font-normal hover:text-foreground"
+                >
+                  <ChevronRight
+                    className={cn(
+                      'h-3 w-3 shrink-0 transition-transform',
+                      (showArchivedSessions || activeArchivedSession) &&
+                        'rotate-90',
+                    )}
+                  />
+                  <Archive className="h-3 w-3 shrink-0 text-muted-foreground" />
+                  <span className="truncate">Archived</span>
+                  <span className="ml-auto shrink-0 text-xs text-muted-foreground">
+                    {archivedSessions.length}
+                  </span>
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="right">Archived sessions</TooltipContent>
+            </Tooltip>
+          </div>
+
+          {(showArchivedSessions || activeArchivedSession) && (
+            <div className="ml-4 space-y-0.5">
+              {archivedSessions.map(renderSessionRow)}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* New workspace */}
       <div className="mt-2 ml-2">

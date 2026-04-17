@@ -247,6 +247,7 @@ describe('SessionService', () => {
     expect(session.attention).toBe('none')
     expect(session.transcript).toEqual([])
     expect(session.contextWindow).toBeNull()
+    expect(session.archivedAt).toBeNull()
   })
 
   it('lists sessions by project', () => {
@@ -349,6 +350,23 @@ describe('SessionService', () => {
 
     service.delete(session.id)
     expect(service.getById(session.id)).toBeNull()
+  })
+
+  it('archives and unarchives a session', () => {
+    const session = service.create({
+      projectId,
+      workspaceId: null,
+      providerId: 'test-provider',
+      model: 'test-model',
+      effort: null,
+      name: 'archive test',
+    })
+
+    service.archive(session.id)
+    expect(service.getById(session.id)?.archivedAt).toBeTruthy()
+
+    service.unarchive(session.id)
+    expect(service.getById(session.id)?.archivedAt).toBeNull()
   })
 
   it('persists transcript to database', async () => {
@@ -557,5 +575,28 @@ describe('SessionService', () => {
         continuationToken: 'resume-token-1',
       },
     ])
+  })
+
+  it('auto-unarchives a session when it becomes actionable', async () => {
+    const session = service.create({
+      projectId,
+      workspaceId: null,
+      providerId: 'test-provider',
+      model: 'test-model',
+      effort: null,
+      name: 'auto-unarchive test',
+    })
+
+    service.start(session.id, 'Do something')
+    await vi.advanceTimersByTimeAsync(500)
+
+    service.archive(session.id)
+    expect(service.getById(session.id)?.archivedAt).toBeTruthy()
+
+    await vi.advanceTimersByTimeAsync(1500)
+
+    const updated = service.getById(session.id)!
+    expect(updated.attention).toBe('needs-approval')
+    expect(updated.archivedAt).toBeNull()
   })
 })

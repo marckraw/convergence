@@ -50,6 +50,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.invoke('session:getByProjectId', projectId),
     getAll: () => ipcRenderer.invoke('session:getAll'),
     getById: (id: string) => ipcRenderer.invoke('session:getById', id),
+    archive: (id: string) => ipcRenderer.invoke('session:archive', id),
+    unarchive: (id: string) => ipcRenderer.invoke('session:unarchive', id),
     delete: (id: string) => ipcRenderer.invoke('session:delete', id),
     start: (id: string, message: string) =>
       ipcRenderer.invoke('session:start', id, message),

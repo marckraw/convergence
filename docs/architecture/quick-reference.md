@@ -8,7 +8,7 @@ Initial product focus:
 
 - first-class agent sessions for Claude Code and Codex
 - project-centered workflows
-- a strong "needs you" and "finished" attention surface
+- a strong attention surface: waiting on you, needs review, archived history
 - no embedded terminal in the first phases
 
 Later product focus:
@@ -69,6 +69,7 @@ Session state should be provider-neutral and capable of representing:
 - runtime phases
 - attention state
 - session completion and failure
+- working-set lifecycle metadata such as archive state
 
 Claude Code and Codex adapters should map into one shared session snapshot model.
 

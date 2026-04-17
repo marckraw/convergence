@@ -84,6 +84,7 @@ export interface Session {
   workingDirectory: string
   transcript: TranscriptEntry[]
   contextWindow?: SessionContextWindow | null
+  archivedAt?: string | null
   createdAt: string
   updatedAt: string
 }

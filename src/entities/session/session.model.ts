@@ -37,6 +37,8 @@ interface SessionActions {
   denySession: (id: string) => Promise<void>
   sendMessageToSession: (id: string, text: string) => Promise<void>
   stopSession: (id: string) => Promise<void>
+  archiveSession: (id: string) => Promise<void>
+  unarchiveSession: (id: string) => Promise<void>
   deleteSession: (id: string, projectId: string) => Promise<void>
   prepareForProject: (projectId: string | null) => void
   beginSessionDraft: (workspaceId: string | null) => void
@@ -73,6 +75,15 @@ function pruneNeedsYouDismissals(
           session.id === sessionId && session.updatedAt === dismissal.updatedAt,
       ),
     ),
+  )
+}
+
+function removeNeedsYouDismissal(
+  dismissals: NeedsYouDismissals,
+  sessionId: string,
+): NeedsYouDismissals {
+  return Object.fromEntries(
+    Object.entries(dismissals).filter(([id]) => id !== sessionId),
   )
 }
 
@@ -252,6 +263,35 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     }
   },
 
+  archiveSession: async (id: string) => {
+    const previousDismissals = get().needsYouDismissals
+    const nextDismissals = removeNeedsYouDismissal(previousDismissals, id)
+    set({ needsYouDismissals: nextDismissals })
+
+    try {
+      await sessionApi.setNeedsYouDismissals(nextDismissals)
+      await sessionApi.archive(id)
+    } catch (err) {
+      set({ needsYouDismissals: previousDismissals })
+      void sessionApi
+        .setNeedsYouDismissals(previousDismissals)
+        .catch(() => undefined)
+      set({
+        error: err instanceof Error ? err.message : 'Failed to archive',
+      })
+    }
+  },
+
+  unarchiveSession: async (id: string) => {
+    try {
+      await sessionApi.unarchive(id)
+    } catch (err) {
+      set({
+        error: err instanceof Error ? err.message : 'Failed to unarchive',
+      })
+    }
+  },
+
   deleteSession: async (id: string, projectId: string) => {
     try {
       await sessionApi.delete(id)
@@ -260,10 +300,9 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
         (session) => session.id !== id,
       )
       const { activeSessionId } = get()
-      const nextDismissals = Object.fromEntries(
-        Object.entries(get().needsYouDismissals).filter(
-          ([sessionId]) => sessionId !== id,
-        ),
+      const nextDismissals = removeNeedsYouDismissal(
+        get().needsYouDismissals,
+        id,
       )
       await sessionApi.setNeedsYouDismissals(nextDismissals)
       set({

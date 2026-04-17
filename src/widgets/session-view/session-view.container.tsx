@@ -4,7 +4,7 @@ import { useProjectStore } from '@/entities/project'
 import { useSessionStore } from '@/entities/session'
 import { ComposerContainer } from '@/features/composer'
 import { Button } from '@/shared/ui/button'
-import { Square, FileCode, GitBranch } from 'lucide-react'
+import { Archive, Square, FileCode, GitBranch } from 'lucide-react'
 import { AttentionIndicator } from '@/shared/ui/attention-indicator.presentational'
 import { ContextWindowIndicator } from '@/shared/ui/context-window-indicator.presentational'
 import { cn } from '@/shared/lib/cn.pure'
@@ -199,6 +199,12 @@ export const SessionView: FC = () => {
           >
             <span className="text-sm font-medium">{session.name}</span>
             <AttentionIndicator attention={session.attention} />
+            {session.archivedAt && (
+              <span className="flex items-center gap-1 rounded-full border border-border/70 px-2 py-0.5 text-[11px] text-muted-foreground">
+                <Archive className="h-3 w-3" />
+                Archived
+              </span>
+            )}
             {branchName && (
               <span className="flex items-center gap-1 text-xs text-muted-foreground">
                 <GitBranch className="h-3 w-3" />

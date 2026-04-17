@@ -24,6 +24,12 @@ export const sessionApi = {
   getById: (id: string): Promise<Session | null> =>
     window.electronAPI.session.getById(id),
 
+  archive: (id: string): Promise<void> =>
+    window.electronAPI.session.archive(id),
+
+  unarchive: (id: string): Promise<void> =>
+    window.electronAPI.session.unarchive(id),
+
   delete: (id: string): Promise<void> => window.electronAPI.session.delete(id),
 
   start: (id: string, message: string): Promise<void> =>

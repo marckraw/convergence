@@ -28,6 +28,7 @@ export interface Session {
   workingDirectory: string
   transcript: TranscriptEntry[]
   contextWindow: SessionContextWindow | null
+  archivedAt: string | null
   createdAt: string
   updatedAt: string
 }
@@ -57,6 +58,7 @@ export function sessionFromRow(row: SessionRow): Session {
     contextWindow: row.context_window
       ? (JSON.parse(row.context_window) as SessionContextWindow)
       : null,
+    archivedAt: row.archived_at,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   }
