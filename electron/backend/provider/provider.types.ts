@@ -14,6 +14,13 @@ export type ReasoningEffort =
   | 'max'
   | 'xhigh'
 
+export type ActivitySignal =
+  | null
+  | 'streaming'
+  | 'thinking'
+  | 'waiting-approval'
+  | `tool:${string}`
+
 export type ContextWindowSource = 'provider' | 'estimated'
 
 export type SessionContextWindow =
@@ -99,6 +106,7 @@ export interface SessionHandle {
   onContextWindowChange: (
     callback: (contextWindow: SessionContextWindow) => void,
   ) => void
+  onActivityChange: (callback: (activity: ActivitySignal) => void) => void
 
   sendMessage: (text: string) => void
   approve: () => void

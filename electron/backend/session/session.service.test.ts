@@ -5,6 +5,7 @@ import { tmpdir } from 'os'
 import { getDatabase, closeDatabase, resetDatabase } from '../database/database'
 import { ProviderRegistry } from '../provider/provider-registry'
 import type {
+  ActivitySignal,
   Provider,
   SessionHandle,
   SessionStatus,
@@ -46,6 +47,7 @@ function createTestProvider(): Provider {
         contextWindow: [] as Array<
           (contextWindow: SessionContextWindow) => void
         >,
+        activity: [] as Array<(activity: ActivitySignal) => void>,
       }
 
       const timers: ReturnType<typeof setTimeout>[] = []
@@ -68,6 +70,10 @@ function createTestProvider(): Provider {
         listeners.contextWindow.forEach((cb) => cb(contextWindow))
       }
 
+      const emitActivity = (activity: ActivitySignal) => {
+        listeners.activity.forEach((cb) => cb(activity))
+      }
+
       const schedule = (callback: () => void, delay: number) => {
         if (stopped) return
         timers.push(
@@ -79,6 +85,7 @@ function createTestProvider(): Provider {
 
       schedule(() => {
         emitStatus('running')
+        emitActivity('streaming')
         emitContextWindow({
           availability: 'available',
           source: 'provider',
@@ -167,6 +174,9 @@ function createTestProvider(): Provider {
         onContextWindowChange: (cb) => {
           listeners.contextWindow.push(cb)
         },
+        onActivityChange: (cb) => {
+          listeners.activity.push(cb)
+        },
         onContinuationToken: () => {},
         sendMessage: (text) => {
           if (stopped) return
@@ -247,6 +257,7 @@ describe('SessionService', () => {
     expect(session.attention).toBe('none')
     expect(session.transcript).toEqual([])
     expect(session.contextWindow).toBeNull()
+    expect(session.activity).toBeNull()
   })
 
   it('lists sessions by project', () => {
@@ -269,6 +280,27 @@ describe('SessionService', () => {
 
     const sessions = service.getByProjectId(projectId)
     expect(sessions).toHaveLength(2)
+  })
+
+  it('captures activity while running and clears on completion', async () => {
+    const session = service.create({
+      projectId,
+      workspaceId: null,
+      providerId: 'test-provider',
+      model: 'test-model',
+      effort: null,
+      name: 'activity test',
+    })
+
+    service.start(session.id, 'Go')
+    await vi.advanceTimersByTimeAsync(200)
+    expect(service.getById(session.id)!.activity).toBe('streaming')
+
+    await vi.advanceTimersByTimeAsync(1800)
+    service.approve(session.id)
+    await vi.advanceTimersByTimeAsync(2000)
+    expect(service.getById(session.id)!.status).toBe('completed')
+    expect(service.getById(session.id)!.activity).toBeNull()
   })
 
   it('starts a session and receives transcript entries', async () => {
@@ -411,6 +443,7 @@ describe('SessionService', () => {
       },
       onAttentionChange: () => {},
       onContextWindowChange: () => {},
+      onActivityChange: () => {},
       onContinuationToken: () => {},
       sendMessage,
       approve: () => {},
@@ -509,6 +542,7 @@ describe('SessionService', () => {
           },
           onAttentionChange: () => {},
           onContextWindowChange: () => {},
+          onActivityChange: () => {},
           onContinuationToken: (listener) => {
             continuationListener = listener
             if (config.continuationToken) {

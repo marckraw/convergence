@@ -8,6 +8,7 @@ import type {
   SessionStatus,
   AttentionState,
   SessionContextWindow,
+  ActivitySignal,
 } from '../provider/provider.types'
 import {
   sessionFromRow,
@@ -203,6 +204,16 @@ export class SessionService {
     this.notifyUpdate(id)
   }
 
+  private updateActivity(id: string, activity: ActivitySignal): void {
+    this.db
+      .prepare(
+        "UPDATE sessions SET activity = ?, updated_at = datetime('now') WHERE id = ?",
+      )
+      .run(activity, id)
+
+    this.notifyUpdate(id)
+  }
+
   private notifyUpdate(id: string): void {
     if (this.onUpdate) {
       const session = this.getById(id)
@@ -251,6 +262,9 @@ export class SessionService {
 
     handle.onStatusChange((status: SessionStatus) => {
       this.updateField(session.id, 'status', status)
+      if (status !== 'running') {
+        this.updateActivity(session.id, null)
+      }
       if (status === 'failed') {
         this.activeHandles.delete(session.id)
       } else if (status === 'completed' && !provider.supportsContinuation) {
@@ -270,6 +284,10 @@ export class SessionService {
 
     handle.onContextWindowChange((contextWindow: SessionContextWindow) => {
       this.updateContextWindow(session.id, contextWindow)
+    })
+
+    handle.onActivityChange((activity: ActivitySignal) => {
+      this.updateActivity(session.id, activity)
     })
   }
 }
