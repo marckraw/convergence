@@ -108,22 +108,40 @@ export class SessionService {
     this.db.prepare('DELETE FROM sessions WHERE id = ?').run(id)
   }
 
+  archive(id: string): void {
+    if (!this.getById(id)) throw new Error(`Session not found: ${id}`)
+    this.updateArchiveState(id, new Date().toISOString())
+  }
+
+  unarchive(id: string): void {
+    if (!this.getById(id)) throw new Error(`Session not found: ${id}`)
+    this.updateArchiveState(id, null)
+  }
+
   start(id: string, message: string): void {
     const session = this.getById(id)
     if (!session) throw new Error(`Session not found: ${id}`)
+
+    if (session.archivedAt) {
+      this.updateArchiveState(id, null)
+    }
 
     this.startHandle(session, message, this.getContinuationToken(id))
   }
 
   sendMessage(id: string, text: string): void {
+    const session = this.getById(id)
+    if (!session) throw new Error(`Session not found: ${id}`)
+
+    if (session.archivedAt) {
+      this.updateArchiveState(id, null)
+    }
+
     const handle = this.activeHandles.get(id)
     if (handle) {
       handle.sendMessage(text)
       return
     }
-
-    const session = this.getById(id)
-    if (!session) throw new Error(`Session not found: ${id}`)
 
     const provider = this.providers.get(session.providerId)
     if (!provider) throw new Error(`Provider not found: ${session.providerId}`)
@@ -180,7 +198,7 @@ export class SessionService {
     this.notifyUpdate(id)
   }
 
-  private updateField(id: string, field: string, value: string): void {
+  private updateField(id: string, field: string, value: string | null): void {
     this.db
       .prepare(
         `UPDATE sessions SET ${field} = ?, updated_at = datetime('now') WHERE id = ?`,
@@ -201,6 +219,38 @@ export class SessionService {
       .run(JSON.stringify(contextWindow), id)
 
     this.notifyUpdate(id)
+  }
+
+  private updateArchiveState(id: string, archivedAt: string | null): void {
+    this.db
+      .prepare(
+        "UPDATE sessions SET archived_at = ?, updated_at = datetime('now') WHERE id = ?",
+      )
+      .run(archivedAt, id)
+
+    this.notifyUpdate(id)
+  }
+
+  private updateAttention(id: string, attention: AttentionState): void {
+    const row = this.getRowById(id)
+    if (!row) {
+      return
+    }
+
+    if (
+      row.archived_at &&
+      (attention === 'needs-approval' || attention === 'needs-input')
+    ) {
+      this.db
+        .prepare(
+          "UPDATE sessions SET attention = ?, archived_at = NULL, updated_at = datetime('now') WHERE id = ?",
+        )
+        .run(attention, id)
+      this.notifyUpdate(id)
+      return
+    }
+
+    this.updateField(id, 'attention', attention)
   }
 
   private notifyUpdate(id: string): void {
@@ -259,7 +309,7 @@ export class SessionService {
     })
 
     handle.onAttentionChange((attention: AttentionState) => {
-      this.updateField(session.id, 'attention', attention)
+      this.updateAttention(session.id, attention)
     })
 
     handle.onContinuationToken((token: string) => {

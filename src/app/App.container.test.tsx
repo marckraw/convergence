@@ -50,6 +50,8 @@ const mockElectronAPI = {
     getByProjectId: vi.fn().mockResolvedValue([]),
     getById: vi.fn(),
     getNeedsYouDismissals: vi.fn().mockResolvedValue({}),
+    archive: vi.fn(),
+    unarchive: vi.fn(),
     delete: vi.fn(),
     start: vi.fn(),
     sendMessage: vi.fn(),

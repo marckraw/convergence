@@ -123,11 +123,13 @@ describe('NeedsYou', () => {
   it('renders project context and selects attention sessions', () => {
     const onSelect = vi.fn()
     const onDismiss = vi.fn()
+    const onArchive = vi.fn()
 
     render(
       <TooltipProvider>
         <NeedsYou
-          sessions={[
+          waitingSessions={[]}
+          reviewSessions={[
             {
               session: {
                 id: 'session-1',
@@ -152,11 +154,13 @@ describe('NeedsYou', () => {
           activeSessionId={null}
           onSelect={onSelect}
           onDismiss={onDismiss}
+          onArchive={onArchive}
         />
       </TooltipProvider>,
     )
 
     expect(screen.getByText('Needs You (1)')).toBeInTheDocument()
+    expect(screen.getByText('Needs Review')).toBeInTheDocument()
     expect(screen.getByText('Finished')).toBeInTheDocument()
     expect(screen.getByText('RoomFinder')).toBeInTheDocument()
 
@@ -164,60 +168,18 @@ describe('NeedsYou', () => {
 
     expect(onSelect).toHaveBeenCalledWith('session-1')
     expect(onDismiss).not.toHaveBeenCalled()
+    expect(onArchive).not.toHaveBeenCalled()
   })
 
-  it('dismisses an item without selecting the session', () => {
+  it('renders waiting and review sections separately', () => {
     const onSelect = vi.fn()
     const onDismiss = vi.fn()
+    const onArchive = vi.fn()
 
     render(
       <TooltipProvider>
         <NeedsYou
-          sessions={[
-            {
-              session: {
-                id: 'session-1',
-                projectId: 'project-1',
-                workspaceId: null,
-                providerId: 'claude-code',
-                model: 'sonnet',
-                effort: 'medium',
-                name: 'Review RoomFinder',
-                status: 'completed',
-                attention: 'finished',
-                workingDirectory: '/tmp/project-1',
-                transcript: [],
-                createdAt: '2026-01-01T00:00:00.000Z',
-                updatedAt: '2026-01-01T00:00:00.000Z',
-              },
-              projectName: 'RoomFinder',
-              summary: 'Finished',
-              priority: 3,
-            },
-          ]}
-          activeSessionId={null}
-          onSelect={onSelect}
-          onDismiss={onDismiss}
-        />
-      </TooltipProvider>,
-    )
-
-    fireEvent.click(
-      screen.getByRole('button', { name: /acknowledge review roomfinder/i }),
-    )
-
-    expect(onDismiss).toHaveBeenCalledWith('session-1')
-    expect(onSelect).not.toHaveBeenCalled()
-  })
-
-  it('snoozes active needs-you items without selecting the session', () => {
-    const onSelect = vi.fn()
-    const onDismiss = vi.fn()
-
-    render(
-      <TooltipProvider>
-        <NeedsYou
-          sessions={[
+          waitingSessions={[
             {
               session: {
                 id: 'session-2',
@@ -239,9 +201,171 @@ describe('NeedsYou', () => {
               priority: 0,
             },
           ]}
+          reviewSessions={[
+            {
+              session: {
+                id: 'session-3',
+                projectId: 'project-2',
+                workspaceId: null,
+                providerId: 'claude-code',
+                model: 'sonnet',
+                effort: 'medium',
+                name: 'Review release notes',
+                status: 'completed',
+                attention: 'finished',
+                workingDirectory: '/tmp/project-2',
+                transcript: [],
+                createdAt: '2026-01-01T00:00:00.000Z',
+                updatedAt: '2026-01-01T00:00:00.000Z',
+              },
+              projectName: 'Convergence',
+              summary: 'Finished',
+              priority: 3,
+            },
+          ]}
           activeSessionId={null}
           onSelect={onSelect}
           onDismiss={onDismiss}
+          onArchive={onArchive}
+        />
+      </TooltipProvider>,
+    )
+
+    expect(screen.getByText('Waiting on You')).toBeInTheDocument()
+    expect(screen.getByText('Needs Review')).toBeInTheDocument()
+  })
+
+  it('dismisses a review item without selecting the session', () => {
+    const onSelect = vi.fn()
+    const onDismiss = vi.fn()
+    const onArchive = vi.fn()
+
+    render(
+      <TooltipProvider>
+        <NeedsYou
+          waitingSessions={[]}
+          reviewSessions={[
+            {
+              session: {
+                id: 'session-1',
+                projectId: 'project-1',
+                workspaceId: null,
+                providerId: 'claude-code',
+                model: 'sonnet',
+                effort: 'medium',
+                name: 'Review RoomFinder',
+                status: 'completed',
+                attention: 'finished',
+                workingDirectory: '/tmp/project-1',
+                transcript: [],
+                createdAt: '2026-01-01T00:00:00.000Z',
+                updatedAt: '2026-01-01T00:00:00.000Z',
+              },
+              projectName: 'RoomFinder',
+              summary: 'Finished',
+              priority: 3,
+            },
+          ]}
+          activeSessionId={null}
+          onSelect={onSelect}
+          onDismiss={onDismiss}
+          onArchive={onArchive}
+        />
+      </TooltipProvider>,
+    )
+
+    fireEvent.click(
+      screen.getByRole('button', { name: /acknowledge review roomfinder/i }),
+    )
+
+    expect(onDismiss).toHaveBeenCalledWith('session-1')
+    expect(onSelect).not.toHaveBeenCalled()
+    expect(onArchive).not.toHaveBeenCalled()
+  })
+
+  it('archives a review item without selecting the session', () => {
+    const onSelect = vi.fn()
+    const onDismiss = vi.fn()
+    const onArchive = vi.fn()
+
+    render(
+      <TooltipProvider>
+        <NeedsYou
+          waitingSessions={[]}
+          reviewSessions={[
+            {
+              session: {
+                id: 'session-1',
+                projectId: 'project-1',
+                workspaceId: null,
+                providerId: 'claude-code',
+                model: 'sonnet',
+                effort: 'medium',
+                name: 'Review RoomFinder',
+                status: 'completed',
+                attention: 'finished',
+                workingDirectory: '/tmp/project-1',
+                transcript: [],
+                createdAt: '2026-01-01T00:00:00.000Z',
+                updatedAt: '2026-01-01T00:00:00.000Z',
+              },
+              projectName: 'RoomFinder',
+              summary: 'Finished',
+              priority: 3,
+            },
+          ]}
+          activeSessionId={null}
+          onSelect={onSelect}
+          onDismiss={onDismiss}
+          onArchive={onArchive}
+        />
+      </TooltipProvider>,
+    )
+
+    fireEvent.click(
+      screen.getByRole('button', { name: /archive review roomfinder/i }),
+    )
+
+    expect(onArchive).toHaveBeenCalledWith('session-1')
+    expect(onSelect).not.toHaveBeenCalled()
+    expect(onDismiss).not.toHaveBeenCalled()
+  })
+
+  it('snoozes active needs-you items without selecting the session', () => {
+    const onSelect = vi.fn()
+    const onDismiss = vi.fn()
+    const onArchive = vi.fn()
+
+    render(
+      <TooltipProvider>
+        <NeedsYou
+          waitingSessions={[
+            {
+              session: {
+                id: 'session-2',
+                projectId: 'project-2',
+                workspaceId: null,
+                providerId: 'claude-code',
+                model: 'sonnet',
+                effort: 'medium',
+                name: 'Need approval',
+                status: 'running',
+                attention: 'needs-approval',
+                workingDirectory: '/tmp/project-2',
+                transcript: [],
+                createdAt: '2026-01-01T00:00:00.000Z',
+                updatedAt: '2026-01-01T00:00:00.000Z',
+              },
+              projectName: 'Convergence',
+              summary: 'Approval needed',
+              priority: 0,
+            },
+          ]}
+          reviewSessions={[]}
+          activeSessionId={null}
+          onSelect={onSelect}
+          onDismiss={onDismiss}
+          onArchive={onArchive}
         />
       </TooltipProvider>,
     )
@@ -252,5 +376,6 @@ describe('NeedsYou', () => {
 
     expect(onDismiss).toHaveBeenCalledWith('session-2')
     expect(onSelect).not.toHaveBeenCalled()
+    expect(onArchive).not.toHaveBeenCalled()
   })
 })

@@ -111,6 +111,7 @@ interface SessionData {
   workingDirectory: string
   transcript: TranscriptEntry[]
   contextWindow?: SessionContextWindow | null
+  archivedAt?: string | null
   createdAt: string
   updatedAt: string
 }
@@ -181,6 +182,8 @@ interface ElectronAPI {
     getByProjectId: (projectId: string) => Promise<SessionData[]>
     getAll: () => Promise<SessionData[]>
     getById: (id: string) => Promise<SessionData | null>
+    archive: (id: string) => Promise<void>
+    unarchive: (id: string) => Promise<void>
     delete: (id: string) => Promise<void>
     start: (id: string, message: string) => Promise<void>
     sendMessage: (id: string, text: string) => Promise<void>

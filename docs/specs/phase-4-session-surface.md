@@ -1,223 +1,327 @@
-# Phase 4: UI-First Session Surface — Detailed Spec
+# Phase 4: Session Attention Surface and Archive Lifecycle — Detailed Spec
 
 > Parent: `docs/specs/project-spec.md`
-> Builds on: Phase 3 (provider system, session service, fake provider)
-> Design references: Divergence (attention model), T3 Code (thread grouping), Codex (clean minimal aesthetic)
+> Builds on: Phase 3 (provider-neutral runtime), current sidebar/session surface implementation
 
 ## Objective
 
-Replace the single-page project view with a proper app layout: resizable sidebar with "needs you" attention panel and project/workspace/session tree, plus a dedicated session view with scrollable transcript and composer. This is where Convergence starts feeling like a real product.
+Convergence already has the basic sidebar, transcript, composer, and multi-session navigation. Phase 4 is no longer about inventing that surface from scratch. It is about making the surface operationally correct:
 
-## Design Principles
+- the app must clearly separate what is waiting on the user from what is merely ready for review
+- terminal sessions must be manageable without deleting them
+- the working set must stay small through archive, not through destructive delete
 
-1. **Clean over complex** — closer to Codex than Divergence. No multi-pane, no tabs, no drag-reorder.
-2. **Attention-first** — "Needs You" at the top of the sidebar, always visible. The app tells you what to do.
-3. **Click to switch** — one session active at a time. Click sidebar item → main area loads that session.
-4. **Workspace hierarchy visible** — Project → Workspaces → Sessions in a tree. Unique to Convergence.
-5. **Dark mode default** — with light/system options via shadcn class strategy.
+This phase defines the durable attention model for the session surface and introduces archive as a first-class session lifecycle action.
+
+## Current Baseline
+
+The app already ships the following baseline:
+
+- sidebar with a cross-project attention panel
+- project/workspace/session tree
+- dedicated session view with transcript and composer
+- persisted needs-panel dismissals keyed by `session.updatedAt`
+- delete session from the project tree
+
+The current gaps are semantic, not structural:
+
+1. actionable attention and review attention are mixed together in one flat list
+2. acknowledge only hides an item from the queue; it does not reduce the session working set
+3. delete is overloaded as the only durable cleanup action
+4. there is no durable distinction between "I saw this" and "I am done with this session"
+
+## Product Principles
+
+1. **Attention is a routing system**. The app should tell the user where they are the bottleneck.
+2. **Review is not the same as response**. A finished session can matter without blocking anything.
+3. **Archive beats delete**. Most completed work should leave the working set without leaving history.
+4. **Dismissal is queue state, not domain state**. Snooze and acknowledge belong to the attention surface, not to the session record.
+5. **Archive is domain state**. It changes how the session participates in the default working set until explicitly or automatically reversed.
 
 ## Success Criteria
 
-1. App has resizable sidebar + main content layout
-2. Sidebar shows "Needs You" section with attention-prioritized sessions
-3. Sidebar shows project tree: project → workspaces → sessions
-4. Clicking a session loads its transcript in the main area
-5. Transcript scrolls, auto-scrolls on new entries, renders all entry types
-6. Inline approval/input cards in transcript with action buttons
-7. Composer at bottom with text input + send
-8. Session header shows name, status badge, provider, stop button
-9. Theme toggle (dark/light/system) works
-10. All Phase 0-3 verification commands still pass
+1. The attention panel visually separates "waiting on you" from "needs review"
+2. `needs-approval` and `needs-input` can be snoozed without losing the session
+3. `finished` and `failed` can be acknowledged without losing the session
+4. Sessions can be archived from the attention panel and from session rows in the project tree
+5. Archived sessions disappear from the default working set and from the attention panel
+6. Archived sessions remain recoverable from an archived section in the UI
+7. Delete remains available but clearly destructive and secondary to archive
+8. If an archived session later needs user input or approval, it automatically re-enters the working set
+9. All verification gates continue to pass once the implementation lands
 
 ## Scope
 
 ### In scope
 
-- App layout: sidebar + main content with resizable divider
-- Sidebar "Needs You" panel with prioritized sessions
-- Sidebar project tree with workspace/session hierarchy
-- Session view: header + transcript + composer
-- Transcript rendering for all entry types (user, assistant, tool-use, tool-result, approval-request, input-request, system)
-- Inline approval/deny buttons in transcript
-- Auto-scroll on new transcript entries
-- Theme toggle (dark/light/system)
-- Create session from sidebar (per workspace or project root)
-- Create workspace from sidebar
-- Empty states (no project, no sessions)
+- attention panel restructuring
+- clear semantics for snooze, acknowledge, archive, unarchive, delete
+- session schema update for archive metadata
+- archive and unarchive actions in backend, preload, renderer API, store, and UI
+- project tree support for archived sessions
+- tests covering archive behavior and attention resurfacing
+- spec cleanup to reflect the implemented sidebar/session surface baseline
 
 ### Out of scope
 
-- Multi-pane/tab layout (Phase 6+)
-- Rich Lexical editor for composer (future)
-- Virtualized transcript (add when profiling shows need)
-- File change panels (Phase 6)
-- Drag-reorder projects/sessions
-- Search/filter sessions
+- redesigning the transcript/composer layout from scratch
+- search and filtering across sessions
+- bulk archive or bulk delete
+- cross-device sync
+- persisting the active session selection across refresh/restart
+- changed-files or project metadata work beyond what already exists
 
-## Layout Spec
+## Terminology
 
+### Attention kinds
+
+- **Waiting on you**: `needs-approval`, `needs-input`
+- **Needs review**: `finished`, `failed`
+- **Not in attention queue**: `none`
+
+### Queue actions
+
+- **Snooze**: hide a waiting-on-you item until the session updates again
+- **Acknowledge**: hide a needs-review item until the session updates again
+
+These are persisted queue dismissals keyed to the session's current `updatedAt`. They do not alter the session record itself.
+
+### Session lifecycle actions
+
+- **Archive**: remove a session from the default working set while keeping transcript and history
+- **Unarchive**: restore an archived session to the default working set
+- **Delete**: permanently remove a session and its transcript data
+
+Archive and unarchive are durable session state changes. Delete is destructive.
+
+## UX Model
+
+### Attention Panel
+
+The sidebar keeps one attention surface, but it is split into two sections:
+
+1. **Waiting on You**
+2. **Needs Review**
+
+### Waiting on You
+
+Contains sessions with:
+
+- `needs-approval`
+- `needs-input`
+
+Sorting:
+
+- `needs-approval` before `needs-input`
+- then newest `updatedAt` first
+
+Primary row actions:
+
+- open session
+- snooze
+
+### Needs Review
+
+Contains sessions with:
+
+- `failed`
+- `finished`
+
+Sorting:
+
+- `failed` before `finished`
+- then newest `updatedAt` first
+
+Primary row actions:
+
+- open session
+- acknowledge
+- archive
+
+### Visibility rules
+
+- archived sessions never appear in the attention panel
+- snoozed and acknowledged items stay hidden until `updatedAt` changes
+- if a session changes after being snoozed or acknowledged, it must be eligible for attention again
+
+### Project Tree
+
+The default project tree shows only unarchived sessions in:
+
+- project-root sessions
+- workspace session lists
+
+An additional collapsed section appears at the bottom:
+
+- `Archived (n)`
+
+The archived section is per active project. It may be flat rather than grouped by workspace if that keeps the UI simpler and easier to scan.
+
+Archived session rows must support:
+
+- open session
+- unarchive
+- delete
+
+Unarchived session rows must support:
+
+- open session
+- archive
+- delete
+
+Delete should move behind a lower-emphasis affordance than archive. An overflow menu is preferred over multiple hover icons.
+
+### Session View
+
+The session view remains the main inspection and response surface.
+
+Requirements:
+
+- opening an archived session is allowed
+- archived sessions remain readable
+- if the user explicitly continues an archived session, the app should unarchive it before or as part of the continuation flow
+- archive state should be visible somewhere in the header or surrounding controls when an archived session is open
+
+## Behavioral Rules
+
+### Snooze
+
+- valid only for `needs-approval` and `needs-input`
+- persisted in the dismissal map with disposition `snoozed`
+- hides the item until `session.updatedAt` changes
+
+### Acknowledge
+
+- valid only for `finished` and `failed`
+- persisted in the dismissal map with disposition `acknowledged`
+- hides the item until `session.updatedAt` changes
+
+### Archive
+
+- valid for terminal sessions immediately
+- may also be allowed for non-terminal sessions from the project tree, but only if product behavior is clearly defined
+- removes the session from the default project tree and the attention panel
+- clears any dismissal entry for that session, since archive becomes the governing visibility rule
+
+### Auto-unarchive
+
+An archived session must automatically unarchive if either of these happens:
+
+- its attention changes to `needs-approval`
+- its attention changes to `needs-input`
+
+It should also unarchive on explicit user continuation of the session from the archived state.
+
+Passive terminal updates do not require auto-unarchive.
+
+### Delete
+
+- permanently removes the session record and transcript data
+- remains available from session-row actions
+- should be treated as secondary to archive in copy, placement, and styling
+
+## Data Model
+
+Add archive metadata to `sessions`.
+
+### SQLite
+
+```sql
+ALTER TABLE sessions ADD COLUMN archived_at TEXT;
 ```
-┌──────────────────────────────────────────────────────────────────┐
-│ Convergence                                              _ □ x  │
-├─────────────────────┬────────────────────────────────────────────┤
-│                     │                                            │
-│  NEEDS YOU (n)      │  Session Header                            │
-│  [attention items]  │  ──────────────────────────────────────    │
-│                     │                                            │
-│  ───────────────    │  Transcript (scrollable)                   │
-│                     │                                            │
-│  PROJECT TREE       │  [entries...]                               │
-│  ▼ project-name     │                                            │
-│    main (n)         │  [inline approval cards]                   │
-│    ▼ workspace (n)  │                                            │
-│      ● session      │  ──────────────────────────────────────    │
-│      ● session      │  Composer                                  │
-│    ▶ workspace (n)  │  [input + send]                            │
-│                     │                                            │
-│  + New Project      │                                            │
-│  ☀/🌙 Theme        │                                            │
-└─────────────────────┴────────────────────────────────────────────┘
+
+Rules:
+
+- `archived_at IS NULL` means active working-set session
+- non-null `archived_at` means archived session
+
+No separate archive table is needed for this phase.
+
+## Renderer and Backend Types
+
+Add:
+
+```ts
+interface Session {
+  archivedAt: string | null
+}
 ```
 
-**Sidebar:** ~260px default, resizable. Two sections stacked:
+## Persistence Boundaries
 
-- "Needs You" — sessions with `needs-approval` or `needs-input`, sorted by priority
-- Project tree — expandable workspaces with session lists and count badges
+### Session table
 
-**Main area:** Fills remaining width.
+Owns durable lifecycle state:
 
-- Header: session name, attention badge, provider, stop button
-- Transcript: full-height scroll container
-- Composer: fixed at bottom
+- transcript
+- status
+- attention
+- archive state
 
-**No session selected:** Show empty state with prompt to start a session.
+### App state
 
-## Attention Priority (from Divergence)
+Owns attention-surface dismissals:
 
-| Priority    | State            | Visual      | Action        |
-| ----------- | ---------------- | ----------- | ------------- |
-| 1 (highest) | `needs-approval` | Amber badge | Approve/Deny  |
-| 2           | `needs-input`    | Blue badge  | Type response |
-| 3           | `failed`         | Red badge   | Inspect       |
-| 4           | `finished`       | Green badge | Review        |
-| 5 (lowest)  | `none` (running) | Spinner     | Monitor       |
+- snoozed items
+- acknowledged items
 
-"Needs You" panel shows only priority 1-2 items. Badges show on all sessions in the tree.
+The dismissal map remains ephemeral relative to session domain state. It should stay keyed by session id plus `updatedAt`.
+
+## API Changes
+
+Add session APIs for:
+
+- `archive(id)`
+- `unarchive(id)`
+
+Existing reads may continue returning all sessions, including archived ones, with the renderer deriving:
+
+- working set
+- attention sections
+- archived section
+
+If implementation pressure suggests filtering in the service layer, that is acceptable, but the renderer must still be able to show archived sessions when needed.
 
 ## Deliverables
 
-### App layout
+### Backend
 
-| File                             | What it does                                                    |
-| -------------------------------- | --------------------------------------------------------------- |
-| `src/app/App.container.tsx`      | Rewritten: manages layout, sidebar state, active session, theme |
-| `src/app/App.presentational.tsx` | Rewritten: sidebar + main area resizable layout                 |
-| `src/app/layout/`                | Layout primitives if needed (resizable panel)                   |
+- update session schema migration in `electron/backend/database/database.ts`
+- extend session row typing and `sessionFromRow`
+- add archive and unarchive methods in `electron/backend/session/session.service.ts`
+- expose IPC handlers in `electron/main/ipc.ts`
+- expose preload bridge methods in `electron/preload/index.ts`
 
-### Sidebar widgets
+### Renderer entity layer
 
-| File                                                  | What it does                                    |
-| ----------------------------------------------------- | ----------------------------------------------- |
-| `src/widgets/sidebar/sidebar.container.tsx`           | Orchestrates needs-you + project tree + actions |
-| `src/widgets/sidebar/sidebar.presentational.tsx`      | Sidebar layout shell                            |
-| `src/widgets/sidebar/needs-you.presentational.tsx`    | Attention-prioritized session list              |
-| `src/widgets/sidebar/project-tree.presentational.tsx` | Project → workspace → session tree              |
-| `src/widgets/sidebar/index.ts`                        | Barrel                                          |
+- extend `Session` types with `archivedAt`
+- add `archiveSession` and `unarchiveSession` actions in `src/entities/session/session.model.ts`
+- ensure archive clears dismissal entries for the session
+- ensure session updates can auto-unarchive when attention becomes actionable
 
-### Session view widgets
+### Sidebar / session UI
 
-| File                                                             | What it does                                |
-| ---------------------------------------------------------------- | ------------------------------------------- |
-| `src/widgets/session-view/session-view.container.tsx`            | Loads active session, subscribes to updates |
-| `src/widgets/session-view/session-header.presentational.tsx`     | Name, badge, provider, stop                 |
-| `src/widgets/session-view/session-transcript.presentational.tsx` | Scrollable transcript with all entry types  |
-| `src/widgets/session-view/transcript-entry.presentational.tsx`   | Single transcript entry renderer            |
-| `src/widgets/session-view/approval-card.presentational.tsx`      | Inline approval request with buttons        |
-| `src/widgets/session-view/index.ts`                              | Barrel                                      |
+- split the attention panel into "Waiting on You" and "Needs Review"
+- add archive action in the needs-review rows
+- replace delete-only session-row affordances with archive-first session actions
+- add an archived section to the project tree
+- support unarchive from archived session rows
 
-### Composer feature
+### Tests
 
-| File                                                | What it does                                |
-| --------------------------------------------------- | ------------------------------------------- |
-| `src/features/composer/composer.container.tsx`      | Manages input state, sends message          |
-| `src/features/composer/composer.presentational.tsx` | Text input + send button + provider display |
-| `src/features/composer/index.ts`                    | Barrel                                      |
-
-### Theme feature
-
-| File                                                        | What it does                           |
-| ----------------------------------------------------------- | -------------------------------------- |
-| `src/features/theme-toggle/theme-toggle.container.tsx`      | Reads/writes theme preference          |
-| `src/features/theme-toggle/theme-toggle.presentational.tsx` | Sun/Moon/Monitor toggle button         |
-| `src/features/theme-toggle/index.ts`                        | Barrel                                 |
-| `src/shared/lib/theme.pure.ts`                              | Theme logic: get/set/apply theme class |
-
-### shadcn components to add
-
-| Component     | Used for                       |
-| ------------- | ------------------------------ |
-| `scroll-area` | Transcript scrolling           |
-| `resizable`   | Sidebar/main split (or custom) |
-| `tooltip`     | Button tooltips                |
-
-### Cleanup
-
-- Remove old `src/widgets/welcome/` (absorbed into sidebar empty state)
-- Remove old `src/widgets/project-header/` (absorbed into sidebar)
-- Remove old `src/widgets/workspace-list/` (absorbed into sidebar tree)
-- Remove old `src/widgets/session-list/` (absorbed into sidebar + session view)
+- session store tests for archive, unarchive, dismissal clearing, and auto-unarchive
+- sidebar tests for the two attention sections
+- project tree tests for archive/unarchive actions and archived section rendering
 
 ## Implementation Order
 
-### Step 1: Theme system
-
-- Create theme toggle feature + pure logic
-- Apply dark class on `<html>` element
-- Persist preference to localStorage
-- **Verify:** dark/light/system toggle works
-
-### Step 2: App layout shell
-
-- Rewrite App container + presentational with sidebar + main split
-- Basic resizable divider (CSS or simple drag handler)
-- **Verify:** layout renders with placeholder content
-
-### Step 3: Sidebar — project tree
-
-- Build project tree with workspace/session hierarchy
-- Session count badges on workspaces
-- Create workspace inline
-- Create session from workspace or project root
-- **Verify:** tree renders, items clickable
-
-### Step 4: Sidebar — "Needs You"
-
-- Compute attention-prioritized list from sessions
-- Show top attention items
-- Click to select session
-- **Verify:** sessions needing attention appear at top
-
-### Step 5: Session view — transcript
-
-- Build scrollable transcript renderer
-- Render all entry types with proper styling
-- Auto-scroll on new entries
-- Inline approval/deny cards
-- **Verify:** fake session transcript renders fully
-
-### Step 6: Session view — composer
-
-- Text input + send button
-- Provider display
-- Start new session flow (if no active session)
-- **Verify:** can send messages to active session
-
-### Step 7: Cleanup + integration
-
-- Remove old widgets
-- Update barrel exports
-- Full flow test: create project → workspace → session → approve → complete
-- **Verify:** all gates pass
+1. Update schema, backend types, service methods, IPC, and preload
+2. Extend renderer session types and store actions
+3. Split the attention panel into response vs review sections
+4. Add archive-first actions to session rows
+5. Add archived section and unarchive flow
+6. Add auto-unarchive handling for actionable attention
+7. Update tests and verify behavior end to end
 
 ## Verification Gate
 
@@ -231,12 +335,14 @@ npm run build
 chaperone check --fix
 ```
 
-Plus manual verification:
+Manual verification:
 
-- Dark/light/system theme toggle works
-- Sidebar shows "Needs You" with attention items
-- Project tree shows workspaces and sessions
-- Click session → transcript loads
-- Start fake session → watch streaming in transcript
-- Approve inline → session completes
-- Switch between sessions via sidebar
+- a `needs-input` or `needs-approval` session appears under "Waiting on You"
+- a `finished` or `failed` session appears under "Needs Review"
+- snooze hides an actionable item until the next session update
+- acknowledge hides a review item until the next session update
+- archive removes a session from both attention and the default project tree
+- archived sessions appear under `Archived (n)`
+- unarchive restores the session to the working set
+- delete still removes the session entirely
+- an archived session that later needs approval or input returns to the active working set automatically

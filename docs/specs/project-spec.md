@@ -5,7 +5,7 @@
 
 ## Objective
 
-Convergence is a UI-first Electron desktop app for managing AI agent work across local codebases. It replaces Divergence (Tauri + Rust) with a simpler Electron + Node stack while preserving the core product ideas: project-centered workflows, attention-driven session management ("needs you" / "finished"), and a provider-neutral agent runtime.
+Convergence is a UI-first Electron desktop app for managing AI agent work across local codebases. It replaces Divergence (Tauri + Rust) with a simpler Electron + Node stack while preserving the core product ideas: project-centered workflows, attention-driven session management (waiting on you, needs review, archived history), and a provider-neutral agent runtime.
 
 **Users:** Software engineers who run AI coding agents (Claude Code, Codex) against local repositories and need a dedicated surface to manage multiple concurrent agent sessions.
 
@@ -256,18 +256,18 @@ Co-located with source files:
 
 Each phase is self-contained and leaves the app testable end-to-end. A detailed spec is written at the start of each phase — not all upfront.
 
-| Phase | Name                       | Objective                                 | Key Deliverable                   |
-| ----- | -------------------------- | ----------------------------------------- | --------------------------------- |
-| 0     | Repository Bootstrap       | Disciplined repo with working toolchain   | App opens, test gate passes       |
-| 1     | Project Foundation         | Project as the central domain entity      | Create/open/persist projects      |
-| 2     | Workspaces (Git Worktrees) | Parallel branch work via worktrees        | Create/manage worktrees           |
-| 3     | Agent Runtime Core         | Provider-neutral session backbone         | Fake sessions with event bus      |
-| 4     | UI-First Session Surface   | Transcript, composer, attention routing   | Multi-session UX with "needs you" |
-| 5     | Real Provider Integrations | Claude Code + Codex adapters              | Run real agents against repos     |
-| 6     | Project-Aware Tooling      | Changed files, project metadata panels    | Session-to-project linking        |
-| 7     | Multi-Agent Orchestration  | Agent-to-agent collaboration and handoffs | Conductor workflows, agent chains |
-| 8     | Multi-Repo Projects        | Multiple repository roots per project     | Multi-repo project model          |
-| 9     | Terminal Surface           | Embedded terminal (deferred)              | Terminal in project context       |
+| Phase | Name                       | Objective                                   | Key Deliverable                           |
+| ----- | -------------------------- | ------------------------------------------- | ----------------------------------------- |
+| 0     | Repository Bootstrap       | Disciplined repo with working toolchain     | App opens, test gate passes               |
+| 1     | Project Foundation         | Project as the central domain entity        | Create/open/persist projects              |
+| 2     | Workspaces (Git Worktrees) | Parallel branch work via worktrees          | Create/manage worktrees                   |
+| 3     | Agent Runtime Core         | Provider-neutral session backbone           | Fake sessions with event bus              |
+| 4     | Session Attention Surface  | Attention routing, acknowledgement, archive | Multi-session UX with working-set control |
+| 5     | Real Provider Integrations | Claude Code + Codex adapters                | Run real agents against repos             |
+| 6     | Project-Aware Tooling      | Changed files, project metadata panels      | Session-to-project linking                |
+| 7     | Multi-Agent Orchestration  | Agent-to-agent collaboration and handoffs   | Conductor workflows, agent chains         |
+| 8     | Multi-Repo Projects        | Multiple repository roots per project       | Multi-repo project model                  |
+| 9     | Terminal Surface           | Embedded terminal (deferred)                | Terminal in project context               |
 
 ### Phase dependency chain
 
@@ -325,7 +325,7 @@ These decisions keep the door open for multi-agent collaboration:
 These apply across all phases:
 
 1. **Transcript stability** is a product requirement, not a visual nice-to-have
-2. **"Needs you" and "finished" attention routing** are first-class features
+2. **Attention routing and archive lifecycle** are first-class features
 3. **Project is the top-level domain object** — not sessions, not repos
 4. **Provider-neutral above the adapter boundary** — session model never couples to Claude/Codex specifics
 5. **Every phase leaves the app testable end-to-end** — no phase ships a broken intermediate state

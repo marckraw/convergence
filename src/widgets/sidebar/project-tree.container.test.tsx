@@ -4,9 +4,9 @@ import { TooltipProvider } from '@/shared/ui/tooltip'
 import { ProjectTree } from './project-tree.container'
 
 describe('ProjectTree', () => {
-  it('deletes a session without selecting it', () => {
+  it('archives a session without selecting it', () => {
     const onSelectSession = vi.fn()
-    const onDeleteSession = vi.fn()
+    const onArchiveSession = vi.fn()
 
     render(
       <TooltipProvider>
@@ -26,13 +26,16 @@ describe('ProjectTree', () => {
               attention: 'finished',
               workingDirectory: '/tmp/roomfinder',
               transcript: [],
+              archivedAt: null,
               createdAt: '2026-01-01T00:00:00.000Z',
               updatedAt: '2026-01-01T00:00:00.000Z',
             },
           ]}
           activeSessionId={null}
           onSelectSession={onSelectSession}
-          onDeleteSession={onDeleteSession}
+          onArchiveSession={onArchiveSession}
+          onUnarchiveSession={vi.fn()}
+          onDeleteSession={vi.fn()}
           onDeleteWorkspace={vi.fn()}
           onCreateWorkspace={vi.fn()}
         />
@@ -40,11 +43,60 @@ describe('ProjectTree', () => {
     )
 
     fireEvent.click(
-      screen.getByRole('button', { name: /delete session hey there/i }),
+      screen.getByRole('button', { name: /session actions hey there/i }),
+    )
+    fireEvent.click(screen.getByRole('menuitem', { name: /archive session/i }))
+
+    expect(onArchiveSession).toHaveBeenCalledWith('session-1')
+    expect(onSelectSession).not.toHaveBeenCalled()
+  })
+
+  it('unarchives a session from the archived section', () => {
+    const onUnarchiveSession = vi.fn()
+
+    render(
+      <TooltipProvider>
+        <ProjectTree
+          baseBranchName="master"
+          workspaces={[]}
+          sessions={[
+            {
+              id: 'session-archived',
+              projectId: 'project-1',
+              workspaceId: null,
+              providerId: 'claude-code',
+              model: 'sonnet',
+              effort: 'medium',
+              name: 'archived note',
+              status: 'completed',
+              attention: 'finished',
+              workingDirectory: '/tmp/roomfinder',
+              transcript: [],
+              archivedAt: '2026-01-02T00:00:00.000Z',
+              createdAt: '2026-01-01T00:00:00.000Z',
+              updatedAt: '2026-01-02T00:00:00.000Z',
+            },
+          ]}
+          activeSessionId={null}
+          onSelectSession={vi.fn()}
+          onArchiveSession={vi.fn()}
+          onUnarchiveSession={onUnarchiveSession}
+          onDeleteSession={vi.fn()}
+          onDeleteWorkspace={vi.fn()}
+          onCreateWorkspace={vi.fn()}
+        />
+      </TooltipProvider>,
     )
 
-    expect(onDeleteSession).toHaveBeenCalledWith('session-1')
-    expect(onSelectSession).not.toHaveBeenCalled()
+    fireEvent.click(screen.getByRole('button', { name: /archived/i }))
+    fireEvent.click(
+      screen.getByRole('button', { name: /session actions archived note/i }),
+    )
+    fireEvent.click(
+      screen.getByRole('menuitem', { name: /unarchive session/i }),
+    )
+
+    expect(onUnarchiveSession).toHaveBeenCalledWith('session-archived')
   })
 
   it('deletes a workspace without toggling it open', () => {
@@ -67,6 +119,8 @@ describe('ProjectTree', () => {
           sessions={[]}
           activeSessionId={null}
           onSelectSession={vi.fn()}
+          onArchiveSession={vi.fn()}
+          onUnarchiveSession={vi.fn()}
           onDeleteSession={vi.fn()}
           onDeleteWorkspace={onDeleteWorkspace}
           onCreateWorkspace={vi.fn()}
