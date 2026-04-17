@@ -2,7 +2,7 @@ import { useEffect } from 'react'
 import type { FC } from 'react'
 import { useProjectStore } from '@/entities/project'
 import { useWorkspaceStore } from '@/entities/workspace'
-import { useSessionStore, type Session } from '@/entities/session'
+import { sessionApi, useSessionStore, type Session } from '@/entities/session'
 import {
   AppSettingsDialogContainer,
   McpServersDialogContainer,
@@ -226,6 +226,12 @@ export const Sidebar: FC<SidebarProps> = ({
             onUnarchiveSession={unarchiveSession}
             onDeleteSession={(sessionId: string) =>
               deleteSession(sessionId, activeProject.id)
+            }
+            onRenameSession={(sessionId: string, name: string) =>
+              sessionApi.rename(sessionId, name).catch(() => undefined)
+            }
+            onRegenerateSessionName={(sessionId: string) =>
+              sessionApi.regenerateName(sessionId).catch(() => undefined)
             }
             onDeleteWorkspace={handleDeleteWorkspace}
             onCreateWorkspace={(branchName: string) =>

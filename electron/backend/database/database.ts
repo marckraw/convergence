@@ -30,6 +30,7 @@ const SCHEMA = `
     transcript TEXT NOT NULL DEFAULT '[]',
     context_window TEXT,
     archived_at TEXT,
+    name_auto_generated INTEGER NOT NULL DEFAULT 0,
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
     updated_at TEXT NOT NULL DEFAULT (datetime('now')),
     FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
@@ -74,6 +75,12 @@ function ensureSessionColumns(database: Database.Database): void {
 
   if (!columnNames.has('archived_at')) {
     database.exec('ALTER TABLE sessions ADD COLUMN archived_at TEXT')
+  }
+
+  if (!columnNames.has('name_auto_generated')) {
+    database.exec(
+      'ALTER TABLE sessions ADD COLUMN name_auto_generated INTEGER NOT NULL DEFAULT 0',
+    )
   }
 }
 

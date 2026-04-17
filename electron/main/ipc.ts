@@ -241,6 +241,14 @@ export function registerIpcHandlers(
     sessionService.stop(id)
   })
 
+  ipcMain.handle('session:rename', (_event, id: string, name: string) => {
+    sessionService.rename(id, name)
+  })
+
+  ipcMain.handle('session:regenerateName', async (_event, id: string) => {
+    await sessionService.regenerateName(id)
+  })
+
   // Provider handlers
   ipcMain.handle('provider:getAll', async () =>
     Promise.all(providerRegistry.getAll().map((p) => p.describe())),

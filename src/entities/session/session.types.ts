@@ -95,6 +95,7 @@ export interface ProviderInfo {
   vendorLabel: string
   supportsContinuation: boolean
   defaultModelId: string
+  fastModelId?: string | null
   modelOptions: ProviderModelOption[]
 }
 

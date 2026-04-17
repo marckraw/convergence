@@ -20,7 +20,9 @@ import {
   ChevronRight,
   GitBranch,
   MoreHorizontal,
+  Pencil,
   Plus,
+  Sparkles,
   Trash2,
   Undo2,
 } from 'lucide-react'
@@ -34,6 +36,8 @@ interface ProjectTreeProps {
   onArchiveSession: (id: string) => void
   onUnarchiveSession: (id: string) => void
   onDeleteSession: (id: string) => void
+  onRenameSession: (id: string, name: string) => void
+  onRegenerateSessionName: (id: string) => void
   onDeleteWorkspace: (workspaceId: string) => void
   onCreateWorkspace: (branchName: string) => void
 }
@@ -47,6 +51,8 @@ export const ProjectTree: FC<ProjectTreeProps> = ({
   onArchiveSession,
   onUnarchiveSession,
   onDeleteSession,
+  onRenameSession,
+  onRegenerateSessionName,
   onDeleteWorkspace,
   onCreateWorkspace,
 }) => {
@@ -56,6 +62,25 @@ export const ProjectTree: FC<ProjectTreeProps> = ({
   const [showArchivedSessions, setShowArchivedSessions] = useState(false)
   const [newBranch, setNewBranch] = useState('')
   const [showNewBranch, setShowNewBranch] = useState(false)
+  const [renamingSessionId, setRenamingSessionId] = useState<string | null>(
+    null,
+  )
+  const [renameDraft, setRenameDraft] = useState('')
+
+  const submitRename = () => {
+    if (!renamingSessionId) return
+    const next = renameDraft.trim()
+    if (next.length > 0) {
+      onRenameSession(renamingSessionId, next)
+    }
+    setRenamingSessionId(null)
+    setRenameDraft('')
+  }
+
+  const cancelRename = () => {
+    setRenamingSessionId(null)
+    setRenameDraft('')
+  }
 
   const toggleWorkspace = (id: string) => {
     setExpandedWorkspaces((prev) => {
@@ -93,6 +118,24 @@ export const ProjectTree: FC<ProjectTreeProps> = ({
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">
+          <DropdownMenuItem
+            className="gap-2"
+            onClick={() => {
+              setRenamingSessionId(session.id)
+              setRenameDraft(session.name)
+            }}
+          >
+            <Pencil className="h-3.5 w-3.5" />
+            <span>Rename</span>
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            className="gap-2"
+            onClick={() => onRegenerateSessionName(session.id)}
+          >
+            <Sparkles className="h-3.5 w-3.5" />
+            <span>Regenerate name</span>
+          </DropdownMenuItem>
+          <DropdownMenuSeparator />
           {isArchived ? (
             <DropdownMenuItem
               className="gap-2"
@@ -123,31 +166,65 @@ export const ProjectTree: FC<ProjectTreeProps> = ({
     )
   }
 
-  const renderSessionRow = (session: Session) => (
-    <div
-      key={session.id}
-      className={cn(
-        'group/session flex min-w-0 items-center gap-1 rounded pr-1 transition-colors hover:bg-accent',
-        activeSessionId === session.id && 'bg-accent',
-      )}
-    >
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <Button
-            type="button"
-            variant="ghost"
-            onClick={() => onSelectSession(session.id)}
-            className="h-auto min-w-0 flex-1 justify-start gap-1.5 px-1.5 py-1 text-left text-xs font-normal"
+  const renderSessionRow = (session: Session) => {
+    const isRenaming = renamingSessionId === session.id
+
+    return (
+      <div
+        key={session.id}
+        className={cn(
+          'group/session flex min-w-0 items-center gap-1 rounded pr-1 transition-colors hover:bg-accent',
+          activeSessionId === session.id && 'bg-accent',
+        )}
+      >
+        {isRenaming ? (
+          <form
+            className="flex min-w-0 flex-1 items-center gap-1.5 px-1.5 py-1"
+            onSubmit={(event) => {
+              event.preventDefault()
+              submitRename()
+            }}
           >
             <SessionBadge attention={session.attention} />
-            <span className="truncate">{session.name}</span>
-          </Button>
-        </TooltipTrigger>
-        <TooltipContent side="right">{session.name}</TooltipContent>
-      </Tooltip>
-      {renderSessionActions(session)}
-    </div>
-  )
+            <Input
+              value={renameDraft}
+              onChange={(event) => setRenameDraft(event.target.value)}
+              onBlur={submitRename}
+              onKeyDown={(event) => {
+                if (event.key === 'Escape') {
+                  event.preventDefault()
+                  cancelRename()
+                }
+              }}
+              className="h-6 flex-1 min-w-0 text-xs"
+              autoFocus
+              aria-label={`Rename ${session.name}`}
+            />
+          </form>
+        ) : (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={() => onSelectSession(session.id)}
+                onDoubleClick={() => {
+                  setRenamingSessionId(session.id)
+                  setRenameDraft(session.name)
+                }}
+                className="h-auto min-w-0 flex-1 justify-start gap-1.5 px-1.5 py-1 text-left text-xs font-normal"
+              >
+                <SessionBadge attention={session.attention} />
+                <span className="truncate">{session.name}</span>
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="right">{session.name}</TooltipContent>
+          </Tooltip>
+        )}
+        {renderSessionActions(session)}
+      </div>
+    )
+  }
 
   return (
     <div className="px-3">

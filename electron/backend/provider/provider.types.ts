@@ -88,7 +88,19 @@ export interface ProviderDescriptor {
   vendorLabel: string
   supportsContinuation: boolean
   defaultModelId: string
+  fastModelId?: string | null
   modelOptions: ProviderModelOption[]
+}
+
+export interface OneShotInput {
+  prompt: string
+  modelId: string
+  workingDirectory: string
+  timeoutMs?: number
+}
+
+export interface OneShotResult {
+  text: string
 }
 
 export interface SessionHandle {
@@ -112,4 +124,5 @@ export interface Provider {
   supportsContinuation: boolean
   describe: () => Promise<ProviderDescriptor>
   start: (config: SessionStartConfig) => SessionHandle
+  oneShot?: (input: OneShotInput) => Promise<OneShotResult>
 }

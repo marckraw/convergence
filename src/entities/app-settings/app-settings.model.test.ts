@@ -6,6 +6,7 @@ const EMPTY: AppSettings = {
   defaultProviderId: null,
   defaultModelId: null,
   defaultEffortId: null,
+  namingModelByProvider: {},
 }
 
 type BroadcastCallback = (settings: AppSettings) => void
@@ -57,6 +58,7 @@ describe('useAppSettingsStore', () => {
       defaultProviderId: 'claude-code',
       defaultModelId: 'opus',
       defaultEffortId: 'high',
+      namingModelByProvider: {},
     }
     installMockApi({ get: vi.fn().mockResolvedValue(stored) })
 
@@ -82,6 +84,7 @@ describe('useAppSettingsStore', () => {
       defaultProviderId: 'codex',
       defaultModelId: 'gpt-5.4',
       defaultEffortId: 'medium',
+      namingModelByProvider: {},
     }
     installMockApi({ set: vi.fn().mockResolvedValue(stored) })
 
@@ -101,6 +104,7 @@ describe('useAppSettingsStore', () => {
       defaultProviderId: 'codex',
       defaultModelId: 'gpt-5.4',
       defaultEffortId: 'high',
+      namingModelByProvider: {},
     }
     listeners.forEach((cb) => cb(updated))
 
