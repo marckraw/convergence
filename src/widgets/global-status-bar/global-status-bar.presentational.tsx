@@ -3,6 +3,7 @@ import type { ProjectActivity } from '@/entities/session'
 import type { ProviderInfo, Session } from '@/entities/session'
 import { CheckCircle2, CircleAlert, CircleDot, CircleOff } from 'lucide-react'
 import { cn } from '@/shared/lib/cn.pure'
+import { Button } from '@/shared/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/shared/ui/tooltip'
 import { AggregateSummary } from './aggregate-summary.presentational'
 import { ProjectSummary } from './project-summary.presentational'
@@ -112,10 +113,13 @@ export const GlobalStatusBar: FC<GlobalStatusBarProps> = ({
             {byProject.map((project) => (
               <Tooltip key={project.projectId}>
                 <TooltipTrigger asChild>
-                  <button
+                  <Button
                     type="button"
+                    variant="ghost"
+                    size="sm"
                     onClick={() => onSelectProject(project.projectId)}
                     className={cn(
+                      'h-auto px-1.5 py-0.5 text-[11px] font-medium shadow-none',
                       projectChipClass,
                       project.needsAttention.length > 0 &&
                         projectChipAttentionClass,
@@ -144,7 +148,7 @@ export const GlobalStatusBar: FC<GlobalStatusBarProps> = ({
                         </span>
                       )}
                     </span>
-                  </button>
+                  </Button>
                 </TooltipTrigger>
                 <TooltipContent side="top" className="max-w-sm">
                   <ProjectSummary
@@ -161,10 +165,15 @@ export const GlobalStatusBar: FC<GlobalStatusBarProps> = ({
       {recency ? (
         <Tooltip>
           <TooltipTrigger asChild>
-            <button
+            <Button
               type="button"
+              variant="ghost"
+              size="sm"
               onClick={() => onSelectProject(recency.session.projectId)}
-              className={recencyBadgeClass}
+              className={cn(
+                'h-auto px-1.5 py-0.5 text-[11px] font-medium shadow-none',
+                recencyBadgeClass,
+              )}
               data-testid="global-status-recency"
               aria-label={`Switch to project ${recency.projectName}`}
             >
@@ -177,7 +186,7 @@ export const GlobalStatusBar: FC<GlobalStatusBarProps> = ({
               <span className="text-muted-foreground/70">
                 · {recency.projectName}
               </span>
-            </button>
+            </Button>
           </TooltipTrigger>
           <TooltipContent side="top">
             <p className="font-medium text-foreground">

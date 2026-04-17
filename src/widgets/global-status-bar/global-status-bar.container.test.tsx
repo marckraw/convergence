@@ -1,6 +1,6 @@
 import { fireEvent, render, screen } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { useProjectStore } from '@/entities/project'
+import { DEFAULT_PROJECT_SETTINGS, useProjectStore } from '@/entities/project'
 import { useSessionStore } from '@/entities/session'
 import type { Project } from '@/entities/project'
 import type { ProviderInfo, Session } from '@/entities/session'
@@ -12,7 +12,7 @@ const projects: Project[] = [
     id: 'project-one',
     name: 'Project One',
     repositoryPath: '/tmp/project-one',
-    settings: {},
+    settings: DEFAULT_PROJECT_SETTINGS,
     createdAt: '2026-01-01T00:00:00.000Z',
     updatedAt: '2026-01-01T00:00:00.000Z',
   },
@@ -20,7 +20,7 @@ const projects: Project[] = [
     id: 'project-two',
     name: 'Project Two',
     repositoryPath: '/tmp/project-two',
-    settings: {},
+    settings: DEFAULT_PROJECT_SETTINGS,
     createdAt: '2026-01-01T00:00:00.000Z',
     updatedAt: '2026-01-01T00:00:00.000Z',
   },

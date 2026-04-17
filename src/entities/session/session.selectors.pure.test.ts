@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { DEFAULT_PROJECT_SETTINGS } from '../project'
 import type { Project } from '../project/project.types'
 import type { NeedsYouDismissals, Session } from './session.types'
 import { selectGlobalStatus } from './session.selectors.pure'
@@ -27,7 +28,7 @@ function makeProject(overrides: Partial<Project>): Project {
     id: 'project-1',
     name: 'Project One',
     repositoryPath: '/tmp/project-one',
-    settings: {},
+    settings: DEFAULT_PROJECT_SETTINGS,
     createdAt: '2026-01-01T00:00:00.000Z',
     updatedAt: '2026-01-01T00:00:00.000Z',
     ...overrides,
