@@ -1,0 +1,107 @@
+name: Publish Windows Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag to publish (for example v0.1.1)
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Resolve release tag
+        id: release
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            TAG="${{ inputs.tag }}"
+          else
+            TAG="$GITHUB_REF_NAME"
+          fi
+
+          if [ -z "$TAG" ]; then
+            echo "Release tag is required."
+            exit 1
+          fi
+
+          if [[ "$TAG" != v* ]]; then
+            echo "Release tag must start with v (got: $TAG)"
+            exit 1
+          fi
+
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout release tag for manual runs
+        if: github.event_name == 'workflow_dispatch'
+        shell: bash
+        run: |
+          git fetch --tags --force
+          git checkout "refs/tags/${{ steps.release.outputs.tag }}"
+
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Verify tag matches package version
+        shell: bash
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          if [ "v$VERSION" != "${{ steps.release.outputs.tag }}" ]; then
+            echo "Tag ${{ steps.release.outputs.tag }} does not match package version v$VERSION"
+            exit 1
+          fi
+
+      - name: Extract release notes
+        shell: bash
+        run: npm run release:notes -- "${{ steps.release.outputs.version }}" release-notes.md
+
+      - name: Build Windows artifacts (unsigned)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+        run: npm run package:win
+
+      - name: Publish GitHub Release
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if gh release view "${{ steps.release.outputs.tag }}" >/dev/null 2>&1; then
+            gh release upload "${{ steps.release.outputs.tag }}" \
+              release/Convergence-*.exe \
+              release/*.blockmap \
+              release/latest.yml \
+              --clobber
+            gh release edit "${{ steps.release.outputs.tag }}" \
+              --title "${{ steps.release.outputs.tag }}" \
+              --notes-file release-notes.md
+          else
+            gh release create "${{ steps.release.outputs.tag }}" \
+              release/Convergence-*.exe \
+              release/*.blockmap \
+              release/latest.yml \
+              --title "${{ steps.release.outputs.tag }}" \
+              --notes-file release-notes.md \
+              --verify-tag
+          fi

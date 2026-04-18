@@ -14,6 +14,8 @@
     "package:mac:dir": "npm run build && electron-builder --mac dir --publish never",
     "package:mac:unsigned": "npm run build && CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --mac dmg zip --publish never",
     "package:mac:dir:unsigned": "npm run build && CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --mac dir --publish never",
+    "package:win": "npm run build && electron-builder --win nsis --x64 --publish never",
+    "package:win:dir": "npm run build && electron-builder --win dir --publish never",
     "changeset": "changeset",
     "changeset:status": "changeset status --verbose",
     "changeset:version": "changeset version && npm install --package-lock-only",

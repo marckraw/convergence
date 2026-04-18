@@ -2,6 +2,7 @@
 
 > Parent: `docs/specs/project-spec.md`
 > Builds on: Phase 5 (real providers running against repos)
+> Status: **DONE (in-scope deliverables)** (verified 2026-04-17) — explicit Out-of-scope items (full editor, merge conflict UI, commit-from-UI, multi-file diff navigation, syntax highlighting) remain deferred
 
 ## Objective
 

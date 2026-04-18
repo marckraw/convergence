@@ -2,6 +2,7 @@
 
 > Parent: `docs/specs/project-spec.md`
 > Builds on: Phase 2 (workspaces/worktrees, chaperone rules)
+> Status: **DONE** (verified 2026-04-17)
 
 ## Objective
 

@@ -1,0 +1,16 @@
+# Normalize line endings across platforms so diffs stay consistent on Windows.
+* text=auto eol=lf
+
+# Treat these as binary to avoid any normalization.
+*.png binary
+*.ico binary
+*.icns binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.webp binary
+*.zip binary
+*.dmg binary
+*.exe binary
+*.node binary
+*.wasm binary

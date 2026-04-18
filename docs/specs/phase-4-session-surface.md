@@ -2,6 +2,7 @@
 
 > Parent: `docs/specs/project-spec.md`
 > Builds on: Phase 3 (provider-neutral runtime), current sidebar/session surface implementation
+> Status: **DONE** (verified 2026-04-17)
 
 ## Objective
 

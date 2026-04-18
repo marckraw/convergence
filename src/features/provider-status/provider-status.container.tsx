@@ -1,15 +1,21 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { FC } from 'react'
 import { Bot } from 'lucide-react'
 import { providerApi, type ProviderStatusInfo } from '@/entities/session'
 import { Button } from '@/shared/ui/button'
 import { ProviderStatusDialog } from './provider-status.presentational'
+import { normalizePlatform } from './install-hints.pure'
 
 export const ProviderStatusDialogContainer: FC = () => {
   const [open, setOpen] = useState(false)
   const [statuses, setStatuses] = useState<ProviderStatusInfo[]>([])
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  const platform = useMemo(() => {
+    const info = window.electronAPI.system?.getInfo?.()
+    return normalizePlatform(info?.platform ?? 'other')
+  }, [])
 
   const load = useCallback(async () => {
     setIsLoading(true)
@@ -44,6 +50,7 @@ export const ProviderStatusDialogContainer: FC = () => {
       isLoading={isLoading}
       error={error}
       onRefresh={load}
+      platform={platform}
       trigger={
         <Button
           type="button"

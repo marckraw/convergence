@@ -4,6 +4,8 @@ import type Database from 'better-sqlite3'
 import type { WorkspaceRow } from '../database/database.types'
 import { GitService } from '../git/git.service'
 import { normalizeProjectSettings } from '../project/project-settings.pure'
+import { validateBranchNameForPlatform } from './branch-name-validation.pure'
+import { checkWorktreePathLength } from './long-path.pure'
 import {
   workspaceFromRow,
   type Workspace,
@@ -18,6 +20,14 @@ export class WorkspaceService {
   ) {}
 
   async create(input: CreateWorkspaceInput): Promise<Workspace> {
+    const validation = validateBranchNameForPlatform(
+      input.branchName,
+      process.platform,
+    )
+    if (!validation.valid) {
+      throw new Error(validation.reason)
+    }
+
     const project = this.db
       .prepare('SELECT repository_path, settings FROM projects WHERE id = ?')
       .get(input.projectId) as
@@ -32,6 +42,11 @@ export class WorkspaceService {
     const settings = normalizeProjectSettings(JSON.parse(project.settings))
     const id = randomUUID()
     const worktreePath = join(this.workspacesRoot, input.projectId, id)
+
+    const pathCheck = checkWorktreePathLength(worktreePath, process.platform)
+    if (pathCheck.exceedsLimit && pathCheck.message) {
+      console.warn(`[workspace] ${pathCheck.message}`)
+    }
 
     const branchExists = await this.git.branchExists(repoPath, input.branchName)
     const createBranch = !branchExists

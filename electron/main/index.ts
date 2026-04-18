@@ -20,6 +20,10 @@ import { hydrateProcessPathFromShell } from '../backend/environment/shell-path.s
 import { registerIpcHandlers } from './ipc'
 import { shouldOpenInSystemBrowser } from './external-links.pure'
 import { getWindowAppearanceOptions } from './window-effects.pure'
+import {
+  applyDockIcon,
+  shouldQuitOnWindowAllClosed,
+} from './app-chrome.service'
 import { formatStartupFailure } from './startup-failure.pure'
 
 function createWindow(): void {
@@ -154,9 +158,7 @@ async function startApp(): Promise<void> {
   )
 
   const runtimeIconPath = resolveRuntimeIconPath()
-  if (process.platform === 'darwin' && runtimeIconPath) {
-    app.dock?.setIcon(runtimeIconPath)
-  }
+  applyDockIcon(app, runtimeIconPath)
 
   createWindow()
 
@@ -177,7 +179,7 @@ function handleStartupFailure(err: unknown): void {
 app.whenReady().then(startApp).catch(handleStartupFailure)
 
 app.on('window-all-closed', () => {
-  if (process.platform !== 'darwin') {
+  if (shouldQuitOnWindowAllClosed()) {
     app.quit()
   }
 })

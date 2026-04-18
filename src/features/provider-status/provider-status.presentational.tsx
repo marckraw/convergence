@@ -11,6 +11,7 @@ import {
 } from '@/shared/ui/dialog'
 import { Button } from '@/shared/ui/button'
 import { Bot, CircleAlert, CircleCheck, RefreshCw, Wrench } from 'lucide-react'
+import { getProviderInstallHint, type HostPlatform } from './install-hints.pure'
 
 interface ProviderStatusDialogProps {
   open: boolean
@@ -20,6 +21,7 @@ interface ProviderStatusDialogProps {
   isLoading: boolean
   error: string | null
   onRefresh: () => void
+  platform: HostPlatform
 }
 
 function renderStatusBadge(provider: ProviderStatusInfo) {
@@ -37,7 +39,49 @@ function renderStatusBadge(provider: ProviderStatusInfo) {
   )
 }
 
-function renderProviderRow(provider: ProviderStatusInfo) {
+function renderInstallHint(providerId: string, platform: HostPlatform) {
+  const hint = getProviderInstallHint(providerId, platform)
+  if (!hint) return null
+
+  return (
+    <div className="mt-2 space-y-2 rounded-md border border-amber-500/30 bg-amber-500/5 px-2.5 py-2 text-xs">
+      <p className="text-[11px] font-medium uppercase tracking-wide text-amber-300/90">
+        How to install
+      </p>
+      <p className="text-foreground/80">{hint.summary}</p>
+      <div className="space-y-1">
+        {hint.commands.map((command) => (
+          <pre
+            key={command}
+            className="overflow-x-auto rounded border border-border/60 bg-background/60 px-2 py-1 font-mono text-[11px] text-foreground/90"
+          >
+            {command}
+          </pre>
+        ))}
+      </div>
+      {hint.platformNote && (
+        <p className="text-muted-foreground">{hint.platformNote}</p>
+      )}
+      {hint.docsUrl && (
+        <p>
+          <a
+            href={hint.docsUrl}
+            target="_blank"
+            rel="noreferrer noopener"
+            className="text-primary underline-offset-2 hover:underline"
+          >
+            Open install guide
+          </a>
+        </p>
+      )}
+    </div>
+  )
+}
+
+function renderProviderRow(
+  provider: ProviderStatusInfo,
+  platform: HostPlatform,
+) {
   return (
     <div
       key={provider.id}
@@ -85,6 +129,8 @@ function renderProviderRow(provider: ProviderStatusInfo) {
           <p>{provider.reason ?? 'Provider binary is unavailable.'}</p>
         )}
       </div>
+      {provider.availability === 'unavailable' &&
+        renderInstallHint(provider.id, platform)}
     </div>
   )
 }
@@ -97,6 +143,7 @@ export const ProviderStatusDialog: FC<ProviderStatusDialogProps> = ({
   isLoading,
   error,
   onRefresh,
+  platform,
 }) => {
   const availableCount = statuses.filter(
     (provider) => provider.availability === 'available',
@@ -136,7 +183,9 @@ export const ProviderStatusDialog: FC<ProviderStatusDialogProps> = ({
               </div>
 
               <div className="space-y-3">
-                {statuses.map((provider) => renderProviderRow(provider))}
+                {statuses.map((provider) =>
+                  renderProviderRow(provider, platform),
+                )}
               </div>
             </div>
           )}

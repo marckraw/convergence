@@ -2,6 +2,7 @@
 
 > Parent: `docs/specs/project-spec.md`
 > Builds on: Phase 0 (working repo, toolchain, app shell)
+> Status: **DONE** (verified 2026-04-17)
 
 ## Objective
 

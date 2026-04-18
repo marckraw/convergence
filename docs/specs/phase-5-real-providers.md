@@ -3,6 +3,7 @@
 > Parent: `docs/specs/project-spec.md`
 > Builds on: Phase 4 (session UX with sidebar, transcript, composer)
 > Research: Divergence (Claude Code adapter), T3 Code (Codex app-server adapter)
+> Status: **DONE** (verified 2026-04-17) — Claude Code, Codex, and Pi adapters all functional end-to-end
 
 ## Objective
 
