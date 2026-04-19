@@ -1,5 +1,11 @@
 # convergence
 
+## 0.11.0
+
+### Minor Changes
+
+- 6c5ba58: Embedded terminal surface: PTY-backed dock with recursive splits, tabs, keyboard shortcuts (Cmd-T/D/W/K/`/arrows), close-confirm on running foreground process, and user-resizable dock height. Panes open in the active session's working directory; PTYs clean up on window/app close.
+
 ## 0.10.2
 
 ### Patch Changes
