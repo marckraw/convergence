@@ -42,10 +42,15 @@ export const CommandCenterPalette: FC<CommandCenterPaletteProps> = ({
 }) => {
   const renderRow = (item: PaletteItem) => {
     const { primary, secondary } = describeItem(item)
+    const kindLabel = describeKind(item.kind)
+    const accessibleLabel = secondary
+      ? `${kindLabel}: ${primary} — ${secondary}`
+      : `${kindLabel}: ${primary}`
     return (
       <CommandItem
         key={item.id}
         value={item.id}
+        aria-label={accessibleLabel}
         onSelect={() => onSelect(item)}
         className="flex cursor-pointer items-center justify-between gap-3 rounded-md px-3 py-2 text-sm aria-selected:bg-white/10"
       >
@@ -73,7 +78,11 @@ export const CommandCenterPalette: FC<CommandCenterPaletteProps> = ({
 
     const nonEmpty = view.sections.filter((section) => section.items.length > 0)
     if (nonEmpty.length === 0) {
-      return <CommandEmpty>No items yet.</CommandEmpty>
+      return (
+        <CommandEmpty>
+          No recents yet. Start a session to see it here.
+        </CommandEmpty>
+      )
     }
     return (
       <>
@@ -144,5 +153,22 @@ function describeItem(item: PaletteItem): {
       return { primary: item.title, secondary: item.projectName }
     case 'new-workspace':
       return { primary: item.title, secondary: item.projectName }
+  }
+}
+
+function describeKind(kind: PaletteItem['kind']): string {
+  switch (kind) {
+    case 'project':
+      return 'Project'
+    case 'workspace':
+      return 'Workspace'
+    case 'session':
+      return 'Session'
+    case 'dialog':
+      return 'Dialog'
+    case 'new-session':
+      return 'New session'
+    case 'new-workspace':
+      return 'New workspace'
   }
 }

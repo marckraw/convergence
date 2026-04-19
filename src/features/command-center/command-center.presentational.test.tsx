@@ -174,6 +174,58 @@ describe('CommandCenterPalette', () => {
     expect(onQueryChange).toHaveBeenCalledWith('a')
   })
 
+  it('labels each row with the entity kind for screen readers', () => {
+    render(
+      <CommandCenterPalette
+        open
+        query=""
+        view={{
+          mode: 'sections',
+          sections: [
+            { id: 'projects', title: 'Projects', items: [project] },
+            {
+              id: 'recent-sessions',
+              title: 'Recent Sessions',
+              items: [session],
+            },
+          ],
+        }}
+        onOpenChange={() => {}}
+        onQueryChange={() => {}}
+        onSelect={() => {}}
+      />,
+    )
+
+    expect(
+      screen.getByRole('option', { name: /^Project: alpha — \/repos\/alpha$/ }),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByRole('option', {
+        name: /^Session: fix login bug — alpha · feat\/login$/,
+      }),
+    ).toBeInTheDocument()
+  })
+
+  it('shows a "no recents yet" empty-state when every curated section is empty', () => {
+    const sections: CuratedSection[] = [
+      { id: 'waiting-on-you', title: 'Waiting on You', items: [] },
+      { id: 'recent-sessions', title: 'Recent Sessions', items: [] },
+    ]
+
+    render(
+      <CommandCenterPalette
+        open
+        query=""
+        view={{ mode: 'sections', sections }}
+        onOpenChange={() => {}}
+        onQueryChange={() => {}}
+        onSelect={() => {}}
+      />,
+    )
+
+    expect(screen.getByText(/No recents yet/i)).toBeInTheDocument()
+  })
+
   it('fires onSelect with the full palette item when a row is chosen', () => {
     const onSelect = vi.fn<(item: PaletteItem) => void>()
 
