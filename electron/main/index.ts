@@ -17,12 +17,18 @@ import { AppSettingsService } from '../backend/app-settings/app-settings.service
 import { AttachmentsService } from '../backend/attachments/attachments.service'
 import { SessionNamingService } from '../backend/session/naming/session-naming.service'
 import { hydrateProcessPathFromShell } from '../backend/environment/shell-path.service'
+import { TerminalService } from '../backend/terminal/terminal.service'
+import {
+  broadcastToRenderers,
+  registerTerminalIpcHandlers,
+} from '../backend/terminal/terminal.ipc'
+import { createNodePtyFactory } from '../backend/terminal/pty-factory'
 import { registerIpcHandlers } from './ipc'
 import { shouldOpenInSystemBrowser } from './external-links.pure'
 import { getWindowAppearanceOptions } from './window-effects.pure'
 import { formatStartupFailure } from './startup-failure.pure'
 
-function createWindow(): void {
+function createWindow(onClose?: () => void): void {
   const runtimeIconPath = resolveRuntimeIconPath()
 
   const mainWindow = new BrowserWindow({
@@ -41,6 +47,10 @@ function createWindow(): void {
       sandbox: false,
     },
   })
+
+  if (onClose) {
+    mainWindow.on('closed', onClose)
+  }
 
   if (process.env.ELECTRON_RENDERER_URL) {
     mainWindow.loadURL(process.env.ELECTRON_RENDERER_URL)
@@ -153,16 +163,30 @@ async function startApp(): Promise<void> {
     attachmentsService,
   )
 
+  const terminalService = new TerminalService(
+    createNodePtyFactory(),
+    broadcastToRenderers,
+  )
+  registerTerminalIpcHandlers(terminalService)
+
+  app.on('before-quit', () => {
+    terminalService.disposeAll()
+  })
+
   const runtimeIconPath = resolveRuntimeIconPath()
   if (process.platform === 'darwin' && runtimeIconPath) {
     app.dock?.setIcon(runtimeIconPath)
   }
 
-  createWindow()
+  const onWindowClosed = () => {
+    terminalService.disposeAll()
+  }
+
+  createWindow(onWindowClosed)
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
-      createWindow()
+      createWindow(onWindowClosed)
     }
   })
 }
