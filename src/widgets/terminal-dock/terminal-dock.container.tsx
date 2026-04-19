@@ -1,5 +1,5 @@
 import type { FC } from 'react'
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useSessionStore } from '@/entities/session'
 import {
   useTerminalStore,
@@ -66,6 +66,7 @@ export const TerminalDockContainer: FC = () => {
   const [closeRequest, setCloseRequest] = useState<CloseConfirmRequest | null>(
     null,
   )
+  const dockRef = useRef<HTMLDivElement>(null)
 
   const sessionId = activeSession?.id ?? null
   const cwd = activeSession?.workingDirectory ?? null
@@ -255,6 +256,8 @@ export const TerminalDockContainer: FC = () => {
     if (!sessionId) return
     const platform = getPlatform()
     const handler = (event: KeyboardEvent) => {
+      const root = dockRef.current
+      if (!root || !root.contains(document.activeElement)) return
       const shortcut = matchShortcut(event, platform)
       if (!shortcut) return
       event.preventDefault()
@@ -273,6 +276,7 @@ export const TerminalDockContainer: FC = () => {
   return (
     <>
       <div
+        ref={dockRef}
         className={dockStyles.root}
         style={{ height: dockHeight }}
         data-testid="terminal-dock"
