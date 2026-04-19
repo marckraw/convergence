@@ -16,6 +16,7 @@ export function App() {
   const clearProjectError = useProjectStore((s) => s.clearError)
   const workspaceError = useWorkspaceStore((s) => s.error)
   const clearWorkspaceError = useWorkspaceStore((s) => s.clearError)
+  const loadGlobalWorkspaces = useWorkspaceStore((s) => s.loadGlobalWorkspaces)
   const sessionError = useSessionStore((s) => s.error)
   const clearSessionError = useSessionStore((s) => s.clearError)
   const activeSessionId = useSessionStore((s) => s.activeSessionId)
@@ -45,6 +46,10 @@ export function App() {
   useEffect(() => {
     loadActiveProject()
   }, [loadActiveProject])
+
+  useEffect(() => {
+    void loadGlobalWorkspaces()
+  }, [loadGlobalWorkspaces])
 
   useEffect(() => {
     void loadAppSettings()
