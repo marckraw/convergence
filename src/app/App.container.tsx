@@ -6,6 +6,7 @@ import { useAppSettingsStore } from '@/entities/app-settings'
 import { Toaster, toast } from 'sonner'
 import { TooltipProvider } from '@/shared/ui/tooltip'
 import { applyTheme, getStoredTheme } from '@/shared/lib/theme'
+import { CommandCenterContainer } from '@/features/command-center'
 import { AppShell } from './App.layout'
 
 export function App() {
@@ -102,6 +103,7 @@ export function App() {
         loading={loading}
         hasProject={!!activeProject}
       />
+      <CommandCenterContainer />
       <Toaster position="bottom-right" />
     </TooltipProvider>
   )
