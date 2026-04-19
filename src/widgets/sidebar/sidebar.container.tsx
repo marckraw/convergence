@@ -11,6 +11,7 @@ import {
   ReleaseNotesDialogContainer,
   ThemeToggleButton,
 } from '@/features'
+import { switchToSession } from '@/features/command-center'
 import { NeedsYou } from './needs-you.presentational'
 import { buildNeedsYouSummary } from './needs-you.presentational'
 import { ProjectTree } from './project-tree.container'
@@ -133,30 +134,7 @@ export const Sidebar: FC<SidebarProps> = ({
   )
 
   const handleSelectNeedsYouSession = async (sessionId: string) => {
-    const targetSession = globalSessions.find(
-      (session) => session.id === sessionId,
-    )
-    if (!targetSession) {
-      return
-    }
-
-    if (activeProject?.id !== targetSession.projectId) {
-      const targetProject = projects.find(
-        (project) => project.id === targetSession.projectId,
-      )
-      prepareForProject(targetSession.projectId)
-      await setActiveProject(targetSession.projectId)
-      if (targetProject) {
-        await Promise.all([
-          loadWorkspaces(targetProject.id),
-          loadCurrentBranch(targetProject.repositoryPath),
-          loadSessions(targetProject.id),
-        ])
-      } else {
-        await loadSessions(targetSession.projectId)
-      }
-    }
-
+    await switchToSession(sessionId)
     onSelectSession(sessionId)
   }
 
