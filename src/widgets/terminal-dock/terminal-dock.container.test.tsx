@@ -519,6 +519,46 @@ describe('TerminalDock container', () => {
       expect(focusSpy).toHaveBeenCalledWith('s-1', 'l2')
     })
 
+    it('Cmd-T shows the dock when hidden', () => {
+      setupSingleLeaf()
+      useTerminalStore.setState((state) => ({
+        ...state,
+        dockVisibleBySessionId: { 's-1': false },
+      }))
+      const setVisibleSpy = vi.spyOn(
+        useTerminalStore.getState(),
+        'setDockVisible',
+      )
+      vi.spyOn(useTerminalStore.getState(), 'newTab').mockResolvedValue(
+        makeTab('t-2'),
+      )
+
+      render(<TerminalDock />)
+      fireEvent.keyDown(window, { key: 't', metaKey: true })
+
+      expect(setVisibleSpy).toHaveBeenCalledWith('s-1', true)
+    })
+
+    it('Cmd-T opens the first pane when the session has no tree', () => {
+      useSessionStore.setState({
+        sessions: [makeSession()],
+        activeSessionId: 's-1',
+      } as Partial<ReturnType<typeof useSessionStore.getState>>)
+      const openFirstPaneSpy = vi
+        .spyOn(useTerminalStore.getState(), 'openFirstPane')
+        .mockResolvedValue({ leafId: 'l1', tab: makeTab('t-1') })
+
+      render(<TerminalDock />)
+      fireEvent.keyDown(window, { key: 't', metaKey: true })
+
+      expect(openFirstPaneSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          sessionId: 's-1',
+          cwd: '/tmp/session-cwd',
+        }),
+      )
+    })
+
     it('Cmd-` toggles dock visibility', () => {
       setupSingleLeaf()
       const toggleSpy = vi.spyOn(

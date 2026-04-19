@@ -60,6 +60,8 @@ export const TerminalDockContainer: FC = () => {
   const setFocusedLeaf = useTerminalStore((s) => s.setFocusedLeaf)
   const resizeSplit = useTerminalStore((s) => s.resizeSplit)
   const toggleDockVisible = useTerminalStore((s) => s.toggleDockVisible)
+  const setDockVisible = useTerminalStore((s) => s.setDockVisible)
+  const openFirstPane = useTerminalStore((s) => s.openFirstPane)
 
   const [closeRequest, setCloseRequest] = useState<CloseConfirmRequest | null>(
     null,
@@ -162,6 +164,33 @@ export const TerminalDockContainer: FC = () => {
   const dispatchShortcut = useCallback(
     (shortcut: TerminalShortcut) => {
       if (!sessionId) return
+
+      if (shortcut.kind === 'new-tab') {
+        const visible =
+          useTerminalStore.getState().dockVisibleBySessionId[sessionId] ?? true
+        if (!visible) setDockVisible(sessionId, true)
+        const treeNow = useTerminalStore.getState().getTree(sessionId)
+        if (!treeNow) {
+          if (!cwd) return
+          void openFirstPane({
+            sessionId,
+            cwd,
+            cols: DEFAULT_COLS,
+            rows: DEFAULT_ROWS,
+          })
+          return
+        }
+        const focused =
+          useTerminalStore.getState().focusedLeafBySessionId[sessionId] ?? null
+        if (focused) handleNewTab(focused)
+        return
+      }
+
+      if (shortcut.kind === 'toggle-dock') {
+        toggleDockVisible(sessionId)
+        return
+      }
+
       const currentTree = useTerminalStore.getState().getTree(sessionId)
       if (!currentTree) return
       const leafId =
@@ -169,10 +198,6 @@ export const TerminalDockContainer: FC = () => {
       const leafEntry = leafId ? findLeaf(currentTree, leafId) : null
 
       switch (shortcut.kind) {
-        case 'new-tab': {
-          if (leafId) handleNewTab(leafId)
-          return
-        }
         case 'split': {
           if (leafId) handleSplit(leafId, shortcut.direction)
           return
@@ -210,20 +235,19 @@ export const TerminalDockContainer: FC = () => {
           xtermRegistry.clear(leafEntry.leaf.activeTabId)
           return
         }
-        case 'toggle-dock': {
-          toggleDockVisible(sessionId)
-          return
-        }
       }
     },
     [
       sessionId,
+      cwd,
       handleNewTab,
       handleSplit,
       closeTabWithGuard,
       setActiveTab,
       setFocusedLeaf,
       toggleDockVisible,
+      setDockVisible,
+      openFirstPane,
     ],
   )
 
