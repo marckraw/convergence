@@ -6,6 +6,7 @@ import {
   type ReasoningEffort,
 } from '@/entities/session'
 import { useAppSettingsStore } from '@/entities/app-settings'
+import { useDialogStore } from '@/entities/dialog'
 import { AppSettingsDialog } from './app-settings.presentational'
 
 interface AppSettingsContainerProps {
@@ -24,7 +25,16 @@ const EMPTY_NAMING_DRAFT: Record<string, string> = {}
 export const AppSettingsDialogContainer: FC<AppSettingsContainerProps> = ({
   trigger,
 }) => {
-  const [open, setOpen] = useState(false)
+  const open = useDialogStore((s) => s.openDialog === 'app-settings')
+  const openDialog = useDialogStore((s) => s.open)
+  const closeDialog = useDialogStore((s) => s.close)
+  const handleOpenChange = useCallback(
+    (next: boolean) => {
+      if (next) openDialog('app-settings')
+      else closeDialog()
+    },
+    [openDialog, closeDialog],
+  )
   const [draft, setDraft] = useState<Draft>(EMPTY_DRAFT)
   const [namingDraft, setNamingDraft] =
     useState<Record<string, string>>(EMPTY_NAMING_DRAFT)
@@ -126,8 +136,8 @@ export const AppSettingsDialogContainer: FC<AppSettingsContainerProps> = ({
   }, [providers])
 
   const handleCancel = useCallback(() => {
-    setOpen(false)
-  }, [])
+    closeDialog()
+  }, [closeDialog])
 
   const handleSave = useCallback(async () => {
     try {
@@ -137,16 +147,16 @@ export const AppSettingsDialogContainer: FC<AppSettingsContainerProps> = ({
         defaultEffortId: selection.effort?.id ?? null,
         namingModelByProvider: namingDraft,
       })
-      setOpen(false)
+      closeDialog()
     } catch {
       // error already surfaced on store
     }
-  }, [saveSettings, selection, namingDraft])
+  }, [saveSettings, selection, namingDraft, closeDialog])
 
   return (
     <AppSettingsDialog
       open={open}
-      onOpenChange={setOpen}
+      onOpenChange={handleOpenChange}
       trigger={trigger}
       providers={providers}
       selection={selection}

@@ -284,10 +284,7 @@ export const Sidebar: FC<SidebarProps> = ({
           <ProviderStatusDialogContainer />
         </div>
         <div className="mt-2">
-          <McpServersDialogContainer
-            projectId={activeProject?.id ?? null}
-            projectName={activeProject?.name ?? null}
-          />
+          <McpServersDialogContainer />
         </div>
         <div className="mt-2">
           <ReleaseNotesDialogContainer />

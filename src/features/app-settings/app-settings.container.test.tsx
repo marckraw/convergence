@@ -2,6 +2,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { useSessionStore } from '@/entities/session'
 import { useAppSettingsStore } from '@/entities/app-settings'
+import { useDialogStore } from '@/entities/dialog'
 import { Button } from '@/shared/ui/button'
 import { AppSettingsDialogContainer } from './app-settings.container'
 
@@ -93,6 +94,7 @@ function primeStores(stored: {
 describe('AppSettingsDialogContainer', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    useDialogStore.setState({ openDialog: null })
     ;(window as unknown as { electronAPI: unknown }).electronAPI = {
       provider: { getAll: vi.fn().mockResolvedValue(providers) },
       appSettings: {

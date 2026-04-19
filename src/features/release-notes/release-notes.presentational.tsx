@@ -15,18 +15,22 @@ import { Button } from '@/shared/ui/button'
 import { Markdown } from '@/shared/ui/markdown.presentational'
 
 interface ReleaseNotesProps {
+  open: boolean
+  onOpenChange: (open: boolean) => void
   bundle: ReleaseNotesBundle
   trigger: ReactNode
 }
 
 export const ReleaseNotesDialog: FC<ReleaseNotesProps> = ({
+  open,
+  onOpenChange,
   bundle,
   trigger,
 }) => {
   const latest = bundle.releases[0] ?? null
 
   return (
-    <Dialog>
+    <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogTrigger asChild>{trigger}</DialogTrigger>
       <DialogContent className="p-0">
         <DialogHeader className="border-b border-border/70 px-6 py-5">
