@@ -5,7 +5,14 @@ import { useWorkspaceStore } from '@/entities/workspace'
 import { useSessionStore } from '@/entities/session'
 import type { Session } from '@/entities/session'
 import { useDialogStore } from '@/entities/dialog'
-import { activateProject, openDialog, switchToSession } from './intents'
+import type { Workspace } from '@/entities/workspace'
+import {
+  activateProject,
+  beginSessionDraft,
+  beginWorkspaceDraft,
+  openDialog,
+  switchToSession,
+} from './intents'
 
 function makeProject(id: string, name: string): Project {
   return {
@@ -54,6 +61,18 @@ describe('command-center intents', () => {
     typeof vi.fn<(projectId: string | null) => void>
   >
   let setActiveSession: ReturnType<typeof vi.fn<(id: string | null) => void>>
+  let beginSessionDraftMock: ReturnType<
+    typeof vi.fn<(workspaceId: string | null) => void>
+  >
+
+  const betaWorkspace: Workspace = {
+    id: 'w-beta',
+    projectId: 'p2',
+    branchName: 'feature-x',
+    path: '/repos/beta/feature-x',
+    type: 'worktree',
+    createdAt: '2026-01-01T00:00:00.000Z',
+  }
 
   beforeEach(() => {
     setActiveProject = vi.fn<(id: string) => Promise<void>>(
@@ -70,6 +89,7 @@ describe('command-center intents', () => {
     )
     prepareForProject = vi.fn<(projectId: string | null) => void>()
     setActiveSession = vi.fn<(id: string | null) => void>()
+    beginSessionDraftMock = vi.fn<(workspaceId: string | null) => void>()
 
     useProjectStore.setState({
       projects: [alpha, beta],
@@ -78,7 +98,7 @@ describe('command-center intents', () => {
     })
     useWorkspaceStore.setState({
       workspaces: [],
-      globalWorkspaces: [],
+      globalWorkspaces: [betaWorkspace],
       currentBranch: null,
       loadWorkspaces,
       loadCurrentBranch,
@@ -96,6 +116,7 @@ describe('command-center intents', () => {
       prepareForProject,
       setActiveSession,
       loadSessions,
+      beginSessionDraft: beginSessionDraftMock,
     })
     useDialogStore.setState({ openDialog: null })
   })
@@ -185,6 +206,47 @@ describe('command-center intents', () => {
       openDialog('app-settings')
       openDialog('mcp-servers')
       expect(useDialogStore.getState().openDialog).toBe('mcp-servers')
+    })
+  })
+
+  describe('beginSessionDraft', () => {
+    it('hops to the workspace owner project and starts a draft', async () => {
+      await beginSessionDraft('w-beta')
+
+      expect(setActiveProject).toHaveBeenCalledWith('p2')
+      expect(beginSessionDraftMock).toHaveBeenCalledWith('w-beta')
+    })
+
+    it('skips the hop when the workspace lives in the active project', async () => {
+      useProjectStore.setState({ activeProject: beta })
+
+      await beginSessionDraft('w-beta')
+
+      expect(setActiveProject).not.toHaveBeenCalled()
+      expect(beginSessionDraftMock).toHaveBeenCalledWith('w-beta')
+    })
+
+    it('no-ops when the workspace id is not in globalWorkspaces', async () => {
+      await beginSessionDraft('missing')
+
+      expect(setActiveProject).not.toHaveBeenCalled()
+      expect(beginSessionDraftMock).not.toHaveBeenCalled()
+    })
+  })
+
+  describe('beginWorkspaceDraft', () => {
+    it('activates the target project when it is not already active', async () => {
+      await beginWorkspaceDraft('p2')
+
+      expect(setActiveProject).toHaveBeenCalledWith('p2')
+    })
+
+    it('short-circuits when the target project is already active', async () => {
+      useProjectStore.setState({ activeProject: beta })
+
+      await beginWorkspaceDraft('p2')
+
+      expect(setActiveProject).not.toHaveBeenCalled()
     })
   })
 })

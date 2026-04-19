@@ -50,3 +50,16 @@ export async function activateProject(projectId: string): Promise<void> {
 export function openDialog(kind: DialogKind): void {
   useDialogStore.getState().open(kind)
 }
+
+export async function beginSessionDraft(workspaceId: string): Promise<void> {
+  const workspace = useWorkspaceStore
+    .getState()
+    .globalWorkspaces.find((w) => w.id === workspaceId)
+  if (!workspace) return
+  await activateProject(workspace.projectId)
+  useSessionStore.getState().beginSessionDraft(workspaceId)
+}
+
+export async function beginWorkspaceDraft(projectId: string): Promise<void> {
+  await activateProject(projectId)
+}

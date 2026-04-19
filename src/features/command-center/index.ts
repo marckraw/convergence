@@ -26,7 +26,13 @@ export type {
   CuratedSectionId,
   RankedItem,
 } from './command-center.types'
-export { switchToSession, activateProject, openDialog } from './intents'
+export {
+  switchToSession,
+  activateProject,
+  openDialog,
+  beginSessionDraft,
+  beginWorkspaceDraft,
+} from './intents'
 export { useCommandCenterStore } from './command-center.model'
 export type { CommandCenterStore } from './command-center.model'
 export { CommandCenterPalette } from './command-center.presentational'

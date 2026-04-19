@@ -11,7 +11,13 @@ import {
   PALETTE_FUSE_OPTIONS,
 } from './command-palette-ranking.pure'
 import { matchPaletteShortcut } from './command-palette-trigger.pure'
-import { activateProject, openDialog, switchToSession } from './intents'
+import {
+  activateProject,
+  beginSessionDraft,
+  beginWorkspaceDraft,
+  openDialog,
+  switchToSession,
+} from './intents'
 import {
   CommandCenterPalette,
   type CommandCenterView,
@@ -111,7 +117,10 @@ export function CommandCenterContainer() {
           openDialog(item.dialogKind)
           return
         case 'new-session':
+          void beginSessionDraft(item.workspaceId)
+          return
         case 'new-workspace':
+          void beginWorkspaceDraft(item.projectId)
           return
       }
     },

@@ -16,6 +16,12 @@ vi.mock('./intents', () => ({
     async () => undefined,
   ),
   openDialog: vi.fn<(kind: string) => void>(),
+  beginSessionDraft: vi.fn<(workspaceId: string) => Promise<void>>(
+    async () => undefined,
+  ),
+  beginWorkspaceDraft: vi.fn<(projectId: string) => Promise<void>>(
+    async () => undefined,
+  ),
 }))
 
 import { CommandCenterContainer } from './command-center.container'
@@ -82,6 +88,8 @@ describe('CommandCenterContainer', () => {
     vi.mocked(intents.switchToSession).mockClear()
     vi.mocked(intents.activateProject).mockClear()
     vi.mocked(intents.openDialog).mockClear()
+    vi.mocked(intents.beginSessionDraft).mockClear()
+    vi.mocked(intents.beginWorkspaceDraft).mockClear()
 
     useCommandCenterStore.setState({ isOpen: false, query: '' })
     useProjectStore.setState({
@@ -173,6 +181,23 @@ describe('CommandCenterContainer', () => {
         new KeyboardEvent('keydown', { key: 'k', metaKey: true }),
       )
     })
+    expect(useCommandCenterStore.getState().isOpen).toBe(false)
+  })
+
+  it('surfaces New session for a matching workspace branch under a typed query', () => {
+    render(<CommandCenterContainer />)
+
+    act(() => {
+      useCommandCenterStore.getState().open()
+    })
+
+    fireEvent.change(screen.getByPlaceholderText(/Search projects/i), {
+      target: { value: 'feature-x' },
+    })
+
+    fireEvent.click(screen.getByText('New session in feature-x'))
+
+    expect(intents.beginSessionDraft).toHaveBeenCalledWith('w2')
     expect(useCommandCenterStore.getState().isOpen).toBe(false)
   })
 
