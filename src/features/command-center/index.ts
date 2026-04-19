@@ -26,3 +26,4 @@ export type {
   CuratedSectionId,
   RankedItem,
 } from './command-center.types'
+export { switchToSession, activateProject, openDialog } from './intents'
