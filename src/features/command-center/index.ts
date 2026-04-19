@@ -27,3 +27,7 @@ export type {
   RankedItem,
 } from './command-center.types'
 export { switchToSession, activateProject, openDialog } from './intents'
+export { useCommandCenterStore } from './command-center.model'
+export type { CommandCenterStore } from './command-center.model'
+export { CommandCenterPalette } from './command-center.presentational'
+export type { CommandCenterView } from './command-center.presentational'

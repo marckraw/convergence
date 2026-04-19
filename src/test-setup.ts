@@ -14,6 +14,15 @@ if (typeof globalThis.ResizeObserver === 'undefined') {
   ).ResizeObserver = MockResizeObserver
 }
 
+// jsdom does not implement Element.scrollIntoView; cmdk calls it when the
+// highlighted item changes.
+if (
+  typeof Element !== 'undefined' &&
+  typeof Element.prototype.scrollIntoView !== 'function'
+) {
+  Element.prototype.scrollIntoView = function scrollIntoView() {}
+}
+
 // Pin navigator.platform so shortcut tests exercise the mac branch by default.
 if (typeof navigator !== 'undefined') {
   try {
