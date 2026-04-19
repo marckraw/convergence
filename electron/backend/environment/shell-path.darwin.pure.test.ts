@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { getFallbackPathEntries } from './shell-path.darwin.pure'
 
-describe('shell-path.darwin.pure', () => {
+describe.skipIf(process.platform === 'win32')('shell-path.darwin.pure', () => {
   it('includes Homebrew and standard Unix locations', () => {
     const entries = getFallbackPathEntries()
 
