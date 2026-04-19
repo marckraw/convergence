@@ -6,6 +6,7 @@ import type {
 } from '@/entities/session'
 import type { Attachment } from '@/entities/attachment'
 import { Button } from '@/shared/ui/button'
+import { Textarea } from '@/shared/ui/textarea'
 import { cn } from '@/shared/lib/cn.pure'
 import { ArrowUp, Paperclip } from 'lucide-react'
 import { ComposerSelect } from './composer-select.presentational'
@@ -129,7 +130,7 @@ export const Composer: FC<ComposerProps> = ({
           onOpen={onAttachmentOpen}
           onRemove={onAttachmentRemove}
         />
-        <textarea
+        <Textarea
           value={value}
           onChange={(e) => onChange(e.target.value)}
           onKeyDown={handleKeyDown}
@@ -138,7 +139,7 @@ export const Composer: FC<ComposerProps> = ({
           placeholder={placeholder}
           disabled={disabled}
           rows={1}
-          className="w-full resize-none bg-transparent text-sm text-foreground placeholder:text-muted-foreground focus:outline-none disabled:opacity-50"
+          className="min-h-0 resize-none border-0 px-0 py-0 text-foreground shadow-none focus-visible:ring-0"
         />
         <div className="mt-2 flex items-center justify-between">
           <div className="flex min-w-0 flex-wrap items-center gap-1">
