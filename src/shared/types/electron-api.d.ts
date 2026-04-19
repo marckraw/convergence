@@ -236,6 +236,7 @@ interface ElectronAPI {
   workspace: {
     create: (input: CreateWorkspaceInput) => Promise<WorkspaceData>
     getByProjectId: (projectId: string) => Promise<WorkspaceData[]>
+    getAll: () => Promise<WorkspaceData[]>
     delete: (id: string) => Promise<void>
   }
   git: {

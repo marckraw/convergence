@@ -157,6 +157,8 @@ export function registerIpcHandlers(
     workspaceService.getByProjectId(projectId),
   )
 
+  ipcMain.handle('workspace:getAll', () => workspaceService.listAll())
+
   ipcMain.handle('workspace:delete', async (_event, id: string) => {
     await workspaceService.delete(id)
   })

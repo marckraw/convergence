@@ -34,6 +34,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.invoke('workspace:create', input),
     getByProjectId: (projectId: string) =>
       ipcRenderer.invoke('workspace:getByProjectId', projectId),
+    getAll: () => ipcRenderer.invoke('workspace:getAll'),
     delete: (id: string) => ipcRenderer.invoke('workspace:delete', id),
   },
   git: {
