@@ -19,4 +19,4 @@ Add a global Cmd+K command palette for cross-project navigation.
   to terminal-dock focus. When your focus is outside the dock, `Cmd+K` opens
   the palette; click into a terminal pane first to clear it. All other
   terminal shortcuts (`Cmd+T`, splits, focus-adjacent, toggle-dock) are
-  similarly gated on dock focus.
+  unchanged and still fire from anywhere.

@@ -256,10 +256,12 @@ export const TerminalDockContainer: FC = () => {
     if (!sessionId) return
     const platform = getPlatform()
     const handler = (event: KeyboardEvent) => {
-      const root = dockRef.current
-      if (!root || !root.contains(document.activeElement)) return
       const shortcut = matchShortcut(event, platform)
       if (!shortcut) return
+      if (shortcut.kind === 'clear') {
+        const root = dockRef.current
+        if (!root || !root.contains(document.activeElement)) return
+      }
       event.preventDefault()
       event.stopPropagation()
       dispatchShortcut(shortcut)

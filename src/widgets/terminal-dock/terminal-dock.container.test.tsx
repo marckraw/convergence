@@ -353,7 +353,6 @@ describe('TerminalDock container', () => {
         .mockResolvedValue(makeTab('t-2'))
 
       render(<TerminalDock />)
-      focusDock()
       fireEvent.keyDown(window, { key: 't', metaKey: true })
 
       expect(newTabSpy).toHaveBeenCalledWith(
@@ -368,7 +367,6 @@ describe('TerminalDock container', () => {
         .mockResolvedValue({ leafId: 'l2', tab: makeTab('t-2') })
 
       render(<TerminalDock />)
-      focusDock()
       fireEvent.keyDown(window, { key: 'd', metaKey: true })
 
       expect(splitSpy).toHaveBeenCalledWith(
@@ -383,7 +381,6 @@ describe('TerminalDock container', () => {
         .mockResolvedValue({ leafId: 'l2', tab: makeTab('t-2') })
 
       render(<TerminalDock />)
-      focusDock()
       fireEvent.keyDown(window, { key: 'D', metaKey: true, shiftKey: true })
 
       expect(splitSpy).toHaveBeenCalledWith(
@@ -401,7 +398,6 @@ describe('TerminalDock container', () => {
         .mockResolvedValue(null)
 
       render(<TerminalDock />)
-      focusDock()
       fireEvent.keyDown(window, { key: 'w', metaKey: true })
 
       await vi.waitFor(() => {
@@ -421,7 +417,6 @@ describe('TerminalDock container', () => {
       })
 
       render(<TerminalDock />)
-      focusDock()
       fireEvent.keyDown(window, { key: 'w', metaKey: true })
 
       await vi.waitFor(() => {
@@ -443,7 +438,6 @@ describe('TerminalDock container', () => {
       })
 
       render(<TerminalDock />)
-      focusDock()
       fireEvent.keyDown(window, { key: 'w', metaKey: true })
 
       const confirm = await screen.findByRole('button', {
@@ -465,7 +459,6 @@ describe('TerminalDock container', () => {
       })
 
       render(<TerminalDock />)
-      focusDock()
       fireEvent.keyDown(window, { key: 'w', metaKey: true })
 
       const cancel = await screen.findByRole('button', {
@@ -510,7 +503,6 @@ describe('TerminalDock container', () => {
       const setActiveSpy = vi.spyOn(useTerminalStore.getState(), 'setActiveTab')
 
       render(<TerminalDock />)
-      focusDock()
       fireEvent.keyDown(window, { key: ']', metaKey: true, shiftKey: true })
 
       expect(setActiveSpy).toHaveBeenCalledWith('s-1', 'l1', 't-2')
@@ -532,7 +524,6 @@ describe('TerminalDock container', () => {
       const focusSpy = vi.spyOn(useTerminalStore.getState(), 'setFocusedLeaf')
 
       render(<TerminalDock />)
-      focusDock()
       fireEvent.keyDown(window, {
         key: 'ArrowRight',
         metaKey: true,
@@ -542,7 +533,7 @@ describe('TerminalDock container', () => {
       expect(focusSpy).toHaveBeenCalledWith('s-1', 'l2')
     })
 
-    it('Cmd-T is a no-op when the dock is hidden (no element to focus)', () => {
+    it('Cmd-T shows the dock when hidden', () => {
       setupSingleLeaf()
       useTerminalStore.setState((state) => ({
         ...state,
@@ -552,18 +543,17 @@ describe('TerminalDock container', () => {
         useTerminalStore.getState(),
         'setDockVisible',
       )
-      const newTabSpy = vi
-        .spyOn(useTerminalStore.getState(), 'newTab')
-        .mockResolvedValue(makeTab('t-2'))
+      vi.spyOn(useTerminalStore.getState(), 'newTab').mockResolvedValue(
+        makeTab('t-2'),
+      )
 
       render(<TerminalDock />)
       fireEvent.keyDown(window, { key: 't', metaKey: true })
 
-      expect(setVisibleSpy).not.toHaveBeenCalled()
-      expect(newTabSpy).not.toHaveBeenCalled()
+      expect(setVisibleSpy).toHaveBeenCalledWith('s-1', true)
     })
 
-    it('Cmd-T is a no-op when the session has no tree (no dock to focus)', () => {
+    it('Cmd-T opens the first pane when the session has no tree', () => {
       useSessionStore.setState({
         sessions: [makeSession()],
         activeSessionId: 's-1',
@@ -575,10 +565,15 @@ describe('TerminalDock container', () => {
       render(<TerminalDock />)
       fireEvent.keyDown(window, { key: 't', metaKey: true })
 
-      expect(openFirstPaneSpy).not.toHaveBeenCalled()
+      expect(openFirstPaneSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          sessionId: 's-1',
+          cwd: '/tmp/session-cwd',
+        }),
+      )
     })
 
-    it('Cmd-` toggles dock visibility when focus is inside the dock', () => {
+    it('Cmd-` toggles dock visibility', () => {
       setupSingleLeaf()
       const toggleSpy = vi.spyOn(
         useTerminalStore.getState(),
@@ -586,7 +581,6 @@ describe('TerminalDock container', () => {
       )
 
       render(<TerminalDock />)
-      focusDock()
       fireEvent.keyDown(window, { key: '`', metaKey: true })
 
       expect(toggleSpy).toHaveBeenCalledWith('s-1')
