@@ -17,6 +17,12 @@ import { AppSettingsService } from '../backend/app-settings/app-settings.service
 import { AttachmentsService } from '../backend/attachments/attachments.service'
 import { SessionNamingService } from '../backend/session/naming/session-naming.service'
 import { hydrateProcessPathFromShell } from '../backend/environment/shell-path.service'
+import { TerminalService } from '../backend/terminal/terminal.service'
+import {
+  broadcastToRenderers,
+  registerTerminalIpcHandlers,
+} from '../backend/terminal/terminal.ipc'
+import { createNodePtyFactory } from '../backend/terminal/pty-factory'
 import { registerIpcHandlers } from './ipc'
 import { shouldOpenInSystemBrowser } from './external-links.pure'
 import { getWindowAppearanceOptions } from './window-effects.pure'
@@ -152,6 +158,16 @@ async function startApp(): Promise<void> {
     appSettingsService,
     attachmentsService,
   )
+
+  const terminalService = new TerminalService(
+    createNodePtyFactory(),
+    broadcastToRenderers,
+  )
+  registerTerminalIpcHandlers(terminalService)
+
+  app.on('before-quit', () => {
+    terminalService.disposeAll()
+  })
 
   const runtimeIconPath = resolveRuntimeIconPath()
   if (process.platform === 'darwin' && runtimeIconPath) {

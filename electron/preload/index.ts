@@ -141,4 +141,40 @@ contextBridge.exposeInMainWorld('electronAPI', {
       }
     },
   },
+  terminal: {
+    create: (input: {
+      sessionId: string
+      cwd: string
+      cols: number
+      rows: number
+    }) => ipcRenderer.invoke('terminal:create', input),
+    attach: (id: string) => ipcRenderer.invoke('terminal:attach', id),
+    write: (id: string, data: string) =>
+      ipcRenderer.invoke('terminal:write', id, data),
+    resize: (id: string, cols: number, rows: number) =>
+      ipcRenderer.invoke('terminal:resize', id, cols, rows),
+    dispose: (id: string) => ipcRenderer.invoke('terminal:dispose', id),
+    onData: (id: string, callback: (data: string) => void) => {
+      const channel = `terminal:data:${id}`
+      const handler = (_event: unknown, data: string) => callback(data)
+      ipcRenderer.on(channel, handler)
+      return () => {
+        ipcRenderer.removeListener(channel, handler)
+      }
+    },
+    onExit: (
+      id: string,
+      callback: (payload: { exitCode: number; signal: number | null }) => void,
+    ) => {
+      const channel = `terminal:exit:${id}`
+      const handler = (
+        _event: unknown,
+        payload: { exitCode: number; signal: number | null },
+      ) => callback(payload)
+      ipcRenderer.on(channel, handler)
+      return () => {
+        ipcRenderer.removeListener(channel, handler)
+      }
+    },
+  },
 })
