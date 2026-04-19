@@ -1,0 +1,5 @@
+export { TerminalPaneContainer } from './terminal-pane.container'
+export { PaneToolbar } from './pane-toolbar.presentational'
+export { xtermRegistry } from './xterm-registry'
+export { CloseConfirmDialog } from './close-confirm.container'
+export type { CloseConfirmRequest } from './close-confirm.container'

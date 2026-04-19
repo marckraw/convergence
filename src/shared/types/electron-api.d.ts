@@ -298,6 +298,31 @@ interface ElectronAPI {
     set: (input: AppSettingsData) => Promise<AppSettingsData>
     onUpdated: (callback: (settings: AppSettingsData) => void) => () => void
   }
+  terminal: {
+    create: (input: {
+      sessionId: string
+      cwd: string
+      cols: number
+      rows: number
+    }) => Promise<{
+      id: string
+      pid: number
+      shell: string
+      initialBuffer: string
+    }>
+    attach: (id: string) => Promise<{ initialBuffer: string }>
+    write: (id: string, data: string) => Promise<void>
+    resize: (id: string, cols: number, rows: number) => Promise<void>
+    dispose: (id: string) => Promise<void>
+    getForegroundProcess: (
+      id: string,
+    ) => Promise<{ pid: number; name: string } | null>
+    onData: (id: string, callback: (data: string) => void) => () => void
+    onExit: (
+      id: string,
+      callback: (payload: { exitCode: number; signal: number | null }) => void,
+    ) => () => void
+  }
 }
 
 interface AppSettingsData {

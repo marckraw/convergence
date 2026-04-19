@@ -1,5 +1,32 @@
 # convergence
 
+## 0.12.1
+
+### Patch Changes
+
+- 3f26025: Fix the composer scrollbar so it uses the shared themed scrollbar styling in
+  both dark and light modes. The composer input now goes through a shared
+  textarea primitive, which keeps future multiline inputs aligned with the app's
+  common scrollbar treatment.
+
+## 0.12.0
+
+### Minor Changes
+
+- fe4daa2: `Cmd-T` (Ctrl-T on other platforms) now doubles as an "open terminal" shortcut: when the dock is hidden it becomes visible, and when the active session has no pane tree yet it opens the first pane in the session's working directory. When the dock is already visible with an existing tree, the shortcut keeps its original `new-tab` behavior.
+
+## 0.11.1
+
+### Patch Changes
+
+- d070e33: Fix terminal dock single-leaf width collapse: when the dock held a single pane, the leaf took intrinsic width inside the dock's flex-row container instead of filling it. Split layouts were unaffected because `Group` already stretched. Leaf root now carries `w-full min-w-0`, matching the `Group` path.
+
+## 0.11.0
+
+### Minor Changes
+
+- 6c5ba58: Embedded terminal surface: PTY-backed dock with recursive splits, tabs, keyboard shortcuts (Cmd-T/D/W/K/`/arrows), close-confirm on running foreground process, and user-resizable dock height. Panes open in the active session's working directory; PTYs clean up on window/app close.
+
 ## 0.10.2
 
 ### Patch Changes

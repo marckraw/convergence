@@ -3,8 +3,15 @@ import type { FC, MouseEvent as ReactMouseEvent } from 'react'
 import { useProjectStore } from '@/entities/project'
 import { useSessionStore } from '@/entities/session'
 import { ComposerContainer } from '@/features/composer'
+import { useTerminalStore } from '@/entities/terminal'
 import { Button } from '@/shared/ui/button'
-import { Archive, Square, FileCode, GitBranch } from 'lucide-react'
+import {
+  Archive,
+  Square,
+  FileCode,
+  GitBranch,
+  TerminalSquare,
+} from 'lucide-react'
 import { AttentionIndicator } from '@/shared/ui/attention-indicator.presentational'
 import { ContextWindowIndicator } from '@/shared/ui/context-window-indicator.presentational'
 import { cn } from '@/shared/lib/cn.pure'
@@ -25,6 +32,12 @@ export const SessionView: FC = () => {
   const approveSession = useSessionStore((s) => s.approveSession)
   const denySession = useSessionStore((s) => s.denySession)
   const stopSession = useSessionStore((s) => s.stopSession)
+  const openFirstPane = useTerminalStore((s) => s.openFirstPane)
+  const closeAllTerminals = useTerminalStore((s) => s.closeAllForSession)
+  const terminalTree = useTerminalStore((s) =>
+    activeSessionId ? (s.treesBySessionId[activeSessionId] ?? null) : null,
+  )
+  const hasTerminal = terminalTree !== null
   const [showChangedFiles, setShowChangedFiles] = useState(false)
   const [changedFilesSide, setChangedFilesSide] = useState<'left' | 'right'>(
     'right',
@@ -225,6 +238,27 @@ export const SessionView: FC = () => {
               title="Changed files"
             >
               <FileCode className="h-3.5 w-3.5" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7"
+              onClick={() => {
+                if (hasTerminal) {
+                  void closeAllTerminals(session.id)
+                } else {
+                  void openFirstPane({
+                    sessionId: session.id,
+                    cwd: session.workingDirectory,
+                    cols: 80,
+                    rows: 24,
+                  })
+                }
+              }}
+              title={hasTerminal ? 'Close terminal' : 'Open terminal'}
+              aria-pressed={hasTerminal ? true : undefined}
+            >
+              <TerminalSquare className="h-3.5 w-3.5" />
             </Button>
             {session.status === 'running' && (
               <Button
