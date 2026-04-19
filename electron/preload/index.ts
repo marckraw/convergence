@@ -92,6 +92,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.invoke('session:getNeedsYouDismissals'),
     setNeedsYouDismissals: (dismissals: unknown) =>
       ipcRenderer.invoke('session:setNeedsYouDismissals', dismissals),
+    getRecentIds: () => ipcRenderer.invoke('session:getRecentIds'),
+    setRecentIds: (ids: string[]) =>
+      ipcRenderer.invoke('session:setRecentIds', ids),
     onSessionUpdate: (callback: (session: unknown) => void) => {
       const handler = (_event: unknown, session: unknown) => callback(session)
       ipcRenderer.on('session:updated', handler)

@@ -270,6 +270,8 @@ interface ElectronAPI {
     regenerateName: (id: string) => Promise<void>
     getNeedsYouDismissals: () => Promise<NeedsYouDismissals>
     setNeedsYouDismissals: (dismissals: NeedsYouDismissals) => Promise<void>
+    getRecentIds: () => Promise<string[]>
+    setRecentIds: (ids: string[]) => Promise<void>
     onSessionUpdate: (callback: (session: SessionData) => void) => () => void
   }
   provider: {

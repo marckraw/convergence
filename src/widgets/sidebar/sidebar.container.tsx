@@ -49,6 +49,7 @@ export const Sidebar: FC<SidebarProps> = ({
   const needsYouDismissals = useSessionStore((s) => s.needsYouDismissals)
   const loadSessions = useSessionStore((s) => s.loadSessions)
   const loadGlobalSessions = useSessionStore((s) => s.loadGlobalSessions)
+  const loadRecents = useSessionStore((s) => s.loadRecents)
   const archiveSession = useSessionStore((s) => s.archiveSession)
   const unarchiveSession = useSessionStore((s) => s.unarchiveSession)
   const deleteSession = useSessionStore((s) => s.deleteSession)
@@ -77,10 +78,6 @@ export const Sidebar: FC<SidebarProps> = ({
       })
     })
   }, [])
-
-  useEffect(() => {
-    loadGlobalSessions()
-  }, [loadGlobalSessions])
 
   useEffect(() => {
     if (activeProject) {
@@ -175,6 +172,7 @@ export const Sidebar: FC<SidebarProps> = ({
     await deleteWorkspace(workspaceId, activeProject.id)
     await loadSessions(activeProject.id)
     await loadGlobalSessions()
+    await loadRecents()
 
     if (activeSessionId && deletedSessionIds.includes(activeSessionId)) {
       setActiveSession(null)

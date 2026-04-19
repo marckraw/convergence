@@ -22,6 +22,8 @@ export function App() {
   const activeSessionId = useSessionStore((s) => s.activeSessionId)
   const setActiveSession = useSessionStore((s) => s.setActiveSession)
   const handleSessionUpdate = useSessionStore((s) => s.handleSessionUpdate)
+  const loadGlobalSessions = useSessionStore((s) => s.loadGlobalSessions)
+  const loadRecents = useSessionStore((s) => s.loadRecents)
   const loadAppSettings = useAppSettingsStore((s) => s.load)
 
   useEffect(() => {
@@ -50,6 +52,13 @@ export function App() {
   useEffect(() => {
     void loadGlobalWorkspaces()
   }, [loadGlobalWorkspaces])
+
+  useEffect(() => {
+    void (async () => {
+      await loadGlobalSessions()
+      await loadRecents()
+    })()
+  }, [loadGlobalSessions, loadRecents])
 
   useEffect(() => {
     void loadAppSettings()

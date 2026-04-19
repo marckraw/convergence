@@ -8,10 +8,13 @@ import type {
 } from './session.types'
 import { sessionApi, providerApi } from './session.api'
 
+const RECENT_SESSIONS_CAP = 10
+
 interface SessionState {
   sessions: Session[]
   globalSessions: Session[]
   needsYouDismissals: NeedsYouDismissals
+  recentSessionIds: string[]
   currentProjectId: string | null
   activeSessionId: string | null
   draftWorkspaceId: string | null
@@ -22,6 +25,8 @@ interface SessionState {
 interface SessionActions {
   loadSessions: (projectId: string) => Promise<void>
   loadGlobalSessions: () => Promise<void>
+  loadRecents: () => Promise<void>
+  recordRecentSession: (id: string) => void
   loadProviders: () => Promise<void>
   dismissNeedsYouSession: (id: string) => Promise<void>
   createAndStartSession: (
@@ -92,10 +97,15 @@ function removeNeedsYouDismissal(
   )
 }
 
+function persistRecents(ids: string[]): void {
+  void sessionApi.setRecentIds(ids).catch(() => undefined)
+}
+
 export const useSessionStore = create<SessionStore>((set, get) => ({
   sessions: [],
   globalSessions: [],
   needsYouDismissals: {},
+  recentSessionIds: [],
   currentProjectId: null,
   activeSessionId: null,
   draftWorkspaceId: null,
@@ -148,6 +158,39 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
       globalSessions,
       needsYouDismissals: nextDismissals,
     })
+  },
+
+  loadRecents: async () => {
+    try {
+      const persisted = await sessionApi.getRecentIds()
+      const globalSessions = get().globalSessions
+      const known = new Set(globalSessions.map((session) => session.id))
+      const pruned = persisted
+        .filter((id) => known.has(id))
+        .slice(0, RECENT_SESSIONS_CAP)
+      set({ recentSessionIds: pruned })
+      if (pruned.length !== persisted.length) {
+        persistRecents(pruned)
+      }
+    } catch {
+      // Recency is advisory; preserve existing state on transient failures.
+    }
+  },
+
+  recordRecentSession: (id: string) => {
+    const prev = get().recentSessionIds
+    const next = [id, ...prev.filter((entry) => entry !== id)].slice(
+      0,
+      RECENT_SESSIONS_CAP,
+    )
+    if (
+      next.length === prev.length &&
+      next.every((entry, index) => entry === prev[index])
+    ) {
+      return
+    }
+    set({ recentSessionIds: next })
+    persistRecents(next)
   },
 
   loadProviders: async () => {
@@ -221,6 +264,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
         activeSessionId: session.id,
         draftWorkspaceId: null,
       }))
+      get().recordRecentSession(session.id)
     } catch (err) {
       set({
         error: err instanceof Error ? err.message : 'Failed to start session',
@@ -315,14 +359,20 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
         id,
       )
       await sessionApi.setNeedsYouDismissals(nextDismissals)
+      const prevRecents = get().recentSessionIds
+      const nextRecents = prevRecents.filter((entry) => entry !== id)
       set({
         sessions,
         globalSessions,
         needsYouDismissals: nextDismissals,
+        recentSessionIds: nextRecents,
         activeSessionId: activeSessionId === id ? null : activeSessionId,
         draftWorkspaceId:
           activeSessionId === id ? null : get().draftWorkspaceId,
       })
+      if (nextRecents.length !== prevRecents.length) {
+        persistRecents(nextRecents)
+      }
     } catch (err) {
       set({
         error: err instanceof Error ? err.message : 'Failed to delete',
@@ -344,11 +394,15 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
       draftWorkspaceId: workspaceId,
     }),
 
-  setActiveSession: (id) =>
+  setActiveSession: (id) => {
     set({
       activeSessionId: id,
       draftWorkspaceId: null,
-    }),
+    })
+    if (id !== null) {
+      get().recordRecentSession(id)
+    }
+  },
 
   handleSessionUpdate: (session: Session) => {
     const currentProjectId = get().currentProjectId

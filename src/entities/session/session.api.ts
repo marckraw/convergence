@@ -65,6 +65,12 @@ export const sessionApi = {
   setNeedsYouDismissals: (dismissals: NeedsYouDismissals): Promise<void> =>
     window.electronAPI.session.setNeedsYouDismissals(dismissals),
 
+  getRecentIds: (): Promise<string[]> =>
+    window.electronAPI.session.getRecentIds(),
+
+  setRecentIds: (ids: string[]): Promise<void> =>
+    window.electronAPI.session.setRecentIds(ids),
+
   onSessionUpdate: (callback: (session: Session) => void): (() => void) =>
     window.electronAPI.session.onSessionUpdate(callback),
 }
