@@ -2,7 +2,7 @@ import { render, screen, fireEvent } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { useSessionStore } from '@/entities/session'
 import type { Session } from '@/entities/session'
-import { useTerminalStore } from '@/entities/terminal'
+import { useTerminalStore, terminalApi } from '@/entities/terminal'
 import type {
   LeafNode,
   PaneTree,
@@ -10,23 +10,92 @@ import type {
   TerminalTab,
 } from '@/entities/terminal'
 
-vi.mock('@/features/terminal-pane', async () => {
-  const actual = await vi.importActual<object>('@/features/terminal-pane')
-  return {
-    ...actual,
-    TerminalPaneContainer: ({
-      sessionId,
-      tabId,
-    }: {
+const xtermClearSpy = vi.fn()
+
+vi.mock('@/features/terminal-pane', () => ({
+  TerminalPaneContainer: ({
+    sessionId,
+    tabId,
+  }: {
+    sessionId: string
+    tabId: string
+  }) => (
+    <div data-testid="terminal-pane-stub">
+      {sessionId}:{tabId}
+    </div>
+  ),
+  PaneToolbar: ({
+    onSplitHorizontal,
+    onSplitVertical,
+    onClose,
+  }: {
+    onSplitHorizontal: () => void
+    onSplitVertical: () => void
+    onClose: () => void
+  }) => (
+    <div>
+      <button
+        type="button"
+        aria-label="Split horizontal"
+        onClick={onSplitHorizontal}
+      >
+        h
+      </button>
+      <button
+        type="button"
+        aria-label="Split vertical"
+        onClick={onSplitVertical}
+      >
+        v
+      </button>
+      <button type="button" aria-label="Close tab" onClick={onClose}>
+        x
+      </button>
+    </div>
+  ),
+  CloseConfirmDialog: ({
+    request,
+    onConfirm,
+    onCancel,
+  }: {
+    request: {
       sessionId: string
+      leafId: string
       tabId: string
-    }) => (
-      <div data-testid="terminal-pane-stub">
-        {sessionId}:{tabId}
+      process: { pid: number; name: string }
+    } | null
+    onConfirm: (req: {
+      sessionId: string
+      leafId: string
+      tabId: string
+      process: { pid: number; name: string }
+    }) => void
+    onCancel: () => void
+  }) =>
+    request ? (
+      <div data-testid="close-confirm">
+        <div data-testid="close-confirm-name">{request.process.name}</div>
+        <button
+          type="button"
+          aria-label="Confirm close"
+          onClick={() => onConfirm(request)}
+        >
+          confirm
+        </button>
+        <button type="button" aria-label="Cancel close" onClick={onCancel}>
+          cancel
+        </button>
       </div>
-    ),
-  }
-})
+    ) : null,
+  xtermRegistry: {
+    register: () => () => undefined,
+    clear: (tabId: string) => {
+      xtermClearSpy(tabId)
+      return true
+    },
+    has: () => true,
+  },
+}))
 
 import { TerminalDock } from './index'
 
@@ -107,9 +176,12 @@ describe('TerminalDock container', () => {
         ...initialTerminalState,
         treesBySessionId: {},
         focusedLeafBySessionId: {},
+        dockHeightBySessionId: {},
+        dockVisibleBySessionId: {},
       },
       true,
     )
+    xtermClearSpy.mockReset()
   })
 
   it('renders nothing when there is no active session', () => {
@@ -255,5 +327,220 @@ describe('TerminalDock container', () => {
     fireEvent.click(screen.getByRole('button', { name: /^close tab$/i }))
 
     expect(closeSpy).toHaveBeenCalledWith('s-1', 'l1', 't-1')
+  })
+
+  describe('keyboard shortcuts', () => {
+    function setupSingleLeaf() {
+      useSessionStore.setState({
+        sessions: [makeSession()],
+        activeSessionId: 's-1',
+      } as Partial<ReturnType<typeof useSessionStore.getState>>)
+      useTerminalStore.setState({
+        treesBySessionId: { 's-1': leaf('l1', [makeTab('t-1')]) },
+        focusedLeafBySessionId: { 's-1': 'l1' },
+      })
+    }
+
+    it('Cmd-T dispatches newTab for the focused leaf', () => {
+      setupSingleLeaf()
+      const newTabSpy = vi
+        .spyOn(useTerminalStore.getState(), 'newTab')
+        .mockResolvedValue(makeTab('t-2'))
+
+      render(<TerminalDock />)
+      fireEvent.keyDown(window, { key: 't', metaKey: true })
+
+      expect(newTabSpy).toHaveBeenCalledWith(
+        expect.objectContaining({ sessionId: 's-1', leafId: 'l1' }),
+      )
+    })
+
+    it('Cmd-D dispatches splitLeaf vertical', () => {
+      setupSingleLeaf()
+      const splitSpy = vi
+        .spyOn(useTerminalStore.getState(), 'splitLeaf')
+        .mockResolvedValue({ leafId: 'l2', tab: makeTab('t-2') })
+
+      render(<TerminalDock />)
+      fireEvent.keyDown(window, { key: 'd', metaKey: true })
+
+      expect(splitSpy).toHaveBeenCalledWith(
+        expect.objectContaining({ direction: 'vertical' }),
+      )
+    })
+
+    it('Cmd-Shift-D dispatches splitLeaf horizontal', () => {
+      setupSingleLeaf()
+      const splitSpy = vi
+        .spyOn(useTerminalStore.getState(), 'splitLeaf')
+        .mockResolvedValue({ leafId: 'l2', tab: makeTab('t-2') })
+
+      render(<TerminalDock />)
+      fireEvent.keyDown(window, { key: 'D', metaKey: true, shiftKey: true })
+
+      expect(splitSpy).toHaveBeenCalledWith(
+        expect.objectContaining({ direction: 'horizontal' }),
+      )
+    })
+
+    it('Cmd-W closes directly when no foreground process is running', async () => {
+      setupSingleLeaf()
+      const closeSpy = vi
+        .spyOn(useTerminalStore.getState(), 'closeTab')
+        .mockResolvedValue(undefined)
+      const fgSpy = vi
+        .spyOn(terminalApi, 'getForegroundProcess')
+        .mockResolvedValue(null)
+
+      render(<TerminalDock />)
+      fireEvent.keyDown(window, { key: 'w', metaKey: true })
+
+      await vi.waitFor(() => {
+        expect(fgSpy).toHaveBeenCalledWith('t-1')
+        expect(closeSpy).toHaveBeenCalledWith('s-1', 'l1', 't-1')
+      })
+    })
+
+    it('Cmd-W shows close-confirm modal when a process is running', async () => {
+      setupSingleLeaf()
+      const closeSpy = vi
+        .spyOn(useTerminalStore.getState(), 'closeTab')
+        .mockResolvedValue(undefined)
+      vi.spyOn(terminalApi, 'getForegroundProcess').mockResolvedValue({
+        pid: 9999,
+        name: 'sleep',
+      })
+
+      render(<TerminalDock />)
+      fireEvent.keyDown(window, { key: 'w', metaKey: true })
+
+      await vi.waitFor(() => {
+        expect(screen.getByTestId('close-confirm-name')).toHaveTextContent(
+          'sleep',
+        )
+      })
+      expect(closeSpy).not.toHaveBeenCalled()
+    })
+
+    it('confirming close-confirm modal calls closeTab', async () => {
+      setupSingleLeaf()
+      const closeSpy = vi
+        .spyOn(useTerminalStore.getState(), 'closeTab')
+        .mockResolvedValue(undefined)
+      vi.spyOn(terminalApi, 'getForegroundProcess').mockResolvedValue({
+        pid: 9999,
+        name: 'sleep',
+      })
+
+      render(<TerminalDock />)
+      fireEvent.keyDown(window, { key: 'w', metaKey: true })
+
+      const confirm = await screen.findByRole('button', {
+        name: /confirm close/i,
+      })
+      fireEvent.click(confirm)
+
+      expect(closeSpy).toHaveBeenCalledWith('s-1', 'l1', 't-1')
+    })
+
+    it('cancelling close-confirm modal does not call closeTab', async () => {
+      setupSingleLeaf()
+      const closeSpy = vi
+        .spyOn(useTerminalStore.getState(), 'closeTab')
+        .mockResolvedValue(undefined)
+      vi.spyOn(terminalApi, 'getForegroundProcess').mockResolvedValue({
+        pid: 9999,
+        name: 'sleep',
+      })
+
+      render(<TerminalDock />)
+      fireEvent.keyDown(window, { key: 'w', metaKey: true })
+
+      const cancel = await screen.findByRole('button', {
+        name: /cancel close/i,
+      })
+      fireEvent.click(cancel)
+
+      expect(closeSpy).not.toHaveBeenCalled()
+    })
+
+    it('Cmd-K calls xterm clear on the focused active tab', () => {
+      setupSingleLeaf()
+      render(<TerminalDock />)
+      fireEvent.keyDown(window, { key: 'k', metaKey: true })
+      expect(xtermClearSpy).toHaveBeenCalledWith('t-1')
+    })
+
+    it('Cmd-Shift-] cycles to the next tab', () => {
+      useSessionStore.setState({
+        sessions: [makeSession()],
+        activeSessionId: 's-1',
+      } as Partial<ReturnType<typeof useSessionStore.getState>>)
+      const twoTabs: LeafNode = {
+        kind: 'leaf',
+        id: 'l1',
+        tabs: [makeTab('t-1'), makeTab('t-2')],
+        activeTabId: 't-1',
+      }
+      useTerminalStore.setState({
+        treesBySessionId: { 's-1': twoTabs },
+        focusedLeafBySessionId: { 's-1': 'l1' },
+      })
+      const setActiveSpy = vi.spyOn(useTerminalStore.getState(), 'setActiveTab')
+
+      render(<TerminalDock />)
+      fireEvent.keyDown(window, { key: ']', metaKey: true, shiftKey: true })
+
+      expect(setActiveSpy).toHaveBeenCalledWith('s-1', 'l1', 't-2')
+    })
+
+    it('Cmd-Alt-Right moves focus to adjacent leaf', () => {
+      useSessionStore.setState({
+        sessions: [makeSession()],
+        activeSessionId: 's-1',
+      } as Partial<ReturnType<typeof useSessionStore.getState>>)
+      const splitTree = split('s1', 'horizontal', [
+        leaf('l1', [makeTab('t-1')]),
+        leaf('l2', [makeTab('t-2')]),
+      ])
+      useTerminalStore.setState({
+        treesBySessionId: { 's-1': splitTree },
+        focusedLeafBySessionId: { 's-1': 'l1' },
+      })
+      const focusSpy = vi.spyOn(useTerminalStore.getState(), 'setFocusedLeaf')
+
+      render(<TerminalDock />)
+      fireEvent.keyDown(window, {
+        key: 'ArrowRight',
+        metaKey: true,
+        altKey: true,
+      })
+
+      expect(focusSpy).toHaveBeenCalledWith('s-1', 'l2')
+    })
+
+    it('Cmd-` toggles dock visibility', () => {
+      setupSingleLeaf()
+      const toggleSpy = vi.spyOn(
+        useTerminalStore.getState(),
+        'toggleDockVisible',
+      )
+
+      render(<TerminalDock />)
+      fireEvent.keyDown(window, { key: '`', metaKey: true })
+
+      expect(toggleSpy).toHaveBeenCalledWith('s-1')
+    })
+
+    it('does not render dock when dockVisible is false', () => {
+      setupSingleLeaf()
+      useTerminalStore.setState((state) => ({
+        ...state,
+        dockVisibleBySessionId: { 's-1': false },
+      }))
+
+      const { queryByTestId } = render(<TerminalDock />)
+      expect(queryByTestId('terminal-dock')).toBeNull()
+    })
   })
 })

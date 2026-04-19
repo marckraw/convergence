@@ -23,6 +23,10 @@ export function registerTerminalIpcHandlers(service: TerminalService): void {
   ipcMain.handle('terminal:dispose', (_event, id: string) => {
     service.dispose(id)
   })
+
+  ipcMain.handle('terminal:getForegroundProcess', (_event, id: string) =>
+    service.getForegroundProcess(id),
+  )
 }
 
 export function broadcastToRenderers(channel: string, payload: unknown): void {

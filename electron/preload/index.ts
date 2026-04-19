@@ -154,6 +154,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
     resize: (id: string, cols: number, rows: number) =>
       ipcRenderer.invoke('terminal:resize', id, cols, rows),
     dispose: (id: string) => ipcRenderer.invoke('terminal:dispose', id),
+    getForegroundProcess: (id: string) =>
+      ipcRenderer.invoke('terminal:getForegroundProcess', id),
     onData: (id: string, callback: (data: string) => void) => {
       const channel = `terminal:data:${id}`
       const handler = (_event: unknown, data: string) => callback(data)

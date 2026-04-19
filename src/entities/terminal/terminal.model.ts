@@ -20,6 +20,23 @@ import {
 interface TerminalState {
   treesBySessionId: Record<string, PaneTree | null>
   focusedLeafBySessionId: Record<string, string | null>
+  dockHeightBySessionId: Record<string, number>
+  dockVisibleBySessionId: Record<string, boolean>
+}
+
+export const DEFAULT_DOCK_HEIGHT = 280
+export const MIN_DOCK_HEIGHT = 120
+export const DOCK_MAX_HEIGHT_RATIO = 0.6
+
+export function clampDockHeight(
+  height: number,
+  maxWindowHeight: number,
+): number {
+  const max = Math.max(
+    MIN_DOCK_HEIGHT,
+    Math.floor(maxWindowHeight * DOCK_MAX_HEIGHT_RATIO),
+  )
+  return Math.min(Math.max(height, MIN_DOCK_HEIGHT), max)
 }
 
 interface OpenFirstPaneArgs {
@@ -60,6 +77,16 @@ interface TerminalActions {
   setFocusedLeaf: (sessionId: string, leafId: string) => void
   resizeSplit: (sessionId: string, splitId: string, sizes: number[]) => void
   markTabExited: (sessionId: string, tabId: string, exitCode: number) => void
+  setDockHeight: (
+    sessionId: string,
+    height: number,
+    maxWindowHeight: number,
+  ) => void
+  resetDockHeight: (sessionId: string) => void
+  getDockHeight: (sessionId: string) => number
+  toggleDockVisible: (sessionId: string) => void
+  setDockVisible: (sessionId: string, visible: boolean) => void
+  isDockVisible: (sessionId: string) => boolean
   getTree: (sessionId: string) => PaneTree | null
   getTab: (sessionId: string, tabId: string) => TerminalTab | null
 }
@@ -124,6 +151,8 @@ function basename(path: string): string {
 export const useTerminalStore = create<TerminalStore>((set, get) => ({
   treesBySessionId: {},
   focusedLeafBySessionId: {},
+  dockHeightBySessionId: {},
+  dockVisibleBySessionId: {},
 
   getTree: (sessionId) => get().treesBySessionId[sessionId] ?? null,
 
@@ -273,6 +302,48 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
       }
     })
   },
+
+  setDockHeight: (sessionId, height, maxWindowHeight) => {
+    const clamped = clampDockHeight(height, maxWindowHeight)
+    set((state) => ({
+      dockHeightBySessionId: {
+        ...state.dockHeightBySessionId,
+        [sessionId]: clamped,
+      },
+    }))
+  },
+
+  resetDockHeight: (sessionId) => {
+    set((state) => ({
+      dockHeightBySessionId: {
+        ...state.dockHeightBySessionId,
+        [sessionId]: DEFAULT_DOCK_HEIGHT,
+      },
+    }))
+  },
+
+  getDockHeight: (sessionId) =>
+    get().dockHeightBySessionId[sessionId] ?? DEFAULT_DOCK_HEIGHT,
+
+  toggleDockVisible: (sessionId) => {
+    set((state) => ({
+      dockVisibleBySessionId: {
+        ...state.dockVisibleBySessionId,
+        [sessionId]: !(state.dockVisibleBySessionId[sessionId] ?? true),
+      },
+    }))
+  },
+
+  setDockVisible: (sessionId, visible) => {
+    set((state) => ({
+      dockVisibleBySessionId: {
+        ...state.dockVisibleBySessionId,
+        [sessionId]: visible,
+      },
+    }))
+  },
+
+  isDockVisible: (sessionId) => get().dockVisibleBySessionId[sessionId] ?? true,
 
   markTabExited: (sessionId, tabId, exitCode) => {
     set((state) => {

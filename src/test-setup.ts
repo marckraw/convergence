@@ -14,6 +14,18 @@ if (typeof globalThis.ResizeObserver === 'undefined') {
   ).ResizeObserver = MockResizeObserver
 }
 
+// Pin navigator.platform so shortcut tests exercise the mac branch by default.
+if (typeof navigator !== 'undefined') {
+  try {
+    Object.defineProperty(navigator, 'platform', {
+      value: 'MacIntel',
+      configurable: true,
+    })
+  } catch {
+    // some environments freeze navigator; safe to ignore
+  }
+}
+
 afterEach(() => {
   cleanup()
 })

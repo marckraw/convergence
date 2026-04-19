@@ -34,6 +34,8 @@ describe('terminal store', () => {
     useTerminalStore.setState({
       treesBySessionId: {},
       focusedLeafBySessionId: {},
+      dockHeightBySessionId: {},
+      dockVisibleBySessionId: {},
     })
     createMock.mockReset()
     disposeMock.mockReset()
@@ -266,6 +268,46 @@ describe('terminal store', () => {
       useTerminalStore.getState().markTabExited('s1', 't1', 137)
       const tab = useTerminalStore.getState().getTab('s1', 't1')
       expect(tab).toMatchObject({ status: 'exited', exitCode: 137 })
+    })
+  })
+
+  describe('dock height', () => {
+    it('returns default dock height when unset', () => {
+      expect(useTerminalStore.getState().getDockHeight('s1')).toBe(280)
+    })
+
+    it('clamps dock height to min 120', () => {
+      useTerminalStore.getState().setDockHeight('s1', 50, 1000)
+      expect(useTerminalStore.getState().getDockHeight('s1')).toBe(120)
+    })
+
+    it('clamps dock height to max (60% of window)', () => {
+      useTerminalStore.getState().setDockHeight('s1', 9999, 1000)
+      expect(useTerminalStore.getState().getDockHeight('s1')).toBe(600)
+    })
+
+    it('stores within-bounds dock height verbatim', () => {
+      useTerminalStore.getState().setDockHeight('s1', 400, 1000)
+      expect(useTerminalStore.getState().getDockHeight('s1')).toBe(400)
+    })
+
+    it('resetDockHeight sets to default 280', () => {
+      useTerminalStore.getState().setDockHeight('s1', 400, 1000)
+      useTerminalStore.getState().resetDockHeight('s1')
+      expect(useTerminalStore.getState().getDockHeight('s1')).toBe(280)
+    })
+  })
+
+  describe('dock visibility', () => {
+    it('returns true by default', () => {
+      expect(useTerminalStore.getState().isDockVisible('s1')).toBe(true)
+    })
+
+    it('toggleDockVisible flips the value', () => {
+      useTerminalStore.getState().toggleDockVisible('s1')
+      expect(useTerminalStore.getState().isDockVisible('s1')).toBe(false)
+      useTerminalStore.getState().toggleDockVisible('s1')
+      expect(useTerminalStore.getState().isDockVisible('s1')).toBe(true)
     })
   })
 })

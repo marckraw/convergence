@@ -9,6 +9,7 @@ import '@xterm/xterm/css/xterm.css'
 
 import { terminalApi, useTerminalStore } from '@/entities/terminal'
 import { buildXtermOptions } from './xterm-setup.pure'
+import { xtermRegistry } from './xterm-registry'
 
 interface TerminalPaneContainerProps {
   sessionId: string
@@ -54,6 +55,8 @@ export const TerminalPaneContainer = ({
 
     termRef.current = term
     fitRef.current = fit
+    const unregister = xtermRegistry.register(tabId, () => term.clear())
+    unsubs.push(unregister)
 
     const boot = async () => {
       const { initialBuffer } = await terminalApi.attach(tabId)

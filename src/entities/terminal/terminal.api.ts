@@ -16,6 +16,9 @@ export const terminalApi = {
   dispose(id: string) {
     return window.electronAPI.terminal.dispose(id)
   },
+  getForegroundProcess(id: string) {
+    return window.electronAPI.terminal.getForegroundProcess(id)
+  },
   onData(id: string, callback: (data: string) => void) {
     return window.electronAPI.terminal.onData(id, callback)
   },

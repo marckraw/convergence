@@ -245,4 +245,91 @@ describe('TerminalService', () => {
     const res = svc.create({ sessionId: 's', cwd: '/tmp', cols: 80, rows: 24 })
     expect(res.shell).toBe('/bin/zsh')
   })
+
+  describe('getForegroundProcess', () => {
+    it('returns null for unknown id', async () => {
+      const svc = new TerminalService(factory, emit, { SHELL: '/bin/zsh' })
+      expect(await svc.getForegroundProcess('missing')).toBeNull()
+    })
+
+    it('returns null when only the shell is running', async () => {
+      const psOutput = ['  PID  PPID COMM', `  4242     1 /bin/zsh`].join('\n')
+      const svc = new TerminalService(
+        factory,
+        emit,
+        { SHELL: '/bin/zsh' },
+        async () => psOutput,
+      )
+      const { id } = svc.create({
+        sessionId: 's',
+        cwd: '/tmp',
+        cols: 80,
+        rows: 24,
+      })
+      expect(await svc.getForegroundProcess(id)).toBeNull()
+    })
+
+    it('returns the child process when one is running', async () => {
+      const psOutput = [
+        '  PID  PPID COMM',
+        `  4242     1 /bin/zsh`,
+        `  9999  4242 sleep`,
+      ].join('\n')
+      const svc = new TerminalService(
+        factory,
+        emit,
+        { SHELL: '/bin/zsh' },
+        async () => psOutput,
+      )
+      const { id } = svc.create({
+        sessionId: 's',
+        cwd: '/tmp',
+        cols: 80,
+        rows: 24,
+      })
+      expect(await svc.getForegroundProcess(id)).toEqual({
+        pid: 9999,
+        name: 'sleep',
+      })
+    })
+
+    it('returns null when ps runner throws', async () => {
+      const svc = new TerminalService(
+        factory,
+        emit,
+        { SHELL: '/bin/zsh' },
+        async () => {
+          throw new Error('ps failed')
+        },
+      )
+      const { id } = svc.create({
+        sessionId: 's',
+        cwd: '/tmp',
+        cols: 80,
+        rows: 24,
+      })
+      expect(await svc.getForegroundProcess(id)).toBeNull()
+    })
+
+    it('returns null when the descendant is the shell binary', async () => {
+      const psOutput = [
+        '  PID  PPID COMM',
+        `  4242     1 /bin/zsh`,
+        `  9999  4242 /bin/zsh`,
+      ].join('\n')
+      const svc = new TerminalService(
+        factory,
+        emit,
+        { SHELL: '/bin/zsh' },
+        async () => psOutput,
+      )
+      const { id } = svc.create({
+        sessionId: 's',
+        cwd: '/tmp',
+        cols: 80,
+        rows: 24,
+      })
+      expect(await svc.getForegroundProcess(id)).toBeNull()
+    })
+  })
 })

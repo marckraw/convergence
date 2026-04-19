@@ -1,6 +1,12 @@
 import { randomUUID } from 'crypto'
+import { exec } from 'child_process'
 import { createRingBuffer } from './ring-buffer.pure'
 import { resolveDefaultShell } from './shell-resolver.pure'
+import {
+  findForegroundDescendant,
+  parsePsOutput,
+  type ForegroundProcess,
+} from './foreground-process.pure'
 import type {
   AttachTerminalResult,
   CreateTerminalInput,
@@ -11,6 +17,15 @@ import type {
 } from './terminal.types'
 
 export type TerminalEventEmitter = (channel: string, payload: unknown) => void
+export type PsRunner = () => Promise<string>
+
+const defaultPsRunner: PsRunner = () =>
+  new Promise((resolve, reject) => {
+    exec('ps -A -o pid,ppid,comm', (err, stdout) => {
+      if (err) reject(err)
+      else resolve(stdout)
+    })
+  })
 
 export class TerminalService {
   private handles = new Map<string, TerminalHandle>()
@@ -19,6 +34,7 @@ export class TerminalService {
     private readonly ptyFactory: PtyFactory,
     private readonly emit: TerminalEventEmitter,
     private readonly env: NodeJS.ProcessEnv = process.env,
+    private readonly psRunner: PsRunner = defaultPsRunner,
   ) {}
 
   create(input: CreateTerminalInput): CreateTerminalResult {
@@ -102,6 +118,23 @@ export class TerminalService {
     for (const id of Array.from(this.handles.keys())) {
       this.dispose(id)
     }
+  }
+
+  async getForegroundProcess(id: string): Promise<ForegroundProcess | null> {
+    const handle = this.handles.get(id)
+    if (!handle) return null
+    let output: string
+    try {
+      output = await this.psRunner()
+    } catch {
+      return null
+    }
+    const rows = parsePsOutput(output)
+    const result = findForegroundDescendant(rows, handle.pid)
+    if (!result) return null
+    const shellBasename = handle.shell.split('/').pop() ?? handle.shell
+    if (result.name === shellBasename) return null
+    return result
   }
 
   has(id: string): boolean {

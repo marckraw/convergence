@@ -28,7 +28,7 @@ import { shouldOpenInSystemBrowser } from './external-links.pure'
 import { getWindowAppearanceOptions } from './window-effects.pure'
 import { formatStartupFailure } from './startup-failure.pure'
 
-function createWindow(): void {
+function createWindow(onClose?: () => void): void {
   const runtimeIconPath = resolveRuntimeIconPath()
 
   const mainWindow = new BrowserWindow({
@@ -47,6 +47,10 @@ function createWindow(): void {
       sandbox: false,
     },
   })
+
+  if (onClose) {
+    mainWindow.on('closed', onClose)
+  }
 
   if (process.env.ELECTRON_RENDERER_URL) {
     mainWindow.loadURL(process.env.ELECTRON_RENDERER_URL)
@@ -174,11 +178,15 @@ async function startApp(): Promise<void> {
     app.dock?.setIcon(runtimeIconPath)
   }
 
-  createWindow()
+  const onWindowClosed = () => {
+    terminalService.disposeAll()
+  }
+
+  createWindow(onWindowClosed)
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
-      createWindow()
+      createWindow(onWindowClosed)
     }
   })
 }

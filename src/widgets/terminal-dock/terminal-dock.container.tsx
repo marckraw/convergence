@@ -1,13 +1,34 @@
 import type { FC } from 'react'
-import { useCallback } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useSessionStore } from '@/entities/session'
-import { useTerminalStore, findLeaf } from '@/entities/terminal'
-import type { SplitDirection } from '@/entities/terminal'
-import { dockStyles, DOCK_HEIGHT_PX } from './terminal-dock.styles'
+import {
+  useTerminalStore,
+  findLeaf,
+  findAdjacentLeaf,
+  matchShortcut,
+  terminalApi,
+} from '@/entities/terminal'
+import type {
+  FocusDirection,
+  SplitDirection,
+  TerminalShortcut,
+} from '@/entities/terminal'
+import {
+  CloseConfirmDialog,
+  xtermRegistry,
+  type CloseConfirmRequest,
+} from '@/features/terminal-pane'
+import { dockStyles } from './terminal-dock.styles'
 import { SplitNodeView } from './split-node.presentational'
+import { DockResizeHandle } from './dock-resize.container'
 
 const DEFAULT_COLS = 80
 const DEFAULT_ROWS = 24
+
+function getPlatform(): 'mac' | 'other' {
+  if (typeof navigator === 'undefined') return 'other'
+  return navigator.platform.toLowerCase().includes('mac') ? 'mac' : 'other'
+}
 
 export const TerminalDockContainer: FC = () => {
   const activeSessionId = useSessionStore((s) => s.activeSessionId)
@@ -24,12 +45,25 @@ export const TerminalDockContainer: FC = () => {
       ? (s.focusedLeafBySessionId[activeSessionId] ?? null)
       : null,
   )
+  const dockHeight = useTerminalStore((s) =>
+    activeSessionId ? (s.dockHeightBySessionId[activeSessionId] ?? 280) : 280,
+  )
+  const dockVisible = useTerminalStore((s) =>
+    activeSessionId
+      ? (s.dockVisibleBySessionId[activeSessionId] ?? true)
+      : true,
+  )
   const newTab = useTerminalStore((s) => s.newTab)
   const splitLeaf = useTerminalStore((s) => s.splitLeaf)
   const closeTab = useTerminalStore((s) => s.closeTab)
   const setActiveTab = useTerminalStore((s) => s.setActiveTab)
   const setFocusedLeaf = useTerminalStore((s) => s.setFocusedLeaf)
   const resizeSplit = useTerminalStore((s) => s.resizeSplit)
+  const toggleDockVisible = useTerminalStore((s) => s.toggleDockVisible)
+
+  const [closeRequest, setCloseRequest] = useState<CloseConfirmRequest | null>(
+    null,
+  )
 
   const sessionId = activeSession?.id ?? null
   const cwd = activeSession?.workingDirectory ?? null
@@ -107,28 +141,142 @@ export const TerminalDockContainer: FC = () => {
     [sessionId, resizeSplit],
   )
 
+  const closeTabWithGuard = useCallback(
+    async (leafId: string, tabId: string) => {
+      if (!sessionId) return
+      let foreground: { pid: number; name: string } | null
+      try {
+        foreground = await terminalApi.getForegroundProcess(tabId)
+      } catch {
+        foreground = null
+      }
+      if (!foreground) {
+        void closeTab(sessionId, leafId, tabId)
+        return
+      }
+      setCloseRequest({ sessionId, leafId, tabId, process: foreground })
+    },
+    [sessionId, closeTab],
+  )
+
+  const dispatchShortcut = useCallback(
+    (shortcut: TerminalShortcut) => {
+      if (!sessionId) return
+      const currentTree = useTerminalStore.getState().getTree(sessionId)
+      if (!currentTree) return
+      const leafId =
+        useTerminalStore.getState().focusedLeafBySessionId[sessionId] ?? null
+      const leafEntry = leafId ? findLeaf(currentTree, leafId) : null
+
+      switch (shortcut.kind) {
+        case 'new-tab': {
+          if (leafId) handleNewTab(leafId)
+          return
+        }
+        case 'split': {
+          if (leafId) handleSplit(leafId, shortcut.direction)
+          return
+        }
+        case 'close-tab': {
+          if (leafId && leafEntry) {
+            void closeTabWithGuard(leafId, leafEntry.leaf.activeTabId)
+          }
+          return
+        }
+        case 'cycle-tab': {
+          if (!leafId || !leafEntry) return
+          const tabs = leafEntry.leaf.tabs
+          if (tabs.length < 2) return
+          const activeIndex = tabs.findIndex(
+            (t) => t.id === leafEntry.leaf.activeTabId,
+          )
+          const delta = shortcut.direction === 'next' ? 1 : -1
+          const nextIndex = (activeIndex + delta + tabs.length) % tabs.length
+          setActiveTab(sessionId, leafId, tabs[nextIndex]!.id)
+          return
+        }
+        case 'focus-adjacent': {
+          if (!leafId) return
+          const target = findAdjacentLeaf(
+            currentTree,
+            leafId,
+            shortcut.direction as FocusDirection,
+          )
+          if (target) setFocusedLeaf(sessionId, target)
+          return
+        }
+        case 'clear': {
+          if (!leafEntry) return
+          xtermRegistry.clear(leafEntry.leaf.activeTabId)
+          return
+        }
+        case 'toggle-dock': {
+          toggleDockVisible(sessionId)
+          return
+        }
+      }
+    },
+    [
+      sessionId,
+      handleNewTab,
+      handleSplit,
+      closeTabWithGuard,
+      setActiveTab,
+      setFocusedLeaf,
+      toggleDockVisible,
+    ],
+  )
+
+  useEffect(() => {
+    if (!sessionId) return
+    const platform = getPlatform()
+    const handler = (event: KeyboardEvent) => {
+      const shortcut = matchShortcut(event, platform)
+      if (!shortcut) return
+      event.preventDefault()
+      event.stopPropagation()
+      dispatchShortcut(shortcut)
+    }
+    window.addEventListener('keydown', handler, true)
+    return () => {
+      window.removeEventListener('keydown', handler, true)
+    }
+  }, [sessionId, dispatchShortcut])
+
   if (!activeSessionId || !activeSession || !tree) return null
+  if (!dockVisible) return null
 
   return (
-    <div
-      className={dockStyles.root}
-      style={{ height: DOCK_HEIGHT_PX }}
-      data-testid="terminal-dock"
-    >
-      <div className={dockStyles.inner}>
-        <SplitNodeView
-          tree={tree}
-          sessionId={activeSessionId}
-          focusedLeafId={focusedLeafId}
-          onSelectTab={handleSelectTab}
-          onNewTab={handleNewTab}
-          onSplit={handleSplit}
-          onCloseActiveTab={handleCloseActiveTab}
-          onCloseTab={handleCloseTab}
-          onFocusLeaf={handleFocusLeaf}
-          onResizeSplit={handleResizeSplit}
-        />
+    <>
+      <div
+        className={dockStyles.root}
+        style={{ height: dockHeight }}
+        data-testid="terminal-dock"
+      >
+        <DockResizeHandle sessionId={activeSessionId} />
+        <div className={dockStyles.inner} style={{ height: dockHeight - 4 }}>
+          <SplitNodeView
+            tree={tree}
+            sessionId={activeSessionId}
+            focusedLeafId={focusedLeafId}
+            onSelectTab={handleSelectTab}
+            onNewTab={handleNewTab}
+            onSplit={handleSplit}
+            onCloseActiveTab={handleCloseActiveTab}
+            onCloseTab={handleCloseTab}
+            onFocusLeaf={handleFocusLeaf}
+            onResizeSplit={handleResizeSplit}
+          />
+        </div>
       </div>
-    </div>
+      <CloseConfirmDialog
+        request={closeRequest}
+        onCancel={() => setCloseRequest(null)}
+        onConfirm={(req) => {
+          setCloseRequest(null)
+          void closeTab(req.sessionId, req.leafId, req.tabId)
+        }}
+      />
+    </>
   )
 }
