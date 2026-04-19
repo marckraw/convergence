@@ -220,4 +220,30 @@ describe('WorkspaceService', () => {
     await service.deleteAllForProject(projectId)
     expect(service.getByProjectId(projectId)).toHaveLength(0)
   })
+
+  it('listAll returns an empty array when no workspaces exist', () => {
+    expect(service.listAll()).toEqual([])
+  })
+
+  it('listAll returns workspaces from every project in one call', async () => {
+    const secondRepoPath = join(tempDir, 'repo-2')
+    gitInit(secondRepoPath)
+    const secondProjectId = 'test-project-id-2'
+    insertProject(secondProjectId, secondRepoPath)
+
+    await service.create({ projectId, branchName: 'project-a-branch-1' })
+    await service.create({ projectId, branchName: 'project-a-branch-2' })
+    await service.create({
+      projectId: secondProjectId,
+      branchName: 'project-b-branch-1',
+    })
+
+    const all = service.listAll()
+    expect(all).toHaveLength(3)
+    const projectIds = new Set(all.map((w) => w.projectId))
+    expect(projectIds).toEqual(new Set([projectId, secondProjectId]))
+
+    expect(service.getByProjectId(projectId)).toHaveLength(2)
+    expect(service.getByProjectId(secondProjectId)).toHaveLength(1)
+  })
 })

@@ -6,6 +6,7 @@ import { useAppSettingsStore } from '@/entities/app-settings'
 import { Toaster, toast } from 'sonner'
 import { TooltipProvider } from '@/shared/ui/tooltip'
 import { applyTheme, getStoredTheme } from '@/shared/lib/theme'
+import { CommandCenterContainer } from '@/features/command-center'
 import { AppShell } from './App.layout'
 
 export function App() {
@@ -16,11 +17,14 @@ export function App() {
   const clearProjectError = useProjectStore((s) => s.clearError)
   const workspaceError = useWorkspaceStore((s) => s.error)
   const clearWorkspaceError = useWorkspaceStore((s) => s.clearError)
+  const loadGlobalWorkspaces = useWorkspaceStore((s) => s.loadGlobalWorkspaces)
   const sessionError = useSessionStore((s) => s.error)
   const clearSessionError = useSessionStore((s) => s.clearError)
   const activeSessionId = useSessionStore((s) => s.activeSessionId)
   const setActiveSession = useSessionStore((s) => s.setActiveSession)
   const handleSessionUpdate = useSessionStore((s) => s.handleSessionUpdate)
+  const loadGlobalSessions = useSessionStore((s) => s.loadGlobalSessions)
+  const loadRecents = useSessionStore((s) => s.loadRecents)
   const loadAppSettings = useAppSettingsStore((s) => s.load)
 
   useEffect(() => {
@@ -45,6 +49,17 @@ export function App() {
   useEffect(() => {
     loadActiveProject()
   }, [loadActiveProject])
+
+  useEffect(() => {
+    void loadGlobalWorkspaces()
+  }, [loadGlobalWorkspaces])
+
+  useEffect(() => {
+    void (async () => {
+      await loadGlobalSessions()
+      await loadRecents()
+    })()
+  }, [loadGlobalSessions, loadRecents])
 
   useEffect(() => {
     void loadAppSettings()
@@ -88,6 +103,7 @@ export function App() {
         loading={loading}
         hasProject={!!activeProject}
       />
+      <CommandCenterContainer />
       <Toaster position="bottom-right" />
     </TooltipProvider>
   )

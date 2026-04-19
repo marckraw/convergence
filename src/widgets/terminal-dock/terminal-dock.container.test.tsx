@@ -341,6 +341,11 @@ describe('TerminalDock container', () => {
       })
     }
 
+    function focusDock() {
+      const buttons = screen.queryAllByRole('button')
+      if (buttons.length > 0) buttons[0]!.focus()
+    }
+
     it('Cmd-T dispatches newTab for the focused leaf', () => {
       setupSingleLeaf()
       const newTabSpy = vi
@@ -467,8 +472,17 @@ describe('TerminalDock container', () => {
     it('Cmd-K calls xterm clear on the focused active tab', () => {
       setupSingleLeaf()
       render(<TerminalDock />)
+      focusDock()
       fireEvent.keyDown(window, { key: 'k', metaKey: true })
       expect(xtermClearSpy).toHaveBeenCalledWith('t-1')
+    })
+
+    it('Cmd-K does not clear when focus is outside the dock', () => {
+      setupSingleLeaf()
+      render(<TerminalDock />)
+      // focus stays on document.body by default — outside the dock root
+      fireEvent.keyDown(window, { key: 'k', metaKey: true })
+      expect(xtermClearSpy).not.toHaveBeenCalled()
     })
 
     it('Cmd-Shift-] cycles to the next tab', () => {

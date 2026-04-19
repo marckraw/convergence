@@ -11,6 +11,7 @@ import {
   ReleaseNotesDialogContainer,
   ThemeToggleButton,
 } from '@/features'
+import { switchToSession } from '@/features/command-center'
 import { NeedsYou } from './needs-you.presentational'
 import { buildNeedsYouSummary } from './needs-you.presentational'
 import { ProjectTree } from './project-tree.container'
@@ -49,6 +50,7 @@ export const Sidebar: FC<SidebarProps> = ({
   const needsYouDismissals = useSessionStore((s) => s.needsYouDismissals)
   const loadSessions = useSessionStore((s) => s.loadSessions)
   const loadGlobalSessions = useSessionStore((s) => s.loadGlobalSessions)
+  const loadRecents = useSessionStore((s) => s.loadRecents)
   const archiveSession = useSessionStore((s) => s.archiveSession)
   const unarchiveSession = useSessionStore((s) => s.unarchiveSession)
   const deleteSession = useSessionStore((s) => s.deleteSession)
@@ -77,10 +79,6 @@ export const Sidebar: FC<SidebarProps> = ({
       })
     })
   }, [])
-
-  useEffect(() => {
-    loadGlobalSessions()
-  }, [loadGlobalSessions])
 
   useEffect(() => {
     if (activeProject) {
@@ -136,30 +134,7 @@ export const Sidebar: FC<SidebarProps> = ({
   )
 
   const handleSelectNeedsYouSession = async (sessionId: string) => {
-    const targetSession = globalSessions.find(
-      (session) => session.id === sessionId,
-    )
-    if (!targetSession) {
-      return
-    }
-
-    if (activeProject?.id !== targetSession.projectId) {
-      const targetProject = projects.find(
-        (project) => project.id === targetSession.projectId,
-      )
-      prepareForProject(targetSession.projectId)
-      await setActiveProject(targetSession.projectId)
-      if (targetProject) {
-        await Promise.all([
-          loadWorkspaces(targetProject.id),
-          loadCurrentBranch(targetProject.repositoryPath),
-          loadSessions(targetProject.id),
-        ])
-      } else {
-        await loadSessions(targetSession.projectId)
-      }
-    }
-
+    await switchToSession(sessionId)
     onSelectSession(sessionId)
   }
 
@@ -175,6 +150,7 @@ export const Sidebar: FC<SidebarProps> = ({
     await deleteWorkspace(workspaceId, activeProject.id)
     await loadSessions(activeProject.id)
     await loadGlobalSessions()
+    await loadRecents()
 
     if (activeSessionId && deletedSessionIds.includes(activeSessionId)) {
       setActiveSession(null)
@@ -284,10 +260,7 @@ export const Sidebar: FC<SidebarProps> = ({
           <ProviderStatusDialogContainer />
         </div>
         <div className="mt-2">
-          <McpServersDialogContainer
-            projectId={activeProject?.id ?? null}
-            projectName={activeProject?.name ?? null}
-          />
+          <McpServersDialogContainer />
         </div>
         <div className="mt-2">
           <ReleaseNotesDialogContainer />

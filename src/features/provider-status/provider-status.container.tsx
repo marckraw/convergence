@@ -2,11 +2,21 @@ import { useCallback, useEffect, useState } from 'react'
 import type { FC } from 'react'
 import { Bot } from 'lucide-react'
 import { providerApi, type ProviderStatusInfo } from '@/entities/session'
+import { useDialogStore } from '@/entities/dialog'
 import { Button } from '@/shared/ui/button'
 import { ProviderStatusDialog } from './provider-status.presentational'
 
 export const ProviderStatusDialogContainer: FC = () => {
-  const [open, setOpen] = useState(false)
+  const open = useDialogStore((s) => s.openDialog === 'providers')
+  const openDialog = useDialogStore((s) => s.open)
+  const closeDialog = useDialogStore((s) => s.close)
+  const handleOpenChange = useCallback(
+    (next: boolean) => {
+      if (next) openDialog('providers')
+      else closeDialog()
+    },
+    [openDialog, closeDialog],
+  )
   const [statuses, setStatuses] = useState<ProviderStatusInfo[]>([])
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -39,7 +49,7 @@ export const ProviderStatusDialogContainer: FC = () => {
   return (
     <ProviderStatusDialog
       open={open}
-      onOpenChange={setOpen}
+      onOpenChange={handleOpenChange}
       statuses={statuses}
       isLoading={isLoading}
       error={error}

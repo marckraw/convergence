@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { FC } from 'react'
 import { GitBranch, Settings2 } from 'lucide-react'
 import {
@@ -6,6 +6,7 @@ import {
   useProjectStore,
   type WorkspaceStartStrategy,
 } from '@/entities/project'
+import { useDialogStore } from '@/entities/dialog'
 import { Button } from '@/shared/ui/button'
 import { ProjectSettingsDialog } from './project-settings.presentational'
 
@@ -15,7 +16,16 @@ export const ProjectSettingsDialogContainer: FC = () => {
     (state) => state.updateProjectSettings,
   )
 
-  const [open, setOpen] = useState(false)
+  const open = useDialogStore((s) => s.openDialog === 'project-settings')
+  const openDialog = useDialogStore((s) => s.open)
+  const closeDialog = useDialogStore((s) => s.close)
+  const handleOpenChange = useCallback(
+    (next: boolean) => {
+      if (next) openDialog('project-settings')
+      else closeDialog()
+    },
+    [openDialog, closeDialog],
+  )
   const [strategy, setStrategy] =
     useState<WorkspaceStartStrategy>('base-branch')
   const [baseBranchName, setBaseBranchName] = useState('')
@@ -39,10 +49,10 @@ export const ProjectSettingsDialogContainer: FC = () => {
 
   useEffect(() => {
     if (!activeProject) {
-      setOpen(false)
+      closeDialog()
       setError(null)
     }
-  }, [activeProject])
+  }, [activeProject, closeDialog])
 
   if (!activeProject) {
     return null
@@ -71,7 +81,7 @@ export const ProjectSettingsDialogContainer: FC = () => {
               : null,
         },
       })
-      setOpen(false)
+      closeDialog()
     } catch (nextError) {
       setError(
         nextError instanceof Error
@@ -86,7 +96,7 @@ export const ProjectSettingsDialogContainer: FC = () => {
   return (
     <ProjectSettingsDialog
       open={open}
-      onOpenChange={setOpen}
+      onOpenChange={handleOpenChange}
       projectName={activeProject.name}
       strategy={strategy}
       baseBranchName={baseBranchName}

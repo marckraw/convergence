@@ -34,6 +34,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.invoke('workspace:create', input),
     getByProjectId: (projectId: string) =>
       ipcRenderer.invoke('workspace:getByProjectId', projectId),
+    getAll: () => ipcRenderer.invoke('workspace:getAll'),
     delete: (id: string) => ipcRenderer.invoke('workspace:delete', id),
   },
   git: {
@@ -91,6 +92,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.invoke('session:getNeedsYouDismissals'),
     setNeedsYouDismissals: (dismissals: unknown) =>
       ipcRenderer.invoke('session:setNeedsYouDismissals', dismissals),
+    getRecentIds: () => ipcRenderer.invoke('session:getRecentIds'),
+    setRecentIds: (ids: string[]) =>
+      ipcRenderer.invoke('session:setRecentIds', ids),
     onSessionUpdate: (callback: (session: unknown) => void) => {
       const handler = (_event: unknown, session: unknown) => callback(session)
       ipcRenderer.on('session:updated', handler)

@@ -23,6 +23,7 @@ const mockElectronAPI = {
   workspace: {
     create: vi.fn(),
     getByProjectId: vi.fn(),
+    getAll: vi.fn(),
     delete: vi.fn(),
   },
   git: {
@@ -35,6 +36,7 @@ describe('useWorkspaceStore', () => {
   beforeEach(() => {
     useWorkspaceStore.setState({
       workspaces: [],
+      globalWorkspaces: [],
       currentBranch: null,
       loading: false,
       error: null,
@@ -69,9 +71,10 @@ describe('useWorkspaceStore', () => {
     expect(useWorkspaceStore.getState().currentBranch).toBe('main')
   })
 
-  it('createWorkspace calls API and refreshes list', async () => {
+  it('createWorkspace calls API and refreshes both lists', async () => {
     mockElectronAPI.workspace.create.mockResolvedValue(mockWorkspace)
     mockElectronAPI.workspace.getByProjectId.mockResolvedValue([mockWorkspace])
+    mockElectronAPI.workspace.getAll.mockResolvedValue([mockWorkspace])
 
     await useWorkspaceStore.getState().createWorkspace('proj-1', 'feature-test')
 
@@ -80,6 +83,9 @@ describe('useWorkspaceStore', () => {
       branchName: 'feature-test',
     })
     expect(useWorkspaceStore.getState().workspaces).toEqual([mockWorkspace])
+    expect(useWorkspaceStore.getState().globalWorkspaces).toEqual([
+      mockWorkspace,
+    ])
   })
 
   it('createWorkspace sets error on failure', async () => {
@@ -94,13 +100,49 @@ describe('useWorkspaceStore', () => {
     )
   })
 
-  it('deleteWorkspace calls API and refreshes list', async () => {
+  it('deleteWorkspace calls API and refreshes both lists', async () => {
+    useWorkspaceStore.setState({
+      workspaces: [mockWorkspace],
+      globalWorkspaces: [mockWorkspace],
+    })
     mockElectronAPI.workspace.delete.mockResolvedValue(undefined)
     mockElectronAPI.workspace.getByProjectId.mockResolvedValue([])
+    mockElectronAPI.workspace.getAll.mockResolvedValue([])
 
     await useWorkspaceStore.getState().deleteWorkspace('ws-1', 'proj-1')
 
     expect(mockElectronAPI.workspace.delete).toHaveBeenCalledWith('ws-1')
     expect(useWorkspaceStore.getState().workspaces).toEqual([])
+    expect(useWorkspaceStore.getState().globalWorkspaces).toEqual([])
+  })
+
+  it('loadGlobalWorkspaces populates globalWorkspaces with every project', async () => {
+    const otherProjectWorkspace = {
+      ...mockWorkspace,
+      id: 'ws-2',
+      projectId: 'proj-2',
+      branchName: 'other',
+      path: '/tmp/workspaces/proj-2/ws-2',
+    }
+    mockElectronAPI.workspace.getAll.mockResolvedValue([
+      mockWorkspace,
+      otherProjectWorkspace,
+    ])
+
+    await useWorkspaceStore.getState().loadGlobalWorkspaces()
+
+    expect(mockElectronAPI.workspace.getAll).toHaveBeenCalled()
+    expect(useWorkspaceStore.getState().globalWorkspaces).toEqual([
+      mockWorkspace,
+      otherProjectWorkspace,
+    ])
+  })
+
+  it('loadGlobalWorkspaces sets error on failure', async () => {
+    mockElectronAPI.workspace.getAll.mockRejectedValue(new Error('disk down'))
+
+    await useWorkspaceStore.getState().loadGlobalWorkspaces()
+
+    expect(useWorkspaceStore.getState().error).toBe('disk down')
   })
 })

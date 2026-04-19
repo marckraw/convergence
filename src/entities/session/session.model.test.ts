@@ -10,10 +10,12 @@ const mockElectronAPI = {
     getNeedsYouDismissals: vi.fn().mockResolvedValue({}),
     archive: vi.fn().mockResolvedValue(undefined),
     unarchive: vi.fn().mockResolvedValue(undefined),
-    delete: vi.fn(),
+    delete: vi.fn().mockResolvedValue(undefined),
     start: vi.fn(),
     sendMessage: vi.fn(),
     setNeedsYouDismissals: vi.fn().mockResolvedValue(undefined),
+    getRecentIds: vi.fn().mockResolvedValue([]),
+    setRecentIds: vi.fn().mockResolvedValue(undefined),
     approve: vi.fn(),
     deny: vi.fn(),
     stop: vi.fn(),
@@ -22,6 +24,31 @@ const mockElectronAPI = {
   provider: {
     getAll: vi.fn().mockResolvedValue([]),
   },
+}
+
+function makeSession(overrides: {
+  id: string
+  projectId?: string
+  updatedAt?: string
+  attention?: 'none' | 'needs-input' | 'needs-approval' | 'finished' | 'failed'
+  archivedAt?: string | null
+}) {
+  return {
+    id: overrides.id,
+    projectId: overrides.projectId ?? 'project-1',
+    workspaceId: null,
+    providerId: 'claude-code',
+    model: 'sonnet',
+    effort: 'medium' as const,
+    name: `Session ${overrides.id}`,
+    status: 'running' as const,
+    attention: overrides.attention ?? ('none' as const),
+    workingDirectory: '/tmp/project-1',
+    transcript: [],
+    archivedAt: overrides.archivedAt ?? null,
+    createdAt: '2026-01-01T00:00:00.000Z',
+    updatedAt: overrides.updatedAt ?? '2026-01-01T00:00:00.000Z',
+  }
 }
 
 describe('useSessionStore', () => {
@@ -36,6 +63,7 @@ describe('useSessionStore', () => {
       sessions: [],
       globalSessions: [],
       needsYouDismissals: {},
+      recentSessionIds: [],
       currentProjectId: null,
       activeSessionId: null,
       draftWorkspaceId: null,
@@ -347,5 +375,69 @@ describe('useSessionStore', () => {
     await useSessionStore.getState().unarchiveSession('session-2')
 
     expect(mockElectronAPI.session.unarchive).toHaveBeenCalledWith('session-2')
+  })
+
+  it('recordRecentSession prepends and dedupes ids', () => {
+    useSessionStore.getState().recordRecentSession('a')
+    useSessionStore.getState().recordRecentSession('b')
+    useSessionStore.getState().recordRecentSession('a')
+
+    expect(useSessionStore.getState().recentSessionIds).toEqual(['a', 'b'])
+    expect(mockElectronAPI.session.setRecentIds).toHaveBeenLastCalledWith([
+      'a',
+      'b',
+    ])
+  })
+
+  it('recordRecentSession caps recents at 10', () => {
+    for (let i = 0; i < 15; i += 1) {
+      useSessionStore.getState().recordRecentSession(`id-${i}`)
+    }
+
+    const ids = useSessionStore.getState().recentSessionIds
+    expect(ids).toHaveLength(10)
+    expect(ids[0]).toBe('id-14')
+    expect(ids[9]).toBe('id-5')
+  })
+
+  it('setActiveSession records recent id but null does not', () => {
+    useSessionStore.getState().setActiveSession('session-a')
+    useSessionStore.getState().setActiveSession(null)
+
+    expect(useSessionStore.getState().recentSessionIds).toEqual(['session-a'])
+  })
+
+  it('loadRecents prunes ids missing from globalSessions', async () => {
+    useSessionStore.setState({
+      globalSessions: [makeSession({ id: 'keep' })],
+    })
+    mockElectronAPI.session.getRecentIds.mockResolvedValueOnce([
+      'keep',
+      'gone',
+      'also-gone',
+    ])
+
+    await useSessionStore.getState().loadRecents()
+
+    expect(useSessionStore.getState().recentSessionIds).toEqual(['keep'])
+    expect(mockElectronAPI.session.setRecentIds).toHaveBeenCalledWith(['keep'])
+  })
+
+  it('deleteSession removes id from recents and persists', async () => {
+    useSessionStore.setState({
+      globalSessions: [
+        makeSession({ id: 'session-1' }),
+        makeSession({ id: 'session-2' }),
+      ],
+      recentSessionIds: ['session-1', 'session-2'],
+    })
+    mockElectronAPI.session.getByProjectId.mockResolvedValueOnce([])
+
+    await useSessionStore.getState().deleteSession('session-1', 'project-1')
+
+    expect(useSessionStore.getState().recentSessionIds).toEqual(['session-2'])
+    expect(mockElectronAPI.session.setRecentIds).toHaveBeenCalledWith([
+      'session-2',
+    ])
   })
 })

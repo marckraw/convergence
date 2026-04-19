@@ -9,6 +9,8 @@ export const workspaceApi = {
   getByProjectId: (projectId: string): Promise<Workspace[]> =>
     window.electronAPI.workspace.getByProjectId(projectId),
 
+  getAll: (): Promise<Workspace[]> => window.electronAPI.workspace.getAll(),
+
   delete: (id: string): Promise<void> =>
     window.electronAPI.workspace.delete(id),
 }

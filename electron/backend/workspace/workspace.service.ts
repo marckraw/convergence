@@ -75,6 +75,14 @@ export class WorkspaceService {
     return rows.map(workspaceFromRow)
   }
 
+  listAll(): Workspace[] {
+    const rows = this.db
+      .prepare('SELECT * FROM workspaces ORDER BY created_at DESC')
+      .all() as WorkspaceRow[]
+
+    return rows.map(workspaceFromRow)
+  }
+
   async delete(id: string): Promise<void> {
     const row = this.db
       .prepare('SELECT * FROM workspaces WHERE id = ?')

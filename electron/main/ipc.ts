@@ -4,6 +4,10 @@ import { StateService } from '../backend/state/state.service'
 import { WorkspaceService } from '../backend/workspace/workspace.service'
 import { GitService } from '../backend/git/git.service'
 import { SessionService } from '../backend/session/session.service'
+import {
+  getRecentSessionIds,
+  setRecentSessionIds,
+} from '../backend/session/session-recents'
 import { ProviderRegistry } from '../backend/provider/provider-registry'
 import { McpService } from '../backend/mcp/mcp.service'
 import { AppSettingsService } from '../backend/app-settings/app-settings.service'
@@ -157,6 +161,8 @@ export function registerIpcHandlers(
     workspaceService.getByProjectId(projectId),
   )
 
+  ipcMain.handle('workspace:getAll', () => workspaceService.listAll())
+
   ipcMain.handle('workspace:delete', async (_event, id: string) => {
     await workspaceService.delete(id)
   })
@@ -226,6 +232,17 @@ export function registerIpcHandlers(
       stateService.set(NEEDS_YOU_DISMISSALS_KEY, JSON.stringify(dismissals))
     },
   )
+
+  ipcMain.handle('session:getRecentIds', () =>
+    getRecentSessionIds(stateService),
+  )
+
+  ipcMain.handle('session:setRecentIds', (_event, ids: string[]) => {
+    const sanitized = Array.isArray(ids)
+      ? ids.filter((value): value is string => typeof value === 'string')
+      : []
+    setRecentSessionIds(stateService, sanitized)
+  })
 
   ipcMain.handle('session:getById', (_event, id: string) =>
     sessionService.getById(id),
