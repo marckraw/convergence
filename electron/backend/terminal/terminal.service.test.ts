@@ -1,5 +1,10 @@
-import { describe, expect, it, beforeEach, vi } from 'vitest'
-import { TerminalService, dataChannel, exitChannel } from './terminal.service'
+import { describe, expect, it, beforeEach, vi, type Mock } from 'vitest'
+import {
+  TerminalService,
+  dataChannel,
+  exitChannel,
+  type TerminalEventEmitter,
+} from './terminal.service'
 import type {
   PtyFactory,
   PtyProcess,
@@ -72,14 +77,14 @@ function createFakePtyFactory(): {
 describe('TerminalService', () => {
   let factory: PtyFactory
   let created: FakePty[]
-  let emit: ReturnType<typeof vi.fn>
+  let emit: Mock<TerminalEventEmitter>
   let service: TerminalService
 
   beforeEach(() => {
     const built = createFakePtyFactory()
     factory = built.factory
     created = built.created
-    emit = vi.fn()
+    emit = vi.fn<TerminalEventEmitter>()
     service = new TerminalService(factory, emit, {
       SHELL: '/bin/zsh',
     })
