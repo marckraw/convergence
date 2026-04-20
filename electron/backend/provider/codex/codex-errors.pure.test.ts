@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { buildTurnFailureEntry } from './codex-errors.pure'
+import {
+  buildCodexThreadRecoveryEntry,
+  buildTurnFailureEntry,
+  isCodexThreadNotFoundError,
+} from './codex-errors.pure'
 
 describe('buildTurnFailureEntry', () => {
   const timestamp = '2026-04-17T10:00:00.000Z'
@@ -34,6 +38,39 @@ describe('buildTurnFailureEntry', () => {
     expect(entry).toEqual({
       type: 'system',
       text: 'Turn failed: undefined',
+      timestamp,
+    })
+  })
+})
+
+describe('isCodexThreadNotFoundError', () => {
+  it('matches thread-not-found Error instances', () => {
+    expect(
+      isCodexThreadNotFoundError(
+        new Error('thread not found: 019daad2-12e0-7c30-8699-5d09467a2f9d'),
+      ),
+    ).toBe(true)
+  })
+
+  it('matches string rejections case-insensitively', () => {
+    expect(
+      isCodexThreadNotFoundError('Thread Not Found: stale-thread-id'),
+    ).toBe(true)
+  })
+
+  it('ignores unrelated failures', () => {
+    expect(isCodexThreadNotFoundError(new Error('model not available'))).toBe(
+      false,
+    )
+  })
+})
+
+describe('buildCodexThreadRecoveryEntry', () => {
+  it('explains that recovery used a fresh thread', () => {
+    const timestamp = '2026-04-17T10:00:00.000Z'
+    expect(buildCodexThreadRecoveryEntry(timestamp)).toEqual({
+      type: 'system',
+      text: 'Codex thread was no longer available. Started a new thread; previous provider context may be missing.',
       timestamp,
     })
   })

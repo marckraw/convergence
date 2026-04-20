@@ -25,7 +25,11 @@ import type {
   ReasoningEffort,
 } from '../provider.types'
 import { deriveCodexContextWindow } from '../context-window.pure'
-import { buildTurnFailureEntry } from './codex-errors.pure'
+import {
+  buildCodexThreadRecoveryEntry,
+  buildTurnFailureEntry,
+  isCodexThreadNotFoundError,
+} from './codex-errors.pure'
 import {
   buildCodexUserInput,
   partFromAttachment,
@@ -278,6 +282,62 @@ export class CodexProvider implements Provider {
       })
     }
 
+    async function startFreshThread(activeRpc: JsonRpcClient): Promise<string> {
+      const threadResult = await activeRpc.request('thread/start', {
+        cwd: config.workingDirectory,
+        approvalPolicy: 'on-request',
+        sandbox: 'workspace-write',
+      })
+
+      const discoveredThreadId = readThreadId(threadResult)
+      if (discoveredThreadId) {
+        setContinuationToken(discoveredThreadId)
+      }
+      if (!threadId) {
+        threadId = await waitForThreadId()
+      }
+
+      return threadId
+    }
+
+    async function ensureThread(activeRpc: JsonRpcClient): Promise<string> {
+      if (threadId) {
+        return threadId
+      }
+
+      return startFreshThread(activeRpc)
+    }
+
+    async function startTurn(
+      activeRpc: JsonRpcClient,
+      input: ReturnType<typeof buildCodexUserInput>,
+    ): Promise<void> {
+      const currentThreadId = await ensureThread(activeRpc)
+
+      try {
+        await activeRpc.request('turn/start', {
+          threadId: currentThreadId,
+          model: config.model,
+          effort: config.effort,
+          input,
+        })
+      } catch (err) {
+        if (!threadId || !isCodexThreadNotFoundError(err)) {
+          throw err
+        }
+
+        emit(buildCodexThreadRecoveryEntry(now()))
+        threadId = null
+        const recoveredThreadId = await startFreshThread(activeRpc)
+        await activeRpc.request('turn/start', {
+          threadId: recoveredThreadId,
+          model: config.model,
+          effort: config.effort,
+          input,
+        })
+      }
+    }
+
     async function initialize(
       initialMessage: string,
       initialAttachments?: Attachment[],
@@ -298,22 +358,6 @@ export class CodexProvider implements Provider {
         })
         rpc.notify('initialized')
 
-        if (!threadId) {
-          const threadResult = await rpc.request('thread/start', {
-            cwd: config.workingDirectory,
-            approvalPolicy: 'on-request',
-            sandbox: 'workspace-write',
-          })
-
-          const discoveredThreadId = readThreadId(threadResult)
-          if (discoveredThreadId) {
-            setContinuationToken(discoveredThreadId)
-          }
-          if (!threadId) {
-            threadId = await waitForThreadId()
-          }
-        }
-
         // Emit user message and start turn
         emit({
           type: 'user',
@@ -323,12 +367,10 @@ export class CodexProvider implements Provider {
         setStatus('running')
 
         const parts = await loadCodexParts(initialAttachments)
-        await rpc.request('turn/start', {
-          threadId,
-          model: config.model,
-          effort: config.effort,
-          input: buildCodexUserInput({ text: initialMessage, parts }),
-        })
+        await startTurn(
+          rpc,
+          buildCodexUserInput({ text: initialMessage, parts }),
+        )
       } catch (err) {
         if (stopped) return
         emit({
@@ -701,12 +743,7 @@ export class CodexProvider implements Provider {
         const activeRpc = rpc
         loadCodexParts(attachments)
           .then((parts) =>
-            activeRpc.request('turn/start', {
-              threadId,
-              model: config.model,
-              effort: config.effort,
-              input: buildCodexUserInput({ text, parts }),
-            }),
+            startTurn(activeRpc, buildCodexUserInput({ text, parts })),
           )
           .catch((err) => {
             if (stopped) return
