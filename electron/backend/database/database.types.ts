@@ -29,6 +29,8 @@ export interface SessionRow {
   activity: string | null
   archived_at: string | null
   name_auto_generated: number
+  parent_session_id: string | null
+  fork_strategy: string | null
   created_at: string
   updated_at: string
 }

@@ -16,6 +16,7 @@ import {
 import { Button } from '@/shared/ui/button'
 import { SessionDefaultsFields } from './session-defaults.presentational'
 import { NamingModelDefaultsFields } from './naming-model-defaults.presentational'
+import { ExtractionModelDefaultsFields } from './extraction-model-defaults.presentational'
 
 interface AppSettingsDialogProps {
   open: boolean
@@ -24,12 +25,14 @@ interface AppSettingsDialogProps {
   providers: ProviderInfo[]
   selection: ResolvedProviderSelection
   namingDraft: Record<string, string>
+  extractionDraft: Record<string, string>
   isSaving: boolean
   error: string | null
   onProviderChange: (id: string) => void
   onModelChange: (id: string) => void
   onEffortChange: (id: ReasoningEffort | '') => void
   onNamingModelChange: (providerId: string, modelId: string) => void
+  onExtractionModelChange: (providerId: string, modelId: string) => void
   onSave: () => void
   onCancel: () => void
   onRestoreDefaults: () => void
@@ -42,12 +45,14 @@ export const AppSettingsDialog: FC<AppSettingsDialogProps> = ({
   providers,
   selection,
   namingDraft,
+  extractionDraft,
   isSaving,
   error,
   onProviderChange,
   onModelChange,
   onEffortChange,
   onNamingModelChange,
+  onExtractionModelChange,
   onSave,
   onCancel,
   onRestoreDefaults,
@@ -92,6 +97,19 @@ export const AppSettingsDialog: FC<AppSettingsDialogProps> = ({
               providers={providers}
               namingDraft={namingDraft}
               onNamingModelChange={onNamingModelChange}
+            />
+          </section>
+        )}
+
+        {providers.length > 0 && (
+          <section className="space-y-3">
+            <h3 className="text-xs font-semibold tracking-wide uppercase text-muted-foreground">
+              Session forking
+            </h3>
+            <ExtractionModelDefaultsFields
+              providers={providers}
+              extractionDraft={extractionDraft}
+              onExtractionModelChange={onExtractionModelChange}
             />
           </section>
         )}

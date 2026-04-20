@@ -120,9 +120,11 @@ export class SessionService {
            model,
            effort,
            name,
-           working_directory
+           working_directory,
+           parent_session_id,
+           fork_strategy
          )
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
       .run(
         id,
@@ -133,6 +135,8 @@ export class SessionService {
         input.effort,
         input.name,
         workingDirectory,
+        input.parentSessionId ?? null,
+        input.forkStrategy ?? null,
       )
 
     return this.getById(id)!

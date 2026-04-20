@@ -74,6 +74,16 @@ export type NewWorkspacePaletteItem = {
   search: PaletteSearchFields
 }
 
+export type ForkSessionPaletteItem = {
+  kind: 'fork-session'
+  id: string
+  sessionId: string
+  sessionName: string
+  projectName: string
+  title: string
+  search: PaletteSearchFields
+}
+
 export type PaletteItem =
   | ProjectPaletteItem
   | WorkspacePaletteItem
@@ -81,10 +91,12 @@ export type PaletteItem =
   | DialogPaletteItem
   | NewSessionPaletteItem
   | NewWorkspacePaletteItem
+  | ForkSessionPaletteItem
 
 export type CuratedSectionId =
   | 'waiting-on-you'
   | 'needs-review'
+  | 'session-actions'
   | 'recent-sessions'
   | 'projects'
   | 'workspaces'

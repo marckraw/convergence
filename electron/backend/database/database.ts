@@ -32,10 +32,13 @@ const SCHEMA = `
     activity TEXT,
     archived_at TEXT,
     name_auto_generated INTEGER NOT NULL DEFAULT 0,
+    parent_session_id TEXT,
+    fork_strategy TEXT,
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
     updated_at TEXT NOT NULL DEFAULT (datetime('now')),
     FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
-    FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE
+    FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE,
+    FOREIGN KEY (parent_session_id) REFERENCES sessions(id) ON DELETE SET NULL
   );
 
   CREATE TABLE IF NOT EXISTS workspaces (
@@ -139,6 +142,14 @@ function ensureSessionColumns(database: Database.Database): void {
     database.exec(
       'ALTER TABLE sessions ADD COLUMN name_auto_generated INTEGER NOT NULL DEFAULT 0',
     )
+  }
+
+  if (!columnNames.has('parent_session_id')) {
+    database.exec('ALTER TABLE sessions ADD COLUMN parent_session_id TEXT')
+  }
+
+  if (!columnNames.has('fork_strategy')) {
+    database.exec('ALTER TABLE sessions ADD COLUMN fork_strategy TEXT')
   }
 }
 

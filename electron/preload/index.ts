@@ -102,6 +102,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
         ipcRenderer.removeListener('session:updated', handler)
       }
     },
+    forkPreviewSummary: (parentId: string) =>
+      ipcRenderer.invoke('session:fork:previewSummary', parentId),
+    forkFull: (input: unknown) =>
+      ipcRenderer.invoke('session:fork:full', input),
+    forkSummary: (input: unknown) =>
+      ipcRenderer.invoke('session:fork:summary', input),
   },
   provider: {
     getAll: () => ipcRenderer.invoke('provider:getAll'),
@@ -136,6 +142,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
       defaultModelId: string | null
       defaultEffortId: string | null
       namingModelByProvider: Record<string, string>
+      extractionModelByProvider: Record<string, string>
     }) => ipcRenderer.invoke('appSettings:set', input),
     onUpdated: (callback: (settings: unknown) => void) => {
       const handler = (_event: unknown, settings: unknown) => callback(settings)

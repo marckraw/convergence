@@ -51,6 +51,10 @@ export function openDialog(kind: DialogKind): void {
   useDialogStore.getState().open(kind)
 }
 
+export function forkCurrentSession(parentSessionId: string): void {
+  useDialogStore.getState().open('session-fork', { parentSessionId })
+}
+
 export async function beginSessionDraft(workspaceId: string): Promise<void> {
   const workspace = useWorkspaceStore
     .getState()

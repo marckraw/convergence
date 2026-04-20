@@ -6,6 +6,7 @@ import type {
   ProjectPaletteItem,
   WorkspacePaletteItem,
   DialogPaletteItem,
+  ForkSessionPaletteItem,
   CuratedSection,
   CuratedSections,
   RankedItem,
@@ -83,6 +84,9 @@ export function buildCuratedSections(
   const dialogItems = items.filter(
     (item): item is DialogPaletteItem => item.kind === 'dialog',
   )
+  const forkSessionItems = items.filter(
+    (item): item is ForkSessionPaletteItem => item.kind === 'fork-session',
+  )
 
   const waiting = sessionItems
     .filter(
@@ -123,6 +127,11 @@ export function buildCuratedSections(
   const sections: CuratedSection[] = [
     { id: 'waiting-on-you', title: 'Waiting on You', items: waiting },
     { id: 'needs-review', title: 'Needs Review', items: review },
+    {
+      id: 'session-actions',
+      title: 'Session Actions',
+      items: forkSessionItems,
+    },
     { id: 'recent-sessions', title: 'Recent Sessions', items: recentItems },
     {
       id: 'projects',

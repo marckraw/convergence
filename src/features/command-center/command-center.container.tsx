@@ -15,6 +15,7 @@ import {
   activateProject,
   beginSessionDraft,
   beginWorkspaceDraft,
+  forkCurrentSession,
   openDialog,
   switchToSession,
 } from './intents'
@@ -42,6 +43,7 @@ export function CommandCenterContainer() {
   const globalSessions = useSessionStore((s) => s.globalSessions)
   const recentSessionIds = useSessionStore((s) => s.recentSessionIds)
   const dismissals = useSessionStore((s) => s.needsYouDismissals)
+  const activeSessionId = useSessionStore((s) => s.activeSessionId)
 
   useEffect(() => {
     const platform = detectPlatform()
@@ -63,6 +65,7 @@ export function CommandCenterContainer() {
       sessions: globalSessions,
       recentSessionIds,
       dismissals,
+      activeSessionId,
     })
   }, [
     isOpen,
@@ -71,6 +74,7 @@ export function CommandCenterContainer() {
     globalSessions,
     recentSessionIds,
     dismissals,
+    activeSessionId,
   ])
 
   const fuse = useMemo(() => {
@@ -121,6 +125,9 @@ export function CommandCenterContainer() {
           return
         case 'new-workspace':
           void beginWorkspaceDraft(item.projectId)
+          return
+        case 'fork-session':
+          forkCurrentSession(item.sessionId)
           return
       }
     },

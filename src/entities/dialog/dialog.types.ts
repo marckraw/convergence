@@ -4,3 +4,6 @@ export type DialogKind =
   | 'providers'
   | 'mcp-servers'
   | 'release-notes'
+  | 'session-fork'
+
+export type DialogPayload = { parentSessionId: string } | null

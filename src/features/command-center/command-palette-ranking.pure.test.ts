@@ -77,11 +77,12 @@ function buildItems(input: {
 }
 
 describe('buildCuratedSections', () => {
-  it('returns the six sections in spec order', () => {
+  it('returns the seven sections in spec order', () => {
     const sections = buildCuratedSections([], {}, [])
     expect(sections.map((section) => section.id)).toEqual([
       'waiting-on-you',
       'needs-review',
+      'session-actions',
       'recent-sessions',
       'projects',
       'workspaces',
