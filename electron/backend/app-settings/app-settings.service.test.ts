@@ -99,6 +99,7 @@ describe('AppSettingsService', () => {
         defaultModelId: null,
         defaultEffortId: null,
         namingModelByProvider: {},
+        extractionModelByProvider: {},
       })
     })
 
@@ -108,6 +109,7 @@ describe('AppSettingsService', () => {
         defaultModelId: 'gpt-5.4',
         defaultEffortId: 'high',
         namingModelByProvider: {},
+        extractionModelByProvider: {},
       })
       const settings = await service.getAppSettings()
       expect(settings).toEqual({
@@ -115,6 +117,7 @@ describe('AppSettingsService', () => {
         defaultModelId: 'gpt-5.4',
         defaultEffortId: 'high',
         namingModelByProvider: {},
+        extractionModelByProvider: {},
       })
     })
 
@@ -133,6 +136,7 @@ describe('AppSettingsService', () => {
         defaultModelId: null,
         defaultEffortId: null,
         namingModelByProvider: {},
+        extractionModelByProvider: {},
       })
     })
 
@@ -151,6 +155,7 @@ describe('AppSettingsService', () => {
         defaultModelId: null,
         defaultEffortId: null,
         namingModelByProvider: {},
+        extractionModelByProvider: {},
       })
     })
 
@@ -169,6 +174,7 @@ describe('AppSettingsService', () => {
         defaultModelId: 'sonnet',
         defaultEffortId: null,
         namingModelByProvider: {},
+        extractionModelByProvider: {},
       })
     })
 
@@ -180,6 +186,7 @@ describe('AppSettingsService', () => {
         defaultModelId: null,
         defaultEffortId: null,
         namingModelByProvider: {},
+        extractionModelByProvider: {},
       })
     })
   })
@@ -232,6 +239,7 @@ describe('AppSettingsService', () => {
         defaultModelId: null,
         defaultEffortId: null,
         namingModelByProvider: {},
+        extractionModelByProvider: {},
       })
     })
 
@@ -313,6 +321,40 @@ describe('AppSettingsService', () => {
       descriptors = []
       const resolved = await service.resolveSessionDefaults()
       expect(resolved).toBeNull()
+    })
+  })
+
+  describe('resolveExtractionModel', () => {
+    it('returns the configured override when set', async () => {
+      await service.setAppSettings({
+        defaultProviderId: null,
+        defaultModelId: null,
+        defaultEffortId: null,
+        extractionModelByProvider: { 'claude-code': 'opus' },
+      })
+      const resolved = await service.resolveExtractionModel('claude-code')
+      expect(resolved).toBe('opus')
+    })
+
+    it('falls back to the provider default model when no override is configured', async () => {
+      const resolved = await service.resolveExtractionModel('claude-code')
+      expect(resolved).toBe('sonnet')
+    })
+
+    it('returns null when the provider is unknown', async () => {
+      const resolved = await service.resolveExtractionModel('ghost')
+      expect(resolved).toBeNull()
+    })
+
+    it('ignores an override that points to a model the provider no longer offers', async () => {
+      stateService.set(
+        APP_SETTINGS_KEY,
+        JSON.stringify({
+          extractionModelByProvider: { 'claude-code': 'ghost-model' },
+        }),
+      )
+      const resolved = await service.resolveExtractionModel('claude-code')
+      expect(resolved).toBe('sonnet')
     })
   })
 })

@@ -29,3 +29,17 @@ export { selectGlobalStatus } from './session.selectors.pure'
 export type { GlobalStatus, ProjectActivity } from './session.selectors.pure'
 export { formatActivityLabel } from './session.activity.pure'
 export { providerApi, sessionApi } from './session.api'
+export { sessionForkApi } from './session-fork.api'
+export type {
+  ForkStrategy,
+  WorkspaceMode,
+  ForkArtifacts,
+  ForkDecision,
+  ForkKeyFact,
+  ForkSummary,
+  ForkCommonInput,
+  ForkFullInput,
+  ForkSummaryInput,
+  ForkInput,
+  ForkResult,
+} from './session-fork.types'

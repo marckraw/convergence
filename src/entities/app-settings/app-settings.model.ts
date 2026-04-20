@@ -7,6 +7,7 @@ const EMPTY: AppSettings = {
   defaultModelId: null,
   defaultEffortId: null,
   namingModelByProvider: {},
+  extractionModelByProvider: {},
 }
 
 interface AppSettingsState {

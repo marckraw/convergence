@@ -16,6 +16,8 @@ import { McpService } from '../backend/mcp/mcp.service'
 import { AppSettingsService } from '../backend/app-settings/app-settings.service'
 import { AttachmentsService } from '../backend/attachments/attachments.service'
 import { SessionNamingService } from '../backend/session/naming/session-naming.service'
+import { SessionForkService } from '../backend/session/fork/session-fork.service'
+import { registerSessionForkIpcHandlers } from '../backend/session/fork/session-fork.ipc'
 import { hydrateProcessPathFromShell } from '../backend/environment/shell-path.service'
 import { TerminalService } from '../backend/terminal/terminal.service'
 import {
@@ -150,6 +152,14 @@ async function startApp(): Promise<void> {
     appSettings: appSettingsService,
   })
   sessionService.setNamer(namingService)
+
+  const sessionForkService = new SessionForkService({
+    sessions: sessionService,
+    providers: providerRegistry,
+    appSettings: appSettingsService,
+    workspaces: workspaceService,
+  })
+  registerSessionForkIpcHandlers(sessionForkService)
 
   registerIpcHandlers(
     projectService,

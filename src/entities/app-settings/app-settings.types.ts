@@ -5,6 +5,7 @@ export interface AppSettings {
   defaultModelId: string | null
   defaultEffortId: ReasoningEffort | null
   namingModelByProvider: Record<string, string>
+  extractionModelByProvider: Record<string, string>
 }
 
 export type AppSettingsInput = AppSettings

@@ -21,6 +21,7 @@ interface Draft {
 
 const EMPTY_DRAFT: Draft = { providerId: '', modelId: '', effortId: '' }
 const EMPTY_NAMING_DRAFT: Record<string, string> = {}
+const EMPTY_EXTRACTION_DRAFT: Record<string, string> = {}
 
 export const AppSettingsDialogContainer: FC<AppSettingsContainerProps> = ({
   trigger,
@@ -38,6 +39,9 @@ export const AppSettingsDialogContainer: FC<AppSettingsContainerProps> = ({
   const [draft, setDraft] = useState<Draft>(EMPTY_DRAFT)
   const [namingDraft, setNamingDraft] =
     useState<Record<string, string>>(EMPTY_NAMING_DRAFT)
+  const [extractionDraft, setExtractionDraft] = useState<
+    Record<string, string>
+  >(EMPTY_EXTRACTION_DRAFT)
 
   const providers = useSessionStore((s) => s.providers)
   const loadProviders = useSessionStore((s) => s.loadProviders)
@@ -64,6 +68,7 @@ export const AppSettingsDialogContainer: FC<AppSettingsContainerProps> = ({
       effortId: settings.defaultEffortId ?? '',
     })
     setNamingDraft({ ...settings.namingModelByProvider })
+    setExtractionDraft({ ...settings.extractionModelByProvider })
     clearError()
   }, [open, settings, clearError])
 
@@ -126,6 +131,13 @@ export const AppSettingsDialogContainer: FC<AppSettingsContainerProps> = ({
     [],
   )
 
+  const handleExtractionModelChange = useCallback(
+    (providerId: string, modelId: string) => {
+      setExtractionDraft((current) => ({ ...current, [providerId]: modelId }))
+    },
+    [],
+  )
+
   const handleRestoreDefaults = useCallback(() => {
     const fallback = resolveProviderSelection(providers, null, null, null)
     setDraft({
@@ -146,12 +158,13 @@ export const AppSettingsDialogContainer: FC<AppSettingsContainerProps> = ({
         defaultModelId: selection.modelId || null,
         defaultEffortId: selection.effort?.id ?? null,
         namingModelByProvider: namingDraft,
+        extractionModelByProvider: extractionDraft,
       })
       closeDialog()
     } catch {
       // error already surfaced on store
     }
-  }, [saveSettings, selection, namingDraft, closeDialog])
+  }, [saveSettings, selection, namingDraft, extractionDraft, closeDialog])
 
   return (
     <AppSettingsDialog
@@ -161,12 +174,14 @@ export const AppSettingsDialogContainer: FC<AppSettingsContainerProps> = ({
       providers={providers}
       selection={selection}
       namingDraft={namingDraft}
+      extractionDraft={extractionDraft}
       isSaving={isSaving}
       error={error}
       onProviderChange={handleProviderChange}
       onModelChange={handleModelChange}
       onEffortChange={handleEffortChange}
       onNamingModelChange={handleNamingModelChange}
+      onExtractionModelChange={handleExtractionModelChange}
       onSave={handleSave}
       onCancel={handleCancel}
       onRestoreDefaults={handleRestoreDefaults}

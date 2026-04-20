@@ -38,6 +38,8 @@ export type SessionContextWindow =
       reason: string
     }
 
+export type ForkStrategy = 'full' | 'summary'
+
 export type NeedsYouDisposition = 'snoozed' | 'acknowledged'
 
 export interface NeedsYouDismissal {
@@ -98,6 +100,8 @@ export interface Session {
   contextWindow?: SessionContextWindow | null
   activity?: ActivitySignal
   archivedAt?: string | null
+  parentSessionId?: string | null
+  forkStrategy?: ForkStrategy | null
   createdAt: string
   updatedAt: string
 }

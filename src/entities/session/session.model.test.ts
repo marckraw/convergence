@@ -20,6 +20,9 @@ const mockElectronAPI = {
     deny: vi.fn(),
     stop: vi.fn(),
     onSessionUpdate: vi.fn(),
+    forkPreviewSummary: vi.fn(),
+    forkFull: vi.fn(),
+    forkSummary: vi.fn(),
   },
   provider: {
     getAll: vi.fn().mockResolvedValue([]),
@@ -439,5 +442,134 @@ describe('useSessionStore', () => {
     expect(mockElectronAPI.session.setRecentIds).toHaveBeenCalledWith([
       'session-2',
     ])
+  })
+
+  describe('fork actions', () => {
+    const sampleSummary = {
+      topic: 'Auth refactor',
+      decisions: [],
+      open_questions: [],
+      key_facts: [],
+      artifacts: {
+        urls: [],
+        file_paths: [],
+        repos: [],
+        commands: [],
+        identifiers: [],
+      },
+      next_steps: [],
+    }
+
+    it('previewFork delegates to the api and returns the summary', async () => {
+      mockElectronAPI.session.forkPreviewSummary.mockResolvedValueOnce(
+        sampleSummary,
+      )
+      const summary = await useSessionStore.getState().previewFork('parent-id')
+      expect(mockElectronAPI.session.forkPreviewSummary).toHaveBeenCalledWith(
+        'parent-id',
+      )
+      expect(summary.topic).toBe('Auth refactor')
+    })
+
+    it('previewFork surfaces errors as rejected promises', async () => {
+      mockElectronAPI.session.forkPreviewSummary.mockRejectedValueOnce(
+        new Error('boom'),
+      )
+      await expect(
+        useSessionStore.getState().previewFork('parent-id'),
+      ).rejects.toThrow('boom')
+    })
+
+    it('forkFull inserts the child and activates it', async () => {
+      const child = makeSession({ id: 'child-1' })
+      mockElectronAPI.session.forkFull.mockResolvedValueOnce(child)
+      useSessionStore.setState({ currentProjectId: 'project-1' })
+
+      const result = await useSessionStore.getState().forkFull({
+        strategy: 'full',
+        parentSessionId: 'parent-1',
+        name: 'Fork',
+        providerId: 'claude-code',
+        modelId: 'sonnet',
+        effort: null,
+        workspaceMode: 'reuse',
+        workspaceBranchName: null,
+        additionalInstruction: null,
+      })
+
+      expect(result.id).toBe('child-1')
+      const state = useSessionStore.getState()
+      expect(state.sessions[0]?.id).toBe('child-1')
+      expect(state.globalSessions[0]?.id).toBe('child-1')
+      expect(state.activeSessionId).toBe('child-1')
+      expect(state.recentSessionIds).toEqual(['child-1'])
+    })
+
+    it('forkFull keeps project list untouched when child belongs elsewhere', async () => {
+      const child = makeSession({ id: 'child-9', projectId: 'project-2' })
+      mockElectronAPI.session.forkFull.mockResolvedValueOnce(child)
+      useSessionStore.setState({ currentProjectId: 'project-1', sessions: [] })
+
+      await useSessionStore.getState().forkFull({
+        strategy: 'full',
+        parentSessionId: 'parent-1',
+        name: 'Fork',
+        providerId: 'claude-code',
+        modelId: 'sonnet',
+        effort: null,
+        workspaceMode: 'reuse',
+        workspaceBranchName: null,
+        additionalInstruction: null,
+      })
+
+      const state = useSessionStore.getState()
+      expect(state.sessions).toEqual([])
+      expect(state.globalSessions[0]?.id).toBe('child-9')
+    })
+
+    it('forkSummary inserts the child and activates it', async () => {
+      const child = makeSession({ id: 'child-sum' })
+      mockElectronAPI.session.forkSummary.mockResolvedValueOnce(child)
+      useSessionStore.setState({ currentProjectId: 'project-1' })
+
+      const result = await useSessionStore.getState().forkSummary({
+        strategy: 'summary',
+        parentSessionId: 'parent-1',
+        name: 'Fork',
+        providerId: 'claude-code',
+        modelId: 'sonnet',
+        effort: null,
+        workspaceMode: 'reuse',
+        workspaceBranchName: null,
+        additionalInstruction: null,
+        seedMarkdown: '# seed',
+      })
+
+      expect(result.id).toBe('child-sum')
+      expect(useSessionStore.getState().activeSessionId).toBe('child-sum')
+      expect(mockElectronAPI.session.forkSummary).toHaveBeenCalledWith(
+        expect.objectContaining({ seedMarkdown: '# seed' }),
+      )
+    })
+
+    it('forkSummary surfaces errors as rejected promises', async () => {
+      mockElectronAPI.session.forkSummary.mockRejectedValueOnce(
+        new Error('nope'),
+      )
+      await expect(
+        useSessionStore.getState().forkSummary({
+          strategy: 'summary',
+          parentSessionId: 'parent-1',
+          name: 'Fork',
+          providerId: 'claude-code',
+          modelId: 'sonnet',
+          effort: null,
+          workspaceMode: 'reuse',
+          workspaceBranchName: null,
+          additionalInstruction: null,
+          seedMarkdown: '# seed',
+        }),
+      ).rejects.toThrow('nope')
+    })
   })
 })

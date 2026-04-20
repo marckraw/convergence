@@ -7,6 +7,12 @@ import type {
   NeedsYouDisposition,
 } from './session.types'
 import { sessionApi, providerApi } from './session.api'
+import { sessionForkApi } from './session-fork.api'
+import type {
+  ForkFullInput,
+  ForkSummary,
+  ForkSummaryInput,
+} from './session-fork.types'
 
 const RECENT_SESSIONS_CAP = 10
 
@@ -54,6 +60,9 @@ interface SessionActions {
   beginSessionDraft: (workspaceId: string | null) => void
   setActiveSession: (id: string | null) => void
   handleSessionUpdate: (session: Session) => void
+  previewFork: (parentSessionId: string) => Promise<ForkSummary>
+  forkFull: (input: ForkFullInput) => Promise<Session>
+  forkSummary: (input: ForkSummaryInput) => Promise<Session>
   clearError: () => void
 }
 
@@ -441,6 +450,39 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
         })
       })
     }
+  },
+
+  previewFork: (parentSessionId: string) =>
+    sessionForkApi.previewSummary(parentSessionId),
+
+  forkFull: async (input: ForkFullInput) => {
+    const session = await sessionForkApi.forkFull(input)
+    set((state) => ({
+      sessions:
+        state.currentProjectId === session.projectId
+          ? [session, ...state.sessions]
+          : state.sessions,
+      globalSessions: [session, ...state.globalSessions],
+      activeSessionId: session.id,
+      draftWorkspaceId: null,
+    }))
+    get().recordRecentSession(session.id)
+    return session
+  },
+
+  forkSummary: async (input: ForkSummaryInput) => {
+    const session = await sessionForkApi.forkSummary(input)
+    set((state) => ({
+      sessions:
+        state.currentProjectId === session.projectId
+          ? [session, ...state.sessions]
+          : state.sessions,
+      globalSessions: [session, ...state.globalSessions],
+      activeSessionId: session.id,
+      draftWorkspaceId: null,
+    }))
+    get().recordRecentSession(session.id)
+    return session
   },
 
   clearError: () => set({ error: null }),

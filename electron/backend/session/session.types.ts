@@ -17,6 +17,8 @@ export type {
   ActivitySignal,
 }
 
+export type ForkStrategy = 'full' | 'summary'
+
 export interface Session {
   id: string
   projectId: string
@@ -32,8 +34,15 @@ export interface Session {
   contextWindow: SessionContextWindow | null
   activity: ActivitySignal
   archivedAt: string | null
+  parentSessionId: string | null
+  forkStrategy: ForkStrategy | null
   createdAt: string
   updatedAt: string
+}
+
+function parseForkStrategy(value: string | null): ForkStrategy | null {
+  if (value === 'full' || value === 'summary') return value
+  return null
 }
 
 export interface CreateSessionInput {
@@ -43,6 +52,8 @@ export interface CreateSessionInput {
   model: string | null
   effort: ReasoningEffort | null
   name: string
+  parentSessionId?: string | null
+  forkStrategy?: ForkStrategy | null
 }
 
 function parseActivity(value: string | null): ActivitySignal {
@@ -78,6 +89,8 @@ export function sessionFromRow(row: SessionRow): Session {
       : null,
     activity: parseActivity(row.activity),
     archivedAt: row.archived_at,
+    parentSessionId: row.parent_session_id,
+    forkStrategy: parseForkStrategy(row.fork_strategy),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   }

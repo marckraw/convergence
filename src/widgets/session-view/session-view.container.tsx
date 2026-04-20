@@ -2,11 +2,20 @@ import { useEffect, useRef, useState, useCallback } from 'react'
 import type { FC, MouseEvent as ReactMouseEvent } from 'react'
 import { useProjectStore } from '@/entities/project'
 import { useSessionStore } from '@/entities/session'
+import { useDialogStore } from '@/entities/dialog'
 import { ComposerContainer } from '@/features/composer'
 import { useTerminalStore } from '@/entities/terminal'
 import { Button } from '@/shared/ui/button'
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/shared/ui/dropdown-menu'
+import {
   Archive,
+  GitFork,
+  MoreVertical,
   Square,
   FileCode,
   GitBranch,
@@ -29,6 +38,9 @@ export const SessionView: FC = () => {
   const activeSessionId = useSessionStore((s) => s.activeSessionId)
   const draftWorkspaceId = useSessionStore((s) => s.draftWorkspaceId)
   const sessions = useSessionStore((s) => s.sessions)
+  const globalSessions = useSessionStore((s) => s.globalSessions)
+  const setActiveSession = useSessionStore((s) => s.setActiveSession)
+  const openDialog = useDialogStore((s) => s.open)
   const approveSession = useSessionStore((s) => s.approveSession)
   const denySession = useSessionStore((s) => s.denySession)
   const stopSession = useSessionStore((s) => s.stopSession)
@@ -212,6 +224,24 @@ export const SessionView: FC = () => {
           >
             <span className="text-sm font-medium">{session.name}</span>
             <AttentionIndicator attention={session.attention} />
+            {session.parentSessionId && (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() =>
+                  session.parentSessionId &&
+                  setActiveSession(session.parentSessionId)
+                }
+                className="h-auto rounded-full border border-border/70 px-2 py-0.5 text-[11px] text-muted-foreground"
+                title="Open parent session"
+              >
+                <GitFork className="h-3 w-3" />
+                Forked from:{' '}
+                {globalSessions.find((s) => s.id === session.parentSessionId)
+                  ?.name ?? 'parent'}
+              </Button>
+            )}
             {session.archivedAt && (
               <span className="flex items-center gap-1 rounded-full border border-border/70 px-2 py-0.5 text-[11px] text-muted-foreground">
                 <Archive className="h-3 w-3" />
@@ -270,6 +300,32 @@ export const SessionView: FC = () => {
                 <Square className="h-3 w-3" />
               </Button>
             )}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-7 w-7"
+                  title="More actions"
+                  aria-label="Session actions"
+                >
+                  <MoreVertical className="h-3.5 w-3.5" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem
+                  onClick={() =>
+                    openDialog('session-fork', {
+                      parentSessionId: session.id,
+                    })
+                  }
+                  className="gap-2"
+                >
+                  <GitFork className="h-3.5 w-3.5" />
+                  Fork session…
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         </div>
 

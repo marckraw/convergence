@@ -13,6 +13,7 @@ import type {
   NewWorkspacePaletteItem,
   WorkspacePaletteItem,
   ProjectPaletteItem,
+  ForkSessionPaletteItem,
 } from './command-center.types'
 
 function makeProject(
@@ -209,6 +210,50 @@ describe('buildPaletteIndex', () => {
     expect(session?.search.branchName).toBe('feat/x')
     expect(session?.search.providerId).toBe('codex')
     expect(session?.search.attentionAlias).toContain('input')
+  })
+
+  it('emits a fork-session item when an active session is focused', () => {
+    const items = buildPaletteIndex({
+      projects: [makeProject('p1', 'alpha')],
+      workspaces: [],
+      sessions: [makeSession('s1', 'p1', { name: 'investigate crash' })],
+      recentSessionIds: [],
+      dismissals: {},
+      activeSessionId: 's1',
+    })
+    const forkItems = items.filter(
+      (item): item is ForkSessionPaletteItem => item.kind === 'fork-session',
+    )
+    expect(forkItems).toHaveLength(1)
+    expect(forkItems[0]?.sessionId).toBe('s1')
+    expect(forkItems[0]?.title).toBe('Fork session: investigate crash')
+  })
+
+  it('does not emit a fork-session item when no session is focused', () => {
+    const items = buildPaletteIndex({
+      projects: [makeProject('p1', 'alpha')],
+      workspaces: [],
+      sessions: [makeSession('s1', 'p1')],
+      recentSessionIds: [],
+      dismissals: {},
+    })
+    const forkItems = items.filter((item) => item.kind === 'fork-session')
+    expect(forkItems).toHaveLength(0)
+  })
+
+  it('does not emit a fork-session item when the focused session is archived', () => {
+    const items = buildPaletteIndex({
+      projects: [makeProject('p1', 'alpha')],
+      workspaces: [],
+      sessions: [
+        makeSession('s1', 'p1', { archivedAt: '2026-01-02T00:00:00.000Z' }),
+      ],
+      recentSessionIds: [],
+      dismissals: {},
+      activeSessionId: 's1',
+    })
+    const forkItems = items.filter((item) => item.kind === 'fork-session')
+    expect(forkItems).toHaveLength(0)
   })
 
   it('emits each session exactly once even when listed in recents', () => {

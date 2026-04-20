@@ -7,6 +7,7 @@ import { Toaster, toast } from 'sonner'
 import { TooltipProvider } from '@/shared/ui/tooltip'
 import { applyTheme, getStoredTheme } from '@/shared/lib/theme'
 import { CommandCenterContainer } from '@/features/command-center'
+import { SessionForkDialogContainer } from '@/features/session-fork'
 import { AppShell } from './App.layout'
 
 export function App() {
@@ -104,6 +105,7 @@ export function App() {
         hasProject={!!activeProject}
       />
       <CommandCenterContainer />
+      <SessionForkDialogContainer />
       <Toaster position="bottom-right" />
     </TooltipProvider>
   )

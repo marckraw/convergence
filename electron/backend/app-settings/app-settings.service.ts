@@ -13,7 +13,7 @@ export const APP_SETTINGS_KEY = 'app_settings'
 
 type ProviderDescriptorLoader = () => Promise<ProviderDescriptor[]>
 
-function parseNamingMap(value: unknown): Record<string, string> {
+function parseModelMap(value: unknown): Record<string, string> {
   if (!value || typeof value !== 'object') return {}
   const entries = Object.entries(value as Record<string, unknown>).flatMap(
     ([providerId, modelId]) =>
@@ -30,6 +30,7 @@ function parse(raw: string | null): AppSettings {
     defaultModelId: null,
     defaultEffortId: null,
     namingModelByProvider: {},
+    extractionModelByProvider: {},
   }
 
   if (!raw) return empty
@@ -49,14 +50,17 @@ function parse(raw: string | null): AppSettings {
         typeof parsed.defaultEffortId === 'string'
           ? (parsed.defaultEffortId as ReasoningEffort)
           : null,
-      namingModelByProvider: parseNamingMap(parsed.namingModelByProvider),
+      namingModelByProvider: parseModelMap(parsed.namingModelByProvider),
+      extractionModelByProvider: parseModelMap(
+        parsed.extractionModelByProvider,
+      ),
     }
   } catch {
     return empty
   }
 }
 
-function validateNamingMap(
+function validateModelMap(
   map: Record<string, string>,
   descriptors: ProviderDescriptor[],
 ): Record<string, string> {
@@ -79,8 +83,12 @@ function validateAgainst(
   settings: AppSettings,
   descriptors: ProviderDescriptor[],
 ): AppSettings {
-  const namingModelByProvider = validateNamingMap(
+  const namingModelByProvider = validateModelMap(
     settings.namingModelByProvider,
+    descriptors,
+  )
+  const extractionModelByProvider = validateModelMap(
+    settings.extractionModelByProvider,
     descriptors,
   )
 
@@ -93,6 +101,7 @@ function validateAgainst(
       defaultModelId: null,
       defaultEffortId: null,
       namingModelByProvider,
+      extractionModelByProvider,
     }
   }
 
@@ -105,6 +114,7 @@ function validateAgainst(
       defaultModelId: null,
       defaultEffortId: null,
       namingModelByProvider,
+      extractionModelByProvider,
     }
   }
 
@@ -116,6 +126,7 @@ function validateAgainst(
     defaultModelId: model.id,
     defaultEffortId: effort ? effort.id : null,
     namingModelByProvider,
+    extractionModelByProvider,
   }
 }
 
@@ -165,8 +176,12 @@ export class AppSettingsService {
       }
     }
 
-    const namingModelByProvider = validateNamingMap(
+    const namingModelByProvider = validateModelMap(
       input.namingModelByProvider ?? {},
+      descriptors,
+    )
+    const extractionModelByProvider = validateModelMap(
+      input.extractionModelByProvider ?? {},
       descriptors,
     )
 
@@ -176,6 +191,7 @@ export class AppSettingsService {
       defaultEffortId:
         model && input.defaultEffortId !== null ? input.defaultEffortId : null,
       namingModelByProvider,
+      extractionModelByProvider,
     }
 
     this.stateService.set(APP_SETTINGS_KEY, JSON.stringify(toStore))
@@ -201,6 +217,22 @@ export class AppSettingsService {
       )
       if (exists) return descriptor.fastModelId
     }
+
+    return descriptor.defaultModelId ?? null
+  }
+
+  async resolveExtractionModel(providerId: string): Promise<string | null> {
+    const descriptors = await this.loadDescriptors()
+    const descriptor = descriptors.find((item) => item.id === providerId)
+    if (!descriptor) return null
+
+    const stored = validateAgainst(
+      parse(this.stateService.get(APP_SETTINGS_KEY)),
+      descriptors,
+    )
+
+    const override = stored.extractionModelByProvider[providerId]
+    if (override) return override
 
     return descriptor.defaultModelId ?? null
   }

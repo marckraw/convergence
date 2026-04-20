@@ -14,6 +14,7 @@ import type {
   DialogPaletteItem,
   NewSessionPaletteItem,
   NewWorkspacePaletteItem,
+  ForkSessionPaletteItem,
 } from './command-center.types'
 
 export interface BuildPaletteIndexInput {
@@ -22,6 +23,7 @@ export interface BuildPaletteIndexInput {
   sessions: Session[]
   recentSessionIds: string[]
   dismissals: NeedsYouDismissals
+  activeSessionId?: string | null
 }
 
 interface DialogDescriptor {
@@ -76,12 +78,13 @@ function attentionAlias(attention: AttentionState): string | undefined {
 export function buildPaletteIndex(
   input: BuildPaletteIndexInput,
 ): PaletteItem[] {
-  const { projects, workspaces, sessions } = input
+  const { projects, workspaces, sessions, activeSessionId } = input
 
   const projectsById = new Map(projects.map((project) => [project.id, project]))
   const workspacesById = new Map(
     workspaces.map((workspace) => [workspace.id, workspace]),
   )
+  const sessionsById = new Map(sessions.map((session) => [session.id, session]))
 
   const items: PaletteItem[] = []
 
@@ -192,6 +195,29 @@ export function buildPaletteIndex(
       search: { title, projectName: project.name },
     }
     items.push(item)
+  }
+
+  if (activeSessionId) {
+    const focused = sessionsById.get(activeSessionId)
+    if (focused && !focused.archivedAt) {
+      const project = projectsById.get(focused.projectId)
+      const projectName = project?.name ?? ''
+      const title = `Fork session: ${focused.name}`
+      const item: ForkSessionPaletteItem = {
+        kind: 'fork-session',
+        id: `fork-session:${focused.id}`,
+        sessionId: focused.id,
+        sessionName: focused.name,
+        projectName,
+        title,
+        search: {
+          title,
+          sessionName: focused.name,
+          projectName,
+        },
+      }
+      items.push(item)
+    }
   }
 
   return items

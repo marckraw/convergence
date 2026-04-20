@@ -273,6 +273,9 @@ interface ElectronAPI {
     getRecentIds: () => Promise<string[]>
     setRecentIds: (ids: string[]) => Promise<void>
     onSessionUpdate: (callback: (session: SessionData) => void) => () => void
+    forkPreviewSummary: (parentId: string) => Promise<unknown>
+    forkFull: (input: unknown) => Promise<SessionData>
+    forkSummary: (input: unknown) => Promise<SessionData>
   }
   provider: {
     getAll: () => Promise<ProviderInfo[]>
@@ -333,6 +336,7 @@ interface AppSettingsData {
   defaultModelId: string | null
   defaultEffortId: ReasoningEffort | null
   namingModelByProvider: Record<string, string>
+  extractionModelByProvider: Record<string, string>
 }
 
 declare global {
