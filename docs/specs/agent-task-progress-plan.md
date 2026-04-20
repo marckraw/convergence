@@ -24,7 +24,7 @@ wiring, no IPC. Pure-testable end to end.
       `src/features/session-fork/session-fork.pure.ts` (kept inline
       per "decide by size"; ~25 LOC did not warrant a new file).
   - [x] `deriveForkProgressLabel({ elapsedMs, msSinceLastEvent }):
-    { primary: string; secondary: string | null; stale: boolean }`
+{ primary: string; secondary: string | null; stale: boolean }`
         — implements the three tiered hints from the spec.
 - [x] Pure tests for both files covering all threshold branches,
       reducer branches, and eviction edges.
@@ -36,21 +36,27 @@ Verification: tests green. No IPC, no providers touched.
 Goal: a single place to broadcast `TaskProgressEvent`s to renderer
 windows. No callers yet — this phase is the channel itself.
 
-- [ ] New file `electron/backend/task-progress/task-progress.service.ts`:
-  - [ ] `class TaskProgressService` with `emit(event)`, holding a
+- [x] New file `electron/backend/task-progress/task-progress.service.ts`:
+  - [x] `class TaskProgressService` with `emit(event)`, holding a
         reference to a `BroadcastFn` injected at construction (so
         tests can substitute a stub instead of a real
         `BrowserWindow`).
-  - [ ] Default real-runtime broadcast implementation iterates
+  - [x] Default real-runtime broadcast implementation iterates
         `BrowserWindow.getAllWindows()` and sends on
-        `task:progress`.
+        `task:progress`. Lives in
+        `electron/backend/task-progress/task-progress.ipc.ts` so the
+        service module stays electron-free and unit-testable without
+        mocking.
 - [ ] Register the service in `electron/main/index.ts` bootstrap and
       expose it on the DI object passed to services that will use it.
-- [ ] Preload (`electron/preload/index.ts`): expose
+      Deferred to P4 — with zero consumers in P2 the construction
+      would be a no-op and trip `@typescript-eslint/no-unused-vars`.
+      P4 adds the first consumer and registers/threads it there.
+- [x] Preload (`electron/preload/index.ts`): expose
       `taskProgress.subscribe(cb)` over `contextBridge`, returning an
       unsubscribe function.
-- [ ] Extend `src/shared/types/electron-api.d.ts` with the new method.
-- [ ] Unit test `task-progress.service.test.ts` with an injected
+- [x] Extend `src/shared/types/electron-api.d.ts` with the new method.
+- [x] Unit test `task-progress.service.test.ts` with an injected
       broadcast stub: asserts emit forwards exactly what was passed.
 
 Verification: tests green, typecheck clean. Preload exposure smoke-
