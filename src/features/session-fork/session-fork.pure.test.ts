@@ -2,7 +2,11 @@ import { describe, expect, it } from 'vitest'
 import type { ForkSummary, TranscriptEntry } from '@/entities/session'
 import {
   computeSeedSizeWarning,
+  deriveForkProgressLabel,
   estimateTranscriptTokens,
+  FORK_PROGRESS_EXTENDED_THRESHOLD_MS,
+  FORK_PROGRESS_SECONDARY_THRESHOLD_MS,
+  FORK_PROGRESS_STALE_THRESHOLD_MS,
   renderSeedMarkdown,
 } from './session-fork.pure'
 
@@ -74,5 +78,55 @@ describe('computeSeedSizeWarning', () => {
     expect(warning?.estimatedTokens).toBe(tokens)
     expect(warning?.windowTokens).toBe(tokens + 10)
     expect(warning?.percentage).toBeGreaterThanOrEqual(80)
+  })
+})
+
+describe('deriveForkProgressLabel', () => {
+  it('renders the elapsed-second counter in primary', () => {
+    const label = deriveForkProgressLabel({
+      elapsedMs: 12_400,
+      msSinceLastEvent: 0,
+    })
+    expect(label.primary).toBe(
+      'Extracting summary from parent transcript… (12s)',
+    )
+  })
+
+  it('omits secondary and stale below the 30s threshold', () => {
+    const label = deriveForkProgressLabel({
+      elapsedMs: FORK_PROGRESS_SECONDARY_THRESHOLD_MS - 1,
+      msSinceLastEvent: 999_999,
+    })
+    expect(label.secondary).toBeNull()
+    expect(label.stale).toBe(false)
+  })
+
+  it('shows secondary hint at the 30s threshold', () => {
+    const label = deriveForkProgressLabel({
+      elapsedMs: FORK_PROGRESS_SECONDARY_THRESHOLD_MS,
+      msSinceLastEvent: 0,
+    })
+    expect(label.secondary).toMatch(/Still working/)
+    expect(label.stale).toBe(false)
+  })
+
+  it('marks stale only when elapsed >= 90s AND last event was >= 30s ago', () => {
+    const fresh = deriveForkProgressLabel({
+      elapsedMs: FORK_PROGRESS_EXTENDED_THRESHOLD_MS,
+      msSinceLastEvent: FORK_PROGRESS_STALE_THRESHOLD_MS - 1,
+    })
+    expect(fresh.stale).toBe(false)
+
+    const early = deriveForkProgressLabel({
+      elapsedMs: FORK_PROGRESS_EXTENDED_THRESHOLD_MS - 1,
+      msSinceLastEvent: FORK_PROGRESS_STALE_THRESHOLD_MS,
+    })
+    expect(early.stale).toBe(false)
+
+    const stuck = deriveForkProgressLabel({
+      elapsedMs: FORK_PROGRESS_EXTENDED_THRESHOLD_MS,
+      msSinceLastEvent: FORK_PROGRESS_STALE_THRESHOLD_MS,
+    })
+    expect(stuck.stale).toBe(true)
   })
 })

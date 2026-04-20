@@ -36,6 +36,35 @@ export function computeSeedSizeWarning(
   }
 }
 
+export const FORK_PROGRESS_SECONDARY_THRESHOLD_MS = 30_000
+export const FORK_PROGRESS_EXTENDED_THRESHOLD_MS = 90_000
+export const FORK_PROGRESS_STALE_THRESHOLD_MS = 30_000
+
+export interface ForkProgressLabel {
+  primary: string
+  secondary: string | null
+  stale: boolean
+}
+
+export function deriveForkProgressLabel(args: {
+  elapsedMs: number
+  msSinceLastEvent: number
+}): ForkProgressLabel {
+  const seconds = Math.floor(args.elapsedMs / 1000)
+  const primary = `Extracting summary from parent transcript… (${seconds}s)`
+
+  const secondary =
+    args.elapsedMs >= FORK_PROGRESS_SECONDARY_THRESHOLD_MS
+      ? 'Still working. Long transcripts can take a couple of minutes.'
+      : null
+
+  const stale =
+    args.elapsedMs >= FORK_PROGRESS_EXTENDED_THRESHOLD_MS &&
+    args.msSinceLastEvent >= FORK_PROGRESS_STALE_THRESHOLD_MS
+
+  return { primary, secondary, stale }
+}
+
 function renderList(items: string[], bullet = '- '): string {
   return items.map((item) => `${bullet}${item}`).join('\n')
 }

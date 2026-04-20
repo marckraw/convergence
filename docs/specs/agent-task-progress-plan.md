@@ -11,21 +11,22 @@ all pass unless the phase explicitly notes otherwise.
 Goal: land the shared types and the pure threshold logic. No runtime
 wiring, no IPC. Pure-testable end to end.
 
-- [ ] New file `electron/backend/task-progress/task-progress.types.ts`:
-  - [ ] `TaskProgressEvent` discriminated union exactly as spec'd.
-  - [ ] `TaskProgressSnapshot` for the renderer-side aggregate.
-- [ ] New file `electron/backend/task-progress/task-progress.pure.ts`:
-  - [ ] `applyEvent(snapshot | null, event): TaskProgressSnapshot` —
+- [x] New file `electron/backend/task-progress/task-progress.types.ts`:
+  - [x] `TaskProgressEvent` discriminated union exactly as spec'd.
+  - [x] `TaskProgressSnapshot` for the renderer-side aggregate.
+- [x] New file `electron/backend/task-progress/task-progress.pure.ts`:
+  - [x] `applyEvent(snapshot | null, event): TaskProgressSnapshot` —
         reducer that aggregates an event into a snapshot (handles
         `started` → initial snapshot, chunk events → byte counters +
         `lastEventAt`, `settled` → terminal state).
-  - [ ] `shouldEvictSnapshot(snapshot, now, graceMs): boolean`.
-- [ ] New file `src/features/session-fork/fork-progress.pure.ts` (or
-      keep inside `session-fork.pure.ts`, decide by size):
-  - [ ] `deriveForkProgressLabel({ elapsedMs, msSinceLastEvent }):
-        { primary: string; secondary: string | null; stale: boolean }`
+  - [x] `shouldEvictSnapshot(snapshot, now, graceMs): boolean`.
+- [x] `deriveForkProgressLabel` lives in
+      `src/features/session-fork/session-fork.pure.ts` (kept inline
+      per "decide by size"; ~25 LOC did not warrant a new file).
+  - [x] `deriveForkProgressLabel({ elapsedMs, msSinceLastEvent }):
+    { primary: string; secondary: string | null; stale: boolean }`
         — implements the three tiered hints from the spec.
-- [ ] Pure tests for both files covering all threshold branches,
+- [x] Pure tests for both files covering all threshold branches,
       reducer branches, and eviction edges.
 
 Verification: tests green. No IPC, no providers touched.
