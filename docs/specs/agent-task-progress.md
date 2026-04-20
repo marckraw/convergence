@@ -76,7 +76,12 @@ type TaskProgressEvent =
   | { requestId: string; kind: 'started'; at: number }
   | { requestId: string; kind: 'stdout-chunk'; at: number; bytes: number }
   | { requestId: string; kind: 'stderr-chunk'; at: number; bytes: number }
-  | { requestId: string; kind: 'settled'; at: number; outcome: 'ok' | 'error' | 'timeout' }
+  | {
+      requestId: string
+      kind: 'settled'
+      at: number
+      outcome: 'ok' | 'error' | 'timeout'
+    }
 ```
 
 - `at` is `Date.now()` on the main process, forwarded verbatim.
@@ -137,7 +142,7 @@ Two callers in V1, both in `oneShot` flows:
    before the first `provider.oneShot(...)` call, passes it through
    `OneShotInput`, forwards it to the renderer via the existing
    `session:fork:previewSummary` IPC response path as a prelude event
-   — *actually*, see "wiring" below; the `requestId` is returned
+   — _actually_, see "wiring" below; the `requestId` is returned
    synchronously so the renderer can bind the hook before the promise
    resolves.
 2. **`SessionNamingService.generateName`** — same shape, but the
