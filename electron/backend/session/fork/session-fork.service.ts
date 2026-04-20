@@ -36,6 +36,8 @@ export class SessionForkExtractionError extends Error {
   }
 }
 
+const SUMMARY_EXTRACTION_TIMEOUT_MS = 180_000
+
 export class SessionForkService {
   constructor(private readonly deps: SessionForkDeps) {}
 
@@ -66,6 +68,7 @@ export class SessionForkService {
       prompt: basePrompt,
       modelId,
       workingDirectory: parent.workingDirectory,
+      timeoutMs: SUMMARY_EXTRACTION_TIMEOUT_MS,
     })
     const firstResult = parseAndValidateSummary(firstRaw.text)
     if (firstResult.ok) {
@@ -76,6 +79,7 @@ export class SessionForkService {
       prompt: basePrompt + RETRY_SUFFIX,
       modelId,
       workingDirectory: parent.workingDirectory,
+      timeoutMs: SUMMARY_EXTRACTION_TIMEOUT_MS,
     })
     const retryResult = parseAndValidateSummary(retryRaw.text)
     if (retryResult.ok) {
