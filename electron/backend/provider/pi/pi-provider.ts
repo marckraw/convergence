@@ -32,6 +32,10 @@ import {
   type PiActivityInput,
   type PiActivityState,
 } from './pi-activity.pure'
+import {
+  buildContinuationRecoveryEntry,
+  isMissingContinuationError,
+} from '../continuation-recovery.pure'
 
 function now(): string {
   return new Date().toISOString()
@@ -86,6 +90,17 @@ export class PiProvider implements Provider {
     let continuationCaptured = !!config.continuationToken
     let textBuffer = ''
     let isStreaming = false
+    let currentTurn: {
+      message: string
+      attachments?: Attachment[]
+      allowContinuationRecovery: boolean
+      usedContinuationToken: boolean
+    } | null = null
+    let pendingRecoveryTurn: {
+      message: string
+      attachments?: Attachment[]
+    } | null = null
+    let sawTurnActivity = false
     const pendingToolCallArgs = new Map<
       string,
       { name: string; args: string }
@@ -121,7 +136,59 @@ export class PiProvider implements Provider {
       if (textBuffer) {
         emit({ type: 'assistant', text: textBuffer, timestamp: now() })
         textBuffer = ''
+        sawTurnActivity = true
       }
+    }
+
+    function canRecoverContinuation(): boolean {
+      return !!(
+        currentTurn?.allowContinuationRecovery &&
+        currentTurn.usedContinuationToken &&
+        !pendingRecoveryTurn
+      )
+    }
+
+    function shouldRecoverFromMessage(message: unknown): boolean {
+      return (
+        canRecoverContinuation() &&
+        isMissingContinuationError(message, ['session', 'resume'])
+      )
+    }
+
+    function scheduleContinuationRecovery(): void {
+      if (!currentTurn || !canRecoverContinuation()) {
+        return
+      }
+
+      pendingRecoveryTurn = {
+        message: currentTurn.message,
+        attachments: currentTurn.attachments,
+      }
+      emit(buildContinuationRecoveryEntry('Pi Agent', now()))
+      sessionFile = null
+      continuationCaptured = false
+      currentTurn = null
+      if (rpc) {
+        rpc.destroy()
+        rpc = null
+      }
+      if (child) {
+        child.kill('SIGTERM')
+      }
+    }
+
+    function maybeRestartRecoveredTurn(): boolean {
+      if (!pendingRecoveryTurn) {
+        return false
+      }
+
+      const recoveryTurn = pendingRecoveryTurn
+      pendingRecoveryTurn = null
+      spawnPi(recoveryTurn.message, recoveryTurn.attachments, {
+        emitUserEntry: false,
+        allowContinuationRecovery: false,
+      })
+      return true
     }
 
     async function captureContinuationToken(): Promise<void> {
@@ -226,6 +293,7 @@ export class PiProvider implements Provider {
 
       switch (event.type) {
         case 'agent_start':
+          sawTurnActivity = true
           isStreaming = true
           setStatus('running')
           setAttention('none')
@@ -234,6 +302,7 @@ export class PiProvider implements Provider {
           break
 
         case 'message_update':
+          sawTurnActivity = true
           handleAssistantMessageEvent(
             (event as { assistantMessageEvent?: unknown })
               .assistantMessageEvent,
@@ -241,6 +310,7 @@ export class PiProvider implements Provider {
           break
 
         case 'tool_execution_end': {
+          sawTurnActivity = true
           const isError = (event as { isError?: unknown }).isError === true
           const text = extractToolResultText(
             (event as { result?: unknown }).result,
@@ -255,12 +325,14 @@ export class PiProvider implements Provider {
         }
 
         case 'turn_end':
+          sawTurnActivity = true
           flushText()
           applyActivity({ kind: 'turn_end' })
           void refreshContextWindow()
           break
 
         case 'agent_end': {
+          sawTurnActivity = true
           flushText()
           applyActivity({ kind: 'agent_end' })
           isStreaming = false
@@ -268,6 +340,7 @@ export class PiProvider implements Provider {
           if (stopReason === 'aborted') {
             setStatus('failed')
             setAttention('failed')
+            currentTurn = null
           } else if (stopReason === 'error') {
             emit({
               type: 'system',
@@ -276,9 +349,11 @@ export class PiProvider implements Provider {
             })
             setStatus('failed')
             setAttention('failed')
+            currentTurn = null
           } else {
             setStatus('completed')
             setAttention('finished')
+            currentTurn = null
           }
           break
         }
@@ -376,6 +451,10 @@ export class PiProvider implements Provider {
       rpc.request(command).then(
         (response) => {
           if (!response.success) {
+            if (shouldRecoverFromMessage(response.error)) {
+              scheduleContinuationRecovery()
+              return
+            }
             emit({
               type: 'system',
               text: `Prompt failed: ${response.error ?? 'unknown error'}`,
@@ -383,10 +462,16 @@ export class PiProvider implements Provider {
             })
             setStatus('failed')
             setAttention('failed')
+            currentTurn = null
           }
         },
         (err) => {
           if (stopped) return
+          if (pendingRecoveryTurn) return
+          if (shouldRecoverFromMessage(err)) {
+            scheduleContinuationRecovery()
+            return
+          }
           emit({
             type: 'system',
             text: `Prompt error: ${err instanceof Error ? err.message : String(err)}`,
@@ -394,6 +479,7 @@ export class PiProvider implements Provider {
           })
           setStatus('failed')
           setAttention('failed')
+          currentTurn = null
         },
       )
     }
@@ -424,6 +510,10 @@ export class PiProvider implements Provider {
     function spawnPi(
       initialMessage: string,
       initialAttachments?: Attachment[],
+      options?: {
+        emitUserEntry?: boolean
+        allowContinuationRecovery?: boolean
+      },
     ): void {
       if (stopped || child || rpc) return
 
@@ -466,6 +556,20 @@ export class PiProvider implements Provider {
         if (stopped) return
         flushText()
         applyActivity({ kind: 'close' })
+        if (
+          code !== 0 &&
+          code !== null &&
+          canRecoverContinuation() &&
+          !sawTurnActivity
+        ) {
+          scheduleContinuationRecovery()
+        }
+        child = null
+        rpc?.destroy()
+        rpc = null
+        if (maybeRestartRecoveredTurn()) {
+          return
+        }
         if (code !== 0 && code !== null) {
           emit({
             type: 'system',
@@ -474,10 +578,8 @@ export class PiProvider implements Provider {
           })
           setStatus('failed')
           setAttention('failed')
+          currentTurn = null
         }
-        child = null
-        rpc?.destroy()
-        rpc = null
       })
 
       child.on('error', (err) => {
@@ -490,10 +592,21 @@ export class PiProvider implements Provider {
         setStatus('failed')
         setAttention('failed')
         child = null
+        currentTurn = null
       })
 
-      emit({ type: 'user', text: initialMessage, timestamp: now() })
+      sawTurnActivity = false
+      currentTurn = {
+        message: initialMessage,
+        attachments: initialAttachments,
+        allowContinuationRecovery: options?.allowContinuationRecovery ?? true,
+        usedContinuationToken: !!sessionFile,
+      }
+      if (options?.emitUserEntry !== false) {
+        emit({ type: 'user', text: initialMessage, timestamp: now() })
+      }
       setStatus('running')
+      setAttention('none')
       sendPromptWithAttachments(initialMessage, initialAttachments)
     }
 

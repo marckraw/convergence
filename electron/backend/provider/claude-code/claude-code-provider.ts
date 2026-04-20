@@ -25,6 +25,10 @@ import {
   deriveClaudeContextWindow,
   deriveClaudeEstimatedContextWindow,
 } from '../context-window.pure'
+import {
+  buildContinuationRecoveryEntry,
+  isMissingContinuationError,
+} from '../continuation-recovery.pure'
 import { readClaudeLoggedContextWindow } from './claude-context-log.service'
 import { deriveClaudeActivity } from './claude-code-activity.pure'
 
@@ -172,6 +176,18 @@ export class ClaudeCodeProvider implements Provider {
     let claudeSessionId: string | null = config.continuationToken
     let assistantTextBuffer = ''
     let currentTurnHasAssistantText = false
+    let currentTurn: {
+      message: string
+      attachments?: Attachment[]
+      allowContinuationRecovery: boolean
+      usedContinuationToken: boolean
+    } | null = null
+    let pendingRecoveryTurn: {
+      message: string
+      attachments?: Attachment[]
+    } | null = null
+    let sawTurnOutput = false
+    let stderrBuffer = ''
 
     function emit(entry: TranscriptEntry): void {
       listeners.transcript.forEach((cb) => cb(entry))
@@ -226,7 +242,66 @@ export class ClaudeCodeProvider implements Provider {
         emit({ type: 'assistant', text: assistantTextBuffer, timestamp: now() })
         assistantTextBuffer = ''
         currentTurnHasAssistantText = true
+        sawTurnOutput = true
       }
+    }
+
+    function canRecoverContinuation(): boolean {
+      return !!(
+        currentTurn?.allowContinuationRecovery &&
+        currentTurn.usedContinuationToken &&
+        !pendingRecoveryTurn
+      )
+    }
+
+    function shouldRecoverFromMessage(message: unknown): boolean {
+      return (
+        canRecoverContinuation() &&
+        isMissingContinuationError(message, [
+          'session',
+          'resume',
+          'conversation',
+        ])
+      )
+    }
+
+    function scheduleContinuationRecovery(): void {
+      if (!currentTurn || !canRecoverContinuation()) {
+        return
+      }
+
+      pendingRecoveryTurn = {
+        message: currentTurn.message,
+        attachments: currentTurn.attachments,
+      }
+      emit(buildContinuationRecoveryEntry('Claude Code', now()))
+      claudeSessionId = null
+      currentTurn = null
+      if (child) {
+        child.kill('SIGTERM')
+      }
+    }
+
+    function maybeRestartRecoveredTurn(): boolean {
+      if (!pendingRecoveryTurn) {
+        return false
+      }
+
+      const recoveryTurn = pendingRecoveryTurn
+      pendingRecoveryTurn = null
+      startTurn(recoveryTurn.message, recoveryTurn.attachments, {
+        emitUserEntry: false,
+        allowContinuationRecovery: false,
+      })
+      return true
+    }
+
+    function getSignificantStderr(): string {
+      return stderrBuffer
+        .split('\n')
+        .filter((line) => line.trim() && !line.includes('DEBUG'))
+        .join('\n')
+        .trim()
     }
 
     function handleEvent(data: unknown): void {
@@ -277,6 +352,7 @@ export class ClaudeCodeProvider implements Provider {
         }
 
         case 'stream_event':
+          sawTurnOutput = true
           if (
             event.event?.type === 'content_block_delta' &&
             event.event.delta?.type === 'text_delta' &&
@@ -287,6 +363,7 @@ export class ClaudeCodeProvider implements Provider {
           break
 
         case 'assistant': {
+          sawTurnOutput = true
           // If we already streamed text via stream_events, flush that
           // and skip text blocks in the assistant message (they're duplicates)
           const hadStreamedText = assistantTextBuffer.length > 0
@@ -318,6 +395,7 @@ export class ClaudeCodeProvider implements Provider {
         }
 
         case 'user':
+          sawTurnOutput = true
           if (event.message?.content) {
             for (const block of event.message.content) {
               if (block.type === 'tool_result') {
@@ -341,9 +419,14 @@ export class ClaudeCodeProvider implements Provider {
           break
 
         case 'result':
+          sawTurnOutput = true
           flushAssistantBuffer()
           refreshContextWindowFromLogs()
           if (event.is_error) {
+            if (shouldRecoverFromMessage(event.result)) {
+              scheduleContinuationRecovery()
+              break
+            }
             emit({
               type: 'system',
               text: `Error: ${event.result ?? 'Unknown error'}`,
@@ -351,6 +434,7 @@ export class ClaudeCodeProvider implements Provider {
             })
             setStatus('failed')
             setAttention('failed')
+            currentTurn = null
           } else {
             if (!currentTurnHasAssistantText && event.result?.trim()) {
               emit({
@@ -361,6 +445,7 @@ export class ClaudeCodeProvider implements Provider {
             }
             setStatus('completed')
             setAttention('finished')
+            currentTurn = null
           }
           break
       }
@@ -383,12 +468,29 @@ export class ClaudeCodeProvider implements Provider {
       return parts
     }
 
-    function startTurn(message: string, attachments?: Attachment[]): void {
+    function startTurn(
+      message: string,
+      attachments?: Attachment[],
+      options?: {
+        emitUserEntry?: boolean
+        allowContinuationRecovery?: boolean
+      },
+    ): void {
       if (stopped || child) return
 
       assistantTextBuffer = ''
       currentTurnHasAssistantText = false
-      emit({ type: 'user', text: message, timestamp: now() })
+      sawTurnOutput = false
+      stderrBuffer = ''
+      currentTurn = {
+        message,
+        attachments,
+        allowContinuationRecovery: options?.allowContinuationRecovery ?? true,
+        usedContinuationToken: !!claudeSessionId,
+      }
+      if (options?.emitUserEntry !== false) {
+        emit({ type: 'user', text: message, timestamp: now() })
+      }
       setStatus('running')
       setAttention('none')
       setActivity(null)
@@ -437,21 +539,20 @@ export class ClaudeCodeProvider implements Provider {
       }
 
       if (child.stderr) {
-        let stderrBuffer = ''
         child.stderr.on('data', (chunk: Buffer) => {
           stderrBuffer += chunk.toString()
         })
         child.stderr.on('end', () => {
-          if (stderrBuffer.trim() && !stopped) {
-            // Only log significant stderr
-            const significant = stderrBuffer
-              .split('\n')
-              .filter((l) => l.trim() && !l.includes('DEBUG'))
-              .join('\n')
-              .trim()
-            if (significant) {
-              emit({ type: 'system', text: significant, timestamp: now() })
-            }
+          if (stopped) {
+            return
+          }
+          const significant = getSignificantStderr()
+          if (shouldRecoverFromMessage(significant)) {
+            scheduleContinuationRecovery()
+            return
+          }
+          if (significant && !pendingRecoveryTurn) {
+            emit({ type: 'system', text: significant, timestamp: now() })
           }
         })
       }
@@ -489,6 +590,19 @@ export class ClaudeCodeProvider implements Provider {
         if (stopped) return
         flushAssistantBuffer()
         refreshContextWindowFromLogs()
+        const significant = getSignificantStderr()
+        if (
+          code !== 0 &&
+          code !== null &&
+          (shouldRecoverFromMessage(significant) ||
+            (canRecoverContinuation() && !sawTurnOutput))
+        ) {
+          scheduleContinuationRecovery()
+        }
+        child = null
+        if (maybeRestartRecoveredTurn()) {
+          return
+        }
         if (code !== 0 && code !== null) {
           emit({
             type: 'system',
@@ -497,8 +611,8 @@ export class ClaudeCodeProvider implements Provider {
           })
           setStatus('failed')
           setAttention('failed')
+          currentTurn = null
         }
-        child = null
       })
 
       child.on('error', (err) => {
@@ -511,6 +625,7 @@ export class ClaudeCodeProvider implements Provider {
         setStatus('failed')
         setAttention('failed')
         child = null
+        currentTurn = null
       })
     }
 
