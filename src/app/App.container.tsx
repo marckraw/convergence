@@ -3,6 +3,7 @@ import { useProjectStore } from '@/entities/project'
 import { useWorkspaceStore } from '@/entities/workspace'
 import { useSessionStore } from '@/entities/session'
 import { useAppSettingsStore } from '@/entities/app-settings'
+import { useTaskProgressStore } from '@/entities/task-progress'
 import { Toaster, toast } from 'sonner'
 import { TooltipProvider } from '@/shared/ui/tooltip'
 import { applyTheme, getStoredTheme } from '@/shared/lib/theme'
@@ -27,6 +28,7 @@ export function App() {
   const loadGlobalSessions = useSessionStore((s) => s.loadGlobalSessions)
   const loadRecents = useSessionStore((s) => s.loadRecents)
   const loadAppSettings = useAppSettingsStore((s) => s.load)
+  const ingestTaskProgress = useTaskProgressStore((s) => s.ingest)
 
   useEffect(() => {
     applyTheme(getStoredTheme())
@@ -65,6 +67,13 @@ export function App() {
   useEffect(() => {
     void loadAppSettings()
   }, [loadAppSettings])
+
+  useEffect(() => {
+    const subscribe = window.electronAPI.taskProgress?.subscribe
+    if (!subscribe) return
+    const unsubscribe = subscribe(ingestTaskProgress)
+    return unsubscribe
+  }, [ingestTaskProgress])
 
   useEffect(() => {
     const unsubscribe = window.electronAPI.session.onSessionUpdate(

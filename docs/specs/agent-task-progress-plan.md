@@ -66,25 +66,32 @@ tested manually by logging from devtools.
 
 Goal: renderer ingests events into a snapshot map, exposes a hook.
 
-- [ ] New slice `src/entities/task-progress/` with:
-  - [ ] `task-progress.types.ts` (re-export from shared or duplicate
-        the minimum needed — pick one, note in the file).
-  - [ ] `task-progress.model.ts` — Zustand store:
+- [x] New slice `src/entities/task-progress/` with:
+  - [x] `task-progress.types.ts` — duplicated from the electron copy
+        (renderer tsconfig can't import from `electron/`); header
+        comment calls out the drift requirement.
+  - [x] `task-progress.pure.ts` — renderer-side copy of `applyEvent`
+        with a parallel `.pure.test.ts` that guards against drift
+        from the main-process reducer.
+  - [x] `task-progress.model.ts` — Zustand store:
     - state: `snapshots: Record<string, TaskProgressSnapshot>`
-    - actions: `ingest(event)`, `evict(requestId)`, internal reducer
-      powered by `applyEvent` from P1.
-  - [ ] `use-task-progress.ts` — hook that reads a snapshot by id
-        and owns a `setInterval(1000)` that re-renders so consumers
-        get live `elapsedMs`.
-  - [ ] `index.ts` public API: `useTaskProgress`, types.
-- [ ] Mount a single subscription in `src/app/App.container.tsx`:
+    - actions: `ingest(event)`, `evict(requestId)`, with a test-only
+      `__setEvictScheduler` seam so reducer tests can assert the
+      settled→eviction handoff without real timers.
+  - [x] `use-task-progress.ts` — hook that reads a snapshot by id
+        and owns a `setInterval(1000)`, pausing ticks once the
+        snapshot is settled.
+  - [x] `index.ts` public API: `useTaskProgress`, store, types.
+- [x] Mount a single subscription in `src/app/App.container.tsx`:
       on mount, `window.electronAPI.taskProgress.subscribe(ingest)`,
       unsubscribe on unmount.
-- [ ] Unit tests:
-  - [ ] Store reducer tests — thin wrapper over the pure reducer,
-        plus eviction timer behavior (use fake timers).
-  - [ ] Hook tests (React Testing Library + fake timers): verify
-        1s tick, `settled` surfaces, unmount clears interval.
+- [x] Unit tests:
+  - [x] Store reducer tests — snapshot accumulation, per-id isolation,
+        settled→eviction scheduling (injected stub) and the real-timer
+        grace-window path.
+  - [x] Hook tests (React Testing Library + fake timers): 1s tick,
+        `settled` freezes the elapsed reading, unmount clears the
+        interval.
 
 Verification: tests green. No UI changes visible yet.
 
