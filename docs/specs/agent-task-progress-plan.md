@@ -47,7 +47,7 @@ windows. No callers yet — this phase is the channel itself.
         `electron/backend/task-progress/task-progress.ipc.ts` so the
         service module stays electron-free and unit-testable without
         mocking.
-- [ ] Register the service in `electron/main/index.ts` bootstrap and
+- [x] Register the service in `electron/main/index.ts` bootstrap and
       expose it on the DI object passed to services that will use it.
       Deferred to P4 — with zero consumers in P2 the construction
       would be a no-op and trip `@typescript-eslint/no-unused-vars`.
@@ -100,19 +100,18 @@ Verification: tests green. No UI changes visible yet.
 Goal: `runClaudeOneShot` and `runCodexOneShot` emit progress when a
 `requestId` is present.
 
-- [ ] Extend `OneShotInput` in
+- [x] Extend `OneShotInput` in
       `electron/backend/provider/provider.types.ts` with
       `requestId?: string`.
-- [ ] `ClaudeCodeProvider.oneShot` receives a `TaskProgressService`
+- [x] `ClaudeCodeProvider.oneShot` receives a `TaskProgressService`
       at construction (or via deps). Thread it into
       `runClaudeOneShot`. On spawn → `started`. On stdout/stderr data
       → chunk events. On exit/timeout/error → `settled`.
-- [ ] Same for `CodexProvider.oneShot` /
-      `PIProvider.oneShot` (all providers that currently implement
-      `oneShot`).
-- [ ] Provider tests: emit nothing when `requestId` absent; emit the
-      expected sequence when set. Use an in-memory stub for
-      `TaskProgressService.emit`.
+- [x] Same for `CodexProvider.oneShot`. `PiProvider` has no `oneShot`
+      implementation (chat-only provider), so no wiring needed there.
+- [x] Provider tests: emit nothing when `requestId` absent; emit the
+      expected sequence when set. Use a `captureEmits` helper that
+      spies on `TaskProgressService.emit`.
 
 Verification: tests green. End-to-end still dormant — no caller
 passes a `requestId` yet.

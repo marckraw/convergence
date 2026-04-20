@@ -118,6 +118,7 @@ export interface OneShotInput {
   modelId: string
   workingDirectory: string
   timeoutMs?: number
+  requestId?: string
 }
 
 export interface OneShotResult {
