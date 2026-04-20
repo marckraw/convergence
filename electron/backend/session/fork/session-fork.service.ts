@@ -1,7 +1,6 @@
 import type { ProviderRegistry } from '../../provider/provider-registry'
 import type { AppSettingsService } from '../../app-settings/app-settings.service'
 import type { WorkspaceService } from '../../workspace/workspace.service'
-import type { OneShotInput, OneShotResult } from '../../provider/provider.types'
 import type { SessionService } from '../session.service'
 import type { Session } from '../session.types'
 import {
@@ -37,8 +36,6 @@ export class SessionForkExtractionError extends Error {
   }
 }
 
-type OneShotFn = (input: OneShotInput) => Promise<OneShotResult>
-
 export class SessionForkService {
   constructor(private readonly deps: SessionForkDeps) {}
 
@@ -64,9 +61,8 @@ export class SessionForkService {
 
     const serialized = serializeTranscript(parent.transcript)
     const basePrompt = buildExtractionPrompt(serialized)
-    const oneShot: OneShotFn = provider.oneShot
 
-    const firstRaw = await oneShot({
+    const firstRaw = await provider.oneShot({
       prompt: basePrompt,
       modelId,
       workingDirectory: parent.workingDirectory,
@@ -76,7 +72,7 @@ export class SessionForkService {
       return mergeWithRegex(firstResult.value, serialized)
     }
 
-    const retryRaw = await oneShot({
+    const retryRaw = await provider.oneShot({
       prompt: basePrompt + RETRY_SUFFIX,
       modelId,
       workingDirectory: parent.workingDirectory,

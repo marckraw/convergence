@@ -253,6 +253,25 @@ describe('SessionForkService', () => {
       )
     })
 
+    it('invokes oneShot as a method so providers can rely on `this`', async () => {
+      const h = setup()
+      const provider = h.providers.get('claude-code') as unknown as {
+        oneShot: (input: OneShotInput) => Promise<OneShotResult>
+        marker: string
+      }
+      provider.marker = 'ok'
+      const seen: { marker?: string }[] = []
+      provider.oneShot = vi.fn(async function (
+        this: { marker?: string },
+        _input: OneShotInput,
+      ): Promise<OneShotResult> {
+        seen.push(this)
+        return { text: JSON.stringify(validSummary) }
+      })
+      await h.service.previewSummary('parent-1')
+      expect(seen[0]?.marker).toBe('ok')
+    })
+
     it('throws when the provider has no oneShot', async () => {
       const h = setup()
       vi.mocked(h.providers.get).mockReturnValue({
