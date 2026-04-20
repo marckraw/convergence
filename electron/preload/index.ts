@@ -152,6 +152,15 @@ contextBridge.exposeInMainWorld('electronAPI', {
       }
     },
   },
+  taskProgress: {
+    subscribe: (callback: (event: unknown) => void) => {
+      const handler = (_event: unknown, payload: unknown) => callback(payload)
+      ipcRenderer.on('task:progress', handler)
+      return () => {
+        ipcRenderer.removeListener('task:progress', handler)
+      }
+    },
+  },
   terminal: {
     create: (input: {
       sessionId: string
