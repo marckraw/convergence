@@ -1,5 +1,6 @@
 import { spawn } from 'child_process'
 import { PiRpcClient } from './pi-rpc'
+import { needsShellForSpawn } from '../shell-exec.pure'
 
 const PROBE_TIMEOUT_MS = 5000
 
@@ -10,6 +11,7 @@ export async function probePiAvailableModels(
     cwd: process.cwd(),
     stdio: ['pipe', 'pipe', 'pipe'],
     env: { ...process.env },
+    shell: needsShellForSpawn(binaryPath, process.platform),
   })
 
   const spawnFailure = new Promise<never>((_, reject) => {

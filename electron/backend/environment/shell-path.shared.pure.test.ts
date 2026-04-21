@@ -1,12 +1,12 @@
+import { delimiter } from 'path'
 import { describe, expect, it } from 'vitest'
 import {
   buildShellPathProbeCommand,
   extractShellPathFromStdout,
-  getFallbackPathEntries,
   mergePathValues,
-} from './shell-path.pure'
+} from './shell-path.shared.pure'
 
-describe('shell-path.pure', () => {
+describe('shell-path.shared.pure', () => {
   it('builds a shell probe command with markers', () => {
     const command = buildShellPathProbeCommand()
 
@@ -32,14 +32,19 @@ describe('shell-path.pure', () => {
     expect(extractShellPathFromStdout('no markers here')).toBeNull()
   })
 
-  it('merges path values without duplicates', () => {
-    expect(mergePathValues('/a:/b', '/b:/c', '/a:/d')).toBe('/a:/b:/c:/d')
+  it('merges path values without duplicates using the platform delimiter', () => {
+    const a = ['/a', '/b'].join(delimiter)
+    const b = ['/b', '/c'].join(delimiter)
+    const c = ['/a', '/d'].join(delimiter)
+
+    expect(mergePathValues(a, b, c)).toBe(
+      ['/a', '/b', '/c', '/d'].join(delimiter),
+    )
   })
 
-  it('includes common fallback locations', () => {
-    const fallbackEntries = getFallbackPathEntries()
-
-    expect(fallbackEntries).toContain('/opt/homebrew/bin')
-    expect(fallbackEntries).toContain('/usr/local/bin')
+  it('ignores null, undefined, and empty segments', () => {
+    expect(mergePathValues(null, undefined, '', '/a', '   /b  ')).toBe(
+      ['/a', '/b'].join(delimiter),
+    )
   })
 })

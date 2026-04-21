@@ -22,3 +22,16 @@ mac:
   target:
     - target: dmg
     - target: zip
+win:
+  icon: build/icon.ico
+  target:
+    - target: nsis
+      arch:
+        - x64
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: Convergence

@@ -14,6 +14,7 @@ import type {
   OneShotResult,
 } from '../provider.types'
 import { JsonRpcClient } from './jsonrpc'
+import { needsShellForSpawn } from '../shell-exec.pure'
 import {
   buildFallbackCodexDescriptor,
   normalizeProviderDescriptor,
@@ -82,6 +83,7 @@ function runCodexOneShot(
       cwd: input.workingDirectory,
       stdio: ['ignore', 'pipe', 'pipe'],
       env: { ...process.env },
+      shell: needsShellForSpawn(binaryPath, process.platform),
     })
 
     let stdout = ''
@@ -394,6 +396,7 @@ export class CodexProvider implements Provider {
         cwd: config.workingDirectory,
         stdio: ['pipe', 'pipe', 'pipe'],
         env: { ...process.env },
+        shell: needsShellForSpawn(binaryPath, process.platform),
       })
 
       if (!child.stdin || !child.stdout) {
@@ -803,6 +806,7 @@ export class CodexProvider implements Provider {
       cwd: process.cwd(),
       stdio: ['pipe', 'pipe', 'pipe'],
       env: { ...process.env },
+      shell: needsShellForSpawn(this.binaryPath, process.platform),
     })
 
     if (!child.stdin || !child.stdout) {

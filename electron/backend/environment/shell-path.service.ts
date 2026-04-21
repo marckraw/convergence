@@ -1,44 +1,12 @@
-import { execFile } from 'child_process'
-import {
-  buildShellPathProbeCommand,
-  extractShellPathFromStdout,
-  getFallbackPathEntries,
-  mergePathValues,
-} from './shell-path.pure'
-
-function runShellPathProbe(shellPath: string): Promise<string | null> {
-  return new Promise((resolve) => {
-    execFile(
-      shellPath,
-      ['-ilc', buildShellPathProbeCommand()],
-      {
-        timeout: 5_000,
-        env: { ...process.env },
-      },
-      (error, stdout) => {
-        if (error) {
-          resolve(null)
-          return
-        }
-
-        resolve(extractShellPathFromStdout(stdout))
-      },
-    )
-  })
-}
+import { hydrateProcessPath as hydrateDarwin } from './shell-path.darwin'
+import { hydrateProcessPath as hydrateWin32 } from './shell-path.win32'
 
 export async function hydrateProcessPathFromShell(): Promise<void> {
-  if (process.platform !== 'darwin') {
-    return
+  if (process.platform === 'darwin') {
+    return hydrateDarwin()
   }
 
-  const shellPath = process.env.SHELL || '/bin/zsh'
-  const shellPathValue = await runShellPathProbe(shellPath)
-  const fallbackPath = getFallbackPathEntries().join(':')
-
-  process.env.PATH = mergePathValues(
-    shellPathValue,
-    process.env.PATH,
-    fallbackPath,
-  )
+  if (process.platform === 'win32') {
+    return hydrateWin32()
+  }
 }

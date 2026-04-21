@@ -67,6 +67,38 @@ When Convergence is intended for other users, the release pipeline must move to:
 
 At that point unsigned releases should be treated as development artifacts only.
 
+## Decision: Unsigned Windows Releases First
+
+### Short-term decision
+
+For the initial Windows release pipeline, unsigned NSIS installers are acceptable.
+
+This is only acceptable because:
+
+- current distribution is to the owner and a small circle of trusted testers
+- EV/OV code signing is expensive and CI-hostile until Azure Trusted Signing is wired up
+- SmartScreen warnings are tolerable while the user count is small
+
+### Tradeoff
+
+Unsigned Windows builds trigger Microsoft Defender SmartScreen "unknown publisher" warnings. Opening them may require:
+
+- clicking `More info` → `Run anyway` on first launch
+- confirming through a UAC prompt during install
+- accepting that Windows Defender may quarantine the installer on fresh machines until restored
+
+This is acceptable for now but is not the long-term distribution model.
+
+### Future rule
+
+When Convergence is intended for broader Windows distribution, the release pipeline must move to:
+
+- Azure Trusted Signing (preferred 2026 default) or an EV certificate in an HSM-backed signing service
+- signed NSIS installer with stable `publisherName` matching the signing identity
+- signed auto-update payloads for `electron-updater` `NsisUpdater`
+
+At that point unsigned Windows releases should be treated as development artifacts only.
+
 ## Proposed Tooling
 
 ### Versioning and changelog
@@ -100,6 +132,8 @@ Packaging scripts:
 - `npm run package:mac:dir` — build a signed/notarized-release-ready unpacked app directory
 - `npm run package:mac:unsigned` — build unsigned macOS DMG + ZIP artifacts for local-only use
 - `npm run package:mac:dir:unsigned` — build an unsigned unpacked macOS app directory
+- `npm run package:win` — build unsigned Windows NSIS `.exe` installer (x64) for Phase 7
+- `npm run package:win:dir` — build an unpacked Windows app directory for local debugging
 
 ### Release publishing
 
@@ -140,11 +174,17 @@ Initial macOS targets:
 - `.dmg`
 - `.zip`
 
+Initial Windows targets (Phase 7):
+
+- `.exe` (NSIS installer)
+- `latest.yml` + `*.blockmap` (reserved for future auto-updater; published alongside installer from day one)
+
 Initial architecture strategy:
 
 - prefer `arm64` first if release speed is the main priority
 - optionally add `x64` in the same pipeline shortly after
 - universal binaries are not required for the first release system
+- Windows ships `x64` only for first release; ARM64 Windows deferred
 
 ## GitHub Release Notes Strategy
 

@@ -2,11 +2,13 @@ import { execFile } from 'child_process'
 import type { ProviderStatusInfo } from './provider.types'
 import { buildProviderStatus, getKnownProviders } from './provider-status.pure'
 import { isPiAuthConfigured } from './pi/pi-auth-status'
+import { resolveWhichCommand } from './which-binary.pure'
+import { needsShellForSpawn } from './shell-exec.pure'
 
 function which(binary: string): Promise<string | null> {
-  const cmd = process.platform === 'win32' ? 'where' : 'which'
+  const cmd = resolveWhichCommand(process.platform)
   return new Promise((resolve) => {
-    execFile(cmd, [binary], (error, stdout) => {
+    execFile(cmd, [binary], { shell: false }, (error, stdout) => {
       if (error || !stdout.trim()) {
         resolve(null)
       } else {
@@ -17,14 +19,20 @@ function which(binary: string): Promise<string | null> {
 }
 
 function getVersion(binaryPath: string): Promise<string | null> {
+  const shell = needsShellForSpawn(binaryPath, process.platform)
   return new Promise((resolve) => {
-    execFile(binaryPath, ['--version'], { timeout: 5_000 }, (error, stdout) => {
-      if (error || !stdout.trim()) {
-        resolve(null)
-      } else {
-        resolve(stdout.trim().split('\n')[0])
-      }
-    })
+    execFile(
+      binaryPath,
+      ['--version'],
+      { timeout: 5_000, shell },
+      (error, stdout) => {
+        if (error || !stdout.trim()) {
+          resolve(null)
+        } else {
+          resolve(stdout.trim().split('\n')[0])
+        }
+      },
+    )
   })
 }
 

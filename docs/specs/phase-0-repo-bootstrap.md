@@ -2,6 +2,7 @@
 
 > Parent: `docs/specs/project-spec.md`
 > This phase exists to make every later phase verifiable.
+> Status: **DONE** (verified 2026-04-17)
 
 ## Objective
 

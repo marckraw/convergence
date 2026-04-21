@@ -28,6 +28,10 @@ import { createNodePtyFactory } from '../backend/terminal/pty-factory'
 import { registerIpcHandlers } from './ipc'
 import { shouldOpenInSystemBrowser } from './external-links.pure'
 import { getWindowAppearanceOptions } from './window-effects.pure'
+import {
+  applyDockIcon,
+  shouldQuitOnWindowAllClosed,
+} from './app-chrome.service'
 import { formatStartupFailure } from './startup-failure.pure'
 
 function createWindow(onClose?: () => void): void {
@@ -184,9 +188,7 @@ async function startApp(): Promise<void> {
   })
 
   const runtimeIconPath = resolveRuntimeIconPath()
-  if (process.platform === 'darwin' && runtimeIconPath) {
-    app.dock?.setIcon(runtimeIconPath)
-  }
+  applyDockIcon(app, runtimeIconPath)
 
   const onWindowClosed = () => {
     terminalService.disposeAll()
@@ -211,7 +213,7 @@ function handleStartupFailure(err: unknown): void {
 app.whenReady().then(startApp).catch(handleStartupFailure)
 
 app.on('window-all-closed', () => {
-  if (process.platform !== 'darwin') {
+  if (shouldQuitOnWindowAllClosed()) {
     app.quit()
   }
 })

@@ -16,6 +16,7 @@ import {
   buildFallbackPiDescriptor,
   normalizeProviderDescriptor,
 } from '../provider-descriptor.pure'
+import { needsShellForSpawn } from '../shell-exec.pure'
 import { PiRpcClient, type PiEvent, type PiExtensionUiRequest } from './pi-rpc'
 import {
   derivePiContextWindow,
@@ -533,6 +534,7 @@ export class PiProvider implements Provider {
         cwd: config.workingDirectory,
         stdio: ['pipe', 'pipe', 'pipe'],
         env: { ...process.env },
+        shell: needsShellForSpawn(binaryPath, process.platform),
       })
 
       if (!child.stdin || !child.stdout) {

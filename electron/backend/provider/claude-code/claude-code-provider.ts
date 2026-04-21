@@ -14,6 +14,7 @@ import type {
   OneShotResult,
 } from '../provider.types'
 import { parseJsonLines } from '../line-parser'
+import { needsShellForSpawn } from '../shell-exec.pure'
 import { buildClaudeDescriptor } from '../provider-descriptor.pure'
 import type { ProviderDescriptor } from '../provider.types'
 import {
@@ -86,6 +87,7 @@ function runClaudeOneShot(
       cwd: input.workingDirectory,
       stdio: ['pipe', 'pipe', 'pipe'],
       env: { ...process.env },
+      shell: needsShellForSpawn(binaryPath, process.platform),
     })
 
     let stdout = ''
@@ -524,6 +526,7 @@ export class ClaudeCodeProvider implements Provider {
         cwd: config.workingDirectory,
         stdio: ['pipe', 'pipe', 'pipe'],
         env: { ...process.env },
+        shell: needsShellForSpawn(binaryPath, process.platform),
       })
 
       if (child.stdout) {

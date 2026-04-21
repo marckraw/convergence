@@ -1,5 +1,4 @@
-import { delimiter, join } from 'path'
-import { homedir } from 'os'
+import { delimiter } from 'path'
 
 const START_MARKER = '__CONVERGENCE_PATH_START__'
 const END_MARKER = '__CONVERGENCE_PATH_END__'
@@ -21,33 +20,6 @@ export function extractShellPathFromStdout(stdout: string): string | null {
     .replace(/^\s+|\s+$/g, '')
 
   return value.length > 0 ? value : null
-}
-
-export function getFallbackPathEntries(): string[] {
-  const home = homedir()
-
-  return [
-    '/opt/homebrew/bin',
-    '/opt/homebrew/sbin',
-    '/usr/local/bin',
-    '/usr/local/sbin',
-    '/usr/bin',
-    '/bin',
-    '/usr/sbin',
-    '/sbin',
-    join(home, '.local', 'bin'),
-    join(home, '.bun', 'bin'),
-    join(home, '.cargo', 'bin'),
-    join(home, 'Library', 'pnpm'),
-    join(
-      home,
-      'Library',
-      'Application Support',
-      'JetBrains',
-      'Toolbox',
-      'scripts',
-    ),
-  ]
 }
 
 export function mergePathValues(
