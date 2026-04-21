@@ -40,6 +40,8 @@ import {
   reduceCodexActivity,
   type CodexActivityState,
 } from './codex-activity.pure'
+import type { TaskProgressService } from '../../task-progress/task-progress.service'
+import { createTaskProgressEmitter } from '../../task-progress/task-progress.emitter'
 
 async function loadCodexParts(
   attachments: Attachment[] | undefined,
@@ -69,6 +71,7 @@ function now(): string {
 function runCodexOneShot(
   binaryPath: string,
   input: OneShotInput,
+  taskProgress?: TaskProgressService | null,
 ): Promise<OneShotResult> {
   return new Promise((resolve, reject) => {
     const args = [
@@ -84,6 +87,9 @@ function runCodexOneShot(
       env: { ...process.env },
     })
 
+    const progress = createTaskProgressEmitter(input.requestId, taskProgress)
+    progress?.started()
+
     let stdout = ''
     let stderr = ''
     let settled = false
@@ -92,20 +98,24 @@ function runCodexOneShot(
       if (settled) return
       settled = true
       child.kill('SIGTERM')
+      progress?.settled('timeout')
       reject(new Error('codex oneShot timed out'))
     }, input.timeoutMs ?? 20000)
 
     child.stdout?.on('data', (chunk: Buffer) => {
       stdout += chunk.toString()
+      progress?.stdoutChunk(chunk.length)
     })
     child.stderr?.on('data', (chunk: Buffer) => {
       stderr += chunk.toString()
+      progress?.stderrChunk(chunk.length)
     })
 
     child.on('error', (err) => {
       if (settled) return
       settled = true
       clearTimeout(timeout)
+      progress?.settled('error')
       reject(err)
     })
 
@@ -114,6 +124,7 @@ function runCodexOneShot(
       settled = true
       clearTimeout(timeout)
       if (code !== 0) {
+        progress?.settled('error')
         reject(
           new Error(
             `codex oneShot exited with code ${code}: ${stderr.trim() || 'no stderr'}`,
@@ -121,6 +132,7 @@ function runCodexOneShot(
         )
         return
       }
+      progress?.settled('ok')
       resolve({ text: extractCodexExecText(stdout) })
     })
   })
@@ -153,7 +165,10 @@ export class CodexProvider implements Provider {
   supportsContinuation = true
   private descriptorPromise: Promise<ProviderDescriptor> | null = null
 
-  constructor(private binaryPath: string) {}
+  constructor(
+    private binaryPath: string,
+    private taskProgress: TaskProgressService | null = null,
+  ) {}
 
   describe(): Promise<ProviderDescriptor> {
     if (!this.descriptorPromise) {
@@ -166,7 +181,7 @@ export class CodexProvider implements Provider {
   }
 
   async oneShot(input: OneShotInput): Promise<OneShotResult> {
-    return runCodexOneShot(this.binaryPath, input)
+    return runCodexOneShot(this.binaryPath, input, this.taskProgress)
   }
 
   start(config: SessionStartConfig): SessionHandle {

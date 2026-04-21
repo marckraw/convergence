@@ -1,5 +1,5 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   useSessionStore,
   type ForkFullInput,
@@ -10,6 +10,7 @@ import {
 } from '@/entities/session'
 import { useAppSettingsStore } from '@/entities/app-settings'
 import { useDialogStore } from '@/entities/dialog'
+import { useTaskProgressStore } from '@/entities/task-progress'
 import { SessionForkDialogContainer } from './session-fork.container'
 
 const TEST_ATTACHMENTS = {
@@ -156,11 +157,16 @@ function primeStores(
 describe('SessionForkDialogContainer', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    useTaskProgressStore.getState().reset()
     ;(window as unknown as { electronAPI: unknown }).electronAPI = {
       session: {
         getById: vi.fn().mockResolvedValue(parentSession),
       },
     }
+  })
+
+  afterEach(() => {
+    useTaskProgressStore.getState().reset()
   })
 
   it('renders nothing when dialog is closed', () => {
@@ -205,7 +211,7 @@ describe('SessionForkDialogContainer', () => {
     fireEvent.click(screen.getByRole('button', { name: /Structured summary/i }))
 
     await waitFor(() => {
-      expect(previewFork).toHaveBeenCalledWith('parent-1')
+      expect(previewFork).toHaveBeenCalledWith('parent-1', expect.any(String))
     })
 
     const textarea = (await screen.findByDisplayValue(
@@ -353,6 +359,107 @@ describe('SessionForkDialogContainer', () => {
     expect(
       screen.getByRole('button', { name: /Switch to summary/i }),
     ).toBeInTheDocument()
+  })
+
+  it('surfaces the tiered elapsed hint once the preview drags on', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    try {
+      const uuidSpy = vi
+        .spyOn(crypto, 'randomUUID')
+        .mockReturnValue(
+          'req-progress' as `${string}-${string}-${string}-${string}-${string}`,
+        )
+      const previewFork = vi.fn().mockImplementation(
+        () =>
+          new Promise<ForkSummary>(() => {
+            /* never resolves for this test */
+          }),
+      )
+      primeStores({ previewFork })
+
+      render(<SessionForkDialogContainer />)
+
+      fireEvent.click(
+        await screen.findByRole('button', { name: /Structured summary/i }),
+      )
+
+      await waitFor(() => {
+        expect(previewFork).toHaveBeenCalledWith('parent-1', 'req-progress')
+      })
+
+      act(() => {
+        useTaskProgressStore.getState().ingest({
+          requestId: 'req-progress',
+          kind: 'started',
+          at: Date.now(),
+        })
+      })
+
+      expect(
+        await screen.findByTestId('fork-preview-progress'),
+      ).toHaveTextContent(/Extracting summary/)
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(50_000)
+      })
+
+      expect(screen.getByTestId('fork-preview-progress')).toHaveTextContent(
+        /Still working/,
+      )
+      expect(screen.queryByTestId('fork-preview-stale')).not.toBeInTheDocument()
+
+      uuidSpy.mockRestore()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('renders the stale warning when no chunk events arrive for 30s past the extended threshold', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    try {
+      const uuidSpy = vi
+        .spyOn(crypto, 'randomUUID')
+        .mockReturnValue(
+          'req-stale' as `${string}-${string}-${string}-${string}-${string}`,
+        )
+      const previewFork = vi.fn().mockImplementation(
+        () =>
+          new Promise<ForkSummary>(() => {
+            /* never resolves for this test */
+          }),
+      )
+      primeStores({ previewFork })
+
+      render(<SessionForkDialogContainer />)
+
+      fireEvent.click(
+        await screen.findByRole('button', { name: /Structured summary/i }),
+      )
+
+      await waitFor(() => {
+        expect(previewFork).toHaveBeenCalled()
+      })
+
+      act(() => {
+        useTaskProgressStore.getState().ingest({
+          requestId: 'req-stale',
+          kind: 'started',
+          at: Date.now(),
+        })
+      })
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(95_000)
+      })
+
+      expect(await screen.findByTestId('fork-preview-stale')).toHaveTextContent(
+        /No output in the last 30s/,
+      )
+
+      uuidSpy.mockRestore()
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('summary-strategy confirm sends the edited seed markdown verbatim', async () => {

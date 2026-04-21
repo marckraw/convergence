@@ -273,7 +273,10 @@ interface ElectronAPI {
     getRecentIds: () => Promise<string[]>
     setRecentIds: (ids: string[]) => Promise<void>
     onSessionUpdate: (callback: (session: SessionData) => void) => () => void
-    forkPreviewSummary: (parentId: string) => Promise<unknown>
+    forkPreviewSummary: (
+      parentId: string,
+      requestId?: string,
+    ) => Promise<unknown>
     forkFull: (input: unknown) => Promise<SessionData>
     forkSummary: (input: unknown) => Promise<SessionData>
   }
@@ -304,6 +307,9 @@ interface ElectronAPI {
     set: (input: AppSettingsData) => Promise<AppSettingsData>
     onUpdated: (callback: (settings: AppSettingsData) => void) => () => void
   }
+  taskProgress: {
+    subscribe: (callback: (event: TaskProgressEvent) => void) => () => void
+  }
   terminal: {
     create: (input: {
       sessionId: string
@@ -330,6 +336,19 @@ interface ElectronAPI {
     ) => () => void
   }
 }
+
+type TaskProgressOutcome = 'ok' | 'error' | 'timeout'
+
+type TaskProgressEvent =
+  | { requestId: string; kind: 'started'; at: number }
+  | { requestId: string; kind: 'stdout-chunk'; at: number; bytes: number }
+  | { requestId: string; kind: 'stderr-chunk'; at: number; bytes: number }
+  | {
+      requestId: string
+      kind: 'settled'
+      at: number
+      outcome: TaskProgressOutcome
+    }
 
 interface AppSettingsData {
   defaultProviderId: string | null

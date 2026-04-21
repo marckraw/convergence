@@ -6,9 +6,13 @@ import type {
 } from './session-fork.types'
 
 export const sessionForkApi = {
-  previewSummary: (parentId: string): Promise<ForkSummary> =>
+  previewSummary: (
+    parentId: string,
+    requestId?: string,
+  ): Promise<ForkSummary> =>
     window.electronAPI.session.forkPreviewSummary(
       parentId,
+      requestId,
     ) as Promise<ForkSummary>,
 
   forkFull: (input: ForkFullInput): Promise<Session> =>

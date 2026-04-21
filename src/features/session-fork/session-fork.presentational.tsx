@@ -21,7 +21,7 @@ import type {
 } from '@/entities/session'
 import { SessionStartSelect } from '@/features/session-start'
 import type { PreviewState } from './session-fork.types'
-import type { SeedSizeWarning } from './session-fork.pure'
+import type { ForkProgressLabel, SeedSizeWarning } from './session-fork.pure'
 
 interface SessionForkDialogProps {
   open: boolean
@@ -39,6 +39,7 @@ interface SessionForkDialogProps {
   additionalInstruction: string
   seedMarkdown: string
   preview: PreviewState
+  progressLabel: ForkProgressLabel | null
   isSubmitting: boolean
   submitError: string | null
   onNameChange: (value: string) => void
@@ -71,6 +72,7 @@ export const SessionForkDialog: FC<SessionForkDialogProps> = ({
   additionalInstruction,
   seedMarkdown,
   preview,
+  progressLabel,
   isSubmitting,
   submitError,
   onNameChange,
@@ -301,9 +303,25 @@ export const SessionForkDialog: FC<SessionForkDialogProps> = ({
                 )}
               </div>
               {preview.status === 'loading' && (
-                <p className="text-xs text-muted-foreground">
-                  Extracting summary from parent transcript…
-                </p>
+                <div className="space-y-1" data-testid="fork-preview-progress">
+                  <p className="text-xs text-muted-foreground">
+                    {progressLabel?.primary ??
+                      'Extracting summary from parent transcript…'}
+                  </p>
+                  {progressLabel?.secondary && (
+                    <p className="text-xs text-muted-foreground">
+                      {progressLabel.secondary}
+                    </p>
+                  )}
+                  {progressLabel?.stale && (
+                    <p
+                      data-testid="fork-preview-stale"
+                      className="rounded-md border border-amber-400/40 bg-amber-400/10 px-2 py-1 text-xs text-amber-200"
+                    >
+                      No output in the last 30s. The provider may be stuck.
+                    </p>
+                  )}
+                </div>
               )}
               {preview.status === 'error' && (
                 <div className="space-y-2 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">

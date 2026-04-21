@@ -102,8 +102,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
         ipcRenderer.removeListener('session:updated', handler)
       }
     },
-    forkPreviewSummary: (parentId: string) =>
-      ipcRenderer.invoke('session:fork:previewSummary', parentId),
+    forkPreviewSummary: (parentId: string, requestId?: string) =>
+      ipcRenderer.invoke('session:fork:previewSummary', parentId, requestId),
     forkFull: (input: unknown) =>
       ipcRenderer.invoke('session:fork:full', input),
     forkSummary: (input: unknown) =>
@@ -149,6 +149,15 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.on('appSettings:updated', handler)
       return () => {
         ipcRenderer.removeListener('appSettings:updated', handler)
+      }
+    },
+  },
+  taskProgress: {
+    subscribe: (callback: (event: unknown) => void) => {
+      const handler = (_event: unknown, payload: unknown) => callback(payload)
+      ipcRenderer.on('task:progress', handler)
+      return () => {
+        ipcRenderer.removeListener('task:progress', handler)
       }
     },
   },

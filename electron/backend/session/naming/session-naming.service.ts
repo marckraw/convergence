@@ -1,3 +1,4 @@
+import { randomUUID } from 'crypto'
 import type { ProviderRegistry } from '../../provider/provider-registry'
 import type { AppSettingsService } from '../../app-settings/app-settings.service'
 import type { Session } from '../session.types'
@@ -41,6 +42,7 @@ export class SessionNamingService {
         prompt,
         modelId,
         workingDirectory: session.workingDirectory,
+        requestId: randomUUID(),
       })
       return sanitizeTitle(result.text)
     } catch {

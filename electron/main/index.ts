@@ -24,6 +24,8 @@ import {
   broadcastToRenderers,
   registerTerminalIpcHandlers,
 } from '../backend/terminal/terminal.ipc'
+import { TaskProgressService } from '../backend/task-progress/task-progress.service'
+import { broadcastTaskProgress } from '../backend/task-progress/task-progress.ipc'
 import { createNodePtyFactory } from '../backend/terminal/pty-factory'
 import { registerIpcHandlers } from './ipc'
 import { shouldOpenInSystemBrowser } from './external-links.pure'
@@ -109,6 +111,7 @@ async function startApp(): Promise<void> {
   const stateService = new StateService(db)
   const workspaceService = new WorkspaceService(db, gitService, workspacesRoot)
   const providerRegistry = new ProviderRegistry()
+  const taskProgressService = new TaskProgressService(broadcastTaskProgress)
   const sessionService = new SessionService(db, providerRegistry)
   const attachmentsService = new AttachmentsService(db, attachmentsRoot)
   sessionService.setAttachmentsService(attachmentsService)
@@ -126,9 +129,13 @@ async function startApp(): Promise<void> {
   const detected = await detectProviders()
   for (const p of detected) {
     if (p.id === 'claude-code') {
-      providerRegistry.register(new ClaudeCodeProvider(p.binaryPath))
+      providerRegistry.register(
+        new ClaudeCodeProvider(p.binaryPath, taskProgressService),
+      )
     } else if (p.id === 'codex') {
-      providerRegistry.register(new CodexProvider(p.binaryPath))
+      providerRegistry.register(
+        new CodexProvider(p.binaryPath, taskProgressService),
+      )
     } else if (p.id === 'pi') {
       providerRegistry.register(new PiProvider(p.binaryPath))
     }

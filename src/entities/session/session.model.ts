@@ -60,7 +60,10 @@ interface SessionActions {
   beginSessionDraft: (workspaceId: string | null) => void
   setActiveSession: (id: string | null) => void
   handleSessionUpdate: (session: Session) => void
-  previewFork: (parentSessionId: string) => Promise<ForkSummary>
+  previewFork: (
+    parentSessionId: string,
+    requestId?: string,
+  ) => Promise<ForkSummary>
   forkFull: (input: ForkFullInput) => Promise<Session>
   forkSummary: (input: ForkSummaryInput) => Promise<Session>
   clearError: () => void
@@ -452,8 +455,8 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     }
   },
 
-  previewFork: (parentSessionId: string) =>
-    sessionForkApi.previewSummary(parentSessionId),
+  previewFork: (parentSessionId: string, requestId?: string) =>
+    sessionForkApi.previewSummary(parentSessionId, requestId),
 
   forkFull: async (input: ForkFullInput) => {
     const session = await sessionForkApi.forkFull(input)

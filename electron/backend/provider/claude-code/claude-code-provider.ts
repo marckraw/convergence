@@ -31,6 +31,8 @@ import {
 } from '../continuation-recovery.pure'
 import { readClaudeLoggedContextWindow } from './claude-context-log.service'
 import { deriveClaudeActivity } from './claude-code-activity.pure'
+import type { TaskProgressService } from '../../task-progress/task-progress.service'
+import { createTaskProgressEmitter } from '../../task-progress/task-progress.emitter'
 
 function now(): string {
   return new Date().toISOString()
@@ -72,6 +74,7 @@ interface ClaudeStreamEvent {
 function runClaudeOneShot(
   binaryPath: string,
   input: OneShotInput,
+  taskProgress?: TaskProgressService | null,
 ): Promise<OneShotResult> {
   return new Promise((resolve, reject) => {
     const args = [
@@ -88,6 +91,9 @@ function runClaudeOneShot(
       env: { ...process.env },
     })
 
+    const progress = createTaskProgressEmitter(input.requestId, taskProgress)
+    progress?.started()
+
     let stdout = ''
     let stderr = ''
     let settled = false
@@ -96,20 +102,24 @@ function runClaudeOneShot(
       if (settled) return
       settled = true
       child.kill('SIGTERM')
+      progress?.settled('timeout')
       reject(new Error('claude oneShot timed out'))
     }, input.timeoutMs ?? 20000)
 
     child.stdout?.on('data', (chunk: Buffer) => {
       stdout += chunk.toString()
+      progress?.stdoutChunk(chunk.length)
     })
     child.stderr?.on('data', (chunk: Buffer) => {
       stderr += chunk.toString()
+      progress?.stderrChunk(chunk.length)
     })
 
     child.on('error', (err) => {
       if (settled) return
       settled = true
       clearTimeout(timeout)
+      progress?.settled('error')
       reject(err)
     })
 
@@ -118,6 +128,7 @@ function runClaudeOneShot(
       settled = true
       clearTimeout(timeout)
       if (code !== 0) {
+        progress?.settled('error')
         reject(
           new Error(
             `claude oneShot exited with code ${code}: ${stderr.trim() || 'no stderr'}`,
@@ -128,8 +139,10 @@ function runClaudeOneShot(
       try {
         const parsed = JSON.parse(stdout) as { result?: unknown }
         const text = typeof parsed.result === 'string' ? parsed.result : ''
+        progress?.settled('ok')
         resolve({ text })
       } catch (err) {
+        progress?.settled('error')
         reject(
           err instanceof Error
             ? err
@@ -150,14 +163,17 @@ export class ClaudeCodeProvider implements Provider {
   name = 'Claude Code'
   supportsContinuation = true
 
-  constructor(private binaryPath: string) {}
+  constructor(
+    private binaryPath: string,
+    private taskProgress: TaskProgressService | null = null,
+  ) {}
 
   async describe(): Promise<ProviderDescriptor> {
     return buildClaudeDescriptor()
   }
 
   async oneShot(input: OneShotInput): Promise<OneShotResult> {
-    return runClaudeOneShot(this.binaryPath, input)
+    return runClaudeOneShot(this.binaryPath, input, this.taskProgress)
   }
 
   start(config: SessionStartConfig): SessionHandle {
