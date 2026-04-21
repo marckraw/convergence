@@ -71,7 +71,12 @@ export function App() {
   useEffect(() => {
     const subscribe = window.electronAPI.taskProgress?.subscribe
     if (!subscribe) return
-    const unsubscribe = subscribe(ingestTaskProgress)
+    const unsubscribe = subscribe((event) => {
+      if (import.meta.env.DEV) {
+        console.debug('[task-progress]', event)
+      }
+      ingestTaskProgress(event)
+    })
     return unsubscribe
   }, [ingestTaskProgress])
 

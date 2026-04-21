@@ -126,7 +126,7 @@ summary extraction preview.
 - [x] IPC layer (`session:fork:previewSummary`): accept a caller-
       supplied `requestId` in the request payload.
 - [x] Renderer `sessionFork` API / store: `previewFork(parentId,
-      requestId?)` forwards the id through to IPC. The container
+    requestId?)` forwards the id through to IPC. The container
       owns the id as local `previewRequestId` state rather than a
       store field — it's scoped to a single dialog instance and has
       no cross-slice consumers.
@@ -146,7 +146,7 @@ summary extraction preview.
         past the extended threshold, assert the stale warning
         renders.
   - [x] Success path covered by existing `switching to summary runs
-        preview and populates the seed buffer` test — when the
+    preview and populates the seed buffer` test — when the
         promise resolves, the hint region unmounts.
 
 Verification: full gate. Smoke-test by hand in dev: open fork dialog,
@@ -158,15 +158,15 @@ Goal: wire the primitive into session auto-naming so the second
 real caller exists, even without visible UI. Proves the abstraction
 isn't over-fit to fork preview.
 
-- [ ] `SessionNamingService.generateName` generates a `requestId`
+- [x] `SessionNamingService.generateName` generates a `requestId`
       and passes it into `provider.oneShot(...)`. No UI surface.
-- [ ] Add a minimal log subscriber for dev builds only: in
-      `App.container.tsx` dev-mode branch, log `TaskProgressEvent`s
-      to the console for visibility. (Behind an env flag, not
-      shipped to users.)
-- [ ] Update `docs/specs/agent-task-progress.md` "Open questions"
-      section if any gaps became obvious during P5/P6.
-- [ ] Changeset: single patch bump covering the whole series.
+- [x] Minimal dev-only log subscriber in `App.container.tsx`: the
+      existing `taskProgress.subscribe` effect wraps the ingest
+      callback with `import.meta.env.DEV` guarded `console.debug`,
+      so events are visible in devtools without shipping noise.
+- [x] Updated `docs/specs/agent-task-progress.md` "Open questions"
+      telemetry entry to reference the dev-mode subscriber.
+- [x] Changeset: single patch bump covering the whole series.
 
 Verification: full gate. Changeset present.
 

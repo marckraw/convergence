@@ -230,7 +230,9 @@ Nothing persisted. Renderer store only; evicted shortly after
   receipt. Needs UX in the fork dialog and elsewhere.
 - **Session streaming alignment.** Whether to retire
   `ActivitySignal` in favor of `TaskProgressEvent`, or bridge them.
-- **Telemetry.** Logging progress events for diagnostics is trivially
-  easy once the helper exists; decide whether/where to log.
+- **Telemetry.** The renderer subscriber in `App.container.tsx` logs
+  every `TaskProgressEvent` to the console under `import.meta.env.DEV`
+  for local diagnostics. Production telemetry (a durable sink, per-
+  request tracing) remains a follow-up.
 - **Auto-naming surface.** Where (if anywhere) to show naming
   progress in the UI.
