@@ -1,5 +1,13 @@
 # convergence
 
+## 0.14.4
+
+### Patch Changes
+
+- 29c09a1: Fix long provider, model, and project pickers by replacing unbounded dropdowns
+  with searchable popovers and aligning their scrollbars with the shared app
+  scrollbar styling.
+
 ## 0.14.3
 
 ### Patch Changes
