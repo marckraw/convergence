@@ -41,7 +41,10 @@ const SUMMARY_EXTRACTION_TIMEOUT_MS = 180_000
 export class SessionForkService {
   constructor(private readonly deps: SessionForkDeps) {}
 
-  async previewSummary(parentId: string): Promise<ForkSummary> {
+  async previewSummary(
+    parentId: string,
+    requestId?: string,
+  ): Promise<ForkSummary> {
     const parent = this.deps.sessions.getById(parentId)
     if (!parent) throw new Error(`Parent session not found: ${parentId}`)
 
@@ -69,6 +72,7 @@ export class SessionForkService {
       modelId,
       workingDirectory: parent.workingDirectory,
       timeoutMs: SUMMARY_EXTRACTION_TIMEOUT_MS,
+      requestId,
     })
     const firstResult = parseAndValidateSummary(firstRaw.text)
     if (firstResult.ok) {
@@ -80,6 +84,7 @@ export class SessionForkService {
       modelId,
       workingDirectory: parent.workingDirectory,
       timeoutMs: SUMMARY_EXTRACTION_TIMEOUT_MS,
+      requestId,
     })
     const retryResult = parseAndValidateSummary(retryRaw.text)
     if (retryResult.ok) {

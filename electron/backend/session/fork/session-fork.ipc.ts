@@ -5,8 +5,10 @@ import type { ForkFullInput, ForkSummaryInput } from './session-fork.types'
 export function registerSessionForkIpcHandlers(
   service: SessionForkService,
 ): void {
-  ipcMain.handle('session:fork:previewSummary', (_event, parentId: string) =>
-    service.previewSummary(parentId),
+  ipcMain.handle(
+    'session:fork:previewSummary',
+    (_event, parentId: string, requestId?: string) =>
+      service.previewSummary(parentId, requestId),
   )
 
   ipcMain.handle('session:fork:full', (_event, input: ForkFullInput) =>

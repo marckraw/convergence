@@ -273,7 +273,10 @@ interface ElectronAPI {
     getRecentIds: () => Promise<string[]>
     setRecentIds: (ids: string[]) => Promise<void>
     onSessionUpdate: (callback: (session: SessionData) => void) => () => void
-    forkPreviewSummary: (parentId: string) => Promise<unknown>
+    forkPreviewSummary: (
+      parentId: string,
+      requestId?: string,
+    ) => Promise<unknown>
     forkFull: (input: unknown) => Promise<SessionData>
     forkSummary: (input: unknown) => Promise<SessionData>
   }

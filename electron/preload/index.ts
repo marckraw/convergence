@@ -102,8 +102,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
         ipcRenderer.removeListener('session:updated', handler)
       }
     },
-    forkPreviewSummary: (parentId: string) =>
-      ipcRenderer.invoke('session:fork:previewSummary', parentId),
+    forkPreviewSummary: (parentId: string, requestId?: string) =>
+      ipcRenderer.invoke('session:fork:previewSummary', parentId, requestId),
     forkFull: (input: unknown) =>
       ipcRenderer.invoke('session:fork:full', input),
     forkSummary: (input: unknown) =>

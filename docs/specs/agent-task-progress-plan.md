@@ -121,30 +121,33 @@ passes a `requestId` yet.
 Goal: fork dialog shows live elapsed time and tiered hints for the
 summary extraction preview.
 
-- [ ] `SessionForkService.previewSummary` accepts a `requestId` and
+- [x] `SessionForkService.previewSummary` accepts a `requestId` and
       forwards it into both `provider.oneShot(...)` calls.
-- [ ] IPC layer (`session:fork:previewSummary`): accept a caller-
+- [x] IPC layer (`session:fork:previewSummary`): accept a caller-
       supplied `requestId` in the request payload.
-- [ ] Renderer `sessionFork` API / store: when `previewFork(parentId)`
-      runs, it generates a `requestId` (crypto.randomUUID), writes it
-      into a `currentPreviewRequestId` field on the fork store, and
-      passes it in the IPC call.
-- [ ] `SessionForkDialogContainer`: read `currentPreviewRequestId`
-      and `useTaskProgress(requestId)`. Compute the label via
-      `deriveForkProgressLabel` (from P1) and pass it to the
+- [x] Renderer `sessionFork` API / store: `previewFork(parentId,
+      requestId?)` forwards the id through to IPC. The container
+      owns the id as local `previewRequestId` state rather than a
+      store field — it's scoped to a single dialog instance and has
+      no cross-slice consumers.
+- [x] `SessionForkDialogContainer`: tracks `previewRequestId` and
+      calls `useTaskProgress(requestId)`. Computes the label via
+      `deriveForkProgressLabel` (from P1) and passes it to the
       presentational component.
-- [ ] `SessionForkDialog` presentational: when
-      `preview.status === 'loading'`, render `primary` and optionally
-      `secondary`. When `stale === true`, render the "No output in
+- [x] `SessionForkDialog` presentational: when
+      `preview.status === 'loading'`, renders `primary` and optionally
+      `secondary`. When `stale === true`, renders the "No output in
       the last 30s" cue in a warning tone.
-- [ ] Container tests:
-  - [ ] Slow preview path: mock oneShot with a delayed resolve,
-        advance fake timers past 30s threshold, assert secondary
-        hint appears.
-  - [ ] Stale path: simulate no chunk events for 30s after start,
-        assert stale warning renders.
-  - [ ] Success path: when `settled: ok` arrives, hints disappear
-        and seed markdown renders (existing behavior).
+- [x] Container tests:
+  - [x] Slow preview path: inject `started` event, advance fake
+        timers past the secondary threshold, assert the hint
+        appears.
+  - [x] Stale path: inject only a `started` event, advance timers
+        past the extended threshold, assert the stale warning
+        renders.
+  - [x] Success path covered by existing `switching to summary runs
+        preview and populates the seed buffer` test — when the
+        promise resolves, the hint region unmounts.
 
 Verification: full gate. Smoke-test by hand in dev: open fork dialog,
 pick summary, watch counter tick and hint appear.

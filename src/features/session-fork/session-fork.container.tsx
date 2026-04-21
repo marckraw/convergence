@@ -11,8 +11,13 @@ import {
 } from '@/entities/session'
 import { useAppSettingsStore } from '@/entities/app-settings'
 import { useDialogStore } from '@/entities/dialog'
+import { useTaskProgress } from '@/entities/task-progress'
 import { SessionForkDialog } from './session-fork.presentational'
-import { computeSeedSizeWarning, renderSeedMarkdown } from './session-fork.pure'
+import {
+  computeSeedSizeWarning,
+  deriveForkProgressLabel,
+  renderSeedMarkdown,
+} from './session-fork.pure'
 import {
   MIN_TRANSCRIPT_ENTRIES_FOR_SUMMARY,
   type PreviewState,
@@ -56,8 +61,18 @@ export const SessionForkDialogContainer: FC = () => {
   const [additionalInstruction, setAdditionalInstruction] = useState('')
   const [seedMarkdown, setSeedMarkdown] = useState('')
   const [preview, setPreview] = useState<PreviewState>(EMPTY_PREVIEW)
+  const [previewRequestId, setPreviewRequestId] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState<string | null>(null)
+
+  const progressView = useTaskProgress(previewRequestId)
+  const progressLabel =
+    preview.status === 'loading' && progressView
+      ? deriveForkProgressLabel({
+          elapsedMs: progressView.elapsedMs,
+          msSinceLastEvent: progressView.msSinceLastEvent,
+        })
+      : null
 
   const selection = useMemo(
     () =>
@@ -122,14 +137,17 @@ export const SessionForkDialogContainer: FC = () => {
     setAdditionalInstruction('')
     setSeedMarkdown('')
     setPreview(EMPTY_PREVIEW)
+    setPreviewRequestId(null)
     setSubmitError(null)
   }, [open, parent])
 
   const runPreview = useCallback(async () => {
     if (!parent) return
+    const requestId = crypto.randomUUID()
+    setPreviewRequestId(requestId)
     setPreview({ status: 'loading' })
     try {
-      const summary = await previewFork(parent.id)
+      const summary = await previewFork(parent.id, requestId)
       const md = renderSeedMarkdown({
         summary,
         parentName: parent.name,
@@ -270,6 +288,7 @@ export const SessionForkDialogContainer: FC = () => {
       additionalInstruction={additionalInstruction}
       seedMarkdown={seedMarkdown}
       preview={preview}
+      progressLabel={progressLabel}
       isSubmitting={isSubmitting}
       submitError={submitError}
       onNameChange={setName}
