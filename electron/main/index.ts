@@ -34,6 +34,13 @@ import {
   broadcastNotificationsToRenderers,
   registerNotificationsIpcHandlers,
 } from '../backend/notifications/notifications.ipc'
+import { UpdatesService } from '../backend/updates/updates.service'
+import { UpdatesScheduler } from '../backend/updates/updates.scheduler'
+import {
+  broadcastUpdateStatus,
+  registerUpdatesDevStubs,
+  registerUpdatesIpc,
+} from '../backend/updates/updates.ipc'
 import { SessionNamingService } from '../backend/session/naming/session-naming.service'
 import { SessionForkService } from '../backend/session/fork/session-fork.service'
 import { registerSessionForkIpcHandlers } from '../backend/session/fork/session-fork.ipc'
@@ -265,6 +272,33 @@ async function startApp(): Promise<void> {
     state: notificationsState,
   })
 
+  let updatesService: UpdatesService | null = null
+  let updatesScheduler: UpdatesScheduler | null = null
+  if (app.isPackaged) {
+    const { autoUpdater } = await import('electron-updater')
+    updatesService = new UpdatesService({
+      autoUpdater,
+      appVersion: app.getVersion(),
+      broadcast: broadcastUpdateStatus,
+      openExternal: (url) => shell.openExternal(url),
+    })
+    updatesScheduler = new UpdatesScheduler({
+      service: updatesService,
+      getPrefs: () => appSettingsService.getUpdatePrefsSync(),
+    })
+    registerUpdatesIpc({
+      service: updatesService,
+      appSettings: appSettingsService,
+      onPrefsChanged: (prefs) => updatesScheduler?.onPrefsChanged(prefs),
+    })
+    updatesScheduler.start()
+  } else {
+    registerUpdatesDevStubs({
+      appVersion: app.getVersion(),
+      appSettings: appSettingsService,
+    })
+  }
+
   const namingService = new SessionNamingService({
     providers: providerRegistry,
     appSettings: appSettingsService,
@@ -289,6 +323,7 @@ async function startApp(): Promise<void> {
     mcpService,
     appSettingsService,
     attachmentsService,
+    (prefs) => updatesScheduler?.onPrefsChanged(prefs),
   )
 
   const terminalService = new TerminalService(
@@ -319,6 +354,8 @@ async function startApp(): Promise<void> {
   app.on('before-quit', () => {
     systemNotifications.dispose()
     systemCoalescer.dispose()
+    updatesScheduler?.stop()
+    updatesService?.dispose()
   })
 
   createWindow(onWindowClosed, onWindowCreated)

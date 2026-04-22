@@ -155,6 +155,8 @@ function describeItem(item: PaletteItem): {
       return { primary: item.title, secondary: item.projectName }
     case 'fork-session':
       return { primary: item.title, secondary: item.projectName || null }
+    case 'check-updates':
+      return { primary: item.title, secondary: item.description }
   }
 }
 
@@ -174,5 +176,7 @@ function describeKind(kind: PaletteItem['kind']): string {
       return 'New workspace'
     case 'fork-session':
       return 'Fork session'
+    case 'check-updates':
+      return 'Updates'
   }
 }

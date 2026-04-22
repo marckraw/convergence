@@ -3,6 +3,7 @@ import { useAppSettingsStore } from './app-settings.model'
 import {
   DEFAULT_NOTIFICATION_PREFS,
   DEFAULT_ONBOARDING_PREFS,
+  DEFAULT_UPDATE_PREFS,
   type AppSettings,
 } from './app-settings.types'
 
@@ -14,6 +15,7 @@ const EMPTY: AppSettings = {
   extractionModelByProvider: {},
   notifications: DEFAULT_NOTIFICATION_PREFS,
   onboarding: DEFAULT_ONBOARDING_PREFS,
+  updates: DEFAULT_UPDATE_PREFS,
 }
 
 type BroadcastCallback = (settings: AppSettings) => void
@@ -69,6 +71,7 @@ describe('useAppSettingsStore', () => {
       extractionModelByProvider: {},
       notifications: DEFAULT_NOTIFICATION_PREFS,
       onboarding: DEFAULT_ONBOARDING_PREFS,
+      updates: DEFAULT_UPDATE_PREFS,
     }
     installMockApi({ get: vi.fn().mockResolvedValue(stored) })
 
@@ -98,6 +101,7 @@ describe('useAppSettingsStore', () => {
       extractionModelByProvider: {},
       notifications: DEFAULT_NOTIFICATION_PREFS,
       onboarding: DEFAULT_ONBOARDING_PREFS,
+      updates: DEFAULT_UPDATE_PREFS,
     }
     installMockApi({ set: vi.fn().mockResolvedValue(stored) })
 
@@ -121,6 +125,7 @@ describe('useAppSettingsStore', () => {
       extractionModelByProvider: {},
       notifications: DEFAULT_NOTIFICATION_PREFS,
       onboarding: DEFAULT_ONBOARDING_PREFS,
+      updates: DEFAULT_UPDATE_PREFS,
     }
     listeners.forEach((cb) => cb(updated))
 

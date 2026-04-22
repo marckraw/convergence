@@ -3,9 +3,11 @@ import type {
   NotificationPrefs,
 } from '../notifications'
 import type { ReasoningEffort } from '../session'
+import type { UpdatePrefs } from '../updates'
 
-export type { NotificationEventPrefs, NotificationPrefs }
+export type { NotificationEventPrefs, NotificationPrefs, UpdatePrefs }
 export { DEFAULT_NOTIFICATION_PREFS } from '../notifications'
+export { DEFAULT_UPDATE_PREFS } from '../updates'
 
 export interface OnboardingPrefs {
   notificationsCardDismissed: boolean
@@ -23,6 +25,7 @@ export interface AppSettings {
   extractionModelByProvider: Record<string, string>
   notifications: NotificationPrefs
   onboarding: OnboardingPrefs
+  updates: UpdatePrefs
 }
 
 export type AppSettingsInput = AppSettings

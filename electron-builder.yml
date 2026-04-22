@@ -22,3 +22,8 @@ mac:
   target:
     - target: dmg
     - target: zip
+publish:
+  - provider: github
+    owner: marckraw
+    repo: convergence
+    releaseType: release

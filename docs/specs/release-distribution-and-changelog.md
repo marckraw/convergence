@@ -12,7 +12,13 @@ Define a release system that covers:
 - GitHub Releases with release notes
 - an in-app changelog / "What's New" surface
 
-This document is intentionally separate from auto-update. Auto-update remains out of scope for the first release system.
+This document is intentionally separate from auto-update. Auto-update
+has since shipped in its own phase — see
+[`docs/specs/auto-updates.md`](./auto-updates.md) and
+[`docs/specs/auto-updates-plan.md`](./auto-updates-plan.md). The
+release pipeline below has been updated to produce both `arm64` and
+`x64` artifacts plus `latest-mac.yml`, which the auto-updater relies
+on at runtime.
 
 ## Current State
 
@@ -145,6 +151,15 @@ Initial architecture strategy:
 - prefer `arm64` first if release speed is the main priority
 - optionally add `x64` in the same pipeline shortly after
 - universal binaries are not required for the first release system
+
+As of the auto-updates phase, `package:mac*` scripts build both
+`--x64` and `--arm64` in the same run (`electron-builder --mac dmg zip
+--x64 --arm64 --publish never`). The arch flags must come after the
+target positionals or electron-builder's CLI rejects them as unknown
+arguments. Every published release therefore contains four artifacts
+(two DMG + two ZIP) plus their blockmaps and a single `latest-mac.yml`
+that lists both ZIPs under `files[]`; electron-updater picks the
+matching `process.arch` entry at runtime.
 
 ## GitHub Release Notes Strategy
 
@@ -313,7 +328,15 @@ Runs on:
 Responsibilities:
 
 - verify tag matches `package.json` version
-- build unsigned macOS artifacts
+- build signed + notarized macOS artifacts for both `arm64` and
+  `x64`
 - extract the matching changelog section
 - create a GitHub Release
-- attach DMG/ZIP assets and release metadata files
+- attach DMG/ZIP assets, blockmaps, and `latest-mac.yml` (required by
+  the auto-updater)
+
+When modifying `electron-builder.yml`, `package:mac*`, or this
+workflow, run `npm run package:mac:unsigned` locally and confirm
+`release/latest-mac.yml` still lists both archs. Missing or incorrect
+`latest-mac.yml` entries silently break auto-update for everyone on
+that arch.

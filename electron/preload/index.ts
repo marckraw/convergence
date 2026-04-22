@@ -217,6 +217,25 @@ contextBridge.exposeInMainWorld('electronAPI', {
       }
     },
   },
+  updates: {
+    getStatus: () => ipcRenderer.invoke('updates:get-status'),
+    getAppVersion: () => ipcRenderer.invoke('updates:get-app-version'),
+    getIsDev: () => ipcRenderer.invoke('updates:get-is-dev'),
+    getPrefs: () => ipcRenderer.invoke('updates:get-prefs'),
+    setPrefs: (input: unknown) =>
+      ipcRenderer.invoke('updates:set-prefs', input),
+    check: () => ipcRenderer.invoke('updates:check'),
+    download: () => ipcRenderer.invoke('updates:download'),
+    install: () => ipcRenderer.invoke('updates:install'),
+    openReleaseNotes: () => ipcRenderer.invoke('updates:open-release-notes'),
+    onStatusChanged: (callback: (status: unknown) => void) => {
+      const handler = (_event: unknown, status: unknown) => callback(status)
+      ipcRenderer.on('updates:status-changed', handler)
+      return () => {
+        ipcRenderer.removeListener('updates:status-changed', handler)
+      }
+    },
+  },
   terminal: {
     create: (input: {
       sessionId: string

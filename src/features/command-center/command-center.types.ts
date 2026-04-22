@@ -84,6 +84,14 @@ export type ForkSessionPaletteItem = {
   search: PaletteSearchFields
 }
 
+export type CheckUpdatesPaletteItem = {
+  kind: 'check-updates'
+  id: string
+  title: string
+  description: string
+  search: PaletteSearchFields
+}
+
 export type PaletteItem =
   | ProjectPaletteItem
   | WorkspacePaletteItem
@@ -92,6 +100,7 @@ export type PaletteItem =
   | NewSessionPaletteItem
   | NewWorkspacePaletteItem
   | ForkSessionPaletteItem
+  | CheckUpdatesPaletteItem
 
 export type CuratedSectionId =
   | 'waiting-on-you'

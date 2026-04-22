@@ -7,6 +7,7 @@ import {
   notificationsApi,
   useNotificationsStore,
 } from '@/entities/notifications'
+import { useUpdatesStore } from '@/entities/updates'
 import { useTaskProgressStore } from '@/entities/task-progress'
 import { Toaster, toast } from 'sonner'
 import { TooltipProvider } from '@/shared/ui/tooltip'
@@ -14,6 +15,7 @@ import { applyTheme, getStoredTheme } from '@/shared/lib/theme'
 import { CommandCenterContainer } from '@/features/command-center'
 import { SessionForkDialogContainer } from '@/features/session-fork'
 import { NotificationsToastHostContainer } from '@/features/notifications-toast-host'
+import { UpdatesToastContainer } from '@/features/updates-toast'
 import { AppShell } from './App.layout'
 
 export function App() {
@@ -42,6 +44,7 @@ export function App() {
   const setNotificationActiveSession = useNotificationsStore(
     (s) => s.setActiveSession,
   )
+  const loadUpdates = useUpdatesStore((s) => s.loadInitial)
   const ingestTaskProgress = useTaskProgressStore((s) => s.ingest)
 
   useEffect(() => {
@@ -85,6 +88,19 @@ export function App() {
   useEffect(() => {
     void loadNotificationPrefs()
   }, [loadNotificationPrefs])
+
+  useEffect(() => {
+    void loadUpdates()
+  }, [loadUpdates])
+
+  useEffect(() => {
+    if (!import.meta.env.DEV) return
+    const api = window.electronAPI.updates
+    if (!api?.onStatusChanged) return
+    return api.onStatusChanged((status) => {
+      console.debug('[updates:status]', status)
+    })
+  }, [])
 
   useEffect(() => {
     void setNotificationActiveSession(activeSessionId)
@@ -164,6 +180,7 @@ export function App() {
       <CommandCenterContainer />
       <SessionForkDialogContainer />
       <NotificationsToastHostContainer />
+      <UpdatesToastContainer />
       <Toaster position="bottom-right" />
     </TooltipProvider>
   )

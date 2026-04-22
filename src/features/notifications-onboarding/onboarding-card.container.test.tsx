@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   DEFAULT_NOTIFICATION_PREFS,
   DEFAULT_ONBOARDING_PREFS,
+  DEFAULT_UPDATE_PREFS,
   useAppSettingsStore,
 } from '@/entities/app-settings'
 import { useDialogStore } from '@/entities/dialog'
@@ -38,6 +39,7 @@ function primeStores(opts: {
         ...DEFAULT_ONBOARDING_PREFS,
         notificationsCardDismissed: opts.dismissed,
       },
+      updates: DEFAULT_UPDATE_PREFS,
     },
     isLoaded: opts.isLoaded,
     isSaving: false,

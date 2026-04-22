@@ -1,6 +1,26 @@
 {
-  "currentVersion": "0.14.2",
+  "currentVersion": "0.16.0",
   "releases": [
+    {
+      "version": "0.16.0",
+      "date": null,
+      "notes": "### Minor Changes\n\n- 07df4e9: Add a full notifications system: toasts, sounds, inline pulses, dock badge\n  and bounce, system-level macOS notifications, and a settings panel with a\n  test-fire button. Notifications fire on agent attention transitions\n  (`finished` / `needs input` / `needs approval` / `errored`), respect a\n  suppression matrix tied to window focus and the active session, and\n  collapse bursts via a 5-second per-severity coalescer with a 3-per-minute\n  rate limit on system-level fires. A first-run onboarding card surfaces the\n  new settings; everything is opt-out per channel and per event."
+    },
+    {
+      "version": "0.15.0",
+      "date": null,
+      "notes": "### Minor Changes\n\n- 9997130: Normalize sessions around lightweight summaries and first-class conversation\n  items instead of embedded transcript blobs. Providers now emit a canonical\n  delta stream that the backend persists into `session_conversation_items`, and\n  the renderer consumes split summary/detail session data rather than hydrating\n  full conversations everywhere.\n\n  This release also updates forking and session surfaces to work from normalized\n  conversation items, migrates existing local transcript-backed sessions to the\n  new model on startup, and rebuilds legacy databases to drop the old\n  `sessions.transcript` storage once the normalized conversation rows are in\n  place."
+    },
+    {
+      "version": "0.14.4",
+      "date": null,
+      "notes": "### Patch Changes\n\n- 29c09a1: Fix long provider, model, and project pickers by replacing unbounded dropdowns\n  with searchable popovers and aligning their scrollbars with the shared app\n  scrollbar styling."
+    },
+    {
+      "version": "0.14.3",
+      "date": null,
+      "notes": "### Patch Changes\n\n- 5db7ba0: Add agent task progress primitive and wire fork-preview + auto-naming\n  to it. Long-running one-shot provider calls now stream `started`,\n  `stdout-chunk`, `stderr-chunk`, and `settled` events over a dedicated\n  IPC channel. The fork dialog's summary extraction shows a live elapsed\n  counter, a \"still working\" hint past 45s, and a stale warning when the\n  provider has produced no output for 30s beyond the extended threshold.\n  Session auto-naming uses the same primitive, surfacing its progress\n  to the dev-mode console subscriber without any visible UI yet."
+    },
     {
       "version": "0.14.2",
       "date": null,

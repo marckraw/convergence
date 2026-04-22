@@ -411,7 +411,44 @@ interface ElectronAPI {
       callback: (payload: { exitCode: number; signal: number | null }) => void,
     ) => () => void
   }
+  updates: {
+    getStatus: () => Promise<UpdateStatusData>
+    getAppVersion: () => Promise<string>
+    getIsDev: () => Promise<boolean>
+    getPrefs: () => Promise<UpdatePrefsData>
+    setPrefs: (input: UpdatePrefsData) => Promise<UpdatePrefsData>
+    check: () => Promise<UpdateStatusData>
+    download: () => Promise<UpdateStatusData>
+    install: () => Promise<UpdateStatusData>
+    openReleaseNotes: () => Promise<boolean>
+    onStatusChanged: (
+      callback: (status: UpdateStatusData) => void,
+    ) => () => void
+  }
 }
+
+type UpdateStatusData =
+  | {
+      phase: 'idle'
+      lastChecked: string | null
+      lastError: string | null
+    }
+  | { phase: 'checking'; startedAt: string }
+  | {
+      phase: 'available'
+      version: string
+      releaseNotesUrl: string
+      detectedAt: string
+    }
+  | {
+      phase: 'downloading'
+      version: string
+      percent: number
+      bytesPerSecond: number
+    }
+  | { phase: 'downloaded'; version: string; releaseNotesUrl: string }
+  | { phase: 'not-available'; currentVersion: string; lastChecked: string }
+  | { phase: 'error'; message: string; lastChecked: string | null }
 
 type TaskProgressOutcome = 'ok' | 'error' | 'timeout'
 
@@ -488,6 +525,10 @@ interface OnboardingPrefsData {
   notificationsCardDismissed: boolean
 }
 
+interface UpdatePrefsData {
+  backgroundCheckEnabled: boolean
+}
+
 interface AppSettingsData {
   defaultProviderId: string | null
   defaultModelId: string | null
@@ -496,6 +537,7 @@ interface AppSettingsData {
   extractionModelByProvider: Record<string, string>
   notifications: NotificationPrefsData
   onboarding: OnboardingPrefsData
+  updates: UpdatePrefsData
 }
 
 declare global {

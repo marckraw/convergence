@@ -15,6 +15,7 @@ import type {
   NewSessionPaletteItem,
   NewWorkspacePaletteItem,
   ForkSessionPaletteItem,
+  CheckUpdatesPaletteItem,
 } from './command-center.types'
 
 export interface BuildPaletteIndexInput {
@@ -162,6 +163,15 @@ export function buildPaletteIndex(
     }
     items.push(item)
   }
+
+  const checkUpdates: CheckUpdatesPaletteItem = {
+    kind: 'check-updates',
+    id: 'check-updates',
+    title: 'Check for updates…',
+    description: 'Look for a new Convergence release',
+    search: { title: 'Check for updates' },
+  }
+  items.push(checkUpdates)
 
   for (const workspace of workspaces) {
     const project = projectsById.get(workspace.projectId)
