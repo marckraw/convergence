@@ -109,7 +109,7 @@ export function SearchableSelectPresentational({
           'min-w-52 w-[var(--radix-popover-trigger-width)] max-w-[min(24rem,calc(100vw-2rem))] p-0',
           contentClassName,
         )}
-        onOpenAutoFocus={(event) => {
+        onOpenAutoFocus={(event: Event) => {
           event.preventDefault()
           inputRef.current?.focus()
         }}

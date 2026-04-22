@@ -10,6 +10,27 @@ export interface SessionNamingDeps {
   appSettings: AppSettingsService
 }
 
+type UserMessageItem = ConversationItem & {
+  kind: 'message'
+  actor: 'user'
+  text: string
+}
+type AssistantMessageItem = ConversationItem & {
+  kind: 'message'
+  actor: 'assistant'
+  text: string
+}
+
+function isUserMessageItem(item: ConversationItem): item is UserMessageItem {
+  return item.kind === 'message' && item.actor === 'user'
+}
+
+function isAssistantMessageItem(
+  item: ConversationItem,
+): item is AssistantMessageItem {
+  return item.kind === 'message' && item.actor === 'assistant'
+}
+
 export class SessionNamingService {
   constructor(private readonly deps: SessionNamingDeps) {}
 
@@ -20,12 +41,8 @@ export class SessionNamingService {
     const provider = this.deps.providers.get(session.providerId)
     if (!provider || !provider.oneShot) return null
 
-    const firstUser = conversation.find(
-      (entry) => entry.kind === 'message' && entry.actor === 'user',
-    )
-    const firstAssistant = conversation.find(
-      (entry) => entry.kind === 'message' && entry.actor === 'assistant',
-    )
+    const firstUser = conversation.find(isUserMessageItem)
+    const firstAssistant = conversation.find(isAssistantMessageItem)
     if (!firstUser || !firstAssistant) return null
 
     const userText = firstUser.text
