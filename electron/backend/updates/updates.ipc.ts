@@ -6,6 +6,7 @@ import type { UpdatePrefs, UpdateStatus } from './updates.types'
 
 export const UPDATES_STATUS_CHANGED = 'updates:status-changed'
 const DEV_DISABLED_ERROR = 'auto-updates disabled in dev mode'
+const UNAVAILABLE_DISABLED_ERROR = 'auto-updates unavailable in this build'
 
 export interface UpdatesIpcDeps {
   service: UpdatesService
@@ -53,17 +54,47 @@ export interface UpdatesDevIpcDeps {
 }
 
 export function registerUpdatesDevStubs(deps: UpdatesDevIpcDeps): void {
-  ipcMain.handle('updates:get-status', () => INITIAL_UPDATE_STATUS)
+  registerUpdatesDisabledStubs({
+    ...deps,
+    isDev: true,
+    errorMessage: DEV_DISABLED_ERROR,
+  })
+}
+
+export function registerUpdatesUnavailableStubs(deps: UpdatesDevIpcDeps): void {
+  registerUpdatesDisabledStubs({
+    ...deps,
+    isDev: false,
+    errorMessage: UNAVAILABLE_DISABLED_ERROR,
+    status: {
+      phase: 'error',
+      message: UNAVAILABLE_DISABLED_ERROR,
+      lastChecked: null,
+    },
+  })
+}
+
+interface UpdatesDisabledIpcDeps extends UpdatesDevIpcDeps {
+  isDev: boolean
+  errorMessage: string
+  status?: UpdateStatus
+}
+
+function registerUpdatesDisabledStubs(deps: UpdatesDisabledIpcDeps): void {
+  ipcMain.handle(
+    'updates:get-status',
+    () => deps.status ?? INITIAL_UPDATE_STATUS,
+  )
   ipcMain.handle('updates:get-app-version', () => deps.appVersion)
-  ipcMain.handle('updates:get-is-dev', () => true)
+  ipcMain.handle('updates:get-is-dev', () => deps.isDev)
   ipcMain.handle('updates:check', () => {
-    throw new Error(DEV_DISABLED_ERROR)
+    throw new Error(deps.errorMessage)
   })
   ipcMain.handle('updates:download', () => {
-    throw new Error(DEV_DISABLED_ERROR)
+    throw new Error(deps.errorMessage)
   })
   ipcMain.handle('updates:install', () => {
-    throw new Error(DEV_DISABLED_ERROR)
+    throw new Error(deps.errorMessage)
   })
   ipcMain.handle('updates:open-release-notes', () => false)
   ipcMain.handle('updates:get-prefs', async () => {
@@ -98,3 +129,4 @@ export function broadcastUpdateStatus(status: UpdateStatus): void {
 }
 
 export const UPDATES_DEV_DISABLED_ERROR = DEV_DISABLED_ERROR
+export const UPDATES_UNAVAILABLE_ERROR = UNAVAILABLE_DISABLED_ERROR
