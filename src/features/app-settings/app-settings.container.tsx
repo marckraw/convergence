@@ -12,7 +12,10 @@ import {
 } from '@/entities/notifications'
 import { useAppSettingsStore } from '@/entities/app-settings'
 import { useDialogStore } from '@/entities/dialog'
-import { AppSettingsDialog } from './app-settings.presentational'
+import {
+  AppSettingsDialog,
+  type AppSettingsSectionId,
+} from './app-settings.presentational'
 
 interface AppSettingsContainerProps {
   trigger: ReactNode
@@ -27,6 +30,7 @@ interface Draft {
 const EMPTY_DRAFT: Draft = { providerId: '', modelId: '', effortId: '' }
 const EMPTY_NAMING_DRAFT: Record<string, string> = {}
 const EMPTY_EXTRACTION_DRAFT: Record<string, string> = {}
+const DEFAULT_SECTION: AppSettingsSectionId = 'session-defaults'
 
 export const AppSettingsDialogContainer: FC<AppSettingsContainerProps> = ({
   trigger,
@@ -49,6 +53,8 @@ export const AppSettingsDialogContainer: FC<AppSettingsContainerProps> = ({
   >(EMPTY_EXTRACTION_DRAFT)
   const [notificationsDraft, setNotificationsDraft] =
     useState<NotificationPrefs | null>(null)
+  const [activeSection, setActiveSection] =
+    useState<AppSettingsSectionId>(DEFAULT_SECTION)
 
   const providers = useSessionStore((s) => s.providers)
   const loadProviders = useSessionStore((s) => s.loadProviders)
@@ -69,6 +75,7 @@ export const AppSettingsDialogContainer: FC<AppSettingsContainerProps> = ({
 
   useEffect(() => {
     if (!open) return
+    setActiveSection(DEFAULT_SECTION)
     setDraft({
       providerId: settings.defaultProviderId ?? '',
       modelId: settings.defaultModelId ?? '',
@@ -211,6 +218,7 @@ export const AppSettingsDialogContainer: FC<AppSettingsContainerProps> = ({
       platform={platform}
       isSaving={isSaving}
       error={error}
+      activeSection={activeSection}
       onProviderChange={handleProviderChange}
       onModelChange={handleModelChange}
       onEffortChange={handleEffortChange}
@@ -218,6 +226,7 @@ export const AppSettingsDialogContainer: FC<AppSettingsContainerProps> = ({
       onExtractionModelChange={handleExtractionModelChange}
       onNotificationsChange={handleNotificationsChange}
       onTestFireNotification={handleTestFire}
+      onSectionChange={setActiveSection}
       onSave={handleSave}
       onCancel={handleCancel}
       onRestoreDefaults={handleRestoreDefaults}
