@@ -95,6 +95,7 @@ export function registerIpcHandlers(
   mcpService: McpService,
   appSettingsService: AppSettingsService,
   attachmentsService: AttachmentsService,
+  onUpdatePrefsChanged?: (prefs: { backgroundCheckEnabled: boolean }) => void,
 ): void {
   // Project handlers
   ipcMain.handle('project:create', (_event, input: CreateProjectInput) => {
@@ -200,6 +201,7 @@ export function registerIpcHandlers(
         )
       }
     }
+    onUpdatePrefsChanged?.(stored.updates)
     return stored
   })
 

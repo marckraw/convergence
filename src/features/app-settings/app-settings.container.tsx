@@ -12,6 +12,7 @@ import {
 } from '@/entities/notifications'
 import { useAppSettingsStore } from '@/entities/app-settings'
 import { useDialogStore } from '@/entities/dialog'
+import { useUpdatesStore, type UpdatePrefs } from '@/entities/updates'
 import { AppSettingsDialog } from './app-settings.presentational'
 
 interface AppSettingsContainerProps {
@@ -49,6 +50,7 @@ export const AppSettingsDialogContainer: FC<AppSettingsContainerProps> = ({
   >(EMPTY_EXTRACTION_DRAFT)
   const [notificationsDraft, setNotificationsDraft] =
     useState<NotificationPrefs | null>(null)
+  const [updatesDraft, setUpdatesDraft] = useState<UpdatePrefs | null>(null)
 
   const providers = useSessionStore((s) => s.providers)
   const loadProviders = useSessionStore((s) => s.loadProviders)
@@ -59,6 +61,14 @@ export const AppSettingsDialogContainer: FC<AppSettingsContainerProps> = ({
   const loadSettings = useAppSettingsStore((s) => s.load)
   const saveSettings = useAppSettingsStore((s) => s.save)
   const clearError = useAppSettingsStore((s) => s.clearError)
+
+  const updatesStatus = useUpdatesStore((s) => s.status)
+  const updatesVersion = useUpdatesStore((s) => s.currentVersion)
+  const updatesIsDev = useUpdatesStore((s) => s.isDev)
+  const checkForUpdates = useUpdatesStore((s) => s.check)
+  const downloadUpdate = useUpdatesStore((s) => s.download)
+  const installUpdate = useUpdatesStore((s) => s.install)
+  const openReleaseNotes = useUpdatesStore((s) => s.openReleaseNotes)
 
   useEffect(() => {
     if (open) {
@@ -77,6 +87,7 @@ export const AppSettingsDialogContainer: FC<AppSettingsContainerProps> = ({
     setNamingDraft({ ...settings.namingModelByProvider })
     setExtractionDraft({ ...settings.extractionModelByProvider })
     setNotificationsDraft(settings.notifications)
+    setUpdatesDraft(settings.updates)
     clearError()
   }, [open, settings, clearError])
 
@@ -163,6 +174,26 @@ export const AppSettingsDialogContainer: FC<AppSettingsContainerProps> = ({
     void notificationsApi.testFire(severity)
   }, [])
 
+  const handleToggleBackgroundUpdates = useCallback((next: boolean) => {
+    setUpdatesDraft({ backgroundCheckEnabled: next })
+  }, [])
+
+  const handleCheckNow = useCallback(() => {
+    void checkForUpdates()
+  }, [checkForUpdates])
+
+  const handleDownloadUpdate = useCallback(() => {
+    void downloadUpdate()
+  }, [downloadUpdate])
+
+  const handleInstallUpdate = useCallback(() => {
+    void installUpdate()
+  }, [installUpdate])
+
+  const handleOpenReleaseNotes = useCallback(() => {
+    void openReleaseNotes()
+  }, [openReleaseNotes])
+
   const platform = useMemo<string | null>(() => {
     const datasetPlatform = document.documentElement.dataset.platform
     if (datasetPlatform) return datasetPlatform
@@ -183,6 +214,7 @@ export const AppSettingsDialogContainer: FC<AppSettingsContainerProps> = ({
         extractionModelByProvider: extractionDraft,
         notifications: notificationsDraft ?? settings.notifications,
         onboarding: settings.onboarding,
+        updates: updatesDraft ?? settings.updates,
       })
       closeDialog()
     } catch {
@@ -194,7 +226,10 @@ export const AppSettingsDialogContainer: FC<AppSettingsContainerProps> = ({
     namingDraft,
     extractionDraft,
     notificationsDraft,
+    updatesDraft,
+    settings.notifications,
     settings.onboarding,
+    settings.updates,
     closeDialog,
   ])
 
@@ -208,6 +243,10 @@ export const AppSettingsDialogContainer: FC<AppSettingsContainerProps> = ({
       namingDraft={namingDraft}
       extractionDraft={extractionDraft}
       notificationsDraft={notificationsDraft ?? settings.notifications}
+      updatesDraft={updatesDraft ?? settings.updates}
+      updatesStatus={updatesStatus}
+      updatesVersion={updatesVersion}
+      updatesIsDev={updatesIsDev}
       platform={platform}
       isSaving={isSaving}
       error={error}
@@ -218,6 +257,11 @@ export const AppSettingsDialogContainer: FC<AppSettingsContainerProps> = ({
       onExtractionModelChange={handleExtractionModelChange}
       onNotificationsChange={handleNotificationsChange}
       onTestFireNotification={handleTestFire}
+      onToggleBackgroundUpdates={handleToggleBackgroundUpdates}
+      onCheckUpdates={handleCheckNow}
+      onDownloadUpdate={handleDownloadUpdate}
+      onInstallUpdate={handleInstallUpdate}
+      onOpenReleaseNotes={handleOpenReleaseNotes}
       onSave={handleSave}
       onCancel={handleCancel}
       onRestoreDefaults={handleRestoreDefaults}

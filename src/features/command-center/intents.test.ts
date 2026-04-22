@@ -7,9 +7,15 @@ import type { Session } from '@/entities/session'
 import { useDialogStore } from '@/entities/dialog'
 import type { Workspace } from '@/entities/workspace'
 import {
+  INITIAL_UPDATE_STATUS,
+  useUpdatesStore,
+  type UpdateStatus,
+} from '@/entities/updates'
+import {
   activateProject,
   beginSessionDraft,
   beginWorkspaceDraft,
+  checkForUpdates,
   openDialog,
   switchToSession,
 } from './intents'
@@ -253,6 +259,21 @@ describe('command-center intents', () => {
       await beginWorkspaceDraft('p2')
 
       expect(setActiveProject).not.toHaveBeenCalled()
+    })
+  })
+
+  describe('checkForUpdates', () => {
+    it('delegates to useUpdatesStore.check', async () => {
+      const check = vi.fn<() => Promise<void>>(async () => undefined)
+      useUpdatesStore.setState({
+        status: INITIAL_UPDATE_STATUS as UpdateStatus,
+        currentVersion: '0.16.0',
+        isDev: false,
+        check,
+      })
+
+      await checkForUpdates()
+      expect(check).toHaveBeenCalledTimes(1)
     })
   })
 })

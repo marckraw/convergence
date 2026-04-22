@@ -8,6 +8,7 @@ import type {
   NotificationPrefs,
   NotificationSeverity,
 } from '@/entities/notifications'
+import type { UpdatePrefs, UpdateStatus } from '@/entities/updates'
 import {
   Dialog,
   DialogContent,
@@ -22,6 +23,7 @@ import { SessionDefaultsFields } from './session-defaults.presentational'
 import { NamingModelDefaultsFields } from './naming-model-defaults.presentational'
 import { ExtractionModelDefaultsFields } from './extraction-model-defaults.presentational'
 import { NotificationsFields } from './notifications-fields.presentational'
+import { UpdatesFields } from './updates-fields.presentational'
 
 interface AppSettingsDialogProps {
   open: boolean
@@ -32,6 +34,10 @@ interface AppSettingsDialogProps {
   namingDraft: Record<string, string>
   extractionDraft: Record<string, string>
   notificationsDraft: NotificationPrefs
+  updatesDraft: UpdatePrefs
+  updatesStatus: UpdateStatus
+  updatesVersion: string | null
+  updatesIsDev: boolean
   platform: string | null
   isSaving: boolean
   error: string | null
@@ -42,6 +48,11 @@ interface AppSettingsDialogProps {
   onExtractionModelChange: (providerId: string, modelId: string) => void
   onNotificationsChange: (prefs: NotificationPrefs) => void
   onTestFireNotification: (severity: NotificationSeverity) => void
+  onToggleBackgroundUpdates: (next: boolean) => void
+  onCheckUpdates: () => void
+  onDownloadUpdate: () => void
+  onInstallUpdate: () => void
+  onOpenReleaseNotes: () => void
   onSave: () => void
   onCancel: () => void
   onRestoreDefaults: () => void
@@ -56,6 +67,10 @@ export const AppSettingsDialog: FC<AppSettingsDialogProps> = ({
   namingDraft,
   extractionDraft,
   notificationsDraft,
+  updatesDraft,
+  updatesStatus,
+  updatesVersion,
+  updatesIsDev,
   platform,
   isSaving,
   error,
@@ -66,6 +81,11 @@ export const AppSettingsDialog: FC<AppSettingsDialogProps> = ({
   onExtractionModelChange,
   onNotificationsChange,
   onTestFireNotification,
+  onToggleBackgroundUpdates,
+  onCheckUpdates,
+  onDownloadUpdate,
+  onInstallUpdate,
+  onOpenReleaseNotes,
   onSave,
   onCancel,
   onRestoreDefaults,
@@ -137,6 +157,25 @@ export const AppSettingsDialog: FC<AppSettingsDialogProps> = ({
             isSaving={isSaving}
             onChange={onNotificationsChange}
             onTestFire={onTestFireNotification}
+          />
+        </section>
+
+        <section className="space-y-3">
+          <h3 className="text-xs font-semibold tracking-wide uppercase text-muted-foreground">
+            Updates
+          </h3>
+          <UpdatesFields
+            status={updatesStatus}
+            currentVersion={updatesVersion}
+            prefs={updatesDraft}
+            isDev={updatesIsDev}
+            isSaving={isSaving}
+            now={new Date()}
+            onToggleBackground={onToggleBackgroundUpdates}
+            onCheckNow={onCheckUpdates}
+            onDownload={onDownloadUpdate}
+            onInstall={onInstallUpdate}
+            onOpenReleaseNotes={onOpenReleaseNotes}
           />
         </section>
 

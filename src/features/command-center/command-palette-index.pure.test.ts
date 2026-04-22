@@ -193,6 +193,23 @@ describe('buildPaletteIndex', () => {
     )
   })
 
+  it('emits a check-updates item exposed by the search title', () => {
+    const items = buildPaletteIndex({
+      projects: [],
+      workspaces: [],
+      sessions: [],
+      recentSessionIds: [],
+      dismissals: {},
+    })
+    const checkUpdates = items.filter((item) => item.kind === 'check-updates')
+    expect(checkUpdates).toHaveLength(1)
+    expect(checkUpdates[0]).toMatchObject({
+      id: 'check-updates',
+      title: 'Check for updates…',
+      search: { title: 'Check for updates' },
+    })
+  })
+
   it('populates session search fields with project and branch names', () => {
     const items = buildPaletteIndex({
       projects: [makeProject('p1', 'alpha')],

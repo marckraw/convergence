@@ -2,6 +2,7 @@ import { useProjectStore } from '@/entities/project'
 import { useWorkspaceStore } from '@/entities/workspace'
 import { useSessionStore } from '@/entities/session'
 import { useDialogStore, type DialogKind } from '@/entities/dialog'
+import { useUpdatesStore } from '@/entities/updates'
 
 async function hopToProject(projectId: string): Promise<void> {
   const projectState = useProjectStore.getState()
@@ -66,4 +67,8 @@ export async function beginSessionDraft(workspaceId: string): Promise<void> {
 
 export async function beginWorkspaceDraft(projectId: string): Promise<void> {
   await activateProject(projectId)
+}
+
+export async function checkForUpdates(): Promise<void> {
+  await useUpdatesStore.getState().check()
 }

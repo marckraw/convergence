@@ -116,7 +116,16 @@ Sessions support image, PDF, and UTF-8 text attachments on outgoing messages:
 
 Full spec: `docs/specs/session-attachments.md`.
 
-### 8. Verification rules
+### 8. Auto-updates
+
+Packaged builds self-update from public GitHub Releases via
+`electron-updater`. A `UpdatesService` wraps the updater behind
+IPC; a scheduler runs a startup check (+10s) and a 4h interval.
+The user is always asked before download and before install.
+Dev mode (`app.isPackaged === false`) short-circuits every update
+code path. Full spec: `docs/specs/auto-updates.md`.
+
+### 9. Verification rules
 
 After every finished task, the expected verification flow is:
 

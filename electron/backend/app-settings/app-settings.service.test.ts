@@ -6,6 +6,7 @@ import type {
   ProviderAttachmentCapability,
   ProviderDescriptor,
 } from '../provider/provider.types'
+import { DEFAULT_UPDATE_PREFS } from '../updates/updates.defaults'
 import { AppSettingsService, APP_SETTINGS_KEY } from './app-settings.service'
 import { DEFAULT_ONBOARDING_PREFS } from './app-settings.types'
 
@@ -104,6 +105,7 @@ describe('AppSettingsService', () => {
         extractionModelByProvider: {},
         notifications: DEFAULT_NOTIFICATION_PREFS,
         onboarding: DEFAULT_ONBOARDING_PREFS,
+        updates: DEFAULT_UPDATE_PREFS,
       })
     })
 
@@ -116,6 +118,7 @@ describe('AppSettingsService', () => {
         extractionModelByProvider: {},
         notifications: DEFAULT_NOTIFICATION_PREFS,
         onboarding: DEFAULT_ONBOARDING_PREFS,
+        updates: DEFAULT_UPDATE_PREFS,
       })
       const settings = await service.getAppSettings()
       expect(settings).toEqual({
@@ -126,6 +129,7 @@ describe('AppSettingsService', () => {
         extractionModelByProvider: {},
         notifications: DEFAULT_NOTIFICATION_PREFS,
         onboarding: DEFAULT_ONBOARDING_PREFS,
+        updates: DEFAULT_UPDATE_PREFS,
       })
     })
 
@@ -147,6 +151,7 @@ describe('AppSettingsService', () => {
         extractionModelByProvider: {},
         notifications: DEFAULT_NOTIFICATION_PREFS,
         onboarding: DEFAULT_ONBOARDING_PREFS,
+        updates: DEFAULT_UPDATE_PREFS,
       })
     })
 
@@ -168,6 +173,7 @@ describe('AppSettingsService', () => {
         extractionModelByProvider: {},
         notifications: DEFAULT_NOTIFICATION_PREFS,
         onboarding: DEFAULT_ONBOARDING_PREFS,
+        updates: DEFAULT_UPDATE_PREFS,
       })
     })
 
@@ -189,6 +195,7 @@ describe('AppSettingsService', () => {
         extractionModelByProvider: {},
         notifications: DEFAULT_NOTIFICATION_PREFS,
         onboarding: DEFAULT_ONBOARDING_PREFS,
+        updates: DEFAULT_UPDATE_PREFS,
       })
     })
 
@@ -203,6 +210,7 @@ describe('AppSettingsService', () => {
         extractionModelByProvider: {},
         notifications: DEFAULT_NOTIFICATION_PREFS,
         onboarding: DEFAULT_ONBOARDING_PREFS,
+        updates: DEFAULT_UPDATE_PREFS,
       })
     })
   })
@@ -258,6 +266,7 @@ describe('AppSettingsService', () => {
         extractionModelByProvider: {},
         notifications: DEFAULT_NOTIFICATION_PREFS,
         onboarding: DEFAULT_ONBOARDING_PREFS,
+        updates: DEFAULT_UPDATE_PREFS,
       })
     })
 
@@ -473,6 +482,59 @@ describe('AppSettingsService', () => {
         defaultEffortId: 'medium',
       })
       expect(stored.notifications).toEqual(custom)
+    })
+  })
+
+  describe('updates', () => {
+    it('hydrates missing updates field on read with defaults', async () => {
+      stateService.set(
+        APP_SETTINGS_KEY,
+        JSON.stringify({
+          defaultProviderId: 'claude-code',
+          defaultModelId: 'sonnet',
+          defaultEffortId: 'medium',
+        }),
+      )
+      const settings = await service.getAppSettings()
+      expect(settings.updates).toEqual(DEFAULT_UPDATE_PREFS)
+    })
+
+    it('rejects non-boolean backgroundCheckEnabled and falls back to default', async () => {
+      stateService.set(
+        APP_SETTINGS_KEY,
+        JSON.stringify({
+          updates: { backgroundCheckEnabled: 'yes' },
+        }),
+      )
+      const settings = await service.getAppSettings()
+      expect(settings.updates).toEqual(DEFAULT_UPDATE_PREFS)
+    })
+
+    it('round-trips a toggled backgroundCheckEnabled through setAppSettings', async () => {
+      const stored = await service.setAppSettings({
+        defaultProviderId: null,
+        defaultModelId: null,
+        defaultEffortId: null,
+        updates: { backgroundCheckEnabled: false },
+      })
+      expect(stored.updates).toEqual({ backgroundCheckEnabled: false })
+      const reloaded = await service.getAppSettings()
+      expect(reloaded.updates).toEqual({ backgroundCheckEnabled: false })
+    })
+
+    it('preserves existing updates when input omits the field', async () => {
+      await service.setAppSettings({
+        defaultProviderId: null,
+        defaultModelId: null,
+        defaultEffortId: null,
+        updates: { backgroundCheckEnabled: false },
+      })
+      const stored = await service.setAppSettings({
+        defaultProviderId: 'claude-code',
+        defaultModelId: 'sonnet',
+        defaultEffortId: 'medium',
+      })
+      expect(stored.updates).toEqual({ backgroundCheckEnabled: false })
     })
   })
 })

@@ -7,6 +7,7 @@ import type {
   WorkspacePaletteItem,
   DialogPaletteItem,
   ForkSessionPaletteItem,
+  CheckUpdatesPaletteItem,
   CuratedSection,
   CuratedSections,
   RankedItem,
@@ -84,6 +85,9 @@ export function buildCuratedSections(
   const dialogItems = items.filter(
     (item): item is DialogPaletteItem => item.kind === 'dialog',
   )
+  const checkUpdatesItems = items.filter(
+    (item): item is CheckUpdatesPaletteItem => item.kind === 'check-updates',
+  )
   const forkSessionItems = items.filter(
     (item): item is ForkSessionPaletteItem => item.kind === 'fork-session',
   )
@@ -143,7 +147,11 @@ export function buildCuratedSections(
       title: 'Workspaces',
       items: workspaceItems.slice(0, WORKSPACES_CAP),
     },
-    { id: 'dialogs', title: 'Dialogs', items: dialogItems },
+    {
+      id: 'dialogs',
+      title: 'Dialogs',
+      items: [...dialogItems, ...checkUpdatesItems],
+    },
   ]
 
   return sections

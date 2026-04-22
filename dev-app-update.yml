@@ -1,0 +1,8 @@
+# Used only by locally-packaged dev builds that want to exercise
+# electron-updater against the public GitHub releases. This file is NOT
+# read by `npm run dev` — the renderer-only dev flow short-circuits the
+# updater via `app.isPackaged`. See docs/specs/auto-updates.md.
+provider: github
+owner: marckraw
+repo: convergence
+releaseType: release

@@ -15,6 +15,7 @@ import {
   activateProject,
   beginSessionDraft,
   beginWorkspaceDraft,
+  checkForUpdates,
   forkCurrentSession,
   openDialog,
   switchToSession,
@@ -128,6 +129,9 @@ export function CommandCenterContainer() {
           return
         case 'fork-session':
           forkCurrentSession(item.sessionId)
+          return
+        case 'check-updates':
+          void checkForUpdates()
           return
       }
     },

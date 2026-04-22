@@ -19,6 +19,14 @@ After every finished task, agents must run these commands in this repo:
 
 If a command fails because the current phase has not introduced that tool yet, report the failure clearly and fix the missing bootstrap in the next relevant task. Do not silently skip verification.
 
+When modifying `electron-builder.yml`, any `package:mac*` script, or
+`.github/workflows/publish-mac-release.yml`, also run
+`npm run package:mac:unsigned` locally and confirm that
+`release/latest-mac.yml` still lists both the x64 and arm64 ZIPs under
+`files[]`. Missing or incorrect entries break auto-update silently for
+everyone on that arch — see `docs/specs/auto-updates.md` and
+`docs/runbook/auto-updates.md`.
+
 ## Architecture and File Organization
 
 Source of truth:

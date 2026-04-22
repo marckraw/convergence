@@ -4,6 +4,7 @@ import { useSessionStore } from '@/entities/session'
 import {
   DEFAULT_NOTIFICATION_PREFS,
   DEFAULT_ONBOARDING_PREFS,
+  DEFAULT_UPDATE_PREFS,
   useAppSettingsStore,
 } from '@/entities/app-settings'
 import { useDialogStore } from '@/entities/dialog'
@@ -93,6 +94,7 @@ function primeStores(stored: {
       extractionModelByProvider: {},
       notifications: DEFAULT_NOTIFICATION_PREFS,
       onboarding: DEFAULT_ONBOARDING_PREFS,
+      updates: DEFAULT_UPDATE_PREFS,
     },
     isLoaded: true,
     isSaving: false,
@@ -144,6 +146,7 @@ describe('AppSettingsDialogContainer', () => {
         extractionModelByProvider: {},
         notifications: DEFAULT_NOTIFICATION_PREFS,
         onboarding: DEFAULT_ONBOARDING_PREFS,
+        updates: DEFAULT_UPDATE_PREFS,
       })
     })
   })
@@ -173,6 +176,7 @@ describe('AppSettingsDialogContainer', () => {
         extractionModelByProvider: {},
         notifications: DEFAULT_NOTIFICATION_PREFS,
         onboarding: DEFAULT_ONBOARDING_PREFS,
+        updates: DEFAULT_UPDATE_PREFS,
       })
     })
   })
@@ -224,6 +228,55 @@ describe('AppSettingsDialogContainer', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Alert' }))
 
     expect(testFire).toHaveBeenCalledWith('critical')
+  })
+
+  it('toggling the auto-update switch persists the new updates prefs on save', async () => {
+    primeStores({
+      defaultProviderId: 'claude-code',
+      defaultModelId: 'sonnet',
+      defaultEffortId: 'medium',
+    })
+
+    render(<AppSettingsDialogContainer trigger={<Button>Open</Button>} />)
+    fireEvent.click(screen.getByText('Open'))
+
+    expect(await screen.findByText('Settings')).toBeInTheDocument()
+
+    fireEvent.click(
+      screen.getByRole('switch', { name: 'Check for updates automatically' }),
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+
+    await waitFor(() => {
+      expect(window.electronAPI.appSettings.set).toHaveBeenCalledWith(
+        expect.objectContaining({
+          updates: { backgroundCheckEnabled: false },
+        }),
+      )
+    })
+  })
+
+  it('Check now button calls updates.check via the store', async () => {
+    primeStores({
+      defaultProviderId: 'claude-code',
+      defaultModelId: 'sonnet',
+      defaultEffortId: 'medium',
+    })
+    const updatesCheck = vi.fn().mockResolvedValue({
+      phase: 'checking',
+      startedAt: '2026-04-22T17:00:00.000Z',
+    })
+    ;(window.electronAPI as unknown as { updates: unknown }).updates = {
+      check: updatesCheck,
+    }
+
+    render(<AppSettingsDialogContainer trigger={<Button>Open</Button>} />)
+    fireEvent.click(screen.getByText('Open'))
+
+    expect(await screen.findByText('Settings')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Check now' }))
+    await waitFor(() => expect(updatesCheck).toHaveBeenCalledTimes(1))
   })
 
   it('Cancel closes without dispatching save', async () => {

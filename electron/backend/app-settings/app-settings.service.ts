@@ -5,6 +5,8 @@ import type {
   ProviderDescriptor,
   ReasoningEffort,
 } from '../provider/provider.types'
+import { DEFAULT_UPDATE_PREFS } from '../updates/updates.defaults'
+import type { UpdatePrefs } from '../updates/updates.types'
 import {
   DEFAULT_ONBOARDING_PREFS,
   type AppSettings,
@@ -87,6 +89,17 @@ function parseOnboardingPrefs(value: unknown): OnboardingPrefs {
   }
 }
 
+function parseUpdatePrefs(value: unknown): UpdatePrefs {
+  if (!value || typeof value !== 'object') return DEFAULT_UPDATE_PREFS
+  const raw = value as Partial<UpdatePrefs>
+  return {
+    backgroundCheckEnabled: pickBoolean(
+      raw.backgroundCheckEnabled,
+      DEFAULT_UPDATE_PREFS.backgroundCheckEnabled,
+    ),
+  }
+}
+
 function parse(raw: string | null): AppSettings {
   const empty: AppSettings = {
     defaultProviderId: null,
@@ -96,6 +109,7 @@ function parse(raw: string | null): AppSettings {
     extractionModelByProvider: {},
     notifications: DEFAULT_NOTIFICATION_PREFS,
     onboarding: DEFAULT_ONBOARDING_PREFS,
+    updates: DEFAULT_UPDATE_PREFS,
   }
 
   if (!raw) return empty
@@ -121,6 +135,7 @@ function parse(raw: string | null): AppSettings {
       ),
       notifications: parseNotificationPrefs(parsed.notifications),
       onboarding: parseOnboardingPrefs(parsed.onboarding),
+      updates: parseUpdatePrefs(parsed.updates),
     }
   } catch {
     return empty
@@ -171,6 +186,7 @@ function validateAgainst(
       extractionModelByProvider,
       notifications: settings.notifications,
       onboarding: settings.onboarding,
+      updates: settings.updates,
     }
   }
 
@@ -186,6 +202,7 @@ function validateAgainst(
       extractionModelByProvider,
       notifications: settings.notifications,
       onboarding: settings.onboarding,
+      updates: settings.updates,
     }
   }
 
@@ -200,6 +217,7 @@ function validateAgainst(
     extractionModelByProvider,
     notifications: settings.notifications,
     onboarding: settings.onboarding,
+    updates: settings.updates,
   }
 }
 
@@ -218,6 +236,10 @@ export class AppSettingsService {
 
   getNotificationPrefsSync(): NotificationPrefs {
     return parse(this.stateService.get(APP_SETTINGS_KEY)).notifications
+  }
+
+  getUpdatePrefsSync(): UpdatePrefs {
+    return parse(this.stateService.get(APP_SETTINGS_KEY)).updates
   }
 
   async setAppSettings(input: AppSettingsInput): Promise<AppSettings> {
@@ -271,6 +293,10 @@ export class AppSettingsService {
       input.onboarding === undefined
         ? existing.onboarding
         : parseOnboardingPrefs(input.onboarding)
+    const updates =
+      input.updates === undefined
+        ? existing.updates
+        : parseUpdatePrefs(input.updates)
 
     const toStore: AppSettings = {
       defaultProviderId: provider ? provider.id : null,
@@ -281,6 +307,7 @@ export class AppSettingsService {
       extractionModelByProvider,
       notifications,
       onboarding,
+      updates,
     }
 
     this.stateService.set(APP_SETTINGS_KEY, JSON.stringify(toStore))

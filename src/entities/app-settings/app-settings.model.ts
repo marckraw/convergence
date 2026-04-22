@@ -3,6 +3,7 @@ import { appSettingsApi } from './app-settings.api'
 import {
   DEFAULT_NOTIFICATION_PREFS,
   DEFAULT_ONBOARDING_PREFS,
+  DEFAULT_UPDATE_PREFS,
   type AppSettings,
   type AppSettingsInput,
 } from './app-settings.types'
@@ -15,6 +16,7 @@ const EMPTY: AppSettings = {
   extractionModelByProvider: {},
   notifications: DEFAULT_NOTIFICATION_PREFS,
   onboarding: DEFAULT_ONBOARDING_PREFS,
+  updates: DEFAULT_UPDATE_PREFS,
 }
 
 interface AppSettingsState {
