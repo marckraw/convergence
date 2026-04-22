@@ -1,6 +1,7 @@
 import type { FC } from 'react'
 import type { ProviderInfo } from '@/entities/session'
 import { SessionStartSelect } from '@/features/session-start/session-start-select.presentational'
+import { SettingsControlField } from './settings-control-field.presentational'
 
 interface ExtractionModelDefaultsFieldsProps {
   providers: ProviderInfo[]
@@ -36,20 +37,18 @@ export const ExtractionModelDefaultsFields: FC<
         description: model.id,
       }))
       return (
-        <div key={provider.id} className="space-y-1.5">
-          <label className="text-xs font-medium text-foreground">
-            {provider.vendorLabel || provider.name}
-          </label>
+        <SettingsControlField
+          key={provider.id}
+          title={provider.vendorLabel || provider.name}
+          description="Model used to summarise conversations when forking a session."
+        >
           <SessionStartSelect
             selectedId={selectedId}
             value={selectedLabel}
             items={items}
             onChange={(id) => onExtractionModelChange(provider.id, id)}
           />
-          <p className="text-[11px] text-muted-foreground">
-            Model used to summarise conversations when forking a session.
-          </p>
-        </div>
+        </SettingsControlField>
       )
     })}
   </div>

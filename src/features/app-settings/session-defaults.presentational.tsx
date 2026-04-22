@@ -5,6 +5,7 @@ import type {
   ResolvedProviderSelection,
 } from '@/entities/session'
 import { SessionStartSelect } from '@/features/session-start/session-start-select.presentational'
+import { SettingsControlField } from './settings-control-field.presentational'
 
 interface SessionDefaultsFieldsProps {
   providers: ProviderInfo[]
@@ -44,60 +45,42 @@ export const SessionDefaultsFields: FC<SessionDefaultsFieldsProps> = ({
 
   return (
     <div className="space-y-4">
-      <div className="space-y-1.5">
-        <label
-          htmlFor="app-settings-provider"
-          className="text-xs font-medium text-foreground"
-        >
-          Default provider
-        </label>
+      <SettingsControlField
+        title="Default provider"
+        description="Used as the provider for every new session unless you override it."
+      >
         <SessionStartSelect
           selectedId={selection.providerId}
           value={selection.providerLabel || 'Select provider'}
           items={providerItems}
           onChange={onProviderChange}
         />
-        <p className="text-[11px] text-muted-foreground">
-          Used as the provider for every new session unless you override it.
-        </p>
-      </div>
+      </SettingsControlField>
 
-      <div className="space-y-1.5">
-        <label
-          htmlFor="app-settings-model"
-          className="text-xs font-medium text-foreground"
-        >
-          Default model
-        </label>
+      <SettingsControlField
+        title="Default model"
+        description="Model that runs by default for the selected provider."
+      >
         <SessionStartSelect
           selectedId={selection.modelId}
           value={selection.model?.label ?? 'Select model'}
           items={modelItems}
           onChange={onModelChange}
         />
-        <p className="text-[11px] text-muted-foreground">
-          Model that runs by default for the selected provider.
-        </p>
-      </div>
+      </SettingsControlField>
 
       {effortItems.length > 0 && (
-        <div className="space-y-1.5">
-          <label
-            htmlFor="app-settings-effort"
-            className="text-xs font-medium text-foreground"
-          >
-            Default reasoning effort
-          </label>
+        <SettingsControlField
+          title="Default reasoning effort"
+          description="Reasoning effort the model uses by default."
+        >
           <SessionStartSelect
             selectedId={selection.effortId}
             value={selection.effort?.label ?? 'Select effort'}
             items={effortItems}
             onChange={(id) => onEffortChange(id as ReasoningEffort)}
           />
-          <p className="text-[11px] text-muted-foreground">
-            Reasoning effort the model uses by default.
-          </p>
-        </div>
+        </SettingsControlField>
       )}
     </div>
   )
