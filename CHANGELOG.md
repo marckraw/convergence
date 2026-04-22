@@ -1,5 +1,15 @@
 # convergence
 
+## 0.18.1
+
+### Patch Changes
+
+- 307cd8e: Prevent packaged macOS builds from crashing on launch when the
+  `electron-updater` module loads with an unexpected export shape.
+  Convergence now disables auto-updates for that build instead of aborting
+  startup, so affected users can still open the app and install a follow-up
+  release.
+
 ## 0.18.0
 
 ### Minor Changes
