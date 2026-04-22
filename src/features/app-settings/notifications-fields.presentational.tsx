@@ -38,103 +38,142 @@ export const NotificationsFields: FC<NotificationsFieldsProps> = ({
     onChange({ ...prefs, events: { ...prefs.events, [key]: value } })
   }
 
+  const sectionRowClass =
+    'border-border/60 py-3 first:pt-0 last:border-b-0 last:pb-0'
+
   return (
     <div className="space-y-4">
-      <SwitchRow
-        id="notif-enabled"
-        label="Enable notifications"
-        description="Master switch — turn off to mute every channel."
-        checked={prefs.enabled}
-        onChange={(next) => setChannel('enabled', next)}
-      />
-
-      <div className="space-y-1 pl-1">
-        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-          Channels
-        </p>
+      <div className="rounded-xl border border-border/70 bg-card/45 p-4">
         <SwitchRow
-          id="notif-toasts"
-          label={TOAST_LABEL}
-          checked={prefs.toasts}
-          disabled={masterDisabled}
-          onChange={(next) => setChannel('toasts', next)}
-        />
-        <SwitchRow
-          id="notif-sounds"
-          label={SOUND_LABEL}
-          checked={prefs.sounds}
-          disabled={masterDisabled}
-          onChange={(next) => setChannel('sounds', next)}
-        />
-        <SwitchRow
-          id="notif-system"
-          label={SYSTEM_LABEL}
-          checked={prefs.system}
-          disabled={masterDisabled}
-          onChange={(next) => setChannel('system', next)}
-        />
-        {isMac && (
-          <>
-            <SwitchRow
-              id="notif-dock-badge"
-              label={DOCK_BADGE_LABEL}
-              checked={prefs.dockBadge}
-              disabled={masterDisabled}
-              onChange={(next) => setChannel('dockBadge', next)}
-            />
-            <SwitchRow
-              id="notif-dock-bounce"
-              label={DOCK_BOUNCE_LABEL}
-              checked={prefs.dockBounce}
-              disabled={masterDisabled}
-              onChange={(next) => setChannel('dockBounce', next)}
-            />
-          </>
-        )}
-      </div>
-
-      <div className="space-y-1 pl-1">
-        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-          Events
-        </p>
-        <SwitchRow
-          id="notif-event-finished"
-          label="Finished"
-          checked={prefs.events.finished}
-          disabled={masterDisabled}
-          onChange={(next) => setEvent('finished', next)}
-        />
-        <SwitchRow
-          id="notif-event-needs-input"
-          label="Needs input"
-          checked={prefs.events.needsInput}
-          disabled={masterDisabled}
-          onChange={(next) => setEvent('needsInput', next)}
-        />
-        <SwitchRow
-          id="notif-event-needs-approval"
-          label="Needs approval"
-          checked={prefs.events.needsApproval}
-          disabled={masterDisabled}
-          onChange={(next) => setEvent('needsApproval', next)}
-        />
-        <SwitchRow
-          id="notif-event-errored"
-          label="Errored"
-          checked={prefs.events.errored}
-          disabled={masterDisabled}
-          onChange={(next) => setEvent('errored', next)}
+          id="notif-enabled"
+          label="Enable notifications"
+          description="Master switch. Turn this off to mute every channel."
+          checked={prefs.enabled}
+          onChange={(next) => setChannel('enabled', next)}
         />
       </div>
 
-      <SwitchRow
-        id="notif-suppress-focused"
-        label="Suppress when window is focused"
-        description="Hide toasts and silence sounds when Convergence is the active window."
-        checked={prefs.suppressWhenFocused}
-        disabled={masterDisabled}
-        onChange={(next) => setChannel('suppressWhenFocused', next)}
-      />
+      <section className="rounded-xl border border-border/70 bg-card/45">
+        <div className="border-b border-border/60 px-4 py-3">
+          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            Channels
+          </p>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Choose where notifications appear when an agent needs attention.
+          </p>
+        </div>
+        <div className="space-y-0 px-4 py-2">
+          <div className={`border-b ${sectionRowClass}`}>
+            <SwitchRow
+              id="notif-toasts"
+              label={TOAST_LABEL}
+              checked={prefs.toasts}
+              disabled={masterDisabled}
+              onChange={(next) => setChannel('toasts', next)}
+            />
+          </div>
+          <div className={`border-b ${sectionRowClass}`}>
+            <SwitchRow
+              id="notif-sounds"
+              label={SOUND_LABEL}
+              checked={prefs.sounds}
+              disabled={masterDisabled}
+              onChange={(next) => setChannel('sounds', next)}
+            />
+          </div>
+          <div className={`border-b ${sectionRowClass}`}>
+            <SwitchRow
+              id="notif-system"
+              label={SYSTEM_LABEL}
+              checked={prefs.system}
+              disabled={masterDisabled}
+              onChange={(next) => setChannel('system', next)}
+            />
+          </div>
+          {isMac && (
+            <div className={`border-b ${sectionRowClass}`}>
+              <SwitchRow
+                id="notif-dock-badge"
+                label={DOCK_BADGE_LABEL}
+                checked={prefs.dockBadge}
+                disabled={masterDisabled}
+                onChange={(next) => setChannel('dockBadge', next)}
+              />
+            </div>
+          )}
+          {isMac && (
+            <div className={sectionRowClass}>
+              <SwitchRow
+                id="notif-dock-bounce"
+                label={DOCK_BOUNCE_LABEL}
+                checked={prefs.dockBounce}
+                disabled={masterDisabled}
+                onChange={(next) => setChannel('dockBounce', next)}
+              />
+            </div>
+          )}
+        </div>
+      </section>
+
+      <section className="rounded-xl border border-border/70 bg-card/45">
+        <div className="border-b border-border/60 px-4 py-3">
+          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            Events
+          </p>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Fine-tune which agent states should trigger a notification.
+          </p>
+        </div>
+        <div className="space-y-0 px-4 py-2">
+          <div className={`border-b ${sectionRowClass}`}>
+            <SwitchRow
+              id="notif-event-finished"
+              label="Finished"
+              checked={prefs.events.finished}
+              disabled={masterDisabled}
+              onChange={(next) => setEvent('finished', next)}
+            />
+          </div>
+          <div className={`border-b ${sectionRowClass}`}>
+            <SwitchRow
+              id="notif-event-needs-input"
+              label="Needs input"
+              checked={prefs.events.needsInput}
+              disabled={masterDisabled}
+              onChange={(next) => setEvent('needsInput', next)}
+            />
+          </div>
+          <div className={`border-b ${sectionRowClass}`}>
+            <SwitchRow
+              id="notif-event-needs-approval"
+              label="Needs approval"
+              checked={prefs.events.needsApproval}
+              disabled={masterDisabled}
+              onChange={(next) => setEvent('needsApproval', next)}
+            />
+          </div>
+          <div className={sectionRowClass}>
+            <SwitchRow
+              id="notif-event-errored"
+              label="Errored"
+              checked={prefs.events.errored}
+              disabled={masterDisabled}
+              onChange={(next) => setEvent('errored', next)}
+            />
+          </div>
+        </div>
+      </section>
+
+      <div className="rounded-xl border border-border/70 bg-card/45 p-4">
+        <SwitchRow
+          id="notif-suppress-focused"
+          label="Suppress when window is focused"
+          description="Hide toasts and silence sounds when Convergence is the active window."
+          checked={prefs.suppressWhenFocused}
+          disabled={masterDisabled}
+          onChange={(next) => setChannel('suppressWhenFocused', next)}
+        />
+      </div>
 
       <div className="space-y-2 rounded-md border border-dashed border-border p-3">
         <p className="text-xs font-medium">Try a test notification</p>
@@ -163,7 +202,7 @@ export const NotificationsFields: FC<NotificationsFieldsProps> = ({
         </div>
       </div>
 
-      <p className="text-xs text-muted-foreground">
+      <p className="text-xs leading-relaxed text-muted-foreground">
         Claude Code reports fewer states than Codex — you&rsquo;ll receive
         &ldquo;Finished&rdquo; and &ldquo;Errored&rdquo; notifications for
         Claude Code agents but not &ldquo;Needs input&rdquo;.

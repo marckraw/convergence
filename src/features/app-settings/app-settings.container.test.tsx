@@ -189,6 +189,7 @@ describe('AppSettingsDialogContainer', () => {
     fireEvent.click(screen.getByText('Open'))
 
     expect(await screen.findByText('Settings')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: /Notifications/ }))
 
     fireEvent.click(screen.getByRole('switch', { name: 'Sounds' }))
     fireEvent.click(screen.getByRole('button', { name: 'Save' }))
@@ -220,10 +221,35 @@ describe('AppSettingsDialogContainer', () => {
     fireEvent.click(screen.getByText('Open'))
 
     expect(await screen.findByText('Settings')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: /Notifications/ }))
 
     fireEvent.click(screen.getByRole('button', { name: 'Alert' }))
 
     expect(testFire).toHaveBeenCalledWith('critical')
+  })
+
+  it('renders a dedicated scroll region and lets the user switch sections', async () => {
+    primeStores({
+      defaultProviderId: 'claude-code',
+      defaultModelId: 'sonnet',
+      defaultEffortId: 'medium',
+    })
+
+    render(<AppSettingsDialogContainer trigger={<Button>Open</Button>} />)
+    fireEvent.click(screen.getByText('Open'))
+
+    expect(await screen.findByText('Settings')).toBeInTheDocument()
+
+    expect(screen.getByTestId('app-settings-scroll-region')).toHaveClass(
+      'app-scrollbar',
+      'overflow-y-auto',
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: /Notifications/ }))
+
+    expect(
+      screen.getByRole('switch', { name: 'Enable notifications' }),
+    ).toBeInTheDocument()
   })
 
   it('Cancel closes without dispatching save', async () => {
