@@ -1,6 +1,6 @@
 {
   "name": "convergence",
-  "version": "0.14.2",
+  "version": "0.14.4",
   "description": "UI-first desktop app for managing agent work across local codebases",
   "main": "out/main/index.js",
   "scripts": {
@@ -35,6 +35,7 @@
   "dependencies": {
     "@radix-ui/react-dialog": "^1.1.15",
     "@radix-ui/react-dropdown-menu": "^2.1.16",
+    "@radix-ui/react-popover": "^1.1.15",
     "@radix-ui/react-separator": "^1.1.8",
     "@radix-ui/react-slot": "^1.2.4",
     "@radix-ui/react-tabs": "^1.1.13",

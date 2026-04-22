@@ -1,5 +1,26 @@
 # convergence
 
+## 0.14.4
+
+### Patch Changes
+
+- 29c09a1: Fix long provider, model, and project pickers by replacing unbounded dropdowns
+  with searchable popovers and aligning their scrollbars with the shared app
+  scrollbar styling.
+
+## 0.14.3
+
+### Patch Changes
+
+- 5db7ba0: Add agent task progress primitive and wire fork-preview + auto-naming
+  to it. Long-running one-shot provider calls now stream `started`,
+  `stdout-chunk`, `stderr-chunk`, and `settled` events over a dedicated
+  IPC channel. The fork dialog's summary extraction shows a live elapsed
+  counter, a "still working" hint past 45s, and a stale warning when the
+  provider has produced no output for 30s beyond the extended threshold.
+  Session auto-naming uses the same primitive, surfacing its progress
+  to the dev-mode console subscriber without any visible UI yet.
+
 ## 0.14.2
 
 ### Patch Changes
