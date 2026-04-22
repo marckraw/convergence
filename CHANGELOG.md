@@ -1,5 +1,13 @@
 # convergence
 
+## 0.17.1
+
+### Patch Changes
+
+- 9d17975: Fix the app settings dialog so long settings lists scroll correctly, use the
+  shared dark scrollbar styling, and present settings in clearer grouped sections
+  with better control alignment.
+
 ## 0.17.0
 
 ### Minor Changes
