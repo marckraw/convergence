@@ -40,6 +40,7 @@ import {
   broadcastUpdateStatus,
   registerUpdatesDevStubs,
   registerUpdatesIpc,
+  registerUpdatesUnavailableStubs,
 } from '../backend/updates/updates.ipc'
 import { SessionNamingService } from '../backend/session/naming/session-naming.service'
 import { SessionForkService } from '../backend/session/fork/session-fork.service'
@@ -55,6 +56,7 @@ import { broadcastTaskProgress } from '../backend/task-progress/task-progress.ip
 import { createNodePtyFactory } from '../backend/terminal/pty-factory'
 import { registerIpcHandlers } from './ipc'
 import { shouldOpenInSystemBrowser } from './external-links.pure'
+import { resolveAutoUpdater } from './auto-updater-module.pure'
 import { getWindowAppearanceOptions } from './window-effects.pure'
 import { formatStartupFailure } from './startup-failure.pure'
 
@@ -275,23 +277,46 @@ async function startApp(): Promise<void> {
   let updatesService: UpdatesService | null = null
   let updatesScheduler: UpdatesScheduler | null = null
   if (app.isPackaged) {
-    const { autoUpdater } = await import('electron-updater')
-    updatesService = new UpdatesService({
-      autoUpdater,
-      appVersion: app.getVersion(),
-      broadcast: broadcastUpdateStatus,
-      openExternal: (url) => shell.openExternal(url),
-    })
-    updatesScheduler = new UpdatesScheduler({
-      service: updatesService,
-      getPrefs: () => appSettingsService.getUpdatePrefsSync(),
-    })
-    registerUpdatesIpc({
-      service: updatesService,
-      appSettings: appSettingsService,
-      onPrefsChanged: (prefs) => updatesScheduler?.onPrefsChanged(prefs),
-    })
-    updatesScheduler.start()
+    try {
+      const updaterModule = await import('electron-updater')
+      const autoUpdater = resolveAutoUpdater(updaterModule)
+      if (!autoUpdater) {
+        console.error(
+          '[updates] auto-updates disabled: invalid electron-updater module shape',
+          updaterModule,
+        )
+        registerUpdatesUnavailableStubs({
+          appVersion: app.getVersion(),
+          appSettings: appSettingsService,
+        })
+      } else {
+        updatesService = new UpdatesService({
+          autoUpdater,
+          appVersion: app.getVersion(),
+          broadcast: broadcastUpdateStatus,
+          openExternal: (url) => shell.openExternal(url),
+        })
+        updatesScheduler = new UpdatesScheduler({
+          service: updatesService,
+          getPrefs: () => appSettingsService.getUpdatePrefsSync(),
+        })
+        registerUpdatesIpc({
+          service: updatesService,
+          appSettings: appSettingsService,
+          onPrefsChanged: (prefs) => updatesScheduler?.onPrefsChanged(prefs),
+        })
+        updatesScheduler.start()
+      }
+    } catch (err) {
+      console.error(
+        '[updates] auto-updates disabled: failed to load electron-updater',
+        err,
+      )
+      registerUpdatesUnavailableStubs({
+        appVersion: app.getVersion(),
+        appSettings: appSettingsService,
+      })
+    }
   } else {
     registerUpdatesDevStubs({
       appVersion: app.getVersion(),
