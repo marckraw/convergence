@@ -1,6 +1,46 @@
 {
-  "currentVersion": "0.10.2",
+  "currentVersion": "0.14.2",
   "releases": [
+    {
+      "version": "0.14.2",
+      "date": null,
+      "notes": "### Patch Changes\n\n- 02f5791: Fix structured-summary preview in the fork dialog. The session-fork\n  service was detaching `provider.oneShot` into a local variable before\n  invoking it, which lost the method's `this` binding and caused the\n  Claude Code adapter to read `binaryPath` off `undefined`. The preview\n  call now invokes `oneShot` directly on the provider, matching the\n  pattern used by session auto-naming."
+    },
+    {
+      "version": "0.14.1",
+      "date": null,
+      "notes": "### Patch Changes\n\n- 7a4f3e8: fixing threads"
+    },
+    {
+      "version": "0.14.0",
+      "date": null,
+      "notes": "### Minor Changes\n\n- 3d4df55: Add session fork with full-transcript and structured-summary strategies.\n  - A new **Fork session…** action is available from a session's header kebab\n    menu and from the Command Center (Cmd+K) when a session is focused. Each\n    entry opens a fork dialog pre-populated from the parent session's name,\n    provider, model, and effort.\n  - **Full transcript** strategy seeds the child session by pasting the\n    parent's conversation verbatim. **Structured summary** asks the parent's\n    provider to extract decisions, key facts (with verbatim evidence),\n    artifacts, open questions, and suggested next steps into a typed artifact\n    rendered as an editable markdown seed. The summary strategy is disabled\n    for parent sessions with very short transcripts.\n  - The dialog also lets you pick a different provider/model/effort for the\n    child and choose whether to reuse the parent's workspace or create a new\n    worktree on its own branch.\n  - Forked sessions display a **Forked from: &lt;parent&gt;** chip in their\n    header that navigates back to the parent with a click. Session fork\n    tracking is persisted in the sessions store alongside existing session\n    metadata."
+    },
+    {
+      "version": "0.13.0",
+      "date": null,
+      "notes": "### Minor Changes\n\n- ba57c96: Add a global Cmd+K command palette for cross-project navigation.\n  - `Cmd+K` (macOS) / `Ctrl+K` (other platforms) opens a global palette from\n    anywhere in the app. An empty query shows curated sections — **Waiting on\n    You**, **Needs Review**, **Recent Sessions**, **Projects**, **Workspaces**,\n    **Dialogs** — in that order. Typing ranks projects, workspaces, sessions,\n    dialogs, and \"New session in <branch>\" / \"New workspace in <project>\"\n    affordances via Fuse.js weighted over session name, project name, branch\n    name, provider, and dialog title.\n  - Selecting a session in another project performs a single cross-project hop\n    (`switchToSession`) that preserves the existing sidebar **Waiting on You**\n    click behaviour. Selecting a workspace activates its owning project;\n    selecting a dialog routes through the shared `useDialogStore`.\n  - **Behaviour change:** the terminal `Cmd+K` (clear) shortcut is now scoped\n    to terminal-dock focus. When your focus is outside the dock, `Cmd+K` opens\n    the palette; click into a terminal pane first to clear it. All other\n    terminal shortcuts (`Cmd+T`, splits, focus-adjacent, toggle-dock) are\n    unchanged and still fire from anywhere."
+    },
+    {
+      "version": "0.12.1",
+      "date": null,
+      "notes": "### Patch Changes\n\n- 3f26025: Fix the composer scrollbar so it uses the shared themed scrollbar styling in\n  both dark and light modes. The composer input now goes through a shared\n  textarea primitive, which keeps future multiline inputs aligned with the app's\n  common scrollbar treatment."
+    },
+    {
+      "version": "0.12.0",
+      "date": null,
+      "notes": "### Minor Changes\n\n- fe4daa2: `Cmd-T` (Ctrl-T on other platforms) now doubles as an \"open terminal\" shortcut: when the dock is hidden it becomes visible, and when the active session has no pane tree yet it opens the first pane in the session's working directory. When the dock is already visible with an existing tree, the shortcut keeps its original `new-tab` behavior."
+    },
+    {
+      "version": "0.11.1",
+      "date": null,
+      "notes": "### Patch Changes\n\n- d070e33: Fix terminal dock single-leaf width collapse: when the dock held a single pane, the leaf took intrinsic width inside the dock's flex-row container instead of filling it. Split layouts were unaffected because `Group` already stretched. Leaf root now carries `w-full min-w-0`, matching the `Group` path."
+    },
+    {
+      "version": "0.11.0",
+      "date": null,
+      "notes": "### Minor Changes\n\n- 6c5ba58: Embedded terminal surface: PTY-backed dock with recursive splits, tabs, keyboard shortcuts (Cmd-T/D/W/K/`/arrows), close-confirm on running foreground process, and user-resizable dock height. Panes open in the active session's working directory; PTYs clean up on window/app close."
+    },
     {
       "version": "0.10.2",
       "date": null,

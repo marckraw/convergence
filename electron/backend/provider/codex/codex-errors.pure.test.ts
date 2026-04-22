@@ -11,8 +11,8 @@ describe('buildTurnFailureEntry', () => {
   it('formats an Error instance using its message', () => {
     const entry = buildTurnFailureEntry(new Error('rpc dropped'), timestamp)
     expect(entry).toEqual({
-      type: 'system',
       text: 'Turn failed: rpc dropped',
+      level: 'error',
       timestamp,
     })
   })
@@ -20,15 +20,15 @@ describe('buildTurnFailureEntry', () => {
   it('stringifies non-Error rejections', () => {
     const entry = buildTurnFailureEntry('boom', timestamp)
     expect(entry).toEqual({
-      type: 'system',
       text: 'Turn failed: boom',
+      level: 'error',
       timestamp,
     })
   })
 
   it('falls back to String() for unknown objects', () => {
     const entry = buildTurnFailureEntry({ code: 42 }, timestamp)
-    expect(entry.type).toBe('system')
+    expect(entry.level).toBe('error')
     expect(entry.text.startsWith('Turn failed: ')).toBe(true)
     expect(entry.timestamp).toBe(timestamp)
   })
@@ -36,8 +36,8 @@ describe('buildTurnFailureEntry', () => {
   it('handles undefined rejection value', () => {
     const entry = buildTurnFailureEntry(undefined, timestamp)
     expect(entry).toEqual({
-      type: 'system',
       text: 'Turn failed: undefined',
+      level: 'error',
       timestamp,
     })
   })
@@ -69,8 +69,8 @@ describe('buildCodexThreadRecoveryEntry', () => {
   it('explains that recovery used a fresh thread', () => {
     const timestamp = '2026-04-17T10:00:00.000Z'
     expect(buildCodexThreadRecoveryEntry(timestamp)).toEqual({
-      type: 'system',
       text: 'Codex thread was no longer available. Started a new thread; previous provider context may be missing.',
+      level: 'warning',
       timestamp,
     })
   })

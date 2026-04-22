@@ -1,13 +1,13 @@
 import type { FC } from 'react'
 import { Archive, BellOff, Check } from 'lucide-react'
-import type { Session, NeedsYouDisposition } from '@/entities/session'
+import type { SessionSummary, NeedsYouDisposition } from '@/entities/session'
 import { cn } from '@/shared/lib/cn.pure'
 import { Button } from '@/shared/ui/button'
 import { SessionBadge } from '@/shared/ui/session-badge.presentational'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/shared/ui/tooltip'
 
 interface NeedsYouSession {
-  session: Session
+  session: SessionSummary
   projectName: string
   summary: string
   priority: number
@@ -134,7 +134,7 @@ export const NeedsYouSection: FC<NeedsYouSectionProps> = ({
   </div>
 )
 
-function resolveNeedsYouAction(session: Session): {
+function resolveNeedsYouAction(session: SessionSummary): {
   label: string
   disposition: NeedsYouDisposition
 } {

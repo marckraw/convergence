@@ -1,6 +1,8 @@
-import type { TranscriptEntry } from '../provider.types'
-
-type SystemEntry = Extract<TranscriptEntry, { type: 'system' }>
+export interface CodexNoteDraft {
+  text: string
+  level: 'info' | 'warning' | 'error'
+  timestamp: string
+}
 
 function readErrorMessage(err: unknown): string {
   return err instanceof Error ? err.message : String(err)
@@ -9,10 +11,10 @@ function readErrorMessage(err: unknown): string {
 export function buildTurnFailureEntry(
   err: unknown,
   timestamp: string,
-): SystemEntry {
+): CodexNoteDraft {
   return {
-    type: 'system',
     text: `Turn failed: ${readErrorMessage(err)}`,
+    level: 'error',
     timestamp,
   }
 }
@@ -22,10 +24,12 @@ export function isCodexThreadNotFoundError(err: unknown): boolean {
   return message.includes('thread') && message.includes('not found')
 }
 
-export function buildCodexThreadRecoveryEntry(timestamp: string): SystemEntry {
+export function buildCodexThreadRecoveryEntry(
+  timestamp: string,
+): CodexNoteDraft {
   return {
-    type: 'system',
     text: 'Codex thread was no longer available. Started a new thread; previous provider context may be missing.',
+    level: 'warning',
     timestamp,
   }
 }

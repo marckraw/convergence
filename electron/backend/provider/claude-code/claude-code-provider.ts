@@ -1,10 +1,10 @@
 import { spawn, type ChildProcess } from 'child_process'
 import { promises as fs } from 'fs'
+import type { SessionDelta } from '../../session/conversation-item.types'
 import type {
   Provider,
   SessionStartConfig,
   SessionHandle,
-  TranscriptEntry,
   SessionStatus,
   AttentionState,
   SessionContextWindow,
@@ -16,6 +16,7 @@ import type {
 import { parseJsonLines } from '../line-parser'
 import { buildClaudeDescriptor } from '../provider-descriptor.pure'
 import type { ProviderDescriptor } from '../provider.types'
+import { ProviderSessionEmitter } from '../provider-session.emitter'
 import {
   buildClaudeUserMessageLine,
   type ClaudeMessagePart,
@@ -179,7 +180,7 @@ export class ClaudeCodeProvider implements Provider {
   start(config: SessionStartConfig): SessionHandle {
     const binaryPath = this.binaryPath
     const listeners = {
-      transcript: [] as ((entry: TranscriptEntry) => void)[],
+      delta: [] as ((delta: SessionDelta) => void)[],
       status: [] as ((status: SessionStatus) => void)[],
       attention: [] as ((attention: AttentionState) => void)[],
       continuationToken: [] as ((token: string) => void)[],
@@ -191,6 +192,7 @@ export class ClaudeCodeProvider implements Provider {
     let stopped = false
     let claudeSessionId: string | null = config.continuationToken
     let assistantTextBuffer = ''
+    let assistantMessageItemId: string | null = null
     let currentTurnHasAssistantText = false
     let currentTurn: {
       message: string
@@ -205,16 +207,24 @@ export class ClaudeCodeProvider implements Provider {
     let sawTurnOutput = false
     let stderrBuffer = ''
 
-    function emit(entry: TranscriptEntry): void {
-      listeners.transcript.forEach((cb) => cb(entry))
+    function emitDelta(delta: SessionDelta): void {
+      listeners.delta.forEach((cb) => cb(delta))
     }
+
+    const sessionEmitter = new ProviderSessionEmitter({
+      providerId: 'claude-code',
+      emitDelta,
+      now,
+    })
 
     function setStatus(status: SessionStatus): void {
       listeners.status.forEach((cb) => cb(status))
+      sessionEmitter.patchSession({ status })
     }
 
     function setAttention(attention: AttentionState): void {
       listeners.attention.forEach((cb) => cb(attention))
+      sessionEmitter.patchSession({ attention })
     }
 
     function setContinuationToken(token: string): void {
@@ -224,10 +234,12 @@ export class ClaudeCodeProvider implements Provider {
 
       claudeSessionId = token
       listeners.continuationToken.forEach((cb) => cb(token))
+      sessionEmitter.patchSession({ continuationToken: token })
     }
 
     function setContextWindow(contextWindow: SessionContextWindow): void {
       listeners.contextWindow.forEach((cb) => cb(contextWindow))
+      sessionEmitter.patchSession({ contextWindow })
     }
 
     let lastActivity: ActivitySignal = null
@@ -235,6 +247,7 @@ export class ClaudeCodeProvider implements Provider {
       if (activity === lastActivity) return
       lastActivity = activity
       listeners.activity.forEach((cb) => cb(activity))
+      sessionEmitter.patchSession({ activity })
     }
 
     function refreshContextWindowFromLogs(): void {
@@ -255,8 +268,22 @@ export class ClaudeCodeProvider implements Provider {
 
     function flushAssistantBuffer(): void {
       if (assistantTextBuffer) {
-        emit({ type: 'assistant', text: assistantTextBuffer, timestamp: now() })
+        const timestamp = now()
+        if (assistantMessageItemId) {
+          sessionEmitter.patchMessage(assistantMessageItemId, {
+            text: assistantTextBuffer,
+            state: 'complete',
+            updatedAt: timestamp,
+          })
+        } else {
+          assistantMessageItemId = sessionEmitter.addAssistantMessage({
+            text: assistantTextBuffer,
+            state: 'complete',
+            timestamp,
+          })
+        }
         assistantTextBuffer = ''
+        assistantMessageItemId = null
         currentTurnHasAssistantText = true
         sawTurnOutput = true
       }
@@ -290,7 +317,12 @@ export class ClaudeCodeProvider implements Provider {
         message: currentTurn.message,
         attachments: currentTurn.attachments,
       }
-      emit(buildContinuationRecoveryEntry('Claude Code', now()))
+      const recoveryEntry = buildContinuationRecoveryEntry('Claude Code', now())
+      sessionEmitter.addNote({
+        text: recoveryEntry.text,
+        level: recoveryEntry.level,
+        timestamp: recoveryEntry.timestamp,
+      })
       claudeSessionId = null
       currentTurn = null
       if (child) {
@@ -358,10 +390,9 @@ export class ClaudeCodeProvider implements Provider {
             if (!isNewSession) {
               break
             }
-            emit({
-              type: 'system',
-              text: `Session started`,
-              timestamp: now(),
+            sessionEmitter.addNote({
+              text: 'Session started',
+              level: 'info',
             })
           }
           break
@@ -375,6 +406,18 @@ export class ClaudeCodeProvider implements Provider {
             event.event.delta?.text
           ) {
             assistantTextBuffer += event.event.delta.text
+            if (!assistantMessageItemId) {
+              assistantMessageItemId = sessionEmitter.addAssistantMessage({
+                text: assistantTextBuffer,
+                state: 'streaming',
+                providerEventType: 'stream_event',
+              })
+            } else {
+              sessionEmitter.patchMessage(assistantMessageItemId, {
+                text: assistantTextBuffer,
+                state: 'streaming',
+              })
+            }
           }
           break
 
@@ -387,14 +430,13 @@ export class ClaudeCodeProvider implements Provider {
           if (event.message?.content) {
             for (const block of event.message.content) {
               if (block.type === 'tool_use' && block.name) {
-                emit({
-                  type: 'tool-use',
-                  tool: block.name,
-                  input:
+                sessionEmitter.addToolCall({
+                  toolName: block.name,
+                  inputText:
                     typeof block.input === 'string'
                       ? block.input
                       : JSON.stringify(block.input, null, 2),
-                  timestamp: now(),
+                  providerEventType: 'tool_use',
                 })
               } else if (
                 block.type === 'text' &&
@@ -402,7 +444,10 @@ export class ClaudeCodeProvider implements Provider {
                 !hadStreamedText &&
                 !currentTurnHasAssistantText
               ) {
-                emit({ type: 'assistant', text: block.text, timestamp: now() })
+                sessionEmitter.addAssistantMessage({
+                  text: block.text,
+                  state: 'complete',
+                })
                 currentTurnHasAssistantText = true
               }
             }
@@ -424,10 +469,9 @@ export class ClaudeCodeProvider implements Provider {
                           .map((c) => c.text)
                           .join('\n')
                       : 'Done'
-                emit({
-                  type: 'tool-result',
-                  result: resultText,
-                  timestamp: now(),
+                sessionEmitter.addToolResult({
+                  outputText: resultText,
+                  providerEventType: 'tool_result',
                 })
               }
             }
@@ -443,20 +487,18 @@ export class ClaudeCodeProvider implements Provider {
               scheduleContinuationRecovery()
               break
             }
-            emit({
-              type: 'system',
+            sessionEmitter.addNote({
               text: `Error: ${event.result ?? 'Unknown error'}`,
-              timestamp: now(),
+              level: 'error',
             })
             setStatus('failed')
             setAttention('failed')
             currentTurn = null
           } else {
             if (!currentTurnHasAssistantText && event.result?.trim()) {
-              emit({
-                type: 'assistant',
+              sessionEmitter.addAssistantMessage({
                 text: event.result,
-                timestamp: now(),
+                state: 'complete',
               })
             }
             setStatus('completed')
@@ -495,6 +537,7 @@ export class ClaudeCodeProvider implements Provider {
       if (stopped || child) return
 
       assistantTextBuffer = ''
+      assistantMessageItemId = null
       currentTurnHasAssistantText = false
       sawTurnOutput = false
       stderrBuffer = ''
@@ -505,7 +548,7 @@ export class ClaudeCodeProvider implements Provider {
         usedContinuationToken: !!claudeSessionId,
       }
       if (options?.emitUserEntry !== false) {
-        emit({ type: 'user', text: message, timestamp: now() })
+        sessionEmitter.addUserMessage({ text: message })
       }
       setStatus('running')
       setAttention('none')
@@ -545,10 +588,9 @@ export class ClaudeCodeProvider implements Provider {
       if (child.stdout) {
         parseJsonLines(child.stdout, handleEvent, (err) => {
           if (!stopped) {
-            emit({
-              type: 'system',
+            sessionEmitter.addNote({
               text: `Stream error: ${err.message}`,
-              timestamp: now(),
+              level: 'error',
             })
           }
         })
@@ -568,7 +610,10 @@ export class ClaudeCodeProvider implements Provider {
             return
           }
           if (significant && !pendingRecoveryTurn) {
-            emit({ type: 'system', text: significant, timestamp: now() })
+            sessionEmitter.addNote({
+              text: significant,
+              level: 'info',
+            })
           }
         })
       }
@@ -587,10 +632,9 @@ export class ClaudeCodeProvider implements Provider {
           })
           .catch((err) => {
             if (stopped) return
-            emit({
-              type: 'system',
+            sessionEmitter.addNote({
               text: `Failed to send attachments: ${err instanceof Error ? err.message : String(err)}`,
-              timestamp: now(),
+              level: 'error',
             })
             setStatus('failed')
             setAttention('failed')
@@ -620,9 +664,9 @@ export class ClaudeCodeProvider implements Provider {
           return
         }
         if (code !== 0 && code !== null) {
-          emit({
-            type: 'system',
+          sessionEmitter.addNote({
             text: `Process exited with code ${code}`,
+            level: 'error',
             timestamp: now(),
           })
           setStatus('failed')
@@ -633,9 +677,9 @@ export class ClaudeCodeProvider implements Provider {
 
       child.on('error', (err) => {
         if (stopped) return
-        emit({
-          type: 'system',
+        sessionEmitter.addNote({
           text: `Process error: ${err.message}`,
+          level: 'error',
           timestamp: now(),
         })
         setStatus('failed')
@@ -651,8 +695,8 @@ export class ClaudeCodeProvider implements Provider {
     }, 10)
 
     const handle: SessionHandle = {
-      onTranscriptEntry: (cb) => {
-        listeners.transcript.push(cb)
+      onDelta: (cb) => {
+        listeners.delta.push(cb)
       },
       onStatusChange: (cb) => {
         listeners.status.push(cb)

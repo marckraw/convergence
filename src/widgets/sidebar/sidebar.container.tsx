@@ -2,7 +2,11 @@ import { useCallback, useEffect, useState } from 'react'
 import type { FC } from 'react'
 import { useProjectStore } from '@/entities/project'
 import { useWorkspaceStore } from '@/entities/workspace'
-import { sessionApi, useSessionStore, type Session } from '@/entities/session'
+import {
+  sessionApi,
+  useSessionStore,
+  type SessionSummary,
+} from '@/entities/session'
 import {
   AppSettingsDialogContainer,
   McpServersDialogContainer,
@@ -25,7 +29,7 @@ interface SidebarProps {
 }
 
 interface AttentionSession {
-  session: Session
+  session: SessionSummary
   projectName: string
   summary: string
   priority: number

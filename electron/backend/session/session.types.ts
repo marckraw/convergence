@@ -2,7 +2,6 @@ import type { SessionRow } from '../database/database.types'
 import type {
   SessionStatus,
   AttentionState,
-  TranscriptEntry,
   ReasoningEffort,
   SessionContextWindow,
   ActivitySignal,
@@ -11,7 +10,6 @@ import type {
 export type {
   SessionStatus,
   AttentionState,
-  TranscriptEntry,
   ReasoningEffort,
   SessionContextWindow,
   ActivitySignal,
@@ -19,7 +17,7 @@ export type {
 
 export type ForkStrategy = 'full' | 'summary'
 
-export interface Session {
+export interface SessionSummary {
   id: string
   projectId: string
   workspaceId: string | null
@@ -29,16 +27,19 @@ export interface Session {
   name: string
   status: SessionStatus
   attention: AttentionState
-  workingDirectory: string
-  transcript: TranscriptEntry[]
-  contextWindow: SessionContextWindow | null
   activity: ActivitySignal
+  contextWindow: SessionContextWindow | null
+  workingDirectory: string
   archivedAt: string | null
   parentSessionId: string | null
   forkStrategy: ForkStrategy | null
+  continuationToken: string | null
+  lastSequence: number
   createdAt: string
   updatedAt: string
 }
+
+export type Session = SessionSummary
 
 function parseForkStrategy(value: string | null): ForkStrategy | null {
   if (value === 'full' || value === 'summary') return value
@@ -71,7 +72,7 @@ function parseActivity(value: string | null): ActivitySignal {
   return null
 }
 
-export function sessionFromRow(row: SessionRow): Session {
+export function sessionSummaryFromRow(row: SessionRow): SessionSummary {
   return {
     id: row.id,
     projectId: row.project_id,
@@ -82,15 +83,16 @@ export function sessionFromRow(row: SessionRow): Session {
     name: row.name,
     status: row.status as SessionStatus,
     attention: row.attention as AttentionState,
-    workingDirectory: row.working_directory,
-    transcript: JSON.parse(row.transcript) as TranscriptEntry[],
+    activity: parseActivity(row.activity),
     contextWindow: row.context_window
       ? (JSON.parse(row.context_window) as SessionContextWindow)
       : null,
-    activity: parseActivity(row.activity),
+    workingDirectory: row.working_directory,
     archivedAt: row.archived_at,
     parentSessionId: row.parent_session_id,
     forkStrategy: parseForkStrategy(row.fork_strategy),
+    continuationToken: row.continuation_token,
+    lastSequence: row.last_sequence ?? 0,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   }

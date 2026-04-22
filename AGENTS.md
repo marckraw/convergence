@@ -2,6 +2,14 @@
 
 ## Post-task requirement
 
+Agents must use the Node version from `.nvmrc` for all repo commands that
+depend on Node tooling (`npm install`, Vitest, typecheck, chaperone, Vite,
+Electron build/dev). If the current shell is on a different Node version,
+switch first with your installed version manager, e.g. `nvm use` or
+`fnm exec --using "$(cat .nvmrc)" -- <command>`. If the required Node version
+is unavailable, report that explicitly instead of silently running verification
+on the wrong runtime.
+
 After every finished task, agents must run these commands in this repo:
 
 - `npm install`

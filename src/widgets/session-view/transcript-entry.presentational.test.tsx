@@ -1,14 +1,19 @@
 import { fireEvent, render, screen } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
-import { TranscriptEntryView } from './transcript-entry.presentational'
+import { ConversationItemView } from './transcript-entry.presentational'
 
-describe('TranscriptEntryView', () => {
+describe('ConversationItemView', () => {
   it('renders assistant markdown with headings, lists, links, and code', () => {
     render(
-      <TranscriptEntryView
+      <ConversationItemView
         entry={{
-          type: 'assistant',
-          timestamp: '2026-04-13T10:00:00.000Z',
+          id: 'message-1',
+          sessionId: 'session-1',
+          sequence: 1,
+          turnId: null,
+          kind: 'message',
+          state: 'complete',
+          actor: 'assistant',
           text: [
             '# Summary',
             '',
@@ -21,6 +26,13 @@ describe('TranscriptEntryView', () => {
             'const value = 1',
             '```',
           ].join('\n'),
+          createdAt: '2026-04-13T10:00:00.000Z',
+          updatedAt: '2026-04-13T10:00:00.000Z',
+          providerMeta: {
+            providerId: 'claude-code',
+            providerItemId: null,
+            providerEventType: 'assistant',
+          },
         }}
       />,
     )
@@ -45,11 +57,24 @@ describe('TranscriptEntryView', () => {
     ].join('\n')
 
     render(
-      <TranscriptEntryView
+      <ConversationItemView
         entry={{
-          type: 'tool-result',
-          timestamp: '2026-04-13T10:00:00.000Z',
-          result,
+          id: 'tool-result-1',
+          sessionId: 'session-1',
+          sequence: 1,
+          turnId: null,
+          kind: 'tool-result',
+          state: 'complete',
+          toolName: null,
+          relatedItemId: null,
+          outputText: result,
+          createdAt: '2026-04-13T10:00:00.000Z',
+          updatedAt: '2026-04-13T10:00:00.000Z',
+          providerMeta: {
+            providerId: 'codex',
+            providerItemId: null,
+            providerEventType: 'tool-result',
+          },
         }}
       />,
     )

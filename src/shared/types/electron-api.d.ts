@@ -137,30 +137,77 @@ interface SendSessionMessageInput {
   attachmentIds?: string[]
 }
 
-type TranscriptEntry =
-  | {
-      type: 'user'
-      text: string
-      timestamp: string
-      attachmentIds?: string[]
-    }
-  | {
-      type: 'assistant'
-      text: string
-      timestamp: string
-      streaming?: boolean
-    }
-  | { type: 'tool-use'; tool: string; input: string; timestamp: string }
-  | { type: 'tool-result'; result: string; timestamp: string }
-  | {
-      type: 'approval-request'
-      description: string
-      timestamp: string
-    }
-  | { type: 'input-request'; prompt: string; timestamp: string }
-  | { type: 'system'; text: string; timestamp: string }
+type ConversationItemKind =
+  | 'message'
+  | 'thinking'
+  | 'tool-call'
+  | 'tool-result'
+  | 'approval-request'
+  | 'input-request'
+  | 'note'
 
-interface SessionData {
+type ConversationItemState = 'streaming' | 'complete' | 'error'
+
+interface ConversationItemDataBase {
+  id: string
+  sessionId: string
+  sequence: number
+  turnId: string | null
+  kind: ConversationItemKind
+  state: ConversationItemState
+  createdAt: string
+  updatedAt: string
+  providerMeta: {
+    providerId: string
+    providerItemId: string | null
+    providerEventType: string | null
+  }
+}
+
+type ConversationItemData =
+  | (ConversationItemDataBase & {
+      kind: 'message'
+      actor: 'user' | 'assistant'
+      text: string
+      attachmentIds?: string[]
+    })
+  | (ConversationItemDataBase & {
+      kind: 'thinking'
+      actor: 'assistant'
+      text: string
+    })
+  | (ConversationItemDataBase & {
+      kind: 'tool-call'
+      toolName: string
+      inputText: string
+    })
+  | (ConversationItemDataBase & {
+      kind: 'tool-result'
+      toolName: string | null
+      relatedItemId: string | null
+      outputText: string
+    })
+  | (ConversationItemDataBase & {
+      kind: 'approval-request'
+      description: string
+    })
+  | (ConversationItemDataBase & {
+      kind: 'input-request'
+      prompt: string
+    })
+  | (ConversationItemDataBase & {
+      kind: 'note'
+      level: 'info' | 'warning' | 'error'
+      text: string
+    })
+
+interface ConversationPatchEventData {
+  sessionId: string
+  op: 'add' | 'patch'
+  item: ConversationItemData
+}
+
+interface SessionSummaryData {
   id: string
   projectId: string
   workspaceId: string | null
@@ -170,10 +217,14 @@ interface SessionData {
   name: string
   status: SessionStatus
   attention: AttentionState
+  activity: ActivitySignal
+  contextWindow: SessionContextWindow | null
   workingDirectory: string
-  transcript: TranscriptEntry[]
-  contextWindow?: SessionContextWindow | null
-  archivedAt?: string | null
+  archivedAt: string | null
+  parentSessionId: string | null
+  forkStrategy: 'full' | 'summary' | null
+  continuationToken: string | null
+  lastSequence: number
   createdAt: string
   updatedAt: string
 }
@@ -248,10 +299,13 @@ interface ElectronAPI {
     getDiff: (repoPath: string, filePath?: string) => Promise<string>
   }
   session: {
-    create: (input: CreateSessionInput) => Promise<SessionData>
-    getByProjectId: (projectId: string) => Promise<SessionData[]>
-    getAll: () => Promise<SessionData[]>
-    getById: (id: string) => Promise<SessionData | null>
+    create: (input: CreateSessionInput) => Promise<SessionSummaryData>
+    getSummariesByProjectId: (
+      projectId: string,
+    ) => Promise<SessionSummaryData[]>
+    getAllSummaries: () => Promise<SessionSummaryData[]>
+    getSummaryById: (id: string) => Promise<SessionSummaryData | null>
+    getConversation: (id: string) => Promise<ConversationItemData[]>
     archive: (id: string) => Promise<void>
     unarchive: (id: string) => Promise<void>
     delete: (id: string) => Promise<void>
@@ -272,13 +326,18 @@ interface ElectronAPI {
     setNeedsYouDismissals: (dismissals: NeedsYouDismissals) => Promise<void>
     getRecentIds: () => Promise<string[]>
     setRecentIds: (ids: string[]) => Promise<void>
-    onSessionUpdate: (callback: (session: SessionData) => void) => () => void
+    onSessionSummaryUpdate: (
+      callback: (summary: SessionSummaryData) => void,
+    ) => () => void
+    onSessionConversationPatched: (
+      callback: (event: ConversationPatchEventData) => void,
+    ) => () => void
     forkPreviewSummary: (
       parentId: string,
       requestId?: string,
     ) => Promise<unknown>
-    forkFull: (input: unknown) => Promise<SessionData>
-    forkSummary: (input: unknown) => Promise<SessionData>
+    forkFull: (input: unknown) => Promise<SessionSummaryData>
+    forkSummary: (input: unknown) => Promise<SessionSummaryData>
   }
   provider: {
     getAll: () => Promise<ProviderInfo[]>

@@ -1,7 +1,7 @@
 import type { Project } from '@/entities/project'
 import type { Workspace } from '@/entities/workspace'
 import type {
-  Session,
+  SessionSummary,
   AttentionState,
   NeedsYouDismissals,
 } from '@/entities/session'
@@ -20,7 +20,7 @@ import type {
 export interface BuildPaletteIndexInput {
   projects: Project[]
   workspaces: Workspace[]
-  sessions: Session[]
+  sessions: SessionSummary[]
   recentSessionIds: string[]
   dismissals: NeedsYouDismissals
   activeSessionId?: string | null

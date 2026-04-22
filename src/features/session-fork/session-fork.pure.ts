@@ -1,16 +1,16 @@
 import type {
   ForkArtifacts,
   ForkSummary,
-  TranscriptEntry,
+  ConversationItem,
 } from '@/entities/session'
 
 const CHARS_PER_TOKEN_ESTIMATE = 4
 const SIZE_WARNING_THRESHOLD = 0.8
 
-export function estimateTranscriptTokens(entries: TranscriptEntry[]): number {
+export function estimateTranscriptTokens(items: ConversationItem[]): number {
   let chars = 0
-  for (const entry of entries) {
-    chars += JSON.stringify(entry).length
+  for (const item of items) {
+    chars += JSON.stringify(item).length
   }
   return Math.ceil(chars / CHARS_PER_TOKEN_ESTIMATE)
 }
@@ -22,11 +22,11 @@ export interface SeedSizeWarning {
 }
 
 export function computeSeedSizeWarning(
-  entries: TranscriptEntry[],
+  items: ConversationItem[],
   windowTokens: number | null | undefined,
 ): SeedSizeWarning | null {
   if (!windowTokens || windowTokens <= 0) return null
-  const estimatedTokens = estimateTranscriptTokens(entries)
+  const estimatedTokens = estimateTranscriptTokens(items)
   const ratio = estimatedTokens / windowTokens
   if (ratio < SIZE_WARNING_THRESHOLD) return null
   return {

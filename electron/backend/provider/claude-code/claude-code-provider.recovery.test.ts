@@ -1,7 +1,7 @@
 import { EventEmitter } from 'events'
 import { PassThrough } from 'stream'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { TranscriptEntry } from '../provider.types'
+import type { SessionDelta } from '../../session/conversation-item.types'
 
 const { spawnMock } = vi.hoisted(() => ({
   spawnMock: vi.fn(),
@@ -108,12 +108,16 @@ describe('ClaudeCodeProvider continuation recovery', () => {
       continuationToken: 'stale-claude-session',
     })
 
-    const transcript: TranscriptEntry[] = []
+    const items: Array<
+      Extract<SessionDelta, { kind: 'conversation.item.add' }>['item']
+    > = []
     const statuses: string[] = []
     const continuationTokens: string[] = []
 
-    handle.onTranscriptEntry((entry) => {
-      transcript.push(entry)
+    handle.onDelta((delta) => {
+      if (delta.kind === 'conversation.item.add') {
+        items.push(delta.item)
+      }
     })
     handle.onStatusChange((status) => {
       statuses.push(status)
@@ -139,17 +143,20 @@ describe('ClaudeCodeProvider continuation recovery', () => {
       'fresh-claude-session',
     ])
 
-    const userEntries = transcript.filter((entry) => entry.type === 'user')
+    const userEntries = items.filter(
+      (item) => item.kind === 'message' && item.actor === 'user',
+    )
     expect(userEntries).toHaveLength(1)
     expect(userEntries[0]).toMatchObject({ text: 'hello claude' })
-    expect(transcript).toEqual(
+    expect(items).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          type: 'system',
+          kind: 'note',
           text: 'Claude Code continuation was no longer available. Started a new session; previous provider context may be missing.',
         }),
         expect.objectContaining({
-          type: 'assistant',
+          kind: 'message',
+          actor: 'assistant',
           text: 'Recovered Claude reply',
         }),
       ]),

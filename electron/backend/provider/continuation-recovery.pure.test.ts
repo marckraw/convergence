@@ -38,8 +38,8 @@ describe('buildContinuationRecoveryEntry', () => {
     expect(
       buildContinuationRecoveryEntry('Claude Code', '2026-04-20T14:00:00.000Z'),
     ).toEqual({
-      type: 'system',
       text: 'Claude Code continuation was no longer available. Started a new session; previous provider context may be missing.',
+      level: 'warning',
       timestamp: '2026-04-20T14:00:00.000Z',
     })
   })

@@ -6,7 +6,8 @@ import {
   useSessionStore,
   type ForkStrategy,
   type ReasoningEffort,
-  type Session,
+  type ConversationItem,
+  type SessionSummary,
   type WorkspaceMode,
 } from '@/entities/session'
 import { useAppSettingsStore } from '@/entities/app-settings'
@@ -50,7 +51,10 @@ export const SessionForkDialogContainer: FC = () => {
   )
 
   const parentSessionId = payload?.parentSessionId ?? null
-  const [parent, setParent] = useState<Session | null>(null)
+  const [parent, setParent] = useState<SessionSummary | null>(null)
+  const [parentConversation, setParentConversation] = useState<
+    ConversationItem[]
+  >([])
   const [name, setName] = useState('')
   const [strategy, setStrategy] = useState<ForkStrategy>('full')
   const [providerId, setProviderId] = useState('')
@@ -86,7 +90,7 @@ export const SessionForkDialogContainer: FC = () => {
     [providers, providerId, modelId, effortId, storedDefaults],
   )
 
-  const transcriptLength = parent?.transcript.length ?? 0
+  const transcriptLength = parentConversation.length
   const summaryAllowed = transcriptLength >= MIN_TRANSCRIPT_ENTRIES_FOR_SUMMARY
   const summaryDisabledReason = summaryAllowed
     ? null
@@ -99,8 +103,8 @@ export const SessionForkDialogContainer: FC = () => {
       parentContext?.availability === 'available'
         ? parentContext.windowTokens
         : null
-    return computeSeedSizeWarning(parent.transcript, windowTokens)
-  }, [parent, strategy])
+    return computeSeedSizeWarning(parentConversation, windowTokens)
+  }, [parent, parentConversation, strategy])
 
   useEffect(() => {
     if (open) loadProviders()
@@ -109,16 +113,22 @@ export const SessionForkDialogContainer: FC = () => {
   useEffect(() => {
     if (!open || !parentSessionId) {
       setParent(null)
-      return
-    }
-    const existing = globalSessions.find((s) => s.id === parentSessionId)
-    if (existing) {
-      setParent(existing)
+      setParentConversation([])
       return
     }
     let cancelled = false
-    void sessionApi.getById(parentSessionId).then((session) => {
-      if (!cancelled) setParent(session)
+    const existing = globalSessions.find((s) => s.id === parentSessionId)
+    if (existing) {
+      setParent(existing)
+    }
+    setParentConversation([])
+    if (!existing) {
+      void sessionApi.getSummaryById(parentSessionId).then((session) => {
+        if (!cancelled) setParent(session)
+      })
+    }
+    void sessionApi.getConversation(parentSessionId).then((conversation) => {
+      if (!cancelled) setParentConversation(conversation)
     })
     return () => {
       cancelled = true

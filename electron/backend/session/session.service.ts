@@ -1,22 +1,40 @@
 import { randomUUID } from 'crypto'
 import type Database from 'better-sqlite3'
-import type { SessionRow } from '../database/database.types'
+import type {
+  ConversationItemRow,
+  SessionRow,
+} from '../database/database.types'
 import type { ProviderRegistry } from '../provider/provider-registry'
 import type {
   Attachment,
   SessionHandle,
-  TranscriptEntry,
   SessionStatus,
   AttentionState,
-  SessionContextWindow,
   ActivitySignal,
 } from '../provider/provider.types'
 import type { AttachmentsService } from '../attachments/attachments.service'
 import {
-  sessionFromRow,
+  sessionSummaryFromRow,
   type Session,
+  type SessionSummary,
   type CreateSessionInput,
 } from './session.types'
+import type {
+  ConversationItem,
+  ConversationItemDraft,
+  ConversationPatchEvent,
+  SessionDelta,
+} from './conversation-item.types'
+import {
+  conversationItemFromRow,
+  conversationItemToInsertRow,
+} from './conversation-item.pure'
+
+type UserMessageDraft = Extract<
+  ConversationItem,
+  { kind: 'message'; actor: 'user' }
+>
+type UserMessageDraftInput = Omit<UserMessageDraft, 'sessionId' | 'sequence'>
 
 export interface SendMessageInput {
   text: string
@@ -24,12 +42,18 @@ export interface SendMessageInput {
 }
 
 export interface SessionNamer {
-  generateName(session: Session): Promise<string | null>
+  generateName(
+    session: SessionSummary,
+    conversation: ConversationItem[],
+  ): Promise<string | null>
 }
 
 export class SessionService {
   private activeHandles = new Map<string, SessionHandle>()
-  private onUpdate: ((session: Session) => void) | null = null
+  private onSummaryUpdate: ((summary: SessionSummary) => void) | null = null
+  private onConversationPatch:
+    | ((event: ConversationPatchEvent) => void)
+    | null = null
   private attachments: AttachmentsService | null = null
   private namer: SessionNamer | null = null
 
@@ -58,7 +82,7 @@ export class SessionService {
         "UPDATE sessions SET name = ?, name_auto_generated = 1, updated_at = datetime('now') WHERE id = ?",
       )
       .run(trimmed, id)
-    this.notifyUpdate(id)
+    this.notifySessionChange(id)
     return this.getById(id)!
   }
 
@@ -68,16 +92,19 @@ export class SessionService {
     await this.runNaming(session)
   }
 
-  private async runNaming(session: Session): Promise<void> {
+  private async runNaming(session: SessionSummary): Promise<void> {
     if (!this.namer) return
-    const title = await this.namer.generateName(session)
+    const title = await this.namer.generateName(
+      session,
+      this.getConversation(session.id),
+    )
     if (!title) return
     this.db
       .prepare(
         "UPDATE sessions SET name = ?, name_auto_generated = 1, updated_at = datetime('now') WHERE id = ?",
       )
       .run(title, session.id)
-    this.notifyUpdate(session.id)
+    this.notifySessionChange(session.id)
   }
 
   private hasBeenAutoNamed(id: string): boolean {
@@ -87,8 +114,14 @@ export class SessionService {
     return (row?.name_auto_generated ?? 0) === 1
   }
 
-  setUpdateListener(listener: (session: Session) => void): void {
-    this.onUpdate = listener
+  setSummaryUpdateListener(listener: (summary: SessionSummary) => void): void {
+    this.onSummaryUpdate = listener
+  }
+
+  setConversationPatchListener(
+    listener: (event: ConversationPatchEvent) => void,
+  ): void {
+    this.onConversationPatch = listener
   }
 
   create(input: CreateSessionInput): Session {
@@ -139,7 +172,7 @@ export class SessionService {
         input.forkStrategy ?? null,
       )
 
-    return this.getById(id)!
+    return this.getSummaryById(id)!
   }
 
   getByProjectId(projectId: string): Session[] {
@@ -149,7 +182,7 @@ export class SessionService {
       )
       .all(projectId) as SessionRow[]
 
-    return rows.map(sessionFromRow)
+    return rows.map(sessionSummaryFromRow)
   }
 
   getAll(): Session[] {
@@ -157,13 +190,50 @@ export class SessionService {
       .prepare('SELECT * FROM sessions ORDER BY created_at DESC')
       .all() as SessionRow[]
 
-    return rows.map(sessionFromRow)
+    return rows.map(sessionSummaryFromRow)
+  }
+
+  getSummariesByProjectId(projectId: string): SessionSummary[] {
+    const rows = this.db
+      .prepare(
+        'SELECT * FROM sessions WHERE project_id = ? ORDER BY created_at DESC',
+      )
+      .all(projectId) as SessionRow[]
+
+    return rows.map(sessionSummaryFromRow)
+  }
+
+  getAllSummaries(): SessionSummary[] {
+    const rows = this.db
+      .prepare('SELECT * FROM sessions ORDER BY created_at DESC')
+      .all() as SessionRow[]
+
+    return rows.map(sessionSummaryFromRow)
   }
 
   getById(id: string): Session | null {
     const row = this.getRowById(id)
 
-    return row ? sessionFromRow(row) : null
+    return row ? sessionSummaryFromRow(row) : null
+  }
+
+  getSummaryById(id: string): SessionSummary | null {
+    const row = this.getRowById(id)
+    return row ? sessionSummaryFromRow(row) : null
+  }
+
+  getConversation(id: string): ConversationItem[] {
+    const rows = this.db
+      .prepare(
+        `SELECT items.*, sessions.provider_id
+         FROM session_conversation_items items
+         INNER JOIN sessions ON sessions.id = items.session_id
+         WHERE items.session_id = ?
+         ORDER BY items.sequence ASC`,
+      )
+      .all(id) as ConversationItemRow[]
+
+    return rows.map(conversationItemFromRow)
   }
 
   delete(id: string): void {
@@ -297,47 +367,245 @@ export class SessionService {
     this.activeHandles.delete(id)
   }
 
-  private appendTranscript(id: string, entry: TranscriptEntry): void {
-    const row = this.db
-      .prepare('SELECT transcript FROM sessions WHERE id = ?')
-      .get(id) as { transcript: string } | undefined
-    if (!row) return
+  private applyDelta(sessionId: string, delta: SessionDelta): void {
+    switch (delta.kind) {
+      case 'session.patch':
+        this.applySessionPatch(sessionId, delta.patch)
+        this.handleLifecycle(sessionId, delta.patch.status)
+        this.notifySessionChange(sessionId)
+        return
 
-    let annotated: TranscriptEntry = entry
-    if (entry.type === 'user') {
-      const pending = this.pendingUserAttachmentIds.get(id)
-      if (pending && pending.length > 0) {
-        annotated = { ...entry, attachmentIds: pending }
+      case 'conversation.item.add': {
+        const item = this.addConversationItem(sessionId, delta.item)
+        if (!item) return
+        this.handleAssistantNaming(sessionId, item)
+        this.notifySessionChange(sessionId, {
+          sessionId,
+          op: 'add',
+          item,
+        })
+        return
       }
-      this.pendingUserAttachmentIds.delete(id)
-    }
 
-    const transcript = JSON.parse(row.transcript) as TranscriptEntry[]
-    const priorAssistantCount = transcript.filter(
-      (item) => item.type === 'assistant',
-    ).length
-    transcript.push(annotated)
-
-    this.db
-      .prepare(
-        "UPDATE sessions SET transcript = ?, updated_at = datetime('now') WHERE id = ?",
-      )
-      .run(JSON.stringify(transcript), id)
-
-    this.notifyUpdate(id)
-
-    if (
-      entry.type === 'assistant' &&
-      priorAssistantCount === 0 &&
-      !this.hasBeenAutoNamed(id)
-    ) {
-      const session = this.getById(id)
-      if (session) {
-        void this.runNaming(session).catch(() => {
-          // Naming failures are silent per spec.
+      case 'conversation.item.patch': {
+        const item = this.patchConversationItem(
+          sessionId,
+          delta.itemId,
+          delta.patch,
+        )
+        if (!item) return
+        this.notifySessionChange(sessionId, {
+          sessionId,
+          op: 'patch',
+          item,
         })
       }
     }
+  }
+
+  private addConversationItem(
+    sessionId: string,
+    itemDraft: ConversationItemDraft,
+  ): ConversationItem | null {
+    const row = this.getRowById(sessionId)
+    if (!row) return null
+
+    const latest = this.db
+      .prepare(
+        `SELECT turn_id
+         FROM session_conversation_items
+         WHERE session_id = ?
+         ORDER BY sequence DESC
+         LIMIT 1`,
+      )
+      .get(sessionId) as { turn_id: string | null } | undefined
+
+    const nextSequence = (row.last_sequence ?? 0) + 1
+    const pendingAttachments = this.pendingUserAttachmentIds.get(sessionId)
+    const isUserMessage =
+      itemDraft.kind === 'message' &&
+      (itemDraft as { actor?: unknown }).actor === 'user'
+    const turnId = isUserMessage ? randomUUID() : (latest?.turn_id ?? null)
+
+    let item: ConversationItem
+    if (isUserMessage) {
+      const userMessageDraft = itemDraft as unknown as UserMessageDraftInput
+      item = {
+        ...(userMessageDraft as unknown as ConversationItemDraft),
+        sessionId,
+        sequence: nextSequence,
+        turnId,
+        attachmentIds:
+          userMessageDraft.attachmentIds ??
+          (pendingAttachments && pendingAttachments.length > 0
+            ? pendingAttachments
+            : undefined),
+      } as ConversationItem
+    } else {
+      item = {
+        ...itemDraft,
+        sessionId,
+        sequence: nextSequence,
+        turnId,
+      } as ConversationItem
+    }
+
+    if (item.kind === 'message' && item.actor === 'user') {
+      this.pendingUserAttachmentIds.delete(sessionId)
+    }
+
+    const insertRow = conversationItemToInsertRow(item)
+
+    this.db
+      .prepare(
+        `INSERT INTO session_conversation_items (
+           id,
+           session_id,
+           sequence,
+           turn_id,
+           kind,
+           state,
+           payload_json,
+           provider_item_id,
+           provider_event_type,
+           created_at,
+           updated_at
+         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      )
+      .run(
+        insertRow.id,
+        insertRow.sessionId,
+        insertRow.sequence,
+        insertRow.turnId,
+        insertRow.kind,
+        insertRow.state,
+        insertRow.payloadJson,
+        insertRow.providerItemId,
+        insertRow.providerEventType,
+        insertRow.createdAt,
+        insertRow.updatedAt,
+      )
+
+    this.db
+      .prepare(
+        'UPDATE sessions SET last_sequence = ?, conversation_version = 2, updated_at = ? WHERE id = ?',
+      )
+      .run(nextSequence, item.updatedAt, sessionId)
+
+    return item
+  }
+
+  private patchConversationItem(
+    sessionId: string,
+    itemId: string,
+    patch: Partial<ConversationItem>,
+  ): ConversationItem | null {
+    const existing = this.db
+      .prepare(
+        `SELECT items.*, sessions.provider_id
+         FROM session_conversation_items items
+         INNER JOIN sessions ON sessions.id = items.session_id
+         WHERE items.session_id = ? AND items.id = ?`,
+      )
+      .get(sessionId, itemId) as ConversationItemRow | undefined
+
+    if (!existing) return null
+
+    const current = conversationItemFromRow(existing)
+    const merged = {
+      ...current,
+      ...patch,
+      providerMeta: {
+        ...current.providerMeta,
+        ...(patch.providerMeta ?? {}),
+      },
+      updatedAt: patch.updatedAt ?? new Date().toISOString(),
+    } as ConversationItem
+    const row = conversationItemToInsertRow(merged)
+
+    this.db
+      .prepare(
+        `UPDATE session_conversation_items
+         SET turn_id = ?,
+             kind = ?,
+             state = ?,
+             payload_json = ?,
+             provider_item_id = ?,
+             provider_event_type = ?,
+             updated_at = ?
+         WHERE session_id = ? AND id = ?`,
+      )
+      .run(
+        row.turnId,
+        row.kind,
+        row.state,
+        row.payloadJson,
+        row.providerItemId,
+        row.providerEventType,
+        row.updatedAt,
+        sessionId,
+        itemId,
+      )
+
+    this.db
+      .prepare('UPDATE sessions SET updated_at = ? WHERE id = ?')
+      .run(merged.updatedAt, sessionId)
+
+    return merged
+  }
+
+  private applySessionPatch(
+    sessionId: string,
+    patch: Extract<SessionDelta, { kind: 'session.patch' }>['patch'],
+  ): void {
+    const row = this.getRowById(sessionId)
+    if (!row) return
+
+    const nextStatus = patch.status ?? (row.status as SessionStatus)
+    const nextAttention =
+      patch.attention ?? (row.attention as AttentionState | undefined)
+    const nextActivity =
+      patch.activity !== undefined
+        ? patch.activity
+        : nextStatus !== 'running'
+          ? null
+          : ((row.activity as ActivitySignal) ?? null)
+    const nextArchivedAt =
+      row.archived_at &&
+      (nextAttention === 'needs-approval' || nextAttention === 'needs-input')
+        ? null
+        : row.archived_at
+
+    this.db
+      .prepare(
+        `UPDATE sessions
+         SET status = ?,
+             attention = ?,
+             activity = ?,
+             context_window = ?,
+             continuation_token = ?,
+             archived_at = ?,
+             updated_at = ?
+         WHERE id = ?`,
+      )
+      .run(
+        nextStatus,
+        nextAttention ?? row.attention,
+        nextActivity,
+        patch.contextWindow !== undefined
+          ? patch.contextWindow
+            ? JSON.stringify(patch.contextWindow)
+            : null
+          : row.context_window,
+        patch.continuationToken !== undefined
+          ? patch.continuationToken?.trim()
+            ? patch.continuationToken
+            : row.continuation_token
+          : row.continuation_token,
+        nextArchivedAt,
+        patch.updatedAt ?? new Date().toISOString(),
+        sessionId,
+      )
   }
 
   private updateField(id: string, field: string, value: string | null): void {
@@ -347,30 +615,7 @@ export class SessionService {
       )
       .run(value, id)
 
-    this.notifyUpdate(id)
-  }
-
-  private updateContextWindow(
-    id: string,
-    contextWindow: SessionContextWindow,
-  ): void {
-    this.db
-      .prepare(
-        "UPDATE sessions SET context_window = ?, updated_at = datetime('now') WHERE id = ?",
-      )
-      .run(JSON.stringify(contextWindow), id)
-
-    this.notifyUpdate(id)
-  }
-
-  private updateActivity(id: string, activity: ActivitySignal): void {
-    this.db
-      .prepare(
-        "UPDATE sessions SET activity = ?, updated_at = datetime('now') WHERE id = ?",
-      )
-      .run(activity, id)
-
-    this.notifyUpdate(id)
+    this.notifySessionChange(id)
   }
 
   private updateArchiveState(id: string, archivedAt: string | null): void {
@@ -380,7 +625,7 @@ export class SessionService {
       )
       .run(archivedAt, id)
 
-    this.notifyUpdate(id)
+    this.notifySessionChange(id)
   }
 
   private updateAttention(id: string, attention: AttentionState): void {
@@ -398,17 +643,28 @@ export class SessionService {
           "UPDATE sessions SET attention = ?, archived_at = NULL, updated_at = datetime('now') WHERE id = ?",
         )
         .run(attention, id)
-      this.notifyUpdate(id)
+      this.notifySessionChange(id)
       return
     }
 
     this.updateField(id, 'attention', attention)
   }
 
-  private notifyUpdate(id: string): void {
-    if (this.onUpdate) {
-      const session = this.getById(id)
-      if (session) this.onUpdate(session)
+  private notifySummaryUpdated(id: string): void {
+    if (!this.onSummaryUpdate) return
+    const summary = this.getSummaryById(id)
+    if (summary) {
+      this.onSummaryUpdate(summary)
+    }
+  }
+
+  private notifySessionChange(
+    id: string,
+    conversationPatch?: ConversationPatchEvent,
+  ): void {
+    this.notifySummaryUpdated(id)
+    if (conversationPatch && this.onConversationPatch) {
+      this.onConversationPatch(conversationPatch)
     }
   }
 
@@ -420,12 +676,6 @@ export class SessionService {
 
   private getContinuationToken(id: string): string | null {
     return this.getRowById(id)?.continuation_token ?? null
-  }
-
-  private updateContinuationToken(id: string, token: string): void {
-    this.db
-      .prepare('UPDATE sessions SET continuation_token = ? WHERE id = ?')
-      .run(token, id)
   }
 
   private startHandle(
@@ -453,39 +703,54 @@ export class SessionService {
     })
 
     this.activeHandles.set(session.id, handle)
-
-    handle.onTranscriptEntry((entry: TranscriptEntry) => {
-      this.appendTranscript(session.id, entry)
+    handle.onDelta((delta: SessionDelta) => {
+      this.applyDelta(session.id, delta)
     })
+  }
 
-    handle.onStatusChange((status: SessionStatus) => {
-      this.updateField(session.id, 'status', status)
-      if (status !== 'running') {
-        this.updateActivity(session.id, null)
+  private handleLifecycle(
+    sessionId: string,
+    status: SessionStatus | undefined,
+  ): void {
+    if (status === 'failed') {
+      this.activeHandles.delete(sessionId)
+    } else if (status === 'completed') {
+      const summary = this.getSummaryById(sessionId)
+      if (
+        summary &&
+        !this.providers.get(summary.providerId)?.supportsContinuation
+      ) {
+        this.activeHandles.delete(sessionId)
       }
-      if (status === 'failed') {
-        this.activeHandles.delete(session.id)
-      } else if (status === 'completed' && !provider.supportsContinuation) {
-        this.activeHandles.delete(session.id)
-      }
-    })
+    }
+  }
 
-    handle.onAttentionChange((attention: AttentionState) => {
-      this.updateAttention(session.id, attention)
-    })
+  private handleAssistantNaming(
+    sessionId: string,
+    item: ConversationItem,
+  ): void {
+    if (
+      item.kind !== 'message' ||
+      item.actor !== 'assistant' ||
+      !item.text.trim() ||
+      this.hasBeenAutoNamed(sessionId)
+    ) {
+      return
+    }
 
-    handle.onContinuationToken((token: string) => {
-      if (token.trim()) {
-        this.updateContinuationToken(session.id, token)
-      }
-    })
+    const assistantCount = this.getConversation(sessionId).filter(
+      (entry) => entry.kind === 'message' && entry.actor === 'assistant',
+    ).length
 
-    handle.onContextWindowChange((contextWindow: SessionContextWindow) => {
-      this.updateContextWindow(session.id, contextWindow)
-    })
+    if (assistantCount !== 1) {
+      return
+    }
 
-    handle.onActivityChange((activity: ActivitySignal) => {
-      this.updateActivity(session.id, activity)
+    const session = this.getById(sessionId)
+    if (!session) return
+
+    void this.runNaming(session).catch(() => {
+      // Naming failures are silent per spec.
     })
   }
 }

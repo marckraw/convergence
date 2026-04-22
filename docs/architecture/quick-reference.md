@@ -111,7 +111,7 @@ Sessions support image, PDF, and UTF-8 text attachments on outgoing messages:
   - `pi/pi-message.pure.ts` → `{message, images?}` per Pi rpc schema
 - **Capability matrix** is exposed on `ProviderDescriptor.attachments`; renderer gates on `selection.provider.attachments` via `src/features/composer/attachment-capability.pure.ts`
 - **UI surface:** composer `+` button (file picker), textarea `onPaste`, composer root drag-and-drop, chip row with preview modal
-- **Persistence:** `TranscriptEntry` of kind `user` carries optional `attachmentIds: string[]`; attachment rows live in dedicated `attachments` table
+- **Persistence:** attachment ids live on normalized user `ConversationItem` payloads; attachment rows live in dedicated `attachments` table
 - **PDFs are Claude-Code-only**; Codex and Pi providers report `supportsPdf: false` and the composer surfaces a capability error with red chip outline + send-disabled state
 
 Full spec: `docs/specs/session-attachments.md`.

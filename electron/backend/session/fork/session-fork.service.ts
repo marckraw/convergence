@@ -2,7 +2,7 @@ import type { ProviderRegistry } from '../../provider/provider-registry'
 import type { AppSettingsService } from '../../app-settings/app-settings.service'
 import type { WorkspaceService } from '../../workspace/workspace.service'
 import type { SessionService } from '../session.service'
-import type { Session } from '../session.types'
+import type { Session, SessionSummary } from '../session.types'
 import {
   buildExtractionPrompt,
   extractArtifactsByRegex,
@@ -10,7 +10,7 @@ import {
   parseAndValidateSummary,
   renderFullSeed,
   RETRY_SUFFIX,
-  serializeTranscript,
+  serializeConversationItems,
 } from './session-fork.pure'
 import type {
   ForkFullInput,
@@ -45,8 +45,9 @@ export class SessionForkService {
     parentId: string,
     requestId?: string,
   ): Promise<ForkSummary> {
-    const parent = this.deps.sessions.getById(parentId)
+    const parent = this.deps.sessions.getSummaryById(parentId)
     if (!parent) throw new Error(`Parent session not found: ${parentId}`)
+    const conversation = this.deps.sessions.getConversation(parentId)
 
     const provider = this.deps.providers.get(parent.providerId)
     if (!provider || !provider.oneShot) {
@@ -64,7 +65,7 @@ export class SessionForkService {
       )
     }
 
-    const serialized = serializeTranscript(parent.transcript)
+    const serialized = serializeConversationItems(conversation)
     const basePrompt = buildExtractionPrompt(serialized)
 
     const firstRaw = await provider.oneShot({
@@ -97,12 +98,15 @@ export class SessionForkService {
   }
 
   async forkFull(input: ForkFullInput): Promise<Session> {
-    const parent = this.deps.sessions.getById(input.parentSessionId)
+    const parent = this.deps.sessions.getSummaryById(input.parentSessionId)
     if (!parent) {
       throw new Error(`Parent session not found: ${input.parentSessionId}`)
     }
+    const conversation = this.deps.sessions.getConversation(
+      input.parentSessionId,
+    )
 
-    const serialized = serializeTranscript(parent.transcript)
+    const serialized = serializeConversationItems(conversation)
     const seed = renderFullSeed({
       serializedTranscript: serialized,
       parentName: parent.name,
@@ -123,7 +127,7 @@ export class SessionForkService {
   }
 
   async forkSummary(input: ForkSummaryInput): Promise<Session> {
-    const parent = this.deps.sessions.getById(input.parentSessionId)
+    const parent = this.deps.sessions.getSummaryById(input.parentSessionId)
     if (!parent) {
       throw new Error(`Parent session not found: ${input.parentSessionId}`)
     }
@@ -142,7 +146,7 @@ export class SessionForkService {
   }
 
   private async createAndStart(args: {
-    parent: Session
+    parent: SessionSummary
     name: string
     providerId: string
     modelId: string
@@ -170,11 +174,11 @@ export class SessionForkService {
     })
 
     await this.deps.sessions.start(child.id, { text: args.seed })
-    return this.deps.sessions.getById(child.id) ?? child
+    return this.deps.sessions.getSummaryById(child.id) ?? child
   }
 
   private async resolveChildWorkspace(
-    parent: Session,
+    parent: SessionSummary,
     mode: WorkspaceMode,
     branchName: string | null,
   ): Promise<string | null> {
