@@ -1,5 +1,5 @@
-import { fireEvent, render, screen } from '@testing-library/react'
-import { describe, expect, it } from 'vitest'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ConversationItemView } from './transcript-entry.presentational'
 
 describe('ConversationItemView', () => {
@@ -98,5 +98,81 @@ describe('ConversationItemView', () => {
     fireEvent.click(summary as Element)
 
     expect(details).not.toHaveAttribute('open')
+  })
+
+  describe('copy button', () => {
+    const writeText = vi.fn<(value: string) => Promise<void>>()
+
+    beforeEach(() => {
+      writeText.mockReset()
+      writeText.mockResolvedValue(undefined)
+      Object.defineProperty(navigator, 'clipboard', {
+        configurable: true,
+        value: { writeText },
+      })
+    })
+
+    afterEach(() => {
+      vi.restoreAllMocks()
+    })
+
+    it('copies the raw markdown text for assistant messages', async () => {
+      const markdown = '# Title\n\n- item'
+      render(
+        <ConversationItemView
+          entry={{
+            id: 'message-1',
+            sessionId: 'session-1',
+            sequence: 1,
+            turnId: null,
+            kind: 'message',
+            state: 'complete',
+            actor: 'assistant',
+            text: markdown,
+            createdAt: '2026-04-22T10:00:00.000Z',
+            updatedAt: '2026-04-22T10:00:00.000Z',
+            providerMeta: {
+              providerId: 'claude-code',
+              providerItemId: null,
+              providerEventType: 'assistant',
+            },
+          }}
+        />,
+      )
+
+      fireEvent.click(screen.getByRole('button', { name: 'Copy' }))
+
+      await waitFor(() => expect(writeText).toHaveBeenCalledWith(markdown))
+    })
+
+    it('copies the raw outputText for tool-result items', async () => {
+      const output = 'line 1\nline 2'
+      render(
+        <ConversationItemView
+          entry={{
+            id: 'tool-result-1',
+            sessionId: 'session-1',
+            sequence: 1,
+            turnId: null,
+            kind: 'tool-result',
+            state: 'complete',
+            toolName: null,
+            relatedItemId: null,
+            outputText: output,
+            createdAt: '2026-04-22T10:00:00.000Z',
+            updatedAt: '2026-04-22T10:00:00.000Z',
+            providerMeta: {
+              providerId: 'codex',
+              providerItemId: null,
+              providerEventType: 'tool-result',
+            },
+          }}
+        />,
+      )
+
+      fireEvent.click(screen.getByRole('button', { name: 'Copy' }))
+
+      await waitFor(() => expect(writeText).toHaveBeenCalledWith(output))
+    })
   })
 })
