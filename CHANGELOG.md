@@ -1,5 +1,13 @@
 # convergence
 
+## 0.18.2
+
+### Patch Changes
+
+- 58c9092: Fix agent completion notifications so real session finish and attention
+  transitions trigger the same toast, sound, and system notification flow as
+  the manual notification test action.
+
 ## 0.18.1
 
 ### Patch Changes
