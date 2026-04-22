@@ -4,9 +4,10 @@ import { useSessionStore } from './session.model'
 const mockElectronAPI = {
   session: {
     create: vi.fn(),
-    getAll: vi.fn(),
-    getByProjectId: vi.fn(),
-    getById: vi.fn(),
+    getAllSummaries: vi.fn(),
+    getSummariesByProjectId: vi.fn(),
+    getSummaryById: vi.fn(),
+    getConversation: vi.fn().mockResolvedValue([]),
     getNeedsYouDismissals: vi.fn().mockResolvedValue({}),
     archive: vi.fn().mockResolvedValue(undefined),
     unarchive: vi.fn().mockResolvedValue(undefined),
@@ -19,7 +20,8 @@ const mockElectronAPI = {
     approve: vi.fn(),
     deny: vi.fn(),
     stop: vi.fn(),
-    onSessionUpdate: vi.fn(),
+    onSessionSummaryUpdate: vi.fn(),
+    onSessionConversationPatched: vi.fn(),
     forkPreviewSummary: vi.fn(),
     forkFull: vi.fn(),
     forkSummary: vi.fn(),
@@ -46,9 +48,14 @@ function makeSession(overrides: {
     name: `Session ${overrides.id}`,
     status: 'running' as const,
     attention: overrides.attention ?? ('none' as const),
+    activity: null,
+    contextWindow: null,
     workingDirectory: '/tmp/project-1',
-    transcript: [],
     archivedAt: overrides.archivedAt ?? null,
+    parentSessionId: null,
+    forkStrategy: null,
+    continuationToken: null,
+    lastSequence: 0,
     createdAt: '2026-01-01T00:00:00.000Z',
     updatedAt: overrides.updatedAt ?? '2026-01-01T00:00:00.000Z',
   }
@@ -77,23 +84,7 @@ describe('useSessionStore', () => {
 
   it('clears project session context when preparing for a different project', () => {
     useSessionStore.setState({
-      sessions: [
-        {
-          id: 'session-1',
-          projectId: 'project-1',
-          workspaceId: null,
-          providerId: 'claude-code',
-          model: 'sonnet',
-          effort: 'medium',
-          name: 'Session 1',
-          status: 'running',
-          attention: 'none',
-          workingDirectory: '/tmp/project-1',
-          transcript: [],
-          createdAt: '2026-01-01T00:00:00.000Z',
-          updatedAt: '2026-01-01T00:00:00.000Z',
-        },
-      ],
+      sessions: [makeSession({ id: 'session-1' })],
       globalSessions: [],
       needsYouDismissals: {},
       currentProjectId: 'project-1',
@@ -124,20 +115,13 @@ describe('useSessionStore', () => {
       error: null,
     })
 
-    useSessionStore.getState().handleSessionUpdate({
-      id: 'session-2',
-      projectId: 'project-2',
-      workspaceId: null,
+    useSessionStore.getState().handleSessionSummaryUpdate({
+      ...makeSession({ id: 'session-2', projectId: 'project-2' }),
       providerId: 'codex',
       model: 'gpt-5.4',
       effort: 'high',
       name: 'Other project session',
-      status: 'running',
-      attention: 'none',
       workingDirectory: '/tmp/project-2',
-      transcript: [],
-      createdAt: '2026-01-01T00:00:00.000Z',
-      updatedAt: '2026-01-01T00:00:00.000Z',
     })
 
     const state = useSessionStore.getState()
@@ -147,63 +131,39 @@ describe('useSessionStore', () => {
   })
 
   it('loads global sessions for cross-project attention tracking', async () => {
-    mockElectronAPI.session.getAll.mockResolvedValueOnce([
+    mockElectronAPI.session.getAllSummaries.mockResolvedValueOnce([
       {
-        id: 'session-1',
-        projectId: 'project-1',
-        workspaceId: null,
-        providerId: 'claude-code',
-        model: 'sonnet',
-        effort: 'medium',
+        ...makeSession({ id: 'session-1', attention: 'needs-input' }),
         name: 'Needs input session',
-        status: 'running',
-        attention: 'needs-input',
-        workingDirectory: '/tmp/project-1',
-        transcript: [],
-        createdAt: '2026-01-01T00:00:00.000Z',
-        updatedAt: '2026-01-01T00:00:00.000Z',
       },
       {
-        id: 'session-2',
-        projectId: 'project-2',
-        workspaceId: null,
+        ...makeSession({
+          id: 'session-2',
+          projectId: 'project-2',
+          attention: 'finished',
+        }),
         providerId: 'codex',
         model: 'gpt-5.4',
         effort: 'high',
         name: 'Finished session',
         status: 'completed',
-        attention: 'finished',
         workingDirectory: '/tmp/project-2',
-        transcript: [],
-        createdAt: '2026-01-01T00:00:00.000Z',
-        updatedAt: '2026-01-01T00:00:00.000Z',
       },
     ])
     mockElectronAPI.session.getNeedsYouDismissals.mockResolvedValueOnce({})
 
     await useSessionStore.getState().loadGlobalSessions()
 
-    expect(mockElectronAPI.session.getAll).toHaveBeenCalledOnce()
+    expect(mockElectronAPI.session.getAllSummaries).toHaveBeenCalledOnce()
     expect(mockElectronAPI.session.getNeedsYouDismissals).toHaveBeenCalledOnce()
     expect(useSessionStore.getState().globalSessions).toHaveLength(2)
   })
 
   it('loads and prunes persisted needs-you dismissals', async () => {
-    mockElectronAPI.session.getAll.mockResolvedValueOnce([
+    mockElectronAPI.session.getAllSummaries.mockResolvedValueOnce([
       {
-        id: 'session-1',
-        projectId: 'project-1',
-        workspaceId: null,
-        providerId: 'claude-code',
-        model: 'sonnet',
-        effort: 'medium',
+        ...makeSession({ id: 'session-1', attention: 'needs-input' }),
         name: 'Needs input session',
-        status: 'running',
-        attention: 'needs-input',
-        workingDirectory: '/tmp/project-1',
-        transcript: [],
-        createdAt: '2026-01-01T00:00:00.000Z',
-        updatedAt: '2026-01-01T00:00:00.000Z',
       },
     ])
     mockElectronAPI.session.getNeedsYouDismissals.mockResolvedValueOnce({
@@ -238,19 +198,8 @@ describe('useSessionStore', () => {
       sessions: [],
       globalSessions: [
         {
-          id: 'session-1',
-          projectId: 'project-1',
-          workspaceId: null,
-          providerId: 'claude-code',
-          model: 'sonnet',
-          effort: 'medium',
+          ...makeSession({ id: 'session-1', attention: 'needs-input' }),
           name: 'Needs input session',
-          status: 'running',
-          attention: 'needs-input',
-          workingDirectory: '/tmp/project-1',
-          transcript: [],
-          createdAt: '2026-01-01T00:00:00.000Z',
-          updatedAt: '2026-01-01T00:00:00.000Z',
         },
       ],
       needsYouDismissals: {},
@@ -275,20 +224,13 @@ describe('useSessionStore', () => {
       },
     })
 
-    useSessionStore.getState().handleSessionUpdate({
-      id: 'session-1',
-      projectId: 'project-1',
-      workspaceId: null,
-      providerId: 'claude-code',
-      model: 'sonnet',
-      effort: 'medium',
+    useSessionStore.getState().handleSessionSummaryUpdate({
+      ...makeSession({
+        id: 'session-1',
+        attention: 'needs-input',
+        updatedAt: '2026-01-01T00:01:00.000Z',
+      }),
       name: 'Needs input session',
-      status: 'running',
-      attention: 'needs-input',
-      workingDirectory: '/tmp/project-1',
-      transcript: [],
-      createdAt: '2026-01-01T00:00:00.000Z',
-      updatedAt: '2026-01-01T00:01:00.000Z',
     })
 
     expect(useSessionStore.getState().needsYouDismissals).toEqual({})
@@ -299,19 +241,17 @@ describe('useSessionStore', () => {
       sessions: [],
       globalSessions: [
         {
-          id: 'session-2',
-          projectId: 'project-2',
-          workspaceId: null,
+          ...makeSession({
+            id: 'session-2',
+            projectId: 'project-2',
+            attention: 'finished',
+          }),
           providerId: 'codex',
           model: 'gpt-5.4',
           effort: 'high',
           name: 'Finished session',
           status: 'completed',
-          attention: 'finished',
           workingDirectory: '/tmp/project-2',
-          transcript: [],
-          createdAt: '2026-01-01T00:00:00.000Z',
-          updatedAt: '2026-01-01T00:00:00.000Z',
         },
       ],
       needsYouDismissals: {},
@@ -337,19 +277,17 @@ describe('useSessionStore', () => {
       sessions: [],
       globalSessions: [
         {
-          id: 'session-2',
-          projectId: 'project-2',
-          workspaceId: null,
+          ...makeSession({
+            id: 'session-2',
+            projectId: 'project-2',
+            attention: 'finished',
+          }),
           providerId: 'codex',
           model: 'gpt-5.4',
           effort: 'high',
           name: 'Finished session',
           status: 'completed',
-          attention: 'finished',
           workingDirectory: '/tmp/project-2',
-          transcript: [],
-          createdAt: '2026-01-01T00:00:00.000Z',
-          updatedAt: '2026-01-01T00:00:00.000Z',
         },
       ],
       needsYouDismissals: {
@@ -434,7 +372,7 @@ describe('useSessionStore', () => {
       ],
       recentSessionIds: ['session-1', 'session-2'],
     })
-    mockElectronAPI.session.getByProjectId.mockResolvedValueOnce([])
+    mockElectronAPI.session.getSummariesByProjectId.mockResolvedValueOnce([])
 
     await useSessionStore.getState().deleteSession('session-1', 'project-1')
 

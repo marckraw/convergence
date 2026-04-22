@@ -1,4 +1,4 @@
-import type { Session } from './session.types'
+import type { SessionSummary } from './session.types'
 import type {
   ForkFullInput,
   ForkSummary,
@@ -15,9 +15,9 @@ export const sessionForkApi = {
       requestId,
     ) as Promise<ForkSummary>,
 
-  forkFull: (input: ForkFullInput): Promise<Session> =>
-    window.electronAPI.session.forkFull(input) as Promise<Session>,
+  forkFull: (input: ForkFullInput): Promise<SessionSummary> =>
+    window.electronAPI.session.forkFull(input) as Promise<SessionSummary>,
 
-  forkSummary: (input: ForkSummaryInput): Promise<Session> =>
-    window.electronAPI.session.forkSummary(input) as Promise<Session>,
+  forkSummary: (input: ForkSummaryInput): Promise<SessionSummary> =>
+    window.electronAPI.session.forkSummary(input) as Promise<SessionSummary>,
 }

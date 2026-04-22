@@ -1,5 +1,6 @@
 import { spawn, type ChildProcess } from 'child_process'
 import { promises as fs } from 'fs'
+import type { SessionDelta } from '../../session/conversation-item.types'
 import type {
   ActivitySignal,
   Attachment,
@@ -10,8 +11,8 @@ import type {
   SessionHandle,
   SessionStartConfig,
   SessionStatus,
-  TranscriptEntry,
 } from '../provider.types'
+import { ProviderSessionEmitter } from '../provider-session.emitter'
 import {
   buildFallbackPiDescriptor,
   normalizeProviderDescriptor,
@@ -75,7 +76,7 @@ export class PiProvider implements Provider {
   start(config: SessionStartConfig): SessionHandle {
     const binaryPath = this.binaryPath
     const listeners = {
-      transcript: [] as ((entry: TranscriptEntry) => void)[],
+      delta: [] as ((delta: SessionDelta) => void)[],
       status: [] as ((status: SessionStatus) => void)[],
       attention: [] as ((attention: AttentionState) => void)[],
       continuationToken: [] as ((token: string) => void)[],
@@ -89,6 +90,7 @@ export class PiProvider implements Provider {
     let sessionFile: string | null = config.continuationToken
     let continuationCaptured = !!config.continuationToken
     let textBuffer = ''
+    let assistantMessageItemId: string | null = null
     let isStreaming = false
     let currentTurn: {
       message: string
@@ -106,22 +108,31 @@ export class PiProvider implements Provider {
       { name: string; args: string }
     >()
 
-    function emit(entry: TranscriptEntry): void {
-      listeners.transcript.forEach((cb) => cb(entry))
+    function emitDelta(delta: SessionDelta): void {
+      listeners.delta.forEach((cb) => cb(delta))
     }
+    const sessionEmitter = new ProviderSessionEmitter({
+      providerId: 'pi',
+      emitDelta,
+      now,
+    })
     function setStatus(status: SessionStatus): void {
       listeners.status.forEach((cb) => cb(status))
+      sessionEmitter.patchSession({ status })
     }
     function setAttention(attention: AttentionState): void {
       listeners.attention.forEach((cb) => cb(attention))
+      sessionEmitter.patchSession({ attention })
     }
     function setContinuationToken(token: string): void {
       if (sessionFile === token) return
       sessionFile = token
       listeners.continuationToken.forEach((cb) => cb(token))
+      sessionEmitter.patchSession({ continuationToken: token })
     }
     function setContextWindow(window: SessionContextWindow): void {
       listeners.contextWindow.forEach((cb) => cb(window))
+      sessionEmitter.patchSession({ contextWindow: window })
     }
 
     let activityState: PiActivityState = initialPiActivityState()
@@ -130,12 +141,27 @@ export class PiProvider implements Provider {
       activityState = state
       if (activity !== 'keep') {
         listeners.activity.forEach((cb) => cb(activity))
+        sessionEmitter.patchSession({ activity })
       }
     }
     function flushText(): void {
       if (textBuffer) {
-        emit({ type: 'assistant', text: textBuffer, timestamp: now() })
+        const timestamp = now()
+        if (assistantMessageItemId) {
+          sessionEmitter.patchMessage(assistantMessageItemId, {
+            text: textBuffer,
+            state: 'complete',
+            updatedAt: timestamp,
+          })
+        } else {
+          assistantMessageItemId = sessionEmitter.addAssistantMessage({
+            text: textBuffer,
+            state: 'complete',
+            timestamp,
+          })
+        }
         textBuffer = ''
+        assistantMessageItemId = null
         sawTurnActivity = true
       }
     }
@@ -164,7 +190,12 @@ export class PiProvider implements Provider {
         message: currentTurn.message,
         attachments: currentTurn.attachments,
       }
-      emit(buildContinuationRecoveryEntry('Pi Agent', now()))
+      const recoveryEntry = buildContinuationRecoveryEntry('Pi Agent', now())
+      sessionEmitter.addNote({
+        text: recoveryEntry.text,
+        level: recoveryEntry.level,
+        timestamp: recoveryEntry.timestamp,
+      })
       sessionFile = null
       continuationCaptured = false
       currentTurn = null
@@ -231,6 +262,20 @@ export class PiProvider implements Provider {
 
       if (deltaType === 'text_delta') {
         if (typeof event.delta === 'string') textBuffer += event.delta
+        if (textBuffer) {
+          if (!assistantMessageItemId) {
+            assistantMessageItemId = sessionEmitter.addAssistantMessage({
+              text: textBuffer,
+              state: 'streaming',
+              providerEventType: 'message_update',
+            })
+          } else {
+            sessionEmitter.patchMessage(assistantMessageItemId, {
+              text: textBuffer,
+              state: 'streaming',
+            })
+          }
+        }
         applyActivity({ kind: 'text_delta' })
         return
       }
@@ -279,11 +324,10 @@ export class PiProvider implements Provider {
         }
         if (extracted.id) pendingToolCallArgs.delete(extracted.id)
         flushText()
-        emit({
-          type: 'tool-use',
-          tool: extracted.name,
-          input,
-          timestamp: now(),
+        sessionEmitter.addToolCall({
+          toolName: extracted.name,
+          inputText: input,
+          providerEventType: 'toolcall_end',
         })
       }
     }
@@ -315,10 +359,10 @@ export class PiProvider implements Provider {
           const text = extractToolResultText(
             (event as { result?: unknown }).result,
           )
-          emit({
-            type: 'tool-result',
-            result: isError ? `Error: ${text}` : text,
-            timestamp: now(),
+          sessionEmitter.addToolResult({
+            outputText: isError ? `Error: ${text}` : text,
+            state: isError ? 'error' : 'complete',
+            providerEventType: 'tool_execution_end',
           })
           applyActivity({ kind: 'tool_end' })
           break
@@ -342,10 +386,9 @@ export class PiProvider implements Provider {
             setAttention('failed')
             currentTurn = null
           } else if (stopReason === 'error') {
-            emit({
-              type: 'system',
+            sessionEmitter.addNote({
               text: 'Agent failed',
-              timestamp: now(),
+              level: 'error',
             })
             setStatus('failed')
             setAttention('failed')
@@ -359,37 +402,33 @@ export class PiProvider implements Provider {
         }
 
         case 'compaction_start':
-          emit({
-            type: 'system',
-            text: 'Compacting context…',
-            timestamp: now(),
+          sessionEmitter.addNote({
+            text: 'Compacting context...',
+            level: 'info',
           })
           break
 
         case 'compaction_end':
-          emit({
-            type: 'system',
+          sessionEmitter.addNote({
             text: 'Compaction complete',
-            timestamp: now(),
+            level: 'info',
           })
           break
 
         case 'auto_retry_start': {
           const msg = (event as { errorMessage?: unknown }).errorMessage
-          emit({
-            type: 'system',
+          sessionEmitter.addNote({
             text: `Retrying: ${typeof msg === 'string' ? msg : 'transient error'}`,
-            timestamp: now(),
+            level: 'warning',
           })
           break
         }
 
         case 'auto_retry_end': {
           const success = (event as { success?: unknown }).success === true
-          emit({
-            type: 'system',
+          sessionEmitter.addNote({
             text: success ? 'Retry succeeded' : 'Retry failed',
-            timestamp: now(),
+            level: success ? 'info' : 'warning',
           })
           break
         }
@@ -455,10 +494,9 @@ export class PiProvider implements Provider {
               scheduleContinuationRecovery()
               return
             }
-            emit({
-              type: 'system',
+            sessionEmitter.addNote({
               text: `Prompt failed: ${response.error ?? 'unknown error'}`,
-              timestamp: now(),
+              level: 'error',
             })
             setStatus('failed')
             setAttention('failed')
@@ -472,10 +510,9 @@ export class PiProvider implements Provider {
             scheduleContinuationRecovery()
             return
           }
-          emit({
-            type: 'system',
+          sessionEmitter.addNote({
             text: `Prompt error: ${err instanceof Error ? err.message : String(err)}`,
-            timestamp: now(),
+            level: 'error',
           })
           setStatus('failed')
           setAttention('failed')
@@ -497,10 +534,9 @@ export class PiProvider implements Provider {
         })
         .catch((err) => {
           if (stopped) return
-          emit({
-            type: 'system',
+          sessionEmitter.addNote({
             text: `Failed to send attachments: ${err instanceof Error ? err.message : String(err)}`,
-            timestamp: now(),
+            level: 'error',
           })
           setStatus('failed')
           setAttention('failed')
@@ -536,7 +572,10 @@ export class PiProvider implements Provider {
       })
 
       if (!child.stdin || !child.stdout) {
-        emit({ type: 'system', text: 'Failed to open stdio', timestamp: now() })
+        sessionEmitter.addNote({
+          text: 'Failed to open stdio',
+          level: 'error',
+        })
         setStatus('failed')
         setAttention('failed')
         return
@@ -571,10 +610,9 @@ export class PiProvider implements Provider {
           return
         }
         if (code !== 0 && code !== null) {
-          emit({
-            type: 'system',
+          sessionEmitter.addNote({
             text: `Process exited with code ${code}`,
-            timestamp: now(),
+            level: 'error',
           })
           setStatus('failed')
           setAttention('failed')
@@ -584,10 +622,9 @@ export class PiProvider implements Provider {
 
       child.on('error', (err) => {
         if (stopped) return
-        emit({
-          type: 'system',
+        sessionEmitter.addNote({
           text: `Process error: ${err.message}`,
-          timestamp: now(),
+          level: 'error',
         })
         setStatus('failed')
         setAttention('failed')
@@ -596,6 +633,8 @@ export class PiProvider implements Provider {
       })
 
       sawTurnActivity = false
+      textBuffer = ''
+      assistantMessageItemId = null
       currentTurn = {
         message: initialMessage,
         attachments: initialAttachments,
@@ -603,7 +642,7 @@ export class PiProvider implements Provider {
         usedContinuationToken: !!sessionFile,
       }
       if (options?.emitUserEntry !== false) {
-        emit({ type: 'user', text: initialMessage, timestamp: now() })
+        sessionEmitter.addUserMessage({ text: initialMessage })
       }
       setStatus('running')
       setAttention('none')
@@ -616,8 +655,8 @@ export class PiProvider implements Provider {
     )
 
     const handle: SessionHandle = {
-      onTranscriptEntry: (cb) => {
-        listeners.transcript.push(cb)
+      onDelta: (cb) => {
+        listeners.delta.push(cb)
       },
       onStatusChange: (cb) => {
         listeners.status.push(cb)
@@ -641,7 +680,7 @@ export class PiProvider implements Provider {
           spawnPi(text, attachments)
           return
         }
-        emit({ type: 'user', text, timestamp: now() })
+        sessionEmitter.addUserMessage({ text })
         setStatus('running')
         setAttention('none')
         sendPromptWithAttachments(text, attachments)

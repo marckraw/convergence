@@ -1,4 +1,43 @@
 import Database from 'better-sqlite3'
+import type { TranscriptEntry } from '../provider/provider.types'
+import { conversationItemToInsertRow } from '../session/conversation-item.pure'
+import { migrateTranscriptToConversationItems } from '../session/conversation-item.pure'
+
+function buildSessionsTableSql(
+  tableName: string,
+  includeIfNotExists = true,
+): string {
+  const ifNotExistsClause = includeIfNotExists ? 'IF NOT EXISTS ' : ''
+
+  return `
+    CREATE TABLE ${ifNotExistsClause}${tableName} (
+      id TEXT PRIMARY KEY,
+      project_id TEXT NOT NULL,
+      workspace_id TEXT,
+      provider_id TEXT NOT NULL,
+      model TEXT,
+      effort TEXT,
+      continuation_token TEXT,
+      name TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'idle',
+      attention TEXT NOT NULL DEFAULT 'none',
+      working_directory TEXT NOT NULL,
+      context_window TEXT,
+      activity TEXT,
+      archived_at TEXT,
+      last_sequence INTEGER NOT NULL DEFAULT 0,
+      conversation_version INTEGER NOT NULL DEFAULT 2,
+      name_auto_generated INTEGER NOT NULL DEFAULT 0,
+      parent_session_id TEXT,
+      fork_strategy TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+      FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
+      FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE,
+      FOREIGN KEY (parent_session_id) REFERENCES sessions(id) ON DELETE SET NULL
+    );
+  `
+}
 
 const SCHEMA = `
   CREATE TABLE IF NOT EXISTS projects (
@@ -15,31 +54,26 @@ const SCHEMA = `
     value TEXT NOT NULL
   );
 
-  CREATE TABLE IF NOT EXISTS sessions (
+  ${buildSessionsTableSql('sessions')}
+
+  CREATE TABLE IF NOT EXISTS session_conversation_items (
     id TEXT PRIMARY KEY,
-    project_id TEXT NOT NULL,
-    workspace_id TEXT,
-    provider_id TEXT NOT NULL,
-    model TEXT,
-    effort TEXT,
-    continuation_token TEXT,
-    name TEXT NOT NULL,
-    status TEXT NOT NULL DEFAULT 'idle',
-    attention TEXT NOT NULL DEFAULT 'none',
-    working_directory TEXT NOT NULL,
-    transcript TEXT NOT NULL DEFAULT '[]',
-    context_window TEXT,
-    activity TEXT,
-    archived_at TEXT,
-    name_auto_generated INTEGER NOT NULL DEFAULT 0,
-    parent_session_id TEXT,
-    fork_strategy TEXT,
-    created_at TEXT NOT NULL DEFAULT (datetime('now')),
-    updated_at TEXT NOT NULL DEFAULT (datetime('now')),
-    FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
-    FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE,
-    FOREIGN KEY (parent_session_id) REFERENCES sessions(id) ON DELETE SET NULL
+    session_id TEXT NOT NULL,
+    sequence INTEGER NOT NULL,
+    turn_id TEXT,
+    kind TEXT NOT NULL,
+    state TEXT NOT NULL,
+    payload_json TEXT NOT NULL,
+    provider_item_id TEXT,
+    provider_event_type TEXT,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE,
+    UNIQUE (session_id, sequence)
   );
+
+  CREATE INDEX IF NOT EXISTS idx_session_conversation_items_session_sequence
+    ON session_conversation_items(session_id, sequence);
 
   CREATE TABLE IF NOT EXISTS workspaces (
     id TEXT PRIMARY KEY,
@@ -108,11 +142,23 @@ function ensureAttachmentsTableNoFk(database: Database.Database): void {
 
 let db: Database.Database | null = null
 
-function ensureSessionColumns(database: Database.Database): void {
+function getTableColumnNames(
+  database: Database.Database,
+  tableName: string,
+): Set<string> {
   const columns = database
-    .prepare("PRAGMA table_info('sessions')")
+    .prepare(`PRAGMA table_info('${tableName}')`)
     .all() as Array<{ name: string }>
-  const columnNames = new Set(columns.map((column) => column.name))
+
+  return new Set(columns.map((column) => column.name))
+}
+
+function hasLegacyTranscriptColumn(database: Database.Database): boolean {
+  return getTableColumnNames(database, 'sessions').has('transcript')
+}
+
+function ensureSessionColumns(database: Database.Database): void {
+  const columnNames = getTableColumnNames(database, 'sessions')
 
   if (!columnNames.has('model')) {
     database.exec('ALTER TABLE sessions ADD COLUMN model TEXT')
@@ -138,6 +184,18 @@ function ensureSessionColumns(database: Database.Database): void {
     database.exec('ALTER TABLE sessions ADD COLUMN archived_at TEXT')
   }
 
+  if (!columnNames.has('last_sequence')) {
+    database.exec(
+      'ALTER TABLE sessions ADD COLUMN last_sequence INTEGER NOT NULL DEFAULT 0',
+    )
+  }
+
+  if (!columnNames.has('conversation_version')) {
+    database.exec(
+      'ALTER TABLE sessions ADD COLUMN conversation_version INTEGER NOT NULL DEFAULT 2',
+    )
+  }
+
   if (!columnNames.has('name_auto_generated')) {
     database.exec(
       'ALTER TABLE sessions ADD COLUMN name_auto_generated INTEGER NOT NULL DEFAULT 0',
@@ -153,17 +211,277 @@ function ensureSessionColumns(database: Database.Database): void {
   }
 }
 
+function parseLegacyTranscript(
+  sessionId: string,
+  value: string,
+): TranscriptEntry[] {
+  let parsed: unknown
+
+  try {
+    parsed = JSON.parse(value) as unknown
+  } catch {
+    throw new Error(
+      `Cannot drop legacy transcript storage: session ${sessionId} transcript is invalid JSON`,
+    )
+  }
+
+  if (!Array.isArray(parsed)) {
+    throw new Error(
+      `Cannot drop legacy transcript storage: session ${sessionId} transcript is not an array`,
+    )
+  }
+
+  return parsed as TranscriptEntry[]
+}
+
+function migrateLegacySessionConversations(database: Database.Database): void {
+  if (!hasLegacyTranscriptColumn(database)) return
+
+  const sessions = database
+    .prepare(
+      'SELECT id, provider_id, transcript FROM sessions ORDER BY created_at ASC',
+    )
+    .all() as Array<{
+    id: string
+    provider_id: string
+    transcript: string
+  }>
+
+  const itemCountStmt = database.prepare(
+    'SELECT COUNT(*) as count FROM session_conversation_items WHERE session_id = ?',
+  )
+  const maxSequenceStmt = database.prepare(
+    'SELECT MAX(sequence) as sequence FROM session_conversation_items WHERE session_id = ?',
+  )
+  const insertItemStmt = database.prepare(`
+    INSERT INTO session_conversation_items (
+      id,
+      session_id,
+      sequence,
+      turn_id,
+      kind,
+      state,
+      payload_json,
+      provider_item_id,
+      provider_event_type,
+      created_at,
+      updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `)
+  const updateSessionStmt = database.prepare(`
+    UPDATE sessions
+    SET last_sequence = ?, conversation_version = 2
+    WHERE id = ?
+  `)
+
+  const migrateOne = database.transaction(
+    (sessionId: string, providerId: string, transcript: string) => {
+      const existingCount = (
+        itemCountStmt.get(sessionId) as { count: number } | undefined
+      )?.count
+
+      if ((existingCount ?? 0) > 0) {
+        const maxSequence = (
+          maxSequenceStmt.get(sessionId) as
+            | { sequence: number | null }
+            | undefined
+        )?.sequence
+        updateSessionStmt.run(maxSequence ?? 0, sessionId)
+        return
+      }
+
+      const items = migrateTranscriptToConversationItems({
+        sessionId,
+        providerId,
+        entries: parseLegacyTranscript(sessionId, transcript),
+      })
+
+      for (const item of items) {
+        const row = conversationItemToInsertRow(item)
+        insertItemStmt.run(
+          row.id,
+          row.sessionId,
+          row.sequence,
+          row.turnId,
+          row.kind,
+          row.state,
+          row.payloadJson,
+          row.providerItemId,
+          row.providerEventType,
+          row.createdAt,
+          row.updatedAt,
+        )
+      }
+
+      updateSessionStmt.run(items.length, sessionId)
+    },
+  )
+
+  for (const session of sessions) {
+    migrateOne(session.id, session.provider_id, session.transcript)
+  }
+}
+
+function ensureLegacyTranscriptCoverage(database: Database.Database): void {
+  if (!hasLegacyTranscriptColumn(database)) return
+
+  const sessions = database
+    .prepare(
+      'SELECT id, transcript, last_sequence FROM sessions ORDER BY created_at ASC',
+    )
+    .all() as Array<{
+    id: string
+    transcript: string
+    last_sequence: number
+  }>
+  const sequenceStatsStmt = database.prepare(`
+    SELECT COUNT(*) as count, MAX(sequence) as max_sequence
+    FROM session_conversation_items
+    WHERE session_id = ?
+  `)
+
+  for (const session of sessions) {
+    const stats = sequenceStatsStmt.get(session.id) as
+      | { count: number; max_sequence: number | null }
+      | undefined
+    const itemCount = stats?.count ?? 0
+    const maxSequence = stats?.max_sequence ?? 0
+
+    if (itemCount > 0) {
+      if (maxSequence !== itemCount) {
+        throw new Error(
+          `Cannot drop legacy transcript storage: session ${session.id} has non-contiguous normalized conversation rows`,
+        )
+      }
+
+      if ((session.last_sequence ?? 0) !== maxSequence) {
+        throw new Error(
+          `Cannot drop legacy transcript storage: session ${session.id} has inconsistent last_sequence metadata`,
+        )
+      }
+
+      continue
+    }
+
+    const entries = parseLegacyTranscript(session.id, session.transcript)
+    if (entries.length === 0) continue
+
+    throw new Error(
+      `Cannot drop legacy transcript storage: session ${session.id} is missing normalized conversation rows`,
+    )
+  }
+}
+
+function ensureSessionsTableWithoutTranscript(
+  database: Database.Database,
+): void {
+  if (!hasLegacyTranscriptColumn(database)) return
+
+  ensureLegacyTranscriptCoverage(database)
+
+  const foreignKeysEnabled =
+    (database.pragma('foreign_keys', { simple: true }) as number) === 1
+
+  if (foreignKeysEnabled) {
+    database.pragma('foreign_keys = OFF')
+  }
+
+  try {
+    database.transaction(() => {
+      database.exec('DROP TABLE IF EXISTS sessions_next')
+      database.exec(buildSessionsTableSql('sessions_next', false))
+      database.exec(`
+        INSERT INTO sessions_next (
+          id,
+          project_id,
+          workspace_id,
+          provider_id,
+          model,
+          effort,
+          continuation_token,
+          name,
+          status,
+          attention,
+          working_directory,
+          context_window,
+          activity,
+          archived_at,
+          last_sequence,
+          conversation_version,
+          name_auto_generated,
+          parent_session_id,
+          fork_strategy,
+          created_at,
+          updated_at
+        )
+        SELECT
+          id,
+          project_id,
+          workspace_id,
+          provider_id,
+          model,
+          effort,
+          continuation_token,
+          name,
+          status,
+          attention,
+          working_directory,
+          context_window,
+          activity,
+          archived_at,
+          last_sequence,
+          conversation_version,
+          name_auto_generated,
+          CASE
+            WHEN parent_session_id IN (SELECT id FROM sessions)
+              THEN parent_session_id
+            ELSE NULL
+          END,
+          fork_strategy,
+          created_at,
+          updated_at
+        FROM sessions;
+        DROP TABLE sessions;
+        ALTER TABLE sessions_next RENAME TO sessions;
+      `)
+
+      const violations = database
+        .prepare('PRAGMA foreign_key_check')
+        .all() as Array<Record<string, unknown>>
+
+      if (violations.length > 0) {
+        throw new Error(
+          'Failed to rebuild sessions table without legacy transcript column: foreign key check failed',
+        )
+      }
+    })()
+  } finally {
+    if (foreignKeysEnabled) {
+      database.pragma('foreign_keys = ON')
+    }
+  }
+}
+
 export function getDatabase(dbPath?: string): Database.Database {
   if (db) return db
 
-  db = new Database(dbPath ?? ':memory:')
-  db.pragma('journal_mode = WAL')
-  db.pragma('foreign_keys = ON')
-  db.exec(SCHEMA)
-  ensureSessionColumns(db)
-  ensureAttachmentsTableNoFk(db)
+  const database = new Database(dbPath ?? ':memory:')
 
-  return db
+  try {
+    database.pragma('journal_mode = WAL')
+    database.pragma('foreign_keys = ON')
+    database.exec(SCHEMA)
+    ensureSessionColumns(database)
+    ensureAttachmentsTableNoFk(database)
+    migrateLegacySessionConversations(database)
+    ensureSessionsTableWithoutTranscript(database)
+  } catch (error) {
+    database.close()
+    throw error
+  }
+
+  db = database
+  return database
 }
 
 export { ensureAttachmentsTableNoFk }

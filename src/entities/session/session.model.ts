@@ -1,10 +1,12 @@
 import { create } from 'zustand'
 import type {
-  Session,
+  ConversationItem,
+  ConversationPatchEvent,
   ProviderInfo,
   ReasoningEffort,
   NeedsYouDismissals,
   NeedsYouDisposition,
+  SessionSummary,
 } from './session.types'
 import { sessionApi, providerApi } from './session.api'
 import { sessionForkApi } from './session-fork.api'
@@ -17,8 +19,10 @@ import type {
 const RECENT_SESSIONS_CAP = 10
 
 interface SessionState {
-  sessions: Session[]
-  globalSessions: Session[]
+  sessions: SessionSummary[]
+  globalSessions: SessionSummary[]
+  activeConversation: ConversationItem[]
+  activeConversationSessionId: string | null
   needsYouDismissals: NeedsYouDismissals
   recentSessionIds: string[]
   currentProjectId: string | null
@@ -56,23 +60,25 @@ interface SessionActions {
   archiveSession: (id: string) => Promise<void>
   unarchiveSession: (id: string) => Promise<void>
   deleteSession: (id: string, projectId: string) => Promise<void>
+  loadActiveConversation: (sessionId: string) => Promise<void>
   prepareForProject: (projectId: string | null) => void
   beginSessionDraft: (workspaceId: string | null) => void
   setActiveSession: (id: string | null) => void
-  handleSessionUpdate: (session: Session) => void
+  handleSessionSummaryUpdate: (summary: SessionSummary) => void
+  handleConversationPatched: (event: ConversationPatchEvent) => void
   previewFork: (
     parentSessionId: string,
     requestId?: string,
   ) => Promise<ForkSummary>
-  forkFull: (input: ForkFullInput) => Promise<Session>
-  forkSummary: (input: ForkSummaryInput) => Promise<Session>
+  forkFull: (input: ForkFullInput) => Promise<SessionSummary>
+  forkSummary: (input: ForkSummaryInput) => Promise<SessionSummary>
   clearError: () => void
 }
 
 export type SessionStore = SessionState & SessionActions
 
 function resolveNeedsYouDisposition(
-  session: Session,
+  session: SessionSummary,
 ): NeedsYouDisposition | null {
   switch (session.attention) {
     case 'needs-approval':
@@ -88,7 +94,7 @@ function resolveNeedsYouDisposition(
 
 function pruneNeedsYouDismissals(
   dismissals: NeedsYouDismissals,
-  sessions: Session[],
+  sessions: SessionSummary[],
 ): NeedsYouDismissals {
   return Object.fromEntries(
     Object.entries(dismissals).filter(([sessionId, dismissal]) =>
@@ -109,6 +115,26 @@ function removeNeedsYouDismissal(
   )
 }
 
+function upsertSummary(
+  sessions: SessionSummary[],
+  summary: SessionSummary,
+): SessionSummary[] {
+  return sessions.some((session) => session.id === summary.id)
+    ? sessions.map((session) => (session.id === summary.id ? summary : session))
+    : [summary, ...sessions]
+}
+
+function upsertConversationItem(
+  items: ConversationItem[],
+  nextItem: ConversationItem,
+): ConversationItem[] {
+  const nextItems = items.some((item) => item.id === nextItem.id)
+    ? items.map((item) => (item.id === nextItem.id ? nextItem : item))
+    : [...items, nextItem]
+
+  return [...nextItems].sort((left, right) => left.sequence - right.sequence)
+}
+
 function persistRecents(ids: string[]): void {
   void sessionApi.setRecentIds(ids).catch(() => undefined)
 }
@@ -116,6 +142,8 @@ function persistRecents(ids: string[]): void {
 export const useSessionStore = create<SessionStore>((set, get) => ({
   sessions: [],
   globalSessions: [],
+  activeConversation: [],
+  activeConversationSessionId: null,
   needsYouDismissals: {},
   recentSessionIds: [],
   currentProjectId: null,
@@ -131,11 +159,13 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
         currentProjectId: projectId,
         sessions: [],
         activeSessionId: null,
+        activeConversation: [],
+        activeConversationSessionId: null,
         draftWorkspaceId: null,
       })
     }
 
-    const sessions = await sessionApi.getByProjectId(projectId)
+    const sessions = await sessionApi.getSummariesByProjectId(projectId)
     set((state) => ({
       currentProjectId: projectId,
       sessions,
@@ -143,6 +173,16 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
         (session) => session.id === state.activeSessionId,
       )
         ? state.activeSessionId
+        : null,
+      activeConversation: sessions.some(
+        (session) => session.id === state.activeSessionId,
+      )
+        ? state.activeConversation
+        : [],
+      activeConversationSessionId: sessions.some(
+        (session) => session.id === state.activeSessionId,
+      )
+        ? state.activeConversationSessionId
         : null,
       draftWorkspaceId: sessions.some(
         (session) => session.id === state.activeSessionId,
@@ -153,7 +193,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
   },
 
   loadGlobalSessions: async () => {
-    const globalSessions = await sessionApi.getAll()
+    const globalSessions = await sessionApi.getAllSummaries()
     const persistedDismissals = await sessionApi.getNeedsYouDismissals()
     const nextDismissals = pruneNeedsYouDismissals(
       persistedDismissals,
@@ -268,6 +308,8 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
         currentProjectId: projectId,
         sessions: [session, ...state.sessions],
         globalSessions: [session, ...state.globalSessions],
+        activeConversation: [],
+        activeConversationSessionId: session.id,
         needsYouDismissals: Object.fromEntries(
           Object.entries(state.needsYouDismissals).filter(
             ([sessionId]) => sessionId !== session.id,
@@ -277,6 +319,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
         draftWorkspaceId: null,
       }))
       get().recordRecentSession(session.id)
+      void get().loadActiveConversation(session.id)
     } catch (err) {
       set({
         error: err instanceof Error ? err.message : 'Failed to start session',
@@ -361,7 +404,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
   deleteSession: async (id: string, projectId: string) => {
     try {
       await sessionApi.delete(id)
-      const sessions = await sessionApi.getByProjectId(projectId)
+      const sessions = await sessionApi.getSummariesByProjectId(projectId)
       const globalSessions = get().globalSessions.filter(
         (session) => session.id !== id,
       )
@@ -379,6 +422,10 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
         needsYouDismissals: nextDismissals,
         recentSessionIds: nextRecents,
         activeSessionId: activeSessionId === id ? null : activeSessionId,
+        activeConversation:
+          activeSessionId === id ? [] : get().activeConversation,
+        activeConversationSessionId:
+          activeSessionId === id ? null : get().activeConversationSessionId,
         draftWorkspaceId:
           activeSessionId === id ? null : get().draftWorkspaceId,
       })
@@ -392,42 +439,60 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     }
   },
 
+  loadActiveConversation: async (sessionId: string) => {
+    const conversation = await sessionApi.getConversation(sessionId)
+    set((state) =>
+      state.activeSessionId === sessionId
+        ? {
+            activeConversation: conversation,
+            activeConversationSessionId: sessionId,
+          }
+        : {},
+    )
+  },
+
   prepareForProject: (projectId) =>
     set({
       currentProjectId: projectId,
       sessions: [],
       activeSessionId: null,
+      activeConversation: [],
+      activeConversationSessionId: null,
       draftWorkspaceId: null,
     }),
 
   beginSessionDraft: (workspaceId) =>
     set({
       activeSessionId: null,
+      activeConversation: [],
+      activeConversationSessionId: null,
       draftWorkspaceId: workspaceId,
     }),
 
   setActiveSession: (id) => {
-    set({
+    set((state) => ({
       activeSessionId: id,
+      activeConversation:
+        id !== null && state.activeConversationSessionId === id
+          ? state.activeConversation
+          : [],
+      activeConversationSessionId: id,
       draftWorkspaceId: null,
-    })
+    }))
     if (id !== null) {
       get().recordRecentSession(id)
+      void get().loadActiveConversation(id)
     }
   },
 
-  handleSessionUpdate: (session: Session) => {
+  handleSessionSummaryUpdate: (session: SessionSummary) => {
     const currentProjectId = get().currentProjectId
     const state = get()
-    const nextGlobalSessions = state.globalSessions.some(
-      (s) => s.id === session.id,
-    )
-      ? state.globalSessions.map((s) => (s.id === session.id ? session : s))
-      : [session, ...state.globalSessions]
-    const nextSessions = state.sessions.some((s) => s.id === session.id)
-      ? state.sessions.map((s) => (s.id === session.id ? session : s))
-      : currentProjectId && session.projectId === currentProjectId
-        ? [session, ...state.sessions]
+    const nextGlobalSessions = upsertSummary(state.globalSessions, session)
+    const nextSessions =
+      state.sessions.some((s) => s.id === session.id) ||
+      (currentProjectId && session.projectId === currentProjectId)
+        ? upsertSummary(state.sessions, session)
         : state.sessions
     const nextDismissals = pruneNeedsYouDismissals(
       state.needsYouDismissals,
@@ -455,6 +520,22 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     }
   },
 
+  handleConversationPatched: (event: ConversationPatchEvent) => {
+    set((state) => {
+      if (state.activeSessionId !== event.sessionId) {
+        return {}
+      }
+
+      return {
+        activeConversation: upsertConversationItem(
+          state.activeConversation,
+          event.item,
+        ),
+        activeConversationSessionId: event.sessionId,
+      }
+    })
+  },
+
   previewFork: (parentSessionId: string, requestId?: string) =>
     sessionForkApi.previewSummary(parentSessionId, requestId),
 
@@ -466,10 +547,13 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
           ? [session, ...state.sessions]
           : state.sessions,
       globalSessions: [session, ...state.globalSessions],
+      activeConversation: [],
+      activeConversationSessionId: session.id,
       activeSessionId: session.id,
       draftWorkspaceId: null,
     }))
     get().recordRecentSession(session.id)
+    void get().loadActiveConversation(session.id)
     return session
   },
 
@@ -481,10 +565,13 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
           ? [session, ...state.sessions]
           : state.sessions,
       globalSessions: [session, ...state.globalSessions],
+      activeConversation: [],
+      activeConversationSessionId: session.id,
       activeSessionId: session.id,
       draftWorkspaceId: null,
     }))
     get().recordRecentSession(session.id)
+    void get().loadActiveConversation(session.id)
     return session
   },
 

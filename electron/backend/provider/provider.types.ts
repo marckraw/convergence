@@ -2,6 +2,7 @@ import type {
   Attachment,
   ProviderAttachmentCapability,
 } from '../attachments/attachments.types'
+import type { SessionDelta } from '../session/conversation-item.types'
 
 export type { Attachment, ProviderAttachmentCapability }
 
@@ -45,6 +46,7 @@ export type SessionContextWindow =
       reason: string
     }
 
+// Legacy transcript blobs remain only for one-time DB migration and tests.
 export type TranscriptEntry =
   | {
       type: 'user'
@@ -126,7 +128,7 @@ export interface OneShotResult {
 }
 
 export interface SessionHandle {
-  onTranscriptEntry: (callback: (entry: TranscriptEntry) => void) => void
+  onDelta: (callback: (delta: SessionDelta) => void) => void
   onStatusChange: (callback: (status: SessionStatus) => void) => void
   onAttentionChange: (callback: (attention: AttentionState) => void) => void
   onContinuationToken: (callback: (token: string) => void) => void

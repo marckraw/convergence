@@ -1,4 +1,4 @@
-import type { TranscriptEntry } from '../session.types'
+import type { ConversationItem } from '../conversation-item.types'
 import type {
   ForkArtifacts,
   ForkSummary,
@@ -41,30 +41,30 @@ function truncateEntry(text: string, cap: number): string {
 
 const ENTRY_CAP = 4000
 
-export function serializeTranscript(entries: TranscriptEntry[]): string {
+export function serializeConversationItems(items: ConversationItem[]): string {
   const lines: string[] = []
-  for (const entry of entries) {
-    switch (entry.type) {
-      case 'user':
-        lines.push(`user: ${truncateEntry(entry.text, ENTRY_CAP)}`)
+  for (const item of items) {
+    switch (item.kind) {
+      case 'message':
+        lines.push(`${item.actor}: ${truncateEntry(item.text, ENTRY_CAP)}`)
         break
-      case 'assistant':
-        lines.push(`assistant: ${truncateEntry(entry.text, ENTRY_CAP)}`)
+      case 'thinking':
+        lines.push(`thinking: ${truncateEntry(item.text, ENTRY_CAP)}`)
         break
-      case 'system':
-        lines.push(`system: ${truncateEntry(entry.text, ENTRY_CAP)}`)
+      case 'note':
+        lines.push(`system: ${truncateEntry(item.text, ENTRY_CAP)}`)
         break
-      case 'tool-use':
-        lines.push(`[tool ${entry.tool}]`)
+      case 'tool-call':
+        lines.push(`[tool ${item.toolName}]`)
         break
       case 'tool-result':
         lines.push('[tool result]')
         break
       case 'approval-request':
-        lines.push(`[approval requested: ${entry.description}]`)
+        lines.push(`[approval requested: ${item.description}]`)
         break
       case 'input-request':
-        lines.push(`[input requested: ${entry.prompt}]`)
+        lines.push(`[input requested: ${item.prompt}]`)
         break
     }
   }

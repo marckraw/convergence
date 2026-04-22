@@ -62,30 +62,77 @@ export interface ProviderModelOption {
   effortOptions: ProviderEffortOption[]
 }
 
-export type TranscriptEntry =
-  | {
-      type: 'user'
-      text: string
-      timestamp: string
-      attachmentIds?: string[]
-    }
-  | {
-      type: 'assistant'
-      text: string
-      timestamp: string
-      streaming?: boolean
-    }
-  | { type: 'tool-use'; tool: string; input: string; timestamp: string }
-  | { type: 'tool-result'; result: string; timestamp: string }
-  | {
-      type: 'approval-request'
-      description: string
-      timestamp: string
-    }
-  | { type: 'input-request'; prompt: string; timestamp: string }
-  | { type: 'system'; text: string; timestamp: string }
+export type ConversationItemKind =
+  | 'message'
+  | 'thinking'
+  | 'tool-call'
+  | 'tool-result'
+  | 'approval-request'
+  | 'input-request'
+  | 'note'
 
-export interface Session {
+export type ConversationItemState = 'streaming' | 'complete' | 'error'
+
+export interface ConversationItemBase {
+  id: string
+  sessionId: string
+  sequence: number
+  turnId: string | null
+  kind: ConversationItemKind
+  state: ConversationItemState
+  createdAt: string
+  updatedAt: string
+  providerMeta: {
+    providerId: string
+    providerItemId: string | null
+    providerEventType: string | null
+  }
+}
+
+export type ConversationItem =
+  | (ConversationItemBase & {
+      kind: 'message'
+      actor: 'user' | 'assistant'
+      text: string
+      attachmentIds?: string[]
+    })
+  | (ConversationItemBase & {
+      kind: 'thinking'
+      actor: 'assistant'
+      text: string
+    })
+  | (ConversationItemBase & {
+      kind: 'tool-call'
+      toolName: string
+      inputText: string
+    })
+  | (ConversationItemBase & {
+      kind: 'tool-result'
+      toolName: string | null
+      relatedItemId: string | null
+      outputText: string
+    })
+  | (ConversationItemBase & {
+      kind: 'approval-request'
+      description: string
+    })
+  | (ConversationItemBase & {
+      kind: 'input-request'
+      prompt: string
+    })
+  | (ConversationItemBase & {
+      kind: 'note'
+      level: 'info' | 'warning' | 'error'
+      text: string
+    })
+
+export interface ConversationPatchEvent {
+  sessionId: string
+  op: 'add' | 'patch'
+  item: ConversationItem
+}
+
+export interface SessionSummary {
   id: string
   projectId: string
   workspaceId: string | null
@@ -95,16 +142,19 @@ export interface Session {
   name: string
   status: SessionStatus
   attention: AttentionState
+  activity: ActivitySignal
+  contextWindow: SessionContextWindow | null
   workingDirectory: string
-  transcript: TranscriptEntry[]
-  contextWindow?: SessionContextWindow | null
-  activity?: ActivitySignal
-  archivedAt?: string | null
-  parentSessionId?: string | null
-  forkStrategy?: ForkStrategy | null
+  archivedAt: string | null
+  parentSessionId: string | null
+  forkStrategy: ForkStrategy | null
+  continuationToken: string | null
+  lastSequence: number
   createdAt: string
   updatedAt: string
 }
+
+export type Session = SessionSummary
 
 export interface ProviderAttachmentCapability {
   supportsImage: boolean

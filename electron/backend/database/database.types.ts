@@ -24,13 +24,29 @@ export interface SessionRow {
   status: string
   attention: string
   working_directory: string
-  transcript: string
   context_window: string | null
   activity: string | null
   archived_at: string | null
+  last_sequence: number
+  conversation_version: number
   name_auto_generated: number
   parent_session_id: string | null
   fork_strategy: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface ConversationItemRow {
+  id: string
+  session_id: string
+  sequence: number
+  turn_id: string | null
+  kind: string
+  state: string
+  payload_json: string
+  provider_item_id: string | null
+  provider_event_type: string | null
+  provider_id: string
   created_at: string
   updated_at: string
 }

@@ -24,7 +24,8 @@ describe('SessionCreateInline', () => {
       deleteSession: vi.fn(),
       beginSessionDraft,
       setActiveSession: vi.fn(),
-      handleSessionUpdate: vi.fn(),
+      handleSessionSummaryUpdate: vi.fn(),
+      handleConversationPatched: vi.fn(),
       clearError: vi.fn(),
     })
   })

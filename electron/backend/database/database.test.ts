@@ -22,6 +22,14 @@ describe('database', () => {
     const tableNames = tables.map((t) => t.name)
     expect(tableNames).toContain('projects')
     expect(tableNames).toContain('app_state')
+    expect(tableNames).toContain('session_conversation_items')
+
+    const sessionColumns = db
+      .prepare("PRAGMA table_info('sessions')")
+      .all() as Array<{ name: string }>
+    expect(sessionColumns.map((column) => column.name)).not.toContain(
+      'transcript',
+    )
   })
 
   it('returns the same instance on repeated calls', () => {
@@ -121,8 +129,466 @@ describe('database', () => {
       const foreignKeys = db
         .prepare("PRAGMA foreign_key_list('attachments')")
         .all() as Array<{ table: string }>
+      const sessionColumns = db
+        .prepare("PRAGMA table_info('sessions')")
+        .all() as Array<{ name: string }>
 
       expect(foreignKeys.some((fk) => fk.table === 'sessions')).toBe(false)
+      expect(sessionColumns.map((column) => column.name)).not.toContain(
+        'transcript',
+      )
+    } finally {
+      closeDatabase()
+      resetDatabase()
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('migrates legacy session transcript blobs into normalized conversation rows', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'convergence-db-test-'))
+    const dbPath = join(dir, 'legacy-session.sqlite')
+
+    try {
+      const legacy = new Database(dbPath)
+      legacy.pragma('foreign_keys = ON')
+      legacy.exec(`
+        CREATE TABLE projects (
+          id TEXT PRIMARY KEY,
+          name TEXT NOT NULL,
+          repository_path TEXT NOT NULL UNIQUE,
+          settings TEXT NOT NULL DEFAULT '{}',
+          created_at TEXT NOT NULL DEFAULT (datetime('now')),
+          updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+        );
+
+        CREATE TABLE workspaces (
+          id TEXT PRIMARY KEY,
+          project_id TEXT NOT NULL,
+          branch_name TEXT NOT NULL,
+          path TEXT NOT NULL,
+          type TEXT NOT NULL DEFAULT 'worktree',
+          created_at TEXT NOT NULL DEFAULT (datetime('now')),
+          UNIQUE(project_id, branch_name),
+          FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE
+        );
+
+        CREATE TABLE sessions (
+          id TEXT PRIMARY KEY,
+          project_id TEXT NOT NULL,
+          workspace_id TEXT,
+          provider_id TEXT NOT NULL,
+          name TEXT NOT NULL,
+          status TEXT NOT NULL DEFAULT 'idle',
+          attention TEXT NOT NULL DEFAULT 'none',
+          working_directory TEXT NOT NULL,
+          transcript TEXT NOT NULL DEFAULT '[]',
+          created_at TEXT NOT NULL DEFAULT (datetime('now')),
+          updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+          FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
+          FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE
+        );
+      `)
+
+      legacy
+        .prepare(
+          "INSERT INTO projects (id, name, repository_path) VALUES ('p1', 'test', '/tmp/test')",
+        )
+        .run()
+      legacy
+        .prepare(
+          'INSERT INTO sessions (id, project_id, provider_id, name, working_directory, transcript) VALUES (?, ?, ?, ?, ?, ?)',
+        )
+        .run(
+          's1',
+          'p1',
+          'codex',
+          'legacy',
+          '/tmp/test',
+          JSON.stringify([
+            {
+              type: 'user',
+              text: 'hello',
+              timestamp: '2026-01-01T00:00:00.000Z',
+            },
+            {
+              type: 'assistant',
+              text: 'hi',
+              timestamp: '2026-01-01T00:00:01.000Z',
+            },
+            {
+              type: 'tool-use',
+              tool: 'edit_file',
+              input: 'src/main.ts',
+              timestamp: '2026-01-01T00:00:02.000Z',
+            },
+          ]),
+        )
+      legacy.close()
+
+      const db = getDatabase(dbPath)
+      const items = db
+        .prepare(
+          'SELECT sequence, kind, payload_json FROM session_conversation_items WHERE session_id = ? ORDER BY sequence ASC',
+        )
+        .all('s1') as Array<{
+        sequence: number
+        kind: string
+        payload_json: string
+      }>
+
+      const session = db
+        .prepare(
+          'SELECT last_sequence, conversation_version FROM sessions WHERE id = ?',
+        )
+        .get('s1') as { last_sequence: number; conversation_version: number }
+      const sessionColumns = db
+        .prepare("PRAGMA table_info('sessions')")
+        .all() as Array<{ name: string }>
+
+      expect(items).toHaveLength(3)
+      expect(items.map((item) => item.kind)).toEqual([
+        'message',
+        'message',
+        'tool-call',
+      ])
+      expect(session).toEqual({
+        last_sequence: 3,
+        conversation_version: 2,
+      })
+      expect(sessionColumns.map((column) => column.name)).not.toContain(
+        'transcript',
+      )
+    } finally {
+      closeDatabase()
+      resetDatabase()
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('drops the legacy transcript column when normalized rows already exist', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'convergence-db-test-'))
+    const dbPath = join(dir, 'partially-migrated.sqlite')
+
+    try {
+      const legacy = new Database(dbPath)
+      legacy.pragma('foreign_keys = ON')
+      legacy.exec(`
+        CREATE TABLE projects (
+          id TEXT PRIMARY KEY,
+          name TEXT NOT NULL,
+          repository_path TEXT NOT NULL UNIQUE,
+          settings TEXT NOT NULL DEFAULT '{}',
+          created_at TEXT NOT NULL DEFAULT (datetime('now')),
+          updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+        );
+
+        CREATE TABLE sessions (
+          id TEXT PRIMARY KEY,
+          project_id TEXT NOT NULL,
+          workspace_id TEXT,
+          provider_id TEXT NOT NULL,
+          name TEXT NOT NULL,
+          status TEXT NOT NULL DEFAULT 'idle',
+          attention TEXT NOT NULL DEFAULT 'none',
+          working_directory TEXT NOT NULL,
+          transcript TEXT NOT NULL DEFAULT '[]',
+          last_sequence INTEGER NOT NULL DEFAULT 0,
+          conversation_version INTEGER NOT NULL DEFAULT 2,
+          created_at TEXT NOT NULL DEFAULT (datetime('now')),
+          updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+          FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE
+        );
+
+        CREATE TABLE session_conversation_items (
+          id TEXT PRIMARY KEY,
+          session_id TEXT NOT NULL,
+          sequence INTEGER NOT NULL,
+          turn_id TEXT,
+          kind TEXT NOT NULL,
+          state TEXT NOT NULL,
+          payload_json TEXT NOT NULL,
+          provider_item_id TEXT,
+          provider_event_type TEXT,
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL,
+          FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE,
+          UNIQUE (session_id, sequence)
+        );
+      `)
+
+      legacy
+        .prepare(
+          "INSERT INTO projects (id, name, repository_path) VALUES ('p1', 'test', '/tmp/test')",
+        )
+        .run()
+      legacy
+        .prepare(
+          'INSERT INTO sessions (id, project_id, provider_id, name, working_directory, transcript, last_sequence, conversation_version) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+        )
+        .run(
+          's1',
+          'p1',
+          'codex',
+          'legacy',
+          '/tmp/test',
+          JSON.stringify([
+            {
+              type: 'user',
+              text: 'hello',
+              timestamp: '2026-01-01T00:00:00.000Z',
+            },
+            {
+              type: 'assistant',
+              text: 'hi',
+              timestamp: '2026-01-01T00:00:01.000Z',
+            },
+            {
+              type: 'assistant',
+              text: 'still streaming',
+              timestamp: '2026-01-01T00:00:01.500Z',
+              streaming: true,
+            },
+          ]),
+          1,
+          2,
+        )
+      legacy
+        .prepare(
+          `INSERT INTO session_conversation_items (
+             id,
+             session_id,
+             sequence,
+             turn_id,
+             kind,
+             state,
+             payload_json,
+             provider_item_id,
+             provider_event_type,
+             created_at,
+             updated_at
+           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        )
+        .run(
+          's1:item:1',
+          's1',
+          1,
+          's1:turn:1',
+          'message',
+          'complete',
+          JSON.stringify({
+            actor: 'user',
+            text: 'hello',
+          }),
+          null,
+          'user',
+          '2026-01-01T00:00:00.000Z',
+          '2026-01-01T00:00:00.000Z',
+        )
+      legacy.close()
+
+      const db = getDatabase(dbPath)
+      const sessionColumns = db
+        .prepare("PRAGMA table_info('sessions')")
+        .all() as Array<{ name: string }>
+      const session = db
+        .prepare(
+          'SELECT last_sequence, conversation_version FROM sessions WHERE id = ?',
+        )
+        .get('s1') as { last_sequence: number; conversation_version: number }
+
+      expect(sessionColumns.map((column) => column.name)).not.toContain(
+        'transcript',
+      )
+      expect(session).toEqual({
+        last_sequence: 1,
+        conversation_version: 2,
+      })
+    } finally {
+      closeDatabase()
+      resetDatabase()
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('nulls orphaned parent_session_id values while rebuilding legacy sessions', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'convergence-db-test-'))
+    const dbPath = join(dir, 'legacy-parent-session.sqlite')
+
+    try {
+      const legacy = new Database(dbPath)
+      legacy.pragma('foreign_keys = ON')
+      legacy.exec(`
+        CREATE TABLE projects (
+          id TEXT PRIMARY KEY,
+          name TEXT NOT NULL,
+          repository_path TEXT NOT NULL UNIQUE,
+          settings TEXT NOT NULL DEFAULT '{}',
+          created_at TEXT NOT NULL DEFAULT (datetime('now')),
+          updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+        );
+
+        CREATE TABLE sessions (
+          id TEXT PRIMARY KEY,
+          project_id TEXT NOT NULL,
+          workspace_id TEXT,
+          provider_id TEXT NOT NULL,
+          name TEXT NOT NULL,
+          status TEXT NOT NULL DEFAULT 'idle',
+          attention TEXT NOT NULL DEFAULT 'none',
+          working_directory TEXT NOT NULL,
+          transcript TEXT NOT NULL DEFAULT '[]',
+          parent_session_id TEXT,
+          last_sequence INTEGER NOT NULL DEFAULT 0,
+          conversation_version INTEGER NOT NULL DEFAULT 2,
+          created_at TEXT NOT NULL DEFAULT (datetime('now')),
+          updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+          FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE
+        );
+
+        CREATE TABLE session_conversation_items (
+          id TEXT PRIMARY KEY,
+          session_id TEXT NOT NULL,
+          sequence INTEGER NOT NULL,
+          turn_id TEXT,
+          kind TEXT NOT NULL,
+          state TEXT NOT NULL,
+          payload_json TEXT NOT NULL,
+          provider_item_id TEXT,
+          provider_event_type TEXT,
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL,
+          FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE,
+          UNIQUE (session_id, sequence)
+        );
+      `)
+
+      legacy
+        .prepare(
+          "INSERT INTO projects (id, name, repository_path) VALUES ('p1', 'test', '/tmp/test')",
+        )
+        .run()
+      legacy
+        .prepare(
+          'INSERT INTO sessions (id, project_id, provider_id, name, working_directory, transcript, parent_session_id, last_sequence, conversation_version) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        )
+        .run(
+          'child',
+          'p1',
+          'codex',
+          'child',
+          '/tmp/test',
+          '[]',
+          'missing-parent',
+          1,
+          2,
+        )
+      legacy
+        .prepare(
+          `INSERT INTO session_conversation_items (
+             id,
+             session_id,
+             sequence,
+             turn_id,
+             kind,
+             state,
+             payload_json,
+             provider_item_id,
+             provider_event_type,
+             created_at,
+             updated_at
+           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        )
+        .run(
+          'child:item:1',
+          'child',
+          1,
+          'child:turn:1',
+          'message',
+          'complete',
+          JSON.stringify({
+            actor: 'user',
+            text: 'hello',
+          }),
+          null,
+          'user',
+          '2026-01-01T00:00:00.000Z',
+          '2026-01-01T00:00:00.000Z',
+        )
+      legacy.close()
+
+      const db = getDatabase(dbPath)
+      const session = db
+        .prepare('SELECT parent_session_id FROM sessions WHERE id = ?')
+        .get('child') as { parent_session_id: string | null }
+      const violations = db.prepare('PRAGMA foreign_key_check').all() as Array<
+        Record<string, unknown>
+      >
+
+      expect(session.parent_session_id).toBeNull()
+      expect(violations).toEqual([])
+    } finally {
+      closeDatabase()
+      resetDatabase()
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('fails closed when a legacy transcript blob cannot be parsed safely', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'convergence-db-test-'))
+    const dbPath = join(dir, 'invalid-legacy-session.sqlite')
+
+    try {
+      const legacy = new Database(dbPath)
+      legacy.pragma('foreign_keys = ON')
+      legacy.exec(`
+        CREATE TABLE projects (
+          id TEXT PRIMARY KEY,
+          name TEXT NOT NULL,
+          repository_path TEXT NOT NULL UNIQUE,
+          settings TEXT NOT NULL DEFAULT '{}',
+          created_at TEXT NOT NULL DEFAULT (datetime('now')),
+          updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+        );
+
+        CREATE TABLE sessions (
+          id TEXT PRIMARY KEY,
+          project_id TEXT NOT NULL,
+          workspace_id TEXT,
+          provider_id TEXT NOT NULL,
+          name TEXT NOT NULL,
+          status TEXT NOT NULL DEFAULT 'idle',
+          attention TEXT NOT NULL DEFAULT 'none',
+          working_directory TEXT NOT NULL,
+          transcript TEXT NOT NULL DEFAULT '[]',
+          created_at TEXT NOT NULL DEFAULT (datetime('now')),
+          updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+          FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE
+        );
+      `)
+
+      legacy
+        .prepare(
+          "INSERT INTO projects (id, name, repository_path) VALUES ('p1', 'test', '/tmp/test')",
+        )
+        .run()
+      legacy
+        .prepare(
+          'INSERT INTO sessions (id, project_id, provider_id, name, working_directory, transcript) VALUES (?, ?, ?, ?, ?, ?)',
+        )
+        .run('s1', 'p1', 'codex', 'legacy', '/tmp/test', '{not-json')
+      legacy.close()
+
+      expect(() => getDatabase(dbPath)).toThrow(/invalid JSON/)
+
+      const reopened = new Database(dbPath)
+      const sessionColumns = reopened
+        .prepare("PRAGMA table_info('sessions')")
+        .all() as Array<{ name: string }>
+      reopened.close()
+
+      expect(sessionColumns.map((column) => column.name)).toContain(
+        'transcript',
+      )
     } finally {
       closeDatabase()
       resetDatabase()

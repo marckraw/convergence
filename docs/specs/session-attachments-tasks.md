@@ -18,7 +18,7 @@
 - [x] `electron/backend/attachments/image-normalize.pure.test.ts`
 - [x] `electron/backend/attachments/attachments.service.ts` — ingest-from-bytes, ingest-from-paths, readBytes, delete, orphan sweep; wires DB + filesystem + normalizer + sniffer
 - [x] `electron/backend/attachments/attachments.service.test.ts`
-- [x] `electron/backend/database/database.ts` — add `attachments` table + index. `attachment_ids` lives inline in the existing `sessions.transcript` JSON blob (no separate `transcript_entries` table exists in this repo), so no column add is needed on that side.
+- [x] `electron/backend/database/database.ts` — add `attachments` table + index. At the time of this rollout, `attachmentIds` lived inline in the legacy `sessions.transcript` JSON blob; later conversation normalization migrated them into normalized conversation-item payloads and removed the live `sessions.transcript` column.
 
 ## T2 — Provider type contract + descriptor capability
 
@@ -150,7 +150,7 @@
 - [x] Claude Code wire (stream-json + Anthropic content blocks) → `claude-code-message.pure.ts` + adapter
 - [x] Codex wire (`UserInput[]` + `localImage`) → `codex-message.pure.ts` + adapter
 - [x] Pi wire (`prompt.images[]`) → `pi-message.pure.ts` + adapter
-- [x] Persistence via `TranscriptEntry.attachmentIds` → inline in `sessions.transcript` JSON blob (note: spec referenced a separate `transcript_entries` table that does not exist in this repo; inline was the only available path, flagged in T1)
+- [x] Persistence via `TranscriptEntry.attachmentIds` → originally inline in `sessions.transcript`; current runtime stores attachment ids inside normalized `ConversationItem` payload rows after the conversation-normalization migration.
 - [x] Size caps validated in renderer + main → `validateAttachmentsAgainstCapability` (renderer) + `attachments.service` ingest checks (main)
 - [x] Tests: unit + integration + renderer component → 34 pure test files, 18 unit test files
 

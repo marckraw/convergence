@@ -3,6 +3,11 @@
 > Parent: `docs/specs/project-spec.md`
 > Builds on: Phase 2 (workspaces/worktrees, chaperone rules)
 
+Historical note: this phase doc describes the original transcript-JSON runtime.
+The current source of truth is `docs/specs/session-conversation-normalization.md`;
+the live schema now persists normalized `session_conversation_items` and no
+longer keeps `sessions.transcript` in the live `sessions` table.
+
 ## Objective
 
 Build the provider-neutral runtime backbone that all agent integrations will plug into. After this phase, fake sessions can be created, streamed, paused for approval/input, completed, and failed — with full persistence and a minimal UI to prove it works. No real providers yet (Phase 5), but the model is solid enough that Claude Code and Codex adapters can drop in without changing the core.

@@ -1,5 +1,7 @@
 import type {
-  Session,
+  ConversationItem,
+  ConversationPatchEvent,
+  SessionSummary,
   ProviderInfo,
   ProviderStatusInfo,
   ReasoningEffort,
@@ -14,15 +16,19 @@ export const sessionApi = {
     model: string | null
     effort: ReasoningEffort | null
     name: string
-  }): Promise<Session> => window.electronAPI.session.create(input),
+  }): Promise<SessionSummary> => window.electronAPI.session.create(input),
 
-  getByProjectId: (projectId: string): Promise<Session[]> =>
-    window.electronAPI.session.getByProjectId(projectId),
+  getSummariesByProjectId: (projectId: string): Promise<SessionSummary[]> =>
+    window.electronAPI.session.getSummariesByProjectId(projectId),
 
-  getAll: (): Promise<Session[]> => window.electronAPI.session.getAll(),
+  getAllSummaries: (): Promise<SessionSummary[]> =>
+    window.electronAPI.session.getAllSummaries(),
 
-  getById: (id: string): Promise<Session | null> =>
-    window.electronAPI.session.getById(id),
+  getSummaryById: (id: string): Promise<SessionSummary | null> =>
+    window.electronAPI.session.getSummaryById(id),
+
+  getConversation: (id: string): Promise<ConversationItem[]> =>
+    window.electronAPI.session.getConversation(id),
 
   archive: (id: string): Promise<void> =>
     window.electronAPI.session.archive(id),
@@ -71,8 +77,15 @@ export const sessionApi = {
   setRecentIds: (ids: string[]): Promise<void> =>
     window.electronAPI.session.setRecentIds(ids),
 
-  onSessionUpdate: (callback: (session: Session) => void): (() => void) =>
-    window.electronAPI.session.onSessionUpdate(callback),
+  onSessionSummaryUpdate: (
+    callback: (summary: SessionSummary) => void,
+  ): (() => void) =>
+    window.electronAPI.session.onSessionSummaryUpdate(callback),
+
+  onSessionConversationPatched: (
+    callback: (event: ConversationPatchEvent) => void,
+  ): (() => void) =>
+    window.electronAPI.session.onSessionConversationPatched(callback),
 }
 
 export const providerApi = {

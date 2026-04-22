@@ -1,23 +1,23 @@
 import type { Project } from '../project/project.types'
-import type { NeedsYouDismissals, Session } from './session.types'
+import type { NeedsYouDismissals, SessionSummary } from './session.types'
 
 export interface ProjectActivity {
   projectId: string
   projectName: string
-  running: Session[]
-  needsAttention: Session[]
+  running: SessionSummary[]
+  needsAttention: SessionSummary[]
   providerIds: string[]
 }
 
 export interface GlobalStatus {
-  running: Session[]
-  needsAttention: Session[]
+  running: SessionSummary[]
+  needsAttention: SessionSummary[]
   byProject: ProjectActivity[]
-  lastCompleted: Session | null
+  lastCompleted: SessionSummary | null
 }
 
 function isAttentionSession(
-  session: Session,
+  session: SessionSummary,
   dismissals: NeedsYouDismissals,
 ): boolean {
   if (
@@ -43,7 +43,7 @@ function uniqueInOrder(values: string[]): string[] {
 }
 
 export function selectGlobalStatus(
-  sessions: Session[],
+  sessions: SessionSummary[],
   dismissals: NeedsYouDismissals,
   projects: Project[],
 ): GlobalStatus {
@@ -99,7 +99,7 @@ export function selectGlobalStatus(
       (session) =>
         session.status === 'completed' || session.status === 'failed',
     )
-    .reduce<Session | null>((latest, session) => {
+    .reduce<SessionSummary | null>((latest, session) => {
       if (!latest) return session
       return session.updatedAt.localeCompare(latest.updatedAt) > 0
         ? session
