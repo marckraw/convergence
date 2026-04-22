@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import type { FC } from 'react'
 import type { Workspace } from '@/entities/workspace'
-import type { Session } from '@/entities/session'
+import type { SessionSummary } from '@/entities/session'
 import { SessionCreateInline } from '@/features/session-create-inline'
 import { Button } from '@/shared/ui/button'
 import {
@@ -31,7 +31,7 @@ import {
 interface ProjectTreeProps {
   baseBranchName: string | null
   workspaces: Workspace[]
-  sessions: Session[]
+  sessions: SessionSummary[]
   activeSessionId: string | null
   regeneratingSessionIds?: ReadonlySet<string>
   pulsingSessionIds?: Readonly<Record<string, true>>
@@ -104,7 +104,7 @@ export const ProjectTree: FC<ProjectTreeProps> = ({
   const getWorkspaceSessions = (wsId: string) =>
     sessions.filter((s) => s.workspaceId === wsId && !s.archivedAt)
 
-  const renderSessionActions = (session: Session) => {
+  const renderSessionActions = (session: SessionSummary) => {
     const isArchived = !!session.archivedAt
     const isRegeneratingName = regeneratingSessionIds?.has(session.id) ?? false
 
@@ -179,7 +179,7 @@ export const ProjectTree: FC<ProjectTreeProps> = ({
     )
   }
 
-  const renderSessionRow = (session: Session) => {
+  const renderSessionRow = (session: SessionSummary) => {
     const isRenaming = renamingSessionId === session.id
     const isRegeneratingName = regeneratingSessionIds?.has(session.id) ?? false
     const pulsing = pulsingSessionIds?.[session.id] === true

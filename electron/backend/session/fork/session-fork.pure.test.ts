@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { TranscriptEntry } from '../session.types'
+import type { ConversationItem } from '../conversation-item.types'
 import type { ForkSummary } from './session-fork.types'
 import {
   buildExtractionPrompt,
@@ -8,7 +8,7 @@ import {
   parseAndValidateSummary,
   renderFullSeed,
   renderSeedMarkdown,
-  serializeTranscript,
+  serializeConversationItems,
 } from './session-fork.pure'
 
 const sampleSummary: ForkSummary = {
@@ -36,18 +36,129 @@ const sampleSummary: ForkSummary = {
   next_steps: ['Write the migration'],
 }
 
-describe('serializeTranscript', () => {
+describe('serializeConversationItems', () => {
   it('prefixes roles and collapses tool entries', () => {
-    const entries: TranscriptEntry[] = [
-      { type: 'user', text: 'hi', timestamp: 't1' },
-      { type: 'assistant', text: 'hello', timestamp: 't2' },
-      { type: 'tool-use', tool: 'bash', input: 'ls -la', timestamp: 't3' },
-      { type: 'tool-result', result: 'file.ts', timestamp: 't4' },
-      { type: 'system', text: 'status: ok', timestamp: 't5' },
-      { type: 'approval-request', description: 'run rm', timestamp: 't6' },
-      { type: 'input-request', prompt: 'name?', timestamp: 't7' },
+    const items: ConversationItem[] = [
+      {
+        id: '1',
+        sessionId: 's',
+        sequence: 1,
+        turnId: 't1',
+        kind: 'message',
+        state: 'complete',
+        actor: 'user',
+        text: 'hi',
+        createdAt: 't1',
+        updatedAt: 't1',
+        providerMeta: {
+          providerId: 'p',
+          providerItemId: null,
+          providerEventType: 'user',
+        },
+      },
+      {
+        id: '2',
+        sessionId: 's',
+        sequence: 2,
+        turnId: 't1',
+        kind: 'message',
+        state: 'complete',
+        actor: 'assistant',
+        text: 'hello',
+        createdAt: 't2',
+        updatedAt: 't2',
+        providerMeta: {
+          providerId: 'p',
+          providerItemId: null,
+          providerEventType: 'assistant',
+        },
+      },
+      {
+        id: '3',
+        sessionId: 's',
+        sequence: 3,
+        turnId: 't1',
+        kind: 'tool-call',
+        state: 'complete',
+        toolName: 'bash',
+        inputText: 'ls -la',
+        createdAt: 't3',
+        updatedAt: 't3',
+        providerMeta: {
+          providerId: 'p',
+          providerItemId: null,
+          providerEventType: 'tool-use',
+        },
+      },
+      {
+        id: '4',
+        sessionId: 's',
+        sequence: 4,
+        turnId: 't1',
+        kind: 'tool-result',
+        state: 'complete',
+        toolName: null,
+        relatedItemId: null,
+        outputText: 'file.ts',
+        createdAt: 't4',
+        updatedAt: 't4',
+        providerMeta: {
+          providerId: 'p',
+          providerItemId: null,
+          providerEventType: 'tool-result',
+        },
+      },
+      {
+        id: '5',
+        sessionId: 's',
+        sequence: 5,
+        turnId: 't1',
+        kind: 'note',
+        state: 'complete',
+        level: 'info',
+        text: 'status: ok',
+        createdAt: 't5',
+        updatedAt: 't5',
+        providerMeta: {
+          providerId: 'p',
+          providerItemId: null,
+          providerEventType: 'system',
+        },
+      },
+      {
+        id: '6',
+        sessionId: 's',
+        sequence: 6,
+        turnId: 't1',
+        kind: 'approval-request',
+        state: 'complete',
+        description: 'run rm',
+        createdAt: 't6',
+        updatedAt: 't6',
+        providerMeta: {
+          providerId: 'p',
+          providerItemId: null,
+          providerEventType: 'approval-request',
+        },
+      },
+      {
+        id: '7',
+        sessionId: 's',
+        sequence: 7,
+        turnId: 't1',
+        kind: 'input-request',
+        state: 'complete',
+        prompt: 'name?',
+        createdAt: 't7',
+        updatedAt: 't7',
+        providerMeta: {
+          providerId: 'p',
+          providerItemId: null,
+          providerEventType: 'input-request',
+        },
+      },
     ]
-    const out = serializeTranscript(entries)
+    const out = serializeConversationItems(items)
     expect(out).toContain('user: hi')
     expect(out).toContain('assistant: hello')
     expect(out).toContain('[tool bash]')
@@ -60,10 +171,26 @@ describe('serializeTranscript', () => {
   })
 
   it('truncates very long text', () => {
-    const entries: TranscriptEntry[] = [
-      { type: 'user', text: 'x'.repeat(10000), timestamp: 't1' },
+    const items: ConversationItem[] = [
+      {
+        id: '1',
+        sessionId: 's',
+        sequence: 1,
+        turnId: 't1',
+        kind: 'message',
+        state: 'complete',
+        actor: 'user',
+        text: 'x'.repeat(10000),
+        createdAt: 't1',
+        updatedAt: 't1',
+        providerMeta: {
+          providerId: 'p',
+          providerItemId: null,
+          providerEventType: 'user',
+        },
+      },
     ]
-    const out = serializeTranscript(entries)
+    const out = serializeConversationItems(items)
     expect(out.length).toBeLessThan(10000)
     expect(out).toContain('…')
   })

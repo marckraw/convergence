@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import type { FC, MouseEvent as ReactMouseEvent } from 'react'
-import type { Session } from '@/entities/session'
+import type { SessionSummary } from '@/entities/session'
 import { Button } from '@/shared/ui/button'
 import {
   ArrowLeftToLine,
@@ -19,7 +19,7 @@ interface ChangedFile {
 }
 
 interface ChangedFilesPanelProps {
-  session: Session
+  session: SessionSummary
   side: 'left' | 'right'
   expanded: boolean
   onClose: () => void

@@ -147,7 +147,7 @@ async function startApp(): Promise<void> {
   projectService.setWorkspaceService(workspaceService)
 
   try {
-    const liveSessionIds = sessionService.getAll().map((s) => s.id)
+    const liveSessionIds = sessionService.getAllSummaries().map((s) => s.id)
     await attachmentsService.sweepOrphans(liveSessionIds)
   } catch (err) {
     console.warn('Attachment orphan sweep failed:', err)

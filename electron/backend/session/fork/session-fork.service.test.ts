@@ -8,14 +8,15 @@ import type {
 } from '../../provider/provider.types'
 import type { WorkspaceService } from '../../workspace/workspace.service'
 import type { SessionService } from '../session.service'
-import type { Session } from '../session.types'
+import type { ConversationItem } from '../conversation-item.types'
+import type { SessionSummary } from '../session.types'
 import {
   SessionForkExtractionError,
   SessionForkService,
 } from './session-fork.service'
 import type { ForkSummary } from './session-fork.types'
 
-function makeParent(overrides: Partial<Session> = {}): Session {
+function makeParent(overrides: Partial<SessionSummary> = {}): SessionSummary {
   return {
     id: 'parent-1',
     projectId: 'proj-1',
@@ -27,30 +28,82 @@ function makeParent(overrides: Partial<Session> = {}): Session {
     status: 'idle',
     attention: 'none',
     workingDirectory: '/tmp/parent',
-    transcript: [
-      { type: 'user', text: 'hi', timestamp: 't1' },
-      { type: 'assistant', text: 'hello', timestamp: 't2' },
-      {
-        type: 'user',
-        text: 'check https://example.com and src/foo.ts',
-        timestamp: 't3',
-      },
-    ],
     contextWindow: null,
     activity: null,
     archivedAt: null,
     parentSessionId: null,
     forkStrategy: null,
+    continuationToken: null,
+    lastSequence: 3,
     createdAt: 'now',
     updatedAt: 'now',
     ...overrides,
   }
 }
 
-function makeChild(id: string, overrides: Partial<Session> = {}): Session {
+function makeChild(
+  id: string,
+  overrides: Partial<SessionSummary> = {},
+): SessionSummary {
   return {
     ...makeParent({ id, ...overrides }),
   }
+}
+
+function makeParentConversation(session: SessionSummary): ConversationItem[] {
+  return [
+    {
+      id: `${session.id}-item-1`,
+      sessionId: session.id,
+      sequence: 1,
+      turnId: `${session.id}:turn:1`,
+      kind: 'message',
+      state: 'complete',
+      actor: 'user',
+      text: 'hi',
+      createdAt: 't1',
+      updatedAt: 't1',
+      providerMeta: {
+        providerId: session.providerId,
+        providerItemId: null,
+        providerEventType: 'user',
+      },
+    },
+    {
+      id: `${session.id}-item-2`,
+      sessionId: session.id,
+      sequence: 2,
+      turnId: `${session.id}:turn:1`,
+      kind: 'message',
+      state: 'complete',
+      actor: 'assistant',
+      text: 'hello',
+      createdAt: 't2',
+      updatedAt: 't2',
+      providerMeta: {
+        providerId: session.providerId,
+        providerItemId: null,
+        providerEventType: 'assistant',
+      },
+    },
+    {
+      id: `${session.id}-item-3`,
+      sessionId: session.id,
+      sequence: 3,
+      turnId: `${session.id}:turn:2`,
+      kind: 'message',
+      state: 'complete',
+      actor: 'user',
+      text: 'check https://example.com and src/foo.ts',
+      createdAt: 't3',
+      updatedAt: 't3',
+      providerMeta: {
+        providerId: session.providerId,
+        providerItemId: null,
+        providerEventType: 'user',
+      },
+    },
+  ]
 }
 
 const validSummary: ForkSummary = {
@@ -78,12 +131,18 @@ interface Harness {
     typeof vi.fn<(input: OneShotInput) => Promise<OneShotResult>>
   >
   createSession: ReturnType<
-    typeof vi.fn<(input: Parameters<SessionService['create']>[0]) => Session>
+    typeof vi.fn<
+      (input: Parameters<SessionService['create']>[0]) => SessionSummary
+    >
   >
   startSession: ReturnType<
     typeof vi.fn<(id: string, input: unknown) => Promise<void>>
   >
-  getById: ReturnType<typeof vi.fn<(id: string) => Session | null>>
+  getById: ReturnType<typeof vi.fn<(id: string) => SessionSummary | null>>
+  getSummaryById: ReturnType<
+    typeof vi.fn<(id: string) => SessionSummary | null>
+  >
+  getConversation: ReturnType<typeof vi.fn<(id: string) => ConversationItem[]>>
   workspaceCreate: ReturnType<
     typeof vi.fn<
       (
@@ -94,11 +153,16 @@ interface Harness {
 }
 
 function setup(
-  overrides: { parent?: Session; oneShotText?: string[] } = {},
+  overrides: { parent?: SessionSummary; oneShotText?: string[] } = {},
 ): Harness {
   const parent = overrides.parent ?? makeParent()
-  const sessionsById = new Map<string, Session>([[parent.id, parent]])
+  const sessionsById = new Map<string, SessionSummary>([[parent.id, parent]])
+  const conversationsById = new Map<string, ConversationItem[]>([
+    [parent.id, makeParentConversation(parent)],
+  ])
   const getById = vi.fn((id: string) => sessionsById.get(id) ?? null)
+  const getSummaryById = vi.fn((id: string) => sessionsById.get(id) ?? null)
+  const getConversation = vi.fn((id: string) => conversationsById.get(id) ?? [])
   const createSession = vi.fn(
     (input: Parameters<SessionService['create']>[0]) => {
       const child = makeChild(`child-${sessionsById.size}`, {
@@ -111,9 +175,10 @@ function setup(
         parentSessionId: input.parentSessionId ?? null,
         forkStrategy: input.forkStrategy ?? null,
         workingDirectory: '/tmp/child',
-        transcript: [],
+        lastSequence: 0,
       })
       sessionsById.set(child.id, child)
+      conversationsById.set(child.id, [])
       return child
     },
   )
@@ -122,6 +187,8 @@ function setup(
     create: createSession,
     start: startSession,
     getById,
+    getSummaryById,
+    getConversation,
   } as unknown as SessionService
 
   const oneShotTexts = overrides.oneShotText ?? [JSON.stringify(validSummary)]
@@ -207,6 +274,8 @@ function setup(
     createSession,
     startSession,
     getById,
+    getSummaryById,
+    getConversation,
     workspaceCreate,
   }
 }

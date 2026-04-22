@@ -1,4 +1,8 @@
-import type { ForkStrategy, ReasoningEffort, Session } from './session.types'
+import type {
+  ForkStrategy,
+  ReasoningEffort,
+  SessionSummary,
+} from './session.types'
 
 export type { ForkStrategy }
 
@@ -53,4 +57,4 @@ export interface ForkSummaryInput extends ForkCommonInput {
 
 export type ForkInput = ForkFullInput | ForkSummaryInput
 
-export type ForkResult = Session
+export type ForkResult = SessionSummary

@@ -220,11 +220,15 @@ export function registerIpcHandlers(
     },
   )
 
-  ipcMain.handle('session:getByProjectId', (_event, projectId: string) =>
-    sessionService.getByProjectId(projectId),
+  ipcMain.handle(
+    'session:getSummariesByProjectId',
+    (_event, projectId: string) =>
+      sessionService.getSummariesByProjectId(projectId),
   )
 
-  ipcMain.handle('session:getAll', () => sessionService.getAll())
+  ipcMain.handle('session:getAllSummaries', () =>
+    sessionService.getAllSummaries(),
+  )
 
   ipcMain.handle('session:getNeedsYouDismissals', () =>
     parseNeedsYouDismissals(stateService.get(NEEDS_YOU_DISMISSALS_KEY)),
@@ -248,8 +252,12 @@ export function registerIpcHandlers(
     setRecentSessionIds(stateService, sanitized)
   })
 
-  ipcMain.handle('session:getById', (_event, id: string) =>
-    sessionService.getById(id),
+  ipcMain.handle('session:getSummaryById', (_event, id: string) =>
+    sessionService.getSummaryById(id),
+  )
+
+  ipcMain.handle('session:getConversation', (_event, id: string) =>
+    sessionService.getConversation(id),
   )
 
   ipcMain.handle('session:archive', (_event, id: string) => {
@@ -376,11 +384,20 @@ export function registerIpcHandlers(
   )
 
   // Session update event forwarding
-  sessionService.setUpdateListener((session) => {
+  sessionService.setSummaryUpdateListener((summary) => {
     const windows = BrowserWindow.getAllWindows()
     for (const win of windows) {
       if (!win.isDestroyed()) {
-        win.webContents.send('session:updated', session)
+        win.webContents.send('session:summaryUpdated', summary)
+      }
+    }
+  })
+
+  sessionService.setConversationPatchListener((event) => {
+    const windows = BrowserWindow.getAllWindows()
+    for (const win of windows) {
+      if (!win.isDestroyed()) {
+        win.webContents.send('session:conversationPatched', event)
       }
     }
   })

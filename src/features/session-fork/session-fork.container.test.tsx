@@ -2,6 +2,7 @@ import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   useSessionStore,
+  type ConversationItem,
   type ForkFullInput,
   type ForkSummary,
   type ForkSummaryInput,
@@ -76,20 +77,88 @@ const parentSession: Session = {
   name: 'Parent Session',
   status: 'idle',
   attention: 'none',
+  activity: null,
+  contextWindow: null,
   workingDirectory: '/tmp/parent',
-  transcript: [
-    { type: 'user', text: 'hi', timestamp: '2026-01-01T00:00:00.000Z' },
-    { type: 'assistant', text: 'hello', timestamp: '2026-01-01T00:00:01.000Z' },
-    {
-      type: 'user',
-      text: 'do the thing',
-      timestamp: '2026-01-01T00:00:02.000Z',
-    },
-    { type: 'assistant', text: 'done', timestamp: '2026-01-01T00:00:03.000Z' },
-  ],
+  archivedAt: null,
+  parentSessionId: null,
+  forkStrategy: null,
+  continuationToken: null,
+  lastSequence: 4,
   createdAt: '2026-01-01T00:00:00.000Z',
   updatedAt: '2026-01-01T00:00:04.000Z',
 }
+
+const parentConversation: ConversationItem[] = [
+  {
+    id: 'item-1',
+    sessionId: 'parent-1',
+    sequence: 1,
+    turnId: null,
+    kind: 'message',
+    state: 'complete',
+    actor: 'user',
+    text: 'hi',
+    createdAt: '2026-01-01T00:00:00.000Z',
+    updatedAt: '2026-01-01T00:00:00.000Z',
+    providerMeta: {
+      providerId: 'claude-code',
+      providerItemId: null,
+      providerEventType: 'user',
+    },
+  },
+  {
+    id: 'item-2',
+    sessionId: 'parent-1',
+    sequence: 2,
+    turnId: null,
+    kind: 'message',
+    state: 'complete',
+    actor: 'assistant',
+    text: 'hello',
+    createdAt: '2026-01-01T00:00:01.000Z',
+    updatedAt: '2026-01-01T00:00:01.000Z',
+    providerMeta: {
+      providerId: 'claude-code',
+      providerItemId: null,
+      providerEventType: 'assistant',
+    },
+  },
+  {
+    id: 'item-3',
+    sessionId: 'parent-1',
+    sequence: 3,
+    turnId: null,
+    kind: 'message',
+    state: 'complete',
+    actor: 'user',
+    text: 'do the thing',
+    createdAt: '2026-01-01T00:00:02.000Z',
+    updatedAt: '2026-01-01T00:00:02.000Z',
+    providerMeta: {
+      providerId: 'claude-code',
+      providerItemId: null,
+      providerEventType: 'user',
+    },
+  },
+  {
+    id: 'item-4',
+    sessionId: 'parent-1',
+    sequence: 4,
+    turnId: null,
+    kind: 'message',
+    state: 'complete',
+    actor: 'assistant',
+    text: 'done',
+    createdAt: '2026-01-01T00:00:03.000Z',
+    updatedAt: '2026-01-01T00:00:03.000Z',
+    providerMeta: {
+      providerId: 'claude-code',
+      providerItemId: null,
+      providerEventType: 'assistant',
+    },
+  },
+]
 
 const sampleSummary: ForkSummary = {
   topic: 'Shipping the fork dialog',
@@ -160,7 +229,8 @@ describe('SessionForkDialogContainer', () => {
     useTaskProgressStore.getState().reset()
     ;(window as unknown as { electronAPI: unknown }).electronAPI = {
       session: {
-        getById: vi.fn().mockResolvedValue(parentSession),
+        getSummaryById: vi.fn().mockResolvedValue(parentSession),
+        getConversation: vi.fn().mockResolvedValue(parentConversation),
       },
     }
   })
@@ -327,14 +397,25 @@ describe('SessionForkDialogContainer', () => {
   })
 
   it('renders a size warning when the parent context window is near full', async () => {
-    const bigTranscript = Array.from({ length: 40 }).map((_, idx) => ({
-      type: 'user' as const,
+    const bigConversation = Array.from({ length: 40 }).map((_, idx) => ({
+      id: `item-${idx + 1}`,
+      sessionId: 'parent-1',
+      sequence: idx + 1,
+      turnId: null,
+      kind: 'message' as const,
+      state: 'complete' as const,
+      actor: 'user' as const,
       text: 'x'.repeat(500),
-      timestamp: `2026-01-01T00:00:${String(idx).padStart(2, '0')}.000Z`,
+      createdAt: `2026-01-01T00:00:${String(idx).padStart(2, '0')}.000Z`,
+      updatedAt: `2026-01-01T00:00:${String(idx).padStart(2, '0')}.000Z`,
+      providerMeta: {
+        providerId: 'claude-code',
+        providerItemId: null,
+        providerEventType: 'user',
+      },
     }))
     const heavyParent: Session = {
       ...parentSession,
-      transcript: bigTranscript,
       contextWindow: {
         availability: 'available',
         source: 'provider',
@@ -347,6 +428,11 @@ describe('SessionForkDialogContainer', () => {
     useSessionStore.setState({
       globalSessions: [heavyParent],
     } as unknown as ReturnType<typeof useSessionStore.getState>)
+    ;(
+      window as unknown as {
+        electronAPI: { session: { getConversation: ReturnType<typeof vi.fn> } }
+      }
+    ).electronAPI.session.getConversation.mockResolvedValueOnce(bigConversation)
     primeStores()
     useSessionStore.setState({
       globalSessions: [heavyParent],
@@ -379,9 +465,13 @@ describe('SessionForkDialogContainer', () => {
 
       render(<SessionForkDialogContainer />)
 
-      fireEvent.click(
-        await screen.findByRole('button', { name: /Structured summary/i }),
-      )
+      const summaryButton = await screen.findByRole('button', {
+        name: /Structured summary/i,
+      })
+      await waitFor(() => {
+        expect(summaryButton).toBeEnabled()
+      })
+      fireEvent.click(summaryButton)
 
       await waitFor(() => {
         expect(previewFork).toHaveBeenCalledWith('parent-1', 'req-progress')
@@ -432,9 +522,13 @@ describe('SessionForkDialogContainer', () => {
 
       render(<SessionForkDialogContainer />)
 
-      fireEvent.click(
-        await screen.findByRole('button', { name: /Structured summary/i }),
-      )
+      const summaryButton = await screen.findByRole('button', {
+        name: /Structured summary/i,
+      })
+      await waitFor(() => {
+        expect(summaryButton).toBeEnabled()
+      })
+      fireEvent.click(summaryButton)
 
       await waitFor(() => {
         expect(previewFork).toHaveBeenCalled()

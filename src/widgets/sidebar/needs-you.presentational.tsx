@@ -1,9 +1,9 @@
 import type { FC } from 'react'
-import type { Session, NeedsYouDisposition } from '@/entities/session'
+import type { SessionSummary, NeedsYouDisposition } from '@/entities/session'
 import { NeedsYouSection } from './needs-you-section.presentational'
 
 interface NeedsYouSession {
-  session: Session
+  session: SessionSummary
   projectName: string
   summary: string
   priority: number
@@ -64,7 +64,7 @@ export const NeedsYou: FC<NeedsYouProps> = ({
   )
 }
 
-export function getNeedsYouAction(session: Session): {
+export function getNeedsYouAction(session: SessionSummary): {
   label: string
   disposition: NeedsYouDisposition
 } {
@@ -80,7 +80,7 @@ export function getNeedsYouAction(session: Session): {
   }
 }
 
-export function buildNeedsYouSummary(session: Session): {
+export function buildNeedsYouSummary(session: SessionSummary): {
   summary: string
   priority: number
 } | null {

@@ -1,10 +1,10 @@
 import { spawn, type ChildProcess } from 'child_process'
 import { promises as fs } from 'fs'
+import type { SessionDelta } from '../../session/conversation-item.types'
 import type {
   Provider,
   SessionStartConfig,
   SessionHandle,
-  TranscriptEntry,
   SessionStatus,
   AttentionState,
   SessionContextWindow,
@@ -14,6 +14,7 @@ import type {
   OneShotResult,
 } from '../provider.types'
 import { JsonRpcClient } from './jsonrpc'
+import { ProviderSessionEmitter } from '../provider-session.emitter'
 import {
   buildFallbackCodexDescriptor,
   normalizeProviderDescriptor,
@@ -187,7 +188,7 @@ export class CodexProvider implements Provider {
   start(config: SessionStartConfig): SessionHandle {
     const binaryPath = this.binaryPath
     const listeners = {
-      transcript: [] as ((entry: TranscriptEntry) => void)[],
+      delta: [] as ((delta: SessionDelta) => void)[],
       status: [] as ((status: SessionStatus) => void)[],
       attention: [] as ((attention: AttentionState) => void)[],
       continuationToken: [] as ((token: string) => void)[],
@@ -199,37 +200,56 @@ export class CodexProvider implements Provider {
     let rpc: JsonRpcClient | null = null
     let stopped = false
     let threadId: string | null = config.continuationToken
+    let threadReady = config.continuationToken === null
     let assistantTextBuffer = ''
+    let assistantMessageItemId: string | null = null
     let resolveThreadReady: (() => void) | null = null
 
     // Map of pending approval request IDs (JSON-RPC id → our description)
     const pendingApprovals = new Map<number, string>()
     const pendingUserInputs = new Map<number, string[]>()
 
-    function emit(entry: TranscriptEntry): void {
-      listeners.transcript.forEach((cb) => cb(entry))
+    function emitDelta(delta: SessionDelta): void {
+      listeners.delta.forEach((cb) => cb(delta))
     }
+
+    const sessionEmitter = new ProviderSessionEmitter({
+      providerId: 'codex',
+      emitDelta,
+      now,
+    })
 
     function setStatus(status: SessionStatus): void {
       listeners.status.forEach((cb) => cb(status))
+      sessionEmitter.patchSession({ status })
     }
 
     function setAttention(attention: AttentionState): void {
       listeners.attention.forEach((cb) => cb(attention))
+      sessionEmitter.patchSession({ attention })
     }
 
     function setContinuationToken(token: string): void {
+      threadReady = true
       if (threadId === token) {
+        resolveThreadReady?.()
         return
       }
 
       threadId = token
       listeners.continuationToken.forEach((cb) => cb(token))
+      sessionEmitter.patchSession({ continuationToken: token })
+      resolveThreadReady?.()
+    }
+
+    function markThreadReady(): void {
+      threadReady = true
       resolveThreadReady?.()
     }
 
     function setContextWindow(contextWindow: SessionContextWindow): void {
       listeners.contextWindow.forEach((cb) => cb(contextWindow))
+      sessionEmitter.patchSession({ contextWindow })
     }
 
     let activityState: CodexActivityState = initialCodexActivityState()
@@ -240,17 +260,28 @@ export class CodexProvider implements Provider {
       activityState = state
       if (activity !== 'keep') {
         listeners.activity.forEach((cb) => cb(activity))
+        sessionEmitter.patchSession({ activity })
       }
     }
 
     function flushAssistantBuffer(): void {
       if (assistantTextBuffer) {
-        emit({
-          type: 'assistant',
-          text: assistantTextBuffer,
-          timestamp: now(),
-        })
+        const timestamp = now()
+        if (assistantMessageItemId) {
+          sessionEmitter.patchMessage(assistantMessageItemId, {
+            text: assistantTextBuffer,
+            state: 'complete',
+            updatedAt: timestamp,
+          })
+        } else {
+          assistantMessageItemId = sessionEmitter.addAssistantMessage({
+            text: assistantTextBuffer,
+            state: 'complete',
+            timestamp,
+          })
+        }
         assistantTextBuffer = ''
+        assistantMessageItemId = null
       }
     }
 
@@ -315,8 +346,49 @@ export class CodexProvider implements Provider {
       return threadId
     }
 
+    async function resumeExistingThread(
+      activeRpc: JsonRpcClient,
+      continuationThreadId: string,
+    ): Promise<string> {
+      try {
+        const threadResult = await activeRpc.request('thread/resume', {
+          threadId: continuationThreadId,
+          cwd: config.workingDirectory,
+          approvalPolicy: 'on-request',
+          sandbox: 'workspace-write',
+        })
+
+        const discoveredThreadId = readThreadId(threadResult)
+        if (discoveredThreadId) {
+          setContinuationToken(discoveredThreadId)
+          return discoveredThreadId
+        }
+
+        markThreadReady()
+        return continuationThreadId
+      } catch (err) {
+        if (!isCodexThreadNotFoundError(err)) {
+          throw err
+        }
+
+        const recoveryEntry = buildCodexThreadRecoveryEntry(now())
+        sessionEmitter.addNote({
+          text: recoveryEntry.text,
+          level: recoveryEntry.level,
+          timestamp: recoveryEntry.timestamp,
+        })
+
+        threadId = null
+        threadReady = false
+        return startFreshThread(activeRpc)
+      }
+    }
+
     async function ensureThread(activeRpc: JsonRpcClient): Promise<string> {
       if (threadId) {
+        if (!threadReady) {
+          return resumeExistingThread(activeRpc, threadId)
+        }
         return threadId
       }
 
@@ -327,6 +399,8 @@ export class CodexProvider implements Provider {
       activeRpc: JsonRpcClient,
       input: ReturnType<typeof buildCodexUserInput>,
     ): Promise<void> {
+      assistantTextBuffer = ''
+      assistantMessageItemId = null
       const currentThreadId = await ensureThread(activeRpc)
 
       try {
@@ -341,8 +415,14 @@ export class CodexProvider implements Provider {
           throw err
         }
 
-        emit(buildCodexThreadRecoveryEntry(now()))
+        const recoveryEntry = buildCodexThreadRecoveryEntry(now())
+        sessionEmitter.addNote({
+          text: recoveryEntry.text,
+          level: recoveryEntry.level,
+          timestamp: recoveryEntry.timestamp,
+        })
         threadId = null
+        threadReady = false
         const recoveredThreadId = await startFreshThread(activeRpc)
         await activeRpc.request('turn/start', {
           threadId: recoveredThreadId,
@@ -374,11 +454,7 @@ export class CodexProvider implements Provider {
         rpc.notify('initialized')
 
         // Emit user message and start turn
-        emit({
-          type: 'user',
-          text: initialMessage,
-          timestamp: now(),
-        })
+        sessionEmitter.addUserMessage({ text: initialMessage })
         setStatus('running')
 
         const parts = await loadCodexParts(initialAttachments)
@@ -388,10 +464,9 @@ export class CodexProvider implements Provider {
         )
       } catch (err) {
         if (stopped) return
-        emit({
-          type: 'system',
+        sessionEmitter.addNote({
           text: `Initialization failed: ${err instanceof Error ? err.message : String(err)}`,
-          timestamp: now(),
+          level: 'error',
         })
         setStatus('failed')
         setAttention('failed')
@@ -412,10 +487,9 @@ export class CodexProvider implements Provider {
       })
 
       if (!child.stdin || !child.stdout) {
-        emit({
-          type: 'system',
+        sessionEmitter.addNote({
           text: 'Failed to open stdio',
-          timestamp: now(),
+          level: 'error',
         })
         setStatus('failed')
         setAttention('failed')
@@ -466,6 +540,20 @@ export class CodexProvider implements Provider {
             } else if (typeof p.textDelta === 'string') {
               assistantTextBuffer += p.textDelta
             }
+            if (assistantTextBuffer) {
+              if (!assistantMessageItemId) {
+                assistantMessageItemId = sessionEmitter.addAssistantMessage({
+                  text: assistantTextBuffer,
+                  state: 'streaming',
+                  providerEventType: method,
+                })
+              } else {
+                sessionEmitter.patchMessage(assistantMessageItemId, {
+                  text: assistantTextBuffer,
+                  state: 'streaming',
+                })
+              }
+            }
             break
 
           case 'turn/completed':
@@ -499,10 +587,9 @@ export class CodexProvider implements Provider {
                   : null
               if (turn.status === 'failed' || errorMessage) {
                 if (errorMessage) {
-                  emit({
-                    type: 'system',
+                  sessionEmitter.addNote({
                     text: errorMessage,
-                    timestamp: now(),
+                    level: 'error',
                   })
                 }
                 setStatus('failed')
@@ -516,10 +603,9 @@ export class CodexProvider implements Provider {
 
           case 'turn/interrupt':
             flushAssistantBuffer()
-            emit({
-              type: 'system',
+            sessionEmitter.addNote({
               text: 'Turn interrupted',
-              timestamp: now(),
+              level: 'warning',
             })
             break
 
@@ -535,10 +621,10 @@ export class CodexProvider implements Provider {
               flushAssistantBuffer()
               const text = typeof item?.text === 'string' ? item.text : ''
               if (text && !hadBufferedText) {
-                emit({
-                  type: 'assistant',
+                sessionEmitter.addAssistantMessage({
                   text,
-                  timestamp: now(),
+                  state: 'complete',
+                  providerEventType: itemType,
                 })
               }
               break
@@ -553,19 +639,18 @@ export class CodexProvider implements Provider {
                   : typeof item?.exitCode === 'number'
                     ? `exit code ${item.exitCode}`
                     : 'Done'
-              emit({
-                type: 'tool-result',
-                result: `${command}: ${output}`,
-                timestamp: now(),
+              sessionEmitter.addToolResult({
+                outputText: `${command}: ${output}`,
+                toolName: command,
+                providerEventType: itemType,
               })
               break
             }
 
             if (itemType === 'fileChange' || itemType === 'mcpToolCall') {
-              emit({
-                type: 'tool-result',
-                result: JSON.stringify(item ?? 'Done'),
-                timestamp: now(),
+              sessionEmitter.addToolResult({
+                outputText: JSON.stringify(item ?? 'Done'),
+                providerEventType: itemType,
               })
             }
             break
@@ -577,10 +662,9 @@ export class CodexProvider implements Provider {
               typeof p.error === 'object' && p.error !== null
                 ? (p.error as { message?: unknown })
                 : null
-            emit({
-              type: 'system',
+            sessionEmitter.addNote({
               text: `Error: ${typeof error?.message === 'string' ? error.message : typeof p.message === 'string' ? p.message : 'Unknown error'}`,
-              timestamp: now(),
+              level: 'error',
             })
             setStatus('failed')
             setAttention('failed')
@@ -611,10 +695,9 @@ export class CodexProvider implements Provider {
 
           pendingApprovals.set(id, description)
 
-          emit({
-            type: 'approval-request',
+          sessionEmitter.addApprovalRequest({
             description,
-            timestamp: now(),
+            providerEventType: method,
           })
           setAttention('needs-approval')
         } else if (method === 'item/tool/requestUserInput') {
@@ -651,10 +734,9 @@ export class CodexProvider implements Provider {
 
           pendingUserInputs.set(id, questionIds)
 
-          emit({
-            type: 'input-request',
+          sessionEmitter.addInputRequest({
             prompt,
-            timestamp: now(),
+            providerEventType: method,
           })
           setAttention('needs-input')
         }
@@ -671,10 +753,9 @@ export class CodexProvider implements Provider {
         flushAssistantBuffer()
         applyActivity({ kind: 'close' })
         if (code !== 0 && code !== null) {
-          emit({
-            type: 'system',
+          sessionEmitter.addNote({
             text: `Process exited with code ${code}`,
-            timestamp: now(),
+            level: 'error',
           })
           setStatus('failed')
           setAttention('failed')
@@ -686,10 +767,9 @@ export class CodexProvider implements Provider {
 
       child.on('error', (err) => {
         if (stopped) return
-        emit({
-          type: 'system',
+        sessionEmitter.addNote({
           text: `Process error: ${err.message}`,
-          timestamp: now(),
+          level: 'error',
         })
         setStatus('failed')
         setAttention('failed')
@@ -705,8 +785,8 @@ export class CodexProvider implements Provider {
     }, 10)
 
     const handle: SessionHandle = {
-      onTranscriptEntry: (cb) => {
-        listeners.transcript.push(cb)
+      onDelta: (cb) => {
+        listeners.delta.push(cb)
       },
       onStatusChange: (cb) => {
         listeners.status.push(cb)
@@ -752,7 +832,7 @@ export class CodexProvider implements Provider {
           return
         }
 
-        emit({ type: 'user', text, timestamp: now() })
+        sessionEmitter.addUserMessage({ text })
         setStatus('running')
         setAttention('none')
         const activeRpc = rpc
@@ -762,7 +842,12 @@ export class CodexProvider implements Provider {
           )
           .catch((err) => {
             if (stopped) return
-            emit(buildTurnFailureEntry(err, now()))
+            const failureEntry = buildTurnFailureEntry(err, now())
+            sessionEmitter.addNote({
+              text: failureEntry.text,
+              level: failureEntry.level,
+              timestamp: failureEntry.timestamp,
+            })
             setStatus('failed')
             setAttention('failed')
           })

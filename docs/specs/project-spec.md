@@ -317,7 +317,7 @@ These decisions keep the door open for multi-agent collaboration:
 
 1. **Sessions are handles with `sendMessage()`** — a conductor is just code that calls this method
 2. **Sessions know about siblings** — query all sessions on a workspace to coordinate
-3. **Provider-neutral events** — all providers emit the same transcript format, so cross-provider collaboration works naturally
+3. **Provider-neutral runtime model** — all providers emit the same normalized session deltas and conversation-item model, so cross-provider collaboration works naturally
 4. **Attention model as coordination signal** — "finished" from Session A can trigger "start" on Session B
 
 ## Always-on Product Rules

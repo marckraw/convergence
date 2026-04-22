@@ -1,6 +1,8 @@
-import type { TranscriptEntry } from './provider.types'
-
-type SystemEntry = Extract<TranscriptEntry, { type: 'system' }>
+export interface ProviderNoteDraft {
+  text: string
+  level: 'info' | 'warning' | 'error'
+  timestamp: string
+}
 
 function readErrorMessage(err: unknown): string {
   return err instanceof Error ? err.message : String(err)
@@ -31,10 +33,10 @@ export function isMissingContinuationError(
 export function buildContinuationRecoveryEntry(
   providerName: string,
   timestamp: string,
-): SystemEntry {
+): ProviderNoteDraft {
   return {
-    type: 'system',
     text: `${providerName} continuation was no longer available. Started a new session; previous provider context may be missing.`,
+    level: 'warning',
     timestamp,
   }
 }

@@ -1,7 +1,7 @@
 import { EventEmitter } from 'events'
 import { PassThrough } from 'stream'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { TranscriptEntry } from '../provider.types'
+import type { SessionDelta } from '../../session/conversation-item.types'
 
 const { spawnMock } = vi.hoisted(() => ({
   spawnMock: vi.fn(),
@@ -52,7 +52,14 @@ function waitFor(
   })
 }
 
-function createMockCodexServer(child: MockChildProcess): void {
+function createMockCodexServer(
+  child: MockChildProcess,
+  options?: { missingThreadIds?: string[] },
+): {
+  requests: Array<{ method: string; params?: { threadId?: string } }>
+} {
+  const missingThreadIds = new Set(options?.missingThreadIds ?? [])
+  const requests: Array<{ method: string; params?: { threadId?: string } }> = []
   let buffer = ''
   const enqueue = (fn: () => void) => {
     setTimeout(fn, 0)
@@ -91,14 +98,41 @@ function createMockCodexServer(child: MockChildProcess): void {
           params?: { threadId?: string }
         }
 
+        if (
+          typeof message.id === 'number' &&
+          typeof message.method === 'string'
+        ) {
+          requests.push({
+            method: message.method,
+            params: message.params,
+          })
+        }
+
         if (message.method === 'initialize' && typeof message.id === 'number') {
           respond(message.id, {})
+        } else if (
+          message.method === 'thread/resume' &&
+          typeof message.id === 'number'
+        ) {
+          if (
+            typeof message.params?.threadId === 'string' &&
+            missingThreadIds.has(message.params.threadId)
+          ) {
+            reject(message.id, `thread not found: ${message.params.threadId}`)
+          } else {
+            respond(message.id, {
+              thread: { id: message.params?.threadId ?? 'resumed-thread' },
+            })
+          }
         } else if (
           message.method === 'turn/start' &&
           typeof message.id === 'number'
         ) {
-          if (message.params?.threadId === 'dead-thread') {
-            reject(message.id, 'thread not found: dead-thread')
+          if (
+            typeof message.params?.threadId === 'string' &&
+            missingThreadIds.has(message.params.threadId)
+          ) {
+            reject(message.id, `thread not found: ${message.params.threadId}`)
           } else {
             respond(message.id, {})
             enqueue(() => {
@@ -122,6 +156,8 @@ function createMockCodexServer(child: MockChildProcess): void {
       newlineIndex = buffer.indexOf('\n')
     }
   })
+
+  return { requests }
 }
 
 describe('CodexProvider', () => {
@@ -129,28 +165,32 @@ describe('CodexProvider', () => {
     spawnMock.mockReset()
   })
 
-  it('recovers from a stale continuation thread by starting a fresh thread', async () => {
+  it('resumes a continuation thread before starting a new turn', async () => {
     const child = new MockChildProcess()
-    createMockCodexServer(child)
+    const server = createMockCodexServer(child)
     spawnMock.mockReturnValue(child)
 
     const provider = new CodexProvider('/usr/local/bin/codex')
     const handle = provider.start({
       sessionId: 'session-1',
       workingDirectory: process.cwd(),
-      initialMessage: 'are you good?',
+      initialMessage: 'continue from before',
       initialAttachments: undefined,
       model: 'gpt-5.4',
       effort: 'medium',
-      continuationToken: 'dead-thread',
+      continuationToken: 'resume-thread',
     })
 
-    const transcript: TranscriptEntry[] = []
+    const items: Array<
+      Extract<SessionDelta, { kind: 'conversation.item.add' }>['item']
+    > = []
     const statuses: string[] = []
     const continuationTokens: string[] = []
 
-    handle.onTranscriptEntry((entry) => {
-      transcript.push(entry)
+    handle.onDelta((delta) => {
+      if (delta.kind === 'conversation.item.add') {
+        items.push(delta.item)
+      }
     })
     handle.onStatusChange((status) => {
       statuses.push(status)
@@ -166,27 +206,109 @@ describe('CodexProvider', () => {
       expect(statuses).toContain('completed')
     })
 
+    expect(server.requests.map(({ method }) => method)).toEqual([
+      'initialize',
+      'thread/resume',
+      'turn/start',
+    ])
+    expect(server.requests).toContainEqual(
+      expect.objectContaining({
+        method: 'turn/start',
+        params: expect.objectContaining({ threadId: 'resume-thread' }),
+      }),
+    )
+    expect(
+      server.requests.some(({ method }) => method === 'thread/start'),
+    ).toBe(false)
+    expect(continuationTokens).toEqual(['resume-thread'])
+    expect(statuses).toContain('running')
+    expect(statuses).not.toContain('failed')
+    expect(
+      items.some(
+        (item) =>
+          item.kind === 'note' &&
+          item.text.includes('thread was no longer available'),
+      ),
+    ).toBe(false)
+  })
+
+  it('recovers from a stale continuation thread by starting a fresh thread', async () => {
+    const child = new MockChildProcess()
+    const server = createMockCodexServer(child, {
+      missingThreadIds: ['dead-thread'],
+    })
+    spawnMock.mockReturnValue(child)
+
+    const provider = new CodexProvider('/usr/local/bin/codex')
+    const handle = provider.start({
+      sessionId: 'session-1',
+      workingDirectory: process.cwd(),
+      initialMessage: 'are you good?',
+      initialAttachments: undefined,
+      model: 'gpt-5.4',
+      effort: 'medium',
+      continuationToken: 'dead-thread',
+    })
+
+    const items: Array<
+      Extract<SessionDelta, { kind: 'conversation.item.add' }>['item']
+    > = []
+    const statuses: string[] = []
+    const continuationTokens: string[] = []
+
+    handle.onDelta((delta) => {
+      if (delta.kind === 'conversation.item.add') {
+        items.push(delta.item)
+      }
+    })
+    handle.onStatusChange((status) => {
+      statuses.push(status)
+    })
+    handle.onContinuationToken((token) => {
+      continuationTokens.push(token)
+    })
+    handle.onAttentionChange(() => {})
+    handle.onContextWindowChange(() => {})
+    handle.onActivityChange(() => {})
+
+    await waitFor(() => {
+      expect(statuses).toContain('completed')
+    })
+
+    expect(server.requests.map(({ method }) => method)).toEqual([
+      'initialize',
+      'thread/resume',
+      'thread/start',
+      'turn/start',
+    ])
+    expect(server.requests).toContainEqual(
+      expect.objectContaining({
+        method: 'turn/start',
+        params: expect.objectContaining({ threadId: 'fresh-thread' }),
+      }),
+    )
     expect(continuationTokens).toEqual(['dead-thread', 'fresh-thread'])
     expect(statuses).toContain('running')
     expect(statuses).not.toContain('failed')
 
-    expect(transcript).toEqual(
+    expect(items).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          type: 'user',
+          kind: 'message',
+          actor: 'user',
           text: 'are you good?',
         }),
         expect.objectContaining({
-          type: 'system',
+          kind: 'note',
           text: 'Codex thread was no longer available. Started a new thread; previous provider context may be missing.',
         }),
       ]),
     )
     expect(
-      transcript.some(
-        (entry) =>
-          entry.type === 'system' &&
-          entry.text.startsWith('Initialization failed:'),
+      items.some(
+        (item) =>
+          item.kind === 'note' &&
+          item.text.startsWith('Initialization failed:'),
       ),
     ).toBe(false)
   })

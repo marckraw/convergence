@@ -4,18 +4,19 @@ import { join } from 'path'
 import { tmpdir } from 'os'
 import { getDatabase, closeDatabase, resetDatabase } from '../database/database'
 import { ProviderRegistry } from '../provider/provider-registry'
+import { ProviderSessionEmitter } from '../provider/provider-session.emitter'
 import type {
   ActivitySignal,
   Attachment,
   Provider,
   SessionHandle,
   SessionStatus,
-  TranscriptEntry,
   AttentionState,
   SessionContextWindow,
 } from '../provider/provider.types'
 import type { ProviderAttachmentCapability } from '../provider/provider.types'
 import { AttachmentsService } from '../attachments/attachments.service'
+import type { SessionDelta } from './conversation-item.types'
 import { SessionService } from './session.service'
 
 const TEST_ATTACHMENT_CAPABILITY: ProviderAttachmentCapability = {
@@ -55,7 +56,7 @@ function createTestProvider(): Provider {
     }),
     start(config) {
       const listeners = {
-        transcript: [] as Array<(entry: TranscriptEntry) => void>,
+        delta: [] as Array<(delta: SessionDelta) => void>,
         status: [] as Array<(status: SessionStatus) => void>,
         attention: [] as Array<(attention: AttentionState) => void>,
         contextWindow: [] as Array<
@@ -68,24 +69,34 @@ function createTestProvider(): Provider {
       let stopped = false
       let approveResolve: (() => void) | null = null
 
-      const emitTranscript = (entry: TranscriptEntry) => {
-        listeners.transcript.forEach((cb) => cb(entry))
+      const emitDelta = (delta: SessionDelta) => {
+        listeners.delta.forEach((cb) => cb(delta))
       }
+
+      const sessionEmitter = new ProviderSessionEmitter({
+        providerId: 'test-provider',
+        emitDelta,
+        now,
+      })
 
       const emitStatus = (status: SessionStatus) => {
         listeners.status.forEach((cb) => cb(status))
+        sessionEmitter.patchSession({ status })
       }
 
       const emitAttention = (attention: AttentionState) => {
         listeners.attention.forEach((cb) => cb(attention))
+        sessionEmitter.patchSession({ attention })
       }
 
       const emitContextWindow = (contextWindow: SessionContextWindow) => {
         listeners.contextWindow.forEach((cb) => cb(contextWindow))
+        sessionEmitter.patchSession({ contextWindow })
       }
 
       const emitActivity = (activity: ActivitySignal) => {
         listeners.activity.forEach((cb) => cb(activity))
+        sessionEmitter.patchSession({ activity })
       }
 
       const schedule = (callback: () => void, delay: number) => {
@@ -108,33 +119,25 @@ function createTestProvider(): Provider {
           usedPercentage: 1,
           remainingPercentage: 99,
         })
-        emitTranscript({
-          type: 'user',
-          text: config.initialMessage,
-          timestamp: now(),
-        })
+        sessionEmitter.addUserMessage({ text: config.initialMessage })
 
         schedule(() => {
-          emitTranscript({
-            type: 'assistant',
+          sessionEmitter.addAssistantMessage({
             text: 'Starting analysis...',
-            timestamp: now(),
+            state: 'complete',
           })
         }, 300)
 
         schedule(() => {
-          emitTranscript({
-            type: 'assistant',
+          sessionEmitter.addAssistantMessage({
             text: 'Preparing an edit.',
-            timestamp: now(),
+            state: 'complete',
           })
         }, 800)
 
         schedule(() => {
-          emitTranscript({
-            type: 'approval-request',
+          sessionEmitter.addApprovalRequest({
             description: 'Edit src/main.ts',
-            timestamp: now(),
           })
           emitAttention('needs-approval')
 
@@ -144,27 +147,19 @@ function createTestProvider(): Provider {
             if (stopped) return
             emitAttention('none')
 
-            emitTranscript({
-              type: 'tool-use',
-              tool: 'edit_file',
-              input: 'src/main.ts',
-              timestamp: now(),
+            sessionEmitter.addToolCall({
+              toolName: 'edit_file',
+              inputText: 'src/main.ts',
             })
 
             schedule(() => {
-              emitTranscript({
-                type: 'tool-result',
-                result: 'Edited src/main.ts',
-                timestamp: now(),
+              sessionEmitter.addToolResult({
+                outputText: 'Edited src/main.ts',
               })
             }, 400)
 
             schedule(() => {
-              emitTranscript({
-                type: 'assistant',
-                text: 'Done.',
-                timestamp: now(),
-              })
+              sessionEmitter.addAssistantMessage({ text: 'Done.' })
             }, 800)
 
             schedule(() => {
@@ -176,8 +171,8 @@ function createTestProvider(): Provider {
       }, 50)
 
       return {
-        onTranscriptEntry: (cb) => {
-          listeners.transcript.push(cb)
+        onDelta: (cb) => {
+          listeners.delta.push(cb)
         },
         onStatusChange: (cb) => {
           listeners.status.push(cb)
@@ -194,7 +189,7 @@ function createTestProvider(): Provider {
         onContinuationToken: () => {},
         sendMessage: (text) => {
           if (stopped) return
-          emitTranscript({ type: 'user', text, timestamp: now() })
+          sessionEmitter.addUserMessage({ text })
         },
         approve: () => {
           approveResolve?.()
@@ -203,10 +198,9 @@ function createTestProvider(): Provider {
         deny: () => {
           if (stopped) return
           approveResolve = null
-          emitTranscript({
-            type: 'system',
+          sessionEmitter.addNote({
             text: 'User denied the action.',
-            timestamp: now(),
+            level: 'info',
           })
           emitStatus('completed')
           emitAttention('finished')
@@ -269,10 +263,10 @@ describe('SessionService', () => {
     expect(session.name).toBe('test session')
     expect(session.status).toBe('idle')
     expect(session.attention).toBe('none')
-    expect(session.transcript).toEqual([])
     expect(session.contextWindow).toBeNull()
     expect(session.activity).toBeNull()
     expect(session.archivedAt).toBeNull()
+    expect(session.lastSequence).toBe(0)
   })
 
   it('lists sessions by project', () => {
@@ -297,6 +291,27 @@ describe('SessionService', () => {
     expect(sessions).toHaveLength(2)
   })
 
+  it('lists normalized session summaries without transcript payloads', () => {
+    service.create({
+      projectId,
+      workspaceId: null,
+      providerId: 'test-provider',
+      model: 'test-model',
+      effort: null,
+      name: 'summary target',
+    })
+
+    const [summary] = service.getSummariesByProjectId(projectId)
+
+    expect(summary).toMatchObject({
+      projectId,
+      providerId: 'test-provider',
+      continuationToken: null,
+      lastSequence: 0,
+    })
+    expect('transcript' in summary).toBe(false)
+  })
+
   it('captures activity while running and clears on completion', async () => {
     const session = service.create({
       projectId,
@@ -318,7 +333,7 @@ describe('SessionService', () => {
     expect(service.getById(session.id)!.activity).toBeNull()
   })
 
-  it('starts a session and receives transcript entries', async () => {
+  it('starts a session and receives normalized conversation items', async () => {
     const session = service.create({
       projectId,
       workspaceId: null,
@@ -332,12 +347,159 @@ describe('SessionService', () => {
     await vi.advanceTimersByTimeAsync(1200)
 
     const updated = service.getById(session.id)!
+    const conversation = service.getConversation(session.id)
     expect(updated.status).toBe('running')
-    expect(updated.transcript.length).toBeGreaterThanOrEqual(2)
-    expect(updated.transcript[0]).toMatchObject({
-      type: 'user',
+    expect(conversation.length).toBeGreaterThanOrEqual(2)
+    expect(updated.lastSequence).toBe(conversation.length)
+    expect(conversation[0]).toMatchObject({
+      kind: 'message',
+      actor: 'user',
       text: 'Fix the bug',
+      sequence: 1,
     })
+    expect(conversation[1]).toMatchObject({
+      kind: 'message',
+      actor: 'assistant',
+    })
+  })
+
+  it('patches streaming assistant text into a single conversation item', async () => {
+    const db = getDatabase()
+    const registry = new ProviderRegistry()
+
+    const provider: Provider = {
+      id: 'streaming-provider',
+      name: 'Streaming Provider',
+      supportsContinuation: false,
+      describe: async () => ({
+        id: 'streaming-provider',
+        name: 'Streaming Provider',
+        vendorLabel: 'Test',
+        supportsContinuation: false,
+        defaultModelId: 'stream-model',
+        modelOptions: [
+          {
+            id: 'stream-model',
+            label: 'Stream Model',
+            defaultEffort: null,
+            effortOptions: [],
+          },
+        ],
+        attachments: TEST_ATTACHMENT_CAPABILITY,
+      }),
+      start: (config) => {
+        let deltaListener: ((delta: SessionDelta) => void) | null = null
+        setTimeout(() => {
+          const assistantId = 'assistant-stream-1'
+          deltaListener?.({
+            kind: 'conversation.item.add',
+            item: {
+              id: 'user-1',
+              turnId: null,
+              kind: 'message',
+              state: 'complete',
+              actor: 'user',
+              text: config.initialMessage,
+              createdAt: now(),
+              updatedAt: now(),
+              providerMeta: {
+                providerId: 'streaming-provider',
+                providerItemId: null,
+                providerEventType: 'user',
+              },
+            },
+          })
+          deltaListener?.({
+            kind: 'conversation.item.add',
+            item: {
+              id: assistantId,
+              turnId: null,
+              kind: 'message',
+              state: 'streaming',
+              actor: 'assistant',
+              text: 'Hello',
+              createdAt: now(),
+              updatedAt: now(),
+              providerMeta: {
+                providerId: 'streaming-provider',
+                providerItemId: null,
+                providerEventType: 'stream',
+              },
+            },
+          })
+          deltaListener?.({
+            kind: 'conversation.item.patch',
+            itemId: assistantId,
+            patch: {
+              text: 'Hello world',
+              state: 'complete',
+              updatedAt: now(),
+            },
+          })
+          deltaListener?.({
+            kind: 'session.patch',
+            patch: {
+              status: 'completed',
+              attention: 'finished',
+            },
+          })
+        }, 0)
+
+        return {
+          onDelta: (listener) => {
+            deltaListener = listener
+          },
+          onStatusChange: () => {},
+          onAttentionChange: () => {},
+          onContinuationToken: () => {},
+          onContextWindowChange: () => {},
+          onActivityChange: () => {},
+          sendMessage: () => {},
+          approve: () => {},
+          deny: () => {},
+          stop: () => {},
+        }
+      },
+    }
+
+    registry.register(provider)
+    const streamingService = new SessionService(db, registry)
+
+    const session = streamingService.create({
+      projectId,
+      workspaceId: null,
+      providerId: 'streaming-provider',
+      model: 'stream-model',
+      effort: null,
+      name: 'stream reducer test',
+    })
+
+    await streamingService.start(session.id, { text: 'Say hello' })
+    await vi.advanceTimersByTimeAsync(10)
+
+    const conversation = streamingService.getConversation(session.id)
+    const assistantItems = conversation.filter(
+      (item) => item.kind === 'message' && item.actor === 'assistant',
+    )
+
+    expect(assistantItems).toHaveLength(1)
+    expect(assistantItems[0]).toMatchObject({
+      text: 'Hello world',
+      state: 'complete',
+    })
+    expect(streamingService.getSummaryById(session.id)?.lastSequence).toBe(2)
+    expect(conversation).toEqual([
+      expect.objectContaining({
+        kind: 'message',
+        actor: 'user',
+        text: 'Say hello',
+      }),
+      expect.objectContaining({
+        kind: 'message',
+        actor: 'assistant',
+        text: 'Hello world',
+      }),
+    ])
   })
 
   it('transitions through approval flow', async () => {
@@ -415,7 +577,7 @@ describe('SessionService', () => {
     expect(service.getById(session.id)?.archivedAt).toBeNull()
   })
 
-  it('persists transcript to database', async () => {
+  it('persists conversation items to database', async () => {
     const session = service.create({
       projectId,
       workspaceId: null,
@@ -431,9 +593,13 @@ describe('SessionService', () => {
     await vi.advanceTimersByTimeAsync(2000)
 
     const loaded = service.getById(session.id)!
-    expect(loaded.transcript.length).toBeGreaterThan(3)
-    expect(loaded.transcript.some((e) => e.type === 'tool-use')).toBe(true)
-    expect(loaded.transcript.some((e) => e.type === 'tool-result')).toBe(true)
+    const conversation = service.getConversation(session.id)
+    expect(conversation.length).toBeGreaterThan(3)
+    expect(conversation.some((item) => item.kind === 'tool-call')).toBe(true)
+    expect(conversation.some((item) => item.kind === 'tool-result')).toBe(true)
+    expect(service.getSummaryById(session.id)?.lastSequence).toBe(
+      conversation.length,
+    )
     expect(loaded.contextWindow).toMatchObject({
       availability: 'available',
       usedTokens: 2048,
@@ -441,9 +607,9 @@ describe('SessionService', () => {
     })
   })
 
-  it('notifies update listener on changes', async () => {
+  it('notifies summary update listener on changes', async () => {
     const updates: string[] = []
-    service.setUpdateListener((session) => updates.push(session.id))
+    service.setSummaryUpdateListener((summary) => updates.push(summary.id))
 
     const session = service.create({
       projectId,
@@ -465,14 +631,14 @@ describe('SessionService', () => {
     const db = getDatabase()
     const registry = new ProviderRegistry()
 
-    let statusListener: ((status: SessionStatus) => void) | null = null
+    let deltaListener: ((delta: SessionDelta) => void) | null = null
     const sendMessage = vi.fn()
 
     const handle: SessionHandle = {
-      onTranscriptEntry: () => {},
-      onStatusChange: (listener) => {
-        statusListener = listener
+      onDelta: (listener) => {
+        deltaListener = listener
       },
+      onStatusChange: () => {},
       onAttentionChange: () => {},
       onContextWindowChange: () => {},
       onActivityChange: () => {},
@@ -519,8 +685,12 @@ describe('SessionService', () => {
     })
 
     await continuationService.start(session.id, { text: 'Start here' })
-    expect(statusListener).not.toBeNull()
-    ;(statusListener as unknown as (status: SessionStatus) => void)('completed')
+    expect(deltaListener).not.toBeNull()
+    if (!deltaListener) {
+      throw new Error('delta listener was not registered')
+    }
+    const emitDelta = deltaListener as (delta: SessionDelta) => void
+    emitDelta({ kind: 'session.patch', patch: { status: 'completed' } })
 
     await expect(
       continuationService.sendMessage(session.id, { text: 'Follow up' }),
@@ -563,14 +733,24 @@ describe('SessionService', () => {
 
         let continuationListener: ((token: string) => void) | null = null
         let statusListener: ((status: SessionStatus) => void) | null = null
+        let deltaListener: ((delta: SessionDelta) => void) | null = null
 
         setTimeout(() => {
           continuationListener?.('resume-token-1')
           statusListener?.('completed')
+          deltaListener?.({
+            kind: 'session.patch',
+            patch: {
+              continuationToken: 'resume-token-1',
+              status: 'completed',
+            },
+          })
         }, 0)
 
         return {
-          onTranscriptEntry: () => {},
+          onDelta: (listener) => {
+            deltaListener = listener
+          },
           onStatusChange: (listener) => {
             statusListener = listener
           },
@@ -687,15 +867,20 @@ describe('SessionService attachments integration', () => {
       }),
       start(config) {
         received.initial = config.initialAttachments
-        const transcriptListeners: Array<(entry: TranscriptEntry) => void> = []
+        const deltaListeners: Array<(delta: SessionDelta) => void> = []
+        const sessionEmitter = new ProviderSessionEmitter({
+          providerId: 'capture',
+          emitDelta: (delta) => {
+            deltaListeners.forEach((cb) => cb(delta))
+          },
+          now,
+        })
         setTimeout(() => {
-          transcriptListeners.forEach((cb) =>
-            cb({ type: 'user', text: config.initialMessage, timestamp: now() }),
-          )
+          sessionEmitter.addUserMessage({ text: config.initialMessage })
         }, 0)
         return {
-          onTranscriptEntry: (cb) => {
-            transcriptListeners.push(cb)
+          onDelta: (cb) => {
+            deltaListeners.push(cb)
           },
           onStatusChange: () => {},
           onAttentionChange: () => {},
@@ -704,9 +889,7 @@ describe('SessionService attachments integration', () => {
           onActivityChange: () => {},
           sendMessage: (text, atts) => {
             received.send = atts
-            transcriptListeners.forEach((cb) =>
-              cb({ type: 'user', text, timestamp: now() }),
-            )
+            sessionEmitter.addUserMessage({ text })
           },
           approve: () => {},
           deny: () => {},
@@ -779,7 +962,7 @@ describe('SessionService attachments integration', () => {
     expect(received.initial?.[0]?.id).toBe(id)
   })
 
-  it('persists attachmentIds on the user transcript entry', async () => {
+  it('persists attachmentIds on the user conversation item', async () => {
     const session = service.create({
       projectId,
       workspaceId: null,
@@ -793,13 +976,11 @@ describe('SessionService attachments integration', () => {
     service.start(session.id, { text: 'hi', attachmentIds: [id] })
     await new Promise((r) => setTimeout(r, 10))
 
-    const loaded = service.getById(session.id)!
-    const userEntry = loaded.transcript.find((e) => e.type === 'user') as {
-      type: 'user'
-      text: string
-      attachmentIds?: string[]
-    }
-    expect(userEntry.attachmentIds).toEqual([id])
+    const conversation = service.getConversation(session.id)
+    const userEntry = conversation.find(
+      (entry) => entry.kind === 'message' && entry.actor === 'user',
+    )
+    expect(userEntry).toMatchObject({ attachmentIds: [id] })
   })
 
   it('cascades attachment cleanup on session delete', async () => {

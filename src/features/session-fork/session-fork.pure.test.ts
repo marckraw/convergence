@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { ForkSummary, TranscriptEntry } from '@/entities/session'
+import type { ConversationItem, ForkSummary } from '@/entities/session'
 import {
   computeSeedSizeWarning,
   deriveForkProgressLabel,
@@ -52,8 +52,24 @@ describe('renderSeedMarkdown (renderer)', () => {
   })
 })
 
-function userEntry(text: string): TranscriptEntry {
-  return { type: 'user', text, timestamp: '2026-01-01T00:00:00.000Z' }
+function userEntry(text: string): ConversationItem {
+  return {
+    id: `item-${text.length}`,
+    sessionId: 'session-1',
+    sequence: 1,
+    turnId: null,
+    kind: 'message',
+    state: 'complete',
+    actor: 'user',
+    text,
+    createdAt: '2026-01-01T00:00:00.000Z',
+    updatedAt: '2026-01-01T00:00:00.000Z',
+    providerMeta: {
+      providerId: 'claude-code',
+      providerItemId: null,
+      providerEventType: 'user',
+    },
+  }
 }
 
 describe('computeSeedSizeWarning', () => {

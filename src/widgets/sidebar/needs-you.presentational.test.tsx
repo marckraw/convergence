@@ -1,5 +1,6 @@
 import { fireEvent, render, screen } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
+import type { Session } from '@/entities/session'
 import { TooltipProvider } from '@/shared/ui/tooltip'
 import {
   NeedsYou,
@@ -7,116 +8,97 @@ import {
   getNeedsYouAction,
 } from './needs-you.presentational'
 
+function makeSession(overrides: Partial<Session>): Session {
+  return {
+    id: 'session-1',
+    projectId: 'project-1',
+    workspaceId: null,
+    providerId: 'claude-code',
+    model: 'sonnet',
+    effort: 'medium' as const,
+    name: 'Session',
+    status: 'idle',
+    attention: 'none',
+    activity: null,
+    contextWindow: null,
+    workingDirectory: '/tmp/project-1',
+    archivedAt: null,
+    parentSessionId: null,
+    forkStrategy: null,
+    continuationToken: null,
+    lastSequence: 0,
+    createdAt: '2026-01-01T00:00:00.000Z',
+    updatedAt: '2026-01-01T00:00:00.000Z',
+    ...overrides,
+  }
+}
+
 describe('NeedsYou', () => {
   it('builds summaries for all meaningful attention states', () => {
     expect(
-      buildNeedsYouSummary({
-        id: 'session-1',
-        projectId: 'project-1',
-        workspaceId: null,
-        providerId: 'claude-code',
-        model: 'sonnet',
-        effort: 'medium',
-        name: 'Approval',
-        status: 'running',
-        attention: 'needs-approval',
-        workingDirectory: '/tmp/project-1',
-        transcript: [],
-        createdAt: '2026-01-01T00:00:00.000Z',
-        updatedAt: '2026-01-01T00:00:00.000Z',
-      })?.summary,
+      buildNeedsYouSummary(
+        makeSession({
+          name: 'Approval',
+          status: 'running',
+          attention: 'needs-approval',
+        }),
+      )?.summary,
     ).toBe('Approval needed')
 
     expect(
-      buildNeedsYouSummary({
-        id: 'session-2',
-        projectId: 'project-1',
-        workspaceId: null,
-        providerId: 'claude-code',
-        model: 'sonnet',
-        effort: 'medium',
-        name: 'Input',
-        status: 'running',
-        attention: 'needs-input',
-        workingDirectory: '/tmp/project-1',
-        transcript: [],
-        createdAt: '2026-01-01T00:00:00.000Z',
-        updatedAt: '2026-01-01T00:00:00.000Z',
-      })?.summary,
+      buildNeedsYouSummary(
+        makeSession({
+          id: 'session-2',
+          name: 'Input',
+          status: 'running',
+          attention: 'needs-input',
+        }),
+      )?.summary,
     ).toBe('Input needed')
 
     expect(
-      buildNeedsYouSummary({
-        id: 'session-3',
-        projectId: 'project-1',
-        workspaceId: null,
-        providerId: 'claude-code',
-        model: 'sonnet',
-        effort: 'medium',
-        name: 'Finished',
-        status: 'completed',
-        attention: 'finished',
-        workingDirectory: '/tmp/project-1',
-        transcript: [],
-        createdAt: '2026-01-01T00:00:00.000Z',
-        updatedAt: '2026-01-01T00:00:00.000Z',
-      })?.summary,
+      buildNeedsYouSummary(
+        makeSession({
+          id: 'session-3',
+          name: 'Finished',
+          status: 'completed',
+          attention: 'finished',
+        }),
+      )?.summary,
     ).toBe('Finished')
 
     expect(
-      buildNeedsYouSummary({
-        id: 'session-4',
-        projectId: 'project-1',
-        workspaceId: null,
-        providerId: 'claude-code',
-        model: 'sonnet',
-        effort: 'medium',
-        name: 'Failed',
-        status: 'failed',
-        attention: 'failed',
-        workingDirectory: '/tmp/project-1',
-        transcript: [],
-        createdAt: '2026-01-01T00:00:00.000Z',
-        updatedAt: '2026-01-01T00:00:00.000Z',
-      })?.summary,
+      buildNeedsYouSummary(
+        makeSession({
+          id: 'session-4',
+          name: 'Failed',
+          status: 'failed',
+          attention: 'failed',
+        }),
+      )?.summary,
     ).toBe('Session failed')
   })
 
   it('uses snooze for active attention and acknowledge for terminal attention', () => {
     expect(
-      getNeedsYouAction({
-        id: 'session-1',
-        projectId: 'project-1',
-        workspaceId: null,
-        providerId: 'claude-code',
-        model: 'sonnet',
-        effort: 'medium',
-        name: 'Approval',
-        status: 'running',
-        attention: 'needs-approval',
-        workingDirectory: '/tmp/project-1',
-        transcript: [],
-        createdAt: '2026-01-01T00:00:00.000Z',
-        updatedAt: '2026-01-01T00:00:00.000Z',
-      }).label,
+      getNeedsYouAction(
+        makeSession({
+          name: 'Approval',
+          status: 'running',
+          attention: 'needs-approval',
+        }),
+      ).label,
     ).toBe('Snooze')
 
     expect(
-      getNeedsYouAction({
-        id: 'session-2',
-        projectId: 'project-1',
-        workspaceId: null,
-        providerId: 'claude-code',
-        model: 'sonnet',
-        effort: 'medium',
-        name: 'Finished',
-        status: 'completed',
-        attention: 'finished',
-        workingDirectory: '/tmp/project-1',
-        transcript: [],
-        createdAt: '2026-01-01T00:00:00.000Z',
-        updatedAt: '2026-01-01T00:00:00.000Z',
-      }).label,
+      getNeedsYouAction(
+        makeSession({
+          id: 'session-2',
+          name: 'Finished',
+          status: 'completed',
+          attention: 'finished',
+        }),
+      ).label,
     ).toBe('Acknowledge')
   })
 
@@ -131,21 +113,11 @@ describe('NeedsYou', () => {
           waitingSessions={[]}
           reviewSessions={[
             {
-              session: {
-                id: 'session-1',
-                projectId: 'project-1',
-                workspaceId: null,
-                providerId: 'claude-code',
-                model: 'sonnet',
-                effort: 'medium',
+              session: makeSession({
                 name: 'Review RoomFinder',
                 status: 'completed',
                 attention: 'finished',
-                workingDirectory: '/tmp/project-1',
-                transcript: [],
-                createdAt: '2026-01-01T00:00:00.000Z',
-                updatedAt: '2026-01-01T00:00:00.000Z',
-              },
+              }),
               projectName: 'RoomFinder',
               summary: 'Finished',
               priority: 3,
@@ -181,21 +153,14 @@ describe('NeedsYou', () => {
         <NeedsYou
           waitingSessions={[
             {
-              session: {
+              session: makeSession({
                 id: 'session-2',
                 projectId: 'project-2',
-                workspaceId: null,
-                providerId: 'claude-code',
-                model: 'sonnet',
-                effort: 'medium',
                 name: 'Need approval',
                 status: 'running',
                 attention: 'needs-approval',
                 workingDirectory: '/tmp/project-2',
-                transcript: [],
-                createdAt: '2026-01-01T00:00:00.000Z',
-                updatedAt: '2026-01-01T00:00:00.000Z',
-              },
+              }),
               projectName: 'Convergence',
               summary: 'Approval needed',
               priority: 0,
@@ -203,21 +168,14 @@ describe('NeedsYou', () => {
           ]}
           reviewSessions={[
             {
-              session: {
+              session: makeSession({
                 id: 'session-3',
                 projectId: 'project-2',
-                workspaceId: null,
-                providerId: 'claude-code',
-                model: 'sonnet',
-                effort: 'medium',
                 name: 'Review release notes',
                 status: 'completed',
                 attention: 'finished',
                 workingDirectory: '/tmp/project-2',
-                transcript: [],
-                createdAt: '2026-01-01T00:00:00.000Z',
-                updatedAt: '2026-01-01T00:00:00.000Z',
-              },
+              }),
               projectName: 'Convergence',
               summary: 'Finished',
               priority: 3,
@@ -246,21 +204,11 @@ describe('NeedsYou', () => {
           waitingSessions={[]}
           reviewSessions={[
             {
-              session: {
-                id: 'session-1',
-                projectId: 'project-1',
-                workspaceId: null,
-                providerId: 'claude-code',
-                model: 'sonnet',
-                effort: 'medium',
+              session: makeSession({
                 name: 'Review RoomFinder',
                 status: 'completed',
                 attention: 'finished',
-                workingDirectory: '/tmp/project-1',
-                transcript: [],
-                createdAt: '2026-01-01T00:00:00.000Z',
-                updatedAt: '2026-01-01T00:00:00.000Z',
-              },
+              }),
               projectName: 'RoomFinder',
               summary: 'Finished',
               priority: 3,
@@ -294,21 +242,11 @@ describe('NeedsYou', () => {
           waitingSessions={[]}
           reviewSessions={[
             {
-              session: {
-                id: 'session-1',
-                projectId: 'project-1',
-                workspaceId: null,
-                providerId: 'claude-code',
-                model: 'sonnet',
-                effort: 'medium',
+              session: makeSession({
                 name: 'Review RoomFinder',
                 status: 'completed',
                 attention: 'finished',
-                workingDirectory: '/tmp/project-1',
-                transcript: [],
-                createdAt: '2026-01-01T00:00:00.000Z',
-                updatedAt: '2026-01-01T00:00:00.000Z',
-              },
+              }),
               projectName: 'RoomFinder',
               summary: 'Finished',
               priority: 3,
@@ -338,21 +276,11 @@ describe('NeedsYou', () => {
           waitingSessions={[]}
           reviewSessions={[
             {
-              session: {
-                id: 'session-1',
-                projectId: 'project-1',
-                workspaceId: null,
-                providerId: 'claude-code',
-                model: 'sonnet',
-                effort: 'medium',
+              session: makeSession({
                 name: 'Review RoomFinder',
                 status: 'completed',
                 attention: 'finished',
-                workingDirectory: '/tmp/project-1',
-                transcript: [],
-                createdAt: '2026-01-01T00:00:00.000Z',
-                updatedAt: '2026-01-01T00:00:00.000Z',
-              },
+              }),
               projectName: 'RoomFinder',
               summary: 'Finished',
               priority: 3,
@@ -382,21 +310,14 @@ describe('NeedsYou', () => {
         <NeedsYou
           waitingSessions={[
             {
-              session: {
+              session: makeSession({
                 id: 'session-2',
                 projectId: 'project-2',
-                workspaceId: null,
-                providerId: 'claude-code',
-                model: 'sonnet',
-                effort: 'medium',
                 name: 'Need approval',
                 status: 'running',
                 attention: 'needs-approval',
                 workingDirectory: '/tmp/project-2',
-                transcript: [],
-                createdAt: '2026-01-01T00:00:00.000Z',
-                updatedAt: '2026-01-01T00:00:00.000Z',
-              },
+              }),
               projectName: 'Convergence',
               summary: 'Approval needed',
               priority: 0,

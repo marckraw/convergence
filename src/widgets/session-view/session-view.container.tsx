@@ -24,7 +24,7 @@ import {
 import { AttentionIndicator } from '@/shared/ui/attention-indicator.presentational'
 import { ContextWindowIndicator } from '@/shared/ui/context-window-indicator.presentational'
 import { cn } from '@/shared/lib/cn.pure'
-import { TranscriptEntryView } from './transcript-entry.presentational'
+import { ConversationItemView } from './transcript-entry.presentational'
 import { ChangedFilesPanel } from './changed-files-panel.container'
 
 const CHANGED_FILES_MIN_WIDTH = 320
@@ -38,6 +38,7 @@ export const SessionView: FC = () => {
   const activeSessionId = useSessionStore((s) => s.activeSessionId)
   const draftWorkspaceId = useSessionStore((s) => s.draftWorkspaceId)
   const sessions = useSessionStore((s) => s.sessions)
+  const activeConversation = useSessionStore((s) => s.activeConversation)
   const globalSessions = useSessionStore((s) => s.globalSessions)
   const setActiveSession = useSessionStore((s) => s.setActiveSession)
   const openDialog = useDialogStore((s) => s.open)
@@ -73,7 +74,7 @@ export const SessionView: FC = () => {
 
   useEffect(() => {
     scrollToBottom()
-  }, [session?.transcript.length, scrollToBottom])
+  }, [activeConversation.length, scrollToBottom])
 
   useEffect(() => {
     if (!changedFilesExpanded) {
@@ -332,15 +333,15 @@ export const SessionView: FC = () => {
         {/* Transcript */}
         <div className="app-scrollbar flex-1 overflow-y-auto px-4">
           <div className="mx-auto max-w-2xl py-4">
-            {session.transcript.map((entry, i) => {
+            {activeConversation.map((entry, i) => {
               const isLastApproval =
-                entry.type === 'approval-request' &&
+                entry.kind === 'approval-request' &&
                 session.attention === 'needs-approval' &&
-                i === session.transcript.length - 1
+                i === activeConversation.length - 1
 
               return (
-                <TranscriptEntryView
-                  key={i}
+                <ConversationItemView
+                  key={entry.id}
                   entry={entry}
                   onApprove={
                     isLastApproval

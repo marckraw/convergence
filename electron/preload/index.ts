@@ -56,10 +56,13 @@ contextBridge.exposeInMainWorld('electronAPI', {
       effort: string | null
       name: string
     }) => ipcRenderer.invoke('session:create', input),
-    getByProjectId: (projectId: string) =>
-      ipcRenderer.invoke('session:getByProjectId', projectId),
-    getAll: () => ipcRenderer.invoke('session:getAll'),
-    getById: (id: string) => ipcRenderer.invoke('session:getById', id),
+    getSummariesByProjectId: (projectId: string) =>
+      ipcRenderer.invoke('session:getSummariesByProjectId', projectId),
+    getAllSummaries: () => ipcRenderer.invoke('session:getAllSummaries'),
+    getSummaryById: (id: string) =>
+      ipcRenderer.invoke('session:getSummaryById', id),
+    getConversation: (id: string) =>
+      ipcRenderer.invoke('session:getConversation', id),
     archive: (id: string) => ipcRenderer.invoke('session:archive', id),
     unarchive: (id: string) => ipcRenderer.invoke('session:unarchive', id),
     delete: (id: string) => ipcRenderer.invoke('session:delete', id),
@@ -95,11 +98,18 @@ contextBridge.exposeInMainWorld('electronAPI', {
     getRecentIds: () => ipcRenderer.invoke('session:getRecentIds'),
     setRecentIds: (ids: string[]) =>
       ipcRenderer.invoke('session:setRecentIds', ids),
-    onSessionUpdate: (callback: (session: unknown) => void) => {
-      const handler = (_event: unknown, session: unknown) => callback(session)
-      ipcRenderer.on('session:updated', handler)
+    onSessionSummaryUpdate: (callback: (summary: unknown) => void) => {
+      const handler = (_event: unknown, summary: unknown) => callback(summary)
+      ipcRenderer.on('session:summaryUpdated', handler)
       return () => {
-        ipcRenderer.removeListener('session:updated', handler)
+        ipcRenderer.removeListener('session:summaryUpdated', handler)
+      }
+    },
+    onSessionConversationPatched: (callback: (event: unknown) => void) => {
+      const handler = (_event: unknown, event: unknown) => callback(event)
+      ipcRenderer.on('session:conversationPatched', handler)
+      return () => {
+        ipcRenderer.removeListener('session:conversationPatched', handler)
       }
     },
     forkPreviewSummary: (parentId: string, requestId?: string) =>

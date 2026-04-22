@@ -1,7 +1,7 @@
 import { useEffect } from 'react'
 import { useProjectStore } from '@/entities/project'
 import { useWorkspaceStore } from '@/entities/workspace'
-import { useSessionStore } from '@/entities/session'
+import { sessionApi, useSessionStore } from '@/entities/session'
 import { useAppSettingsStore } from '@/entities/app-settings'
 import {
   notificationsApi,
@@ -29,7 +29,12 @@ export function App() {
   const clearSessionError = useSessionStore((s) => s.clearError)
   const activeSessionId = useSessionStore((s) => s.activeSessionId)
   const setActiveSession = useSessionStore((s) => s.setActiveSession)
-  const handleSessionUpdate = useSessionStore((s) => s.handleSessionUpdate)
+  const handleSessionSummaryUpdate = useSessionStore(
+    (s) => s.handleSessionSummaryUpdate,
+  )
+  const handleConversationPatched = useSessionStore(
+    (s) => s.handleConversationPatched,
+  )
   const loadGlobalSessions = useSessionStore((s) => s.loadGlobalSessions)
   const loadRecents = useSessionStore((s) => s.loadRecents)
   const loadAppSettings = useAppSettingsStore((s) => s.load)
@@ -98,13 +103,20 @@ export function App() {
   }, [ingestTaskProgress])
 
   useEffect(() => {
-    const unsubscribe = window.electronAPI.session.onSessionUpdate(
-      (session) => {
-        handleSessionUpdate(session)
+    const unsubscribeSummary = sessionApi.onSessionSummaryUpdate((summary) => {
+      handleSessionSummaryUpdate(summary)
+    })
+    const unsubscribeConversation = sessionApi.onSessionConversationPatched(
+      (event) => {
+        handleConversationPatched(event)
       },
     )
-    return unsubscribe
-  }, [handleSessionUpdate])
+
+    return () => {
+      unsubscribeSummary()
+      unsubscribeConversation()
+    }
+  }, [handleSessionSummaryUpdate, handleConversationPatched])
 
   useEffect(() => {
     if (!import.meta.env.DEV) return

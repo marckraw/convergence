@@ -1,6 +1,6 @@
 import type { FC } from 'react'
 import type { ProjectActivity } from '@/entities/session'
-import type { ProviderInfo, Session } from '@/entities/session'
+import type { ProviderInfo, SessionSummary } from '@/entities/session'
 import { CheckCircle2, CircleAlert, CircleDot, CircleOff } from 'lucide-react'
 import { cn } from '@/shared/lib/cn.pure'
 import { Button } from '@/shared/ui/button'
@@ -18,7 +18,7 @@ import {
 } from './global-status-bar.styles'
 
 interface RecencyBadge {
-  session: Session
+  session: SessionSummary
   projectName: string
   kind: 'completed' | 'failed'
 }

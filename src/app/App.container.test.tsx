@@ -48,9 +48,10 @@ const mockElectronAPI = {
   },
   session: {
     create: vi.fn(),
-    getAll: vi.fn().mockResolvedValue([]),
-    getByProjectId: vi.fn().mockResolvedValue([]),
-    getById: vi.fn(),
+    getAllSummaries: vi.fn().mockResolvedValue([]),
+    getSummariesByProjectId: vi.fn().mockResolvedValue([]),
+    getSummaryById: vi.fn().mockResolvedValue(null),
+    getConversation: vi.fn().mockResolvedValue([]),
     getNeedsYouDismissals: vi.fn().mockResolvedValue({}),
     archive: vi.fn(),
     unarchive: vi.fn(),
@@ -61,7 +62,10 @@ const mockElectronAPI = {
     approve: vi.fn(),
     deny: vi.fn(),
     stop: vi.fn(),
-    onSessionUpdate: vi.fn().mockReturnValue(() => {}),
+    getRecentIds: vi.fn().mockResolvedValue([]),
+    setRecentIds: vi.fn().mockResolvedValue(undefined),
+    onSessionSummaryUpdate: vi.fn().mockReturnValue(() => {}),
+    onSessionConversationPatched: vi.fn().mockReturnValue(() => {}),
   },
   appSettings: {
     get: vi.fn().mockResolvedValue({
