@@ -627,6 +627,51 @@ describe('SessionService', () => {
     expect(updates.every((id) => id === session.id)).toBe(true)
   })
 
+  it('notifies the attention observer for provider session.patch transitions', async () => {
+    const transitions: Array<{
+      sessionId: string
+      prev: AttentionState
+      next: AttentionState
+    }> = []
+    service.setAttentionObserver({
+      onAttentionTransition: (prev, next, session) => {
+        transitions.push({ sessionId: session.id, prev, next })
+      },
+    })
+
+    const session = service.create({
+      projectId,
+      workspaceId: null,
+      providerId: 'test-provider',
+      model: 'test-model',
+      effort: null,
+      name: 'attention notify test',
+    })
+
+    service.start(session.id, { text: 'Go' })
+    await vi.advanceTimersByTimeAsync(2000)
+
+    expect(transitions).toContainEqual({
+      sessionId: session.id,
+      prev: 'none',
+      next: 'needs-approval',
+    })
+
+    service.approve(session.id)
+    await vi.advanceTimersByTimeAsync(2000)
+
+    expect(transitions).toContainEqual({
+      sessionId: session.id,
+      prev: 'needs-approval',
+      next: 'none',
+    })
+    expect(transitions).toContainEqual({
+      sessionId: session.id,
+      prev: 'none',
+      next: 'finished',
+    })
+  })
+
   it('keeps continuation-capable sessions active after completion', async () => {
     const db = getDatabase()
     const registry = new ProviderRegistry()

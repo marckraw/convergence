@@ -574,9 +574,9 @@ export class SessionService {
     const row = this.getRowById(sessionId)
     if (!row) return
 
+    const prevAttention = row.attention as AttentionState
     const nextStatus = patch.status ?? (row.status as SessionStatus)
-    const nextAttention =
-      patch.attention ?? (row.attention as AttentionState | undefined)
+    const nextAttention = patch.attention ?? prevAttention
     const nextActivity =
       patch.activity !== undefined
         ? patch.activity
@@ -619,6 +619,10 @@ export class SessionService {
         patch.updatedAt ?? new Date().toISOString(),
         sessionId,
       )
+
+    if (nextAttention !== prevAttention) {
+      this.notifyAttention(sessionId, prevAttention, nextAttention)
+    }
   }
 
   private updateField(id: string, field: string, value: string | null): void {
@@ -639,32 +643,6 @@ export class SessionService {
       .run(archivedAt, id)
 
     this.notifySessionChange(id)
-  }
-
-  private updateAttention(id: string, attention: AttentionState): void {
-    const row = this.getRowById(id)
-    if (!row) {
-      return
-    }
-
-    const prevAttention = row.attention as AttentionState
-
-    if (
-      row.archived_at &&
-      (attention === 'needs-approval' || attention === 'needs-input')
-    ) {
-      this.db
-        .prepare(
-          "UPDATE sessions SET attention = ?, archived_at = NULL, updated_at = datetime('now') WHERE id = ?",
-        )
-        .run(attention, id)
-      this.notifySessionChange(id)
-      this.notifyAttention(id, prevAttention, attention)
-      return
-    }
-
-    this.updateField(id, 'attention', attention)
-    this.notifyAttention(id, prevAttention, attention)
   }
 
   private notifyAttention(
