@@ -27,8 +27,6 @@ export interface NotificationsServiceDeps {
 }
 
 export class NotificationsService {
-  private readonly lastSeenAttention = new Map<string, AttentionState>()
-
   constructor(private readonly deps: NotificationsServiceDeps) {}
 
   onAttentionTransition(
@@ -36,11 +34,6 @@ export class NotificationsService {
     next: AttentionState,
     session: Session,
   ): void {
-    const seen = this.lastSeenAttention.get(session.id)
-    this.lastSeenAttention.set(session.id, next)
-
-    if (seen === undefined) return
-
     const kind = detectEvent(prev, next)
     if (!kind) return
 
@@ -73,9 +66,7 @@ export class NotificationsService {
     }
   }
 
-  forgetSession(sessionId: string): void {
-    this.lastSeenAttention.delete(sessionId)
-  }
+  forgetSession(_sessionId: string): void {}
 }
 
 const BYPASS_WINDOW_STATE: WindowState = {

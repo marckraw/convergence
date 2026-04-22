@@ -100,14 +100,14 @@ describe('NotificationsService.onAttentionTransition', () => {
     harness = createHarness()
   })
 
-  it('does not fire on first-seen attention (baseline)', () => {
+  it('fires on the first real attention transition', () => {
     harness.service.onAttentionTransition('none', 'finished', makeSession())
-    expect(harness.dispatched).toEqual([])
+    expect(harness.dispatched.length).toBeGreaterThan(0)
+    expect(harness.dispatched[0].event.kind).toBe('agent.finished')
   })
 
-  it('fires agent.finished after baseline when next becomes finished', () => {
+  it('fires agent.finished when next becomes finished', () => {
     const session = makeSession()
-    harness.service.onAttentionTransition('none', 'none', session)
     harness.service.onAttentionTransition('none', 'finished', session)
 
     expect(harness.dispatched.length).toBeGreaterThan(0)
@@ -120,8 +120,6 @@ describe('NotificationsService.onAttentionTransition', () => {
 
   it('fires agent.needs_input when needs-approval → needs-input', () => {
     const session = makeSession()
-    harness.service.onAttentionTransition('none', 'needs-approval', session)
-    harness.dispatched.length = 0
     harness.service.onAttentionTransition(
       'needs-approval',
       'needs-input',
@@ -155,7 +153,6 @@ describe('NotificationsService.onAttentionTransition', () => {
       windowState: makeWindowState({ isFocused: false }),
     })
     const session = makeSession()
-    harnessUnfocused.service.onAttentionTransition('none', 'none', session)
     harnessUnfocused.service.onAttentionTransition(
       'none',
       'needs-input',
@@ -175,7 +172,6 @@ describe('NotificationsService.onAttentionTransition', () => {
   it('respects the master enabled=false toggle', () => {
     harness.setPrefs({ ...DEFAULT_NOTIFICATION_PREFS, enabled: false })
     const session = makeSession()
-    harness.service.onAttentionTransition('none', 'none', session)
     harness.service.onAttentionTransition('none', 'finished', session)
 
     expect(harness.dispatched).toEqual([])
@@ -184,34 +180,39 @@ describe('NotificationsService.onAttentionTransition', () => {
   it('falls back to "Convergence" when project name is unknown', () => {
     const harnessNoProject = createHarness({ projectName: null })
     const session = makeSession()
-    harnessNoProject.service.onAttentionTransition('none', 'none', session)
     harnessNoProject.service.onAttentionTransition('none', 'finished', session)
 
     expect(harnessNoProject.dispatched[0].event.projectName).toBe('Convergence')
   })
 
-  it('tracks per-session baselines independently', () => {
+  it('tracks per-session transitions independently', () => {
     const sessionA = makeSession({ id: 'session-A', name: 'A' })
     const sessionB = makeSession({ id: 'session-B', name: 'B' })
 
-    harness.service.onAttentionTransition('none', 'none', sessionA)
     harness.service.onAttentionTransition('none', 'finished', sessionB)
-    expect(harness.dispatched).toEqual([])
-
     harness.service.onAttentionTransition('none', 'finished', sessionA)
-    expect(harness.dispatched.length).toBeGreaterThan(0)
-    expect(
-      harness.dispatched.every((p) => p.event.sessionId === 'session-A'),
-    ).toBe(true)
+    expect(harness.channelsFor('session-A').sort()).toEqual([
+      'dock-badge',
+      'dock-bounce-info',
+      'sound-soft',
+      'system-notification',
+      'toast',
+    ])
+    expect(harness.channelsFor('session-B').sort()).toEqual([
+      'dock-badge',
+      'dock-bounce-info',
+      'sound-soft',
+      'system-notification',
+      'toast',
+    ])
   })
 
-  it('forgetSession clears the baseline so the next call re-establishes', () => {
+  it('forgetSession does not suppress future real transitions', () => {
     const session = makeSession()
-    harness.service.onAttentionTransition('none', 'none', session)
     harness.service.forgetSession(session.id)
     harness.service.onAttentionTransition('none', 'finished', session)
 
-    expect(harness.dispatched).toEqual([])
+    expect(harness.dispatched.length).toBeGreaterThan(0)
   })
 })
 
