@@ -5,6 +5,11 @@ import {
   useSessionStore,
   type ReasoningEffort,
 } from '@/entities/session'
+import {
+  notificationsApi,
+  type NotificationPrefs,
+  type NotificationSeverity,
+} from '@/entities/notifications'
 import { useAppSettingsStore } from '@/entities/app-settings'
 import { useDialogStore } from '@/entities/dialog'
 import { AppSettingsDialog } from './app-settings.presentational'
@@ -42,6 +47,8 @@ export const AppSettingsDialogContainer: FC<AppSettingsContainerProps> = ({
   const [extractionDraft, setExtractionDraft] = useState<
     Record<string, string>
   >(EMPTY_EXTRACTION_DRAFT)
+  const [notificationsDraft, setNotificationsDraft] =
+    useState<NotificationPrefs | null>(null)
 
   const providers = useSessionStore((s) => s.providers)
   const loadProviders = useSessionStore((s) => s.loadProviders)
@@ -69,6 +76,7 @@ export const AppSettingsDialogContainer: FC<AppSettingsContainerProps> = ({
     })
     setNamingDraft({ ...settings.namingModelByProvider })
     setExtractionDraft({ ...settings.extractionModelByProvider })
+    setNotificationsDraft(settings.notifications)
     clearError()
   }, [open, settings, clearError])
 
@@ -147,6 +155,20 @@ export const AppSettingsDialogContainer: FC<AppSettingsContainerProps> = ({
     })
   }, [providers])
 
+  const handleNotificationsChange = useCallback((next: NotificationPrefs) => {
+    setNotificationsDraft(next)
+  }, [])
+
+  const handleTestFire = useCallback((severity: NotificationSeverity) => {
+    void notificationsApi.testFire(severity)
+  }, [])
+
+  const platform = useMemo<string | null>(() => {
+    const datasetPlatform = document.documentElement.dataset.platform
+    if (datasetPlatform) return datasetPlatform
+    return window.electronAPI?.system?.getInfo?.()?.platform ?? null
+  }, [])
+
   const handleCancel = useCallback(() => {
     closeDialog()
   }, [closeDialog])
@@ -159,12 +181,22 @@ export const AppSettingsDialogContainer: FC<AppSettingsContainerProps> = ({
         defaultEffortId: selection.effort?.id ?? null,
         namingModelByProvider: namingDraft,
         extractionModelByProvider: extractionDraft,
+        notifications: notificationsDraft ?? settings.notifications,
+        onboarding: settings.onboarding,
       })
       closeDialog()
     } catch {
       // error already surfaced on store
     }
-  }, [saveSettings, selection, namingDraft, extractionDraft, closeDialog])
+  }, [
+    saveSettings,
+    selection,
+    namingDraft,
+    extractionDraft,
+    notificationsDraft,
+    settings.onboarding,
+    closeDialog,
+  ])
 
   return (
     <AppSettingsDialog
@@ -175,6 +207,8 @@ export const AppSettingsDialogContainer: FC<AppSettingsContainerProps> = ({
       selection={selection}
       namingDraft={namingDraft}
       extractionDraft={extractionDraft}
+      notificationsDraft={notificationsDraft ?? settings.notifications}
+      platform={platform}
       isSaving={isSaving}
       error={error}
       onProviderChange={handleProviderChange}
@@ -182,6 +216,8 @@ export const AppSettingsDialogContainer: FC<AppSettingsContainerProps> = ({
       onEffortChange={handleEffortChange}
       onNamingModelChange={handleNamingModelChange}
       onExtractionModelChange={handleExtractionModelChange}
+      onNotificationsChange={handleNotificationsChange}
+      onTestFireNotification={handleTestFire}
       onSave={handleSave}
       onCancel={handleCancel}
       onRestoreDefaults={handleRestoreDefaults}

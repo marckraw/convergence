@@ -307,6 +307,23 @@ interface ElectronAPI {
     set: (input: AppSettingsData) => Promise<AppSettingsData>
     onUpdated: (callback: (settings: AppSettingsData) => void) => () => void
   }
+  notifications: {
+    getPrefs: () => Promise<NotificationPrefsData>
+    setPrefs: (input: NotificationPrefsData) => Promise<NotificationPrefsData>
+    testFire: (severity: NotificationSeverityData) => Promise<void>
+    setActiveSession: (sessionId: string | null) => Promise<void>
+    onPrefsUpdated: (
+      callback: (prefs: NotificationPrefsData) => void,
+    ) => () => void
+    onShowToast: (
+      callback: (payload: NotificationDispatchPayloadData) => void,
+    ) => () => void
+    onPlaySound: (
+      callback: (payload: NotificationDispatchPayloadData) => void,
+    ) => () => void
+    onFocusSession: (callback: (sessionId: string) => void) => () => void
+    onClearUnread: (callback: () => void) => () => void
+  }
   taskProgress: {
     subscribe: (callback: (event: TaskProgressEvent) => void) => () => void
   }
@@ -350,12 +367,76 @@ type TaskProgressEvent =
       outcome: TaskProgressOutcome
     }
 
+interface NotificationEventPrefsData {
+  finished: boolean
+  needsInput: boolean
+  needsApproval: boolean
+  errored: boolean
+}
+
+interface NotificationPrefsData {
+  enabled: boolean
+  toasts: boolean
+  sounds: boolean
+  system: boolean
+  dockBadge: boolean
+  dockBounce: boolean
+  events: NotificationEventPrefsData
+  suppressWhenFocused: boolean
+}
+
+type NotificationSeverityData = 'info' | 'critical'
+
+type NotificationEventKindData =
+  | 'agent.finished'
+  | 'agent.needs_approval'
+  | 'agent.needs_input'
+  | 'agent.errored'
+
+type NotificationChannelData =
+  | 'inline-pulse'
+  | 'toast'
+  | 'sound-soft'
+  | 'sound-alert'
+  | 'dock-badge'
+  | 'dock-bounce-info'
+  | 'dock-bounce-crit'
+  | 'flash-frame'
+  | 'system-notification'
+
+interface NotificationEventData {
+  id: string
+  kind: NotificationEventKindData
+  sessionId: string
+  sessionName: string
+  projectName: string
+  firedAt: number
+}
+
+interface FormattedNotificationData {
+  title: string
+  body: string
+  subtitle?: string
+}
+
+interface NotificationDispatchPayloadData {
+  channel: NotificationChannelData
+  event: NotificationEventData
+  formatted: FormattedNotificationData
+}
+
+interface OnboardingPrefsData {
+  notificationsCardDismissed: boolean
+}
+
 interface AppSettingsData {
   defaultProviderId: string | null
   defaultModelId: string | null
   defaultEffortId: ReasoningEffort | null
   namingModelByProvider: Record<string, string>
   extractionModelByProvider: Record<string, string>
+  notifications: NotificationPrefsData
+  onboarding: OnboardingPrefsData
 }
 
 declare global {

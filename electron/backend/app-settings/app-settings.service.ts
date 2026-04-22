@@ -1,12 +1,16 @@
+import { DEFAULT_NOTIFICATION_PREFS } from '../notifications/notifications.defaults'
+import type { NotificationPrefs } from '../notifications/notifications.types'
 import type { StateService } from '../state/state.service'
 import type {
   ProviderDescriptor,
   ReasoningEffort,
 } from '../provider/provider.types'
-import type {
-  AppSettings,
-  AppSettingsInput,
-  ResolvedSessionDefaults,
+import {
+  DEFAULT_ONBOARDING_PREFS,
+  type AppSettings,
+  type AppSettingsInput,
+  type OnboardingPrefs,
+  type ResolvedSessionDefaults,
 } from './app-settings.types'
 
 export const APP_SETTINGS_KEY = 'app_settings'
@@ -24,6 +28,65 @@ function parseModelMap(value: unknown): Record<string, string> {
   return Object.fromEntries(entries)
 }
 
+function pickBoolean(value: unknown, fallback: boolean): boolean {
+  return typeof value === 'boolean' ? value : fallback
+}
+
+function parseNotificationPrefs(value: unknown): NotificationPrefs {
+  if (!value || typeof value !== 'object') return DEFAULT_NOTIFICATION_PREFS
+  const raw = value as Partial<NotificationPrefs> & {
+    events?: Partial<NotificationPrefs['events']>
+  }
+  const eventsRaw =
+    raw.events && typeof raw.events === 'object'
+      ? raw.events
+      : DEFAULT_NOTIFICATION_PREFS.events
+  return {
+    enabled: pickBoolean(raw.enabled, DEFAULT_NOTIFICATION_PREFS.enabled),
+    toasts: pickBoolean(raw.toasts, DEFAULT_NOTIFICATION_PREFS.toasts),
+    sounds: pickBoolean(raw.sounds, DEFAULT_NOTIFICATION_PREFS.sounds),
+    system: pickBoolean(raw.system, DEFAULT_NOTIFICATION_PREFS.system),
+    dockBadge: pickBoolean(raw.dockBadge, DEFAULT_NOTIFICATION_PREFS.dockBadge),
+    dockBounce: pickBoolean(
+      raw.dockBounce,
+      DEFAULT_NOTIFICATION_PREFS.dockBounce,
+    ),
+    suppressWhenFocused: pickBoolean(
+      raw.suppressWhenFocused,
+      DEFAULT_NOTIFICATION_PREFS.suppressWhenFocused,
+    ),
+    events: {
+      finished: pickBoolean(
+        eventsRaw.finished,
+        DEFAULT_NOTIFICATION_PREFS.events.finished,
+      ),
+      needsInput: pickBoolean(
+        eventsRaw.needsInput,
+        DEFAULT_NOTIFICATION_PREFS.events.needsInput,
+      ),
+      needsApproval: pickBoolean(
+        eventsRaw.needsApproval,
+        DEFAULT_NOTIFICATION_PREFS.events.needsApproval,
+      ),
+      errored: pickBoolean(
+        eventsRaw.errored,
+        DEFAULT_NOTIFICATION_PREFS.events.errored,
+      ),
+    },
+  }
+}
+
+function parseOnboardingPrefs(value: unknown): OnboardingPrefs {
+  if (!value || typeof value !== 'object') return DEFAULT_ONBOARDING_PREFS
+  const raw = value as Partial<OnboardingPrefs>
+  return {
+    notificationsCardDismissed: pickBoolean(
+      raw.notificationsCardDismissed,
+      DEFAULT_ONBOARDING_PREFS.notificationsCardDismissed,
+    ),
+  }
+}
+
 function parse(raw: string | null): AppSettings {
   const empty: AppSettings = {
     defaultProviderId: null,
@@ -31,6 +94,8 @@ function parse(raw: string | null): AppSettings {
     defaultEffortId: null,
     namingModelByProvider: {},
     extractionModelByProvider: {},
+    notifications: DEFAULT_NOTIFICATION_PREFS,
+    onboarding: DEFAULT_ONBOARDING_PREFS,
   }
 
   if (!raw) return empty
@@ -54,6 +119,8 @@ function parse(raw: string | null): AppSettings {
       extractionModelByProvider: parseModelMap(
         parsed.extractionModelByProvider,
       ),
+      notifications: parseNotificationPrefs(parsed.notifications),
+      onboarding: parseOnboardingPrefs(parsed.onboarding),
     }
   } catch {
     return empty
@@ -102,6 +169,8 @@ function validateAgainst(
       defaultEffortId: null,
       namingModelByProvider,
       extractionModelByProvider,
+      notifications: settings.notifications,
+      onboarding: settings.onboarding,
     }
   }
 
@@ -115,6 +184,8 @@ function validateAgainst(
       defaultEffortId: null,
       namingModelByProvider,
       extractionModelByProvider,
+      notifications: settings.notifications,
+      onboarding: settings.onboarding,
     }
   }
 
@@ -127,6 +198,8 @@ function validateAgainst(
     defaultEffortId: effort ? effort.id : null,
     namingModelByProvider,
     extractionModelByProvider,
+    notifications: settings.notifications,
+    onboarding: settings.onboarding,
   }
 }
 
@@ -141,6 +214,10 @@ export class AppSettingsService {
     const parsed = parse(raw)
     const descriptors = await this.loadDescriptors()
     return validateAgainst(parsed, descriptors)
+  }
+
+  getNotificationPrefsSync(): NotificationPrefs {
+    return parse(this.stateService.get(APP_SETTINGS_KEY)).notifications
   }
 
   async setAppSettings(input: AppSettingsInput): Promise<AppSettings> {
@@ -185,6 +262,16 @@ export class AppSettingsService {
       descriptors,
     )
 
+    const existing = parse(this.stateService.get(APP_SETTINGS_KEY))
+    const notifications =
+      input.notifications === undefined
+        ? existing.notifications
+        : parseNotificationPrefs(input.notifications)
+    const onboarding =
+      input.onboarding === undefined
+        ? existing.onboarding
+        : parseOnboardingPrefs(input.onboarding)
+
     const toStore: AppSettings = {
       defaultProviderId: provider ? provider.id : null,
       defaultModelId: model ? model.id : null,
@@ -192,6 +279,8 @@ export class AppSettingsService {
         model && input.defaultEffortId !== null ? input.defaultEffortId : null,
       namingModelByProvider,
       extractionModelByProvider,
+      notifications,
+      onboarding,
     }
 
     this.stateService.set(APP_SETTINGS_KEY, JSON.stringify(toStore))

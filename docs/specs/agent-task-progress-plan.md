@@ -126,7 +126,7 @@ summary extraction preview.
 - [x] IPC layer (`session:fork:previewSummary`): accept a caller-
       supplied `requestId` in the request payload.
 - [x] Renderer `sessionFork` API / store: `previewFork(parentId,
-    requestId?)` forwards the id through to IPC. The container
+requestId?)` forwards the id through to IPC. The container
       owns the id as local `previewRequestId` state rather than a
       store field — it's scoped to a single dialog instance and has
       no cross-slice consumers.
@@ -146,7 +146,7 @@ summary extraction preview.
         past the extended threshold, assert the stale warning
         renders.
   - [x] Success path covered by existing `switching to summary runs
-    preview and populates the seed buffer` test — when the
+preview and populates the seed buffer` test — when the
         promise resolves, the hint region unmounts.
 
 Verification: full gate. Smoke-test by hand in dev: open fork dialog,

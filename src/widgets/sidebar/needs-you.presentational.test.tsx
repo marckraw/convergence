@@ -331,6 +331,47 @@ describe('NeedsYou', () => {
     expect(onDismiss).not.toHaveBeenCalled()
   })
 
+  it('applies data-pulse to a session row when pulsingSessionIds includes its id', () => {
+    render(
+      <TooltipProvider>
+        <NeedsYou
+          waitingSessions={[]}
+          reviewSessions={[
+            {
+              session: {
+                id: 'session-1',
+                projectId: 'project-1',
+                workspaceId: null,
+                providerId: 'claude-code',
+                model: 'sonnet',
+                effort: 'medium',
+                name: 'Review RoomFinder',
+                status: 'completed',
+                attention: 'finished',
+                workingDirectory: '/tmp/project-1',
+                transcript: [],
+                createdAt: '2026-01-01T00:00:00.000Z',
+                updatedAt: '2026-01-01T00:00:00.000Z',
+              },
+              projectName: 'RoomFinder',
+              summary: 'Finished',
+              priority: 3,
+            },
+          ]}
+          activeSessionId={null}
+          pulsingSessionIds={{ 'session-1': true }}
+          onSelect={vi.fn()}
+          onDismiss={vi.fn()}
+          onArchive={vi.fn()}
+        />
+      </TooltipProvider>,
+    )
+
+    const row = screen.getByText('Review RoomFinder').closest('[data-pulse]')
+    expect(row).not.toBeNull()
+    expect(row).toHaveAttribute('data-pulse', 'true')
+  })
+
   it('snoozes active needs-you items without selecting the session', () => {
     const onSelect = vi.fn()
     const onDismiss = vi.fn()

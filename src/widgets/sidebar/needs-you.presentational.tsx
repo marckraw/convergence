@@ -13,6 +13,7 @@ interface NeedsYouProps {
   waitingSessions: NeedsYouSession[]
   reviewSessions: NeedsYouSession[]
   activeSessionId: string | null
+  pulsingSessionIds?: Readonly<Record<string, true>>
   onSelect: (id: string) => void
   onDismiss: (id: string) => void | Promise<void>
   onArchive: (id: string) => void | Promise<void>
@@ -22,6 +23,7 @@ export const NeedsYou: FC<NeedsYouProps> = ({
   waitingSessions,
   reviewSessions,
   activeSessionId,
+  pulsingSessionIds,
   onSelect,
   onDismiss,
   onArchive,
@@ -40,6 +42,7 @@ export const NeedsYou: FC<NeedsYouProps> = ({
             title="Waiting on You"
             sessions={waitingSessions}
             activeSessionId={activeSessionId}
+            pulsingSessionIds={pulsingSessionIds}
             onSelect={onSelect}
             onDismiss={onDismiss}
             onArchive={onArchive}
@@ -50,6 +53,7 @@ export const NeedsYou: FC<NeedsYouProps> = ({
             title="Needs Review"
             sessions={reviewSessions}
             activeSessionId={activeSessionId}
+            pulsingSessionIds={pulsingSessionIds}
             onSelect={onSelect}
             onDismiss={onDismiss}
             onArchive={onArchive}

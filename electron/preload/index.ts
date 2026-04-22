@@ -143,12 +143,58 @@ contextBridge.exposeInMainWorld('electronAPI', {
       defaultEffortId: string | null
       namingModelByProvider: Record<string, string>
       extractionModelByProvider: Record<string, string>
+      notifications?: unknown
     }) => ipcRenderer.invoke('appSettings:set', input),
     onUpdated: (callback: (settings: unknown) => void) => {
       const handler = (_event: unknown, settings: unknown) => callback(settings)
       ipcRenderer.on('appSettings:updated', handler)
       return () => {
         ipcRenderer.removeListener('appSettings:updated', handler)
+      }
+    },
+  },
+  notifications: {
+    getPrefs: () => ipcRenderer.invoke('notifications:get-prefs'),
+    setPrefs: (input: unknown) =>
+      ipcRenderer.invoke('notifications:set-prefs', input),
+    testFire: (severity: 'info' | 'critical') =>
+      ipcRenderer.invoke('notifications:test-fire', severity),
+    setActiveSession: (sessionId: string | null) =>
+      ipcRenderer.invoke('notifications:set-active-session', sessionId),
+    onPrefsUpdated: (callback: (prefs: unknown) => void) => {
+      const handler = (_event: unknown, prefs: unknown) => callback(prefs)
+      ipcRenderer.on('notifications:prefs-updated', handler)
+      return () => {
+        ipcRenderer.removeListener('notifications:prefs-updated', handler)
+      }
+    },
+    onShowToast: (callback: (payload: unknown) => void) => {
+      const handler = (_event: unknown, payload: unknown) => callback(payload)
+      ipcRenderer.on('notifications:show-toast', handler)
+      return () => {
+        ipcRenderer.removeListener('notifications:show-toast', handler)
+      }
+    },
+    onPlaySound: (callback: (payload: unknown) => void) => {
+      const handler = (_event: unknown, payload: unknown) => callback(payload)
+      ipcRenderer.on('notifications:play-sound', handler)
+      return () => {
+        ipcRenderer.removeListener('notifications:play-sound', handler)
+      }
+    },
+    onFocusSession: (callback: (sessionId: string) => void) => {
+      const handler = (_event: unknown, sessionId: string) =>
+        callback(sessionId)
+      ipcRenderer.on('notifications:focus-session', handler)
+      return () => {
+        ipcRenderer.removeListener('notifications:focus-session', handler)
+      }
+    },
+    onClearUnread: (callback: () => void) => {
+      const handler = () => callback()
+      ipcRenderer.on('notifications:clear-unread', handler)
+      return () => {
+        ipcRenderer.removeListener('notifications:clear-unread', handler)
       }
     },
   },

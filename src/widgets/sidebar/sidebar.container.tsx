@@ -3,6 +3,7 @@ import type { FC } from 'react'
 import { useProjectStore } from '@/entities/project'
 import { useWorkspaceStore } from '@/entities/workspace'
 import { sessionApi, useSessionStore, type Session } from '@/entities/session'
+import { useNotificationsStore } from '@/entities/notifications'
 import {
   AppSettingsDialogContainer,
   McpServersDialogContainer,
@@ -59,6 +60,7 @@ export const Sidebar: FC<SidebarProps> = ({
   )
   const prepareForProject = useSessionStore((s) => s.prepareForProject)
   const setActiveSession = useSessionStore((s) => s.setActiveSession)
+  const pulsingSessionIds = useNotificationsStore((s) => s.pulsingSessionIds)
   const [regeneratingSessionIds, setRegeneratingSessionIds] = useState<
     ReadonlySet<string>
   >(() => new Set())
@@ -194,6 +196,7 @@ export const Sidebar: FC<SidebarProps> = ({
           waitingSessions={waitingSessions}
           reviewSessions={reviewSessions}
           activeSessionId={activeSessionId}
+          pulsingSessionIds={pulsingSessionIds}
           onSelect={handleSelectNeedsYouSession}
           onDismiss={dismissNeedsYouSession}
           onArchive={archiveSession}
@@ -218,6 +221,7 @@ export const Sidebar: FC<SidebarProps> = ({
             workspaces={workspaces}
             sessions={sessions}
             activeSessionId={activeSessionId}
+            pulsingSessionIds={pulsingSessionIds}
             onSelectSession={onSelectSession}
             onArchiveSession={archiveSession}
             onUnarchiveSession={unarchiveSession}
