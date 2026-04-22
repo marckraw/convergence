@@ -1,7 +1,11 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { useSessionStore } from '@/entities/session'
-import { useAppSettingsStore } from '@/entities/app-settings'
+import {
+  DEFAULT_NOTIFICATION_PREFS,
+  DEFAULT_ONBOARDING_PREFS,
+  useAppSettingsStore,
+} from '@/entities/app-settings'
 import { useDialogStore } from '@/entities/dialog'
 import { Button } from '@/shared/ui/button'
 import { AppSettingsDialogContainer } from './app-settings.container'
@@ -87,6 +91,8 @@ function primeStores(stored: {
       ...stored,
       namingModelByProvider: {},
       extractionModelByProvider: {},
+      notifications: DEFAULT_NOTIFICATION_PREFS,
+      onboarding: DEFAULT_ONBOARDING_PREFS,
     },
     isLoaded: true,
     isSaving: false,
@@ -136,6 +142,8 @@ describe('AppSettingsDialogContainer', () => {
         defaultEffortId: 'high',
         namingModelByProvider: {},
         extractionModelByProvider: {},
+        notifications: DEFAULT_NOTIFICATION_PREFS,
+        onboarding: DEFAULT_ONBOARDING_PREFS,
       })
     })
   })
@@ -163,8 +171,59 @@ describe('AppSettingsDialogContainer', () => {
         defaultEffortId: 'medium',
         namingModelByProvider: {},
         extractionModelByProvider: {},
+        notifications: DEFAULT_NOTIFICATION_PREFS,
+        onboarding: DEFAULT_ONBOARDING_PREFS,
       })
     })
+  })
+
+  it('toggling a notification channel persists the new prefs on save', async () => {
+    primeStores({
+      defaultProviderId: 'claude-code',
+      defaultModelId: 'sonnet',
+      defaultEffortId: 'medium',
+    })
+    document.documentElement.dataset.platform = 'darwin'
+
+    render(<AppSettingsDialogContainer trigger={<Button>Open</Button>} />)
+    fireEvent.click(screen.getByText('Open'))
+
+    expect(await screen.findByText('Settings')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('switch', { name: 'Sounds' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+
+    await waitFor(() => {
+      expect(window.electronAPI.appSettings.set).toHaveBeenCalledWith(
+        expect.objectContaining({
+          notifications: expect.objectContaining({ sounds: false }),
+          onboarding: DEFAULT_ONBOARDING_PREFS,
+        }),
+      )
+    })
+  })
+
+  it('Test fire button calls notifications.testFire with the chosen severity', async () => {
+    primeStores({
+      defaultProviderId: 'claude-code',
+      defaultModelId: 'sonnet',
+      defaultEffortId: 'medium',
+    })
+    const testFire = vi.fn().mockResolvedValue(undefined)
+    ;(
+      window.electronAPI as unknown as { notifications: unknown }
+    ).notifications = {
+      testFire,
+    }
+
+    render(<AppSettingsDialogContainer trigger={<Button>Open</Button>} />)
+    fireEvent.click(screen.getByText('Open'))
+
+    expect(await screen.findByText('Settings')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Alert' }))
+
+    expect(testFire).toHaveBeenCalledWith('critical')
   })
 
   it('Cancel closes without dispatching save', async () => {

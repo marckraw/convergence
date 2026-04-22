@@ -1,4 +1,11 @@
-import { app, BrowserWindow, dialog, nativeTheme, shell } from 'electron'
+import {
+  app,
+  BrowserWindow,
+  dialog,
+  nativeTheme,
+  Notification,
+  shell,
+} from 'electron'
 import { existsSync } from 'fs'
 import { join } from 'path'
 import { getDatabase } from '../backend/database/database'
@@ -15,6 +22,18 @@ import { detectProviders } from '../backend/provider/detect'
 import { McpService } from '../backend/mcp/mcp.service'
 import { AppSettingsService } from '../backend/app-settings/app-settings.service'
 import { AttachmentsService } from '../backend/attachments/attachments.service'
+import { NotificationsService } from '../backend/notifications/notifications.service'
+import { NotificationsStateService } from '../backend/notifications/notifications.state'
+import { DockBadgeService } from '../backend/notifications/notifications.dock-badge'
+import { DockBounceService } from '../backend/notifications/notifications.dock-bounce'
+import { FlashFrameService } from '../backend/notifications/notifications.flash-frame'
+import { SystemNotificationService } from '../backend/notifications/notifications.system'
+import { SystemNotificationCoalescer } from '../backend/notifications/notifications.coalescer'
+import { eventSeverity } from '../backend/notifications/notifications.policy.pure'
+import {
+  broadcastNotificationsToRenderers,
+  registerNotificationsIpcHandlers,
+} from '../backend/notifications/notifications.ipc'
 import { SessionNamingService } from '../backend/session/naming/session-naming.service'
 import { SessionForkService } from '../backend/session/fork/session-fork.service'
 import { registerSessionForkIpcHandlers } from '../backend/session/fork/session-fork.ipc'
@@ -32,7 +51,10 @@ import { shouldOpenInSystemBrowser } from './external-links.pure'
 import { getWindowAppearanceOptions } from './window-effects.pure'
 import { formatStartupFailure } from './startup-failure.pure'
 
-function createWindow(onClose?: () => void): void {
+function createWindow(
+  onClose?: () => void,
+  onCreate?: (window: BrowserWindow) => void,
+): void {
   const runtimeIconPath = resolveRuntimeIconPath()
 
   const mainWindow = new BrowserWindow({
@@ -54,6 +76,10 @@ function createWindow(onClose?: () => void): void {
 
   if (onClose) {
     mainWindow.on('closed', onClose)
+  }
+
+  if (onCreate) {
+    onCreate(mainWindow)
   }
 
   if (process.env.ELECTRON_RENDERER_URL) {
@@ -100,6 +126,8 @@ function resolveRuntimeIconPath(): string | undefined {
 
 async function startApp(): Promise<void> {
   await hydrateProcessPathFromShell()
+
+  let currentMainWindow: BrowserWindow | null = null
 
   const dbPath = join(app.getPath('userData'), 'convergence.db')
   const workspacesRoot = join(app.getPath('userData'), 'workspaces')
@@ -154,6 +182,89 @@ async function startApp(): Promise<void> {
     Promise.all(providerRegistry.getAll().map((p) => p.describe())),
   )
 
+  const notificationsState = new NotificationsStateService()
+  const dockBadge = new DockBadgeService({
+    setBadge: (text) => app.dock?.setBadge(text),
+  })
+  const dockBounce = new DockBounceService({
+    bounce: (kind) => app.dock?.bounce(kind),
+    cancelBounce: (id) => app.dock?.cancelBounce(id),
+  })
+  const flashFrame = new FlashFrameService({
+    flashFrame: (flag) => currentMainWindow?.flashFrame(flag),
+  })
+  const systemNotifications = new SystemNotificationService({
+    createNotification: ({ title, body, subtitle, sound }) =>
+      new Notification({ title, body, subtitle, sound }),
+    onClick: (event) => {
+      if (currentMainWindow) {
+        if (currentMainWindow.isMinimized()) currentMainWindow.restore()
+        currentMainWindow.show()
+        currentMainWindow.focus()
+      }
+      broadcastNotificationsToRenderers(
+        'notifications:focus-session',
+        event.sessionId,
+      )
+    },
+  })
+  const systemCoalescer = new SystemNotificationCoalescer({
+    fire: (event, formatted) => systemNotifications.show(event, formatted),
+  })
+  notificationsState.setListeners({
+    onFocusGained: () => {
+      dockBadge.clear()
+      dockBounce.cancelOnFocus()
+      flashFrame.clearOnFocus()
+      broadcastNotificationsToRenderers('notifications:clear-unread', null)
+    },
+  })
+  const notificationsService = new NotificationsService({
+    getPrefs: () => {
+      // Reads the latest persisted prefs synchronously via the cached
+      // state. AppSettingsService.getAppSettings is async, but the
+      // notifications field always round-trips through the same JSON
+      // blob, so we read the raw row here to avoid awaiting on the hot
+      // attention-transition path. Falls back to defaults on any miss.
+      return appSettingsService.getNotificationPrefsSync()
+    },
+    getWindowState: () => notificationsState.getState(),
+    getProjectName: (projectId) =>
+      projectService.getById(projectId)?.name ?? null,
+    dispatch: ({ channel, event, formatted }) => {
+      if (channel === 'toast' || channel === 'inline-pulse') {
+        broadcastNotificationsToRenderers('notifications:show-toast', {
+          channel,
+          event,
+          formatted,
+        })
+      } else if (channel === 'sound-soft' || channel === 'sound-alert') {
+        broadcastNotificationsToRenderers('notifications:play-sound', {
+          channel,
+          event,
+          formatted,
+        })
+      } else if (channel === 'dock-badge') {
+        dockBadge.increment()
+      } else if (channel === 'system-notification') {
+        systemCoalescer.add(eventSeverity(event.kind), event, formatted)
+      } else if (channel === 'dock-bounce-info') {
+        dockBounce.bounceInformational()
+      } else if (channel === 'dock-bounce-crit') {
+        dockBounce.bounceCritical()
+      } else if (channel === 'flash-frame') {
+        flashFrame.flash()
+      }
+    },
+  })
+  sessionService.setAttentionObserver(notificationsService)
+
+  registerNotificationsIpcHandlers({
+    appSettings: appSettingsService,
+    notifications: notificationsService,
+    state: notificationsState,
+  })
+
   const namingService = new SessionNamingService({
     providers: providerRegistry,
     appSettings: appSettingsService,
@@ -197,13 +308,24 @@ async function startApp(): Promise<void> {
 
   const onWindowClosed = () => {
     terminalService.disposeAll()
+    currentMainWindow = null
   }
 
-  createWindow(onWindowClosed)
+  const onWindowCreated = (window: BrowserWindow) => {
+    currentMainWindow = window
+    notificationsState.attach(window)
+  }
+
+  app.on('before-quit', () => {
+    systemNotifications.dispose()
+    systemCoalescer.dispose()
+  })
+
+  createWindow(onWindowClosed, onWindowCreated)
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
-      createWindow(onWindowClosed)
+      createWindow(onWindowClosed, onWindowCreated)
     }
   })
 }
@@ -214,6 +336,12 @@ function handleStartupFailure(err: unknown): void {
   dialog.showErrorBox(title, body)
   app.quit()
 }
+
+// Required for `<audio>.play()` to fire without a user gesture in the
+// renderer (notification chimes are dispatched from main-process events).
+app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required')
+// Windows forward-compat for system notifications; harmless on macOS.
+app.setAppUserModelId('com.convergence.app')
 
 app.whenReady().then(startApp).catch(handleStartupFailure)
 

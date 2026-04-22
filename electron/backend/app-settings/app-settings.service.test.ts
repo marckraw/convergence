@@ -1,11 +1,13 @@
 import { describe, expect, it, beforeEach, afterEach } from 'vitest'
 import { getDatabase, closeDatabase, resetDatabase } from '../database/database'
+import { DEFAULT_NOTIFICATION_PREFS } from '../notifications/notifications.defaults'
 import { StateService } from '../state/state.service'
 import type {
   ProviderAttachmentCapability,
   ProviderDescriptor,
 } from '../provider/provider.types'
 import { AppSettingsService, APP_SETTINGS_KEY } from './app-settings.service'
+import { DEFAULT_ONBOARDING_PREFS } from './app-settings.types'
 
 const TEST_ATTACHMENT_CAPABILITY: ProviderAttachmentCapability = {
   supportsImage: true,
@@ -100,6 +102,8 @@ describe('AppSettingsService', () => {
         defaultEffortId: null,
         namingModelByProvider: {},
         extractionModelByProvider: {},
+        notifications: DEFAULT_NOTIFICATION_PREFS,
+        onboarding: DEFAULT_ONBOARDING_PREFS,
       })
     })
 
@@ -110,6 +114,8 @@ describe('AppSettingsService', () => {
         defaultEffortId: 'high',
         namingModelByProvider: {},
         extractionModelByProvider: {},
+        notifications: DEFAULT_NOTIFICATION_PREFS,
+        onboarding: DEFAULT_ONBOARDING_PREFS,
       })
       const settings = await service.getAppSettings()
       expect(settings).toEqual({
@@ -118,6 +124,8 @@ describe('AppSettingsService', () => {
         defaultEffortId: 'high',
         namingModelByProvider: {},
         extractionModelByProvider: {},
+        notifications: DEFAULT_NOTIFICATION_PREFS,
+        onboarding: DEFAULT_ONBOARDING_PREFS,
       })
     })
 
@@ -137,6 +145,8 @@ describe('AppSettingsService', () => {
         defaultEffortId: null,
         namingModelByProvider: {},
         extractionModelByProvider: {},
+        notifications: DEFAULT_NOTIFICATION_PREFS,
+        onboarding: DEFAULT_ONBOARDING_PREFS,
       })
     })
 
@@ -156,6 +166,8 @@ describe('AppSettingsService', () => {
         defaultEffortId: null,
         namingModelByProvider: {},
         extractionModelByProvider: {},
+        notifications: DEFAULT_NOTIFICATION_PREFS,
+        onboarding: DEFAULT_ONBOARDING_PREFS,
       })
     })
 
@@ -175,6 +187,8 @@ describe('AppSettingsService', () => {
         defaultEffortId: null,
         namingModelByProvider: {},
         extractionModelByProvider: {},
+        notifications: DEFAULT_NOTIFICATION_PREFS,
+        onboarding: DEFAULT_ONBOARDING_PREFS,
       })
     })
 
@@ -187,6 +201,8 @@ describe('AppSettingsService', () => {
         defaultEffortId: null,
         namingModelByProvider: {},
         extractionModelByProvider: {},
+        notifications: DEFAULT_NOTIFICATION_PREFS,
+        onboarding: DEFAULT_ONBOARDING_PREFS,
       })
     })
   })
@@ -240,6 +256,8 @@ describe('AppSettingsService', () => {
         defaultEffortId: null,
         namingModelByProvider: {},
         extractionModelByProvider: {},
+        notifications: DEFAULT_NOTIFICATION_PREFS,
+        onboarding: DEFAULT_ONBOARDING_PREFS,
       })
     })
 
@@ -355,6 +373,106 @@ describe('AppSettingsService', () => {
       )
       const resolved = await service.resolveExtractionModel('claude-code')
       expect(resolved).toBe('sonnet')
+    })
+  })
+
+  describe('notifications', () => {
+    it('hydrates missing notifications field on read with defaults', async () => {
+      stateService.set(
+        APP_SETTINGS_KEY,
+        JSON.stringify({
+          defaultProviderId: 'claude-code',
+          defaultModelId: 'sonnet',
+          defaultEffortId: 'medium',
+        }),
+      )
+      const settings = await service.getAppSettings()
+      expect(settings.notifications).toEqual(DEFAULT_NOTIFICATION_PREFS)
+    })
+
+    it('hydrates missing nested event keys with defaults', async () => {
+      stateService.set(
+        APP_SETTINGS_KEY,
+        JSON.stringify({
+          notifications: {
+            enabled: false,
+            events: { finished: false },
+          },
+        }),
+      )
+      const settings = await service.getAppSettings()
+      expect(settings.notifications).toEqual({
+        ...DEFAULT_NOTIFICATION_PREFS,
+        enabled: false,
+        events: {
+          ...DEFAULT_NOTIFICATION_PREFS.events,
+          finished: false,
+        },
+      })
+    })
+
+    it('rejects non-boolean values and falls back to defaults per field', async () => {
+      stateService.set(
+        APP_SETTINGS_KEY,
+        JSON.stringify({
+          notifications: {
+            enabled: 'yes',
+            toasts: 1,
+            sounds: false,
+            system: null,
+            events: { finished: 'on', errored: false },
+          },
+        }),
+      )
+      const settings = await service.getAppSettings()
+      expect(settings.notifications).toEqual({
+        ...DEFAULT_NOTIFICATION_PREFS,
+        sounds: false,
+        events: {
+          ...DEFAULT_NOTIFICATION_PREFS.events,
+          errored: false,
+        },
+      })
+    })
+
+    it('round-trips a custom notifications object through setAppSettings', async () => {
+      const custom = {
+        ...DEFAULT_NOTIFICATION_PREFS,
+        sounds: false,
+        suppressWhenFocused: false,
+        events: {
+          ...DEFAULT_NOTIFICATION_PREFS.events,
+          needsApproval: false,
+        },
+      }
+      const stored = await service.setAppSettings({
+        defaultProviderId: null,
+        defaultModelId: null,
+        defaultEffortId: null,
+        notifications: custom,
+      })
+      expect(stored.notifications).toEqual(custom)
+      const reloaded = await service.getAppSettings()
+      expect(reloaded.notifications).toEqual(custom)
+    })
+
+    it('preserves existing notifications when input omits the field', async () => {
+      const custom = {
+        ...DEFAULT_NOTIFICATION_PREFS,
+        toasts: false,
+      }
+      await service.setAppSettings({
+        defaultProviderId: null,
+        defaultModelId: null,
+        defaultEffortId: null,
+        notifications: custom,
+      })
+      const stored = await service.setAppSettings({
+        defaultProviderId: 'claude-code',
+        defaultModelId: 'sonnet',
+        defaultEffortId: 'medium',
+      })
+      expect(stored.notifications).toEqual(custom)
     })
   })
 })

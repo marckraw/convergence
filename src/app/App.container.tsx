@@ -3,12 +3,17 @@ import { useProjectStore } from '@/entities/project'
 import { useWorkspaceStore } from '@/entities/workspace'
 import { sessionApi, useSessionStore } from '@/entities/session'
 import { useAppSettingsStore } from '@/entities/app-settings'
+import {
+  notificationsApi,
+  useNotificationsStore,
+} from '@/entities/notifications'
 import { useTaskProgressStore } from '@/entities/task-progress'
 import { Toaster, toast } from 'sonner'
 import { TooltipProvider } from '@/shared/ui/tooltip'
 import { applyTheme, getStoredTheme } from '@/shared/lib/theme'
 import { CommandCenterContainer } from '@/features/command-center'
 import { SessionForkDialogContainer } from '@/features/session-fork'
+import { NotificationsToastHostContainer } from '@/features/notifications-toast-host'
 import { AppShell } from './App.layout'
 
 export function App() {
@@ -33,6 +38,10 @@ export function App() {
   const loadGlobalSessions = useSessionStore((s) => s.loadGlobalSessions)
   const loadRecents = useSessionStore((s) => s.loadRecents)
   const loadAppSettings = useAppSettingsStore((s) => s.load)
+  const loadNotificationPrefs = useNotificationsStore((s) => s.loadPrefs)
+  const setNotificationActiveSession = useNotificationsStore(
+    (s) => s.setActiveSession,
+  )
   const ingestTaskProgress = useTaskProgressStore((s) => s.ingest)
 
   useEffect(() => {
@@ -74,6 +83,14 @@ export function App() {
   }, [loadAppSettings])
 
   useEffect(() => {
+    void loadNotificationPrefs()
+  }, [loadNotificationPrefs])
+
+  useEffect(() => {
+    void setNotificationActiveSession(activeSessionId)
+  }, [activeSessionId, setNotificationActiveSession])
+
+  useEffect(() => {
     const subscribe = window.electronAPI.taskProgress?.subscribe
     if (!subscribe) return
     const unsubscribe = subscribe((event) => {
@@ -100,6 +117,20 @@ export function App() {
       unsubscribeConversation()
     }
   }, [handleSessionSummaryUpdate, handleConversationPatched])
+
+  useEffect(() => {
+    if (!import.meta.env.DEV) return
+    const unsubToast = notificationsApi.onShowToast((payload) => {
+      console.debug('[notifications:show-toast]', payload)
+    })
+    const unsubSound = notificationsApi.onPlaySound((payload) => {
+      console.debug('[notifications:play-sound]', payload)
+    })
+    return () => {
+      unsubToast()
+      unsubSound()
+    }
+  }, [])
 
   useEffect(() => {
     if (projectError) {
@@ -132,6 +163,7 @@ export function App() {
       />
       <CommandCenterContainer />
       <SessionForkDialogContainer />
+      <NotificationsToastHostContainer />
       <Toaster position="bottom-right" />
     </TooltipProvider>
   )

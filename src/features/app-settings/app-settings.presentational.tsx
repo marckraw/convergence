@@ -4,6 +4,10 @@ import type {
   ReasoningEffort,
   ResolvedProviderSelection,
 } from '@/entities/session'
+import type {
+  NotificationPrefs,
+  NotificationSeverity,
+} from '@/entities/notifications'
 import {
   Dialog,
   DialogContent,
@@ -17,6 +21,7 @@ import { Button } from '@/shared/ui/button'
 import { SessionDefaultsFields } from './session-defaults.presentational'
 import { NamingModelDefaultsFields } from './naming-model-defaults.presentational'
 import { ExtractionModelDefaultsFields } from './extraction-model-defaults.presentational'
+import { NotificationsFields } from './notifications-fields.presentational'
 
 interface AppSettingsDialogProps {
   open: boolean
@@ -26,6 +31,8 @@ interface AppSettingsDialogProps {
   selection: ResolvedProviderSelection
   namingDraft: Record<string, string>
   extractionDraft: Record<string, string>
+  notificationsDraft: NotificationPrefs
+  platform: string | null
   isSaving: boolean
   error: string | null
   onProviderChange: (id: string) => void
@@ -33,6 +40,8 @@ interface AppSettingsDialogProps {
   onEffortChange: (id: ReasoningEffort | '') => void
   onNamingModelChange: (providerId: string, modelId: string) => void
   onExtractionModelChange: (providerId: string, modelId: string) => void
+  onNotificationsChange: (prefs: NotificationPrefs) => void
+  onTestFireNotification: (severity: NotificationSeverity) => void
   onSave: () => void
   onCancel: () => void
   onRestoreDefaults: () => void
@@ -46,6 +55,8 @@ export const AppSettingsDialog: FC<AppSettingsDialogProps> = ({
   selection,
   namingDraft,
   extractionDraft,
+  notificationsDraft,
+  platform,
   isSaving,
   error,
   onProviderChange,
@@ -53,6 +64,8 @@ export const AppSettingsDialog: FC<AppSettingsDialogProps> = ({
   onEffortChange,
   onNamingModelChange,
   onExtractionModelChange,
+  onNotificationsChange,
+  onTestFireNotification,
   onSave,
   onCancel,
   onRestoreDefaults,
@@ -113,6 +126,19 @@ export const AppSettingsDialog: FC<AppSettingsDialogProps> = ({
             />
           </section>
         )}
+
+        <section className="space-y-3">
+          <h3 className="text-xs font-semibold tracking-wide uppercase text-muted-foreground">
+            Notifications
+          </h3>
+          <NotificationsFields
+            prefs={notificationsDraft}
+            platform={platform}
+            isSaving={isSaving}
+            onChange={onNotificationsChange}
+            onTestFire={onTestFireNotification}
+          />
+        </section>
 
         {error && (
           <p className="text-xs text-destructive" role="alert">

@@ -1,6 +1,11 @@
 import { create } from 'zustand'
 import { appSettingsApi } from './app-settings.api'
-import type { AppSettings, AppSettingsInput } from './app-settings.types'
+import {
+  DEFAULT_NOTIFICATION_PREFS,
+  DEFAULT_ONBOARDING_PREFS,
+  type AppSettings,
+  type AppSettingsInput,
+} from './app-settings.types'
 
 const EMPTY: AppSettings = {
   defaultProviderId: null,
@@ -8,6 +13,8 @@ const EMPTY: AppSettings = {
   defaultEffortId: null,
   namingModelByProvider: {},
   extractionModelByProvider: {},
+  notifications: DEFAULT_NOTIFICATION_PREFS,
+  onboarding: DEFAULT_ONBOARDING_PREFS,
 }
 
 interface AppSettingsState {

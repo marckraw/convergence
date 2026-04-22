@@ -1,4 +1,14 @@
-export type { AppSettings, AppSettingsInput } from './app-settings.types'
+export type {
+  AppSettings,
+  AppSettingsInput,
+  NotificationEventPrefs,
+  NotificationPrefs,
+  OnboardingPrefs,
+} from './app-settings.types'
+export {
+  DEFAULT_NOTIFICATION_PREFS,
+  DEFAULT_ONBOARDING_PREFS,
+} from './app-settings.types'
 export { appSettingsApi } from './app-settings.api'
 export { useAppSettingsStore } from './app-settings.model'
 export type { AppSettingsStore } from './app-settings.model'

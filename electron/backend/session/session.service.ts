@@ -48,6 +48,14 @@ export interface SessionNamer {
   ): Promise<string | null>
 }
 
+export interface SessionAttentionObserver {
+  onAttentionTransition(
+    prev: AttentionState,
+    next: AttentionState,
+    session: Session,
+  ): void
+}
+
 export class SessionService {
   private activeHandles = new Map<string, SessionHandle>()
   private onSummaryUpdate: ((summary: SessionSummary) => void) | null = null
@@ -56,6 +64,7 @@ export class SessionService {
     | null = null
   private attachments: AttachmentsService | null = null
   private namer: SessionNamer | null = null
+  private attentionObserver: SessionAttentionObserver | null = null
 
   constructor(
     private db: Database.Database,
@@ -68,6 +77,10 @@ export class SessionService {
 
   setNamer(namer: SessionNamer): void {
     this.namer = namer
+  }
+
+  setAttentionObserver(observer: SessionAttentionObserver): void {
+    this.attentionObserver = observer
   }
 
   rename(id: string, name: string): Session {
@@ -634,6 +647,8 @@ export class SessionService {
       return
     }
 
+    const prevAttention = row.attention as AttentionState
+
     if (
       row.archived_at &&
       (attention === 'needs-approval' || attention === 'needs-input')
@@ -644,10 +659,23 @@ export class SessionService {
         )
         .run(attention, id)
       this.notifySessionChange(id)
+      this.notifyAttention(id, prevAttention, attention)
       return
     }
 
     this.updateField(id, 'attention', attention)
+    this.notifyAttention(id, prevAttention, attention)
+  }
+
+  private notifyAttention(
+    id: string,
+    prev: AttentionState,
+    next: AttentionState,
+  ): void {
+    if (!this.attentionObserver) return
+    const session = this.getById(id)
+    if (!session) return
+    this.attentionObserver.onAttentionTransition(prev, next, session)
   }
 
   private notifySummaryUpdated(id: string): void {

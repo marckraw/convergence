@@ -234,3 +234,25 @@
     background: transparent;
   }
 }
+
+@keyframes notifications-pulse {
+  0% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--ring) 55%, transparent);
+  }
+  60% {
+    box-shadow: 0 0 0 4px color-mix(in srgb, var(--ring) 0%, transparent);
+  }
+  100% {
+    box-shadow: 0 0 0 0 transparent;
+  }
+}
+
+[data-pulse='true'] {
+  animation: notifications-pulse 600ms ease-out 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-pulse='true'] {
+    animation: none;
+  }
+}

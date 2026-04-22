@@ -4,6 +4,7 @@ import { Sidebar } from '@/widgets/sidebar'
 import { SessionView } from '@/widgets/session-view'
 import { GlobalStatusBar } from '@/widgets/global-status-bar'
 import { TerminalDock } from '@/widgets/terminal-dock'
+import { NotificationsOnboardingContainer } from '@/features/notifications-onboarding'
 import { cn } from '@/shared/lib/cn.pure'
 
 interface AppShellProps {
@@ -78,9 +79,14 @@ export const AppShell: FC<AppShellProps> = ({
           )}
         />
 
-        <div className="app-main-panel min-w-0 flex-1">
+        <div className="app-main-panel flex min-w-0 flex-1 flex-col">
           {hasProject ? (
-            <SessionView />
+            <>
+              <NotificationsOnboardingContainer />
+              <div className="min-h-0 flex-1">
+                <SessionView />
+              </div>
+            </>
           ) : (
             <div className="flex h-full flex-col items-center justify-center">
               <h1 className="text-2xl font-bold tracking-tight">

@@ -17,6 +17,7 @@ interface NeedsYouSectionProps {
   title: string
   sessions: NeedsYouSession[]
   activeSessionId: string | null
+  pulsingSessionIds?: Readonly<Record<string, true>>
   onSelect: (id: string) => void
   onDismiss: (id: string) => void | Promise<void>
   onArchive: (id: string) => void | Promise<void>
@@ -26,6 +27,7 @@ export const NeedsYouSection: FC<NeedsYouSectionProps> = ({
   title,
   sessions,
   activeSessionId,
+  pulsingSessionIds,
   onSelect,
   onDismiss,
   onArchive,
@@ -39,9 +41,12 @@ export const NeedsYouSection: FC<NeedsYouSectionProps> = ({
         const action = resolveNeedsYouAction(session)
         const showArchive = action.disposition === 'acknowledged'
 
+        const pulsing = pulsingSessionIds?.[session.id] === true
+
         return (
           <div
             key={session.id}
+            data-pulse={pulsing ? 'true' : undefined}
             className={cn(
               'group flex min-w-0 items-start gap-1 rounded-md transition-colors hover:bg-accent',
               activeSessionId === session.id && 'bg-accent',

@@ -194,6 +194,10 @@ export function registerIpcHandlers(
     for (const win of BrowserWindow.getAllWindows()) {
       if (!win.isDestroyed()) {
         win.webContents.send('appSettings:updated', stored)
+        win.webContents.send(
+          'notifications:prefs-updated',
+          stored.notifications,
+        )
       }
     }
     return stored

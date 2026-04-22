@@ -34,6 +34,7 @@ interface ProjectTreeProps {
   sessions: SessionSummary[]
   activeSessionId: string | null
   regeneratingSessionIds?: ReadonlySet<string>
+  pulsingSessionIds?: Readonly<Record<string, true>>
   onSelectSession: (id: string) => void
   onArchiveSession: (id: string) => void
   onUnarchiveSession: (id: string) => void
@@ -50,6 +51,7 @@ export const ProjectTree: FC<ProjectTreeProps> = ({
   sessions,
   activeSessionId,
   regeneratingSessionIds,
+  pulsingSessionIds,
   onSelectSession,
   onArchiveSession,
   onUnarchiveSession,
@@ -180,10 +182,12 @@ export const ProjectTree: FC<ProjectTreeProps> = ({
   const renderSessionRow = (session: SessionSummary) => {
     const isRenaming = renamingSessionId === session.id
     const isRegeneratingName = regeneratingSessionIds?.has(session.id) ?? false
+    const pulsing = pulsingSessionIds?.[session.id] === true
 
     return (
       <div
         key={session.id}
+        data-pulse={pulsing ? 'true' : undefined}
         className={cn(
           'group/session flex min-w-0 items-center gap-1 rounded pr-1 transition-colors hover:bg-accent',
           activeSessionId === session.id && 'bg-accent',
