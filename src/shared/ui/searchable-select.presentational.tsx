@@ -128,7 +128,10 @@ export function SearchableSelectPresentational({
               className="w-full bg-transparent text-sm outline-none placeholder:text-muted-foreground"
             />
           </div>
-          <CommandList className="app-scrollbar max-h-72 overflow-y-auto p-1">
+          <CommandList
+            className="app-scrollbar overflow-y-auto p-1"
+            style={{ maxHeight: 'min(18rem, calc(100vh - 12rem))' }}
+          >
             {items.length === 0 ? (
               <CommandEmpty className="px-2 py-6 text-center text-sm text-muted-foreground">
                 {emptyMessage}
