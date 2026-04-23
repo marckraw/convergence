@@ -4,6 +4,7 @@ import type { WorkspaceService } from '../../workspace/workspace.service'
 import type { SessionService } from '../session.service'
 import type { Session, SessionSummary } from '../session.types'
 import {
+  applyAdditionalInstructionToSeed,
   buildExtractionPrompt,
   extractArtifactsByRegex,
   mergeArtifacts,
@@ -141,7 +142,10 @@ export class SessionForkService {
       workspaceMode: input.workspaceMode,
       workspaceBranchName: input.workspaceBranchName,
       strategy: 'summary',
-      seed: input.seedMarkdown,
+      seed: applyAdditionalInstructionToSeed(
+        input.seedMarkdown,
+        input.additionalInstruction,
+      ),
     })
   }
 

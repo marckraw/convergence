@@ -64,6 +64,7 @@ export const SessionForkDialogContainer: FC = () => {
   const [workspaceBranchName, setWorkspaceBranchName] = useState('')
   const [additionalInstruction, setAdditionalInstruction] = useState('')
   const [seedMarkdown, setSeedMarkdown] = useState('')
+  const [seedEdited, setSeedEdited] = useState(false)
   const [preview, setPreview] = useState<PreviewState>(EMPTY_PREVIEW)
   const [previewRequestId, setPreviewRequestId] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -146,6 +147,7 @@ export const SessionForkDialogContainer: FC = () => {
     setWorkspaceBranchName('')
     setAdditionalInstruction('')
     setSeedMarkdown('')
+    setSeedEdited(false)
     setPreview(EMPTY_PREVIEW)
     setPreviewRequestId(null)
     setSubmitError(null)
@@ -165,6 +167,7 @@ export const SessionForkDialogContainer: FC = () => {
       })
       setPreview({ status: 'ready', summary })
       setSeedMarkdown(md)
+      setSeedEdited(false)
     } catch (err) {
       setPreview({
         status: 'error',
@@ -180,13 +183,34 @@ export const SessionForkDialogContainer: FC = () => {
     }
   }, [open, strategy, parent, preview.status, runPreview])
 
+  useEffect(() => {
+    if (
+      !open ||
+      strategy !== 'summary' ||
+      !parent ||
+      preview.status !== 'ready' ||
+      seedEdited
+    ) {
+      return
+    }
+    setSeedMarkdown(
+      renderSeedMarkdown({
+        summary: preview.summary,
+        parentName: parent.name,
+        additionalInstruction: additionalInstruction.trim() || null,
+      }),
+    )
+  }, [open, strategy, parent, preview, additionalInstruction, seedEdited])
+
   const handleStrategyChange = useCallback((next: ForkStrategy) => {
     setStrategy(next)
     if (next === 'full') {
       setPreview(EMPTY_PREVIEW)
       setSeedMarkdown('')
+      setSeedEdited(false)
     } else {
       setPreview(EMPTY_PREVIEW)
+      setSeedEdited(false)
     }
   }, [])
 
@@ -309,7 +333,10 @@ export const SessionForkDialogContainer: FC = () => {
       onWorkspaceModeChange={setWorkspaceMode}
       onWorkspaceBranchNameChange={setWorkspaceBranchName}
       onAdditionalInstructionChange={setAdditionalInstruction}
-      onSeedMarkdownChange={setSeedMarkdown}
+      onSeedMarkdownChange={(value) => {
+        setSeedEdited(true)
+        setSeedMarkdown(value)
+      }}
       onRetryPreview={() => void runPreview()}
       onConfirm={() => void handleConfirm()}
       onCancel={handleCancel}

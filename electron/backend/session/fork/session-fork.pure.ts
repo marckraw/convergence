@@ -323,6 +323,41 @@ function hasAnyArtifact(artifacts: ForkArtifacts): boolean {
   )
 }
 
+export const FORK_SEED_SEPARATOR = '\n\n---\n\n'
+export const DEFAULT_FORK_SEED_TAIL = 'Continue from here.'
+
+function renderForkSeedTail(additionalInstruction: string | null): string {
+  const tail = additionalInstruction?.trim()
+  return tail && tail.length > 0 ? tail : DEFAULT_FORK_SEED_TAIL
+}
+
+export function applyAdditionalInstructionToSeed(
+  seedMarkdown: string,
+  additionalInstruction: string | null,
+): string {
+  const instruction = additionalInstruction?.trim()
+  const trimmedSeed = seedMarkdown.trimEnd()
+  if (!instruction) {
+    return trimmedSeed
+  }
+
+  const expectedTail = `${FORK_SEED_SEPARATOR}${instruction}`
+  if (trimmedSeed.endsWith(expectedTail)) {
+    return trimmedSeed
+  }
+
+  const defaultTail = `${FORK_SEED_SEPARATOR}${DEFAULT_FORK_SEED_TAIL}`
+  if (trimmedSeed.endsWith(defaultTail)) {
+    return trimmedSeed.slice(0, -defaultTail.length) + expectedTail
+  }
+
+  if (trimmedSeed.length === 0) {
+    return instruction
+  }
+
+  return `${trimmedSeed}${FORK_SEED_SEPARATOR}${instruction}`
+}
+
 export function renderFullSeed(input: {
   serializedTranscript: string
   parentName: string
@@ -337,8 +372,7 @@ export function renderFullSeed(input: {
     '---',
     '',
   ]
-  const tail = additionalInstruction?.trim()
-  sections.push(tail && tail.length > 0 ? tail : 'Continue from here.')
+  sections.push(renderForkSeedTail(additionalInstruction))
   return sections.join('\n')
 }
 
@@ -407,8 +441,7 @@ export function renderSeedMarkdown(input: {
   }
 
   sections.push('', '---', '')
-  const tail = additionalInstruction?.trim()
-  sections.push(tail && tail.length > 0 ? tail : 'Continue from here.')
+  sections.push(renderForkSeedTail(additionalInstruction))
 
   return sections.join('\n')
 }

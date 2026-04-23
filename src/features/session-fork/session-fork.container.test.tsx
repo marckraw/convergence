@@ -291,6 +291,38 @@ describe('SessionForkDialogContainer', () => {
     expect(textarea.value).toContain('Use typed artifact')
   })
 
+  it('keeps the summary preview in sync with the instruction until the user edits it', async () => {
+    const previewFork = vi.fn().mockResolvedValue(sampleSummary)
+    primeStores({ previewFork })
+
+    render(<SessionForkDialogContainer />)
+
+    fireEvent.click(
+      await screen.findByRole('button', { name: /Structured summary/i }),
+    )
+
+    const textarea = (await screen.findByDisplayValue(
+      /Shipping the fork dialog/,
+    )) as HTMLTextAreaElement
+    expect(textarea.value).toContain('Continue from here.')
+
+    fireEvent.change(screen.getByLabelText(/Additional instruction/i), {
+      target: { value: 'Focus on tests.' },
+    })
+
+    await waitFor(() => {
+      expect(textarea.value).toContain('Focus on tests.')
+    })
+    expect(textarea.value).not.toContain('Continue from here.')
+
+    fireEvent.change(textarea, { target: { value: 'edited seed' } })
+    fireEvent.change(screen.getByLabelText(/Additional instruction/i), {
+      target: { value: 'Focus on docs instead.' },
+    })
+
+    expect(textarea.value).toBe('edited seed')
+  })
+
   it('switching strategy back to full clears the preview', async () => {
     const previewFork = vi.fn().mockResolvedValue(sampleSummary)
     primeStores({ previewFork })

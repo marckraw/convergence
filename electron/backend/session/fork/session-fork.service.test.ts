@@ -413,7 +413,7 @@ describe('SessionForkService', () => {
   })
 
   describe('forkSummary', () => {
-    it('passes seedMarkdown verbatim to session.start without re-extracting', async () => {
+    it('passes seedMarkdown through to session.start without re-extracting', async () => {
       const h = setup()
       await h.service.forkSummary({
         strategy: 'summary',
@@ -434,6 +434,28 @@ describe('SessionForkService', () => {
       )
       expect(h.createSession).toHaveBeenCalledWith(
         expect.objectContaining({ forkStrategy: 'summary' }),
+      )
+    })
+
+    it('applies the latest additional instruction to the submitted seed', async () => {
+      const h = setup()
+      await h.service.forkSummary({
+        strategy: 'summary',
+        parentSessionId: 'parent-1',
+        name: 'fork',
+        providerId: 'claude-code',
+        modelId: 'sonnet',
+        effort: 'medium',
+        workspaceMode: 'reuse',
+        workspaceBranchName: null,
+        additionalInstruction: 'Focus on tests.',
+        seedMarkdown: 'Summary body\n\n---\n\nContinue from here.',
+      })
+      expect(h.startSession).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({
+          text: 'Summary body\n\n---\n\nFocus on tests.',
+        }),
       )
     })
   })
