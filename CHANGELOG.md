@@ -1,5 +1,11 @@
 # convergence
 
+## 0.18.4
+
+### Patch Changes
+
+- 44a7f24: Fix Pi provider label in composer dropdown: show "Pi" as the primary label instead of the creator name.
+
 ## 0.18.3
 
 ### Patch Changes
