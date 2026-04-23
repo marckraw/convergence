@@ -1,5 +1,0 @@
----
-'convergence': minor
----
-
-feat(terminal): promote terminal to a first-class session surface. Sessions now carry a `primarySurface` field that chooses between the conversation transcript and the terminal pane tree in the main pane, with the opposite surface as an opt-in bottom dock. A new synthetic `shell` provider lets users create terminal-only sessions (no agent attached) via an intent dialog (Conversation / Terminal) on `+ New session` and a new `new-terminal-session` command in Cmd+K. Pane layout (tree shape, split sizes, tab CWDs and titles) is persisted per session and replayed as fresh PTYs in the saved working directories on app restart — scrollback and live processes are not preserved (future tmux work). Shell-provider sessions skip auto-naming, hide the fork action, and display "Terminal" in the provider chip. `Cmd+J` toggles the conversation dock when terminal is the primary surface. Existing conversation sessions behave identically; the layout change is gated on the new primary surface field so no migration is required for current users.
