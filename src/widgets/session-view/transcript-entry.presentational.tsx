@@ -10,7 +10,7 @@ import {
   ChevronRight,
 } from 'lucide-react'
 import { Button } from '@/shared/ui/button'
-import { Markdown } from '@/shared/ui/markdown.presentational'
+import { Markdown } from '@/shared/ui/markdown.container'
 import { ConversationItemShell } from './conversation-item-shell.presentational'
 
 interface ConversationItemViewProps {

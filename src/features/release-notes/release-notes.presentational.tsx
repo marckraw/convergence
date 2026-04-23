@@ -12,7 +12,7 @@ import {
   DialogTrigger,
 } from '@/shared/ui/dialog'
 import { Button } from '@/shared/ui/button'
-import { Markdown } from '@/shared/ui/markdown.presentational'
+import { Markdown } from '@/shared/ui/markdown.container'
 
 interface ReleaseNotesProps {
   open: boolean
