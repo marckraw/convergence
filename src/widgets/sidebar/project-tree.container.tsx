@@ -106,6 +106,7 @@ export const ProjectTree: FC<ProjectTreeProps> = ({
   const renderSessionActions = (session: SessionSummary) => {
     const isArchived = !!session.archivedAt
     const isRegeneratingName = regeneratingSessionIds?.has(session.id) ?? false
+    const canRegenerateName = session.providerId !== 'shell'
 
     return (
       <DropdownMenu>
@@ -133,21 +134,27 @@ export const ProjectTree: FC<ProjectTreeProps> = ({
             <Pencil className="h-3.5 w-3.5" />
             <span>Rename</span>
           </DropdownMenuItem>
-          <DropdownMenuItem
-            className="gap-2"
-            disabled={isRegeneratingName}
-            onClick={() => onRegenerateSessionName(session.id)}
-          >
-            {isRegeneratingName ? (
-              <Loader2 className="h-3.5 w-3.5 animate-spin" />
-            ) : (
-              <Sparkles className="h-3.5 w-3.5" />
-            )}
-            <span>
-              {isRegeneratingName ? 'Regenerating name…' : 'Regenerate name'}
-            </span>
-          </DropdownMenuItem>
-          <DropdownMenuSeparator />
+          {canRegenerateName ? (
+            <>
+              <DropdownMenuItem
+                className="gap-2"
+                disabled={isRegeneratingName}
+                onClick={() => onRegenerateSessionName(session.id)}
+              >
+                {isRegeneratingName ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <Sparkles className="h-3.5 w-3.5" />
+                )}
+                <span>
+                  {isRegeneratingName
+                    ? 'Regenerating name…'
+                    : 'Regenerate name'}
+                </span>
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+            </>
+          ) : null}
           {isArchived ? (
             <DropdownMenuItem
               className="gap-2"
