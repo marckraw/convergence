@@ -4,6 +4,7 @@ export const workspaceApi = {
   create: (input: {
     projectId: string
     branchName: string
+    baseBranch?: string | null
   }): Promise<Workspace> => window.electronAPI.workspace.create(input),
 
   getByProjectId: (projectId: string): Promise<Workspace[]> =>
@@ -18,6 +19,9 @@ export const workspaceApi = {
 export const gitApi = {
   getBranches: (repoPath: string): Promise<string[]> =>
     window.electronAPI.git.getBranches(repoPath),
+
+  getAllBranches: (repoPath: string): Promise<string[]> =>
+    window.electronAPI.git.getAllBranches(repoPath),
 
   getCurrentBranch: (repoPath: string): Promise<string> =>
     window.electronAPI.git.getCurrentBranch(repoPath),

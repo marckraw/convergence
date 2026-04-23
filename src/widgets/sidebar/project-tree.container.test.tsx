@@ -44,7 +44,7 @@ describe('ProjectTree', () => {
           onRenameSession={vi.fn()}
           onRegenerateSessionName={vi.fn()}
           onDeleteWorkspace={vi.fn()}
-          onCreateWorkspace={vi.fn()}
+          onOpenCreateWorkspace={vi.fn()}
         />
       </TooltipProvider>,
     )
@@ -99,7 +99,7 @@ describe('ProjectTree', () => {
           onRenameSession={vi.fn()}
           onRegenerateSessionName={vi.fn()}
           onDeleteWorkspace={vi.fn()}
-          onCreateWorkspace={vi.fn()}
+          onOpenCreateWorkspace={vi.fn()}
         />
       </TooltipProvider>,
     )
@@ -141,7 +141,7 @@ describe('ProjectTree', () => {
           onRenameSession={vi.fn()}
           onRegenerateSessionName={vi.fn()}
           onDeleteWorkspace={onDeleteWorkspace}
-          onCreateWorkspace={vi.fn()}
+          onOpenCreateWorkspace={vi.fn()}
         />
       </TooltipProvider>,
     )

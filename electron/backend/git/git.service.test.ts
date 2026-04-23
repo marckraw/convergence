@@ -47,6 +47,47 @@ describe('GitService', () => {
     })
   })
 
+  describe('getAllBranches', () => {
+    it('returns local branches sorted and deduped', async () => {
+      execFileSync('git', ['checkout', '-b', 'feature-a'], { cwd: repoPath })
+      execFileSync('git', ['checkout', '-b', 'feature-b'], { cwd: repoPath })
+
+      const branches = await service.getAllBranches(repoPath)
+      expect(branches).toContain('feature-a')
+      expect(branches).toContain('feature-b')
+      expect(branches).toEqual([...branches].sort())
+    })
+
+    it('includes origin branches as short names and excludes HEAD', async () => {
+      const remotePath = join(tempDir, 'remote.git')
+      execFileSync('git', ['init', '--bare', remotePath])
+      execFileSync('git', ['symbolic-ref', 'HEAD', 'refs/heads/master'], {
+        cwd: remotePath,
+      })
+
+      const seedPath = join(tempDir, 'seed')
+      gitInit(seedPath)
+      execFileSync('git', ['branch', '-M', 'master'], { cwd: seedPath })
+      execFileSync('git', ['remote', 'add', 'origin', remotePath], {
+        cwd: seedPath,
+      })
+      execFileSync('git', ['push', '-u', 'origin', 'master'], { cwd: seedPath })
+      execFileSync('git', ['checkout', '-b', 'develop'], { cwd: seedPath })
+      execFileSync('git', ['push', '-u', 'origin', 'develop'], {
+        cwd: seedPath,
+      })
+
+      const clonePath = join(tempDir, 'clone')
+      execFileSync('git', ['clone', remotePath, clonePath])
+
+      const branches = await service.getAllBranches(clonePath)
+      expect(branches).toContain('master')
+      expect(branches).toContain('develop')
+      expect(branches).not.toContain('origin/HEAD')
+      expect(branches).not.toContain('HEAD')
+    })
+  })
+
   describe('branchExists', () => {
     it('returns true for existing branch', async () => {
       const current = await service.getCurrentBranch(repoPath)

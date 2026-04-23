@@ -37,6 +37,7 @@ interface WorkspaceData {
 interface CreateWorkspaceInput {
   projectId: string
   branchName: string
+  baseBranch?: string | null
 }
 
 type SessionStatus = 'idle' | 'running' | 'completed' | 'failed'
@@ -292,6 +293,7 @@ interface ElectronAPI {
   }
   git: {
     getBranches: (repoPath: string) => Promise<string[]>
+    getAllBranches: (repoPath: string) => Promise<string[]>
     getCurrentBranch: (repoPath: string) => Promise<string>
     getStatus: (
       repoPath: string,

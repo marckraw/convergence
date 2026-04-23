@@ -1,1 +1,1 @@
-export { WorkspaceCreate } from './workspace-create.container'
+export { WorkspaceCreateDialogContainer } from './workspace-create.container'

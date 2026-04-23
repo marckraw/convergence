@@ -173,6 +173,10 @@ export function registerIpcHandlers(
     gitService.getBranches(repoPath),
   )
 
+  ipcMain.handle('git:getAllBranches', async (_event, repoPath: string) =>
+    gitService.getAllBranches(repoPath),
+  )
+
   ipcMain.handle('git:getCurrentBranch', async (_event, repoPath: string) =>
     gitService.getCurrentBranch(repoPath),
   )

@@ -30,8 +30,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
     selectDirectory: () => ipcRenderer.invoke('dialog:selectDirectory'),
   },
   workspace: {
-    create: (input: { projectId: string; branchName: string }) =>
-      ipcRenderer.invoke('workspace:create', input),
+    create: (input: {
+      projectId: string
+      branchName: string
+      baseBranch?: string | null
+    }) => ipcRenderer.invoke('workspace:create', input),
     getByProjectId: (projectId: string) =>
       ipcRenderer.invoke('workspace:getByProjectId', projectId),
     getAll: () => ipcRenderer.invoke('workspace:getAll'),
@@ -40,6 +43,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   git: {
     getBranches: (repoPath: string) =>
       ipcRenderer.invoke('git:getBranches', repoPath),
+    getAllBranches: (repoPath: string) =>
+      ipcRenderer.invoke('git:getAllBranches', repoPath),
     getCurrentBranch: (repoPath: string) =>
       ipcRenderer.invoke('git:getCurrentBranch', repoPath),
     getStatus: (repoPath: string) =>
