@@ -24,8 +24,6 @@ export const WorkspaceCreateDialogContainer: FC = () => {
   const [isLoadingBranches, setIsLoadingBranches] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [popoverContainer, setPopoverContainer] =
-    useState<HTMLDivElement | null>(null)
 
   const projectSettings = useMemo(
     () => normalizeProjectSettings(activeProject?.settings),
@@ -155,8 +153,6 @@ export const WorkspaceCreateDialogContainer: FC = () => {
       isLoadingBranches={isLoadingBranches}
       isSubmitting={isSubmitting}
       error={error}
-      popoverContainer={popoverContainer}
-      popoverContainerRef={setPopoverContainer}
       onSubmit={() => void handleSubmit()}
     />
   )
