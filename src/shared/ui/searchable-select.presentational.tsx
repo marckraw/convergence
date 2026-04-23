@@ -106,7 +106,7 @@ export function SearchableSelectPresentational({
         align="start"
         collisionPadding={16}
         className={cn(
-          'min-w-52 w-[var(--radix-popover-trigger-width)] max-w-[min(24rem,calc(100vw-2rem))] p-0',
+          'flex min-h-0 flex-col min-w-52 w-[var(--radix-popover-trigger-width)] max-w-[min(24rem,calc(100vw-2rem))] max-h-[min(24rem,var(--radix-popover-content-available-height))] p-0',
           contentClassName,
         )}
         onOpenAutoFocus={(event: Event) => {
@@ -117,9 +117,9 @@ export function SearchableSelectPresentational({
         <Command
           shouldFilter={false}
           label={searchPlaceholder}
-          className="flex min-h-0 flex-col"
+          className="flex min-h-0 flex-1 flex-col"
         >
-          <div className="border-b border-white/10 px-3 py-2">
+          <div className="shrink-0 border-b border-white/10 px-3 py-2">
             <CommandInput
               ref={inputRef}
               value={query}
@@ -129,8 +129,8 @@ export function SearchableSelectPresentational({
             />
           </div>
           <CommandList
-            className="app-scrollbar overflow-y-auto p-1"
-            style={{ maxHeight: 'min(18rem, calc(100vh - 12rem))' }}
+            className="app-scrollbar min-h-0 flex-1 overflow-y-auto p-1"
+            style={{ maxHeight: '100%' }}
           >
             {items.length === 0 ? (
               <CommandEmpty className="px-2 py-6 text-center text-sm text-muted-foreground">
