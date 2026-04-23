@@ -21,7 +21,7 @@ describe('provider-descriptor', () => {
   it('returns the expected built-in provider descriptors', () => {
     expect(buildClaudeDescriptor().vendorLabel).toBe('Anthropic')
     expect(buildFallbackCodexDescriptor().vendorLabel).toBe('OpenAI')
-    expect(buildFallbackPiDescriptor().vendorLabel).toBe('Mario Zechner')
+    expect(buildFallbackPiDescriptor().vendorLabel).toBe('Pi')
   })
 
   it('exposes pi-compatible effort options on the pi fallback descriptor', () => {

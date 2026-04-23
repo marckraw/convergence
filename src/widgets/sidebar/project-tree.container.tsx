@@ -42,7 +42,7 @@ interface ProjectTreeProps {
   onRenameSession: (id: string, name: string) => void
   onRegenerateSessionName: (id: string) => void
   onDeleteWorkspace: (workspaceId: string) => void
-  onCreateWorkspace: (branchName: string) => void
+  onOpenCreateWorkspace: () => void
 }
 
 export const ProjectTree: FC<ProjectTreeProps> = ({
@@ -59,14 +59,12 @@ export const ProjectTree: FC<ProjectTreeProps> = ({
   onRenameSession,
   onRegenerateSessionName,
   onDeleteWorkspace,
-  onCreateWorkspace,
+  onOpenCreateWorkspace,
 }) => {
   const [expandedWorkspaces, setExpandedWorkspaces] = useState<Set<string>>(
     new Set(),
   )
   const [showArchivedSessions, setShowArchivedSessions] = useState(false)
-  const [newBranch, setNewBranch] = useState('')
-  const [showNewBranch, setShowNewBranch] = useState(false)
   const [renamingSessionId, setRenamingSessionId] = useState<string | null>(
     null,
   )
@@ -373,40 +371,15 @@ export const ProjectTree: FC<ProjectTreeProps> = ({
 
       {/* New workspace */}
       <div className="mt-2 ml-2">
-        {showNewBranch ? (
-          <form
-            onSubmit={(e) => {
-              e.preventDefault()
-              if (newBranch.trim()) {
-                onCreateWorkspace(newBranch.trim())
-                setNewBranch('')
-                setShowNewBranch(false)
-              }
-            }}
-            className="flex gap-1"
-          >
-            <Input
-              value={newBranch}
-              onChange={(e) => setNewBranch(e.target.value)}
-              placeholder="branch..."
-              className="h-7 text-xs"
-              autoFocus
-              onBlur={() => {
-                if (!newBranch.trim()) setShowNewBranch(false)
-              }}
-            />
-          </form>
-        ) : (
-          <Button
-            type="button"
-            variant="ghost"
-            onClick={() => setShowNewBranch(true)}
-            className="h-auto items-center gap-1 px-0 py-0 text-xs font-normal text-muted-foreground hover:text-foreground"
-          >
-            <Plus className="h-3 w-3" />
-            New workspace
-          </Button>
-        )}
+        <Button
+          type="button"
+          variant="ghost"
+          onClick={onOpenCreateWorkspace}
+          className="h-auto items-center gap-1 px-0 py-0 text-xs font-normal text-muted-foreground hover:text-foreground"
+        >
+          <Plus className="h-3 w-3" />
+          New workspace
+        </Button>
       </div>
     </div>
   )

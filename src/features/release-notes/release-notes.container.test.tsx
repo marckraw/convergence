@@ -24,9 +24,34 @@ describe('ReleaseNotesDialogContainer', () => {
     fireEvent.click(screen.getByRole('button', { name: /what's new/i }))
     const footer = document.querySelector('[data-slot="dialog-footer"]')
     expect(footer).not.toBeNull()
-    fireEvent.click(within(footer as HTMLElement).getByRole('button'))
+    fireEvent.click(
+      within(footer as HTMLElement).getByRole('button', { name: 'Close' }),
+    )
 
     expect(screen.queryByText('About Convergence')).not.toBeInTheDocument()
+  })
+
+  it('keeps release history pagination in the dialog footer', () => {
+    render(<ReleaseNotesDialogContainer />)
+
+    fireEvent.click(screen.getByRole('button', { name: /what's new/i }))
+
+    const footer = document.querySelector('[data-slot="dialog-footer"]')
+    expect(footer).not.toBeNull()
+
+    const footerScope = within(footer as HTMLElement)
+    expect(
+      footerScope.getByLabelText('Release history pagination'),
+    ).toBeInTheDocument()
+    expect(
+      footerScope.getByRole('button', { name: /previous/i }),
+    ).toBeDisabled()
+    expect(
+      footerScope.getByRole('button', { name: /next/i }),
+    ).toBeInTheDocument()
+    expect(
+      footerScope.getByRole('button', { name: 'Close' }),
+    ).toBeInTheDocument()
   })
 
   it('opens when useDialogStore.open() is called with the release-notes kind', () => {

@@ -14,7 +14,7 @@ describe('PiProvider', () => {
     const descriptor = await provider.describe()
 
     expect(descriptor.id).toBe('pi')
-    expect(descriptor.vendorLabel).toBe('Mario Zechner')
+    expect(descriptor.vendorLabel).toBe('Pi')
     expect(descriptor.supportsContinuation).toBe(true)
     expect(descriptor.modelOptions.length).toBeGreaterThan(0)
   })

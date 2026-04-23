@@ -1,5 +1,43 @@
 # convergence
 
+## 0.20.0
+
+### Minor Changes
+
+- da183b7: Pick the base branch when creating a workspace. The new workspace dialog now shows a searchable "Create from" list of local and origin branches, so a new worktree can branch off any ref on demand instead of always using the project-wide setting. Leaving the selection on "Project default" preserves existing behavior.
+
+## 0.19.0
+
+### Minor Changes
+
+- 673bb96: Group the extended Changed Files panel by agent turn. Each round-trip
+  from user message to agent-idle is now recorded as a turn with its own
+  per-turn diffs, so reviewers can see what the agent did in each step
+  rather than a single cumulative working-tree diff. The compact view is
+  unchanged and continues to show the live git-status list. Existing
+  sessions show an empty turn list in the extended view — only sessions
+  started after this release accumulate turn records.
+
+## 0.18.5
+
+### Patch Changes
+
+- 59af8da: Add a bottom-right feedback button with a dialog for collecting Convergence app feedback. Submissions currently go through a mocked Electron API boundary so the real destination can be wired later.
+
+  Keep the release history pagination visible in the What's New dialog footer so users can move between release pages without scrolling to the bottom of the notes.
+
+## 0.18.4
+
+### Patch Changes
+
+- 44a7f24: Fix Pi provider label in composer dropdown: show "Pi" as the primary label instead of the creator name.
+
+## 0.18.3
+
+### Patch Changes
+
+- a7e5abd: Paginate the Release History list in the About Convergence dialog (5 per page) so the modal stays compact as the changelog grows.
+
 ## 0.18.2
 
 ### Patch Changes

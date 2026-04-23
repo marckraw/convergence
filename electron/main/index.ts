@@ -14,6 +14,7 @@ import { StateService } from '../backend/state/state.service'
 import { WorkspaceService } from '../backend/workspace/workspace.service'
 import { GitService } from '../backend/git/git.service'
 import { SessionService } from '../backend/session/session.service'
+import { TurnCaptureService } from '../backend/session/turn/turn-capture.service'
 import { ProviderRegistry } from '../backend/provider/provider-registry'
 import { ClaudeCodeProvider } from '../backend/provider/claude-code/claude-code-provider'
 import { CodexProvider } from '../backend/provider/codex/codex-provider'
@@ -54,6 +55,8 @@ import {
 import { TaskProgressService } from '../backend/task-progress/task-progress.service'
 import { broadcastTaskProgress } from '../backend/task-progress/task-progress.ipc'
 import { createNodePtyFactory } from '../backend/terminal/pty-factory'
+import { FeedbackService } from '../backend/feedback/feedback.service'
+import { registerFeedbackIpcHandlers } from '../backend/feedback/feedback.ipc'
 import { registerIpcHandlers } from './ipc'
 import { shouldOpenInSystemBrowser } from './external-links.pure'
 import { resolveAutoUpdater } from './auto-updater-module.pure'
@@ -151,7 +154,11 @@ async function startApp(): Promise<void> {
   const taskProgressService = new TaskProgressService(broadcastTaskProgress)
   const sessionService = new SessionService(db, providerRegistry)
   const attachmentsService = new AttachmentsService(db, attachmentsRoot)
+  const feedbackService = new FeedbackService()
   sessionService.setAttachmentsService(attachmentsService)
+  const turnCaptureService = new TurnCaptureService(gitService, db)
+  turnCaptureService.recoverRunningTurns()
+  sessionService.setTurnCaptureService(turnCaptureService)
 
   projectService.setWorkspaceService(workspaceService)
 
@@ -337,6 +344,7 @@ async function startApp(): Promise<void> {
     workspaces: workspaceService,
   })
   registerSessionForkIpcHandlers(sessionForkService)
+  registerFeedbackIpcHandlers(feedbackService)
 
   registerIpcHandlers(
     projectService,
@@ -348,6 +356,7 @@ async function startApp(): Promise<void> {
     mcpService,
     appSettingsService,
     attachmentsService,
+    turnCaptureService,
     (prefs) => updatesScheduler?.onPrefsChanged(prefs),
   )
 

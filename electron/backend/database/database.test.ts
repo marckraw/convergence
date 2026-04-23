@@ -23,6 +23,8 @@ describe('database', () => {
     expect(tableNames).toContain('projects')
     expect(tableNames).toContain('app_state')
     expect(tableNames).toContain('session_conversation_items')
+    expect(tableNames).toContain('session_turns')
+    expect(tableNames).toContain('session_turn_file_changes')
 
     const sessionColumns = db
       .prepare("PRAGMA table_info('sessions')")
@@ -30,6 +32,111 @@ describe('database', () => {
     expect(sessionColumns.map((column) => column.name)).not.toContain(
       'transcript',
     )
+  })
+
+  it('creates session_turns with expected columns, FK, and unique constraint', () => {
+    const db = getDatabase()
+    const columns = db
+      .prepare("PRAGMA table_info('session_turns')")
+      .all() as Array<{ name: string }>
+    expect(columns.map((c) => c.name).sort()).toEqual(
+      [
+        'id',
+        'session_id',
+        'sequence',
+        'started_at',
+        'ended_at',
+        'status',
+        'summary',
+      ].sort(),
+    )
+
+    const foreignKeys = db
+      .prepare("PRAGMA foreign_key_list('session_turns')")
+      .all() as Array<{ table: string; on_delete: string }>
+    expect(foreignKeys.some((fk) => fk.table === 'sessions')).toBe(true)
+    expect(foreignKeys[0]?.on_delete).toBe('CASCADE')
+
+    const indexList = db
+      .prepare("PRAGMA index_list('session_turns')")
+      .all() as Array<{ name: string; unique: number }>
+    const uniqueIndex = indexList.find((idx) => idx.unique === 1)
+    expect(uniqueIndex).toBeDefined()
+    const uniqueColumns = db
+      .prepare(`PRAGMA index_info('${uniqueIndex!.name}')`)
+      .all() as Array<{ name: string }>
+    expect(uniqueColumns.map((c) => c.name).sort()).toEqual(
+      ['session_id', 'sequence'].sort(),
+    )
+  })
+
+  it('creates session_turn_file_changes with expected columns, FKs, and unique constraint', () => {
+    const db = getDatabase()
+    const columns = db
+      .prepare("PRAGMA table_info('session_turn_file_changes')")
+      .all() as Array<{ name: string }>
+    expect(columns.map((c) => c.name).sort()).toEqual(
+      [
+        'id',
+        'session_id',
+        'turn_id',
+        'file_path',
+        'old_path',
+        'status',
+        'additions',
+        'deletions',
+        'diff',
+        'created_at',
+      ].sort(),
+    )
+
+    const foreignKeys = db
+      .prepare("PRAGMA foreign_key_list('session_turn_file_changes')")
+      .all() as Array<{ table: string; on_delete: string }>
+    const fkTables = foreignKeys.map((fk) => fk.table).sort()
+    expect(fkTables).toEqual(['session_turns', 'sessions'].sort())
+    for (const fk of foreignKeys) {
+      expect(fk.on_delete).toBe('CASCADE')
+    }
+
+    const indexList = db
+      .prepare("PRAGMA index_list('session_turn_file_changes')")
+      .all() as Array<{ name: string; unique: number }>
+    const uniqueIndex = indexList.find((idx) => idx.unique === 1)
+    expect(uniqueIndex).toBeDefined()
+    const uniqueColumns = db
+      .prepare(`PRAGMA index_info('${uniqueIndex!.name}')`)
+      .all() as Array<{ name: string }>
+    expect(uniqueColumns.map((c) => c.name).sort()).toEqual(
+      ['file_path', 'turn_id'].sort(),
+    )
+  })
+
+  it('cascades session_turns deletion when parent session is deleted', () => {
+    const db = getDatabase()
+    db.prepare(
+      "INSERT INTO projects (id, name, repository_path) VALUES ('p1', 'p', '/tmp/p')",
+    ).run()
+    db.prepare(
+      "INSERT INTO sessions (id, project_id, provider_id, name, working_directory) VALUES ('s1', 'p1', 'codex', 's', '/tmp/p')",
+    ).run()
+    db.prepare(
+      "INSERT INTO session_turns (id, session_id, sequence, started_at, status) VALUES ('t1', 's1', 1, '2026-04-23T10:00:00.000Z', 'running')",
+    ).run()
+    db.prepare(
+      "INSERT INTO session_turn_file_changes (id, session_id, turn_id, file_path, status, diff, created_at) VALUES ('c1', 's1', 't1', 'a.ts', 'added', '', '2026-04-23T10:00:00.000Z')",
+    ).run()
+
+    db.prepare('DELETE FROM sessions WHERE id = ?').run('s1')
+
+    const turns = db
+      .prepare('SELECT id FROM session_turns WHERE session_id = ?')
+      .all('s1')
+    const changes = db
+      .prepare('SELECT id FROM session_turn_file_changes WHERE session_id = ?')
+      .all('s1')
+    expect(turns).toEqual([])
+    expect(changes).toEqual([])
   })
 
   it('returns the same instance on repeated calls', () => {

@@ -37,6 +37,7 @@ interface WorkspaceData {
 interface CreateWorkspaceInput {
   projectId: string
   branchName: string
+  baseBranch?: string | null
 }
 
 type SessionStatus = 'idle' | 'running' | 'completed' | 'failed'
@@ -214,6 +215,42 @@ interface ConversationPatchEventData {
   item: ConversationItemData
 }
 
+type TurnStatusData = 'running' | 'completed' | 'errored'
+
+type TurnFileChangeStatusData = 'added' | 'modified' | 'deleted' | 'renamed'
+
+interface TurnData {
+  id: string
+  sessionId: string
+  sequence: number
+  startedAt: string
+  endedAt: string | null
+  status: TurnStatusData
+  summary: string | null
+}
+
+interface TurnFileChangeData {
+  id: string
+  sessionId: string
+  turnId: string
+  filePath: string
+  oldPath: string | null
+  status: TurnFileChangeStatusData
+  additions: number
+  deletions: number
+  diff: string
+  createdAt: string
+}
+
+type TurnDeltaData =
+  | { kind: 'turn.add'; sessionId: string; turn: TurnData }
+  | {
+      kind: 'turn.fileChanges.add'
+      sessionId: string
+      turnId: string
+      fileChanges: TurnFileChangeData[]
+    }
+
 interface SessionSummaryData {
   id: string
   projectId: string
@@ -267,6 +304,27 @@ interface ProviderStatusInfo {
   reason: string | null
 }
 
+type FeedbackKindData = 'bug' | 'idea' | 'ui' | 'other'
+
+interface FeedbackContextData {
+  activeProjectId?: string | null
+  activeProjectName?: string | null
+  activeSessionId?: string | null
+  appUrl?: string | null
+}
+
+interface SubmitFeedbackInputData {
+  kind: FeedbackKindData
+  message: string
+  contact?: string | null
+  context?: FeedbackContextData
+}
+
+interface FeedbackSubmissionResultData {
+  id: string
+  acceptedAt: string
+}
+
 interface SystemInfo {
   platform: NodeJS.Platform
   prefersReducedTransparency: boolean
@@ -299,6 +357,7 @@ interface ElectronAPI {
   }
   git: {
     getBranches: (repoPath: string) => Promise<string[]>
+    getAllBranches: (repoPath: string) => Promise<string[]>
     getCurrentBranch: (repoPath: string) => Promise<string>
     getStatus: (
       repoPath: string,
@@ -346,12 +405,23 @@ interface ElectronAPI {
     forkFull: (input: unknown) => Promise<SessionSummaryData>
     forkSummary: (input: unknown) => Promise<SessionSummaryData>
   }
+  turns: {
+    listForSession: (sessionId: string) => Promise<TurnData[]>
+    getFileChanges: (turnId: string) => Promise<TurnFileChangeData[]>
+    getFileDiff: (turnId: string, filePath: string) => Promise<string>
+    onTurnDelta: (callback: (payload: TurnDeltaData) => void) => () => void
+  }
   provider: {
     getAll: () => Promise<ProviderInfo[]>
     getStatuses: () => Promise<ProviderStatusInfo[]>
   }
   mcp: {
     listByProjectId: (projectId: string) => Promise<ProjectMcpVisibility>
+  }
+  feedback: {
+    submit: (
+      input: SubmitFeedbackInputData,
+    ) => Promise<FeedbackSubmissionResultData>
   }
   attachments: {
     ingestFiles: (
