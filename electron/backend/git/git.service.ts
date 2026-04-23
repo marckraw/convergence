@@ -132,6 +132,40 @@ export class GitService {
     await exec('git', args, repoPath)
   }
 
+  async isGitRepository(repoPath: string): Promise<boolean> {
+    if (!existsSync(repoPath)) return false
+    try {
+      await exec('git', ['rev-parse', '--is-inside-work-tree'], repoPath)
+      return true
+    } catch {
+      return false
+    }
+  }
+
+  async getFileAtHead(
+    repoPath: string,
+    relativePath: string,
+  ): Promise<string | null> {
+    try {
+      return await exec('git', ['show', `HEAD:${relativePath}`], repoPath)
+    } catch {
+      return null
+    }
+  }
+
+  async diffTwoPaths(
+    cwd: string,
+    leftPath: string,
+    rightPath: string,
+  ): Promise<string> {
+    return execAllowExitCodes(
+      'git',
+      ['diff', '--no-index', '--no-color', '--', leftPath, rightPath],
+      cwd,
+      [0, 1],
+    )
+  }
+
   async getStatus(
     repoPath: string,
   ): Promise<Array<{ status: string; file: string }>> {

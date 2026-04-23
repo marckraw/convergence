@@ -119,6 +119,21 @@ contextBridge.exposeInMainWorld('electronAPI', {
     forkSummary: (input: unknown) =>
       ipcRenderer.invoke('session:fork:summary', input),
   },
+  turns: {
+    listForSession: (sessionId: string) =>
+      ipcRenderer.invoke('turns:listForSession', sessionId),
+    getFileChanges: (turnId: string) =>
+      ipcRenderer.invoke('turns:getFileChanges', turnId),
+    getFileDiff: (turnId: string, filePath: string) =>
+      ipcRenderer.invoke('turns:getFileDiff', turnId, filePath),
+    onTurnDelta: (callback: (payload: unknown) => void) => {
+      const handler = (_event: unknown, payload: unknown) => callback(payload)
+      ipcRenderer.on('turns:delta', handler)
+      return () => {
+        ipcRenderer.removeListener('turns:delta', handler)
+      }
+    },
+  },
   provider: {
     getAll: () => ipcRenderer.invoke('provider:getAll'),
     getStatuses: () => ipcRenderer.invoke('provider:getStatuses'),
