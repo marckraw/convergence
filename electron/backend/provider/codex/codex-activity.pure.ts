@@ -36,11 +36,25 @@ function extractApprovalLabel(method: string, params: unknown): string {
   return method.split('/')[1] ?? 'tool'
 }
 
-function extractCompletedToolName(params: unknown): string | null {
+function extractItemRecord(params: unknown): Record<string, unknown> | null {
   if (!params || typeof params !== 'object') return null
   const record = params as { item?: unknown }
   if (!record.item || typeof record.item !== 'object') return null
-  const item = record.item as Record<string, unknown>
+  return record.item as Record<string, unknown>
+}
+
+function isContextCompactionItem(params: unknown): boolean {
+  const item = extractItemRecord(params)
+  return (
+    item?.type === 'contextCompaction' ||
+    item?.type === 'compacted' ||
+    item?.type === 'context_compacted'
+  )
+}
+
+function extractCompletedToolName(params: unknown): string | null {
+  const item = extractItemRecord(params)
+  if (!item) return null
   const itemType = typeof item.type === 'string' ? item.type : null
   if (!itemType) return null
   if (itemType === 'agentMessage') return null
@@ -112,7 +126,31 @@ export function reduceCodexActivity(
     }
   }
 
+  if (
+    input.method === 'item/started' &&
+    isContextCompactionItem(input.params)
+  ) {
+    const activity: ActivitySignal = 'compacting'
+    if (prev.lastActivity === activity) {
+      return { state: prev, activity: 'keep' }
+    }
+    return {
+      state: { ...prev, lastActivity: activity },
+      activity,
+    }
+  }
+
   if (input.method === 'item/completed') {
+    if (isContextCompactionItem(input.params)) {
+      if (prev.lastActivity !== 'compacting') {
+        return { state: prev, activity: 'keep' }
+      }
+      return {
+        state: { ...prev, lastActivity: null },
+        activity: null,
+      }
+    }
+
     const toolName = extractCompletedToolName(input.params)
     if (!toolName) return { state: prev, activity: 'keep' }
     const activity: ActivitySignal = `tool:${normalize(toolName)}`

@@ -7,6 +7,7 @@ export type DialogKind =
   | 'session-fork'
   | 'session-intent'
   | 'terminal-session-create'
+  | 'workspace-create'
 
 export type DialogPayload =
   | { parentSessionId: string }

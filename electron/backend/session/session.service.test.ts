@@ -1145,3 +1145,255 @@ describe('SessionService attachments integration', () => {
     })
   })
 })
+
+describe('SessionService — turn capture wiring', () => {
+  let service: SessionService
+  let tempDir: string
+  let repoPath: string
+  let projectId: string
+  let capture: import('./turn/turn-capture.service').TurnCaptureService
+  let triggerCompletion: (() => void) | null
+
+  function createQuietProvider(): Provider {
+    return {
+      id: 'quiet-provider',
+      name: 'Quiet Provider',
+      supportsContinuation: false,
+      describe: async () => ({
+        id: 'quiet-provider',
+        name: 'Quiet Provider',
+        vendorLabel: 'Quiet',
+        kind: 'conversation',
+        supportsContinuation: false,
+        defaultModelId: 'quiet',
+        modelOptions: [
+          {
+            id: 'quiet',
+            label: 'Quiet',
+            defaultEffort: null,
+            effortOptions: [],
+          },
+        ],
+        attachments: TEST_ATTACHMENT_CAPABILITY,
+      }),
+      start(config) {
+        const listeners = {
+          delta: [] as Array<(delta: SessionDelta) => void>,
+          status: [] as Array<(status: SessionStatus) => void>,
+          attention: [] as Array<(attention: AttentionState) => void>,
+          contextWindow: [] as Array<
+            (contextWindow: SessionContextWindow) => void
+          >,
+          activity: [] as Array<(activity: ActivitySignal) => void>,
+        }
+        const emitDelta = (delta: SessionDelta) =>
+          listeners.delta.forEach((cb) => cb(delta))
+        const sessionEmitter = new ProviderSessionEmitter({
+          providerId: 'quiet-provider',
+          emitDelta,
+          now,
+        })
+        let stopped = false
+
+        setTimeout(() => {
+          if (stopped) return
+          listeners.status.forEach((cb) => cb('running'))
+          sessionEmitter.patchSession({ status: 'running' })
+          sessionEmitter.addUserMessage({ text: config.initialMessage })
+          setTimeout(() => {
+            if (stopped) return
+            sessionEmitter.addAssistantMessage({
+              text: 'Working on it',
+              state: 'complete',
+            })
+          }, 5)
+        }, 0)
+
+        triggerCompletion = () => {
+          if (stopped) return
+          listeners.status.forEach((cb) => cb('completed'))
+          listeners.attention.forEach((cb) => cb('finished'))
+          sessionEmitter.patchSession({
+            status: 'completed',
+            attention: 'finished',
+          })
+        }
+
+        return {
+          onDelta: (cb) => listeners.delta.push(cb),
+          onStatusChange: (cb) => listeners.status.push(cb),
+          onAttentionChange: (cb) => listeners.attention.push(cb),
+          onContextWindowChange: (cb) => listeners.contextWindow.push(cb),
+          onActivityChange: (cb) => listeners.activity.push(cb),
+          onContinuationToken: () => {},
+          sendMessage: (text) => {
+            if (stopped) return
+            sessionEmitter.addUserMessage({ text })
+          },
+          approve: () => {},
+          deny: () => {},
+          stop: () => {
+            stopped = true
+            listeners.status.forEach((cb) => cb('failed'))
+            listeners.attention.forEach((cb) => cb('failed'))
+            sessionEmitter.patchSession({
+              status: 'failed',
+              attention: 'failed',
+            })
+          },
+        }
+      },
+    }
+  }
+
+  beforeEach(async () => {
+    vi.useRealTimers()
+    triggerCompletion = null
+    const { execFileSync } = await import('child_process')
+    const db = getDatabase()
+    const registry = new ProviderRegistry()
+    registry.register(createQuietProvider())
+
+    tempDir = mkdtempSync(join(tmpdir(), 'convergence-session-turn-'))
+    repoPath = join(tempDir, 'repo')
+    execFileSync('git', ['init', '-q', repoPath])
+    execFileSync('git', ['config', 'user.email', 'test@test.com'], {
+      cwd: repoPath,
+    })
+    execFileSync('git', ['config', 'user.name', 'Test'], { cwd: repoPath })
+    execFileSync('git', ['commit', '--allow-empty', '-q', '-m', 'init'], {
+      cwd: repoPath,
+    })
+
+    projectId = 'turn-project'
+    db.prepare(
+      "INSERT INTO projects (id, name, repository_path) VALUES (?, 't', ?)",
+    ).run(projectId, repoPath)
+
+    const { GitService } = await import('../git/git.service')
+    const { TurnCaptureService } = await import('./turn/turn-capture.service')
+    capture = new TurnCaptureService(new GitService(), db, { debounceMs: 0 })
+
+    service = new SessionService(db, registry)
+    service.setTurnCaptureService(capture)
+  })
+
+  afterEach(() => {
+    closeDatabase()
+    resetDatabase()
+    rmSync(tempDir, { recursive: true, force: true })
+  })
+
+  it('creates a turn on start and closes it when status reaches completed', async () => {
+    const session = service.create({
+      projectId,
+      workspaceId: null,
+      providerId: 'quiet-provider',
+      model: 'quiet',
+      effort: null,
+      name: 'turn test',
+    })
+
+    await service.start(session.id, { text: 'Do the thing' })
+    await new Promise((resolve) => setTimeout(resolve, 150))
+
+    const turnsMid = capture.listTurns(session.id)
+    expect(turnsMid).toHaveLength(1)
+    expect(turnsMid[0].status).toBe('running')
+
+    triggerCompletion!()
+    await new Promise((resolve) => setTimeout(resolve, 10))
+    await capture.flushPendingEnd(session.id)
+
+    const turnsEnd = capture.listTurns(session.id)
+    expect(turnsEnd).toHaveLength(1)
+    expect(turnsEnd[0].status).toBe('completed')
+    expect(turnsEnd[0].endedAt).not.toBeNull()
+  })
+
+  it('stamps all conversation items in a turn with a consistent turnId', async () => {
+    const session = service.create({
+      projectId,
+      workspaceId: null,
+      providerId: 'quiet-provider',
+      model: 'quiet',
+      effort: null,
+      name: 'stamp test',
+    })
+
+    await service.start(session.id, { text: 'Hello there' })
+    await new Promise((resolve) => setTimeout(resolve, 150))
+
+    const convo = service.getConversation(session.id)
+    const userItems = convo.filter(
+      (item) => item.kind === 'message' && item.actor === 'user',
+    )
+    expect(userItems).toHaveLength(1)
+    const turnId = userItems[0].turnId
+    expect(turnId).not.toBeNull()
+    for (const item of convo) {
+      expect(item.turnId).toBe(turnId)
+    }
+  })
+
+  it('emits turn deltas through the registered listener', async () => {
+    const observed: Array<{ sessionId: string; kind: string }> = []
+    service.setTurnDeltaListener((sessionId, delta) => {
+      observed.push({ sessionId, kind: delta.kind })
+    })
+
+    const session = service.create({
+      projectId,
+      workspaceId: null,
+      providerId: 'quiet-provider',
+      model: 'quiet',
+      effort: null,
+      name: 'delta test',
+    })
+
+    await service.start(session.id, { text: 'hi' })
+    await new Promise((resolve) => setTimeout(resolve, 150))
+
+    expect(observed.some((d) => d.kind === 'turn.add')).toBe(true)
+    expect(observed.every((d) => d.sessionId === session.id)).toBe(true)
+  })
+
+  it('closes the active turn as errored on stop()', async () => {
+    const session = service.create({
+      projectId,
+      workspaceId: null,
+      providerId: 'quiet-provider',
+      model: 'quiet',
+      effort: null,
+      name: 'stop test',
+    })
+
+    await service.start(session.id, { text: 'hi' })
+    await new Promise((resolve) => setTimeout(resolve, 150))
+
+    service.stop(session.id)
+    await capture.flushPendingEnd(session.id)
+
+    const turns = capture.listTurns(session.id)
+    expect(turns).toHaveLength(1)
+    expect(turns[0].status).toBe('errored')
+  })
+
+  it('recovers leftover running turns on boot', () => {
+    const db = getDatabase()
+    db.prepare(
+      `INSERT INTO sessions (id, project_id, provider_id, name, working_directory)
+       VALUES ('rec1', ?, 'quiet-provider', 's', ?)`,
+    ).run(projectId, repoPath)
+    db.prepare(
+      `INSERT INTO session_turns (id, session_id, sequence, started_at, status)
+       VALUES ('stale-turn', 'rec1', 1, '2026-04-23T00:00:00.000Z', 'running')`,
+    ).run()
+
+    capture.recoverRunningTurns()
+
+    const turns = capture.listTurns('rec1')
+    expect(turns[0].status).toBe('errored')
+    expect(turns[0].endedAt).not.toBeNull()
+  })
+})

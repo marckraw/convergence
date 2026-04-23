@@ -30,8 +30,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
     selectDirectory: () => ipcRenderer.invoke('dialog:selectDirectory'),
   },
   workspace: {
-    create: (input: { projectId: string; branchName: string }) =>
-      ipcRenderer.invoke('workspace:create', input),
+    create: (input: {
+      projectId: string
+      branchName: string
+      baseBranch?: string | null
+    }) => ipcRenderer.invoke('workspace:create', input),
     getByProjectId: (projectId: string) =>
       ipcRenderer.invoke('workspace:getByProjectId', projectId),
     getAll: () => ipcRenderer.invoke('workspace:getAll'),
@@ -40,6 +43,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   git: {
     getBranches: (repoPath: string) =>
       ipcRenderer.invoke('git:getBranches', repoPath),
+    getAllBranches: (repoPath: string) =>
+      ipcRenderer.invoke('git:getAllBranches', repoPath),
     getCurrentBranch: (repoPath: string) =>
       ipcRenderer.invoke('git:getCurrentBranch', repoPath),
     getStatus: (repoPath: string) =>
@@ -123,6 +128,21 @@ contextBridge.exposeInMainWorld('electronAPI', {
     forkSummary: (input: unknown) =>
       ipcRenderer.invoke('session:fork:summary', input),
   },
+  turns: {
+    listForSession: (sessionId: string) =>
+      ipcRenderer.invoke('turns:listForSession', sessionId),
+    getFileChanges: (turnId: string) =>
+      ipcRenderer.invoke('turns:getFileChanges', turnId),
+    getFileDiff: (turnId: string, filePath: string) =>
+      ipcRenderer.invoke('turns:getFileDiff', turnId, filePath),
+    onTurnDelta: (callback: (payload: unknown) => void) => {
+      const handler = (_event: unknown, payload: unknown) => callback(payload)
+      ipcRenderer.on('turns:delta', handler)
+      return () => {
+        ipcRenderer.removeListener('turns:delta', handler)
+      }
+    },
+  },
   provider: {
     getAll: () => ipcRenderer.invoke('provider:getAll'),
     getStatuses: () => ipcRenderer.invoke('provider:getStatuses'),
@@ -130,6 +150,19 @@ contextBridge.exposeInMainWorld('electronAPI', {
   mcp: {
     listByProjectId: (projectId: string) =>
       ipcRenderer.invoke('mcp:listByProjectId', projectId),
+  },
+  feedback: {
+    submit: (input: {
+      kind: 'bug' | 'idea' | 'ui' | 'other'
+      message: string
+      contact?: string | null
+      context?: {
+        activeProjectId?: string | null
+        activeProjectName?: string | null
+        activeSessionId?: string | null
+        appUrl?: string | null
+      }
+    }) => ipcRenderer.invoke('feedback:submit', input),
   },
   attachments: {
     ingestFiles: (

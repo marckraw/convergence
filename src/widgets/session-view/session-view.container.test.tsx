@@ -100,6 +100,12 @@ describe('SessionView changed files drawer', () => {
               '@@ -1 +1 @@\n-console.log("old")\n+console.log("new")',
             ),
         },
+        turns: {
+          listForSession: vi.fn().mockResolvedValue([]),
+          getFileChanges: vi.fn().mockResolvedValue([]),
+          getFileDiff: vi.fn().mockResolvedValue(''),
+          onTurnDelta: vi.fn().mockReturnValue(() => {}),
+        },
       },
       configurable: true,
       writable: true,
@@ -136,5 +142,26 @@ describe('SessionView changed files drawer', () => {
     await waitFor(() => {
       expect(screen.getByTitle('Use wide width')).toBeInTheDocument()
     })
+  })
+
+  it('shows the live session activity in the header', async () => {
+    useSessionStore.setState((state) => ({
+      ...state,
+      sessions: state.sessions.map((session) =>
+        session.id === 'session-1'
+          ? { ...session, status: 'running', activity: 'compacting' }
+          : session,
+      ),
+    }))
+
+    render(
+      <TooltipProvider>
+        <SessionView />
+      </TooltipProvider>,
+    )
+
+    expect(screen.getByTestId('session-activity-indicator')).toHaveTextContent(
+      'compacting context…',
+    )
   })
 })

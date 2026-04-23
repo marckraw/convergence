@@ -53,6 +53,93 @@ describe('deriveClaudeActivity', () => {
     expect(deriveClaudeActivity({ type: 'result' })).toBeNull()
   })
 
+  it('maps PreCompact hook events to compacting', () => {
+    expect(
+      deriveClaudeActivity({
+        type: 'system',
+        hook_event_name: 'PreCompact',
+      }),
+    ).toBe('compacting')
+  })
+
+  it('maps compact metadata system events to compacting', () => {
+    expect(
+      deriveClaudeActivity({
+        type: 'system',
+        compact_metadata: { trigger: 'auto' },
+      }),
+    ).toBe('compacting')
+  })
+
+  it('maps compact subtype system events to compacting', () => {
+    expect(
+      deriveClaudeActivity({
+        type: 'system',
+        subtype: 'compact_boundary',
+      }),
+    ).toBe('compacting')
+  })
+
+  it('maps compaction block start to compacting', () => {
+    expect(
+      deriveClaudeActivity({
+        type: 'stream_event',
+        event: {
+          type: 'content_block_start',
+          content_block: { type: 'compaction' },
+        },
+      }),
+    ).toBe('compacting')
+  })
+
+  it('maps compaction deltas to compacting', () => {
+    expect(
+      deriveClaudeActivity({
+        type: 'stream_event',
+        event: {
+          type: 'content_block_delta',
+          delta: { type: 'compaction_delta' },
+        },
+      }),
+    ).toBe('compacting')
+  })
+
+  it('clears compacting on PostCompact hook events', () => {
+    expect(
+      deriveClaudeActivity(
+        {
+          type: 'system',
+          hook_event_name: 'PostCompact',
+        },
+        'compacting',
+      ),
+    ).toBeNull()
+  })
+
+  it('clears compacting on compaction block stop', () => {
+    expect(
+      deriveClaudeActivity(
+        {
+          type: 'stream_event',
+          event: {
+            type: 'content_block_stop',
+          },
+        },
+        'compacting',
+      ),
+    ).toBeNull()
+  })
+
+  it('maps compact boundary system events with camelCase metadata to compacting', () => {
+    expect(
+      deriveClaudeActivity({
+        type: 'system',
+        subtype: 'compact_boundary',
+        compactMetadata: { trigger: 'auto' },
+      }),
+    ).toBe('compacting')
+  })
+
   it('keeps activity for unknown events', () => {
     expect(deriveClaudeActivity({ type: 'system' })).toBe('keep')
     expect(deriveClaudeActivity({})).toBe('keep')

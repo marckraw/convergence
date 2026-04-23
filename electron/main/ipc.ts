@@ -4,6 +4,7 @@ import { StateService } from '../backend/state/state.service'
 import { WorkspaceService } from '../backend/workspace/workspace.service'
 import { GitService } from '../backend/git/git.service'
 import { SessionService } from '../backend/session/session.service'
+import type { TurnCaptureService } from '../backend/session/turn/turn-capture.service'
 import {
   getRecentSessionIds,
   setRecentSessionIds,
@@ -95,6 +96,7 @@ export function registerIpcHandlers(
   mcpService: McpService,
   appSettingsService: AppSettingsService,
   attachmentsService: AttachmentsService,
+  turnCaptureService: TurnCaptureService,
   onUpdatePrefsChanged?: (prefs: { backgroundCheckEnabled: boolean }) => void,
 ): void {
   // Project handlers
@@ -171,6 +173,10 @@ export function registerIpcHandlers(
   // Git handlers
   ipcMain.handle('git:getBranches', async (_event, repoPath: string) =>
     gitService.getBranches(repoPath),
+  )
+
+  ipcMain.handle('git:getAllBranches', async (_event, repoPath: string) =>
+    gitService.getAllBranches(repoPath),
   )
 
   ipcMain.handle('git:getCurrentBranch', async (_event, repoPath: string) =>
@@ -406,6 +412,31 @@ export function registerIpcHandlers(
     for (const win of windows) {
       if (!win.isDestroyed()) {
         win.webContents.send('session:conversationPatched', event)
+      }
+    }
+  })
+
+  // Turn-grouped file-change handlers
+  ipcMain.handle('turns:listForSession', (_event, sessionId: string) =>
+    turnCaptureService.listTurns(sessionId),
+  )
+
+  ipcMain.handle('turns:getFileChanges', (_event, turnId: string) =>
+    turnCaptureService.listFileChanges(turnId),
+  )
+
+  ipcMain.handle(
+    'turns:getFileDiff',
+    (_event, turnId: string, filePath: string) =>
+      turnCaptureService.getFileDiff(turnId, filePath),
+  )
+
+  sessionService.setTurnDeltaListener((sessionId, delta) => {
+    const payload = { ...delta, sessionId }
+    const windows = BrowserWindow.getAllWindows()
+    for (const win of windows) {
+      if (!win.isDestroyed()) {
+        win.webContents.send('turns:delta', payload)
       }
     }
   })

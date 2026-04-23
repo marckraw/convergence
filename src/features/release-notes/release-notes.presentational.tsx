@@ -16,7 +16,7 @@ import {
   DialogTrigger,
 } from '@/shared/ui/dialog'
 import { Button } from '@/shared/ui/button'
-import { Markdown } from '@/shared/ui/markdown.presentational'
+import { Markdown } from '@/shared/ui/markdown.container'
 
 export interface ReleaseHistoryPageItem {
   release: ReleaseNotesEntry
@@ -118,51 +118,53 @@ export const ReleaseNotesDialog: FC<ReleaseNotesProps> = ({
                 </article>
               ))}
             </div>
-            {showPagination ? (
-              <nav
-                aria-label="Release history pagination"
-                className="mt-4 flex items-center justify-between gap-3"
-              >
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() =>
-                    onHistoryPageChange(Math.max(1, historyPage - 1))
-                  }
-                  disabled={historyPage === 1}
-                >
-                  <ChevronLeft className="mr-1 h-3.5 w-3.5" />
-                  Previous
-                </Button>
-                <span
-                  className="text-xs text-muted-foreground"
-                  aria-live="polite"
-                >
-                  {historyPage} / {historyTotalPages}
-                </span>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() =>
-                    onHistoryPageChange(
-                      Math.min(historyTotalPages, historyPage + 1),
-                    )
-                  }
-                  disabled={historyPage === historyTotalPages}
-                >
-                  Next
-                  <ChevronRight className="ml-1 h-3.5 w-3.5" />
-                </Button>
-              </nav>
-            ) : null}
           </section>
         </div>
 
-        <DialogFooter className="border-t border-border/70 px-6 py-4">
+        <DialogFooter className="flex-col items-stretch justify-between gap-3 border-t border-border/70 px-6 py-4 sm:flex-row sm:items-center">
+          {showPagination ? (
+            <nav
+              aria-label="Release history pagination"
+              className="flex items-center justify-between gap-3 sm:min-w-64 sm:justify-start"
+            >
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() =>
+                  onHistoryPageChange(Math.max(1, historyPage - 1))
+                }
+                disabled={historyPage === 1}
+              >
+                <ChevronLeft className="mr-1 h-3.5 w-3.5" />
+                Previous
+              </Button>
+              <span
+                className="text-xs text-muted-foreground"
+                aria-live="polite"
+              >
+                {historyPage} / {historyTotalPages}
+              </span>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() =>
+                  onHistoryPageChange(
+                    Math.min(historyTotalPages, historyPage + 1),
+                  )
+                }
+                disabled={historyPage === historyTotalPages}
+              >
+                Next
+                <ChevronRight className="ml-1 h-3.5 w-3.5" />
+              </Button>
+            </nav>
+          ) : (
+            <span aria-hidden />
+          )}
           <DialogClose asChild>
-            <Button type="button" variant="outline">
+            <Button type="button" variant="outline" className="sm:w-auto">
               Close
             </Button>
           </DialogClose>

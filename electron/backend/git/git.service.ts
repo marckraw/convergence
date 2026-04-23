@@ -52,6 +52,31 @@ export class GitService {
     return output.split('\n').filter(Boolean)
   }
 
+  async getAllBranches(repoPath: string): Promise<string[]> {
+    const output = await exec(
+      'git',
+      [
+        'for-each-ref',
+        '--format=%(refname:short)',
+        'refs/heads',
+        'refs/remotes/origin',
+      ],
+      repoPath,
+    )
+    if (!output) return []
+    const names = new Set<string>()
+    for (const raw of output.split('\n')) {
+      const name = raw.trim()
+      if (!name) continue
+      if (name === 'origin/HEAD' || name.endsWith('/HEAD')) continue
+      const stripped = name.startsWith('origin/')
+        ? name.slice('origin/'.length)
+        : name
+      if (stripped) names.add(stripped)
+    }
+    return Array.from(names).sort()
+  }
+
   async getCurrentBranch(repoPath: string): Promise<string> {
     return exec('git', ['rev-parse', '--abbrev-ref', 'HEAD'], repoPath)
   }
@@ -130,6 +155,40 @@ export class GitService {
     }
 
     await exec('git', args, repoPath)
+  }
+
+  async isGitRepository(repoPath: string): Promise<boolean> {
+    if (!existsSync(repoPath)) return false
+    try {
+      await exec('git', ['rev-parse', '--is-inside-work-tree'], repoPath)
+      return true
+    } catch {
+      return false
+    }
+  }
+
+  async getFileAtHead(
+    repoPath: string,
+    relativePath: string,
+  ): Promise<string | null> {
+    try {
+      return await exec('git', ['show', `HEAD:${relativePath}`], repoPath)
+    } catch {
+      return null
+    }
+  }
+
+  async diffTwoPaths(
+    cwd: string,
+    leftPath: string,
+    rightPath: string,
+  ): Promise<string> {
+    return execAllowExitCodes(
+      'git',
+      ['diff', '--no-index', '--no-color', '--', leftPath, rightPath],
+      cwd,
+      [0, 1],
+    )
   }
 
   async getStatus(

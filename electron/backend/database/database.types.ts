@@ -60,3 +60,26 @@ export interface WorkspaceRow {
   type: string
   created_at: string
 }
+
+export interface SessionTurnRow {
+  id: string
+  session_id: string
+  sequence: number
+  started_at: string
+  ended_at: string | null
+  status: string
+  summary: string | null
+}
+
+export interface SessionTurnFileChangeRow {
+  id: string
+  session_id: string
+  turn_id: string
+  file_path: string
+  old_path: string | null
+  status: string
+  additions: number
+  deletions: number
+  diff: string
+  created_at: string
+}

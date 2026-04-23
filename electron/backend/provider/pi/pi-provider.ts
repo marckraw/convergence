@@ -402,6 +402,7 @@ export class PiProvider implements Provider {
         }
 
         case 'compaction_start':
+          applyActivity({ kind: 'compaction_start' })
           sessionEmitter.addNote({
             text: 'Compacting context...',
             level: 'info',
@@ -409,6 +410,7 @@ export class PiProvider implements Provider {
           break
 
         case 'compaction_end':
+          applyActivity({ kind: 'compaction_end' })
           sessionEmitter.addNote({
             text: 'Compaction complete',
             level: 'info',

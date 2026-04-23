@@ -19,6 +19,7 @@ import { SessionIntentDialogContainer } from '@/features/session-intent-dialog'
 import { TerminalSessionCreateDialogContainer } from '@/features/terminal-session-create'
 import { NotificationsToastHostContainer } from '@/features/notifications-toast-host'
 import { UpdatesToastContainer } from '@/features/updates-toast'
+import { FeedbackButtonContainer } from '@/features/feedback-button'
 import { AppShell } from './App.layout'
 
 export function App() {
@@ -198,6 +199,7 @@ export function App() {
       <TerminalSessionCreateDialogContainer />
       <NotificationsToastHostContainer />
       <UpdatesToastContainer />
+      <FeedbackButtonContainer />
       <Toaster position="bottom-right" />
     </TooltipProvider>
   )

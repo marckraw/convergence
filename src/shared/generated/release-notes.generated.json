@@ -1,6 +1,31 @@
 {
-  "currentVersion": "0.16.0",
+  "currentVersion": "0.18.2",
   "releases": [
+    {
+      "version": "0.18.2",
+      "date": null,
+      "notes": "### Patch Changes\n\n- 58c9092: Fix agent completion notifications so real session finish and attention\n  transitions trigger the same toast, sound, and system notification flow as\n  the manual notification test action."
+    },
+    {
+      "version": "0.18.1",
+      "date": null,
+      "notes": "### Patch Changes\n\n- 307cd8e: Prevent packaged macOS builds from crashing on launch when the\n  `electron-updater` module loads with an unexpected export shape.\n  Convergence now disables auto-updates for that build instead of aborting\n  startup, so affected users can still open the app and install a follow-up\n  release."
+    },
+    {
+      "version": "0.18.0",
+      "date": null,
+      "notes": "### Minor Changes\n\n- 6ad9c88: Ship automatic updates for packaged macOS builds. Convergence now checks\n  GitHub Releases for new versions on startup (after a 10s delay) and\n  every four hours thereafter, then surfaces any available update through\n  an actionable toast, a new section in Settings, and a `Check for\nupdates…` entry in the Command Center.\n\n  The flow never installs silently: users are asked before downloading\n  and again before installing. Background checking is opt-out via\n  Settings → Updates → \"Check for updates automatically\".\n\n  Release artifacts now ship both Intel (`x64`) and Apple Silicon\n  (`arm64`) variants; electron-updater picks the matching arch at\n  runtime from the published `latest-mac.yml`.\n\n  Dev mode (`npm run dev`) disables every update code path — the Settings\n  section and the Command Center item stay visible but are clearly marked\n  as disabled.\n\n  **One-time note:** users on v0.16.0 or earlier need to download and\n  install this release manually (via the DMG on GitHub). Every release\n  from this version onward will be picked up by the auto-updater."
+    },
+    {
+      "version": "0.17.1",
+      "date": null,
+      "notes": "### Patch Changes\n\n- 9d17975: Fix the app settings dialog so long settings lists scroll correctly, use the\n  shared dark scrollbar styling, and present settings in clearer grouped sections\n  with better control alignment."
+    },
+    {
+      "version": "0.17.0",
+      "date": null,
+      "notes": "### Minor Changes\n\n- b7fc109: Add a hover-to-copy button on every conversation item in the session view.\n  Each message, agent response, thinking block, tool call, tool result,\n  approval request, input request, and system note now reveals a small copy\n  button in its top-right corner on hover or keyboard focus. Clicking copies\n  the raw underlying text — original markdown for messages, the raw\n  stringified input or output for tool calls — so you can grab a specific\n  portion of the conversation without hand-selecting."
+    },
     {
       "version": "0.16.0",
       "date": null,

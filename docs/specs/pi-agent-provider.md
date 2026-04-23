@@ -156,24 +156,24 @@ No new renderer slices are required. If we decide later to expose model/thinking
 
 ## Event Mapping
 
-| Pi RPC event                                                          | Convergence TranscriptEntry / transition                                          |
-| --------------------------------------------------------------------- | --------------------------------------------------------------------------------- |
-| `agent_start`                                                         | Status → running                                                                  |
-| `turn_start`                                                          | (no transcript entry; used to reset per-turn accumulators)                        |
-| `message_update` with `assistantMessageEvent.type = "text_delta"`     | Accumulate → `{ type: "assistant", text: accumulated }`                           |
-| `message_update` with `assistantMessageEvent.type = "thinking_delta"` | Accumulate → `{ type: "thinking", text: accumulated }`                            |
-| `message_update` with `assistantMessageEvent.type = "toolcall_start"` | `{ type: "tool-use", tool: name, input: "" }` (input filled by subsequent deltas) |
-| `message_update` with `assistantMessageEvent.type = "toolcall_delta"` | Update existing tool-use entry's input                                            |
-| `message_update` with `assistantMessageEvent.type = "toolcall_end"`   | Finalize tool-use entry                                                           |
-| `tool_execution_start`                                                | (already represented by tool-use; keep for telemetry/logging)                     |
-| `tool_execution_end`                                                  | `{ type: "tool-result", result: stringify(result or error) }`                     |
-| `turn_end`                                                            | Trigger `get_session_stats` → emit `onContextWindowChange`                        |
-| `agent_end` with `reason: "completed"`                                | Status → completed, attention → finished                                          |
-| `agent_end` with `reason: "aborted"`                                  | Status → stopped, attention → idle                                                |
-| `agent_end` with `reason: "failed"`                                   | Status → failed, attention → failed                                               |
-| `compaction_start` / `compaction_end`                                 | `{ type: "system", text: "Compacting context…" / "Compaction complete" }`         |
-| `auto_retry_start` / `auto_retry_end`                                 | `{ type: "system", text: "Retrying…" / "Retry complete" }`                        |
-| `extension_ui_request`                                                | Ignore in v1; log and reply with a benign cancel so pi is not left waiting        |
+| Pi RPC event                                                          | Convergence TranscriptEntry / transition                                                                                                                                 |
+| --------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `agent_start`                                                         | Status → running                                                                                                                                                         |
+| `turn_start`                                                          | (no transcript entry; used to reset per-turn accumulators)                                                                                                               |
+| `message_update` with `assistantMessageEvent.type = "text_delta"`     | Accumulate → `{ type: "assistant", text: accumulated }`                                                                                                                  |
+| `message_update` with `assistantMessageEvent.type = "thinking_delta"` | Accumulate → `{ type: "thinking", text: accumulated }`                                                                                                                   |
+| `message_update` with `assistantMessageEvent.type = "toolcall_start"` | `{ type: "tool-use", tool: name, input: "" }` (input filled by subsequent deltas)                                                                                        |
+| `message_update` with `assistantMessageEvent.type = "toolcall_delta"` | Update existing tool-use entry's input                                                                                                                                   |
+| `message_update` with `assistantMessageEvent.type = "toolcall_end"`   | Finalize tool-use entry                                                                                                                                                  |
+| `tool_execution_start`                                                | (already represented by tool-use; keep for telemetry/logging)                                                                                                            |
+| `tool_execution_end`                                                  | `{ type: "tool-result", result: stringify(result or error) }`                                                                                                            |
+| `turn_end`                                                            | Trigger `get_session_stats` → emit `onContextWindowChange`                                                                                                               |
+| `agent_end` with `reason: "completed"`                                | Status → completed, attention → finished                                                                                                                                 |
+| `agent_end` with `reason: "aborted"`                                  | Status → stopped, attention → idle                                                                                                                                       |
+| `agent_end` with `reason: "failed"`                                   | Status → failed, attention → failed                                                                                                                                      |
+| `compaction_start` / `compaction_end`                                 | System note `"Compacting context…"` / `"Compaction complete"` **and** `activity` set to `'compacting'` while compacting (restores prior streaming/thinking state on end) |
+| `auto_retry_start` / `auto_retry_end`                                 | `{ type: "system", text: "Retrying…" / "Retry complete" }`                                                                                                               |
+| `extension_ui_request`                                                | Ignore in v1; log and reply with a benign cancel so pi is not left waiting                                                                                               |
 
 ## Command Mapping
 

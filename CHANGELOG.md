@@ -1,5 +1,41 @@
 # convergence
 
+## 0.21.0
+
+### Minor Changes
+
+- 78ff1a3: feat(activity): surface native provider auto-compaction as a `compacting` activity state in the session header and status bar. Pi maps `compaction_start`/`compaction_end`, Codex maps `contextCompaction` item lifecycle events, and Claude Code maps best-effort stream-json hook/compaction shapes, so users can see when the underlying CLI is auto-compacting instead of guessing during slower turns.
+
+### Patch Changes
+
+- 446254c: chore(markdown): add runtime canary that warns in the console when a rendered assistant message appears to be missing its tail versus the source string. Catches silent truncation bugs from the markdown parser, the conversation-item persistence pipeline, or streaming flush edge cases without needing DevTools inspection.
+
+## 0.20.0
+
+### Minor Changes
+
+- da183b7: Pick the base branch when creating a workspace. The new workspace dialog now shows a searchable "Create from" list of local and origin branches, so a new worktree can branch off any ref on demand instead of always using the project-wide setting. Leaving the selection on "Project default" preserves existing behavior.
+
+## 0.19.0
+
+### Minor Changes
+
+- 673bb96: Group the extended Changed Files panel by agent turn. Each round-trip
+  from user message to agent-idle is now recorded as a turn with its own
+  per-turn diffs, so reviewers can see what the agent did in each step
+  rather than a single cumulative working-tree diff. The compact view is
+  unchanged and continues to show the live git-status list. Existing
+  sessions show an empty turn list in the extended view — only sessions
+  started after this release accumulate turn records.
+
+## 0.18.5
+
+### Patch Changes
+
+- 59af8da: Add a bottom-right feedback button with a dialog for collecting Convergence app feedback. Submissions currently go through a mocked Electron API boundary so the real destination can be wired later.
+
+  Keep the release history pagination visible in the What's New dialog footer so users can move between release pages without scrolling to the bottom of the notes.
+
 ## 0.18.4
 
 ### Patch Changes

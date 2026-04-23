@@ -18,6 +18,10 @@ describe('formatActivityLabel', () => {
     expect(formatActivityLabel('thinking')).toBe('thinking…')
   })
 
+  it('formats compacting', () => {
+    expect(formatActivityLabel('compacting')).toBe('compacting context…')
+  })
+
   it('formats waiting-approval', () => {
     expect(formatActivityLabel('waiting-approval')).toBe('awaiting approval')
   })
