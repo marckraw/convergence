@@ -127,6 +127,19 @@ contextBridge.exposeInMainWorld('electronAPI', {
     listByProjectId: (projectId: string) =>
       ipcRenderer.invoke('mcp:listByProjectId', projectId),
   },
+  feedback: {
+    submit: (input: {
+      kind: 'bug' | 'idea' | 'ui' | 'other'
+      message: string
+      contact?: string | null
+      context?: {
+        activeProjectId?: string | null
+        activeProjectName?: string | null
+        activeSessionId?: string | null
+        appUrl?: string | null
+      }
+    }) => ipcRenderer.invoke('feedback:submit', input),
+  },
   attachments: {
     ingestFiles: (
       sessionId: string,

@@ -54,6 +54,8 @@ import {
 import { TaskProgressService } from '../backend/task-progress/task-progress.service'
 import { broadcastTaskProgress } from '../backend/task-progress/task-progress.ipc'
 import { createNodePtyFactory } from '../backend/terminal/pty-factory'
+import { FeedbackService } from '../backend/feedback/feedback.service'
+import { registerFeedbackIpcHandlers } from '../backend/feedback/feedback.ipc'
 import { registerIpcHandlers } from './ipc'
 import { shouldOpenInSystemBrowser } from './external-links.pure'
 import { resolveAutoUpdater } from './auto-updater-module.pure'
@@ -151,6 +153,7 @@ async function startApp(): Promise<void> {
   const taskProgressService = new TaskProgressService(broadcastTaskProgress)
   const sessionService = new SessionService(db, providerRegistry)
   const attachmentsService = new AttachmentsService(db, attachmentsRoot)
+  const feedbackService = new FeedbackService()
   sessionService.setAttachmentsService(attachmentsService)
 
   projectService.setWorkspaceService(workspaceService)
@@ -337,6 +340,7 @@ async function startApp(): Promise<void> {
     workspaces: workspaceService,
   })
   registerSessionForkIpcHandlers(sessionForkService)
+  registerFeedbackIpcHandlers(feedbackService)
 
   registerIpcHandlers(
     projectService,

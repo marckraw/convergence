@@ -260,6 +260,27 @@ interface ProviderStatusInfo {
   reason: string | null
 }
 
+type FeedbackKindData = 'bug' | 'idea' | 'ui' | 'other'
+
+interface FeedbackContextData {
+  activeProjectId?: string | null
+  activeProjectName?: string | null
+  activeSessionId?: string | null
+  appUrl?: string | null
+}
+
+interface SubmitFeedbackInputData {
+  kind: FeedbackKindData
+  message: string
+  contact?: string | null
+  context?: FeedbackContextData
+}
+
+interface FeedbackSubmissionResultData {
+  id: string
+  acceptedAt: string
+}
+
 interface SystemInfo {
   platform: NodeJS.Platform
   prefersReducedTransparency: boolean
@@ -345,6 +366,11 @@ interface ElectronAPI {
   }
   mcp: {
     listByProjectId: (projectId: string) => Promise<ProjectMcpVisibility>
+  }
+  feedback: {
+    submit: (
+      input: SubmitFeedbackInputData,
+    ) => Promise<FeedbackSubmissionResultData>
   }
   attachments: {
     ingestFiles: (
