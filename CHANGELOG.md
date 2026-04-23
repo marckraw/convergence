@@ -1,5 +1,11 @@
 # convergence
 
+## 0.18.3
+
+### Patch Changes
+
+- a7e5abd: Paginate the Release History list in the About Convergence dialog (5 per page) so the modal stays compact as the changelog grows.
+
 ## 0.18.2
 
 ### Patch Changes
