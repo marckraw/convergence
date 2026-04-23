@@ -18,6 +18,7 @@ export function SearchableSelect({
   contentClassName,
   icon,
   action,
+  popoverContainer,
 }: SearchableSelectProps) {
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
@@ -58,6 +59,7 @@ export function SearchableSelect({
       contentClassName={contentClassName}
       icon={icon}
       action={action}
+      popoverContainer={popoverContainer}
       inputRef={inputRef}
       onOpenChange={(nextOpen) => {
         setOpen(nextOpen)

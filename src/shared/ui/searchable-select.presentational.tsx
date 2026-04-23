@@ -37,6 +37,7 @@ export interface SearchableSelectProps {
   contentClassName?: string
   icon?: ReactNode
   action?: SearchableSelectAction
+  popoverContainer?: HTMLElement | null
 }
 
 interface SearchableSelectPresentationalProps {
@@ -54,6 +55,7 @@ interface SearchableSelectPresentationalProps {
   contentClassName?: string
   icon?: ReactNode
   action?: SearchableSelectAction
+  popoverContainer?: HTMLElement | null
   inputRef: RefObject<HTMLInputElement | null>
   onOpenChange: (open: boolean) => void
   onQueryChange: (query: string) => void
@@ -76,6 +78,7 @@ export function SearchableSelectPresentational({
   contentClassName,
   icon,
   action,
+  popoverContainer,
   inputRef,
   onOpenChange,
   onQueryChange,
@@ -105,6 +108,7 @@ export function SearchableSelectPresentational({
       <PopoverContent
         align="start"
         collisionPadding={16}
+        container={popoverContainer}
         className={cn(
           'flex min-h-0 flex-col min-w-52 w-[var(--radix-popover-trigger-width)] max-w-[min(24rem,calc(100vw-2rem))] max-h-[min(24rem,var(--radix-popover-content-available-height))] p-0',
           contentClassName,
