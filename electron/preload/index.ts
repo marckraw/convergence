@@ -96,6 +96,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.invoke('session:rename', id, name),
     regenerateName: (id: string) =>
       ipcRenderer.invoke('session:regenerateName', id),
+    setPrimarySurface: (
+      id: string,
+      surface: 'conversation' | 'terminal',
+    ) => ipcRenderer.invoke('session:setPrimarySurface', id, surface),
     getNeedsYouDismissals: () =>
       ipcRenderer.invoke('session:getNeedsYouDismissals'),
     setNeedsYouDismissals: (dismissals: unknown) =>
@@ -306,5 +310,13 @@ contextBridge.exposeInMainWorld('electronAPI', {
         ipcRenderer.removeListener(channel, handler)
       }
     },
+  },
+  terminalLayout: {
+    get: (sessionId: string) =>
+      ipcRenderer.invoke('terminalLayout:get', sessionId),
+    save: (sessionId: string, tree: unknown) =>
+      ipcRenderer.invoke('terminalLayout:save', sessionId, tree),
+    clear: (sessionId: string) =>
+      ipcRenderer.invoke('terminalLayout:clear', sessionId),
   },
 })

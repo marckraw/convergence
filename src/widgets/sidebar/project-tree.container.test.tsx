@@ -3,6 +3,26 @@ import { describe, expect, it, vi } from 'vitest'
 import { TooltipProvider } from '@/shared/ui/tooltip'
 import { ProjectTree } from './project-tree.container'
 
+const baseSession = {
+  projectId: 'project-1',
+  workspaceId: null,
+  model: 'sonnet',
+  effort: 'medium' as const,
+  status: 'completed' as const,
+  attention: 'finished' as const,
+  activity: null,
+  contextWindow: null,
+  workingDirectory: '/tmp/roomfinder',
+  archivedAt: null,
+  parentSessionId: null,
+  forkStrategy: null,
+  primarySurface: 'conversation' as const,
+  continuationToken: null,
+  lastSequence: 0,
+  createdAt: '2026-01-01T00:00:00.000Z',
+  updatedAt: '2026-01-01T00:00:00.000Z',
+}
+
 describe('ProjectTree', () => {
   it('archives a session without selecting it', async () => {
     const onSelectSession = vi.fn()
@@ -15,25 +35,10 @@ describe('ProjectTree', () => {
           workspaces={[]}
           sessions={[
             {
+              ...baseSession,
               id: 'session-1',
-              projectId: 'project-1',
-              workspaceId: null,
               providerId: 'claude-code',
-              model: 'sonnet',
-              effort: 'medium',
               name: 'hey there',
-              status: 'completed',
-              attention: 'finished',
-              activity: null,
-              contextWindow: null,
-              workingDirectory: '/tmp/roomfinder',
-              archivedAt: null,
-              parentSessionId: null,
-              forkStrategy: null,
-              continuationToken: null,
-              lastSequence: 0,
-              createdAt: '2026-01-01T00:00:00.000Z',
-              updatedAt: '2026-01-01T00:00:00.000Z',
             },
           ]}
           activeSessionId={null}
@@ -70,24 +75,11 @@ describe('ProjectTree', () => {
           workspaces={[]}
           sessions={[
             {
+              ...baseSession,
               id: 'session-archived',
-              projectId: 'project-1',
-              workspaceId: null,
               providerId: 'claude-code',
-              model: 'sonnet',
-              effort: 'medium',
               name: 'archived note',
-              status: 'completed',
-              attention: 'finished',
-              activity: null,
-              contextWindow: null,
-              workingDirectory: '/tmp/roomfinder',
               archivedAt: '2026-01-02T00:00:00.000Z',
-              parentSessionId: null,
-              forkStrategy: null,
-              continuationToken: null,
-              lastSequence: 0,
-              createdAt: '2026-01-01T00:00:00.000Z',
               updatedAt: '2026-01-02T00:00:00.000Z',
             },
           ]}
@@ -113,6 +105,86 @@ describe('ProjectTree', () => {
     )
 
     expect(onUnarchiveSession).toHaveBeenCalledWith('session-archived')
+  })
+
+  it('shows regenerate name for conversation sessions', async () => {
+    render(
+      <TooltipProvider>
+        <ProjectTree
+          baseBranchName="master"
+          workspaces={[]}
+          sessions={[
+            {
+              ...baseSession,
+              id: 'conversation-session',
+              providerId: 'claude-code',
+              name: 'conversation note',
+            },
+          ]}
+          activeSessionId={null}
+          onSelectSession={vi.fn()}
+          onArchiveSession={vi.fn()}
+          onUnarchiveSession={vi.fn()}
+          onDeleteSession={vi.fn()}
+          onRenameSession={vi.fn()}
+          onRegenerateSessionName={vi.fn()}
+          onDeleteWorkspace={vi.fn()}
+          onOpenCreateWorkspace={vi.fn()}
+        />
+      </TooltipProvider>,
+    )
+
+    fireEvent.pointerDown(
+      screen.getByRole('button', {
+        name: /session actions conversation note/i,
+      }),
+    )
+
+    expect(
+      await screen.findByRole('menuitem', { name: /regenerate name/i }),
+    ).toBeInTheDocument()
+  })
+
+  it('hides regenerate name for shell sessions', async () => {
+    render(
+      <TooltipProvider>
+        <ProjectTree
+          baseBranchName="master"
+          workspaces={[]}
+          sessions={[
+            {
+              ...baseSession,
+              id: 'terminal-session',
+              providerId: 'shell',
+              name: 'terminal note',
+              model: null,
+              effort: null,
+              primarySurface: 'terminal',
+            },
+          ]}
+          activeSessionId={null}
+          onSelectSession={vi.fn()}
+          onArchiveSession={vi.fn()}
+          onUnarchiveSession={vi.fn()}
+          onDeleteSession={vi.fn()}
+          onRenameSession={vi.fn()}
+          onRegenerateSessionName={vi.fn()}
+          onDeleteWorkspace={vi.fn()}
+          onOpenCreateWorkspace={vi.fn()}
+        />
+      </TooltipProvider>,
+    )
+
+    fireEvent.pointerDown(
+      screen.getByRole('button', { name: /session actions terminal note/i }),
+    )
+
+    expect(
+      screen.queryByRole('menuitem', { name: /regenerate name/i }),
+    ).toBeNull()
+    expect(
+      await screen.findByRole('menuitem', { name: /^rename$/i }),
+    ).toBeInTheDocument()
   })
 
   it('deletes a workspace without toggling it open', () => {

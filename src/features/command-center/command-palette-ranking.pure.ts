@@ -7,6 +7,7 @@ import type {
   WorkspacePaletteItem,
   DialogPaletteItem,
   ForkSessionPaletteItem,
+  SwapPrimarySurfacePaletteItem,
   CheckUpdatesPaletteItem,
   CuratedSection,
   CuratedSections,
@@ -91,6 +92,10 @@ export function buildCuratedSections(
   const forkSessionItems = items.filter(
     (item): item is ForkSessionPaletteItem => item.kind === 'fork-session',
   )
+  const swapSurfaceItems = items.filter(
+    (item): item is SwapPrimarySurfacePaletteItem =>
+      item.kind === 'swap-primary-surface',
+  )
 
   const waiting = sessionItems
     .filter(
@@ -134,7 +139,7 @@ export function buildCuratedSections(
     {
       id: 'session-actions',
       title: 'Session Actions',
-      items: forkSessionItems,
+      items: [...forkSessionItems, ...swapSurfaceItems],
     },
     { id: 'recent-sessions', title: 'Recent Sessions', items: recentItems },
     {

@@ -131,10 +131,11 @@ export const TerminalPaneContainer = ({
 
   return (
     <div
-      ref={hostRef}
-      className="min-h-0 flex-1 overflow-hidden bg-[#0b0b0f]"
+      className="flex min-h-0 flex-1 overflow-hidden bg-[#0b0b0f] px-2 py-1.5"
       data-testid="terminal-pane-host"
       data-tab-id={tabId}
-    />
+    >
+      <div ref={hostRef} className="h-full w-full min-w-0" />
+    </div>
   )
 }

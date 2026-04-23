@@ -1,9 +1,8 @@
 import { useState, useCallback, useRef } from 'react'
 import type { FC } from 'react'
 import { Sidebar } from '@/widgets/sidebar'
-import { SessionView } from '@/widgets/session-view'
 import { GlobalStatusBar } from '@/widgets/global-status-bar'
-import { TerminalDock } from '@/widgets/terminal-dock'
+import { WorkspaceLayout } from '@/widgets/workspace-layout'
 import { NotificationsOnboardingContainer } from '@/features/notifications-onboarding'
 import { cn } from '@/shared/lib/cn.pure'
 
@@ -84,7 +83,7 @@ export const AppShell: FC<AppShellProps> = ({
             <>
               <NotificationsOnboardingContainer />
               <div className="min-h-0 flex-1">
-                <SessionView />
+                <WorkspaceLayout />
               </div>
             </>
           ) : (
@@ -100,7 +99,6 @@ export const AppShell: FC<AppShellProps> = ({
         </div>
       </div>
 
-      <TerminalDock />
       <GlobalStatusBar />
     </div>
   )

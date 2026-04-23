@@ -2,6 +2,7 @@ import { useEffect } from 'react'
 import { useProjectStore } from '@/entities/project'
 import { useWorkspaceStore } from '@/entities/workspace'
 import { sessionApi, useSessionStore } from '@/entities/session'
+import { useTerminalStore } from '@/entities/terminal'
 import { useAppSettingsStore } from '@/entities/app-settings'
 import {
   notificationsApi,
@@ -14,6 +15,7 @@ import { TooltipProvider } from '@/shared/ui/tooltip'
 import { applyTheme, getStoredTheme } from '@/shared/lib/theme'
 import { CommandCenterContainer } from '@/features/command-center'
 import { SessionForkDialogContainer } from '@/features/session-fork'
+import { SessionIntentDialogContainer } from '@/features/session-intent-dialog'
 import { NotificationsToastHostContainer } from '@/features/notifications-toast-host'
 import { UpdatesToastContainer } from '@/features/updates-toast'
 import { FeedbackButtonContainer } from '@/features/feedback-button'
@@ -108,6 +110,18 @@ export function App() {
   }, [activeSessionId, setNotificationActiveSession])
 
   useEffect(() => {
+    // Drain pending terminal-layout debounced saves on window close so a
+    // quit within the save debounce window still persists the last
+    // mutation. Best-effort; the call fires-and-forgets a synchronous
+    // IPC invoke, which is the closest we can get inside beforeunload.
+    const handler = () => {
+      void useTerminalStore.getState().flushPersistedSaves()
+    }
+    window.addEventListener('beforeunload', handler)
+    return () => window.removeEventListener('beforeunload', handler)
+  }, [])
+
+  useEffect(() => {
     const subscribe = window.electronAPI.taskProgress?.subscribe
     if (!subscribe) return
     const unsubscribe = subscribe((event) => {
@@ -180,6 +194,7 @@ export function App() {
       />
       <CommandCenterContainer />
       <SessionForkDialogContainer />
+      <SessionIntentDialogContainer />
       <NotificationsToastHostContainer />
       <UpdatesToastContainer />
       <FeedbackButtonContainer />

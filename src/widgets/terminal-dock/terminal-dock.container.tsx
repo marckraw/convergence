@@ -30,7 +30,13 @@ function getPlatform(): 'mac' | 'other' {
   return navigator.platform.toLowerCase().includes('mac') ? 'mac' : 'other'
 }
 
-export const TerminalDockContainer: FC = () => {
+interface TerminalDockContainerProps {
+  mode?: 'dock' | 'main'
+}
+
+export const TerminalDockContainer: FC<TerminalDockContainerProps> = ({
+  mode = 'dock',
+}) => {
   const activeSessionId = useSessionStore((s) => s.activeSessionId)
   const activeSession = useSessionStore((s) =>
     s.activeSessionId
@@ -61,7 +67,7 @@ export const TerminalDockContainer: FC = () => {
   const resizeSplit = useTerminalStore((s) => s.resizeSplit)
   const toggleDockVisible = useTerminalStore((s) => s.toggleDockVisible)
   const setDockVisible = useTerminalStore((s) => s.setDockVisible)
-  const openFirstPane = useTerminalStore((s) => s.openFirstPane)
+  const hydratePaneTree = useTerminalStore((s) => s.hydratePaneTree)
 
   const [closeRequest, setCloseRequest] = useState<CloseConfirmRequest | null>(
     null,
@@ -173,7 +179,9 @@ export const TerminalDockContainer: FC = () => {
         const treeNow = useTerminalStore.getState().getTree(sessionId)
         if (!treeNow) {
           if (!cwd) return
-          void openFirstPane({
+          // Reuse the hydrate path so a Cmd+T after restart rebuilds the
+          // previously-saved layout instead of creating a single blank tab.
+          void hydratePaneTree({
             sessionId,
             cwd,
             cols: DEFAULT_COLS,
@@ -188,6 +196,10 @@ export const TerminalDockContainer: FC = () => {
       }
 
       if (shortcut.kind === 'toggle-dock') {
+        // Terminal-primary sessions mount the pane tree as the main
+        // surface; there is no dock chrome to hide. Swallow the shortcut
+        // so it does not accidentally collapse the tree via state.
+        if (mode === 'main') return
         toggleDockVisible(sessionId)
         return
       }
@@ -241,6 +253,7 @@ export const TerminalDockContainer: FC = () => {
     [
       sessionId,
       cwd,
+      mode,
       handleNewTab,
       handleSplit,
       closeTabWithGuard,
@@ -248,7 +261,7 @@ export const TerminalDockContainer: FC = () => {
       setFocusedLeaf,
       toggleDockVisible,
       setDockVisible,
-      openFirstPane,
+      hydratePaneTree,
     ],
   )
 
@@ -272,7 +285,73 @@ export const TerminalDockContainer: FC = () => {
     }
   }, [sessionId, dispatchShortcut])
 
-  if (!activeSessionId || !activeSession || !tree) return null
+  // In 'main' mode the terminal is the primary surface. Hydrate the
+  // pane tree so it either restores a persisted layout (fresh shells in
+  // the saved CWDs) or auto-opens a single new leaf — the main area is
+  // never empty on a fresh terminal-primary session.
+  useEffect(() => {
+    if (mode !== 'main') return
+    if (!sessionId || !cwd) return
+    if (tree) return
+    void hydratePaneTree({
+      sessionId,
+      cwd,
+      cols: DEFAULT_COLS,
+      rows: DEFAULT_ROWS,
+    })
+  }, [mode, sessionId, cwd, tree, hydratePaneTree])
+
+  if (!activeSessionId || !activeSession) return null
+
+  if (mode === 'main') {
+    if (!tree) {
+      return (
+        <div
+          ref={dockRef}
+          className={dockStyles.mainRoot}
+          data-testid="terminal-dock"
+          data-mode="main"
+        >
+          <div className={dockStyles.mainFrame} />
+        </div>
+      )
+    }
+    return (
+      <>
+        <div
+          ref={dockRef}
+          className={dockStyles.mainRoot}
+          data-testid="terminal-dock"
+          data-mode="main"
+        >
+          <div className={dockStyles.mainFrame}>
+            <SplitNodeView
+              tree={tree}
+              sessionId={activeSessionId}
+              focusedLeafId={focusedLeafId}
+              onSelectTab={handleSelectTab}
+              onNewTab={handleNewTab}
+              onSplit={handleSplit}
+              onCloseActiveTab={handleCloseActiveTab}
+              onCloseTab={handleCloseTab}
+              onFocusLeaf={handleFocusLeaf}
+              onResizeSplit={handleResizeSplit}
+            />
+          </div>
+        </div>
+        <CloseConfirmDialog
+          request={closeRequest}
+          onCancel={() => setCloseRequest(null)}
+          onConfirm={(req) => {
+            setCloseRequest(null)
+            void closeTab(req.sessionId, req.leafId, req.tabId)
+          }}
+        />
+      </>
+    )
+  }
+
+  if (!tree) return null
   if (!dockVisible) return null
 
   return (

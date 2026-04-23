@@ -38,6 +38,7 @@ export class SessionNamingService {
     session: SessionSummary,
     conversation: ConversationItem[],
   ): Promise<string | null> {
+    if (session.providerId === 'shell') return null
     const provider = this.deps.providers.get(session.providerId)
     if (!provider || !provider.oneShot) return null
 

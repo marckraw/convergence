@@ -8,6 +8,7 @@ import type {
   NeedsYouDisposition,
   SessionSummary,
 } from './session.types'
+import { isConversationalProvider } from './session.types'
 import { sessionApi, providerApi } from './session.api'
 import { sessionForkApi } from './session-fork.api'
 import type {
@@ -49,6 +50,11 @@ interface SessionActions {
     message: string,
     attachmentIds?: string[],
   ) => Promise<void>
+  createTerminalSession: (
+    projectId: string,
+    workspaceId: string | null,
+    name: string,
+  ) => Promise<SessionSummary>
   approveSession: (id: string) => Promise<void>
   denySession: (id: string) => Promise<void>
   sendMessageToSession: (
@@ -72,6 +78,10 @@ interface SessionActions {
   ) => Promise<ForkSummary>
   forkFull: (input: ForkFullInput) => Promise<SessionSummary>
   forkSummary: (input: ForkSummaryInput) => Promise<SessionSummary>
+  setPrimarySurface: (
+    id: string,
+    surface: 'conversation' | 'terminal',
+  ) => Promise<SessionSummary>
   clearError: () => void
 }
 
@@ -247,7 +257,10 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
 
   loadProviders: async () => {
     const providers = await providerApi.getAll()
-    set({ providers })
+    // Conversation surfaces (composer, session-start) only ever pick a real
+    // chat provider; the synthetic shell provider is selected implicitly by
+    // the terminal-session-create flow.
+    set({ providers: providers.filter(isConversationalProvider) })
   },
 
   dismissNeedsYouSession: async (id: string) => {
@@ -325,6 +338,32 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
         error: err instanceof Error ? err.message : 'Failed to start session',
       })
     }
+  },
+
+  createTerminalSession: async (projectId, workspaceId, name) => {
+    const session = await sessionApi.create({
+      projectId,
+      workspaceId,
+      providerId: 'shell',
+      model: null,
+      effort: null,
+      name,
+      primarySurface: 'terminal',
+    })
+    set((state) => ({
+      currentProjectId: projectId,
+      sessions:
+        state.currentProjectId === projectId
+          ? [session, ...state.sessions]
+          : state.sessions,
+      globalSessions: [session, ...state.globalSessions],
+      activeConversation: [],
+      activeConversationSessionId: session.id,
+      activeSessionId: session.id,
+      draftWorkspaceId: null,
+    }))
+    get().recordRecentSession(session.id)
+    return session
   },
 
   approveSession: async (id: string) => {
@@ -573,6 +612,16 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     get().recordRecentSession(session.id)
     void get().loadActiveConversation(session.id)
     return session
+  },
+
+  setPrimarySurface: async (id, surface) => {
+    const updated = await sessionApi.setPrimarySurface(id, surface)
+    // The backend also emits a session:summaryUpdated broadcast that will
+    // eventually flow through handleSessionSummaryUpdate. Applying the
+    // returned summary here too keeps the flip visible without waiting
+    // for the round-trip.
+    get().handleSessionSummaryUpdate(updated)
+    return updated
   },
 
   clearError: () => set({ error: null }),

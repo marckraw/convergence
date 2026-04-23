@@ -13,6 +13,8 @@ import type {
   SessionPaletteItem,
   DialogPaletteItem,
   NewSessionPaletteItem,
+  NewTerminalSessionPaletteItem,
+  SwapPrimarySurfacePaletteItem,
   NewWorkspacePaletteItem,
   ForkSessionPaletteItem,
   CheckUpdatesPaletteItem,
@@ -192,6 +194,23 @@ export function buildPaletteIndex(
       },
     }
     items.push(item)
+
+    const terminalTitle = `New terminal in ${workspace.branchName}`
+    const terminalItem: NewTerminalSessionPaletteItem = {
+      kind: 'new-terminal-session',
+      id: `new-terminal-session:${workspace.id}`,
+      workspaceId: workspace.id,
+      projectId: workspace.projectId,
+      branchName: workspace.branchName,
+      projectName,
+      title: terminalTitle,
+      search: {
+        title: terminalTitle,
+        branchName: workspace.branchName,
+        projectName,
+      },
+    }
+    items.push(terminalItem)
   }
 
   for (const project of projects) {
@@ -209,7 +228,7 @@ export function buildPaletteIndex(
 
   if (activeSessionId) {
     const focused = sessionsById.get(activeSessionId)
-    if (focused && !focused.archivedAt) {
+    if (focused && !focused.archivedAt && focused.providerId !== 'shell') {
       const project = projectsById.get(focused.projectId)
       const projectName = project?.name ?? ''
       const title = `Fork session: ${focused.name}`
@@ -227,6 +246,28 @@ export function buildPaletteIndex(
         },
       }
       items.push(item)
+
+      const target =
+        focused.primarySurface === 'terminal' ? 'conversation' : 'terminal'
+      const swapTitle =
+        target === 'terminal'
+          ? `Show terminal as main: ${focused.name}`
+          : `Show conversation as main: ${focused.name}`
+      const swapItem: SwapPrimarySurfacePaletteItem = {
+        kind: 'swap-primary-surface',
+        id: `swap-primary-surface:${focused.id}`,
+        sessionId: focused.id,
+        sessionName: focused.name,
+        projectName,
+        target,
+        title: swapTitle,
+        search: {
+          title: swapTitle,
+          sessionName: focused.name,
+          projectName,
+        },
+      }
+      items.push(swapItem)
     }
   }
 

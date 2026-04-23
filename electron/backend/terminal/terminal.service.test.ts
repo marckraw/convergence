@@ -4,6 +4,7 @@ import {
   dataChannel,
   exitChannel,
   type TerminalEventEmitter,
+  type TerminalSessionExitObserver,
 } from './terminal.service'
 import type {
   PtyFactory,
@@ -78,6 +79,7 @@ describe('TerminalService', () => {
   let factory: PtyFactory
   let created: FakePty[]
   let emit: Mock<TerminalEventEmitter>
+  let onSessionLastTerminalExit: Mock<TerminalSessionExitObserver>
   let service: TerminalService
 
   beforeEach(() => {
@@ -85,9 +87,11 @@ describe('TerminalService', () => {
     factory = built.factory
     created = built.created
     emit = vi.fn<TerminalEventEmitter>()
+    onSessionLastTerminalExit = vi.fn<TerminalSessionExitObserver>()
     service = new TerminalService(factory, emit, {
       SHELL: '/bin/zsh',
     })
+    service.setSessionLastTerminalExitObserver(onSessionLastTerminalExit)
   })
 
   it('spawns a pty on create with cwd, cols, rows', () => {
@@ -211,6 +215,52 @@ describe('TerminalService', () => {
       signal: null,
     })
     expect(service.has(id)).toBe(false)
+  })
+
+  it('notifies when the last terminal in a session exits', () => {
+    const { id } = service.create({
+      sessionId: 's1',
+      cwd: '/tmp',
+      cols: 80,
+      rows: 24,
+    })
+
+    created[0].emitExit({ exitCode: 0, signal: null })
+
+    expect(onSessionLastTerminalExit).toHaveBeenCalledWith({
+      sessionId: 's1',
+      terminalId: id,
+      exitCode: 0,
+      signal: null,
+    })
+  })
+
+  it('waits for the last terminal before notifying at the session level', () => {
+    const first = service.create({
+      sessionId: 's1',
+      cwd: '/tmp',
+      cols: 80,
+      rows: 24,
+    })
+    const second = service.create({
+      sessionId: 's1',
+      cwd: '/tmp',
+      cols: 80,
+      rows: 24,
+    })
+
+    created[0].emitExit({ exitCode: 1, signal: null })
+    expect(onSessionLastTerminalExit).not.toHaveBeenCalled()
+
+    created[1].emitExit({ exitCode: 0, signal: null })
+    expect(onSessionLastTerminalExit).toHaveBeenCalledTimes(1)
+    expect(onSessionLastTerminalExit).toHaveBeenCalledWith({
+      sessionId: 's1',
+      terminalId: second.id,
+      exitCode: 0,
+      signal: null,
+    })
+    expect(first.id).not.toBe(second.id)
   })
 
   it('disposeAll kills every handle', () => {

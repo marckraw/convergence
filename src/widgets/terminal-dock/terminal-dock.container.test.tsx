@@ -116,6 +116,7 @@ function makeSession(overrides: Partial<Session> = {}): Session {
     archivedAt: null,
     parentSessionId: null,
     forkStrategy: null,
+    primarySurface: 'conversation' as const,
     continuationToken: null,
     lastSequence: 0,
     createdAt: '2026-01-01T00:00:00.000Z',
@@ -559,19 +560,19 @@ describe('TerminalDock container', () => {
       expect(setVisibleSpy).toHaveBeenCalledWith('s-1', true)
     })
 
-    it('Cmd-T opens the first pane when the session has no tree', () => {
+    it('Cmd-T hydrates the pane tree when the session has no tree', () => {
       useSessionStore.setState({
         sessions: [makeSession()],
         activeSessionId: 's-1',
       } as Partial<ReturnType<typeof useSessionStore.getState>>)
-      const openFirstPaneSpy = vi
-        .spyOn(useTerminalStore.getState(), 'openFirstPane')
+      const hydrateSpy = vi
+        .spyOn(useTerminalStore.getState(), 'hydratePaneTree')
         .mockResolvedValue({ leafId: 'l1', tab: makeTab('t-1') })
 
       render(<TerminalDock />)
       fireEvent.keyDown(window, { key: 't', metaKey: true })
 
-      expect(openFirstPaneSpy).toHaveBeenCalledWith(
+      expect(hydrateSpy).toHaveBeenCalledWith(
         expect.objectContaining({
           sessionId: 's-1',
           cwd: '/tmp/session-cwd',

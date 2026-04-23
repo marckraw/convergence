@@ -1,11 +1,18 @@
 import { create } from 'zustand'
 import { terminalApi } from './terminal.api'
+import { terminalLayoutApi } from './terminal-layout.api'
 import type {
   LeafNode,
   PaneTree,
   SplitDirection,
+  SplitNode,
   TerminalTab,
 } from './terminal.types'
+import type {
+  PersistedLeaf,
+  PersistedPaneTree,
+} from './terminal-layout.types'
+import { serializePaneTree } from './terminal-layout.pure'
 import {
   collectAllPtyIds,
   findLeaf,
@@ -63,6 +70,13 @@ interface SplitLeafArgs {
   rows: number
 }
 
+interface RestoreFromPersistedArgs {
+  sessionId: string
+  persisted: PersistedPaneTree
+  cols: number
+  rows: number
+}
+
 interface TerminalActions {
   openFirstPane: (
     args: OpenFirstPaneArgs,
@@ -89,12 +103,68 @@ interface TerminalActions {
   isDockVisible: (sessionId: string) => boolean
   getTree: (sessionId: string) => PaneTree | null
   getTab: (sessionId: string, tabId: string) => TerminalTab | null
+  loadPersistedLayout: (sessionId: string) => Promise<PersistedPaneTree | null>
+  restoreFromPersisted: (
+    args: RestoreFromPersistedArgs,
+  ) => Promise<{ focusedLeafId: string | null }>
+  hydratePaneTree: (
+    args: OpenFirstPaneArgs,
+  ) => Promise<{ leafId: string; tab: TerminalTab } | null>
+  flushPersistedSaves: () => Promise<void>
 }
 
 export type TerminalStore = TerminalState & TerminalActions
 
 let idCounter = 0
 const nextId = (prefix: string) => `${prefix}-${++idCounter}-${Date.now()}`
+
+const PERSIST_DEBOUNCE_MS = 300
+
+const persistTimers = new Map<string, ReturnType<typeof setTimeout>>()
+const pendingSessions = new Set<string>()
+
+function getTreeForSession(sessionId: string): PaneTree | null {
+  return useTerminalStore.getState().treesBySessionId[sessionId] ?? null
+}
+
+async function persistSessionNow(sessionId: string): Promise<void> {
+  pendingSessions.delete(sessionId)
+  const tree = getTreeForSession(sessionId)
+  try {
+    if (tree) {
+      await terminalLayoutApi.save(sessionId, serializePaneTree(tree))
+    } else {
+      await terminalLayoutApi.clear(sessionId)
+    }
+  } catch {
+    // Persistence is best-effort; a failed save is not fatal. The next
+    // mutation will attempt another save, and app quit replays from the
+    // saved-at-mutation snapshot regardless.
+  }
+}
+
+function schedulePersistSave(sessionId: string): void {
+  pendingSessions.add(sessionId)
+  const existing = persistTimers.get(sessionId)
+  if (existing) clearTimeout(existing)
+  const handle = setTimeout(() => {
+    persistTimers.delete(sessionId)
+    void persistSessionNow(sessionId)
+  }, PERSIST_DEBOUNCE_MS)
+  persistTimers.set(sessionId, handle)
+}
+
+async function flushAllPendingSaves(): Promise<void> {
+  const ids = Array.from(pendingSessions)
+  for (const sessionId of ids) {
+    const timer = persistTimers.get(sessionId)
+    if (timer) {
+      clearTimeout(timer)
+      persistTimers.delete(sessionId)
+    }
+    await persistSessionNow(sessionId)
+  }
+}
 
 function findTabInTree(tree: PaneTree, tabId: string): TerminalTab | null {
   if (tree.kind === 'leaf') {
@@ -190,6 +260,7 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
         [sessionId]: leafId,
       },
     }))
+    schedulePersistSave(sessionId)
     return { leafId, tab }
   },
 
@@ -206,6 +277,7 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
         },
       }
     })
+    schedulePersistSave(sessionId)
     return tab
   },
 
@@ -229,6 +301,7 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
         },
       }
     })
+    schedulePersistSave(sessionId)
     return { leafId: newLeafId, tab }
   },
 
@@ -239,6 +312,7 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
     set((state) => ({
       treesBySessionId: { ...state.treesBySessionId, [sessionId]: nextTree },
     }))
+    schedulePersistSave(sessionId)
     for (const id of ptyIdsToDispose) {
       try {
         await terminalApi.dispose(id)
@@ -259,6 +333,7 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
         [sessionId]: null,
       },
     }))
+    schedulePersistSave(sessionId)
     for (const id of ids) {
       try {
         await terminalApi.dispose(id)
@@ -279,6 +354,7 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
         },
       }
     })
+    schedulePersistSave(sessionId)
   },
 
   setFocusedLeaf: (sessionId, leafId) => {
@@ -301,6 +377,7 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
         },
       }
     })
+    schedulePersistSave(sessionId)
   },
 
   setDockHeight: (sessionId, height, maxWindowHeight) => {
@@ -361,4 +438,150 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
       }
     })
   },
+
+  loadPersistedLayout: async (sessionId) => {
+    try {
+      return await terminalLayoutApi.get(sessionId)
+    } catch {
+      return null
+    }
+  },
+
+  restoreFromPersisted: async ({ sessionId, persisted, cols, rows }) => {
+    const existing = get().treesBySessionId[sessionId]
+    if (existing) {
+      const focused = get().focusedLeafBySessionId[sessionId] ?? null
+      return { focusedLeafId: focused }
+    }
+
+    let firstLeafId: string | null = null
+    const tree = await rebuildTreeFromPersisted(persisted, sessionId, cols, rows, (leafId) => {
+      if (!firstLeafId) firstLeafId = leafId
+    })
+
+    set((state) => ({
+      treesBySessionId: { ...state.treesBySessionId, [sessionId]: tree },
+      focusedLeafBySessionId: {
+        ...state.focusedLeafBySessionId,
+        [sessionId]: firstLeafId,
+      },
+    }))
+    // Persist right away so the freshly-allocated PTY ids replace the old
+    // ones in the stored snapshot — next restore uses the new ids.
+    schedulePersistSave(sessionId)
+
+    return { focusedLeafId: firstLeafId }
+  },
+
+  hydratePaneTree: async ({ sessionId, cwd, cols, rows }) => {
+    const state = get()
+    const existing = state.treesBySessionId[sessionId]
+    if (existing) {
+      const focusedLeafId = state.focusedLeafBySessionId[sessionId] ?? null
+      if (focusedLeafId) {
+        const found = findLeaf(existing, focusedLeafId)
+        if (found) {
+          const activeTab = found.leaf.tabs.find(
+            (t) => t.id === found.leaf.activeTabId,
+          )
+          if (activeTab) return { leafId: found.leaf.id, tab: activeTab }
+        }
+      }
+      return null
+    }
+
+    const persisted = await get().loadPersistedLayout(sessionId)
+    if (persisted) {
+      await get().restoreFromPersisted({
+        sessionId,
+        persisted,
+        cols,
+        rows,
+      })
+      const refreshed = get()
+      const tree = refreshed.treesBySessionId[sessionId]
+      const focusedLeafId = refreshed.focusedLeafBySessionId[sessionId] ?? null
+      if (tree && focusedLeafId) {
+        const found = findLeaf(tree, focusedLeafId)
+        if (found) {
+          const activeTab = found.leaf.tabs.find(
+            (t) => t.id === found.leaf.activeTabId,
+          )
+          if (activeTab) return { leafId: found.leaf.id, tab: activeTab }
+        }
+      }
+      return null
+    }
+
+    return get().openFirstPane({ sessionId, cwd, cols, rows })
+  },
+
+  flushPersistedSaves: () => flushAllPendingSaves(),
 }))
+
+async function rebuildTreeFromPersisted(
+  persisted: PersistedPaneTree,
+  sessionId: string,
+  cols: number,
+  rows: number,
+  onLeafBuilt: (leafId: string) => void,
+): Promise<PaneTree> {
+  if (persisted.kind === 'leaf') {
+    return rebuildLeafFromPersisted(persisted, sessionId, cols, rows, onLeafBuilt)
+  }
+  const children: PaneTree[] = []
+  for (const child of persisted.children) {
+    children.push(
+      await rebuildTreeFromPersisted(child, sessionId, cols, rows, onLeafBuilt),
+    )
+  }
+  const split: SplitNode = {
+    kind: 'split',
+    id: persisted.id,
+    direction: persisted.direction,
+    sizes: persisted.sizes.slice(),
+    children,
+  }
+  return split
+}
+
+async function rebuildLeafFromPersisted(
+  persisted: PersistedLeaf,
+  sessionId: string,
+  cols: number,
+  rows: number,
+  onLeafBuilt: (leafId: string) => void,
+): Promise<LeafNode> {
+  const tabs: TerminalTab[] = []
+  let activeIndex = persisted.tabs.findIndex(
+    (tab) => tab.id === persisted.activeTabId,
+  )
+  if (activeIndex < 0) activeIndex = 0
+
+  for (const persistedTab of persisted.tabs) {
+    const result = await terminalApi.create({
+      sessionId,
+      cwd: persistedTab.cwd,
+      cols,
+      rows,
+    })
+    tabs.push({
+      id: result.id,
+      cwd: persistedTab.cwd,
+      title: persistedTab.title || basename(result.shell),
+      pid: result.pid,
+      shell: result.shell,
+      status: 'running',
+      exitCode: null,
+    })
+  }
+
+  const leaf: LeafNode = {
+    kind: 'leaf',
+    id: persisted.id,
+    tabs,
+    activeTabId: tabs[activeIndex]?.id ?? tabs[0]?.id ?? '',
+  }
+  onLeafBuilt(leaf.id)
+  return leaf
+}

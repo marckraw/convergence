@@ -54,6 +54,7 @@ function makeSession(overrides: {
     archivedAt: overrides.archivedAt ?? null,
     parentSessionId: null,
     forkStrategy: null,
+    primarySurface: 'conversation' as const,
     continuationToken: null,
     lastSequence: 0,
     createdAt: '2026-01-01T00:00:00.000Z',

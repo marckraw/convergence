@@ -1,5 +1,5 @@
 import type { FC } from 'react'
-import { useSessionStore } from '@/entities/session'
+import { useDialogStore } from '@/entities/dialog'
 import { Button } from '@/shared/ui/button'
 import { Play } from 'lucide-react'
 
@@ -10,7 +10,7 @@ interface SessionCreateInlineProps {
 export const SessionCreateInline: FC<SessionCreateInlineProps> = ({
   workspaceId,
 }) => {
-  const beginSessionDraft = useSessionStore((s) => s.beginSessionDraft)
+  const openDialog = useDialogStore((s) => s.open)
 
   const stopSidebarEvent = (event: { stopPropagation: () => void }): void => {
     event.stopPropagation()
@@ -23,7 +23,7 @@ export const SessionCreateInline: FC<SessionCreateInlineProps> = ({
       size="sm"
       onClick={(event) => {
         stopSidebarEvent(event)
-        beginSessionDraft(workspaceId)
+        openDialog('session-intent', { workspaceId })
       }}
       onMouseDown={stopSidebarEvent}
       className="flex w-full justify-start gap-1 px-2 text-muted-foreground hover:text-foreground"

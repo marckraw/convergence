@@ -17,6 +17,8 @@ export type {
 
 export type ForkStrategy = 'full' | 'summary'
 
+export type PrimarySurface = 'conversation' | 'terminal'
+
 export interface SessionSummary {
   id: string
   projectId: string
@@ -33,6 +35,7 @@ export interface SessionSummary {
   archivedAt: string | null
   parentSessionId: string | null
   forkStrategy: ForkStrategy | null
+  primarySurface: PrimarySurface
   continuationToken: string | null
   lastSequence: number
   createdAt: string
@@ -46,6 +49,11 @@ function parseForkStrategy(value: string | null): ForkStrategy | null {
   return null
 }
 
+function parsePrimarySurface(value: string | null | undefined): PrimarySurface {
+  if (value === 'terminal') return 'terminal'
+  return 'conversation'
+}
+
 export interface CreateSessionInput {
   projectId: string
   workspaceId: string | null
@@ -55,6 +63,7 @@ export interface CreateSessionInput {
   name: string
   parentSessionId?: string | null
   forkStrategy?: ForkStrategy | null
+  primarySurface?: PrimarySurface
 }
 
 function parseActivity(value: string | null): ActivitySignal {
@@ -92,6 +101,7 @@ export function sessionSummaryFromRow(row: SessionRow): SessionSummary {
     archivedAt: row.archived_at,
     parentSessionId: row.parent_session_id,
     forkStrategy: parseForkStrategy(row.fork_strategy),
+    primarySurface: parsePrimarySurface(row.primary_surface),
     continuationToken: row.continuation_token,
     lastSequence: row.last_sequence ?? 0,
     createdAt: row.created_at,

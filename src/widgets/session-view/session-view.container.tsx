@@ -14,6 +14,7 @@ import {
 } from '@/shared/ui/dropdown-menu'
 import {
   Archive,
+  ArrowLeftRight,
   GitFork,
   MoreVertical,
   Square,
@@ -45,8 +46,9 @@ export const SessionView: FC = () => {
   const approveSession = useSessionStore((s) => s.approveSession)
   const denySession = useSessionStore((s) => s.denySession)
   const stopSession = useSessionStore((s) => s.stopSession)
-  const openFirstPane = useTerminalStore((s) => s.openFirstPane)
+  const hydratePaneTree = useTerminalStore((s) => s.hydratePaneTree)
   const closeAllTerminals = useTerminalStore((s) => s.closeAllForSession)
+  const setPrimarySurface = useSessionStore((s) => s.setPrimarySurface)
   const terminalTree = useTerminalStore((s) =>
     activeSessionId ? (s.treesBySessionId[activeSessionId] ?? null) : null,
   )
@@ -287,7 +289,7 @@ export const SessionView: FC = () => {
                 if (hasTerminal) {
                   void closeAllTerminals(session.id)
                 } else {
-                  void openFirstPane({
+                  void hydratePaneTree({
                     sessionId: session.id,
                     cwd: session.workingDirectory,
                     cols: 80,
@@ -323,17 +325,37 @@ export const SessionView: FC = () => {
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
-                <DropdownMenuItem
-                  onClick={() =>
-                    openDialog('session-fork', {
-                      parentSessionId: session.id,
-                    })
-                  }
-                  className="gap-2"
-                >
-                  <GitFork className="h-3.5 w-3.5" />
-                  Fork session…
-                </DropdownMenuItem>
+                {session.providerId !== 'shell' && (
+                  <DropdownMenuItem
+                    onClick={() =>
+                      openDialog('session-fork', {
+                        parentSessionId: session.id,
+                      })
+                    }
+                    className="gap-2"
+                  >
+                    <GitFork className="h-3.5 w-3.5" />
+                    Fork session…
+                  </DropdownMenuItem>
+                )}
+                {session.providerId !== 'shell' && (
+                  <DropdownMenuItem
+                    onClick={() => {
+                      void setPrimarySurface(
+                        session.id,
+                        session.primarySurface === 'terminal'
+                          ? 'conversation'
+                          : 'terminal',
+                      )
+                    }}
+                    className="gap-2"
+                  >
+                    <ArrowLeftRight className="h-3.5 w-3.5" />
+                    {session.primarySurface === 'terminal'
+                      ? 'Show conversation as main'
+                      : 'Show terminal as main'}
+                  </DropdownMenuItem>
+                )}
               </DropdownMenuContent>
             </DropdownMenu>
           </div>

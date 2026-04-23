@@ -24,6 +24,7 @@ import {
   Pencil,
   Plus,
   Sparkles,
+  TerminalSquare,
   Trash2,
   Undo2,
 } from 'lucide-react'
@@ -105,6 +106,7 @@ export const ProjectTree: FC<ProjectTreeProps> = ({
   const renderSessionActions = (session: SessionSummary) => {
     const isArchived = !!session.archivedAt
     const isRegeneratingName = regeneratingSessionIds?.has(session.id) ?? false
+    const canRegenerateName = session.providerId !== 'shell'
 
     return (
       <DropdownMenu>
@@ -132,21 +134,27 @@ export const ProjectTree: FC<ProjectTreeProps> = ({
             <Pencil className="h-3.5 w-3.5" />
             <span>Rename</span>
           </DropdownMenuItem>
-          <DropdownMenuItem
-            className="gap-2"
-            disabled={isRegeneratingName}
-            onClick={() => onRegenerateSessionName(session.id)}
-          >
-            {isRegeneratingName ? (
-              <Loader2 className="h-3.5 w-3.5 animate-spin" />
-            ) : (
-              <Sparkles className="h-3.5 w-3.5" />
-            )}
-            <span>
-              {isRegeneratingName ? 'Regenerating name…' : 'Regenerate name'}
-            </span>
-          </DropdownMenuItem>
-          <DropdownMenuSeparator />
+          {canRegenerateName ? (
+            <>
+              <DropdownMenuItem
+                className="gap-2"
+                disabled={isRegeneratingName}
+                onClick={() => onRegenerateSessionName(session.id)}
+              >
+                {isRegeneratingName ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <Sparkles className="h-3.5 w-3.5" />
+                )}
+                <span>
+                  {isRegeneratingName
+                    ? 'Regenerating name…'
+                    : 'Regenerate name'}
+                </span>
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+            </>
+          ) : null}
           {isArchived ? (
             <DropdownMenuItem
               className="gap-2"
@@ -199,7 +207,14 @@ export const ProjectTree: FC<ProjectTreeProps> = ({
               submitRename()
             }}
           >
-            <SessionBadge attention={session.attention} />
+            {session.providerId === 'shell' ? (
+              <TerminalSquare
+                className="h-3 w-3 shrink-0 text-muted-foreground"
+                aria-label="Terminal session"
+              />
+            ) : (
+              <SessionBadge attention={session.attention} />
+            )}
             <Input
               value={renameDraft}
               onChange={(event) => setRenameDraft(event.target.value)}
@@ -228,7 +243,14 @@ export const ProjectTree: FC<ProjectTreeProps> = ({
                 }}
                 className="h-auto min-w-0 flex-1 justify-start gap-1.5 px-1.5 py-1 text-left text-xs font-normal"
               >
-                <SessionBadge attention={session.attention} />
+                {session.providerId === 'shell' ? (
+                  <TerminalSquare
+                    className="h-3 w-3 shrink-0 text-muted-foreground"
+                    aria-label="Terminal session"
+                  />
+                ) : (
+                  <SessionBadge attention={session.attention} />
+                )}
                 <span className="truncate">{session.name}</span>
                 {isRegeneratingName && (
                   <Loader2

@@ -1,6 +1,7 @@
 import { BrowserWindow, ipcMain } from 'electron'
 import type { TerminalService } from './terminal.service'
 import type { CreateTerminalInput } from './terminal.types'
+import type { TerminalLayoutService } from './layout/terminal-layout.service'
 
 export function registerTerminalIpcHandlers(service: TerminalService): void {
   ipcMain.handle('terminal:create', (_event, input: CreateTerminalInput) =>
@@ -27,6 +28,25 @@ export function registerTerminalIpcHandlers(service: TerminalService): void {
   ipcMain.handle('terminal:getForegroundProcess', (_event, id: string) =>
     service.getForegroundProcess(id),
   )
+}
+
+export function registerTerminalLayoutIpcHandlers(
+  service: TerminalLayoutService,
+): void {
+  ipcMain.handle('terminalLayout:get', (_event, sessionId: string) =>
+    service.getLayout(sessionId),
+  )
+
+  ipcMain.handle(
+    'terminalLayout:save',
+    (_event, sessionId: string, tree: unknown) => {
+      service.saveLayout(sessionId, tree)
+    },
+  )
+
+  ipcMain.handle('terminalLayout:clear', (_event, sessionId: string) => {
+    service.clearLayout(sessionId)
+  })
 }
 
 export function broadcastToRenderers(channel: string, payload: unknown): void {

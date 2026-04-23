@@ -30,6 +30,7 @@ function buildSessionsTableSql(
       name_auto_generated INTEGER NOT NULL DEFAULT 0,
       parent_session_id TEXT,
       fork_strategy TEXT,
+      primary_surface TEXT NOT NULL DEFAULT 'conversation',
       created_at TEXT NOT NULL DEFAULT (datetime('now')),
       updated_at TEXT NOT NULL DEFAULT (datetime('now')),
       FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
@@ -134,6 +135,13 @@ const SCHEMA = `
   );
 
   CREATE INDEX IF NOT EXISTS idx_attachments_session ON attachments(session_id);
+
+  CREATE TABLE IF NOT EXISTS session_terminal_layout (
+    session_id TEXT PRIMARY KEY,
+    layout_json TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE
+  );
 `
 
 function ensureAttachmentsTableNoFk(database: Database.Database): void {
@@ -242,6 +250,12 @@ function ensureSessionColumns(database: Database.Database): void {
 
   if (!columnNames.has('fork_strategy')) {
     database.exec('ALTER TABLE sessions ADD COLUMN fork_strategy TEXT')
+  }
+
+  if (!columnNames.has('primary_surface')) {
+    database.exec(
+      "ALTER TABLE sessions ADD COLUMN primary_surface TEXT NOT NULL DEFAULT 'conversation'",
+    )
   }
 }
 
@@ -445,6 +459,7 @@ function ensureSessionsTableWithoutTranscript(
           name_auto_generated,
           parent_session_id,
           fork_strategy,
+          primary_surface,
           created_at,
           updated_at
         )
@@ -472,6 +487,7 @@ function ensureSessionsTableWithoutTranscript(
             ELSE NULL
           END,
           fork_strategy,
+          primary_surface,
           created_at,
           updated_at
         FROM sessions;

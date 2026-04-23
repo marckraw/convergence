@@ -26,6 +26,7 @@ const providers = [
     id: 'claude-code',
     name: 'Claude Code',
     vendorLabel: 'Anthropic',
+    kind: 'conversation' as const,
     supportsContinuation: true,
     defaultModelId: 'sonnet',
     modelOptions: [
@@ -46,6 +47,7 @@ const providers = [
     id: 'codex',
     name: 'Codex',
     vendorLabel: 'OpenAI',
+    kind: 'conversation' as const,
     supportsContinuation: true,
     defaultModelId: 'gpt-5.4',
     modelOptions: [

@@ -63,6 +63,7 @@ export function buildClaudeDescriptor(): ProviderDescriptor {
     id: 'claude-code',
     name: 'Claude Code',
     vendorLabel: 'Anthropic',
+    kind: 'conversation',
     supportsContinuation: true,
     defaultModelId: 'sonnet',
     fastModelId: 'haiku',
@@ -119,6 +120,7 @@ export function buildFallbackCodexDescriptor(): ProviderDescriptor {
     id: 'codex',
     name: 'Codex',
     vendorLabel: 'OpenAI',
+    kind: 'conversation',
     supportsContinuation: true,
     defaultModelId: 'gpt-5.4',
     fastModelId: 'gpt-5.4-mini',
@@ -163,6 +165,7 @@ export function buildFallbackPiDescriptor(): ProviderDescriptor {
     id: 'pi',
     name: 'Pi Agent',
     vendorLabel: 'Pi',
+    kind: 'conversation',
     supportsContinuation: true,
     defaultModelId: 'default',
     modelOptions: [

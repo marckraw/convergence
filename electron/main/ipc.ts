@@ -376,6 +376,12 @@ export function registerIpcHandlers(
     await sessionService.regenerateName(id)
   })
 
+  ipcMain.handle(
+    'session:setPrimarySurface',
+    (_event, id: string, surface: 'conversation' | 'terminal') =>
+      sessionService.setPrimarySurface(id, surface),
+  )
+
   // Provider handlers
   ipcMain.handle('provider:getAll', async () =>
     Promise.all(providerRegistry.getAll().map((p) => p.describe())),
