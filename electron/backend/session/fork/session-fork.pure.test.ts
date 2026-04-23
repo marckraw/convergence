@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { ConversationItem } from '../conversation-item.types'
 import type { ForkSummary } from './session-fork.types'
 import {
+  applyAdditionalInstructionToSeed,
   buildExtractionPrompt,
   extractArtifactsByRegex,
   mergeArtifacts,
@@ -414,6 +415,34 @@ describe('renderSeedMarkdown', () => {
     })
     expect(md).toContain('Now make it faster.')
     expect(md).not.toContain('Continue from here.')
+  })
+})
+
+describe('applyAdditionalInstructionToSeed', () => {
+  it('replaces the default tail with the current instruction', () => {
+    const seed = applyAdditionalInstructionToSeed(
+      'Summary body\n\n---\n\nContinue from here.',
+      'Focus on tests.',
+    )
+    expect(seed).toBe('Summary body\n\n---\n\nFocus on tests.')
+  })
+
+  it('does not duplicate an instruction already present at the tail', () => {
+    const seed = applyAdditionalInstructionToSeed(
+      'Summary body\n\n---\n\nFocus on tests.',
+      'Focus on tests.',
+    )
+    expect(seed).toBe('Summary body\n\n---\n\nFocus on tests.')
+  })
+
+  it('appends the instruction when the seed was edited to a custom tail', () => {
+    const seed = applyAdditionalInstructionToSeed(
+      'Summary body\n\n---\n\nCustom wrap-up',
+      'Focus on tests.',
+    )
+    expect(seed).toBe(
+      'Summary body\n\n---\n\nCustom wrap-up\n\n---\n\nFocus on tests.',
+    )
   })
 })
 
