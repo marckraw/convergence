@@ -69,6 +69,14 @@ function now(): string {
   return new Date().toISOString()
 }
 
+function isContextCompactionItemType(itemType: string | null): boolean {
+  return (
+    itemType === 'contextCompaction' ||
+    itemType === 'compacted' ||
+    itemType === 'context_compacted'
+  )
+}
+
 function runCodexOneShot(
   binaryPath: string,
   input: OneShotInput,
@@ -609,12 +617,38 @@ export class CodexProvider implements Provider {
             })
             break
 
+          case 'item/started': {
+            const item =
+              typeof p.item === 'object' && p.item !== null
+                ? (p.item as Record<string, unknown>)
+                : null
+            const itemType = typeof item?.type === 'string' ? item.type : null
+
+            if (isContextCompactionItemType(itemType)) {
+              sessionEmitter.addNote({
+                text: 'Compacting context...',
+                level: 'info',
+                providerEventType: itemType,
+              })
+            }
+            break
+          }
+
           case 'item/completed': {
             const item =
               typeof p.item === 'object' && p.item !== null
                 ? (p.item as Record<string, unknown>)
                 : null
             const itemType = typeof item?.type === 'string' ? item.type : null
+
+            if (isContextCompactionItemType(itemType)) {
+              sessionEmitter.addNote({
+                text: 'Compaction complete',
+                level: 'info',
+                providerEventType: itemType,
+              })
+              break
+            }
 
             if (itemType === 'agentMessage') {
               const hadBufferedText = assistantTextBuffer.length > 0

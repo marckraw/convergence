@@ -15,6 +15,8 @@ export type PiActivityInput =
   | { kind: 'thinking_delta' }
   | { kind: 'tool_start'; name: string }
   | { kind: 'tool_end' }
+  | { kind: 'compaction_start' }
+  | { kind: 'compaction_end' }
   | { kind: 'turn_end' }
   | { kind: 'agent_end' }
   | { kind: 'close' }
@@ -74,6 +76,12 @@ export function reducePiActivity(
       return emit(prev, { lastActivity: `tool:${normalize(input.name)}` })
 
     case 'tool_end':
+      return emit(prev, { lastActivity: prev.lastStreamingKind })
+
+    case 'compaction_start':
+      return emit(prev, { lastActivity: 'compacting' })
+
+    case 'compaction_end':
       return emit(prev, { lastActivity: prev.lastStreamingKind })
   }
 }

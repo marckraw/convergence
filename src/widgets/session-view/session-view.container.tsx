@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
 import type { FC, MouseEvent as ReactMouseEvent } from 'react'
 import { useProjectStore } from '@/entities/project'
-import { useSessionStore } from '@/entities/session'
+import { formatActivityLabel, useSessionStore } from '@/entities/session'
 import { useDialogStore } from '@/entities/dialog'
 import { ComposerContainer } from '@/features/composer'
 import { useTerminalStore } from '@/entities/terminal'
@@ -67,6 +67,7 @@ export const SessionView: FC = () => {
   const changedFilesExpanded = changedFilesMode === 'overlay'
 
   const session = sessions.find((s) => s.id === activeSessionId) ?? null
+  const activityLabel = formatActivityLabel(session?.activity)
 
   const scrollToBottom = useCallback(() => {
     transcriptEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -253,6 +254,14 @@ export const SessionView: FC = () => {
               <span className="flex items-center gap-1 text-xs text-muted-foreground">
                 <GitBranch className="h-3 w-3" />
                 {branchName}
+              </span>
+            )}
+            {activityLabel && (
+              <span
+                className="rounded-full border border-border/70 px-2 py-0.5 text-[11px] text-muted-foreground"
+                data-testid="session-activity-indicator"
+              >
+                {activityLabel}
               </span>
             )}
             <ContextWindowIndicator contextWindow={session.contextWindow} />

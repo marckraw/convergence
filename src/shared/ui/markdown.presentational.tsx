@@ -1,4 +1,4 @@
-import { memo, useMemo, type FC } from 'react'
+import { memo, useMemo, type FC, type Ref } from 'react'
 import ReactMarkdown, { type Components } from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { cn } from '@/shared/lib/cn.pure'
@@ -7,6 +7,7 @@ export interface MarkdownProps {
   content: string
   className?: string
   size?: 'sm' | 'md'
+  rootRef?: Ref<HTMLDivElement>
 }
 
 function createMarkdownComponents(size: MarkdownProps['size']): Components {
@@ -183,12 +184,13 @@ function createMarkdownComponents(size: MarkdownProps['size']): Components {
   }
 }
 
-export const Markdown: FC<MarkdownProps> = memo(
-  ({ content, className, size = 'md' }) => {
+export const MarkdownPresentational: FC<MarkdownProps> = memo(
+  ({ content, className, size = 'md', rootRef }) => {
     const components = useMemo(() => createMarkdownComponents(size), [size])
 
     return (
       <div
+        ref={rootRef}
         className={cn(
           'min-w-0 break-words [&_:first-child]:mt-0 [&_:last-child]:mb-0',
           className,

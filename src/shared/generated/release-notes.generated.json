@@ -1,16 +1,6 @@
 {
-  "currentVersion": "0.18.4",
+  "currentVersion": "0.18.2",
   "releases": [
-    {
-      "version": "0.18.4",
-      "date": null,
-      "notes": "### Patch Changes\n\n- 44a7f24: Fix Pi provider label in composer dropdown: show \"Pi\" as the primary label instead of the creator name."
-    },
-    {
-      "version": "0.18.3",
-      "date": null,
-      "notes": "### Patch Changes\n\n- a7e5abd: Paginate the Release History list in the About Convergence dialog (5 per page) so the modal stays compact as the changelog grows."
-    },
     {
       "version": "0.18.2",
       "date": null,
