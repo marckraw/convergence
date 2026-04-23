@@ -76,9 +76,9 @@ export function FeedbackButton({
             size="icon"
             aria-label="Send feedback"
             onClick={() => onOpenChange(true)}
-            className="fixed right-4 bottom-10 z-40 h-10 w-10 rounded-full border border-border/70 bg-background/90 shadow-xl shadow-black/15 backdrop-blur-xl hover:bg-accent"
+            className="fixed right-4 bottom-10 z-40 h-10 w-10 rounded-full border border-foreground/20 bg-background/90 text-foreground shadow-xl shadow-black/15 backdrop-blur-xl hover:border-foreground/35 hover:bg-accent dark:border-white/20 dark:bg-white/8 dark:text-zinc-100 dark:hover:border-white/35 dark:hover:bg-white/12"
           >
-            <MessageSquarePlus className="h-5 w-5" />
+            <MessageSquarePlus className="h-5 w-5 stroke-[2.25]" />
           </Button>
         </TooltipTrigger>
         <TooltipContent side="left">Send feedback</TooltipContent>
