@@ -200,7 +200,14 @@ export const ProjectTree: FC<ProjectTreeProps> = ({
               submitRename()
             }}
           >
-            <SessionBadge attention={session.attention} />
+            {session.providerId === 'shell' ? (
+              <TerminalSquare
+                className="h-3 w-3 shrink-0 text-muted-foreground"
+                aria-label="Terminal session"
+              />
+            ) : (
+              <SessionBadge attention={session.attention} />
+            )}
             <Input
               value={renameDraft}
               onChange={(event) => setRenameDraft(event.target.value)}
@@ -229,12 +236,13 @@ export const ProjectTree: FC<ProjectTreeProps> = ({
                 }}
                 className="h-auto min-w-0 flex-1 justify-start gap-1.5 px-1.5 py-1 text-left text-xs font-normal"
               >
-                <SessionBadge attention={session.attention} />
-                {session.providerId === 'shell' && (
+                {session.providerId === 'shell' ? (
                   <TerminalSquare
                     className="h-3 w-3 shrink-0 text-muted-foreground"
                     aria-label="Terminal session"
                   />
+                ) : (
+                  <SessionBadge attention={session.attention} />
                 )}
                 <span className="truncate">{session.name}</span>
                 {isRegeneratingName && (
