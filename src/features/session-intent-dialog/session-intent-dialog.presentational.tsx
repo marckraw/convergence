@@ -37,7 +37,7 @@ export const SessionIntentDialog: FC<SessionIntentDialogProps> = ({
         <Button
           type="button"
           variant="outline"
-          className="flex h-auto flex-col items-start gap-2 rounded-xl p-5 text-left"
+          className="flex h-auto w-full min-w-0 flex-col items-start gap-2 whitespace-normal rounded-xl p-5 text-left"
           onClick={onSelectConversation}
           data-testid="session-intent-conversation"
         >
@@ -45,14 +45,14 @@ export const SessionIntentDialog: FC<SessionIntentDialogProps> = ({
             <MessageSquare className="h-4 w-4" />
             Conversation
           </span>
-          <span className="text-xs text-muted-foreground">
+          <span className="w-full whitespace-normal break-words text-xs leading-snug text-muted-foreground">
             Talk to an AI agent in this workspace.
           </span>
         </Button>
         <Button
           type="button"
           variant="outline"
-          className="flex h-auto flex-col items-start gap-2 rounded-xl p-5 text-left"
+          className="flex h-auto w-full min-w-0 flex-col items-start gap-2 whitespace-normal rounded-xl p-5 text-left"
           onClick={onSelectTerminal}
           data-testid="session-intent-terminal"
         >
@@ -60,7 +60,7 @@ export const SessionIntentDialog: FC<SessionIntentDialogProps> = ({
             <TerminalSquare className="h-4 w-4" />
             Terminal
           </span>
-          <span className="text-xs text-muted-foreground">
+          <span className="w-full whitespace-normal break-words text-xs leading-snug text-muted-foreground">
             Open a shell-only session with no agent attached.
           </span>
         </Button>
