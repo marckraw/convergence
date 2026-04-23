@@ -23,21 +23,21 @@ export const SessionIntentDialog: FC<SessionIntentDialogProps> = ({
   onSelectTerminal,
 }) => (
   <Dialog open={open} onOpenChange={onOpenChange}>
-    <DialogContent className="sm:max-w-[520px]">
-      <DialogHeader>
+    <DialogContent className="p-0 sm:max-w-[560px]">
+      <DialogHeader className="border-b border-border/70 px-6 py-5">
         <DialogTitle>New session</DialogTitle>
         <DialogDescription>
           Pick how you want this session to run.
         </DialogDescription>
       </DialogHeader>
       <div
-        className="grid gap-3 sm:grid-cols-2"
+        className="grid gap-3 px-6 py-5 sm:grid-cols-2"
         data-testid="session-intent-options"
       >
         <Button
           type="button"
           variant="outline"
-          className="flex h-auto flex-col items-start gap-2 p-4 text-left"
+          className="flex h-auto flex-col items-start gap-2 rounded-xl p-5 text-left"
           onClick={onSelectConversation}
           data-testid="session-intent-conversation"
         >
@@ -52,7 +52,7 @@ export const SessionIntentDialog: FC<SessionIntentDialogProps> = ({
         <Button
           type="button"
           variant="outline"
-          className="flex h-auto flex-col items-start gap-2 p-4 text-left"
+          className="flex h-auto flex-col items-start gap-2 rounded-xl p-5 text-left"
           onClick={onSelectTerminal}
           data-testid="session-intent-terminal"
         >

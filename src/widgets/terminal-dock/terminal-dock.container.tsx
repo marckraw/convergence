@@ -311,7 +311,9 @@ export const TerminalDockContainer: FC<TerminalDockContainerProps> = ({
           className={dockStyles.mainRoot}
           data-testid="terminal-dock"
           data-mode="main"
-        />
+        >
+          <div className={dockStyles.mainFrame} />
+        </div>
       )
     }
     return (
@@ -322,18 +324,20 @@ export const TerminalDockContainer: FC<TerminalDockContainerProps> = ({
           data-testid="terminal-dock"
           data-mode="main"
         >
-          <SplitNodeView
-            tree={tree}
-            sessionId={activeSessionId}
-            focusedLeafId={focusedLeafId}
-            onSelectTab={handleSelectTab}
-            onNewTab={handleNewTab}
-            onSplit={handleSplit}
-            onCloseActiveTab={handleCloseActiveTab}
-            onCloseTab={handleCloseTab}
-            onFocusLeaf={handleFocusLeaf}
-            onResizeSplit={handleResizeSplit}
-          />
+          <div className={dockStyles.mainFrame}>
+            <SplitNodeView
+              tree={tree}
+              sessionId={activeSessionId}
+              focusedLeafId={focusedLeafId}
+              onSelectTab={handleSelectTab}
+              onNewTab={handleNewTab}
+              onSplit={handleSplit}
+              onCloseActiveTab={handleCloseActiveTab}
+              onCloseTab={handleCloseTab}
+              onFocusLeaf={handleFocusLeaf}
+              onResizeSplit={handleResizeSplit}
+            />
+          </div>
         </div>
         <CloseConfirmDialog
           request={closeRequest}
