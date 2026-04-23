@@ -99,6 +99,12 @@ describe('SessionView changed files drawer', () => {
               '@@ -1 +1 @@\n-console.log("old")\n+console.log("new")',
             ),
         },
+        turns: {
+          listForSession: vi.fn().mockResolvedValue([]),
+          getFileChanges: vi.fn().mockResolvedValue([]),
+          getFileDiff: vi.fn().mockResolvedValue(''),
+          onTurnDelta: vi.fn().mockReturnValue(() => {}),
+        },
       },
       configurable: true,
       writable: true,

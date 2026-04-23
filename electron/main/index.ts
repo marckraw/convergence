@@ -14,6 +14,7 @@ import { StateService } from '../backend/state/state.service'
 import { WorkspaceService } from '../backend/workspace/workspace.service'
 import { GitService } from '../backend/git/git.service'
 import { SessionService } from '../backend/session/session.service'
+import { TurnCaptureService } from '../backend/session/turn/turn-capture.service'
 import { ProviderRegistry } from '../backend/provider/provider-registry'
 import { ClaudeCodeProvider } from '../backend/provider/claude-code/claude-code-provider'
 import { CodexProvider } from '../backend/provider/codex/codex-provider'
@@ -152,6 +153,9 @@ async function startApp(): Promise<void> {
   const sessionService = new SessionService(db, providerRegistry)
   const attachmentsService = new AttachmentsService(db, attachmentsRoot)
   sessionService.setAttachmentsService(attachmentsService)
+  const turnCaptureService = new TurnCaptureService(gitService, db)
+  turnCaptureService.recoverRunningTurns()
+  sessionService.setTurnCaptureService(turnCaptureService)
 
   projectService.setWorkspaceService(workspaceService)
 
@@ -348,6 +352,7 @@ async function startApp(): Promise<void> {
     mcpService,
     appSettingsService,
     attachmentsService,
+    turnCaptureService,
     (prefs) => updatesScheduler?.onPrefsChanged(prefs),
   )
 

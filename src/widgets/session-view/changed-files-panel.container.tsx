@@ -12,6 +12,7 @@ import {
 import { cn } from '@/shared/lib/cn.pure'
 import { ChangedFileItem } from './changed-file-item.presentational'
 import { DiffViewer } from './diff-viewer.presentational'
+import { TurnList } from './turn-list.container'
 
 interface ChangedFile {
   status: string
@@ -111,7 +112,7 @@ export const ChangedFilesPanel: FC<ChangedFilesPanelProps> = ({
     >
       <div className="flex h-12 shrink-0 items-center justify-between border-b px-3">
         <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-          Changed Files ({files.length})
+          {expanded ? 'Turns' : `Changed Files (${files.length})`}
         </span>
         <div className="flex items-center gap-1">
           <Button
@@ -140,17 +141,19 @@ export const ChangedFilesPanel: FC<ChangedFilesPanelProps> = ({
           >
             <PanelRight className={cn('h-3 w-3', expanded && 'scale-x-125')} />
           </Button>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            className="h-6 w-6"
-            onClick={loadFiles}
-            onMouseDown={stopPanelControlEvent}
-            disabled={loading}
-          >
-            <RefreshCw className={cn('h-3 w-3', loading && 'animate-spin')} />
-          </Button>
+          {!expanded && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="h-6 w-6"
+              onClick={loadFiles}
+              onMouseDown={stopPanelControlEvent}
+              disabled={loading}
+            >
+              <RefreshCw className={cn('h-3 w-3', loading && 'animate-spin')} />
+            </Button>
+          )}
           <Button
             type="button"
             variant="ghost"
@@ -164,60 +167,64 @@ export const ChangedFilesPanel: FC<ChangedFilesPanelProps> = ({
         </div>
       </div>
 
-      <div className="flex min-h-0 flex-1 flex-col">
-        {files.length === 0 ? (
-          <div className="p-3">
-            <p className="text-xs text-muted-foreground">
-              {loading
-                ? 'Loading working tree...'
-                : 'No working tree changes detected'}
-            </p>
-            <p className="mt-1 text-[11px] text-muted-foreground/80">
-              This panel shows the current git changes inside the session
-              workspace.
-            </p>
-          </div>
-        ) : (
-          <div className="shrink-0 border-b border-border px-3 py-2">
-            <p className="text-[11px] text-muted-foreground">
-              Current git changes in this session workspace.
-            </p>
-          </div>
-        )}
-
-        {files.length > 0 && (
-          <div className="shrink-0 border-b border-border">
-            <div className="flex items-center justify-between px-3 py-2">
-              <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
-                Files
+      {expanded ? (
+        <TurnList sessionId={session.id} />
+      ) : (
+        <div className="flex min-h-0 flex-1 flex-col">
+          {files.length === 0 ? (
+            <div className="p-3">
+              <p className="text-xs text-muted-foreground">
+                {loading
+                  ? 'Loading working tree...'
+                  : 'No working tree changes detected'}
               </p>
-              <p className="text-[10px] text-muted-foreground">
-                {files.length} changed
+              <p className="mt-1 text-[11px] text-muted-foreground/80">
+                This panel shows the current git changes inside the session
+                workspace.
               </p>
             </div>
-            <div
-              className={cn(
-                'app-scrollbar overflow-y-auto px-1 pb-2',
-                expanded ? 'h-56' : 'h-44',
-              )}
-            >
-              {files.map((f) => (
-                <ChangedFileItem
-                  key={f.file}
-                  status={f.status}
-                  file={f.file}
-                  selected={selectedFile === f.file}
-                  onSelect={() => handleFileClick(f.file)}
-                />
-              ))}
+          ) : (
+            <div className="shrink-0 border-b border-border px-3 py-2">
+              <p className="text-[11px] text-muted-foreground">
+                Current git changes in this session workspace.
+              </p>
             </div>
-          </div>
-        )}
+          )}
 
-        <div className="min-h-0 flex-1">
-          <DiffViewer file={selectedFile} diff={diff} loading={diffLoading} />
+          {files.length > 0 && (
+            <div className="shrink-0 border-b border-border">
+              <div className="flex items-center justify-between px-3 py-2">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                  Files
+                </p>
+                <p className="text-[10px] text-muted-foreground">
+                  {files.length} changed
+                </p>
+              </div>
+              <div
+                className={cn(
+                  'app-scrollbar overflow-y-auto px-1 pb-2',
+                  expanded ? 'h-56' : 'h-44',
+                )}
+              >
+                {files.map((f) => (
+                  <ChangedFileItem
+                    key={f.file}
+                    status={f.status}
+                    file={f.file}
+                    selected={selectedFile === f.file}
+                    onSelect={() => handleFileClick(f.file)}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
+
+          <div className="min-h-0 flex-1">
+            <DiffViewer file={selectedFile} diff={diff} loading={diffLoading} />
+          </div>
         </div>
-      </div>
+      )}
     </div>
   )
 }

@@ -338,20 +338,50 @@ export const SessionView: FC = () => {
                 entry.kind === 'approval-request' &&
                 session.attention === 'needs-approval' &&
                 i === activeConversation.length - 1
+              const prev = activeConversation[i - 1] ?? null
+              const turnBoundary =
+                entry.turnId !== null &&
+                (prev === null || prev.turnId !== entry.turnId)
+              const turnSequence = turnBoundary
+                ? activeConversation.slice(0, i + 1).reduce<{
+                    count: number
+                    seen: Set<string>
+                  }>(
+                    (acc, item) => {
+                      if (item.turnId && !acc.seen.has(item.turnId)) {
+                        acc.seen.add(item.turnId)
+                        acc.count += 1
+                      }
+                      return acc
+                    },
+                    { count: 0, seen: new Set() },
+                  ).count
+                : null
 
               return (
-                <ConversationItemView
-                  key={entry.id}
-                  entry={entry}
-                  onApprove={
-                    isLastApproval
-                      ? () => approveSession(session.id)
-                      : undefined
-                  }
-                  onDeny={
-                    isLastApproval ? () => denySession(session.id) : undefined
-                  }
-                />
+                <div key={entry.id}>
+                  {turnBoundary && (
+                    <div
+                      className="my-3 flex items-center gap-2 text-[10px] uppercase tracking-[0.2em] text-muted-foreground"
+                      data-turn-id={entry.turnId}
+                    >
+                      <span className="h-px flex-1 bg-border" />
+                      <span className="font-mono">Turn {turnSequence}</span>
+                      <span className="h-px flex-1 bg-border" />
+                    </div>
+                  )}
+                  <ConversationItemView
+                    entry={entry}
+                    onApprove={
+                      isLastApproval
+                        ? () => approveSession(session.id)
+                        : undefined
+                    }
+                    onDeny={
+                      isLastApproval ? () => denySession(session.id) : undefined
+                    }
+                  />
+                </div>
               )
             })}
             <div ref={transcriptEndRef} />

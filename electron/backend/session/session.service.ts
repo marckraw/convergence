@@ -29,6 +29,8 @@ import {
   conversationItemFromRow,
   conversationItemToInsertRow,
 } from './conversation-item.pure'
+import type { TurnCaptureService } from './turn/turn-capture.service'
+import type { TurnDelta } from './turn/turn-capture.service'
 
 type UserMessageDraft = Extract<
   ConversationItem,
@@ -58,18 +60,35 @@ export interface SessionAttentionObserver {
 
 export class SessionService {
   private activeHandles = new Map<string, SessionHandle>()
+  private activeTurnIds = new Map<string, string>()
   private onSummaryUpdate: ((summary: SessionSummary) => void) | null = null
   private onConversationPatch:
     | ((event: ConversationPatchEvent) => void)
     | null = null
+  private onTurnDelta: ((sessionId: string, delta: TurnDelta) => void) | null =
+    null
   private attachments: AttachmentsService | null = null
   private namer: SessionNamer | null = null
   private attentionObserver: SessionAttentionObserver | null = null
+  private turnCapture: TurnCaptureService | null = null
 
   constructor(
     private db: Database.Database,
     private providers: ProviderRegistry,
   ) {}
+
+  setTurnCaptureService(service: TurnCaptureService): void {
+    this.turnCapture = service
+    service.setDeltaEmitter((sessionId, delta) => {
+      this.onTurnDelta?.(sessionId, delta)
+    })
+  }
+
+  setTurnDeltaListener(
+    listener: (sessionId: string, delta: TurnDelta) => void,
+  ): void {
+    this.onTurnDelta = listener
+  }
 
   setAttachmentsService(service: AttachmentsService): void {
     this.attachments = service
@@ -505,6 +524,15 @@ export class SessionService {
       )
       .run(nextSequence, item.updatedAt, sessionId)
 
+    if (isUserMessage && this.turnCapture && turnId) {
+      this.activeTurnIds.set(sessionId, turnId)
+      void this.turnCapture.startTurn({
+        sessionId,
+        turnId,
+        workingDirectory: row.working_directory,
+      })
+    }
+
     return item
   }
 
@@ -720,6 +748,7 @@ export class SessionService {
   ): void {
     if (status === 'failed') {
       this.activeHandles.delete(sessionId)
+      this.closeActiveTurn(sessionId, 'errored')
     } else if (status === 'completed') {
       const summary = this.getSummaryById(sessionId)
       if (
@@ -728,7 +757,53 @@ export class SessionService {
       ) {
         this.activeHandles.delete(sessionId)
       }
+      this.closeActiveTurn(sessionId, 'completed')
     }
+  }
+
+  private closeActiveTurn(
+    sessionId: string,
+    status: 'completed' | 'errored',
+  ): void {
+    if (!this.turnCapture) return
+    const turnId = this.activeTurnIds.get(sessionId)
+    if (!turnId) return
+    const summarySource = this.firstAssistantTextForTurn(sessionId, turnId)
+    this.activeTurnIds.delete(sessionId)
+    this.turnCapture.endTurn({
+      sessionId,
+      turnId,
+      status,
+      summarySource,
+    })
+  }
+
+  private firstAssistantTextForTurn(
+    sessionId: string,
+    turnId: string,
+  ): string | null {
+    const rows = this.db
+      .prepare(
+        `SELECT payload_json
+         FROM session_conversation_items
+         WHERE session_id = ? AND turn_id = ? AND kind = 'message'
+         ORDER BY sequence ASC`,
+      )
+      .all(sessionId, turnId) as Array<{ payload_json: string }>
+    for (const row of rows) {
+      try {
+        const parsed = JSON.parse(row.payload_json) as {
+          actor?: string
+          text?: string
+        }
+        if (parsed.actor === 'assistant' && typeof parsed.text === 'string') {
+          return parsed.text
+        }
+      } catch {
+        continue
+      }
+    }
+    return null
   }
 
   private handleAssistantNaming(

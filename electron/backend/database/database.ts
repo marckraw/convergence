@@ -75,6 +75,40 @@ const SCHEMA = `
   CREATE INDEX IF NOT EXISTS idx_session_conversation_items_session_sequence
     ON session_conversation_items(session_id, sequence);
 
+  CREATE TABLE IF NOT EXISTS session_turns (
+    id TEXT PRIMARY KEY,
+    session_id TEXT NOT NULL,
+    sequence INTEGER NOT NULL,
+    started_at TEXT NOT NULL,
+    ended_at TEXT,
+    status TEXT NOT NULL DEFAULT 'running',
+    summary TEXT,
+    FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE,
+    UNIQUE (session_id, sequence)
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_session_turns_session_sequence
+    ON session_turns(session_id, sequence);
+
+  CREATE TABLE IF NOT EXISTS session_turn_file_changes (
+    id TEXT PRIMARY KEY,
+    session_id TEXT NOT NULL,
+    turn_id TEXT NOT NULL,
+    file_path TEXT NOT NULL,
+    old_path TEXT,
+    status TEXT NOT NULL,
+    additions INTEGER NOT NULL DEFAULT 0,
+    deletions INTEGER NOT NULL DEFAULT 0,
+    diff TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE,
+    FOREIGN KEY (turn_id) REFERENCES session_turns(id) ON DELETE CASCADE,
+    UNIQUE (turn_id, file_path)
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_session_turn_file_changes_session_turn
+    ON session_turn_file_changes(session_id, turn_id);
+
   CREATE TABLE IF NOT EXISTS workspaces (
     id TEXT PRIMARY KEY,
     project_id TEXT NOT NULL,
