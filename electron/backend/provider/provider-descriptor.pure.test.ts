@@ -44,6 +44,7 @@ describe('provider-descriptor', () => {
       id: 'codex',
       name: 'Codex',
       vendorLabel: 'OpenAI',
+      kind: 'conversation',
       supportsContinuation: true,
       defaultModelId: 'missing',
       modelOptions: [

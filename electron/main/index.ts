@@ -18,6 +18,7 @@ import { ProviderRegistry } from '../backend/provider/provider-registry'
 import { ClaudeCodeProvider } from '../backend/provider/claude-code/claude-code-provider'
 import { CodexProvider } from '../backend/provider/codex/codex-provider'
 import { PiProvider } from '../backend/provider/pi/pi-provider'
+import { ShellProvider } from '../backend/provider/shell/shell-provider'
 import { detectProviders } from '../backend/provider/detect'
 import { McpService } from '../backend/mcp/mcp.service'
 import { AppSettingsService } from '../backend/app-settings/app-settings.service'
@@ -50,7 +51,10 @@ import { TerminalService } from '../backend/terminal/terminal.service'
 import {
   broadcastToRenderers,
   registerTerminalIpcHandlers,
+  registerTerminalLayoutIpcHandlers,
 } from '../backend/terminal/terminal.ipc'
+import { TerminalLayoutRepository } from '../backend/terminal/layout/terminal-layout.repository'
+import { TerminalLayoutService } from '../backend/terminal/layout/terminal-layout.service'
 import { TaskProgressService } from '../backend/task-progress/task-progress.service'
 import { broadcastTaskProgress } from '../backend/task-progress/task-progress.ipc'
 import { createNodePtyFactory } from '../backend/terminal/pty-factory'
@@ -177,6 +181,10 @@ async function startApp(): Promise<void> {
       providerRegistry.register(new PiProvider(p.binaryPath))
     }
   }
+
+  // Synthetic provider for terminal-primary sessions; always available
+  // regardless of which conversational binaries are installed.
+  providerRegistry.register(new ShellProvider())
 
   console.log(
     `Providers: ${providerRegistry
@@ -356,6 +364,11 @@ async function startApp(): Promise<void> {
     broadcastToRenderers,
   )
   registerTerminalIpcHandlers(terminalService)
+
+  const terminalLayoutService = new TerminalLayoutService({
+    repository: new TerminalLayoutRepository(db),
+  })
+  registerTerminalLayoutIpcHandlers(terminalLayoutService)
 
   app.on('before-quit', () => {
     terminalService.disposeAll()

@@ -223,6 +223,7 @@ interface SessionSummaryData {
   archivedAt: string | null
   parentSessionId: string | null
   forkStrategy: 'full' | 'summary' | null
+  primarySurface: 'conversation' | 'terminal'
   continuationToken: string | null
   lastSequence: number
   createdAt: string
@@ -236,12 +237,14 @@ interface CreateSessionInput {
   model: string | null
   effort: ReasoningEffort | null
   name: string
+  primarySurface?: 'conversation' | 'terminal'
 }
 
 interface ProviderInfo {
   id: string
   name: string
   vendorLabel: string
+  kind: 'conversation' | 'shell'
   supportsContinuation: boolean
   defaultModelId: string
   fastModelId?: string | null
@@ -322,6 +325,10 @@ interface ElectronAPI {
     stop: (id: string) => Promise<void>
     rename: (id: string, name: string) => Promise<void>
     regenerateName: (id: string) => Promise<void>
+    setPrimarySurface: (
+      id: string,
+      surface: 'conversation' | 'terminal',
+    ) => Promise<SessionSummaryData>
     getNeedsYouDismissals: () => Promise<NeedsYouDismissals>
     setNeedsYouDismissals: (dismissals: NeedsYouDismissals) => Promise<void>
     getRecentIds: () => Promise<string[]>
@@ -410,6 +417,11 @@ interface ElectronAPI {
       id: string,
       callback: (payload: { exitCode: number; signal: number | null }) => void,
     ) => () => void
+  }
+  terminalLayout: {
+    get: (sessionId: string) => Promise<unknown>
+    save: (sessionId: string, tree: unknown) => Promise<void>
+    clear: (sessionId: string) => Promise<void>
   }
   updates: {
     getStatus: () => Promise<UpdateStatusData>

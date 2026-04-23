@@ -48,6 +48,7 @@ function makeSession(id: string, projectId: string): Session {
     archivedAt: null,
     parentSessionId: null,
     forkStrategy: null,
+    primarySurface: 'conversation' as const,
     continuationToken: null,
     lastSequence: 0,
     createdAt: '2026-01-01T00:00:00.000Z',
@@ -222,11 +223,15 @@ describe('command-center intents', () => {
   })
 
   describe('beginSessionDraft', () => {
-    it('hops to the workspace owner project and starts a draft', async () => {
+    it('hops to the workspace owner project and opens the session intent dialog', async () => {
       await beginSessionDraft('w-beta')
 
       expect(setActiveProject).toHaveBeenCalledWith('p2')
-      expect(beginSessionDraftMock).toHaveBeenCalledWith('w-beta')
+      expect(useDialogStore.getState().openDialog).toBe('session-intent')
+      expect(useDialogStore.getState().payload).toEqual({
+        workspaceId: 'w-beta',
+      })
+      expect(beginSessionDraftMock).not.toHaveBeenCalled()
     })
 
     it('skips the hop when the workspace lives in the active project', async () => {
@@ -235,14 +240,14 @@ describe('command-center intents', () => {
       await beginSessionDraft('w-beta')
 
       expect(setActiveProject).not.toHaveBeenCalled()
-      expect(beginSessionDraftMock).toHaveBeenCalledWith('w-beta')
+      expect(useDialogStore.getState().openDialog).toBe('session-intent')
     })
 
     it('no-ops when the workspace id is not in globalWorkspaces', async () => {
       await beginSessionDraft('missing')
 
       expect(setActiveProject).not.toHaveBeenCalled()
-      expect(beginSessionDraftMock).not.toHaveBeenCalled()
+      expect(useDialogStore.getState().openDialog).toBeNull()
     })
   })
 

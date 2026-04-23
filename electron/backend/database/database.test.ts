@@ -23,13 +23,40 @@ describe('database', () => {
     expect(tableNames).toContain('projects')
     expect(tableNames).toContain('app_state')
     expect(tableNames).toContain('session_conversation_items')
+    expect(tableNames).toContain('session_terminal_layout')
 
     const sessionColumns = db
       .prepare("PRAGMA table_info('sessions')")
       .all() as Array<{ name: string }>
-    expect(sessionColumns.map((column) => column.name)).not.toContain(
-      'transcript',
-    )
+    const columnNames = sessionColumns.map((column) => column.name)
+    expect(columnNames).not.toContain('transcript')
+    expect(columnNames).toContain('primary_surface')
+  })
+
+  it('cascades terminal-layout rows when their session is deleted', () => {
+    const db = getDatabase()
+    db.prepare(
+      "INSERT INTO projects (id, name, repository_path) VALUES ('p', 'p', '/tmp/p')",
+    ).run()
+    db.prepare(
+      `INSERT INTO sessions (
+         id, project_id, provider_id, name, working_directory
+       ) VALUES ('s', 'p', 'shell', 'term', '/tmp/p')`,
+    ).run()
+    db.prepare(
+      `INSERT INTO session_terminal_layout (
+         session_id, layout_json, updated_at
+       ) VALUES ('s', '{}', '2026-01-01T00:00:00.000Z')`,
+    ).run()
+
+    db.prepare('DELETE FROM sessions WHERE id = ?').run('s')
+
+    const remaining = db
+      .prepare(
+        'SELECT session_id FROM session_terminal_layout WHERE session_id = ?',
+      )
+      .all('s')
+    expect(remaining).toEqual([])
   })
 
   it('returns the same instance on repeated calls', () => {

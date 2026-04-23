@@ -1,40 +1,28 @@
 import { fireEvent, render, screen } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { useSessionStore } from '@/entities/session'
+import { useDialogStore } from '@/entities/dialog'
 import { SessionCreateInline } from './session-create-inline.container'
 
 describe('SessionCreateInline', () => {
-  const beginSessionDraft = vi.fn()
+  const open = vi.fn()
 
   beforeEach(() => {
     vi.clearAllMocks()
-    useSessionStore.setState({
-      sessions: [],
-      activeSessionId: 'session-1',
-      draftWorkspaceId: null,
-      providers: [],
-      error: null,
-      loadSessions: vi.fn(),
-      loadProviders: vi.fn(),
-      createAndStartSession: vi.fn(),
-      approveSession: vi.fn(),
-      denySession: vi.fn(),
-      sendMessageToSession: vi.fn(),
-      stopSession: vi.fn(),
-      deleteSession: vi.fn(),
-      beginSessionDraft,
-      setActiveSession: vi.fn(),
-      handleSessionSummaryUpdate: vi.fn(),
-      handleConversationPatched: vi.fn(),
-      clearError: vi.fn(),
+    useDialogStore.setState({
+      openDialog: null,
+      payload: null,
+      open,
+      close: vi.fn(),
     })
   })
 
-  it('opens a main-area draft for the chosen workspace', () => {
+  it('opens the session intent dialog with the chosen workspace id', () => {
     render(<SessionCreateInline workspaceId="workspace-1" />)
 
     fireEvent.click(screen.getByRole('button', { name: /new session/i }))
 
-    expect(beginSessionDraft).toHaveBeenCalledWith('workspace-1')
+    expect(open).toHaveBeenCalledWith('session-intent', {
+      workspaceId: 'workspace-1',
+    })
   })
 })

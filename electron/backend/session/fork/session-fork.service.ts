@@ -36,6 +36,21 @@ export class SessionForkExtractionError extends Error {
   }
 }
 
+export class SessionForkUnsupportedError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = 'SessionForkUnsupportedError'
+  }
+}
+
+function assertForkableParent(parent: SessionSummary): void {
+  if (parent.providerId === 'shell') {
+    throw new SessionForkUnsupportedError(
+      `Session ${parent.id} uses the shell provider and cannot be forked`,
+    )
+  }
+}
+
 const SUMMARY_EXTRACTION_TIMEOUT_MS = 180_000
 
 export class SessionForkService {
@@ -47,6 +62,7 @@ export class SessionForkService {
   ): Promise<ForkSummary> {
     const parent = this.deps.sessions.getSummaryById(parentId)
     if (!parent) throw new Error(`Parent session not found: ${parentId}`)
+    assertForkableParent(parent)
     const conversation = this.deps.sessions.getConversation(parentId)
 
     const provider = this.deps.providers.get(parent.providerId)
@@ -102,6 +118,7 @@ export class SessionForkService {
     if (!parent) {
       throw new Error(`Parent session not found: ${input.parentSessionId}`)
     }
+    assertForkableParent(parent)
     const conversation = this.deps.sessions.getConversation(
       input.parentSessionId,
     )
@@ -131,6 +148,7 @@ export class SessionForkService {
     if (!parent) {
       throw new Error(`Parent session not found: ${input.parentSessionId}`)
     }
+    assertForkableParent(parent)
 
     return this.createAndStart({
       parent,
@@ -171,6 +189,7 @@ export class SessionForkService {
       name: args.name,
       parentSessionId: args.parent.id,
       forkStrategy: args.strategy,
+      primarySurface: args.parent.primarySurface,
     })
 
     await this.deps.sessions.start(child.id, { text: args.seed })

@@ -151,9 +151,13 @@ function describeItem(item: PaletteItem): {
       return { primary: item.title, secondary: item.description }
     case 'new-session':
       return { primary: item.title, secondary: item.projectName }
+    case 'new-terminal-session':
+      return { primary: item.title, secondary: item.projectName }
     case 'new-workspace':
       return { primary: item.title, secondary: item.projectName }
     case 'fork-session':
+      return { primary: item.title, secondary: item.projectName || null }
+    case 'swap-primary-surface':
       return { primary: item.title, secondary: item.projectName || null }
     case 'check-updates':
       return { primary: item.title, secondary: item.description }
@@ -172,10 +176,14 @@ function describeKind(kind: PaletteItem['kind']): string {
       return 'Dialog'
     case 'new-session':
       return 'New session'
+    case 'new-terminal-session':
+      return 'New terminal'
     case 'new-workspace':
       return 'New workspace'
     case 'fork-session':
       return 'Fork session'
+    case 'swap-primary-surface':
+      return 'Swap primary surface'
     case 'check-updates':
       return 'Updates'
   }

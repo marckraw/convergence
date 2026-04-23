@@ -50,7 +50,8 @@ export const SessionForkDialogContainer: FC = () => {
     ],
   )
 
-  const parentSessionId = payload?.parentSessionId ?? null
+  const parentSessionId =
+    payload && 'parentSessionId' in payload ? payload.parentSessionId : null
   const [parent, setParent] = useState<SessionSummary | null>(null)
   const [parentConversation, setParentConversation] = useState<
     ConversationItem[]

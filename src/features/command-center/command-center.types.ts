@@ -65,6 +65,17 @@ export type NewSessionPaletteItem = {
   search: PaletteSearchFields
 }
 
+export type NewTerminalSessionPaletteItem = {
+  kind: 'new-terminal-session'
+  id: string
+  workspaceId: string | null
+  projectId: string
+  branchName: string | null
+  projectName: string
+  title: string
+  search: PaletteSearchFields
+}
+
 export type NewWorkspacePaletteItem = {
   kind: 'new-workspace'
   id: string
@@ -84,6 +95,17 @@ export type ForkSessionPaletteItem = {
   search: PaletteSearchFields
 }
 
+export type SwapPrimarySurfacePaletteItem = {
+  kind: 'swap-primary-surface'
+  id: string
+  sessionId: string
+  sessionName: string
+  projectName: string
+  target: 'conversation' | 'terminal'
+  title: string
+  search: PaletteSearchFields
+}
+
 export type CheckUpdatesPaletteItem = {
   kind: 'check-updates'
   id: string
@@ -98,8 +120,10 @@ export type PaletteItem =
   | SessionPaletteItem
   | DialogPaletteItem
   | NewSessionPaletteItem
+  | NewTerminalSessionPaletteItem
   | NewWorkspacePaletteItem
   | ForkSessionPaletteItem
+  | SwapPrimarySurfacePaletteItem
   | CheckUpdatesPaletteItem
 
 export type CuratedSectionId =

@@ -2,6 +2,9 @@ import { describe, it, expect, beforeEach, vi } from 'vitest'
 
 const createMock = vi.fn()
 const disposeMock = vi.fn()
+const layoutSaveMock = vi.fn()
+const layoutGetMock = vi.fn()
+const layoutClearMock = vi.fn()
 
 vi.mock('./terminal.api', () => ({
   terminalApi: {
@@ -15,8 +18,17 @@ vi.mock('./terminal.api', () => ({
   },
 }))
 
+vi.mock('./terminal-layout.api', () => ({
+  terminalLayoutApi: {
+    get: (...args: unknown[]) => layoutGetMock(...args),
+    save: (...args: unknown[]) => layoutSaveMock(...args),
+    clear: (...args: unknown[]) => layoutClearMock(...args),
+  },
+}))
+
 import { useTerminalStore } from './terminal.model'
 import type { LeafNode, SplitNode } from './terminal.types'
+import type { PersistedPaneTree } from './terminal-layout.types'
 
 function mockCreate(id: string, pid = 1000) {
   createMock.mockResolvedValueOnce({
@@ -39,6 +51,11 @@ describe('terminal store', () => {
     })
     createMock.mockReset()
     disposeMock.mockReset()
+    layoutSaveMock.mockReset()
+    layoutSaveMock.mockResolvedValue(undefined)
+    layoutGetMock.mockReset()
+    layoutClearMock.mockReset()
+    layoutClearMock.mockResolvedValue(undefined)
   })
 
   describe('openFirstPane', () => {
@@ -308,6 +325,213 @@ describe('terminal store', () => {
       expect(useTerminalStore.getState().isDockVisible('s1')).toBe(false)
       useTerminalStore.getState().toggleDockVisible('s1')
       expect(useTerminalStore.getState().isDockVisible('s1')).toBe(true)
+    })
+  })
+
+  describe('layout persistence', () => {
+    it('loadPersistedLayout forwards to the backend api', async () => {
+      layoutGetMock.mockResolvedValueOnce(null)
+      const result = await useTerminalStore
+        .getState()
+        .loadPersistedLayout('s1')
+      expect(layoutGetMock).toHaveBeenCalledWith('s1')
+      expect(result).toBeNull()
+    })
+
+    it('loadPersistedLayout returns null when the api throws', async () => {
+      layoutGetMock.mockRejectedValueOnce(new Error('boom'))
+      const result = await useTerminalStore
+        .getState()
+        .loadPersistedLayout('s1')
+      expect(result).toBeNull()
+    })
+
+    it('restoreFromPersisted spawns one PTY per persisted tab and builds a matching tree', async () => {
+      mockCreate('fresh-a')
+      mockCreate('fresh-b')
+      const persisted: PersistedPaneTree = {
+        kind: 'split',
+        id: 'split-1',
+        direction: 'horizontal',
+        sizes: [60, 40],
+        children: [
+          {
+            kind: 'leaf',
+            id: 'leaf-a',
+            tabs: [{ id: 'old-a', cwd: '/work', title: 'zsh' }],
+            activeTabId: 'old-a',
+          },
+          {
+            kind: 'leaf',
+            id: 'leaf-b',
+            tabs: [{ id: 'old-b', cwd: '/work/sub', title: 'bash' }],
+            activeTabId: 'old-b',
+          },
+        ],
+      }
+
+      const { focusedLeafId } = await useTerminalStore
+        .getState()
+        .restoreFromPersisted({ sessionId: 's1', persisted, cols: 80, rows: 24 })
+
+      expect(createMock).toHaveBeenCalledTimes(2)
+      expect(createMock).toHaveBeenNthCalledWith(1, {
+        sessionId: 's1',
+        cwd: '/work',
+        cols: 80,
+        rows: 24,
+      })
+      expect(createMock).toHaveBeenNthCalledWith(2, {
+        sessionId: 's1',
+        cwd: '/work/sub',
+        cols: 80,
+        rows: 24,
+      })
+
+      const tree = useTerminalStore.getState().getTree('s1') as SplitNode
+      expect(tree.kind).toBe('split')
+      expect(tree.id).toBe('split-1')
+      expect(tree.sizes).toEqual([60, 40])
+      const leafA = tree.children[0] as LeafNode
+      const leafB = tree.children[1] as LeafNode
+      expect(leafA.id).toBe('leaf-a')
+      expect(leafA.tabs[0]?.id).toBe('fresh-a')
+      expect(leafA.tabs[0]?.cwd).toBe('/work')
+      expect(leafA.activeTabId).toBe('fresh-a')
+      expect(leafB.tabs[0]?.id).toBe('fresh-b')
+      expect(focusedLeafId).toBe('leaf-a')
+    })
+
+    it('restoreFromPersisted is a no-op if a tree already exists for the session', async () => {
+      mockCreate('t1')
+      await useTerminalStore
+        .getState()
+        .openFirstPane({ sessionId: 's1', ...baseArgs })
+      createMock.mockClear()
+
+      const persisted: PersistedPaneTree = {
+        kind: 'leaf',
+        id: 'leaf-x',
+        tabs: [{ id: 'old', cwd: '/work', title: 'zsh' }],
+        activeTabId: 'old',
+      }
+      await useTerminalStore
+        .getState()
+        .restoreFromPersisted({ sessionId: 's1', persisted, cols: 80, rows: 24 })
+
+      expect(createMock).not.toHaveBeenCalled()
+    })
+
+    it('schedules a debounced save after a mutation and sends serialized tree', async () => {
+      vi.useFakeTimers()
+      try {
+        mockCreate('t1')
+        await useTerminalStore
+          .getState()
+          .openFirstPane({ sessionId: 's1', ...baseArgs })
+
+        expect(layoutSaveMock).not.toHaveBeenCalled()
+        await vi.advanceTimersByTimeAsync(300)
+        expect(layoutSaveMock).toHaveBeenCalledTimes(1)
+        const [sessionId, payload] = layoutSaveMock.mock.calls[0]!
+        expect(sessionId).toBe('s1')
+        expect(payload).toMatchObject({ kind: 'leaf' })
+        expect((payload as { tabs: unknown[] }).tabs).toHaveLength(1)
+      } finally {
+        vi.useRealTimers()
+      }
+    })
+
+    it('collapses multiple rapid mutations into a single save', async () => {
+      vi.useFakeTimers()
+      try {
+        mockCreate('t1')
+        mockCreate('t2')
+        const { leafId } = await useTerminalStore
+          .getState()
+          .openFirstPane({ sessionId: 's1', ...baseArgs })
+        await useTerminalStore
+          .getState()
+          .newTab({ sessionId: 's1', leafId, ...baseArgs })
+
+        await vi.advanceTimersByTimeAsync(300)
+        expect(layoutSaveMock).toHaveBeenCalledTimes(1)
+      } finally {
+        vi.useRealTimers()
+      }
+    })
+
+    it('closeAllForSession clears the persisted layout instead of saving', async () => {
+      vi.useFakeTimers()
+      try {
+        mockCreate('t1')
+        await useTerminalStore
+          .getState()
+          .openFirstPane({ sessionId: 's1', ...baseArgs })
+        await vi.advanceTimersByTimeAsync(300)
+        layoutSaveMock.mockClear()
+        layoutClearMock.mockClear()
+
+        await useTerminalStore.getState().closeAllForSession('s1')
+        await vi.advanceTimersByTimeAsync(300)
+
+        expect(layoutClearMock).toHaveBeenCalledWith('s1')
+        expect(layoutSaveMock).not.toHaveBeenCalled()
+      } finally {
+        vi.useRealTimers()
+      }
+    })
+
+    it('hydratePaneTree rebuilds the saved layout instead of creating a blank tab when one exists', async () => {
+      const persisted: PersistedPaneTree = {
+        kind: 'leaf',
+        id: 'leaf-saved',
+        tabs: [{ id: 'old-a', cwd: '/work', title: 'zsh' }],
+        activeTabId: 'old-a',
+      }
+      layoutGetMock.mockResolvedValueOnce(persisted)
+      mockCreate('fresh-a')
+
+      const result = await useTerminalStore
+        .getState()
+        .hydratePaneTree({ sessionId: 's1', ...baseArgs })
+
+      expect(result?.tab.id).toBe('fresh-a')
+      const tree = useTerminalStore.getState().getTree('s1') as LeafNode
+      expect(tree.id).toBe('leaf-saved')
+      expect(tree.tabs[0]?.id).toBe('fresh-a')
+    })
+
+    it('hydratePaneTree falls back to openFirstPane when no layout is stored', async () => {
+      layoutGetMock.mockResolvedValueOnce(null)
+      mockCreate('fresh-a')
+
+      const result = await useTerminalStore
+        .getState()
+        .hydratePaneTree({ sessionId: 's1', ...baseArgs })
+
+      expect(result?.tab.id).toBe('fresh-a')
+    })
+
+    it('flushPersistedSaves drains pending saves immediately', async () => {
+      vi.useFakeTimers()
+      try {
+        mockCreate('t1')
+        await useTerminalStore
+          .getState()
+          .openFirstPane({ sessionId: 's1', ...baseArgs })
+
+        expect(layoutSaveMock).not.toHaveBeenCalled()
+        await useTerminalStore.getState().flushPersistedSaves()
+        expect(layoutSaveMock).toHaveBeenCalledTimes(1)
+
+        // Any pending timer should have been cancelled by the flush.
+        layoutSaveMock.mockClear()
+        await vi.advanceTimersByTimeAsync(300)
+        expect(layoutSaveMock).not.toHaveBeenCalled()
+      } finally {
+        vi.useRealTimers()
+      }
     })
   })
 })

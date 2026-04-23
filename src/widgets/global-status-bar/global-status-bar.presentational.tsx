@@ -42,9 +42,13 @@ export const GlobalStatusBar: FC<GlobalStatusBarProps> = ({
 }) => {
   const isEmpty =
     runningCount === 0 && attentionCount === 0 && byProject.length === 0
-  const providerLabel = (providerId: string) =>
-    providers.find((entry) => entry.id === providerId)?.vendorLabel ??
-    providerId
+  const providerLabel = (providerId: string) => {
+    if (providerId === 'shell') return 'Terminal'
+    return (
+      providers.find((entry) => entry.id === providerId)?.vendorLabel ??
+      providerId
+    )
+  }
 
   return (
     <div className={barClass} data-testid="global-status-bar">

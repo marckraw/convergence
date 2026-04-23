@@ -40,6 +40,10 @@ export type SessionContextWindow =
 
 export type ForkStrategy = 'full' | 'summary'
 
+export type PrimarySurface = 'conversation' | 'terminal'
+
+export type ProviderKind = 'conversation' | 'shell'
+
 export type NeedsYouDisposition = 'snoozed' | 'acknowledged'
 
 export interface NeedsYouDismissal {
@@ -148,6 +152,7 @@ export interface SessionSummary {
   archivedAt: string | null
   parentSessionId: string | null
   forkStrategy: ForkStrategy | null
+  primarySurface: PrimarySurface
   continuationToken: string | null
   lastSequence: number
   createdAt: string
@@ -170,11 +175,18 @@ export interface ProviderInfo {
   id: string
   name: string
   vendorLabel: string
+  kind: ProviderKind
   supportsContinuation: boolean
   defaultModelId: string
   fastModelId?: string | null
   modelOptions: ProviderModelOption[]
   attachments: ProviderAttachmentCapability
+}
+
+export function isConversationalProvider(provider: {
+  kind: ProviderKind
+}): boolean {
+  return provider.kind === 'conversation'
 }
 
 export interface ProviderStatusInfo {

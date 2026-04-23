@@ -42,6 +42,7 @@ function createTestProvider(): Provider {
       id: 'test-provider',
       name: 'Test Provider',
       vendorLabel: 'Test',
+      kind: 'conversation',
       supportsContinuation: false,
       defaultModelId: 'test-model',
       modelOptions: [
@@ -375,6 +376,7 @@ describe('SessionService', () => {
         id: 'streaming-provider',
         name: 'Streaming Provider',
         vendorLabel: 'Test',
+        kind: 'conversation',
         supportsContinuation: false,
         defaultModelId: 'stream-model',
         modelOptions: [
@@ -702,6 +704,7 @@ describe('SessionService', () => {
         id: 'continuable',
         name: 'Continuable Provider',
         vendorLabel: 'Test',
+        kind: 'conversation',
         supportsContinuation: true,
         defaultModelId: 'continuable-model',
         modelOptions: [
@@ -758,6 +761,7 @@ describe('SessionService', () => {
         id: 'continuable-rehydrate',
         name: 'Continuable Rehydrate Provider',
         vendorLabel: 'Test',
+        kind: 'conversation',
         supportsContinuation: true,
         defaultModelId: 'continuable-model',
         modelOptions: [
@@ -898,6 +902,7 @@ describe('SessionService attachments integration', () => {
         id: 'capture',
         name: 'Capture',
         vendorLabel: 'Test',
+        kind: 'conversation',
         supportsContinuation: false,
         defaultModelId: 'm',
         modelOptions: [
@@ -1063,5 +1068,80 @@ describe('SessionService attachments integration', () => {
         attachmentIds: ['does-not-exist'],
       }),
     ).rejects.toThrow(/Attachment\(s\) not found/)
+  })
+
+  describe('primary surface', () => {
+    it('persists primarySurface on create and exposes it on the summary', () => {
+      const session = service.create({
+        projectId,
+        workspaceId: null,
+        providerId: 'shell',
+        model: null,
+        effort: null,
+        name: 'terminal',
+        primarySurface: 'terminal',
+      })
+      expect(session.primarySurface).toBe('terminal')
+
+      const reloaded = service.getSummaryById(session.id)
+      expect(reloaded?.primarySurface).toBe('terminal')
+    })
+
+    it('setPrimarySurface flips the stored value and broadcasts the update', () => {
+      const summaries: Array<{ id: string; primarySurface: string }> = []
+      service.setSummaryUpdateListener((summary) => {
+        summaries.push({
+          id: summary.id,
+          primarySurface: summary.primarySurface,
+        })
+      })
+
+      const session = service.create({
+        projectId,
+        workspaceId: null,
+        providerId: 'test-provider',
+        model: 'test-model',
+        effort: null,
+        name: 'convo',
+      })
+      expect(session.primarySurface).toBe('conversation')
+
+      const flipped = service.setPrimarySurface(session.id, 'terminal')
+      expect(flipped.primarySurface).toBe('terminal')
+      expect(summaries.at(-1)).toEqual({
+        id: session.id,
+        primarySurface: 'terminal',
+      })
+    })
+
+    it('setPrimarySurface refuses to flip a shell session to conversation without a real provider', () => {
+      const session = service.create({
+        projectId,
+        workspaceId: null,
+        providerId: 'shell',
+        model: null,
+        effort: null,
+        name: 'terminal',
+        primarySurface: 'terminal',
+      })
+      expect(() =>
+        service.setPrimarySurface(session.id, 'conversation'),
+      ).toThrow(/shell provider/)
+    })
+
+    it('sendMessage rejects sessions that use the shell provider', async () => {
+      const session = service.create({
+        projectId,
+        workspaceId: null,
+        providerId: 'shell',
+        model: null,
+        effort: null,
+        name: 'terminal',
+        primarySurface: 'terminal',
+      })
+      await expect(
+        service.sendMessage(session.id, { text: 'hello' }),
+      ).rejects.toThrow(/shell provider/)
+    })
   })
 })

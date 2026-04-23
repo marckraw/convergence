@@ -125,6 +125,7 @@ const mockElectronAPI = {
         id: 'claude-code',
         name: 'Claude Code',
         vendorLabel: 'Anthropic',
+        kind: 'conversation',
         supportsContinuation: true,
         defaultModelId: 'sonnet',
         modelOptions: [

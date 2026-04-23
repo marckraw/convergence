@@ -29,6 +29,7 @@ const providers: ProviderInfo[] = [
     id: 'claude-code',
     name: 'Claude Code',
     vendorLabel: 'Anthropic',
+    kind: 'conversation',
     supportsContinuation: true,
     defaultModelId: 'sonnet',
     modelOptions: [
@@ -49,6 +50,7 @@ const providers: ProviderInfo[] = [
     id: 'codex',
     name: 'Codex',
     vendorLabel: 'OpenAI',
+    kind: 'conversation',
     supportsContinuation: true,
     defaultModelId: 'gpt-5.4',
     modelOptions: [
@@ -83,6 +85,7 @@ const parentSession: Session = {
   archivedAt: null,
   parentSessionId: null,
   forkStrategy: null,
+  primarySurface: 'conversation',
   continuationToken: null,
   lastSequence: 4,
   createdAt: '2026-01-01T00:00:00.000Z',

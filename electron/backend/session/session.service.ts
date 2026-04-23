@@ -99,6 +99,26 @@ export class SessionService {
     return this.getById(id)!
   }
 
+  setPrimarySurface(
+    id: string,
+    surface: 'conversation' | 'terminal',
+  ): Session {
+    const session = this.getById(id)
+    if (!session) throw new Error(`Session not found: ${id}`)
+    if (surface === 'conversation' && session.providerId === 'shell') {
+      throw new Error(
+        `Session ${id} uses the shell provider and cannot be flipped to conversation-primary without attaching a real provider`,
+      )
+    }
+    this.db
+      .prepare(
+        "UPDATE sessions SET primary_surface = ?, updated_at = datetime('now') WHERE id = ?",
+      )
+      .run(surface, id)
+    this.notifySessionChange(id)
+    return this.getById(id)!
+  }
+
   async regenerateName(id: string): Promise<void> {
     const session = this.getById(id)
     if (!session) throw new Error(`Session not found: ${id}`)
@@ -168,9 +188,10 @@ export class SessionService {
            name,
            working_directory,
            parent_session_id,
-           fork_strategy
+           fork_strategy,
+           primary_surface
          )
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
       .run(
         id,
@@ -183,6 +204,7 @@ export class SessionService {
         workingDirectory,
         input.parentSessionId ?? null,
         input.forkStrategy ?? null,
+        input.primarySurface ?? 'conversation',
       )
 
     return this.getSummaryById(id)!
@@ -293,6 +315,12 @@ export class SessionService {
   async sendMessage(id: string, input: SendMessageInput): Promise<void> {
     const session = this.getById(id)
     if (!session) throw new Error(`Session not found: ${id}`)
+
+    if (session.providerId === 'shell') {
+      throw new Error(
+        `Session ${id} uses the shell provider and cannot accept conversation messages`,
+      )
+    }
 
     if (session.archivedAt) {
       this.updateArchiveState(id, null)

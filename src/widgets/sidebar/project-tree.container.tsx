@@ -24,6 +24,7 @@ import {
   Pencil,
   Plus,
   Sparkles,
+  TerminalSquare,
   Trash2,
   Undo2,
 } from 'lucide-react'
@@ -231,6 +232,12 @@ export const ProjectTree: FC<ProjectTreeProps> = ({
                 className="h-auto min-w-0 flex-1 justify-start gap-1.5 px-1.5 py-1 text-left text-xs font-normal"
               >
                 <SessionBadge attention={session.attention} />
+                {session.providerId === 'shell' && (
+                  <TerminalSquare
+                    className="h-3 w-3 shrink-0 text-muted-foreground"
+                    aria-label="Terminal session"
+                  />
+                )}
                 <span className="truncate">{session.name}</span>
                 {isRegeneratingName && (
                   <Loader2

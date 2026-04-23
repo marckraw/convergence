@@ -16,6 +16,7 @@ export const sessionApi = {
     model: string | null
     effort: ReasoningEffort | null
     name: string
+    primarySurface?: 'conversation' | 'terminal'
   }): Promise<SessionSummary> => window.electronAPI.session.create(input),
 
   getSummariesByProjectId: (projectId: string): Promise<SessionSummary[]> =>
@@ -64,6 +65,15 @@ export const sessionApi = {
 
   regenerateName: (id: string): Promise<void> =>
     window.electronAPI.session.regenerateName(id),
+
+  setPrimarySurface: (
+    id: string,
+    surface: 'conversation' | 'terminal',
+  ): Promise<SessionSummary> =>
+    window.electronAPI.session.setPrimarySurface(
+      id,
+      surface,
+    ) as Promise<SessionSummary>,
 
   getNeedsYouDismissals: (): Promise<NeedsYouDismissals> =>
     window.electronAPI.session.getNeedsYouDismissals(),

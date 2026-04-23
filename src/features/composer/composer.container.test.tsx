@@ -27,6 +27,7 @@ describe('ComposerContainer', () => {
           archivedAt: null,
           parentSessionId: null,
           forkStrategy: null,
+          primarySurface: 'conversation',
           continuationToken: null,
           lastSequence: 0,
           createdAt: '2026-01-01T00:00:00.000Z',
@@ -38,6 +39,7 @@ describe('ComposerContainer', () => {
           id: 'claude-code',
           name: 'Claude Code',
           vendorLabel: 'Anthropic',
+          kind: 'conversation',
           supportsContinuation: true,
           defaultModelId: 'claude-sonnet',
           modelOptions: [

@@ -14,10 +14,12 @@ import { matchPaletteShortcut } from './command-palette-trigger.pure'
 import {
   activateProject,
   beginSessionDraft,
+  beginTerminalSessionDraft,
   beginWorkspaceDraft,
   checkForUpdates,
   forkCurrentSession,
   openDialog,
+  swapPrimarySurface,
   switchToSession,
 } from './intents'
 import {
@@ -124,11 +126,17 @@ export function CommandCenterContainer() {
         case 'new-session':
           void beginSessionDraft(item.workspaceId)
           return
+        case 'new-terminal-session':
+          void beginTerminalSessionDraft(item.workspaceId)
+          return
         case 'new-workspace':
           void beginWorkspaceDraft(item.projectId)
           return
         case 'fork-session':
           forkCurrentSession(item.sessionId)
+          return
+        case 'swap-primary-surface':
+          void swapPrimarySurface(item.sessionId, item.target)
           return
         case 'check-updates':
           void checkForUpdates()

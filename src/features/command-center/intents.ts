@@ -56,13 +56,34 @@ export function forkCurrentSession(parentSessionId: string): void {
   useDialogStore.getState().open('session-fork', { parentSessionId })
 }
 
+export async function swapPrimarySurface(
+  sessionId: string,
+  target: 'conversation' | 'terminal',
+): Promise<void> {
+  await useSessionStore.getState().setPrimarySurface(sessionId, target)
+}
+
 export async function beginSessionDraft(workspaceId: string): Promise<void> {
   const workspace = useWorkspaceStore
     .getState()
     .globalWorkspaces.find((w) => w.id === workspaceId)
   if (!workspace) return
   await activateProject(workspace.projectId)
-  useSessionStore.getState().beginSessionDraft(workspaceId)
+  useDialogStore.getState().open('session-intent', { workspaceId })
+}
+
+export async function beginTerminalSessionDraft(
+  workspaceId: string | null,
+): Promise<void> {
+  if (workspaceId) {
+    const workspace = useWorkspaceStore
+      .getState()
+      .globalWorkspaces.find((w) => w.id === workspaceId)
+    if (workspace) {
+      await activateProject(workspace.projectId)
+    }
+  }
+  useDialogStore.getState().open('terminal-session-create', { workspaceId })
 }
 
 export async function beginWorkspaceDraft(projectId: string): Promise<void> {

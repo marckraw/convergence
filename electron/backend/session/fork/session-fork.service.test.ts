@@ -33,6 +33,7 @@ function makeParent(overrides: Partial<SessionSummary> = {}): SessionSummary {
     archivedAt: null,
     parentSessionId: null,
     forkStrategy: null,
+    primarySurface: 'conversation',
     continuationToken: null,
     lastSequence: 3,
     createdAt: 'now',
@@ -174,6 +175,7 @@ function setup(
         name: input.name,
         parentSessionId: input.parentSessionId ?? null,
         forkStrategy: input.forkStrategy ?? null,
+        primarySurface: 'conversation',
         workingDirectory: '/tmp/child',
         lastSequence: 0,
       })
@@ -208,6 +210,7 @@ function setup(
       id: parent.providerId,
       name: 'Claude Code',
       vendorLabel: 'Anthropic',
+      kind: 'conversation',
       supportsContinuation: true,
       defaultModelId: 'sonnet',
       modelOptions: [
@@ -374,6 +377,7 @@ describe('SessionForkService', () => {
         expect.objectContaining({
           parentSessionId: 'parent-1',
           forkStrategy: 'full',
+          primarySurface: 'conversation',
           workspaceId: 'ws-1',
           providerId: 'codex',
           model: 'gpt-5.4',
@@ -495,6 +499,58 @@ describe('SessionForkService', () => {
           additionalInstruction: null,
         }),
       ).rejects.toThrow(/workspaceBranchName is required/)
+    })
+  })
+
+  describe('shell parent guard', () => {
+    it('previewSummary rejects parents that use the shell provider', async () => {
+      const h = setup({
+        parent: makeParent({ providerId: 'shell', primarySurface: 'terminal' }),
+      })
+      await expect(h.service.previewSummary('parent-1')).rejects.toThrow(
+        /shell provider/,
+      )
+    })
+
+    it('forkFull rejects shell-provider parents without touching the session service', async () => {
+      const h = setup({
+        parent: makeParent({ providerId: 'shell', primarySurface: 'terminal' }),
+      })
+      await expect(
+        h.service.forkFull({
+          strategy: 'full',
+          parentSessionId: 'parent-1',
+          name: 'fork',
+          providerId: 'claude-code',
+          modelId: 'sonnet',
+          effort: null,
+          workspaceMode: 'reuse',
+          workspaceBranchName: null,
+          additionalInstruction: null,
+        }),
+      ).rejects.toThrow(/shell provider/)
+      expect(h.createSession).not.toHaveBeenCalled()
+    })
+
+    it('forkSummary rejects shell-provider parents', async () => {
+      const h = setup({
+        parent: makeParent({ providerId: 'shell', primarySurface: 'terminal' }),
+      })
+      await expect(
+        h.service.forkSummary({
+          strategy: 'summary',
+          parentSessionId: 'parent-1',
+          name: 'fork',
+          providerId: 'claude-code',
+          modelId: 'sonnet',
+          effort: null,
+          workspaceMode: 'reuse',
+          workspaceBranchName: null,
+          additionalInstruction: null,
+          seedMarkdown: 'seed',
+        }),
+      ).rejects.toThrow(/shell provider/)
+      expect(h.createSession).not.toHaveBeenCalled()
     })
   })
 })

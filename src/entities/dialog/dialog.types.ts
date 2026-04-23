@@ -5,5 +5,10 @@ export type DialogKind =
   | 'mcp-servers'
   | 'release-notes'
   | 'session-fork'
+  | 'session-intent'
+  | 'terminal-session-create'
 
-export type DialogPayload = { parentSessionId: string } | null
+export type DialogPayload =
+  | { parentSessionId: string }
+  | { workspaceId: string | null }
+  | null

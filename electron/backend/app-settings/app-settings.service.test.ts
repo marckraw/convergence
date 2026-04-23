@@ -26,6 +26,7 @@ function buildDescriptors(): ProviderDescriptor[] {
       id: 'claude-code',
       name: 'Claude Code',
       vendorLabel: 'Anthropic',
+      kind: 'conversation',
       supportsContinuation: true,
       defaultModelId: 'sonnet',
       modelOptions: [
@@ -57,6 +58,7 @@ function buildDescriptors(): ProviderDescriptor[] {
       id: 'codex',
       name: 'Codex',
       vendorLabel: 'OpenAI',
+      kind: 'conversation',
       supportsContinuation: true,
       defaultModelId: 'gpt-5.4',
       modelOptions: [

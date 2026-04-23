@@ -104,10 +104,13 @@ export interface ProviderStatusInfo {
   reason: string | null
 }
 
+export type ProviderKind = 'conversation' | 'shell'
+
 export interface ProviderDescriptor {
   id: string
   name: string
   vendorLabel: string
+  kind: ProviderKind
   supportsContinuation: boolean
   defaultModelId: string
   fastModelId?: string | null
