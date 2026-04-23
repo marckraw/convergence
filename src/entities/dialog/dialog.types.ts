@@ -6,7 +6,6 @@ export type DialogKind =
   | 'release-notes'
   | 'session-fork'
   | 'session-intent'
-  | 'terminal-session-create'
   | 'workspace-create'
 
 export type DialogPayload =

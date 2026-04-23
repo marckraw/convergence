@@ -16,7 +16,6 @@ import { applyTheme, getStoredTheme } from '@/shared/lib/theme'
 import { CommandCenterContainer } from '@/features/command-center'
 import { SessionForkDialogContainer } from '@/features/session-fork'
 import { SessionIntentDialogContainer } from '@/features/session-intent-dialog'
-import { TerminalSessionCreateDialogContainer } from '@/features/terminal-session-create'
 import { NotificationsToastHostContainer } from '@/features/notifications-toast-host'
 import { UpdatesToastContainer } from '@/features/updates-toast'
 import { FeedbackButtonContainer } from '@/features/feedback-button'
@@ -196,7 +195,6 @@ export function App() {
       <CommandCenterContainer />
       <SessionForkDialogContainer />
       <SessionIntentDialogContainer />
-      <TerminalSessionCreateDialogContainer />
       <NotificationsToastHostContainer />
       <UpdatesToastContainer />
       <FeedbackButtonContainer />

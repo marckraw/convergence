@@ -1,6 +1,6 @@
 import { useProjectStore } from '@/entities/project'
 import { useWorkspaceStore } from '@/entities/workspace'
-import { useSessionStore } from '@/entities/session'
+import { sessionApi, useSessionStore } from '@/entities/session'
 import { useDialogStore, type DialogKind } from '@/entities/dialog'
 import { useUpdatesStore } from '@/entities/updates'
 
@@ -83,7 +83,18 @@ export async function beginTerminalSessionDraft(
       await activateProject(workspace.projectId)
     }
   }
-  useDialogStore.getState().open('terminal-session-create', { workspaceId })
+  const activeProject = useProjectStore.getState().activeProject
+  if (!activeProject) return
+  const session = await sessionApi.create({
+    projectId: activeProject.id,
+    workspaceId,
+    providerId: 'shell',
+    model: null,
+    effort: null,
+    name: 'Terminal',
+    primarySurface: 'terminal',
+  })
+  useSessionStore.getState().setActiveSession(session.id)
 }
 
 export async function beginWorkspaceDraft(projectId: string): Promise<void> {
