@@ -1,5 +1,11 @@
 # convergence
 
+## 0.21.1
+
+### Patch Changes
+
+- 6b1d745: Fix structured-summary session forks so additional instructions stay visible in the preview and are applied to the final seed when the fork is created.
+
 ## 0.21.0
 
 ### Minor Changes
