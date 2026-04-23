@@ -144,6 +144,20 @@ export class SessionService {
     await this.runNaming(session)
   }
 
+  markShellSessionExited(id: string, exitCode: number): void {
+    const session = this.getById(id)
+    if (!session) return
+    if (session.providerId !== 'shell') return
+
+    this.applySessionPatch(id, {
+      status: exitCode === 0 ? 'completed' : 'failed',
+      attention: exitCode === 0 ? 'finished' : 'failed',
+      activity: null,
+      updatedAt: new Date().toISOString(),
+    })
+    this.notifySessionChange(id)
+  }
+
   private async runNaming(session: SessionSummary): Promise<void> {
     if (!this.namer) return
     const title = await this.namer.generateName(

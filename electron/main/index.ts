@@ -372,6 +372,10 @@ async function startApp(): Promise<void> {
     createNodePtyFactory(),
     broadcastToRenderers,
   )
+  terminalService.setSessionLastTerminalExitObserver(
+    ({ sessionId, exitCode }) =>
+      sessionService.markShellSessionExited(sessionId, exitCode),
+  )
   registerTerminalIpcHandlers(terminalService)
 
   const terminalLayoutService = new TerminalLayoutService({

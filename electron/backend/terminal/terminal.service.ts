@@ -18,6 +18,15 @@ import type {
 
 export type TerminalEventEmitter = (channel: string, payload: unknown) => void
 export type PsRunner = () => Promise<string>
+export interface TerminalSessionExitEvent {
+  sessionId: string
+  terminalId: string
+  exitCode: number
+  signal: number | null
+}
+export type TerminalSessionExitObserver = (
+  event: TerminalSessionExitEvent,
+) => void
 
 const defaultPsRunner: PsRunner = () =>
   new Promise((resolve, reject) => {
@@ -29,6 +38,7 @@ const defaultPsRunner: PsRunner = () =>
 
 export class TerminalService {
   private handles = new Map<string, TerminalHandle>()
+  private onSessionLastTerminalExit: TerminalSessionExitObserver | null = null
 
   constructor(
     private readonly ptyFactory: PtyFactory,
@@ -36,6 +46,12 @@ export class TerminalService {
     private readonly env: NodeJS.ProcessEnv = process.env,
     private readonly psRunner: PsRunner = defaultPsRunner,
   ) {}
+
+  setSessionLastTerminalExitObserver(
+    observer: TerminalSessionExitObserver | null,
+  ): void {
+    this.onSessionLastTerminalExit = observer
+  }
 
   create(input: CreateTerminalInput): CreateTerminalResult {
     const { shell, args } = resolveDefaultShell(this.env)
@@ -58,7 +74,16 @@ export class TerminalService {
 
     const exitDisposable = pty.onExit((payload: TerminalExitPayload) => {
       this.emit(exitChannel(id), payload)
+      const sessionId = input.sessionId
       this.cleanup(id)
+      if (this.countHandlesForSession(sessionId) === 0) {
+        this.onSessionLastTerminalExit?.({
+          sessionId,
+          terminalId: id,
+          exitCode: payload.exitCode,
+          signal: payload.signal,
+        })
+      }
     })
 
     this.handles.set(id, {
@@ -143,6 +168,14 @@ export class TerminalService {
 
   size(): number {
     return this.handles.size
+  }
+
+  private countHandlesForSession(sessionId: string): number {
+    let count = 0
+    for (const handle of this.handles.values()) {
+      if (handle.sessionId === sessionId) count += 1
+    }
+    return count
   }
 
   private cleanup(id: string): void {

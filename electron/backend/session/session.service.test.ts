@@ -674,6 +674,60 @@ describe('SessionService', () => {
     })
   })
 
+  it('marks shell sessions finished when their last terminal exits cleanly', () => {
+    const transitions: Array<{
+      sessionId: string
+      prev: AttentionState
+      next: AttentionState
+    }> = []
+    service.setAttentionObserver({
+      onAttentionTransition: (prev, next, session) => {
+        transitions.push({ sessionId: session.id, prev, next })
+      },
+    })
+
+    const session = service.create({
+      projectId,
+      workspaceId: null,
+      providerId: 'shell',
+      model: null,
+      effort: null,
+      name: 'shell session',
+      primarySurface: 'terminal',
+    })
+
+    service.markShellSessionExited(session.id, 0)
+
+    expect(service.getById(session.id)).toMatchObject({
+      status: 'completed',
+      attention: 'finished',
+    })
+    expect(transitions).toContainEqual({
+      sessionId: session.id,
+      prev: 'none',
+      next: 'finished',
+    })
+  })
+
+  it('marks shell sessions failed when their last terminal exits non-zero', () => {
+    const session = service.create({
+      projectId,
+      workspaceId: null,
+      providerId: 'shell',
+      model: null,
+      effort: null,
+      name: 'shell failed',
+      primarySurface: 'terminal',
+    })
+
+    service.markShellSessionExited(session.id, 23)
+
+    expect(service.getById(session.id)).toMatchObject({
+      status: 'failed',
+      attention: 'failed',
+    })
+  })
+
   it('keeps continuation-capable sessions active after completion', async () => {
     const db = getDatabase()
     const registry = new ProviderRegistry()
