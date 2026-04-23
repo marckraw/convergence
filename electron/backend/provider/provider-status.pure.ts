@@ -23,7 +23,7 @@ const KNOWN_PROVIDERS: KnownProvider[] = [
   {
     id: 'pi',
     name: 'Pi Agent',
-    vendorLabel: 'Mario Zechner',
+    vendorLabel: 'Pi',
     binaryName: 'pi',
   },
 ]

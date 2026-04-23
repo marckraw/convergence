@@ -162,7 +162,7 @@ export function buildFallbackPiDescriptor(): ProviderDescriptor {
   return {
     id: 'pi',
     name: 'Pi Agent',
-    vendorLabel: 'Mario Zechner',
+    vendorLabel: 'Pi',
     supportsContinuation: true,
     defaultModelId: 'default',
     modelOptions: [
