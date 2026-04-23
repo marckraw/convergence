@@ -35,11 +35,15 @@ export class WorkspaceService {
 
     const branchExists = await this.git.branchExists(repoPath, input.branchName)
     const createBranch = !branchExists
+    const overrideBaseBranch = input.baseBranch?.trim() || null
+    const useBaseBranchStart =
+      overrideBaseBranch !== null ||
+      settings.workspaceCreation.startStrategy === 'base-branch'
     const startPoint =
-      createBranch && settings.workspaceCreation.startStrategy === 'base-branch'
+      createBranch && useBaseBranchStart
         ? await this.git.resolveBaseBranchStartPoint(
             repoPath,
-            settings.workspaceCreation.baseBranchName,
+            overrideBaseBranch ?? settings.workspaceCreation.baseBranchName,
           )
         : undefined
 

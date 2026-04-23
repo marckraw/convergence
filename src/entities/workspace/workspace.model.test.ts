@@ -76,11 +76,14 @@ describe('useWorkspaceStore', () => {
     mockElectronAPI.workspace.getByProjectId.mockResolvedValue([mockWorkspace])
     mockElectronAPI.workspace.getAll.mockResolvedValue([mockWorkspace])
 
-    await useWorkspaceStore.getState().createWorkspace('proj-1', 'feature-test')
+    await useWorkspaceStore
+      .getState()
+      .createWorkspace('proj-1', 'feature-test', 'develop')
 
     expect(mockElectronAPI.workspace.create).toHaveBeenCalledWith({
       projectId: 'proj-1',
       branchName: 'feature-test',
+      baseBranch: 'develop',
     })
     expect(useWorkspaceStore.getState().workspaces).toEqual([mockWorkspace])
     expect(useWorkspaceStore.getState().globalWorkspaces).toEqual([

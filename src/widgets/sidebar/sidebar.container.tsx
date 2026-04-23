@@ -15,8 +15,10 @@ import {
   ProviderStatusDialogContainer,
   ReleaseNotesDialogContainer,
   ThemeToggleButton,
+  WorkspaceCreateDialogContainer,
 } from '@/features'
 import { switchToSession } from '@/features/command-center'
+import { useDialogStore } from '@/entities/dialog'
 import { NeedsYou } from './needs-you.presentational'
 import { buildNeedsYouSummary } from './needs-you.presentational'
 import { ProjectTree } from './project-tree.container'
@@ -48,8 +50,8 @@ export const Sidebar: FC<SidebarProps> = ({
   const currentBranch = useWorkspaceStore((s) => s.currentBranch)
   const loadWorkspaces = useWorkspaceStore((s) => s.loadWorkspaces)
   const loadCurrentBranch = useWorkspaceStore((s) => s.loadCurrentBranch)
-  const createWorkspace = useWorkspaceStore((s) => s.createWorkspace)
   const deleteWorkspace = useWorkspaceStore((s) => s.deleteWorkspace)
+  const openDialog = useDialogStore((s) => s.open)
   const sessions = useSessionStore((s) => s.sessions)
   const globalSessions = useSessionStore((s) => s.globalSessions)
   const needsYouDismissals = useSessionStore((s) => s.needsYouDismissals)
@@ -238,9 +240,7 @@ export const Sidebar: FC<SidebarProps> = ({
             regeneratingSessionIds={regeneratingSessionIds}
             onRegenerateSessionName={handleRegenerateSessionName}
             onDeleteWorkspace={handleDeleteWorkspace}
-            onCreateWorkspace={(branchName: string) =>
-              createWorkspace(activeProject.id, branchName)
-            }
+            onOpenCreateWorkspace={() => openDialog('workspace-create')}
           />
         ) : (
           <div className="px-3 text-center">
@@ -274,6 +274,8 @@ export const Sidebar: FC<SidebarProps> = ({
           <ReleaseNotesDialogContainer />
         </div>
       </div>
+
+      <WorkspaceCreateDialogContainer />
     </div>
   )
 }

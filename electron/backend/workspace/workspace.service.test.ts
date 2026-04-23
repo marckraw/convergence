@@ -141,6 +141,39 @@ describe('WorkspaceService', () => {
     expect(workspaceHead).not.toBe(featureHead)
   })
 
+  it('uses the input baseBranch override instead of the project setting', async () => {
+    getDatabase()
+      .prepare('UPDATE projects SET settings = ? WHERE id = ?')
+      .run(
+        JSON.stringify({
+          workspaceCreation: {
+            startStrategy: 'current-head',
+            baseBranchName: null,
+          },
+        }),
+        projectId,
+      )
+
+    git(repoPath, ['checkout', '-b', 'develop'])
+    git(repoPath, ['commit', '--allow-empty', '-m', 'develop change'])
+    const developHead = git(repoPath, ['rev-parse', 'HEAD'])
+
+    git(repoPath, ['checkout', 'master'])
+    git(repoPath, ['checkout', '-b', 'feature-source'])
+    git(repoPath, ['commit', '--allow-empty', '-m', 'feature change'])
+    const featureHead = git(repoPath, ['rev-parse', 'HEAD'])
+
+    const ws = await service.create({
+      projectId,
+      branchName: 'feature-from-develop',
+      baseBranch: 'develop',
+    })
+
+    const workspaceHead = git(ws.path, ['rev-parse', 'HEAD'])
+    expect(workspaceHead).toBe(developHead)
+    expect(workspaceHead).not.toBe(featureHead)
+  })
+
   it('uses the current HEAD when the project is configured for that strategy', async () => {
     getDatabase()
       .prepare('UPDATE projects SET settings = ? WHERE id = ?')

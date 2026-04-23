@@ -14,7 +14,11 @@ interface WorkspaceActions {
   loadWorkspaces: (projectId: string) => Promise<void>
   loadGlobalWorkspaces: () => Promise<void>
   loadCurrentBranch: (repoPath: string) => Promise<void>
-  createWorkspace: (projectId: string, branchName: string) => Promise<void>
+  createWorkspace: (
+    projectId: string,
+    branchName: string,
+    baseBranch?: string | null,
+  ) => Promise<void>
   deleteWorkspace: (id: string, projectId: string) => Promise<void>
   clearError: () => void
 }
@@ -53,10 +57,14 @@ export const useWorkspaceStore = create<WorkspaceStore>((set) => ({
     }
   },
 
-  createWorkspace: async (projectId: string, branchName: string) => {
+  createWorkspace: async (
+    projectId: string,
+    branchName: string,
+    baseBranch?: string | null,
+  ) => {
     set({ error: null })
     try {
-      await workspaceApi.create({ projectId, branchName })
+      await workspaceApi.create({ projectId, branchName, baseBranch })
       const [workspaces, globalWorkspaces] = await Promise.all([
         workspaceApi.getByProjectId(projectId),
         workspaceApi.getAll(),

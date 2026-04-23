@@ -12,6 +12,7 @@ export interface Workspace {
 export interface CreateWorkspaceInput {
   projectId: string
   branchName: string
+  baseBranch?: string | null
 }
 
 export function workspaceFromRow(row: WorkspaceRow): Workspace {
