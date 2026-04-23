@@ -1,9 +1,10 @@
 import { useCallback, useState } from 'react'
 import type { FC } from 'react'
+import { toast } from 'sonner'
 import { useDialogStore } from '@/entities/dialog'
 import { useProjectStore } from '@/entities/project'
 import { useSessionStore } from '@/entities/session'
-import { sessionApi } from '@/entities/session'
+import { useWorkspaceStore } from '@/entities/workspace'
 import { SessionIntentDialog } from './session-intent-dialog.presentational'
 
 export const SessionIntentDialogContainer: FC = () => {
@@ -11,8 +12,9 @@ export const SessionIntentDialogContainer: FC = () => {
   const payload = useDialogStore((s) => s.payload)
   const closeDialog = useDialogStore((s) => s.close)
   const beginSessionDraft = useSessionStore((s) => s.beginSessionDraft)
-  const setActiveSession = useSessionStore((s) => s.setActiveSession)
+  const createTerminalSession = useSessionStore((s) => s.createTerminalSession)
   const activeProject = useProjectStore((s) => s.activeProject)
+  const workspaces = useWorkspaceStore((s) => s.workspaces)
   const [creating, setCreating] = useState(false)
 
   const workspaceId =
@@ -26,26 +28,35 @@ export const SessionIntentDialogContainer: FC = () => {
   const handleSelectTerminal = useCallback(async () => {
     if (creating) return
     if (!activeProject) {
+      toast.error('No active project. Open a project first.')
       closeDialog()
       return
     }
+    const workspace = workspaceId
+      ? workspaces.find((w) => w.id === workspaceId)
+      : null
+    const name = workspace ? `Terminal — ${workspace.branchName}` : 'Terminal'
     setCreating(true)
     try {
-      const session = await sessionApi.create({
-        projectId: activeProject.id,
-        workspaceId,
-        providerId: 'shell',
-        model: null,
-        effort: null,
-        name: 'Terminal',
-        primarySurface: 'terminal',
-      })
-      setActiveSession(session.id)
+      await createTerminalSession(activeProject.id, workspaceId, name)
+      closeDialog()
+    } catch (err) {
+      toast.error(
+        err instanceof Error
+          ? `Failed to create terminal session: ${err.message}`
+          : 'Failed to create terminal session',
+      )
     } finally {
       setCreating(false)
-      closeDialog()
     }
-  }, [activeProject, workspaceId, creating, closeDialog, setActiveSession])
+  }, [
+    activeProject,
+    workspaceId,
+    workspaces,
+    creating,
+    closeDialog,
+    createTerminalSession,
+  ])
 
   const handleOpenChange = useCallback(
     (next: boolean) => {

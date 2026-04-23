@@ -1,6 +1,6 @@
 import { useProjectStore } from '@/entities/project'
 import { useWorkspaceStore } from '@/entities/workspace'
-import { sessionApi, useSessionStore } from '@/entities/session'
+import { useSessionStore } from '@/entities/session'
 import { useDialogStore, type DialogKind } from '@/entities/dialog'
 import { useUpdatesStore } from '@/entities/updates'
 
@@ -75,26 +75,22 @@ export async function beginSessionDraft(workspaceId: string): Promise<void> {
 export async function beginTerminalSessionDraft(
   workspaceId: string | null,
 ): Promise<void> {
+  let branchName: string | null = null
   if (workspaceId) {
     const workspace = useWorkspaceStore
       .getState()
       .globalWorkspaces.find((w) => w.id === workspaceId)
     if (workspace) {
+      branchName = workspace.branchName
       await activateProject(workspace.projectId)
     }
   }
   const activeProject = useProjectStore.getState().activeProject
   if (!activeProject) return
-  const session = await sessionApi.create({
-    projectId: activeProject.id,
-    workspaceId,
-    providerId: 'shell',
-    model: null,
-    effort: null,
-    name: 'Terminal',
-    primarySurface: 'terminal',
-  })
-  useSessionStore.getState().setActiveSession(session.id)
+  const name = branchName ? `Terminal — ${branchName}` : 'Terminal'
+  await useSessionStore
+    .getState()
+    .createTerminalSession(activeProject.id, workspaceId, name)
 }
 
 export async function beginWorkspaceDraft(projectId: string): Promise<void> {

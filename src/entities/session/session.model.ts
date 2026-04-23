@@ -50,6 +50,11 @@ interface SessionActions {
     message: string,
     attachmentIds?: string[],
   ) => Promise<void>
+  createTerminalSession: (
+    projectId: string,
+    workspaceId: string | null,
+    name: string,
+  ) => Promise<SessionSummary>
   approveSession: (id: string) => Promise<void>
   denySession: (id: string) => Promise<void>
   sendMessageToSession: (
@@ -333,6 +338,32 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
         error: err instanceof Error ? err.message : 'Failed to start session',
       })
     }
+  },
+
+  createTerminalSession: async (projectId, workspaceId, name) => {
+    const session = await sessionApi.create({
+      projectId,
+      workspaceId,
+      providerId: 'shell',
+      model: null,
+      effort: null,
+      name,
+      primarySurface: 'terminal',
+    })
+    set((state) => ({
+      currentProjectId: projectId,
+      sessions:
+        state.currentProjectId === projectId
+          ? [session, ...state.sessions]
+          : state.sessions,
+      globalSessions: [session, ...state.globalSessions],
+      activeConversation: [],
+      activeConversationSessionId: session.id,
+      activeSessionId: session.id,
+      draftWorkspaceId: null,
+    }))
+    get().recordRecentSession(session.id)
+    return session
   },
 
   approveSession: async (id: string) => {

@@ -4,23 +4,19 @@ import { useDialogStore } from '@/entities/dialog'
 import { SessionIntentDialogContainer } from './session-intent-dialog.container'
 
 const beginSessionDraftMock = vi.fn()
-const setActiveSessionMock = vi.fn()
-const createSessionMock = vi.fn()
+const createTerminalSessionMock = vi.fn()
 
 vi.mock('@/entities/session', () => ({
   useSessionStore: (
     selector: (state: {
       beginSessionDraft: typeof beginSessionDraftMock
-      setActiveSession: typeof setActiveSessionMock
+      createTerminalSession: typeof createTerminalSessionMock
     }) => unknown,
   ) =>
     selector({
       beginSessionDraft: beginSessionDraftMock,
-      setActiveSession: setActiveSessionMock,
+      createTerminalSession: createTerminalSessionMock,
     }),
-  sessionApi: {
-    create: (...args: unknown[]) => createSessionMock(...args),
-  },
 }))
 
 vi.mock('@/entities/project', () => ({
@@ -28,12 +24,25 @@ vi.mock('@/entities/project', () => ({
     selector({ activeProject: { id: 'p1', name: 'Proj' } }),
 }))
 
+vi.mock('@/entities/workspace', () => ({
+  useWorkspaceStore: (selector: (state: unknown) => unknown) =>
+    selector({
+      workspaces: [
+        { id: 'ws-1', branchName: 'feature/x' },
+        { id: 'ws-2', branchName: 'main' },
+      ],
+    }),
+}))
+
+vi.mock('sonner', () => ({
+  toast: { error: vi.fn() },
+}))
+
 describe('SessionIntentDialogContainer', () => {
   beforeEach(() => {
     beginSessionDraftMock.mockReset()
-    setActiveSessionMock.mockReset()
-    createSessionMock.mockReset()
-    createSessionMock.mockResolvedValue({
+    createTerminalSessionMock.mockReset()
+    createTerminalSessionMock.mockResolvedValue({
       id: 'new-session',
       providerId: 'shell',
       primarySurface: 'terminal',
@@ -70,7 +79,7 @@ describe('SessionIntentDialogContainer', () => {
     expect(beginSessionDraftMock).toHaveBeenCalledWith('ws-1')
   })
 
-  it('picking Terminal creates a shell session in the payload workspace and closes the dialog', async () => {
+  it('picking Terminal creates a shell session in the payload workspace, with a name derived from the branch, and closes the dialog', async () => {
     const close = vi.fn()
     useDialogStore.setState({
       openDialog: 'session-intent',
@@ -84,24 +93,19 @@ describe('SessionIntentDialogContainer', () => {
     fireEvent.click(screen.getByTestId('session-intent-terminal'))
 
     await waitFor(() => {
-      expect(createSessionMock).toHaveBeenCalledTimes(1)
+      expect(createTerminalSessionMock).toHaveBeenCalledTimes(1)
     })
-    expect(createSessionMock).toHaveBeenCalledWith({
-      projectId: 'p1',
-      workspaceId: 'ws-1',
-      providerId: 'shell',
-      model: null,
-      effort: null,
-      name: 'Terminal',
-      primarySurface: 'terminal',
-    })
-    expect(setActiveSessionMock).toHaveBeenCalledWith('new-session')
+    expect(createTerminalSessionMock).toHaveBeenCalledWith(
+      'p1',
+      'ws-1',
+      'Terminal — feature/x',
+    )
     await waitFor(() => {
       expect(close).toHaveBeenCalled()
     })
   })
 
-  it('picking Terminal at project root passes null workspaceId', async () => {
+  it('picking Terminal at project root passes null workspaceId and a plain "Terminal" name', async () => {
     useDialogStore.setState({
       openDialog: 'session-intent',
       payload: { workspaceId: null },
@@ -114,8 +118,10 @@ describe('SessionIntentDialogContainer', () => {
     fireEvent.click(screen.getByTestId('session-intent-terminal'))
 
     await waitFor(() => {
-      expect(createSessionMock).toHaveBeenCalledWith(
-        expect.objectContaining({ workspaceId: null }),
+      expect(createTerminalSessionMock).toHaveBeenCalledWith(
+        'p1',
+        null,
+        'Terminal',
       )
     })
   })
