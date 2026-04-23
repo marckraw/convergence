@@ -10,6 +10,14 @@ export { useSessionStore } from './session'
 export type { AppSettings, AppSettingsInput } from './app-settings'
 export { useAppSettingsStore } from './app-settings'
 
+export type {
+  FeedbackContext,
+  FeedbackKind,
+  FeedbackSubmissionResult,
+  SubmitFeedbackInput,
+} from './feedback'
+export { feedbackApi } from './feedback'
+
 export type { UpdatePrefs, UpdateStatus, UpdateTrigger } from './updates'
 export { DEFAULT_UPDATE_PREFS, INITIAL_UPDATE_STATUS } from './updates'
 

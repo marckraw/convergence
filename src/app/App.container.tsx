@@ -16,6 +16,7 @@ import { CommandCenterContainer } from '@/features/command-center'
 import { SessionForkDialogContainer } from '@/features/session-fork'
 import { NotificationsToastHostContainer } from '@/features/notifications-toast-host'
 import { UpdatesToastContainer } from '@/features/updates-toast'
+import { FeedbackButtonContainer } from '@/features/feedback-button'
 import { AppShell } from './App.layout'
 
 export function App() {
@@ -181,6 +182,7 @@ export function App() {
       <SessionForkDialogContainer />
       <NotificationsToastHostContainer />
       <UpdatesToastContainer />
+      <FeedbackButtonContainer />
       <Toaster position="bottom-right" />
     </TooltipProvider>
   )
