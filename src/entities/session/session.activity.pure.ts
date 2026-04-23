@@ -6,6 +6,7 @@ export function formatActivityLabel(
   if (!activity) return null
   if (activity === 'streaming') return 'streaming…'
   if (activity === 'thinking') return 'thinking…'
+  if (activity === 'compacting') return 'compacting context…'
   if (activity === 'waiting-approval') return 'awaiting approval'
   if (activity.startsWith('tool:')) {
     const name = activity.slice('tool:'.length).trim()

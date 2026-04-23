@@ -77,6 +77,47 @@ describe('reduceCodexActivity', () => {
     expect(activity).toBe('keep')
   })
 
+  it('emits compacting when context compaction starts', () => {
+    const { state, activity } = reduceCodexActivity(
+      initialCodexActivityState(),
+      {
+        kind: 'notification',
+        method: 'item/started',
+        params: { item: { type: 'contextCompaction' } },
+      },
+    )
+    expect(activity).toBe('compacting')
+    expect(state.lastActivity).toBe('compacting')
+  })
+
+  it('clears compacting when context compaction completes', () => {
+    const prev = reduceCodexActivity(initialCodexActivityState(), {
+      kind: 'notification',
+      method: 'item/started',
+      params: { item: { type: 'contextCompaction' } },
+    }).state
+    const { state, activity } = reduceCodexActivity(prev, {
+      kind: 'notification',
+      method: 'item/completed',
+      params: { item: { type: 'contextCompaction' } },
+    })
+    expect(activity).toBeNull()
+    expect(state.lastActivity).toBeNull()
+  })
+
+  it('accepts deprecated compacted item variants', () => {
+    const { state, activity } = reduceCodexActivity(
+      initialCodexActivityState(),
+      {
+        kind: 'notification',
+        method: 'item/started',
+        params: { item: { type: 'compacted' } },
+      },
+    )
+    expect(activity).toBe('compacting')
+    expect(state.lastActivity).toBe('compacting')
+  })
+
   it('clears state on turn/completed', () => {
     const prev = reduceCodexActivity(initialCodexActivityState(), {
       kind: 'request',

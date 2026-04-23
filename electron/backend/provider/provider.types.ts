@@ -26,6 +26,7 @@ export type ActivitySignal =
   | null
   | 'streaming'
   | 'thinking'
+  | 'compacting'
   | 'waiting-approval'
   | `tool:${string}`
 

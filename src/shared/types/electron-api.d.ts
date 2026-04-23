@@ -54,6 +54,13 @@ type ReasoningEffort =
   | 'high'
   | 'max'
   | 'xhigh'
+type ActivitySignal =
+  | null
+  | 'streaming'
+  | 'thinking'
+  | 'compacting'
+  | 'waiting-approval'
+  | `tool:${string}`
 type ContextWindowSource = 'provider' | 'estimated'
 type SessionContextWindow =
   | {

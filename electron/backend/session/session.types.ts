@@ -62,6 +62,7 @@ function parseActivity(value: string | null): ActivitySignal {
   if (
     value === 'streaming' ||
     value === 'thinking' ||
+    value === 'compacting' ||
     value === 'waiting-approval'
   ) {
     return value

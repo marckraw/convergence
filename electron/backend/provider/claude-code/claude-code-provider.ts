@@ -355,9 +355,29 @@ export class ClaudeCodeProvider implements Provider {
     function handleEvent(data: unknown): void {
       if (stopped) return
       const event = data as ClaudeStreamEvent
-      const activityDelta = deriveClaudeActivity(data)
+      const previousActivity = lastActivity
+      const activityDelta = deriveClaudeActivity(data, previousActivity)
       if (activityDelta !== 'keep') {
         setActivity(activityDelta)
+        if (
+          activityDelta === 'compacting' &&
+          previousActivity !== 'compacting'
+        ) {
+          sessionEmitter.addNote({
+            text: 'Compacting context...',
+            level: 'info',
+            providerEventType: 'compaction',
+          })
+        } else if (
+          previousActivity === 'compacting' &&
+          activityDelta !== 'compacting'
+        ) {
+          sessionEmitter.addNote({
+            text: 'Compaction complete',
+            level: 'info',
+            providerEventType: 'compaction',
+          })
+        }
       }
       if (event.session_id) {
         setContinuationToken(event.session_id)
@@ -375,8 +395,8 @@ export class ClaudeCodeProvider implements Provider {
       switch (event.type) {
         case 'system': {
           // Skip hook events — they're internal
-          const subtype = (event as unknown as Record<string, unknown>)
-            .subtype as string | undefined
+          const rawEvent = event as unknown as Record<string, unknown>
+          const subtype = rawEvent.subtype as string | undefined
           if (
             subtype === 'hook_started' ||
             subtype === 'hook_response' ||

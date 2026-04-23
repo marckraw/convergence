@@ -136,4 +136,25 @@ describe('SessionView changed files drawer', () => {
       expect(screen.getByTitle('Use wide width')).toBeInTheDocument()
     })
   })
+
+  it('shows the live session activity in the header', async () => {
+    useSessionStore.setState((state) => ({
+      ...state,
+      sessions: state.sessions.map((session) =>
+        session.id === 'session-1'
+          ? { ...session, status: 'running', activity: 'compacting' }
+          : session,
+      ),
+    }))
+
+    render(
+      <TooltipProvider>
+        <SessionView />
+      </TooltipProvider>,
+    )
+
+    expect(screen.getByTestId('session-activity-indicator')).toHaveTextContent(
+      'compacting context…',
+    )
+  })
 })

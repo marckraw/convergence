@@ -70,6 +70,34 @@ describe('reducePiActivity', () => {
     expect(state.lastStreamingKind).toBeNull()
   })
 
+  it('maps compaction_start to compacting without losing streaming kind', () => {
+    const state = reducePiActivity(initialPiActivityState(), {
+      kind: 'text_delta',
+    }).state
+    const { activity, state: next } = reducePiActivity(state, {
+      kind: 'compaction_start',
+    })
+    expect(activity).toBe('compacting')
+    expect(next.lastStreamingKind).toBe('streaming')
+  })
+
+  it('restores prior streaming kind on compaction_end', () => {
+    let state = reducePiActivity(initialPiActivityState(), {
+      kind: 'thinking_delta',
+    }).state
+    state = reducePiActivity(state, { kind: 'compaction_start' }).state
+    const { activity } = reducePiActivity(state, { kind: 'compaction_end' })
+    expect(activity).toBe('thinking')
+  })
+
+  it('goes to null on compaction_end when no prior streaming', () => {
+    const after = reducePiActivity(initialPiActivityState(), {
+      kind: 'compaction_start',
+    }).state
+    const { activity } = reducePiActivity(after, { kind: 'compaction_end' })
+    expect(activity).toBeNull()
+  })
+
   it('clears on close', () => {
     const after = reducePiActivity(initialPiActivityState(), {
       kind: 'tool_start',
