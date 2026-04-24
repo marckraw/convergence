@@ -178,7 +178,7 @@ describe('buildPaletteIndex', () => {
     expect(sessionItems).toHaveLength(1)
   })
 
-  it('emits all five dialog items', () => {
+  it('emits all dialog items', () => {
     const items = buildPaletteIndex({
       projects: [],
       workspaces: [],

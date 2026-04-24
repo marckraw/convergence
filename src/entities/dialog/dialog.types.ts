@@ -1,5 +1,6 @@
 export type DialogKind =
   | 'app-settings'
+  | 'initiative-workboard'
   | 'project-settings'
   | 'providers'
   | 'mcp-servers'

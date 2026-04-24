@@ -225,7 +225,7 @@ describe('buildCuratedSections', () => {
     expect(sections.find((s) => s.id === 'workspaces')!.items).toHaveLength(8)
   })
 
-  it('always emits the five dialog items plus the check-updates entry', () => {
+  it('always emits the dialog items plus the check-updates entry', () => {
     const sections = buildCuratedSections([], {}, [])
     const dialogs = sections.find((s) => s.id === 'dialogs')!
     expect(dialogs.items).toHaveLength(0)
@@ -233,7 +233,7 @@ describe('buildCuratedSections', () => {
     const items = buildItems({ projects: [], workspaces: [], sessions: [] })
     const allSections = buildCuratedSections(items, {}, [])
     const dialogSection = allSections.find((s) => s.id === 'dialogs')!
-    expect(dialogSection.items).toHaveLength(6)
+    expect(dialogSection.items).toHaveLength(7)
     expect(
       dialogSection.items.some((item) => item.kind === 'check-updates'),
     ).toBe(true)
