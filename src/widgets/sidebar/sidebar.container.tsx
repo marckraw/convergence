@@ -259,7 +259,7 @@ export const Sidebar: FC<SidebarProps> = ({
           className="w-full"
         >
           <Plus className="h-4 w-4" />
-          {activeProject ? 'New Project' : 'Create Project'}
+          Open a project
         </Button>
         <div className="mt-2">
           <ProjectSettingsDialogContainer />

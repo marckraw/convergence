@@ -42,14 +42,14 @@ describe('SearchableSelect', () => {
         value="Select project"
         items={[]}
         onChange={vi.fn()}
-        action={{ label: 'Create Project', onSelect: onCreate }}
+        action={{ label: 'Open a project', onSelect: onCreate }}
       />,
     )
 
     fireEvent.click(screen.getByRole('combobox', { name: /select project/i }))
 
     fireEvent.click(
-      await screen.findByRole('button', { name: /create project/i }),
+      await screen.findByRole('button', { name: /open a project/i }),
     )
 
     expect(onCreate).toHaveBeenCalledTimes(1)
