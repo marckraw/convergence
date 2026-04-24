@@ -1,5 +1,11 @@
 # convergence
 
+## 0.23.1
+
+### Patch Changes
+
+- 081f84b: Fix text overflow in Project Settings workspace start point buttons. Description text now wraps inside the button instead of being clipped at the button edge.
+
 ## 0.23.0
 
 ### Minor Changes
