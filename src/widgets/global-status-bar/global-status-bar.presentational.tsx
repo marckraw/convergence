@@ -59,7 +59,7 @@ export const GlobalStatusBar: FC<GlobalStatusBarProps> = ({
         </div>
       ) : (
         <>
-          <Tooltip>
+          <Tooltip delayDuration={120}>
             <TooltipTrigger asChild>
               <div className={zoneClass} data-testid="global-status-aggregate">
                 <div className={aggregateChipClass}>
@@ -115,7 +115,7 @@ export const GlobalStatusBar: FC<GlobalStatusBarProps> = ({
             data-testid="global-status-chips"
           >
             {byProject.map((project) => (
-              <Tooltip key={project.projectId}>
+              <Tooltip key={project.projectId} delayDuration={120}>
                 <TooltipTrigger asChild>
                   <Button
                     type="button"
@@ -167,7 +167,7 @@ export const GlobalStatusBar: FC<GlobalStatusBarProps> = ({
       )}
 
       {recency ? (
-        <Tooltip>
+        <Tooltip delayDuration={120}>
           <TooltipTrigger asChild>
             <Button
               type="button"
