@@ -6,6 +6,8 @@ import {
   useInitiativeStore,
   type Initiative,
   type InitiativeAttemptRole,
+  type InitiativeOutputKind,
+  type InitiativeOutputStatus,
   type InitiativeStatus,
 } from '@/entities/initiative'
 import { useProjectStore } from '@/entities/project'
@@ -16,12 +18,21 @@ import {
   InitiativeWorkboardDialog,
   type InitiativeAttemptView,
   type InitiativeDraft,
+  type InitiativeOutputDraft,
 } from './initiative-workboard.presentational'
 
 const emptyDraft: InitiativeDraft = {
   title: '',
   status: 'exploring',
   currentUnderstanding: '',
+}
+
+const emptyOutputDraft: InitiativeOutputDraft = {
+  kind: 'pull-request',
+  label: '',
+  value: '',
+  status: 'planned',
+  sourceSessionId: '',
 }
 
 function draftFromInitiative(initiative: Initiative | null): InitiativeDraft {
@@ -57,6 +68,9 @@ export const InitiativeWorkboardDialogContainer: FC<{
   const updateAttempt = useInitiativeStore((s) => s.updateAttempt)
   const setPrimaryAttempt = useInitiativeStore((s) => s.setPrimaryAttempt)
   const unlinkAttempt = useInitiativeStore((s) => s.unlinkAttempt)
+  const addOutput = useInitiativeStore((s) => s.addOutput)
+  const updateOutput = useInitiativeStore((s) => s.updateOutput)
+  const deleteOutput = useInitiativeStore((s) => s.deleteOutput)
   const clearError = useInitiativeStore((s) => s.clearError)
   const projects = useProjectStore((s) => s.projects)
   const sessions = useSessionStore((s) => s.globalSessions)
@@ -64,8 +78,12 @@ export const InitiativeWorkboardDialogContainer: FC<{
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [createTitle, setCreateTitle] = useState('')
   const [draft, setDraft] = useState<InitiativeDraft>(emptyDraft)
+  const [outputDraft, setOutputDraft] =
+    useState<InitiativeOutputDraft>(emptyOutputDraft)
+  const [outputDialogOpen, setOutputDialogOpen] = useState(false)
   const [isCreating, setIsCreating] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
+  const [isCreatingOutput, setIsCreatingOutput] = useState(false)
 
   const selectedInitiative = useMemo(
     () =>
@@ -114,6 +132,8 @@ export const InitiativeWorkboardDialogContainer: FC<{
 
   useEffect(() => {
     setDraft(draftFromInitiative(selectedInitiative))
+    setOutputDraft(emptyOutputDraft)
+    setOutputDialogOpen(false)
   }, [selectedInitiative])
 
   const handleCreate = useCallback(async () => {
@@ -204,6 +224,10 @@ export const InitiativeWorkboardDialogContainer: FC<{
     workspaces,
   ])
 
+  const selectedOutputs = selectedInitiative
+    ? (outputsByInitiativeId[selectedInitiative.id] ?? [])
+    : []
+
   const handleAttemptRoleChange = useCallback(
     async (attemptId: string, role: InitiativeAttemptRole) => {
       if (!selectedInitiative) return
@@ -226,6 +250,78 @@ export const InitiativeWorkboardDialogContainer: FC<{
       await unlinkAttempt(attemptId, selectedInitiative.id)
     },
     [selectedInitiative, unlinkAttempt],
+  )
+
+  const handleCreateOutput = useCallback(async () => {
+    if (!selectedInitiative) return
+    const label = outputDraft.label.trim()
+    const value = outputDraft.value.trim()
+    if (!label || !value) return
+
+    setIsCreatingOutput(true)
+    const output = await addOutput({
+      initiativeId: selectedInitiative.id,
+      kind: outputDraft.kind,
+      label,
+      value,
+      status: outputDraft.status,
+      sourceSessionId: outputDraft.sourceSessionId || null,
+    })
+    setIsCreatingOutput(false)
+    if (output) {
+      setOutputDraft(emptyOutputDraft)
+      setOutputDialogOpen(false)
+    }
+  }, [addOutput, outputDraft, selectedInitiative])
+
+  const handleOutputKindChange = useCallback(
+    async (outputId: string, kind: InitiativeOutputKind) => {
+      if (!selectedInitiative) return
+      await updateOutput(outputId, selectedInitiative.id, { kind })
+    },
+    [selectedInitiative, updateOutput],
+  )
+
+  const handleOutputStatusChange = useCallback(
+    async (outputId: string, status: InitiativeOutputStatus) => {
+      if (!selectedInitiative) return
+      await updateOutput(outputId, selectedInitiative.id, { status })
+    },
+    [selectedInitiative, updateOutput],
+  )
+
+  const handleOutputSourceSessionChange = useCallback(
+    async (outputId: string, sourceSessionId: string) => {
+      if (!selectedInitiative) return
+      await updateOutput(outputId, selectedInitiative.id, {
+        sourceSessionId: sourceSessionId || null,
+      })
+    },
+    [selectedInitiative, updateOutput],
+  )
+
+  const handleOutputLabelCommit = useCallback(
+    async (outputId: string, label: string) => {
+      if (!selectedInitiative) return
+      await updateOutput(outputId, selectedInitiative.id, { label })
+    },
+    [selectedInitiative, updateOutput],
+  )
+
+  const handleOutputValueCommit = useCallback(
+    async (outputId: string, value: string) => {
+      if (!selectedInitiative) return
+      await updateOutput(outputId, selectedInitiative.id, { value })
+    },
+    [selectedInitiative, updateOutput],
+  )
+
+  const handleDeleteOutput = useCallback(
+    async (outputId: string) => {
+      if (!selectedInitiative) return
+      await deleteOutput(outputId, selectedInitiative.id)
+    },
+    [deleteOutput, selectedInitiative],
   )
 
   return (
@@ -251,12 +347,16 @@ export const InitiativeWorkboardDialogContainer: FC<{
       selectedInitiative={selectedInitiative}
       selectedDraft={draft}
       selectedAttempts={selectedAttempts}
+      selectedOutputs={selectedOutputs}
+      outputDraft={outputDraft}
+      outputDialogOpen={outputDialogOpen}
       createTitle={createTitle}
       attemptCounts={attemptCounts}
       outputCounts={outputCounts}
       isLoading={loading}
       isCreating={isCreating}
       isSaving={isSaving}
+      isCreatingOutput={isCreatingOutput}
       error={error}
       onOpenChange={handleOpenChange}
       onCreateTitleChange={setCreateTitle}
@@ -264,6 +364,15 @@ export const InitiativeWorkboardDialogContainer: FC<{
       onSelectInitiative={setSelectedId}
       onDraftChange={setDraft}
       onSave={handleSave}
+      onOutputDraftChange={setOutputDraft}
+      onOutputDialogOpenChange={setOutputDialogOpen}
+      onCreateOutput={handleCreateOutput}
+      onOutputKindChange={handleOutputKindChange}
+      onOutputStatusChange={handleOutputStatusChange}
+      onOutputSourceSessionChange={handleOutputSourceSessionChange}
+      onOutputLabelCommit={handleOutputLabelCommit}
+      onOutputValueCommit={handleOutputValueCommit}
+      onDeleteOutput={handleDeleteOutput}
       onAttemptRoleChange={handleAttemptRoleChange}
       onSetPrimaryAttempt={handleSetPrimaryAttempt}
       onDetachAttempt={handleDetachAttempt}

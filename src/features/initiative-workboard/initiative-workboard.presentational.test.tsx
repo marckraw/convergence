@@ -1,10 +1,15 @@
 import { describe, expect, it, vi } from 'vitest'
 import { fireEvent, render, screen } from '@testing-library/react'
-import type { Initiative, InitiativeAttempt } from '@/entities/initiative'
+import type {
+  Initiative,
+  InitiativeAttempt,
+  InitiativeOutput,
+} from '@/entities/initiative'
 import { InitiativeWorkboardDialog } from './initiative-workboard.presentational'
 import type {
   InitiativeAttemptView,
   InitiativeDraft,
+  InitiativeOutputDraft,
 } from './initiative-workboard.presentational'
 
 const initiative: Initiative = {
@@ -43,6 +48,26 @@ const attemptView: InitiativeAttemptView = {
   missing: false,
 }
 
+const output: InitiativeOutput = {
+  id: 'o1',
+  initiativeId: 'i1',
+  kind: 'pull-request',
+  label: 'Public PR',
+  value: 'https://github.com/example/repo/pull/1',
+  sourceSessionId: 's1',
+  status: 'planned',
+  createdAt: '2026-01-01T00:00:00.000Z',
+  updatedAt: '2026-01-01T00:00:00.000Z',
+}
+
+const outputDraft: InitiativeOutputDraft = {
+  kind: 'pull-request',
+  label: '',
+  value: '',
+  status: 'planned',
+  sourceSessionId: '',
+}
+
 function renderDialog(
   overrides: Partial<Parameters<typeof InitiativeWorkboardDialog>[0]> = {},
 ) {
@@ -52,12 +77,16 @@ function renderDialog(
     selectedInitiative: null,
     selectedDraft: { title: '', status: 'exploring', currentUnderstanding: '' },
     selectedAttempts: [],
+    selectedOutputs: [],
+    outputDraft,
+    outputDialogOpen: false,
     createTitle: '',
     attemptCounts: {},
     outputCounts: {},
     isLoading: false,
     isCreating: false,
     isSaving: false,
+    isCreatingOutput: false,
     error: null,
     onOpenChange: vi.fn(),
     onCreateTitleChange: vi.fn(),
@@ -65,6 +94,15 @@ function renderDialog(
     onSelectInitiative: vi.fn(),
     onDraftChange: vi.fn(),
     onSave: vi.fn(),
+    onOutputDraftChange: vi.fn(),
+    onOutputDialogOpenChange: vi.fn(),
+    onCreateOutput: vi.fn(),
+    onOutputKindChange: vi.fn(),
+    onOutputStatusChange: vi.fn(),
+    onOutputSourceSessionChange: vi.fn(),
+    onOutputLabelCommit: vi.fn(),
+    onOutputValueCommit: vi.fn(),
+    onDeleteOutput: vi.fn(),
     onAttemptRoleChange: vi.fn(),
     onSetPrimaryAttempt: vi.fn(),
     onDetachAttempt: vi.fn(),
@@ -147,7 +185,7 @@ describe('InitiativeWorkboardDialog', () => {
       outputCounts: { i1: 0 },
     })
 
-    expect(screen.getByText('Implement workboard')).toBeInTheDocument()
+    expect(screen.getAllByText('Implement workboard').length).toBeGreaterThan(0)
     expect(screen.getByText('convergence')).toBeInTheDocument()
     expect(screen.getByText('feat/initiatives')).toBeInTheDocument()
 
@@ -162,5 +200,78 @@ describe('InitiativeWorkboardDialog', () => {
     expect(props.onAttemptRoleChange).toHaveBeenCalledWith('a1', 'review')
     expect(props.onSetPrimaryAttempt).toHaveBeenCalledWith('a1')
     expect(props.onDetachAttempt).toHaveBeenCalledWith('a1')
+  })
+
+  it('creates a manual Output', () => {
+    const props = renderDialog({
+      initiatives: [initiative],
+      selectedInitiative: initiative,
+      selectedDraft: draft,
+      selectedAttempts: [attemptView],
+      outputDialogOpen: true,
+      outputDraft: {
+        kind: 'branch',
+        label: 'Feature branch',
+        value: 'feat/initiatives',
+        status: 'in-progress',
+        sourceSessionId: 's1',
+      },
+      attemptCounts: { i1: 1 },
+      outputCounts: { i1: 0 },
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: /create output/i }))
+
+    expect(props.onCreateOutput).toHaveBeenCalled()
+  })
+
+  it('renders Outputs and emits Output actions', () => {
+    const props = renderDialog({
+      initiatives: [initiative],
+      selectedInitiative: initiative,
+      selectedDraft: draft,
+      selectedAttempts: [attemptView],
+      selectedOutputs: [output],
+      attemptCounts: { i1: 1 },
+      outputCounts: { i1: 1 },
+    })
+
+    expect(screen.getByDisplayValue('Public PR')).toBeInTheDocument()
+    expect(
+      screen.getByDisplayValue('https://github.com/example/repo/pull/1'),
+    ).toBeInTheDocument()
+    expect(screen.getByText('Source: Implement workboard')).toBeInTheDocument()
+
+    fireEvent.change(screen.getByLabelText(/kind for public pr/i), {
+      target: { value: 'documentation' },
+    })
+    fireEvent.change(screen.getByLabelText(/status for public pr/i), {
+      target: { value: 'ready' },
+    })
+    fireEvent.change(screen.getByLabelText(/source for public pr/i), {
+      target: { value: '' },
+    })
+    fireEvent.blur(screen.getByLabelText(/label for public pr/i), {
+      target: { value: 'Implementation PR' },
+    })
+    fireEvent.blur(screen.getByLabelText(/value for public pr/i), {
+      target: { value: 'https://github.com/example/repo/pull/2' },
+    })
+    fireEvent.click(
+      screen.getByRole('button', { name: /remove output public pr/i }),
+    )
+
+    expect(props.onOutputKindChange).toHaveBeenCalledWith('o1', 'documentation')
+    expect(props.onOutputStatusChange).toHaveBeenCalledWith('o1', 'ready')
+    expect(props.onOutputSourceSessionChange).toHaveBeenCalledWith('o1', '')
+    expect(props.onOutputLabelCommit).toHaveBeenCalledWith(
+      'o1',
+      'Implementation PR',
+    )
+    expect(props.onOutputValueCommit).toHaveBeenCalledWith(
+      'o1',
+      'https://github.com/example/repo/pull/2',
+    )
+    expect(props.onDeleteOutput).toHaveBeenCalledWith('o1')
   })
 })

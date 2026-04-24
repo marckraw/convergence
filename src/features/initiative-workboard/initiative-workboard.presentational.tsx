@@ -1,6 +1,7 @@
 import type { FC, ReactNode } from 'react'
 import {
   CalendarClock,
+  ExternalLink,
   FileText,
   GitBranch,
   GitPullRequest,
@@ -13,15 +14,23 @@ import type {
   Initiative,
   InitiativeAttempt,
   InitiativeAttemptRole,
+  InitiativeOutput,
+  InitiativeOutputKind,
+  InitiativeOutputStatus,
   InitiativeStatus,
 } from '@/entities/initiative'
 import {
   initiativeAttemptRoleLabels,
   initiativeAttemptRoleOptions,
+  initiativeOutputKindLabels,
+  initiativeOutputKindOptions,
+  initiativeOutputStatusLabels,
+  initiativeOutputStatusOptions,
 } from '@/entities/initiative'
 import { Button } from '@/shared/ui/button'
 import {
   Dialog,
+  DialogBody,
   DialogContent,
   DialogDescription,
   DialogFooter,
@@ -46,6 +55,14 @@ export interface InitiativeDraft {
   currentUnderstanding: string
 }
 
+export interface InitiativeOutputDraft {
+  kind: InitiativeOutputKind
+  label: string
+  value: string
+  status: InitiativeOutputStatus
+  sourceSessionId: string
+}
+
 export interface InitiativeAttemptView {
   attempt: InitiativeAttempt
   sessionName: string
@@ -64,12 +81,16 @@ interface InitiativeWorkboardProps {
   selectedInitiative: Initiative | null
   selectedDraft: InitiativeDraft
   selectedAttempts: InitiativeAttemptView[]
+  selectedOutputs: InitiativeOutput[]
+  outputDraft: InitiativeOutputDraft
+  outputDialogOpen: boolean
   createTitle: string
   attemptCounts: Record<string, number>
   outputCounts: Record<string, number>
   isLoading: boolean
   isCreating: boolean
   isSaving: boolean
+  isCreatingOutput: boolean
   error: string | null
   onOpenChange: (open: boolean) => void
   onCreateTitleChange: (value: string) => void
@@ -77,6 +98,21 @@ interface InitiativeWorkboardProps {
   onSelectInitiative: (id: string) => void
   onDraftChange: (draft: InitiativeDraft) => void
   onSave: () => void
+  onOutputDraftChange: (draft: InitiativeOutputDraft) => void
+  onOutputDialogOpenChange: (open: boolean) => void
+  onCreateOutput: () => void
+  onOutputKindChange: (outputId: string, kind: InitiativeOutputKind) => void
+  onOutputStatusChange: (
+    outputId: string,
+    status: InitiativeOutputStatus,
+  ) => void
+  onOutputSourceSessionChange: (
+    outputId: string,
+    sourceSessionId: string,
+  ) => void
+  onOutputLabelCommit: (outputId: string, label: string) => void
+  onOutputValueCommit: (outputId: string, value: string) => void
+  onDeleteOutput: (outputId: string) => void
   onAttemptRoleChange: (attemptId: string, role: InitiativeAttemptRole) => void
   onSetPrimaryAttempt: (attemptId: string) => void
   onDetachAttempt: (attemptId: string) => void
@@ -89,12 +125,16 @@ export const InitiativeWorkboardDialog: FC<InitiativeWorkboardProps> = ({
   selectedInitiative,
   selectedDraft,
   selectedAttempts,
+  selectedOutputs,
+  outputDraft,
+  outputDialogOpen,
   createTitle,
   attemptCounts,
   outputCounts,
   isLoading,
   isCreating,
   isSaving,
+  isCreatingOutput,
   error,
   onOpenChange,
   onCreateTitleChange,
@@ -102,6 +142,15 @@ export const InitiativeWorkboardDialog: FC<InitiativeWorkboardProps> = ({
   onSelectInitiative,
   onDraftChange,
   onSave,
+  onOutputDraftChange,
+  onOutputDialogOpenChange,
+  onCreateOutput,
+  onOutputKindChange,
+  onOutputStatusChange,
+  onOutputSourceSessionChange,
+  onOutputLabelCommit,
+  onOutputValueCommit,
+  onDeleteOutput,
   onAttemptRoleChange,
   onSetPrimaryAttempt,
   onDetachAttempt,
@@ -109,6 +158,11 @@ export const InitiativeWorkboardDialog: FC<InitiativeWorkboardProps> = ({
   const createDisabled = createTitle.trim().length === 0 || isCreating
   const saveDisabled =
     !selectedInitiative || selectedDraft.title.trim().length === 0 || isSaving
+  const outputCreateDisabled =
+    !selectedInitiative ||
+    outputDraft.label.trim().length === 0 ||
+    outputDraft.value.trim().length === 0 ||
+    isCreatingOutput
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -312,6 +366,193 @@ export const InitiativeWorkboardDialog: FC<InitiativeWorkboardProps> = ({
                     </div>
                   )}
                 </section>
+
+                <section className="space-y-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="text-xs font-medium uppercase text-muted-foreground">
+                      Outputs
+                    </div>
+                    <Dialog
+                      open={outputDialogOpen}
+                      onOpenChange={onOutputDialogOpenChange}
+                    >
+                      <DialogTrigger asChild>
+                        <Button type="button" variant="outline" size="sm">
+                          <Plus className="h-4 w-4" />
+                          Add Output
+                        </Button>
+                      </DialogTrigger>
+                      <DialogContent className="w-[min(720px,calc(100vw-2rem))] p-0">
+                        <form
+                          className="flex min-h-0 flex-1 flex-col"
+                          onSubmit={(event) => {
+                            event.preventDefault()
+                            if (!outputCreateDisabled) onCreateOutput()
+                          }}
+                        >
+                          <DialogHeader className="border-b border-border/70 px-6 py-5 pr-14">
+                            <DialogTitle>Add Output</DialogTitle>
+                            <DialogDescription>
+                              Attach a concrete artifact produced by this
+                              Initiative.
+                            </DialogDescription>
+                          </DialogHeader>
+
+                          <DialogBody className="grid gap-4 md:grid-cols-[160px_1fr]">
+                            <label className="space-y-1.5">
+                              <span className="text-[11px] font-medium uppercase text-muted-foreground">
+                                Kind
+                              </span>
+                              <select
+                                className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                                value={outputDraft.kind}
+                                onChange={(event) =>
+                                  onOutputDraftChange({
+                                    ...outputDraft,
+                                    kind: event.target
+                                      .value as InitiativeOutputKind,
+                                  })
+                                }
+                                aria-label="New Output kind"
+                              >
+                                {initiativeOutputKindOptions.map((kind) => (
+                                  <option key={kind} value={kind}>
+                                    {initiativeOutputKindLabels[kind]}
+                                  </option>
+                                ))}
+                              </select>
+                            </label>
+
+                            <label className="space-y-1.5">
+                              <span className="text-[11px] font-medium uppercase text-muted-foreground">
+                                Label
+                              </span>
+                              <Input
+                                value={outputDraft.label}
+                                onChange={(event) =>
+                                  onOutputDraftChange({
+                                    ...outputDraft,
+                                    label: event.target.value,
+                                  })
+                                }
+                                placeholder="Public PR"
+                                aria-label="New Output label"
+                              />
+                            </label>
+
+                            <label className="space-y-1.5">
+                              <span className="text-[11px] font-medium uppercase text-muted-foreground">
+                                Status
+                              </span>
+                              <select
+                                className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                                value={outputDraft.status}
+                                onChange={(event) =>
+                                  onOutputDraftChange({
+                                    ...outputDraft,
+                                    status: event.target
+                                      .value as InitiativeOutputStatus,
+                                  })
+                                }
+                                aria-label="New Output status"
+                              >
+                                {initiativeOutputStatusOptions.map((status) => (
+                                  <option key={status} value={status}>
+                                    {initiativeOutputStatusLabels[status]}
+                                  </option>
+                                ))}
+                              </select>
+                            </label>
+
+                            <label className="space-y-1.5">
+                              <span className="text-[11px] font-medium uppercase text-muted-foreground">
+                                Source
+                              </span>
+                              <select
+                                className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                                value={outputDraft.sourceSessionId}
+                                onChange={(event) =>
+                                  onOutputDraftChange({
+                                    ...outputDraft,
+                                    sourceSessionId: event.target.value,
+                                  })
+                                }
+                                aria-label="New Output source session"
+                              >
+                                <option value="">No source Attempt</option>
+                                {selectedAttempts.map((view) => (
+                                  <option
+                                    key={view.attempt.sessionId}
+                                    value={view.attempt.sessionId}
+                                  >
+                                    {view.sessionName}
+                                  </option>
+                                ))}
+                              </select>
+                            </label>
+
+                            <label className="space-y-1.5 md:col-span-2">
+                              <span className="text-[11px] font-medium uppercase text-muted-foreground">
+                                Value
+                              </span>
+                              <Input
+                                value={outputDraft.value}
+                                onChange={(event) =>
+                                  onOutputDraftChange({
+                                    ...outputDraft,
+                                    value: event.target.value,
+                                  })
+                                }
+                                placeholder="URL, branch, file path, or note"
+                                aria-label="New Output value"
+                              />
+                            </label>
+                          </DialogBody>
+
+                          <DialogFooter className="border-t border-border/70 px-6 py-4">
+                            <Button
+                              type="button"
+                              variant="outline"
+                              onClick={() => onOutputDialogOpenChange(false)}
+                            >
+                              Cancel
+                            </Button>
+                            <Button
+                              type="submit"
+                              disabled={outputCreateDisabled}
+                            >
+                              <Plus className="h-4 w-4" />
+                              {isCreatingOutput
+                                ? 'Creating...'
+                                : 'Create Output'}
+                            </Button>
+                          </DialogFooter>
+                        </form>
+                      </DialogContent>
+                    </Dialog>
+                  </div>
+
+                  {selectedOutputs.length === 0 ? (
+                    <div className="rounded-lg border border-border/60 px-3 py-4 text-sm text-muted-foreground">
+                      No Outputs yet.
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      {selectedOutputs.map((output) =>
+                        renderOutputRow({
+                          output,
+                          attempts: selectedAttempts,
+                          onOutputKindChange,
+                          onOutputStatusChange,
+                          onOutputSourceSessionChange,
+                          onOutputLabelCommit,
+                          onOutputValueCommit,
+                          onDeleteOutput,
+                        }),
+                      )}
+                    </div>
+                  )}
+                </section>
               </div>
             ) : (
               <div className="flex min-h-[260px] items-center justify-center text-sm text-muted-foreground">
@@ -452,6 +693,199 @@ function renderAttemptRow(input: {
       </div>
     </div>
   )
+}
+
+function renderOutputRow(input: {
+  output: InitiativeOutput
+  attempts: InitiativeAttemptView[]
+  onOutputKindChange: (outputId: string, kind: InitiativeOutputKind) => void
+  onOutputStatusChange: (
+    outputId: string,
+    status: InitiativeOutputStatus,
+  ) => void
+  onOutputSourceSessionChange: (
+    outputId: string,
+    sourceSessionId: string,
+  ) => void
+  onOutputLabelCommit: (outputId: string, label: string) => void
+  onOutputValueCommit: (outputId: string, value: string) => void
+  onDeleteOutput: (outputId: string) => void
+}) {
+  const {
+    output,
+    attempts,
+    onOutputKindChange,
+    onOutputStatusChange,
+    onOutputSourceSessionChange,
+    onOutputLabelCommit,
+    onOutputValueCommit,
+    onDeleteOutput,
+  } = input
+  const sourceAttempt = attempts.find(
+    (view) => view.attempt.sessionId === output.sourceSessionId,
+  )
+  const outputUrl = parseHttpUrl(output.value)
+
+  return (
+    <div
+      key={output.id}
+      className="rounded-lg border border-border/60 bg-card/30 px-3 py-3"
+    >
+      <div className="grid gap-3 md:grid-cols-[150px_1fr_160px_auto]">
+        <label className="space-y-1.5">
+          <span className="text-[11px] font-medium uppercase text-muted-foreground">
+            Kind
+          </span>
+          <select
+            className="h-8 w-full rounded-md border border-input bg-background px-2 text-xs shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+            value={output.kind}
+            onChange={(event) =>
+              onOutputKindChange(
+                output.id,
+                event.target.value as InitiativeOutputKind,
+              )
+            }
+            aria-label={`Kind for ${output.label}`}
+          >
+            {initiativeOutputKindOptions.map((kind) => (
+              <option key={kind} value={kind}>
+                {initiativeOutputKindLabels[kind]}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <label className="space-y-1.5">
+          <span className="text-[11px] font-medium uppercase text-muted-foreground">
+            Label
+          </span>
+          <Input
+            defaultValue={output.label}
+            onBlur={(event) => {
+              const label = event.target.value.trim()
+              if (label && label !== output.label) {
+                onOutputLabelCommit(output.id, label)
+              }
+            }}
+            aria-label={`Label for ${output.label}`}
+          />
+        </label>
+
+        <label className="space-y-1.5">
+          <span className="text-[11px] font-medium uppercase text-muted-foreground">
+            Status
+          </span>
+          <select
+            className="h-8 w-full rounded-md border border-input bg-background px-2 text-xs shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+            value={output.status}
+            onChange={(event) =>
+              onOutputStatusChange(
+                output.id,
+                event.target.value as InitiativeOutputStatus,
+              )
+            }
+            aria-label={`Status for ${output.label}`}
+          >
+            {initiativeOutputStatusOptions.map((status) => (
+              <option key={status} value={status}>
+                {initiativeOutputStatusLabels[status]}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <div className="flex items-end">
+          <Button
+            type="button"
+            variant="outline"
+            size="icon"
+            className="h-8 w-8"
+            onClick={() => onDeleteOutput(output.id)}
+            aria-label={`Remove Output ${output.label}`}
+          >
+            <Trash2 className="h-4 w-4" />
+          </Button>
+        </div>
+      </div>
+
+      <div className="mt-3 grid gap-3 md:grid-cols-[1fr_190px]">
+        <label className="space-y-1.5">
+          <span className="text-[11px] font-medium uppercase text-muted-foreground">
+            Value
+          </span>
+          <div className="flex gap-2">
+            <Input
+              defaultValue={output.value}
+              onBlur={(event) => {
+                const value = event.target.value.trim()
+                if (value && value !== output.value) {
+                  onOutputValueCommit(output.id, value)
+                }
+              }}
+              aria-label={`Value for ${output.label}`}
+            />
+            {outputUrl ? (
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="h-9 w-9 shrink-0"
+                asChild
+              >
+                <a
+                  href={outputUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  aria-label={`Open Output ${output.label}`}
+                >
+                  <ExternalLink className="h-4 w-4" />
+                </a>
+              </Button>
+            ) : null}
+          </div>
+        </label>
+
+        <label className="space-y-1.5">
+          <span className="text-[11px] font-medium uppercase text-muted-foreground">
+            Source
+          </span>
+          <select
+            className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+            value={output.sourceSessionId ?? ''}
+            onChange={(event) =>
+              onOutputSourceSessionChange(output.id, event.target.value)
+            }
+            aria-label={`Source for ${output.label}`}
+          >
+            <option value="">No source Attempt</option>
+            {attempts.map((view) => (
+              <option
+                key={view.attempt.sessionId}
+                value={view.attempt.sessionId}
+              >
+                {view.sessionName}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
+
+      {sourceAttempt ? (
+        <div className="mt-2 text-xs text-muted-foreground">
+          Source: {sourceAttempt.sessionName}
+        </div>
+      ) : null}
+    </div>
+  )
+}
+
+function parseHttpUrl(value: string): string | null {
+  if (!/^https?:\/\//i.test(value)) return null
+  try {
+    return new URL(value).toString()
+  } catch {
+    return null
+  }
 }
 
 function formatUpdatedAt(value: string): string {

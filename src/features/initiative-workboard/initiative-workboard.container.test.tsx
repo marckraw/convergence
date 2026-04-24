@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { useDialogStore } from '@/entities/dialog'
 import { useInitiativeStore } from '@/entities/initiative'
-import type { Initiative } from '@/entities/initiative'
+import type { Initiative, InitiativeOutput } from '@/entities/initiative'
 import { InitiativeWorkboardDialogContainer } from './initiative-workboard.container'
 
 const initiative: Initiative = {
@@ -28,6 +28,18 @@ const secondInitiative: Initiative = {
   id: 'i2',
   title: 'Linked session context',
   currentUnderstanding: 'Show context beside the session.',
+}
+
+const output: InitiativeOutput = {
+  id: 'o1',
+  initiativeId: 'i1',
+  kind: 'pull-request',
+  label: 'Public PR',
+  value: 'https://github.com/example/repo/pull/1',
+  sourceSessionId: null,
+  status: 'planned',
+  createdAt: '2026-01-01T00:00:00.000Z',
+  updatedAt: '2026-01-01T00:00:00.000Z',
 }
 
 const mockElectronAPI = {
@@ -63,6 +75,12 @@ describe('InitiativeWorkboardDialogContainer', () => {
     mockElectronAPI.initiative.listOutputs.mockResolvedValue([])
     mockElectronAPI.initiative.create.mockResolvedValue(initiative)
     mockElectronAPI.initiative.update.mockResolvedValue(updatedInitiative)
+    mockElectronAPI.initiative.addOutput.mockResolvedValue(output)
+    mockElectronAPI.initiative.updateOutput.mockResolvedValue({
+      ...output,
+      status: 'ready',
+    })
+    mockElectronAPI.initiative.deleteOutput.mockResolvedValue(undefined)
     useDialogStore.setState({ openDialog: null, payload: null })
     useInitiativeStore.setState({
       initiatives: [],
@@ -152,5 +170,53 @@ describe('InitiativeWorkboardDialogContainer', () => {
     expect(
       screen.getByDisplayValue('Show context beside the session.'),
     ).toBeInTheDocument()
+  })
+
+  it('creates a manual Output for the selected Initiative', async () => {
+    render(<InitiativeWorkboardDialogContainer />)
+
+    fireEvent.click(screen.getByRole('button', { name: /initiatives/i }))
+    await screen.findByText('Agent-native work tracking')
+    fireEvent.click(screen.getByRole('button', { name: /add output/i }))
+    fireEvent.change(screen.getByLabelText(/new output label/i), {
+      target: { value: 'Public PR' },
+    })
+    fireEvent.change(screen.getByLabelText(/new output value/i), {
+      target: { value: 'https://github.com/example/repo/pull/1' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: /create output/i }))
+
+    await waitFor(() => {
+      expect(mockElectronAPI.initiative.addOutput).toHaveBeenCalledWith({
+        initiativeId: 'i1',
+        kind: 'pull-request',
+        label: 'Public PR',
+        value: 'https://github.com/example/repo/pull/1',
+        status: 'planned',
+        sourceSessionId: null,
+      })
+    })
+  })
+
+  it('updates and removes manual Outputs', async () => {
+    mockElectronAPI.initiative.listOutputs.mockResolvedValue([output])
+    render(<InitiativeWorkboardDialogContainer />)
+
+    fireEvent.click(screen.getByRole('button', { name: /initiatives/i }))
+    await screen.findByDisplayValue('Public PR')
+    fireEvent.change(screen.getByLabelText(/status for public pr/i), {
+      target: { value: 'ready' },
+    })
+    fireEvent.click(
+      screen.getByRole('button', { name: /remove output public pr/i }),
+    )
+
+    await waitFor(() => {
+      expect(mockElectronAPI.initiative.updateOutput).toHaveBeenCalledWith(
+        'o1',
+        { status: 'ready' },
+      )
+    })
+    expect(mockElectronAPI.initiative.deleteOutput).toHaveBeenCalledWith('o1')
   })
 })
