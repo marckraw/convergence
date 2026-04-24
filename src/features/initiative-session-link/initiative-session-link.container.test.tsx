@@ -65,6 +65,7 @@ const mockElectronAPI = {
     addOutput: vi.fn(),
     updateOutput: vi.fn(),
     deleteOutput: vi.fn(),
+    synthesize: vi.fn(),
   },
 }
 

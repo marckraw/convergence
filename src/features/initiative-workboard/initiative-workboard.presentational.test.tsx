@@ -80,6 +80,7 @@ function renderDialog(
     selectedAttempts: [],
     selectedOutputs: [],
     outputSuggestions: [],
+    synthesisPreview: null,
     outputDraft,
     outputDialogOpen: false,
     createTitle: '',
@@ -90,6 +91,7 @@ function renderDialog(
     isSaving: false,
     isCreatingOutput: false,
     isDiscoveringOutputs: false,
+    isSynthesizing: false,
     error: null,
     onOpenChange: vi.fn(),
     onCreateTitleChange: vi.fn(),
@@ -109,6 +111,12 @@ function renderDialog(
     onDiscoverOutputs: vi.fn(),
     onAcceptOutputSuggestion: vi.fn(),
     onDismissOutputSuggestion: vi.fn(),
+    onSynthesize: vi.fn(),
+    onSynthesisCurrentUnderstandingChange: vi.fn(),
+    onAcceptSynthesisCurrentUnderstanding: vi.fn(),
+    onRejectSynthesisCurrentUnderstanding: vi.fn(),
+    onAcceptSynthesisOutput: vi.fn(),
+    onDismissSynthesisPreview: vi.fn(),
     onAttemptRoleChange: vi.fn(),
     onSetPrimaryAttempt: vi.fn(),
     onDetachAttempt: vi.fn(),
@@ -320,6 +328,57 @@ describe('InitiativeWorkboardDialog', () => {
     )
     expect(props.onDismissOutputSuggestion).toHaveBeenCalledWith(
       'branch:s1:feat/initiatives',
+    )
+  })
+
+  it('renders synthesis suggestions and emits accept/reject actions', () => {
+    const props = renderDialog({
+      initiatives: [initiative],
+      selectedInitiative: initiative,
+      selectedDraft: draft,
+      selectedAttempts: [attemptView],
+      synthesisPreview: {
+        currentUnderstanding: 'Use a curated Initiative summary.',
+        decisions: ['Keep suggestions transient.'],
+        openQuestions: ['Should decisions become persisted later?'],
+        nextAction: 'Save the accepted understanding.',
+        outputs: [
+          {
+            id: 'synthesis-output-1',
+            kind: 'documentation',
+            label: 'Implementation notes',
+            value: 'docs/initiatives/notes.md',
+            status: 'ready',
+            sourceSessionId: 's1',
+          },
+        ],
+      },
+      attemptCounts: { i1: 1 },
+      outputCounts: { i1: 0 },
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: /synthesize/i }))
+    fireEvent.change(
+      screen.getByLabelText(/suggested current understanding/i),
+      {
+        target: { value: 'Edited suggested understanding.' },
+      },
+    )
+    const acceptButtons = screen.getAllByRole('button', { name: /accept/i })
+    fireEvent.click(acceptButtons[0])
+    fireEvent.click(screen.getByRole('button', { name: /^reject$/i }))
+    fireEvent.click(screen.getByRole('button', { name: /dismiss synthesis/i }))
+    fireEvent.click(acceptButtons[1])
+
+    expect(props.onSynthesize).toHaveBeenCalled()
+    expect(props.onSynthesisCurrentUnderstandingChange).toHaveBeenCalledWith(
+      'Edited suggested understanding.',
+    )
+    expect(props.onAcceptSynthesisCurrentUnderstanding).toHaveBeenCalled()
+    expect(props.onRejectSynthesisCurrentUnderstanding).toHaveBeenCalled()
+    expect(props.onDismissSynthesisPreview).toHaveBeenCalled()
+    expect(props.onAcceptSynthesisOutput).toHaveBeenCalledWith(
+      'synthesis-output-1',
     )
   })
 })

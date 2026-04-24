@@ -4,6 +4,7 @@ import type {
   Initiative,
   InitiativeAttempt,
   InitiativeOutput,
+  InitiativeSynthesisResult,
   LinkInitiativeAttemptInput,
   UpdateInitiativeAttemptInput,
   UpdateInitiativeInput,
@@ -65,4 +66,10 @@ export const initiativeApi = {
 
   deleteOutput: (id: string): Promise<void> =>
     window.electronAPI.initiative.deleteOutput(id),
+
+  synthesize: (
+    initiativeId: string,
+    requestId?: string,
+  ): Promise<InitiativeSynthesisResult> =>
+    window.electronAPI.initiative.synthesize(initiativeId, requestId),
 }

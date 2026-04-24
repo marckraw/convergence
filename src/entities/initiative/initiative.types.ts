@@ -115,3 +115,19 @@ export interface UpdateInitiativeOutputInput {
   sourceSessionId?: string | null
   status?: InitiativeOutputStatus
 }
+
+export interface InitiativeSynthesisOutputSuggestion {
+  kind: InitiativeOutputKind
+  label: string
+  value: string
+  sourceSessionId: string | null
+  status: InitiativeOutputStatus
+}
+
+export interface InitiativeSynthesisResult {
+  currentUnderstanding: string
+  decisions: string[]
+  openQuestions: string[]
+  nextAction: string
+  outputs: InitiativeSynthesisOutputSuggestion[]
+}

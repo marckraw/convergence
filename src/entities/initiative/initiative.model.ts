@@ -6,6 +6,7 @@ import type {
   Initiative,
   InitiativeAttempt,
   InitiativeOutput,
+  InitiativeSynthesisResult,
   LinkInitiativeAttemptInput,
   UpdateInitiativeAttemptInput,
   UpdateInitiativeInput,
@@ -54,6 +55,10 @@ interface InitiativeActions {
     input: UpdateInitiativeOutputInput,
   ) => Promise<InitiativeOutput | null>
   deleteOutput: (id: string, initiativeId: string) => Promise<void>
+  synthesize: (
+    initiativeId: string,
+    requestId?: string,
+  ) => Promise<InitiativeSynthesisResult | null>
   clearError: () => void
 }
 
@@ -400,6 +405,21 @@ export const useInitiativeStore = create<InitiativeStore>((set) => ({
       set({
         error: err instanceof Error ? err.message : 'Failed to delete Output',
       })
+    }
+  },
+
+  synthesize: async (initiativeId, requestId) => {
+    set({ error: null })
+    try {
+      return await initiativeApi.synthesize(initiativeId, requestId)
+    } catch (err) {
+      set({
+        error:
+          err instanceof Error
+            ? err.message
+            : 'Failed to synthesize Initiative',
+      })
+      return null
     }
   },
 

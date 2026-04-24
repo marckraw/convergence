@@ -1,6 +1,7 @@
 import { ipcMain, dialog, BrowserWindow } from 'electron'
 import { ProjectService } from '../backend/project/project.service'
 import { InitiativeService } from '../backend/initiative/initiative.service'
+import type { InitiativeSynthesisService } from '../backend/initiative/initiative-synthesis.service'
 import { StateService } from '../backend/state/state.service'
 import { WorkspaceService } from '../backend/workspace/workspace.service'
 import { GitService } from '../backend/git/git.service'
@@ -107,6 +108,7 @@ export function registerIpcHandlers(
   appSettingsService: AppSettingsService,
   attachmentsService: AttachmentsService,
   turnCaptureService: TurnCaptureService,
+  initiativeSynthesisService?: InitiativeSynthesisService,
   onUpdatePrefsChanged?: (prefs: { backgroundCheckEnabled: boolean }) => void,
 ): void {
   // Project handlers
@@ -223,6 +225,16 @@ export function registerIpcHandlers(
   ipcMain.handle('initiative:deleteOutput', (_event, id: string) => {
     initiativeService.deleteOutput(id)
   })
+
+  ipcMain.handle(
+    'initiative:synthesize',
+    (_event, initiativeId: string, requestId?: string) => {
+      if (!initiativeSynthesisService) {
+        throw new Error('Initiative synthesis service is unavailable')
+      }
+      return initiativeSynthesisService.synthesize(initiativeId, requestId)
+    },
+  )
 
   // Dialog handlers
   ipcMain.handle('dialog:selectDirectory', async (event) => {

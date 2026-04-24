@@ -154,6 +154,7 @@ describe('SessionView changed files drawer', () => {
           addOutput: vi.fn(),
           updateOutput: vi.fn(),
           deleteOutput: vi.fn(),
+          synthesize: vi.fn(),
         },
         git: {
           getCurrentBranch: vi.fn().mockResolvedValue('master'),

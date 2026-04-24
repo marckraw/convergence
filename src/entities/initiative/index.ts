@@ -8,6 +8,8 @@ export type {
   InitiativeOutput,
   InitiativeOutputKind,
   InitiativeOutputStatus,
+  InitiativeSynthesisOutputSuggestion,
+  InitiativeSynthesisResult,
   InitiativeStatus,
   LinkInitiativeAttemptInput,
   UpdateInitiativeAttemptInput,

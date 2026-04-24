@@ -57,6 +57,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.invoke('initiative:updateOutput', id, input),
     deleteOutput: (id: string) =>
       ipcRenderer.invoke('initiative:deleteOutput', id),
+    synthesize: (initiativeId: string, requestId?: string) =>
+      ipcRenderer.invoke('initiative:synthesize', initiativeId, requestId),
   },
   dialog: {
     selectDirectory: () => ipcRenderer.invoke('dialog:selectDirectory'),

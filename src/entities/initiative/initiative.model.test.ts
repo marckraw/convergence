@@ -54,6 +54,7 @@ const mockElectronAPI = {
     addOutput: vi.fn(),
     updateOutput: vi.fn(),
     deleteOutput: vi.fn(),
+    synthesize: vi.fn(),
   },
 }
 
@@ -193,5 +194,27 @@ describe('useInitiativeStore', () => {
     await useInitiativeStore.getState().loadInitiatives()
 
     expect(useInitiativeStore.getState().error).toBe('boom')
+  })
+
+  it('runs synthesis without mutating stable state', async () => {
+    const synthesis = {
+      currentUnderstanding: 'Synthesized understanding',
+      decisions: ['Keep it transient.'],
+      openQuestions: [],
+      nextAction: 'Save accepted changes.',
+      outputs: [],
+    }
+    mockElectronAPI.initiative.synthesize.mockResolvedValue(synthesis)
+
+    const result = await useInitiativeStore
+      .getState()
+      .synthesize(initiative.id, 'request-1')
+
+    expect(result).toEqual(synthesis)
+    expect(mockElectronAPI.initiative.synthesize).toHaveBeenCalledWith(
+      initiative.id,
+      'request-1',
+    )
+    expect(useInitiativeStore.getState().initiatives).toEqual([])
   })
 })

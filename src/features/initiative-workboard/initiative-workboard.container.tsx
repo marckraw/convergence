@@ -8,6 +8,7 @@ import {
   type InitiativeAttemptRole,
   type InitiativeOutputKind,
   type InitiativeOutputStatus,
+  type InitiativeSynthesisResult,
   type InitiativeStatus,
 } from '@/entities/initiative'
 import { useProjectStore } from '@/entities/project'
@@ -19,6 +20,7 @@ import {
   type InitiativeAttemptView,
   type InitiativeDraft,
   type InitiativeOutputDraft,
+  type InitiativeSynthesisPreview,
 } from './initiative-workboard.presentational'
 import {
   buildBranchOutputSuggestions,
@@ -75,6 +77,7 @@ export const InitiativeWorkboardDialogContainer: FC<{
   const addOutput = useInitiativeStore((s) => s.addOutput)
   const updateOutput = useInitiativeStore((s) => s.updateOutput)
   const deleteOutput = useInitiativeStore((s) => s.deleteOutput)
+  const synthesize = useInitiativeStore((s) => s.synthesize)
   const clearError = useInitiativeStore((s) => s.clearError)
   const projects = useProjectStore((s) => s.projects)
   const sessions = useSessionStore((s) => s.globalSessions)
@@ -88,10 +91,13 @@ export const InitiativeWorkboardDialogContainer: FC<{
   const [outputSuggestions, setOutputSuggestions] = useState<
     InitiativeOutputSuggestion[]
   >([])
+  const [synthesisPreview, setSynthesisPreview] =
+    useState<InitiativeSynthesisPreview | null>(null)
   const [isCreating, setIsCreating] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
   const [isCreatingOutput, setIsCreatingOutput] = useState(false)
   const [isDiscoveringOutputs, setIsDiscoveringOutputs] = useState(false)
+  const [isSynthesizing, setIsSynthesizing] = useState(false)
 
   const selectedInitiative = useMemo(
     () =>
@@ -143,6 +149,7 @@ export const InitiativeWorkboardDialogContainer: FC<{
     setOutputDraft(emptyOutputDraft)
     setOutputDialogOpen(false)
     setOutputSuggestions([])
+    setSynthesisPreview(null)
   }, [selectedInitiative])
 
   const handleCreate = useCallback(async () => {
@@ -381,6 +388,80 @@ export const InitiativeWorkboardDialogContainer: FC<{
     )
   }, [])
 
+  const handleSynthesize = useCallback(async () => {
+    if (!selectedInitiative) return
+    setIsSynthesizing(true)
+    const result = await synthesize(
+      selectedInitiative.id,
+      `initiative:${selectedInitiative.id}:${Date.now()}`,
+    )
+    setIsSynthesizing(false)
+    if (!result) return
+    setSynthesisPreview(toSynthesisPreview(result))
+  }, [selectedInitiative, synthesize])
+
+  const handleSynthesisCurrentUnderstandingChange = useCallback(
+    (value: string) => {
+      setSynthesisPreview((current) =>
+        current ? { ...current, currentUnderstanding: value } : current,
+      )
+    },
+    [],
+  )
+
+  const handleAcceptSynthesisCurrentUnderstanding = useCallback(() => {
+    if (!synthesisPreview) return
+    setDraft((current) => ({
+      ...current,
+      currentUnderstanding: synthesisPreview.currentUnderstanding,
+    }))
+    setSynthesisPreview((current) =>
+      current ? { ...current, currentUnderstanding: '' } : current,
+    )
+  }, [synthesisPreview])
+
+  const handleRejectSynthesisCurrentUnderstanding = useCallback(() => {
+    setSynthesisPreview((current) =>
+      current ? { ...current, currentUnderstanding: '' } : current,
+    )
+  }, [])
+
+  const handleAcceptSynthesisOutput = useCallback(
+    async (suggestionId: string) => {
+      if (!selectedInitiative || !synthesisPreview) return
+      const suggestion = synthesisPreview.outputs.find(
+        (candidate) => candidate.id === suggestionId,
+      )
+      if (!suggestion) return
+
+      const output = await addOutput({
+        initiativeId: selectedInitiative.id,
+        kind: suggestion.kind,
+        label: suggestion.label,
+        value: suggestion.value,
+        status: suggestion.status,
+        sourceSessionId: suggestion.sourceSessionId,
+      })
+      if (!output) return
+
+      setSynthesisPreview((current) =>
+        current
+          ? {
+              ...current,
+              outputs: current.outputs.filter(
+                (candidate) => candidate.id !== suggestionId,
+              ),
+            }
+          : current,
+      )
+    },
+    [addOutput, selectedInitiative, synthesisPreview],
+  )
+
+  const handleDismissSynthesisPreview = useCallback(() => {
+    setSynthesisPreview(null)
+  }, [])
+
   return (
     <InitiativeWorkboardDialog
       open={open}
@@ -406,6 +487,7 @@ export const InitiativeWorkboardDialogContainer: FC<{
       selectedAttempts={selectedAttempts}
       selectedOutputs={selectedOutputs}
       outputSuggestions={outputSuggestions}
+      synthesisPreview={synthesisPreview}
       outputDraft={outputDraft}
       outputDialogOpen={outputDialogOpen}
       createTitle={createTitle}
@@ -416,6 +498,7 @@ export const InitiativeWorkboardDialogContainer: FC<{
       isSaving={isSaving}
       isCreatingOutput={isCreatingOutput}
       isDiscoveringOutputs={isDiscoveringOutputs}
+      isSynthesizing={isSynthesizing}
       error={error}
       onOpenChange={handleOpenChange}
       onCreateTitleChange={setCreateTitle}
@@ -435,9 +518,42 @@ export const InitiativeWorkboardDialogContainer: FC<{
       onDiscoverOutputs={handleDiscoverOutputs}
       onAcceptOutputSuggestion={handleAcceptOutputSuggestion}
       onDismissOutputSuggestion={handleDismissOutputSuggestion}
+      onSynthesize={handleSynthesize}
+      onSynthesisCurrentUnderstandingChange={
+        handleSynthesisCurrentUnderstandingChange
+      }
+      onAcceptSynthesisCurrentUnderstanding={
+        handleAcceptSynthesisCurrentUnderstanding
+      }
+      onRejectSynthesisCurrentUnderstanding={
+        handleRejectSynthesisCurrentUnderstanding
+      }
+      onAcceptSynthesisOutput={handleAcceptSynthesisOutput}
+      onDismissSynthesisPreview={handleDismissSynthesisPreview}
       onAttemptRoleChange={handleAttemptRoleChange}
       onSetPrimaryAttempt={handleSetPrimaryAttempt}
       onDetachAttempt={handleDetachAttempt}
     />
   )
+}
+
+function toSynthesisPreview(
+  result: InitiativeSynthesisResult,
+): InitiativeSynthesisPreview {
+  return {
+    currentUnderstanding: result.currentUnderstanding,
+    decisions: result.decisions,
+    openQuestions: result.openQuestions,
+    nextAction: result.nextAction,
+    outputs: result.outputs.map((output, index) => ({
+      ...output,
+      id: [
+        'synthesis-output',
+        output.kind,
+        output.sourceSessionId ?? 'none',
+        output.value,
+        index,
+      ].join(':'),
+    })),
+  }
 }

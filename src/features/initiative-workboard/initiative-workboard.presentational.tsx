@@ -20,6 +20,7 @@ import type {
   InitiativeOutput,
   InitiativeOutputKind,
   InitiativeOutputStatus,
+  InitiativeSynthesisOutputSuggestion,
   InitiativeStatus,
 } from '@/entities/initiative'
 import {
@@ -79,6 +80,18 @@ export interface InitiativeAttemptView {
   missing: boolean
 }
 
+export interface InitiativeSynthesisOutputSuggestionView extends InitiativeSynthesisOutputSuggestion {
+  id: string
+}
+
+export interface InitiativeSynthesisPreview {
+  currentUnderstanding: string
+  decisions: string[]
+  openQuestions: string[]
+  nextAction: string
+  outputs: InitiativeSynthesisOutputSuggestionView[]
+}
+
 interface InitiativeWorkboardProps {
   open: boolean
   trigger?: ReactNode
@@ -88,6 +101,7 @@ interface InitiativeWorkboardProps {
   selectedAttempts: InitiativeAttemptView[]
   selectedOutputs: InitiativeOutput[]
   outputSuggestions: InitiativeOutputSuggestion[]
+  synthesisPreview: InitiativeSynthesisPreview | null
   outputDraft: InitiativeOutputDraft
   outputDialogOpen: boolean
   createTitle: string
@@ -98,6 +112,7 @@ interface InitiativeWorkboardProps {
   isSaving: boolean
   isCreatingOutput: boolean
   isDiscoveringOutputs: boolean
+  isSynthesizing: boolean
   error: string | null
   onOpenChange: (open: boolean) => void
   onCreateTitleChange: (value: string) => void
@@ -123,6 +138,12 @@ interface InitiativeWorkboardProps {
   onDiscoverOutputs: () => void
   onAcceptOutputSuggestion: (suggestionId: string) => void
   onDismissOutputSuggestion: (suggestionId: string) => void
+  onSynthesize: () => void
+  onSynthesisCurrentUnderstandingChange: (value: string) => void
+  onAcceptSynthesisCurrentUnderstanding: () => void
+  onRejectSynthesisCurrentUnderstanding: () => void
+  onAcceptSynthesisOutput: (suggestionId: string) => void
+  onDismissSynthesisPreview: () => void
   onAttemptRoleChange: (attemptId: string, role: InitiativeAttemptRole) => void
   onSetPrimaryAttempt: (attemptId: string) => void
   onDetachAttempt: (attemptId: string) => void
@@ -137,6 +158,7 @@ export const InitiativeWorkboardDialog: FC<InitiativeWorkboardProps> = ({
   selectedAttempts,
   selectedOutputs,
   outputSuggestions,
+  synthesisPreview,
   outputDraft,
   outputDialogOpen,
   createTitle,
@@ -147,6 +169,7 @@ export const InitiativeWorkboardDialog: FC<InitiativeWorkboardProps> = ({
   isSaving,
   isCreatingOutput,
   isDiscoveringOutputs,
+  isSynthesizing,
   error,
   onOpenChange,
   onCreateTitleChange,
@@ -166,6 +189,12 @@ export const InitiativeWorkboardDialog: FC<InitiativeWorkboardProps> = ({
   onDiscoverOutputs,
   onAcceptOutputSuggestion,
   onDismissOutputSuggestion,
+  onSynthesize,
+  onSynthesisCurrentUnderstandingChange,
+  onAcceptSynthesisCurrentUnderstanding,
+  onRejectSynthesisCurrentUnderstanding,
+  onAcceptSynthesisOutput,
+  onDismissSynthesisPreview,
   onAttemptRoleChange,
   onSetPrimaryAttempt,
   onDetachAttempt,
@@ -328,10 +357,23 @@ export const InitiativeWorkboardDialog: FC<InitiativeWorkboardProps> = ({
                   </label>
                 </div>
 
-                <label className="space-y-2">
-                  <span className="text-xs font-medium uppercase text-muted-foreground">
-                    Current understanding
-                  </span>
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="text-xs font-medium uppercase text-muted-foreground">
+                      Current understanding
+                    </span>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={onSynthesize}
+                      disabled={isSynthesizing || selectedAttempts.length === 0}
+                      aria-label="Synthesize Current understanding"
+                    >
+                      <RefreshCw className="h-4 w-4" />
+                      {isSynthesizing ? 'Synthesizing...' : 'Synthesize'}
+                    </Button>
+                  </div>
                   <Textarea
                     value={selectedDraft.currentUnderstanding}
                     onChange={(event) =>
@@ -342,8 +384,107 @@ export const InitiativeWorkboardDialog: FC<InitiativeWorkboardProps> = ({
                     }
                     className="min-h-[220px] resize-y"
                     placeholder="Stable notes, decisions, constraints, and next action."
+                    aria-label="Current understanding"
                   />
-                </label>
+                </div>
+
+                {synthesisPreview ? (
+                  <section className="space-y-3 rounded-lg border border-cyan-500/25 bg-cyan-500/10 p-3">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <div className="text-xs font-medium uppercase text-cyan-100">
+                          Suggested updates
+                        </div>
+                        <div className="mt-1 text-xs text-muted-foreground">
+                          Review and accept only the parts that should become
+                          stable Initiative state.
+                        </div>
+                      </div>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="icon"
+                        className="h-8 w-8 shrink-0"
+                        onClick={onDismissSynthesisPreview}
+                        aria-label="Dismiss synthesis preview"
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
+                    </div>
+
+                    {synthesisPreview.currentUnderstanding ? (
+                      <div className="space-y-2">
+                        <div className="text-[11px] font-medium uppercase text-muted-foreground">
+                          Proposed current understanding
+                        </div>
+                        <Textarea
+                          value={synthesisPreview.currentUnderstanding}
+                          onChange={(event) =>
+                            onSynthesisCurrentUnderstandingChange(
+                              event.target.value,
+                            )
+                          }
+                          className="min-h-[140px] resize-y"
+                          aria-label="Suggested Current understanding"
+                        />
+                        <div className="flex justify-end gap-2">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={onRejectSynthesisCurrentUnderstanding}
+                          >
+                            Reject
+                          </Button>
+                          <Button
+                            type="button"
+                            size="sm"
+                            onClick={onAcceptSynthesisCurrentUnderstanding}
+                          >
+                            <Check className="h-4 w-4" />
+                            Accept
+                          </Button>
+                        </div>
+                      </div>
+                    ) : null}
+
+                    {renderSynthesisNotes(synthesisPreview)}
+
+                    {synthesisPreview.outputs.length > 0 ? (
+                      <div className="space-y-2">
+                        <div className="text-[11px] font-medium uppercase text-muted-foreground">
+                          Proposed Outputs
+                        </div>
+                        {synthesisPreview.outputs.map((output) => (
+                          <div
+                            key={output.id}
+                            className="flex min-w-0 items-start justify-between gap-3 rounded-md border border-border/60 bg-background/50 px-3 py-2"
+                          >
+                            <div className="min-w-0">
+                              <div className="truncate text-sm font-medium">
+                                {output.label}
+                              </div>
+                              <div className="mt-1 text-xs text-muted-foreground">
+                                {initiativeOutputKindLabels[output.kind]} |{' '}
+                                {initiativeOutputStatusLabels[output.status]} |{' '}
+                                {output.value}
+                              </div>
+                            </div>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={() => onAcceptSynthesisOutput(output.id)}
+                            >
+                              <Check className="h-4 w-4" />
+                              Accept
+                            </Button>
+                          </div>
+                        ))}
+                      </div>
+                    ) : null}
+                  </section>
+                ) : null}
 
                 <div className="grid gap-3 sm:grid-cols-3">
                   {renderMetric(
@@ -675,6 +816,39 @@ function renderStatusBadge(status: InitiativeStatus) {
     >
       {initiativeStatusLabels[status]}
     </span>
+  )
+}
+
+function renderSynthesisNotes(preview: InitiativeSynthesisPreview) {
+  const sections = [
+    { label: 'Decisions', values: preview.decisions },
+    { label: 'Open questions', values: preview.openQuestions },
+    {
+      label: 'Next action',
+      values: preview.nextAction ? [preview.nextAction] : [],
+    },
+  ].filter((section) => section.values.length > 0)
+
+  if (sections.length === 0) return null
+
+  return (
+    <div className="grid gap-2 md:grid-cols-3">
+      {sections.map((section) => (
+        <div
+          key={section.label}
+          className="rounded-md border border-border/60 bg-background/50 px-3 py-2"
+        >
+          <div className="text-[11px] font-medium uppercase text-muted-foreground">
+            {section.label}
+          </div>
+          <ul className="mt-2 space-y-1 text-xs text-muted-foreground">
+            {section.values.map((value) => (
+              <li key={value}>{value}</li>
+            ))}
+          </ul>
+        </div>
+      ))}
+    </div>
   )
 }
 

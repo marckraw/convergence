@@ -143,6 +143,22 @@ interface UpdateInitiativeOutputInputData {
   status?: InitiativeOutputStatusData
 }
 
+interface InitiativeSynthesisOutputSuggestionData {
+  kind: InitiativeOutputKindData
+  label: string
+  value: string
+  sourceSessionId: string | null
+  status: InitiativeOutputStatusData
+}
+
+interface InitiativeSynthesisResultData {
+  currentUnderstanding: string
+  decisions: string[]
+  openQuestions: string[]
+  nextAction: string
+  outputs: InitiativeSynthesisOutputSuggestionData[]
+}
+
 interface BranchOutputFactsData {
   branchName: string
   upstreamBranch: string | null
@@ -507,6 +523,10 @@ interface ElectronAPI {
       input: UpdateInitiativeOutputInputData,
     ) => Promise<InitiativeOutputData>
     deleteOutput: (id: string) => Promise<void>
+    synthesize: (
+      initiativeId: string,
+      requestId?: string,
+    ) => Promise<InitiativeSynthesisResultData>
   }
   dialog: {
     selectDirectory: () => Promise<string | null>

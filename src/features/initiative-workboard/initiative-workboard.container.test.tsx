@@ -75,6 +75,7 @@ const mockElectronAPI = {
     addOutput: vi.fn(),
     updateOutput: vi.fn(),
     deleteOutput: vi.fn(),
+    synthesize: vi.fn(),
   },
   git: {
     getBranchOutputFacts: vi.fn(),
@@ -100,6 +101,21 @@ describe('InitiativeWorkboardDialogContainer', () => {
       status: 'ready',
     })
     mockElectronAPI.initiative.deleteOutput.mockResolvedValue(undefined)
+    mockElectronAPI.initiative.synthesize.mockResolvedValue({
+      currentUnderstanding: 'Synthesized current understanding.',
+      decisions: ['Keep suggestions transient.'],
+      openQuestions: [],
+      nextAction: 'Save accepted notes.',
+      outputs: [
+        {
+          kind: 'documentation',
+          label: 'Synthesis notes',
+          value: 'docs/synthesis.md',
+          status: 'ready',
+          sourceSessionId: 's1',
+        },
+      ],
+    })
     mockElectronAPI.git.getBranchOutputFacts.mockResolvedValue({
       branchName: 'feature-output',
       upstreamBranch: 'origin/feature-output',
@@ -327,6 +343,45 @@ describe('InitiativeWorkboardDialogContainer', () => {
         value: 'feature-output',
         sourceSessionId: 's1',
         status: 'in-progress',
+      })
+    })
+  })
+
+  it('synthesizes transient suggestions and accepts selected updates', async () => {
+    mockElectronAPI.initiative.listAttempts.mockResolvedValue([attempt])
+    render(<InitiativeWorkboardDialogContainer />)
+
+    fireEvent.click(screen.getByRole('button', { name: /initiatives/i }))
+    await screen.findByText('Implement output suggestions')
+    fireEvent.click(screen.getByRole('button', { name: /synthesize/i }))
+
+    expect(
+      await screen.findByDisplayValue('Synthesized current understanding.'),
+    ).toBeInTheDocument()
+    fireEvent.click(screen.getAllByRole('button', { name: /accept/i })[1])
+    await waitFor(() => {
+      expect(mockElectronAPI.initiative.addOutput).toHaveBeenCalledWith({
+        initiativeId: 'i1',
+        kind: 'documentation',
+        label: 'Synthesis notes',
+        value: 'docs/synthesis.md',
+        status: 'ready',
+        sourceSessionId: 's1',
+      })
+    })
+
+    fireEvent.change(
+      screen.getByLabelText(/suggested current understanding/i),
+      { target: { value: 'Edited synthesized understanding.' } },
+    )
+    fireEvent.click(screen.getAllByRole('button', { name: /accept/i })[0])
+    fireEvent.click(screen.getByRole('button', { name: /^save$/i }))
+
+    await waitFor(() => {
+      expect(mockElectronAPI.initiative.update).toHaveBeenCalledWith('i1', {
+        title: 'Agent-native work tracking',
+        status: 'exploring',
+        currentUnderstanding: 'Edited synthesized understanding.',
       })
     })
   })
