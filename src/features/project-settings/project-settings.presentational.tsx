@@ -66,14 +66,14 @@ export const ProjectSettingsDialog: FC<ProjectSettingsDialogProps> = ({
                 type="button"
                 variant={strategy === 'base-branch' ? 'secondary' : 'outline'}
                 className={cn(
-                  'h-auto items-start justify-start px-3 py-3 text-left',
+                  'h-auto w-full min-w-0 items-start justify-start whitespace-normal px-3 py-3 text-left',
                   strategy === 'base-branch' && 'ring-1 ring-ring',
                 )}
                 onClick={() => onStrategyChange('base-branch')}
               >
-                <span className="flex flex-col gap-1">
+                <span className="flex min-w-0 flex-1 flex-col gap-1">
                   <span className="text-sm font-medium">Base branch</span>
-                  <span className="text-xs text-muted-foreground">
+                  <span className="whitespace-normal break-words text-xs text-muted-foreground">
                     Start from the project base branch.
                   </span>
                 </span>
@@ -83,14 +83,14 @@ export const ProjectSettingsDialog: FC<ProjectSettingsDialogProps> = ({
                 type="button"
                 variant={strategy === 'current-head' ? 'secondary' : 'outline'}
                 className={cn(
-                  'h-auto items-start justify-start px-3 py-3 text-left',
+                  'h-auto w-full min-w-0 items-start justify-start whitespace-normal px-3 py-3 text-left',
                   strategy === 'current-head' && 'ring-1 ring-ring',
                 )}
                 onClick={() => onStrategyChange('current-head')}
               >
-                <span className="flex flex-col gap-1">
+                <span className="flex min-w-0 flex-1 flex-col gap-1">
                   <span className="text-sm font-medium">Current HEAD</span>
-                  <span className="text-xs text-muted-foreground">
+                  <span className="whitespace-normal break-words text-xs text-muted-foreground">
                     Start from whatever commit the source repo currently has
                     checked out.
                   </span>
