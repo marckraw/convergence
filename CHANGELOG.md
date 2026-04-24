@@ -1,5 +1,11 @@
 # convergence
 
+## 0.22.3
+
+### Patch Changes
+
+- b056774: Status bar tooltips now open almost instantly (120ms) instead of waiting on the global 1500ms tooltip delay, so hovering over running/attention/project chips surfaces details right away.
+
 ## 0.22.2
 
 ### Patch Changes
