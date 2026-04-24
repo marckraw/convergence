@@ -42,7 +42,7 @@ export const ProjectSwitcher: FC<ProjectSwitcherProps> = ({
         contentClassName="min-w-72 max-w-[min(28rem,calc(100vw-2rem))]"
         icon={<FolderGit2 className="h-3.5 w-3.5 shrink-0" />}
         action={{
-          label: 'Create Project',
+          label: 'Open a project',
           icon: <Plus className="h-3.5 w-3.5 shrink-0" />,
           onSelect: onCreateProject,
         }}

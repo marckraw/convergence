@@ -15,6 +15,6 @@ export const ProjectCreateButton: FC<ProjectCreateButtonProps> = ({
 }) => (
   <Button variant={variant} size={size} onClick={onClick}>
     <Plus className="h-4 w-4" />
-    New Project
+    Open a project
   </Button>
 )
