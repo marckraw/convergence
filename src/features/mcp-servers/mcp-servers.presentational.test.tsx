@@ -22,6 +22,7 @@ describe('McpServersDialog', () => {
               providerId: 'claude-code',
               providerName: 'Claude Code',
               error: null,
+              note: null,
               globalServers: [
                 {
                   name: 'atlassian',
@@ -62,5 +63,39 @@ describe('McpServersDialog', () => {
     expect(screen.getAllByText('Global')).not.toHaveLength(0)
     expect(screen.getByText('project-docs')).toBeInTheDocument()
     expect(screen.getByText('atlassian')).toBeInTheDocument()
+  })
+
+  it('renders provider notes when available', () => {
+    render(
+      <McpServersDialog
+        open
+        onOpenChange={() => {}}
+        trigger={<Button type="button">Open</Button>}
+        projectName="convergence"
+        isLoading={false}
+        error={null}
+        onRefresh={() => {}}
+        snapshot={{
+          projectId: 'project-1',
+          projectName: 'convergence',
+          providers: [
+            {
+              providerId: 'pi',
+              providerName: 'Pi Agent',
+              error: null,
+              note: 'Pi does not expose MCP server discovery through its CLI.',
+              globalServers: [],
+              projectServers: [],
+            },
+          ],
+        }}
+      />,
+    )
+
+    expect(
+      screen.getByText(
+        'Pi does not expose MCP server discovery through its CLI.',
+      ),
+    ).toBeInTheDocument()
   })
 })
