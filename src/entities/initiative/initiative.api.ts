@@ -28,6 +28,9 @@ export const initiativeApi = {
   listAttempts: (initiativeId: string): Promise<InitiativeAttempt[]> =>
     window.electronAPI.initiative.listAttempts(initiativeId),
 
+  listAttemptsForSession: (sessionId: string): Promise<InitiativeAttempt[]> =>
+    window.electronAPI.initiative.listAttemptsForSession(sessionId),
+
   linkAttempt: (
     input: LinkInitiativeAttemptInput,
   ): Promise<InitiativeAttempt> =>

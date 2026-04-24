@@ -16,6 +16,7 @@ import {
   Archive,
   ArrowLeftRight,
   GitFork,
+  Link2,
   MoreVertical,
   Square,
   FileCode,
@@ -336,6 +337,19 @@ export const SessionView: FC = () => {
                   >
                     <GitFork className="h-3.5 w-3.5" />
                     Fork session…
+                  </DropdownMenuItem>
+                )}
+                {session.providerId !== 'shell' && (
+                  <DropdownMenuItem
+                    onClick={() =>
+                      openDialog('initiative-session-link', {
+                        sessionId: session.id,
+                      })
+                    }
+                    className="gap-2"
+                  >
+                    <Link2 className="h-3.5 w-3.5" />
+                    Link to Initiative...
                   </DropdownMenuItem>
                 )}
                 {session.providerId !== 'shell' && (

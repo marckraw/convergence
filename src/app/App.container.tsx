@@ -14,6 +14,7 @@ import { Toaster, toast } from 'sonner'
 import { TooltipProvider } from '@/shared/ui/tooltip'
 import { applyTheme, getStoredTheme } from '@/shared/lib/theme'
 import { CommandCenterContainer } from '@/features/command-center'
+import { InitiativeSessionLinkDialogContainer } from '@/features/initiative-session-link'
 import { SessionForkDialogContainer } from '@/features/session-fork'
 import { SessionIntentDialogContainer } from '@/features/session-intent-dialog'
 import { NotificationsToastHostContainer } from '@/features/notifications-toast-host'
@@ -193,6 +194,7 @@ export function App() {
         hasProject={!!activeProject}
       />
       <CommandCenterContainer />
+      <InitiativeSessionLinkDialogContainer />
       <SessionForkDialogContainer />
       <SessionIntentDialogContainer />
       <NotificationsToastHostContainer />

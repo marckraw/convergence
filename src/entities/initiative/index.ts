@@ -15,5 +15,9 @@ export type {
   UpdateInitiativeOutputInput,
 } from './initiative.types'
 export { initiativeApi } from './initiative.api'
+export {
+  initiativeAttemptRoleLabels,
+  initiativeAttemptRoleOptions,
+} from './initiative.constants'
 export { useInitiativeStore } from './initiative.model'
 export type { InitiativeStore } from './initiative.model'

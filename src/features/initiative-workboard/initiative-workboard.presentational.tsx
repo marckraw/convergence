@@ -2,11 +2,23 @@ import type { FC, ReactNode } from 'react'
 import {
   CalendarClock,
   FileText,
+  GitBranch,
   GitPullRequest,
   Plus,
   Save,
+  Star,
+  Trash2,
 } from 'lucide-react'
-import type { Initiative, InitiativeStatus } from '@/entities/initiative'
+import type {
+  Initiative,
+  InitiativeAttempt,
+  InitiativeAttemptRole,
+  InitiativeStatus,
+} from '@/entities/initiative'
+import {
+  initiativeAttemptRoleLabels,
+  initiativeAttemptRoleOptions,
+} from '@/entities/initiative'
 import { Button } from '@/shared/ui/button'
 import {
   Dialog,
@@ -34,12 +46,24 @@ export interface InitiativeDraft {
   currentUnderstanding: string
 }
 
+export interface InitiativeAttemptView {
+  attempt: InitiativeAttempt
+  sessionName: string
+  projectName: string
+  branchName: string | null
+  providerId: string
+  status: string
+  attention: string
+  missing: boolean
+}
+
 interface InitiativeWorkboardProps {
   open: boolean
   trigger?: ReactNode
   initiatives: Initiative[]
   selectedInitiative: Initiative | null
   selectedDraft: InitiativeDraft
+  selectedAttempts: InitiativeAttemptView[]
   createTitle: string
   attemptCounts: Record<string, number>
   outputCounts: Record<string, number>
@@ -53,6 +77,9 @@ interface InitiativeWorkboardProps {
   onSelectInitiative: (id: string) => void
   onDraftChange: (draft: InitiativeDraft) => void
   onSave: () => void
+  onAttemptRoleChange: (attemptId: string, role: InitiativeAttemptRole) => void
+  onSetPrimaryAttempt: (attemptId: string) => void
+  onDetachAttempt: (attemptId: string) => void
 }
 
 export const InitiativeWorkboardDialog: FC<InitiativeWorkboardProps> = ({
@@ -61,6 +88,7 @@ export const InitiativeWorkboardDialog: FC<InitiativeWorkboardProps> = ({
   initiatives,
   selectedInitiative,
   selectedDraft,
+  selectedAttempts,
   createTitle,
   attemptCounts,
   outputCounts,
@@ -74,6 +102,9 @@ export const InitiativeWorkboardDialog: FC<InitiativeWorkboardProps> = ({
   onSelectInitiative,
   onDraftChange,
   onSave,
+  onAttemptRoleChange,
+  onSetPrimaryAttempt,
+  onDetachAttempt,
 }) => {
   const createDisabled = createTitle.trim().length === 0 || isCreating
   const saveDisabled =
@@ -259,6 +290,28 @@ export const InitiativeWorkboardDialog: FC<InitiativeWorkboardProps> = ({
                     formatUpdatedAt(selectedInitiative.updatedAt),
                   )}
                 </div>
+
+                <section className="space-y-3">
+                  <div className="text-xs font-medium uppercase text-muted-foreground">
+                    Attempts
+                  </div>
+                  {selectedAttempts.length === 0 ? (
+                    <div className="rounded-lg border border-border/60 px-3 py-4 text-sm text-muted-foreground">
+                      No linked Attempts yet.
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      {selectedAttempts.map((view) =>
+                        renderAttemptRow({
+                          view,
+                          onAttemptRoleChange,
+                          onSetPrimaryAttempt,
+                          onDetachAttempt,
+                        }),
+                      )}
+                    </div>
+                  )}
+                </section>
               </div>
             ) : (
               <div className="flex min-h-[260px] items-center justify-center text-sm text-muted-foreground">
@@ -310,6 +363,93 @@ function renderMetric(label: string, value: string | number) {
         {label}
       </div>
       <div className="mt-1 truncate text-sm">{value}</div>
+    </div>
+  )
+}
+
+function renderAttemptRow(input: {
+  view: InitiativeAttemptView
+  onAttemptRoleChange: (attemptId: string, role: InitiativeAttemptRole) => void
+  onSetPrimaryAttempt: (attemptId: string) => void
+  onDetachAttempt: (attemptId: string) => void
+}) {
+  const { view, onAttemptRoleChange, onSetPrimaryAttempt, onDetachAttempt } =
+    input
+  const { attempt } = view
+
+  return (
+    <div
+      key={attempt.id}
+      className="rounded-lg border border-border/60 bg-card/30 px-3 py-3"
+    >
+      <div className="flex min-w-0 items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="flex min-w-0 flex-wrap items-center gap-2">
+            <span className="truncate text-sm font-medium">
+              {view.sessionName}
+            </span>
+            {attempt.isPrimary ? (
+              <span className="inline-flex items-center gap-1 rounded-full border border-amber-500/25 bg-amber-500/10 px-2 py-0.5 text-[10px] font-medium text-amber-200">
+                <Star className="h-3 w-3" />
+                Primary
+              </span>
+            ) : null}
+          </div>
+          <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+            <span>{view.projectName}</span>
+            {view.branchName ? (
+              <span className="inline-flex items-center gap-1">
+                <GitBranch className="h-3.5 w-3.5" />
+                {view.branchName}
+              </span>
+            ) : null}
+            <span>{view.providerId}</span>
+            <span>{view.status}</span>
+            {view.attention !== 'none' ? <span>{view.attention}</span> : null}
+            {view.missing ? <span>Missing session</span> : null}
+          </div>
+        </div>
+
+        <div className="flex shrink-0 items-center gap-2">
+          <select
+            className="h-8 rounded-md border border-input bg-background px-2 text-xs shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+            value={attempt.role}
+            onChange={(event) =>
+              onAttemptRoleChange(
+                attempt.id,
+                event.target.value as InitiativeAttemptRole,
+              )
+            }
+            aria-label={`Role for ${view.sessionName}`}
+          >
+            {initiativeAttemptRoleOptions.map((role) => (
+              <option key={role} value={role}>
+                {initiativeAttemptRoleLabels[role]}
+              </option>
+            ))}
+          </select>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => onSetPrimaryAttempt(attempt.id)}
+            disabled={attempt.isPrimary}
+          >
+            <Star className="h-4 w-4" />
+            Primary
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            size="icon"
+            className="h-8 w-8"
+            onClick={() => onDetachAttempt(attempt.id)}
+            aria-label={`Detach ${view.sessionName}`}
+          >
+            <Trash2 className="h-4 w-4" />
+          </Button>
+        </div>
+      </div>
     </div>
   )
 }

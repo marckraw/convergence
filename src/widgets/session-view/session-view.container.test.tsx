@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { DEFAULT_PROJECT_SETTINGS, useProjectStore } from '@/entities/project'
+import { useDialogStore } from '@/entities/dialog'
 import { useSessionStore } from '@/entities/session'
 import { TooltipProvider } from '@/shared/ui/tooltip'
 import { SessionView } from './session-view.container'
@@ -87,6 +88,8 @@ describe('SessionView changed files drawer', () => {
       clearError: vi.fn(),
     })
 
+    useDialogStore.setState({ openDialog: null, payload: null })
+
     Object.defineProperty(window, 'electronAPI', {
       value: {
         git: {
@@ -163,5 +166,23 @@ describe('SessionView changed files drawer', () => {
     expect(screen.getByTestId('session-activity-indicator')).toHaveTextContent(
       'compacting context…',
     )
+  })
+
+  it('opens the Initiative link dialog from session actions', async () => {
+    render(
+      <TooltipProvider>
+        <SessionView />
+      </TooltipProvider>,
+    )
+
+    fireEvent.pointerDown(
+      screen.getByRole('button', { name: /session actions/i }),
+    )
+    fireEvent.click(await screen.findByText('Link to Initiative...'))
+
+    expect(useDialogStore.getState().openDialog).toBe('initiative-session-link')
+    expect(useDialogStore.getState().payload).toEqual({
+      sessionId: 'session-1',
+    })
   })
 })

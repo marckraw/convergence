@@ -45,6 +45,7 @@ const mockElectronAPI = {
     update: vi.fn(),
     delete: vi.fn(),
     listAttempts: vi.fn(),
+    listAttemptsForSession: vi.fn(),
     linkAttempt: vi.fn(),
     updateAttempt: vi.fn(),
     unlinkAttempt: vi.fn(),
@@ -61,6 +62,7 @@ describe('useInitiativeStore', () => {
     useInitiativeStore.setState({
       initiatives: [],
       attemptsByInitiativeId: {},
+      attemptsBySessionId: {},
       outputsByInitiativeId: {},
       loading: false,
       error: null,
@@ -105,9 +107,15 @@ describe('useInitiativeStore', () => {
 
   it('loads and links attempts', async () => {
     mockElectronAPI.initiative.listAttempts.mockResolvedValue([attempt])
+    mockElectronAPI.initiative.listAttemptsForSession.mockResolvedValue([
+      attempt,
+    ])
     mockElectronAPI.initiative.linkAttempt.mockResolvedValue(attempt)
 
     await useInitiativeStore.getState().loadAttempts(initiative.id)
+    await useInitiativeStore
+      .getState()
+      .loadAttemptsForSession(attempt.sessionId)
     await useInitiativeStore.getState().linkAttempt({
       initiativeId: initiative.id,
       sessionId: attempt.sessionId,
@@ -116,6 +124,9 @@ describe('useInitiativeStore', () => {
 
     expect(
       useInitiativeStore.getState().attemptsByInitiativeId[initiative.id],
+    ).toEqual([attempt])
+    expect(
+      useInitiativeStore.getState().attemptsBySessionId[attempt.sessionId],
     ).toEqual([attempt])
   })
 

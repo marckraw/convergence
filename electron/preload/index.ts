@@ -35,6 +35,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
     delete: (id: string) => ipcRenderer.invoke('initiative:delete', id),
     listAttempts: (initiativeId: string) =>
       ipcRenderer.invoke('initiative:listAttempts', initiativeId),
+    listAttemptsForSession: (sessionId: string) =>
+      ipcRenderer.invoke('initiative:listAttemptsForSession', sessionId),
     linkAttempt: (input: unknown) =>
       ipcRenderer.invoke('initiative:linkAttempt', input),
     updateAttempt: (id: string, input: unknown) =>

@@ -477,6 +477,9 @@ interface ElectronAPI {
     ) => Promise<InitiativeData>
     delete: (id: string) => Promise<void>
     listAttempts: (initiativeId: string) => Promise<InitiativeAttemptData[]>
+    listAttemptsForSession: (
+      sessionId: string,
+    ) => Promise<InitiativeAttemptData[]>
     linkAttempt: (
       input: LinkInitiativeAttemptInputData,
     ) => Promise<InitiativeAttemptData>

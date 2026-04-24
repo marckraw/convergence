@@ -15,6 +15,7 @@ import type {
 interface InitiativeState {
   initiatives: Initiative[]
   attemptsByInitiativeId: Record<string, InitiativeAttempt[]>
+  attemptsBySessionId: Record<string, InitiativeAttempt[]>
   outputsByInitiativeId: Record<string, InitiativeOutput[]>
   loading: boolean
   error: string | null
@@ -29,6 +30,7 @@ interface InitiativeActions {
   ) => Promise<Initiative | null>
   deleteInitiative: (id: string) => Promise<void>
   loadAttempts: (initiativeId: string) => Promise<void>
+  loadAttemptsForSession: (sessionId: string) => Promise<void>
   linkAttempt: (
     input: LinkInitiativeAttemptInput,
   ) => Promise<InitiativeAttempt | null>
@@ -81,6 +83,7 @@ function removeById<T extends { id: string }>(items: T[], id: string): T[] {
 export const useInitiativeStore = create<InitiativeStore>((set) => ({
   initiatives: [],
   attemptsByInitiativeId: {},
+  attemptsBySessionId: {},
   outputsByInitiativeId: {},
   loading: false,
   error: null,
@@ -139,12 +142,21 @@ export const useInitiativeStore = create<InitiativeStore>((set) => ({
       await initiativeApi.delete(id)
       set((state) => {
         const attemptsByInitiativeId = { ...state.attemptsByInitiativeId }
+        const attemptsBySessionId = { ...state.attemptsBySessionId }
         const outputsByInitiativeId = { ...state.outputsByInitiativeId }
         delete attemptsByInitiativeId[id]
+        for (const [sessionId, attempts] of Object.entries(
+          attemptsBySessionId,
+        )) {
+          attemptsBySessionId[sessionId] = attempts.filter(
+            (attempt) => attempt.initiativeId !== id,
+          )
+        }
         delete outputsByInitiativeId[id]
         return {
           initiatives: removeById(state.initiatives, id),
           attemptsByInitiativeId,
+          attemptsBySessionId,
           outputsByInitiativeId,
         }
       })
@@ -173,6 +185,26 @@ export const useInitiativeStore = create<InitiativeStore>((set) => ({
     }
   },
 
+  loadAttemptsForSession: async (sessionId) => {
+    set({ error: null })
+    try {
+      const attempts = await initiativeApi.listAttemptsForSession(sessionId)
+      set((state) => ({
+        attemptsBySessionId: {
+          ...state.attemptsBySessionId,
+          [sessionId]: attempts,
+        },
+      }))
+    } catch (err) {
+      set({
+        error:
+          err instanceof Error
+            ? err.message
+            : 'Failed to load session Attempts',
+      })
+    }
+  },
+
   linkAttempt: async (input) => {
     set({ error: null })
     try {
@@ -182,6 +214,13 @@ export const useInitiativeStore = create<InitiativeStore>((set) => ({
           ...state.attemptsByInitiativeId,
           [input.initiativeId]: upsertById(
             state.attemptsByInitiativeId[input.initiativeId] ?? [],
+            attempt,
+          ),
+        },
+        attemptsBySessionId: {
+          ...state.attemptsBySessionId,
+          [input.sessionId]: upsertById(
+            state.attemptsBySessionId[input.sessionId] ?? [],
             attempt,
           ),
         },
@@ -207,6 +246,13 @@ export const useInitiativeStore = create<InitiativeStore>((set) => ({
             attempt,
           ),
         },
+        attemptsBySessionId: {
+          ...state.attemptsBySessionId,
+          [attempt.sessionId]: upsertById(
+            state.attemptsBySessionId[attempt.sessionId] ?? [],
+            attempt,
+          ),
+        },
       }))
       return attempt
     } catch (err) {
@@ -229,6 +275,11 @@ export const useInitiativeStore = create<InitiativeStore>((set) => ({
             id,
           ),
         },
+        attemptsBySessionId: Object.fromEntries(
+          Object.entries(state.attemptsBySessionId).map(
+            ([sessionId, attempts]) => [sessionId, removeById(attempts, id)],
+          ),
+        ),
       }))
     } catch (err) {
       set({
@@ -250,6 +301,16 @@ export const useInitiativeStore = create<InitiativeStore>((set) => ({
           ...state.attemptsByInitiativeId,
           [initiativeId]: attempts,
         },
+        attemptsBySessionId: attempts.reduce(
+          (nextBySession, nextAttempt) => ({
+            ...nextBySession,
+            [nextAttempt.sessionId]: upsertById(
+              nextBySession[nextAttempt.sessionId] ?? [],
+              nextAttempt,
+            ),
+          }),
+          { ...state.attemptsBySessionId },
+        ),
       }))
       return attempt
     } catch (err) {

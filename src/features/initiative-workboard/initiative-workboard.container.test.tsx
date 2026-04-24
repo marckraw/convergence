@@ -31,6 +31,7 @@ const mockElectronAPI = {
     update: vi.fn(),
     delete: vi.fn(),
     listAttempts: vi.fn(),
+    listAttemptsForSession: vi.fn(),
     linkAttempt: vi.fn(),
     updateAttempt: vi.fn(),
     unlinkAttempt: vi.fn(),

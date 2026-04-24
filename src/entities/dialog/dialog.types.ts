@@ -1,5 +1,6 @@
 export type DialogKind =
   | 'app-settings'
+  | 'initiative-session-link'
   | 'initiative-workboard'
   | 'project-settings'
   | 'providers'
@@ -11,5 +12,6 @@ export type DialogKind =
 
 export type DialogPayload =
   | { parentSessionId: string }
+  | { sessionId: string }
   | { workspaceId: string | null }
   | null

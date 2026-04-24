@@ -1,8 +1,11 @@
 import { describe, expect, it, vi } from 'vitest'
 import { fireEvent, render, screen } from '@testing-library/react'
-import type { Initiative } from '@/entities/initiative'
+import type { Initiative, InitiativeAttempt } from '@/entities/initiative'
 import { InitiativeWorkboardDialog } from './initiative-workboard.presentational'
-import type { InitiativeDraft } from './initiative-workboard.presentational'
+import type {
+  InitiativeAttemptView,
+  InitiativeDraft,
+} from './initiative-workboard.presentational'
 
 const initiative: Initiative = {
   id: 'i1',
@@ -20,6 +23,26 @@ const draft: InitiativeDraft = {
   currentUnderstanding: initiative.currentUnderstanding,
 }
 
+const attempt: InitiativeAttempt = {
+  id: 'a1',
+  initiativeId: 'i1',
+  sessionId: 's1',
+  role: 'implementation',
+  isPrimary: false,
+  createdAt: '2026-01-01T00:00:00.000Z',
+}
+
+const attemptView: InitiativeAttemptView = {
+  attempt,
+  sessionName: 'Implement workboard',
+  projectName: 'convergence',
+  branchName: 'feat/initiatives',
+  providerId: 'codex',
+  status: 'completed',
+  attention: 'finished',
+  missing: false,
+}
+
 function renderDialog(
   overrides: Partial<Parameters<typeof InitiativeWorkboardDialog>[0]> = {},
 ) {
@@ -28,6 +51,7 @@ function renderDialog(
     initiatives: [],
     selectedInitiative: null,
     selectedDraft: { title: '', status: 'exploring', currentUnderstanding: '' },
+    selectedAttempts: [],
     createTitle: '',
     attemptCounts: {},
     outputCounts: {},
@@ -41,6 +65,9 @@ function renderDialog(
     onSelectInitiative: vi.fn(),
     onDraftChange: vi.fn(),
     onSave: vi.fn(),
+    onAttemptRoleChange: vi.fn(),
+    onSetPrimaryAttempt: vi.fn(),
+    onDetachAttempt: vi.fn(),
     ...overrides,
   }
 
@@ -108,5 +135,32 @@ describe('InitiativeWorkboardDialog', () => {
     expect(props.onSave).toHaveBeenCalled()
     expect(screen.getAllByText('2')).toHaveLength(2)
     expect(screen.getAllByText('1')).toHaveLength(2)
+  })
+
+  it('renders Attempts and emits Attempt actions', () => {
+    const props = renderDialog({
+      initiatives: [initiative],
+      selectedInitiative: initiative,
+      selectedDraft: draft,
+      selectedAttempts: [attemptView],
+      attemptCounts: { i1: 1 },
+      outputCounts: { i1: 0 },
+    })
+
+    expect(screen.getByText('Implement workboard')).toBeInTheDocument()
+    expect(screen.getByText('convergence')).toBeInTheDocument()
+    expect(screen.getByText('feat/initiatives')).toBeInTheDocument()
+
+    fireEvent.change(screen.getByLabelText(/role for implement workboard/i), {
+      target: { value: 'review' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: /^primary$/i }))
+    fireEvent.click(
+      screen.getByRole('button', { name: /detach implement workboard/i }),
+    )
+
+    expect(props.onAttemptRoleChange).toHaveBeenCalledWith('a1', 'review')
+    expect(props.onSetPrimaryAttempt).toHaveBeenCalledWith('a1')
+    expect(props.onDetachAttempt).toHaveBeenCalledWith('a1')
   })
 })

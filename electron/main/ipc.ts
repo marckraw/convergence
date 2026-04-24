@@ -177,6 +177,12 @@ export function registerIpcHandlers(
   )
 
   ipcMain.handle(
+    'initiative:listAttemptsForSession',
+    (_event, sessionId: string) =>
+      initiativeService.listAttemptsForSession(sessionId),
+  )
+
+  ipcMain.handle(
     'initiative:linkAttempt',
     (_event, input: LinkInitiativeAttemptInput) =>
       initiativeService.linkAttempt(input),

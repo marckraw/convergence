@@ -5,11 +5,16 @@ import { useDialogStore } from '@/entities/dialog'
 import {
   useInitiativeStore,
   type Initiative,
+  type InitiativeAttemptRole,
   type InitiativeStatus,
 } from '@/entities/initiative'
+import { useProjectStore } from '@/entities/project'
+import { useSessionStore } from '@/entities/session'
+import { useWorkspaceStore } from '@/entities/workspace'
 import { Button } from '@/shared/ui/button'
 import {
   InitiativeWorkboardDialog,
+  type InitiativeAttemptView,
   type InitiativeDraft,
 } from './initiative-workboard.presentational'
 
@@ -48,7 +53,13 @@ export const InitiativeWorkboardDialogContainer: FC<{
   const updateInitiative = useInitiativeStore((s) => s.updateInitiative)
   const loadAttempts = useInitiativeStore((s) => s.loadAttempts)
   const loadOutputs = useInitiativeStore((s) => s.loadOutputs)
+  const updateAttempt = useInitiativeStore((s) => s.updateAttempt)
+  const setPrimaryAttempt = useInitiativeStore((s) => s.setPrimaryAttempt)
+  const unlinkAttempt = useInitiativeStore((s) => s.unlinkAttempt)
   const clearError = useInitiativeStore((s) => s.clearError)
+  const projects = useProjectStore((s) => s.projects)
+  const sessions = useSessionStore((s) => s.globalSessions)
+  const workspaces = useWorkspaceStore((s) => s.globalWorkspaces)
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [createTitle, setCreateTitle] = useState('')
   const [draft, setDraft] = useState<InitiativeDraft>(emptyDraft)
@@ -153,6 +164,65 @@ export const InitiativeWorkboardDialogContainer: FC<{
     [initiatives, outputsByInitiativeId],
   )
 
+  const selectedAttempts = useMemo<InitiativeAttemptView[]>(() => {
+    if (!selectedInitiative) return []
+    return (attemptsByInitiativeId[selectedInitiative.id] ?? []).map(
+      (attempt) => {
+        const session =
+          sessions.find((entry) => entry.id === attempt.sessionId) ?? null
+        const project = session
+          ? projects.find((entry) => entry.id === session.projectId)
+          : null
+        const workspace =
+          session?.workspaceId !== null && session?.workspaceId !== undefined
+            ? (workspaces.find((entry) => entry.id === session.workspaceId) ??
+              null)
+            : null
+
+        return {
+          attempt,
+          sessionName: session?.name ?? 'Unknown session',
+          projectName: project?.name ?? 'Unknown project',
+          branchName: workspace?.branchName ?? null,
+          providerId: session?.providerId ?? 'unknown',
+          status: session?.status ?? 'unknown',
+          attention: session?.attention ?? 'none',
+          missing: session === null,
+        }
+      },
+    )
+  }, [
+    attemptsByInitiativeId,
+    projects,
+    selectedInitiative,
+    sessions,
+    workspaces,
+  ])
+
+  const handleAttemptRoleChange = useCallback(
+    async (attemptId: string, role: InitiativeAttemptRole) => {
+      if (!selectedInitiative) return
+      await updateAttempt(attemptId, selectedInitiative.id, { role })
+    },
+    [selectedInitiative, updateAttempt],
+  )
+
+  const handleSetPrimaryAttempt = useCallback(
+    async (attemptId: string) => {
+      if (!selectedInitiative) return
+      await setPrimaryAttempt(selectedInitiative.id, attemptId)
+    },
+    [selectedInitiative, setPrimaryAttempt],
+  )
+
+  const handleDetachAttempt = useCallback(
+    async (attemptId: string) => {
+      if (!selectedInitiative) return
+      await unlinkAttempt(attemptId, selectedInitiative.id)
+    },
+    [selectedInitiative, unlinkAttempt],
+  )
+
   return (
     <InitiativeWorkboardDialog
       open={open}
@@ -175,6 +245,7 @@ export const InitiativeWorkboardDialogContainer: FC<{
       initiatives={initiatives}
       selectedInitiative={selectedInitiative}
       selectedDraft={draft}
+      selectedAttempts={selectedAttempts}
       createTitle={createTitle}
       attemptCounts={attemptCounts}
       outputCounts={outputCounts}
@@ -188,6 +259,9 @@ export const InitiativeWorkboardDialogContainer: FC<{
       onSelectInitiative={setSelectedId}
       onDraftChange={setDraft}
       onSave={handleSave}
+      onAttemptRoleChange={handleAttemptRoleChange}
+      onSetPrimaryAttempt={handleSetPrimaryAttempt}
+      onDetachAttempt={handleDetachAttempt}
     />
   )
 }

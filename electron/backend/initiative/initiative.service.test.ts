@@ -74,6 +74,11 @@ describe('InitiativeService', () => {
     expect(service.listAttempts(initiative.id).map((a) => a.sessionId)).toEqual(
       ['s1', 's2'],
     )
+    expect(
+      service
+        .listAttemptsForSession('s2')
+        .map((attempt) => attempt.initiativeId),
+    ).toEqual([initiative.id])
   })
 
   it('prevents duplicate session links within one initiative', () => {

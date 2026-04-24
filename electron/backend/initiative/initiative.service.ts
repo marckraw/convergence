@@ -114,6 +114,19 @@ export class InitiativeService {
     return rows.map(initiativeAttemptFromRow)
   }
 
+  listAttemptsForSession(sessionId: string): InitiativeAttempt[] {
+    this.assertSessionExists(sessionId)
+    const rows = this.db
+      .prepare(
+        `SELECT * FROM initiative_attempts
+         WHERE session_id = ?
+         ORDER BY is_primary DESC, created_at ASC`,
+      )
+      .all(sessionId) as InitiativeAttemptRow[]
+
+    return rows.map(initiativeAttemptFromRow)
+  }
+
   linkAttempt(input: LinkInitiativeAttemptInput): InitiativeAttempt {
     this.assertInitiativeExists(input.initiativeId)
     this.assertSessionExists(input.sessionId)
