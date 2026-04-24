@@ -266,6 +266,10 @@ export function registerIpcHandlers(
     gitService.getCurrentBranch(repoPath),
   )
 
+  ipcMain.handle('git:getBranchOutputFacts', async (_event, repoPath: string) =>
+    gitService.getBranchOutputFacts(repoPath),
+  )
+
   ipcMain.handle('git:getStatus', async (_event, repoPath: string) =>
     gitService.getStatus(repoPath),
   )

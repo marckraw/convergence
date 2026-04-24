@@ -20,6 +20,10 @@ import {
   type InitiativeDraft,
   type InitiativeOutputDraft,
 } from './initiative-workboard.presentational'
+import {
+  buildBranchOutputSuggestions,
+  type InitiativeOutputSuggestion,
+} from './initiative-output-suggestions.pure'
 
 const emptyDraft: InitiativeDraft = {
   title: '',
@@ -81,9 +85,13 @@ export const InitiativeWorkboardDialogContainer: FC<{
   const [outputDraft, setOutputDraft] =
     useState<InitiativeOutputDraft>(emptyOutputDraft)
   const [outputDialogOpen, setOutputDialogOpen] = useState(false)
+  const [outputSuggestions, setOutputSuggestions] = useState<
+    InitiativeOutputSuggestion[]
+  >([])
   const [isCreating, setIsCreating] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
   const [isCreatingOutput, setIsCreatingOutput] = useState(false)
+  const [isDiscoveringOutputs, setIsDiscoveringOutputs] = useState(false)
 
   const selectedInitiative = useMemo(
     () =>
@@ -134,6 +142,7 @@ export const InitiativeWorkboardDialogContainer: FC<{
     setDraft(draftFromInitiative(selectedInitiative))
     setOutputDraft(emptyOutputDraft)
     setOutputDialogOpen(false)
+    setOutputSuggestions([])
   }, [selectedInitiative])
 
   const handleCreate = useCallback(async () => {
@@ -209,6 +218,7 @@ export const InitiativeWorkboardDialogContainer: FC<{
           sessionName: session?.name ?? 'Unknown session',
           projectName: project?.name ?? 'Unknown project',
           branchName: workspace?.branchName ?? null,
+          workingDirectory: session?.workingDirectory ?? null,
           providerId: session?.providerId ?? 'unknown',
           status: session?.status ?? 'unknown',
           attention: session?.attention ?? 'none',
@@ -324,6 +334,53 @@ export const InitiativeWorkboardDialogContainer: FC<{
     [deleteOutput, selectedInitiative],
   )
 
+  const handleDiscoverOutputs = useCallback(async () => {
+    if (!selectedInitiative) return
+    setIsDiscoveringOutputs(true)
+    const facts = await Promise.all(
+      selectedAttempts.flatMap((attemptView) => {
+        if (!attemptView.workingDirectory || attemptView.missing) return []
+        return window.electronAPI.git
+          .getBranchOutputFacts(attemptView.workingDirectory)
+          .then((fact) => ({
+            sourceSessionId: attemptView.attempt.sessionId,
+            sourceSessionName: attemptView.sessionName,
+            ...fact,
+          }))
+          .catch(() => null)
+      }),
+    )
+    setOutputSuggestions(
+      buildBranchOutputSuggestions({
+        initiativeId: selectedInitiative.id,
+        facts: facts.filter((fact) => fact !== null),
+        existingOutputs: selectedOutputs,
+      }),
+    )
+    setIsDiscoveringOutputs(false)
+  }, [selectedAttempts, selectedInitiative, selectedOutputs])
+
+  const handleAcceptOutputSuggestion = useCallback(
+    async (suggestionId: string) => {
+      const suggestion = outputSuggestions.find(
+        (candidate) => candidate.id === suggestionId,
+      )
+      if (!suggestion) return
+      const output = await addOutput(suggestion.output)
+      if (!output) return
+      setOutputSuggestions((current) =>
+        current.filter((candidate) => candidate.id !== suggestionId),
+      )
+    },
+    [addOutput, outputSuggestions],
+  )
+
+  const handleDismissOutputSuggestion = useCallback((suggestionId: string) => {
+    setOutputSuggestions((current) =>
+      current.filter((candidate) => candidate.id !== suggestionId),
+    )
+  }, [])
+
   return (
     <InitiativeWorkboardDialog
       open={open}
@@ -348,6 +405,7 @@ export const InitiativeWorkboardDialogContainer: FC<{
       selectedDraft={draft}
       selectedAttempts={selectedAttempts}
       selectedOutputs={selectedOutputs}
+      outputSuggestions={outputSuggestions}
       outputDraft={outputDraft}
       outputDialogOpen={outputDialogOpen}
       createTitle={createTitle}
@@ -357,6 +415,7 @@ export const InitiativeWorkboardDialogContainer: FC<{
       isCreating={isCreating}
       isSaving={isSaving}
       isCreatingOutput={isCreatingOutput}
+      isDiscoveringOutputs={isDiscoveringOutputs}
       error={error}
       onOpenChange={handleOpenChange}
       onCreateTitleChange={setCreateTitle}
@@ -373,6 +432,9 @@ export const InitiativeWorkboardDialogContainer: FC<{
       onOutputLabelCommit={handleOutputLabelCommit}
       onOutputValueCommit={handleOutputValueCommit}
       onDeleteOutput={handleDeleteOutput}
+      onDiscoverOutputs={handleDiscoverOutputs}
+      onAcceptOutputSuggestion={handleAcceptOutputSuggestion}
+      onDismissOutputSuggestion={handleDismissOutputSuggestion}
       onAttemptRoleChange={handleAttemptRoleChange}
       onSetPrimaryAttempt={handleSetPrimaryAttempt}
       onDetachAttempt={handleDetachAttempt}

@@ -143,6 +143,12 @@ interface UpdateInitiativeOutputInputData {
   status?: InitiativeOutputStatusData
 }
 
+interface BranchOutputFactsData {
+  branchName: string
+  upstreamBranch: string | null
+  remoteUrl: string | null
+}
+
 interface WorkspaceData {
   id: string
   projectId: string
@@ -515,6 +521,7 @@ interface ElectronAPI {
     getBranches: (repoPath: string) => Promise<string[]>
     getAllBranches: (repoPath: string) => Promise<string[]>
     getCurrentBranch: (repoPath: string) => Promise<string>
+    getBranchOutputFacts: (repoPath: string) => Promise<BranchOutputFactsData>
     getStatus: (
       repoPath: string,
     ) => Promise<Array<{ status: string; file: string }>>

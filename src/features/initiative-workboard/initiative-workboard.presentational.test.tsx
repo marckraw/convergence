@@ -42,6 +42,7 @@ const attemptView: InitiativeAttemptView = {
   sessionName: 'Implement workboard',
   projectName: 'convergence',
   branchName: 'feat/initiatives',
+  workingDirectory: '/tmp/convergence',
   providerId: 'codex',
   status: 'completed',
   attention: 'finished',
@@ -78,6 +79,7 @@ function renderDialog(
     selectedDraft: { title: '', status: 'exploring', currentUnderstanding: '' },
     selectedAttempts: [],
     selectedOutputs: [],
+    outputSuggestions: [],
     outputDraft,
     outputDialogOpen: false,
     createTitle: '',
@@ -87,6 +89,7 @@ function renderDialog(
     isCreating: false,
     isSaving: false,
     isCreatingOutput: false,
+    isDiscoveringOutputs: false,
     error: null,
     onOpenChange: vi.fn(),
     onCreateTitleChange: vi.fn(),
@@ -103,6 +106,9 @@ function renderDialog(
     onOutputLabelCommit: vi.fn(),
     onOutputValueCommit: vi.fn(),
     onDeleteOutput: vi.fn(),
+    onDiscoverOutputs: vi.fn(),
+    onAcceptOutputSuggestion: vi.fn(),
+    onDismissOutputSuggestion: vi.fn(),
     onAttemptRoleChange: vi.fn(),
     onSetPrimaryAttempt: vi.fn(),
     onDetachAttempt: vi.fn(),
@@ -273,5 +279,47 @@ describe('InitiativeWorkboardDialog', () => {
       'https://github.com/example/repo/pull/2',
     )
     expect(props.onDeleteOutput).toHaveBeenCalledWith('o1')
+  })
+
+  it('discovers, accepts, and dismisses suggested Outputs', () => {
+    const props = renderDialog({
+      initiatives: [initiative],
+      selectedInitiative: initiative,
+      selectedDraft: draft,
+      selectedAttempts: [attemptView],
+      outputSuggestions: [
+        {
+          id: 'branch:s1:feat/initiatives',
+          title: 'Branch feat/initiatives',
+          description: 'Implement workboard tracking origin/feat/initiatives',
+          output: {
+            initiativeId: 'i1',
+            kind: 'branch',
+            label: 'Branch feat/initiatives',
+            value: 'feat/initiatives',
+            sourceSessionId: 's1',
+            status: 'in-progress',
+          },
+        },
+      ],
+      attemptCounts: { i1: 1 },
+      outputCounts: { i1: 0 },
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: /discover/i }))
+    fireEvent.click(screen.getByRole('button', { name: /accept/i }))
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: /dismiss branch feat\/initiatives/i,
+      }),
+    )
+
+    expect(props.onDiscoverOutputs).toHaveBeenCalled()
+    expect(props.onAcceptOutputSuggestion).toHaveBeenCalledWith(
+      'branch:s1:feat/initiatives',
+    )
+    expect(props.onDismissOutputSuggestion).toHaveBeenCalledWith(
+      'branch:s1:feat/initiatives',
+    )
   })
 })

@@ -79,6 +79,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.invoke('git:getAllBranches', repoPath),
     getCurrentBranch: (repoPath: string) =>
       ipcRenderer.invoke('git:getCurrentBranch', repoPath),
+    getBranchOutputFacts: (repoPath: string) =>
+      ipcRenderer.invoke('git:getBranchOutputFacts', repoPath),
     getStatus: (repoPath: string) =>
       ipcRenderer.invoke('git:getStatus', repoPath),
     getDiff: (repoPath: string, filePath?: string) =>

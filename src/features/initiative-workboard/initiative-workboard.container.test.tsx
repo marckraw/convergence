@@ -2,7 +2,14 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { useDialogStore } from '@/entities/dialog'
 import { useInitiativeStore } from '@/entities/initiative'
-import type { Initiative, InitiativeOutput } from '@/entities/initiative'
+import type {
+  Initiative,
+  InitiativeAttempt,
+  InitiativeOutput,
+} from '@/entities/initiative'
+import { useProjectStore } from '@/entities/project'
+import { useSessionStore } from '@/entities/session'
+import { useWorkspaceStore } from '@/entities/workspace'
 import { InitiativeWorkboardDialogContainer } from './initiative-workboard.container'
 
 const initiative: Initiative = {
@@ -42,6 +49,15 @@ const output: InitiativeOutput = {
   updatedAt: '2026-01-01T00:00:00.000Z',
 }
 
+const attempt: InitiativeAttempt = {
+  id: 'a1',
+  initiativeId: 'i1',
+  sessionId: 's1',
+  role: 'implementation',
+  isPrimary: true,
+  createdAt: '2026-01-01T00:00:00.000Z',
+}
+
 const mockElectronAPI = {
   initiative: {
     list: vi.fn(),
@@ -59,6 +75,9 @@ const mockElectronAPI = {
     addOutput: vi.fn(),
     updateOutput: vi.fn(),
     deleteOutput: vi.fn(),
+  },
+  git: {
+    getBranchOutputFacts: vi.fn(),
   },
 }
 
@@ -81,6 +100,11 @@ describe('InitiativeWorkboardDialogContainer', () => {
       status: 'ready',
     })
     mockElectronAPI.initiative.deleteOutput.mockResolvedValue(undefined)
+    mockElectronAPI.git.getBranchOutputFacts.mockResolvedValue({
+      branchName: 'feature-output',
+      upstreamBranch: 'origin/feature-output',
+      remoteUrl: 'git@github.com:example/repo.git',
+    })
     useDialogStore.setState({ openDialog: null, payload: null })
     useInitiativeStore.setState({
       initiatives: [],
@@ -88,6 +112,61 @@ describe('InitiativeWorkboardDialogContainer', () => {
       outputsByInitiativeId: {},
       loading: false,
       error: null,
+    })
+    useProjectStore.setState({
+      projects: [
+        {
+          id: 'p1',
+          name: 'convergence',
+          repositoryPath: '/tmp/convergence',
+          settings: {
+            workspaceCreation: {
+              startStrategy: 'base-branch',
+              baseBranchName: null,
+            },
+          },
+          createdAt: '2026-01-01T00:00:00.000Z',
+          updatedAt: '2026-01-01T00:00:00.000Z',
+        },
+      ],
+    })
+    useWorkspaceStore.setState({
+      globalWorkspaces: [
+        {
+          id: 'w1',
+          projectId: 'p1',
+          branchName: 'feature-output',
+          path: '/tmp/convergence',
+          type: 'worktree',
+          createdAt: '2026-01-01T00:00:00.000Z',
+        },
+      ],
+    })
+    useSessionStore.setState({
+      globalSessions: [
+        {
+          id: 's1',
+          projectId: 'p1',
+          workspaceId: 'w1',
+          providerId: 'codex',
+          model: null,
+          effort: null,
+          name: 'Implement output suggestions',
+          status: 'completed',
+          attention: 'finished',
+          activity: null,
+          contextWindow: null,
+          workingDirectory: '/tmp/convergence',
+          archivedAt: null,
+          parentSessionId: null,
+          forkStrategy: null,
+          primarySurface: 'conversation',
+          continuationToken: null,
+          lastSequence: 0,
+          createdAt: '2026-01-01T00:00:00.000Z',
+          updatedAt: '2026-01-01T00:00:00.000Z',
+        },
+      ],
     })
   })
 
@@ -218,5 +297,37 @@ describe('InitiativeWorkboardDialogContainer', () => {
       )
     })
     expect(mockElectronAPI.initiative.deleteOutput).toHaveBeenCalledWith('o1')
+  })
+
+  it('discovers and accepts branch Output suggestions', async () => {
+    mockElectronAPI.initiative.listAttempts.mockResolvedValue([attempt])
+    mockElectronAPI.initiative.addOutput.mockResolvedValue({
+      ...output,
+      id: 'o2',
+      kind: 'branch',
+      label: 'Branch feature-output',
+      value: 'feature-output',
+      sourceSessionId: 's1',
+      status: 'in-progress',
+    })
+    render(<InitiativeWorkboardDialogContainer />)
+
+    fireEvent.click(screen.getByRole('button', { name: /initiatives/i }))
+    await screen.findByText('Implement output suggestions')
+    fireEvent.click(screen.getByRole('button', { name: /discover/i }))
+
+    expect(await screen.findByText('Branch feature-output')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: /accept/i }))
+
+    await waitFor(() => {
+      expect(mockElectronAPI.initiative.addOutput).toHaveBeenCalledWith({
+        initiativeId: 'i1',
+        kind: 'branch',
+        label: 'Branch feature-output',
+        value: 'feature-output',
+        sourceSessionId: 's1',
+        status: 'in-progress',
+      })
+    })
   })
 })

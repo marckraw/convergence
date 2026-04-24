@@ -1,14 +1,17 @@
 import type { FC, ReactNode } from 'react'
 import {
   CalendarClock,
+  Check,
   ExternalLink,
   FileText,
   GitBranch,
   GitPullRequest,
   Plus,
+  RefreshCw,
   Save,
   Star,
   Trash2,
+  X,
 } from 'lucide-react'
 import type {
   Initiative,
@@ -48,6 +51,7 @@ import {
   initiativeStatusLabels,
   initiativeStatusOptions,
 } from './initiative-workboard.styles'
+import type { InitiativeOutputSuggestion } from './initiative-output-suggestions.pure'
 
 export interface InitiativeDraft {
   title: string
@@ -68,6 +72,7 @@ export interface InitiativeAttemptView {
   sessionName: string
   projectName: string
   branchName: string | null
+  workingDirectory: string | null
   providerId: string
   status: string
   attention: string
@@ -82,6 +87,7 @@ interface InitiativeWorkboardProps {
   selectedDraft: InitiativeDraft
   selectedAttempts: InitiativeAttemptView[]
   selectedOutputs: InitiativeOutput[]
+  outputSuggestions: InitiativeOutputSuggestion[]
   outputDraft: InitiativeOutputDraft
   outputDialogOpen: boolean
   createTitle: string
@@ -91,6 +97,7 @@ interface InitiativeWorkboardProps {
   isCreating: boolean
   isSaving: boolean
   isCreatingOutput: boolean
+  isDiscoveringOutputs: boolean
   error: string | null
   onOpenChange: (open: boolean) => void
   onCreateTitleChange: (value: string) => void
@@ -113,6 +120,9 @@ interface InitiativeWorkboardProps {
   onOutputLabelCommit: (outputId: string, label: string) => void
   onOutputValueCommit: (outputId: string, value: string) => void
   onDeleteOutput: (outputId: string) => void
+  onDiscoverOutputs: () => void
+  onAcceptOutputSuggestion: (suggestionId: string) => void
+  onDismissOutputSuggestion: (suggestionId: string) => void
   onAttemptRoleChange: (attemptId: string, role: InitiativeAttemptRole) => void
   onSetPrimaryAttempt: (attemptId: string) => void
   onDetachAttempt: (attemptId: string) => void
@@ -126,6 +136,7 @@ export const InitiativeWorkboardDialog: FC<InitiativeWorkboardProps> = ({
   selectedDraft,
   selectedAttempts,
   selectedOutputs,
+  outputSuggestions,
   outputDraft,
   outputDialogOpen,
   createTitle,
@@ -135,6 +146,7 @@ export const InitiativeWorkboardDialog: FC<InitiativeWorkboardProps> = ({
   isCreating,
   isSaving,
   isCreatingOutput,
+  isDiscoveringOutputs,
   error,
   onOpenChange,
   onCreateTitleChange,
@@ -151,6 +163,9 @@ export const InitiativeWorkboardDialog: FC<InitiativeWorkboardProps> = ({
   onOutputLabelCommit,
   onOutputValueCommit,
   onDeleteOutput,
+  onDiscoverOutputs,
+  onAcceptOutputSuggestion,
+  onDismissOutputSuggestion,
   onAttemptRoleChange,
   onSetPrimaryAttempt,
   onDetachAttempt,
@@ -372,165 +387,231 @@ export const InitiativeWorkboardDialog: FC<InitiativeWorkboardProps> = ({
                     <div className="text-xs font-medium uppercase text-muted-foreground">
                       Outputs
                     </div>
-                    <Dialog
-                      open={outputDialogOpen}
-                      onOpenChange={onOutputDialogOpenChange}
-                    >
-                      <DialogTrigger asChild>
-                        <Button type="button" variant="outline" size="sm">
-                          <Plus className="h-4 w-4" />
-                          Add Output
-                        </Button>
-                      </DialogTrigger>
-                      <DialogContent className="w-[min(720px,calc(100vw-2rem))] p-0">
-                        <form
-                          className="flex min-h-0 flex-1 flex-col"
-                          onSubmit={(event) => {
-                            event.preventDefault()
-                            if (!outputCreateDisabled) onCreateOutput()
-                          }}
-                        >
-                          <DialogHeader className="border-b border-border/70 px-6 py-5 pr-14">
-                            <DialogTitle>Add Output</DialogTitle>
-                            <DialogDescription>
-                              Attach a concrete artifact produced by this
-                              Initiative.
-                            </DialogDescription>
-                          </DialogHeader>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={onDiscoverOutputs}
+                        disabled={
+                          isDiscoveringOutputs || selectedAttempts.length === 0
+                        }
+                      >
+                        <RefreshCw className="h-4 w-4" />
+                        {isDiscoveringOutputs ? 'Checking...' : 'Discover'}
+                      </Button>
+                      <Dialog
+                        open={outputDialogOpen}
+                        onOpenChange={onOutputDialogOpenChange}
+                      >
+                        <DialogTrigger asChild>
+                          <Button type="button" variant="outline" size="sm">
+                            <Plus className="h-4 w-4" />
+                            Add Output
+                          </Button>
+                        </DialogTrigger>
+                        <DialogContent className="w-[min(720px,calc(100vw-2rem))] p-0">
+                          <form
+                            className="flex min-h-0 flex-1 flex-col"
+                            onSubmit={(event) => {
+                              event.preventDefault()
+                              if (!outputCreateDisabled) onCreateOutput()
+                            }}
+                          >
+                            <DialogHeader className="border-b border-border/70 px-6 py-5 pr-14">
+                              <DialogTitle>Add Output</DialogTitle>
+                              <DialogDescription>
+                                Attach a concrete artifact produced by this
+                                Initiative.
+                              </DialogDescription>
+                            </DialogHeader>
 
-                          <DialogBody className="grid gap-4 md:grid-cols-[160px_1fr]">
-                            <label className="space-y-1.5">
-                              <span className="text-[11px] font-medium uppercase text-muted-foreground">
-                                Kind
-                              </span>
-                              <select
-                                className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                                value={outputDraft.kind}
-                                onChange={(event) =>
-                                  onOutputDraftChange({
-                                    ...outputDraft,
-                                    kind: event.target
-                                      .value as InitiativeOutputKind,
-                                  })
-                                }
-                                aria-label="New Output kind"
+                            <DialogBody className="grid gap-4 md:grid-cols-[160px_1fr]">
+                              <label className="space-y-1.5">
+                                <span className="text-[11px] font-medium uppercase text-muted-foreground">
+                                  Kind
+                                </span>
+                                <select
+                                  className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                                  value={outputDraft.kind}
+                                  onChange={(event) =>
+                                    onOutputDraftChange({
+                                      ...outputDraft,
+                                      kind: event.target
+                                        .value as InitiativeOutputKind,
+                                    })
+                                  }
+                                  aria-label="New Output kind"
+                                >
+                                  {initiativeOutputKindOptions.map((kind) => (
+                                    <option key={kind} value={kind}>
+                                      {initiativeOutputKindLabels[kind]}
+                                    </option>
+                                  ))}
+                                </select>
+                              </label>
+
+                              <label className="space-y-1.5">
+                                <span className="text-[11px] font-medium uppercase text-muted-foreground">
+                                  Label
+                                </span>
+                                <Input
+                                  value={outputDraft.label}
+                                  onChange={(event) =>
+                                    onOutputDraftChange({
+                                      ...outputDraft,
+                                      label: event.target.value,
+                                    })
+                                  }
+                                  placeholder="Public PR"
+                                  aria-label="New Output label"
+                                />
+                              </label>
+
+                              <label className="space-y-1.5">
+                                <span className="text-[11px] font-medium uppercase text-muted-foreground">
+                                  Status
+                                </span>
+                                <select
+                                  className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                                  value={outputDraft.status}
+                                  onChange={(event) =>
+                                    onOutputDraftChange({
+                                      ...outputDraft,
+                                      status: event.target
+                                        .value as InitiativeOutputStatus,
+                                    })
+                                  }
+                                  aria-label="New Output status"
+                                >
+                                  {initiativeOutputStatusOptions.map(
+                                    (status) => (
+                                      <option key={status} value={status}>
+                                        {initiativeOutputStatusLabels[status]}
+                                      </option>
+                                    ),
+                                  )}
+                                </select>
+                              </label>
+
+                              <label className="space-y-1.5">
+                                <span className="text-[11px] font-medium uppercase text-muted-foreground">
+                                  Source
+                                </span>
+                                <select
+                                  className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                                  value={outputDraft.sourceSessionId}
+                                  onChange={(event) =>
+                                    onOutputDraftChange({
+                                      ...outputDraft,
+                                      sourceSessionId: event.target.value,
+                                    })
+                                  }
+                                  aria-label="New Output source session"
+                                >
+                                  <option value="">No source Attempt</option>
+                                  {selectedAttempts.map((view) => (
+                                    <option
+                                      key={view.attempt.sessionId}
+                                      value={view.attempt.sessionId}
+                                    >
+                                      {view.sessionName}
+                                    </option>
+                                  ))}
+                                </select>
+                              </label>
+
+                              <label className="space-y-1.5 md:col-span-2">
+                                <span className="text-[11px] font-medium uppercase text-muted-foreground">
+                                  Value
+                                </span>
+                                <Input
+                                  value={outputDraft.value}
+                                  onChange={(event) =>
+                                    onOutputDraftChange({
+                                      ...outputDraft,
+                                      value: event.target.value,
+                                    })
+                                  }
+                                  placeholder="URL, branch, file path, or note"
+                                  aria-label="New Output value"
+                                />
+                              </label>
+                            </DialogBody>
+
+                            <DialogFooter className="border-t border-border/70 px-6 py-4">
+                              <Button
+                                type="button"
+                                variant="outline"
+                                onClick={() => onOutputDialogOpenChange(false)}
                               >
-                                {initiativeOutputKindOptions.map((kind) => (
-                                  <option key={kind} value={kind}>
-                                    {initiativeOutputKindLabels[kind]}
-                                  </option>
-                                ))}
-                              </select>
-                            </label>
-
-                            <label className="space-y-1.5">
-                              <span className="text-[11px] font-medium uppercase text-muted-foreground">
-                                Label
-                              </span>
-                              <Input
-                                value={outputDraft.label}
-                                onChange={(event) =>
-                                  onOutputDraftChange({
-                                    ...outputDraft,
-                                    label: event.target.value,
-                                  })
-                                }
-                                placeholder="Public PR"
-                                aria-label="New Output label"
-                              />
-                            </label>
-
-                            <label className="space-y-1.5">
-                              <span className="text-[11px] font-medium uppercase text-muted-foreground">
-                                Status
-                              </span>
-                              <select
-                                className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                                value={outputDraft.status}
-                                onChange={(event) =>
-                                  onOutputDraftChange({
-                                    ...outputDraft,
-                                    status: event.target
-                                      .value as InitiativeOutputStatus,
-                                  })
-                                }
-                                aria-label="New Output status"
+                                Cancel
+                              </Button>
+                              <Button
+                                type="submit"
+                                disabled={outputCreateDisabled}
                               >
-                                {initiativeOutputStatusOptions.map((status) => (
-                                  <option key={status} value={status}>
-                                    {initiativeOutputStatusLabels[status]}
-                                  </option>
-                                ))}
-                              </select>
-                            </label>
-
-                            <label className="space-y-1.5">
-                              <span className="text-[11px] font-medium uppercase text-muted-foreground">
-                                Source
-                              </span>
-                              <select
-                                className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                                value={outputDraft.sourceSessionId}
-                                onChange={(event) =>
-                                  onOutputDraftChange({
-                                    ...outputDraft,
-                                    sourceSessionId: event.target.value,
-                                  })
-                                }
-                                aria-label="New Output source session"
-                              >
-                                <option value="">No source Attempt</option>
-                                {selectedAttempts.map((view) => (
-                                  <option
-                                    key={view.attempt.sessionId}
-                                    value={view.attempt.sessionId}
-                                  >
-                                    {view.sessionName}
-                                  </option>
-                                ))}
-                              </select>
-                            </label>
-
-                            <label className="space-y-1.5 md:col-span-2">
-                              <span className="text-[11px] font-medium uppercase text-muted-foreground">
-                                Value
-                              </span>
-                              <Input
-                                value={outputDraft.value}
-                                onChange={(event) =>
-                                  onOutputDraftChange({
-                                    ...outputDraft,
-                                    value: event.target.value,
-                                  })
-                                }
-                                placeholder="URL, branch, file path, or note"
-                                aria-label="New Output value"
-                              />
-                            </label>
-                          </DialogBody>
-
-                          <DialogFooter className="border-t border-border/70 px-6 py-4">
-                            <Button
-                              type="button"
-                              variant="outline"
-                              onClick={() => onOutputDialogOpenChange(false)}
-                            >
-                              Cancel
-                            </Button>
-                            <Button
-                              type="submit"
-                              disabled={outputCreateDisabled}
-                            >
-                              <Plus className="h-4 w-4" />
-                              {isCreatingOutput
-                                ? 'Creating...'
-                                : 'Create Output'}
-                            </Button>
-                          </DialogFooter>
-                        </form>
-                      </DialogContent>
-                    </Dialog>
+                                <Plus className="h-4 w-4" />
+                                {isCreatingOutput
+                                  ? 'Creating...'
+                                  : 'Create Output'}
+                              </Button>
+                            </DialogFooter>
+                          </form>
+                        </DialogContent>
+                      </Dialog>
+                    </div>
                   </div>
+
+                  {outputSuggestions.length > 0 ? (
+                    <div className="space-y-2">
+                      <div className="text-[11px] font-medium uppercase text-muted-foreground">
+                        Suggestions
+                      </div>
+                      {outputSuggestions.map((suggestion) => (
+                        <div
+                          key={suggestion.id}
+                          className="rounded-lg border border-cyan-500/25 bg-cyan-500/10 px-3 py-3"
+                        >
+                          <div className="flex min-w-0 items-start justify-between gap-3">
+                            <div className="min-w-0">
+                              <div className="truncate text-sm font-medium">
+                                {suggestion.title}
+                              </div>
+                              <div className="mt-1 text-xs text-muted-foreground">
+                                {suggestion.description}
+                              </div>
+                            </div>
+                            <div className="flex shrink-0 items-center gap-2">
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                onClick={() =>
+                                  onAcceptOutputSuggestion(suggestion.id)
+                                }
+                              >
+                                <Check className="h-4 w-4" />
+                                Accept
+                              </Button>
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="icon"
+                                className="h-8 w-8"
+                                onClick={() =>
+                                  onDismissOutputSuggestion(suggestion.id)
+                                }
+                                aria-label={`Dismiss ${suggestion.title}`}
+                              >
+                                <X className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : null}
 
                   {selectedOutputs.length === 0 ? (
                     <div className="rounded-lg border border-border/60 px-3 py-4 text-sm text-muted-foreground">
