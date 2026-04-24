@@ -1,5 +1,15 @@
 # convergence
 
+## 0.23.0
+
+### Minor Changes
+
+- d4769bf: Add agent-native Initiatives V1 for tracking delivery work across sessions and
+  projects. Initiatives now provide a global workboard, session Attempt linking,
+  linked-session context panels, durable current understanding, manual and
+  suggested outputs, provider-backed synthesis suggestions, and manually editable
+  attention flags.
+
 ## 0.22.3
 
 ### Patch Changes
