@@ -25,6 +25,124 @@ interface CreateProjectInput {
   name?: string
 }
 
+type InitiativeStatusData =
+  | 'exploring'
+  | 'planned'
+  | 'implementing'
+  | 'reviewing'
+  | 'ready-to-merge'
+  | 'merged'
+  | 'released'
+  | 'parked'
+  | 'discarded'
+
+type InitiativeAttentionData =
+  | 'none'
+  | 'needs-you'
+  | 'needs-decision'
+  | 'blocked'
+  | 'stale'
+
+type InitiativeAttemptRoleData =
+  | 'seed'
+  | 'exploration'
+  | 'implementation'
+  | 'review'
+  | 'hardening'
+  | 'docs'
+
+type InitiativeOutputKindData =
+  | 'pull-request'
+  | 'branch'
+  | 'commit-range'
+  | 'release'
+  | 'spec'
+  | 'documentation'
+  | 'migration-note'
+  | 'external-issue'
+  | 'other'
+
+type InitiativeOutputStatusData =
+  | 'planned'
+  | 'in-progress'
+  | 'ready'
+  | 'merged'
+  | 'released'
+  | 'abandoned'
+
+interface InitiativeData {
+  id: string
+  title: string
+  status: InitiativeStatusData
+  attention: InitiativeAttentionData
+  currentUnderstanding: string
+  createdAt: string
+  updatedAt: string
+}
+
+interface InitiativeAttemptData {
+  id: string
+  initiativeId: string
+  sessionId: string
+  role: InitiativeAttemptRoleData
+  isPrimary: boolean
+  createdAt: string
+}
+
+interface InitiativeOutputData {
+  id: string
+  initiativeId: string
+  kind: InitiativeOutputKindData
+  label: string
+  value: string
+  sourceSessionId: string | null
+  status: InitiativeOutputStatusData
+  createdAt: string
+  updatedAt: string
+}
+
+interface CreateInitiativeInputData {
+  title: string
+  status?: InitiativeStatusData
+  attention?: InitiativeAttentionData
+  currentUnderstanding?: string
+}
+
+interface UpdateInitiativeInputData {
+  title?: string
+  status?: InitiativeStatusData
+  attention?: InitiativeAttentionData
+  currentUnderstanding?: string
+}
+
+interface LinkInitiativeAttemptInputData {
+  initiativeId: string
+  sessionId: string
+  role?: InitiativeAttemptRoleData
+  isPrimary?: boolean
+}
+
+interface UpdateInitiativeAttemptInputData {
+  role?: InitiativeAttemptRoleData
+}
+
+interface CreateInitiativeOutputInputData {
+  initiativeId: string
+  kind: InitiativeOutputKindData
+  label: string
+  value: string
+  sourceSessionId?: string | null
+  status?: InitiativeOutputStatusData
+}
+
+interface UpdateInitiativeOutputInputData {
+  kind?: InitiativeOutputKindData
+  label?: string
+  value?: string
+  sourceSessionId?: string | null
+  status?: InitiativeOutputStatusData
+}
+
 interface WorkspaceData {
   id: string
   projectId: string
@@ -348,6 +466,38 @@ interface ElectronAPI {
       id: string,
       settings: ProjectSettings,
     ) => Promise<ProjectData>
+  }
+  initiative: {
+    list: () => Promise<InitiativeData[]>
+    getById: (id: string) => Promise<InitiativeData | null>
+    create: (input: CreateInitiativeInputData) => Promise<InitiativeData>
+    update: (
+      id: string,
+      input: UpdateInitiativeInputData,
+    ) => Promise<InitiativeData>
+    delete: (id: string) => Promise<void>
+    listAttempts: (initiativeId: string) => Promise<InitiativeAttemptData[]>
+    linkAttempt: (
+      input: LinkInitiativeAttemptInputData,
+    ) => Promise<InitiativeAttemptData>
+    updateAttempt: (
+      id: string,
+      input: UpdateInitiativeAttemptInputData,
+    ) => Promise<InitiativeAttemptData>
+    unlinkAttempt: (id: string) => Promise<void>
+    setPrimaryAttempt: (
+      initiativeId: string,
+      attemptId: string,
+    ) => Promise<InitiativeAttemptData>
+    listOutputs: (initiativeId: string) => Promise<InitiativeOutputData[]>
+    addOutput: (
+      input: CreateInitiativeOutputInputData,
+    ) => Promise<InitiativeOutputData>
+    updateOutput: (
+      id: string,
+      input: UpdateInitiativeOutputInputData,
+    ) => Promise<InitiativeOutputData>
+    deleteOutput: (id: string) => Promise<void>
   }
   dialog: {
     selectDirectory: () => Promise<string | null>

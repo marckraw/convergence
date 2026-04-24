@@ -1,5 +1,6 @@
 import { ipcMain, dialog, BrowserWindow } from 'electron'
 import { ProjectService } from '../backend/project/project.service'
+import { InitiativeService } from '../backend/initiative/initiative.service'
 import { StateService } from '../backend/state/state.service'
 import { WorkspaceService } from '../backend/workspace/workspace.service'
 import { GitService } from '../backend/git/git.service'
@@ -16,6 +17,14 @@ import type { AttachmentsService } from '../backend/attachments/attachments.serv
 import type { IngestFileInput } from '../backend/attachments/attachments.types'
 import type { AppSettingsInput } from '../backend/app-settings/app-settings.types'
 import type { CreateProjectInput } from '../backend/project/project.types'
+import type {
+  CreateInitiativeInput,
+  CreateInitiativeOutputInput,
+  LinkInitiativeAttemptInput,
+  UpdateInitiativeAttemptInput,
+  UpdateInitiativeInput,
+  UpdateInitiativeOutputInput,
+} from '../backend/initiative/initiative.types'
 import type { CreateWorkspaceInput } from '../backend/workspace/workspace.types'
 import type { CreateSessionInput } from '../backend/session/session.types'
 import type { ProjectSettings } from '../backend/project/project-settings.pure'
@@ -88,6 +97,7 @@ function parseNeedsYouDismissals(
 
 export function registerIpcHandlers(
   projectService: ProjectService,
+  initiativeService: InitiativeService,
   stateService: StateService,
   workspaceService: WorkspaceService,
   gitService: GitService,
@@ -140,6 +150,73 @@ export function registerIpcHandlers(
     (_event, id: string, settings: ProjectSettings) =>
       projectService.updateSettings(id, settings),
   )
+
+  // Initiative handlers
+  ipcMain.handle('initiative:list', () => initiativeService.list())
+
+  ipcMain.handle('initiative:getById', (_event, id: string) =>
+    initiativeService.getById(id),
+  )
+
+  ipcMain.handle('initiative:create', (_event, input: CreateInitiativeInput) =>
+    initiativeService.create(input),
+  )
+
+  ipcMain.handle(
+    'initiative:update',
+    (_event, id: string, input: UpdateInitiativeInput) =>
+      initiativeService.update(id, input),
+  )
+
+  ipcMain.handle('initiative:delete', (_event, id: string) => {
+    initiativeService.delete(id)
+  })
+
+  ipcMain.handle('initiative:listAttempts', (_event, initiativeId: string) =>
+    initiativeService.listAttempts(initiativeId),
+  )
+
+  ipcMain.handle(
+    'initiative:linkAttempt',
+    (_event, input: LinkInitiativeAttemptInput) =>
+      initiativeService.linkAttempt(input),
+  )
+
+  ipcMain.handle(
+    'initiative:updateAttempt',
+    (_event, id: string, input: UpdateInitiativeAttemptInput) =>
+      initiativeService.updateAttempt(id, input),
+  )
+
+  ipcMain.handle('initiative:unlinkAttempt', (_event, id: string) => {
+    initiativeService.unlinkAttempt(id)
+  })
+
+  ipcMain.handle(
+    'initiative:setPrimaryAttempt',
+    (_event, initiativeId: string, attemptId: string) =>
+      initiativeService.setPrimaryAttempt(initiativeId, attemptId),
+  )
+
+  ipcMain.handle('initiative:listOutputs', (_event, initiativeId: string) =>
+    initiativeService.listOutputs(initiativeId),
+  )
+
+  ipcMain.handle(
+    'initiative:addOutput',
+    (_event, input: CreateInitiativeOutputInput) =>
+      initiativeService.addOutput(input),
+  )
+
+  ipcMain.handle(
+    'initiative:updateOutput',
+    (_event, id: string, input: UpdateInitiativeOutputInput) =>
+      initiativeService.updateOutput(id, input),
+  )
+
+  ipcMain.handle('initiative:deleteOutput', (_event, id: string) => {
+    initiativeService.deleteOutput(id)
+  })
 
   // Dialog handlers
   ipcMain.handle('dialog:selectDirectory', async (event) => {

@@ -83,3 +83,34 @@ export interface SessionTurnFileChangeRow {
   diff: string
   created_at: string
 }
+
+export interface InitiativeRow {
+  id: string
+  title: string
+  status: string
+  attention: string
+  current_understanding: string
+  created_at: string
+  updated_at: string
+}
+
+export interface InitiativeAttemptRow {
+  id: string
+  initiative_id: string
+  session_id: string
+  role: string
+  is_primary: number
+  created_at: string
+}
+
+export interface InitiativeOutputRow {
+  id: string
+  initiative_id: string
+  kind: string
+  label: string
+  value: string
+  source_session_id: string | null
+  status: string
+  created_at: string
+  updated_at: string
+}

@@ -1,6 +1,13 @@
 export type { Project } from './project'
 export { useProjectStore } from './project'
 
+export type {
+  Initiative,
+  InitiativeAttempt,
+  InitiativeOutput,
+} from './initiative'
+export { useInitiativeStore } from './initiative'
+
 export type { Workspace } from './workspace'
 export { useWorkspaceStore } from './workspace'
 

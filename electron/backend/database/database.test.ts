@@ -26,6 +26,9 @@ describe('database', () => {
     expect(tableNames).toContain('session_terminal_layout')
     expect(tableNames).toContain('session_turns')
     expect(tableNames).toContain('session_turn_file_changes')
+    expect(tableNames).toContain('initiatives')
+    expect(tableNames).toContain('initiative_attempts')
+    expect(tableNames).toContain('initiative_outputs')
 
     const sessionColumns = db
       .prepare("PRAGMA table_info('sessions')")
@@ -164,6 +167,46 @@ describe('database', () => {
       .all('s1')
     expect(turns).toEqual([])
     expect(changes).toEqual([])
+  })
+
+  it('creates initiative tables with expected constraints', () => {
+    const db = getDatabase()
+    const initiativeColumns = db
+      .prepare("PRAGMA table_info('initiatives')")
+      .all() as Array<{ name: string }>
+    expect(initiativeColumns.map((c) => c.name).sort()).toEqual(
+      [
+        'id',
+        'title',
+        'status',
+        'attention',
+        'current_understanding',
+        'created_at',
+        'updated_at',
+      ].sort(),
+    )
+
+    const attemptForeignKeys = db
+      .prepare("PRAGMA foreign_key_list('initiative_attempts')")
+      .all() as Array<{ table: string; on_delete: string }>
+    expect(attemptForeignKeys.map((fk) => fk.table).sort()).toEqual(
+      ['initiatives', 'sessions'].sort(),
+    )
+    for (const fk of attemptForeignKeys) {
+      expect(fk.on_delete).toBe('CASCADE')
+    }
+
+    const outputForeignKeys = db
+      .prepare("PRAGMA foreign_key_list('initiative_outputs')")
+      .all() as Array<{ table: string; on_delete: string }>
+    expect(outputForeignKeys.map((fk) => fk.table).sort()).toEqual(
+      ['initiatives', 'sessions'].sort(),
+    )
+    expect(
+      outputForeignKeys.some(
+        (fk) => fk.table === 'sessions' && fk.on_delete === 'SET NULL',
+      ),
+    ).toBe(true)
   })
 
   it('returns the same instance on repeated calls', () => {

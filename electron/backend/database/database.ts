@@ -110,6 +110,52 @@ const SCHEMA = `
   CREATE INDEX IF NOT EXISTS idx_session_turn_file_changes_session_turn
     ON session_turn_file_changes(session_id, turn_id);
 
+  CREATE TABLE IF NOT EXISTS initiatives (
+    id TEXT PRIMARY KEY,
+    title TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'exploring',
+    attention TEXT NOT NULL DEFAULT 'none',
+    current_understanding TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+
+  CREATE TABLE IF NOT EXISTS initiative_attempts (
+    id TEXT PRIMARY KEY,
+    initiative_id TEXT NOT NULL,
+    session_id TEXT NOT NULL,
+    role TEXT NOT NULL DEFAULT 'exploration',
+    is_primary INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    FOREIGN KEY (initiative_id) REFERENCES initiatives(id) ON DELETE CASCADE,
+    FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE,
+    UNIQUE (initiative_id, session_id)
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_initiative_attempts_initiative
+    ON initiative_attempts(initiative_id);
+
+  CREATE UNIQUE INDEX IF NOT EXISTS idx_initiative_attempts_one_primary
+    ON initiative_attempts(initiative_id)
+    WHERE is_primary = 1;
+
+  CREATE TABLE IF NOT EXISTS initiative_outputs (
+    id TEXT PRIMARY KEY,
+    initiative_id TEXT NOT NULL,
+    kind TEXT NOT NULL,
+    label TEXT NOT NULL,
+    value TEXT NOT NULL,
+    source_session_id TEXT,
+    status TEXT NOT NULL DEFAULT 'planned',
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+    FOREIGN KEY (initiative_id) REFERENCES initiatives(id) ON DELETE CASCADE,
+    FOREIGN KEY (source_session_id) REFERENCES sessions(id) ON DELETE SET NULL
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_initiative_outputs_initiative
+    ON initiative_outputs(initiative_id);
+
   CREATE TABLE IF NOT EXISTS workspaces (
     id TEXT PRIMARY KEY,
     project_id TEXT NOT NULL,
