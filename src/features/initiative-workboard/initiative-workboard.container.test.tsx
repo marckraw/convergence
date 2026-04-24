@@ -385,4 +385,47 @@ describe('InitiativeWorkboardDialogContainer', () => {
       })
     })
   })
+
+  it('appends synthesized notes into the stable current understanding', async () => {
+    mockElectronAPI.initiative.listAttempts.mockResolvedValue([attempt])
+    mockElectronAPI.initiative.synthesize.mockResolvedValueOnce({
+      currentUnderstanding: 'Leave this as a preview.',
+      decisions: ['Keep suggestions transient.'],
+      openQuestions: ['Should decisions become first-class later?'],
+      nextAction: 'Save accepted notes.',
+      outputs: [],
+    })
+    render(<InitiativeWorkboardDialogContainer />)
+
+    fireEvent.click(screen.getByRole('button', { name: /initiatives/i }))
+    await screen.findByText('Implement output suggestions')
+    fireEvent.click(screen.getByRole('button', { name: /synthesize/i }))
+
+    expect(
+      await screen.findByText('Keep suggestions transient.'),
+    ).toBeInTheDocument()
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: /append to current understanding/i,
+      }),
+    )
+    fireEvent.click(screen.getByRole('button', { name: /^save$/i }))
+
+    await waitFor(() => {
+      expect(mockElectronAPI.initiative.update).toHaveBeenCalledWith('i1', {
+        title: 'Agent-native work tracking',
+        status: 'exploring',
+        currentUnderstanding: [
+          '## Decisions',
+          '- Keep suggestions transient.',
+          '',
+          '## Open questions',
+          '- Should decisions become first-class later?',
+          '',
+          '## Next action',
+          'Save accepted notes.',
+        ].join('\n'),
+      })
+    })
+  })
 })

@@ -50,6 +50,57 @@ function draftFromInitiative(initiative: Initiative | null): InitiativeDraft {
   }
 }
 
+function compactSynthesisPreview(
+  preview: InitiativeSynthesisPreview,
+): InitiativeSynthesisPreview | null {
+  if (
+    preview.currentUnderstanding.trim().length === 0 &&
+    preview.decisions.length === 0 &&
+    preview.openQuestions.length === 0 &&
+    preview.nextAction.trim().length === 0 &&
+    preview.outputs.length === 0
+  ) {
+    return null
+  }
+  return preview
+}
+
+function formatSynthesisNotes(preview: InitiativeSynthesisPreview): string {
+  const sections: string[] = []
+
+  if (preview.decisions.length > 0) {
+    sections.push(
+      ['## Decisions', ...preview.decisions.map((value) => `- ${value}`)].join(
+        '\n',
+      ),
+    )
+  }
+
+  if (preview.openQuestions.length > 0) {
+    sections.push(
+      [
+        '## Open questions',
+        ...preview.openQuestions.map((value) => `- ${value}`),
+      ].join('\n'),
+    )
+  }
+
+  const nextAction = preview.nextAction.trim()
+  if (nextAction.length > 0) {
+    sections.push(['## Next action', nextAction].join('\n'))
+  }
+
+  return sections.join('\n\n')
+}
+
+function appendMarkdownBlock(current: string, block: string): string {
+  const currentText = current.trim()
+  const blockText = block.trim()
+  if (!currentText) return blockText
+  if (!blockText) return currentText
+  return `${currentText}\n\n${blockText}`
+}
+
 export const InitiativeWorkboardDialogContainer: FC<{
   trigger?: ReactNode
 }> = ({ trigger }) => {
@@ -416,15 +467,43 @@ export const InitiativeWorkboardDialogContainer: FC<{
       currentUnderstanding: synthesisPreview.currentUnderstanding,
     }))
     setSynthesisPreview((current) =>
-      current ? { ...current, currentUnderstanding: '' } : current,
+      current
+        ? compactSynthesisPreview({ ...current, currentUnderstanding: '' })
+        : current,
     )
   }, [synthesisPreview])
 
   const handleRejectSynthesisCurrentUnderstanding = useCallback(() => {
     setSynthesisPreview((current) =>
-      current ? { ...current, currentUnderstanding: '' } : current,
+      current
+        ? compactSynthesisPreview({ ...current, currentUnderstanding: '' })
+        : current,
     )
   }, [])
+
+  const handleAppendSynthesisNotes = useCallback(() => {
+    if (!synthesisPreview) return
+    const notes = formatSynthesisNotes(synthesisPreview)
+    if (!notes.trim()) return
+
+    setDraft((current) => ({
+      ...current,
+      currentUnderstanding: appendMarkdownBlock(
+        current.currentUnderstanding,
+        notes,
+      ),
+    }))
+    setSynthesisPreview((current) =>
+      current
+        ? compactSynthesisPreview({
+            ...current,
+            decisions: [],
+            openQuestions: [],
+            nextAction: '',
+          })
+        : current,
+    )
+  }, [synthesisPreview])
 
   const handleAcceptSynthesisOutput = useCallback(
     async (suggestionId: string) => {
@@ -446,12 +525,12 @@ export const InitiativeWorkboardDialogContainer: FC<{
 
       setSynthesisPreview((current) =>
         current
-          ? {
+          ? compactSynthesisPreview({
               ...current,
               outputs: current.outputs.filter(
                 (candidate) => candidate.id !== suggestionId,
               ),
-            }
+            })
           : current,
       )
     },
@@ -528,6 +607,7 @@ export const InitiativeWorkboardDialogContainer: FC<{
       onRejectSynthesisCurrentUnderstanding={
         handleRejectSynthesisCurrentUnderstanding
       }
+      onAppendSynthesisNotes={handleAppendSynthesisNotes}
       onAcceptSynthesisOutput={handleAcceptSynthesisOutput}
       onDismissSynthesisPreview={handleDismissSynthesisPreview}
       onAttemptRoleChange={handleAttemptRoleChange}

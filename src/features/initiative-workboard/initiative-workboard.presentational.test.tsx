@@ -115,6 +115,7 @@ function renderDialog(
     onSynthesisCurrentUnderstandingChange: vi.fn(),
     onAcceptSynthesisCurrentUnderstanding: vi.fn(),
     onRejectSynthesisCurrentUnderstanding: vi.fn(),
+    onAppendSynthesisNotes: vi.fn(),
     onAcceptSynthesisOutput: vi.fn(),
     onDismissSynthesisPreview: vi.fn(),
     onAttemptRoleChange: vi.fn(),
@@ -366,6 +367,11 @@ describe('InitiativeWorkboardDialog', () => {
     )
     const acceptButtons = screen.getAllByRole('button', { name: /accept/i })
     fireEvent.click(acceptButtons[0])
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: /append to current understanding/i,
+      }),
+    )
     fireEvent.click(screen.getByRole('button', { name: /^reject$/i }))
     fireEvent.click(screen.getByRole('button', { name: /dismiss synthesis/i }))
     fireEvent.click(acceptButtons[1])
@@ -375,6 +381,7 @@ describe('InitiativeWorkboardDialog', () => {
       'Edited suggested understanding.',
     )
     expect(props.onAcceptSynthesisCurrentUnderstanding).toHaveBeenCalled()
+    expect(props.onAppendSynthesisNotes).toHaveBeenCalled()
     expect(props.onRejectSynthesisCurrentUnderstanding).toHaveBeenCalled()
     expect(props.onDismissSynthesisPreview).toHaveBeenCalled()
     expect(props.onAcceptSynthesisOutput).toHaveBeenCalledWith(

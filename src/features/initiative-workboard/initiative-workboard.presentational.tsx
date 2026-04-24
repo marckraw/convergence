@@ -142,6 +142,7 @@ interface InitiativeWorkboardProps {
   onSynthesisCurrentUnderstandingChange: (value: string) => void
   onAcceptSynthesisCurrentUnderstanding: () => void
   onRejectSynthesisCurrentUnderstanding: () => void
+  onAppendSynthesisNotes: () => void
   onAcceptSynthesisOutput: (suggestionId: string) => void
   onDismissSynthesisPreview: () => void
   onAttemptRoleChange: (attemptId: string, role: InitiativeAttemptRole) => void
@@ -193,6 +194,7 @@ export const InitiativeWorkboardDialog: FC<InitiativeWorkboardProps> = ({
   onSynthesisCurrentUnderstandingChange,
   onAcceptSynthesisCurrentUnderstanding,
   onRejectSynthesisCurrentUnderstanding,
+  onAppendSynthesisNotes,
   onAcceptSynthesisOutput,
   onDismissSynthesisPreview,
   onAttemptRoleChange,
@@ -448,7 +450,10 @@ export const InitiativeWorkboardDialog: FC<InitiativeWorkboardProps> = ({
                       </div>
                     ) : null}
 
-                    {renderSynthesisNotes(synthesisPreview)}
+                    {renderSynthesisNotes({
+                      preview: synthesisPreview,
+                      onAppendSynthesisNotes,
+                    })}
 
                     {synthesisPreview.outputs.length > 0 ? (
                       <div className="space-y-2">
@@ -819,7 +824,11 @@ function renderStatusBadge(status: InitiativeStatus) {
   )
 }
 
-function renderSynthesisNotes(preview: InitiativeSynthesisPreview) {
+function renderSynthesisNotes(input: {
+  preview: InitiativeSynthesisPreview
+  onAppendSynthesisNotes: () => void
+}) {
+  const { preview, onAppendSynthesisNotes } = input
   const sections = [
     { label: 'Decisions', values: preview.decisions },
     { label: 'Open questions', values: preview.openQuestions },
@@ -832,22 +841,35 @@ function renderSynthesisNotes(preview: InitiativeSynthesisPreview) {
   if (sections.length === 0) return null
 
   return (
-    <div className="grid gap-2 md:grid-cols-3">
-      {sections.map((section) => (
-        <div
-          key={section.label}
-          className="rounded-md border border-border/60 bg-background/50 px-3 py-2"
+    <div className="space-y-2">
+      <div className="flex justify-end">
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={onAppendSynthesisNotes}
         >
-          <div className="text-[11px] font-medium uppercase text-muted-foreground">
-            {section.label}
+          <Check className="h-4 w-4" />
+          Append to Current understanding
+        </Button>
+      </div>
+      <div className="grid gap-2 md:grid-cols-3">
+        {sections.map((section) => (
+          <div
+            key={section.label}
+            className="rounded-md border border-border/60 bg-background/50 px-3 py-2"
+          >
+            <div className="text-[11px] font-medium uppercase text-muted-foreground">
+              {section.label}
+            </div>
+            <ul className="mt-2 space-y-1 text-xs text-muted-foreground">
+              {section.values.map((value) => (
+                <li key={value}>{value}</li>
+              ))}
+            </ul>
           </div>
-          <ul className="mt-2 space-y-1 text-xs text-muted-foreground">
-            {section.values.map((value) => (
-              <li key={value}>{value}</li>
-            ))}
-          </ul>
-        </div>
-      ))}
+        ))}
+      </div>
     </div>
   )
 }
