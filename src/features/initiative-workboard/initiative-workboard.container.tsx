@@ -6,6 +6,7 @@ import {
   useInitiativeStore,
   type Initiative,
   type InitiativeAttemptRole,
+  type InitiativeAttention,
   type InitiativeOutputKind,
   type InitiativeOutputStatus,
   type InitiativeSynthesisResult,
@@ -30,6 +31,7 @@ import {
 const emptyDraft: InitiativeDraft = {
   title: '',
   status: 'exploring',
+  attention: 'none',
   currentUnderstanding: '',
 }
 
@@ -46,6 +48,7 @@ function draftFromInitiative(initiative: Initiative | null): InitiativeDraft {
   return {
     title: initiative.title,
     status: initiative.status,
+    attention: initiative.attention,
     currentUnderstanding: initiative.currentUnderstanding,
   }
 }
@@ -223,6 +226,7 @@ export const InitiativeWorkboardDialogContainer: FC<{
     const updated = await updateInitiative(selectedInitiative.id, {
       title,
       status: draft.status as InitiativeStatus,
+      attention: draft.attention as InitiativeAttention,
       currentUnderstanding: draft.currentUnderstanding,
     })
     setIsSaving(false)

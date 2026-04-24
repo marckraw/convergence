@@ -16,6 +16,14 @@ export const initiativeStatusOptions: InitiativeStatus[] = [
   'discarded',
 ]
 
+export const initiativeAttentionOptions: InitiativeAttention[] = [
+  'none',
+  'needs-you',
+  'needs-decision',
+  'blocked',
+  'stale',
+]
+
 export const initiativeStatusClassNames: Record<InitiativeStatus, string> = {
   exploring: 'border-cyan-500/25 bg-cyan-500/10 text-cyan-200',
   planned: 'border-sky-500/25 bg-sky-500/10 text-sky-200',

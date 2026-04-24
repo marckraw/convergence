@@ -26,6 +26,7 @@ const updatedInitiative: Initiative = {
   ...initiative,
   title: 'Initiatives V1',
   status: 'implementing',
+  attention: 'blocked',
   currentUnderstanding: 'Stable current understanding.',
   updatedAt: '2026-01-02T00:00:00.000Z',
 }
@@ -230,6 +231,9 @@ describe('InitiativeWorkboardDialogContainer', () => {
     fireEvent.change(screen.getByDisplayValue('Exploring'), {
       target: { value: 'implementing' },
     })
+    fireEvent.change(screen.getByDisplayValue('No attention'), {
+      target: { value: 'blocked' },
+    })
     fireEvent.change(
       screen.getByPlaceholderText(
         /stable notes, decisions, constraints, and next action/i,
@@ -242,6 +246,7 @@ describe('InitiativeWorkboardDialogContainer', () => {
       expect(mockElectronAPI.initiative.update).toHaveBeenCalledWith('i1', {
         title: 'Initiatives V1',
         status: 'implementing',
+        attention: 'blocked',
         currentUnderstanding: 'Stable current understanding.',
       })
     })
@@ -381,6 +386,7 @@ describe('InitiativeWorkboardDialogContainer', () => {
       expect(mockElectronAPI.initiative.update).toHaveBeenCalledWith('i1', {
         title: 'Agent-native work tracking',
         status: 'exploring',
+        attention: 'none',
         currentUnderstanding: 'Edited synthesized understanding.',
       })
     })
@@ -415,6 +421,7 @@ describe('InitiativeWorkboardDialogContainer', () => {
       expect(mockElectronAPI.initiative.update).toHaveBeenCalledWith('i1', {
         title: 'Agent-native work tracking',
         status: 'exploring',
+        attention: 'none',
         currentUnderstanding: [
           '## Decisions',
           '- Keep suggestions transient.',

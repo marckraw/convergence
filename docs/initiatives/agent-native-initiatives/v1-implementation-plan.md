@@ -530,6 +530,45 @@ Run `npm run dev`, then perform a full V1 walkthrough:
   Initiative.
 - The user can explain what happened later by reopening the Initiative.
 
+## Phase 8: Manual Initiative Attention
+
+### Goal
+
+Let the user set Initiative attention manually so the Workboard can show which
+Initiatives need focus without relying on fragile automation.
+
+### Scope
+
+- Add attention to the Workboard edit form.
+- Save attention through the existing Initiative update path.
+- Keep attention separate from status:
+  - status tracks delivery journey
+  - attention tracks human focus
+- Keep automatic stale/blocked/needs-you detection out of scope.
+- Do not introduce notifications or new sidebar sections for Initiative
+  attention yet.
+
+### Tests
+
+- Update Workboard component/container tests for editing and saving attention.
+- Keep existing Attempt, Output, and synthesis coverage passing.
+
+### Manual Check
+
+Run `npm run dev`, then verify:
+
+1. Open the Workboard.
+2. Select an Initiative.
+3. Change Attention and save.
+4. Close and reopen the Workboard.
+5. Confirm non-`none` attention appears as a badge in the Initiative list.
+6. Set attention back to `No attention` and confirm the badge disappears.
+
+### Done When
+
+- Attention is a real user-editable Initiative field, not only a displayed
+  backend value.
+
 ## Suggested Commit Strategy
 
 Keep each phase independently reviewable:

@@ -17,6 +17,7 @@ import type {
   Initiative,
   InitiativeAttempt,
   InitiativeAttemptRole,
+  InitiativeAttention,
   InitiativeOutput,
   InitiativeOutputKind,
   InitiativeOutputStatus,
@@ -46,6 +47,7 @@ import { Input } from '@/shared/ui/input'
 import { Textarea } from '@/shared/ui/textarea'
 import { cn } from '@/shared/lib/cn.pure'
 import {
+  initiativeAttentionOptions,
   initiativeAttentionClassNames,
   initiativeAttentionLabels,
   initiativeStatusClassNames,
@@ -57,6 +59,7 @@ import type { InitiativeOutputSuggestion } from './initiative-output-suggestions
 export interface InitiativeDraft {
   title: string
   status: InitiativeStatus
+  attention: InitiativeAttention
   currentUnderstanding: string
 }
 
@@ -320,7 +323,7 @@ export const InitiativeWorkboardDialog: FC<InitiativeWorkboardProps> = ({
           <section className="app-scrollbar min-h-0 overflow-y-auto px-6 py-5">
             {selectedInitiative ? (
               <div className="space-y-5">
-                <div className="grid gap-4 md:grid-cols-[1fr_180px]">
+                <div className="grid gap-4 md:grid-cols-[1fr_180px_180px]">
                   <label className="space-y-2">
                     <span className="text-xs font-medium uppercase text-muted-foreground">
                       Title
@@ -353,6 +356,28 @@ export const InitiativeWorkboardDialog: FC<InitiativeWorkboardProps> = ({
                       {initiativeStatusOptions.map((status) => (
                         <option key={status} value={status}>
                           {initiativeStatusLabels[status]}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+
+                  <label className="space-y-2">
+                    <span className="text-xs font-medium uppercase text-muted-foreground">
+                      Attention
+                    </span>
+                    <select
+                      className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                      value={selectedDraft.attention}
+                      onChange={(event) =>
+                        onDraftChange({
+                          ...selectedDraft,
+                          attention: event.target.value as InitiativeAttention,
+                        })
+                      }
+                    >
+                      {initiativeAttentionOptions.map((attention) => (
+                        <option key={attention} value={attention}>
+                          {initiativeAttentionLabels[attention]}
                         </option>
                       ))}
                     </select>

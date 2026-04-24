@@ -25,6 +25,7 @@ const initiative: Initiative = {
 const draft: InitiativeDraft = {
   title: initiative.title,
   status: initiative.status,
+  attention: initiative.attention,
   currentUnderstanding: initiative.currentUnderstanding,
 }
 
@@ -76,7 +77,12 @@ function renderDialog(
     open: true,
     initiatives: [],
     selectedInitiative: null,
-    selectedDraft: { title: '', status: 'exploring', currentUnderstanding: '' },
+    selectedDraft: {
+      title: '',
+      status: 'exploring',
+      attention: 'none',
+      currentUnderstanding: '',
+    },
     selectedAttempts: [],
     selectedOutputs: [],
     outputSuggestions: [],
@@ -164,6 +170,9 @@ describe('InitiativeWorkboardDialog', () => {
     fireEvent.change(screen.getByDisplayValue('Exploring'), {
       target: { value: 'implementing' },
     })
+    fireEvent.change(screen.getByDisplayValue('Needs decision'), {
+      target: { value: 'blocked' },
+    })
     fireEvent.change(
       screen.getByDisplayValue('Start with a lightweight workboard.'),
       {
@@ -180,6 +189,10 @@ describe('InitiativeWorkboardDialog', () => {
     expect(props.onDraftChange).toHaveBeenCalledWith({
       ...draft,
       status: 'implementing',
+    })
+    expect(props.onDraftChange).toHaveBeenCalledWith({
+      ...draft,
+      attention: 'blocked',
     })
     expect(props.onDraftChange).toHaveBeenCalledWith({
       ...draft,
