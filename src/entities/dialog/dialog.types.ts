@@ -11,6 +11,7 @@ export type DialogKind =
   | 'workspace-create'
 
 export type DialogPayload =
+  | { initiativeId: string }
   | { parentSessionId: string }
   | { sessionId: string }
   | { workspaceId: string | null }

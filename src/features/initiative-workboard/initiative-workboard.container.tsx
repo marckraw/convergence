@@ -37,6 +37,7 @@ export const InitiativeWorkboardDialogContainer: FC<{
   trigger?: ReactNode
 }> = ({ trigger }) => {
   const open = useDialogStore((s) => s.openDialog === 'initiative-workboard')
+  const payload = useDialogStore((s) => s.payload)
   const openDialog = useDialogStore((s) => s.open)
   const closeDialog = useDialogStore((s) => s.close)
   const initiatives = useInitiativeStore((s) => s.initiatives)
@@ -98,6 +99,10 @@ export const InitiativeWorkboardDialogContainer: FC<{
 
   useEffect(() => {
     if (!open) return
+    if (payload && 'initiativeId' in payload) {
+      setSelectedId(payload.initiativeId)
+      return
+    }
     if (
       selectedId &&
       initiatives.some((initiative) => initiative.id === selectedId)
@@ -105,7 +110,7 @@ export const InitiativeWorkboardDialogContainer: FC<{
       return
     }
     setSelectedId(initiatives[0]?.id ?? null)
-  }, [open, initiatives, selectedId])
+  }, [open, initiatives, payload, selectedId])
 
   useEffect(() => {
     setDraft(draftFromInitiative(selectedInitiative))

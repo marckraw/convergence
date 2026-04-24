@@ -1,4 +1,19 @@
-import type { InitiativeAttemptRole } from './initiative.types'
+import type {
+  InitiativeAttemptRole,
+  InitiativeStatus,
+} from './initiative.types'
+
+export const initiativeStatusLabels: Record<InitiativeStatus, string> = {
+  exploring: 'Exploring',
+  planned: 'Planned',
+  implementing: 'Implementing',
+  reviewing: 'Reviewing',
+  'ready-to-merge': 'Ready to merge',
+  merged: 'Merged',
+  released: 'Released',
+  parked: 'Parked',
+  discarded: 'Discarded',
+}
 
 export const initiativeAttemptRoleLabels: Record<
   InitiativeAttemptRole,

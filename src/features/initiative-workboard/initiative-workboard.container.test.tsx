@@ -23,6 +23,13 @@ const updatedInitiative: Initiative = {
   updatedAt: '2026-01-02T00:00:00.000Z',
 }
 
+const secondInitiative: Initiative = {
+  ...initiative,
+  id: 'i2',
+  title: 'Linked session context',
+  currentUnderstanding: 'Show context beside the session.',
+}
+
 const mockElectronAPI = {
   initiative: {
     list: vi.fn(),
@@ -125,5 +132,25 @@ describe('InitiativeWorkboardDialogContainer', () => {
         currentUnderstanding: 'Stable current understanding.',
       })
     })
+  })
+
+  it('opens focused on a payload Initiative id', async () => {
+    mockElectronAPI.initiative.list.mockResolvedValue([
+      initiative,
+      secondInitiative,
+    ])
+    useDialogStore.setState({
+      openDialog: 'initiative-workboard',
+      payload: { initiativeId: 'i2' },
+    })
+
+    render(<InitiativeWorkboardDialogContainer />)
+
+    expect(
+      await screen.findByDisplayValue('Linked session context'),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByDisplayValue('Show context beside the session.'),
+    ).toBeInTheDocument()
   })
 })

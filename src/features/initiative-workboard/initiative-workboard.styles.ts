@@ -2,18 +2,7 @@ import type {
   InitiativeAttention,
   InitiativeStatus,
 } from '@/entities/initiative'
-
-export const initiativeStatusLabels: Record<InitiativeStatus, string> = {
-  exploring: 'Exploring',
-  planned: 'Planned',
-  implementing: 'Implementing',
-  reviewing: 'Reviewing',
-  'ready-to-merge': 'Ready to merge',
-  merged: 'Merged',
-  released: 'Released',
-  parked: 'Parked',
-  discarded: 'Discarded',
-}
+export { initiativeStatusLabels } from '@/entities/initiative'
 
 export const initiativeStatusOptions: InitiativeStatus[] = [
   'exploring',

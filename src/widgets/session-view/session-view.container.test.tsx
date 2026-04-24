@@ -2,13 +2,34 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { DEFAULT_PROJECT_SETTINGS, useProjectStore } from '@/entities/project'
 import { useDialogStore } from '@/entities/dialog'
+import { useInitiativeStore } from '@/entities/initiative'
 import { useSessionStore } from '@/entities/session'
+import { useWorkspaceStore } from '@/entities/workspace'
 import { TooltipProvider } from '@/shared/ui/tooltip'
 import { SessionView } from './session-view.container'
 
 vi.mock('@/features/composer', () => ({
   ComposerContainer: () => <div>composer</div>,
 }))
+
+const initiative = {
+  id: 'initiative-1',
+  title: 'Agent-native initiatives',
+  status: 'exploring' as const,
+  attention: 'none' as const,
+  currentUnderstanding: 'Keep the session and Initiative visible together.',
+  createdAt: '2026-01-01T00:00:00.000Z',
+  updatedAt: '2026-01-02T00:00:00.000Z',
+}
+
+const attempt = {
+  id: 'attempt-1',
+  initiativeId: 'initiative-1',
+  sessionId: 'session-1',
+  role: 'seed' as const,
+  isPrimary: true,
+  createdAt: '2026-01-01T00:00:00.000Z',
+}
 
 describe('SessionView changed files drawer', () => {
   beforeEach(() => {
@@ -33,6 +54,23 @@ describe('SessionView changed files drawer', () => {
       setActiveProject: vi.fn(),
       updateProjectSettings: vi.fn(),
       clearError: vi.fn(),
+    })
+
+    useWorkspaceStore.setState({
+      workspaces: [],
+      globalWorkspaces: [
+        {
+          id: 'workspace-1',
+          projectId: 'project-1',
+          branchName: 'feat/initiative-panel',
+          path: '/tmp/project',
+          type: 'worktree',
+          createdAt: '2026-01-01T00:00:00.000Z',
+        },
+      ],
+      currentBranch: null,
+      loading: false,
+      error: null,
     })
 
     useSessionStore.setState({
@@ -89,9 +127,34 @@ describe('SessionView changed files drawer', () => {
     })
 
     useDialogStore.setState({ openDialog: null, payload: null })
+    useInitiativeStore.setState({
+      initiatives: [],
+      attemptsByInitiativeId: {},
+      attemptsBySessionId: {},
+      outputsByInitiativeId: {},
+      loading: false,
+      error: null,
+    })
 
     Object.defineProperty(window, 'electronAPI', {
       value: {
+        initiative: {
+          list: vi.fn().mockResolvedValue([initiative]),
+          getById: vi.fn().mockResolvedValue(initiative),
+          create: vi.fn(),
+          update: vi.fn(),
+          delete: vi.fn(),
+          listAttempts: vi.fn().mockResolvedValue([attempt]),
+          listAttemptsForSession: vi.fn().mockResolvedValue([]),
+          linkAttempt: vi.fn(),
+          updateAttempt: vi.fn(),
+          unlinkAttempt: vi.fn(),
+          setPrimaryAttempt: vi.fn(),
+          listOutputs: vi.fn().mockResolvedValue([]),
+          addOutput: vi.fn(),
+          updateOutput: vi.fn(),
+          deleteOutput: vi.fn(),
+        },
         git: {
           getCurrentBranch: vi.fn().mockResolvedValue('master'),
           getStatus: vi
@@ -183,6 +246,54 @@ describe('SessionView changed files drawer', () => {
     expect(useDialogStore.getState().openDialog).toBe('initiative-session-link')
     expect(useDialogStore.getState().payload).toEqual({
       sessionId: 'session-1',
+    })
+  })
+
+  it('does not render the Initiative context panel for an unlinked session', () => {
+    render(
+      <TooltipProvider>
+        <SessionView />
+      </TooltipProvider>,
+    )
+
+    expect(screen.queryByTestId('initiative-context-panel')).toBeNull()
+  })
+
+  it('renders Initiative context for a linked session and opens the Workboard', async () => {
+    vi.mocked(
+      window.electronAPI.initiative.listAttemptsForSession,
+    ).mockResolvedValue([attempt])
+    useInitiativeStore.setState({
+      initiatives: [initiative],
+      attemptsByInitiativeId: { 'initiative-1': [attempt] },
+      attemptsBySessionId: { 'session-1': [attempt] },
+      outputsByInitiativeId: {},
+      loading: false,
+      error: null,
+    })
+
+    render(
+      <TooltipProvider>
+        <SessionView />
+      </TooltipProvider>,
+    )
+
+    expect(screen.getByTestId('initiative-context-panel')).toBeInTheDocument()
+    expect(screen.getByText('Agent-native initiatives')).toBeInTheDocument()
+    expect(
+      screen.getByText('Keep the session and Initiative visible together.'),
+    ).toBeInTheDocument()
+    expect(screen.getByText('feat/initiative-panel')).toBeInTheDocument()
+
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: /open initiative agent-native initiatives/i,
+      }),
+    )
+
+    expect(useDialogStore.getState().openDialog).toBe('initiative-workboard')
+    expect(useDialogStore.getState().payload).toEqual({
+      initiativeId: 'initiative-1',
     })
   })
 })
