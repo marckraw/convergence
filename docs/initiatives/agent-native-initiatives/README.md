@@ -30,3 +30,5 @@ requests, and final outcome across one or more projects.
 
 - [Product Spec](./product-spec.md): current product model, terminology,
   UI direction, V1 scope, and open questions.
+- [V1 Implementation Plan](./v1-implementation-plan.md): phased delivery
+  plan with test expectations and manual verification notes.

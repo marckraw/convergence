@@ -385,6 +385,20 @@ This should be advisory and dismissible, not a blocking workflow.
 AI should help organize initiative context, but should not silently mutate
 stable state.
 
+AI-assisted Initiative features must use Convergence's existing provider
+runtime, not direct ad hoc model API calls. The product should route synthesis,
+suggestion, comparison, and future agentic actions through the same provider
+capabilities the app already supports for Claude Code, Codex, Pi, shell-backed
+providers, and future provider integrations.
+
+This keeps Initiative AI behavior aligned with the core Convergence model:
+users bring provider subscriptions and local provider harnesses, and the app
+orchestrates those providers instead of reimplementing separate agent loops for
+each feature. If an Initiative feature needs provider behavior that does not
+exist yet, extend the provider abstraction or add a focused provider capability
+first. Direct model API integrations are reserved for future cases where the
+provider runtime cannot reasonably support the use case.
+
 ### V1 AI Action
 
 **Synthesize current understanding from linked sessions**
