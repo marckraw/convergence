@@ -52,6 +52,12 @@ The app needs a way to answer:
 8. Outputs are first-class. An Initiative usually ends in one or more pull
    requests, but may also produce branches, specs, docs, migration notes,
    releases, or other artifacts.
+9. Initiatives are global, not project-owned. They must be able to link
+   sessions from multiple projects from V1, because multi-project delivery is
+   one of the main reasons this feature exists.
+10. An Initiative has a list of Attempts. One Attempt may be marked primary,
+    usually the first or seed Attempt, but the Initiative is not centered on a
+    single session.
 
 ## Terminology
 
@@ -89,9 +95,10 @@ Possible attempt roles:
 The stable curated description of what the user currently believes about the
 Initiative.
 
-This may eventually be named differently in the UI. It intentionally avoids
-making "brief" the central product object. The central object is the
-Initiative; the current understanding is one important section inside it.
+The UI should use **Current understanding** for this section in V1. It
+intentionally avoids making "brief" the central product object. The central
+object is the Initiative; current understanding is one important section
+inside it.
 
 ### Suggested Update
 
@@ -108,6 +115,11 @@ Examples:
 
 Suggested updates must be reviewable and rejectable. They should not silently
 rewrite the Initiative's stable state.
+
+In V1, suggested updates can be transient preview results from an AI action:
+the user runs synthesis, reviews the suggestions, accepts or edits useful
+parts, and only accepted changes are persisted. A future version may store
+unaccepted suggestions durably as a suggestion inbox or activity artifact.
 
 ### Output
 
@@ -268,19 +280,38 @@ The Workboard should help users scan:
 The board does not need to mimic Jira columns. The useful axis is knowledge
 and delivery maturity, not only task execution.
 
+The Workboard is different from the Initiative side panel:
+
+- **Workboard**: the global place to scan, filter, open, and create
+  Initiatives across projects.
+- **Initiative side panel**: a contextual panel shown next to a linked
+  session, focused on the Initiative behind the current agent attempt.
+- **Initiative detail view**: the full inspection and editing surface for one
+  Initiative.
+
+V1 should include a Workboard, but it should stay lightweight. It can start as
+a list or compact board of Initiatives rather than a full workflow system.
+
 ### Session View With Initiative Panel
 
 When a session is linked to an Initiative, the session view should become a
 focused attempt inside a larger context.
 
+The sidebar should continue to behave as normal project, workspace, and
+session navigation. Initiative membership does not need a special sidebar
+representation in V1. The selected session determines whether the main content
+area renders as a standalone conversation or as a focused attempt with
+Initiative context.
+
 ```text
-sidebar
+main content area
   | conversation or terminal attempt
-  | Initiative panel
+  | Initiative context panel
 ```
 
 The conversation or terminal remains the primary working surface, but an
-Initiative panel appears on the right.
+Initiative context panel appears on the right when the selected session is
+linked to an Initiative.
 
 The panel should be dense and operational:
 
@@ -322,7 +353,6 @@ Optional fields:
 
 - current understanding
 - status
-- linked project
 - initial output target
 
 ### Create Initiative From Session
@@ -392,12 +422,24 @@ edit, or reject each part.
 Outputs are first-class because the practical end of most Initiatives is a
 merged change.
 
-V1 can support manual outputs:
+V1 should support outputs as records attached directly to Initiatives.
+
+Users can create outputs manually:
 
 - kind
 - label
 - URL or local identifier
 - status
+
+Convergence can also support semi-automatic output discovery. For example, a
+refresh action can inspect repositories from linked session projects and
+suggest newly created pull requests or branches as outputs. The user should
+confirm suggested outputs before they become stable Initiative state.
+
+Outputs are important because the Initiative should remain useful after the
+work is done. A user should be able to reopen a completed Initiative and see
+the pull requests, branches, docs, specs, migration notes, or important files
+that represented the result of the work.
 
 Possible output statuses:
 
@@ -442,7 +484,6 @@ interface Initiative {
   currentUnderstanding: string
   createdAt: string
   updatedAt: string
-  archivedAt: string | null
 }
 
 type InitiativeAttemptRole =
@@ -458,6 +499,7 @@ interface InitiativeAttempt {
   initiativeId: string
   sessionId: string
   role: InitiativeAttemptRole
+  isPrimary: boolean
   createdAt: string
 }
 
@@ -496,6 +538,7 @@ interface InitiativeOutput {
   kind: InitiativeOutputKind
   label: string
   value: string
+  sourceSessionId: string | null
   status:
     | 'planned'
     | 'in-progress'
@@ -519,16 +562,20 @@ V1 should prove the workflow without overbuilding the system.
 - edit current understanding
 - set Initiative status
 - link and unlink sessions as attempts
+- mark one linked attempt as primary
 - create Initiative from active session
 - attach active session to existing Initiative
 - show Initiative panel in linked session view
+- show lightweight Workboard for global Initiative navigation
 - show Initiative detail view
 - add manual outputs
+- discover and suggest outputs from linked session repositories where feasible
 - synthesize current understanding from linked sessions as suggested updates
 
 ### Out Of Scope
 
-- automatic PR detection
+- fully automatic PR detection without user confirmation
+- fully automatic output lifecycle tracking
 - GitHub integration
 - release automation
 - complex workflow rules
@@ -538,25 +585,49 @@ V1 should prove the workflow without overbuilding the system.
 - external issue tracker sync
 - automatic truth promotion from AI output
 - perfect automated status or attention detection
+- advanced archived-session behavior
 
-## Open Questions
+## Resolved Product Questions
 
-1. Should the UI use the term "Current understanding", "Summary", "Brief",
-   or something else?
-2. Should an Initiative belong to one project initially, or can V1 be
-   project-agnostic with linked sessions determining project association?
-3. Should outputs be attached directly to Initiatives in V1, or should the
-   first version only support freeform markdown links in current
-   understanding?
-4. Should an Initiative have a single primary session, or only a list of
-   attempts?
-5. Should the Workboard ship in V1, or should the first UI be the Initiative
-   side panel plus detail view?
-6. Should suggested updates be stored durably before acceptance, or can V1
-   treat them as transient preview results?
-7. How should Initiative state interact with archived sessions?
-8. Should an Initiative itself be archivable separately from status values
-   like `done`, `parked`, and `discarded`?
+1. The UI term is **Current understanding** for V1.
+2. Initiatives are global objects. They do not belong to a single project.
+3. Sessions from multiple projects must be linkable to one Initiative from V1.
+4. Outputs should be attached directly to Initiatives in V1.
+5. Outputs can be created manually, and pull requests or branches may be
+   suggested through repository refresh where feasible.
+6. Initiatives have a list of attempts. One attempt may be marked primary, but
+   the model is not single-session-centric.
+7. V1 should include a lightweight Workboard plus the session side panel and
+   detail view.
+
+## Clarifications And Remaining Questions
+
+### Suggested Update Durability
+
+Transient suggested updates exist only inside the synthesis result or preview
+flow. If the user accepts or edits a suggestion, the accepted result becomes
+stable persisted Initiative state. If the user closes the preview, the
+unaccepted suggestions can disappear.
+
+Durable suggested updates would be persisted as pending suggestions even if
+the user closes the preview. That could be useful later, but it creates more
+state to manage. V1 should prefer transient suggestions unless user testing
+shows that losing unaccepted suggestions is painful.
+
+### Archived Sessions
+
+Archived session behavior is intentionally deferred. An archived session that
+is already linked as an Attempt should remain part of the Initiative history,
+but the broader semantics of session archive need to be improved separately.
+
+V1 Initiative behavior should not depend on final archived-session semantics.
+
+### Initiative Archiving
+
+Initiative archiving can be modeled as status in a later phase. The likely
+future behavior is a status such as `archived` rather than a separate hidden
+archive lifecycle. For V1, use `done`, `parked`, or `discarded` as the
+available completion states.
 
 ## Implementation Notes
 
