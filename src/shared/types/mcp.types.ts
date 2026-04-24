@@ -33,6 +33,7 @@ export interface ProviderMcpVisibility {
   globalServers: McpServerSummary[]
   projectServers: McpServerSummary[]
   error: string | null
+  note?: string | null
 }
 
 export interface ProjectMcpVisibility {

@@ -1,5 +1,6 @@
 import { ClaudeMcpService } from './claude-mcp.service'
 import { CodexMcpService } from './codex-mcp.service'
+import { PiMcpService } from './pi-mcp.service'
 import type { ProjectService } from '../project/project.service'
 import type { DetectedProvider } from '../provider/detect'
 import type { ProjectMcpVisibility, ProviderMcpVisibility } from './mcp.types'
@@ -27,6 +28,8 @@ export class McpService {
             return new CodexMcpService(provider.binaryPath).list(
               project.repositoryPath,
             )
+          case 'pi':
+            return new PiMcpService().list()
           default:
             return null
         }

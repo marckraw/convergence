@@ -131,6 +131,12 @@ function renderProviderSection(provider: ProviderMcpVisibility) {
           </div>
         ) : null}
 
+        {provider.note ? (
+          <div className="rounded-lg border border-border/60 bg-muted/20 px-3 py-2 text-sm text-muted-foreground">
+            {provider.note}
+          </div>
+        ) : null}
+
         <div>
           <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
             Project

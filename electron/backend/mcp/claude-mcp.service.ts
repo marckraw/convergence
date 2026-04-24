@@ -1,3 +1,6 @@
+import { promises as fs } from 'fs'
+import { homedir } from 'os'
+import { join } from 'path'
 import { execFileRunner, type CommandRunner } from './command-runner'
 import type {
   McpServerScope,
@@ -7,11 +10,165 @@ import type {
   ProviderMcpVisibility,
 } from './mcp.types'
 
-function parseClaudeServerNames(stdout: string): string[] {
-  return stdout
-    .split(/\r?\n/)
-    .map((line) => line.match(/^([^:\s][^:]*)\s*:/)?.[1]?.trim() ?? null)
-    .filter((name): name is string => !!name)
+interface ClaudeListEntry {
+  name: string
+  description: string
+  statusLabel: string
+  transportType: McpTransportType
+}
+
+interface ClaudeConfigScopes {
+  globalServerNames: Set<string>
+  projectServerNames: Set<string>
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null
+}
+
+function extractServerNames(value: unknown): string[] {
+  if (!isRecord(value)) {
+    return []
+  }
+
+  return Object.keys(value)
+}
+
+async function readJsonObject(
+  path: string,
+): Promise<Record<string, unknown> | null> {
+  try {
+    const raw = await fs.readFile(path, 'utf8')
+    const parsed = JSON.parse(raw) as unknown
+    return isRecord(parsed) ? parsed : null
+  } catch {
+    return null
+  }
+}
+
+async function loadClaudeConfigScopes(
+  projectPath: string,
+): Promise<ClaudeConfigScopes> {
+  const globalServerNames = new Set<string>()
+  const projectServerNames = new Set<string>()
+
+  const userConfig = await readJsonObject(join(homedir(), '.claude.json'))
+  if (userConfig) {
+    for (const name of extractServerNames(userConfig.mcpServers)) {
+      globalServerNames.add(name)
+    }
+
+    const projects = isRecord(userConfig.projects) ? userConfig.projects : null
+    const projectConfig = projects?.[projectPath]
+    for (const name of extractServerNames(
+      isRecord(projectConfig) ? projectConfig.mcpServers : null,
+    )) {
+      projectServerNames.add(name)
+    }
+  }
+
+  const projectMcpJson = await readJsonObject(join(projectPath, '.mcp.json'))
+  if (projectMcpJson) {
+    for (const name of [
+      ...extractServerNames(projectMcpJson.mcpServers),
+      ...extractServerNames(projectMcpJson.servers),
+    ]) {
+      projectServerNames.add(name)
+    }
+  }
+
+  return { globalServerNames, projectServerNames }
+}
+
+function normalizeClaudeListDescription(rawDescription: string): {
+  description: string
+  transportType: McpTransportType
+} {
+  const suffixMatch = rawDescription.match(/\s+\((HTTP|SSE)\)$/i)
+  if (suffixMatch) {
+    const description = rawDescription
+      .slice(0, suffixMatch.index ?? rawDescription.length)
+      .trim()
+    return {
+      description,
+      transportType: suffixMatch[1]?.toLowerCase() === 'sse' ? 'sse' : 'http',
+    }
+  }
+
+  if (/^https?:\/\//i.test(rawDescription)) {
+    return {
+      description: rawDescription,
+      transportType: /\/sse(?:$|[/?#])/i.test(rawDescription) ? 'sse' : 'http',
+    }
+  }
+
+  return {
+    description: rawDescription,
+    transportType: rawDescription.trim().length > 0 ? 'stdio' : 'unknown',
+  }
+}
+
+function parseClaudeListEntries(stdout: string): ClaudeListEntry[] {
+  return stdout.split(/\r?\n/).flatMap((line) => {
+    const match = line.match(/^(.+?):\s+(.+?)\s+-\s+([!✓✗].+)$/)
+    if (!match) {
+      return []
+    }
+
+    const name = match[1]?.trim()
+    const rawDescription = match[2]?.trim()
+    const statusLabel = match[3]?.trim()
+    if (!name || !rawDescription || !statusLabel) {
+      return []
+    }
+
+    const { description, transportType } =
+      normalizeClaudeListDescription(rawDescription)
+
+    return [
+      {
+        name,
+        description,
+        statusLabel,
+        transportType,
+      },
+    ]
+  })
+}
+
+function inferClaudeScope(
+  name: string,
+  scopes: ClaudeConfigScopes,
+): { scope: McpServerScope; scopeLabel: string } {
+  if (scopes.projectServerNames.has(name)) {
+    return { scope: 'project', scopeLabel: 'Project config' }
+  }
+
+  if (scopes.globalServerNames.has(name)) {
+    return { scope: 'global', scopeLabel: 'User config' }
+  }
+
+  return { scope: 'global', scopeLabel: 'Built-in global' }
+}
+
+function buildClaudeFallbackSummary(
+  entry: ClaudeListEntry,
+  scopes: ClaudeConfigScopes,
+): McpServerSummary {
+  const { scope, scopeLabel } = inferClaudeScope(entry.name, scopes)
+
+  return {
+    name: entry.name,
+    providerId: 'claude-code',
+    providerName: 'Claude Code',
+    scope,
+    scopeLabel,
+    status: mapClaudeStatus(entry.statusLabel),
+    statusLabel: entry.statusLabel,
+    transportType: entry.transportType,
+    description: entry.description,
+    enabled: null,
+  }
 }
 
 function mapClaudeScope(scopeLabel: string): McpServerScope {
@@ -46,6 +203,8 @@ function mapClaudeTransport(typeLabel: string): McpTransportType {
       return 'http'
     case 'sse':
       return 'sse'
+    case 'streamable_http':
+      return 'streamable_http'
     default:
       return 'unknown'
   }
@@ -100,36 +259,45 @@ export class ClaudeMcpService {
 
   async list(projectPath: string): Promise<ProviderMcpVisibility> {
     try {
-      const { stdout } = await this.runner(this.binaryPath, ['mcp', 'list'], {
-        cwd: projectPath,
-      })
-
-      const serverNames = parseClaudeServerNames(stdout)
-      const serverDetails = await Promise.all(
-        serverNames.map(async (name) => {
-          const result = await this.runner(
-            this.binaryPath,
-            ['mcp', 'get', name],
-            { cwd: projectPath },
-          )
-
-          return parseClaudeServerDetails(
-            'claude-code',
-            'Claude Code',
-            result.stdout,
-          )
+      const [{ stdout }, scopes] = await Promise.all([
+        this.runner(this.binaryPath, ['mcp', 'list'], {
+          cwd: projectPath,
         }),
-      )
+        loadClaudeConfigScopes(projectPath),
+      ])
 
-      const servers = serverDetails.filter(
-        (server): server is McpServerSummary => server !== null,
+      const listEntries = parseClaudeListEntries(stdout)
+      const serverDetails = await Promise.all(
+        listEntries.map(async (entry) => {
+          try {
+            const result = await this.runner(
+              this.binaryPath,
+              ['mcp', 'get', entry.name],
+              { cwd: projectPath },
+            )
+
+            return (
+              parseClaudeServerDetails(
+                'claude-code',
+                'Claude Code',
+                result.stdout,
+              ) ?? buildClaudeFallbackSummary(entry, scopes)
+            )
+          } catch {
+            return buildClaudeFallbackSummary(entry, scopes)
+          }
+        }),
       )
 
       return {
         providerId: 'claude-code',
         providerName: 'Claude Code',
-        globalServers: servers.filter((server) => server.scope === 'global'),
-        projectServers: servers.filter((server) => server.scope === 'project'),
+        globalServers: serverDetails.filter(
+          (server) => server.scope === 'global',
+        ),
+        projectServers: serverDetails.filter(
+          (server) => server.scope === 'project',
+        ),
         error: null,
       }
     } catch (error) {
