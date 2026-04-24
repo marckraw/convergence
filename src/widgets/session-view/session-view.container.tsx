@@ -1,8 +1,10 @@
-import { useEffect, useRef, useState, useCallback } from 'react'
+import { useEffect, useRef, useState, useCallback, useMemo } from 'react'
 import type { FC, MouseEvent as ReactMouseEvent } from 'react'
 import { useProjectStore } from '@/entities/project'
 import { formatActivityLabel, useSessionStore } from '@/entities/session'
 import { useDialogStore } from '@/entities/dialog'
+import { useInitiativeStore } from '@/entities/initiative'
+import { useWorkspaceStore } from '@/entities/workspace'
 import { ComposerContainer } from '@/features/composer'
 import { useTerminalStore } from '@/entities/terminal'
 import { Button } from '@/shared/ui/button'
@@ -16,6 +18,7 @@ import {
   Archive,
   ArrowLeftRight,
   GitFork,
+  Link2,
   MoreVertical,
   Square,
   FileCode,
@@ -27,6 +30,10 @@ import { ContextWindowIndicator } from '@/shared/ui/context-window-indicator.pre
 import { cn } from '@/shared/lib/cn.pure'
 import { ConversationItemView } from './transcript-entry.presentational'
 import { ChangedFilesPanel } from './changed-files-panel.container'
+import {
+  InitiativeContextPanel,
+  type InitiativeContextAttemptView,
+} from './initiative-context-panel.presentational'
 
 const CHANGED_FILES_MIN_WIDTH = 320
 const CHANGED_FILES_MAX_WIDTH = 960
@@ -36,6 +43,8 @@ type ChangedFilesMode = 'docked' | 'overlay'
 
 export const SessionView: FC = () => {
   const activeProject = useProjectStore((s) => s.activeProject)
+  const projects = useProjectStore((s) => s.projects)
+  const workspaces = useWorkspaceStore((s) => s.globalWorkspaces)
   const activeSessionId = useSessionStore((s) => s.activeSessionId)
   const draftWorkspaceId = useSessionStore((s) => s.draftWorkspaceId)
   const sessions = useSessionStore((s) => s.sessions)
@@ -49,6 +58,20 @@ export const SessionView: FC = () => {
   const hydratePaneTree = useTerminalStore((s) => s.hydratePaneTree)
   const closeAllTerminals = useTerminalStore((s) => s.closeAllForSession)
   const setPrimarySurface = useSessionStore((s) => s.setPrimarySurface)
+  const initiatives = useInitiativeStore((s) => s.initiatives)
+  const attemptsBySessionId = useInitiativeStore((s) => s.attemptsBySessionId)
+  const attemptsByInitiativeId = useInitiativeStore(
+    (s) => s.attemptsByInitiativeId,
+  )
+  const outputsByInitiativeId = useInitiativeStore(
+    (s) => s.outputsByInitiativeId,
+  )
+  const loadInitiatives = useInitiativeStore((s) => s.loadInitiatives)
+  const loadAttemptsForSession = useInitiativeStore(
+    (s) => s.loadAttemptsForSession,
+  )
+  const loadAttempts = useInitiativeStore((s) => s.loadAttempts)
+  const loadOutputs = useInitiativeStore((s) => s.loadOutputs)
   const terminalTree = useTerminalStore((s) =>
     activeSessionId ? (s.treesBySessionId[activeSessionId] ?? null) : null,
   )
@@ -70,6 +93,53 @@ export const SessionView: FC = () => {
 
   const session = sessions.find((s) => s.id === activeSessionId) ?? null
   const activityLabel = formatActivityLabel(session?.activity)
+  const linkedSessionAttempts = session
+    ? (attemptsBySessionId[session.id] ?? [])
+    : []
+  const linkedAttempt = linkedSessionAttempts[0] ?? null
+  const linkedInitiative =
+    linkedAttempt !== null
+      ? (initiatives.find(
+          (initiative) => initiative.id === linkedAttempt.initiativeId,
+        ) ?? null)
+      : null
+  const linkedInitiativeAttempts =
+    linkedInitiative !== null
+      ? (attemptsByInitiativeId[linkedInitiative.id] ?? [])
+      : []
+  const linkedInitiativeOutputs =
+    linkedInitiative !== null
+      ? (outputsByInitiativeId[linkedInitiative.id] ?? [])
+      : []
+
+  const initiativeAttemptViews = useMemo<InitiativeContextAttemptView[]>(
+    () =>
+      linkedInitiativeAttempts.map((attempt) => {
+        const attemptSession =
+          sessions.find((entry) => entry.id === attempt.sessionId) ??
+          globalSessions.find((entry) => entry.id === attempt.sessionId) ??
+          null
+        const project = attemptSession
+          ? projects.find((entry) => entry.id === attemptSession.projectId)
+          : null
+        const workspace =
+          attemptSession?.workspaceId !== null &&
+          attemptSession?.workspaceId !== undefined
+            ? (workspaces.find(
+                (entry) => entry.id === attemptSession.workspaceId,
+              ) ?? null)
+            : null
+
+        return {
+          attempt,
+          sessionName: attemptSession?.name ?? 'Unknown session',
+          projectName: project?.name ?? 'Unknown project',
+          branchName: workspace?.branchName ?? null,
+          providerId: attemptSession?.providerId ?? 'unknown',
+        }
+      }),
+    [globalSessions, linkedInitiativeAttempts, projects, sessions, workspaces],
+  )
 
   const scrollToBottom = useCallback(() => {
     transcriptEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -78,6 +148,18 @@ export const SessionView: FC = () => {
   useEffect(() => {
     scrollToBottom()
   }, [activeConversation.length, scrollToBottom])
+
+  useEffect(() => {
+    if (!session) return
+    void loadInitiatives()
+    void loadAttemptsForSession(session.id)
+  }, [loadAttemptsForSession, loadInitiatives, session])
+
+  useEffect(() => {
+    if (!linkedInitiative) return
+    void loadAttempts(linkedInitiative.id)
+    void loadOutputs(linkedInitiative.id)
+  }, [linkedInitiative, loadAttempts, loadOutputs])
 
   useEffect(() => {
     if (!changedFilesExpanded) {
@@ -340,6 +422,19 @@ export const SessionView: FC = () => {
                 )}
                 {session.providerId !== 'shell' && (
                   <DropdownMenuItem
+                    onClick={() =>
+                      openDialog('initiative-session-link', {
+                        sessionId: session.id,
+                      })
+                    }
+                    className="gap-2"
+                  >
+                    <Link2 className="h-3.5 w-3.5" />
+                    Link to Initiative...
+                  </DropdownMenuItem>
+                )}
+                {session.providerId !== 'shell' && (
+                  <DropdownMenuItem
                     onClick={() => {
                       void setPrimarySurface(
                         session.id,
@@ -439,6 +534,17 @@ export const SessionView: FC = () => {
             {renderChangedFilesPanel()}
           </div>
         )}
+
+      {linkedInitiative && !changedFilesExpanded && (
+        <InitiativeContextPanel
+          initiative={linkedInitiative}
+          attempts={initiativeAttemptViews}
+          outputs={linkedInitiativeOutputs}
+          onOpenInitiative={(initiativeId) =>
+            openDialog('initiative-workboard', { initiativeId })
+          }
+        />
+      )}
 
       {showChangedFiles && changedFilesExpanded && (
         <div

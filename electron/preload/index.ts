@@ -26,6 +26,40 @@ contextBridge.exposeInMainWorld('electronAPI', {
       },
     ) => ipcRenderer.invoke('project:updateSettings', id, settings),
   },
+  initiative: {
+    list: () => ipcRenderer.invoke('initiative:list'),
+    getById: (id: string) => ipcRenderer.invoke('initiative:getById', id),
+    create: (input: unknown) => ipcRenderer.invoke('initiative:create', input),
+    update: (id: string, input: unknown) =>
+      ipcRenderer.invoke('initiative:update', id, input),
+    delete: (id: string) => ipcRenderer.invoke('initiative:delete', id),
+    listAttempts: (initiativeId: string) =>
+      ipcRenderer.invoke('initiative:listAttempts', initiativeId),
+    listAttemptsForSession: (sessionId: string) =>
+      ipcRenderer.invoke('initiative:listAttemptsForSession', sessionId),
+    linkAttempt: (input: unknown) =>
+      ipcRenderer.invoke('initiative:linkAttempt', input),
+    updateAttempt: (id: string, input: unknown) =>
+      ipcRenderer.invoke('initiative:updateAttempt', id, input),
+    unlinkAttempt: (id: string) =>
+      ipcRenderer.invoke('initiative:unlinkAttempt', id),
+    setPrimaryAttempt: (initiativeId: string, attemptId: string) =>
+      ipcRenderer.invoke(
+        'initiative:setPrimaryAttempt',
+        initiativeId,
+        attemptId,
+      ),
+    listOutputs: (initiativeId: string) =>
+      ipcRenderer.invoke('initiative:listOutputs', initiativeId),
+    addOutput: (input: unknown) =>
+      ipcRenderer.invoke('initiative:addOutput', input),
+    updateOutput: (id: string, input: unknown) =>
+      ipcRenderer.invoke('initiative:updateOutput', id, input),
+    deleteOutput: (id: string) =>
+      ipcRenderer.invoke('initiative:deleteOutput', id),
+    synthesize: (initiativeId: string, requestId?: string) =>
+      ipcRenderer.invoke('initiative:synthesize', initiativeId, requestId),
+  },
   dialog: {
     selectDirectory: () => ipcRenderer.invoke('dialog:selectDirectory'),
   },
@@ -47,6 +81,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.invoke('git:getAllBranches', repoPath),
     getCurrentBranch: (repoPath: string) =>
       ipcRenderer.invoke('git:getCurrentBranch', repoPath),
+    getBranchOutputFacts: (repoPath: string) =>
+      ipcRenderer.invoke('git:getBranchOutputFacts', repoPath),
     getStatus: (repoPath: string) =>
       ipcRenderer.invoke('git:getStatus', repoPath),
     getDiff: (repoPath: string, filePath?: string) =>
@@ -96,10 +132,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.invoke('session:rename', id, name),
     regenerateName: (id: string) =>
       ipcRenderer.invoke('session:regenerateName', id),
-    setPrimarySurface: (
-      id: string,
-      surface: 'conversation' | 'terminal',
-    ) => ipcRenderer.invoke('session:setPrimarySurface', id, surface),
+    setPrimarySurface: (id: string, surface: 'conversation' | 'terminal') =>
+      ipcRenderer.invoke('session:setPrimarySurface', id, surface),
     getNeedsYouDismissals: () =>
       ipcRenderer.invoke('session:getNeedsYouDismissals'),
     setNeedsYouDismissals: (dismissals: unknown) =>

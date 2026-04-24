@@ -32,6 +32,12 @@ function execAllowExitCodes(
   })
 }
 
+export interface BranchOutputFacts {
+  branchName: string
+  upstreamBranch: string | null
+  remoteUrl: string | null
+}
+
 export class GitService {
   private async refExists(repoPath: string, ref: string): Promise<boolean> {
     try {
@@ -79,6 +85,27 @@ export class GitService {
 
   async getCurrentBranch(repoPath: string): Promise<string> {
     return exec('git', ['rev-parse', '--abbrev-ref', 'HEAD'], repoPath)
+  }
+
+  async getBranchOutputFacts(repoPath: string): Promise<BranchOutputFacts> {
+    const branchName = await this.getCurrentBranch(repoPath)
+    const upstreamBranch = await exec(
+      'git',
+      ['rev-parse', '--abbrev-ref', '@{upstream}'],
+      repoPath,
+    ).catch(() => null)
+    const remoteName = upstreamBranch?.split('/')[0] ?? null
+    const remoteUrl = remoteName
+      ? await exec('git', ['remote', 'get-url', remoteName], repoPath).catch(
+          () => null,
+        )
+      : null
+
+    return {
+      branchName,
+      upstreamBranch,
+      remoteUrl,
+    }
   }
 
   async branchExists(repoPath: string, branchName: string): Promise<boolean> {

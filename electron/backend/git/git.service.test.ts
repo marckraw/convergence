@@ -36,6 +36,40 @@ describe('GitService', () => {
     })
   })
 
+  describe('getBranchOutputFacts', () => {
+    it('returns the current branch without upstream facts', async () => {
+      execFileSync('git', ['checkout', '-b', 'feature-output'], {
+        cwd: repoPath,
+      })
+
+      await expect(service.getBranchOutputFacts(repoPath)).resolves.toEqual({
+        branchName: 'feature-output',
+        upstreamBranch: null,
+        remoteUrl: null,
+      })
+    })
+
+    it('returns upstream and remote URL facts when configured', async () => {
+      const remotePath = join(tempDir, 'remote.git')
+      execFileSync('git', ['init', '--bare', remotePath])
+      execFileSync('git', ['remote', 'add', 'origin', remotePath], {
+        cwd: repoPath,
+      })
+      execFileSync('git', ['checkout', '-b', 'feature-output'], {
+        cwd: repoPath,
+      })
+      execFileSync('git', ['push', '-u', 'origin', 'feature-output'], {
+        cwd: repoPath,
+      })
+
+      await expect(service.getBranchOutputFacts(repoPath)).resolves.toEqual({
+        branchName: 'feature-output',
+        upstreamBranch: 'origin/feature-output',
+        remoteUrl: remotePath,
+      })
+    })
+  })
+
   describe('getBranches', () => {
     it('lists all local branches', async () => {
       execFileSync('git', ['checkout', '-b', 'feature-1'], { cwd: repoPath })

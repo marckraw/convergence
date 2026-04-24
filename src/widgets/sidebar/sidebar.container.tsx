@@ -10,6 +10,7 @@ import {
 import { useNotificationsStore } from '@/entities/notifications'
 import {
   AppSettingsDialogContainer,
+  InitiativeWorkboardDialogContainer,
   McpServersDialogContainer,
   ProjectSettingsDialogContainer,
   ProviderStatusDialogContainer,
@@ -261,6 +262,9 @@ export const Sidebar: FC<SidebarProps> = ({
           <Plus className="h-4 w-4" />
           Open a project
         </Button>
+        <div className="mt-2">
+          <InitiativeWorkboardDialogContainer />
+        </div>
         <div className="mt-2">
           <ProjectSettingsDialogContainer />
         </div>

@@ -25,6 +25,146 @@ interface CreateProjectInput {
   name?: string
 }
 
+type InitiativeStatusData =
+  | 'exploring'
+  | 'planned'
+  | 'implementing'
+  | 'reviewing'
+  | 'ready-to-merge'
+  | 'merged'
+  | 'released'
+  | 'parked'
+  | 'discarded'
+
+type InitiativeAttentionData =
+  | 'none'
+  | 'needs-you'
+  | 'needs-decision'
+  | 'blocked'
+  | 'stale'
+
+type InitiativeAttemptRoleData =
+  | 'seed'
+  | 'exploration'
+  | 'implementation'
+  | 'review'
+  | 'hardening'
+  | 'docs'
+
+type InitiativeOutputKindData =
+  | 'pull-request'
+  | 'branch'
+  | 'commit-range'
+  | 'release'
+  | 'spec'
+  | 'documentation'
+  | 'migration-note'
+  | 'external-issue'
+  | 'other'
+
+type InitiativeOutputStatusData =
+  | 'planned'
+  | 'in-progress'
+  | 'ready'
+  | 'merged'
+  | 'released'
+  | 'abandoned'
+
+interface InitiativeData {
+  id: string
+  title: string
+  status: InitiativeStatusData
+  attention: InitiativeAttentionData
+  currentUnderstanding: string
+  createdAt: string
+  updatedAt: string
+}
+
+interface InitiativeAttemptData {
+  id: string
+  initiativeId: string
+  sessionId: string
+  role: InitiativeAttemptRoleData
+  isPrimary: boolean
+  createdAt: string
+}
+
+interface InitiativeOutputData {
+  id: string
+  initiativeId: string
+  kind: InitiativeOutputKindData
+  label: string
+  value: string
+  sourceSessionId: string | null
+  status: InitiativeOutputStatusData
+  createdAt: string
+  updatedAt: string
+}
+
+interface CreateInitiativeInputData {
+  title: string
+  status?: InitiativeStatusData
+  attention?: InitiativeAttentionData
+  currentUnderstanding?: string
+}
+
+interface UpdateInitiativeInputData {
+  title?: string
+  status?: InitiativeStatusData
+  attention?: InitiativeAttentionData
+  currentUnderstanding?: string
+}
+
+interface LinkInitiativeAttemptInputData {
+  initiativeId: string
+  sessionId: string
+  role?: InitiativeAttemptRoleData
+  isPrimary?: boolean
+}
+
+interface UpdateInitiativeAttemptInputData {
+  role?: InitiativeAttemptRoleData
+}
+
+interface CreateInitiativeOutputInputData {
+  initiativeId: string
+  kind: InitiativeOutputKindData
+  label: string
+  value: string
+  sourceSessionId?: string | null
+  status?: InitiativeOutputStatusData
+}
+
+interface UpdateInitiativeOutputInputData {
+  kind?: InitiativeOutputKindData
+  label?: string
+  value?: string
+  sourceSessionId?: string | null
+  status?: InitiativeOutputStatusData
+}
+
+interface InitiativeSynthesisOutputSuggestionData {
+  kind: InitiativeOutputKindData
+  label: string
+  value: string
+  sourceSessionId: string | null
+  status: InitiativeOutputStatusData
+}
+
+interface InitiativeSynthesisResultData {
+  currentUnderstanding: string
+  decisions: string[]
+  openQuestions: string[]
+  nextAction: string
+  outputs: InitiativeSynthesisOutputSuggestionData[]
+}
+
+interface BranchOutputFactsData {
+  branchName: string
+  upstreamBranch: string | null
+  remoteUrl: string | null
+}
+
 interface WorkspaceData {
   id: string
   projectId: string
@@ -349,6 +489,45 @@ interface ElectronAPI {
       settings: ProjectSettings,
     ) => Promise<ProjectData>
   }
+  initiative: {
+    list: () => Promise<InitiativeData[]>
+    getById: (id: string) => Promise<InitiativeData | null>
+    create: (input: CreateInitiativeInputData) => Promise<InitiativeData>
+    update: (
+      id: string,
+      input: UpdateInitiativeInputData,
+    ) => Promise<InitiativeData>
+    delete: (id: string) => Promise<void>
+    listAttempts: (initiativeId: string) => Promise<InitiativeAttemptData[]>
+    listAttemptsForSession: (
+      sessionId: string,
+    ) => Promise<InitiativeAttemptData[]>
+    linkAttempt: (
+      input: LinkInitiativeAttemptInputData,
+    ) => Promise<InitiativeAttemptData>
+    updateAttempt: (
+      id: string,
+      input: UpdateInitiativeAttemptInputData,
+    ) => Promise<InitiativeAttemptData>
+    unlinkAttempt: (id: string) => Promise<void>
+    setPrimaryAttempt: (
+      initiativeId: string,
+      attemptId: string,
+    ) => Promise<InitiativeAttemptData>
+    listOutputs: (initiativeId: string) => Promise<InitiativeOutputData[]>
+    addOutput: (
+      input: CreateInitiativeOutputInputData,
+    ) => Promise<InitiativeOutputData>
+    updateOutput: (
+      id: string,
+      input: UpdateInitiativeOutputInputData,
+    ) => Promise<InitiativeOutputData>
+    deleteOutput: (id: string) => Promise<void>
+    synthesize: (
+      initiativeId: string,
+      requestId?: string,
+    ) => Promise<InitiativeSynthesisResultData>
+  }
   dialog: {
     selectDirectory: () => Promise<string | null>
   }
@@ -362,6 +541,7 @@ interface ElectronAPI {
     getBranches: (repoPath: string) => Promise<string[]>
     getAllBranches: (repoPath: string) => Promise<string[]>
     getCurrentBranch: (repoPath: string) => Promise<string>
+    getBranchOutputFacts: (repoPath: string) => Promise<BranchOutputFactsData>
     getStatus: (
       repoPath: string,
     ) => Promise<Array<{ status: string; file: string }>>

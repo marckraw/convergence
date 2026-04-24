@@ -37,6 +37,11 @@ interface DialogDescriptor {
 
 export const PALETTE_DIALOGS: DialogDescriptor[] = [
   {
+    kind: 'initiative-workboard',
+    title: 'Initiatives',
+    description: 'Global workboard for agent-driven delivery',
+  },
+  {
     kind: 'app-settings',
     title: 'App Settings',
     description: 'Preferences, providers, and appearance',
