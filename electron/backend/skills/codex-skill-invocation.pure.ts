@@ -1,9 +1,15 @@
 import type {
   ProviderSkillCatalog,
-  SkillCatalogEntry,
   SkillInvocationStatus,
   SkillSelection,
 } from './skills.types'
+import {
+  markSkillSelectionsStatus,
+  selectionFromCatalogEntry,
+  uniqueSkillSelections,
+} from './skill-invocation.pure'
+
+export { markSkillSelectionsStatus } from './skill-invocation.pure'
 
 export interface CodexSkillInput {
   name: string
@@ -22,49 +28,6 @@ export type CodexSkillInvocationResolution =
       status: Extract<SkillInvocationStatus, 'unavailable' | 'failed'>
       message: string
     }
-
-function selectionFromCatalogEntry(
-  entry: SkillCatalogEntry,
-  status: SkillInvocationStatus,
-): SkillSelection {
-  return {
-    id: entry.id,
-    providerId: entry.providerId,
-    providerName: entry.providerName,
-    name: entry.name,
-    displayName: entry.displayName,
-    path: entry.path,
-    scope: entry.scope,
-    rawScope: entry.rawScope,
-    sourceLabel: entry.sourceLabel,
-    status,
-  }
-}
-
-export function markSkillSelectionsStatus(
-  selections: SkillSelection[] | undefined,
-  status: SkillInvocationStatus,
-): SkillSelection[] | undefined {
-  if (!selections || selections.length === 0) {
-    return undefined
-  }
-
-  return selections.map((selection) => ({
-    ...selection,
-    status,
-  }))
-}
-
-function uniqueSelections(selections: SkillSelection[]): SkillSelection[] {
-  const seen = new Set<string>()
-  return selections.filter((selection) => {
-    if (seen.has(selection.id)) {
-      return false
-    }
-    seen.add(selection.id)
-    return true
-  })
-}
 
 function unavailable(
   selections: SkillSelection[],
@@ -97,7 +60,7 @@ export function resolveCodexSkillInvocation(input: {
   catalog: ProviderSkillCatalog
   selections?: SkillSelection[]
 }): CodexSkillInvocationResolution {
-  const selections = uniqueSelections(input.selections ?? [])
+  const selections = uniqueSkillSelections(input.selections ?? [])
   if (selections.length === 0) {
     return { ok: true, skillInputs: [] }
   }

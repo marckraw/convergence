@@ -37,6 +37,14 @@ import {
   buildContinuationRecoveryEntry,
   isMissingContinuationError,
 } from '../continuation-recovery.pure'
+import { PiSkillsService } from '../../skills/pi-skills.service'
+import {
+  failedNativeSkillInvocation,
+  resolveNativeSkillInvocation,
+  type NativeSkillInvocationResolution,
+} from '../../skills/native-skill-invocation.pure'
+import { markSkillSelectionsStatus } from '../../skills/skill-invocation.pure'
+import type { SkillSelection } from '../../skills/skills.types'
 
 function now(): string {
   return new Date().toISOString()
@@ -48,6 +56,7 @@ export class PiProvider implements Provider {
   supportsContinuation = true
 
   private descriptorPromise: Promise<ProviderDescriptor> | null = null
+  private readonly skillsService = new PiSkillsService()
 
   constructor(private binaryPath: string) {}
 
@@ -75,6 +84,7 @@ export class PiProvider implements Provider {
 
   start(config: SessionStartConfig): SessionHandle {
     const binaryPath = this.binaryPath
+    const skillsService = this.skillsService
     const listeners = {
       delta: [] as ((delta: SessionDelta) => void)[],
       status: [] as ((status: SessionStatus) => void)[],
@@ -95,12 +105,16 @@ export class PiProvider implements Provider {
     let currentTurn: {
       message: string
       attachments?: Attachment[]
+      skillSelections?: SkillSelection[]
+      userMessageItemId: string | null
       allowContinuationRecovery: boolean
       usedContinuationToken: boolean
     } | null = null
     let pendingRecoveryTurn: {
       message: string
       attachments?: Attachment[]
+      skillSelections?: SkillSelection[]
+      userMessageItemId: string | null
     } | null = null
     let sawTurnActivity = false
     const pendingToolCallArgs = new Map<
@@ -189,6 +203,8 @@ export class PiProvider implements Provider {
       pendingRecoveryTurn = {
         message: currentTurn.message,
         attachments: currentTurn.attachments,
+        skillSelections: currentTurn.skillSelections,
+        userMessageItemId: currentTurn.userMessageItemId,
       }
       const recoveryEntry = buildContinuationRecoveryEntry('Pi Agent', now())
       sessionEmitter.addNote({
@@ -215,7 +231,9 @@ export class PiProvider implements Provider {
 
       const recoveryTurn = pendingRecoveryTurn
       pendingRecoveryTurn = null
-      spawnPi(recoveryTurn.message, recoveryTurn.attachments, {
+      void spawnPi(recoveryTurn.message, recoveryTurn.attachments, {
+        skillSelections: recoveryTurn.skillSelections,
+        userMessageItemId: recoveryTurn.userMessageItemId,
         emitUserEntry: false,
         allowContinuationRecovery: false,
       })
@@ -474,9 +492,71 @@ export class PiProvider implements Provider {
       return parts
     }
 
+    async function resolveSelectedSkills(
+      text: string,
+      selections: SkillSelection[] | undefined,
+    ): Promise<NativeSkillInvocationResolution> {
+      if (!selections || selections.length === 0) {
+        return {
+          ok: true,
+          commandText: '',
+          promptText: text,
+        }
+      }
+
+      try {
+        const catalog = await skillsService.list(config.workingDirectory, {
+          forceReload: true,
+        })
+        return resolveNativeSkillInvocation({
+          providerId: 'pi',
+          providerName: 'Pi Agent',
+          catalog,
+          selections,
+          syntax: 'pi-skill-slash',
+          text,
+        })
+      } catch (err) {
+        return failedNativeSkillInvocation({
+          providerName: 'Pi Agent',
+          selections,
+          error: err,
+        })
+      }
+    }
+
+    function addSkillInvocationFailureNote(
+      resolution: Extract<NativeSkillInvocationResolution, { ok: false }>,
+    ): void {
+      sessionEmitter.addNote({
+        text: `Pi skill ${resolution.status}: ${resolution.message}`,
+        level: 'error',
+      })
+    }
+
+    function patchUserMessageSkills(
+      userMessageItemId: string | null,
+      selections: SkillSelection[] | undefined,
+      status: Parameters<typeof markSkillSelectionsStatus>[1],
+    ): void {
+      if (!userMessageItemId) {
+        return
+      }
+      const updatedSelections = markSkillSelectionsStatus(selections, status)
+      if (!updatedSelections) {
+        return
+      }
+
+      sessionEmitter.patchMessage(userMessageItemId, {
+        skillSelections: updatedSelections,
+      })
+    }
+
     function sendPromptFromPayload(
       message: string,
       images: ReturnType<typeof buildPiPromptPayload>['images'],
+      skillSelections?: SkillSelection[],
+      userMessageItemId?: string | null,
     ): void {
       if (!rpc || stopped) return
 
@@ -500,10 +580,21 @@ export class PiProvider implements Provider {
               text: `Prompt failed: ${response.error ?? 'unknown error'}`,
               level: 'error',
             })
+            patchUserMessageSkills(
+              userMessageItemId ?? null,
+              skillSelections,
+              'failed',
+            )
             setStatus('failed')
             setAttention('failed')
             currentTurn = null
+            return
           }
+          patchUserMessageSkills(
+            userMessageItemId ?? null,
+            skillSelections,
+            'sent',
+          )
         },
         (err) => {
           if (stopped) return
@@ -516,6 +607,11 @@ export class PiProvider implements Provider {
             text: `Prompt error: ${err instanceof Error ? err.message : String(err)}`,
             level: 'error',
           })
+          patchUserMessageSkills(
+            userMessageItemId ?? null,
+            skillSelections,
+            'failed',
+          )
           setStatus('failed')
           setAttention('failed')
           currentTurn = null
@@ -526,16 +622,28 @@ export class PiProvider implements Provider {
     function sendPromptWithAttachments(
       text: string,
       attachments?: Attachment[],
+      skillSelections?: SkillSelection[],
+      userMessageItemId?: string | null,
     ): void {
       if (!rpc || stopped) return
       loadPiParts(attachments)
         .then((parts) => {
           if (stopped) return
           const payload = buildPiPromptPayload({ text, parts })
-          sendPromptFromPayload(payload.message, payload.images)
+          sendPromptFromPayload(
+            payload.message,
+            payload.images,
+            skillSelections,
+            userMessageItemId,
+          )
         })
         .catch((err) => {
           if (stopped) return
+          patchUserMessageSkills(
+            userMessageItemId ?? null,
+            skillSelections,
+            'failed',
+          )
           sessionEmitter.addNote({
             text: `Failed to send attachments: ${err instanceof Error ? err.message : String(err)}`,
             level: 'error',
@@ -545,15 +653,74 @@ export class PiProvider implements Provider {
         })
     }
 
-    function spawnPi(
+    async function sendPiTurn(
+      text: string,
+      attachments?: Attachment[],
+      skillSelections?: SkillSelection[],
+    ): Promise<void> {
+      const skillResolution = await resolveSelectedSkills(text, skillSelections)
+      if (stopped || !rpc) return
+
+      const userMessageItemId = sessionEmitter.addUserMessage({
+        text,
+        skillSelections: skillResolution.skillSelections,
+      })
+      if (!skillResolution.ok) {
+        addSkillInvocationFailureNote(skillResolution)
+        setStatus('failed')
+        setAttention('failed')
+        return
+      }
+
+      currentTurn = {
+        message: text,
+        attachments,
+        skillSelections,
+        userMessageItemId,
+        allowContinuationRecovery: true,
+        usedContinuationToken: !!sessionFile,
+      }
+      setStatus('running')
+      setAttention('none')
+      sendPromptWithAttachments(
+        skillResolution.promptText,
+        attachments,
+        skillResolution.skillSelections,
+        userMessageItemId,
+      )
+    }
+
+    async function spawnPi(
       initialMessage: string,
       initialAttachments?: Attachment[],
       options?: {
+        skillSelections?: SkillSelection[]
+        userMessageItemId?: string | null
         emitUserEntry?: boolean
         allowContinuationRecovery?: boolean
       },
-    ): void {
+    ): Promise<void> {
       if (stopped || child || rpc) return
+
+      const skillResolution = await resolveSelectedSkills(
+        initialMessage,
+        options?.skillSelections,
+      )
+      if (stopped || child || rpc) return
+
+      const userMessageItemId =
+        options?.emitUserEntry !== false
+          ? sessionEmitter.addUserMessage({
+              text: initialMessage,
+              skillSelections: skillResolution.skillSelections,
+            })
+          : (options?.userMessageItemId ?? null)
+      if (!skillResolution.ok) {
+        addSkillInvocationFailureNote(skillResolution)
+        setStatus('failed')
+        setAttention('failed')
+        return
+      }
 
       const args = ['--mode', 'rpc']
       if (sessionFile) {
@@ -574,6 +741,11 @@ export class PiProvider implements Provider {
       })
 
       if (!child.stdin || !child.stdout) {
+        patchUserMessageSkills(
+          userMessageItemId,
+          skillResolution.skillSelections,
+          'failed',
+        )
         sessionEmitter.addNote({
           text: 'Failed to open stdio',
           level: 'error',
@@ -612,6 +784,11 @@ export class PiProvider implements Provider {
           return
         }
         if (code !== 0 && code !== null) {
+          patchUserMessageSkills(
+            userMessageItemId,
+            skillResolution.skillSelections,
+            'failed',
+          )
           sessionEmitter.addNote({
             text: `Process exited with code ${code}`,
             level: 'error',
@@ -624,6 +801,11 @@ export class PiProvider implements Provider {
 
       child.on('error', (err) => {
         if (stopped) return
+        patchUserMessageSkills(
+          userMessageItemId,
+          skillResolution.skillSelections,
+          'failed',
+        )
         sessionEmitter.addNote({
           text: `Process error: ${err.message}`,
           level: 'error',
@@ -640,19 +822,26 @@ export class PiProvider implements Provider {
       currentTurn = {
         message: initialMessage,
         attachments: initialAttachments,
+        skillSelections: options?.skillSelections,
+        userMessageItemId,
         allowContinuationRecovery: options?.allowContinuationRecovery ?? true,
         usedContinuationToken: !!sessionFile,
       }
-      if (options?.emitUserEntry !== false) {
-        sessionEmitter.addUserMessage({ text: initialMessage })
-      }
       setStatus('running')
       setAttention('none')
-      sendPromptWithAttachments(initialMessage, initialAttachments)
+      sendPromptWithAttachments(
+        skillResolution.promptText,
+        initialAttachments,
+        skillResolution.skillSelections,
+        userMessageItemId,
+      )
     }
 
     setTimeout(
-      () => spawnPi(config.initialMessage, config.initialAttachments),
+      () =>
+        void spawnPi(config.initialMessage, config.initialAttachments, {
+          skillSelections: config.initialSkillSelections,
+        }),
       10,
     )
 
@@ -676,16 +865,13 @@ export class PiProvider implements Provider {
       onActivityChange: (cb) => {
         listeners.activity.push(cb)
       },
-      sendMessage: (text, attachments) => {
+      sendMessage: (text, attachments, skillSelections) => {
         if (stopped) return
         if (!rpc) {
-          spawnPi(text, attachments)
+          void spawnPi(text, attachments, { skillSelections })
           return
         }
-        sessionEmitter.addUserMessage({ text })
-        setStatus('running')
-        setAttention('none')
-        sendPromptWithAttachments(text, attachments)
+        void sendPiTurn(text, attachments, skillSelections)
       },
       approve: () => {
         // Pi has no built-in approval flow in v1 (extension_ui_request is auto-cancelled).

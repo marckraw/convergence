@@ -375,6 +375,8 @@ Detailed phase spec: `docs/specs/first-class-skills-phase-5.md`.
 **Goal:** Invoke selected Claude Code and Pi skills through their native command
 syntax, while preserving honest transcript status.
 
+Detailed phase spec: `docs/specs/first-class-skills-phase-6.md`.
+
 ### Tasks
 
 - Add provider-specific skill invocation formatting:
@@ -433,6 +435,11 @@ syntax, while preserving honest transcript status.
 
 **Goal:** Add `confirmed` skill status only where a provider exposes a stable
 native signal.
+
+Phase 6 note: Claude Code and Pi now receive provider-native command syntax,
+but that send path still exposes only `sent`/failure state. It does not expose
+additional activation confirmation events, so Phase 7 remains a telemetry-only
+confirmation phase with no heuristic fallback.
 
 ### Tasks
 
