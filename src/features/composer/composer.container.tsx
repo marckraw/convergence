@@ -6,15 +6,26 @@ import {
   type ReasoningEffort,
 } from '@/entities/session'
 import { useAppSettingsStore } from '@/entities/app-settings'
+import { useDialogStore } from '@/entities/dialog'
 import {
   attachmentApi,
   useAttachmentStore,
   type Attachment,
   type AttachmentIngestFileInput,
 } from '@/entities/attachment'
+import {
+  skillSelectionFromCatalogEntry,
+  useSkillStore,
+  type SkillCatalogEntry,
+  type SkillSelection,
+} from '@/entities/skill'
 import { Composer } from './composer.presentational'
 import { validateAttachmentsAgainstCapability } from './attachment-capability.pure'
 import { AttachmentPreviewContainer } from './attachment-preview.container'
+import {
+  filterComposerSkills,
+  filterSelectionsForProvider,
+} from './composer-skill-picker.pure'
 
 interface ComposerContainerProps {
   projectId: string
@@ -70,9 +81,13 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
   const [previewAttachment, setPreviewAttachment] = useState<Attachment | null>(
     null,
   )
+  const [skillPickerOpen, setSkillPickerOpen] = useState(false)
+  const [skillQuery, setSkillQuery] = useState('')
+  const [selectedSkills, setSelectedSkills] = useState<SkillSelection[]>([])
   const [isDragging, setIsDragging] = useState(false)
   const dragDepth = useRef(0)
   const providers = useSessionStore((s) => s.providers)
+  const openDialog = useDialogStore((s) => s.open)
   const loadProviders = useSessionStore((s) => s.loadProviders)
   const createAndStartSession = useSessionStore((s) => s.createAndStartSession)
   const sendMessageToSession = useSessionStore((s) => s.sendMessageToSession)
@@ -111,6 +126,10 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
   const removeDraft = useAttachmentStore((s) => s.removeDraft)
   const clearDraft = useAttachmentStore((s) => s.clearDraft)
   const clearRejections = useAttachmentStore((s) => s.clearRejections)
+  const skillCatalog = useSkillStore((s) => s.catalog)
+  const loadSkillCatalog = useSkillStore((s) => s.loadCatalog)
+  const skillCatalogLoading = useSkillStore((s) => s.isCatalogLoading)
+  const skillCatalogError = useSkillStore((s) => s.catalogError)
 
   const attachments = draft?.items ?? []
   const rejections = draft?.rejections ?? []
@@ -121,10 +140,31 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
     () => validateAttachmentsAgainstCapability(attachments, capability),
     [attachments, capability],
   )
+  const skillOptions = useMemo(
+    () =>
+      filterComposerSkills({
+        catalog: skillCatalog,
+        providerId: selection.providerId,
+        query: skillQuery,
+      }),
+    [skillCatalog, selection.providerId, skillQuery],
+  )
 
   useEffect(() => {
     loadProviders()
   }, [loadProviders])
+
+  useEffect(() => {
+    setSelectedSkills([])
+    setSkillQuery('')
+    setSkillPickerOpen(false)
+  }, [projectId, activeSessionId])
+
+  useEffect(() => {
+    setSelectedSkills((current) =>
+      filterSelectionsForProvider(current, selection.providerId),
+    )
+  }, [selection.providerId])
 
   useEffect(() => {
     if (activeSession) {
@@ -174,14 +214,22 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
 
     const attachmentIds = attachments.map((a) => a.id)
     const hasAttachments = attachmentIds.length > 0
+    const skillSelections =
+      selectedSkills.length > 0 ? selectedSkills : undefined
 
     if (activeSession && canContinueActiveSession) {
-      if (hasAttachments) {
-        sendMessageToSession(activeSession.id, trimmed, attachmentIds)
+      if (hasAttachments || skillSelections) {
+        sendMessageToSession(
+          activeSession.id,
+          trimmed,
+          hasAttachments ? attachmentIds : undefined,
+          skillSelections,
+        )
       } else {
         sendMessageToSession(activeSession.id, trimmed)
       }
       setValue('')
+      setSelectedSkills([])
       clearDraft(draftKey)
       return
     }
@@ -189,7 +237,7 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
     const baseName = trimmed || attachments[0]?.filename || 'New session'
     const name =
       baseName.length > 40 ? baseName.substring(0, 40) + '...' : baseName
-    if (hasAttachments) {
+    if (hasAttachments || skillSelections) {
       createAndStartSession(
         projectId,
         workspaceId,
@@ -198,7 +246,8 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
         selection.effort?.id ?? null,
         name,
         trimmed,
-        attachmentIds,
+        hasAttachments ? attachmentIds : undefined,
+        skillSelections,
       )
     } else {
       createAndStartSession(
@@ -212,6 +261,7 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
       )
     }
     setValue('')
+    setSelectedSkills([])
     clearDraft(draftKey)
   }, [
     value,
@@ -219,6 +269,7 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
     selection.modelId,
     selection.effort,
     attachments,
+    selectedSkills,
     capabilityResult.ok,
     activeSession,
     canContinueActiveSession,
@@ -242,6 +293,36 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
     setModelId(nextSelection.modelId)
     setEffortId(nextSelection.effortId)
   }
+
+  const handleSkillPickerOpenChange = useCallback(
+    (nextOpen: boolean) => {
+      setSkillPickerOpen(nextOpen)
+      if (nextOpen) void loadSkillCatalog(projectId)
+    },
+    [loadSkillCatalog, projectId],
+  )
+
+  const handleSkillToggle = useCallback((skill: SkillCatalogEntry) => {
+    if (!skill.enabled) return
+
+    setSelectedSkills((current) => {
+      const existingSelection = current.some(
+        (selection) => selection.id === skill.id,
+      )
+
+      if (existingSelection) {
+        return current.filter((selection) => selection.id !== skill.id)
+      }
+
+      return [...current, skillSelectionFromCatalogEntry(skill)]
+    })
+  }, [])
+
+  const handleSkillRemove = useCallback((skillId: string) => {
+    setSelectedSkills((current) =>
+      current.filter((selection) => selection.id !== skillId),
+    )
+  }, [])
 
   const handleModelChange = (nextModelId: string) => {
     const nextSelection = resolveProviderSelection(
@@ -318,6 +399,11 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
     [draftKey, removeDraft],
   )
 
+  const handleSkillsBrowse = useCallback(() => {
+    setSkillPickerOpen(false)
+    openDialog('skills-browser')
+  }, [openDialog])
+
   return (
     <>
       <Composer
@@ -345,6 +431,17 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
         hasAttachmentErrors={!capabilityResult.ok}
         attachmentsIngestInFlight={ingestInFlight}
         isDragging={isDragging}
+        skillPickerOpen={skillPickerOpen}
+        skillQuery={skillQuery}
+        skillOptions={skillOptions}
+        selectedSkills={selectedSkills}
+        skillCatalogLoading={skillCatalogLoading}
+        skillCatalogError={skillCatalogError}
+        onSkillPickerOpenChange={handleSkillPickerOpenChange}
+        onSkillQueryChange={setSkillQuery}
+        onSkillToggle={handleSkillToggle}
+        onSkillRemove={handleSkillRemove}
+        onSkillsBrowse={handleSkillsBrowse}
         onAttachmentAdd={handleAttachmentAdd}
         onAttachmentRemove={handleAttachmentRemove}
         onAttachmentOpen={setPreviewAttachment}

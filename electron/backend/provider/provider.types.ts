@@ -3,6 +3,12 @@ import type {
   ProviderAttachmentCapability,
 } from '../attachments/attachments.types'
 import type { SessionDelta } from '../session/conversation-item.types'
+import type {
+  SkillActivationConfirmation,
+  SkillCatalogSource,
+  SkillInvocationSupport,
+  SkillSelection,
+} from '../skills/skills.types'
 
 export type { Attachment, ProviderAttachmentCapability }
 
@@ -76,6 +82,7 @@ export interface SessionStartConfig {
   workingDirectory: string
   initialMessage: string
   initialAttachments?: Attachment[]
+  initialSkillSelections?: SkillSelection[]
   model: string | null
   effort: ReasoningEffort | null
   continuationToken: string | null
@@ -107,6 +114,12 @@ export interface ProviderStatusInfo {
 
 export type ProviderKind = 'conversation' | 'shell'
 
+export interface ProviderSkillsCapability {
+  catalog: SkillCatalogSource
+  invocation: SkillInvocationSupport
+  activationConfirmation: SkillActivationConfirmation
+}
+
 export interface ProviderDescriptor {
   id: string
   name: string
@@ -117,6 +130,7 @@ export interface ProviderDescriptor {
   fastModelId?: string | null
   modelOptions: ProviderModelOption[]
   attachments: ProviderAttachmentCapability
+  skills?: ProviderSkillsCapability
 }
 
 export interface OneShotInput {
@@ -141,7 +155,11 @@ export interface SessionHandle {
   ) => void
   onActivityChange: (callback: (activity: ActivitySignal) => void) => void
 
-  sendMessage: (text: string, attachments?: Attachment[]) => void
+  sendMessage: (
+    text: string,
+    attachments?: Attachment[],
+    skillSelections?: SkillSelection[],
+  ) => void
   approve: () => void
   deny: () => void
   stop: () => void

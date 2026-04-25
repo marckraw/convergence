@@ -13,6 +13,7 @@ import type {
   ActivitySignal,
 } from '../provider/provider.types'
 import type { AttachmentsService } from '../attachments/attachments.service'
+import type { SkillSelection } from '../skills/skills.types'
 import {
   sessionSummaryFromRow,
   type Session,
@@ -41,6 +42,7 @@ type UserMessageDraftInput = Omit<UserMessageDraft, 'sessionId' | 'sequence'>
 export interface SendMessageInput {
   text: string
   attachmentIds?: string[]
+  skillSelections?: SkillSelection[]
 }
 
 export interface SessionNamer {
@@ -339,6 +341,7 @@ export class SessionService {
       this.getContinuationToken(id),
       attachments,
       input.attachmentIds,
+      input.skillSelections,
     )
   }
 
@@ -362,7 +365,8 @@ export class SessionService {
     const handle = this.activeHandles.get(id)
     if (handle) {
       this.pendingUserAttachmentIds.set(id, input.attachmentIds ?? [])
-      handle.sendMessage(input.text, attachments)
+      this.pendingUserSkillSelections.set(id, input.skillSelections ?? [])
+      handle.sendMessage(input.text, attachments, input.skillSelections)
       return
     }
 
@@ -377,6 +381,7 @@ export class SessionService {
         continuationToken,
         attachments,
         input.attachmentIds,
+        input.skillSelections,
       )
       return
     }
@@ -391,6 +396,7 @@ export class SessionService {
   }
 
   private pendingUserAttachmentIds = new Map<string, string[]>()
+  private pendingUserSkillSelections = new Map<string, SkillSelection[]>()
 
   private async rebindDraftAttachments(
     sessionId: string,
@@ -493,6 +499,8 @@ export class SessionService {
 
     const nextSequence = (row.last_sequence ?? 0) + 1
     const pendingAttachments = this.pendingUserAttachmentIds.get(sessionId)
+    const pendingSkillSelections =
+      this.pendingUserSkillSelections.get(sessionId)
     const isUserMessage =
       itemDraft.kind === 'message' &&
       (itemDraft as { actor?: unknown }).actor === 'user'
@@ -511,6 +519,11 @@ export class SessionService {
           (pendingAttachments && pendingAttachments.length > 0
             ? pendingAttachments
             : undefined),
+        skillSelections:
+          userMessageDraft.skillSelections ??
+          (pendingSkillSelections && pendingSkillSelections.length > 0
+            ? pendingSkillSelections
+            : undefined),
       } as ConversationItem
     } else {
       item = {
@@ -523,6 +536,7 @@ export class SessionService {
 
     if (item.kind === 'message' && item.actor === 'user') {
       this.pendingUserAttachmentIds.delete(sessionId)
+      this.pendingUserSkillSelections.delete(sessionId)
     }
 
     const insertRow = conversationItemToInsertRow(item)
@@ -757,6 +771,7 @@ export class SessionService {
     continuationToken: string | null,
     initialAttachments?: Attachment[],
     initialAttachmentIds?: string[],
+    initialSkillSelections?: SkillSelection[],
   ): void {
     const provider = this.providers.get(session.providerId)
     if (!provider) throw new Error(`Provider not found: ${session.providerId}`)
@@ -764,11 +779,15 @@ export class SessionService {
     if (initialAttachmentIds && initialAttachmentIds.length > 0) {
       this.pendingUserAttachmentIds.set(session.id, initialAttachmentIds)
     }
+    if (initialSkillSelections && initialSkillSelections.length > 0) {
+      this.pendingUserSkillSelections.set(session.id, initialSkillSelections)
+    }
 
     const handle = provider.start({
       sessionId: session.id,
       workingDirectory: session.workingDirectory,
       initialMessage,
+      initialSkillSelections,
       model: session.model,
       effort: session.effort,
       continuationToken,

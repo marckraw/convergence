@@ -24,6 +24,7 @@ import { PiProvider } from '../backend/provider/pi/pi-provider'
 import { ShellProvider } from '../backend/provider/shell/shell-provider'
 import { detectProviders } from '../backend/provider/detect'
 import { McpService } from '../backend/mcp/mcp.service'
+import { SkillsService } from '../backend/skills/skills.service'
 import { AppSettingsService } from '../backend/app-settings/app-settings.service'
 import { AttachmentsService } from '../backend/attachments/attachments.service'
 import { NotificationsService } from '../backend/notifications/notifications.service'
@@ -204,6 +205,7 @@ async function startApp(): Promise<void> {
   )
 
   const mcpService = new McpService(projectService, detected)
+  const skillsService = new SkillsService(projectService, detected)
 
   const appSettingsService = new AppSettingsService(stateService, async () =>
     Promise.all(providerRegistry.getAll().map((p) => p.describe())),
@@ -372,6 +374,7 @@ async function startApp(): Promise<void> {
     sessionService,
     providerRegistry,
     mcpService,
+    skillsService,
     appSettingsService,
     attachmentsService,
     turnCaptureService,

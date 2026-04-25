@@ -22,6 +22,11 @@ const SHELL_DESCRIPTOR: ProviderDescriptor = {
     maxTextBytes: 0,
     maxTotalBytes: 0,
   },
+  skills: {
+    catalog: 'unsupported',
+    invocation: 'unsupported',
+    activationConfirmation: 'none',
+  },
 }
 
 function noopHandle(): SessionHandle {

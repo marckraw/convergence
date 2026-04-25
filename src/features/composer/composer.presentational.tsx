@@ -1,16 +1,19 @@
-import type { FC, ClipboardEvent, DragEvent } from 'react'
+import type { FC, ClipboardEvent, DragEvent, KeyboardEvent } from 'react'
 import type {
   ProviderInfo,
   ReasoningEffort,
   ResolvedProviderSelection,
 } from '@/entities/session'
 import type { Attachment } from '@/entities/attachment'
+import type { SkillCatalogEntry, SkillSelection } from '@/entities/skill'
 import { Button } from '@/shared/ui/button'
 import { Textarea } from '@/shared/ui/textarea'
 import { cn } from '@/shared/lib/cn.pure'
 import { ArrowUp, Paperclip } from 'lucide-react'
 import { ComposerSelect } from './composer-select.presentational'
 import { AttachmentsRow } from './attachments-row.presentational'
+import { SkillPicker } from './skill-picker.presentational'
+import { SkillSelectionChip } from './skill-selection-chip.presentational'
 
 interface ComposerProps {
   value: string
@@ -29,7 +32,18 @@ interface ComposerProps {
   hasAttachmentErrors: boolean
   attachmentsIngestInFlight: boolean
   isDragging: boolean
+  skillPickerOpen: boolean
+  skillQuery: string
+  skillOptions: SkillCatalogEntry[]
+  selectedSkills: SkillSelection[]
+  skillCatalogLoading: boolean
+  skillCatalogError: string | null
+  onSkillPickerOpenChange: (open: boolean) => void
+  onSkillQueryChange: (query: string) => void
+  onSkillToggle: (skill: SkillCatalogEntry) => void
+  onSkillRemove: (skillId: string) => void
   onAttachmentAdd: () => void
+  onSkillsBrowse: () => void
   onAttachmentRemove: (attachmentId: string) => void
   onAttachmentOpen: (attachment: Attachment) => void
   onDragEnter: (e: DragEvent<HTMLDivElement>) => void
@@ -56,6 +70,17 @@ export const Composer: FC<ComposerProps> = ({
   hasAttachmentErrors,
   attachmentsIngestInFlight,
   isDragging,
+  skillPickerOpen,
+  skillQuery,
+  skillOptions,
+  selectedSkills,
+  skillCatalogLoading,
+  skillCatalogError,
+  onSkillPickerOpenChange,
+  onSkillQueryChange,
+  onSkillToggle,
+  onSkillRemove,
+  onSkillsBrowse,
   onAttachmentAdd,
   onAttachmentRemove,
   onAttachmentOpen,
@@ -65,7 +90,7 @@ export const Composer: FC<ComposerProps> = ({
   onDrop,
   onPaste,
 }) => {
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+  const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
       e.preventDefault()
       if (
@@ -130,6 +155,20 @@ export const Composer: FC<ComposerProps> = ({
           onOpen={onAttachmentOpen}
           onRemove={onAttachmentRemove}
         />
+        {selectedSkills.length > 0 ? (
+          <div
+            className="mb-2 flex flex-wrap gap-1.5"
+            data-testid="selected-skills-row"
+          >
+            {selectedSkills.map((selection) => (
+              <SkillSelectionChip
+                key={selection.id}
+                selection={selection}
+                onRemove={onSkillRemove}
+              />
+            ))}
+          </div>
+        ) : null}
         <Textarea
           value={value}
           onChange={(e) => onChange(e.target.value)}
@@ -154,6 +193,20 @@ export const Composer: FC<ComposerProps> = ({
             >
               <Paperclip className="h-3.5 w-3.5" />
             </Button>
+            <SkillPicker
+              open={skillPickerOpen}
+              onOpenChange={onSkillPickerOpenChange}
+              query={skillQuery}
+              onQueryChange={onSkillQueryChange}
+              skills={skillOptions}
+              selectedSkills={selectedSkills}
+              activeProviderLabel={selection.providerLabel}
+              isLoading={skillCatalogLoading}
+              error={skillCatalogError}
+              disabled={disabled || !selection.provider}
+              onToggleSkill={onSkillToggle}
+              onBrowseAll={onSkillsBrowse}
+            />
             <ComposerSelect
               selectedId={selection.providerId}
               value={selection.providerLabel || 'Select provider'}

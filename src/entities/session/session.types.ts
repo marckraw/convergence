@@ -1,3 +1,10 @@
+import type {
+  SkillActivationConfirmation,
+  SkillCatalogSource,
+  SkillInvocationSupport,
+  SkillSelection,
+} from '@/shared/types/skill.types'
+
 export type SessionStatus = 'idle' | 'running' | 'completed' | 'failed'
 export type AttentionState =
   | 'none'
@@ -100,6 +107,7 @@ export type ConversationItem =
       actor: 'user' | 'assistant'
       text: string
       attachmentIds?: string[]
+      skillSelections?: SkillSelection[]
     })
   | (ConversationItemBase & {
       kind: 'thinking'
@@ -172,6 +180,12 @@ export interface ProviderAttachmentCapability {
   maxTotalBytes: number
 }
 
+export interface ProviderSkillsCapability {
+  catalog: SkillCatalogSource
+  invocation: SkillInvocationSupport
+  activationConfirmation: SkillActivationConfirmation
+}
+
 export interface ProviderInfo {
   id: string
   name: string
@@ -182,6 +196,7 @@ export interface ProviderInfo {
   fastModelId?: string | null
   modelOptions: ProviderModelOption[]
   attachments: ProviderAttachmentCapability
+  skills?: ProviderSkillsCapability
 }
 
 export function isConversationalProvider(provider: {

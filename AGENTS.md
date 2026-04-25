@@ -13,6 +13,7 @@ on the wrong runtime.
 After every finished task, agents must run these commands in this repo:
 
 - `npm install`
+- `npm run typecheck`
 - `npm run test:pure`
 - `npm run test:unit`
 - `chaperone check --fix`

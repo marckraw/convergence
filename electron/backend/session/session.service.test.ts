@@ -797,7 +797,7 @@ describe('SessionService', () => {
     await expect(
       continuationService.sendMessage(session.id, { text: 'Follow up' }),
     ).resolves.not.toThrow()
-    expect(sendMessage).toHaveBeenCalledWith('Follow up', undefined)
+    expect(sendMessage).toHaveBeenCalledWith('Follow up', undefined, undefined)
   })
 
   it('rehydrates continuation-capable sessions after restart', async () => {
@@ -1085,6 +1085,40 @@ describe('SessionService attachments integration', () => {
       (entry) => entry.kind === 'message' && entry.actor === 'user',
     )
     expect(userEntry).toMatchObject({ attachmentIds: [id] })
+  })
+
+  it('persists selected skills on the user conversation item', async () => {
+    const session = service.create({
+      projectId,
+      workspaceId: null,
+      providerId: 'capture',
+      model: 'm',
+      effort: null,
+      name: 's-skills',
+    })
+
+    const skillSelections = [
+      {
+        id: 'codex:global:planning',
+        providerId: 'codex' as const,
+        providerName: 'Codex',
+        name: 'planning',
+        displayName: 'Planning',
+        path: '/skills/planning/SKILL.md',
+        scope: 'global' as const,
+        rawScope: null,
+        sourceLabel: 'Global',
+        status: 'selected' as const,
+      },
+    ]
+    service.start(session.id, { text: 'hi', skillSelections })
+    await new Promise((r) => setTimeout(r, 10))
+
+    const conversation = service.getConversation(session.id)
+    const userEntry = conversation.find(
+      (entry) => entry.kind === 'message' && entry.actor === 'user',
+    )
+    expect(userEntry).toMatchObject({ skillSelections })
   })
 
   it('cascades attachment cleanup on session delete', async () => {

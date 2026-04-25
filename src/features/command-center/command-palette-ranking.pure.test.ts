@@ -3,7 +3,10 @@ import Fuse from 'fuse.js'
 import { DEFAULT_PROJECT_SETTINGS, type Project } from '@/entities/project'
 import type { Workspace } from '@/entities/workspace'
 import type { Session, NeedsYouDismissals } from '@/entities/session'
-import { buildPaletteIndex } from './command-palette-index.pure'
+import {
+  buildPaletteIndex,
+  PALETTE_DIALOGS,
+} from './command-palette-index.pure'
 import {
   buildCuratedSections,
   rankForQuery,
@@ -233,7 +236,7 @@ describe('buildCuratedSections', () => {
     const items = buildItems({ projects: [], workspaces: [], sessions: [] })
     const allSections = buildCuratedSections(items, {}, [])
     const dialogSection = allSections.find((s) => s.id === 'dialogs')!
-    expect(dialogSection.items).toHaveLength(7)
+    expect(dialogSection.items).toHaveLength(PALETTE_DIALOGS.length + 1)
     expect(
       dialogSection.items.some((item) => item.kind === 'check-updates'),
     ).toBe(true)

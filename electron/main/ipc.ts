@@ -13,6 +13,7 @@ import {
 } from '../backend/session/session-recents'
 import { ProviderRegistry } from '../backend/provider/provider-registry'
 import { McpService } from '../backend/mcp/mcp.service'
+import { SkillsService } from '../backend/skills/skills.service'
 import { AppSettingsService } from '../backend/app-settings/app-settings.service'
 import type { AttachmentsService } from '../backend/attachments/attachments.service'
 import type { IngestFileInput } from '../backend/attachments/attachments.types'
@@ -29,6 +30,11 @@ import type {
 import type { CreateWorkspaceInput } from '../backend/workspace/workspace.types'
 import type { CreateSessionInput } from '../backend/session/session.types'
 import type { ProjectSettings } from '../backend/project/project-settings.pure'
+import type {
+  SkillCatalogOptions,
+  SkillDetailsRequest,
+  SkillSelection,
+} from '../backend/skills/skills.types'
 
 interface IngestFileIpcInput {
   name: string
@@ -105,6 +111,7 @@ export function registerIpcHandlers(
   sessionService: SessionService,
   providerRegistry: ProviderRegistry,
   mcpService: McpService,
+  skillsService: SkillsService,
   appSettingsService: AppSettingsService,
   attachmentsService: AttachmentsService,
   turnCaptureService: TurnCaptureService,
@@ -384,11 +391,16 @@ export function registerIpcHandlers(
     async (
       _event,
       id: string,
-      input: { text: string; attachmentIds?: string[] },
+      input: {
+        text: string
+        attachmentIds?: string[]
+        skillSelections?: SkillSelection[]
+      },
     ) => {
       await sessionService.start(id, {
         text: input.text,
         attachmentIds: input.attachmentIds,
+        skillSelections: input.skillSelections,
       })
     },
   )
@@ -398,11 +410,16 @@ export function registerIpcHandlers(
     async (
       _event,
       id: string,
-      input: { text: string; attachmentIds?: string[] },
+      input: {
+        text: string
+        attachmentIds?: string[]
+        skillSelections?: SkillSelection[]
+      },
     ) => {
       await sessionService.sendMessage(id, {
         text: input.text,
         attachmentIds: input.attachmentIds,
+        skillSelections: input.skillSelections,
       })
     },
   )
@@ -494,6 +511,16 @@ export function registerIpcHandlers(
 
   ipcMain.handle('mcp:listByProjectId', (_event, projectId: string) =>
     mcpService.listByProjectId(projectId),
+  )
+
+  ipcMain.handle(
+    'skills:listByProjectId',
+    (_event, projectId: string, options?: SkillCatalogOptions) =>
+      skillsService.listByProjectId(projectId, options),
+  )
+
+  ipcMain.handle('skills:readDetails', (_event, input: SkillDetailsRequest) =>
+    skillsService.readDetails(input),
   )
 
   // Session update event forwarding

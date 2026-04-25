@@ -109,7 +109,13 @@ contextBridge.exposeInMainWorld('electronAPI', {
     delete: (id: string) => ipcRenderer.invoke('session:delete', id),
     start: (
       id: string,
-      input: { text: string; attachmentIds?: string[] } | string,
+      input:
+        | {
+            text: string
+            attachmentIds?: string[]
+            skillSelections?: unknown[]
+          }
+        | string,
     ) =>
       ipcRenderer.invoke(
         'session:start',
@@ -118,7 +124,13 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ),
     sendMessage: (
       id: string,
-      input: { text: string; attachmentIds?: string[] } | string,
+      input:
+        | {
+            text: string
+            attachmentIds?: string[]
+            skillSelections?: unknown[]
+          }
+        | string,
     ) =>
       ipcRenderer.invoke(
         'session:sendMessage',
@@ -184,6 +196,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
   mcp: {
     listByProjectId: (projectId: string) =>
       ipcRenderer.invoke('mcp:listByProjectId', projectId),
+  },
+  skills: {
+    listByProjectId: (projectId: string, options?: { forceReload?: boolean }) =>
+      ipcRenderer.invoke('skills:listByProjectId', projectId, options),
+    readDetails: (input: unknown) =>
+      ipcRenderer.invoke('skills:readDetails', input),
   },
   feedback: {
     submit: (input: {

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { TranscriptEntry } from '../provider/provider.types'
+import type { ConversationItem } from './conversation-item.types'
 import {
   buildConversationItemFromTranscriptEntry,
   conversationItemFromRow,
@@ -147,6 +148,58 @@ describe('conversation-item migration', () => {
       provider_item_id: row.providerItemId,
       provider_event_type: row.providerEventType,
       provider_id: 'pi',
+      created_at: row.createdAt,
+      updated_at: row.updatedAt,
+    })
+
+    expect(roundTripped).toEqual(item)
+  })
+
+  it('round-trips selected skill metadata on user messages', () => {
+    const item: ConversationItem = {
+      id: 'item-1',
+      sessionId: 'session-1',
+      sequence: 1,
+      turnId: 'turn-1',
+      kind: 'message',
+      state: 'complete',
+      actor: 'user',
+      text: 'Use the planning skill.',
+      skillSelections: [
+        {
+          id: 'codex:global:planning',
+          providerId: 'codex',
+          providerName: 'Codex',
+          name: 'planning',
+          displayName: 'Planning',
+          path: '/skills/planning/SKILL.md',
+          scope: 'global',
+          rawScope: null,
+          sourceLabel: 'Global',
+          status: 'selected',
+        },
+      ],
+      createdAt: '2026-01-01T00:00:00.000Z',
+      updatedAt: '2026-01-01T00:00:00.000Z',
+      providerMeta: {
+        providerId: 'codex',
+        providerItemId: null,
+        providerEventType: 'user',
+      },
+    }
+
+    const row = conversationItemToInsertRow(item)
+    const roundTripped = conversationItemFromRow({
+      id: row.id,
+      session_id: row.sessionId,
+      sequence: row.sequence,
+      turn_id: row.turnId,
+      kind: row.kind,
+      state: row.state,
+      payload_json: row.payloadJson,
+      provider_item_id: row.providerItemId,
+      provider_event_type: row.providerEventType,
+      provider_id: 'codex',
       created_at: row.createdAt,
       updated_at: row.updatedAt,
     })

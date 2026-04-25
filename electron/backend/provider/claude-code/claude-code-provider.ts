@@ -34,6 +34,22 @@ import { readClaudeLoggedContextWindow } from './claude-context-log.service'
 import { deriveClaudeActivity } from './claude-code-activity.pure'
 import type { TaskProgressService } from '../../task-progress/task-progress.service'
 import { createTaskProgressEmitter } from '../../task-progress/task-progress.emitter'
+import { ClaudeCodeSkillsService } from '../../skills/claude-code-skills.service'
+import {
+  failedNativeSkillInvocation,
+  resolveNativeSkillInvocation,
+  type NativeSkillInvocationResolution,
+} from '../../skills/native-skill-invocation.pure'
+import { markSkillSelectionsStatus } from '../../skills/skill-invocation.pure'
+import type { SkillSelection } from '../../skills/skills.types'
+import {
+  isConcreteClaudeSkillName,
+  type ClaudeSkillActivationEvent,
+} from './claude-skill-telemetry.pure'
+import {
+  startClaudeSkillTelemetrySink,
+  type ClaudeSkillTelemetrySink,
+} from './claude-skill-telemetry.service'
 
 function now(): string {
   return new Date().toISOString()
@@ -163,6 +179,7 @@ export class ClaudeCodeProvider implements Provider {
   id = 'claude-code'
   name = 'Claude Code'
   supportsContinuation = true
+  private readonly skillsService = new ClaudeCodeSkillsService()
 
   constructor(
     private binaryPath: string,
@@ -179,6 +196,7 @@ export class ClaudeCodeProvider implements Provider {
 
   start(config: SessionStartConfig): SessionHandle {
     const binaryPath = this.binaryPath
+    const skillsService = this.skillsService
     const listeners = {
       delta: [] as ((delta: SessionDelta) => void)[],
       status: [] as ((status: SessionStatus) => void)[],
@@ -197,13 +215,25 @@ export class ClaudeCodeProvider implements Provider {
     let currentTurn: {
       message: string
       attachments?: Attachment[]
+      skillSelections?: SkillSelection[]
+      userMessageItemId: string | null
       allowContinuationRecovery: boolean
       usedContinuationToken: boolean
     } | null = null
     let pendingRecoveryTurn: {
       message: string
       attachments?: Attachment[]
+      skillSelections?: SkillSelection[]
+      userMessageItemId: string | null
     } | null = null
+    let telemetrySinkPromise: Promise<ClaudeSkillTelemetrySink | null> | null =
+      null
+    let latestSkillInvocationTarget: {
+      userMessageItemId: string
+      skillSelections: SkillSelection[]
+    } | null = null
+    let clearSkillInvocationTargetTimer: ReturnType<typeof setTimeout> | null =
+      null
     let sawTurnOutput = false
     let stderrBuffer = ''
 
@@ -220,6 +250,9 @@ export class ClaudeCodeProvider implements Provider {
     function setStatus(status: SessionStatus): void {
       listeners.status.forEach((cb) => cb(status))
       sessionEmitter.patchSession({ status })
+      if (status === 'failed') {
+        disposeTelemetrySink()
+      }
     }
 
     function setAttention(attention: AttentionState): void {
@@ -248,6 +281,91 @@ export class ClaudeCodeProvider implements Provider {
       lastActivity = activity
       listeners.activity.forEach((cb) => cb(activity))
       sessionEmitter.patchSession({ activity })
+    }
+
+    function clearSkillInvocationTargetSoon(): void {
+      if (clearSkillInvocationTargetTimer) {
+        clearTimeout(clearSkillInvocationTargetTimer)
+      }
+      clearSkillInvocationTargetTimer = setTimeout(() => {
+        latestSkillInvocationTarget = null
+        clearSkillInvocationTargetTimer = null
+      }, 30_000)
+    }
+
+    function trackSkillInvocationTarget(
+      userMessageItemId: string | null,
+      skillSelections: SkillSelection[] | undefined,
+    ): void {
+      if (
+        !userMessageItemId ||
+        !skillSelections ||
+        skillSelections.length === 0
+      ) {
+        return
+      }
+
+      latestSkillInvocationTarget = {
+        userMessageItemId,
+        skillSelections,
+      }
+      clearSkillInvocationTargetSoon()
+    }
+
+    function disposeTelemetrySink(): void {
+      if (!telemetrySinkPromise) {
+        return
+      }
+
+      void telemetrySinkPromise
+        .then((sink) => sink?.dispose())
+        .catch(() => {
+          // Telemetry shutdown is best-effort.
+        })
+      telemetrySinkPromise = null
+    }
+
+    function confirmSkillActivation(event: ClaudeSkillActivationEvent): void {
+      const target = latestSkillInvocationTarget
+      if (!target || !isConcreteClaudeSkillName(event.skillName)) {
+        return
+      }
+
+      let changed = false
+      const updatedSelections = target.skillSelections.map((selection) => {
+        if (
+          selection.providerId === 'claude-code' &&
+          selection.name === event.skillName &&
+          selection.status !== 'confirmed'
+        ) {
+          changed = true
+          return {
+            ...selection,
+            status: 'confirmed' as const,
+          }
+        }
+        return selection
+      })
+
+      if (!changed) {
+        return
+      }
+
+      latestSkillInvocationTarget = {
+        userMessageItemId: target.userMessageItemId,
+        skillSelections: updatedSelections,
+      }
+      clearSkillInvocationTargetSoon()
+      sessionEmitter.patchMessage(target.userMessageItemId, {
+        skillSelections: updatedSelections,
+      })
+    }
+
+    function getTelemetrySink(): Promise<ClaudeSkillTelemetrySink | null> {
+      telemetrySinkPromise ??= startClaudeSkillTelemetrySink({
+        onSkillActivated: confirmSkillActivation,
+      })
+      return telemetrySinkPromise
     }
 
     function refreshContextWindowFromLogs(): void {
@@ -316,6 +434,8 @@ export class ClaudeCodeProvider implements Provider {
       pendingRecoveryTurn = {
         message: currentTurn.message,
         attachments: currentTurn.attachments,
+        skillSelections: currentTurn.skillSelections,
+        userMessageItemId: currentTurn.userMessageItemId,
       }
       const recoveryEntry = buildContinuationRecoveryEntry('Claude Code', now())
       sessionEmitter.addNote({
@@ -337,7 +457,9 @@ export class ClaudeCodeProvider implements Provider {
 
       const recoveryTurn = pendingRecoveryTurn
       pendingRecoveryTurn = null
-      startTurn(recoveryTurn.message, recoveryTurn.attachments, {
+      void startTurn(recoveryTurn.message, recoveryTurn.attachments, {
+        skillSelections: recoveryTurn.skillSelections,
+        userMessageItemId: recoveryTurn.userMessageItemId,
         emitUserEntry: false,
         allowContinuationRecovery: false,
       })
@@ -546,14 +668,112 @@ export class ClaudeCodeProvider implements Provider {
       return parts
     }
 
-    function startTurn(
+    async function resolveSelectedSkills(
+      text: string,
+      selections: SkillSelection[] | undefined,
+    ): Promise<NativeSkillInvocationResolution> {
+      if (!selections || selections.length === 0) {
+        return {
+          ok: true,
+          commandText: '',
+          promptText: text,
+        }
+      }
+
+      try {
+        const catalog = await skillsService.list(config.workingDirectory, {
+          forceReload: true,
+        })
+        return resolveNativeSkillInvocation({
+          providerId: 'claude-code',
+          providerName: 'Claude Code',
+          catalog,
+          selections,
+          syntax: 'claude-slash',
+          text,
+        })
+      } catch (err) {
+        return failedNativeSkillInvocation({
+          providerName: 'Claude Code',
+          selections,
+          error: err,
+        })
+      }
+    }
+
+    function addSkillInvocationFailureNote(
+      resolution: Extract<NativeSkillInvocationResolution, { ok: false }>,
+    ): void {
+      sessionEmitter.addNote({
+        text: `Claude Code skill ${resolution.status}: ${resolution.message}`,
+        level: 'error',
+      })
+    }
+
+    function patchUserMessageSkills(
+      userMessageItemId: string,
+      selections: SkillSelection[] | undefined,
+      status: Parameters<typeof markSkillSelectionsStatus>[1],
+    ): void {
+      const updatedSelections = markSkillSelectionsStatus(selections, status)
+      if (!updatedSelections) {
+        return
+      }
+
+      if (
+        latestSkillInvocationTarget?.userMessageItemId === userMessageItemId
+      ) {
+        latestSkillInvocationTarget = {
+          userMessageItemId,
+          skillSelections: updatedSelections,
+        }
+        clearSkillInvocationTargetSoon()
+      }
+      sessionEmitter.patchMessage(userMessageItemId, {
+        skillSelections: updatedSelections,
+      })
+    }
+
+    async function startTurn(
       message: string,
       attachments?: Attachment[],
       options?: {
+        skillSelections?: SkillSelection[]
+        userMessageItemId?: string | null
         emitUserEntry?: boolean
         allowContinuationRecovery?: boolean
       },
-    ): void {
+    ): Promise<void> {
+      if (stopped || child) return
+
+      const skillResolution = await resolveSelectedSkills(
+        message,
+        options?.skillSelections,
+      )
+      if (stopped || child) return
+
+      const userMessageItemId =
+        options?.emitUserEntry !== false
+          ? sessionEmitter.addUserMessage({
+              text: message,
+              skillSelections: skillResolution.skillSelections,
+            })
+          : (options?.userMessageItemId ?? null)
+      if (!skillResolution.ok) {
+        addSkillInvocationFailureNote(skillResolution)
+        setStatus('failed')
+        setAttention('failed')
+        return
+      }
+      trackSkillInvocationTarget(
+        userMessageItemId,
+        skillResolution.skillSelections,
+      )
+      const telemetrySink =
+        skillResolution.skillSelections &&
+        skillResolution.skillSelections.length > 0
+          ? await getTelemetrySink()
+          : null
       if (stopped || child) return
 
       assistantTextBuffer = ''
@@ -564,11 +784,10 @@ export class ClaudeCodeProvider implements Provider {
       currentTurn = {
         message,
         attachments,
+        skillSelections: options?.skillSelections,
+        userMessageItemId,
         allowContinuationRecovery: options?.allowContinuationRecovery ?? true,
         usedContinuationToken: !!claudeSessionId,
-      }
-      if (options?.emitUserEntry !== false) {
-        sessionEmitter.addUserMessage({ text: message })
       }
       setStatus('running')
       setAttention('none')
@@ -602,7 +821,10 @@ export class ClaudeCodeProvider implements Provider {
       child = spawn(binaryPath, args, {
         cwd: config.workingDirectory,
         stdio: ['pipe', 'pipe', 'pipe'],
-        env: { ...process.env },
+        env: {
+          ...process.env,
+          ...(telemetrySink?.env ?? {}),
+        },
       })
 
       if (child.stdout) {
@@ -644,14 +866,28 @@ export class ClaudeCodeProvider implements Provider {
           .then((parts) => {
             if (stopped || stdin.destroyed) return
             const line = buildClaudeUserMessageLine({
-              text: message,
+              text: skillResolution.promptText,
               parts,
             })
             stdin.write(line + '\n')
+            if (userMessageItemId) {
+              patchUserMessageSkills(
+                userMessageItemId,
+                skillResolution.skillSelections,
+                'sent',
+              )
+            }
             stdin.end()
           })
           .catch((err) => {
             if (stopped) return
+            if (userMessageItemId) {
+              patchUserMessageSkills(
+                userMessageItemId,
+                skillResolution.skillSelections,
+                'failed',
+              )
+            }
             sessionEmitter.addNote({
               text: `Failed to send attachments: ${err instanceof Error ? err.message : String(err)}`,
               level: 'error',
@@ -711,7 +947,9 @@ export class ClaudeCodeProvider implements Provider {
 
     // Spawn after a tick so listeners can be attached
     setTimeout(() => {
-      startTurn(config.initialMessage, config.initialAttachments)
+      void startTurn(config.initialMessage, config.initialAttachments, {
+        skillSelections: config.initialSkillSelections,
+      })
     }, 10)
 
     const handle: SessionHandle = {
@@ -736,8 +974,8 @@ export class ClaudeCodeProvider implements Provider {
       onActivityChange: (cb) => {
         listeners.activity.push(cb)
       },
-      sendMessage: (text, attachments) => {
-        startTurn(text, attachments)
+      sendMessage: (text, attachments, skillSelections) => {
+        void startTurn(text, attachments, { skillSelections })
       },
       approve: () => {
         // Using --dangerously-skip-permissions, no approvals needed
@@ -747,6 +985,11 @@ export class ClaudeCodeProvider implements Provider {
       },
       stop: () => {
         stopped = true
+        disposeTelemetrySink()
+        if (clearSkillInvocationTargetTimer) {
+          clearTimeout(clearSkillInvocationTargetTimer)
+          clearSkillInvocationTargetTimer = null
+        }
         if (child) {
           child.kill('SIGTERM')
           setTimeout(() => {

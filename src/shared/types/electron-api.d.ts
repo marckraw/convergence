@@ -1,4 +1,14 @@
 import type { ProjectMcpVisibility } from './mcp.types'
+import type {
+  ProjectSkillCatalog,
+  SkillActivationConfirmation,
+  SkillCatalogOptions,
+  SkillCatalogSource,
+  SkillDetails,
+  SkillDetailsRequest,
+  SkillInvocationSupport,
+  SkillSelection,
+} from './skill.types'
 
 interface ProjectData {
   id: string
@@ -264,6 +274,12 @@ interface ProviderAttachmentCapability {
   maxTotalBytes: number
 }
 
+interface ProviderSkillsCapability {
+  catalog: SkillCatalogSource
+  invocation: SkillInvocationSupport
+  activationConfirmation: SkillActivationConfirmation
+}
+
 interface AttachmentIngestRejection {
   filename: string
   reason: string
@@ -283,6 +299,7 @@ interface AttachmentIngestFileInput {
 interface SendSessionMessageInput {
   text: string
   attachmentIds?: string[]
+  skillSelections?: SkillSelection[]
 }
 
 type ConversationItemKind =
@@ -318,6 +335,7 @@ type ConversationItemData =
       actor: 'user' | 'assistant'
       text: string
       attachmentIds?: string[]
+      skillSelections?: SkillSelection[]
     })
   | (ConversationItemDataBase & {
       kind: 'thinking'
@@ -434,6 +452,7 @@ interface ProviderInfo {
   fastModelId?: string | null
   modelOptions: ProviderModelOption[]
   attachments: ProviderAttachmentCapability
+  skills?: ProviderSkillsCapability
 }
 
 interface ProviderStatusInfo {
@@ -604,6 +623,13 @@ interface ElectronAPI {
   }
   mcp: {
     listByProjectId: (projectId: string) => Promise<ProjectMcpVisibility>
+  }
+  skills: {
+    listByProjectId: (
+      projectId: string,
+      options?: SkillCatalogOptions,
+    ) => Promise<ProjectSkillCatalog>
+    readDetails: (input: SkillDetailsRequest) => Promise<SkillDetails>
   }
   feedback: {
     submit: (

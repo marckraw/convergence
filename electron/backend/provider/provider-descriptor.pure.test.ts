@@ -22,6 +22,21 @@ describe('provider-descriptor', () => {
     expect(buildClaudeDescriptor().vendorLabel).toBe('Anthropic')
     expect(buildFallbackCodexDescriptor().vendorLabel).toBe('OpenAI')
     expect(buildFallbackPiDescriptor().vendorLabel).toBe('Pi')
+    expect(buildClaudeDescriptor().skills).toEqual({
+      catalog: 'filesystem',
+      invocation: 'native-command',
+      activationConfirmation: 'native-event',
+    })
+    expect(buildFallbackCodexDescriptor().skills).toEqual({
+      catalog: 'native-rpc',
+      invocation: 'structured-input',
+      activationConfirmation: 'none',
+    })
+    expect(buildFallbackPiDescriptor().skills).toEqual({
+      catalog: 'filesystem',
+      invocation: 'native-command',
+      activationConfirmation: 'none',
+    })
   })
 
   it('exposes pi-compatible effort options on the pi fallback descriptor', () => {
@@ -63,5 +78,10 @@ describe('provider-descriptor', () => {
 
     expect(normalized.defaultModelId).toBe('gpt-5.4')
     expect(normalized.modelOptions[0]?.defaultEffort).toBe('medium')
+    expect(normalized.skills).toEqual({
+      catalog: 'unsupported',
+      invocation: 'unsupported',
+      activationConfirmation: 'none',
+    })
   })
 })
