@@ -1,5 +1,6 @@
 import type {
   ProviderSkillCatalog,
+  SkillCatalogEntry,
   SkillInvocationStatus,
   SkillSelection,
 } from './skills.types'
