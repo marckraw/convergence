@@ -145,7 +145,7 @@ export function SearchableSelectPresentational({
                   key={item.id}
                   value={item.id}
                   onSelect={() => onSelect(item.id)}
-                  className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-2 text-sm aria-selected:bg-white/10"
+                  className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-2 text-sm aria-selected:bg-accent aria-selected:text-accent-foreground"
                 >
                   <div className="flex min-w-0 flex-1 flex-col">
                     <span className="truncate font-medium">{item.label}</span>
