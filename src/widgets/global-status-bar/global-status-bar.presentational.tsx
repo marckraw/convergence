@@ -63,7 +63,7 @@ export const GlobalStatusBar: FC<GlobalStatusBarProps> = ({
             <TooltipTrigger asChild>
               <div className={zoneClass} data-testid="global-status-aggregate">
                 <div className={aggregateChipClass}>
-                  <CircleDot className="h-3 w-3 text-emerald-400" />
+                  <CircleDot className="h-3 w-3 text-emerald-600 dark:text-emerald-400" />
                   <span>
                     <span className="font-medium text-foreground">
                       {runningCount}
@@ -75,14 +75,14 @@ export const GlobalStatusBar: FC<GlobalStatusBarProps> = ({
                   className={cn(
                     aggregateChipClass,
                     attentionCount > 0 &&
-                      'border-amber-500/40 bg-amber-500/10 text-amber-100',
+                      'border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-100',
                   )}
                 >
                   <CircleAlert
                     className={cn(
                       'h-3 w-3',
                       attentionCount > 0
-                        ? 'text-amber-300'
+                        ? 'text-amber-600 dark:text-amber-300'
                         : 'text-muted-foreground',
                     )}
                   />
@@ -91,7 +91,7 @@ export const GlobalStatusBar: FC<GlobalStatusBarProps> = ({
                       className={cn(
                         'font-medium',
                         attentionCount > 0
-                          ? 'text-amber-100'
+                          ? 'text-amber-700 dark:text-amber-100'
                           : 'text-foreground',
                       )}
                     >
@@ -135,8 +135,8 @@ export const GlobalStatusBar: FC<GlobalStatusBarProps> = ({
                       className={cn(
                         dotClass,
                         project.needsAttention.length > 0
-                          ? 'bg-amber-300'
-                          : 'bg-emerald-400',
+                          ? 'bg-amber-500 dark:bg-amber-300'
+                          : 'bg-emerald-500 dark:bg-emerald-400',
                       )}
                     />
                     <span className="max-w-32 truncate">
@@ -147,7 +147,7 @@ export const GlobalStatusBar: FC<GlobalStatusBarProps> = ({
                         <span>{project.running.length}▸</span>
                       )}
                       {project.needsAttention.length > 0 && (
-                        <span className="ml-1 text-amber-200">
+                        <span className="ml-1 text-amber-700 dark:text-amber-200">
                           {project.needsAttention.length}!
                         </span>
                       )}
@@ -182,9 +182,9 @@ export const GlobalStatusBar: FC<GlobalStatusBarProps> = ({
               aria-label={`Switch to project ${recency.projectName}`}
             >
               {recency.kind === 'completed' ? (
-                <CheckCircle2 className="h-3 w-3 text-emerald-400" />
+                <CheckCircle2 className="h-3 w-3 text-emerald-600 dark:text-emerald-400" />
               ) : (
-                <CircleAlert className="h-3 w-3 text-rose-400" />
+                <CircleAlert className="h-3 w-3 text-rose-600 dark:text-rose-400" />
               )}
               <span className="max-w-28 truncate">{recency.session.name}</span>
               <span className="text-muted-foreground/70">

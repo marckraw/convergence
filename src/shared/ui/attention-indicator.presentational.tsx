@@ -10,10 +10,10 @@ const labelMap: Record<string, string> = {
 }
 
 const pillStyleMap: Record<string, string> = {
-  'needs-approval': 'bg-amber-500/10 text-amber-500',
-  'needs-input': 'bg-blue-500/10 text-blue-500',
-  finished: 'bg-emerald-500/10 text-emerald-500',
-  failed: 'bg-red-500/10 text-red-500',
+  'needs-approval': 'bg-amber-500/10 text-amber-700 dark:text-amber-500',
+  'needs-input': 'bg-blue-500/10 text-blue-700 dark:text-blue-500',
+  finished: 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-500',
+  failed: 'bg-red-500/10 text-red-700 dark:text-red-500',
 }
 
 interface AttentionIndicatorProps {
