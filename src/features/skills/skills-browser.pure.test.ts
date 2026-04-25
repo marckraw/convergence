@@ -3,6 +3,8 @@ import {
   findSkillInGroups,
   filterSkillCatalog,
   firstSkillInGroups,
+  getNativeSkillInvocationText,
+  hasMcpDependencies,
   type SkillBrowserFilters,
 } from './skills-browser.pure'
 import type { ProjectSkillCatalog, SkillCatalogEntry } from '@/entities/skill'
@@ -13,6 +15,7 @@ const baseFilters: SkillBrowserFilters = {
   scope: 'all',
   enabled: 'all',
   warnings: 'all',
+  dependencyState: 'all',
 }
 
 function skill(
@@ -58,6 +61,13 @@ function catalog(): ProjectSkillCatalog {
             rawScope: 'repo',
             sourceLabel: 'Project',
             enabled: false,
+            dependencies: [
+              {
+                kind: 'mcp',
+                name: 'github',
+                state: 'needs-auth',
+              },
+            ],
             warnings: [
               {
                 code: 'disabled',
@@ -109,6 +119,22 @@ describe('filterSkillCatalog', () => {
     ).toEqual(['ship-it'])
   })
 
+  it('matches and filters by dependency metadata', () => {
+    expect(
+      filterSkillCatalog(catalog(), {
+        ...baseFilters,
+        query: 'github',
+      })[0].skills.map((entry) => entry.name),
+    ).toEqual(['ship-it'])
+
+    expect(
+      filterSkillCatalog(catalog(), {
+        ...baseFilters,
+        dependencyState: 'needs-auth',
+      })[0].skills.map((entry) => entry.name),
+    ).toEqual(['ship-it'])
+  })
+
   it('keeps provider error groups visible', () => {
     const groups = filterSkillCatalog(catalog(), {
       ...baseFilters,
@@ -136,5 +162,26 @@ describe('filterSkillCatalog', () => {
 
     expect(firstSkillInGroups(groups)?.name).toBe('review')
     expect(firstSkillInGroups([])).toBeNull()
+  })
+
+  it('derives dependency and native invocation helpers', () => {
+    const codexSkill = skill('review')
+    const piSkill = skill('pi-review', {
+      providerId: 'pi',
+      dependencies: [{ kind: 'mcp', name: 'github', state: 'declared' }],
+    })
+
+    expect(hasMcpDependencies(codexSkill)).toBe(false)
+    expect(hasMcpDependencies(piSkill)).toBe(true)
+    expect(getNativeSkillInvocationText(codexSkill)).toBe('$review')
+    expect(
+      getNativeSkillInvocationText({ ...codexSkill, providerId: 'pi' }),
+    ).toBe('/skill:review')
+    expect(
+      getNativeSkillInvocationText({
+        ...codexSkill,
+        providerId: 'claude-code',
+      }),
+    ).toBe('/review')
   })
 })

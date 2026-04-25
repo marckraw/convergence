@@ -23,6 +23,7 @@ const DEFAULT_FILTERS: SkillBrowserFilters = {
   scope: 'all',
   enabled: 'all',
   warnings: 'all',
+  dependencyState: 'all',
 }
 
 export const SkillsBrowserDialogContainer: FC = () => {
@@ -158,6 +159,10 @@ export const SkillsBrowserDialogContainer: FC = () => {
     [],
   )
 
+  const handleOpenMcpServers = useCallback(() => {
+    openDialog('mcp-servers')
+  }, [openDialog])
+
   return (
     <SkillsBrowserDialog
       open={open}
@@ -185,6 +190,7 @@ export const SkillsBrowserDialogContainer: FC = () => {
       onFiltersChange={handleFiltersChange}
       onSelectSkill={selectSkill}
       onRefresh={() => void load(true)}
+      onOpenMcpServers={handleOpenMcpServers}
       trigger={
         <Button
           type="button"

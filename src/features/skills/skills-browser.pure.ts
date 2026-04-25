@@ -2,12 +2,14 @@ import type {
   ProjectSkillCatalog,
   ProviderSkillCatalog,
   SkillCatalogEntry,
+  SkillDependencyState,
   SkillProviderId,
   SkillScope,
 } from '@/entities/skill'
 
 export type SkillEnabledFilter = 'all' | 'enabled' | 'disabled'
 export type SkillWarningFilter = 'all' | 'warnings'
+export type SkillDependencyStateFilter = 'all' | SkillDependencyState
 
 export interface SkillBrowserFilters {
   query: string
@@ -15,6 +17,7 @@ export interface SkillBrowserFilters {
   scope: SkillScope | 'all'
   enabled: SkillEnabledFilter
   warnings: SkillWarningFilter
+  dependencyState: SkillDependencyStateFilter
 }
 
 export interface SkillBrowserProviderGroup extends Omit<
@@ -49,6 +52,11 @@ function matchesQuery(
     skill.path,
     provider.providerName,
     provider.providerId,
+    ...skill.dependencies.flatMap((dependency) => [
+      dependency.kind,
+      dependency.name,
+      dependency.state,
+    ]),
     ...skill.warnings.map((warning) => warning.message),
   ]
     .map(normalize)
@@ -78,6 +86,14 @@ function matchesFilters(
     return false
   }
   if (filters.warnings === 'warnings' && skill.warnings.length === 0) {
+    return false
+  }
+  if (
+    filters.dependencyState !== 'all' &&
+    !skill.dependencies.some(
+      (dependency) => dependency.state === filters.dependencyState,
+    )
+  ) {
     return false
   }
 
@@ -135,4 +151,27 @@ export function firstSkillInGroups(
   }
 
   return null
+}
+
+export function hasMcpDependencies(skill: SkillCatalogEntry): boolean {
+  return skill.dependencies.some((dependency) => dependency.kind === 'mcp')
+}
+
+export function getNativeSkillInvocationText(
+  skill: SkillCatalogEntry,
+): string | null {
+  if (!skill.name.trim()) {
+    return null
+  }
+
+  switch (skill.providerId) {
+    case 'codex':
+      return `$${skill.name}`
+    case 'claude-code':
+      return `/${skill.name}`
+    case 'pi':
+      return `/skill:${skill.name}`
+    default:
+      return null
+  }
 }

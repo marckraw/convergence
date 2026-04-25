@@ -500,16 +500,25 @@ confirmation phase with no heuristic fallback.
 **Goal:** Improve the browser into a durable skill management surface without
 turning it into a marketplace or editor.
 
+Detailed phase spec: `docs/specs/first-class-skills-phase-8.md`.
+
+Phase 7 note: Claude Code can now move selected chips to `confirmed` through
+native OTel activation events. Codex and Pi remain `sent`-only for activation.
+Phase 8 should polish discovery/management surfaces around the current
+catalog/detail contracts and defer write operations that do not yet have a
+tested native backend contract.
+
 ### Tasks
 
 - Add dependency readiness display where provider metadata supports it.
 - Link skill dependency concepts to MCP visibility without owning MCP config.
-- Add Codex enable/disable if using `skills/config/write` is stable and tested.
+- Defer Codex enable/disable unless using `skills/config/write` is stable,
+  tested, and scoped as a backend write contract.
 - Add details actions:
   - reveal path in copyable text form
   - refresh provider
   - copy skill name/native invocation
-- Add command center entry for "Browse skills".
+- Keep the existing command center entry for "Browse skills".
 - Add accessibility and keyboard navigation polish.
 - Add release notes if the repo process requires them.
 

@@ -4,11 +4,13 @@ import type {
   SkillCatalogEntry,
   SkillDetails,
   SkillDependency,
+  SkillDependencyState,
   SkillProviderId,
   SkillScope,
   SkillWarning,
 } from '@/entities/skill'
 import { Button } from '@/shared/ui/button'
+import { CopyButton } from '@/shared/ui/copy-button'
 import {
   Dialog,
   DialogContent,
@@ -27,6 +29,7 @@ import {
   CheckCircle2,
   FileText,
   Library,
+  Link2,
   Loader2,
   RefreshCw,
   Search,
@@ -35,6 +38,10 @@ import {
 import type {
   SkillBrowserFilters,
   SkillBrowserProviderGroup,
+} from './skills-browser.pure'
+import {
+  getNativeSkillInvocationText,
+  hasMcpDependencies,
 } from './skills-browser.pure'
 
 interface SkillsBrowserDialogProps {
@@ -58,6 +65,7 @@ interface SkillsBrowserDialogProps {
   onFiltersChange: (patch: Partial<SkillBrowserFilters>) => void
   onSelectSkill: (skillId: string) => void
   onRefresh: () => void
+  onOpenMcpServers: () => void
 }
 
 const SCOPE_LABELS: Record<SkillScope, string> = {
@@ -71,6 +79,49 @@ const SCOPE_LABELS: Record<SkillScope, string> = {
   team: 'Team',
   settings: 'Settings',
   unknown: 'Unknown',
+}
+
+const DEPENDENCY_STATE_LABELS: Record<SkillDependencyState, string> = {
+  declared: 'Declared',
+  available: 'Available',
+  'needs-auth': 'Needs auth',
+  'needs-install': 'Needs install',
+  unknown: 'Unknown',
+}
+
+const DEPENDENCY_STATE_CLASSES: Record<SkillDependencyState, string> = {
+  declared: 'border-border/70 bg-muted/30 text-muted-foreground',
+  available: 'border-emerald-500/20 bg-emerald-500/10 text-emerald-300',
+  'needs-auth': 'border-amber-500/20 bg-amber-500/10 text-amber-200',
+  'needs-install': 'border-sky-500/20 bg-sky-500/10 text-sky-200',
+  unknown: 'border-border/70 bg-muted/30 text-muted-foreground',
+}
+
+const CATALOG_SOURCE_LABELS: Record<
+  ProjectSkillCatalog['providers'][number]['catalogSource'],
+  string
+> = {
+  'native-rpc': 'Native RPC',
+  'native-cli': 'Native CLI',
+  filesystem: 'Filesystem',
+  unsupported: 'Unsupported',
+}
+
+const INVOCATION_SUPPORT_LABELS: Record<
+  ProjectSkillCatalog['providers'][number]['invocationSupport'],
+  string
+> = {
+  'structured-input': 'Structured input',
+  'native-command': 'Native command',
+  unsupported: 'Unsupported',
+}
+
+const ACTIVATION_CONFIRMATION_LABELS: Record<
+  ProjectSkillCatalog['providers'][number]['activationConfirmation'],
+  string
+> = {
+  'native-event': 'Native event',
+  none: 'None',
 }
 
 function renderSelectControl({
@@ -135,15 +186,27 @@ function renderDependencyList(dependencies: SkillDependency[]) {
   }
 
   return (
-    <div className="flex flex-wrap gap-1.5">
+    <div className="space-y-1.5">
       {dependencies.map((dependency, index) => (
-        <span
+        <div
           key={`${dependency.kind}-${dependency.name}-${index}`}
-          className="rounded-full border border-border/70 bg-muted/30 px-2 py-0.5 text-[11px] text-muted-foreground"
+          className="flex min-w-0 items-center justify-between gap-3 rounded-md border border-border/70 bg-muted/20 px-2 py-1.5 text-xs"
         >
-          {dependency.kind}: {dependency.name}
-          {dependency.state !== 'declared' ? ` (${dependency.state})` : ''}
-        </span>
+          <span className="min-w-0 truncate text-muted-foreground">
+            <span className="font-medium text-foreground">
+              {dependency.kind}
+            </span>
+            : {dependency.name}
+          </span>
+          <span
+            className={cn(
+              'shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide',
+              DEPENDENCY_STATE_CLASSES[dependency.state],
+            )}
+          >
+            {DEPENDENCY_STATE_LABELS[dependency.state]}
+          </span>
+        </div>
       ))}
     </div>
   )
@@ -261,17 +324,21 @@ function renderProviderGroup(
 
 function renderDetailsPane({
   projectName,
+  catalog,
   selectedSkill,
   selectedDetails,
   isDetailsLoading,
   detailsError,
+  onOpenMcpServers,
 }: Pick<
   SkillsBrowserDialogProps,
   | 'projectName'
+  | 'catalog'
   | 'selectedSkill'
   | 'selectedDetails'
   | 'isDetailsLoading'
   | 'detailsError'
+  | 'onOpenMcpServers'
 >) {
   if (!projectName) {
     return (
@@ -288,6 +355,13 @@ function renderDetailsPane({
       </div>
     )
   }
+
+  const selectedProvider =
+    catalog?.providers.find(
+      (provider) => provider.providerId === selectedSkill.providerId,
+    ) ?? null
+  const nativeInvocation = getNativeSkillInvocationText(selectedSkill)
+  const selectedSkillHasMcpDependencies = hasMcpDependencies(selectedSkill)
 
   return (
     <div className="app-scrollbar h-full overflow-y-auto px-6 py-5">
@@ -310,13 +384,83 @@ function renderDetailsPane({
             {selectedSkill.description || 'No description.'}
           </p>
         </div>
+        <div className="flex shrink-0 items-center gap-1.5">
+          <CopyButton text={selectedSkill.name} label="Copy skill name" />
+          {selectedSkill.path ? (
+            <CopyButton text={selectedSkill.path} label="Copy SKILL.md path" />
+          ) : null}
+          {nativeInvocation ? (
+            <CopyButton
+              text={nativeInvocation}
+              label="Copy native invocation"
+            />
+          ) : null}
+        </div>
       </div>
 
       <div className="space-y-4">
+        {selectedProvider ? (
+          <section className="rounded-lg border border-border/70 bg-muted/10 p-3">
+            <p className="mb-2 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+              Provider
+            </p>
+            <div className="grid gap-2 text-xs text-muted-foreground sm:grid-cols-3">
+              <span>
+                Catalog:{' '}
+                <span className="text-foreground">
+                  {CATALOG_SOURCE_LABELS[selectedProvider.catalogSource]}
+                </span>
+              </span>
+              <span>
+                Invocation:{' '}
+                <span className="text-foreground">
+                  {
+                    INVOCATION_SUPPORT_LABELS[
+                      selectedProvider.invocationSupport
+                    ]
+                  }
+                </span>
+              </span>
+              <span>
+                Confirmation:{' '}
+                <span className="text-foreground">
+                  {
+                    ACTIVATION_CONFIRMATION_LABELS[
+                      selectedProvider.activationConfirmation
+                    ]
+                  }
+                </span>
+              </span>
+            </div>
+            {nativeInvocation ? (
+              <div className="mt-3 flex min-w-0 items-center gap-2 rounded-md border border-border/70 bg-background/60 px-2 py-1.5">
+                <span className="shrink-0 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                  Native
+                </span>
+                <code className="min-w-0 flex-1 truncate text-xs text-foreground">
+                  {nativeInvocation}
+                </code>
+                <CopyButton
+                  text={nativeInvocation}
+                  label="Copy native invocation"
+                />
+              </div>
+            ) : null}
+          </section>
+        ) : null}
+
         <section className="rounded-lg border border-border/70 bg-muted/10 p-3">
-          <p className="mb-1 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-            Path
-          </p>
+          <div className="mb-1 flex items-center justify-between gap-2">
+            <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+              Path
+            </p>
+            {selectedSkill.path ? (
+              <CopyButton
+                text={selectedSkill.path}
+                label="Copy SKILL.md path"
+              />
+            ) : null}
+          </div>
           <p
             className="break-all font-mono text-xs text-muted-foreground"
             title={selectedSkill.path ?? undefined}
@@ -326,9 +470,23 @@ function renderDetailsPane({
         </section>
 
         <section className="rounded-lg border border-border/70 bg-muted/10 p-3">
-          <p className="mb-2 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-            Dependencies
-          </p>
+          <div className="mb-2 flex items-center justify-between gap-2">
+            <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+              Dependencies
+            </p>
+            {selectedSkillHasMcpDependencies ? (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-7 gap-1.5 px-2 text-xs"
+                onClick={onOpenMcpServers}
+              >
+                <Link2 className="h-3.5 w-3.5" />
+                MCP Servers
+              </Button>
+            ) : null}
+          </div>
           {renderDependencyList(selectedSkill.dependencies)}
         </section>
 
@@ -414,6 +572,7 @@ export const SkillsBrowserDialog: FC<SkillsBrowserDialogProps> = ({
   onFiltersChange,
   onSelectSkill,
   onRefresh,
+  onOpenMcpServers,
 }) => {
   const selectedSkillId = selectedSkill?.id ?? null
   const hasCatalog = Boolean(catalog)
@@ -512,6 +671,27 @@ export const SkillsBrowserDialog: FC<SkillsBrowserDialogProps> = ({
                     </>
                   ),
                 })}
+                {renderSelectControl({
+                  label: 'Dependency',
+                  value: filters.dependencyState,
+                  onChange: (value) =>
+                    onFiltersChange({
+                      dependencyState:
+                        value as SkillBrowserFilters['dependencyState'],
+                    }),
+                  children: (
+                    <>
+                      <option value="all">All readiness</option>
+                      {Object.entries(DEPENDENCY_STATE_LABELS).map(
+                        ([state, label]) => (
+                          <option key={state} value={state}>
+                            {label}
+                          </option>
+                        ),
+                      )}
+                    </>
+                  ),
+                })}
               </div>
             </div>
 
@@ -549,10 +729,12 @@ export const SkillsBrowserDialog: FC<SkillsBrowserDialogProps> = ({
 
           {renderDetailsPane({
             projectName,
+            catalog,
             selectedSkill,
             selectedDetails,
             isDetailsLoading,
             detailsError,
+            onOpenMcpServers,
           })}
         </div>
 

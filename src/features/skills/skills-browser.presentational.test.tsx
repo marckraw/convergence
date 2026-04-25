@@ -18,6 +18,7 @@ const filters: SkillBrowserFilters = {
   scope: 'all',
   enabled: 'all',
   warnings: 'all',
+  dependencyState: 'all',
 }
 
 const skill: SkillCatalogEntry = {
@@ -111,6 +112,7 @@ function renderDialog(
     onFiltersChange: vi.fn(),
     onSelectSkill: vi.fn(),
     onRefresh: vi.fn(),
+    onOpenMcpServers: vi.fn(),
     ...overrides,
   }
 
@@ -128,9 +130,11 @@ describe('SkillsBrowserDialog', () => {
     expect(screen.getAllByText('Codex')).not.toHaveLength(0)
     expect(screen.getAllByText('Review')).not.toHaveLength(0)
     expect(screen.getAllByText('/tmp/review/SKILL.md')).not.toHaveLength(0)
-    expect(screen.getByText('mcp: github')).toBeInTheDocument()
+    expect(screen.getByText(/github/)).toBeInTheDocument()
+    expect(screen.getAllByText('Declared')).not.toHaveLength(0)
     expect(screen.getByText('script: scripts/run.sh')).toBeInTheDocument()
     expect(screen.getByText('Review Skill')).toBeInTheDocument()
+    expect(screen.getByText('$review')).toBeInTheDocument()
   })
 
   it('surfaces provider and details errors', () => {
@@ -165,5 +169,21 @@ describe('SkillsBrowserDialog', () => {
     })
 
     expect(onFiltersChange).toHaveBeenCalledWith({ query: 'review' })
+  })
+
+  it('emits dependency filter changes and opens MCP visibility', () => {
+    const onFiltersChange = vi.fn()
+    const onOpenMcpServers = vi.fn()
+    renderDialog({ onFiltersChange, onOpenMcpServers })
+
+    fireEvent.change(screen.getByLabelText(/Dependency/i), {
+      target: { value: 'declared' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: /MCP Servers/i }))
+
+    expect(onFiltersChange).toHaveBeenCalledWith({
+      dependencyState: 'declared',
+    })
+    expect(onOpenMcpServers).toHaveBeenCalledTimes(1)
   })
 })
