@@ -1,9 +1,12 @@
 import type { ProjectMcpVisibility } from './mcp.types'
 import type {
   ProjectSkillCatalog,
+  SkillActivationConfirmation,
   SkillCatalogOptions,
+  SkillCatalogSource,
   SkillDetails,
   SkillDetailsRequest,
+  SkillInvocationSupport,
   SkillSelection,
 } from './skill.types'
 
@@ -271,6 +274,12 @@ interface ProviderAttachmentCapability {
   maxTotalBytes: number
 }
 
+interface ProviderSkillsCapability {
+  catalog: SkillCatalogSource
+  invocation: SkillInvocationSupport
+  activationConfirmation: SkillActivationConfirmation
+}
+
 interface AttachmentIngestRejection {
   filename: string
   reason: string
@@ -443,6 +452,7 @@ interface ProviderInfo {
   fastModelId?: string | null
   modelOptions: ProviderModelOption[]
   attachments: ProviderAttachmentCapability
+  skills?: ProviderSkillsCapability
 }
 
 interface ProviderStatusInfo {

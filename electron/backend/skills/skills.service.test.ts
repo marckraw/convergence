@@ -87,15 +87,15 @@ describe('SkillsService', () => {
     )
   })
 
-  it('omits unsupported providers in phase 1', async () => {
+  it('omits providers without a skills adapter', async () => {
     const project = projectService.create({ repositoryPath: gitRepoPath })
     const service = new SkillsService(
       projectService,
       [
         {
-          id: 'claude-code',
-          name: 'Claude Code',
-          binaryPath: '/usr/local/bin/claude',
+          id: 'unknown-provider',
+          name: 'Unknown Provider',
+          binaryPath: '/usr/local/bin/unknown-provider',
         },
       ],
       { now: () => FIXED_NOW },
@@ -152,6 +152,42 @@ describe('SkillsService', () => {
         activationConfirmation: 'none',
         skills: [],
         error: 'codex unavailable',
+      }),
+    ])
+  })
+
+  it('reports Claude Code adapter failures with filesystem catalog metadata', async () => {
+    const project = projectService.create({ repositoryPath: gitRepoPath })
+    const service = new SkillsService(
+      projectService,
+      [
+        {
+          id: 'claude-code',
+          name: 'Claude Code',
+          binaryPath: '/usr/local/bin/claude',
+        },
+      ],
+      {
+        now: () => FIXED_NOW,
+        createAdapter: () => ({
+          list: async () => {
+            throw new Error('claude scan failed')
+          },
+        }),
+      },
+    )
+
+    const result = await service.listByProjectId(project.id)
+
+    expect(result.providers).toEqual([
+      expect.objectContaining({
+        providerId: 'claude-code',
+        providerName: 'Claude Code',
+        catalogSource: 'filesystem',
+        invocationSupport: 'native-command',
+        activationConfirmation: 'native-event',
+        skills: [],
+        error: 'claude scan failed',
       }),
     ])
   })

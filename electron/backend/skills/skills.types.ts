@@ -44,6 +44,8 @@ export type SkillWarningCode =
   | 'disabled'
   | 'missing-path'
   | 'missing-description'
+  | 'invalid-frontmatter'
+  | 'unsupported-path-invocation'
   | 'unknown-scope'
   | 'provider-error'
 

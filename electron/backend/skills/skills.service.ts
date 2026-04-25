@@ -1,4 +1,6 @@
 import { CodexSkillsService } from './codex-skills.service'
+import { ClaudeCodeSkillsService } from './claude-code-skills.service'
+import { PiSkillsService } from './pi-skills.service'
 import { buildProviderSkillErrorCatalog } from './skill-catalog.pure'
 import { readdir, readFile, stat } from 'fs/promises'
 import { basename, dirname, join, resolve } from 'path'
@@ -67,6 +69,28 @@ function providerErrorCatalog(
     })
   }
 
+  if (providerId === 'claude-code') {
+    return buildProviderSkillErrorCatalog({
+      providerId,
+      providerName: 'Claude Code',
+      catalogSource: 'filesystem',
+      invocationSupport: 'native-command',
+      activationConfirmation: 'native-event',
+      error: message,
+    })
+  }
+
+  if (providerId === 'pi') {
+    return buildProviderSkillErrorCatalog({
+      providerId,
+      providerName: 'Pi Agent',
+      catalogSource: 'filesystem',
+      invocationSupport: 'native-command',
+      activationConfirmation: 'none',
+      error: message,
+    })
+  }
+
   return buildProviderSkillErrorCatalog({
     providerId,
     providerName: provider.name,
@@ -82,6 +106,12 @@ function defaultCreateAdapter(
 ): SkillProviderCatalogAdapter | null {
   if (provider.id === 'codex') {
     return new CodexSkillsService(provider.binaryPath)
+  }
+  if (provider.id === 'claude-code') {
+    return new ClaudeCodeSkillsService()
+  }
+  if (provider.id === 'pi') {
+    return new PiSkillsService()
   }
 
   return null

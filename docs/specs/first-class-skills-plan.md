@@ -314,6 +314,8 @@ Detailed phase spec: `docs/specs/first-class-skills-phase-4.md`.
 **Goal:** Bring Claude Code and Pi into the skill browser using conservative,
 read-only native-or-filesystem catalogs.
 
+Detailed phase spec: `docs/specs/first-class-skills-phase-5.md`.
+
 ### Tasks
 
 - Add Claude Code catalog adapter:
@@ -378,10 +380,13 @@ syntax, while preserving honest transcript status.
 - Add provider-specific skill invocation formatting:
   - Claude Code: native skill command by name where supported.
   - Pi: `/skill:name` prompt command.
+- Treat Phase 5 filesystem `path` values as catalog/detail anchors only:
+  Claude Code and Pi invocation is name-based until a provider exposes stable
+  exact-path invocation.
 - Validate selections against the provider catalog immediately before send.
 - Handle duplicate/ambiguous names:
-  - allow if provider resolution is deterministic enough to match catalog
-  - otherwise block send with a clear ambiguity message
+  - default to blocking duplicate-name selections with a clear ambiguity message
+  - relax only if provider precedence is proven deterministic and testable
 - Mark selected skills as `sent` when the provider accepts the prompt.
 - Keep activation state as not confirmed for both providers in this phase.
 

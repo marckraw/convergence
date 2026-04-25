@@ -3,7 +3,12 @@ import type {
   ProviderAttachmentCapability,
 } from '../attachments/attachments.types'
 import type { SessionDelta } from '../session/conversation-item.types'
-import type { SkillSelection } from '../skills/skills.types'
+import type {
+  SkillActivationConfirmation,
+  SkillCatalogSource,
+  SkillInvocationSupport,
+  SkillSelection,
+} from '../skills/skills.types'
 
 export type { Attachment, ProviderAttachmentCapability }
 
@@ -109,6 +114,12 @@ export interface ProviderStatusInfo {
 
 export type ProviderKind = 'conversation' | 'shell'
 
+export interface ProviderSkillsCapability {
+  catalog: SkillCatalogSource
+  invocation: SkillInvocationSupport
+  activationConfirmation: SkillActivationConfirmation
+}
+
 export interface ProviderDescriptor {
   id: string
   name: string
@@ -119,6 +130,7 @@ export interface ProviderDescriptor {
   fastModelId?: string | null
   modelOptions: ProviderModelOption[]
   attachments: ProviderAttachmentCapability
+  skills?: ProviderSkillsCapability
 }
 
 export interface OneShotInput {

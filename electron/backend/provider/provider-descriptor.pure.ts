@@ -2,6 +2,7 @@ import type {
   ProviderAttachmentCapability,
   ProviderDescriptor,
   ProviderEffortOption,
+  ProviderSkillsCapability,
   ReasoningEffort,
 } from './provider.types'
 
@@ -35,6 +36,30 @@ export const PI_ATTACHMENT_CAPABILITY: ProviderAttachmentCapability = {
   maxPdfBytes: 0,
   maxTextBytes: 1 * MB,
   maxTotalBytes: 50 * MB,
+}
+
+export const CLAUDE_CODE_SKILLS_CAPABILITY: ProviderSkillsCapability = {
+  catalog: 'filesystem',
+  invocation: 'native-command',
+  activationConfirmation: 'native-event',
+}
+
+export const CODEX_SKILLS_CAPABILITY: ProviderSkillsCapability = {
+  catalog: 'native-rpc',
+  invocation: 'structured-input',
+  activationConfirmation: 'none',
+}
+
+export const PI_SKILLS_CAPABILITY: ProviderSkillsCapability = {
+  catalog: 'filesystem',
+  invocation: 'native-command',
+  activationConfirmation: 'none',
+}
+
+export const UNSUPPORTED_SKILLS_CAPABILITY: ProviderSkillsCapability = {
+  catalog: 'unsupported',
+  invocation: 'unsupported',
+  activationConfirmation: 'none',
 }
 
 const EFFORT_LABELS: Record<ReasoningEffort, string> = {
@@ -112,6 +137,7 @@ export function buildClaudeDescriptor(): ProviderDescriptor {
       },
     ],
     attachments: CLAUDE_CODE_ATTACHMENT_CAPABILITY,
+    skills: CLAUDE_CODE_SKILLS_CAPABILITY,
   }
 }
 
@@ -157,6 +183,7 @@ export function buildFallbackCodexDescriptor(): ProviderDescriptor {
       },
     ],
     attachments: CODEX_ATTACHMENT_CAPABILITY,
+    skills: CODEX_SKILLS_CAPABILITY,
   }
 }
 
@@ -184,6 +211,7 @@ export function buildFallbackPiDescriptor(): ProviderDescriptor {
       },
     ],
     attachments: PI_ATTACHMENT_CAPABILITY,
+    skills: PI_SKILLS_CAPABILITY,
   }
 }
 
@@ -199,6 +227,7 @@ export function normalizeProviderDescriptor(
 
   return {
     ...descriptor,
+    skills: descriptor.skills ?? UNSUPPORTED_SKILLS_CAPABILITY,
     defaultModelId,
     modelOptions: descriptor.modelOptions.map((option) => ({
       ...option,
