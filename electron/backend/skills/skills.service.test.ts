@@ -1,12 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { mkdtempSync, mkdirSync, rmSync } from 'fs'
+import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'fs'
 import { join } from 'path'
 import { tmpdir } from 'os'
 import { getDatabase, closeDatabase, resetDatabase } from '../database/database'
 import { ProjectService } from '../project/project.service'
 import { SkillsService } from './skills.service'
+import { buildSkillCatalogId } from './skill-catalog.pure'
 import type { DetectedProvider } from '../provider/detect'
-import type { ProviderSkillCatalog } from './skills.types'
+import type { ProviderSkillCatalog, SkillCatalogEntry } from './skills.types'
 
 const FIXED_NOW = new Date('2026-04-25T10:00:00.000Z')
 
@@ -18,15 +19,42 @@ function codexProvider(): DetectedProvider {
   }
 }
 
-function catalog(): ProviderSkillCatalog {
+function catalog(skills: SkillCatalogEntry[] = []): ProviderSkillCatalog {
   return {
     providerId: 'codex',
     providerName: 'Codex',
     catalogSource: 'native-rpc',
     invocationSupport: 'structured-input',
     activationConfirmation: 'none',
-    skills: [],
+    skills,
     error: null,
+  }
+}
+
+function catalogEntry(path: string): SkillCatalogEntry {
+  const input = {
+    providerId: 'codex' as const,
+    name: 'skill-a',
+    path,
+    scope: 'user' as const,
+    rawScope: 'user',
+  }
+
+  return {
+    id: buildSkillCatalogId(input),
+    providerId: 'codex',
+    providerName: 'Codex',
+    name: input.name,
+    path,
+    scope: input.scope,
+    rawScope: input.rawScope,
+    displayName: 'Skill A',
+    description: 'Reads details.',
+    shortDescription: null,
+    sourceLabel: 'User',
+    enabled: true,
+    dependencies: [],
+    warnings: [],
   }
 }
 
@@ -126,5 +154,68 @@ describe('SkillsService', () => {
         error: 'codex unavailable',
       }),
     ])
+  })
+
+  it('reads details for a catalog-backed SKILL.md file', async () => {
+    const project = projectService.create({ repositoryPath: gitRepoPath })
+    const skillDir = join(tempDir, 'skills', 'skill-a')
+    mkdirSync(join(skillDir, 'scripts'), { recursive: true })
+    mkdirSync(join(skillDir, 'references'), { recursive: true })
+    writeFileSync(join(skillDir, 'SKILL.md'), '# Skill A\n\nUse it well.\n')
+    writeFileSync(join(skillDir, 'scripts', 'run.sh'), '#!/bin/sh\n')
+    writeFileSync(join(skillDir, 'references', 'notes.md'), '# Notes\n')
+    const entry = catalogEntry(join(skillDir, 'SKILL.md'))
+    const service = new SkillsService(projectService, [codexProvider()], {
+      now: () => FIXED_NOW,
+      createAdapter: () => ({ list: async () => catalog([entry]) }),
+    })
+
+    const details = await service.readDetails({
+      projectId: project.id,
+      providerId: 'codex',
+      skillId: entry.id,
+      path: entry.path ?? '',
+    })
+
+    expect(details).toEqual({
+      skillId: entry.id,
+      providerId: 'codex',
+      path: entry.path,
+      markdown: '# Skill A\n\nUse it well.\n',
+      sizeBytes: 24,
+      resources: [
+        {
+          kind: 'script',
+          name: 'run.sh',
+          relativePath: 'scripts/run.sh',
+        },
+        {
+          kind: 'reference',
+          name: 'notes.md',
+          relativePath: 'references/notes.md',
+        },
+      ],
+    })
+  })
+
+  it('rejects details reads for paths not present in the catalog', async () => {
+    const project = projectService.create({ repositoryPath: gitRepoPath })
+    const skillDir = join(tempDir, 'skills', 'skill-a')
+    mkdirSync(skillDir, { recursive: true })
+    writeFileSync(join(skillDir, 'SKILL.md'), '# Skill A\n')
+    const entry = catalogEntry(join(skillDir, 'SKILL.md'))
+    const service = new SkillsService(projectService, [codexProvider()], {
+      now: () => FIXED_NOW,
+      createAdapter: () => ({ list: async () => catalog([entry]) }),
+    })
+
+    await expect(
+      service.readDetails({
+        projectId: project.id,
+        providerId: 'codex',
+        skillId: entry.id,
+        path: join(tempDir, 'not-cataloged', 'SKILL.md'),
+      }),
+    ).rejects.toThrow('Skill not found in provider catalog')
   })
 })

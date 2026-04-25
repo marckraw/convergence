@@ -62,6 +62,11 @@ export const PALETTE_DIALOGS: DialogDescriptor[] = [
     description: 'Configured MCP servers for this project',
   },
   {
+    kind: 'skills-browser',
+    title: 'Skills',
+    description: 'Provider skill browser for this project',
+  },
+  {
     kind: 'release-notes',
     title: "What's New",
     description: 'Latest release notes and changes',

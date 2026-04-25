@@ -15,6 +15,7 @@ import {
   ProjectSettingsDialogContainer,
   ProviderStatusDialogContainer,
   ReleaseNotesDialogContainer,
+  SkillsBrowserDialogContainer,
   ThemeToggleButton,
   WorkspaceCreateDialogContainer,
 } from '@/features'
@@ -273,6 +274,9 @@ export const Sidebar: FC<SidebarProps> = ({
         </div>
         <div className="mt-2">
           <McpServersDialogContainer />
+        </div>
+        <div className="mt-2">
+          <SkillsBrowserDialogContainer />
         </div>
         <div className="mt-2">
           <ReleaseNotesDialogContainer />

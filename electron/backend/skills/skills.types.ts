@@ -92,3 +92,27 @@ export interface ProjectSkillCatalog {
 export interface SkillCatalogOptions {
   forceReload?: boolean
 }
+
+export interface SkillDetailsRequest {
+  projectId: string
+  providerId: SkillProviderId
+  skillId: string
+  path: string
+}
+
+export type SkillResourceKind = 'script' | 'reference' | 'asset' | 'other'
+
+export interface SkillResourceSummary {
+  kind: SkillResourceKind
+  name: string
+  relativePath: string
+}
+
+export interface SkillDetails {
+  skillId: string
+  providerId: SkillProviderId
+  path: string
+  markdown: string
+  sizeBytes: number
+  resources: SkillResourceSummary[]
+}

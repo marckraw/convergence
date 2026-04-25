@@ -5,6 +5,7 @@ export type DialogKind =
   | 'project-settings'
   | 'providers'
   | 'mcp-servers'
+  | 'skills-browser'
   | 'release-notes'
   | 'session-fork'
   | 'session-intent'

@@ -6,6 +6,7 @@ import {
   type ReasoningEffort,
 } from '@/entities/session'
 import { useAppSettingsStore } from '@/entities/app-settings'
+import { useDialogStore } from '@/entities/dialog'
 import {
   attachmentApi,
   useAttachmentStore,
@@ -73,6 +74,7 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
   const [isDragging, setIsDragging] = useState(false)
   const dragDepth = useRef(0)
   const providers = useSessionStore((s) => s.providers)
+  const openDialog = useDialogStore((s) => s.open)
   const loadProviders = useSessionStore((s) => s.loadProviders)
   const createAndStartSession = useSessionStore((s) => s.createAndStartSession)
   const sendMessageToSession = useSessionStore((s) => s.sendMessageToSession)
@@ -318,6 +320,10 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
     [draftKey, removeDraft],
   )
 
+  const handleSkillsBrowse = useCallback(() => {
+    openDialog('skills-browser')
+  }, [openDialog])
+
   return (
     <>
       <Composer
@@ -345,6 +351,7 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
         hasAttachmentErrors={!capabilityResult.ok}
         attachmentsIngestInFlight={ingestInFlight}
         isDragging={isDragging}
+        onSkillsBrowse={handleSkillsBrowse}
         onAttachmentAdd={handleAttachmentAdd}
         onAttachmentRemove={handleAttachmentRemove}
         onAttachmentOpen={setPreviewAttachment}

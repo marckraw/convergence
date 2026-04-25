@@ -8,7 +8,7 @@ import type { Attachment } from '@/entities/attachment'
 import { Button } from '@/shared/ui/button'
 import { Textarea } from '@/shared/ui/textarea'
 import { cn } from '@/shared/lib/cn.pure'
-import { ArrowUp, Paperclip } from 'lucide-react'
+import { ArrowUp, Library, Paperclip } from 'lucide-react'
 import { ComposerSelect } from './composer-select.presentational'
 import { AttachmentsRow } from './attachments-row.presentational'
 
@@ -30,6 +30,7 @@ interface ComposerProps {
   attachmentsIngestInFlight: boolean
   isDragging: boolean
   onAttachmentAdd: () => void
+  onSkillsBrowse: () => void
   onAttachmentRemove: (attachmentId: string) => void
   onAttachmentOpen: (attachment: Attachment) => void
   onDragEnter: (e: DragEvent<HTMLDivElement>) => void
@@ -56,6 +57,7 @@ export const Composer: FC<ComposerProps> = ({
   hasAttachmentErrors,
   attachmentsIngestInFlight,
   isDragging,
+  onSkillsBrowse,
   onAttachmentAdd,
   onAttachmentRemove,
   onAttachmentOpen,
@@ -153,6 +155,17 @@ export const Composer: FC<ComposerProps> = ({
               disabled={disabled || attachmentsIngestInFlight}
             >
               <Paperclip className="h-3.5 w-3.5" />
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant="ghost"
+              className="h-7 gap-1.5 px-2 text-xs text-muted-foreground hover:text-foreground"
+              aria-label="Browse skills"
+              onClick={onSkillsBrowse}
+            >
+              <Library className="h-3.5 w-3.5" />
+              Skills
             </Button>
             <ComposerSelect
               selectedId={selection.providerId}

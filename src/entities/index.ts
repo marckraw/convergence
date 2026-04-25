@@ -37,3 +37,13 @@ export type {
   DraftAttachments,
 } from './attachment'
 export { useAttachmentStore, attachmentApi } from './attachment'
+
+export type {
+  ProjectSkillCatalog,
+  ProviderSkillCatalog,
+  SkillCatalogEntry,
+  SkillDetails,
+  SkillProviderId,
+  SkillScope,
+} from './skill'
+export { skillApi, useSkillStore } from './skill'

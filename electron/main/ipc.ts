@@ -30,7 +30,10 @@ import type {
 import type { CreateWorkspaceInput } from '../backend/workspace/workspace.types'
 import type { CreateSessionInput } from '../backend/session/session.types'
 import type { ProjectSettings } from '../backend/project/project-settings.pure'
-import type { SkillCatalogOptions } from '../backend/skills/skills.types'
+import type {
+  SkillCatalogOptions,
+  SkillDetailsRequest,
+} from '../backend/skills/skills.types'
 
 interface IngestFileIpcInput {
   name: string
@@ -503,6 +506,10 @@ export function registerIpcHandlers(
     'skills:listByProjectId',
     (_event, projectId: string, options?: SkillCatalogOptions) =>
       skillsService.listByProjectId(projectId, options),
+  )
+
+  ipcMain.handle('skills:readDetails', (_event, input: SkillDetailsRequest) =>
+    skillsService.readDetails(input),
   )
 
   // Session update event forwarding

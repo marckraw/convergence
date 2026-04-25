@@ -134,6 +134,8 @@ Detailed phase spec: `docs/specs/first-class-skills-phase-1.md`.
 **Goal:** Give users a full skill directory with search and detail reading
 before wiring invocation into the composer.
 
+Detailed phase spec: `docs/specs/first-class-skills-phase-2.md`.
+
 ### Tasks
 
 - Add `src/entities/skill` API/model/types.
@@ -193,7 +195,9 @@ refs on user messages, without yet changing provider invocation behavior.
 
 ### Tasks
 
-- Add composer Skills button and searchable picker.
+- Replace the Phase 2 browse-only composer Skills button with a searchable
+  picker that reuses `src/entities/skill` catalog state and catalog-backed
+  skill refs.
 - Add selected skill chips in the composer.
 - Extend session start/send-message input types with `skillSelections`.
 - Extend user conversation item payloads with `skillRefs`.

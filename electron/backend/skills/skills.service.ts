@@ -1,12 +1,18 @@
 import { CodexSkillsService } from './codex-skills.service'
 import { buildProviderSkillErrorCatalog } from './skill-catalog.pure'
+import { readdir, readFile, stat } from 'fs/promises'
+import { basename, dirname, join, resolve } from 'path'
 import type { ProjectService } from '../project/project.service'
 import type { DetectedProvider } from '../provider/detect'
 import type {
   ProjectSkillCatalog,
   ProviderSkillCatalog,
   SkillCatalogOptions,
+  SkillDetails,
+  SkillDetailsRequest,
   SkillProviderId,
+  SkillResourceKind,
+  SkillResourceSummary,
 } from './skills.types'
 
 export interface SkillProviderCatalogAdapter {
@@ -81,6 +87,83 @@ function defaultCreateAdapter(
   return null
 }
 
+const MAX_SKILL_DETAILS_BYTES = 1024 * 1024
+const MAX_RESOURCE_SUMMARIES = 80
+
+const RESOURCE_DIR_KINDS: Record<string, SkillResourceKind> = {
+  scripts: 'script',
+  references: 'reference',
+  assets: 'asset',
+}
+
+async function directoryExists(path: string): Promise<boolean> {
+  try {
+    const info = await stat(path)
+    return info.isDirectory()
+  } catch {
+    return false
+  }
+}
+
+async function summarizeResourceDirectory(
+  root: string,
+  directoryName: string,
+  kind: SkillResourceKind,
+): Promise<SkillResourceSummary[]> {
+  const directoryPath = join(root, directoryName)
+  if (!(await directoryExists(directoryPath))) {
+    return []
+  }
+
+  const entries = await readdir(directoryPath, { withFileTypes: true })
+  return entries
+    .sort((left, right) => left.name.localeCompare(right.name))
+    .slice(0, MAX_RESOURCE_SUMMARIES)
+    .map((entry) => ({
+      kind,
+      name: entry.name,
+      relativePath: `${directoryName}/${entry.name}`,
+    }))
+}
+
+async function summarizeOtherResources(
+  root: string,
+): Promise<SkillResourceSummary[]> {
+  const entries = await readdir(root, { withFileTypes: true })
+
+  return entries
+    .filter((entry) => {
+      if (entry.name.toLowerCase() === 'skill.md') {
+        return false
+      }
+      return !(entry.name in RESOURCE_DIR_KINDS)
+    })
+    .sort((left, right) => left.name.localeCompare(right.name))
+    .slice(0, MAX_RESOURCE_SUMMARIES)
+    .map((entry) => ({
+      kind: 'other' as const,
+      name: entry.name,
+      relativePath: entry.name,
+    }))
+}
+
+async function summarizeSkillResources(
+  skillPath: string,
+): Promise<SkillResourceSummary[]> {
+  const root = dirname(skillPath)
+  const knownResources = await Promise.all(
+    Object.entries(RESOURCE_DIR_KINDS).map(([directoryName, kind]) =>
+      summarizeResourceDirectory(root, directoryName, kind),
+    ),
+  )
+  const otherResources = await summarizeOtherResources(root)
+
+  return [...knownResources.flat(), ...otherResources].slice(
+    0,
+    MAX_RESOURCE_SUMMARIES,
+  )
+}
+
 export class SkillsService {
   private now: () => Date
   private createAdapter: (
@@ -126,6 +209,51 @@ export class SkillsService {
         (provider): provider is ProviderSkillCatalog => provider !== null,
       ),
       refreshedAt: this.now().toISOString(),
+    }
+  }
+
+  async readDetails(input: SkillDetailsRequest): Promise<SkillDetails> {
+    const catalog = await this.listByProjectId(input.projectId)
+    const requestedPath = resolve(input.path)
+    const entry = catalog.providers
+      .flatMap((provider) => provider.skills)
+      .find(
+        (skill) =>
+          skill.providerId === input.providerId &&
+          skill.id === input.skillId &&
+          skill.path !== null &&
+          resolve(skill.path) === requestedPath,
+      )
+
+    if (!entry || !entry.path) {
+      throw new Error('Skill not found in provider catalog')
+    }
+
+    const skillPath = resolve(entry.path)
+    if (basename(skillPath).toLowerCase() !== 'skill.md') {
+      throw new Error('Skill details can only read SKILL.md files')
+    }
+
+    const info = await stat(skillPath)
+    if (!info.isFile()) {
+      throw new Error('Skill details path is not a file')
+    }
+    if (info.size > MAX_SKILL_DETAILS_BYTES) {
+      throw new Error('Skill details file is too large to read')
+    }
+
+    const [markdown, resources] = await Promise.all([
+      readFile(skillPath, 'utf8'),
+      summarizeSkillResources(skillPath),
+    ])
+
+    return {
+      skillId: entry.id,
+      providerId: entry.providerId,
+      path: skillPath,
+      markdown,
+      sizeBytes: info.size,
+      resources,
     }
   }
 }
