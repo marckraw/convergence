@@ -52,7 +52,7 @@ export const CommandCenterPalette: FC<CommandCenterPaletteProps> = ({
         value={item.id}
         aria-label={accessibleLabel}
         onSelect={() => onSelect(item)}
-        className="flex cursor-pointer items-center justify-between gap-3 rounded-md px-3 py-2 text-sm aria-selected:bg-white/10"
+        className="flex cursor-pointer items-center justify-between gap-3 rounded-md px-3 py-2 text-sm aria-selected:bg-accent aria-selected:text-accent-foreground"
       >
         <span className="truncate">{primary}</span>
         {secondary ? (
