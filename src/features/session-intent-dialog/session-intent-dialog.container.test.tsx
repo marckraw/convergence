@@ -58,7 +58,9 @@ describe('SessionIntentDialogContainer', () => {
   it('renders both intent options when the dialog is open', () => {
     render(<SessionIntentDialogContainer />)
 
-    expect(screen.getByTestId('session-intent-conversation')).toBeInTheDocument()
+    expect(
+      screen.getByTestId('session-intent-conversation'),
+    ).toBeInTheDocument()
     expect(screen.getByTestId('session-intent-terminal')).toBeInTheDocument()
   })
 

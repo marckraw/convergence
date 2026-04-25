@@ -6,3 +6,14 @@ export interface Workspace {
   type: 'worktree'
   createdAt: string
 }
+
+export interface BranchOutputFacts {
+  branchName: string
+  upstreamBranch: string | null
+  remoteUrl: string | null
+}
+
+export interface GitStatusEntry {
+  status: string
+  file: string
+}

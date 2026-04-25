@@ -22,16 +22,22 @@ function parseTab(input: unknown, path: string): PersistedTerminalTab {
   }
   const { id, cwd, title } = input
   if (typeof id !== 'string' || id.length === 0) {
-    throw Object.assign(new Error(`${path}: tab.id must be a non-empty string`), {
-      reason: 'invalid-id',
-      path,
-    })
+    throw Object.assign(
+      new Error(`${path}: tab.id must be a non-empty string`),
+      {
+        reason: 'invalid-id',
+        path,
+      },
+    )
   }
   if (typeof cwd !== 'string' || cwd.length === 0) {
-    throw Object.assign(new Error(`${path}: tab.cwd must be a non-empty string`), {
-      reason: 'invalid-cwd',
-      path,
-    })
+    throw Object.assign(
+      new Error(`${path}: tab.cwd must be a non-empty string`),
+      {
+        reason: 'invalid-cwd',
+        path,
+      },
+    )
   }
   if (typeof title !== 'string') {
     throw Object.assign(new Error(`${path}: tab.title must be a string`), {
@@ -42,12 +48,19 @@ function parseTab(input: unknown, path: string): PersistedTerminalTab {
   return { id, cwd, title }
 }
 
-function parseNode(input: unknown, path: string, depth: number): PersistedPaneTree {
+function parseNode(
+  input: unknown,
+  path: string,
+  depth: number,
+): PersistedPaneTree {
   if (depth > MAX_DEPTH) {
-    throw Object.assign(new Error(`${path}: tree exceeds max depth ${MAX_DEPTH}`), {
-      reason: 'max-depth',
-      path,
-    })
+    throw Object.assign(
+      new Error(`${path}: tree exceeds max depth ${MAX_DEPTH}`),
+      {
+        reason: 'max-depth',
+        path,
+      },
+    )
   }
   if (!isRecord(input)) {
     throw Object.assign(new Error(`${path}: node must be an object`), {
@@ -61,16 +74,22 @@ function parseNode(input: unknown, path: string, depth: number): PersistedPaneTr
     const activeTabId = input.activeTabId
     const rawTabs = input.tabs
     if (typeof id !== 'string' || id.length === 0) {
-      throw Object.assign(new Error(`${path}: leaf.id must be a non-empty string`), {
-        reason: 'invalid-id',
-        path,
-      })
+      throw Object.assign(
+        new Error(`${path}: leaf.id must be a non-empty string`),
+        {
+          reason: 'invalid-id',
+          path,
+        },
+      )
     }
     if (!Array.isArray(rawTabs) || rawTabs.length === 0) {
-      throw Object.assign(new Error(`${path}: leaf must have at least one tab`), {
-        reason: 'empty-tabs',
-        path,
-      })
+      throw Object.assign(
+        new Error(`${path}: leaf must have at least one tab`),
+        {
+          reason: 'empty-tabs',
+          path,
+        },
+      )
     }
     if (typeof activeTabId !== 'string' || activeTabId.length === 0) {
       throw Object.assign(
@@ -78,7 +97,9 @@ function parseNode(input: unknown, path: string, depth: number): PersistedPaneTr
         { reason: 'invalid-active-tab-id', path },
       )
     }
-    const tabs = rawTabs.map((tab, index) => parseTab(tab, `${path}.tabs[${index}]`))
+    const tabs = rawTabs.map((tab, index) =>
+      parseTab(tab, `${path}.tabs[${index}]`),
+    )
     if (!tabs.some((tab) => tab.id === activeTabId)) {
       throw Object.assign(
         new Error(`${path}: activeTabId "${activeTabId}" not found in tabs`),
@@ -94,14 +115,19 @@ function parseNode(input: unknown, path: string, depth: number): PersistedPaneTr
     const rawChildren = input.children
     const rawSizes = input.sizes
     if (typeof id !== 'string' || id.length === 0) {
-      throw Object.assign(new Error(`${path}: split.id must be a non-empty string`), {
-        reason: 'invalid-id',
-        path,
-      })
+      throw Object.assign(
+        new Error(`${path}: split.id must be a non-empty string`),
+        {
+          reason: 'invalid-id',
+          path,
+        },
+      )
     }
     if (direction !== 'horizontal' && direction !== 'vertical') {
       throw Object.assign(
-        new Error(`${path}: split.direction must be "horizontal" or "vertical"`),
+        new Error(
+          `${path}: split.direction must be "horizontal" or "vertical"`,
+        ),
         { reason: 'invalid-direction', path },
       )
     }
@@ -144,10 +170,13 @@ function parseNode(input: unknown, path: string, depth: number): PersistedPaneTr
     }
     return split
   }
-  throw Object.assign(new Error(`${path}: unknown node kind "${String(kind)}"`), {
-    reason: 'unknown-kind',
-    path,
-  })
+  throw Object.assign(
+    new Error(`${path}: unknown node kind "${String(kind)}"`),
+    {
+      reason: 'unknown-kind',
+      path,
+    },
+  )
 }
 
 function collectIds(
@@ -165,10 +194,13 @@ function collectIds(
   if (tree.kind === 'leaf') {
     for (const tab of tree.tabs) {
       if (seen.has(tab.id)) {
-        throw Object.assign(new Error(`${path}: duplicate tab id "${tab.id}"`), {
-          reason: 'duplicate-id',
-          path,
-        })
+        throw Object.assign(
+          new Error(`${path}: duplicate tab id "${tab.id}"`),
+          {
+            reason: 'duplicate-id',
+            path,
+          },
+        )
       }
       seen.add(tab.id)
     }

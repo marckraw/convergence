@@ -24,5 +24,6 @@ export const updatesApi = {
     window.electronAPI.updates.openReleaseNotes(),
 
   onStatusChanged: (callback: (status: UpdateStatus) => void): (() => void) =>
-    window.electronAPI.updates.onStatusChanged(callback),
+    window.electronAPI.updates?.onStatusChanged?.(callback) ??
+    (() => undefined),
 }

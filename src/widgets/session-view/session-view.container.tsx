@@ -4,7 +4,7 @@ import { useProjectStore } from '@/entities/project'
 import { formatActivityLabel, useSessionStore } from '@/entities/session'
 import { useDialogStore } from '@/entities/dialog'
 import { useInitiativeStore } from '@/entities/initiative'
-import { useWorkspaceStore } from '@/entities/workspace'
+import { gitApi, useWorkspaceStore } from '@/entities/workspace'
 import { ComposerContainer } from '@/features/composer'
 import { useTerminalStore } from '@/entities/terminal'
 import { Button } from '@/shared/ui/button'
@@ -174,7 +174,7 @@ export const SessionView: FC = () => {
   // Load branch name for the session's working directory
   useEffect(() => {
     if (session?.workingDirectory) {
-      window.electronAPI.git
+      gitApi
         .getCurrentBranch(session.workingDirectory)
         .then(setBranchName)
         .catch(() => setBranchName(null))

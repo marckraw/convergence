@@ -21,8 +21,18 @@ const validSplit: PersistedPaneTree = {
   direction: 'horizontal',
   sizes: [50, 50],
   children: [
-    { ...validLeaf, id: 'leaf-a', tabs: [{ id: 'tab-a', cwd: '/a', title: 'a' }], activeTabId: 'tab-a' },
-    { ...validLeaf, id: 'leaf-b', tabs: [{ id: 'tab-b', cwd: '/b', title: 'b' }], activeTabId: 'tab-b' },
+    {
+      ...validLeaf,
+      id: 'leaf-a',
+      tabs: [{ id: 'tab-a', cwd: '/a', title: 'a' }],
+      activeTabId: 'tab-a',
+    },
+    {
+      ...validLeaf,
+      id: 'leaf-b',
+      tabs: [{ id: 'tab-b', cwd: '/b', title: 'b' }],
+      activeTabId: 'tab-b',
+    },
   ],
 }
 
@@ -44,9 +54,24 @@ describe('validatePersistedTree', () => {
       direction: 'vertical',
       sizes: [33.4, 33.3, 33.3],
       children: [
-        { kind: 'leaf', id: 'l1', tabs: [{ id: 't1', cwd: '/', title: 'a' }], activeTabId: 't1' },
-        { kind: 'leaf', id: 'l2', tabs: [{ id: 't2', cwd: '/', title: 'b' }], activeTabId: 't2' },
-        { kind: 'leaf', id: 'l3', tabs: [{ id: 't3', cwd: '/', title: 'c' }], activeTabId: 't3' },
+        {
+          kind: 'leaf',
+          id: 'l1',
+          tabs: [{ id: 't1', cwd: '/', title: 'a' }],
+          activeTabId: 't1',
+        },
+        {
+          kind: 'leaf',
+          id: 'l2',
+          tabs: [{ id: 't2', cwd: '/', title: 'b' }],
+          activeTabId: 't2',
+        },
+        {
+          kind: 'leaf',
+          id: 'l3',
+          tabs: [{ id: 't3', cwd: '/', title: 'c' }],
+          activeTabId: 't3',
+        },
       ],
     }
     expect(() => validatePersistedTree(nested)).not.toThrow()
@@ -78,7 +103,14 @@ describe('validatePersistedTree', () => {
       id: 's',
       direction: 'horizontal',
       sizes: [100],
-      children: [{ kind: 'leaf', id: 'l', tabs: [{ id: 't', cwd: '/', title: 'a' }], activeTabId: 't' }],
+      children: [
+        {
+          kind: 'leaf',
+          id: 'l',
+          tabs: [{ id: 't', cwd: '/', title: 'a' }],
+          activeTabId: 't',
+        },
+      ],
     })
     expect(error?.reason).toBe('too-few-children')
   })
@@ -90,8 +122,18 @@ describe('validatePersistedTree', () => {
       direction: 'horizontal',
       sizes: [50, 25, 25],
       children: [
-        { kind: 'leaf', id: 'l1', tabs: [{ id: 't1', cwd: '/', title: 'a' }], activeTabId: 't1' },
-        { kind: 'leaf', id: 'l2', tabs: [{ id: 't2', cwd: '/', title: 'b' }], activeTabId: 't2' },
+        {
+          kind: 'leaf',
+          id: 'l1',
+          tabs: [{ id: 't1', cwd: '/', title: 'a' }],
+          activeTabId: 't1',
+        },
+        {
+          kind: 'leaf',
+          id: 'l2',
+          tabs: [{ id: 't2', cwd: '/', title: 'b' }],
+          activeTabId: 't2',
+        },
       ],
     })
     expect(error?.reason).toBe('sizes-length-mismatch')
@@ -104,8 +146,18 @@ describe('validatePersistedTree', () => {
       direction: 'horizontal',
       sizes: [40, 40],
       children: [
-        { kind: 'leaf', id: 'l1', tabs: [{ id: 't1', cwd: '/', title: 'a' }], activeTabId: 't1' },
-        { kind: 'leaf', id: 'l2', tabs: [{ id: 't2', cwd: '/', title: 'b' }], activeTabId: 't2' },
+        {
+          kind: 'leaf',
+          id: 'l1',
+          tabs: [{ id: 't1', cwd: '/', title: 'a' }],
+          activeTabId: 't1',
+        },
+        {
+          kind: 'leaf',
+          id: 'l2',
+          tabs: [{ id: 't2', cwd: '/', title: 'b' }],
+          activeTabId: 't2',
+        },
       ],
     })
     expect(error?.reason).toBe('sizes-sum-mismatch')
@@ -118,8 +170,18 @@ describe('validatePersistedTree', () => {
       direction: 'horizontal',
       sizes: [50, 50],
       children: [
-        { kind: 'leaf', id: 'dup', tabs: [{ id: 't1', cwd: '/', title: 'a' }], activeTabId: 't1' },
-        { kind: 'leaf', id: 'l2', tabs: [{ id: 't2', cwd: '/', title: 'b' }], activeTabId: 't2' },
+        {
+          kind: 'leaf',
+          id: 'dup',
+          tabs: [{ id: 't1', cwd: '/', title: 'a' }],
+          activeTabId: 't1',
+        },
+        {
+          kind: 'leaf',
+          id: 'l2',
+          tabs: [{ id: 't2', cwd: '/', title: 'b' }],
+          activeTabId: 't2',
+        },
       ],
     })
     expect(error?.reason).toBe('duplicate-id')

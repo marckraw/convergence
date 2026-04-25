@@ -5,9 +5,9 @@ export interface ConversationDockPlaceholderProps {
   onConvert?: () => void
 }
 
-export const ConversationDockPlaceholder: FC<ConversationDockPlaceholderProps> = ({
-  onConvert,
-}) => (
+export const ConversationDockPlaceholder: FC<
+  ConversationDockPlaceholderProps
+> = ({ onConvert }) => (
   <div
     className={workspaceLayoutStyles.conversationDock}
     data-testid="conversation-dock-placeholder"
@@ -16,8 +16,8 @@ export const ConversationDockPlaceholder: FC<ConversationDockPlaceholderProps> =
       No conversation history
     </span>
     <span className={workspaceLayoutStyles.conversationDockBody}>
-      This terminal session does not have an AI provider attached. Convert it
-      to a conversation session to talk to an agent in this workspace
+      This terminal session does not have an AI provider attached. Convert it to
+      a conversation session to talk to an agent in this workspace
       {onConvert ? ' (coming soon).' : '.'}
     </span>
   </div>

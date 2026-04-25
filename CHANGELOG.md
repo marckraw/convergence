@@ -1,5 +1,17 @@
 # convergence
 
+## 0.23.5
+
+### Patch Changes
+
+- 135050a: Tighten renderer architecture enforcement with API wrappers and Chaperone rules for preload access and FSD public imports.
+
+## 0.23.4
+
+### Patch Changes
+
+- 4152b8b: Document the Prettier formatting rule in `CLAUDE.md` and `AGENTS.md`. Agents must accept reformatting from `chaperone check --fix` (including diffs to files outside their immediate scope), commit those changes — separately as `chore: prettier` if they're unrelated to the current task — rather than skip them or assume they're someone else's WIP.
+
 ## 0.23.3
 
 ### Patch Changes

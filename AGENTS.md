@@ -19,6 +19,22 @@ After every finished task, agents must run these commands in this repo:
 
 If a command fails because the current phase has not introduced that tool yet, report the failure clearly and fix the missing bootstrap in the next relevant task. Do not silently skip verification.
 
+## Prettier formatting
+
+Always accept Prettier's reformatting. `chaperone check --fix` runs Prettier
+across the repo and may rewrite files that were committed unformatted on a
+prior branch. When that happens:
+
+- Treat the resulting whitespace/wrapping diff as part of your task and stage
+  it. Do not assume the modifications belong to "someone else's WIP" and skip
+  them.
+- If the formatter touches files outside the scope of your change, commit
+  those formatting fixes in a separate `chore: prettier` commit on the same
+  branch rather than leaving them dirty in the working tree or reverting
+  them.
+- Never commit code that fails `chaperone check` (no `--fix`). Run the
+  non-fix variant before opening a PR if you suspect drift.
+
 When modifying `electron-builder.yml`, any `package:mac*` script, or
 `.github/workflows/publish-mac-release.yml`, also run
 `npm run package:mac:unsigned` locally and confirm that

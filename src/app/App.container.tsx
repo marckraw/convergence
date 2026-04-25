@@ -8,10 +8,11 @@ import {
   notificationsApi,
   useNotificationsStore,
 } from '@/entities/notifications'
-import { useUpdatesStore } from '@/entities/updates'
-import { useTaskProgressStore } from '@/entities/task-progress'
+import { updatesApi, useUpdatesStore } from '@/entities/updates'
+import { taskProgressApi, useTaskProgressStore } from '@/entities/task-progress'
 import { Toaster, toast } from 'sonner'
 import { TooltipProvider } from '@/shared/ui/tooltip'
+import { systemApi } from '@/shared'
 import { applyTheme, getStoredTheme } from '@/shared/lib/theme'
 import { CommandCenterContainer } from '@/features/command-center'
 import { InitiativeSessionLinkDialogContainer } from '@/features/initiative-session-link'
@@ -59,7 +60,7 @@ export function App() {
     const fallbackPlatform = navigator.userAgent.includes('Mac')
       ? 'darwin'
       : 'unknown'
-    const systemInfo = window.electronAPI.system?.getInfo?.() ?? {
+    const systemInfo = systemApi.getInfo() ?? {
       platform: fallbackPlatform,
       prefersReducedTransparency: false,
     }
@@ -99,9 +100,7 @@ export function App() {
 
   useEffect(() => {
     if (!import.meta.env.DEV) return
-    const api = window.electronAPI.updates
-    if (!api?.onStatusChanged) return
-    return api.onStatusChanged((status) => {
+    return updatesApi.onStatusChanged((status) => {
       console.debug('[updates:status]', status)
     })
   }, [])
@@ -123,9 +122,7 @@ export function App() {
   }, [])
 
   useEffect(() => {
-    const subscribe = window.electronAPI.taskProgress?.subscribe
-    if (!subscribe) return
-    const unsubscribe = subscribe((event) => {
+    const unsubscribe = taskProgressApi.subscribe((event) => {
       if (import.meta.env.DEV) {
         console.debug('[task-progress]', event)
       }

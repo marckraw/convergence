@@ -14,7 +14,7 @@ import {
 } from '@/entities/initiative'
 import { useProjectStore } from '@/entities/project'
 import { useSessionStore } from '@/entities/session'
-import { useWorkspaceStore } from '@/entities/workspace'
+import { gitApi, useWorkspaceStore } from '@/entities/workspace'
 import { Button } from '@/shared/ui/button'
 import {
   InitiativeWorkboardDialog,
@@ -402,7 +402,7 @@ export const InitiativeWorkboardDialogContainer: FC<{
     const facts = await Promise.all(
       selectedAttempts.flatMap((attemptView) => {
         if (!attemptView.workingDirectory || attemptView.missing) return []
-        return window.electronAPI.git
+        return gitApi
           .getBranchOutputFacts(attemptView.workingDirectory)
           .then((fact) => ({
             sourceSessionId: attemptView.attempt.sessionId,

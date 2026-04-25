@@ -38,7 +38,12 @@ describe('serializePaneTree', () => {
       sizes: [40, 60],
       children: [
         runtimeLeaf,
-        { ...runtimeLeaf, id: 'leaf-2', activeTabId: 'tab-2', tabs: [{ ...runtimeLeaf.tabs[0]!, id: 'tab-2' }] },
+        {
+          ...runtimeLeaf,
+          id: 'leaf-2',
+          activeTabId: 'tab-2',
+          tabs: [{ ...runtimeLeaf.tabs[0]!, id: 'tab-2' }],
+        },
       ],
     }
     const persisted = serializePaneTree(tree)
@@ -56,7 +61,12 @@ describe('serializePaneTree', () => {
       sizes: [50, 50],
       children: [
         runtimeLeaf,
-        { ...runtimeLeaf, id: 'leaf-2', activeTabId: 'tab-2', tabs: [{ ...runtimeLeaf.tabs[0]!, id: 'tab-2' }] },
+        {
+          ...runtimeLeaf,
+          id: 'leaf-2',
+          activeTabId: 'tab-2',
+          tabs: [{ ...runtimeLeaf.tabs[0]!, id: 'tab-2' }],
+        },
       ],
     }
     const persisted = serializePaneTree(tree)
