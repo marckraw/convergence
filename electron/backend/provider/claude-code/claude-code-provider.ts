@@ -42,6 +42,14 @@ import {
 } from '../../skills/native-skill-invocation.pure'
 import { markSkillSelectionsStatus } from '../../skills/skill-invocation.pure'
 import type { SkillSelection } from '../../skills/skills.types'
+import {
+  isConcreteClaudeSkillName,
+  type ClaudeSkillActivationEvent,
+} from './claude-skill-telemetry.pure'
+import {
+  startClaudeSkillTelemetrySink,
+  type ClaudeSkillTelemetrySink,
+} from './claude-skill-telemetry.service'
 
 function now(): string {
   return new Date().toISOString()
@@ -218,6 +226,14 @@ export class ClaudeCodeProvider implements Provider {
       skillSelections?: SkillSelection[]
       userMessageItemId: string | null
     } | null = null
+    let telemetrySinkPromise: Promise<ClaudeSkillTelemetrySink | null> | null =
+      null
+    let latestSkillInvocationTarget: {
+      userMessageItemId: string
+      skillSelections: SkillSelection[]
+    } | null = null
+    let clearSkillInvocationTargetTimer: ReturnType<typeof setTimeout> | null =
+      null
     let sawTurnOutput = false
     let stderrBuffer = ''
 
@@ -234,6 +250,9 @@ export class ClaudeCodeProvider implements Provider {
     function setStatus(status: SessionStatus): void {
       listeners.status.forEach((cb) => cb(status))
       sessionEmitter.patchSession({ status })
+      if (status === 'failed') {
+        disposeTelemetrySink()
+      }
     }
 
     function setAttention(attention: AttentionState): void {
@@ -262,6 +281,91 @@ export class ClaudeCodeProvider implements Provider {
       lastActivity = activity
       listeners.activity.forEach((cb) => cb(activity))
       sessionEmitter.patchSession({ activity })
+    }
+
+    function clearSkillInvocationTargetSoon(): void {
+      if (clearSkillInvocationTargetTimer) {
+        clearTimeout(clearSkillInvocationTargetTimer)
+      }
+      clearSkillInvocationTargetTimer = setTimeout(() => {
+        latestSkillInvocationTarget = null
+        clearSkillInvocationTargetTimer = null
+      }, 30_000)
+    }
+
+    function trackSkillInvocationTarget(
+      userMessageItemId: string | null,
+      skillSelections: SkillSelection[] | undefined,
+    ): void {
+      if (
+        !userMessageItemId ||
+        !skillSelections ||
+        skillSelections.length === 0
+      ) {
+        return
+      }
+
+      latestSkillInvocationTarget = {
+        userMessageItemId,
+        skillSelections,
+      }
+      clearSkillInvocationTargetSoon()
+    }
+
+    function disposeTelemetrySink(): void {
+      if (!telemetrySinkPromise) {
+        return
+      }
+
+      void telemetrySinkPromise
+        .then((sink) => sink?.dispose())
+        .catch(() => {
+          // Telemetry shutdown is best-effort.
+        })
+      telemetrySinkPromise = null
+    }
+
+    function confirmSkillActivation(event: ClaudeSkillActivationEvent): void {
+      const target = latestSkillInvocationTarget
+      if (!target || !isConcreteClaudeSkillName(event.skillName)) {
+        return
+      }
+
+      let changed = false
+      const updatedSelections = target.skillSelections.map((selection) => {
+        if (
+          selection.providerId === 'claude-code' &&
+          selection.name === event.skillName &&
+          selection.status !== 'confirmed'
+        ) {
+          changed = true
+          return {
+            ...selection,
+            status: 'confirmed' as const,
+          }
+        }
+        return selection
+      })
+
+      if (!changed) {
+        return
+      }
+
+      latestSkillInvocationTarget = {
+        userMessageItemId: target.userMessageItemId,
+        skillSelections: updatedSelections,
+      }
+      clearSkillInvocationTargetSoon()
+      sessionEmitter.patchMessage(target.userMessageItemId, {
+        skillSelections: updatedSelections,
+      })
+    }
+
+    function getTelemetrySink(): Promise<ClaudeSkillTelemetrySink | null> {
+      telemetrySinkPromise ??= startClaudeSkillTelemetrySink({
+        onSkillActivated: confirmSkillActivation,
+      })
+      return telemetrySinkPromise
     }
 
     function refreshContextWindowFromLogs(): void {
@@ -616,6 +720,15 @@ export class ClaudeCodeProvider implements Provider {
         return
       }
 
+      if (
+        latestSkillInvocationTarget?.userMessageItemId === userMessageItemId
+      ) {
+        latestSkillInvocationTarget = {
+          userMessageItemId,
+          skillSelections: updatedSelections,
+        }
+        clearSkillInvocationTargetSoon()
+      }
       sessionEmitter.patchMessage(userMessageItemId, {
         skillSelections: updatedSelections,
       })
@@ -652,6 +765,16 @@ export class ClaudeCodeProvider implements Provider {
         setAttention('failed')
         return
       }
+      trackSkillInvocationTarget(
+        userMessageItemId,
+        skillResolution.skillSelections,
+      )
+      const telemetrySink =
+        skillResolution.skillSelections &&
+        skillResolution.skillSelections.length > 0
+          ? await getTelemetrySink()
+          : null
+      if (stopped || child) return
 
       assistantTextBuffer = ''
       assistantMessageItemId = null
@@ -698,7 +821,10 @@ export class ClaudeCodeProvider implements Provider {
       child = spawn(binaryPath, args, {
         cwd: config.workingDirectory,
         stdio: ['pipe', 'pipe', 'pipe'],
-        env: { ...process.env },
+        env: {
+          ...process.env,
+          ...(telemetrySink?.env ?? {}),
+        },
       })
 
       if (child.stdout) {
@@ -859,6 +985,11 @@ export class ClaudeCodeProvider implements Provider {
       },
       stop: () => {
         stopped = true
+        disposeTelemetrySink()
+        if (clearSkillInvocationTargetTimer) {
+          clearTimeout(clearSkillInvocationTargetTimer)
+          clearSkillInvocationTargetTimer = null
+        }
         if (child) {
           child.kill('SIGTERM')
           setTimeout(() => {

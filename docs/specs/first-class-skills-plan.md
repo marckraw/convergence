@@ -436,6 +436,8 @@ Detailed phase spec: `docs/specs/first-class-skills-phase-6.md`.
 **Goal:** Add `confirmed` skill status only where a provider exposes a stable
 native signal.
 
+Detailed phase spec: `docs/specs/first-class-skills-phase-7.md`.
+
 Phase 6 note: Claude Code and Pi now receive provider-native command syntax,
 but that send path still exposes only `sent`/failure state. It does not expose
 additional activation confirmation events, so Phase 7 remains a telemetry-only
@@ -445,8 +447,8 @@ confirmation phase with no heuristic fallback.
 
 - Prototype a Claude Code telemetry ingestion path for
   `claude_code.skill_activated`.
-- Decide whether Convergence runs an embedded local OTel logs endpoint, uses
-  console/log exporter parsing, or defers based on implementation risk.
+- Use an embedded local OTLP HTTP JSON logs endpoint when the user has not
+  configured their own OTEL logs exporter.
 - Correlate activation events to the current session/turn without using model
   output heuristics.
 - Add provider runtime event type for skill activation.
