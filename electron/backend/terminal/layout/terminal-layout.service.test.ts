@@ -1,6 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import Database from 'better-sqlite3'
-import { closeDatabase, getDatabase, resetDatabase } from '../../database/database'
+import {
+  closeDatabase,
+  getDatabase,
+  resetDatabase,
+} from '../../database/database'
 import { TerminalLayoutRepository } from './terminal-layout.repository'
 import { TerminalLayoutService } from './terminal-layout.service'
 import type { PersistedPaneTree } from './terminal-layout.types'
@@ -86,7 +90,9 @@ describe('TerminalLayoutService', () => {
   })
 
   it('throws on malformed input during save', () => {
-    expect(() => service.saveLayout('s', { kind: 'leaf', id: 'l', tabs: [] })).toThrow()
+    expect(() =>
+      service.saveLayout('s', { kind: 'leaf', id: 'l', tabs: [] }),
+    ).toThrow()
   })
 
   it('drops stored layout if it becomes corrupt and returns null', () => {

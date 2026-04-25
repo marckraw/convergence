@@ -213,8 +213,7 @@ Goal: a user can create a terminal-primary session through the UI.
   - [x] `session-intent-dialog.container.tsx` — two-card chooser that
         closes itself and either calls `beginSessionDraft` (inline
         conversation flow) or opens the terminal-session-create dialog.
-  - [x] `session-intent-dialog.presentational.tsx` — Conversation card
-        + Terminal card, both keyed for automated tests.
+  - [x] `session-intent-dialog.presentational.tsx` — Conversation card + Terminal card, both keyed for automated tests.
   - [x] `session-intent-dialog.container.test.tsx` — both cards route
         correctly; cancel closes.
   - [x] `index.ts`.
@@ -224,7 +223,7 @@ Goal: a user can create a terminal-primary session through the UI.
   - [x] `terminal-session-create.container.tsx` — orchestrates name +
         workspace picker, on submit calls
         `sessionApi.create({ providerId: 'shell',
-        primarySurface: 'terminal', name, workspaceId })` and activates
+primarySurface: 'terminal', name, workspaceId })` and activates
         the new session.
   - [x] `terminal-session-create.presentational.tsx` — minimal form
         rendered through the shared `Dialog` primitives.

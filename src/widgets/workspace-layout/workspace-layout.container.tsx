@@ -16,9 +16,7 @@ function isEditableTarget(target: EventTarget | null): boolean {
 export const WorkspaceLayoutContainer: FC = () => {
   const primarySurface = useSessionStore((s) => {
     if (!s.activeSessionId) return 'conversation' as const
-    const session = s.sessions.find(
-      (entry) => entry.id === s.activeSessionId,
-    )
+    const session = s.sessions.find((entry) => entry.id === s.activeSessionId)
     return session?.primarySurface ?? 'conversation'
   })
 
