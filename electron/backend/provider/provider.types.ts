@@ -3,6 +3,7 @@ import type {
   ProviderAttachmentCapability,
 } from '../attachments/attachments.types'
 import type { SessionDelta } from '../session/conversation-item.types'
+import type { SkillSelection } from '../skills/skills.types'
 
 export type { Attachment, ProviderAttachmentCapability }
 
@@ -76,6 +77,7 @@ export interface SessionStartConfig {
   workingDirectory: string
   initialMessage: string
   initialAttachments?: Attachment[]
+  initialSkillSelections?: SkillSelection[]
   model: string | null
   effort: ReasoningEffort | null
   continuationToken: string | null
@@ -141,7 +143,11 @@ export interface SessionHandle {
   ) => void
   onActivityChange: (callback: (activity: ActivitySignal) => void) => void
 
-  sendMessage: (text: string, attachments?: Attachment[]) => void
+  sendMessage: (
+    text: string,
+    attachments?: Attachment[],
+    skillSelections?: SkillSelection[],
+  ) => void
   approve: () => void
   deny: () => void
   stop: () => void

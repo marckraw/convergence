@@ -33,6 +33,7 @@ import type { ProjectSettings } from '../backend/project/project-settings.pure'
 import type {
   SkillCatalogOptions,
   SkillDetailsRequest,
+  SkillSelection,
 } from '../backend/skills/skills.types'
 
 interface IngestFileIpcInput {
@@ -390,11 +391,16 @@ export function registerIpcHandlers(
     async (
       _event,
       id: string,
-      input: { text: string; attachmentIds?: string[] },
+      input: {
+        text: string
+        attachmentIds?: string[]
+        skillSelections?: SkillSelection[]
+      },
     ) => {
       await sessionService.start(id, {
         text: input.text,
         attachmentIds: input.attachmentIds,
+        skillSelections: input.skillSelections,
       })
     },
   )
@@ -404,11 +410,16 @@ export function registerIpcHandlers(
     async (
       _event,
       id: string,
-      input: { text: string; attachmentIds?: string[] },
+      input: {
+        text: string
+        attachmentIds?: string[]
+        skillSelections?: SkillSelection[]
+      },
     ) => {
       await sessionService.sendMessage(id, {
         text: input.text,
         attachmentIds: input.attachmentIds,
+        skillSelections: input.skillSelections,
       })
     },
   )

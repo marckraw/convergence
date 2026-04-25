@@ -5,6 +5,7 @@ import type {
   ConversationItemDraft,
 } from '../session/conversation-item.types'
 import type { SessionSummary } from '../session/session.types'
+import type { SkillSelection } from '../skills/skills.types'
 
 type MessageItem = Extract<ConversationItem, { kind: 'message' }>
 
@@ -50,12 +51,14 @@ export class ProviderSessionEmitter {
   addUserMessage(input: {
     text: string
     attachmentIds?: string[]
+    skillSelections?: SkillSelection[]
     timestamp?: string
   }): string {
     return this.addMessage({
       actor: 'user',
       text: input.text,
       attachmentIds: input.attachmentIds,
+      skillSelections: input.skillSelections,
       timestamp: input.timestamp,
       providerEventType: 'user',
     })
@@ -213,6 +216,7 @@ export class ProviderSessionEmitter {
     actor: 'user' | 'assistant'
     text: string
     attachmentIds?: string[]
+    skillSelections?: SkillSelection[]
     state?: MessageItem['state']
     timestamp?: string
     providerItemId?: string | null
@@ -229,6 +233,9 @@ export class ProviderSessionEmitter {
         actor: input.actor,
         text: input.text,
         ...(input.attachmentIds ? { attachmentIds: input.attachmentIds } : {}),
+        ...(input.skillSelections
+          ? { skillSelections: input.skillSelections }
+          : {}),
       },
     }) as MessageItem
     this.emitItem(item)

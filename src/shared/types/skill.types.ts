@@ -93,6 +93,22 @@ export interface SkillCatalogOptions {
   forceReload?: boolean
 }
 
+export type SkillInvocationStatus =
+  | 'selected'
+  | 'sent'
+  | 'confirmed'
+  | 'unavailable'
+  | 'failed'
+
+export interface SkillSelection extends SkillRef {
+  id: string
+  providerName: string
+  displayName: string
+  sourceLabel: string
+  status: SkillInvocationStatus
+  argumentText?: string
+}
+
 export interface SkillDetailsRequest {
   projectId: string
   providerId: SkillProviderId

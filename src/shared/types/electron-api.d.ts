@@ -4,6 +4,7 @@ import type {
   SkillCatalogOptions,
   SkillDetails,
   SkillDetailsRequest,
+  SkillSelection,
 } from './skill.types'
 
 interface ProjectData {
@@ -289,6 +290,7 @@ interface AttachmentIngestFileInput {
 interface SendSessionMessageInput {
   text: string
   attachmentIds?: string[]
+  skillSelections?: SkillSelection[]
 }
 
 type ConversationItemKind =
@@ -324,6 +326,7 @@ type ConversationItemData =
       actor: 'user' | 'assistant'
       text: string
       attachmentIds?: string[]
+      skillSelections?: SkillSelection[]
     })
   | (ConversationItemDataBase & {
       kind: 'thinking'

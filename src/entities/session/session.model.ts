@@ -8,6 +8,7 @@ import type {
   NeedsYouDisposition,
   SessionSummary,
 } from './session.types'
+import type { SkillSelection } from '@/shared/types/skill.types'
 import { isConversationalProvider } from './session.types'
 import { sessionApi, providerApi } from './session.api'
 import { sessionForkApi } from './session-fork.api'
@@ -49,6 +50,7 @@ interface SessionActions {
     name: string,
     message: string,
     attachmentIds?: string[],
+    skillSelections?: SkillSelection[],
   ) => Promise<void>
   createTerminalSession: (
     projectId: string,
@@ -61,6 +63,7 @@ interface SessionActions {
     id: string,
     text: string,
     attachmentIds?: string[],
+    skillSelections?: SkillSelection[],
   ) => Promise<void>
   stopSession: (id: string) => Promise<void>
   archiveSession: (id: string) => Promise<void>
@@ -305,6 +308,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     name,
     message,
     attachmentIds,
+    skillSelections,
   ) => {
     set({ error: null })
     try {
@@ -316,7 +320,12 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
         effort,
         name,
       })
-      await sessionApi.start(session.id, message, attachmentIds)
+      await sessionApi.start(
+        session.id,
+        message,
+        attachmentIds,
+        skillSelections,
+      )
       set((state) => ({
         currentProjectId: projectId,
         sessions: [session, ...state.sessions],
@@ -390,10 +399,11 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     id: string,
     text: string,
     attachmentIds?: string[],
+    skillSelections?: SkillSelection[],
   ) => {
     set({ error: null })
     try {
-      await sessionApi.sendMessage(id, text, attachmentIds)
+      await sessionApi.sendMessage(id, text, attachmentIds, skillSelections)
     } catch (err) {
       set({
         error: err instanceof Error ? err.message : 'Failed to send message',

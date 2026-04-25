@@ -3,6 +3,48 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ConversationItemView } from './transcript-entry.presentational'
 
 describe('ConversationItemView', () => {
+  it('renders selected skills on user messages', () => {
+    render(
+      <ConversationItemView
+        entry={{
+          id: 'message-1',
+          sessionId: 'session-1',
+          sequence: 1,
+          turnId: null,
+          kind: 'message',
+          state: 'complete',
+          actor: 'user',
+          text: 'Use this skill for the plan.',
+          skillSelections: [
+            {
+              id: 'codex:global:planning',
+              providerId: 'codex',
+              providerName: 'Codex',
+              scope: 'global',
+              sourceLabel: 'Global',
+              name: 'planning',
+              displayName: 'Planning',
+              path: '/skills/planning/SKILL.md',
+              rawScope: null,
+              status: 'selected',
+            },
+          ],
+          createdAt: '2026-04-13T10:00:00.000Z',
+          updatedAt: '2026-04-13T10:00:00.000Z',
+          providerMeta: {
+            providerId: 'codex',
+            providerItemId: null,
+            providerEventType: 'user',
+          },
+        }}
+      />,
+    )
+
+    expect(screen.getByText('Planning')).toBeInTheDocument()
+    expect(screen.getByText('selected')).toBeInTheDocument()
+    expect(screen.getByTestId('message-skill-selections')).toBeInTheDocument()
+  })
+
   it('renders assistant markdown with headings, lists, links, and code', () => {
     render(
       <ConversationItemView

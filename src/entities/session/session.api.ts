@@ -7,6 +7,7 @@ import type {
   ReasoningEffort,
   NeedsYouDismissals,
 } from './session.types'
+import type { SkillSelection } from '@/shared/types/skill.types'
 
 export const sessionApi = {
   create: (input: {
@@ -43,15 +44,25 @@ export const sessionApi = {
     id: string,
     message: string,
     attachmentIds?: string[],
+    skillSelections?: SkillSelection[],
   ): Promise<void> =>
-    window.electronAPI.session.start(id, { text: message, attachmentIds }),
+    window.electronAPI.session.start(id, {
+      text: message,
+      attachmentIds,
+      skillSelections,
+    }),
 
   sendMessage: (
     id: string,
     text: string,
     attachmentIds?: string[],
+    skillSelections?: SkillSelection[],
   ): Promise<void> =>
-    window.electronAPI.session.sendMessage(id, { text, attachmentIds }),
+    window.electronAPI.session.sendMessage(id, {
+      text,
+      attachmentIds,
+      skillSelections,
+    }),
 
   approve: (id: string): Promise<void> =>
     window.electronAPI.session.approve(id),

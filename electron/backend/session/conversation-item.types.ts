@@ -1,4 +1,5 @@
 import type { TranscriptEntry } from '../provider/provider.types'
+import type { SkillSelection } from '../skills/skills.types'
 import type { SessionSummary } from './session.types'
 import type { Turn, TurnFileChange } from './turn/turn.types'
 
@@ -35,6 +36,7 @@ export type ConversationItem =
       actor: 'user' | 'assistant'
       text: string
       attachmentIds?: string[]
+      skillSelections?: SkillSelection[]
     })
   | (ConversationItemBase & {
       kind: 'thinking'

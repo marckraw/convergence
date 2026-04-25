@@ -44,6 +44,11 @@ export type {
   SkillCatalogEntry,
   SkillDetails,
   SkillProviderId,
+  SkillSelection,
   SkillScope,
 } from './skill'
-export { skillApi, useSkillStore } from './skill'
+export {
+  skillApi,
+  skillSelectionFromCatalogEntry,
+  useSkillStore,
+} from './skill'

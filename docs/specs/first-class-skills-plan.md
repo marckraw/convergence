@@ -193,6 +193,8 @@ Detailed phase spec: `docs/specs/first-class-skills-phase-2.md`.
 **Goal:** Let the user select skills in the composer and persist selected skill
 refs on user messages, without yet changing provider invocation behavior.
 
+Detailed phase spec: `docs/specs/first-class-skills-phase-3.md`.
+
 ### Tasks
 
 - Replace the Phase 2 browse-only composer Skills button with a searchable

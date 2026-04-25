@@ -7,6 +7,12 @@ import type {
   ConversationItemKind,
   ConversationItemState,
 } from './conversation-item.types'
+import type {
+  SkillInvocationStatus,
+  SkillProviderId,
+  SkillScope,
+  SkillSelection,
+} from '../skills/skills.types'
 
 function noteLevelFromText(
   text: string,
@@ -65,6 +71,102 @@ function stateFromValue(value: string): ConversationItemState {
     default:
       throw new Error(`Unknown conversation item state: ${value}`)
   }
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+function skillProviderIdFromValue(value: unknown): SkillProviderId | null {
+  switch (value) {
+    case 'codex':
+    case 'claude-code':
+    case 'pi':
+      return value
+    default:
+      return null
+  }
+}
+
+function skillScopeFromValue(value: unknown): SkillScope | null {
+  switch (value) {
+    case 'product':
+    case 'system':
+    case 'global':
+    case 'user':
+    case 'project':
+    case 'plugin':
+    case 'admin':
+    case 'team':
+    case 'settings':
+    case 'unknown':
+      return value
+    default:
+      return null
+  }
+}
+
+function skillStatusFromValue(value: unknown): SkillInvocationStatus | null {
+  switch (value) {
+    case 'selected':
+    case 'sent':
+    case 'confirmed':
+    case 'unavailable':
+    case 'failed':
+      return value
+    default:
+      return null
+  }
+}
+
+function parseSkillSelection(value: unknown): SkillSelection | null {
+  if (!isRecord(value)) {
+    return null
+  }
+
+  const providerId = skillProviderIdFromValue(value.providerId)
+  const scope = skillScopeFromValue(value.scope)
+  const status = skillStatusFromValue(value.status)
+
+  if (
+    !providerId ||
+    !scope ||
+    !status ||
+    typeof value.id !== 'string' ||
+    typeof value.providerName !== 'string' ||
+    typeof value.name !== 'string' ||
+    typeof value.displayName !== 'string' ||
+    typeof value.sourceLabel !== 'string'
+  ) {
+    return null
+  }
+
+  return {
+    id: value.id,
+    providerId,
+    providerName: value.providerName,
+    name: value.name,
+    displayName: value.displayName,
+    path: typeof value.path === 'string' ? value.path : null,
+    scope,
+    rawScope: typeof value.rawScope === 'string' ? value.rawScope : null,
+    sourceLabel: value.sourceLabel,
+    status,
+    argumentText:
+      typeof value.argumentText === 'string' ? value.argumentText : undefined,
+  }
+}
+
+function parseSkillSelections(value: unknown): SkillSelection[] | undefined {
+  if (!Array.isArray(value)) {
+    return undefined
+  }
+
+  const selections = value
+    .map(parseSkillSelection)
+    .filter((selection): selection is SkillSelection => selection !== null)
+
+  return selections.length > 0 ? selections : undefined
 }
 
 export function buildConversationItemFromTranscriptEntry(
@@ -230,6 +332,7 @@ export function conversationItemFromRow(
         actor: payload.actor as 'user' | 'assistant',
         text: payload.text as string,
         attachmentIds: payload.attachmentIds as string[] | undefined,
+        skillSelections: parseSkillSelections(payload.skillSelections),
       }
 
     case 'thinking':

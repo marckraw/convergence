@@ -1,5 +1,6 @@
 import type { FC } from 'react'
 import type { ConversationItem } from '@/entities/session'
+import type { SkillSelection } from '@/entities/skill'
 import {
   User,
   Bot,
@@ -8,6 +9,7 @@ import {
   AlertTriangle,
   Info,
   ChevronRight,
+  Library,
 } from 'lucide-react'
 import { Button } from '@/shared/ui/button'
 import { Markdown } from '@/shared/ui/markdown.container'
@@ -35,6 +37,7 @@ export const ConversationItemView: FC<ConversationItemViewProps> = ({
               </div>
               <div className="min-w-0 flex-1 pt-0.5">
                 <p className="text-xs font-medium text-muted-foreground">You</p>
+                {renderSkillSelections(entry.skillSelections)}
                 <Markdown
                   className="mt-1 text-foreground"
                   content={entry.text}
@@ -206,4 +209,30 @@ function getToolPreview(value: string): string {
   }
 
   return `${singleLine.slice(0, 117)}...`
+}
+
+function renderSkillSelections(selections: SkillSelection[] | undefined) {
+  if (!selections || selections.length === 0) {
+    return null
+  }
+
+  return (
+    <div
+      className="mt-1 flex flex-wrap gap-1.5"
+      data-testid="message-skill-selections"
+    >
+      {selections.map((selection) => (
+        <span
+          key={selection.id}
+          className="inline-flex max-w-full items-center gap-1.5 rounded-full border border-primary/20 bg-primary/10 px-2 py-0.5 text-xs text-primary"
+        >
+          <Library className="h-3 w-3 shrink-0" />
+          <span className="truncate">{selection.displayName}</span>
+          <span className="shrink-0 text-[10px] uppercase text-primary/70">
+            {selection.status}
+          </span>
+        </span>
+      ))}
+    </div>
+  )
 }

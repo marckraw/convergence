@@ -1,3 +1,5 @@
+import type { SkillSelection } from '@/shared/types/skill.types'
+
 export type SessionStatus = 'idle' | 'running' | 'completed' | 'failed'
 export type AttentionState =
   | 'none'
@@ -100,6 +102,7 @@ export type ConversationItem =
       actor: 'user' | 'assistant'
       text: string
       attachmentIds?: string[]
+      skillSelections?: SkillSelection[]
     })
   | (ConversationItemBase & {
       kind: 'thinking'
