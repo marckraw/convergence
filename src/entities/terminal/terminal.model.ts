@@ -8,10 +8,7 @@ import type {
   SplitNode,
   TerminalTab,
 } from './terminal.types'
-import type {
-  PersistedLeaf,
-  PersistedPaneTree,
-} from './terminal-layout.types'
+import type { PersistedLeaf, PersistedPaneTree } from './terminal-layout.types'
 import { serializePaneTree } from './terminal-layout.pure'
 import {
   collectAllPtyIds,
@@ -455,9 +452,15 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
     }
 
     let firstLeafId: string | null = null
-    const tree = await rebuildTreeFromPersisted(persisted, sessionId, cols, rows, (leafId) => {
-      if (!firstLeafId) firstLeafId = leafId
-    })
+    const tree = await rebuildTreeFromPersisted(
+      persisted,
+      sessionId,
+      cols,
+      rows,
+      (leafId) => {
+        if (!firstLeafId) firstLeafId = leafId
+      },
+    )
 
     set((state) => ({
       treesBySessionId: { ...state.treesBySessionId, [sessionId]: tree },
@@ -527,7 +530,13 @@ async function rebuildTreeFromPersisted(
   onLeafBuilt: (leafId: string) => void,
 ): Promise<PaneTree> {
   if (persisted.kind === 'leaf') {
-    return rebuildLeafFromPersisted(persisted, sessionId, cols, rows, onLeafBuilt)
+    return rebuildLeafFromPersisted(
+      persisted,
+      sessionId,
+      cols,
+      rows,
+      onLeafBuilt,
+    )
   }
   const children: PaneTree[] = []
   for (const child of persisted.children) {

@@ -118,10 +118,7 @@ export class SessionService {
     return this.getById(id)!
   }
 
-  setPrimarySurface(
-    id: string,
-    surface: 'conversation' | 'terminal',
-  ): Session {
+  setPrimarySurface(id: string, surface: 'conversation' | 'terminal'): Session {
     const session = this.getById(id)
     if (!session) throw new Error(`Session not found: ${id}`)
     if (surface === 'conversation' && session.providerId === 'shell') {

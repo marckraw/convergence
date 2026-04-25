@@ -331,18 +331,14 @@ describe('terminal store', () => {
   describe('layout persistence', () => {
     it('loadPersistedLayout forwards to the backend api', async () => {
       layoutGetMock.mockResolvedValueOnce(null)
-      const result = await useTerminalStore
-        .getState()
-        .loadPersistedLayout('s1')
+      const result = await useTerminalStore.getState().loadPersistedLayout('s1')
       expect(layoutGetMock).toHaveBeenCalledWith('s1')
       expect(result).toBeNull()
     })
 
     it('loadPersistedLayout returns null when the api throws', async () => {
       layoutGetMock.mockRejectedValueOnce(new Error('boom'))
-      const result = await useTerminalStore
-        .getState()
-        .loadPersistedLayout('s1')
+      const result = await useTerminalStore.getState().loadPersistedLayout('s1')
       expect(result).toBeNull()
     })
 
@@ -372,7 +368,12 @@ describe('terminal store', () => {
 
       const { focusedLeafId } = await useTerminalStore
         .getState()
-        .restoreFromPersisted({ sessionId: 's1', persisted, cols: 80, rows: 24 })
+        .restoreFromPersisted({
+          sessionId: 's1',
+          persisted,
+          cols: 80,
+          rows: 24,
+        })
 
       expect(createMock).toHaveBeenCalledTimes(2)
       expect(createMock).toHaveBeenNthCalledWith(1, {
@@ -415,9 +416,12 @@ describe('terminal store', () => {
         tabs: [{ id: 'old', cwd: '/work', title: 'zsh' }],
         activeTabId: 'old',
       }
-      await useTerminalStore
-        .getState()
-        .restoreFromPersisted({ sessionId: 's1', persisted, cols: 80, rows: 24 })
+      await useTerminalStore.getState().restoreFromPersisted({
+        sessionId: 's1',
+        persisted,
+        cols: 80,
+        rows: 24,
+      })
 
       expect(createMock).not.toHaveBeenCalled()
     })
