@@ -1,5 +1,11 @@
 # convergence
 
+## 0.23.5
+
+### Patch Changes
+
+- 135050a: Tighten renderer architecture enforcement with API wrappers and Chaperone rules for preload access and FSD public imports.
+
 ## 0.23.4
 
 ### Patch Changes
