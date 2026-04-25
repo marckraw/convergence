@@ -1,4 +1,8 @@
-import type { Workspace } from './workspace.types'
+import type {
+  BranchOutputFacts,
+  GitStatusEntry,
+  Workspace,
+} from './workspace.types'
 
 export const workspaceApi = {
   create: (input: {
@@ -25,4 +29,13 @@ export const gitApi = {
 
   getCurrentBranch: (repoPath: string): Promise<string> =>
     window.electronAPI.git.getCurrentBranch(repoPath),
+
+  getBranchOutputFacts: (repoPath: string): Promise<BranchOutputFacts> =>
+    window.electronAPI.git.getBranchOutputFacts(repoPath),
+
+  getStatus: (repoPath: string): Promise<GitStatusEntry[]> =>
+    window.electronAPI.git.getStatus(repoPath),
+
+  getDiff: (repoPath: string, filePath?: string): Promise<string> =>
+    window.electronAPI.git.getDiff(repoPath, filePath),
 }

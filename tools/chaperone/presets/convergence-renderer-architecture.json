@@ -6,6 +6,49 @@
   "rules": {
     "custom": [
       {
+        "id": "renderer-preload-access-through-api-files",
+        "type": "forbidden-import",
+        "severity": "error",
+        "files": "src/**/*.{ts,tsx}",
+        "restrictions": [],
+        "checkPatterns": [
+          {
+            "pattern": "\\bwindow\\.electronAPI\\b",
+            "allowedIn": [
+              "src/**/*.api.ts",
+              "src/**/*.test.ts",
+              "src/**/*.test.tsx",
+              "src/test-setup.ts",
+              "src/shared/types/electron-api.d.ts"
+            ],
+            "message": "Renderer preload access must stay behind *.api.ts wrappers."
+          }
+        ],
+        "message": "Renderer preload access must stay behind *.api.ts wrappers."
+      },
+      {
+        "id": "renderer-fsd-public-api-alias-imports",
+        "type": "forbidden-import",
+        "severity": "error",
+        "files": "src/**/*.{ts,tsx}",
+        "restrictions": [
+          {
+            "source": "^@/(entities|features|widgets)/[^/]+/.+",
+            "allowedIn": [],
+            "message": "Alias imports into FSD slices must stop at the slice public API index.ts."
+          }
+        ],
+        "includeTypeImports": true
+      },
+      {
+        "id": "renderer-no-default-exports",
+        "type": "regex",
+        "severity": "error",
+        "files": "src/**/*.{ts,tsx}",
+        "pattern": "^\\s*export\\s+default\\b",
+        "message": "Use named exports only in renderer code."
+      },
+      {
         "id": "retire-src-components-dir",
         "type": "retired-path",
         "severity": "error",
@@ -130,7 +173,15 @@
         "id": "no-raw-button-outside-shared",
         "type": "regex",
         "severity": "warning",
-        "files": "src/{app,widgets,features,entities}/**/*.tsx",
+        "files": "src/{app,widgets,features,entities}/**/*.container.tsx",
+        "pattern": "<button[\\s>]",
+        "message": "Use Button from src/shared/ui/ instead of raw <button>"
+      },
+      {
+        "id": "no-raw-button-in-presentational-outside-shared",
+        "type": "regex",
+        "severity": "warning",
+        "files": "src/{app,widgets,features,entities}/**/*.presentational.tsx",
         "pattern": "<button[\\s>]",
         "message": "Use Button from src/shared/ui/ instead of raw <button>"
       },
@@ -138,7 +189,15 @@
         "id": "no-raw-input-outside-shared",
         "type": "regex",
         "severity": "warning",
-        "files": "src/{app,widgets,features,entities}/**/*.tsx",
+        "files": "src/{app,widgets,features,entities}/**/*.container.tsx",
+        "pattern": "<input[\\s>]",
+        "message": "Use Input from src/shared/ui/ instead of raw <input>"
+      },
+      {
+        "id": "no-raw-input-in-presentational-outside-shared",
+        "type": "regex",
+        "severity": "warning",
+        "files": "src/{app,widgets,features,entities}/**/*.presentational.tsx",
         "pattern": "<input[\\s>]",
         "message": "Use Input from src/shared/ui/ instead of raw <input>"
       }

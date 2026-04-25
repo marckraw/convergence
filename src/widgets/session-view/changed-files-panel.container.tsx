@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import type { FC, MouseEvent as ReactMouseEvent } from 'react'
 import type { SessionSummary } from '@/entities/session'
+import { gitApi } from '@/entities/workspace'
 import { Button } from '@/shared/ui/button'
 import {
   ArrowLeftToLine,
@@ -45,9 +46,7 @@ export const ChangedFilesPanel: FC<ChangedFilesPanelProps> = ({
   const loadFiles = useCallback(async () => {
     setLoading(true)
     try {
-      const result = await window.electronAPI.git.getStatus(
-        session.workingDirectory,
-      )
+      const result = await gitApi.getStatus(session.workingDirectory)
       setFiles(result)
       setSelectedFile((current) => {
         if (!result.some((file) => file.file === current)) {
@@ -75,10 +74,7 @@ export const ChangedFilesPanel: FC<ChangedFilesPanelProps> = ({
 
       setDiffLoading(true)
       try {
-        const result = await window.electronAPI.git.getDiff(
-          session.workingDirectory,
-          file,
-        )
+        const result = await gitApi.getDiff(session.workingDirectory, file)
         setDiff(result || '(no diff available)')
       } catch {
         setDiff('Failed to load diff')

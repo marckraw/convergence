@@ -13,6 +13,7 @@ import {
 import { useAppSettingsStore } from '@/entities/app-settings'
 import { useDialogStore } from '@/entities/dialog'
 import { useUpdatesStore, type UpdatePrefs } from '@/entities/updates'
+import { systemApi } from '@/shared'
 import {
   AppSettingsDialog,
   type AppSettingsSectionId,
@@ -204,7 +205,7 @@ export const AppSettingsDialogContainer: FC<AppSettingsContainerProps> = ({
   const platform = useMemo<string | null>(() => {
     const datasetPlatform = document.documentElement.dataset.platform
     if (datasetPlatform) return datasetPlatform
-    return window.electronAPI?.system?.getInfo?.()?.platform ?? null
+    return systemApi.getInfo()?.platform ?? null
   }, [])
 
   const handleCancel = useCallback(() => {

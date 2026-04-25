@@ -4,7 +4,7 @@ import type {
   ReasoningEffort,
   ResolvedProviderSelection,
 } from '@/entities/session'
-import { SessionStartSelect } from '@/features/session-start/session-start-select.presentational'
+import { SessionStartSelect } from '@/features/session-start'
 import { SettingsControlField } from './settings-control-field.presentational'
 
 interface SessionDefaultsFieldsProps {

@@ -1,6 +1,6 @@
 import type { FC } from 'react'
 import type { ProviderInfo } from '@/entities/session'
-import { SessionStartSelect } from '@/features/session-start/session-start-select.presentational'
+import { SessionStartSelect } from '@/features/session-start'
 import { SettingsControlField } from './settings-control-field.presentational'
 
 interface ExtractionModelDefaultsFieldsProps {
