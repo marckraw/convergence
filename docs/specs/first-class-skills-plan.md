@@ -255,6 +255,8 @@ Detailed phase spec: `docs/specs/first-class-skills-phase-3.md`.
 **Goal:** Invoke selected Codex skills using Codex's native structured skill
 input.
 
+Detailed phase spec: `docs/specs/first-class-skills-phase-4.md`.
+
 ### Tasks
 
 - Extend `CodexUserInput` to support `{ type: 'skill', name, path }`.

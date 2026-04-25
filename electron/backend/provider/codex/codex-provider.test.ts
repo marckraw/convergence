@@ -2,6 +2,7 @@ import { EventEmitter } from 'events'
 import { PassThrough } from 'stream'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { SessionDelta } from '../../session/conversation-item.types'
+import { buildSkillCatalogId } from '../../skills/skill-catalog.pure'
 
 const { spawnMock } = vi.hoisted(() => ({
   spawnMock: vi.fn(),
@@ -54,12 +55,15 @@ function waitFor(
 
 function createMockCodexServer(
   child: MockChildProcess,
-  options?: { missingThreadIds?: string[] },
+  options?: { missingThreadIds?: string[]; skillsResponse?: unknown },
 ): {
-  requests: Array<{ method: string; params?: { threadId?: string } }>
+  requests: Array<{ method: string; params?: Record<string, unknown> }>
 } {
   const missingThreadIds = new Set(options?.missingThreadIds ?? [])
-  const requests: Array<{ method: string; params?: { threadId?: string } }> = []
+  const requests: Array<{
+    method: string
+    params?: Record<string, unknown>
+  }> = []
   let buffer = ''
   const enqueue = (fn: () => void) => {
     setTimeout(fn, 0)
@@ -95,7 +99,7 @@ function createMockCodexServer(
         const message = JSON.parse(line) as {
           id?: number
           method?: string
-          params?: { threadId?: string }
+          params?: Record<string, unknown>
         }
 
         if (
@@ -150,6 +154,11 @@ function createMockCodexServer(
           typeof message.id === 'number'
         ) {
           respond(message.id, { threadId: 'fresh-thread' })
+        } else if (
+          message.method === 'skills/list' &&
+          typeof message.id === 'number'
+        ) {
+          respond(message.id, options?.skillsResponse ?? { skills: [] })
         }
       }
 
@@ -311,5 +320,208 @@ describe('CodexProvider', () => {
           item.text.startsWith('Initialization failed:'),
       ),
     ).toBe(false)
+  })
+
+  it('sends selected Codex skills as native turn input and patches chips to sent', async () => {
+    const skillPath = '/catalog/skills/planning/SKILL.md'
+    const skillId = buildSkillCatalogId({
+      providerId: 'codex',
+      name: 'planning',
+      path: skillPath,
+      scope: 'global',
+      rawScope: 'global',
+    })
+    const child = new MockChildProcess()
+    const server = createMockCodexServer(child, {
+      skillsResponse: {
+        skills: [
+          {
+            name: 'planning',
+            path: skillPath,
+            scope: 'global',
+            description: 'Plan implementation work.',
+            enabled: true,
+          },
+        ],
+      },
+    })
+    spawnMock.mockReturnValue(child)
+
+    const provider = new CodexProvider('/usr/local/bin/codex')
+    const handle = provider.start({
+      sessionId: 'session-1',
+      workingDirectory: process.cwd(),
+      initialMessage: 'review this plan',
+      initialAttachments: undefined,
+      initialSkillSelections: [
+        {
+          id: skillId,
+          providerId: 'codex',
+          providerName: 'Codex',
+          name: 'planning',
+          displayName: 'Planning',
+          path: '/renderer/stale/SKILL.md',
+          scope: 'global',
+          rawScope: 'global',
+          sourceLabel: 'Global',
+          status: 'selected',
+        },
+      ],
+      model: 'gpt-5.4',
+      effort: 'medium',
+      continuationToken: null,
+    })
+
+    const items: Array<
+      Extract<SessionDelta, { kind: 'conversation.item.add' }>['item']
+    > = []
+    const patches: Array<
+      Extract<SessionDelta, { kind: 'conversation.item.patch' }>
+    > = []
+    const statuses: string[] = []
+
+    handle.onDelta((delta) => {
+      if (delta.kind === 'conversation.item.add') {
+        items.push(delta.item)
+      }
+      if (delta.kind === 'conversation.item.patch') {
+        patches.push(delta)
+      }
+    })
+    handle.onStatusChange((status) => {
+      statuses.push(status)
+    })
+    handle.onContinuationToken(() => {})
+    handle.onAttentionChange(() => {})
+    handle.onContextWindowChange(() => {})
+    handle.onActivityChange(() => {})
+
+    await waitFor(() => {
+      expect(statuses).toContain('completed')
+    })
+
+    const turnStart = server.requests.find(
+      (request) => request.method === 'turn/start',
+    )
+    expect(turnStart?.params).toMatchObject({
+      input: [
+        {
+          type: 'text',
+          text: '$planning\n\nreview this plan',
+          text_elements: [],
+        },
+        {
+          type: 'skill',
+          name: 'planning',
+          path: skillPath,
+        },
+      ],
+    })
+    expect(items).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          kind: 'message',
+          actor: 'user',
+          skillSelections: [
+            expect.objectContaining({
+              id: skillId,
+              path: skillPath,
+              status: 'selected',
+            }),
+          ],
+        }),
+      ]),
+    )
+    expect(patches).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          patch: expect.objectContaining({
+            skillSelections: [
+              expect.objectContaining({
+                id: skillId,
+                status: 'sent',
+              }),
+            ],
+          }),
+        }),
+      ]),
+    )
+  })
+
+  it('marks stale selected Codex skills unavailable without starting a turn', async () => {
+    const child = new MockChildProcess()
+    const server = createMockCodexServer(child, {
+      skillsResponse: { skills: [] },
+    })
+    spawnMock.mockReturnValue(child)
+
+    const provider = new CodexProvider('/usr/local/bin/codex')
+    const handle = provider.start({
+      sessionId: 'session-1',
+      workingDirectory: process.cwd(),
+      initialMessage: 'use missing skill',
+      initialAttachments: undefined,
+      initialSkillSelections: [
+        {
+          id: 'skill:codex:missing',
+          providerId: 'codex',
+          providerName: 'Codex',
+          name: 'missing',
+          displayName: 'Missing',
+          path: '/missing/SKILL.md',
+          scope: 'global',
+          rawScope: 'global',
+          sourceLabel: 'Global',
+          status: 'selected',
+        },
+      ],
+      model: 'gpt-5.4',
+      effort: 'medium',
+      continuationToken: null,
+    })
+
+    const items: Array<
+      Extract<SessionDelta, { kind: 'conversation.item.add' }>['item']
+    > = []
+    const statuses: string[] = []
+
+    handle.onDelta((delta) => {
+      if (delta.kind === 'conversation.item.add') {
+        items.push(delta.item)
+      }
+    })
+    handle.onStatusChange((status) => {
+      statuses.push(status)
+    })
+    handle.onContinuationToken(() => {})
+    handle.onAttentionChange(() => {})
+    handle.onContextWindowChange(() => {})
+    handle.onActivityChange(() => {})
+
+    await waitFor(() => {
+      expect(statuses).toContain('failed')
+    })
+
+    expect(
+      server.requests.some((request) => request.method === 'turn/start'),
+    ).toBe(false)
+    expect(items).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          kind: 'message',
+          actor: 'user',
+          skillSelections: [
+            expect.objectContaining({
+              id: 'skill:codex:missing',
+              status: 'unavailable',
+            }),
+          ],
+        }),
+        expect.objectContaining({
+          kind: 'note',
+          text: 'Codex skill unavailable: Selected Codex skill "Missing" is no longer available.',
+        }),
+      ]),
+    )
   })
 })

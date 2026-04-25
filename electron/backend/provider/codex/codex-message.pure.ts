@@ -2,6 +2,7 @@ import type {
   Attachment,
   AttachmentKind,
 } from '../../attachments/attachments.types'
+import type { CodexSkillInput } from '../../skills/codex-skill-invocation.pure'
 
 export interface CodexMessagePart {
   kind: AttachmentKind
@@ -14,10 +15,12 @@ export interface CodexMessagePart {
 export type CodexUserInput =
   | { type: 'text'; text: string; text_elements: [] }
   | { type: 'localImage'; path: string }
+  | { type: 'skill'; name: string; path: string }
 
 export interface CodexMessageInput {
   text: string
   parts?: CodexMessagePart[]
+  skills?: CodexSkillInput[]
 }
 
 export function partFromAttachment(
@@ -41,6 +44,7 @@ export function buildCodexUserInput(
   input: CodexMessageInput,
 ): CodexUserInput[] {
   const parts = input.parts ?? []
+  const skills = input.skills ?? []
 
   const pdfs = parts.filter((p) => p.kind === 'pdf')
   if (pdfs.length > 0) {
@@ -61,12 +65,17 @@ export function buildCodexUserInput(
     return `<file path="${p.filename}">\n${body}\n</file>`
   })
 
-  const combinedText = [...inlinedTextBlocks, input.text]
+  const skillMarkers = skills.map((skill) => `$${skill.name}`)
+  const combinedText = [...inlinedTextBlocks, ...skillMarkers, input.text]
     .filter((s) => s.length > 0)
     .join('\n\n')
 
   if (combinedText.length > 0 || out.length === 0) {
     out.push({ type: 'text', text: combinedText, text_elements: [] })
+  }
+
+  for (const skill of skills) {
+    out.push({ type: 'skill', name: skill.name, path: skill.path })
   }
 
   return out

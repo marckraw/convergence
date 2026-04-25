@@ -35,7 +35,19 @@ import {
   buildCodexUserInput,
   partFromAttachment,
   type CodexMessagePart,
+  type CodexUserInput,
 } from './codex-message.pure'
+import { mapCodexSkillCatalog } from '../../skills/codex-skills.mapper.pure'
+import {
+  failedCodexSkillInvocation,
+  markSkillSelectionsStatus,
+  resolveCodexSkillInvocation,
+} from '../../skills/codex-skill-invocation.pure'
+import type {
+  CodexSkillInput,
+  CodexSkillInvocationResolution,
+} from '../../skills/codex-skill-invocation.pure'
+import type { SkillSelection } from '../../skills/skills.types'
 import {
   initialCodexActivityState,
   reduceCodexActivity,
@@ -405,7 +417,7 @@ export class CodexProvider implements Provider {
 
     async function startTurn(
       activeRpc: JsonRpcClient,
-      input: ReturnType<typeof buildCodexUserInput>,
+      input: CodexUserInput[],
     ): Promise<void> {
       assistantTextBuffer = ''
       assistantMessageItemId = null
@@ -441,9 +453,114 @@ export class CodexProvider implements Provider {
       }
     }
 
+    async function resolveSelectedSkills(
+      activeRpc: JsonRpcClient,
+      selections: SkillSelection[] | undefined,
+    ): Promise<CodexSkillInvocationResolution> {
+      if (!selections || selections.length === 0) {
+        return { ok: true, skillInputs: [] }
+      }
+
+      try {
+        const payload = await activeRpc.request('skills/list', {
+          cwds: [config.workingDirectory],
+          forceReload: true,
+        })
+        return resolveCodexSkillInvocation({
+          catalog: mapCodexSkillCatalog(payload),
+          selections,
+        })
+      } catch (err) {
+        return failedCodexSkillInvocation(selections, err)
+      }
+    }
+
+    function addSkillInvocationFailureNote(
+      resolution: Extract<CodexSkillInvocationResolution, { ok: false }>,
+    ): void {
+      sessionEmitter.addNote({
+        text: `Codex skill ${resolution.status}: ${resolution.message}`,
+        level: 'error',
+      })
+    }
+
+    function patchUserMessageSkills(
+      userMessageItemId: string,
+      selections: SkillSelection[] | undefined,
+      status: Parameters<typeof markSkillSelectionsStatus>[1],
+    ): void {
+      const updatedSelections = markSkillSelectionsStatus(selections, status)
+      if (!updatedSelections) {
+        return
+      }
+
+      sessionEmitter.patchMessage(userMessageItemId, {
+        skillSelections: updatedSelections,
+      })
+    }
+
+    async function sendCodexTurn(input: {
+      activeRpc: JsonRpcClient
+      text: string
+      attachments?: Attachment[]
+      skillSelections?: SkillSelection[]
+    }): Promise<void> {
+      const skillResolution = await resolveSelectedSkills(
+        input.activeRpc,
+        input.skillSelections,
+      )
+      const userMessageItemId = sessionEmitter.addUserMessage({
+        text: input.text,
+        skillSelections: skillResolution.skillSelections,
+      })
+      setStatus('running')
+      setAttention('none')
+
+      if (!skillResolution.ok) {
+        addSkillInvocationFailureNote(skillResolution)
+        setStatus('failed')
+        setAttention('failed')
+        return
+      }
+
+      const skillInputs: CodexSkillInput[] = skillResolution.skillInputs
+
+      try {
+        const parts = await loadCodexParts(input.attachments)
+        await startTurn(
+          input.activeRpc,
+          buildCodexUserInput({
+            text: input.text,
+            parts,
+            skills: skillInputs,
+          }),
+        )
+        patchUserMessageSkills(
+          userMessageItemId,
+          skillResolution.skillSelections,
+          'sent',
+        )
+      } catch (err) {
+        patchUserMessageSkills(
+          userMessageItemId,
+          skillResolution.skillSelections,
+          'failed',
+        )
+        const failureEntry = buildTurnFailureEntry(err, now())
+        sessionEmitter.addNote({
+          text: failureEntry.text,
+          level: failureEntry.level,
+          timestamp: failureEntry.timestamp,
+        })
+        setStatus('failed')
+        setAttention('failed')
+      }
+    }
+
     async function initialize(
       initialMessage: string,
       initialAttachments?: Attachment[],
+      initialSkillSelections?: SkillSelection[],
     ): Promise<void> {
       if (!rpc || stopped) return
 
@@ -461,15 +578,12 @@ export class CodexProvider implements Provider {
         })
         rpc.notify('initialized')
 
-        // Emit user message and start turn
-        sessionEmitter.addUserMessage({ text: initialMessage })
-        setStatus('running')
-
-        const parts = await loadCodexParts(initialAttachments)
-        await startTurn(
-          rpc,
-          buildCodexUserInput({ text: initialMessage, parts }),
-        )
+        await sendCodexTurn({
+          activeRpc: rpc,
+          text: initialMessage,
+          attachments: initialAttachments,
+          skillSelections: initialSkillSelections,
+        })
       } catch (err) {
         if (stopped) return
         sessionEmitter.addNote({
@@ -484,6 +598,7 @@ export class CodexProvider implements Provider {
     function spawnServer(
       initialMessage: string,
       initialAttachments?: Attachment[],
+      initialSkillSelections?: SkillSelection[],
     ): void {
       if (stopped) return
       if (child || rpc) return
@@ -810,12 +925,20 @@ export class CodexProvider implements Provider {
         child = null
       })
 
-      void initialize(initialMessage, initialAttachments)
+      void initialize(
+        initialMessage,
+        initialAttachments,
+        initialSkillSelections,
+      )
     }
 
     // Spawn after a tick so listeners can be attached
     setTimeout(() => {
-      spawnServer(config.initialMessage, config.initialAttachments)
+      spawnServer(
+        config.initialMessage,
+        config.initialAttachments,
+        config.initialSkillSelections,
+      )
     }, 10)
 
     const handle: SessionHandle = {
@@ -840,10 +963,10 @@ export class CodexProvider implements Provider {
       onActivityChange: (cb) => {
         listeners.activity.push(cb)
       },
-      sendMessage: (text, attachments) => {
+      sendMessage: (text, attachments, skillSelections) => {
         if (stopped) return
         if (!rpc) {
-          spawnServer(text, attachments)
+          spawnServer(text, attachments, skillSelections)
           return
         }
 
@@ -862,29 +985,27 @@ export class CodexProvider implements Provider {
         }
 
         if (!threadId) {
-          spawnServer(text, attachments)
+          spawnServer(text, attachments, skillSelections)
           return
         }
 
-        sessionEmitter.addUserMessage({ text })
-        setStatus('running')
-        setAttention('none')
         const activeRpc = rpc
-        loadCodexParts(attachments)
-          .then((parts) =>
-            startTurn(activeRpc, buildCodexUserInput({ text, parts })),
-          )
-          .catch((err) => {
-            if (stopped) return
-            const failureEntry = buildTurnFailureEntry(err, now())
-            sessionEmitter.addNote({
-              text: failureEntry.text,
-              level: failureEntry.level,
-              timestamp: failureEntry.timestamp,
-            })
-            setStatus('failed')
-            setAttention('failed')
+        void sendCodexTurn({
+          activeRpc,
+          text,
+          attachments,
+          skillSelections,
+        }).catch((err) => {
+          if (stopped) return
+          const failureEntry = buildTurnFailureEntry(err, now())
+          sessionEmitter.addNote({
+            text: failureEntry.text,
+            level: failureEntry.level,
+            timestamp: failureEntry.timestamp,
           })
+          setStatus('failed')
+          setAttention('failed')
+        })
       },
       approve: () => {
         if (!rpc) return

@@ -88,6 +88,50 @@ describe('buildCodexUserInput', () => {
     expect(second.text.endsWith('summarize')).toBe(true)
   })
 
+  it('appends selected skills as structured input and provider-only text markers', () => {
+    const out = buildCodexUserInput({
+      text: 'review the plan',
+      skills: [
+        {
+          name: 'planning',
+          path: '/skills/planning/SKILL.md',
+        },
+      ],
+    })
+
+    expect(out).toEqual([
+      {
+        type: 'text',
+        text: '$planning\n\nreview the plan',
+        text_elements: [],
+      },
+      {
+        type: 'skill',
+        name: 'planning',
+        path: '/skills/planning/SKILL.md',
+      },
+    ])
+  })
+
+  it('keeps images first, text second, and skills last', () => {
+    const out = buildCodexUserInput({
+      text: 'summarize',
+      parts: [IMG_PNG, TEXT_TS],
+      skills: [{ name: 'planning', path: '/skills/planning/SKILL.md' }],
+    })
+
+    expect(out.map((entry) => entry.type)).toEqual([
+      'localImage',
+      'text',
+      'skill',
+    ])
+    const text = out[1]
+    if (text.type !== 'text') throw new Error()
+    expect(text.text).toContain('<file path="foo.ts">')
+    expect(text.text).toContain('$planning')
+    expect(text.text.endsWith('summarize')).toBe(true)
+  })
+
   it('image-only with empty user text omits the text entry', () => {
     const out = buildCodexUserInput({ text: '', parts: [IMG_PNG] })
     expect(out).toEqual([{ type: 'localImage', path: IMG_PNG.storagePath }])
