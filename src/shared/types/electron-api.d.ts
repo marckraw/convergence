@@ -1,4 +1,5 @@
 import type { ProjectMcpVisibility } from './mcp.types'
+import type { ProjectSkillCatalog, SkillCatalogOptions } from './skill.types'
 
 interface ProjectData {
   id: string
@@ -604,6 +605,12 @@ interface ElectronAPI {
   }
   mcp: {
     listByProjectId: (projectId: string) => Promise<ProjectMcpVisibility>
+  }
+  skills: {
+    listByProjectId: (
+      projectId: string,
+      options?: SkillCatalogOptions,
+    ) => Promise<ProjectSkillCatalog>
   }
   feedback: {
     submit: (
