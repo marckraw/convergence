@@ -25,8 +25,8 @@ interface ProviderStatusDialogProps {
 function renderStatusBadge(provider: ProviderStatusInfo) {
   const className =
     provider.availability === 'available'
-      ? 'border-emerald-500/20 bg-emerald-500/10 text-emerald-300'
-      : 'border-amber-500/20 bg-amber-500/10 text-amber-200'
+      ? 'border-emerald-500/20 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300'
+      : 'border-amber-500/20 bg-amber-500/10 text-amber-700 dark:text-amber-200'
 
   return (
     <span
@@ -45,9 +45,9 @@ function renderProviderRow(provider: ProviderStatusInfo) {
     >
       <div className="flex items-center gap-2">
         {provider.availability === 'available' ? (
-          <CircleCheck className="h-4 w-4 text-emerald-400" />
+          <CircleCheck className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
         ) : (
-          <CircleAlert className="h-4 w-4 text-amber-400" />
+          <CircleAlert className="h-4 w-4 text-amber-600 dark:text-amber-400" />
         )}
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
