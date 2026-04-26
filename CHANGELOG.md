@@ -1,5 +1,11 @@
 # convergence
 
+## 0.26.1
+
+### Patch Changes
+
+- 1797f65: Fix old conversation views crashing when historical attachment metadata has not hydrated yet.
+
 ## 0.26.0
 
 ### Minor Changes
