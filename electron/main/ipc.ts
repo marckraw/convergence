@@ -12,6 +12,7 @@ import {
   setRecentSessionIds,
 } from '../backend/session/session-recents'
 import { ProviderRegistry } from '../backend/provider/provider-registry'
+import type { MidRunInputMode } from '../backend/provider/provider.types'
 import { McpService } from '../backend/mcp/mcp.service'
 import { SkillsService } from '../backend/skills/skills.service'
 import { AppSettingsService } from '../backend/app-settings/app-settings.service'
@@ -395,12 +396,14 @@ export function registerIpcHandlers(
         text: string
         attachmentIds?: string[]
         skillSelections?: SkillSelection[]
+        deliveryMode?: string
       },
     ) => {
       await sessionService.start(id, {
         text: input.text,
         attachmentIds: input.attachmentIds,
         skillSelections: input.skillSelections,
+        deliveryMode: input.deliveryMode as MidRunInputMode | undefined,
       })
     },
   )
@@ -414,15 +417,25 @@ export function registerIpcHandlers(
         text: string
         attachmentIds?: string[]
         skillSelections?: SkillSelection[]
+        deliveryMode?: string
       },
     ) => {
       await sessionService.sendMessage(id, {
         text: input.text,
         attachmentIds: input.attachmentIds,
         skillSelections: input.skillSelections,
+        deliveryMode: input.deliveryMode as MidRunInputMode | undefined,
       })
     },
   )
+
+  ipcMain.handle('session:getQueuedInputs', (_event, sessionId: string) =>
+    sessionService.getQueuedInputs(sessionId),
+  )
+
+  ipcMain.handle('session:cancelQueuedInput', (_event, id: string) => {
+    sessionService.cancelQueuedInput(id)
+  })
 
   // Attachments handlers
   ipcMain.handle(
@@ -538,6 +551,15 @@ export function registerIpcHandlers(
     for (const win of windows) {
       if (!win.isDestroyed()) {
         win.webContents.send('session:conversationPatched', event)
+      }
+    }
+  })
+
+  sessionService.setQueuedInputPatchListener((event) => {
+    const windows = BrowserWindow.getAllWindows()
+    for (const win of windows) {
+      if (!win.isDestroyed()) {
+        win.webContents.send('session:queuedInputPatched', event)
       }
     }
   })

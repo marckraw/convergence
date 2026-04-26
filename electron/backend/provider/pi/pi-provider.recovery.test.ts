@@ -153,6 +153,64 @@ function createPiServer(
   })
 }
 
+function createPiCommandCaptureServer(
+  child: MockChildProcess,
+  options: { failCommandTypes?: string[] } = {},
+): {
+  requests: Array<{ type?: string; message?: string; id?: number }>
+} {
+  const requests: Array<{ type?: string; message?: string; id?: number }> = []
+  const failCommandTypes = new Set(options.failCommandTypes ?? [])
+  let buffer = ''
+
+  child.stdin.on('data', (chunk) => {
+    buffer += chunk.toString()
+
+    let newlineIndex = buffer.indexOf('\n')
+    while (newlineIndex >= 0) {
+      const line = buffer.slice(0, newlineIndex).trim()
+      buffer = buffer.slice(newlineIndex + 1)
+
+      if (line) {
+        const message = JSON.parse(line) as {
+          id?: number
+          type?: string
+          message?: string
+        }
+        requests.push(message)
+
+        if (
+          message.type === 'prompt' ||
+          message.type === 'follow_up' ||
+          message.type === 'steer'
+        ) {
+          const shouldFail = message.type
+            ? failCommandTypes.has(message.type)
+            : false
+          setTimeout(() => {
+            child.stdout.write(
+              JSON.stringify({
+                type: 'response',
+                command: message.type,
+                id: message.id,
+                success: !shouldFail,
+                error: shouldFail ? `${message.type} rejected` : undefined,
+              }) + '\n',
+            )
+            if (message.type === 'prompt' && !shouldFail) {
+              child.stdout.write(JSON.stringify({ type: 'agent_start' }) + '\n')
+            }
+          }, 0)
+        }
+      }
+
+      newlineIndex = buffer.indexOf('\n')
+    }
+  })
+
+  return { requests }
+}
+
 describe('PiProvider continuation recovery', () => {
   afterEach(() => {
     spawnMock.mockReset()
@@ -232,5 +290,125 @@ describe('PiProvider continuation recovery', () => {
         }),
       ]),
     )
+  })
+
+  it('routes running follow-up and steer input to native Pi commands', async () => {
+    const child = new MockChildProcess()
+    const server = createPiCommandCaptureServer(child)
+    spawnMock.mockReturnValue(child)
+
+    const provider = new PiProvider('/usr/local/bin/pi')
+    const handle = provider.start({
+      sessionId: 'session-pi',
+      workingDirectory: process.cwd(),
+      initialMessage: 'hello pi',
+      initialAttachments: undefined,
+      model: null,
+      effort: null,
+      continuationToken: null,
+    })
+
+    handle.onDelta(() => {})
+    handle.onStatusChange(() => {})
+    handle.onContinuationToken(() => {})
+    handle.onAttentionChange(() => {})
+    handle.onContextWindowChange(() => {})
+    handle.onActivityChange(() => {})
+
+    await waitFor(() => {
+      expect(server.requests.some((request) => request.type === 'prompt')).toBe(
+        true,
+      )
+    })
+
+    handle.sendMessage('after this', undefined, undefined, {
+      deliveryMode: 'follow-up',
+    })
+    handle.sendMessage('change direction', undefined, undefined, {
+      deliveryMode: 'steer',
+    })
+
+    await waitFor(() => {
+      expect(
+        server.requests.some((request) => request.type === 'follow_up'),
+      ).toBe(true)
+      expect(server.requests.some((request) => request.type === 'steer')).toBe(
+        true,
+      )
+    })
+
+    expect(server.requests).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          type: 'follow_up',
+          message: 'after this',
+        }),
+        expect.objectContaining({
+          type: 'steer',
+          message: 'change direction',
+        }),
+      ]),
+    )
+  })
+
+  it('keeps the active Pi session running when mid-run follow-up is rejected', async () => {
+    const child = new MockChildProcess()
+    const server = createPiCommandCaptureServer(child, {
+      failCommandTypes: ['follow_up'],
+    })
+    spawnMock.mockReturnValue(child)
+
+    const provider = new PiProvider('/usr/local/bin/pi')
+    const handle = provider.start({
+      sessionId: 'session-pi',
+      workingDirectory: process.cwd(),
+      initialMessage: 'hello pi',
+      initialAttachments: undefined,
+      model: null,
+      effort: null,
+      continuationToken: null,
+    })
+
+    const items: Array<
+      Extract<SessionDelta, { kind: 'conversation.item.add' }>['item']
+    > = []
+    const statuses: string[] = []
+    handle.onDelta((delta) => {
+      if (delta.kind === 'conversation.item.add') {
+        items.push(delta.item)
+      }
+    })
+    handle.onStatusChange((status) => {
+      statuses.push(status)
+    })
+    handle.onContinuationToken(() => {})
+    handle.onAttentionChange(() => {})
+    handle.onContextWindowChange(() => {})
+    handle.onActivityChange(() => {})
+
+    await waitFor(() => {
+      expect(server.requests.some((request) => request.type === 'prompt')).toBe(
+        true,
+      )
+    })
+
+    handle.sendMessage('after this', undefined, undefined, {
+      deliveryMode: 'follow-up',
+    })
+
+    await waitFor(() => {
+      expect(items).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            kind: 'note',
+            level: 'error',
+            text: 'Prompt failed: follow_up rejected',
+          }),
+        ]),
+      )
+    })
+
+    expect(statuses).toContain('running')
+    expect(statuses).not.toContain('failed')
   })
 })

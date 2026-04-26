@@ -23,6 +23,7 @@ describe('database', () => {
     expect(tableNames).toContain('projects')
     expect(tableNames).toContain('app_state')
     expect(tableNames).toContain('session_conversation_items')
+    expect(tableNames).toContain('session_queued_inputs')
     expect(tableNames).toContain('session_terminal_layout')
     expect(tableNames).toContain('session_turns')
     expect(tableNames).toContain('session_turn_file_changes')
@@ -98,6 +99,34 @@ describe('database', () => {
     expect(uniqueColumns.map((c) => c.name).sort()).toEqual(
       ['session_id', 'sequence'].sort(),
     )
+  })
+
+  it('creates session_queued_inputs with expected columns and FK', () => {
+    const db = getDatabase()
+    const columns = db
+      .prepare("PRAGMA table_info('session_queued_inputs')")
+      .all() as Array<{ name: string }>
+    expect(columns.map((c) => c.name).sort()).toEqual(
+      [
+        'id',
+        'session_id',
+        'delivery_mode',
+        'state',
+        'text',
+        'attachment_ids_json',
+        'skill_selections_json',
+        'provider_request_id',
+        'error',
+        'created_at',
+        'updated_at',
+      ].sort(),
+    )
+
+    const foreignKeys = db
+      .prepare("PRAGMA foreign_key_list('session_queued_inputs')")
+      .all() as Array<{ table: string; on_delete: string }>
+    expect(foreignKeys.some((fk) => fk.table === 'sessions')).toBe(true)
+    expect(foreignKeys[0]?.on_delete).toBe('CASCADE')
   })
 
   it('creates session_turn_file_changes with expected columns, FKs, and unique constraint', () => {

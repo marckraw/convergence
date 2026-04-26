@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { FC, ClipboardEvent, DragEvent } from 'react'
 import {
+  type MidRunInputMode,
   resolveProviderSelection,
+  type SessionQueuedInput,
   useSessionStore,
   type ReasoningEffort,
 } from '@/entities/session'
@@ -26,6 +28,9 @@ import {
   filterComposerSkills,
   filterSelectionsForProvider,
 } from './composer-skill-picker.pure'
+import { resolveMidRunInputPolicy } from './mid-run-input.pure'
+import { Button } from '@/shared/ui/button'
+import { X } from 'lucide-react'
 
 interface ComposerContainerProps {
   projectId: string
@@ -34,6 +39,30 @@ interface ComposerContainerProps {
 }
 
 const DRAFT_KEY_NEW = '__new__'
+const EMPTY_QUEUED_INPUTS: SessionQueuedInput[] = []
+
+const QUEUED_INPUT_STATE_LABELS: Record<SessionQueuedInput['state'], string> = {
+  queued: 'Queued',
+  dispatching: 'Dispatching',
+  sent: 'Sent',
+  failed: 'Failed',
+  cancelled: 'Cancelled',
+}
+
+const DELIVERY_MODE_LABELS: Partial<Record<MidRunInputMode, string>> = {
+  'follow-up': 'Follow-up',
+  steer: 'Steer',
+  interrupt: 'Interrupt',
+}
+
+function getQueuedInputPreview(input: SessionQueuedInput): string {
+  const text = input.text.trim()
+  if (text) return text
+  if (input.attachmentIds.length === 1) return '1 attachment'
+  if (input.attachmentIds.length > 1)
+    return `${input.attachmentIds.length} attachments`
+  return 'Empty input'
+}
 
 function collectFilesFromDataTransfer(
   dataTransfer: DataTransfer | null,
@@ -78,6 +107,7 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
   const [providerId, setProviderId] = useState('')
   const [modelId, setModelId] = useState('')
   const [effortId, setEffortId] = useState<ReasoningEffort | ''>('')
+  const [deliveryMode, setDeliveryMode] = useState<MidRunInputMode>('normal')
   const [previewAttachment, setPreviewAttachment] = useState<Attachment | null>(
     null,
   )
@@ -91,7 +121,13 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
   const loadProviders = useSessionStore((s) => s.loadProviders)
   const createAndStartSession = useSessionStore((s) => s.createAndStartSession)
   const sendMessageToSession = useSessionStore((s) => s.sendMessageToSession)
+  const cancelQueuedInput = useSessionStore((s) => s.cancelQueuedInput)
   const sessions = useSessionStore((s) => s.sessions)
+  const queuedInputs = useSessionStore((s) =>
+    activeSessionId
+      ? (s.queuedInputsBySessionId[activeSessionId] ?? EMPTY_QUEUED_INPUTS)
+      : EMPTY_QUEUED_INPUTS,
+  )
   const activeSession = sessions.find((s) => s.id === activeSessionId)
   const activeProvider = providers.find(
     (p) => p.id === activeSession?.providerId,
@@ -118,6 +154,16 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
     activeSession?.effort ?? (effortId || null),
     activeSession ? undefined : storedDefaults,
   )
+  const midRunPolicy = useMemo(
+    () =>
+      resolveMidRunInputPolicy({
+        status: activeSession?.status ?? null,
+        attention: activeSession?.attention ?? null,
+        provider: activeSession ? (activeProvider ?? null) : selection.provider,
+      }),
+    [activeSession, activeProvider, selection.provider],
+  )
+  const availableDeliveryModesKey = midRunPolicy.availableModes.join('|')
 
   const draftKey = activeSessionId ?? DRAFT_KEY_NEW
   const draft = useAttachmentStore((s) => s.drafts[draftKey])
@@ -161,6 +207,17 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
   }, [projectId, activeSessionId])
 
   useEffect(() => {
+    if (!midRunPolicy.availableModes.includes(deliveryMode)) {
+      setDeliveryMode(midRunPolicy.defaultMode)
+    }
+  }, [
+    deliveryMode,
+    midRunPolicy.defaultMode,
+    midRunPolicy.availableModes,
+    availableDeliveryModesKey,
+  ])
+
+  useEffect(() => {
     setSelectedSkills((current) =>
       filterSelectionsForProvider(current, selection.providerId),
     )
@@ -202,9 +259,7 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
     !activeSession ||
     activeSession.status === 'completed' ||
     activeSession.status === 'failed'
-  const isComposerDisabled =
-    activeSession?.status === 'running' &&
-    activeSession.attention !== 'needs-input'
+  const isComposerDisabled = midRunPolicy.disabled
 
   const handleSubmit = useCallback(() => {
     const trimmed = value.trim()
@@ -218,12 +273,31 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
       selectedSkills.length > 0 ? selectedSkills : undefined
 
     if (activeSession && canContinueActiveSession) {
+      const mode = deliveryMode === 'normal' ? undefined : deliveryMode
       if (hasAttachments || skillSelections) {
+        if (mode) {
+          sendMessageToSession(
+            activeSession.id,
+            trimmed,
+            hasAttachments ? attachmentIds : undefined,
+            skillSelections,
+            mode,
+          )
+        } else {
+          sendMessageToSession(
+            activeSession.id,
+            trimmed,
+            hasAttachments ? attachmentIds : undefined,
+            skillSelections,
+          )
+        }
+      } else if (mode) {
         sendMessageToSession(
           activeSession.id,
           trimmed,
-          hasAttachments ? attachmentIds : undefined,
-          skillSelections,
+          undefined,
+          undefined,
+          mode,
         )
       } else {
         sendMessageToSession(activeSession.id, trimmed)
@@ -273,6 +347,7 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
     capabilityResult.ok,
     activeSession,
     canContinueActiveSession,
+    deliveryMode,
     sendMessageToSession,
     createAndStartSession,
     clearDraft,
@@ -415,15 +490,24 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
         onProviderChange={handleProviderChange}
         onModelChange={handleModelChange}
         onEffortChange={setEffortId}
+        deliveryMode={deliveryMode}
+        deliveryModes={midRunPolicy.availableModes}
+        onDeliveryModeChange={setDeliveryMode}
         selectionDisabled={canContinueActiveSession}
         placeholder={
           activeSession?.attention === 'needs-input'
             ? 'Respond to the agent...'
-            : canContinueActiveSession
-              ? 'Send a follow-up...'
-              : isSessionDone
-                ? 'What would you like to work on?'
-                : 'Session is running...'
+            : activeSession?.status === 'running'
+              ? midRunPolicy.disabled
+                ? 'Session is running...'
+                : deliveryMode === 'steer'
+                  ? 'Steer current run...'
+                  : 'Queue a follow-up...'
+              : canContinueActiveSession
+                ? 'Send a follow-up...'
+                : isSessionDone
+                  ? 'What would you like to work on?'
+                  : 'Session is running...'
         }
         disabled={isComposerDisabled}
         attachments={attachments}
@@ -451,6 +535,50 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
         onDrop={handleDrop}
         onPaste={handlePaste}
       />
+      {queuedInputs.length > 0 ? (
+        <div
+          className="mx-auto mt-2 w-full max-w-2xl rounded-md border border-border bg-muted/30 px-3 py-2"
+          data-testid="queued-inputs"
+        >
+          <div className="space-y-2">
+            {queuedInputs.map((input) => (
+              <div
+                key={input.id}
+                className="flex items-start justify-between gap-3 text-xs"
+              >
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2 text-[10px] uppercase tracking-wide text-muted-foreground">
+                    <span>
+                      {DELIVERY_MODE_LABELS[input.deliveryMode] ??
+                        input.deliveryMode}
+                    </span>
+                    <span>{QUEUED_INPUT_STATE_LABELS[input.state]}</span>
+                  </div>
+                  <div className="truncate text-foreground">
+                    {getQueuedInputPreview(input)}
+                  </div>
+                  {input.error ? (
+                    <div className="truncate text-destructive">
+                      {input.error}
+                    </div>
+                  ) : null}
+                </div>
+                <Button
+                  type="button"
+                  size="icon"
+                  variant="ghost"
+                  className="h-6 w-6 shrink-0"
+                  aria-label="Cancel queued input"
+                  disabled={input.state !== 'queued'}
+                  onClick={() => void cancelQueuedInput(input.id)}
+                >
+                  <X className="h-3.5 w-3.5" />
+                </Button>
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : null}
       {rejections.length > 0 && (
         <div
           role="status"

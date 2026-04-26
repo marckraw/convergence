@@ -1,7 +1,9 @@
 import type {
+  MidRunInputMode,
   ProviderAttachmentCapability,
   ProviderDescriptor,
   ProviderEffortOption,
+  ProviderMidRunInputCapability,
   ProviderSkillsCapability,
   ReasoningEffort,
 } from './provider.types'
@@ -60,6 +62,81 @@ export const UNSUPPORTED_SKILLS_CAPABILITY: ProviderSkillsCapability = {
   catalog: 'unsupported',
   invocation: 'unsupported',
   activationConfirmation: 'none',
+}
+
+export const NO_MID_RUN_INPUT_CAPABILITY: ProviderMidRunInputCapability = {
+  supportsAnswer: false,
+  supportsNativeFollowUp: false,
+  supportsAppQueuedFollowUp: false,
+  supportsSteer: false,
+  supportsInterrupt: false,
+  defaultRunningMode: null,
+}
+
+export const CLAUDE_CODE_MID_RUN_INPUT_CAPABILITY: ProviderMidRunInputCapability =
+  {
+    supportsAnswer: false,
+    supportsNativeFollowUp: false,
+    supportsAppQueuedFollowUp: true,
+    supportsSteer: false,
+    supportsInterrupt: false,
+    defaultRunningMode: 'follow-up',
+    notes:
+      'Claude Code uses app-managed follow-up queueing until the adapter moves to a long-lived streaming input process.',
+  }
+
+export const CODEX_MID_RUN_INPUT_CAPABILITY: ProviderMidRunInputCapability = {
+  supportsAnswer: true,
+  supportsNativeFollowUp: false,
+  supportsAppQueuedFollowUp: true,
+  supportsSteer: true,
+  supportsInterrupt: true,
+  defaultRunningMode: 'follow-up',
+}
+
+export const PI_MID_RUN_INPUT_CAPABILITY: ProviderMidRunInputCapability = {
+  supportsAnswer: false,
+  supportsNativeFollowUp: true,
+  supportsAppQueuedFollowUp: false,
+  supportsSteer: true,
+  supportsInterrupt: false,
+  defaultRunningMode: 'follow-up',
+}
+
+export function getMidRunInputCapabilityForProviderId(
+  providerId: string,
+): ProviderMidRunInputCapability {
+  switch (providerId) {
+    case 'claude-code':
+      return CLAUDE_CODE_MID_RUN_INPUT_CAPABILITY
+    case 'codex':
+      return CODEX_MID_RUN_INPUT_CAPABILITY
+    case 'pi':
+      return PI_MID_RUN_INPUT_CAPABILITY
+    default:
+      return NO_MID_RUN_INPUT_CAPABILITY
+  }
+}
+
+export function supportsMidRunInputMode(
+  capability: ProviderMidRunInputCapability,
+  mode: MidRunInputMode,
+): boolean {
+  switch (mode) {
+    case 'normal':
+      return true
+    case 'answer':
+      return capability.supportsAnswer
+    case 'follow-up':
+      return (
+        capability.supportsNativeFollowUp ||
+        capability.supportsAppQueuedFollowUp
+      )
+    case 'steer':
+      return capability.supportsSteer
+    case 'interrupt':
+      return capability.supportsInterrupt
+  }
 }
 
 const EFFORT_LABELS: Record<ReasoningEffort, string> = {
@@ -137,6 +214,7 @@ export function buildClaudeDescriptor(): ProviderDescriptor {
       },
     ],
     attachments: CLAUDE_CODE_ATTACHMENT_CAPABILITY,
+    midRunInput: CLAUDE_CODE_MID_RUN_INPUT_CAPABILITY,
     skills: CLAUDE_CODE_SKILLS_CAPABILITY,
   }
 }
@@ -183,6 +261,7 @@ export function buildFallbackCodexDescriptor(): ProviderDescriptor {
       },
     ],
     attachments: CODEX_ATTACHMENT_CAPABILITY,
+    midRunInput: CODEX_MID_RUN_INPUT_CAPABILITY,
     skills: CODEX_SKILLS_CAPABILITY,
   }
 }
@@ -211,6 +290,7 @@ export function buildFallbackPiDescriptor(): ProviderDescriptor {
       },
     ],
     attachments: PI_ATTACHMENT_CAPABILITY,
+    midRunInput: PI_MID_RUN_INPUT_CAPABILITY,
     skills: PI_SKILLS_CAPABILITY,
   }
 }
@@ -227,6 +307,7 @@ export function normalizeProviderDescriptor(
 
   return {
     ...descriptor,
+    midRunInput: descriptor.midRunInput ?? NO_MID_RUN_INPUT_CAPABILITY,
     skills: descriptor.skills ?? UNSUPPORTED_SKILLS_CAPABILITY,
     defaultModelId,
     modelOptions: descriptor.modelOptions.map((option) => ({

@@ -5,6 +5,8 @@ import {
   buildFallbackCodexDescriptor,
   buildFallbackPiDescriptor,
   CODEX_ATTACHMENT_CAPABILITY,
+  CODEX_MID_RUN_INPUT_CAPABILITY,
+  NO_MID_RUN_INPUT_CAPABILITY,
   normalizeProviderDescriptor,
 } from './provider-descriptor.pure'
 
@@ -74,14 +76,32 @@ describe('provider-descriptor', () => {
         },
       ],
       attachments: CODEX_ATTACHMENT_CAPABILITY,
+      midRunInput: CODEX_MID_RUN_INPUT_CAPABILITY,
     })
 
     expect(normalized.defaultModelId).toBe('gpt-5.4')
     expect(normalized.modelOptions[0]?.defaultEffort).toBe('medium')
+    expect(normalized.midRunInput).toEqual(CODEX_MID_RUN_INPUT_CAPABILITY)
     expect(normalized.skills).toEqual({
       catalog: 'unsupported',
       invocation: 'unsupported',
       activationConfirmation: 'none',
     })
+  })
+
+  it('defaults unsupported mid-run input capability when normalizing legacy descriptors', () => {
+    const normalized = normalizeProviderDescriptor({
+      id: 'legacy',
+      name: 'Legacy',
+      vendorLabel: 'Legacy',
+      kind: 'conversation',
+      supportsContinuation: false,
+      defaultModelId: 'legacy',
+      modelOptions: [],
+      attachments: CODEX_ATTACHMENT_CAPABILITY,
+      midRunInput: undefined as never,
+    })
+
+    expect(normalized.midRunInput).toEqual(NO_MID_RUN_INPUT_CAPABILITY)
   })
 })

@@ -2,16 +2,22 @@ import { randomUUID } from 'crypto'
 import type Database from 'better-sqlite3'
 import type {
   ConversationItemRow,
+  SessionQueuedInputRow,
   SessionRow,
 } from '../database/database.types'
 import type { ProviderRegistry } from '../provider/provider-registry'
 import type {
   Attachment,
+  MidRunInputMode,
   SessionHandle,
   SessionStatus,
   AttentionState,
   ActivitySignal,
 } from '../provider/provider.types'
+import {
+  getMidRunInputCapabilityForProviderId,
+  supportsMidRunInputMode,
+} from '../provider/provider-descriptor.pure'
 import type { AttachmentsService } from '../attachments/attachments.service'
 import type { SkillSelection } from '../skills/skills.types'
 import {
@@ -19,6 +25,9 @@ import {
   type Session,
   type SessionSummary,
   type CreateSessionInput,
+  type QueuedInputPatchEvent,
+  type QueuedInputState,
+  type SessionQueuedInput,
 } from './session.types'
 import type {
   ConversationItem,
@@ -43,6 +52,7 @@ export interface SendMessageInput {
   text: string
   attachmentIds?: string[]
   skillSelections?: SkillSelection[]
+  deliveryMode?: MidRunInputMode
 }
 
 export interface SessionNamer {
@@ -67,6 +77,8 @@ export class SessionService {
   private onConversationPatch:
     | ((event: ConversationPatchEvent) => void)
     | null = null
+  private onQueuedInputPatch: ((event: QueuedInputPatchEvent) => void) | null =
+    null
   private onTurnDelta: ((sessionId: string, delta: TurnDelta) => void) | null =
     null
   private attachments: AttachmentsService | null = null
@@ -77,7 +89,9 @@ export class SessionService {
   constructor(
     private db: Database.Database,
     private providers: ProviderRegistry,
-  ) {}
+  ) {
+    this.recoverDispatchingQueuedInputs()
+  }
 
   setTurnCaptureService(service: TurnCaptureService): void {
     this.turnCapture = service
@@ -187,6 +201,12 @@ export class SessionService {
     listener: (event: ConversationPatchEvent) => void,
   ): void {
     this.onConversationPatch = listener
+  }
+
+  setQueuedInputPatchListener(
+    listener: (event: QueuedInputPatchEvent) => void,
+  ): void {
+    this.onQueuedInputPatch = listener
   }
 
   create(input: CreateSessionInput): Session {
@@ -303,6 +323,30 @@ export class SessionService {
     return rows.map(conversationItemFromRow)
   }
 
+  getQueuedInputs(sessionId: string): SessionQueuedInput[] {
+    const rows = this.db
+      .prepare(
+        `SELECT *
+         FROM session_queued_inputs
+         WHERE session_id = ?
+           AND state IN ('queued', 'dispatching', 'failed')
+         ORDER BY created_at ASC`,
+      )
+      .all(sessionId) as SessionQueuedInputRow[]
+
+    return rows.map(queuedInputFromRow)
+  }
+
+  cancelQueuedInput(id: string): void {
+    const row = this.getQueuedInputRowById(id)
+    if (!row) throw new Error(`Queued input not found: ${id}`)
+    if (row.state !== 'queued') {
+      throw new Error(`Queued input cannot be cancelled from ${row.state}`)
+    }
+
+    this.patchQueuedInput(id, 'cancelled')
+  }
+
   delete(id: string): void {
     const handle = this.activeHandles.get(id)
     if (handle) {
@@ -361,12 +405,17 @@ export class SessionService {
 
     await this.rebindDraftAttachments(id, input.attachmentIds)
     const attachments = this.resolveAttachments(input.attachmentIds)
+    const deliveryMode = this.resolveDeliveryMode(session, input.deliveryMode)
 
     const handle = this.activeHandles.get(id)
     if (handle) {
-      this.pendingUserAttachmentIds.set(id, input.attachmentIds ?? [])
-      this.pendingUserSkillSelections.set(id, input.skillSelections ?? [])
-      handle.sendMessage(input.text, attachments, input.skillSelections)
+      this.dispatchToActiveHandle({
+        session,
+        handle,
+        input,
+        attachments,
+        deliveryMode,
+      })
       return
     }
 
@@ -374,6 +423,22 @@ export class SessionService {
     if (!provider) throw new Error(`Provider not found: ${session.providerId}`)
 
     const continuationToken = this.getContinuationToken(id)
+    if (
+      deliveryMode === 'follow-up' &&
+      session.status === 'running' &&
+      getMidRunInputCapabilityForProviderId(session.providerId)
+        .supportsAppQueuedFollowUp
+    ) {
+      this.queueInput(session.id, input, 'follow-up')
+      return
+    }
+
+    if (deliveryMode !== 'normal') {
+      throw new Error(
+        `Session cannot accept ${deliveryMode} input while inactive`,
+      )
+    }
+
     if (provider.supportsContinuation && continuationToken) {
       this.startHandle(
         session,
@@ -393,6 +458,82 @@ export class SessionService {
     }
 
     throw new Error(`Session not active: ${id}`)
+  }
+
+  private dispatchToActiveHandle(input: {
+    session: Session
+    handle: SessionHandle
+    input: SendMessageInput
+    attachments: Attachment[] | undefined
+    deliveryMode: MidRunInputMode
+  }): void {
+    const { session, handle, attachments, deliveryMode } = input
+    const capability = getMidRunInputCapabilityForProviderId(session.providerId)
+
+    if (
+      session.status !== 'running' &&
+      deliveryMode !== 'normal' &&
+      deliveryMode !== 'answer'
+    ) {
+      throw new Error(
+        `Session cannot accept ${deliveryMode} input while ${session.status}`,
+      )
+    }
+
+    if (!supportsMidRunInputMode(capability, deliveryMode)) {
+      throw new Error(
+        `${session.providerId} does not support ${deliveryMode} input`,
+      )
+    }
+
+    if (deliveryMode === 'follow-up' && session.status === 'running') {
+      if (!capability.supportsNativeFollowUp) {
+        this.queueInput(session.id, input.input, 'follow-up')
+        return
+      }
+    }
+
+    const shouldStartConversationTurn =
+      deliveryMode === 'normal' || deliveryMode === 'answer'
+    if (shouldStartConversationTurn) {
+      this.pendingUserAttachmentIds.set(
+        session.id,
+        input.input.attachmentIds ?? [],
+      )
+      this.pendingUserSkillSelections.set(
+        session.id,
+        input.input.skillSelections ?? [],
+      )
+    }
+
+    handle.sendMessage(
+      input.input.text,
+      attachments,
+      input.input.skillSelections,
+      {
+        deliveryMode,
+      },
+    )
+  }
+
+  private resolveDeliveryMode(
+    session: Session,
+    requested: MidRunInputMode | undefined,
+  ): MidRunInputMode {
+    if (requested) return requested
+    if (session.attention === 'needs-input') return 'answer'
+    if (session.status === 'running') {
+      const mode = getMidRunInputCapabilityForProviderId(
+        session.providerId,
+      ).defaultRunningMode
+      if (!mode) {
+        throw new Error(
+          `${session.providerId} does not support messages while running`,
+        )
+      }
+      return mode
+    }
+    return 'normal'
   }
 
   private pendingUserAttachmentIds = new Map<string, string[]>()
@@ -816,6 +957,176 @@ export class SessionService {
         this.activeHandles.delete(sessionId)
       }
       this.closeActiveTurn(sessionId, 'completed')
+      this.dispatchNextQueuedInput(sessionId)
+    }
+  }
+
+  private queueInput(
+    sessionId: string,
+    input: SendMessageInput,
+    deliveryMode: Extract<MidRunInputMode, 'follow-up' | 'steer' | 'interrupt'>,
+  ): SessionQueuedInput {
+    const timestamp = new Date().toISOString()
+    const item: SessionQueuedInput = {
+      id: randomUUID(),
+      sessionId,
+      deliveryMode,
+      state: 'queued',
+      text: input.text,
+      attachmentIds: input.attachmentIds ?? [],
+      skillSelections: input.skillSelections ?? [],
+      providerRequestId: null,
+      error: null,
+      createdAt: timestamp,
+      updatedAt: timestamp,
+    }
+
+    this.db
+      .prepare(
+        `INSERT INTO session_queued_inputs (
+           id,
+           session_id,
+           delivery_mode,
+           state,
+           text,
+           attachment_ids_json,
+           skill_selections_json,
+           provider_request_id,
+           error,
+           created_at,
+           updated_at
+         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      )
+      .run(
+        item.id,
+        item.sessionId,
+        item.deliveryMode,
+        item.state,
+        item.text,
+        JSON.stringify(item.attachmentIds),
+        JSON.stringify(item.skillSelections),
+        item.providerRequestId,
+        item.error,
+        item.createdAt,
+        item.updatedAt,
+      )
+
+    this.notifyQueuedInputChange(sessionId, 'add', item)
+    return item
+  }
+
+  private dispatchNextQueuedInput(sessionId: string): void {
+    const row = this.db
+      .prepare(
+        `SELECT *
+         FROM session_queued_inputs
+         WHERE session_id = ? AND state = 'queued'
+         ORDER BY created_at ASC
+         LIMIT 1`,
+      )
+      .get(sessionId) as SessionQueuedInputRow | undefined
+
+    if (!row) return
+
+    const item = queuedInputFromRow(row)
+    this.patchQueuedInput(item.id, 'dispatching')
+
+    try {
+      const session = this.getById(sessionId)
+      if (!session) throw new Error(`Session not found: ${sessionId}`)
+      const attachments = this.resolveAttachments(item.attachmentIds)
+      const handle = this.activeHandles.get(sessionId)
+
+      if (handle) {
+        this.pendingUserAttachmentIds.set(sessionId, item.attachmentIds)
+        this.pendingUserSkillSelections.set(sessionId, item.skillSelections)
+        handle.sendMessage(item.text, attachments, item.skillSelections, {
+          deliveryMode: 'normal',
+          queuedInputId: item.id,
+        })
+        this.patchQueuedInput(item.id, 'sent')
+        return
+      }
+
+      const provider = this.providers.get(session.providerId)
+      const continuationToken = this.getContinuationToken(sessionId)
+      if (!provider || !provider.supportsContinuation || !continuationToken) {
+        throw new Error('Session is no longer resumable')
+      }
+
+      this.startHandle(
+        session,
+        item.text,
+        continuationToken,
+        attachments,
+        item.attachmentIds,
+        item.skillSelections,
+      )
+      this.patchQueuedInput(item.id, 'sent')
+    } catch (err) {
+      this.patchQueuedInput(
+        item.id,
+        'failed',
+        err instanceof Error ? err.message : String(err),
+      )
+    }
+  }
+
+  private patchQueuedInput(
+    id: string,
+    state: QueuedInputState,
+    error: string | null = null,
+  ): SessionQueuedInput | null {
+    const updatedAt = new Date().toISOString()
+    this.db
+      .prepare(
+        `UPDATE session_queued_inputs
+         SET state = ?, error = ?, updated_at = ?
+         WHERE id = ?`,
+      )
+      .run(state, error, updatedAt, id)
+
+    const row = this.getQueuedInputRowById(id)
+    if (!row) return null
+    const item = queuedInputFromRow(row)
+    this.notifyQueuedInputChange(item.sessionId, 'patch', item)
+    return item
+  }
+
+  private getQueuedInputRowById(id: string): SessionQueuedInputRow | undefined {
+    return this.db
+      .prepare('SELECT * FROM session_queued_inputs WHERE id = ?')
+      .get(id) as SessionQueuedInputRow | undefined
+  }
+
+  private notifyQueuedInputChange(
+    sessionId: string,
+    op: 'add' | 'patch',
+    item: SessionQueuedInput,
+  ): void {
+    this.onQueuedInputPatch?.({ sessionId, op, item })
+  }
+
+  private recoverDispatchingQueuedInputs(): void {
+    const rows = this.db
+      .prepare(
+        `SELECT *
+         FROM session_queued_inputs
+         WHERE state = 'dispatching'`,
+      )
+      .all() as SessionQueuedInputRow[]
+
+    const timestamp = new Date().toISOString()
+    const stmt = this.db.prepare(
+      `UPDATE session_queued_inputs
+       SET state = 'failed',
+           error = 'App restarted before this input was accepted.',
+           updated_at = ?
+       WHERE id = ?`,
+    )
+
+    for (const row of rows) {
+      stmt.run(timestamp, row.id)
     }
   }
 
@@ -891,5 +1202,30 @@ export class SessionService {
     void this.runNaming(session).catch(() => {
       // Naming failures are silent per spec.
     })
+  }
+}
+
+function parseJsonArray<T>(value: string): T[] {
+  try {
+    const parsed = JSON.parse(value) as unknown
+    return Array.isArray(parsed) ? (parsed as T[]) : []
+  } catch {
+    return []
+  }
+}
+
+function queuedInputFromRow(row: SessionQueuedInputRow): SessionQueuedInput {
+  return {
+    id: row.id,
+    sessionId: row.session_id,
+    deliveryMode: row.delivery_mode as SessionQueuedInput['deliveryMode'],
+    state: row.state as QueuedInputState,
+    text: row.text,
+    attachmentIds: parseJsonArray<string>(row.attachment_ids_json),
+    skillSelections: parseJsonArray<SkillSelection>(row.skill_selections_json),
+    providerRequestId: row.provider_request_id,
+    error: row.error,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
   }
 }

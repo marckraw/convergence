@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { AppSettingsService } from '../app-settings/app-settings.service'
+import { NO_MID_RUN_INPUT_CAPABILITY } from '../provider/provider-descriptor.pure'
 import type { ProviderRegistry } from '../provider/provider-registry'
 import type {
   OneShotInput,
@@ -136,6 +137,7 @@ function setup(
         maxTextBytes: 0,
         maxTotalBytes: 0,
       },
+      midRunInput: NO_MID_RUN_INPUT_CAPABILITY,
     }),
     start: vi.fn(),
     oneShot,

@@ -1,10 +1,13 @@
 import type {
   ConversationItem,
   ConversationPatchEvent,
+  QueuedInputPatchEvent,
   SessionSummary,
+  SessionQueuedInput,
   ProviderInfo,
   ProviderStatusInfo,
   ReasoningEffort,
+  MidRunInputMode,
   NeedsYouDismissals,
 } from './session.types'
 import type { SkillSelection } from '@/shared/types/skill.types'
@@ -57,11 +60,13 @@ export const sessionApi = {
     text: string,
     attachmentIds?: string[],
     skillSelections?: SkillSelection[],
+    deliveryMode?: MidRunInputMode,
   ): Promise<void> =>
     window.electronAPI.session.sendMessage(id, {
       text,
       attachmentIds,
       skillSelections,
+      deliveryMode,
     }),
 
   approve: (id: string): Promise<void> =>
@@ -107,6 +112,17 @@ export const sessionApi = {
     callback: (event: ConversationPatchEvent) => void,
   ): (() => void) =>
     window.electronAPI.session.onSessionConversationPatched(callback),
+
+  getQueuedInputs: (sessionId: string): Promise<SessionQueuedInput[]> =>
+    window.electronAPI.session.getQueuedInputs(sessionId),
+
+  cancelQueuedInput: (id: string): Promise<void> =>
+    window.electronAPI.session.cancelQueuedInput(id),
+
+  onSessionQueuedInputPatched: (
+    callback: (event: QueuedInputPatchEvent) => void,
+  ): (() => void) =>
+    window.electronAPI.session.onSessionQueuedInputPatched(callback),
 }
 
 export const providerApi = {

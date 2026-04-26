@@ -212,6 +212,7 @@ type ActivitySignal =
   | 'compacting'
   | 'waiting-approval'
   | `tool:${string}`
+type MidRunInputMode = 'normal' | 'answer' | 'follow-up' | 'steer' | 'interrupt'
 type ContextWindowSource = 'provider' | 'estimated'
 type SessionContextWindow =
   | {
@@ -280,6 +281,16 @@ interface ProviderSkillsCapability {
   activationConfirmation: SkillActivationConfirmation
 }
 
+interface ProviderMidRunInputCapability {
+  supportsAnswer: boolean
+  supportsNativeFollowUp: boolean
+  supportsAppQueuedFollowUp: boolean
+  supportsSteer: boolean
+  supportsInterrupt: boolean
+  defaultRunningMode: Extract<MidRunInputMode, 'follow-up' | 'steer'> | null
+  notes?: string
+}
+
 interface AttachmentIngestRejection {
   filename: string
   reason: string
@@ -300,6 +311,7 @@ interface SendSessionMessageInput {
   text: string
   attachmentIds?: string[]
   skillSelections?: SkillSelection[]
+  deliveryMode?: MidRunInputMode
 }
 
 type ConversationItemKind =
@@ -371,6 +383,33 @@ interface ConversationPatchEventData {
   sessionId: string
   op: 'add' | 'patch'
   item: ConversationItemData
+}
+
+type QueuedInputStateData =
+  | 'queued'
+  | 'dispatching'
+  | 'sent'
+  | 'failed'
+  | 'cancelled'
+
+interface SessionQueuedInputData {
+  id: string
+  sessionId: string
+  deliveryMode: Extract<MidRunInputMode, 'follow-up' | 'steer' | 'interrupt'>
+  state: QueuedInputStateData
+  text: string
+  attachmentIds: string[]
+  skillSelections: SkillSelection[]
+  providerRequestId: string | null
+  error: string | null
+  createdAt: string
+  updatedAt: string
+}
+
+interface QueuedInputPatchEventData {
+  sessionId: string
+  op: 'add' | 'patch'
+  item: SessionQueuedInputData
 }
 
 type TurnStatusData = 'running' | 'completed' | 'errored'
@@ -452,6 +491,7 @@ interface ProviderInfo {
   fastModelId?: string | null
   modelOptions: ProviderModelOption[]
   attachments: ProviderAttachmentCapability
+  midRunInput: ProviderMidRunInputCapability
   skills?: ProviderSkillsCapability
 }
 
@@ -603,6 +643,11 @@ interface ElectronAPI {
     ) => () => void
     onSessionConversationPatched: (
       callback: (event: ConversationPatchEventData) => void,
+    ) => () => void
+    getQueuedInputs: (sessionId: string) => Promise<SessionQueuedInputData[]>
+    cancelQueuedInput: (id: string) => Promise<void>
+    onSessionQueuedInputPatched: (
+      callback: (event: QueuedInputPatchEventData) => void,
     ) => () => void
     forkPreviewSummary: (
       parentId: string,

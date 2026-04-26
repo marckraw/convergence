@@ -36,6 +36,13 @@ export type ActivitySignal =
   | 'waiting-approval'
   | `tool:${string}`
 
+export type MidRunInputMode =
+  | 'normal'
+  | 'answer'
+  | 'follow-up'
+  | 'steer'
+  | 'interrupt'
+
 export type ContextWindowSource = 'provider' | 'estimated'
 
 export type SessionContextWindow =
@@ -120,6 +127,16 @@ export interface ProviderSkillsCapability {
   activationConfirmation: SkillActivationConfirmation
 }
 
+export interface ProviderMidRunInputCapability {
+  supportsAnswer: boolean
+  supportsNativeFollowUp: boolean
+  supportsAppQueuedFollowUp: boolean
+  supportsSteer: boolean
+  supportsInterrupt: boolean
+  defaultRunningMode: Extract<MidRunInputMode, 'follow-up' | 'steer'> | null
+  notes?: string
+}
+
 export interface ProviderDescriptor {
   id: string
   name: string
@@ -130,6 +147,7 @@ export interface ProviderDescriptor {
   fastModelId?: string | null
   modelOptions: ProviderModelOption[]
   attachments: ProviderAttachmentCapability
+  midRunInput: ProviderMidRunInputCapability
   skills?: ProviderSkillsCapability
 }
 
@@ -159,6 +177,11 @@ export interface SessionHandle {
     text: string,
     attachments?: Attachment[],
     skillSelections?: SkillSelection[],
+    options?: {
+      deliveryMode: MidRunInputMode
+      queuedInputId?: string | null
+      expectedProviderTurnId?: string | null
+    },
   ) => void
   approve: () => void
   deny: () => void

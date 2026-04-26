@@ -76,6 +76,24 @@ const SCHEMA = `
   CREATE INDEX IF NOT EXISTS idx_session_conversation_items_session_sequence
     ON session_conversation_items(session_id, sequence);
 
+  CREATE TABLE IF NOT EXISTS session_queued_inputs (
+    id TEXT PRIMARY KEY,
+    session_id TEXT NOT NULL,
+    delivery_mode TEXT NOT NULL,
+    state TEXT NOT NULL,
+    text TEXT NOT NULL,
+    attachment_ids_json TEXT NOT NULL DEFAULT '[]',
+    skill_selections_json TEXT NOT NULL DEFAULT '[]',
+    provider_request_id TEXT,
+    error TEXT,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_session_queued_inputs_session
+    ON session_queued_inputs(session_id, state, created_at);
+
   CREATE TABLE IF NOT EXISTS session_turns (
     id TEXT PRIMARY KEY,
     session_id TEXT NOT NULL,

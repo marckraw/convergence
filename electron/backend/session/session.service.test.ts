@@ -3,6 +3,10 @@ import { mkdtempSync, mkdirSync, rmSync } from 'fs'
 import { join } from 'path'
 import { tmpdir } from 'os'
 import { getDatabase, closeDatabase, resetDatabase } from '../database/database'
+import {
+  CLAUDE_CODE_MID_RUN_INPUT_CAPABILITY,
+  NO_MID_RUN_INPUT_CAPABILITY,
+} from '../provider/provider-descriptor.pure'
 import { ProviderRegistry } from '../provider/provider-registry'
 import { ProviderSessionEmitter } from '../provider/provider-session.emitter'
 import type {
@@ -54,6 +58,7 @@ function createTestProvider(): Provider {
         },
       ],
       attachments: TEST_ATTACHMENT_CAPABILITY,
+      midRunInput: NO_MID_RUN_INPUT_CAPABILITY,
     }),
     start(config) {
       const listeners = {
@@ -388,6 +393,7 @@ describe('SessionService', () => {
           },
         ],
         attachments: TEST_ATTACHMENT_CAPABILITY,
+        midRunInput: NO_MID_RUN_INPUT_CAPABILITY,
       }),
       start: (config) => {
         let deltaListener: ((delta: SessionDelta) => void) | null = null
@@ -770,6 +776,7 @@ describe('SessionService', () => {
           },
         ],
         attachments: TEST_ATTACHMENT_CAPABILITY,
+        midRunInput: NO_MID_RUN_INPUT_CAPABILITY,
       }),
       start: () => handle,
     }
@@ -797,7 +804,206 @@ describe('SessionService', () => {
     await expect(
       continuationService.sendMessage(session.id, { text: 'Follow up' }),
     ).resolves.not.toThrow()
-    expect(sendMessage).toHaveBeenCalledWith('Follow up', undefined, undefined)
+    expect(sendMessage).toHaveBeenCalledWith(
+      'Follow up',
+      undefined,
+      undefined,
+      { deliveryMode: 'normal' },
+    )
+  })
+
+  it('queues app-managed follow-up input while a provider is running', async () => {
+    const db = getDatabase()
+    const registry = new ProviderRegistry()
+    let deltaListener: ((delta: SessionDelta) => void) | null = null
+    const sendMessage = vi.fn()
+    const handle: SessionHandle = {
+      onDelta: (listener) => {
+        deltaListener = listener
+      },
+      onStatusChange: () => {},
+      onAttentionChange: () => {},
+      onContextWindowChange: () => {},
+      onActivityChange: () => {},
+      onContinuationToken: () => {},
+      sendMessage,
+      approve: () => {},
+      deny: () => {},
+      stop: () => {},
+    }
+
+    const provider: Provider = {
+      id: 'claude-code',
+      name: 'Claude Code',
+      supportsContinuation: true,
+      describe: async () => ({
+        id: 'claude-code',
+        name: 'Claude Code',
+        vendorLabel: 'Anthropic',
+        kind: 'conversation',
+        supportsContinuation: true,
+        defaultModelId: 'sonnet',
+        modelOptions: [
+          {
+            id: 'sonnet',
+            label: 'Sonnet',
+            defaultEffort: null,
+            effortOptions: [],
+          },
+        ],
+        attachments: TEST_ATTACHMENT_CAPABILITY,
+        midRunInput: CLAUDE_CODE_MID_RUN_INPUT_CAPABILITY,
+      }),
+      start: () => handle,
+    }
+
+    registry.register(provider)
+    const queueService = new SessionService(db, registry)
+    const session = queueService.create({
+      projectId,
+      workspaceId: null,
+      providerId: 'claude-code',
+      model: 'sonnet',
+      effort: null,
+      name: 'queue test',
+    })
+
+    await queueService.start(session.id, { text: 'Start here' })
+    expect(deltaListener).not.toBeNull()
+    if (!deltaListener) {
+      throw new Error('delta listener was not registered')
+    }
+    const emitDelta = deltaListener as (delta: SessionDelta) => void
+    emitDelta({ kind: 'session.patch', patch: { status: 'running' } })
+
+    await queueService.sendMessage(session.id, {
+      text: 'Do this after',
+      deliveryMode: 'follow-up',
+    })
+
+    expect(sendMessage).not.toHaveBeenCalled()
+    expect(queueService.getQueuedInputs(session.id)).toMatchObject([
+      {
+        sessionId: session.id,
+        deliveryMode: 'follow-up',
+        state: 'queued',
+        text: 'Do this after',
+      },
+    ])
+
+    emitDelta({ kind: 'session.patch', patch: { status: 'completed' } })
+
+    expect(sendMessage).toHaveBeenCalledWith(
+      'Do this after',
+      undefined,
+      [],
+      expect.objectContaining({
+        deliveryMode: 'normal',
+        queuedInputId: expect.any(String),
+      }),
+    )
+    expect(queueService.getQueuedInputs(session.id)).toEqual([])
+  })
+
+  it('cancels queued input only while it is still queued', () => {
+    const db = getDatabase()
+    const session = service.create({
+      projectId,
+      workspaceId: null,
+      providerId: 'test-provider',
+      model: 'test-model',
+      effort: null,
+      name: 'cancel queue test',
+    })
+    const timestamp = '2026-04-26T12:00:00.000Z'
+    db.prepare(
+      `INSERT INTO session_queued_inputs (
+         id,
+         session_id,
+         delivery_mode,
+         state,
+         text,
+         attachment_ids_json,
+         skill_selections_json,
+         provider_request_id,
+         error,
+         created_at,
+         updated_at
+       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    ).run(
+      'queued-1',
+      session.id,
+      'follow-up',
+      'queued',
+      'later',
+      '[]',
+      '[]',
+      null,
+      null,
+      timestamp,
+      timestamp,
+    )
+
+    service.cancelQueuedInput('queued-1')
+
+    expect(service.getQueuedInputs(session.id)).toEqual([])
+    expect(
+      db
+        .prepare('SELECT state FROM session_queued_inputs WHERE id = ?')
+        .get('queued-1'),
+    ).toEqual({ state: 'cancelled' })
+  })
+
+  it('marks stale dispatching queued input failed on startup', () => {
+    const db = getDatabase()
+    const session = service.create({
+      projectId,
+      workspaceId: null,
+      providerId: 'test-provider',
+      model: 'test-model',
+      effort: null,
+      name: 'stale queue test',
+    })
+    const timestamp = '2026-04-26T12:00:00.000Z'
+    db.prepare(
+      `INSERT INTO session_queued_inputs (
+         id,
+         session_id,
+         delivery_mode,
+         state,
+         text,
+         attachment_ids_json,
+         skill_selections_json,
+         provider_request_id,
+         error,
+         created_at,
+         updated_at
+       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    ).run(
+      'queued-stale',
+      session.id,
+      'follow-up',
+      'dispatching',
+      'later',
+      '[]',
+      '[]',
+      null,
+      null,
+      timestamp,
+      timestamp,
+    )
+
+    const registry = new ProviderRegistry()
+    registry.register(createTestProvider())
+    const restartedService = new SessionService(db, registry)
+
+    expect(restartedService.getQueuedInputs(session.id)).toMatchObject([
+      {
+        id: 'queued-stale',
+        state: 'failed',
+        error: 'App restarted before this input was accepted.',
+      },
+    ])
   })
 
   it('rehydrates continuation-capable sessions after restart', async () => {
@@ -827,6 +1033,7 @@ describe('SessionService', () => {
           },
         ],
         attachments: TEST_ATTACHMENT_CAPABILITY,
+        midRunInput: NO_MID_RUN_INPUT_CAPABILITY,
       }),
       start: (config) => {
         startConfigs.push({
@@ -968,6 +1175,7 @@ describe('SessionService attachments integration', () => {
           },
         ],
         attachments: TEST_ATTACHMENT_CAPABILITY,
+        midRunInput: NO_MID_RUN_INPUT_CAPABILITY,
       }),
       start(config) {
         received.initial = config.initialAttachments
@@ -1263,6 +1471,7 @@ describe('SessionService — turn capture wiring', () => {
           },
         ],
         attachments: TEST_ATTACHMENT_CAPABILITY,
+        midRunInput: NO_MID_RUN_INPUT_CAPABILITY,
       }),
       start(config) {
         const listeners = {

@@ -9,6 +9,15 @@ describe('ComposerContainer', () => {
     const loadProviders = vi.fn()
     const createAndStartSession = vi.fn()
     const sendMessageToSession = vi.fn()
+    const cancelQueuedInput = vi.fn()
+    const testMidRunInput = {
+      supportsAnswer: false,
+      supportsNativeFollowUp: false,
+      supportsAppQueuedFollowUp: true,
+      supportsSteer: false,
+      supportsInterrupt: false,
+      defaultRunningMode: 'follow-up' as const,
+    }
     const catalog = {
       projectId: 'project-1',
       projectName: 'Project',
@@ -97,11 +106,14 @@ describe('ComposerContainer', () => {
             maxTextBytes: 1024 * 1024,
             maxTotalBytes: 50 * 1024 * 1024,
           },
+          midRunInput: testMidRunInput,
         },
       ],
+      queuedInputsBySessionId: {},
       loadProviders,
       createAndStartSession,
       sendMessageToSession,
+      cancelQueuedInput,
       error: null,
     })
 
@@ -183,5 +195,120 @@ describe('ComposerContainer', () => {
         },
       ],
     )
+  })
+
+  it('allows follow-up while a supported provider session is running', () => {
+    useSessionStore.setState((state) => ({
+      sessions: state.sessions.map((session) =>
+        session.id === 'session-1'
+          ? { ...session, status: 'running', attention: 'none' }
+          : session,
+      ),
+    }))
+
+    render(
+      <ComposerContainer
+        projectId="project-1"
+        workspaceId={null}
+        activeSessionId="session-1"
+      />,
+    )
+
+    const textbox = screen.getByPlaceholderText('Queue a follow-up...')
+    fireEvent.change(textbox, {
+      target: { value: 'Check auth after this' },
+    })
+    fireEvent.keyDown(textbox, { key: 'Enter', metaKey: true })
+
+    expect(
+      useSessionStore.getState().sendMessageToSession,
+    ).toHaveBeenCalledWith(
+      'session-1',
+      'Check auth after this',
+      undefined,
+      undefined,
+      'follow-up',
+    )
+  })
+
+  it('keeps the composer disabled while running when no mode is supported', () => {
+    useSessionStore.setState((state) => ({
+      sessions: state.sessions.map((session) =>
+        session.id === 'session-1'
+          ? { ...session, status: 'running', attention: 'none' }
+          : session,
+      ),
+      providers: state.providers.map((provider) =>
+        provider.id === 'claude-code'
+          ? {
+              ...provider,
+              midRunInput: {
+                supportsAnswer: false,
+                supportsNativeFollowUp: false,
+                supportsAppQueuedFollowUp: false,
+                supportsSteer: false,
+                supportsInterrupt: false,
+                defaultRunningMode: null,
+              },
+            }
+          : provider,
+      ),
+    }))
+
+    render(
+      <ComposerContainer
+        projectId="project-1"
+        workspaceId={null}
+        activeSessionId="session-1"
+      />,
+    )
+
+    expect(screen.getByPlaceholderText('Session is running...')).toBeDisabled()
+  })
+
+  it('sends answer mode when the provider is waiting for input', () => {
+    useSessionStore.setState((state) => ({
+      sessions: state.sessions.map((session) =>
+        session.id === 'session-1'
+          ? { ...session, status: 'running', attention: 'needs-input' }
+          : session,
+      ),
+      providers: state.providers.map((provider) =>
+        provider.id === 'claude-code'
+          ? {
+              ...provider,
+              midRunInput: {
+                ...provider.midRunInput,
+                supportsAnswer: true,
+              },
+            }
+          : provider,
+      ),
+    }))
+
+    render(
+      <ComposerContainer
+        projectId="project-1"
+        workspaceId={null}
+        activeSessionId="session-1"
+      />,
+    )
+
+    const textbox = screen.getByPlaceholderText('Respond to the agent...')
+    fireEvent.change(textbox, {
+      target: { value: 'Use option B' },
+    })
+    fireEvent.keyDown(textbox, { key: 'Enter', metaKey: true })
+
+    expect(
+      useSessionStore.getState().sendMessageToSession,
+    ).toHaveBeenCalledWith(
+      'session-1',
+      'Use option B',
+      undefined,
+      undefined,
+      'answer',
+    )
+    expect(screen.queryByRole('radiogroup')).not.toBeInTheDocument()
   })
 })

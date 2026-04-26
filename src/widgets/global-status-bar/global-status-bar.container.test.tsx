@@ -36,6 +36,15 @@ const TEST_ATTACHMENTS = {
   maxTotalBytes: 50 * 1024 * 1024,
 }
 
+const TEST_MID_RUN_INPUT = {
+  supportsAnswer: false,
+  supportsNativeFollowUp: false,
+  supportsAppQueuedFollowUp: false,
+  supportsSteer: false,
+  supportsInterrupt: false,
+  defaultRunningMode: null,
+}
+
 const providers: ProviderInfo[] = [
   {
     id: 'claude-code',
@@ -46,6 +55,7 @@ const providers: ProviderInfo[] = [
     defaultModelId: 'sonnet',
     modelOptions: [],
     attachments: TEST_ATTACHMENTS,
+    midRunInput: TEST_MID_RUN_INPUT,
   },
   {
     id: 'codex',
@@ -56,6 +66,7 @@ const providers: ProviderInfo[] = [
     defaultModelId: 'gpt-5',
     modelOptions: [],
     attachments: TEST_ATTACHMENTS,
+    midRunInput: TEST_MID_RUN_INPUT,
   },
 ]
 
