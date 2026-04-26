@@ -3,6 +3,7 @@
 > Parent: `docs/specs/project-spec.md`
 > Builds on: Phase 5 (Claude Code + Codex providers), Pi Agent Provider spec
 > Research: Claude Code 2.1.112 (`--input-format stream-json`), Codex 0.115.0 (`app-server` v2 protocol), Pi 0.65.2 (`--mode rpc`)
+> Follow-up: `docs/specs/attachments-in-history.md` covers history rendering + the post-normalization regression that dropped `attachmentIds` at the provider→emitter boundary across all three adapters.
 
 ## Objective
 

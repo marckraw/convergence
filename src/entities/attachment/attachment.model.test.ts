@@ -35,7 +35,7 @@ describe('useAttachmentStore', () => {
     ingestFiles.mockReset()
     ingestFromPaths.mockReset()
     deleteAttachment.mockReset()
-    useAttachmentStore.setState({ drafts: {} })
+    useAttachmentStore.setState({ drafts: {}, resolved: {} })
   })
 
   it('stores ingested attachments in the draft for the session', async () => {
@@ -141,5 +141,61 @@ describe('useAttachmentStore', () => {
     const draft = useAttachmentStore.getState().getDraft('s1')
     expect(draft.items).toHaveLength(1)
     expect(draft.rejections).toEqual([])
+  })
+
+  it('hydrateForSession populates the resolved map for that session', () => {
+    const a = makeAttachment('a1')
+    const b = makeAttachment('b1', 'b.png')
+    useAttachmentStore.getState().hydrateForSession('s1', [a, b])
+
+    expect(
+      useAttachmentStore.getState().getResolvedAttachment('s1', 'a1'),
+    ).toEqual(a)
+    expect(
+      useAttachmentStore.getState().getResolvedAttachment('s1', 'b1'),
+    ).toEqual(b)
+    expect(
+      useAttachmentStore.getState().getResolvedAttachment('s1', 'unknown'),
+    ).toBeUndefined()
+  })
+
+  it('ingestFiles also writes each new attachment into resolved', async () => {
+    const att = makeAttachment('a1')
+    ingestFiles.mockResolvedValue({ attachments: [att], rejections: [] })
+
+    await useAttachmentStore.getState().ingestFiles('s1', [])
+
+    expect(
+      useAttachmentStore.getState().getResolvedAttachment('s1', 'a1'),
+    ).toEqual(att)
+  })
+
+  it('clearDraft does not evict resolved entries', async () => {
+    const att = makeAttachment('a1')
+    ingestFiles.mockResolvedValue({ attachments: [att], rejections: [] })
+
+    await useAttachmentStore.getState().ingestFiles('s1', [])
+    useAttachmentStore.getState().clearDraft('s1')
+
+    expect(useAttachmentStore.getState().getDraft('s1').items).toEqual([])
+    expect(
+      useAttachmentStore.getState().getResolvedAttachment('s1', 'a1'),
+    ).toEqual(att)
+  })
+
+  it('hydrateForSession replaces (not merges) the resolved map for that session', () => {
+    const oldA = makeAttachment('a1', 'old.png')
+    const newA = makeAttachment('a1', 'new.png')
+    const c = makeAttachment('c1', 'c.png')
+
+    useAttachmentStore.getState().hydrateForSession('s1', [oldA, c])
+    useAttachmentStore.getState().hydrateForSession('s1', [newA])
+
+    expect(
+      useAttachmentStore.getState().getResolvedAttachment('s1', 'a1')?.filename,
+    ).toBe('new.png')
+    expect(
+      useAttachmentStore.getState().getResolvedAttachment('s1', 'c1'),
+    ).toBeUndefined()
   })
 })

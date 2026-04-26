@@ -524,4 +524,115 @@ describe('CodexProvider', () => {
       ]),
     )
   })
+
+  it('persists attachmentIds on the user conversation item when attachments are provided', async () => {
+    const child = new MockChildProcess()
+    createMockCodexServer(child)
+    spawnMock.mockReturnValue(child)
+
+    const provider = new CodexProvider('/usr/local/bin/codex')
+    const handle = provider.start({
+      sessionId: 'session-1',
+      workingDirectory: process.cwd(),
+      initialMessage: 'review these',
+      initialAttachments: [
+        {
+          id: 'att-1',
+          sessionId: 'session-1',
+          kind: 'image',
+          mimeType: 'image/png',
+          filename: 'one.png',
+          sizeBytes: 1,
+          storagePath: '/nonexistent/att-1.png',
+          thumbnailPath: null,
+          textPreview: null,
+          createdAt: new Date().toISOString(),
+        },
+        {
+          id: 'att-2',
+          sessionId: 'session-1',
+          kind: 'image',
+          mimeType: 'image/png',
+          filename: 'two.png',
+          sizeBytes: 1,
+          storagePath: '/nonexistent/att-2.png',
+          thumbnailPath: null,
+          textPreview: null,
+          createdAt: new Date().toISOString(),
+        },
+      ],
+      model: 'gpt-5.4',
+      effort: 'medium',
+      continuationToken: 'resume-thread',
+    })
+
+    const items: Array<
+      Extract<SessionDelta, { kind: 'conversation.item.add' }>['item']
+    > = []
+    handle.onDelta((delta) => {
+      if (delta.kind === 'conversation.item.add') {
+        items.push(delta.item)
+      }
+    })
+    handle.onStatusChange(() => {})
+    handle.onAttentionChange(() => {})
+    handle.onContinuationToken(() => {})
+    handle.onContextWindowChange(() => {})
+    handle.onActivityChange(() => {})
+
+    await waitFor(() => {
+      const userMessage = items.find(
+        (item) =>
+          item.kind === 'message' && 'actor' in item && item.actor === 'user',
+      )
+      expect(userMessage).toBeDefined()
+      const payload = userMessage as unknown as { attachmentIds?: string[] }
+      expect(payload.attachmentIds).toEqual(['att-1', 'att-2'])
+    })
+
+    handle.stop()
+  })
+
+  it('omits attachmentIds when no attachments are provided', async () => {
+    const child = new MockChildProcess()
+    createMockCodexServer(child)
+    spawnMock.mockReturnValue(child)
+
+    const provider = new CodexProvider('/usr/local/bin/codex')
+    const handle = provider.start({
+      sessionId: 'session-2',
+      workingDirectory: process.cwd(),
+      initialMessage: 'hi',
+      initialAttachments: undefined,
+      model: 'gpt-5.4',
+      effort: 'medium',
+      continuationToken: 'resume-thread',
+    })
+
+    const items: Array<
+      Extract<SessionDelta, { kind: 'conversation.item.add' }>['item']
+    > = []
+    handle.onDelta((delta) => {
+      if (delta.kind === 'conversation.item.add') {
+        items.push(delta.item)
+      }
+    })
+    handle.onStatusChange(() => {})
+    handle.onAttentionChange(() => {})
+    handle.onContinuationToken(() => {})
+    handle.onContextWindowChange(() => {})
+    handle.onActivityChange(() => {})
+
+    await waitFor(() => {
+      const userMessage = items.find(
+        (item) =>
+          item.kind === 'message' && 'actor' in item && item.actor === 'user',
+      )
+      expect(userMessage).toBeDefined()
+      const payload = userMessage as unknown as { attachmentIds?: string[] }
+      expect(payload.attachmentIds).toBeUndefined()
+    })
+
+    handle.stop()
+  })
 })

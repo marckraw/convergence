@@ -6,6 +6,7 @@ import { useDialogStore } from '@/entities/dialog'
 import { useInitiativeStore } from '@/entities/initiative'
 import { gitApi, useWorkspaceStore } from '@/entities/workspace'
 import { ComposerContainer } from '@/features/composer'
+import { attachmentApi, useAttachmentStore } from '@/entities/attachment'
 import { useTerminalStore } from '@/entities/terminal'
 import { Button } from '@/shared/ui/button'
 import {
@@ -28,7 +29,7 @@ import {
 import { AttentionIndicator } from '@/shared/ui/attention-indicator.presentational'
 import { ContextWindowIndicator } from '@/shared/ui/context-window-indicator.presentational'
 import { cn } from '@/shared/lib/cn.pure'
-import { ConversationItemView } from './transcript-entry.presentational'
+import { ConversationItem } from './conversation-item.container'
 import { ChangedFilesPanel } from './changed-files-panel.container'
 import {
   InitiativeContextPanel,
@@ -180,6 +181,17 @@ export const SessionView: FC = () => {
         .catch(() => setBranchName(null))
     }
   }, [session?.workingDirectory])
+
+  // Hydrate attachment metadata for the active session so the transcript can render chips.
+  const hydrateAttachments = useAttachmentStore((s) => s.hydrateForSession)
+  useEffect(() => {
+    if (!session) return
+    const sessionId = session.id
+    void attachmentApi
+      .getForSession(sessionId)
+      .then((items) => hydrateAttachments(sessionId, items))
+      .catch(() => hydrateAttachments(sessionId, []))
+  }, [session, hydrateAttachments])
 
   const handleChangedFilesResizeStart = useCallback(
     (event: ReactMouseEvent<HTMLDivElement>) => {
@@ -496,8 +508,9 @@ export const SessionView: FC = () => {
                       <span className="h-px flex-1 bg-border" />
                     </div>
                   )}
-                  <ConversationItemView
+                  <ConversationItem
                     entry={entry}
+                    sessionId={session.id}
                     onApprove={
                       isLastApproval
                         ? () => approveSession(session.id)

@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { fireEvent, render, screen } from '@testing-library/react'
-import type { Attachment } from '@/entities/attachment'
+import type { Attachment } from './attachment.types'
 import { AttachmentChip } from './attachment-chip.presentational'
 
 function makeAttachment(overrides: Partial<Attachment> = {}): Attachment {

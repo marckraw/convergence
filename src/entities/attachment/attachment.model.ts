@@ -14,6 +14,7 @@ export interface DraftAttachments {
 
 interface AttachmentState {
   drafts: Record<string, DraftAttachments>
+  resolved: Record<string, Record<string, Attachment>>
 }
 
 interface AttachmentActions {
@@ -26,6 +27,11 @@ interface AttachmentActions {
   clearDraft: (sessionId: string) => void
   clearRejections: (sessionId: string) => void
   getDraft: (sessionId: string) => DraftAttachments
+  hydrateForSession: (sessionId: string, items: Attachment[]) => void
+  getResolvedAttachment: (
+    sessionId: string,
+    attachmentId: string,
+  ) => Attachment | undefined
 }
 
 export type AttachmentStore = AttachmentState & AttachmentActions
@@ -47,6 +53,7 @@ function withDraft(
 ): AttachmentState {
   const current = draftFor(state, sessionId)
   return {
+    ...state,
     drafts: {
       ...state.drafts,
       [sessionId]: updater(current),
@@ -54,10 +61,47 @@ function withDraft(
   }
 }
 
+function withResolvedAdded(
+  state: AttachmentState,
+  sessionId: string,
+  items: Attachment[],
+): AttachmentState {
+  if (items.length === 0) return state
+  const sessionMap = state.resolved[sessionId] ?? {}
+  const next = { ...sessionMap }
+  for (const item of items) {
+    next[item.id] = item
+  }
+  return {
+    ...state,
+    resolved: {
+      ...state.resolved,
+      [sessionId]: next,
+    },
+  }
+}
+
 export const useAttachmentStore = create<AttachmentStore>((set, get) => ({
   drafts: {},
+  resolved: {},
 
   getDraft: (sessionId) => draftFor(get(), sessionId),
+
+  getResolvedAttachment: (sessionId, attachmentId) =>
+    get().resolved[sessionId]?.[attachmentId],
+
+  hydrateForSession: (sessionId, items) => {
+    set((state) => {
+      const next: Record<string, Attachment> = {}
+      for (const item of items) {
+        next[item.id] = item
+      }
+      return {
+        ...state,
+        resolved: { ...state.resolved, [sessionId]: next },
+      }
+    })
+  },
 
   ingestFiles: async (sessionId, files) => {
     set((state) =>
@@ -65,13 +109,14 @@ export const useAttachmentStore = create<AttachmentStore>((set, get) => ({
     )
     try {
       const result = await attachmentApi.ingestFiles(sessionId, files)
-      set((state) =>
-        withDraft(state, sessionId, (d) => ({
+      set((state) => {
+        const withDraftUpdate = withDraft(state, sessionId, (d) => ({
           items: [...d.items, ...result.attachments],
           rejections: [...d.rejections, ...result.rejections],
           ingestInFlight: false,
-        })),
-      )
+        }))
+        return withResolvedAdded(withDraftUpdate, sessionId, result.attachments)
+      })
     } catch (err) {
       set((state) =>
         withDraft(state, sessionId, (d) => ({
@@ -95,13 +140,14 @@ export const useAttachmentStore = create<AttachmentStore>((set, get) => ({
     )
     try {
       const result = await attachmentApi.ingestFromPaths(sessionId, paths)
-      set((state) =>
-        withDraft(state, sessionId, (d) => ({
+      set((state) => {
+        const withDraftUpdate = withDraft(state, sessionId, (d) => ({
           items: [...d.items, ...result.attachments],
           rejections: [...d.rejections, ...result.rejections],
           ingestInFlight: false,
-        })),
-      )
+        }))
+        return withResolvedAdded(withDraftUpdate, sessionId, result.attachments)
+      })
     } catch (err) {
       set((state) =>
         withDraft(state, sessionId, (d) => ({
@@ -135,6 +181,7 @@ export const useAttachmentStore = create<AttachmentStore>((set, get) => ({
 
   clearDraft: (sessionId) => {
     set((state) => ({
+      ...state,
       drafts: { ...state.drafts, [sessionId]: EMPTY_DRAFT },
     }))
   },
