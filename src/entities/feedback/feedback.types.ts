@@ -1,4 +1,4 @@
-export type FeedbackKind = 'bug' | 'idea' | 'ui' | 'other'
+export type FeedbackPriority = 'low' | 'medium' | 'high'
 
 export interface FeedbackContext {
   activeProjectId?: string | null
@@ -8,8 +8,9 @@ export interface FeedbackContext {
 }
 
 export interface SubmitFeedbackInput {
-  kind: FeedbackKind
-  message: string
+  title: string
+  description: string
+  priority: FeedbackPriority
   contact?: string | null
   context?: FeedbackContext
 }

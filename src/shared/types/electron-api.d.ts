@@ -506,7 +506,7 @@ interface ProviderStatusInfo {
   reason: string | null
 }
 
-type FeedbackKindData = 'bug' | 'idea' | 'ui' | 'other'
+type FeedbackPriorityData = 'low' | 'medium' | 'high'
 
 interface FeedbackContextData {
   activeProjectId?: string | null
@@ -516,8 +516,9 @@ interface FeedbackContextData {
 }
 
 interface SubmitFeedbackInputData {
-  kind: FeedbackKindData
-  message: string
+  title: string
+  description: string
+  priority: FeedbackPriorityData
   contact?: string | null
   context?: FeedbackContextData
 }

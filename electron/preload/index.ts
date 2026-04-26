@@ -218,8 +218,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   },
   feedback: {
     submit: (input: {
-      kind: 'bug' | 'idea' | 'ui' | 'other'
-      message: string
+      title: string
+      description: string
+      priority: 'low' | 'medium' | 'high'
       contact?: string | null
       context?: {
         activeProjectId?: string | null

@@ -50,6 +50,7 @@ import {
 import { SessionNamingService } from '../backend/session/naming/session-naming.service'
 import { SessionForkService } from '../backend/session/fork/session-fork.service'
 import { registerSessionForkIpcHandlers } from '../backend/session/fork/session-fork.ipc'
+import { loadEnvFile } from '../backend/environment/env-file.service'
 import { hydrateProcessPathFromShell } from '../backend/environment/shell-path.service'
 import { TerminalService } from '../backend/terminal/terminal.service'
 import {
@@ -151,6 +152,8 @@ async function startApp(): Promise<void> {
   const dbPath = join(app.getPath('userData'), 'convergence.db')
   const workspacesRoot = join(app.getPath('userData'), 'workspaces')
   const attachmentsRoot = join(app.getPath('userData'), 'attachments')
+  loadEnvFile(join(app.getAppPath(), '.env'))
+  loadEnvFile(join(process.cwd(), '.env'))
   const db = getDatabase(dbPath)
 
   const gitService = new GitService()
@@ -162,7 +165,10 @@ async function startApp(): Promise<void> {
   const taskProgressService = new TaskProgressService(broadcastTaskProgress)
   const sessionService = new SessionService(db, providerRegistry)
   const attachmentsService = new AttachmentsService(db, attachmentsRoot)
-  const feedbackService = new FeedbackService()
+  const feedbackService = new FeedbackService({
+    appVersion: app.getVersion(),
+    platform: process.platform,
+  })
   sessionService.setAttachmentsService(attachmentsService)
   const turnCaptureService = new TurnCaptureService(gitService, db)
   turnCaptureService.recoverRunningTurns()

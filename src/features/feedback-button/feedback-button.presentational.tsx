@@ -1,13 +1,6 @@
 import type { FormEvent } from 'react'
-import type { FeedbackKind } from '@/entities/feedback'
-import {
-  Bug,
-  Lightbulb,
-  Loader2,
-  MessageSquarePlus,
-  Palette,
-  Send,
-} from 'lucide-react'
+import type { FeedbackPriority } from '@/entities/feedback'
+import { Loader2, MessageSquarePlus, Send } from 'lucide-react'
 import { cn } from '@/shared/lib/cn.pure'
 import { Button } from '@/shared/ui/button'
 import {
@@ -24,43 +17,46 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/shared/ui/tooltip'
 
 interface FeedbackButtonProps {
   open: boolean
-  kind: FeedbackKind
-  message: string
+  priority: FeedbackPriority
+  title: string
+  description: string
   contact: string
   error: string | null
   submitting: boolean
   onOpenChange: (open: boolean) => void
-  onKindChange: (kind: FeedbackKind) => void
-  onMessageChange: (message: string) => void
+  onPriorityChange: (priority: FeedbackPriority) => void
+  onTitleChange: (title: string) => void
+  onDescriptionChange: (description: string) => void
   onContactChange: (contact: string) => void
   onSubmit: () => void
 }
 
-const kinds: Array<{
-  value: FeedbackKind
+const priorities: Array<{
+  value: FeedbackPriority
   label: string
-  icon: typeof Palette
 }> = [
-  { value: 'ui', label: 'UI', icon: Palette },
-  { value: 'bug', label: 'Bug', icon: Bug },
-  { value: 'idea', label: 'Idea', icon: Lightbulb },
-  { value: 'other', label: 'Other', icon: MessageSquarePlus },
+  { value: 'low', label: 'Low' },
+  { value: 'medium', label: 'Medium' },
+  { value: 'high', label: 'High' },
 ]
 
 export function FeedbackButton({
   open,
-  kind,
-  message,
+  priority,
+  title,
+  description,
   contact,
   error,
   submitting,
   onOpenChange,
-  onKindChange,
-  onMessageChange,
+  onPriorityChange,
+  onTitleChange,
+  onDescriptionChange,
   onContactChange,
   onSubmit,
 }: FeedbackButtonProps) {
-  const canSubmit = message.trim().length >= 5 && !submitting
+  const canSubmit =
+    title.trim().length >= 3 && description.trim().length >= 5 && !submitting
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
@@ -88,57 +84,60 @@ export function FeedbackButton({
         <DialogContent className="w-[min(520px,calc(100vw-2rem))]">
           <form onSubmit={handleSubmit} className="flex min-h-0 flex-col">
             <DialogHeader className="border-b border-border/60 px-5 py-4">
-              <DialogTitle>Send feedback</DialogTitle>
+              <DialogTitle>Request a feature</DialogTitle>
               <DialogDescription>
                 Share what should change in Convergence.
               </DialogDescription>
             </DialogHeader>
 
             <div className="flex min-h-0 flex-col gap-4 px-5 py-4">
-              <div className="grid grid-cols-4 gap-2">
-                {kinds.map((item) => {
-                  const Icon = item.icon
-                  const selected = item.value === kind
-                  return (
-                    <Button
-                      key={item.value}
-                      type="button"
-                      variant={selected ? 'default' : 'outline'}
-                      size="sm"
-                      aria-pressed={selected}
-                      onClick={() => onKindChange(item.value)}
-                      className={cn(
-                        'h-9 min-w-0 px-2',
-                        !selected && 'bg-background/40',
-                      )}
-                    >
-                      <Icon className="h-4 w-4" />
-                      <span className="truncate">{item.label}</span>
-                    </Button>
-                  )
-                })}
-              </div>
-
               <label className="flex flex-col gap-2 text-sm font-medium">
-                Feedback
-                <Textarea
-                  value={message}
-                  onChange={(event) => onMessageChange(event.target.value)}
-                  placeholder="What should change?"
+                Title
+                <Input
+                  value={title}
+                  onChange={(event) => onTitleChange(event.target.value)}
+                  placeholder="Add export to Markdown"
                   required
-                  minLength={5}
-                  rows={7}
-                  className="max-h-[34vh] min-h-36 resize-none"
+                  minLength={3}
+                  autoComplete="off"
                 />
               </label>
 
               <label className="flex flex-col gap-2 text-sm font-medium">
-                Contact
-                <Input
-                  value={contact}
-                  onChange={(event) => onContactChange(event.target.value)}
-                  placeholder="Optional"
-                  autoComplete="email"
+                Priority
+                <div className="grid grid-cols-3 gap-2">
+                  {priorities.map((item) => {
+                    const selected = item.value === priority
+                    return (
+                      <Button
+                        key={item.value}
+                        type="button"
+                        variant={selected ? 'default' : 'outline'}
+                        size="sm"
+                        aria-pressed={selected}
+                        onClick={() => onPriorityChange(item.value)}
+                        className={cn(
+                          'h-9 min-w-0 px-2',
+                          !selected && 'bg-background/40',
+                        )}
+                      >
+                        <span className="truncate">{item.label}</span>
+                      </Button>
+                    )
+                  })}
+                </div>
+              </label>
+
+              <label className="flex flex-col gap-2 text-sm font-medium">
+                Description
+                <Textarea
+                  value={description}
+                  onChange={(event) => onDescriptionChange(event.target.value)}
+                  placeholder="I want to export notes directly to Markdown files."
+                  required
+                  minLength={5}
+                  rows={7}
+                  className="max-h-[34vh] min-h-36 resize-none"
                 />
               </label>
 
@@ -150,6 +149,13 @@ export function FeedbackButton({
             </div>
 
             <DialogFooter className="border-t border-border/60 px-5 py-4">
+              <Input
+                value={contact}
+                onChange={(event) => onContactChange(event.target.value)}
+                placeholder="Contact optional"
+                autoComplete="email"
+                className="min-w-0 sm:flex-1"
+              />
               <Button
                 type="button"
                 variant="outline"
