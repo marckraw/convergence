@@ -19,7 +19,7 @@ export { useAppSettingsStore } from './app-settings'
 
 export type {
   FeedbackContext,
-  FeedbackKind,
+  FeedbackPriority,
   FeedbackSubmissionResult,
   SubmitFeedbackInput,
 } from './feedback'
