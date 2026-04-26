@@ -49,7 +49,17 @@ export const ConversationItemView: FC<ConversationItemViewProps> = ({
                 <User className="h-4 w-4" />
               </div>
               <div className="min-w-0 flex-1 pt-0.5">
-                <p className="text-xs font-medium text-muted-foreground">You</p>
+                <p className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+                  <span>You</span>
+                  {entry.deliveryMode && (
+                    <span
+                      data-testid="user-message-delivery-mode"
+                      className="inline-flex items-center rounded-full border border-amber-500/30 bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-amber-600 dark:text-amber-400"
+                    >
+                      {entry.deliveryMode === 'steer' ? 'Steer' : 'Follow-up'}
+                    </span>
+                  )}
+                </p>
                 {renderSkillSelections(entry.skillSelections)}
                 <Markdown
                   className="mt-1 text-foreground"

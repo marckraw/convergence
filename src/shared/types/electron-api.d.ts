@@ -348,6 +348,7 @@ type ConversationItemData =
       text: string
       attachmentIds?: string[]
       skillSelections?: SkillSelection[]
+      deliveryMode?: 'steer' | 'follow-up'
     })
   | (ConversationItemDataBase & {
       kind: 'thinking'
