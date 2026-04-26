@@ -1,5 +1,11 @@
 # convergence
 
+## 0.27.0
+
+### Minor Changes
+
+- 869cb31: Submit feature request feedback to Convergence Cloud from the in-app feedback form.
+
 ## 0.26.1
 
 ### Patch Changes
