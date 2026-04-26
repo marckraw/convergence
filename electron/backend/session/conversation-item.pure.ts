@@ -325,7 +325,12 @@ export function conversationItemFromRow(
   }
 
   switch (kind) {
-    case 'message':
+    case 'message': {
+      const deliveryModeValue = payload.deliveryMode
+      const deliveryMode =
+        deliveryModeValue === 'steer' || deliveryModeValue === 'follow-up'
+          ? deliveryModeValue
+          : undefined
       return {
         ...base,
         kind,
@@ -333,7 +338,9 @@ export function conversationItemFromRow(
         text: payload.text as string,
         attachmentIds: payload.attachmentIds as string[] | undefined,
         skillSelections: parseSkillSelections(payload.skillSelections),
+        ...(deliveryMode ? { deliveryMode } : {}),
       }
+    }
 
     case 'thinking':
       return {

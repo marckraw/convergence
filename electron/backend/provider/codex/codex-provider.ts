@@ -614,6 +614,15 @@ export class CodexProvider implements Provider {
         return
       }
 
+      sessionEmitter.addUserMessage({
+        text: input.text,
+        skillSelections: skillResolution.skillSelections,
+        attachmentIds: input.attachments?.length
+          ? input.attachments.map((a) => a.id)
+          : undefined,
+        deliveryMode: 'steer',
+      })
+
       const currentThreadId = await ensureThread(input.activeRpc)
       const parts = await loadCodexParts(input.attachments)
       await input.activeRpc.request('turn/steer', {

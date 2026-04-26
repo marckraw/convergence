@@ -735,11 +735,20 @@ export class PiProvider implements Provider {
         return
       }
 
+      const userMessageItemId = sessionEmitter.addUserMessage({
+        text,
+        skillSelections: skillResolution.skillSelections,
+        attachmentIds: attachments?.length
+          ? attachments.map((a) => a.id)
+          : undefined,
+        deliveryMode,
+      })
+
       sendPromptWithAttachments(
         skillResolution.promptText,
         attachments,
         skillResolution.skillSelections,
-        null,
+        userMessageItemId,
         deliveryMode,
       )
     }

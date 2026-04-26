@@ -115,6 +115,7 @@ export type ConversationItem =
       text: string
       attachmentIds?: string[]
       skillSelections?: SkillSelection[]
+      deliveryMode?: 'steer' | 'follow-up'
     })
   | (ConversationItemBase & {
       kind: 'thinking'

@@ -53,6 +53,7 @@ export class ProviderSessionEmitter {
     attachmentIds?: string[]
     skillSelections?: SkillSelection[]
     timestamp?: string
+    deliveryMode?: 'steer' | 'follow-up'
   }): string {
     return this.addMessage({
       actor: 'user',
@@ -61,6 +62,7 @@ export class ProviderSessionEmitter {
       skillSelections: input.skillSelections,
       timestamp: input.timestamp,
       providerEventType: 'user',
+      deliveryMode: input.deliveryMode,
     })
   }
 
@@ -221,6 +223,7 @@ export class ProviderSessionEmitter {
     timestamp?: string
     providerItemId?: string | null
     providerEventType?: string | null
+    deliveryMode?: 'steer' | 'follow-up'
   }): string {
     const timestamp = input.timestamp ?? this.now()
     const item = this.buildBaseItem({
@@ -236,6 +239,7 @@ export class ProviderSessionEmitter {
         ...(input.skillSelections
           ? { skillSelections: input.skillSelections }
           : {}),
+        ...(input.deliveryMode ? { deliveryMode: input.deliveryMode } : {}),
       },
     }) as MessageItem
     this.emitItem(item)
