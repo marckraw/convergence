@@ -15,6 +15,8 @@ interface ConversationItemProps {
   onDeny?: () => void
 }
 
+const EMPTY_RESOLVED_ATTACHMENTS: Record<string, Attachment> = {}
+
 export const ConversationItem: FC<ConversationItemProps> = ({
   entry,
   sessionId,
@@ -22,7 +24,7 @@ export const ConversationItem: FC<ConversationItemProps> = ({
   onDeny,
 }) => {
   const resolvedMap = useAttachmentStore(
-    (state) => state.resolved[sessionId] ?? {},
+    (state) => state.resolved[sessionId] ?? EMPTY_RESOLVED_ATTACHMENTS,
   )
   const [previewAttachment, setPreviewAttachment] = useState<Attachment | null>(
     null,

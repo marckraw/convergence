@@ -1,6 +1,106 @@
 {
-  "currentVersion": "0.18.2",
+  "currentVersion": "0.26.0",
   "releases": [
+    {
+      "version": "0.26.0",
+      "date": null,
+      "notes": "### Minor Changes\n\n- 3bdcb4f: Allow supported agent sessions to accept follow-up or steering input while they are running, with persisted queued follow-ups and provider-specific Codex/Pi handling."
+    },
+    {
+      "version": "0.25.0",
+      "date": null,
+      "notes": "### Minor Changes\n\n- 9a60bad: Show attachments inside conversation history.\n\n  Two issues fixed:\n  - Provider adapters (Claude Code, Codex, Pi) were dropping `attachmentIds` when emitting the persisted user message. The model still received the bytes, but the stored `ConversationItem` had no record of which attachments were sent. This regressed during the conversation-normalization migration; the emitter signature already supported the field.\n  - The transcript view never rendered attachment chips on stored user messages, even before the regression — the original session-attachments spec only covered the composer surface.\n\n  Now: attachments persist on the user message, the session view hydrates attachment metadata once per mount, and chips render inline below the user text. Clicking a chip opens the same preview modal used by the composer. Attachments whose underlying file is no longer available render as a broken-icon \"Unavailable\" chip."
+    },
+    {
+      "version": "0.24.0",
+      "date": null,
+      "notes": "### Minor Changes\n\n- e662c41: Add first-class skills support across Codex, Claude Code, and Pi. Users can browse provider skill catalogs, inspect full `SKILL.md` details, select skills from the composer, invoke them through provider-native paths, and see Claude Code skill activation confirmed from native telemetry when available."
+    },
+    {
+      "version": "0.23.5",
+      "date": null,
+      "notes": "### Patch Changes\n\n- 135050a: Tighten renderer architecture enforcement with API wrappers and Chaperone rules for preload access and FSD public imports."
+    },
+    {
+      "version": "0.23.4",
+      "date": null,
+      "notes": "### Patch Changes\n\n- 4152b8b: Document the Prettier formatting rule in `CLAUDE.md` and `AGENTS.md`. Agents must accept reformatting from `chaperone check --fix` (including diffs to files outside their immediate scope), commit those changes — separately as `chore: prettier` if they're unrelated to the current task — rather than skip them or assume they're someone else's WIP."
+    },
+    {
+      "version": "0.23.3",
+      "date": null,
+      "notes": "### Patch Changes\n\n- 38240fa: Fix command palette and searchable select highlighting in light mode. The selected row used `bg-white/10`, which was invisible against the near-white popover background. Switched to theme tokens (`bg-accent` / `text-accent-foreground`) so the highlight has proper contrast in both light and dark modes."
+    },
+    {
+      "version": "0.23.2",
+      "date": null,
+      "notes": "### Patch Changes\n\n- fcee2ce: Improve light mode contrast for status badges and indicators. Initiative status/attention pills, provider availability badges, MCP server status badges (including the yellow \"needs authentication\" pill), the global status bar, and the AttentionIndicator now use darker text colors in light mode while preserving the existing dark mode appearance."
+    },
+    {
+      "version": "0.23.1",
+      "date": null,
+      "notes": "### Patch Changes\n\n- 081f84b: Fix text overflow in Project Settings workspace start point buttons. Description text now wraps inside the button instead of being clipped at the button edge."
+    },
+    {
+      "version": "0.23.0",
+      "date": null,
+      "notes": "### Minor Changes\n\n- d4769bf: Add agent-native Initiatives V1 for tracking delivery work across sessions and\n  projects. Initiatives now provide a global workboard, session Attempt linking,\n  linked-session context panels, durable current understanding, manual and\n  suggested outputs, provider-backed synthesis suggestions, and manually editable\n  attention flags."
+    },
+    {
+      "version": "0.22.3",
+      "date": null,
+      "notes": "### Patch Changes\n\n- b056774: Status bar tooltips now open almost instantly (120ms) instead of waiting on the global 1500ms tooltip delay, so hovering over running/attention/project chips surfaces details right away."
+    },
+    {
+      "version": "0.22.2",
+      "date": null,
+      "notes": "### Patch Changes\n\n- a0fbf98: Fix MCP server discovery for Claude Code when built-in `claude.ai ...` servers\n  appear in `claude mcp list` but fail individual `claude mcp get` lookups.\n  Convergence now falls back to list-based parsing instead of dropping the whole\n  provider section, and the MCP dialog also shows Pi with a note explaining that\n  its CLI does not expose inspectable MCP server discovery yet."
+    },
+    {
+      "version": "0.22.1",
+      "date": null,
+      "notes": "### Patch Changes\n\n- 8fd0be3: Rename the sidebar project action from \"Create Project\" / \"New Project\" to\n  \"Open a project\" for consistency. The button has always opened an existing\n  directory via the native picker, so the wording now matches the behavior."
+    },
+    {
+      "version": "0.22.0",
+      "date": null,
+      "notes": "### Minor Changes\n\n- 3cf3415: feat(terminal): promote terminal to a first-class session surface. Sessions now carry a `primarySurface` field that chooses between the conversation transcript and the terminal pane tree in the main pane, with the opposite surface as an opt-in bottom dock. A new synthetic `shell` provider lets users create terminal-only sessions (no agent attached) via an intent dialog (Conversation / Terminal) on `+ New session` and a new `new-terminal-session` command in Cmd+K. Pane layout (tree shape, split sizes, tab CWDs and titles) is persisted per session and replayed as fresh PTYs in the saved working directories on app restart — scrollback and live processes are not preserved (future tmux work). Shell-provider sessions skip auto-naming, hide the fork action, and display \"Terminal\" in the provider chip. `Cmd+J` toggles the conversation dock when terminal is the primary surface. Existing conversation sessions behave identically; the layout change is gated on the new primary surface field so no migration is required for current users."
+    },
+    {
+      "version": "0.21.1",
+      "date": null,
+      "notes": "### Patch Changes\n\n- 6b1d745: Fix structured-summary session forks so additional instructions stay visible in the preview and are applied to the final seed when the fork is created."
+    },
+    {
+      "version": "0.21.0",
+      "date": null,
+      "notes": "### Minor Changes\n\n- 78ff1a3: feat(activity): surface native provider auto-compaction as a `compacting` activity state in the session header and status bar. Pi maps `compaction_start`/`compaction_end`, Codex maps `contextCompaction` item lifecycle events, and Claude Code maps best-effort stream-json hook/compaction shapes, so users can see when the underlying CLI is auto-compacting instead of guessing during slower turns.\n\n### Patch Changes\n\n- 446254c: chore(markdown): add runtime canary that warns in the console when a rendered assistant message appears to be missing its tail versus the source string. Catches silent truncation bugs from the markdown parser, the conversation-item persistence pipeline, or streaming flush edge cases without needing DevTools inspection."
+    },
+    {
+      "version": "0.20.0",
+      "date": null,
+      "notes": "### Minor Changes\n\n- da183b7: Pick the base branch when creating a workspace. The new workspace dialog now shows a searchable \"Create from\" list of local and origin branches, so a new worktree can branch off any ref on demand instead of always using the project-wide setting. Leaving the selection on \"Project default\" preserves existing behavior."
+    },
+    {
+      "version": "0.19.0",
+      "date": null,
+      "notes": "### Minor Changes\n\n- 673bb96: Group the extended Changed Files panel by agent turn. Each round-trip\n  from user message to agent-idle is now recorded as a turn with its own\n  per-turn diffs, so reviewers can see what the agent did in each step\n  rather than a single cumulative working-tree diff. The compact view is\n  unchanged and continues to show the live git-status list. Existing\n  sessions show an empty turn list in the extended view — only sessions\n  started after this release accumulate turn records."
+    },
+    {
+      "version": "0.18.5",
+      "date": null,
+      "notes": "### Patch Changes\n\n- 59af8da: Add a bottom-right feedback button with a dialog for collecting Convergence app feedback. Submissions currently go through a mocked Electron API boundary so the real destination can be wired later.\n\n  Keep the release history pagination visible in the What's New dialog footer so users can move between release pages without scrolling to the bottom of the notes."
+    },
+    {
+      "version": "0.18.4",
+      "date": null,
+      "notes": "### Patch Changes\n\n- 44a7f24: Fix Pi provider label in composer dropdown: show \"Pi\" as the primary label instead of the creator name."
+    },
+    {
+      "version": "0.18.3",
+      "date": null,
+      "notes": "### Patch Changes\n\n- a7e5abd: Paginate the Release History list in the About Convergence dialog (5 per page) so the modal stays compact as the changelog grows."
+    },
     {
       "version": "0.18.2",
       "date": null,
