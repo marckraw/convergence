@@ -217,4 +217,109 @@ describe('ConversationItemView', () => {
       await waitFor(() => expect(writeText).toHaveBeenCalledWith(output))
     })
   })
+
+  describe('user message attachments', () => {
+    function userEntry(text = 'review these') {
+      return {
+        id: 'msg-user',
+        sessionId: 'session-1',
+        sequence: 1,
+        turnId: null,
+        kind: 'message' as const,
+        state: 'complete' as const,
+        actor: 'user' as const,
+        text,
+        createdAt: '2026-04-13T10:00:00.000Z',
+        updatedAt: '2026-04-13T10:00:00.000Z',
+        providerMeta: {
+          providerId: 'claude-code',
+          providerItemId: null,
+          providerEventType: 'user',
+        },
+      }
+    }
+
+    function makeAttachment(id: string, filename: string) {
+      return {
+        id,
+        sessionId: 'session-1',
+        kind: 'image' as const,
+        mimeType: 'image/png',
+        filename,
+        sizeBytes: 1,
+        storagePath: `/tmp/${id}.png`,
+        thumbnailPath: null,
+        textPreview: null,
+        createdAt: '2026-04-13T10:00:00.000Z',
+      }
+    }
+
+    it('renders chips for resolved attachments below the user message text', () => {
+      const onOpen = vi.fn()
+      render(
+        <ConversationItemView
+          entry={userEntry()}
+          attachments={[
+            makeAttachment('att-1', 'one.png'),
+            makeAttachment('att-2', 'two.png'),
+          ]}
+          onAttachmentOpen={onOpen}
+        />,
+      )
+
+      const chips = screen.getAllByTestId('attachment-chip')
+      expect(chips).toHaveLength(2)
+      expect(screen.getByText('one.png')).toBeInTheDocument()
+      expect(screen.getByText('two.png')).toBeInTheDocument()
+    })
+
+    it('renders broken-icon chips for missing attachment ids', () => {
+      render(
+        <ConversationItemView
+          entry={userEntry()}
+          missingAttachmentIds={['gone-1', 'gone-2']}
+        />,
+      )
+
+      const missingChips = screen.getAllByTestId('missing-attachment-chip')
+      expect(missingChips).toHaveLength(2)
+      expect(missingChips[0]).toHaveAttribute('data-attachment-id', 'gone-1')
+      expect(missingChips[1]).toHaveAttribute('data-attachment-id', 'gone-2')
+    })
+
+    it('renders both resolved and missing chips together', () => {
+      render(
+        <ConversationItemView
+          entry={userEntry()}
+          attachments={[makeAttachment('att-1', 'kept.png')]}
+          missingAttachmentIds={['gone-1']}
+          onAttachmentOpen={vi.fn()}
+        />,
+      )
+
+      expect(screen.getAllByTestId('attachment-chip')).toHaveLength(1)
+      expect(screen.getAllByTestId('missing-attachment-chip')).toHaveLength(1)
+    })
+
+    it('renders no chip row when there are no attachments and no missing ids', () => {
+      render(<ConversationItemView entry={userEntry('hello')} />)
+      expect(screen.queryByTestId('history-attachments')).toBeNull()
+      expect(screen.queryByTestId('attachment-chip')).toBeNull()
+      expect(screen.queryByTestId('missing-attachment-chip')).toBeNull()
+    })
+
+    it('does not render an X (remove) button on history chips', () => {
+      render(
+        <ConversationItemView
+          entry={userEntry()}
+          attachments={[makeAttachment('att-1', 'kept.png')]}
+          onAttachmentOpen={vi.fn()}
+        />,
+      )
+
+      expect(
+        screen.queryByRole('button', { name: /Remove kept\.png/ }),
+      ).toBeNull()
+    })
+  })
 })

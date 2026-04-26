@@ -664,6 +664,9 @@ export class PiProvider implements Provider {
       const userMessageItemId = sessionEmitter.addUserMessage({
         text,
         skillSelections: skillResolution.skillSelections,
+        attachmentIds: attachments?.length
+          ? attachments.map((a) => a.id)
+          : undefined,
       })
       if (!skillResolution.ok) {
         addSkillInvocationFailureNote(skillResolution)
@@ -713,6 +716,9 @@ export class PiProvider implements Provider {
           ? sessionEmitter.addUserMessage({
               text: initialMessage,
               skillSelections: skillResolution.skillSelections,
+              attachmentIds: initialAttachments?.length
+                ? initialAttachments.map((a) => a.id)
+                : undefined,
             })
           : (options?.userMessageItemId ?? null)
       if (!skillResolution.ok) {

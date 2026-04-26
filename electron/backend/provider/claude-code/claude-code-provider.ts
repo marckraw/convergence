@@ -757,6 +757,9 @@ export class ClaudeCodeProvider implements Provider {
           ? sessionEmitter.addUserMessage({
               text: message,
               skillSelections: skillResolution.skillSelections,
+              attachmentIds: attachments?.length
+                ? attachments.map((a) => a.id)
+                : undefined,
             })
           : (options?.userMessageItemId ?? null)
       if (!skillResolution.ok) {

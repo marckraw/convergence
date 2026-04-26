@@ -4,14 +4,13 @@ import type {
   ReasoningEffort,
   ResolvedProviderSelection,
 } from '@/entities/session'
-import type { Attachment } from '@/entities/attachment'
+import { AttachmentsRow, type Attachment } from '@/entities/attachment'
 import type { SkillCatalogEntry, SkillSelection } from '@/entities/skill'
 import { Button } from '@/shared/ui/button'
 import { Textarea } from '@/shared/ui/textarea'
 import { cn } from '@/shared/lib/cn.pure'
 import { ArrowUp, Paperclip } from 'lucide-react'
 import { ComposerSelect } from './composer-select.presentational'
-import { AttachmentsRow } from './attachments-row.presentational'
 import { SkillPicker } from './skill-picker.presentational'
 import { SkillSelectionChip } from './skill-selection-chip.presentational'
 

@@ -13,22 +13,35 @@ import {
 } from 'lucide-react'
 import { Button } from '@/shared/ui/button'
 import { Markdown } from '@/shared/ui/markdown.container'
+import {
+  AttachmentChip,
+  MissingAttachmentChip,
+  type Attachment,
+} from '@/entities/attachment'
 import { ConversationItemShell } from './conversation-item-shell.presentational'
 
 interface ConversationItemViewProps {
   entry: ConversationItem
   onApprove?: () => void
   onDeny?: () => void
+  attachments?: Attachment[]
+  missingAttachmentIds?: string[]
+  onAttachmentOpen?: (attachment: Attachment) => void
 }
 
 export const ConversationItemView: FC<ConversationItemViewProps> = ({
   entry,
   onApprove,
   onDeny,
+  attachments,
+  missingAttachmentIds,
+  onAttachmentOpen,
 }) => {
   switch (entry.kind) {
     case 'message':
       if (entry.actor === 'user') {
+        const hasAttachments = (attachments?.length ?? 0) > 0
+        const hasMissing = (missingAttachmentIds?.length ?? 0) > 0
         return (
           <ConversationItemShell item={entry}>
             <div className="flex gap-3 py-3">
@@ -43,6 +56,23 @@ export const ConversationItemView: FC<ConversationItemViewProps> = ({
                   content={entry.text}
                   size="sm"
                 />
+                {(hasAttachments || hasMissing) && (
+                  <div
+                    className="mt-2 flex flex-wrap gap-1.5"
+                    data-testid="history-attachments"
+                  >
+                    {attachments?.map((attachment) => (
+                      <AttachmentChip
+                        key={attachment.id}
+                        attachment={attachment}
+                        onOpen={onAttachmentOpen ?? (() => {})}
+                      />
+                    ))}
+                    {missingAttachmentIds?.map((id) => (
+                      <MissingAttachmentChip key={id} attachmentId={id} />
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
           </ConversationItemShell>

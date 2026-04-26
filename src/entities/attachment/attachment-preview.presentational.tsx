@@ -5,7 +5,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/shared/ui/dialog'
-import type { Attachment } from '@/entities/attachment'
+import type { Attachment } from './attachment.types'
 
 interface AttachmentPreviewProps {
   attachment: Attachment | null

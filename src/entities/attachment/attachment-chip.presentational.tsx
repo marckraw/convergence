@@ -2,13 +2,13 @@ import type { FC } from 'react'
 import { FileText, FileType, Image as ImageIcon, X } from 'lucide-react'
 import { cn } from '@/shared/lib/cn.pure'
 import { Button } from '@/shared/ui/button'
-import type { Attachment } from '@/entities/attachment'
+import type { Attachment } from './attachment.types'
 
 interface AttachmentChipProps {
   attachment: Attachment
   capabilityError?: string | null
   onOpen: (attachment: Attachment) => void
-  onRemove: (attachmentId: string) => void
+  onRemove?: (attachmentId: string) => void
 }
 
 function truncateMiddle(value: string, max = 22): string {
@@ -62,19 +62,21 @@ export const AttachmentChip: FC<AttachmentChipProps> = ({
         )}
         <span className="max-w-[12rem] truncate">{displayName}</span>
       </Button>
-      <Button
-        type="button"
-        variant="ghost"
-        size="icon"
-        aria-label={`Remove ${attachment.filename}`}
-        onClick={(e) => {
-          e.stopPropagation()
-          onRemove(attachment.id)
-        }}
-        className="h-5 w-5"
-      >
-        <X className="h-3 w-3" />
-      </Button>
+      {onRemove && (
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          aria-label={`Remove ${attachment.filename}`}
+          onClick={(e) => {
+            e.stopPropagation()
+            onRemove(attachment.id)
+          }}
+          className="h-5 w-5"
+        >
+          <X className="h-3 w-3" />
+        </Button>
+      )}
     </span>
   )
 }

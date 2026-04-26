@@ -10,6 +10,7 @@ import { useDialogStore } from '@/entities/dialog'
 import {
   attachmentApi,
   useAttachmentStore,
+  AttachmentPreviewContainer,
   type Attachment,
   type AttachmentIngestFileInput,
 } from '@/entities/attachment'
@@ -21,7 +22,6 @@ import {
 } from '@/entities/skill'
 import { Composer } from './composer.presentational'
 import { validateAttachmentsAgainstCapability } from './attachment-capability.pure'
-import { AttachmentPreviewContainer } from './attachment-preview.container'
 import {
   filterComposerSkills,
   filterSelectionsForProvider,

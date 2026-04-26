@@ -512,6 +512,9 @@ export class CodexProvider implements Provider {
       const userMessageItemId = sessionEmitter.addUserMessage({
         text: input.text,
         skillSelections: skillResolution.skillSelections,
+        attachmentIds: input.attachments?.length
+          ? input.attachments.map((a) => a.id)
+          : undefined,
       })
       setStatus('running')
       setAttention('none')

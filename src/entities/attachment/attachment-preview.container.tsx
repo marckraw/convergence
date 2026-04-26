@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import type { FC } from 'react'
-import { attachmentApi, type Attachment } from '@/entities/attachment'
+import { attachmentApi } from './attachment.api'
+import type { Attachment } from './attachment.types'
 import { AttachmentPreview } from './attachment-preview.presentational'
 
 interface AttachmentPreviewContainerProps {

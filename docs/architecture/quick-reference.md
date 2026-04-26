@@ -103,7 +103,7 @@ Requirements:
 
 Sessions support image, PDF, and UTF-8 text attachments on outgoing messages:
 
-- **Entity:** `src/entities/attachment/` (types, api, zustand draft store keyed by session id)
+- **Entity:** `src/entities/attachment/` (types, api, zustand store with `drafts` per composer session and `resolved` per session-view session, plus chip / row / preview / missing-chip presentationals shared by composer and transcript)
 - **Backend:** `electron/backend/attachments/` handles ingest-from-bytes / ingest-from-paths, EXIF stripping, MIME sniffing, per-session directory storage under `userData/attachments/{sessionId}/`, orphan sweep on boot, and FK-cascade deletion
 - **Provider serializers** live next to each adapter:
   - `claude-code/claude-code-message.pure.ts` → Anthropic `content[]` blocks (image/document/text)
@@ -111,10 +111,11 @@ Sessions support image, PDF, and UTF-8 text attachments on outgoing messages:
   - `pi/pi-message.pure.ts` → `{message, images?}` per Pi rpc schema
 - **Capability matrix** is exposed on `ProviderDescriptor.attachments`; renderer gates on `selection.provider.attachments` via `src/features/composer/attachment-capability.pure.ts`
 - **UI surface:** composer `+` button (file picker), textarea `onPaste`, composer root drag-and-drop, chip row with preview modal
+- **History rendering:** `src/widgets/session-view/conversation-item.container.tsx` resolves `entry.attachmentIds` against the `useAttachmentStore` resolved map (hydrated once per session-view mount via `attachments:getForSession`); user messages render chips below text, with a `MissingAttachmentChip` fallback for orphaned ids
 - **Persistence:** attachment ids live on normalized user `ConversationItem` payloads; attachment rows live in dedicated `attachments` table
 - **PDFs are Claude-Code-only**; Codex and Pi providers report `supportsPdf: false` and the composer surfaces a capability error with red chip outline + send-disabled state
 
-Full spec: `docs/specs/session-attachments.md`.
+Full spec: `docs/specs/session-attachments.md`. History-render + post-normalization regression fix: `docs/specs/attachments-in-history.md`.
 
 ### 8. Auto-updates
 

@@ -1,12 +1,12 @@
 import type { FC } from 'react'
-import type { Attachment } from '@/entities/attachment'
+import type { Attachment } from './attachment.types'
 import { AttachmentChip } from './attachment-chip.presentational'
 
 interface AttachmentsRowProps {
   attachments: Attachment[]
-  errorByAttachmentId: Record<string, string>
+  errorByAttachmentId?: Record<string, string>
   onOpen: (attachment: Attachment) => void
-  onRemove: (attachmentId: string) => void
+  onRemove?: (attachmentId: string) => void
 }
 
 export const AttachmentsRow: FC<AttachmentsRowProps> = ({
@@ -23,7 +23,7 @@ export const AttachmentsRow: FC<AttachmentsRowProps> = ({
         <AttachmentChip
           key={attachment.id}
           attachment={attachment}
-          capabilityError={errorByAttachmentId[attachment.id] ?? null}
+          capabilityError={errorByAttachmentId?.[attachment.id] ?? null}
           onOpen={onOpen}
           onRemove={onRemove}
         />

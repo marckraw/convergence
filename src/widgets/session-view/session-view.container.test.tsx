@@ -173,6 +173,21 @@ describe('SessionView changed files drawer', () => {
           getFileDiff: vi.fn().mockResolvedValue(''),
           onTurnDelta: vi.fn().mockReturnValue(() => {}),
         },
+        attachments: {
+          getForSession: vi.fn().mockResolvedValue([]),
+          getById: vi.fn().mockResolvedValue(null),
+          ingestFiles: vi.fn().mockResolvedValue({
+            attachments: [],
+            rejections: [],
+          }),
+          ingestFromPaths: vi.fn().mockResolvedValue({
+            attachments: [],
+            rejections: [],
+          }),
+          readBytes: vi.fn().mockResolvedValue(new Uint8Array()),
+          delete: vi.fn().mockResolvedValue(undefined),
+          showOpenDialog: vi.fn().mockResolvedValue([]),
+        },
       },
       configurable: true,
       writable: true,
