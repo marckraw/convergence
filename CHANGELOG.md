@@ -1,5 +1,11 @@
 # convergence
 
+## 0.26.0
+
+### Minor Changes
+
+- 3bdcb4f: Allow supported agent sessions to accept follow-up or steering input while they are running, with persisted queued follow-ups and provider-specific Codex/Pi handling.
+
 ## 0.25.0
 
 ### Minor Changes
