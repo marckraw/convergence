@@ -114,6 +114,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
             text: string
             attachmentIds?: string[]
             skillSelections?: unknown[]
+            deliveryMode?: string
           }
         | string,
     ) =>
@@ -129,6 +130,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
             text: string
             attachmentIds?: string[]
             skillSelections?: unknown[]
+            deliveryMode?: string
           }
         | string,
     ) =>
@@ -165,6 +167,17 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.on('session:conversationPatched', handler)
       return () => {
         ipcRenderer.removeListener('session:conversationPatched', handler)
+      }
+    },
+    getQueuedInputs: (sessionId: string) =>
+      ipcRenderer.invoke('session:getQueuedInputs', sessionId),
+    cancelQueuedInput: (id: string) =>
+      ipcRenderer.invoke('session:cancelQueuedInput', id),
+    onSessionQueuedInputPatched: (callback: (event: unknown) => void) => {
+      const handler = (_event: unknown, event: unknown) => callback(event)
+      ipcRenderer.on('session:queuedInputPatched', handler)
+      return () => {
+        ipcRenderer.removeListener('session:queuedInputPatched', handler)
       }
     },
     forkPreviewSummary: (parentId: string, requestId?: string) =>

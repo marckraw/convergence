@@ -42,6 +42,9 @@ export function App() {
   const handleConversationPatched = useSessionStore(
     (s) => s.handleConversationPatched,
   )
+  const handleQueuedInputPatched = useSessionStore(
+    (s) => s.handleQueuedInputPatched,
+  )
   const loadGlobalSessions = useSessionStore((s) => s.loadGlobalSessions)
   const loadRecents = useSessionStore((s) => s.loadRecents)
   const loadAppSettings = useAppSettingsStore((s) => s.load)
@@ -140,12 +143,22 @@ export function App() {
         handleConversationPatched(event)
       },
     )
+    const unsubscribeQueuedInput = sessionApi.onSessionQueuedInputPatched(
+      (event) => {
+        handleQueuedInputPatched(event)
+      },
+    )
 
     return () => {
       unsubscribeSummary()
       unsubscribeConversation()
+      unsubscribeQueuedInput()
     }
-  }, [handleSessionSummaryUpdate, handleConversationPatched])
+  }, [
+    handleSessionSummaryUpdate,
+    handleConversationPatched,
+    handleQueuedInputPatched,
+  ])
 
   useEffect(() => {
     if (!import.meta.env.DEV) return

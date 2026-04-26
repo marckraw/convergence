@@ -3,6 +3,7 @@ import type {
   ProviderDescriptor,
   SessionHandle,
 } from '../provider.types'
+import { NO_MID_RUN_INPUT_CAPABILITY } from '../provider-descriptor.pure'
 
 const SHELL_DESCRIPTOR: ProviderDescriptor = {
   id: 'shell',
@@ -22,6 +23,7 @@ const SHELL_DESCRIPTOR: ProviderDescriptor = {
     maxTextBytes: 0,
     maxTotalBytes: 0,
   },
+  midRunInput: NO_MID_RUN_INPUT_CAPABILITY,
   skills: {
     catalog: 'unsupported',
     invocation: 'unsupported',

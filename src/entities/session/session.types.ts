@@ -29,6 +29,13 @@ export type ActivitySignal =
   | 'waiting-approval'
   | `tool:${string}`
 
+export type MidRunInputMode =
+  | 'normal'
+  | 'answer'
+  | 'follow-up'
+  | 'steer'
+  | 'interrupt'
+
 export type ContextWindowSource = 'provider' | 'estimated'
 
 export type SessionContextWindow =
@@ -145,6 +152,33 @@ export interface ConversationPatchEvent {
   item: ConversationItem
 }
 
+export type QueuedInputState =
+  | 'queued'
+  | 'dispatching'
+  | 'sent'
+  | 'failed'
+  | 'cancelled'
+
+export interface SessionQueuedInput {
+  id: string
+  sessionId: string
+  deliveryMode: Extract<MidRunInputMode, 'follow-up' | 'steer' | 'interrupt'>
+  state: QueuedInputState
+  text: string
+  attachmentIds: string[]
+  skillSelections: SkillSelection[]
+  providerRequestId: string | null
+  error: string | null
+  createdAt: string
+  updatedAt: string
+}
+
+export interface QueuedInputPatchEvent {
+  sessionId: string
+  op: 'add' | 'patch'
+  item: SessionQueuedInput
+}
+
 export interface SessionSummary {
   id: string
   projectId: string
@@ -186,6 +220,16 @@ export interface ProviderSkillsCapability {
   activationConfirmation: SkillActivationConfirmation
 }
 
+export interface ProviderMidRunInputCapability {
+  supportsAnswer: boolean
+  supportsNativeFollowUp: boolean
+  supportsAppQueuedFollowUp: boolean
+  supportsSteer: boolean
+  supportsInterrupt: boolean
+  defaultRunningMode: Extract<MidRunInputMode, 'follow-up' | 'steer'> | null
+  notes?: string
+}
+
 export interface ProviderInfo {
   id: string
   name: string
@@ -196,6 +240,7 @@ export interface ProviderInfo {
   fastModelId?: string | null
   modelOptions: ProviderModelOption[]
   attachments: ProviderAttachmentCapability
+  midRunInput: ProviderMidRunInputCapability
   skills?: ProviderSkillsCapability
 }
 

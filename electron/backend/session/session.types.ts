@@ -5,7 +5,9 @@ import type {
   ReasoningEffort,
   SessionContextWindow,
   ActivitySignal,
+  MidRunInputMode,
 } from '../provider/provider.types'
+import type { SkillSelection } from '../skills/skills.types'
 
 export type {
   SessionStatus,
@@ -13,6 +15,7 @@ export type {
   ReasoningEffort,
   SessionContextWindow,
   ActivitySignal,
+  MidRunInputMode,
 }
 
 export type ForkStrategy = 'full' | 'summary'
@@ -64,6 +67,33 @@ export interface CreateSessionInput {
   parentSessionId?: string | null
   forkStrategy?: ForkStrategy | null
   primarySurface?: PrimarySurface
+}
+
+export type QueuedInputState =
+  | 'queued'
+  | 'dispatching'
+  | 'sent'
+  | 'failed'
+  | 'cancelled'
+
+export interface SessionQueuedInput {
+  id: string
+  sessionId: string
+  deliveryMode: Extract<MidRunInputMode, 'follow-up' | 'steer' | 'interrupt'>
+  state: QueuedInputState
+  text: string
+  attachmentIds: string[]
+  skillSelections: SkillSelection[]
+  providerRequestId: string | null
+  error: string | null
+  createdAt: string
+  updatedAt: string
+}
+
+export interface QueuedInputPatchEvent {
+  sessionId: string
+  op: 'add' | 'patch'
+  item: SessionQueuedInput
 }
 
 function parseActivity(value: string | null): ActivitySignal {

@@ -6,6 +6,7 @@ import type {
   ProviderAttachmentCapability,
   ProviderDescriptor,
 } from '../provider/provider.types'
+import { NO_MID_RUN_INPUT_CAPABILITY } from '../provider/provider-descriptor.pure'
 import { DEFAULT_UPDATE_PREFS } from '../updates/updates.defaults'
 import { AppSettingsService, APP_SETTINGS_KEY } from './app-settings.service'
 import { DEFAULT_ONBOARDING_PREFS } from './app-settings.types'
@@ -53,6 +54,7 @@ function buildDescriptors(): ProviderDescriptor[] {
         },
       ],
       attachments: TEST_ATTACHMENT_CAPABILITY,
+      midRunInput: NO_MID_RUN_INPUT_CAPABILITY,
     },
     {
       id: 'codex',
@@ -75,6 +77,7 @@ function buildDescriptors(): ProviderDescriptor[] {
         },
       ],
       attachments: TEST_ATTACHMENT_CAPABILITY,
+      midRunInput: NO_MID_RUN_INPUT_CAPABILITY,
     },
   ]
 }

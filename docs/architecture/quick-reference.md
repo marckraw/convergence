@@ -117,7 +117,26 @@ Sessions support image, PDF, and UTF-8 text attachments on outgoing messages:
 
 Full spec: `docs/specs/session-attachments.md`. History-render + post-normalization regression fix: `docs/specs/attachments-in-history.md`.
 
-### 8. Auto-updates
+### 8. Mid-run session input
+
+Providers advertise running-session input support through
+`ProviderDescriptor.midRunInput`; the renderer must gate composer modes through
+that capability instead of guessing from provider id.
+
+Supported V1 behavior:
+
+- Claude Code: app-managed queued follow-up while running; no advertised steer
+  or interrupt until the dedicated streaming-adapter refactor.
+- Codex: app-managed queued follow-up, `answer` for provider user-input
+  requests, and native `turn/steer` for steering an active turn.
+- Pi: native `follow_up` and `steer` commands while running.
+
+Queued follow-ups are persisted in `session_queued_inputs`, broadcast through
+session queue patch IPC, rendered near the composer, and cancellable while
+still in `queued` state. Full spec:
+`docs/specs/mid-run-session-input.md`.
+
+### 9. Auto-updates
 
 Packaged builds self-update from public GitHub Releases via
 `electron-updater`. A `UpdatesService` wraps the updater behind
@@ -126,7 +145,7 @@ The user is always asked before download and before install.
 Dev mode (`app.isPackaged === false`) short-circuits every update
 code path. Full spec: `docs/specs/auto-updates.md`.
 
-### 9. Verification rules
+### 10. Verification rules
 
 After every finished task, the expected verification flow is:
 

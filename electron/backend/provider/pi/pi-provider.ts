@@ -7,6 +7,7 @@ import type {
   AttentionState,
   Provider,
   ProviderDescriptor,
+  MidRunInputMode,
   SessionContextWindow,
   SessionHandle,
   SessionStartConfig,
@@ -557,16 +558,32 @@ export class PiProvider implements Provider {
       images: ReturnType<typeof buildPiPromptPayload>['images'],
       skillSelections?: SkillSelection[],
       userMessageItemId?: string | null,
+      deliveryMode: Extract<
+        MidRunInputMode,
+        'normal' | 'follow-up' | 'steer'
+      > = 'normal',
     ): void {
       if (!rpc || stopped) return
 
+      const isMidRunInput =
+        deliveryMode === 'follow-up' || deliveryMode === 'steer'
       const command: {
         type: string
         message: string
         streamingBehavior?: string
         images?: ReturnType<typeof buildPiPromptPayload>['images']
-      } = { type: 'prompt', message }
-      if (isStreaming) command.streamingBehavior = 'steer'
+      } = {
+        type:
+          deliveryMode === 'follow-up'
+            ? 'follow_up'
+            : deliveryMode === 'steer'
+              ? 'steer'
+              : 'prompt',
+        message,
+      }
+      if (deliveryMode === 'normal' && isStreaming) {
+        command.streamingBehavior = 'steer'
+      }
       if (images && images.length > 0) command.images = images
 
       rpc.request(command).then(
@@ -585,9 +602,11 @@ export class PiProvider implements Provider {
               skillSelections,
               'failed',
             )
-            setStatus('failed')
-            setAttention('failed')
-            currentTurn = null
+            if (!isMidRunInput) {
+              setStatus('failed')
+              setAttention('failed')
+              currentTurn = null
+            }
             return
           }
           patchUserMessageSkills(
@@ -612,9 +631,11 @@ export class PiProvider implements Provider {
             skillSelections,
             'failed',
           )
-          setStatus('failed')
-          setAttention('failed')
-          currentTurn = null
+          if (!isMidRunInput) {
+            setStatus('failed')
+            setAttention('failed')
+            currentTurn = null
+          }
         },
       )
     }
@@ -624,6 +645,10 @@ export class PiProvider implements Provider {
       attachments?: Attachment[],
       skillSelections?: SkillSelection[],
       userMessageItemId?: string | null,
+      deliveryMode: Extract<
+        MidRunInputMode,
+        'normal' | 'follow-up' | 'steer'
+      > = 'normal',
     ): void {
       if (!rpc || stopped) return
       loadPiParts(attachments)
@@ -635,6 +660,7 @@ export class PiProvider implements Provider {
             payload.images,
             skillSelections,
             userMessageItemId,
+            deliveryMode,
           )
         })
         .catch((err) => {
@@ -648,8 +674,10 @@ export class PiProvider implements Provider {
             text: `Failed to send attachments: ${err instanceof Error ? err.message : String(err)}`,
             level: 'error',
           })
-          setStatus('failed')
-          setAttention('failed')
+          if (deliveryMode === 'normal') {
+            setStatus('failed')
+            setAttention('failed')
+          }
         })
     }
 
@@ -690,6 +718,29 @@ export class PiProvider implements Provider {
         attachments,
         skillResolution.skillSelections,
         userMessageItemId,
+      )
+    }
+
+    async function sendPiRunningInput(
+      text: string,
+      attachments: Attachment[] | undefined,
+      skillSelections: SkillSelection[] | undefined,
+      deliveryMode: Extract<MidRunInputMode, 'follow-up' | 'steer'>,
+    ): Promise<void> {
+      const skillResolution = await resolveSelectedSkills(text, skillSelections)
+      if (stopped || !rpc) return
+
+      if (!skillResolution.ok) {
+        addSkillInvocationFailureNote(skillResolution)
+        return
+      }
+
+      sendPromptWithAttachments(
+        skillResolution.promptText,
+        attachments,
+        skillResolution.skillSelections,
+        null,
+        deliveryMode,
       )
     }
 
@@ -871,10 +922,27 @@ export class PiProvider implements Provider {
       onActivityChange: (cb) => {
         listeners.activity.push(cb)
       },
-      sendMessage: (text, attachments, skillSelections) => {
+      sendMessage: (text, attachments, skillSelections, options) => {
         if (stopped) return
+        const deliveryMode = options?.deliveryMode ?? 'normal'
         if (!rpc) {
+          if (deliveryMode === 'follow-up' || deliveryMode === 'steer') {
+            sessionEmitter.addNote({
+              text: 'Pi Agent is not ready to accept mid-run input yet.',
+              level: 'error',
+            })
+            return
+          }
           void spawnPi(text, attachments, { skillSelections })
+          return
+        }
+        if (deliveryMode === 'follow-up' || deliveryMode === 'steer') {
+          void sendPiRunningInput(
+            text,
+            attachments,
+            skillSelections,
+            deliveryMode,
+          )
           return
         }
         void sendPiTurn(text, attachments, skillSelections)

@@ -64,8 +64,11 @@ const mockElectronAPI = {
     stop: vi.fn(),
     getRecentIds: vi.fn().mockResolvedValue([]),
     setRecentIds: vi.fn().mockResolvedValue(undefined),
+    getQueuedInputs: vi.fn().mockResolvedValue([]),
+    cancelQueuedInput: vi.fn().mockResolvedValue(undefined),
     onSessionSummaryUpdate: vi.fn().mockReturnValue(() => {}),
     onSessionConversationPatched: vi.fn().mockReturnValue(() => {}),
+    onSessionQueuedInputPatched: vi.fn().mockReturnValue(() => {}),
   },
   appSettings: {
     get: vi.fn().mockResolvedValue({
@@ -140,6 +143,23 @@ const mockElectronAPI = {
             ],
           },
         ],
+        attachments: {
+          supportsImage: true,
+          supportsPdf: true,
+          supportsText: true,
+          maxImageBytes: 10 * 1024 * 1024,
+          maxPdfBytes: 20 * 1024 * 1024,
+          maxTextBytes: 1024 * 1024,
+          maxTotalBytes: 50 * 1024 * 1024,
+        },
+        midRunInput: {
+          supportsAnswer: false,
+          supportsNativeFollowUp: false,
+          supportsAppQueuedFollowUp: true,
+          supportsSteer: false,
+          supportsInterrupt: false,
+          defaultRunningMode: 'follow-up',
+        },
       },
     ]),
   },
@@ -170,6 +190,7 @@ describe('App', () => {
     useSessionStore.setState({
       sessions: [],
       globalSessions: [],
+      queuedInputsBySessionId: {},
       needsYouDismissals: {},
       currentProjectId: null,
       activeSessionId: null,

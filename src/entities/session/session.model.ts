@@ -2,10 +2,13 @@ import { create } from 'zustand'
 import type {
   ConversationItem,
   ConversationPatchEvent,
+  MidRunInputMode,
   ProviderInfo,
+  QueuedInputPatchEvent,
   ReasoningEffort,
   NeedsYouDismissals,
   NeedsYouDisposition,
+  SessionQueuedInput,
   SessionSummary,
 } from './session.types'
 import type { SkillSelection } from '@/shared/types/skill.types'
@@ -25,6 +28,7 @@ interface SessionState {
   globalSessions: SessionSummary[]
   activeConversation: ConversationItem[]
   activeConversationSessionId: string | null
+  queuedInputsBySessionId: Record<string, SessionQueuedInput[]>
   needsYouDismissals: NeedsYouDismissals
   recentSessionIds: string[]
   currentProjectId: string | null
@@ -64,17 +68,21 @@ interface SessionActions {
     text: string,
     attachmentIds?: string[],
     skillSelections?: SkillSelection[],
+    deliveryMode?: MidRunInputMode,
   ) => Promise<void>
   stopSession: (id: string) => Promise<void>
   archiveSession: (id: string) => Promise<void>
   unarchiveSession: (id: string) => Promise<void>
   deleteSession: (id: string, projectId: string) => Promise<void>
   loadActiveConversation: (sessionId: string) => Promise<void>
+  loadQueuedInputs: (sessionId: string) => Promise<void>
+  cancelQueuedInput: (id: string) => Promise<void>
   prepareForProject: (projectId: string | null) => void
   beginSessionDraft: (workspaceId: string | null) => void
   setActiveSession: (id: string | null) => void
   handleSessionSummaryUpdate: (summary: SessionSummary) => void
   handleConversationPatched: (event: ConversationPatchEvent) => void
+  handleQueuedInputPatched: (event: QueuedInputPatchEvent) => void
   previewFork: (
     parentSessionId: string,
     requestId?: string,
@@ -148,6 +156,20 @@ function upsertConversationItem(
   return [...nextItems].sort((left, right) => left.sequence - right.sequence)
 }
 
+function upsertQueuedInput(
+  items: SessionQueuedInput[],
+  nextItem: SessionQueuedInput,
+): SessionQueuedInput[] {
+  const visibleStates = new Set(['queued', 'dispatching', 'failed'])
+  const nextItems = items.some((item) => item.id === nextItem.id)
+    ? items.map((item) => (item.id === nextItem.id ? nextItem : item))
+    : [...items, nextItem]
+
+  return nextItems
+    .filter((item) => visibleStates.has(item.state))
+    .sort((left, right) => left.createdAt.localeCompare(right.createdAt))
+}
+
 function persistRecents(ids: string[]): void {
   void sessionApi.setRecentIds(ids).catch(() => undefined)
 }
@@ -157,6 +179,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
   globalSessions: [],
   activeConversation: [],
   activeConversationSessionId: null,
+  queuedInputsBySessionId: {},
   needsYouDismissals: {},
   recentSessionIds: [],
   currentProjectId: null,
@@ -174,6 +197,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
         activeSessionId: null,
         activeConversation: [],
         activeConversationSessionId: null,
+        queuedInputsBySessionId: {},
         draftWorkspaceId: null,
       })
     }
@@ -332,6 +356,10 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
         globalSessions: [session, ...state.globalSessions],
         activeConversation: [],
         activeConversationSessionId: session.id,
+        queuedInputsBySessionId: {
+          ...state.queuedInputsBySessionId,
+          [session.id]: [],
+        },
         needsYouDismissals: Object.fromEntries(
           Object.entries(state.needsYouDismissals).filter(
             ([sessionId]) => sessionId !== session.id,
@@ -368,6 +396,10 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
       globalSessions: [session, ...state.globalSessions],
       activeConversation: [],
       activeConversationSessionId: session.id,
+      queuedInputsBySessionId: {
+        ...state.queuedInputsBySessionId,
+        [session.id]: [],
+      },
       activeSessionId: session.id,
       draftWorkspaceId: null,
     }))
@@ -400,10 +432,17 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     text: string,
     attachmentIds?: string[],
     skillSelections?: SkillSelection[],
+    deliveryMode?: MidRunInputMode,
   ) => {
     set({ error: null })
     try {
-      await sessionApi.sendMessage(id, text, attachmentIds, skillSelections)
+      await sessionApi.sendMessage(
+        id,
+        text,
+        attachmentIds,
+        skillSelections,
+        deliveryMode,
+      )
     } catch (err) {
       set({
         error: err instanceof Error ? err.message : 'Failed to send message',
@@ -465,11 +504,17 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
       await sessionApi.setNeedsYouDismissals(nextDismissals)
       const prevRecents = get().recentSessionIds
       const nextRecents = prevRecents.filter((entry) => entry !== id)
+      const queuedInputsBySessionId = Object.fromEntries(
+        Object.entries(get().queuedInputsBySessionId).filter(
+          ([sessionId]) => sessionId !== id,
+        ),
+      )
       set({
         sessions,
         globalSessions,
         needsYouDismissals: nextDismissals,
         recentSessionIds: nextRecents,
+        queuedInputsBySessionId,
         activeSessionId: activeSessionId === id ? null : activeSessionId,
         activeConversation:
           activeSessionId === id ? [] : get().activeConversation,
@@ -500,6 +545,32 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     )
   },
 
+  loadQueuedInputs: async (sessionId: string) => {
+    const queuedInputs = await sessionApi.getQueuedInputs(sessionId)
+    set((state) =>
+      state.activeSessionId === sessionId
+        ? {
+            queuedInputsBySessionId: {
+              ...state.queuedInputsBySessionId,
+              [sessionId]: queuedInputs,
+            },
+          }
+        : {},
+    )
+  },
+
+  cancelQueuedInput: async (id: string) => {
+    set({ error: null })
+    try {
+      await sessionApi.cancelQueuedInput(id)
+    } catch (err) {
+      set({
+        error:
+          err instanceof Error ? err.message : 'Failed to cancel queued input',
+      })
+    }
+  },
+
   prepareForProject: (projectId) =>
     set({
       currentProjectId: projectId,
@@ -507,6 +578,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
       activeSessionId: null,
       activeConversation: [],
       activeConversationSessionId: null,
+      queuedInputsBySessionId: {},
       draftWorkspaceId: null,
     }),
 
@@ -515,6 +587,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
       activeSessionId: null,
       activeConversation: [],
       activeConversationSessionId: null,
+      queuedInputsBySessionId: {},
       draftWorkspaceId: workspaceId,
     }),
 
@@ -531,6 +604,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     if (id !== null) {
       get().recordRecentSession(id)
       void get().loadActiveConversation(id)
+      void get().loadQueuedInputs(id)
     }
   },
 
@@ -585,6 +659,18 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     })
   },
 
+  handleQueuedInputPatched: (event: QueuedInputPatchEvent) => {
+    set((state) => ({
+      queuedInputsBySessionId: {
+        ...state.queuedInputsBySessionId,
+        [event.sessionId]: upsertQueuedInput(
+          state.queuedInputsBySessionId[event.sessionId] ?? [],
+          event.item,
+        ),
+      },
+    }))
+  },
+
   previewFork: (parentSessionId: string, requestId?: string) =>
     sessionForkApi.previewSummary(parentSessionId, requestId),
 
@@ -598,6 +684,10 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
       globalSessions: [session, ...state.globalSessions],
       activeConversation: [],
       activeConversationSessionId: session.id,
+      queuedInputsBySessionId: {
+        ...state.queuedInputsBySessionId,
+        [session.id]: [],
+      },
       activeSessionId: session.id,
       draftWorkspaceId: null,
     }))
@@ -616,6 +706,10 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
       globalSessions: [session, ...state.globalSessions],
       activeConversation: [],
       activeConversationSessionId: session.id,
+      queuedInputsBySessionId: {
+        ...state.queuedInputsBySessionId,
+        [session.id]: [],
+      },
       activeSessionId: session.id,
       draftWorkspaceId: null,
     }))

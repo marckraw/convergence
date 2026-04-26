@@ -1,5 +1,6 @@
 import type { FC, ClipboardEvent, DragEvent, KeyboardEvent } from 'react'
 import type {
+  MidRunInputMode,
   ProviderInfo,
   ReasoningEffort,
   ResolvedProviderSelection,
@@ -23,6 +24,9 @@ interface ComposerProps {
   onProviderChange: (id: string) => void
   onModelChange: (id: string) => void
   onEffortChange: (id: ReasoningEffort | '') => void
+  deliveryMode: MidRunInputMode
+  deliveryModes: MidRunInputMode[]
+  onDeliveryModeChange: (mode: MidRunInputMode) => void
   selectionDisabled?: boolean
   placeholder?: string
   disabled?: boolean
@@ -61,6 +65,9 @@ export const Composer: FC<ComposerProps> = ({
   onProviderChange,
   onModelChange,
   onEffortChange,
+  deliveryMode,
+  deliveryModes,
+  onDeliveryModeChange,
   selectionDisabled = false,
   placeholder = 'Ask anything, @tag files/folders, or use / to show available commands...',
   disabled = false,
@@ -134,6 +141,13 @@ export const Composer: FC<ComposerProps> = ({
     !hasAttachmentErrors &&
     !attachmentsIngestInFlight &&
     (value.trim().length > 0 || attachments.length > 0)
+
+  const modeLabels: Partial<Record<MidRunInputMode, string>> = {
+    answer: 'Answer',
+    'follow-up': 'Follow-up',
+    steer: 'Steer',
+  }
+  const visibleDeliveryModes = deliveryModes.filter((mode) => mode !== 'normal')
 
   return (
     <div className="mx-auto w-full max-w-2xl">
@@ -232,6 +246,38 @@ export const Composer: FC<ComposerProps> = ({
                 className="px-2 text-xs text-muted-foreground hover:text-foreground"
               />
             )}
+            {visibleDeliveryModes.length > 1 ? (
+              <div
+                className="flex h-7 items-center rounded-md border border-border bg-background p-0.5"
+                aria-label="Delivery mode"
+                role="radiogroup"
+              >
+                {visibleDeliveryModes.map((mode) => (
+                  <Button
+                    key={mode}
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    role="radio"
+                    aria-checked={deliveryMode === mode}
+                    className={cn(
+                      'h-5 rounded-sm px-2 text-[11px] font-medium text-muted-foreground shadow-none transition-colors',
+                      deliveryMode === mode
+                        ? 'bg-secondary text-secondary-foreground'
+                        : 'hover:text-foreground',
+                    )}
+                    onClick={() => onDeliveryModeChange(mode)}
+                    disabled={disabled}
+                  >
+                    {modeLabels[mode] ?? mode}
+                  </Button>
+                ))}
+              </div>
+            ) : visibleDeliveryModes.length === 1 ? (
+              <span className="rounded-md border border-border px-2 py-1 text-[11px] font-medium text-muted-foreground">
+                {modeLabels[visibleDeliveryModes[0]] ?? visibleDeliveryModes[0]}
+              </span>
+            ) : null}
           </div>
           <Button
             type="button"

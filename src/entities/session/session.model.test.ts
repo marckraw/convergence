@@ -8,6 +8,8 @@ const mockElectronAPI = {
     getSummariesByProjectId: vi.fn(),
     getSummaryById: vi.fn(),
     getConversation: vi.fn().mockResolvedValue([]),
+    getQueuedInputs: vi.fn().mockResolvedValue([]),
+    cancelQueuedInput: vi.fn().mockResolvedValue(undefined),
     getNeedsYouDismissals: vi.fn().mockResolvedValue({}),
     archive: vi.fn().mockResolvedValue(undefined),
     unarchive: vi.fn().mockResolvedValue(undefined),
@@ -22,6 +24,7 @@ const mockElectronAPI = {
     stop: vi.fn(),
     onSessionSummaryUpdate: vi.fn(),
     onSessionConversationPatched: vi.fn(),
+    onSessionQueuedInputPatched: vi.fn(),
     forkPreviewSummary: vi.fn(),
     forkFull: vi.fn(),
     forkSummary: vi.fn(),
@@ -73,6 +76,7 @@ describe('useSessionStore', () => {
     useSessionStore.setState({
       sessions: [],
       globalSessions: [],
+      queuedInputsBySessionId: {},
       needsYouDismissals: {},
       recentSessionIds: [],
       currentProjectId: null,
@@ -347,6 +351,65 @@ describe('useSessionStore', () => {
     useSessionStore.getState().setActiveSession(null)
 
     expect(useSessionStore.getState().recentSessionIds).toEqual(['session-a'])
+  })
+
+  it('loads queued inputs for the active session', async () => {
+    const queuedInput = {
+      id: 'queued-1',
+      sessionId: 'session-a',
+      deliveryMode: 'follow-up' as const,
+      state: 'queued' as const,
+      text: 'after this',
+      attachmentIds: [],
+      skillSelections: [],
+      providerRequestId: null,
+      error: null,
+      createdAt: '2026-01-01T00:00:00.000Z',
+      updatedAt: '2026-01-01T00:00:00.000Z',
+    }
+    mockElectronAPI.session.getQueuedInputs.mockResolvedValueOnce([queuedInput])
+
+    useSessionStore.setState({ activeSessionId: 'session-a' })
+    await useSessionStore.getState().loadQueuedInputs('session-a')
+
+    expect(useSessionStore.getState().queuedInputsBySessionId).toEqual({
+      'session-a': [queuedInput],
+    })
+  })
+
+  it('removes queued inputs from the visible list when they are sent', () => {
+    const queuedInput = {
+      id: 'queued-1',
+      sessionId: 'session-a',
+      deliveryMode: 'follow-up' as const,
+      state: 'queued' as const,
+      text: 'after this',
+      attachmentIds: [],
+      skillSelections: [],
+      providerRequestId: null,
+      error: null,
+      createdAt: '2026-01-01T00:00:00.000Z',
+      updatedAt: '2026-01-01T00:00:00.000Z',
+    }
+
+    useSessionStore.getState().handleQueuedInputPatched({
+      sessionId: 'session-a',
+      op: 'add',
+      item: queuedInput,
+    })
+    useSessionStore.getState().handleQueuedInputPatched({
+      sessionId: 'session-a',
+      op: 'patch',
+      item: {
+        ...queuedInput,
+        state: 'sent',
+        updatedAt: '2026-01-01T00:00:01.000Z',
+      },
+    })
+
+    expect(useSessionStore.getState().queuedInputsBySessionId).toEqual({
+      'session-a': [],
+    })
   })
 
   it('loadRecents prunes ids missing from globalSessions', async () => {

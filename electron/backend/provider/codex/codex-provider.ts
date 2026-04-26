@@ -10,6 +10,7 @@ import type {
   SessionContextWindow,
   Attachment,
   ActivitySignal,
+  MidRunInputMode,
   OneShotInput,
   OneShotResult,
 } from '../provider.types'
@@ -224,6 +225,7 @@ export class CodexProvider implements Provider {
     let assistantTextBuffer = ''
     let assistantMessageItemId: string | null = null
     let resolveThreadReady: (() => void) | null = null
+    let activeProviderTurnId: string | null = null
 
     // Map of pending approval request IDs (JSON-RPC id → our description)
     const pendingApprovals = new Map<number, string>()
@@ -318,6 +320,28 @@ export class CodexProvider implements Provider {
 
       if (typeof record.thread?.id === 'string') {
         return record.thread.id
+      }
+
+      return null
+    }
+
+    function readProviderTurnId(payload: unknown): string | null {
+      if (!payload || typeof payload !== 'object') return null
+      const record = payload as {
+        turnId?: unknown
+        turn?: { id?: unknown; turnId?: unknown }
+      }
+
+      if (typeof record.turnId === 'string') {
+        return record.turnId
+      }
+
+      if (typeof record.turn?.id === 'string') {
+        return record.turn.id
+      }
+
+      if (typeof record.turn?.turnId === 'string') {
+        return record.turn.turnId
       }
 
       return null
@@ -424,12 +448,16 @@ export class CodexProvider implements Provider {
       const currentThreadId = await ensureThread(activeRpc)
 
       try {
-        await activeRpc.request('turn/start', {
+        const turnResult = await activeRpc.request('turn/start', {
           threadId: currentThreadId,
           model: config.model,
           effort: config.effort,
           input,
         })
+        const providerTurnId = readProviderTurnId(turnResult)
+        if (providerTurnId) {
+          activeProviderTurnId = providerTurnId
+        }
       } catch (err) {
         if (!threadId || !isCodexThreadNotFoundError(err)) {
           throw err
@@ -444,12 +472,16 @@ export class CodexProvider implements Provider {
         threadId = null
         threadReady = false
         const recoveredThreadId = await startFreshThread(activeRpc)
-        await activeRpc.request('turn/start', {
+        const turnResult = await activeRpc.request('turn/start', {
           threadId: recoveredThreadId,
           model: config.model,
           effort: config.effort,
           input,
         })
+        const providerTurnId = readProviderTurnId(turnResult)
+        if (providerTurnId) {
+          activeProviderTurnId = providerTurnId
+        }
       }
     }
 
@@ -560,6 +592,66 @@ export class CodexProvider implements Provider {
       }
     }
 
+    async function sendCodexSteer(input: {
+      activeRpc: JsonRpcClient
+      text: string
+      attachments?: Attachment[]
+      skillSelections?: SkillSelection[]
+      expectedProviderTurnId?: string | null
+    }): Promise<void> {
+      const expectedTurnId =
+        input.expectedProviderTurnId ?? activeProviderTurnId
+      if (!expectedTurnId) {
+        throw new Error('No active Codex turn is available to steer')
+      }
+
+      const skillResolution = await resolveSelectedSkills(
+        input.activeRpc,
+        input.skillSelections,
+      )
+      if (!skillResolution.ok) {
+        addSkillInvocationFailureNote(skillResolution)
+        return
+      }
+
+      const currentThreadId = await ensureThread(input.activeRpc)
+      const parts = await loadCodexParts(input.attachments)
+      await input.activeRpc.request('turn/steer', {
+        threadId: currentThreadId,
+        expectedTurnId,
+        input: buildCodexUserInput({
+          text: input.text,
+          parts,
+          skills: skillResolution.skillInputs,
+        }),
+      })
+    }
+
+    async function interruptCodexTurn(input: {
+      activeRpc: JsonRpcClient
+      expectedProviderTurnId?: string | null
+    }): Promise<void> {
+      const turnId = input.expectedProviderTurnId ?? activeProviderTurnId
+      if (!turnId) {
+        throw new Error('No active Codex turn is available to interrupt')
+      }
+
+      const currentThreadId = await ensureThread(input.activeRpc)
+      await input.activeRpc.request('turn/interrupt', {
+        threadId: currentThreadId,
+        turnId,
+      })
+      activeProviderTurnId = null
+    }
+
+    function addMidRunInputFailureNote(err: unknown): void {
+      sessionEmitter.addNote({
+        text: `Mid-run input failed: ${err instanceof Error ? err.message : String(err)}`,
+        level: 'error',
+        timestamp: now(),
+      })
+    }
+
     async function initialize(
       initialMessage: string,
       initialAttachments?: Attachment[],
@@ -643,6 +735,12 @@ export class CodexProvider implements Provider {
             break
 
           case 'turn/started':
+            {
+              const providerTurnId = readProviderTurnId(params)
+              if (providerTurnId) {
+                activeProviderTurnId = providerTurnId
+              }
+            }
             setStatus('running')
             setAttention('none')
             break
@@ -684,6 +782,7 @@ export class CodexProvider implements Provider {
 
           case 'turn/completed':
             flushAssistantBuffer()
+            activeProviderTurnId = null
             {
               const contextWindow = deriveCodexContextWindow(
                 (p.usage ??
@@ -729,6 +828,7 @@ export class CodexProvider implements Provider {
 
           case 'turn/interrupt':
             flushAssistantBuffer()
+            activeProviderTurnId = null
             sessionEmitter.addNote({
               text: 'Turn interrupted',
               level: 'warning',
@@ -810,6 +910,7 @@ export class CodexProvider implements Provider {
 
           case 'error': {
             flushAssistantBuffer()
+            activeProviderTurnId = null
             const error =
               typeof p.error === 'object' && p.error !== null
                 ? (p.error as { message?: unknown })
@@ -903,6 +1004,7 @@ export class CodexProvider implements Provider {
       child.on('exit', (code) => {
         if (stopped) return
         flushAssistantBuffer()
+        activeProviderTurnId = null
         applyActivity({ kind: 'close' })
         if (code !== 0 && code !== null) {
           sessionEmitter.addNote({
@@ -919,6 +1021,7 @@ export class CodexProvider implements Provider {
 
       child.on('error', (err) => {
         if (stopped) return
+        activeProviderTurnId = null
         sessionEmitter.addNote({
           text: `Process error: ${err.message}`,
           level: 'error',
@@ -966,17 +1069,20 @@ export class CodexProvider implements Provider {
       onActivityChange: (cb) => {
         listeners.activity.push(cb)
       },
-      sendMessage: (text, attachments, skillSelections) => {
+      sendMessage: (text, attachments, skillSelections, options) => {
         if (stopped) return
         if (!rpc) {
           spawnServer(text, attachments, skillSelections)
           return
         }
 
+        const deliveryMode: MidRunInputMode = options?.deliveryMode ?? 'normal'
+        const activeRpc = rpc
+
         const pendingUserInput = pendingUserInputs.entries().next().value as
           | [number, string[]]
           | undefined
-        if (pendingUserInput) {
+        if (pendingUserInput && deliveryMode !== 'steer') {
           const [requestId, questionIds] = pendingUserInput
           const answers = Object.fromEntries(
             questionIds.map((questionId) => [questionId, { answers: [text] }]),
@@ -987,12 +1093,43 @@ export class CodexProvider implements Provider {
           return
         }
 
+        if (deliveryMode === 'steer') {
+          void sendCodexSteer({
+            activeRpc,
+            text,
+            attachments,
+            skillSelections,
+            expectedProviderTurnId: options?.expectedProviderTurnId,
+          }).catch((err) => {
+            if (!stopped) addMidRunInputFailureNote(err)
+          })
+          return
+        }
+
+        if (deliveryMode === 'interrupt') {
+          void interruptCodexTurn({
+            activeRpc,
+            expectedProviderTurnId: options?.expectedProviderTurnId,
+          })
+            .then(() =>
+              sendCodexTurn({
+                activeRpc,
+                text,
+                attachments,
+                skillSelections,
+              }),
+            )
+            .catch((err) => {
+              if (!stopped) addMidRunInputFailureNote(err)
+            })
+          return
+        }
+
         if (!threadId) {
           spawnServer(text, attachments, skillSelections)
           return
         }
 
-        const activeRpc = rpc
         void sendCodexTurn({
           activeRpc,
           text,

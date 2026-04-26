@@ -55,7 +55,13 @@ function waitFor(
 
 function createMockCodexServer(
   child: MockChildProcess,
-  options?: { missingThreadIds?: string[]; skillsResponse?: unknown },
+  options?: {
+    missingThreadIds?: string[]
+    skillsResponse?: unknown
+    autoCompleteTurns?: boolean
+    turnStartedId?: string
+    steerError?: string
+  },
 ): {
   requests: Array<{ method: string; params?: Record<string, unknown> }>
 } {
@@ -138,16 +144,43 @@ function createMockCodexServer(
           ) {
             reject(message.id, `thread not found: ${message.params.threadId}`)
           } else {
+            respond(
+              message.id,
+              options?.turnStartedId
+                ? { turn: { id: options.turnStartedId } }
+                : {},
+            )
+            if (options?.turnStartedId) {
+              enqueue(() => {
+                child.stdout.write(
+                  JSON.stringify({
+                    jsonrpc: '2.0',
+                    method: 'turn/started',
+                    params: { turn: { id: options.turnStartedId } },
+                  }) + '\n',
+                )
+              })
+            }
+            if (options?.autoCompleteTurns !== false) {
+              enqueue(() => {
+                child.stdout.write(
+                  JSON.stringify({
+                    jsonrpc: '2.0',
+                    method: 'turn/completed',
+                    params: { turn: { status: 'completed' } },
+                  }) + '\n',
+                )
+              })
+            }
+          }
+        } else if (
+          message.method === 'turn/steer' &&
+          typeof message.id === 'number'
+        ) {
+          if (options?.steerError) {
+            reject(message.id, options.steerError)
+          } else {
             respond(message.id, {})
-            enqueue(() => {
-              child.stdout.write(
-                JSON.stringify({
-                  jsonrpc: '2.0',
-                  method: 'turn/completed',
-                  params: { turn: { status: 'completed' } },
-                }) + '\n',
-              )
-            })
           }
         } else if (
           message.method === 'thread/start' &&
@@ -446,6 +479,131 @@ describe('CodexProvider', () => {
         }),
       ]),
     )
+  })
+
+  it('routes steering input to turn/steer without starting a second turn', async () => {
+    const child = new MockChildProcess()
+    const server = createMockCodexServer(child, {
+      autoCompleteTurns: false,
+      turnStartedId: 'codex-turn-1',
+    })
+    spawnMock.mockReturnValue(child)
+
+    const provider = new CodexProvider('/usr/local/bin/codex')
+    const handle = provider.start({
+      sessionId: 'session-1',
+      workingDirectory: process.cwd(),
+      initialMessage: 'start long work',
+      initialAttachments: undefined,
+      model: 'gpt-5.4',
+      effort: 'medium',
+      continuationToken: null,
+    })
+
+    handle.onDelta(() => {})
+    handle.onStatusChange(() => {})
+    handle.onContinuationToken(() => {})
+    handle.onAttentionChange(() => {})
+    handle.onContextWindowChange(() => {})
+    handle.onActivityChange(() => {})
+
+    await waitFor(() => {
+      expect(
+        server.requests.some((request) => request.method === 'turn/start'),
+      ).toBe(true)
+    })
+
+    handle.sendMessage('avoid the auth migration', undefined, undefined, {
+      deliveryMode: 'steer',
+    })
+
+    await waitFor(() => {
+      expect(
+        server.requests.some((request) => request.method === 'turn/steer'),
+      ).toBe(true)
+    })
+
+    const turnStarts = server.requests.filter(
+      (request) => request.method === 'turn/start',
+    )
+    const steer = server.requests.find(
+      (request) => request.method === 'turn/steer',
+    )
+    expect(turnStarts).toHaveLength(1)
+    expect(steer?.params).toMatchObject({
+      threadId: 'fresh-thread',
+      expectedTurnId: 'codex-turn-1',
+      input: [
+        {
+          type: 'text',
+          text: 'avoid the auth migration',
+          text_elements: [],
+        },
+      ],
+    })
+  })
+
+  it('reports stale Codex steer failure without failing the active session', async () => {
+    const child = new MockChildProcess()
+    const server = createMockCodexServer(child, {
+      autoCompleteTurns: false,
+      turnStartedId: 'codex-turn-1',
+      steerError: 'expected turn id is stale',
+    })
+    spawnMock.mockReturnValue(child)
+
+    const provider = new CodexProvider('/usr/local/bin/codex')
+    const handle = provider.start({
+      sessionId: 'session-1',
+      workingDirectory: process.cwd(),
+      initialMessage: 'start long work',
+      initialAttachments: undefined,
+      model: 'gpt-5.4',
+      effort: 'medium',
+      continuationToken: null,
+    })
+
+    const items: Array<
+      Extract<SessionDelta, { kind: 'conversation.item.add' }>['item']
+    > = []
+    const statuses: string[] = []
+    handle.onDelta((delta) => {
+      if (delta.kind === 'conversation.item.add') {
+        items.push(delta.item)
+      }
+    })
+    handle.onStatusChange((status) => {
+      statuses.push(status)
+    })
+    handle.onContinuationToken(() => {})
+    handle.onAttentionChange(() => {})
+    handle.onContextWindowChange(() => {})
+    handle.onActivityChange(() => {})
+
+    await waitFor(() => {
+      expect(
+        server.requests.some((request) => request.method === 'turn/start'),
+      ).toBe(true)
+    })
+
+    handle.sendMessage('avoid the auth migration', undefined, undefined, {
+      deliveryMode: 'steer',
+    })
+
+    await waitFor(() => {
+      expect(items).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            kind: 'note',
+            level: 'error',
+            text: 'Mid-run input failed: expected turn id is stale',
+          }),
+        ]),
+      )
+    })
+
+    expect(statuses).toContain('running')
+    expect(statuses).not.toContain('failed')
   })
 
   it('marks stale selected Codex skills unavailable without starting a turn', async () => {

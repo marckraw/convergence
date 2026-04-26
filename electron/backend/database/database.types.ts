@@ -52,6 +52,20 @@ export interface ConversationItemRow {
   updated_at: string
 }
 
+export interface SessionQueuedInputRow {
+  id: string
+  session_id: string
+  delivery_mode: string
+  state: string
+  text: string
+  attachment_ids_json: string
+  skill_selections_json: string
+  provider_request_id: string | null
+  error: string | null
+  created_at: string
+  updated_at: string
+}
+
 export interface WorkspaceRow {
   id: string
   project_id: string
