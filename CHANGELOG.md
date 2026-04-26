@@ -1,5 +1,11 @@
 # convergence
 
+## 0.27.1
+
+### Patch Changes
+
+- 5f39295: Show steer and follow-up messages in the conversation transcript with a small badge, so users can see the input they sent while the agent was running. Codex steer and Pi running input now emit the user message locally instead of relying on the provider to echo it back.
+
 ## 0.27.0
 
 ### Minor Changes
