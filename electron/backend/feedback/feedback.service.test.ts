@@ -56,11 +56,41 @@ describe('FeedbackService', () => {
         platform: 'darwin',
         appVersion: '1.4.0',
         contact: 'test@example.com',
-        context: {
-          activeProjectId: 'project-local',
-          activeProjectName: 'Local project',
-          activeSessionId: 'session-1',
-        },
+        'context.activeProjectId': 'project-local',
+        'context.activeProjectName': 'Local project',
+        'context.activeSessionId': 'session-1',
+      },
+    })
+  })
+
+  it('omits optional metadata fields instead of sending nulls', async () => {
+    const requests: Array<{ url: string | URL | Request; init?: RequestInit }> =
+      []
+    const fetch: typeof globalThis.fetch = async (url, init) => {
+      requests.push({ url, init })
+      return new Response('{}', { status: 202 })
+    }
+    const service = new FeedbackService({
+      fetch,
+      env: { FEEDBACK_TOKEN: 'secret-token' },
+      platform: 'darwin',
+      idFactory: () => 'feedback-1',
+      now: () => new Date('2026-04-27T10:00:00.000Z'),
+    })
+
+    await service.submit({
+      title: 'hey',
+      description: 'asdasd',
+      priority: 'medium',
+    })
+
+    expect(JSON.parse(requests[0].init?.body as string)).toEqual({
+      sourceApp: 'convergence',
+      title: 'hey',
+      description: 'asdasd',
+      priority: 'medium',
+      metadata: {
+        platform: 'darwin',
       },
     })
   })
@@ -112,5 +142,86 @@ describe('FeedbackService', () => {
         priority: 'medium',
       }),
     ).rejects.toThrow('Feature request submission failed with HTTP 500.')
+  })
+
+  it('includes the cloud error message when the response is JSON', async () => {
+    const service = new FeedbackService({
+      env: { FEEDBACK_TOKEN: 'secret-token' },
+      fetch: async () =>
+        new Response(JSON.stringify({ error: 'description too short' }), {
+          status: 400,
+          headers: { 'Content-Type': 'application/json' },
+        }),
+    })
+
+    await expect(
+      service.submit({
+        title: 'Useful title',
+        description: 'Useful details',
+        priority: 'medium',
+      }),
+    ).rejects.toThrow(
+      'Feature request submission failed with HTTP 400: description too short',
+    )
+  })
+
+  it('falls back to raw response text when the body is not JSON', async () => {
+    const service = new FeedbackService({
+      env: { FEEDBACK_TOKEN: 'secret-token' },
+      fetch: async () =>
+        new Response('Bad Request: missing field', { status: 400 }),
+    })
+
+    await expect(
+      service.submit({
+        title: 'Useful title',
+        description: 'Useful details',
+        priority: 'medium',
+      }),
+    ).rejects.toThrow(
+      'Feature request submission failed with HTTP 400: Bad Request: missing field',
+    )
+  })
+
+  it('serializes JSON bodies without a known error field', async () => {
+    const service = new FeedbackService({
+      env: { FEEDBACK_TOKEN: 'secret-token' },
+      fetch: async () =>
+        new Response(
+          JSON.stringify({ code: 'invalid_payload', field: 'priority' }),
+          {
+            status: 400,
+            headers: { 'Content-Type': 'application/json' },
+          },
+        ),
+    })
+
+    await expect(
+      service.submit({
+        title: 'Useful title',
+        description: 'Useful details',
+        priority: 'medium',
+      }),
+    ).rejects.toThrow(
+      'Feature request submission failed with HTTP 400: {"code":"invalid_payload","field":"priority"}',
+    )
+  })
+
+  it('falls back to status text when the body is empty', async () => {
+    const service = new FeedbackService({
+      env: { FEEDBACK_TOKEN: 'secret-token' },
+      fetch: async () =>
+        new Response('', { status: 401, statusText: 'Unauthorized' }),
+    })
+
+    await expect(
+      service.submit({
+        title: 'Useful title',
+        description: 'Useful details',
+        priority: 'medium',
+      }),
+    ).rejects.toThrow(
+      'Feature request submission failed with HTTP 401: Unauthorized',
+    )
   })
 })
