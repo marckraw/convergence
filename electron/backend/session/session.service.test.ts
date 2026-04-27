@@ -1450,6 +1450,16 @@ describe('SessionService — turn capture wiring', () => {
   let capture: import('./turn/turn-capture.service').TurnCaptureService
   let triggerCompletion: (() => void) | null
 
+  async function waitFor(
+    predicate: () => boolean,
+    timeoutMs = 1_000,
+  ): Promise<void> {
+    const startedAt = Date.now()
+    while (!predicate() && Date.now() - startedAt < timeoutMs) {
+      await new Promise((resolve) => setTimeout(resolve, 10))
+    }
+  }
+
   function createQuietProvider(): Provider {
     return {
       id: 'quiet-provider',
@@ -1649,7 +1659,7 @@ describe('SessionService — turn capture wiring', () => {
     })
 
     await service.start(session.id, { text: 'hi' })
-    await new Promise((resolve) => setTimeout(resolve, 150))
+    await waitFor(() => observed.some((d) => d.kind === 'turn.add'))
 
     expect(observed.some((d) => d.kind === 'turn.add')).toBe(true)
     expect(observed.every((d) => d.sessionId === session.id)).toBe(true)

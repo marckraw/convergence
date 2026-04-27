@@ -1,6 +1,7 @@
 import { execFile } from 'child_process'
 import type { ProviderStatusInfo } from './provider.types'
 import { buildProviderStatus, getKnownProviders } from './provider-status.pure'
+import { fetchNpmLatestVersion } from './npm-registry'
 import { isPiAuthConfigured } from './pi/pi-auth-status'
 
 function which(binary: string): Promise<string | null> {
@@ -38,8 +39,18 @@ export async function inspectProviderStatuses(): Promise<ProviderStatusInfo[]> {
   const statuses = await Promise.all(
     getKnownProviders().map(async (provider) => {
       const binaryPath = await which(provider.binaryName)
-      const version = binaryPath ? await getVersion(binaryPath) : null
-      const status = buildProviderStatus(provider, binaryPath, version)
+      const [{ version: latestVersion, error: updateCheckError }, version] =
+        await Promise.all([
+          fetchNpmLatestVersion(provider.packageName),
+          binaryPath ? getVersion(binaryPath) : Promise.resolve(null),
+        ])
+      const status = buildProviderStatus(
+        provider,
+        binaryPath,
+        version,
+        latestVersion,
+        updateCheckError,
+      )
       if (
         provider.id === 'pi' &&
         status.availability === 'available' &&
