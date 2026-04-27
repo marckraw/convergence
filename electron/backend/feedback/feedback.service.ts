@@ -38,9 +38,9 @@ export class FeedbackService {
     }
 
     const env = this.deps.env ?? process.env
-    const token = env.INTERNAL_API_TOKEN?.trim()
+    const token = env.FEEDBACK_TOKEN?.trim()
     if (!token) {
-      throw new Error('INTERNAL_API_TOKEN is required to send feedback.')
+      throw new Error('FEEDBACK_TOKEN is required to send feedback.')
     }
 
     const baseUrl = (
