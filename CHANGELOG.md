@@ -1,5 +1,12 @@
 # convergence
 
+## 0.27.6
+
+### Patch Changes
+
+- 307bc11: Recover stale running sessions after app restart instead of leaving them stuck
+  as running with queued follow-ups that cannot be stopped.
+
 ## 0.27.5
 
 ### Patch Changes
