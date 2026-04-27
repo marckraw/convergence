@@ -12,7 +12,7 @@ describe('FeedbackService', () => {
     const service = new FeedbackService({
       fetch,
       env: {
-        INTERNAL_API_TOKEN: 'secret-token',
+        FEEDBACK_TOKEN: 'secret-token',
         CONVERGENCE_CLOUD_BASE_URL: 'https://convergence-cloud.vercel.app/',
       },
       platform: 'darwin',
@@ -67,7 +67,7 @@ describe('FeedbackService', () => {
 
   it('rejects empty feature request fields', async () => {
     const service = new FeedbackService({
-      env: { INTERNAL_API_TOKEN: 'secret-token' },
+      env: { FEEDBACK_TOKEN: 'secret-token' },
     })
 
     await expect(
@@ -96,12 +96,12 @@ describe('FeedbackService', () => {
         description: 'Useful details',
         priority: 'medium',
       }),
-    ).rejects.toThrow('INTERNAL_API_TOKEN is required to send feedback.')
+    ).rejects.toThrow('FEEDBACK_TOKEN is required to send feedback.')
   })
 
   it('surfaces failed cloud submissions', async () => {
     const service = new FeedbackService({
-      env: { INTERNAL_API_TOKEN: 'secret-token' },
+      env: { FEEDBACK_TOKEN: 'secret-token' },
       fetch: async () => new Response('{}', { status: 500 }),
     })
 
