@@ -11,6 +11,7 @@ import { ConversationItemView } from './transcript-entry.presentational'
 interface ConversationItemProps {
   entry: ConversationItemEntry
   sessionId: string
+  turnStartedAt?: string | null
   onApprove?: () => void
   onDeny?: () => void
 }
@@ -20,6 +21,7 @@ const EMPTY_RESOLVED_ATTACHMENTS: Record<string, Attachment> = {}
 export const ConversationItem: FC<ConversationItemProps> = ({
   entry,
   sessionId,
+  turnStartedAt,
   onApprove,
   onDeny,
 }) => {
@@ -59,6 +61,7 @@ export const ConversationItem: FC<ConversationItemProps> = ({
     <>
       <ConversationItemView
         entry={entry}
+        turnStartedAt={turnStartedAt}
         onApprove={onApprove}
         onDeny={onDeny}
         attachments={resolved.length > 0 ? resolved : undefined}
