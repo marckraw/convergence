@@ -19,9 +19,12 @@ import {
   type Attachment,
 } from '@/entities/attachment'
 import { ConversationItemShell } from './conversation-item-shell.presentational'
+import { ConversationItemHeader } from './conversation-item-header.presentational'
+import { ConversationItemTimestamp } from './conversation-item-timestamp.presentational'
 
 interface ConversationItemViewProps {
   entry: ConversationItem
+  turnStartedAt?: string | null
   onApprove?: () => void
   onDeny?: () => void
   attachments?: Attachment[]
@@ -31,6 +34,7 @@ interface ConversationItemViewProps {
 
 export const ConversationItemView: FC<ConversationItemViewProps> = ({
   entry,
+  turnStartedAt,
   onApprove,
   onDeny,
   attachments,
@@ -49,8 +53,11 @@ export const ConversationItemView: FC<ConversationItemViewProps> = ({
                 <User className="h-4 w-4" />
               </div>
               <div className="min-w-0 flex-1 pt-0.5">
-                <p className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
-                  <span>You</span>
+                <ConversationItemHeader
+                  entry={entry}
+                  label="You"
+                  turnStartedAt={turnStartedAt}
+                >
                   {entry.deliveryMode && (
                     <span
                       data-testid="user-message-delivery-mode"
@@ -59,7 +66,7 @@ export const ConversationItemView: FC<ConversationItemViewProps> = ({
                       {entry.deliveryMode === 'steer' ? 'Steer' : 'Follow-up'}
                     </span>
                   )}
-                </p>
+                </ConversationItemHeader>
                 {renderSkillSelections(entry.skillSelections)}
                 <Markdown
                   className="mt-1 text-foreground"
@@ -96,7 +103,11 @@ export const ConversationItemView: FC<ConversationItemViewProps> = ({
               <Bot className="h-4 w-4" />
             </div>
             <div className="min-w-0 flex-1 pt-0.5">
-              <p className="text-xs font-medium text-muted-foreground">Agent</p>
+              <ConversationItemHeader
+                entry={entry}
+                label="Agent"
+                turnStartedAt={turnStartedAt}
+              />
               <Markdown
                 className="mt-1 text-foreground"
                 content={entry.text}
@@ -115,9 +126,11 @@ export const ConversationItemView: FC<ConversationItemViewProps> = ({
               <Bot className="h-4 w-4" />
             </div>
             <div className="min-w-0 flex-1 pt-0.5">
-              <p className="text-xs font-medium text-muted-foreground">
-                Thinking
-              </p>
+              <ConversationItemHeader
+                entry={entry}
+                label="Thinking"
+                turnStartedAt={turnStartedAt}
+              />
               <Markdown
                 className="mt-1 italic text-muted-foreground"
                 content={entry.text}
@@ -136,6 +149,11 @@ export const ConversationItemView: FC<ConversationItemViewProps> = ({
               <Wrench className="h-3.5 w-3.5 text-muted-foreground" />
             </div>
             <div className="min-w-0 flex-1 pt-1">
+              <ConversationItemTimestamp
+                entry={entry}
+                turnStartedAt={turnStartedAt}
+                className="mb-1"
+              />
               <details className="group min-w-0 rounded-md border border-border/60 bg-muted/20">
                 <summary className="flex cursor-pointer list-none items-start gap-2 rounded-md px-2 py-1.5 pr-10 hover:bg-muted/40">
                   <ChevronRight className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform group-open:rotate-90" />
@@ -160,6 +178,11 @@ export const ConversationItemView: FC<ConversationItemViewProps> = ({
               <Terminal className="h-3.5 w-3.5 text-muted-foreground" />
             </div>
             <div className="min-w-0 flex-1 pt-1">
+              <ConversationItemTimestamp
+                entry={entry}
+                turnStartedAt={turnStartedAt}
+                className="mb-1"
+              />
               <details className="group min-w-0 rounded-md border border-border/60 bg-muted/20">
                 <summary className="flex cursor-pointer list-none items-start gap-2 rounded-md px-2 py-1.5 pr-10 hover:bg-muted/40">
                   <ChevronRight className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform group-open:rotate-90" />
@@ -183,7 +206,13 @@ export const ConversationItemView: FC<ConversationItemViewProps> = ({
             <div className="flex items-start gap-3">
               <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-500" />
               <div className="flex-1">
-                <p className="text-sm font-medium">Approval needed</p>
+                <div className="flex flex-wrap items-center gap-x-2 gap-y-1 pr-8">
+                  <p className="text-sm font-medium">Approval needed</p>
+                  <ConversationItemTimestamp
+                    entry={entry}
+                    turnStartedAt={turnStartedAt}
+                  />
+                </div>
                 <Markdown
                   className="mt-1 text-muted-foreground"
                   content={entry.description}
@@ -212,7 +241,13 @@ export const ConversationItemView: FC<ConversationItemViewProps> = ({
             <div className="flex items-start gap-3">
               <Info className="mt-0.5 h-5 w-5 shrink-0 text-blue-500" />
               <div className="flex-1">
-                <p className="text-sm font-medium">Input needed</p>
+                <div className="flex flex-wrap items-center gap-x-2 gap-y-1 pr-8">
+                  <p className="text-sm font-medium">Input needed</p>
+                  <ConversationItemTimestamp
+                    entry={entry}
+                    turnStartedAt={turnStartedAt}
+                  />
+                </div>
                 <Markdown
                   className="mt-1 text-muted-foreground"
                   content={entry.prompt}
@@ -228,6 +263,11 @@ export const ConversationItemView: FC<ConversationItemViewProps> = ({
       return (
         <ConversationItemShell item={entry}>
           <div className="py-2 text-center">
+            <ConversationItemTimestamp
+              entry={entry}
+              turnStartedAt={turnStartedAt}
+              className="mb-1 justify-center"
+            />
             <Markdown
               className="text-xs italic text-muted-foreground"
               content={entry.text}

@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import type { ConversationItem } from '@/entities/session'
-import { getConversationItemCopyText } from './transcript-entry.pure'
+import {
+  formatConversationItemAbsoluteTimestamp,
+  formatConversationItemTimestamp,
+  formatDuration,
+  getConversationItemCopyText,
+  getConversationItemTiming,
+} from './transcript-entry.pure'
 
 const base = {
   id: 'item-1',
@@ -95,5 +101,72 @@ describe('getConversationItemCopyText', () => {
       text: 'Session resumed',
     }
     expect(getConversationItemCopyText(item)).toBe('Session resumed')
+  })
+})
+
+describe('conversation item timing', () => {
+  it('formats compact timestamps', () => {
+    expect(
+      formatConversationItemTimestamp('2026-04-22T10:05:06.000Z', {
+        locale: 'en-GB',
+        timeZone: 'UTC',
+      }),
+    ).toBe('10:05:06')
+  })
+
+  it('formats absolute timestamps for tooltips', () => {
+    expect(
+      formatConversationItemAbsoluteTimestamp('2026-04-22T10:05:06.000Z', {
+        locale: 'en-GB',
+        timeZone: 'UTC',
+      }),
+    ).toBe('22 Apr 2026, 10:05:06')
+  })
+
+  it('formats readable durations', () => {
+    expect(formatDuration(900)).toBe('<1s')
+    expect(formatDuration(12_000)).toBe('12s')
+    expect(formatDuration(125_000)).toBe('2m 5s')
+    expect(formatDuration(7_200_000)).toBe('2h')
+  })
+
+  it('reports turn elapsed time and active duration for assistant work', () => {
+    const item: ConversationItem = {
+      ...base,
+      kind: 'message',
+      actor: 'assistant',
+      text: 'done',
+      createdAt: '2026-04-22T00:00:03.000Z',
+      updatedAt: '2026-04-22T00:00:08.000Z',
+    }
+
+    expect(
+      getConversationItemTiming(item, '2026-04-22T00:00:00.000Z', {
+        locale: 'en-GB',
+        timeZone: 'UTC',
+      }),
+    ).toMatchObject({
+      startedAtLabel: '00:00:03',
+      turnElapsedLabel: '+3s',
+      activeDurationLabel: '5s',
+    })
+  })
+
+  it('does not treat user message metadata patches as work duration', () => {
+    const item: ConversationItem = {
+      ...base,
+      kind: 'message',
+      actor: 'user',
+      text: 'start',
+      createdAt: '2026-04-22T00:00:00.000Z',
+      updatedAt: '2026-04-22T00:01:00.000Z',
+    }
+
+    expect(
+      getConversationItemTiming(item, '2026-04-22T00:00:00.000Z'),
+    ).toMatchObject({
+      turnElapsedLabel: null,
+      activeDurationLabel: null,
+    })
   })
 })

@@ -142,6 +142,16 @@ export const SessionView: FC = () => {
     [globalSessions, linkedInitiativeAttempts, projects, sessions, workspaces],
   )
 
+  const turnStartedAtById = useMemo(() => {
+    const startedAtById = new Map<string, string>()
+    for (const item of activeConversation) {
+      if (item.turnId && !startedAtById.has(item.turnId)) {
+        startedAtById.set(item.turnId, item.createdAt)
+      }
+    }
+    return startedAtById
+  }, [activeConversation])
+
   const scrollToBottom = useCallback(() => {
     transcriptEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [])
@@ -511,6 +521,11 @@ export const SessionView: FC = () => {
                   <ConversationItem
                     entry={entry}
                     sessionId={session.id}
+                    turnStartedAt={
+                      entry.turnId
+                        ? (turnStartedAtById.get(entry.turnId) ?? null)
+                        : null
+                    }
                     onApprove={
                       isLastApproval
                         ? () => approveSession(session.id)

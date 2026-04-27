@@ -89,6 +89,41 @@ describe('ConversationItemView', () => {
     )
     expect(screen.getByText('ts')).toBeInTheDocument()
     expect(screen.getByText('const value = 1')).toBeInTheDocument()
+    expect(
+      screen.getByTestId('conversation-item-timestamp'),
+    ).toBeInTheDocument()
+  })
+
+  it('renders elapsed timing metadata for assistant work', () => {
+    render(
+      <ConversationItemView
+        turnStartedAt="2026-04-13T10:00:00.000Z"
+        entry={{
+          id: 'message-1',
+          sessionId: 'session-1',
+          sequence: 2,
+          turnId: 'turn-1',
+          kind: 'message',
+          state: 'complete',
+          actor: 'assistant',
+          text: 'Done.',
+          createdAt: '2026-04-13T10:00:03.000Z',
+          updatedAt: '2026-04-13T10:00:08.000Z',
+          providerMeta: {
+            providerId: 'claude-code',
+            providerItemId: null,
+            providerEventType: 'assistant',
+          },
+        }}
+      />,
+    )
+
+    expect(
+      screen.getByTestId('conversation-item-turn-elapsed'),
+    ).toHaveTextContent('+3s')
+    expect(
+      screen.getByTestId('conversation-item-active-duration'),
+    ).toHaveTextContent('5s')
   })
 
   it('collapses tool results by default and expands inline on demand', () => {
