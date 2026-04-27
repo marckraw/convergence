@@ -554,6 +554,70 @@ describe('SessionService', () => {
     expect(updated.attention).toBe('failed')
   })
 
+  it('marks a stale persisted running session failed instead of throwing on stop', () => {
+    const db = getDatabase()
+    const session = service.create({
+      projectId,
+      workspaceId: null,
+      providerId: 'test-provider',
+      model: 'test-model',
+      effort: null,
+      name: 'stale stop test',
+    })
+    db.prepare(
+      "UPDATE sessions SET status = 'running', attention = 'none', activity = 'tool:read' WHERE id = ?",
+    ).run(session.id)
+    db.prepare(
+      `INSERT INTO session_queued_inputs (
+         id,
+         session_id,
+         delivery_mode,
+         state,
+         text,
+         attachment_ids_json,
+         skill_selections_json,
+         provider_request_id,
+         error,
+         created_at,
+         updated_at
+       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    ).run(
+      'queued-stale-stop',
+      session.id,
+      'follow-up',
+      'queued',
+      'after stop',
+      '[]',
+      '[]',
+      null,
+      null,
+      '2026-04-26T12:00:00.000Z',
+      '2026-04-26T12:00:00.000Z',
+    )
+
+    expect(() => service.stop(session.id)).not.toThrow()
+
+    const updated = service.getById(session.id)!
+    expect(updated.status).toBe('failed')
+    expect(updated.attention).toBe('failed')
+    expect(updated.activity).toBeNull()
+    expect(service.getConversation(session.id)).toEqual([
+      expect.objectContaining({
+        kind: 'note',
+        level: 'error',
+        text: 'Session marked failed because Convergence no longer has an active provider process to stop.',
+      }),
+    ])
+    expect(service.getQueuedInputs(session.id)).toMatchObject([
+      {
+        id: 'queued-stale-stop',
+        state: 'failed',
+        error:
+          'Session marked failed because Convergence no longer has an active provider process to stop.',
+      },
+    ])
+  })
+
   it('deletes a session', () => {
     const session = service.create({
       projectId,
@@ -1002,6 +1066,72 @@ describe('SessionService', () => {
         id: 'queued-stale',
         state: 'failed',
         error: 'App restarted before this input was accepted.',
+      },
+    ])
+  })
+
+  it('recovers stale persisted running sessions as failed on startup', () => {
+    const db = getDatabase()
+    const session = service.create({
+      projectId,
+      workspaceId: null,
+      providerId: 'test-provider',
+      model: 'test-model',
+      effort: null,
+      name: 'stale running test',
+    })
+    db.prepare(
+      "UPDATE sessions SET status = 'running', attention = 'none', activity = 'streaming' WHERE id = ?",
+    ).run(session.id)
+    db.prepare(
+      `INSERT INTO session_queued_inputs (
+         id,
+         session_id,
+         delivery_mode,
+         state,
+         text,
+         attachment_ids_json,
+         skill_selections_json,
+         provider_request_id,
+         error,
+         created_at,
+         updated_at
+       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    ).run(
+      'queued-stale-boot',
+      session.id,
+      'follow-up',
+      'queued',
+      'after restart',
+      '[]',
+      '[]',
+      null,
+      null,
+      '2026-04-26T12:00:00.000Z',
+      '2026-04-26T12:00:00.000Z',
+    )
+
+    const registry = new ProviderRegistry()
+    registry.register(createTestProvider())
+    const restartedService = new SessionService(db, registry)
+
+    const updated = restartedService.getById(session.id)!
+    expect(updated.status).toBe('failed')
+    expect(updated.attention).toBe('failed')
+    expect(updated.activity).toBeNull()
+    expect(restartedService.getConversation(session.id)).toEqual([
+      expect.objectContaining({
+        kind: 'note',
+        level: 'error',
+        text: 'Session marked failed because Convergence restarted before the provider process finished.',
+      }),
+    ])
+    expect(restartedService.getQueuedInputs(session.id)).toMatchObject([
+      {
+        id: 'queued-stale-boot',
+        state: 'failed',
+        error:
+          'Session marked failed because Convergence restarted before the provider process finished.',
       },
     ])
   })

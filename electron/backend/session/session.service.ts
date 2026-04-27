@@ -90,6 +90,7 @@ export class SessionService {
     private db: Database.Database,
     private providers: ProviderRegistry,
   ) {
+    this.recoverStaleRunningSessions()
     this.recoverDispatchingQueuedInputs()
   }
 
@@ -390,7 +391,7 @@ export class SessionService {
   }
 
   async sendMessage(id: string, input: SendMessageInput): Promise<void> {
-    const session = this.getById(id)
+    let session = this.getById(id)
     if (!session) throw new Error(`Session not found: ${id}`)
 
     if (session.providerId === 'shell') {
@@ -405,9 +406,18 @@ export class SessionService {
 
     await this.rebindDraftAttachments(id, input.attachmentIds)
     const attachments = this.resolveAttachments(input.attachmentIds)
-    const deliveryMode = this.resolveDeliveryMode(session, input.deliveryMode)
 
     const handle = this.activeHandles.get(id)
+    if (!handle && session.status === 'running') {
+      session = this.markStaleRunningSessionFailed(
+        session,
+        'Session marked failed because Convergence no longer has an active provider process for this run.',
+        true,
+      )
+    }
+
+    const deliveryMode = this.resolveDeliveryMode(session, input.deliveryMode)
+
     if (handle) {
       this.dispatchToActiveHandle({
         session,
@@ -580,7 +590,18 @@ export class SessionService {
 
   stop(id: string): void {
     const handle = this.activeHandles.get(id)
-    if (!handle) throw new Error(`Session not active: ${id}`)
+    if (!handle) {
+      const session = this.getById(id)
+      if (session?.status === 'running') {
+        this.markStaleRunningSessionFailed(
+          session,
+          'Session marked failed because Convergence no longer has an active provider process to stop.',
+          true,
+        )
+        return
+      }
+      throw new Error(`Session not active: ${id}`)
+    }
     handle.stop()
     this.activeHandles.delete(id)
   }
@@ -1127,6 +1148,91 @@ export class SessionService {
 
     for (const row of rows) {
       stmt.run(timestamp, row.id)
+    }
+  }
+
+  private recoverStaleRunningSessions(): void {
+    const rows = this.db
+      .prepare(
+        `SELECT *
+         FROM sessions
+         WHERE status = 'running'
+           AND provider_id != 'shell'`,
+      )
+      .all() as SessionRow[]
+
+    for (const row of rows) {
+      this.markStaleRunningSessionFailed(
+        sessionSummaryFromRow(row),
+        'Session marked failed because Convergence restarted before the provider process finished.',
+        false,
+      )
+    }
+  }
+
+  private markStaleRunningSessionFailed(
+    session: Session,
+    reason: string,
+    notify: boolean,
+  ): Session {
+    const timestamp = new Date().toISOString()
+    const note = this.addConversationItem(session.id, {
+      id: randomUUID(),
+      turnId: null,
+      kind: 'note',
+      state: 'error',
+      level: 'error',
+      text: reason,
+      createdAt: timestamp,
+      updatedAt: timestamp,
+      providerMeta: {
+        providerId: session.providerId,
+        providerItemId: null,
+        providerEventType: 'system',
+      },
+    })
+
+    this.applySessionPatch(session.id, {
+      status: 'failed',
+      attention: 'failed',
+      activity: null,
+      updatedAt: timestamp,
+    })
+    this.failPendingQueuedInputsForSession(session.id, reason)
+    this.activeHandles.delete(session.id)
+    this.closeActiveTurn(session.id, 'errored')
+
+    if (notify) {
+      this.notifySessionChange(
+        session.id,
+        note
+          ? {
+              sessionId: session.id,
+              op: 'add',
+              item: note,
+            }
+          : undefined,
+      )
+    }
+
+    return this.getById(session.id) ?? session
+  }
+
+  private failPendingQueuedInputsForSession(
+    sessionId: string,
+    reason: string,
+  ): void {
+    const rows = this.db
+      .prepare(
+        `SELECT id
+         FROM session_queued_inputs
+         WHERE session_id = ?
+           AND state IN ('queued', 'dispatching')`,
+      )
+      .all(sessionId) as Array<{ id: string }>
+
+    for (const row of rows) {
+      this.patchQueuedInput(row.id, 'failed', reason)
     }
   }
 
