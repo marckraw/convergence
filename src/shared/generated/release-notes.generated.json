@@ -1,6 +1,21 @@
 {
-  "currentVersion": "0.26.0",
+  "currentVersion": "0.27.1",
   "releases": [
+    {
+      "version": "0.27.1",
+      "date": null,
+      "notes": "### Patch Changes\n\n- 5f39295: Show steer and follow-up messages in the conversation transcript with a small badge, so users can see the input they sent while the agent was running. Codex steer and Pi running input now emit the user message locally instead of relying on the provider to echo it back."
+    },
+    {
+      "version": "0.27.0",
+      "date": null,
+      "notes": "### Minor Changes\n\n- 869cb31: Submit feature request feedback to Convergence Cloud from the in-app feedback form."
+    },
+    {
+      "version": "0.26.1",
+      "date": null,
+      "notes": "### Patch Changes\n\n- 1797f65: Fix old conversation views crashing when historical attachment metadata has not hydrated yet."
+    },
     {
       "version": "0.26.0",
       "date": null,

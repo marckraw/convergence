@@ -111,6 +111,22 @@ jobs:
         run: |
           npm run release:notes -- "${{ steps.release.outputs.version }}" release-notes.md
 
+      - name: Write build-time .env
+        env:
+          FEEDBACK_TOKEN: ${{ secrets.FEEDBACK_TOKEN }}
+          CONVERGENCE_CLOUD_BASE_URL: ${{ vars.CONVERGENCE_CLOUD_BASE_URL }}
+        run: |
+          if [ -z "$FEEDBACK_TOKEN" ]; then
+            echo "FEEDBACK_TOKEN secret is not set; aborting release."
+            exit 1
+          fi
+          {
+            echo "FEEDBACK_TOKEN=$FEEDBACK_TOKEN"
+            if [ -n "$CONVERGENCE_CLOUD_BASE_URL" ]; then
+              echo "CONVERGENCE_CLOUD_BASE_URL=$CONVERGENCE_CLOUD_BASE_URL"
+            fi
+          } > .env
+
       - name: Build macOS artifacts
         run: npm run package:mac
         env:

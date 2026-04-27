@@ -11,6 +11,7 @@ npmRebuild: false
 files:
   - package.json
   - out/**/*
+  - .env
 mac:
   icon: build/icon.icns
   category: public.app-category.developer-tools
