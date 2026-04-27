@@ -195,7 +195,9 @@ async function startApp(): Promise<void> {
         new CodexProvider(p.binaryPath, taskProgressService),
       )
     } else if (p.id === 'pi') {
-      providerRegistry.register(new PiProvider(p.binaryPath))
+      providerRegistry.register(
+        new PiProvider(p.binaryPath, taskProgressService),
+      )
     }
   }
 

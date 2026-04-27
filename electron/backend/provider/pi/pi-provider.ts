@@ -5,6 +5,8 @@ import type {
   ActivitySignal,
   Attachment,
   AttentionState,
+  OneShotInput,
+  OneShotResult,
   Provider,
   ProviderDescriptor,
   MidRunInputMode,
@@ -19,6 +21,8 @@ import {
   normalizeProviderDescriptor,
 } from '../provider-descriptor.pure'
 import { PiRpcClient, type PiEvent, type PiExtensionUiRequest } from './pi-rpc'
+import type { TaskProgressService } from '../../task-progress/task-progress.service'
+import { createTaskProgressEmitter } from '../../task-progress/task-progress.emitter'
 import {
   derivePiContextWindow,
   extractLastAssistantStopReason,
@@ -51,6 +55,144 @@ function now(): string {
   return new Date().toISOString()
 }
 
+function runPiOneShot(
+  binaryPath: string,
+  input: OneShotInput,
+  taskProgress?: TaskProgressService | null,
+): Promise<OneShotResult> {
+  return new Promise<OneShotResult>((resolve, reject) => {
+    const args = ['--mode', 'rpc']
+    if (input.modelId.includes('/')) {
+      args.push('--model', input.modelId)
+    }
+
+    const child = spawn(binaryPath, args, {
+      cwd: input.workingDirectory,
+      stdio: ['pipe', 'pipe', 'pipe'],
+      env: { ...process.env },
+    })
+
+    const progress = createTaskProgressEmitter(input.requestId, taskProgress)
+    progress?.started()
+
+    let settled = false
+    let textBuffer = ''
+    let stderr = ''
+    let rpc: PiRpcClient | null = null
+
+    function cleanup(): void {
+      if (rpc) {
+        try {
+          rpc.destroy()
+        } catch {
+          // ignore
+        }
+        rpc = null
+      }
+      try {
+        child.kill('SIGTERM')
+      } catch {
+        // already exited
+      }
+    }
+
+    const timeout = setTimeout(() => {
+      if (settled) return
+      settled = true
+      cleanup()
+      progress?.settled('timeout')
+      reject(new Error('pi oneShot timed out'))
+    }, input.timeoutMs ?? 20000)
+
+    if (!child.stdin || !child.stdout) {
+      settled = true
+      clearTimeout(timeout)
+      cleanup()
+      progress?.settled('error')
+      reject(new Error('pi oneShot failed to open stdio'))
+      return
+    }
+
+    child.stdout.on('data', (chunk: Buffer) => {
+      progress?.stdoutChunk(chunk.length)
+    })
+    child.stderr?.on('data', (chunk: Buffer) => {
+      stderr += chunk.toString()
+      progress?.stderrChunk(chunk.length)
+    })
+
+    child.on('error', (err) => {
+      if (settled) return
+      settled = true
+      clearTimeout(timeout)
+      cleanup()
+      progress?.settled('error')
+      reject(err)
+    })
+
+    child.on('exit', (code) => {
+      if (settled) return
+      settled = true
+      clearTimeout(timeout)
+      cleanup()
+      if (code !== 0 && code !== null) {
+        progress?.settled('error')
+        reject(
+          new Error(
+            `pi oneShot exited with code ${code}: ${stderr.trim() || 'no stderr'}`,
+          ),
+        )
+        return
+      }
+      progress?.settled('ok')
+      resolve({ text: textBuffer })
+    })
+
+    rpc = new PiRpcClient(child.stdin, child.stdout)
+    rpc.onEvent((event) => {
+      if (settled) return
+      if (event.type === 'message_update') {
+        const ame = (event as { assistantMessageEvent?: unknown })
+          .assistantMessageEvent as
+          | { type?: unknown; delta?: unknown }
+          | undefined
+        if (ame?.type === 'text_delta' && typeof ame.delta === 'string') {
+          textBuffer += ame.delta
+        }
+      } else if (event.type === 'agent_end') {
+        settled = true
+        clearTimeout(timeout)
+        cleanup()
+        progress?.settled('ok')
+        resolve({ text: textBuffer })
+      }
+    })
+
+    rpc.request({ type: 'prompt', message: input.prompt }).then(
+      (response) => {
+        if (settled || response.success) return
+        settled = true
+        clearTimeout(timeout)
+        cleanup()
+        progress?.settled('error')
+        reject(
+          new Error(
+            `pi oneShot prompt failed: ${response.error ?? 'unknown error'}`,
+          ),
+        )
+      },
+      (err) => {
+        if (settled) return
+        settled = true
+        clearTimeout(timeout)
+        cleanup()
+        progress?.settled('error')
+        reject(err instanceof Error ? err : new Error(String(err)))
+      },
+    )
+  })
+}
+
 export class PiProvider implements Provider {
   id = 'pi'
   name = 'Pi Agent'
@@ -59,7 +201,14 @@ export class PiProvider implements Provider {
   private descriptorPromise: Promise<ProviderDescriptor> | null = null
   private readonly skillsService = new PiSkillsService()
 
-  constructor(private binaryPath: string) {}
+  constructor(
+    private binaryPath: string,
+    private taskProgress: TaskProgressService | null = null,
+  ) {}
+
+  async oneShot(input: OneShotInput): Promise<OneShotResult> {
+    return runPiOneShot(this.binaryPath, input, this.taskProgress)
+  }
 
   describe(): Promise<ProviderDescriptor> {
     if (!this.descriptorPromise) {
