@@ -260,4 +260,17 @@ export interface ProviderStatusInfo {
   binaryPath: string | null
   version: string | null
   reason: string | null
+  update: ProviderUpdateInfo
+}
+
+export type ProviderUpdateStatus = 'current' | 'outdated' | 'unknown'
+
+export interface ProviderUpdateInfo {
+  currentVersion: string | null
+  latestVersion: string | null
+  status: ProviderUpdateStatus
+  packageName: string
+  installCommand: string
+  updateCommand: string
+  checkError: string | null
 }

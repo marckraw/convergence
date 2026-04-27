@@ -10,7 +10,14 @@ import {
   DialogTrigger,
 } from '@/shared/ui/dialog'
 import { Button } from '@/shared/ui/button'
-import { Bot, CircleAlert, CircleCheck, RefreshCw, Wrench } from 'lucide-react'
+import {
+  Bot,
+  CircleAlert,
+  CircleCheck,
+  RefreshCw,
+  Terminal,
+  Wrench,
+} from 'lucide-react'
 
 interface ProviderStatusDialogProps {
   open: boolean
@@ -37,7 +44,50 @@ function renderStatusBadge(provider: ProviderStatusInfo) {
   )
 }
 
+function renderUpdateBadge(provider: ProviderStatusInfo) {
+  const className =
+    provider.update.status === 'current'
+      ? 'border-sky-500/20 bg-sky-500/10 text-sky-700 dark:text-sky-300'
+      : provider.update.status === 'outdated'
+        ? 'border-amber-500/20 bg-amber-500/10 text-amber-700 dark:text-amber-200'
+        : 'border-border bg-muted/40 text-muted-foreground'
+
+  const label =
+    provider.update.status === 'current'
+      ? 'Latest'
+      : provider.update.status === 'outdated'
+        ? 'Update available'
+        : 'Latest unknown'
+
+  return (
+    <span
+      className={`rounded-full border px-2 py-0.5 text-[10px] font-medium tracking-wide uppercase ${className}`}
+    >
+      {label}
+    </span>
+  )
+}
+
+function renderCommand(label: string, command: string) {
+  return (
+    <div className="space-y-1">
+      <p className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground/80">
+        <Terminal className="h-3.5 w-3.5" />
+        {label}
+      </p>
+      <code className="block overflow-x-auto rounded border border-border/40 bg-background/70 px-2 py-1.5 text-[11px] text-foreground/80">
+        {command}
+      </code>
+    </div>
+  )
+}
+
 function renderProviderRow(provider: ProviderStatusInfo) {
+  const showInstallCommand = provider.availability === 'unavailable'
+  const showUpdateCommand =
+    provider.availability === 'available' &&
+    provider.update.status === 'outdated'
+
   return (
     <div
       key={provider.id}
@@ -57,7 +107,10 @@ function renderProviderRow(provider: ProviderStatusInfo) {
             </span>
           </div>
         </div>
-        {renderStatusBadge(provider)}
+        <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
+          {renderUpdateBadge(provider)}
+          {renderStatusBadge(provider)}
+        </div>
       </div>
 
       <div className="mt-2 rounded-md border border-border/50 bg-background/40 px-2.5 py-2 text-xs text-muted-foreground">
@@ -72,6 +125,19 @@ function renderProviderRow(provider: ProviderStatusInfo) {
               </div>
             )}
             <div className="space-y-1">
+              <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground/80">
+                Latest
+              </p>
+              <p className="text-foreground/80">
+                {provider.update.latestVersion ??
+                  (provider.update.checkError
+                    ? `Unable to check: ${provider.update.checkError}`
+                    : 'Unknown')}
+              </p>
+            </div>
+            {showUpdateCommand &&
+              renderCommand('Update command', provider.update.updateCommand)}
+            <div className="space-y-1">
               <p className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground/80">
                 <Wrench className="h-3.5 w-3.5" />
                 Binary path
@@ -82,7 +148,14 @@ function renderProviderRow(provider: ProviderStatusInfo) {
             </div>
           </div>
         ) : (
-          <p>{provider.reason ?? 'Provider binary is unavailable.'}</p>
+          <div className="space-y-2">
+            <p>{provider.reason ?? 'Provider binary is unavailable.'}</p>
+            {provider.update.latestVersion && (
+              <p>Latest version: {provider.update.latestVersion}</p>
+            )}
+            {showInstallCommand &&
+              renderCommand('Install command', provider.update.installCommand)}
+          </div>
         )}
       </div>
     </div>

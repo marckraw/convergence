@@ -505,6 +505,19 @@ interface ProviderStatusInfo {
   binaryPath: string | null
   version: string | null
   reason: string | null
+  update: ProviderUpdateInfo
+}
+
+type ProviderUpdateStatus = 'current' | 'outdated' | 'unknown'
+
+interface ProviderUpdateInfo {
+  currentVersion: string | null
+  latestVersion: string | null
+  status: ProviderUpdateStatus
+  packageName: string
+  installCommand: string
+  updateCommand: string
+  checkError: string | null
 }
 
 type FeedbackPriorityData = 'low' | 'medium' | 'high'
