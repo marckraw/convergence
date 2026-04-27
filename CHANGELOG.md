@@ -1,5 +1,11 @@
 # convergence
 
+## 0.27.5
+
+### Patch Changes
+
+- 833e489: Show timestamps and elapsed turn timing on conversation transcript items.
+
 ## 0.27.4
 
 ### Patch Changes
