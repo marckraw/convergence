@@ -70,4 +70,18 @@ describe('AttachmentChip', () => {
       screen.getByRole('button', { name: /Preview doc\.pdf/ }),
     ).toHaveAttribute('title', 'Provider does not accept PDFs')
   })
+
+  it('contains thumbnail images instead of cropping them', () => {
+    const { container } = render(
+      <AttachmentChip
+        attachment={makeAttachment({ thumbnailPath: '/tmp/tall-photo.png' })}
+        onOpen={vi.fn()}
+        onRemove={vi.fn()}
+      />,
+    )
+
+    const thumbnail = container.querySelector('img')
+    expect(thumbnail).toHaveClass('object-contain')
+    expect(thumbnail).not.toHaveClass('object-cover')
+  })
 })

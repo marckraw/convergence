@@ -31,46 +31,53 @@ export const AttachmentPreview: FC<AttachmentPreviewProps> = ({
       open={open}
       onOpenChange={(next) => (!next ? onClose() : undefined)}
     >
-      <DialogContent className="max-w-4xl">
-        <DialogHeader>
+      <DialogContent className="w-[min(96vw,72rem)] max-h-[calc(100vh-2rem)] max-w-none p-0">
+        <DialogHeader className="border-b border-border px-4 py-3 pr-10">
           <DialogTitle className="truncate">
             {attachment?.filename ?? 'Preview'}
           </DialogTitle>
         </DialogHeader>
 
-        {isLoading && (
-          <div className="flex h-64 items-center justify-center text-sm text-muted-foreground">
-            Loading…
-          </div>
-        )}
+        <div className="min-h-0 flex-1 overflow-auto p-4">
+          {isLoading && (
+            <div className="flex h-64 items-center justify-center text-sm text-muted-foreground">
+              Loading…
+            </div>
+          )}
 
-        {!isLoading && error && (
-          <div className="flex h-64 items-center justify-center text-sm text-destructive">
-            {error}
-          </div>
-        )}
+          {!isLoading && error && (
+            <div className="flex h-64 items-center justify-center text-sm text-destructive">
+              {error}
+            </div>
+          )}
 
-        {!isLoading && !error && attachment?.kind === 'image' && objectUrl && (
-          <img
-            src={objectUrl}
-            alt={attachment.filename}
-            className="mx-auto max-h-[80vh] object-contain bg-black"
-          />
-        )}
+          {!isLoading &&
+            !error &&
+            attachment?.kind === 'image' &&
+            objectUrl && (
+              <div className="flex min-h-64 items-center justify-center rounded-md bg-black">
+                <img
+                  src={objectUrl}
+                  alt={attachment.filename}
+                  className="block h-auto w-auto max-h-[calc(100vh-8rem)] max-w-full object-contain"
+                />
+              </div>
+            )}
 
-        {!isLoading && !error && attachment?.kind === 'pdf' && objectUrl && (
-          <embed
-            src={objectUrl}
-            type="application/pdf"
-            className="h-[80vh] w-full"
-          />
-        )}
+          {!isLoading && !error && attachment?.kind === 'pdf' && objectUrl && (
+            <embed
+              src={objectUrl}
+              type="application/pdf"
+              className="h-[calc(100vh-8rem)] min-h-64 w-full"
+            />
+          )}
 
-        {!isLoading && !error && attachment?.kind === 'text' && (
-          <pre className="max-h-[80vh] overflow-auto whitespace-pre-wrap rounded bg-muted/40 p-3 font-mono text-xs text-foreground">
-            {textContent ?? ''}
-          </pre>
-        )}
+          {!isLoading && !error && attachment?.kind === 'text' && (
+            <pre className="max-h-[calc(100vh-8rem)] overflow-auto whitespace-pre-wrap rounded bg-muted/40 p-3 font-mono text-xs text-foreground">
+              {textContent ?? ''}
+            </pre>
+          )}
+        </div>
       </DialogContent>
     </Dialog>
   )
