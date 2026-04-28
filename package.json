@@ -1,6 +1,6 @@
 {
   "name": "convergence",
-  "version": "0.27.6",
+  "version": "0.28.0",
   "description": "UI-first desktop app for managing agent work across local codebases",
   "main": "out/main/index.js",
   "scripts": {
