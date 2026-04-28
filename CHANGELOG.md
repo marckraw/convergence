@@ -1,5 +1,11 @@
 # convergence
 
+## 0.28.2
+
+### Patch Changes
+
+- b5b24c5: Preserve image attachment aspect ratios in composer thumbnails and full preview modals so tall or wide images are scaled to fit without being cropped.
+
 ## 0.28.1
 
 ### Patch Changes
