@@ -1,5 +1,11 @@
 # convergence
 
+## 0.28.1
+
+### Patch Changes
+
+- de54e0d: Claude Code skills picker now lists plugin skills installed via `/plugin install`. Discovery reads `~/.claude/plugins/installed_plugins.json` for authoritative install paths and falls back to a depth-bounded walk of `~/.claude/plugins/cache/` when no manifest is present, so plugins like `agent-skills`, `caveman`, and `frontend-design` surface in the picker just like in the real Claude Code harness.
+
 ## 0.28.0
 
 ### Minor Changes
