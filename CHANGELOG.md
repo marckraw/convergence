@@ -1,5 +1,11 @@
 # convergence
 
+## 0.28.3
+
+### Patch Changes
+
+- 917d7b5: Fix stuck approval recovery in session conversations. Approval cards remain actionable even if later transcript items arrive after the request, and Codex sessions now fail cleanly with an error note if the provider exits before the active turn completes.
+
 ## 0.28.2
 
 ### Patch Changes
