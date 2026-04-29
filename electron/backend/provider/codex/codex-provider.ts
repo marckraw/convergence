@@ -220,6 +220,8 @@ export class CodexProvider implements Provider {
     let child: ChildProcess | null = null
     let rpc: JsonRpcClient | null = null
     let stopped = false
+    let currentStatus: SessionStatus = 'idle'
+    let currentAttention: AttentionState = 'none'
     let threadId: string | null = config.continuationToken
     let threadReady = config.continuationToken === null
     let assistantTextBuffer = ''
@@ -242,11 +244,13 @@ export class CodexProvider implements Provider {
     })
 
     function setStatus(status: SessionStatus): void {
+      currentStatus = status
       listeners.status.forEach((cb) => cb(status))
       sessionEmitter.patchSession({ status })
     }
 
     function setAttention(attention: AttentionState): void {
+      currentAttention = attention
       listeners.attention.forEach((cb) => cb(attention))
       sessionEmitter.patchSession({ attention })
     }
@@ -1018,6 +1022,17 @@ export class CodexProvider implements Provider {
         if (code !== 0 && code !== null) {
           sessionEmitter.addNote({
             text: `Process exited with code ${code}`,
+            level: 'error',
+          })
+          setStatus('failed')
+          setAttention('failed')
+        } else if (
+          currentStatus === 'running' ||
+          currentAttention === 'needs-approval' ||
+          currentAttention === 'needs-input'
+        ) {
+          sessionEmitter.addNote({
+            text: 'Codex exited before the active turn completed.',
             level: 'error',
           })
           setStatus('failed')
