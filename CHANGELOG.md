@@ -1,5 +1,11 @@
 # convergence
 
+## 0.28.6
+
+### Patch Changes
+
+- de97d10: Deepen transcript entry rendering around a pure view model so copy text, timing, attachment resolution, and action state are derived from normalized conversation items before rendering.
+
 ## 0.28.5
 
 ### Patch Changes
