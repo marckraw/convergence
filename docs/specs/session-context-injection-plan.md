@@ -191,23 +191,32 @@ preload bindings.
 Goal: renderer can invoke project-context operations through a Zustand
 store. No UI yet.
 
-- [ ] Create `src/entities/project-context/`:
-  - `project-context.types.ts` — re-export the IPC payload types.
+- [x] Create `src/entities/project-context/`:
+  - `project-context.types.ts` — local renderer-side types
+    (`ProjectContextItem`, `ProjectContextReinjectMode`, input types).
   - `project-context.api.ts` — preload-bridge wrappers for the six IPC
     channels.
   - `project-context.model.ts` — Zustand store keyed by `projectId` and
     `sessionId`:
-    - state: `itemsByProjectId`, `attachmentsBySessionId`, `error`.
+    - state: `itemsByProjectId`, `attachmentsBySessionId`, `loading`,
+      `error`.
     - actions: `loadForProject`, `createItem`, `updateItem`, `deleteItem`,
-      `attachToSession`, `loadForSession`.
+      `attachToSession`, `loadForSession`, `clearError`.
   - `index.ts` public API.
   - `project-context.model.test.ts` covering the action flows with a
     mocked api.
-- [ ] Re-export the mention pure helpers from C1 through
-      `src/entities/project-context/index.ts`.
+- [x] Re-export the mention pure helpers from C1 through
+      `src/entities/project-context/index.ts` (already done in C1; index
+      now also exports the types, api, and store).
 
 **Verification**: all four gates pass. Renderer code can hold the store
 without rendering UI yet.
+
+**C4 verification (2026-04-30)**: all four gates green. 10 model tests
+covering load, create, update (with cross-bucket propagation into
+session attachments), delete (with cascade into session attachments),
+attach refresh, per-project isolation, and error paths. Pure totals
+1030; unit 354; chaperone 0 errors across 327 files.
 
 ---
 
