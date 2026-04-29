@@ -25,6 +25,7 @@ interface ProjectSettingsDialogProps {
   onBaseBranchNameChange: (value: string) => void
   onSave: () => void
   trigger: ReactNode
+  contextSection?: ReactNode
 }
 
 export const ProjectSettingsDialog: FC<ProjectSettingsDialogProps> = ({
@@ -39,6 +40,7 @@ export const ProjectSettingsDialog: FC<ProjectSettingsDialogProps> = ({
   onBaseBranchNameChange,
   onSave,
   trigger,
+  contextSection,
 }) => {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -125,6 +127,12 @@ export const ProjectSettingsDialog: FC<ProjectSettingsDialogProps> = ({
               {error}
             </p>
           )}
+
+          {contextSection ? (
+            <section className="space-y-3 border-t border-white/10 pt-5">
+              {contextSection}
+            </section>
+          ) : null}
         </div>
 
         <DialogFooter className="border-t border-white/10 px-6 py-4">

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import type { FC } from 'react'
+import type { FC, ReactNode } from 'react'
 import { GitBranch, Settings2 } from 'lucide-react'
 import {
   normalizeProjectSettings,
@@ -10,7 +10,13 @@ import { useDialogStore } from '@/entities/dialog'
 import { Button } from '@/shared/ui/button'
 import { ProjectSettingsDialog } from './project-settings.presentational'
 
-export const ProjectSettingsDialogContainer: FC = () => {
+interface ProjectSettingsDialogContainerProps {
+  contextSection?: (projectId: string) => ReactNode
+}
+
+export const ProjectSettingsDialogContainer: FC<
+  ProjectSettingsDialogContainerProps
+> = ({ contextSection }) => {
   const activeProject = useProjectStore((state) => state.activeProject)
   const updateProjectSettings = useProjectStore(
     (state) => state.updateProjectSettings,
@@ -105,6 +111,7 @@ export const ProjectSettingsDialogContainer: FC = () => {
       onStrategyChange={setStrategy}
       onBaseBranchNameChange={setBaseBranchName}
       onSave={() => void handleSave()}
+      contextSection={contextSection?.(activeProject.id)}
       trigger={
         <Button
           type="button"

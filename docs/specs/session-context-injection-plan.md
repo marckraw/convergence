@@ -225,23 +225,37 @@ attach refresh, per-project isolation, and error paths. Pure totals
 Goal: user can create, edit, and delete context items from project
 settings. First user-visible surface.
 
-- [ ] Create `src/features/project-context-settings/`:
+- [x] Create `src/features/project-context-settings/`:
   - `project-context-list.container.tsx` — owns load + delete + open-edit
-    flows.
+    + form-state flows; reads from `useProjectContextStore`.
   - `project-context-list.presentational.tsx` — renders the list with
-    label, body preview, reinject badge, edit + delete actions.
+    label, body preview, reinject badge, edit + delete actions, and an
+    inline delete-confirm row.
   - `project-context-form.presentational.tsx` — create/edit form: optional
     label, multi-line body, reinject toggle. Renders the every-turn
     warning copy from the spec when toggle is on.
   - `index.ts` public API.
-  - Container test covering: list render, create flow, update flow,
-    delete with confirm, every-turn warning visibility.
-- [ ] Add a `Context` section/tab to `src/features/project-settings/`
-      hosting the new feature. Match the existing settings shell pattern.
+  - Container test (7 cases) covering: load/render with badges, empty
+    state, open form, every-turn warning toggle, create flow, edit
+    flow with prefilled values, delete confirm + cancel paths.
+- [x] Compose into `src/features/project-settings/` via a new
+      `contextSection` slot prop on the dialog. The dialog itself stays a
+      feature; the actual `<ProjectContextSettings>` mount happens at the
+      widget layer (`src/widgets/sidebar/sidebar.container.tsx`) where
+      cross-feature composition is allowed by the FSD-lite rules.
 
 **Verification**: all four gates pass. Manual: open project settings →
 Context tab → create item → edit → delete. State persists across app
 restart.
+
+**C5 verification (2026-04-30)**: all four gates green. Pure 1030;
+unit 361 (7 new container tests); chaperone 0 errors across 332 files.
+Plan correction surfaced: features cannot import features (FSD-lite
+boundary), so the host pattern uses a slot-prop composed at the widget
+layer rather than a direct import inside the project-settings feature.
+The fix loop also caught a Zustand selector returning a fresh `[]`
+default per render, which created an infinite update loop; replaced
+with a module-level constant.
 
 ---
 
