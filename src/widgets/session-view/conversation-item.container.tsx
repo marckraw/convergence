@@ -7,6 +7,7 @@ import {
   type Attachment,
 } from '@/entities/attachment'
 import { ConversationItemView } from './transcript-entry.presentational'
+import { buildTranscriptEntryViewModel } from './transcript-entry.pure'
 
 interface ConversationItemProps {
   entry: ConversationItemEntry
@@ -36,36 +37,19 @@ export const ConversationItem: FC<ConversationItemProps> = ({
     setPreviewAttachment(null)
   }, [])
 
-  const isUserMessage =
-    entry.kind === 'message' && 'actor' in entry && entry.actor === 'user'
-
-  const attachmentIds: string[] | undefined = isUserMessage
-    ? (entry as { attachmentIds?: string[] }).attachmentIds
-    : undefined
-
-  const resolved: Attachment[] = []
-  const missing: string[] = []
-
-  if (attachmentIds) {
-    for (const id of attachmentIds) {
-      const att = resolvedMap[id]
-      if (att) {
-        resolved.push(att)
-      } else {
-        missing.push(id)
-      }
-    }
-  }
+  const viewModel = buildTranscriptEntryViewModel({
+    item: entry,
+    turnStartedAt,
+    resolvedAttachmentsById: resolvedMap,
+    actionableApproval: !!onApprove && !!onDeny,
+  })
 
   return (
     <>
       <ConversationItemView
-        entry={entry}
-        turnStartedAt={turnStartedAt}
+        viewModel={viewModel}
         onApprove={onApprove}
         onDeny={onDeny}
-        attachments={resolved.length > 0 ? resolved : undefined}
-        missingAttachmentIds={missing.length > 0 ? missing : undefined}
         onAttachmentOpen={setPreviewAttachment}
       />
       {previewAttachment && (

@@ -1,23 +1,23 @@
 import type { FC, ReactNode } from 'react'
-import type { ConversationItem } from '@/entities/session'
 import { ConversationItemTimestamp } from './conversation-item-timestamp.presentational'
+import type { ConversationItemTiming } from './transcript-entry.pure'
 
 interface ConversationItemHeaderProps {
-  entry: ConversationItem
+  createdAt: string
   label: string
-  turnStartedAt?: string | null
+  timing: ConversationItemTiming
   children?: ReactNode
 }
 
 export const ConversationItemHeader: FC<ConversationItemHeaderProps> = ({
-  entry,
+  createdAt,
   label,
-  turnStartedAt,
+  timing,
   children,
 }) => (
   <p className="flex flex-wrap items-center gap-x-1.5 gap-y-1 pr-10 text-xs font-medium text-muted-foreground">
     <span>{label}</span>
     {children}
-    <ConversationItemTimestamp entry={entry} turnStartedAt={turnStartedAt} />
+    <ConversationItemTimestamp createdAt={createdAt} timing={timing} />
   </p>
 )
