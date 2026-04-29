@@ -21,6 +21,7 @@ import type {
 import type { ProviderAttachmentCapability } from '../provider/provider.types'
 import { AttachmentsService } from '../attachments/attachments.service'
 import { ProjectContextService } from '../project-context/project-context.service'
+import { SessionContextInjectionService } from './context-injection/session-context-injection.service'
 import type { SessionDelta } from './conversation-item.types'
 import { SessionService } from './session.service'
 
@@ -1850,7 +1851,9 @@ describe('SessionService project-context boot injection', () => {
 
     service = new SessionService(db, registry)
     projectContext = new ProjectContextService(db)
-    service.setProjectContextService(projectContext)
+    service.setSessionContextInjectionService(
+      new SessionContextInjectionService(db, projectContext),
+    )
 
     tempDir = mkdtempSync(join(tmpdir(), 'convergence-ctx-test-'))
     projectId = 'ctx-test-project'
@@ -2020,7 +2023,9 @@ describe('SessionService project-context every-turn re-injection', () => {
 
     service = new SessionService(db, registry)
     projectContext = new ProjectContextService(db)
-    service.setProjectContextService(projectContext)
+    service.setSessionContextInjectionService(
+      new SessionContextInjectionService(db, projectContext),
+    )
 
     tempDir = mkdtempSync(join(tmpdir(), 'convergence-every-turn-test-'))
     projectId = 'every-turn-project'
@@ -2168,5 +2173,129 @@ describe('SessionService project-context every-turn re-injection', () => {
     if (latest.kind === 'message') {
       expect(latest.text).toBe('after delete')
     }
+  })
+})
+
+describe('SessionContextInjectionService', () => {
+  let service: SessionService
+  let contextInjection: SessionContextInjectionService
+  let projectContext: ProjectContextService
+  let tempDir: string
+  let projectId: string
+
+  beforeEach(() => {
+    const db = getDatabase()
+    const registry = new ProviderRegistry()
+    service = new SessionService(db, registry)
+    projectContext = new ProjectContextService(db)
+    contextInjection = new SessionContextInjectionService(db, projectContext)
+
+    tempDir = mkdtempSync(join(tmpdir(), 'convergence-context-injection-'))
+    projectId = 'context-injection-project'
+    const repoPath = join(tempDir, 'repo')
+    mkdirSync(repoPath, { recursive: true })
+    mkdirSync(join(repoPath, '.git'), { recursive: true })
+    db.prepare(
+      'INSERT INTO projects (id, name, repository_path) VALUES (?, ?, ?)',
+    ).run(projectId, 'Context Injection Test', repoPath)
+  })
+
+  afterEach(() => {
+    closeDatabase()
+    resetDatabase()
+    rmSync(tempDir, { recursive: true, force: true })
+  })
+
+  it('attaches selected items and prepares a boot note draft', () => {
+    const item = projectContext.create({
+      projectId,
+      label: 'sibling repo',
+      body: 'Also inspect ../api',
+      reinjectMode: 'boot',
+    })
+    const session = service.create({
+      projectId,
+      workspaceId: null,
+      providerId: 'test-provider',
+      model: null,
+      effort: null,
+      name: 'context injection',
+    })
+
+    const result = contextInjection.prepareBoot({
+      session,
+      originalText: 'start here',
+      contextItemIds: [item.id],
+    })
+
+    expect(result.augmentedText).toContain('<context-injection-test:context>')
+    expect(result.augmentedText).toContain('Also inspect ../api')
+    expect(result.augmentedText.endsWith('start here')).toBe(true)
+    expect(result.noteDraft).toMatchObject({
+      kind: 'note',
+      level: 'info',
+      text: expect.stringContaining('sibling repo'),
+      providerMeta: {
+        providerId: 'convergence',
+        providerItemId: null,
+        providerEventType: 'context.boot',
+      },
+    })
+    expect(
+      projectContext.listForSession(session.id).map((entry) => entry.id),
+    ).toEqual([item.id])
+  })
+
+  it('returns the original boot text and no note when no items are attached', () => {
+    const session = service.create({
+      projectId,
+      workspaceId: null,
+      providerId: 'test-provider',
+      model: null,
+      effort: null,
+      name: 'context injection',
+    })
+
+    const result = contextInjection.prepareBoot({
+      session,
+      originalText: 'plain start',
+      contextItemIds: [],
+    })
+
+    expect(result).toEqual({ augmentedText: 'plain start', noteDraft: null })
+  })
+
+  it('reads every-turn item bodies fresh for user turns', () => {
+    const item = projectContext.create({
+      projectId,
+      label: 'verify',
+      body: 'first instruction',
+      reinjectMode: 'every-turn',
+    })
+    const session = service.create({
+      projectId,
+      workspaceId: null,
+      providerId: 'test-provider',
+      model: null,
+      effort: null,
+      name: 'context injection',
+    })
+    contextInjection.prepareBoot({
+      session,
+      originalText: 'start',
+      contextItemIds: [item.id],
+    })
+
+    projectContext.update(item.id, { body: 'updated instruction' })
+
+    const result = contextInjection.prepareUserTurn({
+      session,
+      originalText: 'continue',
+    })
+
+    expect(result).toContain('<context-injection-test:context>')
+    expect(result).toContain('updated instruction')
+    expect(result).not.toContain('first instruction')
+    expect(result.endsWith('continue')).toBe(true)
   })
 })
