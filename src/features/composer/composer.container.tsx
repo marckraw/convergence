@@ -22,7 +22,13 @@ import {
   type SkillCatalogEntry,
   type SkillSelection,
 } from '@/entities/skill'
-import { useProjectContextStore } from '@/entities/project-context'
+import {
+  applyMentionExpansion,
+  detectMentionTrigger,
+  filterContextMentions,
+  useProjectContextStore,
+  type ProjectContextItem,
+} from '@/entities/project-context'
 import { Composer } from './composer.presentational'
 import { validateAttachmentsAgainstCapability } from './attachment-capability.pure'
 import {
@@ -41,6 +47,7 @@ interface ComposerContainerProps {
 
 const DRAFT_KEY_NEW = '__new__'
 const EMPTY_QUEUED_INPUTS: SessionQueuedInput[] = []
+const EMPTY_PROJECT_CONTEXT_ITEMS: ProjectContextItem[] = []
 
 const QUEUED_INPUT_STATE_LABELS: Record<SessionQueuedInput['state'], string> = {
   queued: 'Queued',
@@ -138,19 +145,102 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
   const attachmentsBySessionId = useProjectContextStore(
     (s) => s.attachmentsBySessionId,
   )
+  const itemsByProjectId = useProjectContextStore((s) => s.itemsByProjectId)
   const loadProjectContextForSession = useProjectContextStore(
     (s) => s.loadForSession,
+  )
+  const loadProjectContextForProject = useProjectContextStore(
+    (s) => s.loadForProject,
   )
   const everyTurnContextCount = activeSessionId
     ? (attachmentsBySessionId[activeSessionId] ?? []).filter(
         (item) => item.reinjectMode === 'every-turn',
       ).length
     : 0
+  const projectContextItems =
+    itemsByProjectId[projectId] ?? EMPTY_PROJECT_CONTEXT_ITEMS
+
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null)
+  const [cursor, setCursor] = useState(0)
+  const [mentionHighlightedIndex, setMentionHighlightedIndex] = useState(0)
+  const [mentionDismissedRange, setMentionDismissedRange] = useState<{
+    start: number
+    end: number
+  } | null>(null)
+  const pendingCursorRef = useRef<number | null>(null)
+
+  const mentionTrigger = useMemo(
+    () => detectMentionTrigger(value, cursor),
+    [value, cursor],
+  )
+  const mentionPickerOpen =
+    mentionTrigger.open &&
+    projectContextItems.length > 0 &&
+    !(
+      mentionDismissedRange !== null &&
+      mentionDismissedRange.start === mentionTrigger.range.start
+    )
+  const mentionItems = useMemo(
+    () =>
+      mentionPickerOpen
+        ? filterContextMentions(projectContextItems, mentionTrigger.query)
+        : EMPTY_PROJECT_CONTEXT_ITEMS,
+    [mentionPickerOpen, mentionTrigger, projectContextItems],
+  )
+
+  useEffect(() => {
+    setMentionHighlightedIndex(0)
+  }, [mentionPickerOpen ? mentionTrigger.query : null])
+
+  useEffect(() => {
+    if (mentionDismissedRange === null) return
+    if (!mentionTrigger.open) {
+      setMentionDismissedRange(null)
+      return
+    }
+    if (mentionTrigger.range.start !== mentionDismissedRange.start) {
+      setMentionDismissedRange(null)
+    }
+  }, [mentionDismissedRange, mentionTrigger])
 
   useEffect(() => {
     if (!activeSessionId) return
     void loadProjectContextForSession(activeSessionId)
   }, [activeSessionId, loadProjectContextForSession])
+
+  useEffect(() => {
+    void loadProjectContextForProject(projectId)
+  }, [projectId, loadProjectContextForProject])
+
+  useEffect(() => {
+    if (pendingCursorRef.current === null) return
+    const next = pendingCursorRef.current
+    pendingCursorRef.current = null
+    const node = textareaRef.current
+    if (!node) return
+    node.focus()
+    node.setSelectionRange(next, next)
+    setCursor(next)
+  }, [value])
+
+  const handleMentionSelect = useCallback(
+    (item: ProjectContextItem) => {
+      if (!mentionTrigger.open) return
+      const result = applyMentionExpansion(
+        value,
+        mentionTrigger.range,
+        item.body,
+      )
+      pendingCursorRef.current = result.cursor
+      setValue(result.text)
+    },
+    [mentionTrigger, value],
+  )
+
+  const handleMentionDismiss = useCallback(() => {
+    if (!mentionTrigger.open) return
+    setMentionDismissedRange({ ...mentionTrigger.range })
+  }, [mentionTrigger])
 
   const appSettings = useAppSettingsStore((s) => s.settings)
   const storedDefaults = useMemo(
@@ -512,6 +602,14 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
         deliveryModes={midRunPolicy.availableModes}
         onDeliveryModeChange={setDeliveryMode}
         everyTurnContextCount={everyTurnContextCount}
+        textareaRef={textareaRef}
+        mentionPickerOpen={mentionPickerOpen}
+        mentionItems={mentionItems}
+        mentionHighlightedIndex={mentionHighlightedIndex}
+        onMentionSelect={handleMentionSelect}
+        onMentionHover={setMentionHighlightedIndex}
+        onMentionDismiss={handleMentionDismiss}
+        onSelectionChange={setCursor}
         selectionDisabled={canContinueActiveSession}
         placeholder={
           activeSession?.attention === 'needs-input'

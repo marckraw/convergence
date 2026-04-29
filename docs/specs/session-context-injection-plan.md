@@ -365,6 +365,7 @@ the block in both user messages in the transcript and in provider input.
 **C7 verification (2026-04-30)**: all four gates green. Pure 1038
 (four new every-turn cases on top of C6's four boot cases); unit 361;
 chaperone 0 errors / 332 files. Notes:
+
 - Tests use explicit `deliveryMode: 'normal'` so they run against the
   test provider's `NO_MID_RUN_INPUT_CAPABILITY` without falling
   through `resolveDeliveryMode`. The actual provider adapters
@@ -383,33 +384,51 @@ chaperone 0 errors / 332 files. Notes:
 Goal: user can type `::name` in the composer to inline-expand a context
 item body into the current message.
 
-- [ ] Extend `src/features/composer/composer.container.tsx` to:
-  - run `detectMentionTrigger` on textarea value + selection on input and
-    keyup.
-  - own `mentionPickerOpen` and `mentionQuery` state.
-  - own `mentionItems` derived from
-    `useProjectContextStore` filtered via `filterContextMentions`.
-  - on accept, call `applyMentionExpansion` and update both the textarea
-    value and the cursor.
-  - keep skill-picker state independent; both pickers can never be open
-    simultaneously (skills triggered by `/`, mentions by `::`, but
-    guard against overlap).
-- [ ] Create `src/features/composer/composer-context-mention.presentational.tsx` —
-      shadcn `Popover` anchored to the textarea, listing items with label + body preview, keyboard navigable.
-- [ ] Extend `composer.container.test.tsx`:
-  - typing `::` opens the picker
-  - arrow + Enter inserts the body and advances cursor
-  - Escape closes without inserting
-  - mid-word `::` does NOT open the picker
-  - skill picker (`/`) still works independently
-- [ ] Update the composer placeholder to mention `::` as an additional
-      trigger (currently it says "@tag files/folders, or use / to show
-      available commands"; add ", :: to insert project context").
+- [x] Extend `src/features/composer/composer.container.tsx` to:
+  - run `detectMentionTrigger` on the latest `value`/`cursor` (cursor
+    is fed from textarea `onChange`/`onKeyUp`/`onClick`).
+  - own `mentionHighlightedIndex` and a `mentionDismissedRange` flag
+    that drives Escape handling and auto-clears when the trigger range
+    or open state changes.
+  - derive `mentionItems` from
+    `useProjectContextStore.itemsByProjectId[projectId]` filtered via
+    `filterContextMentions`.
+  - on accept, call `applyMentionExpansion` and queue a cursor restore
+    via `pendingCursorRef`, applied in a `useEffect` after the value
+    re-renders.
+  - skill-picker state stays independent; the two pickers' triggers
+    (`/` for skills, `::` for context) are disjoint by design.
+- [x] Create `src/features/composer/composer-context-mention.presentational.tsx` —
+      lightweight absolutely-positioned dropdown anchored above the
+      textarea, listing items with label + body preview and
+      `aria-selected` highlighting. Built without Radix Popover so the
+      list anchors to the composer container without extra plumbing.
+- [x] Add `src/features/composer/composer-context-mention.container.test.tsx`
+      (7 cases): picker opens for `::`, filters by query, click insert,
+      Enter insert, Escape close + reopen, mid-word `::` ignored, `:::`
+      ignored.
+- [x] Update the composer default placeholder to mention `::`
+      ("Ask anything, @tag files/folders, / for commands, :: for
+      project context...").
 
 **Verification**: all four gates pass. Manual: type `::mon` → see picker
 list filtered to items whose label starts with `mon`, Enter → body
 inlined at cursor → Submit → provider receives the expanded plain text.
 Verify transcript stores the expanded text, no `::` token persists.
+
+**C8 verification (2026-04-30)**: all four gates green. Pure 1038
+unchanged (no new pure cases — C1 already covered detection, expansion,
+and filtering). Unit 368 (7 new mention container cases on top of C7).
+Chaperone clean across 334 files. Notes:
+- The picker is a plain absolutely-positioned `<div>` rather than a
+  Radix Popover. Reason: shared `popover.tsx` doesn't expose
+  `Popover.Anchor`, and adding it just for this list was more
+  complexity than the v1 mention UX needs. Upgrading to Tiptap or a
+  Radix-anchored variant remains the natural future path the spec
+  flagged.
+- The "skill picker (`/`) still works independently" bullet is
+  exercised by the existing 5 composer tests, which all stayed green
+  after the C7+C8 changes.
 
 ### Final checkpoint after C8
 
