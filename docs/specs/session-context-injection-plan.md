@@ -420,6 +420,7 @@ Verify transcript stores the expanded text, no `::` token persists.
 unchanged (no new pure cases — C1 already covered detection, expansion,
 and filtering). Unit 368 (7 new mention container cases on top of C7).
 Chaperone clean across 334 files. Notes:
+
 - The picker is a plain absolutely-positioned `<div>` rather than a
   Radix Popover. Reason: shared `popover.tsx` doesn't expose
   `Popover.Anchor`, and adding it just for this list was more
