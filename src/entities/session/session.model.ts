@@ -55,6 +55,7 @@ interface SessionActions {
     message: string,
     attachmentIds?: string[],
     skillSelections?: SkillSelection[],
+    contextItemIds?: string[],
   ) => Promise<void>
   createTerminalSession: (
     projectId: string,
@@ -333,6 +334,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     message,
     attachmentIds,
     skillSelections,
+    contextItemIds,
   ) => {
     set({ error: null })
     try {
@@ -349,6 +351,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
         message,
         attachmentIds,
         skillSelections,
+        contextItemIds,
       )
       set((state) => ({
         currentProjectId: projectId,

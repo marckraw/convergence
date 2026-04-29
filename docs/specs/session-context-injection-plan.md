@@ -227,7 +227,7 @@ settings. First user-visible surface.
 
 - [x] Create `src/features/project-context-settings/`:
   - `project-context-list.container.tsx` — owns load + delete + open-edit
-    + form-state flows; reads from `useProjectContextStore`.
+    - form-state flows; reads from `useProjectContextStore`.
   - `project-context-list.presentational.tsx` — renders the list with
     label, body preview, reinject badge, edit + delete actions, and an
     inline delete-confirm row.
@@ -264,32 +264,50 @@ with a module-level constant.
 Goal: user can attach context items at session create; the agent sees them
 in the first message. End-to-end boot path lit up.
 
-- [ ] Extend `src/features/session-start/session-start.container.tsx` and
-      `src/features/session-create-inline/session-create-inline.container.tsx`
-      with multi-select context picker bound to `loadForProject`. Picker is
+- [x] Extend `src/features/session-start/session-start.container.tsx` with a
+      multi-select context picker bound to `loadForProject`. Picker is
       hidden when the project has zero items (per locked decision #3).
-- [ ] Extend `createAndStartSession` (renderer
+      `session-create-inline` is just a button that opens the
+      session-intent dialog (no form), so no change is needed there.
+- [x] Extend `createAndStartSession` (renderer
       `src/entities/session/session.model.ts`) and the `session.api.ts`
       `start` method to accept `contextItemIds: string[]` and forward via
-      IPC.
-- [ ] Extend backend `SessionService.start(id, input)` to:
-  - persist attachments via `ProjectContextService.attachToSession`.
-  - resolve project name → slug.
-  - call `serializeBootBlock` with attached items.
-  - if a block was produced, emit a sequence-0 `note` `ConversationItem`
+      IPC. The `SendSessionMessageInput` type in
+      `src/shared/types/electron-api.d.ts` and the backend
+      `SendMessageInput` are extended to carry the field.
+- [x] Extend backend `SessionService.start(id, input)` to:
+  - persist attachments via `ProjectContextService.attachToSession` when
+    `contextItemIds` is provided.
+  - resolve project name → slug via `projectNameToSlug`.
+  - call `serializeBootBlock` with attached items (boot + every-turn).
+  - if a block was produced, emit a sequence-1 `note` `ConversationItem`
     with the block text **before** sending to the provider.
   - prepend the block to `input.text` before passing to `startHandle`.
-- [ ] Extend `session.service.test.ts` covering: start with no context
-      items unchanged, start with boot items emits note + block prepended,
+- [x] Extend `session.service.test.ts` covering: start with no context
+      items unchanged, start with boot items emits note + block prepended
+      to the user message, attachments persist via `listForSession`,
       project name with special characters slugifies correctly.
-- [ ] Boot preview in the session-start form: small "Context will be
-      injected" hint with collapsible preview rendered via the same pure
-      serializer.
+- [x] Session-start form shows a chip-style multi-select strip when context
+      items exist for the project, plus a one-line "N items will be
+      injected" summary when items are selected. Full collapsible preview
+      via the pure serializer is deferred — not v1 essential.
 
 **Verification**: all four gates pass. Manual end-to-end: create context
 item, create session attaching it, observe the `<slug:context>` block in
 the transcript at sequence 0 and the agent referencing it in its first
 response.
+
+**C6 verification (2026-04-30)**: all four gates green. Pure 1034 (4
+new session-service tests); unit 361; chaperone 0 errors across 332
+files. Notes:
+- Picker UI uses chip-style toggles via shadcn `<Button>` per the
+  chaperone `no-raw-button-in-presentational-outside-shared` rule
+  (caught a raw `<button>` on first pass).
+- The boot note lands at sequence 1 (the first written sequence in this
+  app's model is 1, not 0). Spec uses "sequence 0" colloquially; the
+  ordering invariant — note before user message — holds either way.
+- Collapsible preview deferred. Strip + count summary covers the
+  "context will be injected" affordance for v1.
 
 ### Checkpoint after C6
 

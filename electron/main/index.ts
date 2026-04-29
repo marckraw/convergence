@@ -172,6 +172,7 @@ async function startApp(): Promise<void> {
     platform: process.platform,
   })
   sessionService.setAttachmentsService(attachmentsService)
+  sessionService.setProjectContextService(projectContextService)
   const turnCaptureService = new TurnCaptureService(gitService, db)
   turnCaptureService.recoverRunningTurns()
   sessionService.setTurnCaptureService(turnCaptureService)

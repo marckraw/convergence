@@ -20,6 +20,7 @@ import type {
 } from '../provider/provider.types'
 import type { ProviderAttachmentCapability } from '../provider/provider.types'
 import { AttachmentsService } from '../attachments/attachments.service'
+import { ProjectContextService } from '../project-context/project-context.service'
 import type { SessionDelta } from './conversation-item.types'
 import { SessionService } from './session.service'
 
@@ -1832,5 +1833,175 @@ describe('SessionService — turn capture wiring', () => {
     const turns = capture.listTurns('rec1')
     expect(turns[0].status).toBe('errored')
     expect(turns[0].endedAt).not.toBeNull()
+  })
+})
+
+describe('SessionService project-context boot injection', () => {
+  let service: SessionService
+  let projectContext: ProjectContextService
+  let tempDir: string
+  let projectId: string
+
+  beforeEach(() => {
+    vi.useFakeTimers()
+    const db = getDatabase()
+    const registry = new ProviderRegistry()
+    registry.register(createTestProvider())
+
+    service = new SessionService(db, registry)
+    projectContext = new ProjectContextService(db)
+    service.setProjectContextService(projectContext)
+
+    tempDir = mkdtempSync(join(tmpdir(), 'convergence-ctx-test-'))
+    projectId = 'ctx-test-project'
+    const repoPath = join(tempDir, 'repo')
+    mkdirSync(repoPath, { recursive: true })
+    mkdirSync(join(repoPath, '.git'), { recursive: true })
+    db.prepare(
+      'INSERT INTO projects (id, name, repository_path) VALUES (?, ?, ?)',
+    ).run(projectId, 'Convergence Demo', repoPath)
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+    closeDatabase()
+    resetDatabase()
+    rmSync(tempDir, { recursive: true, force: true })
+  })
+
+  it('does not insert a note or alter the message when no items are attached', async () => {
+    const session = service.create({
+      projectId,
+      workspaceId: null,
+      providerId: 'test-provider',
+      model: null,
+      effort: null,
+      name: 'no-context',
+    })
+
+    await service.start(session.id, { text: 'hello agent' })
+    await vi.advanceTimersByTimeAsync(50)
+
+    const items = service.getConversation(session.id)
+    expect(items.some((item) => item.kind === 'note')).toBe(false)
+    const userMessage = items.find(
+      (item) => item.kind === 'message' && item.actor === 'user',
+    )
+    expect(userMessage).toBeDefined()
+    if (userMessage && userMessage.kind === 'message') {
+      expect(userMessage.text).toBe('hello agent')
+    }
+  })
+
+  it('emits a sequence-1 note and prepends the block when boot items are attached', async () => {
+    const item = projectContext.create({
+      projectId,
+      label: 'monorepo',
+      body: 'See ~/work/monorepo',
+      reinjectMode: 'boot',
+    })
+
+    const session = service.create({
+      projectId,
+      workspaceId: null,
+      providerId: 'test-provider',
+      model: null,
+      effort: null,
+      name: 'with-context',
+    })
+
+    await service.start(session.id, {
+      text: 'hello agent',
+      contextItemIds: [item.id],
+    })
+    await vi.advanceTimersByTimeAsync(50)
+
+    const items = service.getConversation(session.id)
+    const note = items.find((entry) => entry.kind === 'note')
+    expect(note).toBeDefined()
+    if (note && note.kind === 'note') {
+      expect(note.level).toBe('info')
+      expect(note.text).toContain('<convergence-demo:context>')
+      expect(note.text).toContain('monorepo')
+      expect(note.text).toContain('See ~/work/monorepo')
+    }
+
+    const userMessage = items.find(
+      (entry) => entry.kind === 'message' && entry.actor === 'user',
+    )
+    expect(userMessage).toBeDefined()
+    if (userMessage && userMessage.kind === 'message') {
+      expect(userMessage.text.startsWith('<convergence-demo:context>')).toBe(
+        true,
+      )
+      expect(userMessage.text.endsWith('hello agent')).toBe(true)
+    }
+
+    expect(note?.sequence).toBeLessThan(userMessage?.sequence ?? Infinity)
+  })
+
+  it('persists the attachments so listForSession returns them after start', async () => {
+    const item = projectContext.create({
+      projectId,
+      body: 'persist me',
+      reinjectMode: 'boot',
+    })
+
+    const session = service.create({
+      projectId,
+      workspaceId: null,
+      providerId: 'test-provider',
+      model: null,
+      effort: null,
+      name: 'persists',
+    })
+
+    await service.start(session.id, {
+      text: 'go',
+      contextItemIds: [item.id],
+    })
+    await vi.advanceTimersByTimeAsync(50)
+
+    const attached = projectContext.listForSession(session.id)
+    expect(attached.map((entry) => entry.id)).toEqual([item.id])
+  })
+
+  it('slugifies project names with special characters in the wrapper tag', async () => {
+    const db = getDatabase()
+    db.prepare('UPDATE projects SET name = ? WHERE id = ?').run(
+      'My Awesome Repo!! ✨',
+      projectId,
+    )
+    const item = projectContext.create({
+      projectId,
+      label: 'a',
+      body: 'a',
+      reinjectMode: 'boot',
+    })
+
+    const session = service.create({
+      projectId,
+      workspaceId: null,
+      providerId: 'test-provider',
+      model: null,
+      effort: null,
+      name: 'slug-test',
+    })
+
+    await service.start(session.id, {
+      text: 'msg',
+      contextItemIds: [item.id],
+    })
+    await vi.advanceTimersByTimeAsync(50)
+
+    const note = service
+      .getConversation(session.id)
+      .find((entry) => entry.kind === 'note')
+    if (note && note.kind === 'note') {
+      expect(note.text).toMatch(/^<my-awesome-repo:context>/)
+      expect(note.text).toMatch(/<\/my-awesome-repo:context>$/m)
+    } else {
+      throw new Error('expected boot context note')
+    }
   })
 })

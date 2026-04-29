@@ -312,6 +312,7 @@ interface SendSessionMessageInput {
   attachmentIds?: string[]
   skillSelections?: SkillSelection[]
   deliveryMode?: MidRunInputMode
+  contextItemIds?: string[]
 }
 
 type ConversationItemKind =

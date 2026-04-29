@@ -41,6 +41,10 @@ import {
 } from './conversation-item.pure'
 import type { TurnCaptureService } from './turn/turn-capture.service'
 import type { TurnDelta } from './turn/turn-capture.service'
+import type { ProjectContextService } from '../project-context/project-context.service'
+import { projectContextItemToSerializable } from '../project-context/project-context.types'
+import { serializeBootBlock } from '../project-context/project-context-serializer.pure'
+import { projectNameToSlug } from '../project-context/project-slug.pure'
 
 type UserMessageDraft = Extract<
   ConversationItem,
@@ -53,6 +57,12 @@ export interface SendMessageInput {
   attachmentIds?: string[]
   skillSelections?: SkillSelection[]
   deliveryMode?: MidRunInputMode
+  /**
+   * Only consumed by `start`. Replaces the session's attached project context
+   * items before computing the boot-injected block. Pass an empty array to
+   * clear; omit to leave existing attachments unchanged.
+   */
+  contextItemIds?: string[]
 }
 
 export interface SessionNamer {
@@ -85,6 +95,7 @@ export class SessionService {
   private namer: SessionNamer | null = null
   private attentionObserver: SessionAttentionObserver | null = null
   private turnCapture: TurnCaptureService | null = null
+  private projectContext: ProjectContextService | null = null
 
   constructor(
     private db: Database.Database,
@@ -105,6 +116,10 @@ export class SessionService {
     listener: (sessionId: string, delta: TurnDelta) => void,
   ): void {
     this.onTurnDelta = listener
+  }
+
+  setProjectContextService(service: ProjectContextService): void {
+    this.projectContext = service
   }
 
   setAttachmentsService(service: AttachmentsService): void {
@@ -380,14 +395,77 @@ export class SessionService {
 
     await this.rebindDraftAttachments(id, input.attachmentIds)
     const attachments = this.resolveAttachments(input.attachmentIds)
+
+    if (input.contextItemIds !== undefined && this.projectContext) {
+      this.projectContext.attachToSession(id, input.contextItemIds)
+    }
+
+    const initialMessage = this.injectBootContextBlock(session, input.text)
+
     this.startHandle(
       session,
-      input.text,
+      initialMessage,
       this.getContinuationToken(id),
       attachments,
       input.attachmentIds,
       input.skillSelections,
     )
+  }
+
+  private injectBootContextBlock(
+    session: Session,
+    originalText: string,
+  ): string {
+    if (!this.projectContext) return originalText
+    const items = this.projectContext.listForSession(session.id)
+    if (items.length === 0) return originalText
+
+    const slug = this.resolveProjectSlugForSession(session)
+    const result = serializeBootBlock({
+      slug,
+      items: items.map(projectContextItemToSerializable),
+      originalText,
+    })
+
+    if (result.note !== null) {
+      this.recordBootContextNote(session.id, result.note)
+    }
+    return result.augmentedText
+  }
+
+  private resolveProjectSlugForSession(session: Session): string {
+    const row = this.db
+      .prepare('SELECT name FROM projects WHERE id = ?')
+      .get(session.projectId) as { name: string } | undefined
+    return projectNameToSlug(row?.name ?? '')
+  }
+
+  private recordBootContextNote(sessionId: string, body: string): void {
+    const id = randomUUID()
+    const timestamp = new Date().toISOString()
+    const draft: ConversationItemDraft = {
+      id,
+      kind: 'note',
+      level: 'info',
+      text: body,
+      state: 'complete',
+      turnId: null,
+      createdAt: timestamp,
+      updatedAt: timestamp,
+      providerMeta: {
+        providerId: 'convergence',
+        providerItemId: null,
+        providerEventType: 'context.boot',
+      },
+    }
+    const item = this.addConversationItem(sessionId, draft)
+    if (item) {
+      this.notifySessionChange(sessionId, {
+        sessionId,
+        op: 'add',
+        item,
+      })
+    }
   }
 
   async sendMessage(id: string, input: SendMessageInput): Promise<void> {
