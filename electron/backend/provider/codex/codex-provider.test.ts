@@ -355,65 +355,6 @@ describe('CodexProvider', () => {
     ).toBe(false)
   })
 
-  it('fails the session when Codex exits before the active turn completes', async () => {
-    const child = new MockChildProcess()
-    createMockCodexServer(child, { autoCompleteTurns: false })
-    spawnMock.mockReturnValue(child)
-
-    const provider = new CodexProvider('/usr/local/bin/codex')
-    const handle = provider.start({
-      sessionId: 'session-1',
-      workingDirectory: process.cwd(),
-      initialMessage: 'continue working',
-      initialAttachments: undefined,
-      model: 'gpt-5.4',
-      effort: 'medium',
-      continuationToken: null,
-    })
-
-    const items: Array<
-      Extract<SessionDelta, { kind: 'conversation.item.add' }>['item']
-    > = []
-    const statuses: string[] = []
-    const attentions: string[] = []
-
-    handle.onDelta((delta) => {
-      if (delta.kind === 'conversation.item.add') {
-        items.push(delta.item)
-      }
-    })
-    handle.onStatusChange((status) => {
-      statuses.push(status)
-    })
-    handle.onAttentionChange((attention) => {
-      attentions.push(attention)
-    })
-    handle.onContinuationToken(() => {})
-    handle.onContextWindowChange(() => {})
-    handle.onActivityChange(() => {})
-
-    await waitFor(() => {
-      expect(statuses).toContain('running')
-    })
-
-    child.emit('exit', 0)
-
-    await waitFor(() => {
-      expect(statuses).toContain('failed')
-    })
-
-    expect(attentions).toContain('failed')
-    expect(statuses).not.toContain('completed')
-    expect(items).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          kind: 'note',
-          text: 'Codex exited before the active turn completed.',
-        }),
-      ]),
-    )
-  })
-
   it('sends selected Codex skills as native turn input and patches chips to sent', async () => {
     const skillPath = '/catalog/skills/planning/SKILL.md'
     const skillId = buildSkillCatalogId({

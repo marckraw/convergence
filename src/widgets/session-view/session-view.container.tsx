@@ -93,17 +93,6 @@ export const SessionView: FC = () => {
   const changedFilesExpanded = changedFilesMode === 'overlay'
 
   const session = sessions.find((s) => s.id === activeSessionId) ?? null
-  const latestActionableApprovalIndex = useMemo(() => {
-    if (!session || session.attention !== 'needs-approval') return -1
-
-    for (let i = activeConversation.length - 1; i >= 0; i -= 1) {
-      if (activeConversation[i]?.kind === 'approval-request') {
-        return i
-      }
-    }
-
-    return -1
-  }, [activeConversation, session])
   const activityLabel = formatActivityLabel(session?.activity)
   const linkedSessionAttempts = session
     ? (attemptsBySessionId[session.id] ?? [])
@@ -493,7 +482,10 @@ export const SessionView: FC = () => {
         <div className="app-scrollbar flex-1 overflow-y-auto px-4">
           <div className="mx-auto max-w-2xl py-4">
             {activeConversation.map((entry, i) => {
-              const isLastApproval = i === latestActionableApprovalIndex
+              const isLastApproval =
+                entry.kind === 'approval-request' &&
+                session.attention === 'needs-approval' &&
+                i === activeConversation.length - 1
               const prev = activeConversation[i - 1] ?? null
               const turnBoundary =
                 entry.turnId !== null &&
