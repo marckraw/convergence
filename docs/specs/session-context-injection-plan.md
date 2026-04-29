@@ -111,18 +111,29 @@ exist and are 100% covered.
 Goal: the database can store context items and session attachments. No
 service code yet.
 
-- [ ] New migration in `electron/backend/database/migrations/` adding
-      `project_context_items` and `session_context_attachments` tables per
-      the spec. Both have `ON DELETE CASCADE` on their parent FKs.
-- [ ] Extend `electron/backend/database/database.types.ts` with
+- [x] Add `project_context_items` and `session_context_attachments` tables
+      to the `SCHEMA` block in `electron/backend/database/database.ts` as
+      `CREATE TABLE IF NOT EXISTS ...`. (Note: this repo does not use a
+      `migrations/` subdirectory — schema lives inline in `database.ts`
+      and per-column upgrades go through `ensure*` helpers. The plan
+      originally said `migrations/`; corrected during C2.) Both tables
+      have `ON DELETE CASCADE` on their parent FKs.
+- [x] Extend `electron/backend/database/database.types.ts` with
       `ProjectContextItemRow` and `SessionContextAttachmentRow`.
-- [ ] Migration test (or verification step in
-      `database.service.test.ts`) confirming the tables are created on
-      fresh install and existing DBs migrate without data loss.
+- [x] Test in `database.test.ts` confirming both new tables are present
+      on a freshly initialised database, with the expected columns and
+      FK behaviour.
 
 **Verification**: all four gates pass. Manual smoke: launch the app, open
 the SQLite file, confirm both new tables exist and existing sessions are
 unmodified.
+
+**C2 verification (2026-04-29)**: all four gates green. New schema
+includes a `sort_order` column on `session_context_attachments` so
+attachment order can be preserved in C3 — composite PK is
+`(session_id, context_item_id)`, list ordering happens via
+`ORDER BY sort_order`. Five new tests cover columns, FKs, CHECK
+constraint, and cascade behaviour both ways.
 
 ---
 

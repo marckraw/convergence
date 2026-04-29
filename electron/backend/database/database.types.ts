@@ -128,3 +128,19 @@ export interface InitiativeOutputRow {
   created_at: string
   updated_at: string
 }
+
+export interface ProjectContextItemRow {
+  id: string
+  project_id: string
+  label: string | null
+  body: string
+  reinject_mode: string
+  created_at: string
+  updated_at: string
+}
+
+export interface SessionContextAttachmentRow {
+  session_id: string
+  context_item_id: string
+  sort_order: number
+}
