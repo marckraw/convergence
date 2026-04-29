@@ -43,7 +43,10 @@ import type { TurnCaptureService } from './turn/turn-capture.service'
 import type { TurnDelta } from './turn/turn-capture.service'
 import type { ProjectContextService } from '../project-context/project-context.service'
 import { projectContextItemToSerializable } from '../project-context/project-context.types'
-import { serializeBootBlock } from '../project-context/project-context-serializer.pure'
+import {
+  serializeBootBlock,
+  serializeEveryTurnBlock,
+} from '../project-context/project-context-serializer.pure'
 import { projectNameToSlug } from '../project-context/project-slug.pure'
 
 type UserMessageDraft = Extract<
@@ -433,6 +436,21 @@ export class SessionService {
     return result.augmentedText
   }
 
+  private injectEveryTurnContextBlock(
+    session: Session,
+    originalText: string,
+  ): string {
+    if (!this.projectContext) return originalText
+    const items = this.projectContext.listForSession(session.id)
+    if (items.length === 0) return originalText
+    const slug = this.resolveProjectSlugForSession(session)
+    return serializeEveryTurnBlock({
+      slug,
+      items: items.map(projectContextItemToSerializable),
+      originalText,
+    })
+  }
+
   private resolveProjectSlugForSession(session: Session): string {
     const row = this.db
       .prepare('SELECT name FROM projects WHERE id = ?')
@@ -528,9 +546,13 @@ export class SessionService {
     }
 
     if (provider.supportsContinuation && continuationToken) {
-      this.startHandle(
+      const augmentedText = this.injectEveryTurnContextBlock(
         session,
         input.text,
+      )
+      this.startHandle(
+        session,
+        augmentedText,
         continuationToken,
         attachments,
         input.attachmentIds,
@@ -594,8 +616,13 @@ export class SessionService {
       )
     }
 
-    handle.sendMessage(
+    const augmentedText = this.injectEveryTurnContextBlock(
+      session,
       input.input.text,
+    )
+
+    handle.sendMessage(
+      augmentedText,
       attachments,
       input.input.skillSelections,
       {
@@ -1136,10 +1163,12 @@ export class SessionService {
       const attachments = this.resolveAttachments(item.attachmentIds)
       const handle = this.activeHandles.get(sessionId)
 
+      const augmentedText = this.injectEveryTurnContextBlock(session, item.text)
+
       if (handle) {
         this.pendingUserAttachmentIds.set(sessionId, item.attachmentIds)
         this.pendingUserSkillSelections.set(sessionId, item.skillSelections)
-        handle.sendMessage(item.text, attachments, item.skillSelections, {
+        handle.sendMessage(augmentedText, attachments, item.skillSelections, {
           deliveryMode: 'normal',
           queuedInputId: item.id,
         })
@@ -1155,7 +1184,7 @@ export class SessionService {
 
       this.startHandle(
         session,
-        item.text,
+        augmentedText,
         continuationToken,
         attachments,
         item.attachmentIds,

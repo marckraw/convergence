@@ -10,7 +10,7 @@ import type { SkillCatalogEntry, SkillSelection } from '@/entities/skill'
 import { Button } from '@/shared/ui/button'
 import { Textarea } from '@/shared/ui/textarea'
 import { cn } from '@/shared/lib/cn.pure'
-import { ArrowUp, Paperclip } from 'lucide-react'
+import { ArrowUp, Paperclip, Repeat } from 'lucide-react'
 import { ComposerSelect } from './composer-select.presentational'
 import { SkillPicker } from './skill-picker.presentational'
 import { SkillSelectionChip } from './skill-selection-chip.presentational'
@@ -54,6 +54,7 @@ interface ComposerProps {
   onDragOver: (e: DragEvent<HTMLDivElement>) => void
   onDrop: (e: DragEvent<HTMLDivElement>) => void
   onPaste: (e: ClipboardEvent<HTMLTextAreaElement>) => void
+  everyTurnContextCount?: number
 }
 
 export const Composer: FC<ComposerProps> = ({
@@ -95,6 +96,7 @@ export const Composer: FC<ComposerProps> = ({
   onDragOver,
   onDrop,
   onPaste,
+  everyTurnContextCount = 0,
 }) => {
   const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
@@ -180,6 +182,19 @@ export const Composer: FC<ComposerProps> = ({
                 onRemove={onSkillRemove}
               />
             ))}
+          </div>
+        ) : null}
+        {everyTurnContextCount > 0 ? (
+          <div
+            className="mb-2 inline-flex items-center gap-1 rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-[11px] font-medium text-amber-700 dark:text-amber-200"
+            data-testid="every-turn-context-badge"
+            title="Every-turn project context items are re-sent on every message in this session."
+          >
+            <Repeat className="h-3 w-3" />
+            <span>
+              Every-turn context active · {everyTurnContextCount} item
+              {everyTurnContextCount === 1 ? '' : 's'}
+            </span>
           </div>
         ) : null}
         <Textarea

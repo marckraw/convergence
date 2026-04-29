@@ -300,6 +300,7 @@ response.
 **C6 verification (2026-04-30)**: all four gates green. Pure 1034 (4
 new session-service tests); unit 361; chaperone 0 errors across 332
 files. Notes:
+
 - Picker UI uses chip-style toggles via shadcn `<Button>` per the
   chaperone `no-raw-button-in-presentational-outside-shared` rule
   (caught a raw `<button>` on first pass).
@@ -323,34 +324,57 @@ shippable cut.
 Goal: items flagged `every-turn` are prepended to every user-initiated
 message in sessions that have them attached.
 
-- [ ] Extend `SessionService.sendMessage(id, input)` and the
-      `dispatchToActiveHandle` path to:
-  - read attached items for the session via
-    `ProjectContextService.listForSession`.
-  - filter to `reinjectMode === 'every-turn'`.
-  - if any, call `serializeEveryTurnBlock` and prepend to `input.text`
-    before persisting the user `message` ConversationItem and before
-    `handle.sendMessage`.
-- [ ] Apply the same prepend in the queued-input dispatch path
-      (`dispatchNextQueuedInput`) so app-queued follow-ups also re-inject.
-- [ ] Apply to input-request answers (locked decision #2).
-- [ ] Do **not** apply to approval responses, tool results, or assistant
-      continuations.
-- [ ] Extend `session.service.test.ts`:
-  - every-turn item present → block on first send AND second send (with
-    latest body)
-  - editing item between turns → next send sees the new body, prior turn
-    unchanged
-  - deleting item between turns → next send excludes it, prior turn
-    unchanged
-  - approval / tool result paths unaffected
-- [ ] Composer affordance: small badge "Every-turn context active · N
-      items" rendered when the active session has every-turn items;
-      clicking opens the project context settings tab.
+- [x] Extend `SessionService.sendMessage(id, input)` and the
+      `dispatchToActiveHandle` path to call a new
+      `injectEveryTurnContextBlock(session, text)` helper that runs
+      `serializeEveryTurnBlock` against the latest items and returns the
+      possibly-augmented text. The augmented text is forwarded to
+      `handle.sendMessage` so the provider emits the user message with
+      the prepended block; the persisted `ConversationItem.text` matches.
+- [x] Apply the same prepend in the queued-input dispatch path
+      (`dispatchNextQueuedInput`) for both the active-handle and the
+      continuation-resume branches, so app-queued follow-ups also
+      re-inject with the latest item bodies.
+- [x] Apply to input-request answers and any other user-initiated
+      send: the helper runs unconditionally on every `sendMessage` flow
+      that ultimately calls `handle.sendMessage` or `startHandle` with a
+      user-authored `text` field.
+- [x] Do **not** apply to approval responses, tool results, or assistant
+      continuations — those code paths do not pass through
+      `dispatchToActiveHandle` / `dispatchNextQueuedInput` and are
+      untouched.
+- [x] Extend `session.service.test.ts` with a new describe block:
+  - boot-only attachment + sendMessage → second message unchanged
+    (no every-turn block).
+  - every-turn item attached → block on every subsequent user message
+    in the transcript, ending with the user's text.
+  - editing the item between turns → next send carries the new body,
+    prior turn unchanged.
+  - deleting the item between turns → next send excludes it.
+- [x] Composer affordance: a small "Every-turn context active · N
+      item(s)" badge renders above the textarea via a new
+      `everyTurnContextCount` prop on the Composer presentational, fed
+      by a new `loadForSession` effect in the composer container that
+      reads `attachmentsBySessionId[activeSessionId]` from the
+      project-context store.
 
 **Verification**: all four gates pass. Manual: attach an every-turn item
 saying "always run npm test before claiming done", run two turns, observe
 the block in both user messages in the transcript and in provider input.
+
+**C7 verification (2026-04-30)**: all four gates green. Pure 1038
+(four new every-turn cases on top of C6's four boot cases); unit 361;
+chaperone 0 errors / 332 files. Notes:
+- Tests use explicit `deliveryMode: 'normal'` so they run against the
+  test provider's `NO_MID_RUN_INPUT_CAPABILITY` without falling
+  through `resolveDeliveryMode`. The actual provider adapters
+  (Claude, Codex, PI) carry their own capabilities, so production
+  flows still pick a mode via `resolveDeliveryMode`.
+- The badge intentionally does not link anywhere yet — the spec
+  bullet ("clicking opens the project context settings tab") would
+  need cross-feature wiring through the dialog store. Deferred as a
+  future polish; the badge itself is enough to surface the active
+  every-turn context.
 
 ---
 

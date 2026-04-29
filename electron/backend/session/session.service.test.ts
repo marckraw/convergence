@@ -2005,3 +2005,168 @@ describe('SessionService project-context boot injection', () => {
     }
   })
 })
+
+describe('SessionService project-context every-turn re-injection', () => {
+  let service: SessionService
+  let projectContext: ProjectContextService
+  let tempDir: string
+  let projectId: string
+
+  beforeEach(() => {
+    vi.useFakeTimers()
+    const db = getDatabase()
+    const registry = new ProviderRegistry()
+    registry.register(createTestProvider())
+
+    service = new SessionService(db, registry)
+    projectContext = new ProjectContextService(db)
+    service.setProjectContextService(projectContext)
+
+    tempDir = mkdtempSync(join(tmpdir(), 'convergence-every-turn-test-'))
+    projectId = 'every-turn-project'
+    const repoPath = join(tempDir, 'repo')
+    mkdirSync(repoPath, { recursive: true })
+    mkdirSync(join(repoPath, '.git'), { recursive: true })
+    db.prepare(
+      'INSERT INTO projects (id, name, repository_path) VALUES (?, ?, ?)',
+    ).run(projectId, 'Repeat Project', repoPath)
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+    closeDatabase()
+    resetDatabase()
+    rmSync(tempDir, { recursive: true, force: true })
+  })
+
+  async function createReadySession(itemIds: string[] = []) {
+    const session = service.create({
+      projectId,
+      workspaceId: null,
+      providerId: 'test-provider',
+      model: null,
+      effort: null,
+      name: 'every-turn',
+    })
+    await service.start(session.id, {
+      text: 'go',
+      contextItemIds: itemIds,
+    })
+    await vi.advanceTimersByTimeAsync(2000)
+    return session
+  }
+
+  it('does not modify subsequent sends when no every-turn items are attached', async () => {
+    const bootOnly = projectContext.create({
+      projectId,
+      body: 'boot only',
+      reinjectMode: 'boot',
+    })
+    const session = await createReadySession([bootOnly.id])
+
+    await service.sendMessage(session.id, {
+      text: 'next message',
+      deliveryMode: 'normal',
+    })
+    await vi.advanceTimersByTimeAsync(50)
+
+    const items = service.getConversation(session.id)
+    const userMessages = items.filter(
+      (entry) => entry.kind === 'message' && entry.actor === 'user',
+    )
+    expect(userMessages.length).toBeGreaterThanOrEqual(2)
+    const second = userMessages[userMessages.length - 1]
+    if (second.kind === 'message') {
+      expect(second.text).toBe('next message')
+    }
+  })
+
+  it('prepends the every-turn block to every subsequent user-initiated send', async () => {
+    const everyTurn = projectContext.create({
+      projectId,
+      label: 'lint',
+      body: 'always run npm test',
+      reinjectMode: 'every-turn',
+    })
+    const session = await createReadySession([everyTurn.id])
+
+    await service.sendMessage(session.id, {
+      text: 'first follow-up',
+      deliveryMode: 'normal',
+    })
+    await vi.advanceTimersByTimeAsync(50)
+    await service.sendMessage(session.id, {
+      text: 'second follow-up',
+      deliveryMode: 'normal',
+    })
+    await vi.advanceTimersByTimeAsync(50)
+
+    const userMessages = service
+      .getConversation(session.id)
+      .filter((entry) => entry.kind === 'message' && entry.actor === 'user')
+    expect(userMessages.length).toBeGreaterThanOrEqual(3)
+    for (let i = 1; i < userMessages.length; i += 1) {
+      const message = userMessages[i]
+      if (message.kind !== 'message') continue
+      expect(message.text.startsWith('<repeat-project:context>')).toBe(true)
+      expect(message.text).toContain('always run npm test')
+    }
+    const last = userMessages[userMessages.length - 1]
+    if (last.kind === 'message') {
+      expect(last.text.endsWith('second follow-up')).toBe(true)
+    }
+  })
+
+  it('reads the latest item body at send time after an edit', async () => {
+    const everyTurn = projectContext.create({
+      projectId,
+      label: 'lint',
+      body: 'first version',
+      reinjectMode: 'every-turn',
+    })
+    const session = await createReadySession([everyTurn.id])
+
+    projectContext.update(everyTurn.id, { body: 'second version' })
+
+    await service.sendMessage(session.id, {
+      text: 'after edit',
+      deliveryMode: 'normal',
+    })
+    await vi.advanceTimersByTimeAsync(50)
+
+    const userMessages = service
+      .getConversation(session.id)
+      .filter((entry) => entry.kind === 'message' && entry.actor === 'user')
+    const latest = userMessages[userMessages.length - 1]
+    if (latest.kind === 'message') {
+      expect(latest.text).toContain('second version')
+      expect(latest.text).not.toContain('first version')
+    }
+  })
+
+  it('omits the block on the next send when an item is detached or deleted', async () => {
+    const everyTurn = projectContext.create({
+      projectId,
+      label: 'lint',
+      body: 'always run npm test',
+      reinjectMode: 'every-turn',
+    })
+    const session = await createReadySession([everyTurn.id])
+
+    projectContext.delete(everyTurn.id)
+
+    await service.sendMessage(session.id, {
+      text: 'after delete',
+      deliveryMode: 'normal',
+    })
+    await vi.advanceTimersByTimeAsync(50)
+
+    const userMessages = service
+      .getConversation(session.id)
+      .filter((entry) => entry.kind === 'message' && entry.actor === 'user')
+    const latest = userMessages[userMessages.length - 1]
+    if (latest.kind === 'message') {
+      expect(latest.text).toBe('after delete')
+    }
+  })
+})

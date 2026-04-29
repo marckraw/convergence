@@ -22,6 +22,7 @@ import {
   type SkillCatalogEntry,
   type SkillSelection,
 } from '@/entities/skill'
+import { useProjectContextStore } from '@/entities/project-context'
 import { Composer } from './composer.presentational'
 import { validateAttachmentsAgainstCapability } from './attachment-capability.pure'
 import {
@@ -134,6 +135,23 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
   )
   const canContinueActiveSession =
     !!activeSession && !!activeProvider?.supportsContinuation
+  const attachmentsBySessionId = useProjectContextStore(
+    (s) => s.attachmentsBySessionId,
+  )
+  const loadProjectContextForSession = useProjectContextStore(
+    (s) => s.loadForSession,
+  )
+  const everyTurnContextCount = activeSessionId
+    ? (attachmentsBySessionId[activeSessionId] ?? []).filter(
+        (item) => item.reinjectMode === 'every-turn',
+      ).length
+    : 0
+
+  useEffect(() => {
+    if (!activeSessionId) return
+    void loadProjectContextForSession(activeSessionId)
+  }, [activeSessionId, loadProjectContextForSession])
+
   const appSettings = useAppSettingsStore((s) => s.settings)
   const storedDefaults = useMemo(
     () => ({
@@ -493,6 +511,7 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
         deliveryMode={deliveryMode}
         deliveryModes={midRunPolicy.availableModes}
         onDeliveryModeChange={setDeliveryMode}
+        everyTurnContextCount={everyTurnContextCount}
         selectionDisabled={canContinueActiveSession}
         placeholder={
           activeSession?.attention === 'needs-input'
