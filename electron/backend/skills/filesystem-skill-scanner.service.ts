@@ -216,7 +216,7 @@ async function discoverSkillFilesInRoot(
   const entries = await readdir(rootPath, { withFileTypes: true })
   const childSkillPaths = await Promise.all(
     entries
-      .filter((entry) => entry.isDirectory())
+      .filter((entry) => entry.isDirectory() || entry.isSymbolicLink())
       .sort((left, right) => left.name.localeCompare(right.name))
       .map((entry) => discoverSkillFileInDirectory(join(rootPath, entry.name))),
   )

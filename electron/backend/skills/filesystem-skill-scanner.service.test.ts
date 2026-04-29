@@ -1,4 +1,4 @@
-import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'fs'
+import { mkdtempSync, mkdirSync, rmSync, symlinkSync, writeFileSync } from 'fs'
 import { tmpdir } from 'os'
 import { join, resolve } from 'path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
@@ -67,6 +67,46 @@ describe('scanFilesystemSkillCatalog', () => {
         sourceLabel: 'User',
         enabled: true,
         warnings: [],
+      }),
+    ])
+  })
+
+  it('discovers skills exposed via symlinked directories', async () => {
+    const realSkillDir = join(tempDir, 'real', 'linked-skill')
+    mkdirSync(realSkillDir, { recursive: true })
+    writeFileSync(
+      join(realSkillDir, 'SKILL.md'),
+      [
+        '---',
+        'name: linked-skill',
+        'description: Reached through a symlink.',
+        '---',
+      ].join('\n'),
+    )
+
+    const skillsRoot = join(tempDir, 'skills')
+    mkdirSync(skillsRoot, { recursive: true })
+    symlinkSync(realSkillDir, join(skillsRoot, 'linked-skill'), 'dir')
+
+    const catalog = await scanFilesystemSkillCatalog({
+      providerId: 'claude-code',
+      providerName: 'Claude Code',
+      invocationSupport: 'native-command',
+      activationConfirmation: 'native-event',
+      roots: [
+        {
+          rootPath: skillsRoot,
+          rawScope: 'user',
+          kind: 'skills-dir',
+        },
+      ],
+    })
+
+    expect(catalog.skills).toEqual([
+      expect.objectContaining({
+        name: 'linked-skill',
+        description: 'Reached through a symlink.',
+        enabled: true,
       }),
     ])
   })
