@@ -28,6 +28,11 @@ import type {
   UpdateInitiativeInput,
   UpdateInitiativeOutputInput,
 } from '../backend/initiative/initiative.types'
+import type { ProjectContextService } from '../backend/project-context/project-context.service'
+import type {
+  CreateProjectContextItemInput,
+  UpdateProjectContextItemInput,
+} from '../backend/project-context/project-context.types'
 import type { CreateWorkspaceInput } from '../backend/workspace/workspace.types'
 import type { CreateSessionInput } from '../backend/session/session.types'
 import type { ProjectSettings } from '../backend/project/project-settings.pure'
@@ -116,6 +121,7 @@ export function registerIpcHandlers(
   appSettingsService: AppSettingsService,
   attachmentsService: AttachmentsService,
   turnCaptureService: TurnCaptureService,
+  projectContextService: ProjectContextService,
   initiativeSynthesisService?: InitiativeSynthesisService,
   onUpdatePrefsChanged?: (prefs: { backgroundCheckEnabled: boolean }) => void,
 ): void {
@@ -159,6 +165,38 @@ export function registerIpcHandlers(
     'project:updateSettings',
     (_event, id: string, settings: ProjectSettings) =>
       projectService.updateSettings(id, settings),
+  )
+
+  // Project context handlers
+  ipcMain.handle('projectContext:list', (_event, projectId: string) =>
+    projectContextService.list(projectId),
+  )
+
+  ipcMain.handle(
+    'projectContext:create',
+    (_event, input: CreateProjectContextItemInput) =>
+      projectContextService.create(input),
+  )
+
+  ipcMain.handle(
+    'projectContext:update',
+    (_event, id: string, patch: UpdateProjectContextItemInput) =>
+      projectContextService.update(id, patch),
+  )
+
+  ipcMain.handle('projectContext:delete', (_event, id: string) => {
+    projectContextService.delete(id)
+  })
+
+  ipcMain.handle(
+    'projectContext:attachToSession',
+    (_event, sessionId: string, itemIds: string[]) => {
+      projectContextService.attachToSession(sessionId, itemIds)
+    },
+  )
+
+  ipcMain.handle('projectContext:listForSession', (_event, sessionId: string) =>
+    projectContextService.listForSession(sessionId),
   )
 
   // Initiative handlers

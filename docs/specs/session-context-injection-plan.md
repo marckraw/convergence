@@ -142,35 +142,47 @@ constraint, and cascade behaviour both ways.
 Goal: backend can CRUD context items, attach them to sessions, and list
 them. Renderer not yet involved.
 
-- [ ] Create `electron/backend/project-context/project-context.types.ts`
+- [x] Create `electron/backend/project-context/project-context.types.ts`
       with `ProjectContextItem`, `CreateProjectContextItemInput`,
-      `UpdateProjectContextItemInput`, IPC payload types. Re-export the
-      pure helpers from C1 through this module's `index` if it helps
-      consumers.
-- [ ] Create `electron/backend/project-context/project-context.service.ts`:
+      `UpdateProjectContextItemInput`, plus `projectContextItemFromRow`
+      and `projectContextItemToSerializable` helpers.
+- [x] Create `electron/backend/project-context/project-context.service.ts`:
   - `list(projectId): ProjectContextItem[]`
   - `create(input): ProjectContextItem`
   - `update(id, patch): ProjectContextItem`
   - `delete(id): void`
   - `attachToSession(sessionId, itemIds): void` — replaces the current set
-    of attachments for the session.
+    of attachments for the session, in stable order via `sort_order`.
   - `listForSession(sessionId): ProjectContextItem[]` — returns items in
     attachment order, joined against `project_context_items`.
-- [ ] `project-context.service.test.ts` covering CRUD round-trips,
+- [x] `project-context.service.test.ts` covering CRUD round-trips,
       cascade-delete on project removal, attach replaces existing set,
       `listForSession` ordering, attach to non-existent session throws.
-- [ ] Create `electron/backend/project-context/project-context.ipc.ts`
-      registering channels:
+- [x] Register IPC channels in `electron/main/ipc.ts`. (Plan said
+      `project-context.ipc.ts`; codebase keeps all handlers inline in
+      `electron/main/ipc.ts` — followed convention.) Channels:
       `projectContext:list`, `projectContext:create`,
       `projectContext:update`, `projectContext:delete`,
       `projectContext:attachToSession`, `projectContext:listForSession`.
-- [ ] Wire `ProjectContextService` into `electron/main` bootstrap.
-- [ ] Extend `electron/preload/index.ts` to expose a `projectContext`
+- [x] Wire `ProjectContextService` into `electron/main/index.ts`
+      bootstrap and pass it through to `registerIpcHandlers`.
+- [x] Extend `electron/preload/index.ts` to expose a `projectContext`
       namespace mirroring the IPC channels.
+- [x] Extend `src/shared/types/electron-api.d.ts` with
+      `ProjectContextItemData`, the input data types, and the
+      `projectContext` namespace on `ElectronAPI`.
 
 **Verification**: all four gates pass. Manual smoke from devtools console:
 `window.electronAPI.projectContext.create({ projectId, body: 'hello', reinjectMode: 'boot' })`
 and read it back via `list`.
+
+**C3 verification (2026-04-29)**: all four gates green. Service has 17
+tests; pure totals 1030; unit 344; chaperone clean. One plan adjustment:
+IPC handlers are registered inline in `electron/main/ipc.ts` per repo
+convention rather than in a per-module `*.ipc.ts` file. Also added the
+matching `projectContext` namespace to the renderer-facing
+`ElectronAPI` interface so `*.api.ts` consumers in C4 see typed
+preload bindings.
 
 ---
 

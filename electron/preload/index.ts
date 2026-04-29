@@ -26,6 +26,19 @@ contextBridge.exposeInMainWorld('electronAPI', {
       },
     ) => ipcRenderer.invoke('project:updateSettings', id, settings),
   },
+  projectContext: {
+    list: (projectId: string) =>
+      ipcRenderer.invoke('projectContext:list', projectId),
+    create: (input: unknown) =>
+      ipcRenderer.invoke('projectContext:create', input),
+    update: (id: string, patch: unknown) =>
+      ipcRenderer.invoke('projectContext:update', id, patch),
+    delete: (id: string) => ipcRenderer.invoke('projectContext:delete', id),
+    attachToSession: (sessionId: string, itemIds: string[]) =>
+      ipcRenderer.invoke('projectContext:attachToSession', sessionId, itemIds),
+    listForSession: (sessionId: string) =>
+      ipcRenderer.invoke('projectContext:listForSession', sessionId),
+  },
   initiative: {
     list: () => ipcRenderer.invoke('initiative:list'),
     getById: (id: string) => ipcRenderer.invoke('initiative:getById', id),

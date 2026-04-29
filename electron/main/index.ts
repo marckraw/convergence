@@ -12,6 +12,7 @@ import { getDatabase } from '../backend/database/database'
 import { ProjectService } from '../backend/project/project.service'
 import { InitiativeService } from '../backend/initiative/initiative.service'
 import { InitiativeSynthesisService } from '../backend/initiative/initiative-synthesis.service'
+import { ProjectContextService } from '../backend/project-context/project-context.service'
 import { StateService } from '../backend/state/state.service'
 import { WorkspaceService } from '../backend/workspace/workspace.service'
 import { GitService } from '../backend/git/git.service'
@@ -159,6 +160,7 @@ async function startApp(): Promise<void> {
   const gitService = new GitService()
   const projectService = new ProjectService(db)
   const initiativeService = new InitiativeService(db)
+  const projectContextService = new ProjectContextService(db)
   const stateService = new StateService(db)
   const workspaceService = new WorkspaceService(db, gitService, workspacesRoot)
   const providerRegistry = new ProviderRegistry()
@@ -386,6 +388,7 @@ async function startApp(): Promise<void> {
     appSettingsService,
     attachmentsService,
     turnCaptureService,
+    projectContextService,
     initiativeSynthesisService,
     (prefs) => updatesScheduler?.onPrefsChanged(prefs),
   )
