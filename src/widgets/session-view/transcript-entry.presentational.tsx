@@ -1,5 +1,4 @@
 import type { FC } from 'react'
-import type { ConversationItem } from '@/entities/session'
 import type { SkillSelection } from '@/entities/skill'
 import {
   User,
@@ -21,49 +20,46 @@ import {
 import { ConversationItemShell } from './conversation-item-shell.presentational'
 import { ConversationItemHeader } from './conversation-item-header.presentational'
 import { ConversationItemTimestamp } from './conversation-item-timestamp.presentational'
+import type { TranscriptEntryViewModel } from './transcript-entry.pure'
 
 interface ConversationItemViewProps {
-  entry: ConversationItem
-  turnStartedAt?: string | null
+  viewModel: TranscriptEntryViewModel
   onApprove?: () => void
   onDeny?: () => void
-  attachments?: Attachment[]
-  missingAttachmentIds?: string[]
   onAttachmentOpen?: (attachment: Attachment) => void
 }
 
 export const ConversationItemView: FC<ConversationItemViewProps> = ({
-  entry,
-  turnStartedAt,
+  viewModel,
   onApprove,
   onDeny,
-  attachments,
-  missingAttachmentIds,
   onAttachmentOpen,
 }) => {
+  const { item: entry } = viewModel
+
   switch (entry.kind) {
     case 'message':
       if (entry.actor === 'user') {
-        const hasAttachments = (attachments?.length ?? 0) > 0
-        const hasMissing = (missingAttachmentIds?.length ?? 0) > 0
+        const hasAttachments = viewModel.attachments.length > 0
+        const hasMissing = viewModel.missingAttachmentIds.length > 0
         return (
-          <ConversationItemShell item={entry}>
+          <ConversationItemShell copyText={viewModel.copyText}>
             <div className="flex gap-3 py-3">
               <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground">
                 <User className="h-4 w-4" />
               </div>
               <div className="min-w-0 flex-1 pt-0.5">
                 <ConversationItemHeader
-                  entry={entry}
-                  label="You"
-                  turnStartedAt={turnStartedAt}
+                  createdAt={entry.createdAt}
+                  label={viewModel.label}
+                  timing={viewModel.timing}
                 >
-                  {entry.deliveryMode && (
+                  {viewModel.deliveryModeLabel && (
                     <span
                       data-testid="user-message-delivery-mode"
                       className="inline-flex items-center rounded-full border border-amber-500/30 bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-amber-600 dark:text-amber-400"
                     >
-                      {entry.deliveryMode === 'steer' ? 'Steer' : 'Follow-up'}
+                      {viewModel.deliveryModeLabel}
                     </span>
                   )}
                 </ConversationItemHeader>
@@ -78,14 +74,14 @@ export const ConversationItemView: FC<ConversationItemViewProps> = ({
                     className="mt-2 flex flex-wrap gap-1.5"
                     data-testid="history-attachments"
                   >
-                    {attachments?.map((attachment) => (
+                    {viewModel.attachments.map((attachment) => (
                       <AttachmentChip
                         key={attachment.id}
                         attachment={attachment}
                         onOpen={onAttachmentOpen ?? (() => {})}
                       />
                     ))}
-                    {missingAttachmentIds?.map((id) => (
+                    {viewModel.missingAttachmentIds.map((id) => (
                       <MissingAttachmentChip key={id} attachmentId={id} />
                     ))}
                   </div>
@@ -97,16 +93,16 @@ export const ConversationItemView: FC<ConversationItemViewProps> = ({
       }
 
       return (
-        <ConversationItemShell item={entry}>
+        <ConversationItemShell copyText={viewModel.copyText}>
           <div className="flex gap-3 py-3">
             <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-purple-600 text-white">
               <Bot className="h-4 w-4" />
             </div>
             <div className="min-w-0 flex-1 pt-0.5">
               <ConversationItemHeader
-                entry={entry}
-                label="Agent"
-                turnStartedAt={turnStartedAt}
+                createdAt={entry.createdAt}
+                label={viewModel.label}
+                timing={viewModel.timing}
               />
               <Markdown
                 className="mt-1 text-foreground"
@@ -120,16 +116,16 @@ export const ConversationItemView: FC<ConversationItemViewProps> = ({
 
     case 'thinking':
       return (
-        <ConversationItemShell item={entry}>
+        <ConversationItemShell copyText={viewModel.copyText}>
           <div className="flex gap-3 py-3">
             <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground">
               <Bot className="h-4 w-4" />
             </div>
             <div className="min-w-0 flex-1 pt-0.5">
               <ConversationItemHeader
-                entry={entry}
-                label="Thinking"
-                turnStartedAt={turnStartedAt}
+                createdAt={entry.createdAt}
+                label={viewModel.label}
+                timing={viewModel.timing}
               />
               <Markdown
                 className="mt-1 italic text-muted-foreground"
@@ -143,22 +139,22 @@ export const ConversationItemView: FC<ConversationItemViewProps> = ({
 
     case 'tool-call':
       return (
-        <ConversationItemShell item={entry}>
+        <ConversationItemShell copyText={viewModel.copyText}>
           <div className="flex gap-3 py-2">
             <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-muted">
               <Wrench className="h-3.5 w-3.5 text-muted-foreground" />
             </div>
             <div className="min-w-0 flex-1 pt-1">
               <ConversationItemTimestamp
-                entry={entry}
-                turnStartedAt={turnStartedAt}
+                createdAt={entry.createdAt}
+                timing={viewModel.timing}
                 className="mb-1"
               />
               <details className="group min-w-0 rounded-md border border-border/60 bg-muted/20">
                 <summary className="flex cursor-pointer list-none items-start gap-2 rounded-md px-2 py-1.5 pr-10 hover:bg-muted/40">
                   <ChevronRight className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform group-open:rotate-90" />
                   <span className="min-w-0 flex-1 truncate font-mono text-xs text-muted-foreground">
-                    {getToolPreview(`${entry.toolName}: ${entry.inputText}`)}
+                    {viewModel.toolPreview}
                   </span>
                 </summary>
                 <pre className="app-scrollbar overflow-x-auto border-t border-border/60 px-3 py-2 font-mono text-xs leading-relaxed text-muted-foreground whitespace-pre-wrap">
@@ -172,22 +168,22 @@ export const ConversationItemView: FC<ConversationItemViewProps> = ({
 
     case 'tool-result':
       return (
-        <ConversationItemShell item={entry}>
+        <ConversationItemShell copyText={viewModel.copyText}>
           <div className="flex gap-3 py-2">
             <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-muted">
               <Terminal className="h-3.5 w-3.5 text-muted-foreground" />
             </div>
             <div className="min-w-0 flex-1 pt-1">
               <ConversationItemTimestamp
-                entry={entry}
-                turnStartedAt={turnStartedAt}
+                createdAt={entry.createdAt}
+                timing={viewModel.timing}
                 className="mb-1"
               />
               <details className="group min-w-0 rounded-md border border-border/60 bg-muted/20">
                 <summary className="flex cursor-pointer list-none items-start gap-2 rounded-md px-2 py-1.5 pr-10 hover:bg-muted/40">
                   <ChevronRight className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform group-open:rotate-90" />
                   <span className="min-w-0 flex-1 truncate font-mono text-xs text-muted-foreground">
-                    {getToolPreview(entry.outputText)}
+                    {viewModel.toolPreview}
                   </span>
                 </summary>
                 <pre className="app-scrollbar overflow-x-auto border-t border-border/60 px-3 py-2 font-mono text-xs leading-relaxed text-muted-foreground whitespace-pre-wrap">
@@ -201,7 +197,7 @@ export const ConversationItemView: FC<ConversationItemViewProps> = ({
 
     case 'approval-request':
       return (
-        <ConversationItemShell item={entry}>
+        <ConversationItemShell copyText={viewModel.copyText}>
           <div className="my-2 rounded-lg border border-amber-500/30 bg-amber-500/5 p-4">
             <div className="flex items-start gap-3">
               <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-500" />
@@ -209,8 +205,8 @@ export const ConversationItemView: FC<ConversationItemViewProps> = ({
                 <div className="flex flex-wrap items-center gap-x-2 gap-y-1 pr-8">
                   <p className="text-sm font-medium">Approval needed</p>
                   <ConversationItemTimestamp
-                    entry={entry}
-                    turnStartedAt={turnStartedAt}
+                    createdAt={entry.createdAt}
+                    timing={viewModel.timing}
                   />
                 </div>
                 <Markdown
@@ -218,7 +214,7 @@ export const ConversationItemView: FC<ConversationItemViewProps> = ({
                   content={entry.description}
                   size="sm"
                 />
-                {onApprove && onDeny && (
+                {viewModel.actionableApproval && onApprove && onDeny && (
                   <div className="mt-3 flex gap-2">
                     <Button size="sm" onClick={onApprove}>
                       Approve
@@ -236,7 +232,7 @@ export const ConversationItemView: FC<ConversationItemViewProps> = ({
 
     case 'input-request':
       return (
-        <ConversationItemShell item={entry}>
+        <ConversationItemShell copyText={viewModel.copyText}>
           <div className="my-2 rounded-lg border border-blue-500/30 bg-blue-500/5 p-4">
             <div className="flex items-start gap-3">
               <Info className="mt-0.5 h-5 w-5 shrink-0 text-blue-500" />
@@ -244,8 +240,8 @@ export const ConversationItemView: FC<ConversationItemViewProps> = ({
                 <div className="flex flex-wrap items-center gap-x-2 gap-y-1 pr-8">
                   <p className="text-sm font-medium">Input needed</p>
                   <ConversationItemTimestamp
-                    entry={entry}
-                    turnStartedAt={turnStartedAt}
+                    createdAt={entry.createdAt}
+                    timing={viewModel.timing}
                   />
                 </div>
                 <Markdown
@@ -261,11 +257,11 @@ export const ConversationItemView: FC<ConversationItemViewProps> = ({
 
     case 'note':
       return (
-        <ConversationItemShell item={entry}>
+        <ConversationItemShell copyText={viewModel.copyText}>
           <div className="py-2 text-center">
             <ConversationItemTimestamp
-              entry={entry}
-              turnStartedAt={turnStartedAt}
+              createdAt={entry.createdAt}
+              timing={viewModel.timing}
               className="mb-1 justify-center"
             />
             <Markdown
@@ -280,15 +276,6 @@ export const ConversationItemView: FC<ConversationItemViewProps> = ({
     default:
       return null
   }
-}
-
-function getToolPreview(value: string): string {
-  const singleLine = value.replace(/\s+/g, ' ').trim()
-  if (singleLine.length <= 120) {
-    return singleLine
-  }
-
-  return `${singleLine.slice(0, 117)}...`
 }
 
 function renderSkillSelections(selections: SkillSelection[] | undefined) {

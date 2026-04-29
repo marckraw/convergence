@@ -1,44 +1,85 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type { Attachment } from '@/entities/attachment'
+import type { ConversationItem } from '@/entities/session'
+import { buildTranscriptEntryViewModel } from './transcript-entry.pure'
 import { ConversationItemView } from './transcript-entry.presentational'
+
+interface RenderConversationItemViewInput {
+  entry: ConversationItem
+  turnStartedAt?: string | null
+  attachments?: Attachment[]
+  missingAttachmentIds?: string[]
+  onAttachmentOpen?: (attachment: Attachment) => void
+}
+
+function renderConversationItemView({
+  entry,
+  turnStartedAt = null,
+  attachments = [],
+  missingAttachmentIds = [],
+  onAttachmentOpen,
+}: RenderConversationItemViewInput) {
+  const attachmentIds = [
+    ...attachments.map((attachment) => attachment.id),
+    ...missingAttachmentIds,
+  ]
+  const item =
+    attachmentIds.length > 0 &&
+    entry.kind === 'message' &&
+    entry.actor === 'user'
+      ? { ...entry, attachmentIds }
+      : entry
+
+  return render(
+    <ConversationItemView
+      viewModel={buildTranscriptEntryViewModel({
+        item,
+        turnStartedAt,
+        resolvedAttachmentsById: Object.fromEntries(
+          attachments.map((attachment) => [attachment.id, attachment]),
+        ),
+      })}
+      onAttachmentOpen={onAttachmentOpen}
+    />,
+  )
+}
 
 describe('ConversationItemView', () => {
   it('renders selected skills on user messages', () => {
-    render(
-      <ConversationItemView
-        entry={{
-          id: 'message-1',
-          sessionId: 'session-1',
-          sequence: 1,
-          turnId: null,
-          kind: 'message',
-          state: 'complete',
-          actor: 'user',
-          text: 'Use this skill for the plan.',
-          skillSelections: [
-            {
-              id: 'codex:global:planning',
-              providerId: 'codex',
-              providerName: 'Codex',
-              scope: 'global',
-              sourceLabel: 'Global',
-              name: 'planning',
-              displayName: 'Planning',
-              path: '/skills/planning/SKILL.md',
-              rawScope: null,
-              status: 'selected',
-            },
-          ],
-          createdAt: '2026-04-13T10:00:00.000Z',
-          updatedAt: '2026-04-13T10:00:00.000Z',
-          providerMeta: {
+    renderConversationItemView({
+      entry: {
+        id: 'message-1',
+        sessionId: 'session-1',
+        sequence: 1,
+        turnId: null,
+        kind: 'message',
+        state: 'complete',
+        actor: 'user',
+        text: 'Use this skill for the plan.',
+        skillSelections: [
+          {
+            id: 'codex:global:planning',
             providerId: 'codex',
-            providerItemId: null,
-            providerEventType: 'user',
+            providerName: 'Codex',
+            scope: 'global',
+            sourceLabel: 'Global',
+            name: 'planning',
+            displayName: 'Planning',
+            path: '/skills/planning/SKILL.md',
+            rawScope: null,
+            status: 'selected',
           },
-        }}
-      />,
-    )
+        ],
+        createdAt: '2026-04-13T10:00:00.000Z',
+        updatedAt: '2026-04-13T10:00:00.000Z',
+        providerMeta: {
+          providerId: 'codex',
+          providerItemId: null,
+          providerEventType: 'user',
+        },
+      },
+    })
 
     expect(screen.getByText('Planning')).toBeInTheDocument()
     expect(screen.getByText('selected')).toBeInTheDocument()
@@ -46,38 +87,36 @@ describe('ConversationItemView', () => {
   })
 
   it('renders assistant markdown with headings, lists, links, and code', () => {
-    render(
-      <ConversationItemView
-        entry={{
-          id: 'message-1',
-          sessionId: 'session-1',
-          sequence: 1,
-          turnId: null,
-          kind: 'message',
-          state: 'complete',
-          actor: 'assistant',
-          text: [
-            '# Summary',
-            '',
-            '- first item',
-            '- second item',
-            '',
-            'See [docs](https://example.com/docs).',
-            '',
-            '```ts',
-            'const value = 1',
-            '```',
-          ].join('\n'),
-          createdAt: '2026-04-13T10:00:00.000Z',
-          updatedAt: '2026-04-13T10:00:00.000Z',
-          providerMeta: {
-            providerId: 'claude-code',
-            providerItemId: null,
-            providerEventType: 'assistant',
-          },
-        }}
-      />,
-    )
+    renderConversationItemView({
+      entry: {
+        id: 'message-1',
+        sessionId: 'session-1',
+        sequence: 1,
+        turnId: null,
+        kind: 'message',
+        state: 'complete',
+        actor: 'assistant',
+        text: [
+          '# Summary',
+          '',
+          '- first item',
+          '- second item',
+          '',
+          'See [docs](https://example.com/docs).',
+          '',
+          '```ts',
+          'const value = 1',
+          '```',
+        ].join('\n'),
+        createdAt: '2026-04-13T10:00:00.000Z',
+        updatedAt: '2026-04-13T10:00:00.000Z',
+        providerMeta: {
+          providerId: 'claude-code',
+          providerItemId: null,
+          providerEventType: 'assistant',
+        },
+      },
+    })
 
     expect(
       screen.getByRole('heading', { name: 'Summary', level: 1 }),
@@ -95,28 +134,26 @@ describe('ConversationItemView', () => {
   })
 
   it('renders elapsed timing metadata for assistant work', () => {
-    render(
-      <ConversationItemView
-        turnStartedAt="2026-04-13T10:00:00.000Z"
-        entry={{
-          id: 'message-1',
-          sessionId: 'session-1',
-          sequence: 2,
-          turnId: 'turn-1',
-          kind: 'message',
-          state: 'complete',
-          actor: 'assistant',
-          text: 'Done.',
-          createdAt: '2026-04-13T10:00:03.000Z',
-          updatedAt: '2026-04-13T10:00:08.000Z',
-          providerMeta: {
-            providerId: 'claude-code',
-            providerItemId: null,
-            providerEventType: 'assistant',
-          },
-        }}
-      />,
-    )
+    renderConversationItemView({
+      turnStartedAt: '2026-04-13T10:00:00.000Z',
+      entry: {
+        id: 'message-1',
+        sessionId: 'session-1',
+        sequence: 2,
+        turnId: 'turn-1',
+        kind: 'message',
+        state: 'complete',
+        actor: 'assistant',
+        text: 'Done.',
+        createdAt: '2026-04-13T10:00:03.000Z',
+        updatedAt: '2026-04-13T10:00:08.000Z',
+        providerMeta: {
+          providerId: 'claude-code',
+          providerItemId: null,
+          providerEventType: 'assistant',
+        },
+      },
+    })
 
     expect(
       screen.getByTestId('conversation-item-turn-elapsed'),
@@ -133,28 +170,26 @@ describe('ConversationItemView', () => {
       'line 2',
     ].join('\n')
 
-    render(
-      <ConversationItemView
-        entry={{
-          id: 'tool-result-1',
-          sessionId: 'session-1',
-          sequence: 1,
-          turnId: null,
-          kind: 'tool-result',
-          state: 'complete',
-          toolName: null,
-          relatedItemId: null,
-          outputText: result,
-          createdAt: '2026-04-13T10:00:00.000Z',
-          updatedAt: '2026-04-13T10:00:00.000Z',
-          providerMeta: {
-            providerId: 'codex',
-            providerItemId: null,
-            providerEventType: 'tool-result',
-          },
-        }}
-      />,
-    )
+    renderConversationItemView({
+      entry: {
+        id: 'tool-result-1',
+        sessionId: 'session-1',
+        sequence: 1,
+        turnId: null,
+        kind: 'tool-result',
+        state: 'complete',
+        toolName: null,
+        relatedItemId: null,
+        outputText: result,
+        createdAt: '2026-04-13T10:00:00.000Z',
+        updatedAt: '2026-04-13T10:00:00.000Z',
+        providerMeta: {
+          providerId: 'codex',
+          providerItemId: null,
+          providerEventType: 'tool-result',
+        },
+      },
+    })
 
     const details = document.querySelector('details')
     const summary = document.querySelector('summary')
@@ -195,27 +230,25 @@ describe('ConversationItemView', () => {
 
     it('copies the raw markdown text for assistant messages', async () => {
       const markdown = '# Title\n\n- item'
-      render(
-        <ConversationItemView
-          entry={{
-            id: 'message-1',
-            sessionId: 'session-1',
-            sequence: 1,
-            turnId: null,
-            kind: 'message',
-            state: 'complete',
-            actor: 'assistant',
-            text: markdown,
-            createdAt: '2026-04-22T10:00:00.000Z',
-            updatedAt: '2026-04-22T10:00:00.000Z',
-            providerMeta: {
-              providerId: 'claude-code',
-              providerItemId: null,
-              providerEventType: 'assistant',
-            },
-          }}
-        />,
-      )
+      renderConversationItemView({
+        entry: {
+          id: 'message-1',
+          sessionId: 'session-1',
+          sequence: 1,
+          turnId: null,
+          kind: 'message',
+          state: 'complete',
+          actor: 'assistant',
+          text: markdown,
+          createdAt: '2026-04-22T10:00:00.000Z',
+          updatedAt: '2026-04-22T10:00:00.000Z',
+          providerMeta: {
+            providerId: 'claude-code',
+            providerItemId: null,
+            providerEventType: 'assistant',
+          },
+        },
+      })
 
       fireEvent.click(screen.getByRole('button', { name: 'Copy' }))
 
@@ -224,28 +257,26 @@ describe('ConversationItemView', () => {
 
     it('copies the raw outputText for tool-result items', async () => {
       const output = 'line 1\nline 2'
-      render(
-        <ConversationItemView
-          entry={{
-            id: 'tool-result-1',
-            sessionId: 'session-1',
-            sequence: 1,
-            turnId: null,
-            kind: 'tool-result',
-            state: 'complete',
-            toolName: null,
-            relatedItemId: null,
-            outputText: output,
-            createdAt: '2026-04-22T10:00:00.000Z',
-            updatedAt: '2026-04-22T10:00:00.000Z',
-            providerMeta: {
-              providerId: 'codex',
-              providerItemId: null,
-              providerEventType: 'tool-result',
-            },
-          }}
-        />,
-      )
+      renderConversationItemView({
+        entry: {
+          id: 'tool-result-1',
+          sessionId: 'session-1',
+          sequence: 1,
+          turnId: null,
+          kind: 'tool-result',
+          state: 'complete',
+          toolName: null,
+          relatedItemId: null,
+          outputText: output,
+          createdAt: '2026-04-22T10:00:00.000Z',
+          updatedAt: '2026-04-22T10:00:00.000Z',
+          providerMeta: {
+            providerId: 'codex',
+            providerItemId: null,
+            providerEventType: 'tool-result',
+          },
+        },
+      })
 
       fireEvent.click(screen.getByRole('button', { name: 'Copy' }))
 
@@ -291,16 +322,14 @@ describe('ConversationItemView', () => {
 
     it('renders chips for resolved attachments below the user message text', () => {
       const onOpen = vi.fn()
-      render(
-        <ConversationItemView
-          entry={userEntry()}
-          attachments={[
-            makeAttachment('att-1', 'one.png'),
-            makeAttachment('att-2', 'two.png'),
-          ]}
-          onAttachmentOpen={onOpen}
-        />,
-      )
+      renderConversationItemView({
+        entry: userEntry(),
+        attachments: [
+          makeAttachment('att-1', 'one.png'),
+          makeAttachment('att-2', 'two.png'),
+        ],
+        onAttachmentOpen: onOpen,
+      })
 
       const chips = screen.getAllByTestId('attachment-chip')
       expect(chips).toHaveLength(2)
@@ -309,12 +338,10 @@ describe('ConversationItemView', () => {
     })
 
     it('renders broken-icon chips for missing attachment ids', () => {
-      render(
-        <ConversationItemView
-          entry={userEntry()}
-          missingAttachmentIds={['gone-1', 'gone-2']}
-        />,
-      )
+      renderConversationItemView({
+        entry: userEntry(),
+        missingAttachmentIds: ['gone-1', 'gone-2'],
+      })
 
       const missingChips = screen.getAllByTestId('missing-attachment-chip')
       expect(missingChips).toHaveLength(2)
@@ -323,34 +350,30 @@ describe('ConversationItemView', () => {
     })
 
     it('renders both resolved and missing chips together', () => {
-      render(
-        <ConversationItemView
-          entry={userEntry()}
-          attachments={[makeAttachment('att-1', 'kept.png')]}
-          missingAttachmentIds={['gone-1']}
-          onAttachmentOpen={vi.fn()}
-        />,
-      )
+      renderConversationItemView({
+        entry: userEntry(),
+        attachments: [makeAttachment('att-1', 'kept.png')],
+        missingAttachmentIds: ['gone-1'],
+        onAttachmentOpen: vi.fn(),
+      })
 
       expect(screen.getAllByTestId('attachment-chip')).toHaveLength(1)
       expect(screen.getAllByTestId('missing-attachment-chip')).toHaveLength(1)
     })
 
     it('renders no chip row when there are no attachments and no missing ids', () => {
-      render(<ConversationItemView entry={userEntry('hello')} />)
+      renderConversationItemView({ entry: userEntry('hello') })
       expect(screen.queryByTestId('history-attachments')).toBeNull()
       expect(screen.queryByTestId('attachment-chip')).toBeNull()
       expect(screen.queryByTestId('missing-attachment-chip')).toBeNull()
     })
 
     it('does not render an X (remove) button on history chips', () => {
-      render(
-        <ConversationItemView
-          entry={userEntry()}
-          attachments={[makeAttachment('att-1', 'kept.png')]}
-          onAttachmentOpen={vi.fn()}
-        />,
-      )
+      renderConversationItemView({
+        entry: userEntry(),
+        attachments: [makeAttachment('att-1', 'kept.png')],
+        onAttachmentOpen: vi.fn(),
+      })
 
       expect(
         screen.queryByRole('button', { name: /Remove kept\.png/ }),
