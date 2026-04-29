@@ -12,6 +12,9 @@ vi.mock('@/features/composer', () => ({
   ComposerContainer: () => <div>composer</div>,
 }))
 
+const approveSessionMock = vi.fn()
+const denySessionMock = vi.fn()
+
 const initiative = {
   id: 'initiative-1',
   title: 'Agent-native initiatives',
@@ -114,8 +117,8 @@ describe('SessionView changed files drawer', () => {
       loadSessions: vi.fn(),
       loadProviders: vi.fn(),
       createAndStartSession: vi.fn(),
-      approveSession: vi.fn(),
-      denySession: vi.fn(),
+      approveSession: approveSessionMock,
+      denySession: denySessionMock,
       sendMessageToSession: vi.fn(),
       stopSession: vi.fn(),
       deleteSession: vi.fn(),
@@ -263,6 +266,69 @@ describe('SessionView changed files drawer', () => {
     expect(useDialogStore.getState().payload).toEqual({
       sessionId: 'session-1',
     })
+  })
+
+  it('keeps the latest approval actionable even after later transcript items arrive', () => {
+    useSessionStore.setState((state) => ({
+      ...state,
+      sessions: state.sessions.map((session) =>
+        session.id === 'session-1'
+          ? {
+              ...session,
+              status: 'running',
+              attention: 'needs-approval',
+              activity: 'waiting-approval',
+            }
+          : session,
+      ),
+      activeConversation: [
+        {
+          id: 'approval-1',
+          sessionId: 'session-1',
+          sequence: 1,
+          turnId: 'turn-1',
+          kind: 'approval-request',
+          state: 'complete',
+          description: 'Command: kill 123',
+          createdAt: '2026-01-01T00:00:01.000Z',
+          updatedAt: '2026-01-01T00:00:01.000Z',
+          providerMeta: {
+            providerId: 'codex',
+            providerItemId: null,
+            providerEventType: 'item/commandExecution/requestApproval',
+          },
+        },
+        {
+          id: 'tool-result-1',
+          sessionId: 'session-1',
+          sequence: 2,
+          turnId: 'turn-1',
+          kind: 'tool-result',
+          state: 'complete',
+          toolName: '/bin/zsh',
+          relatedItemId: null,
+          outputText: 'ps output',
+          createdAt: '2026-01-01T00:00:02.000Z',
+          updatedAt: '2026-01-01T00:00:02.000Z',
+          providerMeta: {
+            providerId: 'codex',
+            providerItemId: null,
+            providerEventType: 'commandExecution',
+          },
+        },
+      ],
+    }))
+
+    render(
+      <TooltipProvider>
+        <SessionView />
+      </TooltipProvider>,
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: 'Approve' }))
+
+    expect(approveSessionMock).toHaveBeenCalledWith('session-1')
+    expect(screen.getByRole('button', { name: 'Deny' })).toBeInTheDocument()
   })
 
   it('does not render the Initiative context panel for an unlinked session', () => {
