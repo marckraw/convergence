@@ -202,28 +202,28 @@ Goal: renderer can load analytics overview data without any final UI.
 Goal: introduce ChartGPU safely behind a Convergence wrapper with WebGPU
 fallback.
 
-- [ ] Install dependencies:
+- [x] Install dependencies:
   - `chartgpu-react`
   - `@chartgpu/chartgpu`
-- [ ] Create `src/shared/ui/chartgpu-chart.container.tsx` that:
+- [x] Create `src/shared/ui/chartgpu-chart.container.tsx` that:
   - checks `navigator.gpu`
   - renders a fallback when unsupported
   - wraps `ChartGPU` from `chartgpu-react`
   - accepts fixed-height class/style props
   - keeps options JSON-serializable where possible
-- [ ] Create `src/shared/ui/chart-fallback.presentational.tsx`.
-- [ ] Add tests for supported/unsupported WebGPU paths by stubbing
+- [x] Create `src/shared/ui/chart-fallback.presentational.tsx`.
+- [x] Add tests for supported/unsupported WebGPU paths by stubbing
       `navigator.gpu`.
-- [ ] Add a tiny internal demo usage in test only; do not wire final Insights
+- [x] Add a tiny internal demo usage in test only; do not wire final Insights
       charts yet.
 
 **Verification**
 
-- [ ] `npm install`
-- [ ] `npm run typecheck`
-- [ ] `npm run test:pure`
-- [ ] `npm run test:unit -- chart`
-- [ ] `chaperone check --fix`
+- [x] `npm install`
+- [x] `npm run typecheck`
+- [x] `npm run test:pure`
+- [x] `npm run test:unit -- chart`
+- [x] `chaperone check --fix`
 
 **Dependencies:** A3.
 
@@ -505,3 +505,21 @@ Append a short note below after each completed phase:
   - `chaperone check --fix`: pass
 - Decisions changed: none.
 - Next phase: A4 ChartGPU dependency and wrapper.
+
+### A4 verification (2026-04-30)
+
+- Summary: Installed `chartgpu-react` and `@chartgpu/chartgpu`, added a shared
+  `ChartGpuChart` wrapper with `navigator.gpu` detection, added a compact
+  fallback presentational, and covered supported/unsupported WebGPU paths with
+  a mocked ChartGPU component.
+- Tests:
+  - `npm install`: pass
+  - `npm run typecheck`: pass
+  - `npm run test:pure`: pass
+  - `npm run test:unit`: pass
+  - `chaperone check --fix`: pass
+- Decisions changed: none. `npm install chartgpu-react @chartgpu/chartgpu`
+  required network access after the sandboxed registry request failed with
+  `ENOTFOUND`.
+- Next phase: A5 `Your Usage` UI. This is the first useful manual testing
+  checkpoint because Settings will expose a visible Insights section.
