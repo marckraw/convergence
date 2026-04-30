@@ -1,4 +1,8 @@
-import type { ChartGPUOptions } from 'chartgpu-react'
+import type {
+  ChartGPUOptions,
+  TooltipConfig,
+  TooltipParams,
+} from 'chartgpu-react'
 import type {
   AnalyticsOverview,
   AnalyticsRangePreset,
@@ -23,6 +27,35 @@ const COMPACT_FORMATTER = new Intl.NumberFormat(undefined, {
 export const WEEKDAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 
 const CHART_PALETTE = ['#2563eb', '#14b8a6', '#f59e0b', '#7c3aed', '#ef4444']
+
+function normalizeTooltipParams(
+  params: TooltipParams | ReadonlyArray<TooltipParams>,
+): ReadonlyArray<TooltipParams> {
+  return Array.isArray(params)
+    ? (params as ReadonlyArray<TooltipParams>)
+    : [params as TooltipParams]
+}
+
+function formatTooltip(
+  title: string,
+  params: TooltipParams | ReadonlyArray<TooltipParams>,
+): string {
+  const lines = normalizeTooltipParams(params).map((item) => {
+    const value = item.value[1]
+    return `${item.seriesName}: ${formatInteger(value)}`
+  })
+
+  return [title, ...lines].join('<br/>')
+}
+
+function createTooltipFormatter(
+  resolveTitle: (params: ReadonlyArray<TooltipParams>) => string,
+): NonNullable<TooltipConfig['formatter']> {
+  return ((params: TooltipParams | ReadonlyArray<TooltipParams>) => {
+    const items = normalizeTooltipParams(params)
+    return formatTooltip(resolveTitle(items), items)
+  }) as NonNullable<TooltipConfig['formatter']>
+}
 
 export function formatInteger(value: number): string {
   return INTEGER_FORMATTER.format(value)
@@ -89,7 +122,16 @@ export function buildDailyActivityChartOptions(
     xAxis: { type: 'value', min: 0, max: Math.max(points.length - 1, 1) },
     yAxis: { type: 'value', min: 0 },
     legend: { show: false },
-    tooltip: { show: true, trigger: 'axis' },
+    tooltip: {
+      show: true,
+      trigger: 'axis',
+      formatter: createTooltipFormatter((params) => {
+        const [first] = params
+        const index = first ? Math.round(first.value[0]) : 0
+        const date = points[index]?.date
+        return date ? formatDateLabel(date) : 'Daily activity'
+      }),
+    },
     series: [
       {
         type: 'area',
@@ -131,7 +173,15 @@ export function buildProviderUsageChartOptions(
     xAxis: { type: 'value', min: 0, max: Math.max(points.length - 1, 1) },
     yAxis: { type: 'value', min: 0 },
     legend: { show: false },
-    tooltip: { show: true, trigger: 'axis' },
+    tooltip: {
+      show: true,
+      trigger: 'axis',
+      formatter: createTooltipFormatter((params) => {
+        const [first] = params
+        const index = first ? Math.round(first.value[0]) : 0
+        return points[index]?.providerName ?? 'Provider usage'
+      }),
+    },
     series: [
       {
         type: 'bar',
@@ -173,7 +223,16 @@ export function buildConversationBalanceChartOptions(
     xAxis: { type: 'value', min: 0, max: Math.max(points.length - 1, 1) },
     yAxis: { type: 'value', min: 0 },
     legend: { show: false },
-    tooltip: { show: true, trigger: 'axis' },
+    tooltip: {
+      show: true,
+      trigger: 'axis',
+      formatter: createTooltipFormatter((params) => {
+        const [first] = params
+        const index = first ? Math.round(first.value[0]) : 0
+        const date = points[index]?.date
+        return date ? formatDateLabel(date) : 'Conversation balance'
+      }),
+    },
     series: [
       {
         type: 'line',

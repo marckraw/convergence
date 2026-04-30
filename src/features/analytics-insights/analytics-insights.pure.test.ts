@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import type { TooltipParams } from 'chartgpu-react'
 import type { AnalyticsOverview } from '@/entities/analytics'
 import {
   buildConversationBalanceChartOptions,
@@ -134,6 +135,55 @@ describe('analytics insights view helpers', () => {
     expect(daily.xAxis?.max).toBe(1)
     expect(provider.legend?.show).toBe(false)
     expect(balance.tooltip?.trigger).toBe('axis')
+  })
+
+  it('formats chart tooltips with domain labels instead of raw x indexes', () => {
+    const daily = buildDailyActivityChartOptions(overview.dailyActivity)
+    const provider = buildProviderUsageChartOptions(overview)
+    const balance = buildConversationBalanceChartOptions(overview)
+    const dailyFormatter = daily.tooltip?.formatter as (
+      params: ReadonlyArray<TooltipParams>,
+    ) => string
+    const providerFormatter = provider.tooltip?.formatter as (
+      params: ReadonlyArray<TooltipParams>,
+    ) => string
+    const balanceFormatter = balance.tooltip?.formatter as (
+      params: ReadonlyArray<TooltipParams>,
+    ) => string
+
+    expect(
+      dailyFormatter([
+        {
+          seriesName: 'Turns',
+          seriesIndex: 1,
+          dataIndex: 1,
+          value: [1, 5],
+          color: '#14b8a6',
+        },
+      ]),
+    ).toContain('Apr')
+    expect(
+      providerFormatter([
+        {
+          seriesName: 'Turns',
+          seriesIndex: 1,
+          dataIndex: 0,
+          value: [0, 16],
+          color: '#f59e0b',
+        },
+      ]),
+    ).toContain('Codex')
+    expect(
+      balanceFormatter([
+        {
+          seriesName: 'Assistant words',
+          seriesIndex: 1,
+          dataIndex: 1,
+          value: [1, 1_100],
+          color: '#14b8a6',
+        },
+      ]),
+    ).toContain('1,100')
   })
 
   it('maps weekday and hour buckets into heatmap levels', () => {

@@ -72,7 +72,7 @@ export function UsageTab({ overview, isLoading }: UsageTabProps) {
         {metricCards.map((card) => renderMetricCard(card))}
       </section>
 
-      <section className="grid gap-4 2xl:grid-cols-[minmax(0,1.2fr)_minmax(360px,0.8fr)]">
+      <section className="grid gap-4">
         {renderChartPanel({
           title: 'Daily activity',
           description: `${formatDateLabel(overview.range.startDate ?? overview.range.endDate)} to ${formatDateLabel(overview.range.endDate)}`,
@@ -82,12 +82,20 @@ export function UsageTab({ overview, isLoading }: UsageTabProps) {
           ],
           empty: !hasDailyActivity(overview),
           children: (
-            <ChartGpuChart
-              options={buildDailyActivityChartOptions(overview.dailyActivity)}
-              height={CHART_HEIGHT}
-              fallbackTitle="Daily chart unavailable"
-              fallbackDescription="WebGPU is not available in this browser view. The totals and grids still work."
-            />
+            <>
+              <ChartGpuChart
+                options={buildDailyActivityChartOptions(overview.dailyActivity)}
+                height={CHART_HEIGHT}
+                fallbackTitle="Daily chart unavailable"
+                fallbackDescription="WebGPU is not available in this browser view. The totals and grids still work."
+              />
+              {renderChartRangeHint(
+                formatDateLabel(
+                  overview.range.startDate ?? overview.range.endDate,
+                ),
+                formatDateLabel(overview.range.endDate),
+              )}
+            </>
           ),
         })}
 
@@ -118,7 +126,7 @@ export function UsageTab({ overview, isLoading }: UsageTabProps) {
         {renderStreakCalendar(overview)}
       </section>
 
-      <section className="grid gap-4 2xl:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)]">
+      <section className="grid gap-4">
         {renderHeatmap(overview)}
         {renderChartPanel({
           title: 'Conversation balance',
@@ -130,12 +138,20 @@ export function UsageTab({ overview, isLoading }: UsageTabProps) {
           ],
           empty: !hasConversationBalance(overview),
           children: (
-            <ChartGpuChart
-              options={buildConversationBalanceChartOptions(overview)}
-              height={CHART_HEIGHT}
-              fallbackTitle="Balance chart unavailable"
-              fallbackDescription="WebGPU is not available in this browser view. Word totals are still shown above."
-            />
+            <>
+              <ChartGpuChart
+                options={buildConversationBalanceChartOptions(overview)}
+                height={CHART_HEIGHT}
+                fallbackTitle="Balance chart unavailable"
+                fallbackDescription="WebGPU is not available in this browser view. Word totals are still shown above."
+              />
+              {renderChartRangeHint(
+                formatDateLabel(
+                  overview.range.startDate ?? overview.range.endDate,
+                ),
+                formatDateLabel(overview.range.endDate),
+              )}
+            </>
           ),
         })}
       </section>
@@ -168,7 +184,7 @@ function renderLoadingState() {
         ))}
       </section>
 
-      <section className="grid gap-4 2xl:grid-cols-[minmax(0,1.2fr)_minmax(360px,0.8fr)]">
+      <section className="grid gap-4">
         {Array.from({ length: 2 }, (_, index) => (
           <div
             key={index}
@@ -261,6 +277,15 @@ function renderChartLegend(
           {item.label}
         </span>
       ))}
+    </div>
+  )
+}
+
+function renderChartRangeHint(left: string, right: string) {
+  return (
+    <div className="mt-2 flex items-center justify-between gap-3 text-[11px] text-muted-foreground">
+      <span>{left}</span>
+      <span>{right}</span>
     </div>
   )
 }

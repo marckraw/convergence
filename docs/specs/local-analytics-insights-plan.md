@@ -445,6 +445,40 @@ or earns a faster entry point.
 
 ---
 
+## Phase A10 — Chart Readability QA Follow-Ups
+
+Goal: address manual QA feedback that dense charts and card text become hard
+to read in the Settings dialog.
+
+- [x] Keep ChartGPU panels single-column inside Settings so canvases are not
+      squeezed by viewport-based breakpoints.
+- [x] Add native date/range hints around charts because ChartGPU currently
+      renders numeric x-axis values for indexed local data.
+- [x] Add tooltip formatters that show dates and provider names instead of raw
+      x indexes.
+- [x] Keep compact native legends outside the canvas instead of using the
+      ChartGPU legend inside the plotting area.
+- [x] Leave the larger Settings dialog from A9 in place for Insights.
+
+**Verification**
+
+- [x] `npm install`
+- [x] `npm run typecheck`
+- [x] `npm run test:pure`
+- [x] `npm run test:unit`
+- [x] `chaperone check --fix`
+- [ ] Manual: reopen Insights with populated 90-day data and confirm charts
+      are no longer duplicated/squashed and key labels remain readable.
+
+**Dependencies:** A9.
+
+**Files likely touched**
+
+- `src/features/analytics-insights/*`
+- `src/features/app-settings/*` if the modal needs more sizing work
+
+---
+
 ## Phase Boundary Template
 
 Append a short note below after each completed phase:
@@ -619,3 +653,24 @@ Append a short note below after each completed phase:
   nav, the sidebar chart icon, and command center `Open Insights`; then run the
   generated profile flow from A8 with a configured provider/model.
 - Next phase: manual QA, then decide whether any follow-up issues are needed.
+
+### A10 verification (2026-04-30)
+
+- Summary: Added a chart readability QA follow-up phase, kept the dense
+  ChartGPU panels single-column in Settings, added date/range hints below
+  indexed charts, and added tooltip formatters that show dates/provider names
+  rather than raw x indexes.
+- Tests:
+  - `npm install`: pass
+  - `npm run typecheck`: pass
+  - `npm run test:pure`: pass
+  - `npm run test:unit`: pass; existing jsdom canvas `getContext()` warnings
+    still print from the chart environment.
+  - `chaperone check --fix`: pass
+- Decisions changed: ChartGPU stays in use, but local UI owns legends and
+  contextual labels where the library currently exposes numeric axes.
+- Manual checkpoint: reopen Insights with populated 90-day data and confirm
+  daily/provider/balance charts are single-column, readable, and no longer
+  visually duplicated or squashed.
+- Next phase: manual QA of generated Work Style profile, then decide whether
+  to create follow-up tickets for richer chart interactions.
