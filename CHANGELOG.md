@@ -1,5 +1,11 @@
 # convergence
 
+## 0.30.0
+
+### Minor Changes
+
+- 4628d1c: Add local-only analytics Insights for reviewing personal Convergence usage, including session and message totals, ChartGPU-backed activity charts, streak tracking, provider/project breakdowns, and opt-in generated Work Style summaries.
+
 ## 0.29.4
 
 ### Patch Changes
