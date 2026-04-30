@@ -9,6 +9,7 @@ import {
   Info,
   ChevronRight,
   Library,
+  FileText,
 } from 'lucide-react'
 import { Button } from '@/shared/ui/button'
 import { Markdown } from '@/shared/ui/markdown.container'
@@ -64,9 +65,24 @@ export const ConversationItemView: FC<ConversationItemViewProps> = ({
                   )}
                 </ConversationItemHeader>
                 {renderSkillSelections(entry.skillSelections)}
+                {viewModel.injectedContextText ? (
+                  <details
+                    className="group/context mt-1 max-w-full"
+                    data-testid="injected-context-details"
+                  >
+                    <summary className="inline-flex cursor-pointer list-none items-center gap-1.5 rounded-full border border-border/70 bg-muted/30 px-2 py-0.5 text-xs text-muted-foreground hover:bg-muted/50 hover:text-foreground">
+                      <FileText className="h-3 w-3" />
+                      <span>Injected context</span>
+                      <ChevronRight className="h-3 w-3 transition-transform group-open/context:rotate-90" />
+                    </summary>
+                    <pre className="app-scrollbar mt-2 max-h-56 overflow-auto rounded-md border border-border/70 bg-muted/20 p-3 font-mono text-xs leading-relaxed text-muted-foreground whitespace-pre-wrap">
+                      {viewModel.injectedContextText}
+                    </pre>
+                  </details>
+                ) : null}
                 <Markdown
                   className="mt-1 text-foreground"
-                  content={entry.text}
+                  content={viewModel.displayText}
                   size="sm"
                 />
                 {(hasAttachments || hasMissing) && (

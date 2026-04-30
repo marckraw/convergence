@@ -5,6 +5,7 @@ import {
   formatConversationItemAbsoluteTimestamp,
   formatConversationItemTimestamp,
   formatDuration,
+  getConversationItemDisplayText,
   getConversationItemCopyText,
   getConversationItemTiming,
 } from './transcript-entry-view-model.pure'
@@ -82,6 +83,36 @@ describe('getConversationItemCopyText', () => {
   })
 })
 
+describe('getConversationItemDisplayText', () => {
+  it('strips injected boot context from user-message display text', () => {
+    const injectedContextText =
+      '<convergence:context>\nchaperone path\n</convergence:context>'
+    const item: ConversationItem = {
+      ...base,
+      kind: 'message',
+      actor: 'user',
+      text: `${injectedContextText}\n\nwhere is chaperone?`,
+    }
+
+    expect(getConversationItemDisplayText(item, injectedContextText)).toBe(
+      'where is chaperone?',
+    )
+  })
+
+  it('keeps raw text when the injected context is not the message prefix', () => {
+    const item: ConversationItem = {
+      ...base,
+      kind: 'message',
+      actor: 'user',
+      text: 'where is chaperone?',
+    }
+
+    expect(getConversationItemDisplayText(item, '<context />')).toBe(
+      'where is chaperone?',
+    )
+  })
+})
+
 describe('conversation item timing', () => {
   it('formats timestamps and durations', () => {
     expect(
@@ -149,14 +180,36 @@ describe('buildTranscriptEntryViewModel', () => {
       buildTranscriptEntryViewModel({
         item,
         resolvedAttachmentsById: { 'att-1': attachment },
+        injectedContextText: '<project:context />',
       }),
     ).toMatchObject({
       kind: 'user-message',
       label: 'You',
       copyText: 'review these',
+      displayText: 'review these',
+      injectedContextText: '<project:context />',
       deliveryModeLabel: 'Follow-up',
       attachments: [attachment],
       missingAttachmentIds: ['missing-1'],
+    })
+  })
+
+  it('uses stripped text for display and copy when boot context was persisted into the message', () => {
+    const injectedContextText =
+      '<convergence:context>\nchaperone path\n</convergence:context>'
+    const item: ConversationItem = {
+      ...base,
+      kind: 'message',
+      actor: 'user',
+      text: `${injectedContextText}\n\nwhere is chaperone?`,
+    }
+
+    expect(
+      buildTranscriptEntryViewModel({ item, injectedContextText }),
+    ).toMatchObject({
+      copyText: 'where is chaperone?',
+      displayText: 'where is chaperone?',
+      injectedContextText,
     })
   })
 

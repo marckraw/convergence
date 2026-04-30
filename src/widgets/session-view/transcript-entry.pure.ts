@@ -3,6 +3,7 @@ export {
   formatConversationItemAbsoluteTimestamp,
   formatConversationItemTimestamp,
   formatDuration,
+  getConversationItemDisplayText,
   getConversationItemCopyText,
   getConversationItemTiming,
 } from './transcript-entry-view-model.pure'

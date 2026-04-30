@@ -247,6 +247,70 @@ describe('SessionView changed files drawer', () => {
     )
   })
 
+  it('renders boot context as revealable metadata on the first user message', () => {
+    useSessionStore.setState((state) => ({
+      ...state,
+      activeConversation: [
+        {
+          id: 'context-note-1',
+          sessionId: 'session-1',
+          sequence: 1,
+          turnId: null,
+          kind: 'note',
+          level: 'info',
+          text: '<convergence:context>\nchaperone project\n/Users/marckraw/Projects/OpenSource/chaperone\n</convergence:context>',
+          state: 'complete',
+          createdAt: '2026-01-01T00:00:00.000Z',
+          updatedAt: '2026-01-01T00:00:00.000Z',
+          providerMeta: {
+            providerId: 'convergence',
+            providerItemId: null,
+            providerEventType: 'context.boot',
+          },
+        },
+        {
+          id: 'user-message-1',
+          sessionId: 'session-1',
+          sequence: 2,
+          turnId: 'turn-1',
+          kind: 'message',
+          actor: 'user',
+          text: 'do you have a chaperone project path ?',
+          state: 'complete',
+          createdAt: '2026-01-01T00:00:01.000Z',
+          updatedAt: '2026-01-01T00:00:01.000Z',
+          providerMeta: {
+            providerId: 'claude-code',
+            providerItemId: null,
+            providerEventType: 'user',
+          },
+        },
+      ],
+    }))
+
+    render(
+      <TooltipProvider>
+        <SessionView />
+      </TooltipProvider>,
+    )
+
+    expect(
+      screen.getByText('do you have a chaperone project path ?'),
+    ).toBeInTheDocument()
+    expect(screen.getByTestId('injected-context-details')).not.toHaveAttribute(
+      'open',
+    )
+
+    fireEvent.click(screen.getByText('Injected context'))
+
+    expect(screen.getByTestId('injected-context-details')).toHaveTextContent(
+      '/Users/marckraw/Projects/OpenSource/chaperone',
+    )
+    expect(screen.getByTestId('injected-context-details')).toHaveAttribute(
+      'open',
+    )
+  })
+
   it('opens the Initiative link dialog from session actions', async () => {
     render(
       <TooltipProvider>

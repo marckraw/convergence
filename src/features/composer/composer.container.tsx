@@ -120,8 +120,10 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
     null,
   )
   const [skillPickerOpen, setSkillPickerOpen] = useState(false)
+  const [contextPickerOpen, setContextPickerOpen] = useState(false)
   const [skillQuery, setSkillQuery] = useState('')
   const [selectedSkills, setSelectedSkills] = useState<SkillSelection[]>([])
+  const [selectedContextIds, setSelectedContextIds] = useState<string[]>([])
   const [isDragging, setIsDragging] = useState(false)
   const dragDepth = useRef(0)
   const providers = useSessionStore((s) => s.providers)
@@ -159,6 +161,13 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
     : 0
   const projectContextItems =
     itemsByProjectId[projectId] ?? EMPTY_PROJECT_CONTEXT_ITEMS
+  const selectedContextItems = useMemo(
+    () =>
+      projectContextItems.filter((item) =>
+        selectedContextIds.includes(item.id),
+      ),
+    [projectContextItems, selectedContextIds],
+  )
 
   const textareaRef = useRef<HTMLTextAreaElement | null>(null)
   const [cursor, setCursor] = useState(0)
@@ -310,9 +319,18 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
 
   useEffect(() => {
     setSelectedSkills([])
+    setSelectedContextIds([])
     setSkillQuery('')
     setSkillPickerOpen(false)
+    setContextPickerOpen(false)
   }, [projectId, activeSessionId])
+
+  useEffect(() => {
+    const availableIds = new Set(projectContextItems.map((item) => item.id))
+    setSelectedContextIds((current) =>
+      current.filter((id) => availableIds.has(id)),
+    )
+  }, [projectContextItems])
 
   useEffect(() => {
     if (!midRunPolicy.availableModes.includes(deliveryMode)) {
@@ -379,6 +397,8 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
     const hasAttachments = attachmentIds.length > 0
     const skillSelections =
       selectedSkills.length > 0 ? selectedSkills : undefined
+    const contextItemIds =
+      selectedContextIds.length > 0 ? selectedContextIds : undefined
 
     if (activeSession && canContinueActiveSession) {
       const mode = deliveryMode === 'normal' ? undefined : deliveryMode
@@ -430,6 +450,7 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
         trimmed,
         hasAttachments ? attachmentIds : undefined,
         skillSelections,
+        contextItemIds,
       )
     } else {
       createAndStartSession(
@@ -440,10 +461,14 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
         selection.effort?.id ?? null,
         name,
         trimmed,
+        undefined,
+        undefined,
+        contextItemIds,
       )
     }
     setValue('')
     setSelectedSkills([])
+    setSelectedContextIds([])
     clearDraft(draftKey)
   }, [
     value,
@@ -452,6 +477,7 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
     selection.effort,
     attachments,
     selectedSkills,
+    selectedContextIds,
     capabilityResult.ok,
     activeSession,
     canContinueActiveSession,
@@ -505,6 +531,18 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
     setSelectedSkills((current) =>
       current.filter((selection) => selection.id !== skillId),
     )
+  }, [])
+
+  const handleContextToggle = useCallback((id: string) => {
+    setSelectedContextIds((current) =>
+      current.includes(id)
+        ? current.filter((value) => value !== id)
+        : [...current, id],
+    )
+  }, [])
+
+  const handleContextRemove = useCallback((id: string) => {
+    setSelectedContextIds((current) => current.filter((value) => value !== id))
   }, [])
 
   const handleModelChange = (nextModelId: string) => {
@@ -636,12 +674,18 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
         skillQuery={skillQuery}
         skillOptions={skillOptions}
         selectedSkills={selectedSkills}
+        contextPickerOpen={contextPickerOpen}
+        projectContextItems={projectContextItems}
+        selectedContextItems={selectedContextItems}
         skillCatalogLoading={skillCatalogLoading}
         skillCatalogError={skillCatalogError}
         onSkillPickerOpenChange={handleSkillPickerOpenChange}
         onSkillQueryChange={setSkillQuery}
         onSkillToggle={handleSkillToggle}
         onSkillRemove={handleSkillRemove}
+        onContextPickerOpenChange={setContextPickerOpen}
+        onContextToggle={handleContextToggle}
+        onContextRemove={handleContextRemove}
         onSkillsBrowse={handleSkillsBrowse}
         onAttachmentAdd={handleAttachmentAdd}
         onAttachmentRemove={handleAttachmentRemove}

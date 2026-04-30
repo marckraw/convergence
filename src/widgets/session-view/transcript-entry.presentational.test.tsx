@@ -11,6 +11,7 @@ interface RenderConversationItemViewInput {
   attachments?: Attachment[]
   missingAttachmentIds?: string[]
   onAttachmentOpen?: (attachment: Attachment) => void
+  injectedContextText?: string | null
 }
 
 function renderConversationItemView({
@@ -19,6 +20,7 @@ function renderConversationItemView({
   attachments = [],
   missingAttachmentIds = [],
   onAttachmentOpen,
+  injectedContextText = null,
 }: RenderConversationItemViewInput) {
   const attachmentIds = [
     ...attachments.map((attachment) => attachment.id),
@@ -39,6 +41,7 @@ function renderConversationItemView({
         resolvedAttachmentsById: Object.fromEntries(
           attachments.map((attachment) => [attachment.id, attachment]),
         ),
+        injectedContextText,
       })}
       onAttachmentOpen={onAttachmentOpen}
     />,
@@ -84,6 +87,40 @@ describe('ConversationItemView', () => {
     expect(screen.getByText('Planning')).toBeInTheDocument()
     expect(screen.getByText('selected')).toBeInTheDocument()
     expect(screen.getByTestId('message-skill-selections')).toBeInTheDocument()
+  })
+
+  it('keeps injected boot context collapsed instead of rendering it as message text', () => {
+    const injectedContextText =
+      '<convergence:context>\nchaperone path\n</convergence:context>'
+
+    renderConversationItemView({
+      injectedContextText,
+      entry: {
+        id: 'message-1',
+        sessionId: 'session-1',
+        sequence: 1,
+        turnId: null,
+        kind: 'message',
+        state: 'complete',
+        actor: 'user',
+        text: `${injectedContextText}\n\nwhere is chaperone?`,
+        createdAt: '2026-04-13T10:00:00.000Z',
+        updatedAt: '2026-04-13T10:00:00.000Z',
+        providerMeta: {
+          providerId: 'claude-code',
+          providerItemId: null,
+          providerEventType: 'user',
+        },
+      },
+    })
+
+    const details = screen.getByTestId('injected-context-details')
+
+    expect(details).not.toHaveAttribute('open')
+    expect(screen.getByText('where is chaperone?')).toBeInTheDocument()
+    for (const node of screen.getAllByText(/^<convergence:context>/)) {
+      expect(node).not.toBeVisible()
+    }
   })
 
   it('renders assistant markdown with headings, lists, links, and code', () => {

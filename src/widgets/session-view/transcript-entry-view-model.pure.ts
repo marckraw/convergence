@@ -28,6 +28,8 @@ export interface TranscriptEntryViewModel {
   kind: TranscriptEntryViewKind
   label: string
   copyText: string
+  displayText: string
+  injectedContextText: string | null
   timing: ConversationItemTiming
   deliveryModeLabel: string | null
   attachments: Attachment[]
@@ -41,6 +43,7 @@ export interface BuildTranscriptEntryViewModelInput {
   turnStartedAt?: string | null
   resolvedAttachmentsById?: Record<string, Attachment>
   actionableApproval?: boolean
+  injectedContextText?: string | null
   timingOptions?: ConversationItemTimingOptions
 }
 
@@ -49,18 +52,22 @@ export function buildTranscriptEntryViewModel({
   turnStartedAt = null,
   resolvedAttachmentsById = {},
   actionableApproval = false,
+  injectedContextText = null,
   timingOptions = {},
 }: BuildTranscriptEntryViewModelInput): TranscriptEntryViewModel {
   const { attachments, missingAttachmentIds } = resolveItemAttachments(
     item,
     resolvedAttachmentsById,
   )
+  const displayText = getConversationItemDisplayText(item, injectedContextText)
 
   return {
     item,
     kind: getViewKind(item),
     label: getEntryLabel(item),
-    copyText: getConversationItemCopyText(item),
+    copyText: displayText,
+    displayText,
+    injectedContextText,
     timing: getConversationItemTiming(item, turnStartedAt, timingOptions),
     deliveryModeLabel: getDeliveryModeLabel(item),
     attachments,
@@ -68,6 +75,24 @@ export function buildTranscriptEntryViewModel({
     toolPreview: getToolPreviewForItem(item),
     actionableApproval: item.kind === 'approval-request' && actionableApproval,
   }
+}
+
+export function getConversationItemDisplayText(
+  item: ConversationItem,
+  injectedContextText: string | null = null,
+): string {
+  const rawText = getConversationItemCopyText(item)
+
+  if (
+    item.kind !== 'message' ||
+    item.actor !== 'user' ||
+    !injectedContextText ||
+    !rawText.startsWith(injectedContextText)
+  ) {
+    return rawText
+  }
+
+  return rawText.slice(injectedContextText.length).replace(/^\s+/, '')
 }
 
 export function getConversationItemCopyText(item: ConversationItem): string {

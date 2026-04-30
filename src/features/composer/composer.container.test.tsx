@@ -3,6 +3,20 @@ import { fireEvent, render, screen } from '@testing-library/react'
 import { ComposerContainer } from './composer.container'
 import { useSessionStore } from '@/entities/session'
 import { useSkillStore } from '@/entities/skill'
+import {
+  useProjectContextStore,
+  type ProjectContextItem,
+} from '@/entities/project-context'
+
+const projectContextItem: ProjectContextItem = {
+  id: 'ctx-chaperone',
+  projectId: 'project-1',
+  label: 'chaperone project',
+  body: '/Users/marckraw/Projects/OpenSource/chaperone',
+  reinjectMode: 'boot',
+  createdAt: '2026-01-01T00:00:00.000Z',
+  updatedAt: '2026-01-01T00:00:00.000Z',
+}
 
 describe('ComposerContainer', () => {
   beforeEach(() => {
@@ -127,6 +141,14 @@ describe('ComposerContainer', () => {
       loadingDetailsSkillId: null,
       loadCatalog: vi.fn().mockResolvedValue(catalog),
     })
+
+    useProjectContextStore.setState({
+      itemsByProjectId: { 'project-1': [projectContextItem] },
+      attachmentsBySessionId: {},
+      loading: false,
+      error: null,
+      loadForProject: vi.fn().mockResolvedValue(undefined),
+    })
   })
 
   it('continues a failed continuable session instead of creating a new one', () => {
@@ -194,6 +216,42 @@ describe('ComposerContainer', () => {
           status: 'selected',
         },
       ],
+    )
+  })
+
+  it('passes selected project context items when creating a new session from the composer', () => {
+    render(
+      <ComposerContainer
+        projectId="project-1"
+        workspaceId={null}
+        activeSessionId={null}
+      />,
+    )
+
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Select project context' }),
+    )
+    fireEvent.click(screen.getByRole('button', { name: /chaperone project/ }))
+
+    const textbox = screen.getByRole('textbox')
+    fireEvent.change(textbox, {
+      target: { value: 'Use the linked chaperone project' },
+    })
+    fireEvent.keyDown(textbox, { key: 'Enter', metaKey: true })
+
+    expect(
+      useSessionStore.getState().createAndStartSession,
+    ).toHaveBeenCalledWith(
+      'project-1',
+      null,
+      'claude-code',
+      'claude-sonnet',
+      'medium',
+      'Use the linked chaperone project',
+      'Use the linked chaperone project',
+      undefined,
+      undefined,
+      ['ctx-chaperone'],
     )
   })
 

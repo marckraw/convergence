@@ -11,9 +11,10 @@ import type { SkillCatalogEntry, SkillSelection } from '@/entities/skill'
 import { Button } from '@/shared/ui/button'
 import { Textarea } from '@/shared/ui/textarea'
 import { cn } from '@/shared/lib/cn.pure'
-import { ArrowUp, Paperclip, Repeat } from 'lucide-react'
+import { ArrowUp, FileText, Paperclip, Repeat, X } from 'lucide-react'
 import { ComposerSelect } from './composer-select.presentational'
 import { ComposerContextMentionPicker } from './composer-context-mention.presentational'
+import { ProjectContextPicker } from './project-context-picker.presentational'
 import { SkillPicker } from './skill-picker.presentational'
 import { SkillSelectionChip } from './skill-selection-chip.presentational'
 
@@ -41,12 +42,18 @@ interface ComposerProps {
   skillQuery: string
   skillOptions: SkillCatalogEntry[]
   selectedSkills: SkillSelection[]
+  contextPickerOpen: boolean
+  projectContextItems: ProjectContextItem[]
+  selectedContextItems: ProjectContextItem[]
   skillCatalogLoading: boolean
   skillCatalogError: string | null
   onSkillPickerOpenChange: (open: boolean) => void
   onSkillQueryChange: (query: string) => void
   onSkillToggle: (skill: SkillCatalogEntry) => void
   onSkillRemove: (skillId: string) => void
+  onContextPickerOpenChange: (open: boolean) => void
+  onContextToggle: (id: string) => void
+  onContextRemove: (id: string) => void
   onAttachmentAdd: () => void
   onSkillsBrowse: () => void
   onAttachmentRemove: (attachmentId: string) => void
@@ -91,12 +98,18 @@ export const Composer: FC<ComposerProps> = ({
   skillQuery,
   skillOptions,
   selectedSkills,
+  contextPickerOpen,
+  projectContextItems,
+  selectedContextItems,
   skillCatalogLoading,
   skillCatalogError,
   onSkillPickerOpenChange,
   onSkillQueryChange,
   onSkillToggle,
   onSkillRemove,
+  onContextPickerOpenChange,
+  onContextToggle,
+  onContextRemove,
   onSkillsBrowse,
   onAttachmentAdd,
   onAttachmentRemove,
@@ -228,6 +241,34 @@ export const Composer: FC<ComposerProps> = ({
             ))}
           </div>
         ) : null}
+        {selectedContextItems.length > 0 ? (
+          <div
+            className="mb-2 flex flex-wrap gap-1.5"
+            data-testid="selected-project-context-row"
+          >
+            {selectedContextItems.map((item) => (
+              <span
+                key={item.id}
+                className="inline-flex max-w-full items-center gap-1 rounded-full border border-border/70 bg-muted/40 px-2 py-0.5 text-xs text-muted-foreground"
+              >
+                <FileText className="h-3 w-3 shrink-0" />
+                <span className="truncate">
+                  {item.label?.trim() ? item.label : 'Untitled'}
+                </span>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="h-4 w-4 rounded-full"
+                  aria-label={`Remove ${item.label?.trim() ? item.label : 'Untitled'} context`}
+                  onClick={() => onContextRemove(item.id)}
+                >
+                  <X className="h-3 w-3" />
+                </Button>
+              </span>
+            ))}
+          </div>
+        ) : null}
         {everyTurnContextCount > 0 ? (
           <div
             className="mb-2 inline-flex items-center gap-1 rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-[11px] font-medium text-amber-700 dark:text-amber-200"
@@ -298,6 +339,14 @@ export const Composer: FC<ComposerProps> = ({
               disabled={disabled || !selection.provider}
               onToggleSkill={onSkillToggle}
               onBrowseAll={onSkillsBrowse}
+            />
+            <ProjectContextPicker
+              open={contextPickerOpen}
+              onOpenChange={onContextPickerOpenChange}
+              items={projectContextItems}
+              selectedIds={selectedContextItems.map((item) => item.id)}
+              disabled={disabled || selectionDisabled}
+              onToggleItem={onContextToggle}
             />
             <ComposerSelect
               selectedId={selection.providerId}

@@ -13,6 +13,7 @@ interface ConversationItemProps {
   entry: ConversationItemEntry
   sessionId: string
   turnStartedAt?: string | null
+  injectedContextText?: string | null
   onApprove?: () => void
   onDeny?: () => void
 }
@@ -23,6 +24,7 @@ export const ConversationItem: FC<ConversationItemProps> = ({
   entry,
   sessionId,
   turnStartedAt,
+  injectedContextText = null,
   onApprove,
   onDeny,
 }) => {
@@ -40,6 +42,7 @@ export const ConversationItem: FC<ConversationItemProps> = ({
   const viewModel = buildTranscriptEntryViewModel({
     item: entry,
     turnStartedAt,
+    injectedContextText,
     resolvedAttachmentsById: resolvedMap,
     actionableApproval: !!onApprove && !!onDeny,
   })

@@ -12,7 +12,6 @@ import {
   setRecentSessionIds,
 } from '../backend/session/session-recents'
 import { ProviderRegistry } from '../backend/provider/provider-registry'
-import type { MidRunInputMode } from '../backend/provider/provider.types'
 import { McpService } from '../backend/mcp/mcp.service'
 import { SkillsService } from '../backend/skills/skills.service'
 import { AppSettingsService } from '../backend/app-settings/app-settings.service'
@@ -39,8 +38,11 @@ import type { ProjectSettings } from '../backend/project/project-settings.pure'
 import type {
   SkillCatalogOptions,
   SkillDetailsRequest,
-  SkillSelection,
 } from '../backend/skills/skills.types'
+import {
+  sendSessionMessageInputFromIpc,
+  type SendSessionMessageIpcInput,
+} from './session-message-ipc.pure'
 
 interface IngestFileIpcInput {
   name: string
@@ -427,43 +429,18 @@ export function registerIpcHandlers(
 
   ipcMain.handle(
     'session:start',
-    async (
-      _event,
-      id: string,
-      input: {
-        text: string
-        attachmentIds?: string[]
-        skillSelections?: SkillSelection[]
-        deliveryMode?: string
-      },
-    ) => {
-      await sessionService.start(id, {
-        text: input.text,
-        attachmentIds: input.attachmentIds,
-        skillSelections: input.skillSelections,
-        deliveryMode: input.deliveryMode as MidRunInputMode | undefined,
-      })
+    async (_event, id: string, input: SendSessionMessageIpcInput) => {
+      await sessionService.start(id, sendSessionMessageInputFromIpc(input))
     },
   )
 
   ipcMain.handle(
     'session:sendMessage',
-    async (
-      _event,
-      id: string,
-      input: {
-        text: string
-        attachmentIds?: string[]
-        skillSelections?: SkillSelection[]
-        deliveryMode?: string
-      },
-    ) => {
-      await sessionService.sendMessage(id, {
-        text: input.text,
-        attachmentIds: input.attachmentIds,
-        skillSelections: input.skillSelections,
-        deliveryMode: input.deliveryMode as MidRunInputMode | undefined,
-      })
+    async (_event, id: string, input: SendSessionMessageIpcInput) => {
+      await sessionService.sendMessage(
+        id,
+        sendSessionMessageInputFromIpc(input),
+      )
     },
   )
 

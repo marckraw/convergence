@@ -35,6 +35,7 @@ import {
   InitiativeContextPanel,
   type InitiativeContextAttemptView,
 } from './initiative-context-panel.presentational'
+import { buildConversationRenderPlan } from './session-transcript-render-plan.pure'
 
 const CHANGED_FILES_MIN_WIDTH = 320
 const CHANGED_FILES_MAX_WIDTH = 960
@@ -151,6 +152,10 @@ export const SessionView: FC = () => {
     }
     return startedAtById
   }, [activeConversation])
+  const conversationRenderPlan = useMemo(
+    () => buildConversationRenderPlan(activeConversation),
+    [activeConversation],
+  )
 
   const scrollToBottom = useCallback(() => {
     transcriptEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -481,21 +486,23 @@ export const SessionView: FC = () => {
         {/* Transcript */}
         <div className="app-scrollbar flex-1 overflow-y-auto px-4">
           <div className="mx-auto max-w-2xl py-4">
-            {activeConversation.map((entry, i) => {
+            {conversationRenderPlan.map((renderEntry, i) => {
+              const entry = renderEntry.item
               const isLastApproval =
                 entry.kind === 'approval-request' &&
                 session.attention === 'needs-approval' &&
-                i === activeConversation.length - 1
-              const prev = activeConversation[i - 1] ?? null
+                i === conversationRenderPlan.length - 1
+              const prev = conversationRenderPlan[i - 1]?.item ?? null
               const turnBoundary =
                 entry.turnId !== null &&
                 (prev === null || prev.turnId !== entry.turnId)
               const turnSequence = turnBoundary
-                ? activeConversation.slice(0, i + 1).reduce<{
+                ? conversationRenderPlan.slice(0, i + 1).reduce<{
                     count: number
                     seen: Set<string>
                   }>(
-                    (acc, item) => {
+                    (acc, plannedEntry) => {
+                      const item = plannedEntry.item
                       if (item.turnId && !acc.seen.has(item.turnId)) {
                         acc.seen.add(item.turnId)
                         acc.count += 1
@@ -521,6 +528,7 @@ export const SessionView: FC = () => {
                   <ConversationItem
                     entry={entry}
                     sessionId={session.id}
+                    injectedContextText={renderEntry.injectedContextText}
                     turnStartedAt={
                       entry.turnId
                         ? (turnStartedAtById.get(entry.turnId) ?? null)
