@@ -1,10 +1,4 @@
-export {
-  useTerminalStore,
-  DEFAULT_DOCK_HEIGHT,
-  MIN_DOCK_HEIGHT,
-  DOCK_MAX_HEIGHT_RATIO,
-  clampDockHeight,
-} from './terminal.model'
+export { useTerminalStore } from './terminal.model'
 export type { TerminalStore } from './terminal.model'
 export { terminalApi } from './terminal.api'
 export { terminalLayoutApi } from './terminal-layout.api'

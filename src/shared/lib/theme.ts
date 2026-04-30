@@ -22,7 +22,7 @@ export function storeTheme(theme: Theme): void {
   }
 }
 
-export function resolveTheme(theme: Theme): 'light' | 'dark' {
+function resolveTheme(theme: Theme): 'light' | 'dark' {
   if (theme === 'system') {
     return window.matchMedia('(prefers-color-scheme: dark)').matches
       ? 'dark'

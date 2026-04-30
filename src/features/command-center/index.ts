@@ -8,7 +8,6 @@ export type { BuildPaletteIndexInput } from './command-palette-index.pure'
 export {
   buildCuratedSections,
   rankForQuery,
-  PALETTE_FUSE_KEYS,
   PALETTE_FUSE_OPTIONS,
 } from './command-palette-ranking.pure'
 export type { PaletteFuse } from './command-palette-ranking.pure'

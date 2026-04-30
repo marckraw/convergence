@@ -2,7 +2,7 @@ import { existsSync, readFileSync } from 'fs'
 import { homedir } from 'os'
 import { join } from 'path'
 
-export function getPiAuthPath(): string {
+function getPiAuthPath(): string {
   return join(homedir(), '.pi', 'agent', 'auth.json')
 }
 
