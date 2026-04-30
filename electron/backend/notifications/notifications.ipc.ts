@@ -61,7 +61,7 @@ export function registerNotificationsIpcHandlers(
   )
 }
 
-export function broadcastPrefs(prefs: NotificationPrefs): void {
+function broadcastPrefs(prefs: NotificationPrefs): void {
   broadcastNotificationsToRenderers('notifications:prefs-updated', prefs)
 }
 

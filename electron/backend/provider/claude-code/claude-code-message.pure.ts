@@ -41,7 +41,7 @@ function decodeUtf8(bytes: Uint8Array): string {
   return new TextDecoder('utf-8').decode(bytes)
 }
 
-export function buildInlinedTextBlock(
+function buildInlinedTextBlock(
   textParts: ClaudeMessagePart[],
   userText: string,
 ): string {

@@ -31,9 +31,7 @@ export interface SystemNotificationDeps {
 const SWEEP_INTERVAL_MS = 30_000
 const MAX_AGE_MS = 60_000
 
-export function severityFromKind(
-  kind: NotificationEventKind,
-): NotificationSeverity {
+function severityFromKind(kind: NotificationEventKind): NotificationSeverity {
   return kind === 'agent.finished' ? 'info' : 'critical'
 }
 

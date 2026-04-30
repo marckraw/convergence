@@ -28,14 +28,11 @@ interface TerminalState {
   dockVisibleBySessionId: Record<string, boolean>
 }
 
-export const DEFAULT_DOCK_HEIGHT = 280
-export const MIN_DOCK_HEIGHT = 120
-export const DOCK_MAX_HEIGHT_RATIO = 0.6
+const DEFAULT_DOCK_HEIGHT = 280
+const MIN_DOCK_HEIGHT = 120
+const DOCK_MAX_HEIGHT_RATIO = 0.6
 
-export function clampDockHeight(
-  height: number,
-  maxWindowHeight: number,
-): number {
+function clampDockHeight(height: number, maxWindowHeight: number): number {
   const max = Math.max(
     MIN_DOCK_HEIGHT,
     Math.floor(maxWindowHeight * DOCK_MAX_HEIGHT_RATIO),

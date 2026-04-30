@@ -20,7 +20,7 @@ const RECENTS_CAP = 5
 const PROJECTS_CAP = 8
 const WORKSPACES_CAP = 8
 
-export const PALETTE_FUSE_KEYS: IFuseOptions<PaletteItem>['keys'] = [
+const PALETTE_FUSE_KEYS: IFuseOptions<PaletteItem>['keys'] = [
   { name: 'search.sessionName', weight: 1.0 },
   { name: 'search.projectName', weight: 0.8 },
   { name: 'search.branchName', weight: 0.7 },

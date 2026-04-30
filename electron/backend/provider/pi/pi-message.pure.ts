@@ -1,7 +1,4 @@
-import type {
-  Attachment,
-  AttachmentKind,
-} from '../../attachments/attachments.types'
+import type { AttachmentKind } from '../../attachments/attachments.types'
 
 export interface PiMessagePart {
   kind: AttachmentKind
@@ -25,19 +22,6 @@ export interface PiPromptPayload {
 export interface PiMessageInput {
   text: string
   parts?: PiMessagePart[]
-}
-
-export function partFromAttachment(
-  attachment: Attachment,
-  bytes?: Uint8Array,
-): PiMessagePart {
-  return {
-    kind: attachment.kind,
-    mimeType: attachment.mimeType,
-    filename: attachment.filename,
-    storagePath: attachment.storagePath,
-    bytes,
-  }
 }
 
 function decodeUtf8(bytes: Uint8Array): string {
