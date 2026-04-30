@@ -1,5 +1,11 @@
 # convergence
 
+## 0.29.2
+
+### Patch Changes
+
+- a8d8e11: Configure Fallow for Electron entry points and prune unused static-analysis surface area.
+
 ## 0.29.1
 
 ### Patch Changes
