@@ -4,7 +4,7 @@ import { INITIAL_UPDATE_STATUS } from './updates.defaults'
 import type { UpdatesService } from './updates.service'
 import type { UpdatePrefs, UpdateStatus } from './updates.types'
 
-export const UPDATES_STATUS_CHANGED = 'updates:status-changed'
+const UPDATES_STATUS_CHANGED = 'updates:status-changed'
 const DEV_DISABLED_ERROR = 'auto-updates disabled in dev mode'
 const UNAVAILABLE_DISABLED_ERROR = 'auto-updates unavailable in this build'
 
@@ -127,6 +127,3 @@ export function broadcastUpdateStatus(status: UpdateStatus): void {
     }
   }
 }
-
-export const UPDATES_DEV_DISABLED_ERROR = DEV_DISABLED_ERROR
-export const UPDATES_UNAVAILABLE_ERROR = UNAVAILABLE_DISABLED_ERROR

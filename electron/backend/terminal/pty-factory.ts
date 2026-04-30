@@ -25,12 +25,3 @@ export function createNodePtyFactory(): PtyFactory {
     },
   }
 }
-
-export function resolveDefaultShell(env: NodeJS.ProcessEnv = process.env): {
-  shell: string
-  args: string[]
-} {
-  const fromEnv = env.SHELL
-  const shell = fromEnv && fromEnv.length > 0 ? fromEnv : '/bin/zsh'
-  return { shell, args: ['-l'] }
-}

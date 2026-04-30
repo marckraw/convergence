@@ -1,0 +1,16 @@
+{
+  "$schema": "https://raw.githubusercontent.com/fallow-rs/fallow/main/schema.json",
+  "entry": [
+    "electron/main/index.ts",
+    "electron/preload/index.ts",
+    "src/index.html",
+    "tools/chaperone/check-single-react-component-per-file.mjs",
+    "tools/generate-notification-sounds.mjs"
+  ],
+  "usedClassMembers": [
+    {
+      "implements": "Provider",
+      "members": ["name", "supportsContinuation", "describe"]
+    }
+  ]
+}

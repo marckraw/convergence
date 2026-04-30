@@ -10,7 +10,7 @@ import type {
 
 const MB = 1024 * 1024
 
-export const CLAUDE_CODE_ATTACHMENT_CAPABILITY: ProviderAttachmentCapability = {
+const CLAUDE_CODE_ATTACHMENT_CAPABILITY: ProviderAttachmentCapability = {
   supportsImage: true,
   supportsPdf: true,
   supportsText: true,
@@ -30,7 +30,7 @@ export const CODEX_ATTACHMENT_CAPABILITY: ProviderAttachmentCapability = {
   maxTotalBytes: 50 * MB,
 }
 
-export const PI_ATTACHMENT_CAPABILITY: ProviderAttachmentCapability = {
+const PI_ATTACHMENT_CAPABILITY: ProviderAttachmentCapability = {
   supportsImage: true,
   supportsPdf: false,
   supportsText: true,
@@ -40,25 +40,25 @@ export const PI_ATTACHMENT_CAPABILITY: ProviderAttachmentCapability = {
   maxTotalBytes: 50 * MB,
 }
 
-export const CLAUDE_CODE_SKILLS_CAPABILITY: ProviderSkillsCapability = {
+const CLAUDE_CODE_SKILLS_CAPABILITY: ProviderSkillsCapability = {
   catalog: 'filesystem',
   invocation: 'native-command',
   activationConfirmation: 'native-event',
 }
 
-export const CODEX_SKILLS_CAPABILITY: ProviderSkillsCapability = {
+const CODEX_SKILLS_CAPABILITY: ProviderSkillsCapability = {
   catalog: 'native-rpc',
   invocation: 'structured-input',
   activationConfirmation: 'none',
 }
 
-export const PI_SKILLS_CAPABILITY: ProviderSkillsCapability = {
+const PI_SKILLS_CAPABILITY: ProviderSkillsCapability = {
   catalog: 'filesystem',
   invocation: 'native-command',
   activationConfirmation: 'none',
 }
 
-export const UNSUPPORTED_SKILLS_CAPABILITY: ProviderSkillsCapability = {
+const UNSUPPORTED_SKILLS_CAPABILITY: ProviderSkillsCapability = {
   catalog: 'unsupported',
   invocation: 'unsupported',
   activationConfirmation: 'none',
@@ -94,7 +94,7 @@ export const CODEX_MID_RUN_INPUT_CAPABILITY: ProviderMidRunInputCapability = {
   defaultRunningMode: 'follow-up',
 }
 
-export const PI_MID_RUN_INPUT_CAPABILITY: ProviderMidRunInputCapability = {
+const PI_MID_RUN_INPUT_CAPABILITY: ProviderMidRunInputCapability = {
   supportsAnswer: false,
   supportsNativeFollowUp: true,
   supportsAppQueuedFollowUp: false,

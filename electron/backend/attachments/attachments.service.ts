@@ -17,10 +17,10 @@ import {
 } from './mime-sniff.pure'
 import { normalizeImageBytes } from './image-normalize.pure'
 
-export const MAX_IMAGE_BYTES = 10 * 1024 * 1024
-export const MAX_PDF_BYTES = 20 * 1024 * 1024
-export const MAX_TEXT_BYTES = 1 * 1024 * 1024
-export const MAX_TOTAL_BYTES = 50 * 1024 * 1024
+const MAX_IMAGE_BYTES = 10 * 1024 * 1024
+const MAX_PDF_BYTES = 20 * 1024 * 1024
+const MAX_TEXT_BYTES = 1 * 1024 * 1024
+const MAX_TOTAL_BYTES = 50 * 1024 * 1024
 
 // Sentinel session id used by the composer when no real session exists yet
 // (see `src/features/composer/composer.container.tsx` DRAFT_KEY_NEW).
@@ -57,7 +57,7 @@ const EXTENSION_BY_MIME: Record<string, string> = {
   'text/x-sql': '.sql',
 }
 
-export function sanitizeFilename(name: string): string {
+function sanitizeFilename(name: string): string {
   const base = name.split(/[/\\]/).pop() ?? name
   const trimmed = base.replace(/\s+/g, '_')
   const sanitized = trimmed.replace(/[^a-zA-Z0-9._-]/g, '_')

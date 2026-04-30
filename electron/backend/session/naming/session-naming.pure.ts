@@ -1,7 +1,7 @@
 const INPUT_CAP = 2000
 const MAX_TITLE_LENGTH = 80
 
-export const NAMING_INSTRUCTION =
+const NAMING_INSTRUCTION =
   'Generate a concise 3-6 word title for the following conversation. ' +
   'Use Title Case. Do not wrap in quotes. No trailing punctuation. ' +
   'Output only the title, nothing else.'
