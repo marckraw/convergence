@@ -7,6 +7,7 @@ import {
   DEFAULT_UPDATE_PREFS,
   useAppSettingsStore,
 } from '@/entities/app-settings'
+import { useAnalyticsStore, type AnalyticsOverview } from '@/entities/analytics'
 import { useDialogStore } from '@/entities/dialog'
 import { Button } from '@/shared/ui/button'
 import { AppSettingsDialogContainer } from './app-settings.container'
@@ -77,6 +78,45 @@ const providers = [
   },
 ]
 
+const EMPTY_ANALYTICS_OVERVIEW: AnalyticsOverview = {
+  range: {
+    preset: '30d',
+    startDate: '2026-04-01',
+    endDate: '2026-04-30',
+  },
+  totals: {
+    userMessages: 0,
+    assistantMessages: 0,
+    userWords: 0,
+    assistantWords: 0,
+    sessionsCreated: 0,
+    turnsCompleted: 0,
+    filesChanged: 0,
+    linesAdded: 0,
+    linesDeleted: 0,
+    approvalRequests: 0,
+    inputRequests: 0,
+    attachmentsSent: 0,
+    toolCalls: 0,
+    failedSessions: 0,
+  },
+  streaks: { current: 0, longest: 0, activeDays: [] },
+  dailyActivity: [],
+  providerUsage: [],
+  projectUsage: [],
+  weekdayHourActivity: [],
+  conversationBalance: [],
+  deterministicProfile: {
+    mostUsedProvider: null,
+    mostActiveProject: null,
+    peakActivity: null,
+    sessionSizeBucket: 'none',
+    interactionShape: 'none',
+    summary: 'No local usage yet.',
+  },
+  generatedProfile: null,
+}
+
 function primeStores(stored: {
   defaultProviderId: string | null
   defaultModelId: string | null
@@ -120,6 +160,12 @@ describe('AppSettingsDialogContainer', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     useDialogStore.setState({ openDialog: null })
+    useAnalyticsStore.setState({
+      rangePreset: '30d',
+      overview: null,
+      isLoading: false,
+      error: null,
+    })
     ;(window as unknown as { electronAPI: unknown }).electronAPI = {
       provider: { getAll: vi.fn().mockResolvedValue(providers) },
       appSettings: {
@@ -130,6 +176,9 @@ describe('AppSettingsDialogContainer', () => {
         }),
         set: vi.fn().mockImplementation(async (input) => input),
         onUpdated: vi.fn().mockReturnValue(() => {}),
+      },
+      analytics: {
+        getOverview: vi.fn().mockResolvedValue(EMPTY_ANALYTICS_OVERVIEW),
       },
     }
   })
@@ -267,6 +316,31 @@ describe('AppSettingsDialogContainer', () => {
     expect(
       screen.getByRole('switch', { name: 'Enable notifications' }),
     ).toBeInTheDocument()
+  })
+
+  it('opens the local Insights section from settings navigation', async () => {
+    primeStores({
+      defaultProviderId: 'claude-code',
+      defaultModelId: 'sonnet',
+      defaultEffortId: 'medium',
+    })
+
+    render(<AppSettingsDialogContainer trigger={<Button>Open</Button>} />)
+    fireEvent.click(screen.getByText('Open'))
+
+    expect(await screen.findByText('Settings')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: /Insights/ }))
+
+    expect(
+      await screen.findByRole('tab', { name: 'Your Usage' }),
+    ).toBeInTheDocument()
+    await waitFor(() => {
+      expect(window.electronAPI.analytics.getOverview).toHaveBeenCalledWith(
+        '30d',
+      )
+    })
+    expect(screen.getByRole('button', { name: 'Done' })).toBeInTheDocument()
   })
 
   it('toggling the auto-update switch persists the new updates prefs on save', async () => {

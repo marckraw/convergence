@@ -242,16 +242,16 @@ fallback.
 Goal: show useful local analytics in the Settings dialog without generated AI
 content.
 
-- [ ] Add `insights` to `AppSettingsSectionId`.
-- [ ] Add an `Insights` nav item in the settings dialog.
-- [ ] Create `src/features/analytics-insights/`.
-- [ ] Create `analytics-insights.container.tsx` to load overview data from the
+- [x] Add `insights` to `AppSettingsSectionId`.
+- [x] Add an `Insights` nav item in the settings dialog.
+- [x] Create `src/features/analytics-insights/`.
+- [x] Create `analytics-insights.container.tsx` to load overview data from the
       analytics entity store when the section is active.
-- [ ] Create `analytics-insights.presentational.tsx` with tabs:
+- [x] Create `analytics-insights.presentational.tsx` with tabs:
   - `Your Usage`
   - `Your Work Style`
-- [ ] Create `range-picker.presentational.tsx`.
-- [ ] Create `usage-tab.presentational.tsx` with:
+- [x] Create `range-picker.presentational.tsx`.
+- [x] Create `usage-tab.presentational.tsx` with:
   - metric cards
   - daily activity chart
   - provider usage chart
@@ -259,17 +259,17 @@ content.
   - time-of-day heatmap
   - streak calendar
   - conversation balance chart
-- [ ] Ensure empty database state is useful and not visually broken.
-- [ ] Ensure WebGPU fallback still leaves the metric cards and CSS grids
+- [x] Ensure empty database state is useful and not visually broken.
+- [x] Ensure WebGPU fallback still leaves the metric cards and CSS grids
       visible.
 
 **Verification**
 
-- [ ] `npm install`
-- [ ] `npm run typecheck`
-- [ ] `npm run test:pure`
-- [ ] `npm run test:unit -- analytics`
-- [ ] `chaperone check --fix`
+- [x] `npm install`
+- [x] `npm run typecheck`
+- [x] `npm run test:pure`
+- [x] `npm run test:unit -- analytics`
+- [x] `chaperone check --fix`
 - [ ] Manual: open Settings -> Insights, switch ranges, inspect empty and
       populated databases.
 
@@ -523,3 +523,22 @@ Append a short note below after each completed phase:
   `ENOTFOUND`.
 - Next phase: A5 `Your Usage` UI. This is the first useful manual testing
   checkpoint because Settings will expose a visible Insights section.
+
+### A5 verification (2026-04-30)
+
+- Summary: Added the Settings -> Insights section, renderer
+  `analytics-insights` feature slice, range picker, `Your Usage` tab, metric
+  cards, ChartGPU-backed daily/provider/balance charts, project distribution,
+  time-of-day heatmap, streak calendar, empty states, and WebGPU fallback
+  coverage. `Your Work Style` is present as a tab placeholder for A6.
+- Tests:
+  - `npm install`: pass
+  - `npm run typecheck`: pass
+  - `npm run test:pure`: pass
+  - `npm run test:unit`: pass; existing jsdom canvas `getContext()` warnings
+    still print from the chart environment.
+  - `chaperone check --fix`: pass
+- Decisions changed: none.
+- Manual checkpoint: ready now. Open Settings -> Insights, switch ranges, and
+  inspect empty and populated local databases.
+- Next phase: A6 deterministic `Your Work Style`.
