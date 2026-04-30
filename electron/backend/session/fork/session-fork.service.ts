@@ -37,7 +37,7 @@ export class SessionForkExtractionError extends Error {
   }
 }
 
-export class SessionForkUnsupportedError extends Error {
+class SessionForkUnsupportedError extends Error {
   constructor(message: string) {
     super(message)
     this.name = 'SessionForkUnsupportedError'

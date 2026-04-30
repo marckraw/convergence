@@ -1,6 +1,6 @@
 import type { RingBuffer } from './terminal.types'
 
-export const DEFAULT_RING_BUFFER_BYTES = 512 * 1024
+const DEFAULT_RING_BUFFER_BYTES = 512 * 1024
 
 export function createRingBuffer(
   maxBytes = DEFAULT_RING_BUFFER_BYTES,

@@ -163,7 +163,7 @@ export function initiativeOutputFromRow(
   }
 }
 
-export function parseInitiativeStatus(value: string): InitiativeStatus {
+function parseInitiativeStatus(value: string): InitiativeStatus {
   if (
     value === 'planned' ||
     value === 'implementing' ||
@@ -179,7 +179,7 @@ export function parseInitiativeStatus(value: string): InitiativeStatus {
   return 'exploring'
 }
 
-export function parseInitiativeAttention(value: string): InitiativeAttention {
+function parseInitiativeAttention(value: string): InitiativeAttention {
   if (
     value === 'needs-you' ||
     value === 'needs-decision' ||
@@ -191,9 +191,7 @@ export function parseInitiativeAttention(value: string): InitiativeAttention {
   return 'none'
 }
 
-export function parseInitiativeAttemptRole(
-  value: string,
-): InitiativeAttemptRole {
+function parseInitiativeAttemptRole(value: string): InitiativeAttemptRole {
   if (
     value === 'seed' ||
     value === 'implementation' ||

@@ -5,7 +5,7 @@ import type {
   SummaryValidationResult,
 } from './session-fork.types'
 
-export const EXTRACTION_INSTRUCTION = [
+const EXTRACTION_INSTRUCTION = [
   'You distill a conversation into a structured JSON summary.',
   'Read the transcript below and output a SINGLE JSON object matching this schema:',
   '{',
@@ -323,8 +323,8 @@ function hasAnyArtifact(artifacts: ForkArtifacts): boolean {
   )
 }
 
-export const FORK_SEED_SEPARATOR = '\n\n---\n\n'
-export const DEFAULT_FORK_SEED_TAIL = 'Continue from here.'
+const FORK_SEED_SEPARATOR = '\n\n---\n\n'
+const DEFAULT_FORK_SEED_TAIL = 'Continue from here.'
 
 function renderForkSeedTail(additionalInstruction: string | null): string {
   const tail = additionalInstruction?.trim()
