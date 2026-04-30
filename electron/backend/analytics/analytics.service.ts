@@ -1,5 +1,12 @@
+import { randomUUID } from 'crypto'
 import type Database from 'better-sqlite3'
+import type { AppSettingsService } from '../app-settings/app-settings.service'
+import type { ProviderRegistry } from '../provider/provider-registry'
 import { AnalyticsProfileService } from './analytics-profile.service'
+import {
+  buildWorkProfilePrompt,
+  parseGeneratedWorkProfilePayload,
+} from './analytics-profile.pure'
 import { buildAnalyticsOverview } from './analytics.pure'
 import type {
   AnalyticsAttachmentInput,
@@ -10,7 +17,15 @@ import type {
   AnalyticsRangePreset,
   AnalyticsSessionInput,
   AnalyticsTurnInput,
+  GenerateWorkProfileInput,
 } from './analytics.types'
+
+interface AnalyticsServiceDeps {
+  profileService?: AnalyticsProfileService
+  providers?: ProviderRegistry
+  appSettings?: AppSettingsService
+  workingDirectory?: string
+}
 
 interface AnalyticsSessionRow {
   id: string
@@ -152,10 +167,20 @@ function conversationItemFromRow(
 }
 
 export class AnalyticsService {
+  private readonly profileService: AnalyticsProfileService
+  private readonly providers: ProviderRegistry | null
+  private readonly appSettings: AppSettingsService | null
+  private readonly workingDirectory: string
+
   constructor(
     private readonly db: Database.Database,
-    private readonly profileService = new AnalyticsProfileService(db),
-  ) {}
+    deps: AnalyticsServiceDeps = {},
+  ) {
+    this.profileService = deps.profileService ?? new AnalyticsProfileService(db)
+    this.providers = deps.providers ?? null
+    this.appSettings = deps.appSettings ?? null
+    this.workingDirectory = deps.workingDirectory ?? process.cwd()
+  }
 
   getOverview(
     rangePreset: string,
@@ -176,6 +201,62 @@ export class AnalyticsService {
 
   deleteWorkProfileSnapshot(id: string): void {
     this.profileService.deleteProfileSnapshot(id)
+  }
+
+  async generateWorkProfile(
+    input: GenerateWorkProfileInput,
+    now = new Date().toISOString(),
+  ) {
+    if (!this.providers || !this.appSettings) {
+      throw new Error('Analytics profile generation is unavailable')
+    }
+
+    const rangePreset = parseRangePreset(input.rangePreset)
+    const provider = this.providers.get(input.providerId)
+    if (!provider) {
+      throw new Error(`Unknown provider id: ${input.providerId}`)
+    }
+    if (!provider.oneShot) {
+      throw new Error(
+        `Provider does not support profile generation: ${input.providerId}`,
+      )
+    }
+
+    const descriptor = await provider.describe()
+    const modelId =
+      input.model ??
+      (await this.appSettings.resolveExtractionModel(provider.id))
+    if (!modelId) {
+      throw new Error(`No model available for provider ${provider.id}`)
+    }
+    if (!descriptor.modelOptions.some((option) => option.id === modelId)) {
+      throw new Error(
+        `Unknown model id for provider ${provider.id}: ${modelId}`,
+      )
+    }
+
+    const overview = this.getOverview(rangePreset, now)
+    const prompt = buildWorkProfilePrompt({
+      ...overview,
+      generatedProfile: null,
+    })
+    const result = await provider.oneShot({
+      prompt,
+      modelId,
+      workingDirectory: this.workingDirectory,
+      timeoutMs: 180_000,
+      requestId: randomUUID(),
+    })
+    const payload = parseGeneratedWorkProfilePayload(result.text)
+
+    return this.profileService.createProfileSnapshot({
+      rangePreset,
+      rangeStartDate: overview.range.startDate,
+      rangeEndDate: overview.range.endDate,
+      providerId: provider.id,
+      model: modelId,
+      payload,
+    })
   }
 
   private listSessions(): AnalyticsSessionInput[] {

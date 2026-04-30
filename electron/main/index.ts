@@ -229,7 +229,11 @@ async function startApp(): Promise<void> {
   const appSettingsService = new AppSettingsService(stateService, async () =>
     Promise.all(providerRegistry.getAll().map((p) => p.describe())),
   )
-  const analyticsService = new AnalyticsService(db)
+  const analyticsService = new AnalyticsService(db, {
+    providers: providerRegistry,
+    appSettings: appSettingsService,
+    workingDirectory: app.getPath('userData'),
+  })
 
   const notificationsState = new NotificationsStateService()
   const dockBadge = new DockBadgeService({

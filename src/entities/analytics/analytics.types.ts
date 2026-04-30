@@ -111,6 +111,12 @@ export interface GeneratedWorkProfileSnapshot {
   createdAt: string
 }
 
+export interface GenerateWorkProfileInput {
+  rangePreset: AnalyticsRangePreset
+  providerId: string
+  model: string | null
+}
+
 export interface AnalyticsOverview {
   range: AnalyticsRange
   totals: AnalyticsTotals

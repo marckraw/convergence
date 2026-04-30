@@ -16,6 +16,7 @@ import { McpService } from '../backend/mcp/mcp.service'
 import { SkillsService } from '../backend/skills/skills.service'
 import { AppSettingsService } from '../backend/app-settings/app-settings.service'
 import type { AnalyticsService } from '../backend/analytics/analytics.service'
+import type { AnalyticsRangePreset } from '../backend/analytics/analytics.types'
 import type { AttachmentsService } from '../backend/attachments/attachments.service'
 import type { IngestFileInput } from '../backend/attachments/attachments.types'
 import type { AppSettingsInput } from '../backend/app-settings/app-settings.types'
@@ -367,6 +368,19 @@ export function registerIpcHandlers(
 
   ipcMain.handle('analytics:deleteWorkProfileSnapshot', (_event, id: string) =>
     analyticsService.deleteWorkProfileSnapshot(id),
+  )
+
+  ipcMain.handle(
+    'analytics:generateWorkProfile',
+    (
+      _event,
+      input: { rangePreset: string; providerId: string; model: string | null },
+    ) =>
+      analyticsService.generateWorkProfile({
+        rangePreset: input.rangePreset as AnalyticsRangePreset,
+        providerId: input.providerId,
+        model: input.model,
+      }),
   )
 
   // Session handlers

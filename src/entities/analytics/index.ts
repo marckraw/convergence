@@ -9,6 +9,7 @@ export type {
   DeterministicWorkProfile,
   GeneratedWorkProfileSnapshot,
   GeneratedWorkProfileSnapshotPayload,
+  GenerateWorkProfileInput,
   ProjectUsagePoint,
   ProviderUsagePoint,
   WeekdayHourActivityPoint,

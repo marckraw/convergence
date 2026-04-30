@@ -369,26 +369,26 @@ provider call is wired.
 
 Goal: generate Wispr-like profile text only after explicit user confirmation.
 
-- [ ] Add `generateWorkProfile(input)` backend path.
-- [ ] Build the generation prompt from aggregate overview data and
+- [x] Add `generateWorkProfile(input)` backend path.
+- [x] Build the generation prompt from aggregate overview data and
       deterministic profile facts only.
-- [ ] Do not include full transcripts or raw conversation excerpts.
-- [ ] Validate provider/model input.
-- [ ] Store the generated profile snapshot from the model response.
-- [ ] Return the new snapshot and include it in future overview responses.
-- [ ] Add `generate-profile-dialog.presentational.tsx` with privacy copy and
+- [x] Do not include full transcripts or raw conversation excerpts.
+- [x] Validate provider/model input.
+- [x] Store the generated profile snapshot from the model response.
+- [x] Return the new snapshot and include it in future overview responses.
+- [x] Add `generate-profile-dialog.presentational.tsx` with privacy copy and
       provider/model selection.
-- [ ] Wire `Generate work profile`, `Regenerate`, and `Delete profile`
+- [x] Wire `Generate work profile`, `Regenerate`, and `Delete profile`
       controls in `Your Work Style`.
-- [ ] Tests prove the API is not called until the user confirms.
+- [x] Tests prove the API is not called until the user confirms.
 
 **Verification**
 
-- [ ] `npm install`
-- [ ] `npm run typecheck`
-- [ ] `npm run test:pure`
-- [ ] `npm run test:unit -- analytics`
-- [ ] `chaperone check --fix`
+- [x] `npm install`
+- [x] `npm run typecheck`
+- [x] `npm run test:pure`
+- [x] `npm run test:unit -- analytics`
+- [x] `chaperone check --fix`
 - [ ] Manual: generate with a configured provider, close/reopen settings,
       verify snapshot persists, delete it, verify removal.
 
@@ -578,3 +578,23 @@ Append a short note below after each completed phase:
   - `chaperone check --fix`: pass
 - Decisions changed: none.
 - Next phase: A8 opt-in generated work profile.
+
+### A8 verification (2026-04-30)
+
+- Summary: Added opt-in work profile generation from aggregate analytics only,
+  provider/model validation, generated snapshot persistence, renderer store
+  actions, and a confirmation dialog with privacy copy. The Work Style tab can
+  generate, regenerate, and delete local generated profile snapshots.
+- Tests:
+  - `npm install`: pass
+  - `npm run typecheck`: pass
+  - `npm run test:pure`: pass
+  - `npm run test:unit`: pass; existing jsdom canvas `getContext()` warnings
+    still print from the chart environment.
+  - `chaperone check --fix`: pass
+- Decisions changed: none.
+- Manual checkpoint: ready now for the generated profile flow. Open Settings
+  -> Insights -> Your Work Style, click Generate, verify the privacy dialog,
+  generate with a configured provider/model, close and reopen Settings to
+  confirm persistence, then delete the snapshot.
+- Next phase: A9 polish, accessibility, and entry-point decision.

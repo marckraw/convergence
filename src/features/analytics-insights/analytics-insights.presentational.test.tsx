@@ -105,20 +105,73 @@ const overview: AnalyticsOverview = {
   generatedProfile: null,
 }
 
+const providers = [
+  {
+    id: 'codex',
+    name: 'Codex',
+    vendorLabel: 'OpenAI',
+    kind: 'conversation' as const,
+    supportsContinuation: true,
+    defaultModelId: 'gpt-5.4',
+    modelOptions: [
+      {
+        id: 'gpt-5.4',
+        label: 'GPT-5.4',
+        defaultEffort: 'medium' as const,
+        effortOptions: [],
+      },
+    ],
+    attachments: {
+      supportsImage: false,
+      supportsPdf: false,
+      supportsText: true,
+      maxImageBytes: 0,
+      maxPdfBytes: 0,
+      maxTextBytes: 1,
+      maxTotalBytes: 1,
+    },
+    midRunInput: {
+      supportsAnswer: false,
+      supportsNativeFollowUp: false,
+      supportsAppQueuedFollowUp: false,
+      supportsSteer: false,
+      supportsInterrupt: false,
+      defaultRunningMode: null,
+    },
+  },
+]
+
+function renderInsights(
+  props: Partial<Parameters<typeof AnalyticsInsights>[0]> = {},
+) {
+  return render(
+    <AnalyticsInsights
+      overview={overview}
+      rangePreset="30d"
+      activeTab="usage"
+      isLoading={false}
+      isGeneratingProfile={false}
+      error={null}
+      providers={providers}
+      profileProviderId="codex"
+      profileModelId="gpt-5.4"
+      generateDialogOpen={false}
+      onRangeChange={vi.fn()}
+      onTabChange={vi.fn()}
+      onRetry={vi.fn()}
+      onGenerateDialogOpenChange={vi.fn()}
+      onProfileProviderChange={vi.fn()}
+      onProfileModelChange={vi.fn()}
+      onGenerateProfile={vi.fn()}
+      onDeleteGeneratedProfile={vi.fn()}
+      {...props}
+    />,
+  )
+}
+
 describe('AnalyticsInsights', () => {
   it('renders populated usage metrics and chart panels', () => {
-    render(
-      <AnalyticsInsights
-        overview={overview}
-        rangePreset="30d"
-        activeTab="usage"
-        isLoading={false}
-        error={null}
-        onRangeChange={vi.fn()}
-        onTabChange={vi.fn()}
-        onRetry={vi.fn()}
-      />,
-    )
+    renderInsights()
 
     expect(screen.getByText('User messages')).toBeInTheDocument()
     expect(screen.getByText('Assistant messages')).toBeInTheDocument()
@@ -130,18 +183,7 @@ describe('AnalyticsInsights', () => {
   it('calls onRangeChange when a range button is selected', () => {
     const onRangeChange = vi.fn()
 
-    render(
-      <AnalyticsInsights
-        overview={overview}
-        rangePreset="30d"
-        activeTab="usage"
-        isLoading={false}
-        error={null}
-        onRangeChange={onRangeChange}
-        onTabChange={vi.fn()}
-        onRetry={vi.fn()}
-      />,
-    )
+    renderInsights({ onRangeChange })
 
     fireEvent.click(screen.getByRole('button', { name: '7 days' }))
 
@@ -149,33 +191,24 @@ describe('AnalyticsInsights', () => {
   })
 
   it('shows empty-state copy for an empty overview', () => {
-    render(
-      <AnalyticsInsights
-        overview={{
-          ...overview,
-          totals: {
-            ...overview.totals,
-            userMessages: 0,
-            assistantMessages: 0,
-            sessionsCreated: 0,
-            turnsCompleted: 0,
-          },
-          dailyActivity: [],
-          providerUsage: [],
-          projectUsage: [],
-          weekdayHourActivity: [],
-          conversationBalance: [],
-          streaks: { current: 0, longest: 0, activeDays: [] },
-        }}
-        rangePreset="30d"
-        activeTab="usage"
-        isLoading={false}
-        error={null}
-        onRangeChange={vi.fn()}
-        onTabChange={vi.fn()}
-        onRetry={vi.fn()}
-      />,
-    )
+    renderInsights({
+      overview: {
+        ...overview,
+        totals: {
+          ...overview.totals,
+          userMessages: 0,
+          assistantMessages: 0,
+          sessionsCreated: 0,
+          turnsCompleted: 0,
+        },
+        dailyActivity: [],
+        providerUsage: [],
+        projectUsage: [],
+        weekdayHourActivity: [],
+        conversationBalance: [],
+        streaks: { current: 0, longest: 0, activeDays: [] },
+      },
+    })
 
     expect(screen.getByText('No usage in this range')).toBeInTheDocument()
     expect(screen.getByText('No project activity')).toBeInTheDocument()
@@ -185,22 +218,28 @@ describe('AnalyticsInsights', () => {
   it('switches to the work style tab', () => {
     const onTabChange = vi.fn()
 
-    render(
-      <AnalyticsInsights
-        overview={overview}
-        rangePreset="30d"
-        activeTab="work-style"
-        isLoading={false}
-        error={null}
-        onRangeChange={vi.fn()}
-        onTabChange={onTabChange}
-        onRetry={vi.fn()}
-      />,
-    )
+    renderInsights({ activeTab: 'work-style', onTabChange })
 
     expect(screen.getByText('Deterministic local profile')).toBeInTheDocument()
 
     fireEvent.click(screen.getByRole('tab', { name: 'Your Usage' }))
     expect(onTabChange).toHaveBeenCalledWith('usage')
+  })
+
+  it('does not generate profile until the confirmation dialog is confirmed', () => {
+    const onGenerateDialogOpenChange = vi.fn()
+    const onGenerateProfile = vi.fn()
+
+    renderInsights({
+      activeTab: 'work-style',
+      generateDialogOpen: true,
+      onGenerateDialogOpenChange,
+      onGenerateProfile,
+    })
+
+    expect(onGenerateProfile).not.toHaveBeenCalled()
+    fireEvent.click(screen.getAllByRole('button', { name: 'Generate' }).at(-1)!)
+
+    expect(onGenerateProfile).toHaveBeenCalledTimes(1)
   })
 })

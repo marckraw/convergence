@@ -6,12 +6,14 @@ import {
   Gauge,
   MessagesSquare,
   Sparkles,
+  Trash2,
 } from 'lucide-react'
 import type {
   AnalyticsOverview,
   WorkStyleInteractionShape,
   WorkStyleSessionSizeBucket,
 } from '@/entities/analytics'
+import { Button } from '@/shared/ui/button'
 import {
   formatHour,
   formatInteger,
@@ -22,6 +24,10 @@ import {
 interface WorkStyleTabProps {
   overview: AnalyticsOverview | null
   isLoading: boolean
+  isGeneratingProfile: boolean
+  canGenerateProfile: boolean
+  onGenerateProfile: () => void
+  onDeleteGeneratedProfile: () => void
 }
 
 interface FactCard {
@@ -31,7 +37,14 @@ interface FactCard {
   icon: ReactNode
 }
 
-export function WorkStyleTab({ overview, isLoading }: WorkStyleTabProps) {
+export function WorkStyleTab({
+  overview,
+  isLoading,
+  isGeneratingProfile,
+  canGenerateProfile,
+  onGenerateProfile,
+  onDeleteGeneratedProfile,
+}: WorkStyleTabProps) {
   if (!overview) {
     return renderEmptyState({
       title: isLoading ? 'Loading work style' : 'No work style yet',
@@ -79,24 +92,96 @@ export function WorkStyleTab({ overview, isLoading }: WorkStyleTabProps) {
         {facts.map((fact) => renderFactCard(fact))}
       </section>
 
-      <section className="rounded-lg border border-border bg-card/60 p-5">
+      {renderGeneratedProfilePanel({
+        overview,
+        isGeneratingProfile,
+        canGenerateProfile,
+        onGenerateProfile,
+        onDeleteGeneratedProfile,
+      })}
+    </div>
+  )
+}
+
+function renderGeneratedProfilePanel({
+  overview,
+  isGeneratingProfile,
+  canGenerateProfile,
+  onGenerateProfile,
+  onDeleteGeneratedProfile,
+}: {
+  overview: AnalyticsOverview
+  isGeneratingProfile: boolean
+  canGenerateProfile: boolean
+  onGenerateProfile: () => void
+  onDeleteGeneratedProfile: () => void
+}) {
+  const generated = overview.generatedProfile
+
+  return (
+    <section className="rounded-lg border border-border bg-card/60 p-5">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div className="flex items-start gap-3">
           <span className="rounded-md border border-border bg-background p-2 text-muted-foreground">
             <Sparkles className="size-4" />
           </span>
           <div>
             <h4 className="text-sm font-semibold">
-              Generated profile is not active yet
+              {generated?.payload.title ?? 'Generated work profile'}
             </h4>
             <p className="mt-2 max-w-2xl text-sm leading-relaxed text-muted-foreground">
-              The future generated profile will be opt-in and will use aggregate
-              summary data only. This tab currently shows deterministic local
-              facts from the selected range.
+              {generated?.payload.summary ??
+                'Generate an optional profile from local aggregate usage data. Full transcripts and raw conversation excerpts are not sent in this version.'}
             </p>
           </div>
         </div>
-      </section>
-    </div>
+
+        <div className="flex shrink-0 flex-wrap items-center gap-2">
+          {generated ? (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={onDeleteGeneratedProfile}
+              disabled={isGeneratingProfile}
+            >
+              <Trash2 className="size-4" />
+              Delete
+            </Button>
+          ) : null}
+          <Button
+            type="button"
+            size="sm"
+            onClick={onGenerateProfile}
+            disabled={isGeneratingProfile || !canGenerateProfile}
+          >
+            <Sparkles className="size-4" />
+            {generated ? 'Regenerate' : 'Generate'}
+          </Button>
+        </div>
+      </div>
+
+      {generated ? (
+        <div className="mt-4 grid gap-3 md:grid-cols-2">
+          {generated.payload.themes.map((theme) => (
+            <div
+              key={theme.label}
+              className="rounded-lg border border-border bg-background/60 p-3"
+            >
+              <p className="text-sm font-medium">{theme.label}</p>
+              <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+                {theme.description}
+              </p>
+            </div>
+          ))}
+          {generated.payload.caveats.length > 0 ? (
+            <div className="rounded-lg border border-amber-500/25 bg-amber-500/10 p-3 text-xs leading-relaxed text-amber-800 dark:text-amber-200 md:col-span-2">
+              {generated.payload.caveats.join(' ')}
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+    </section>
   )
 }
 

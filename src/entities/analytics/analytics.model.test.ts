@@ -39,8 +39,31 @@ const overview: AnalyticsOverview = {
 
 function installMockApi(getOverview = vi.fn().mockResolvedValue(overview)): {
   getOverview: ReturnType<typeof vi.fn>
+  generateWorkProfile: ReturnType<typeof vi.fn>
+  deleteWorkProfileSnapshot: ReturnType<typeof vi.fn>
 } {
-  const mock = { analytics: { getOverview } }
+  const mock = {
+    analytics: {
+      getOverview,
+      generateWorkProfile: vi.fn().mockResolvedValue({
+        id: 'generated-1',
+        rangePreset: '30d',
+        rangeStartDate: '2026-04-01',
+        rangeEndDate: '2026-04-30',
+        providerId: 'codex',
+        model: 'gpt-5.4',
+        payload: {
+          version: 1,
+          title: 'Generated',
+          summary: 'Summary',
+          themes: [],
+          caveats: [],
+        },
+        createdAt: '2026-04-30T12:00:00.000Z',
+      }),
+      deleteWorkProfileSnapshot: vi.fn().mockResolvedValue(undefined),
+    },
+  }
   Object.defineProperty(globalThis, 'window', {
     value: { electronAPI: mock },
     writable: true,
@@ -56,6 +79,7 @@ describe('useAnalyticsStore', () => {
       rangePreset: '30d',
       overview: null,
       isLoading: false,
+      isGeneratingProfile: false,
       error: null,
     })
   })
@@ -118,5 +142,59 @@ describe('useAnalyticsStore', () => {
     useAnalyticsStore.getState().clearError()
 
     expect(useAnalyticsStore.getState().error).toBeNull()
+  })
+
+  it('generates and stores a work profile snapshot on the current overview', async () => {
+    const api = installMockApi()
+    useAnalyticsStore.setState({ overview })
+
+    await useAnalyticsStore.getState().generateWorkProfile({
+      rangePreset: '30d',
+      providerId: 'codex',
+      model: 'gpt-5.4',
+    })
+
+    expect(api.generateWorkProfile).toHaveBeenCalledWith({
+      rangePreset: '30d',
+      providerId: 'codex',
+      model: 'gpt-5.4',
+    })
+    expect(
+      useAnalyticsStore.getState().overview?.generatedProfile,
+    ).toMatchObject({
+      id: 'generated-1',
+      payload: { title: 'Generated' },
+    })
+    expect(useAnalyticsStore.getState().isGeneratingProfile).toBe(false)
+  })
+
+  it('deletes the current generated work profile snapshot', async () => {
+    const api = installMockApi()
+    useAnalyticsStore.setState({
+      overview: {
+        ...overview,
+        generatedProfile: {
+          id: 'generated-1',
+          rangePreset: '30d',
+          rangeStartDate: '2026-04-01',
+          rangeEndDate: '2026-04-30',
+          providerId: 'codex',
+          model: 'gpt-5.4',
+          payload: {
+            version: 1,
+            title: 'Generated',
+            summary: 'Summary',
+            themes: [],
+            caveats: [],
+          },
+          createdAt: '2026-04-30T12:00:00.000Z',
+        },
+      },
+    })
+
+    await useAnalyticsStore.getState().deleteWorkProfileSnapshot('generated-1')
+
+    expect(api.deleteWorkProfileSnapshot).toHaveBeenCalledWith('generated-1')
+    expect(useAnalyticsStore.getState().overview?.generatedProfile).toBeNull()
   })
 })

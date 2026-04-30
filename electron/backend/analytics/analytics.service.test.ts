@@ -1,6 +1,8 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type Database from 'better-sqlite3'
 import { closeDatabase, getDatabase, resetDatabase } from '../database/database'
+import { ProviderRegistry } from '../provider/provider-registry'
+import type { Provider } from '../provider/provider.types'
 import { AnalyticsProfileService } from './analytics-profile.service'
 import { AnalyticsService } from './analytics.service'
 
@@ -361,5 +363,173 @@ describe('AnalyticsService', () => {
       rangePreset: '30d',
       payload: { title: 'Contextual Builder' },
     })
+  })
+
+  it('generates a work profile from aggregate overview data and stores it', async () => {
+    insertProject(db, 'p1', 'Convergence')
+    insertSession(db, {
+      id: 's1',
+      projectId: 'p1',
+      providerId: 'codex',
+      createdAt: '2026-04-29T09:00:00.000Z',
+    })
+    insertConversationItem(db, {
+      id: 'm1',
+      sessionId: 's1',
+      sequence: 1,
+      kind: 'message',
+      payload: { actor: 'user', text: 'please inspect this code' },
+      createdAt: '2026-04-29T09:05:00.000Z',
+    })
+
+    const oneShot = vi.fn().mockResolvedValue({
+      text: JSON.stringify({
+        version: 1,
+        title: 'Contextual Builder',
+        summary: 'You tend to explore before implementing.',
+        themes: [{ label: 'Planning', description: 'Frequent setup.' }],
+        caveats: ['Based on local aggregate usage only.'],
+      }),
+    })
+    const providers = new ProviderRegistry()
+    providers.register({
+      id: 'codex',
+      name: 'Codex',
+      supportsContinuation: true,
+      describe: async () => ({
+        id: 'codex',
+        name: 'Codex',
+        vendorLabel: 'OpenAI',
+        kind: 'conversation',
+        supportsContinuation: true,
+        defaultModelId: 'gpt-5.4',
+        modelOptions: [
+          {
+            id: 'gpt-5.4',
+            label: 'GPT-5.4',
+            defaultEffort: 'medium',
+            effortOptions: [],
+          },
+        ],
+        attachments: {
+          supportsImage: false,
+          supportsPdf: false,
+          supportsText: true,
+          maxImageBytes: 0,
+          maxPdfBytes: 0,
+          maxTextBytes: 1,
+          maxTotalBytes: 1,
+        },
+        midRunInput: {
+          supportsAnswer: false,
+          supportsNativeFollowUp: false,
+          supportsAppQueuedFollowUp: false,
+          supportsSteer: false,
+          supportsInterrupt: false,
+          defaultRunningMode: null,
+        },
+      }),
+      start: () => {
+        throw new Error('not used')
+      },
+      oneShot,
+    } satisfies Provider)
+    const serviceWithGeneration = new AnalyticsService(db, {
+      providers,
+      appSettings: {
+        resolveExtractionModel: vi.fn().mockResolvedValue('gpt-5.4'),
+      } as never,
+      workingDirectory: '/tmp',
+    })
+
+    const snapshot = await serviceWithGeneration.generateWorkProfile(
+      {
+        rangePreset: '30d',
+        providerId: 'codex',
+        model: null,
+      },
+      '2026-04-30T12:00:00.000Z',
+    )
+
+    expect(oneShot).toHaveBeenCalledWith(
+      expect.objectContaining({
+        modelId: 'gpt-5.4',
+        workingDirectory: '/tmp',
+        prompt: expect.stringContaining('aggregate local usage data only'),
+      }),
+    )
+    expect(snapshot).toMatchObject({
+      rangePreset: '30d',
+      rangeStartDate: '2026-04-01',
+      rangeEndDate: '2026-04-30',
+      providerId: 'codex',
+      model: 'gpt-5.4',
+      payload: { title: 'Contextual Builder' },
+    })
+    expect(
+      serviceWithGeneration.getOverview('30d', '2026-04-30T12:00:00.000Z')
+        .generatedProfile?.id,
+    ).toBe(snapshot.id)
+  })
+
+  it('rejects profile generation for unavailable providers and models', async () => {
+    const providers = new ProviderRegistry()
+    providers.register({
+      id: 'codex',
+      name: 'Codex',
+      supportsContinuation: true,
+      describe: async () => ({
+        id: 'codex',
+        name: 'Codex',
+        vendorLabel: 'OpenAI',
+        kind: 'conversation',
+        supportsContinuation: true,
+        defaultModelId: 'gpt-5.4',
+        modelOptions: [],
+        attachments: {
+          supportsImage: false,
+          supportsPdf: false,
+          supportsText: true,
+          maxImageBytes: 0,
+          maxPdfBytes: 0,
+          maxTextBytes: 1,
+          maxTotalBytes: 1,
+        },
+        midRunInput: {
+          supportsAnswer: false,
+          supportsNativeFollowUp: false,
+          supportsAppQueuedFollowUp: false,
+          supportsSteer: false,
+          supportsInterrupt: false,
+          defaultRunningMode: null,
+        },
+      }),
+      start: () => {
+        throw new Error('not used')
+      },
+      oneShot: vi.fn(),
+    } satisfies Provider)
+    const serviceWithGeneration = new AnalyticsService(db, {
+      providers,
+      appSettings: {
+        resolveExtractionModel: vi.fn().mockResolvedValue('gpt-5.4'),
+      } as never,
+    })
+
+    await expect(
+      serviceWithGeneration.generateWorkProfile({
+        rangePreset: '30d',
+        providerId: 'missing',
+        model: null,
+      }),
+    ).rejects.toThrow('Unknown provider id: missing')
+
+    await expect(
+      serviceWithGeneration.generateWorkProfile({
+        rangePreset: '30d',
+        providerId: 'codex',
+        model: 'ghost',
+      }),
+    ).rejects.toThrow('Unknown model id for provider codex: ghost')
   })
 })
