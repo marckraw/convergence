@@ -365,6 +365,10 @@ export function registerIpcHandlers(
     analyticsService.getOverview(rangePreset),
   )
 
+  ipcMain.handle('analytics:deleteWorkProfileSnapshot', (_event, id: string) =>
+    analyticsService.deleteWorkProfileSnapshot(id),
+  )
+
   // Session handlers
   ipcMain.handle(
     'session:create',

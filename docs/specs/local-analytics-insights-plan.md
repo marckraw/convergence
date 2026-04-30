@@ -330,25 +330,25 @@ Goal: add useful non-AI work-style explanations from local aggregates.
 Goal: store, retrieve, and delete generated work profile snapshots before any
 provider call is wired.
 
-- [ ] Add `analytics_profile_snapshots` table to
+- [x] Add `analytics_profile_snapshots` table to
       `electron/backend/database/database.ts`.
-- [ ] Extend `electron/backend/database/database.types.ts`.
-- [ ] Add database tests for table shape and delete behavior.
-- [ ] Extend `AnalyticsService` or create `analytics-profile.service.ts` with:
+- [x] Extend `electron/backend/database/database.types.ts`.
+- [x] Add database tests for table shape and delete behavior.
+- [x] Extend `AnalyticsService` or create `analytics-profile.service.ts` with:
   - `getLatestProfileSnapshot(rangePreset)`
   - `createProfileSnapshot(payload)`
   - `deleteProfileSnapshot(id)`
-- [ ] Add IPC/preload for:
+- [x] Add IPC/preload for:
   - `analytics:deleteWorkProfileSnapshot`
-- [ ] Keep creation internal/test-only until A8 wires generation.
+- [x] Keep creation internal/test-only until A8 wires generation.
 
 **Verification**
 
-- [ ] `npm install`
-- [ ] `npm run typecheck`
-- [ ] `npm run test:pure`
-- [ ] `npm run test:unit -- analytics`
-- [ ] `chaperone check --fix`
+- [x] `npm install`
+- [x] `npm run typecheck`
+- [x] `npm run test:pure`
+- [x] `npm run test:unit -- analytics`
+- [x] `chaperone check --fix`
 
 **Dependencies:** A1.
 
@@ -561,3 +561,20 @@ Append a short note below after each completed phase:
   - `chaperone check --fix`: pass
 - Decisions changed: none.
 - Next phase: A7 profile snapshot storage.
+
+### A7 verification (2026-04-30)
+
+- Summary: Added the local `analytics_profile_snapshots` table, database row
+  type, profile snapshot service for latest/create/delete, overview inclusion
+  of the latest snapshot for the selected range, and the
+  `analytics:deleteWorkProfileSnapshot` IPC/preload/API path. Snapshot
+  creation remains service-only for tests until A8 wires opt-in generation.
+- Tests:
+  - `npm install`: pass
+  - `npm run typecheck`: pass
+  - `npm run test:pure`: pass
+  - `npm run test:unit`: pass; existing jsdom canvas `getContext()` warnings
+    still print from the chart environment.
+  - `chaperone check --fix`: pass
+- Decisions changed: none.
+- Next phase: A8 opt-in generated work profile.

@@ -1,4 +1,5 @@
 import type Database from 'better-sqlite3'
+import { AnalyticsProfileService } from './analytics-profile.service'
 import { buildAnalyticsOverview } from './analytics.pure'
 import type {
   AnalyticsAttachmentInput,
@@ -151,7 +152,10 @@ function conversationItemFromRow(
 }
 
 export class AnalyticsService {
-  constructor(private readonly db: Database.Database) {}
+  constructor(
+    private readonly db: Database.Database,
+    private readonly profileService = new AnalyticsProfileService(db),
+  ) {}
 
   getOverview(
     rangePreset: string,
@@ -166,8 +170,12 @@ export class AnalyticsService {
       turns: this.listTurns(),
       fileChanges: this.listFileChanges(),
       attachments: this.listAttachments(),
-      generatedProfile: null,
+      generatedProfile: this.profileService.getLatestProfileSnapshot(preset),
     })
+  }
+
+  deleteWorkProfileSnapshot(id: string): void {
+    this.profileService.deleteProfileSnapshot(id)
   }
 
   private listSessions(): AnalyticsSessionInput[] {

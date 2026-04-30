@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import type Database from 'better-sqlite3'
 import { closeDatabase, getDatabase, resetDatabase } from '../database/database'
+import { AnalyticsProfileService } from './analytics-profile.service'
 import { AnalyticsService } from './analytics.service'
 
 function insertProject(db: Database.Database, id: string, name: string): void {
@@ -333,5 +334,32 @@ describe('AnalyticsService', () => {
     expect(() =>
       service.getOverview('forever', '2026-04-30T12:00:00.000Z'),
     ).toThrow('Invalid analytics range preset: forever')
+  })
+
+  it('includes the latest generated profile snapshot for the selected range', () => {
+    const profiles = new AnalyticsProfileService(db)
+    const snapshot = profiles.createProfileSnapshot({
+      rangePreset: '30d',
+      rangeStartDate: '2026-04-01',
+      rangeEndDate: '2026-04-30',
+      providerId: 'codex',
+      model: 'gpt-5.4',
+      payload: {
+        version: 1,
+        title: 'Contextual Builder',
+        summary: 'You tend to explore before implementing.',
+        themes: [],
+        caveats: ['Based on local aggregate usage only.'],
+      },
+      createdAt: '2026-04-30T12:00:00.000Z',
+    })
+
+    const overview = service.getOverview('30d', '2026-04-30T12:00:00.000Z')
+
+    expect(overview.generatedProfile).toMatchObject({
+      id: snapshot.id,
+      rangePreset: '30d',
+      payload: { title: 'Contextual Builder' },
+    })
   })
 })

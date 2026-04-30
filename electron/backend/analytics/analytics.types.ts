@@ -176,6 +176,16 @@ export interface GeneratedWorkProfileSnapshot {
   createdAt: string
 }
 
+export interface CreateGeneratedWorkProfileSnapshotInput {
+  rangePreset: AnalyticsRangePreset
+  rangeStartDate: string | null
+  rangeEndDate: string
+  providerId: string | null
+  model: string | null
+  payload: GeneratedWorkProfileSnapshotPayload
+  createdAt?: string
+}
+
 export interface AnalyticsOverview {
   range: AnalyticsRange
   totals: AnalyticsTotals

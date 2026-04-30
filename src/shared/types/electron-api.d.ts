@@ -885,6 +885,7 @@ interface ElectronAPI {
     getOverview: (
       rangePreset: AnalyticsRangePresetData,
     ) => Promise<AnalyticsOverviewData>
+    deleteWorkProfileSnapshot: (id: string) => Promise<void>
   }
   notifications: {
     getPrefs: () => Promise<NotificationPrefsData>
