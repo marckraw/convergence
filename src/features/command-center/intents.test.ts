@@ -131,7 +131,7 @@ describe('command-center intents', () => {
       loadSessions,
       beginSessionDraft: beginSessionDraftMock,
     })
-    useDialogStore.setState({ openDialog: null })
+    useDialogStore.setState({ openDialog: null, payload: null })
   })
 
   describe('switchToSession', () => {
@@ -213,6 +213,15 @@ describe('command-center intents', () => {
     it('delegates to useDialogStore', () => {
       openDialog('providers')
       expect(useDialogStore.getState().openDialog).toBe('providers')
+    })
+
+    it('forwards dialog payloads', () => {
+      openDialog('app-settings', { appSettingsSection: 'insights' })
+
+      expect(useDialogStore.getState()).toMatchObject({
+        openDialog: 'app-settings',
+        payload: { appSettingsSection: 'insights' },
+      })
     })
 
     it('replaces an open dialog kind', () => {

@@ -27,6 +27,7 @@ export const PALETTE_FUSE_KEYS: IFuseOptions<PaletteItem>['keys'] = [
   { name: 'search.providerId', weight: 0.4 },
   { name: 'search.attentionAlias', weight: 0.3 },
   { name: 'search.title', weight: 1.0 },
+  { name: 'search.aliases', weight: 0.6 },
 ]
 
 export const PALETTE_FUSE_OPTIONS: IFuseOptions<PaletteItem> = {

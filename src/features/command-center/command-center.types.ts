@@ -1,5 +1,5 @@
 import type { AttentionState } from '@/entities/session'
-import type { DialogKind } from '@/entities/dialog'
+import type { DialogKind, DialogPayload } from '@/entities/dialog'
 
 export interface PaletteSearchFields {
   sessionName?: string
@@ -8,6 +8,7 @@ export interface PaletteSearchFields {
   providerId?: string
   attentionAlias?: string
   title?: string
+  aliases?: string
 }
 
 export type ProjectPaletteItem = {
@@ -49,6 +50,7 @@ export type DialogPaletteItem = {
   kind: 'dialog'
   id: string
   dialogKind: DialogKind
+  dialogPayload?: DialogPayload
   title: string
   description: string
   search: PaletteSearchFields

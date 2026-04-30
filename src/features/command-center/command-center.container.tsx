@@ -121,7 +121,7 @@ export function CommandCenterContainer() {
           void activateProject(item.projectId)
           return
         case 'dialog':
-          openDialog(item.dialogKind)
+          openDialog(item.dialogKind, item.dialogPayload)
           return
         case 'new-session':
           void beginSessionDraft(item.workspaceId)

@@ -62,6 +62,24 @@ const overview: AnalyticsOverview = {
 }
 
 describe('WorkStyleTab', () => {
+  it('renders a compact loading state while work style loads', () => {
+    render(
+      <WorkStyleTab
+        overview={null}
+        isLoading={true}
+        isGeneratingProfile={false}
+        canGenerateProfile={true}
+        onGenerateProfile={vi.fn()}
+        onDeleteGeneratedProfile={vi.fn()}
+      />,
+    )
+
+    expect(screen.getByLabelText('Loading work style')).toHaveAttribute(
+      'aria-busy',
+      'true',
+    )
+  })
+
   it('renders deterministic local profile facts for populated usage', () => {
     render(
       <WorkStyleTab

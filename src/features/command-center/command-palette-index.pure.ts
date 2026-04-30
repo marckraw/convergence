@@ -5,7 +5,7 @@ import type {
   AttentionState,
   NeedsYouDismissals,
 } from '@/entities/session'
-import type { DialogKind } from '@/entities/dialog'
+import type { DialogKind, DialogPayload } from '@/entities/dialog'
 import type {
   PaletteItem,
   ProjectPaletteItem,
@@ -30,9 +30,12 @@ export interface BuildPaletteIndexInput {
 }
 
 interface DialogDescriptor {
+  id?: string
   kind: DialogKind
+  payload?: DialogPayload
   title: string
   description: string
+  aliases?: string
 }
 
 export const PALETTE_DIALOGS: DialogDescriptor[] = [
@@ -45,6 +48,14 @@ export const PALETTE_DIALOGS: DialogDescriptor[] = [
     kind: 'app-settings',
     title: 'App Settings',
     description: 'Preferences, providers, and appearance',
+  },
+  {
+    id: 'app-settings:insights',
+    kind: 'app-settings',
+    payload: { appSettingsSection: 'insights' },
+    title: 'Open Insights',
+    description: 'Local analytics, usage stats, and work style profile',
+    aliases: 'analytics stats usage work style streaks charts',
   },
   {
     kind: 'project-settings',
@@ -167,11 +178,12 @@ export function buildPaletteIndex(
   for (const dialog of PALETTE_DIALOGS) {
     const item: DialogPaletteItem = {
       kind: 'dialog',
-      id: `dialog:${dialog.kind}`,
+      id: `dialog:${dialog.id ?? dialog.kind}`,
       dialogKind: dialog.kind,
+      dialogPayload: dialog.payload,
       title: dialog.title,
       description: dialog.description,
-      search: { title: dialog.title },
+      search: { title: dialog.title, aliases: dialog.aliases },
     }
     items.push(item)
   }

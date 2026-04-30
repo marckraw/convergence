@@ -46,11 +46,12 @@ export function WorkStyleTab({
   onDeleteGeneratedProfile,
 }: WorkStyleTabProps) {
   if (!overview) {
+    if (isLoading) return renderLoadingState()
+
     return renderEmptyState({
-      title: isLoading ? 'Loading work style' : 'No work style yet',
-      description: isLoading
-        ? 'Convergence is reading local aggregate activity.'
-        : 'Use Convergence for a few sessions and this tab will summarize local patterns.',
+      title: 'No work style yet',
+      description:
+        'Use Convergence for a few sessions and this tab will summarize local patterns.',
     })
   }
 
@@ -99,6 +100,42 @@ export function WorkStyleTab({
         onGenerateProfile,
         onDeleteGeneratedProfile,
       })}
+    </div>
+  )
+}
+
+function renderLoadingState() {
+  return (
+    <div className="space-y-4" aria-label="Loading work style" aria-busy="true">
+      <section className="rounded-lg border border-border bg-card/60 p-5">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+          <div className="w-full max-w-3xl space-y-3">
+            <div className="h-3 w-44 rounded bg-muted" />
+            <div className="h-6 w-64 rounded bg-muted/80" />
+            <div className="h-4 w-full max-w-xl rounded bg-muted" />
+            <div className="h-4 w-full max-w-md rounded bg-muted" />
+          </div>
+          <div className="h-10 w-44 rounded-lg border border-border bg-muted/70" />
+        </div>
+      </section>
+
+      <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+        {Array.from({ length: 5 }, (_, index) => (
+          <div
+            key={index}
+            className="min-w-0 rounded-lg border border-border bg-card/70 p-4"
+          >
+            <div className="flex items-start gap-3">
+              <div className="h-8 w-8 rounded-md border border-border bg-muted" />
+              <div className="min-w-0 flex-1 space-y-3">
+                <div className="h-3 w-28 rounded bg-muted" />
+                <div className="h-5 w-36 rounded bg-muted/80" />
+                <div className="h-3 w-full max-w-44 rounded bg-muted" />
+              </div>
+            </div>
+          </div>
+        ))}
+      </section>
     </div>
   )
 }

@@ -411,26 +411,26 @@ Goal: generate Wispr-like profile text only after explicit user confirmation.
 Goal: make the feature feel native and decide whether it remains settings-only
 or earns a faster entry point.
 
-- [ ] Audit layout at narrow and wide settings-dialog widths.
-- [ ] Confirm no text overflows inside metric cards, buttons, chart panels, or
+- [x] Audit layout at narrow and wide settings-dialog widths.
+- [x] Confirm no text overflows inside metric cards, buttons, chart panels, or
       tabs.
-- [ ] Confirm keyboard navigation across range picker, tabs, and profile
+- [x] Confirm keyboard navigation across range picker, tabs, and profile
       generation dialog.
-- [ ] Confirm color palette is not one-note and works in light/dark themes.
-- [ ] Add loading skeletons or compact loading states.
-- [ ] Add command-center action `Open Insights` if command-center patterns
+- [x] Confirm color palette is not one-note and works in light/dark themes.
+- [x] Add loading skeletons or compact loading states.
+- [x] Add command-center action `Open Insights` if command-center patterns
       make that cheap.
-- [ ] Decide whether a sidebar shortcut is warranted. If yes, add it as a
+- [x] Decide whether a sidebar shortcut is warranted. If yes, add it as a
       small icon/button that opens Settings directly to `Insights`.
-- [ ] Update this plan with final verification notes and any follow-up ideas.
+- [x] Update this plan with final verification notes and any follow-up ideas.
 
 **Verification**
 
-- [ ] `npm install`
-- [ ] `npm run typecheck`
-- [ ] `npm run test:pure`
-- [ ] `npm run test:unit`
-- [ ] `chaperone check --fix`
+- [x] `npm install`
+- [x] `npm run typecheck`
+- [x] `npm run test:pure`
+- [x] `npm run test:unit`
+- [x] `chaperone check --fix`
 - [ ] Manual: open app, use Insights with populated local data, unsupported
       WebGPU fallback, and empty database.
 
@@ -598,3 +598,24 @@ Append a short note below after each completed phase:
   generate with a configured provider/model, close and reopen Settings to
   confirm persistence, then delete the snapshot.
 - Next phase: A9 polish, accessibility, and entry-point decision.
+
+### A9 verification (2026-04-30)
+
+- Summary: Added compact loading states for Usage and Work Style, added a
+  command-center `Open Insights` action, and added a small sidebar chart icon
+  that opens Settings directly to Insights through an app-settings dialog
+  payload. Kept Insights inside Settings as the primary surface; the sidebar
+  icon is only a shortcut into that section.
+- Tests:
+  - `npm install`: pass
+  - `npm run typecheck`: pass
+  - `npm run test:pure`: pass
+  - `npm run test:unit`: pass; existing jsdom canvas `getContext()` warnings
+    still print from the chart environment.
+  - `chaperone check --fix`: pass
+- Decisions changed: sidebar shortcut is warranted as a small direct entry
+  point, not as a separate global page.
+- Manual checkpoint: ready now. Test Settings -> Insights from the settings
+  nav, the sidebar chart icon, and command center `Open Insights`; then run the
+  generated profile flow from A8 with a configured provider/model.
+- Next phase: manual QA, then decide whether any follow-up issues are needed.

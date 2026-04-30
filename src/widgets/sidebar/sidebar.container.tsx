@@ -27,7 +27,7 @@ import { buildNeedsYouSummary } from './needs-you.presentational'
 import { ProjectTree } from './project-tree.container'
 import { ProjectSwitcher } from './project-switcher.presentational'
 import { Button } from '@/shared/ui/button'
-import { Plus, Settings } from 'lucide-react'
+import { BarChart3, Plus, Settings } from 'lucide-react'
 
 interface SidebarProps {
   onSelectSession: (id: string) => void
@@ -183,6 +183,18 @@ export const Sidebar: FC<SidebarProps> = ({
           className="flex items-center gap-1"
           style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
         >
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8"
+            title="Insights"
+            aria-label="Open insights"
+            onClick={() =>
+              openDialog('app-settings', { appSettingsSection: 'insights' })
+            }
+          >
+            <BarChart3 className="h-4 w-4" />
+          </Button>
           <AppSettingsDialogContainer
             trigger={
               <Button

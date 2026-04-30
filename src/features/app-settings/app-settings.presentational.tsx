@@ -1,4 +1,5 @@
 import type { FC, ReactNode } from 'react'
+import type { AppSettingsDialogSection } from '@/entities/dialog'
 import type {
   ProviderInfo,
   ReasoningEffort,
@@ -27,13 +28,7 @@ import { NotificationsFields } from './notifications-fields.presentational'
 import { UpdatesFields } from './updates-fields.presentational'
 import { AnalyticsInsightsContainer } from '../analytics-insights'
 
-export type AppSettingsSectionId =
-  | 'session-defaults'
-  | 'session-naming'
-  | 'session-forking'
-  | 'notifications'
-  | 'updates'
-  | 'insights'
+export type AppSettingsSectionId = AppSettingsDialogSection
 
 interface AppSettingsDialogProps {
   open: boolean

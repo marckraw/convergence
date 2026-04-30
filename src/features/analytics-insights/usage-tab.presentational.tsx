@@ -45,11 +45,12 @@ const STREAK_CELL_COUNT = 35
 
 export function UsageTab({ overview, isLoading }: UsageTabProps) {
   if (!overview) {
+    if (isLoading) return renderLoadingState()
+
     return renderEmptyPanel({
-      title: isLoading ? 'Loading local analytics' : 'No analytics yet',
-      description: isLoading
-        ? 'Convergence is reading the local database.'
-        : 'Start or continue a session and this section will fill in from local history.',
+      title: 'No analytics yet',
+      description:
+        'Start or continue a session and this section will fill in from local history.',
     })
   }
 
@@ -124,6 +125,49 @@ export function UsageTab({ overview, isLoading }: UsageTabProps) {
             />
           ),
         })}
+      </section>
+    </div>
+  )
+}
+
+function renderLoadingState() {
+  return (
+    <div
+      className="space-y-4"
+      aria-label="Loading local analytics"
+      aria-busy="true"
+    >
+      <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        {Array.from({ length: 8 }, (_, index) => (
+          <div
+            key={index}
+            className="min-w-0 rounded-lg border border-border bg-card/70 p-3"
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0 flex-1 space-y-3">
+                <div className="h-3 w-24 rounded bg-muted" />
+                <div className="h-7 w-20 rounded bg-muted/80" />
+                <div className="h-3 w-32 rounded bg-muted" />
+              </div>
+              <div className="h-8 w-8 rounded-md border border-border bg-muted" />
+            </div>
+          </div>
+        ))}
+      </section>
+
+      <section className="grid gap-4 xl:grid-cols-[minmax(0,1.2fr)_minmax(320px,0.8fr)]">
+        {Array.from({ length: 2 }, (_, index) => (
+          <div
+            key={index}
+            className="min-w-0 rounded-lg border border-border bg-card/60 p-4"
+          >
+            <div className="mb-4 space-y-2">
+              <div className="h-4 w-32 rounded bg-muted" />
+              <div className="h-3 w-48 rounded bg-muted/80" />
+            </div>
+            <div className="h-[250px] rounded-lg bg-muted/50" />
+          </div>
+        ))}
       </section>
     </div>
   )

@@ -159,11 +159,12 @@ function primeStores(stored: {
 describe('AppSettingsDialogContainer', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    useDialogStore.setState({ openDialog: null })
+    useDialogStore.setState({ openDialog: null, payload: null })
     useAnalyticsStore.setState({
       rangePreset: '30d',
       overview: null,
       isLoading: false,
+      isGeneratingProfile: false,
       error: null,
     })
     ;(window as unknown as { electronAPI: unknown }).electronAPI = {
@@ -179,6 +180,8 @@ describe('AppSettingsDialogContainer', () => {
       },
       analytics: {
         getOverview: vi.fn().mockResolvedValue(EMPTY_ANALYTICS_OVERVIEW),
+        generateWorkProfile: vi.fn(),
+        deleteWorkProfileSnapshot: vi.fn(),
       },
     }
   })
@@ -341,6 +344,26 @@ describe('AppSettingsDialogContainer', () => {
       )
     })
     expect(screen.getByRole('button', { name: 'Done' })).toBeInTheDocument()
+  })
+
+  it('opens directly to Insights from a dialog payload', async () => {
+    primeStores({
+      defaultProviderId: 'claude-code',
+      defaultModelId: 'sonnet',
+      defaultEffortId: 'medium',
+    })
+    useDialogStore.setState({
+      openDialog: 'app-settings',
+      payload: { appSettingsSection: 'insights' },
+    })
+
+    render(<AppSettingsDialogContainer trigger={<Button>Open</Button>} />)
+
+    expect(
+      await screen.findByRole('tab', { name: 'Your Usage' }),
+    ).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Done' })).toBeInTheDocument()
+    expect(window.electronAPI.analytics.getOverview).toHaveBeenCalledWith('30d')
   })
 
   it('toggling the auto-update switch persists the new updates prefs on save', async () => {

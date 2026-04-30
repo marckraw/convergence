@@ -194,6 +194,27 @@ describe('buildPaletteIndex', () => {
     )
   })
 
+  it('emits a direct Insights dialog item with the app settings payload', () => {
+    const items = buildPaletteIndex({
+      projects: [],
+      workspaces: [],
+      sessions: [],
+      recentSessionIds: [],
+      dismissals: {},
+    })
+    const insights = items.find(
+      (item): item is DialogPaletteItem =>
+        item.kind === 'dialog' && item.id === 'dialog:app-settings:insights',
+    )
+
+    expect(insights).toMatchObject({
+      dialogKind: 'app-settings',
+      dialogPayload: { appSettingsSection: 'insights' },
+      title: 'Open Insights',
+      search: { aliases: expect.stringContaining('analytics') },
+    })
+  })
+
   it('emits a check-updates item exposed by the search title', () => {
     const items = buildPaletteIndex({
       projects: [],

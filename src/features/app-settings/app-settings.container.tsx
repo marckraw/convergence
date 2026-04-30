@@ -34,10 +34,22 @@ const EMPTY_NAMING_DRAFT: Record<string, string> = {}
 const EMPTY_EXTRACTION_DRAFT: Record<string, string> = {}
 const DEFAULT_SECTION: AppSettingsSectionId = 'session-defaults'
 
+function isAppSettingsSection(value: unknown): value is AppSettingsSectionId {
+  return (
+    value === 'session-defaults' ||
+    value === 'session-naming' ||
+    value === 'session-forking' ||
+    value === 'notifications' ||
+    value === 'updates' ||
+    value === 'insights'
+  )
+}
+
 export const AppSettingsDialogContainer: FC<AppSettingsContainerProps> = ({
   trigger,
 }) => {
   const open = useDialogStore((s) => s.openDialog === 'app-settings')
+  const payload = useDialogStore((s) => s.payload)
   const openDialog = useDialogStore((s) => s.open)
   const closeDialog = useDialogStore((s) => s.close)
   const handleOpenChange = useCallback(
@@ -86,7 +98,13 @@ export const AppSettingsDialogContainer: FC<AppSettingsContainerProps> = ({
 
   useEffect(() => {
     if (!open) return
-    setActiveSection(DEFAULT_SECTION)
+    const requestedSection =
+      payload &&
+      'appSettingsSection' in payload &&
+      isAppSettingsSection(payload.appSettingsSection)
+        ? payload.appSettingsSection
+        : DEFAULT_SECTION
+    setActiveSection(requestedSection)
     setDraft({
       providerId: settings.defaultProviderId ?? '',
       modelId: settings.defaultModelId ?? '',
@@ -97,7 +115,7 @@ export const AppSettingsDialogContainer: FC<AppSettingsContainerProps> = ({
     setNotificationsDraft(settings.notifications)
     setUpdatesDraft(settings.updates)
     clearError()
-  }, [open, settings, clearError])
+  }, [open, payload, settings, clearError])
 
   const selection = useMemo(
     () =>

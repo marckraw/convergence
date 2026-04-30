@@ -215,6 +215,15 @@ describe('AnalyticsInsights', () => {
     expect(screen.getByText('No hourly pattern')).toBeInTheDocument()
   })
 
+  it('renders a compact loading state while usage analytics load', () => {
+    renderInsights({ overview: null, isLoading: true })
+
+    expect(screen.getByLabelText('Loading local analytics')).toHaveAttribute(
+      'aria-busy',
+      'true',
+    )
+  })
+
   it('switches to the work style tab', () => {
     const onTabChange = vi.fn()
 
