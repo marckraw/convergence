@@ -18,6 +18,13 @@ export type { AppSettings, AppSettingsInput } from './app-settings'
 export { useAppSettingsStore } from './app-settings'
 
 export type {
+  AnalyticsOverview,
+  AnalyticsRangePreset,
+  AnalyticsTotals,
+} from './analytics'
+export { analyticsApi, useAnalyticsStore } from './analytics'
+
+export type {
   FeedbackContext,
   FeedbackPriority,
   FeedbackSubmissionResult,

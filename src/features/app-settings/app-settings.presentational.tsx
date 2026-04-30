@@ -1,4 +1,5 @@
 import type { FC, ReactNode } from 'react'
+import type { AppSettingsDialogSection } from '@/entities/dialog'
 import type {
   ProviderInfo,
   ReasoningEffort,
@@ -25,13 +26,9 @@ import { NamingModelDefaultsFields } from './naming-model-defaults.presentationa
 import { ExtractionModelDefaultsFields } from './extraction-model-defaults.presentational'
 import { NotificationsFields } from './notifications-fields.presentational'
 import { UpdatesFields } from './updates-fields.presentational'
+import { AnalyticsInsightsContainer } from '../analytics-insights'
 
-export type AppSettingsSectionId =
-  | 'session-defaults'
-  | 'session-naming'
-  | 'session-forking'
-  | 'notifications'
-  | 'updates'
+export type AppSettingsSectionId = AppSettingsDialogSection
 
 interface AppSettingsDialogProps {
   open: boolean
@@ -155,6 +152,14 @@ export const AppSettingsDialog: FC<AppSettingsDialogProps> = ({
       description:
         'Manage background update checks and trigger a manual check for a new Convergence release.',
     },
+    {
+      id: 'insights',
+      navLabel: 'Insights',
+      navSummary: 'Local usage stats and work patterns',
+      title: 'Insights',
+      description:
+        'Review local-only analytics about your conversations, sessions, projects, and agent activity.',
+    },
   ]
 
   const currentSection =
@@ -221,13 +226,22 @@ export const AppSettingsDialog: FC<AppSettingsDialogProps> = ({
             onOpenReleaseNotes={onOpenReleaseNotes}
           />
         )
+      case 'insights':
+        return <AnalyticsInsightsContainer />
     }
   }
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogTrigger asChild>{trigger}</DialogTrigger>
-      <DialogContent className="w-[min(960px,calc(100vw-2rem))] p-0">
+      <DialogContent
+        className={cn(
+          'p-0',
+          currentSection.id === 'insights'
+            ? 'w-[min(1280px,calc(100vw-2rem))] max-h-[min(92vh,960px)]'
+            : 'w-[min(960px,calc(100vw-2rem))]',
+        )}
+      >
         <DialogHeader className="border-b border-border/70 px-6 py-5 pr-14">
           <DialogTitle>Settings</DialogTitle>
           <DialogDescription>
@@ -274,9 +288,17 @@ export const AppSettingsDialog: FC<AppSettingsDialogProps> = ({
           <div className="min-h-0 flex-1">
             <div
               data-testid="app-settings-scroll-region"
-              className="app-scrollbar min-h-0 h-full overflow-y-auto px-6 py-5"
+              className={cn(
+                'app-scrollbar min-h-0 h-full overflow-y-auto py-5',
+                currentSection.id === 'insights' ? 'px-5 lg:px-8' : 'px-6',
+              )}
             >
-              <div className="mx-auto max-w-2xl space-y-5">
+              <div
+                className={cn(
+                  'mx-auto space-y-5',
+                  currentSection.id === 'insights' ? 'max-w-6xl' : 'max-w-2xl',
+                )}
+              >
                 <section className="space-y-2">
                   <p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
                     {currentSection.navLabel}
@@ -325,22 +347,26 @@ export const AppSettingsDialog: FC<AppSettingsDialogProps> = ({
             <DialogClose asChild>
               <Button
                 type="button"
-                variant="outline"
+                variant={
+                  currentSection.id === 'insights' ? 'default' : 'outline'
+                }
                 size="sm"
                 onClick={onCancel}
                 disabled={isSaving}
               >
-                Cancel
+                {currentSection.id === 'insights' ? 'Done' : 'Cancel'}
               </Button>
             </DialogClose>
-            <Button
-              type="button"
-              size="sm"
-              onClick={onSave}
-              disabled={providers.length === 0 || isSaving}
-            >
-              Save
-            </Button>
+            {currentSection.id === 'insights' ? null : (
+              <Button
+                type="button"
+                size="sm"
+                onClick={onSave}
+                disabled={providers.length === 0 || isSaving}
+              >
+                Save
+              </Button>
+            )}
           </div>
         </div>
       </DialogContent>

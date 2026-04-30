@@ -573,6 +573,132 @@ interface UpdateProjectContextItemInputData {
   reinjectMode?: ProjectContextReinjectModeData
 }
 
+type AnalyticsRangePresetData = '7d' | '30d' | '90d' | 'all'
+
+interface AnalyticsRangeData {
+  preset: AnalyticsRangePresetData
+  startDate: string | null
+  endDate: string
+}
+
+interface AnalyticsTotalsData {
+  userMessages: number
+  assistantMessages: number
+  userWords: number
+  assistantWords: number
+  sessionsCreated: number
+  turnsCompleted: number
+  filesChanged: number
+  linesAdded: number
+  linesDeleted: number
+  approvalRequests: number
+  inputRequests: number
+  attachmentsSent: number
+  toolCalls: number
+  failedSessions: number
+}
+
+interface AnalyticsStreaksData {
+  current: number
+  longest: number
+  activeDays: string[]
+}
+
+interface DailyActivityPointData {
+  date: string
+  userMessages: number
+  assistantMessages: number
+  userWords: number
+  assistantWords: number
+  sessionsCreated: number
+  turnsCompleted: number
+  filesChanged: number
+}
+
+interface ProviderUsagePointData {
+  providerId: string
+  providerName: string
+  sessionsCreated: number
+  turnsCompleted: number
+  userMessages: number
+  assistantMessages: number
+}
+
+interface ProjectUsagePointData {
+  projectId: string
+  projectName: string
+  sessionsCreated: number
+  turnsCompleted: number
+  userMessages: number
+  assistantMessages: number
+}
+
+interface WeekdayHourActivityPointData {
+  weekday: number
+  hour: number
+  count: number
+}
+
+interface ConversationBalancePointData {
+  date: string
+  userWords: number
+  assistantWords: number
+}
+
+type WorkStyleInteractionShapeData =
+  | 'none'
+  | 'mostly-ask-review'
+  | 'mostly-implementation'
+  | 'mostly-debugging'
+  | 'mixed-exploration-implementation'
+
+type WorkStyleSessionSizeBucketData =
+  | 'none'
+  | 'quick-check'
+  | 'normal-task'
+  | 'long-running'
+
+interface DeterministicWorkProfileData {
+  mostUsedProvider: ProviderUsagePointData | null
+  mostActiveProject: ProjectUsagePointData | null
+  peakActivity: WeekdayHourActivityPointData | null
+  sessionSizeBucket: WorkStyleSessionSizeBucketData
+  interactionShape: WorkStyleInteractionShapeData
+  summary: string
+}
+
+interface GeneratedWorkProfileSnapshotPayloadData {
+  version: 1
+  title: string
+  summary: string
+  themes: Array<{ label: string; description: string }>
+  caveats: string[]
+}
+
+interface GeneratedWorkProfileSnapshotData {
+  id: string
+  rangePreset: AnalyticsRangePresetData
+  rangeStartDate: string | null
+  rangeEndDate: string
+  providerId: string | null
+  model: string | null
+  payload: GeneratedWorkProfileSnapshotPayloadData
+  createdAt: string
+}
+
+interface AnalyticsOverviewData {
+  range: AnalyticsRangeData
+  totals: AnalyticsTotalsData
+  streaks: AnalyticsStreaksData
+  dailyActivity: DailyActivityPointData[]
+  providerUsage: ProviderUsagePointData[]
+  projectUsage: ProjectUsagePointData[]
+  weekdayHourActivity: WeekdayHourActivityPointData[]
+  conversationBalance: ConversationBalancePointData[]
+  deterministicProfile: DeterministicWorkProfileData
+  generatedProfile: GeneratedWorkProfileSnapshotData | null
+}
+
 interface ElectronAPI {
   system: {
     getInfo: () => SystemInfo
@@ -754,6 +880,17 @@ interface ElectronAPI {
     get: () => Promise<AppSettingsData>
     set: (input: AppSettingsData) => Promise<AppSettingsData>
     onUpdated: (callback: (settings: AppSettingsData) => void) => () => void
+  }
+  analytics: {
+    getOverview: (
+      rangePreset: AnalyticsRangePresetData,
+    ) => Promise<AnalyticsOverviewData>
+    generateWorkProfile: (input: {
+      rangePreset: AnalyticsRangePresetData
+      providerId: string
+      model: string | null
+    }) => Promise<GeneratedWorkProfileSnapshotData>
+    deleteWorkProfileSnapshot: (id: string) => Promise<void>
   }
   notifications: {
     getPrefs: () => Promise<NotificationPrefsData>

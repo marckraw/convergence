@@ -28,6 +28,7 @@ import { detectProviders } from '../backend/provider/detect'
 import { McpService } from '../backend/mcp/mcp.service'
 import { SkillsService } from '../backend/skills/skills.service'
 import { AppSettingsService } from '../backend/app-settings/app-settings.service'
+import { AnalyticsService } from '../backend/analytics/analytics.service'
 import { AttachmentsService } from '../backend/attachments/attachments.service'
 import { NotificationsService } from '../backend/notifications/notifications.service'
 import { NotificationsStateService } from '../backend/notifications/notifications.state'
@@ -228,6 +229,11 @@ async function startApp(): Promise<void> {
   const appSettingsService = new AppSettingsService(stateService, async () =>
     Promise.all(providerRegistry.getAll().map((p) => p.describe())),
   )
+  const analyticsService = new AnalyticsService(db, {
+    providers: providerRegistry,
+    appSettings: appSettingsService,
+    workingDirectory: app.getPath('userData'),
+  })
 
   const notificationsState = new NotificationsStateService()
   const dockBadge = new DockBadgeService({
@@ -394,6 +400,7 @@ async function startApp(): Promise<void> {
     mcpService,
     skillsService,
     appSettingsService,
+    analyticsService,
     attachmentsService,
     turnCaptureService,
     projectContextService,

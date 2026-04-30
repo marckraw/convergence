@@ -32,6 +32,7 @@ describe('database', () => {
     expect(tableNames).toContain('initiative_outputs')
     expect(tableNames).toContain('project_context_items')
     expect(tableNames).toContain('session_context_attachments')
+    expect(tableNames).toContain('analytics_profile_snapshots')
 
     const sessionColumns = db
       .prepare("PRAGMA table_info('sessions')")
@@ -39,6 +40,66 @@ describe('database', () => {
     const columnNames = sessionColumns.map((column) => column.name)
     expect(columnNames).not.toContain('transcript')
     expect(columnNames).toContain('primary_surface')
+  })
+
+  it('creates analytics_profile_snapshots with expected columns and delete behavior', () => {
+    const db = getDatabase()
+    const columns = db
+      .prepare("PRAGMA table_info('analytics_profile_snapshots')")
+      .all() as Array<{ name: string }>
+
+    expect(columns.map((c) => c.name).sort()).toEqual(
+      [
+        'id',
+        'range_preset',
+        'range_start_date',
+        'range_end_date',
+        'provider_id',
+        'model',
+        'profile_json',
+        'created_at',
+      ].sort(),
+    )
+
+    db.prepare(
+      `
+        INSERT INTO analytics_profile_snapshots (
+          id,
+          range_preset,
+          range_start_date,
+          range_end_date,
+          provider_id,
+          model,
+          profile_json,
+          created_at
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      `,
+    ).run(
+      'profile-1',
+      '30d',
+      '2026-04-01',
+      '2026-04-30',
+      'codex',
+      'gpt-5.4',
+      JSON.stringify({
+        version: 1,
+        title: 'Builder',
+        summary: 'Summary',
+        themes: [],
+        caveats: [],
+      }),
+      '2026-04-30T12:00:00.000Z',
+    )
+
+    db.prepare('DELETE FROM analytics_profile_snapshots WHERE id = ?').run(
+      'profile-1',
+    )
+
+    const remaining = db
+      .prepare('SELECT id FROM analytics_profile_snapshots WHERE id = ?')
+      .all('profile-1')
+    expect(remaining).toEqual([])
   })
 
   it('cascades terminal-layout rows when their session is deleted', () => {

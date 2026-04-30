@@ -1,7 +1,11 @@
 import { useProjectStore } from '@/entities/project'
 import { useWorkspaceStore } from '@/entities/workspace'
 import { useSessionStore } from '@/entities/session'
-import { useDialogStore, type DialogKind } from '@/entities/dialog'
+import {
+  useDialogStore,
+  type DialogKind,
+  type DialogPayload,
+} from '@/entities/dialog'
 import { useUpdatesStore } from '@/entities/updates'
 
 async function hopToProject(projectId: string): Promise<void> {
@@ -48,8 +52,8 @@ export async function activateProject(projectId: string): Promise<void> {
   await hopToProject(projectId)
 }
 
-export function openDialog(kind: DialogKind): void {
-  useDialogStore.getState().open(kind)
+export function openDialog(kind: DialogKind, payload?: DialogPayload): void {
+  useDialogStore.getState().open(kind, payload)
 }
 
 export function forkCurrentSession(parentSessionId: string): void {

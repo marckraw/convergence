@@ -11,7 +11,16 @@ export type DialogKind =
   | 'session-intent'
   | 'workspace-create'
 
+export type AppSettingsDialogSection =
+  | 'session-defaults'
+  | 'session-naming'
+  | 'session-forking'
+  | 'notifications'
+  | 'updates'
+  | 'insights'
+
 export type DialogPayload =
+  | { appSettingsSection: AppSettingsDialogSection }
   | { initiativeId: string }
   | { parentSessionId: string }
   | { sessionId: string }

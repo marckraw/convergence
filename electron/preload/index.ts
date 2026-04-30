@@ -279,6 +279,17 @@ contextBridge.exposeInMainWorld('electronAPI', {
       }
     },
   },
+  analytics: {
+    getOverview: (rangePreset: '7d' | '30d' | '90d' | 'all') =>
+      ipcRenderer.invoke('analytics:getOverview', rangePreset),
+    generateWorkProfile: (input: {
+      rangePreset: '7d' | '30d' | '90d' | 'all'
+      providerId: string
+      model: string | null
+    }) => ipcRenderer.invoke('analytics:generateWorkProfile', input),
+    deleteWorkProfileSnapshot: (id: string) =>
+      ipcRenderer.invoke('analytics:deleteWorkProfileSnapshot', id),
+  },
   notifications: {
     getPrefs: () => ipcRenderer.invoke('notifications:get-prefs'),
     setPrefs: (input: unknown) =>

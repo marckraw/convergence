@@ -144,3 +144,14 @@ export interface SessionContextAttachmentRow {
   context_item_id: string
   sort_order: number
 }
+
+export interface AnalyticsProfileSnapshotRow {
+  id: string
+  range_preset: string
+  range_start_date: string | null
+  range_end_date: string
+  provider_id: string | null
+  model: string | null
+  profile_json: string
+  created_at: string
+}

@@ -232,6 +232,20 @@ const SCHEMA = `
 
   CREATE INDEX IF NOT EXISTS idx_session_context_attachments_session
     ON session_context_attachments(session_id);
+
+  CREATE TABLE IF NOT EXISTS analytics_profile_snapshots (
+    id TEXT PRIMARY KEY,
+    range_preset TEXT NOT NULL,
+    range_start_date TEXT,
+    range_end_date TEXT NOT NULL,
+    provider_id TEXT,
+    model TEXT,
+    profile_json TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_analytics_profile_snapshots_range_created
+    ON analytics_profile_snapshots(range_preset, created_at DESC);
 `
 
 function ensureAttachmentsTableNoFk(database: Database.Database): void {
