@@ -58,7 +58,7 @@ export const ConversationItemView: FC<ConversationItemViewProps> = ({
                   {viewModel.deliveryModeLabel && (
                     <span
                       data-testid="user-message-delivery-mode"
-                      className="inline-flex items-center rounded-full border border-amber-500/30 bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-amber-600 dark:text-amber-400"
+                      className="inline-flex items-center rounded-full border border-warning/30 bg-warning/10 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-warning-foreground"
                     >
                       {viewModel.deliveryModeLabel}
                     </span>
@@ -214,9 +214,9 @@ export const ConversationItemView: FC<ConversationItemViewProps> = ({
     case 'approval-request':
       return (
         <ConversationItemShell copyText={viewModel.copyText}>
-          <div className="my-2 rounded-lg border border-amber-500/30 bg-amber-500/5 p-4">
+          <div className="my-2 rounded-lg border border-warning/30 bg-warning/5 p-4">
             <div className="flex items-start gap-3">
-              <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-500" />
+              <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-warning" />
               <div className="flex-1">
                 <div className="flex flex-wrap items-center gap-x-2 gap-y-1 pr-8">
                   <p className="text-sm font-medium">Approval needed</p>

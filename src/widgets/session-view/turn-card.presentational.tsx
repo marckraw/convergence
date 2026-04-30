@@ -69,7 +69,7 @@ export const TurnCard: FC<TurnCardProps> = ({
               </span>
             )}
             {turn.status === 'errored' && (
-              <span className="rounded bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-medium text-amber-500">
+              <span className="rounded bg-warning/10 px-1.5 py-0.5 text-[10px] font-medium text-warning-foreground">
                 errored
               </span>
             )}

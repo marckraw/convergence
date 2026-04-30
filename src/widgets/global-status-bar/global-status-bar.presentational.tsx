@@ -75,14 +75,14 @@ export const GlobalStatusBar: FC<GlobalStatusBarProps> = ({
                   className={cn(
                     aggregateChipClass,
                     attentionCount > 0 &&
-                      'border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-100',
+                      'border-warning/40 bg-warning/10 text-warning-foreground',
                   )}
                 >
                   <CircleAlert
                     className={cn(
                       'h-3 w-3',
                       attentionCount > 0
-                        ? 'text-amber-600 dark:text-amber-300'
+                        ? 'text-warning-foreground'
                         : 'text-muted-foreground',
                     )}
                   />
@@ -91,7 +91,7 @@ export const GlobalStatusBar: FC<GlobalStatusBarProps> = ({
                       className={cn(
                         'font-medium',
                         attentionCount > 0
-                          ? 'text-amber-700 dark:text-amber-100'
+                          ? 'text-warning-foreground'
                           : 'text-foreground',
                       )}
                     >
@@ -135,7 +135,7 @@ export const GlobalStatusBar: FC<GlobalStatusBarProps> = ({
                       className={cn(
                         dotClass,
                         project.needsAttention.length > 0
-                          ? 'bg-amber-500 dark:bg-amber-300'
+                          ? 'bg-warning'
                           : 'bg-emerald-500 dark:bg-emerald-400',
                       )}
                     />
@@ -147,7 +147,7 @@ export const GlobalStatusBar: FC<GlobalStatusBarProps> = ({
                         <span>{project.running.length}▸</span>
                       )}
                       {project.needsAttention.length > 0 && (
-                        <span className="ml-1 text-amber-700 dark:text-amber-200">
+                        <span className="ml-1 text-warning-foreground">
                           {project.needsAttention.length}!
                         </span>
                       )}

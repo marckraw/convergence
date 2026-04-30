@@ -8,7 +8,7 @@ interface FileStatusIconProps {
 export const FileStatusIcon: FC<FileStatusIconProps> = ({ status }) => {
   switch (status) {
     case 'M':
-      return <FileEdit className="h-3.5 w-3.5 text-amber-500" />
+      return <FileEdit className="h-3.5 w-3.5 text-warning" />
     case 'A':
     case '??':
       return <FilePlus className="h-3.5 w-3.5 text-green-500" />

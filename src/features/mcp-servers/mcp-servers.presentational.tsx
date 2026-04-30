@@ -43,9 +43,7 @@ function renderStatusIcon(status: McpServerStatus) {
         <CircleCheck className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
       )
     case 'needs-auth':
-      return (
-        <KeyRound className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400" />
-      )
+      return <KeyRound className="h-3.5 w-3.5 text-warning-foreground" />
     case 'failed':
       return <CircleAlert className="h-3.5 w-3.5 text-destructive" />
     case 'disabled':
@@ -60,7 +58,7 @@ function renderStatusBadge(status: McpServerStatus, label: string) {
     status === 'ready'
       ? 'border-emerald-500/20 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300'
       : status === 'needs-auth'
-        ? 'border-amber-500/20 bg-amber-500/10 text-amber-700 dark:text-amber-200'
+        ? 'border-warning/20 bg-warning/10 text-warning-foreground'
         : status === 'failed'
           ? 'border-destructive/20 bg-destructive/10 text-destructive'
           : 'border-border/70 bg-muted/50 text-muted-foreground'

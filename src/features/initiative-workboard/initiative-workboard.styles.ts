@@ -55,8 +55,7 @@ export const initiativeAttentionClassNames: Record<
   string
 > = {
   none: 'border-border/60 bg-background/40 text-muted-foreground',
-  'needs-you':
-    'border-amber-500/25 bg-amber-500/10 text-amber-700 dark:text-amber-200',
+  'needs-you': 'border-warning/25 bg-warning/10 text-warning-foreground',
   'needs-decision':
     'border-orange-500/25 bg-orange-500/10 text-orange-700 dark:text-orange-200',
   blocked: 'border-red-500/25 bg-red-500/10 text-red-700 dark:text-red-200',

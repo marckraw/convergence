@@ -90,7 +90,7 @@ export const ContextWindowIndicator: FC<ContextWindowIndicatorProps> = ({
                 contextWindow.usedPercentage < 50 && 'text-emerald-500',
                 contextWindow.usedPercentage >= 50 &&
                   contextWindow.usedPercentage < 80 &&
-                  'text-amber-500',
+                  'text-warning',
                 contextWindow.usedPercentage >= 80 && 'text-red-500',
               )}
             />

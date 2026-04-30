@@ -189,7 +189,7 @@ export const SessionForkDialog: FC<SessionForkDialogProps> = ({
               <div
                 role="alert"
                 data-testid="fork-size-warning"
-                className="space-y-2 rounded-md border border-amber-400/40 bg-amber-400/10 px-3 py-2 text-sm text-amber-700 dark:text-amber-200"
+                className="space-y-2 rounded-md border border-warning/40 bg-warning/10 px-3 py-2 text-sm text-warning-foreground"
               >
                 <p>
                   Full transcript is approximately {sizeWarning.percentage}% of
@@ -316,7 +316,7 @@ export const SessionForkDialog: FC<SessionForkDialogProps> = ({
                   {progressLabel?.stale && (
                     <p
                       data-testid="fork-preview-stale"
-                      className="rounded-md border border-amber-400/40 bg-amber-400/10 px-2 py-1 text-xs text-amber-700 dark:text-amber-200"
+                      className="rounded-md border border-warning/40 bg-warning/10 px-2 py-1 text-xs text-warning-foreground"
                     >
                       No output in the last 30s. The provider may be stuck.
                     </p>
