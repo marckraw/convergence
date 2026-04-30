@@ -7,6 +7,7 @@ import { Button } from '@/shared/ui/button'
 import { cn } from '@/shared/lib/cn.pure'
 import { RangePicker } from './range-picker.presentational'
 import { UsageTab } from './usage-tab.presentational'
+import { WorkStyleTab } from './work-style-tab.presentational'
 
 export type AnalyticsInsightsTab = 'usage' | 'work-style'
 
@@ -80,7 +81,7 @@ export function AnalyticsInsights({
       {activeTab === 'usage' ? (
         <UsageTab overview={overview} isLoading={isLoading} />
       ) : (
-        renderWorkStylePlaceholder()
+        <WorkStyleTab overview={overview} isLoading={isLoading} />
       )}
     </div>
   )
@@ -111,18 +112,5 @@ function renderTabButton({
     >
       {label}
     </Button>
-  )
-}
-
-function renderWorkStylePlaceholder() {
-  return (
-    <section className="rounded-lg border border-border bg-card/60 p-5">
-      <p className="text-sm font-semibold">Work style summaries are next</p>
-      <p className="mt-2 max-w-2xl text-sm leading-relaxed text-muted-foreground">
-        This tab will use the same local overview data to explain provider,
-        project, time-of-day, and interaction patterns. Generated AI summaries
-        stay opt-in and are not part of this phase.
-      </p>
-    </section>
   )
 }

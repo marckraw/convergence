@@ -291,26 +291,28 @@ content.
 
 Goal: add useful non-AI work-style explanations from local aggregates.
 
-- [ ] Extend pure deterministic profile helpers if A1 left gaps.
-- [ ] Create `work-style-tab.presentational.tsx`.
-- [ ] Show:
+- [x] Extend pure deterministic profile helpers if A1 left gaps. No backend
+      helper changes were needed; A1 already exposes deterministic profile
+      facts in the overview payload.
+- [x] Create `work-style-tab.presentational.tsx`.
+- [x] Show:
   - most-used provider
   - most-active project
   - peak weekday/hour
   - common session size bucket
   - common interaction shape
   - short deterministic summary text
-- [ ] Avoid pretending this is AI-generated. Label it as based on local usage
+- [x] Avoid pretending this is AI-generated. Label it as based on local usage
       patterns.
-- [ ] Add tests for profile empty state and populated rendering.
+- [x] Add tests for profile empty state and populated rendering.
 
 **Verification**
 
-- [ ] `npm install`
-- [ ] `npm run typecheck`
-- [ ] `npm run test:pure`
-- [ ] `npm run test:unit -- analytics`
-- [ ] `chaperone check --fix`
+- [x] `npm install`
+- [x] `npm run typecheck`
+- [x] `npm run test:pure`
+- [x] `npm run test:unit -- analytics`
+- [x] `chaperone check --fix`
 
 **Dependencies:** A5.
 
@@ -542,3 +544,20 @@ Append a short note below after each completed phase:
 - Manual checkpoint: ready now. Open Settings -> Insights, switch ranges, and
   inspect empty and populated local databases.
 - Next phase: A6 deterministic `Your Work Style`.
+
+### A6 verification (2026-04-30)
+
+- Summary: Replaced the `Your Work Style` placeholder with a deterministic
+  local profile tab showing peak weekday/hour, most-used provider,
+  most-active project, common session size, interaction shape, and the backend
+  summary. The tab explicitly states that no model call is made and no
+  transcripts are sent.
+- Tests:
+  - `npm install`: pass
+  - `npm run typecheck`: pass
+  - `npm run test:pure`: pass
+  - `npm run test:unit`: pass; existing jsdom canvas `getContext()` warnings
+    still print from the chart environment.
+  - `chaperone check --fix`: pass
+- Decisions changed: none.
+- Next phase: A7 profile snapshot storage.

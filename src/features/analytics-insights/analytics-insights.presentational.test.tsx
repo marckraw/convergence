@@ -182,7 +182,7 @@ describe('AnalyticsInsights', () => {
     expect(screen.getByText('No hourly pattern')).toBeInTheDocument()
   })
 
-  it('switches to the work style placeholder tab', () => {
+  it('switches to the work style tab', () => {
     const onTabChange = vi.fn()
 
     render(
@@ -198,9 +198,7 @@ describe('AnalyticsInsights', () => {
       />,
     )
 
-    expect(
-      screen.getByText('Work style summaries are next'),
-    ).toBeInTheDocument()
+    expect(screen.getByText('Deterministic local profile')).toBeInTheDocument()
 
     fireEvent.click(screen.getByRole('tab', { name: 'Your Usage' }))
     expect(onTabChange).toHaveBeenCalledWith('usage')
