@@ -1,5 +1,11 @@
 # convergence
 
+## 0.29.3
+
+### Patch Changes
+
+- 361472d: Reduce static-analysis noise by keeping module-local helpers private.
+
 ## 0.29.2
 
 ### Patch Changes
