@@ -41,6 +41,7 @@ import {
 } from './conversation-item.pure'
 import type { TurnCaptureService } from './turn/turn-capture.service'
 import type { TurnDelta } from './turn/turn-capture.service'
+import type { SessionContextInjectionService } from './context-injection/session-context-injection.service'
 
 type UserMessageDraft = Extract<
   ConversationItem,
@@ -53,6 +54,12 @@ export interface SendMessageInput {
   attachmentIds?: string[]
   skillSelections?: SkillSelection[]
   deliveryMode?: MidRunInputMode
+  /**
+   * Only consumed by `start`. Replaces the session's attached project context
+   * items before computing the boot-injected block. Pass an empty array to
+   * clear; omit to leave existing attachments unchanged.
+   */
+  contextItemIds?: string[]
 }
 
 export interface SessionNamer {
@@ -85,6 +92,7 @@ export class SessionService {
   private namer: SessionNamer | null = null
   private attentionObserver: SessionAttentionObserver | null = null
   private turnCapture: TurnCaptureService | null = null
+  private contextInjection: SessionContextInjectionService | null = null
 
   constructor(
     private db: Database.Database,
@@ -105,6 +113,12 @@ export class SessionService {
     listener: (sessionId: string, delta: TurnDelta) => void,
   ): void {
     this.onTurnDelta = listener
+  }
+
+  setSessionContextInjectionService(
+    service: SessionContextInjectionService,
+  ): void {
+    this.contextInjection = service
   }
 
   setAttachmentsService(service: AttachmentsService): void {
@@ -380,14 +394,56 @@ export class SessionService {
 
     await this.rebindDraftAttachments(id, input.attachmentIds)
     const attachments = this.resolveAttachments(input.attachmentIds)
+
+    const bootContext = this.prepareBootContext(session, input)
+
     this.startHandle(
       session,
-      input.text,
+      bootContext.augmentedText,
       this.getContinuationToken(id),
       attachments,
       input.attachmentIds,
       input.skillSelections,
     )
+  }
+
+  private prepareBootContext(
+    session: Session,
+    input: SendMessageInput,
+  ): { augmentedText: string } {
+    if (!this.contextInjection) {
+      return { augmentedText: input.text }
+    }
+
+    const result = this.contextInjection.prepareBoot({
+      session,
+      originalText: input.text,
+      contextItemIds: input.contextItemIds,
+    })
+
+    if (result.noteDraft) {
+      this.recordBootContextNote(session.id, result.noteDraft)
+    }
+
+    return { augmentedText: result.augmentedText }
+  }
+
+  private prepareUserTurnText(session: Session, originalText: string): string {
+    if (!this.contextInjection) return originalText
+    return this.contextInjection.prepareUserTurn({ session, originalText })
+  }
+
+  private recordBootContextNote(
+    sessionId: string,
+    draft: ConversationItemDraft,
+  ): void {
+    const item = this.addConversationItem(sessionId, draft)
+    if (!item) return
+    this.notifySessionChange(sessionId, {
+      sessionId,
+      op: 'add',
+      item,
+    })
   }
 
   async sendMessage(id: string, input: SendMessageInput): Promise<void> {
@@ -450,9 +506,10 @@ export class SessionService {
     }
 
     if (provider.supportsContinuation && continuationToken) {
+      const augmentedText = this.prepareUserTurnText(session, input.text)
       this.startHandle(
         session,
-        input.text,
+        augmentedText,
         continuationToken,
         attachments,
         input.attachmentIds,
@@ -516,8 +573,10 @@ export class SessionService {
       )
     }
 
+    const augmentedText = this.prepareUserTurnText(session, input.input.text)
+
     handle.sendMessage(
-      input.input.text,
+      augmentedText,
       attachments,
       input.input.skillSelections,
       {
@@ -1058,10 +1117,12 @@ export class SessionService {
       const attachments = this.resolveAttachments(item.attachmentIds)
       const handle = this.activeHandles.get(sessionId)
 
+      const augmentedText = this.prepareUserTurnText(session, item.text)
+
       if (handle) {
         this.pendingUserAttachmentIds.set(sessionId, item.attachmentIds)
         this.pendingUserSkillSelections.set(sessionId, item.skillSelections)
-        handle.sendMessage(item.text, attachments, item.skillSelections, {
+        handle.sendMessage(augmentedText, attachments, item.skillSelections, {
           deliveryMode: 'normal',
           queuedInputId: item.id,
         })
@@ -1077,7 +1138,7 @@ export class SessionService {
 
       this.startHandle(
         session,
-        item.text,
+        augmentedText,
         continuationToken,
         attachments,
         item.attachmentIds,

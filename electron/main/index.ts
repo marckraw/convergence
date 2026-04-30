@@ -12,10 +12,12 @@ import { getDatabase } from '../backend/database/database'
 import { ProjectService } from '../backend/project/project.service'
 import { InitiativeService } from '../backend/initiative/initiative.service'
 import { InitiativeSynthesisService } from '../backend/initiative/initiative-synthesis.service'
+import { ProjectContextService } from '../backend/project-context/project-context.service'
 import { StateService } from '../backend/state/state.service'
 import { WorkspaceService } from '../backend/workspace/workspace.service'
 import { GitService } from '../backend/git/git.service'
 import { SessionService } from '../backend/session/session.service'
+import { SessionContextInjectionService } from '../backend/session/context-injection/session-context-injection.service'
 import { TurnCaptureService } from '../backend/session/turn/turn-capture.service'
 import { ProviderRegistry } from '../backend/provider/provider-registry'
 import { ClaudeCodeProvider } from '../backend/provider/claude-code/claude-code-provider'
@@ -159,6 +161,11 @@ async function startApp(): Promise<void> {
   const gitService = new GitService()
   const projectService = new ProjectService(db)
   const initiativeService = new InitiativeService(db)
+  const projectContextService = new ProjectContextService(db)
+  const sessionContextInjectionService = new SessionContextInjectionService(
+    db,
+    projectContextService,
+  )
   const stateService = new StateService(db)
   const workspaceService = new WorkspaceService(db, gitService, workspacesRoot)
   const providerRegistry = new ProviderRegistry()
@@ -170,6 +177,9 @@ async function startApp(): Promise<void> {
     platform: process.platform,
   })
   sessionService.setAttachmentsService(attachmentsService)
+  sessionService.setSessionContextInjectionService(
+    sessionContextInjectionService,
+  )
   const turnCaptureService = new TurnCaptureService(gitService, db)
   turnCaptureService.recoverRunningTurns()
   sessionService.setTurnCaptureService(turnCaptureService)
@@ -386,6 +396,7 @@ async function startApp(): Promise<void> {
     appSettingsService,
     attachmentsService,
     turnCaptureService,
+    projectContextService,
     initiativeSynthesisService,
     (prefs) => updatesScheduler?.onPrefsChanged(prefs),
   )

@@ -1,6 +1,61 @@
 {
-  "currentVersion": "0.27.2",
+  "currentVersion": "0.28.6",
   "releases": [
+    {
+      "version": "0.28.6",
+      "date": null,
+      "notes": "### Patch Changes\n\n- de97d10: Deepen transcript entry rendering around a pure view model so copy text, timing, attachment resolution, and action state are derived from normalized conversation items before rendering."
+    },
+    {
+      "version": "0.28.5",
+      "date": null,
+      "notes": "### Patch Changes\n\n- b35838a: Revert the stuck approval recovery change from 0.28.3. Approval actions once again remain tied to the latest transcript item, and Codex exits no longer force an active session into a failed state based on local provider bookkeeping."
+    },
+    {
+      "version": "0.28.4",
+      "date": null,
+      "notes": "### Patch Changes\n\n- 716f08f: Discover skills exposed as symlinked directories under `~/.claude/skills/` and project skill roots. The filesystem skill scanner previously dropped symlinks because `Dirent.isDirectory()` reports `false` for them, so externally managed skill collections (e.g. Matt Pocock's installer) never appeared in the composer skill picker."
+    },
+    {
+      "version": "0.28.3",
+      "date": null,
+      "notes": "### Patch Changes\n\n- 917d7b5: Fix stuck approval recovery in session conversations. Approval cards remain actionable even if later transcript items arrive after the request, and Codex sessions now fail cleanly with an error note if the provider exits before the active turn completes."
+    },
+    {
+      "version": "0.28.2",
+      "date": null,
+      "notes": "### Patch Changes\n\n- b5b24c5: Preserve image attachment aspect ratios in composer thumbnails and full preview modals so tall or wide images are scaled to fit without being cropped."
+    },
+    {
+      "version": "0.28.1",
+      "date": null,
+      "notes": "### Patch Changes\n\n- de54e0d: Claude Code skills picker now lists plugin skills installed via `/plugin install`. Discovery reads `~/.claude/plugins/installed_plugins.json` for authoritative install paths and falls back to a depth-bounded walk of `~/.claude/plugins/cache/` when no manifest is present, so plugins like `agent-skills`, `caveman`, and `frontend-design` surface in the picker just like in the real Claude Code harness."
+    },
+    {
+      "version": "0.28.0",
+      "date": null,
+      "notes": "### Minor Changes\n\n- 6380ccf: Pi provider now implements the `oneShot` interface used by Claude Code and Codex providers. This unlocks summary-driven flows (session fork, session naming, initiative synthesis) for pi sessions. The implementation spawns the pi binary in `--mode rpc`, sends a `prompt` request, accumulates `text_delta` chunks, and resolves on `agent_end`. Task progress events are emitted when a `TaskProgressService` is wired in."
+    },
+    {
+      "version": "0.27.6",
+      "date": null,
+      "notes": "### Patch Changes\n\n- 307bc11: Recover stale running sessions after app restart instead of leaving them stuck\n  as running with queued follow-ups that cannot be stopped."
+    },
+    {
+      "version": "0.27.5",
+      "date": null,
+      "notes": "### Patch Changes\n\n- 833e489: Show timestamps and elapsed turn timing on conversation transcript items."
+    },
+    {
+      "version": "0.27.4",
+      "date": null,
+      "notes": "### Patch Changes\n\n- 0276624: Show provider harness update status in the Providers dialog. Convergence now checks the npm registry for the latest Claude Code, Codex, and Pi Agent harness versions, labels each installed provider as latest, outdated, or unknown, and displays the relevant install or update command when action is needed."
+    },
+    {
+      "version": "0.27.3",
+      "date": null,
+      "notes": "### Patch Changes\n\n- a775512: Fix feedback submission so feature requests actually reach Convergence Cloud. The cloud enforces a flat `metadata` record of primitive values, so the desktop app now flattens session context into `context.<key>` entries and omits unset optional fields instead of sending `null`. Failed submissions also surface the cloud's error body in the dialog instead of a bare HTTP status."
+    },
     {
       "version": "0.27.2",
       "date": null,

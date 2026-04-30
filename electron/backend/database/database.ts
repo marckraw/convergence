@@ -206,6 +206,32 @@ const SCHEMA = `
     updated_at TEXT NOT NULL,
     FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE
   );
+
+  CREATE TABLE IF NOT EXISTS project_context_items (
+    id TEXT PRIMARY KEY,
+    project_id TEXT NOT NULL,
+    label TEXT,
+    body TEXT NOT NULL,
+    reinject_mode TEXT NOT NULL CHECK (reinject_mode IN ('boot', 'every-turn')),
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+    FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_project_context_items_project
+    ON project_context_items(project_id);
+
+  CREATE TABLE IF NOT EXISTS session_context_attachments (
+    session_id TEXT NOT NULL,
+    context_item_id TEXT NOT NULL,
+    sort_order INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (session_id, context_item_id),
+    FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE,
+    FOREIGN KEY (context_item_id) REFERENCES project_context_items(id) ON DELETE CASCADE
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_session_context_attachments_session
+    ON session_context_attachments(session_id);
 `
 
 function ensureAttachmentsTableNoFk(database: Database.Database): void {

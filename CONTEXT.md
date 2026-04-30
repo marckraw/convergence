@@ -16,6 +16,10 @@ _Avoid_: Session row, session metadata
 A first-class ordered unit in a session conversation, such as a user message, assistant message, tool call, tool result, approval request, input request, or note.
 _Avoid_: Transcript entry, message row
 
+**Session Context Injection**:
+The process that materializes selected project-level context into provider-visible Session input and, when needed, visible **Conversation Items**.
+_Avoid_: Prompt injection, hidden context
+
 **Transcript Entry View Model**:
 A render-ready interpretation of one **Conversation Item** for the transcript surface, including copy text, timing, attachments, actions, and display labels.
 _Avoid_: Transcript entry, renderer item
@@ -28,6 +32,7 @@ _Avoid_: File blob, upload
 
 - A **Session** has exactly one **Session Summary**.
 - A **Session** has zero or more **Conversation Items**.
+- **Session Context Injection** can add provider-visible text to a **Session** turn and can create a visible note **Conversation Item**.
 - A **Conversation Item** may reference zero or more **Attachments**.
 - A **Transcript Entry View Model** is derived from exactly one **Conversation Item**.
 

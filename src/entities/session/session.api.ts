@@ -48,11 +48,13 @@ export const sessionApi = {
     message: string,
     attachmentIds?: string[],
     skillSelections?: SkillSelection[],
+    contextItemIds?: string[],
   ): Promise<void> =>
     window.electronAPI.session.start(id, {
       text: message,
       attachmentIds,
       skillSelections,
+      contextItemIds,
     }),
 
   sendMessage: (

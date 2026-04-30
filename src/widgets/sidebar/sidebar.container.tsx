@@ -12,6 +12,7 @@ import {
   AppSettingsDialogContainer,
   InitiativeWorkboardDialogContainer,
   McpServersDialogContainer,
+  ProjectContextSettings,
   ProjectSettingsDialogContainer,
   ProviderStatusDialogContainer,
   ReleaseNotesDialogContainer,
@@ -267,7 +268,11 @@ export const Sidebar: FC<SidebarProps> = ({
           <InitiativeWorkboardDialogContainer />
         </div>
         <div className="mt-2">
-          <ProjectSettingsDialogContainer />
+          <ProjectSettingsDialogContainer
+            contextSection={(projectId) => (
+              <ProjectContextSettings projectId={projectId} />
+            )}
+          />
         </div>
         <div className="mt-2">
           <ProviderStatusDialogContainer />

@@ -1,4 +1,4 @@
-import type { FC, ClipboardEvent, DragEvent, KeyboardEvent } from 'react'
+import type { FC, ClipboardEvent, DragEvent, KeyboardEvent, Ref } from 'react'
 import type {
   MidRunInputMode,
   ProviderInfo,
@@ -6,12 +6,15 @@ import type {
   ResolvedProviderSelection,
 } from '@/entities/session'
 import { AttachmentsRow, type Attachment } from '@/entities/attachment'
+import type { ProjectContextItem } from '@/entities/project-context'
 import type { SkillCatalogEntry, SkillSelection } from '@/entities/skill'
 import { Button } from '@/shared/ui/button'
 import { Textarea } from '@/shared/ui/textarea'
 import { cn } from '@/shared/lib/cn.pure'
-import { ArrowUp, Paperclip } from 'lucide-react'
+import { ArrowUp, FileText, Paperclip, Repeat, X } from 'lucide-react'
 import { ComposerSelect } from './composer-select.presentational'
+import { ComposerContextMentionPicker } from './composer-context-mention.presentational'
+import { ProjectContextPicker } from './project-context-picker.presentational'
 import { SkillPicker } from './skill-picker.presentational'
 import { SkillSelectionChip } from './skill-selection-chip.presentational'
 
@@ -39,12 +42,18 @@ interface ComposerProps {
   skillQuery: string
   skillOptions: SkillCatalogEntry[]
   selectedSkills: SkillSelection[]
+  contextPickerOpen: boolean
+  projectContextItems: ProjectContextItem[]
+  selectedContextItems: ProjectContextItem[]
   skillCatalogLoading: boolean
   skillCatalogError: string | null
   onSkillPickerOpenChange: (open: boolean) => void
   onSkillQueryChange: (query: string) => void
   onSkillToggle: (skill: SkillCatalogEntry) => void
   onSkillRemove: (skillId: string) => void
+  onContextPickerOpenChange: (open: boolean) => void
+  onContextToggle: (id: string) => void
+  onContextRemove: (id: string) => void
   onAttachmentAdd: () => void
   onSkillsBrowse: () => void
   onAttachmentRemove: (attachmentId: string) => void
@@ -54,6 +63,15 @@ interface ComposerProps {
   onDragOver: (e: DragEvent<HTMLDivElement>) => void
   onDrop: (e: DragEvent<HTMLDivElement>) => void
   onPaste: (e: ClipboardEvent<HTMLTextAreaElement>) => void
+  everyTurnContextCount?: number
+  textareaRef?: Ref<HTMLTextAreaElement>
+  mentionPickerOpen?: boolean
+  mentionItems?: ProjectContextItem[]
+  mentionHighlightedIndex?: number
+  onMentionSelect?: (item: ProjectContextItem) => void
+  onMentionHover?: (index: number) => void
+  onMentionDismiss?: () => void
+  onSelectionChange?: (cursor: number) => void
 }
 
 export const Composer: FC<ComposerProps> = ({
@@ -69,7 +87,7 @@ export const Composer: FC<ComposerProps> = ({
   deliveryModes,
   onDeliveryModeChange,
   selectionDisabled = false,
-  placeholder = 'Ask anything, @tag files/folders, or use / to show available commands...',
+  placeholder = 'Ask anything, @tag files/folders, / for commands, :: for project context...',
   disabled = false,
   attachments,
   attachmentErrorByAttachmentId,
@@ -80,12 +98,18 @@ export const Composer: FC<ComposerProps> = ({
   skillQuery,
   skillOptions,
   selectedSkills,
+  contextPickerOpen,
+  projectContextItems,
+  selectedContextItems,
   skillCatalogLoading,
   skillCatalogError,
   onSkillPickerOpenChange,
   onSkillQueryChange,
   onSkillToggle,
   onSkillRemove,
+  onContextPickerOpenChange,
+  onContextToggle,
+  onContextRemove,
   onSkillsBrowse,
   onAttachmentAdd,
   onAttachmentRemove,
@@ -95,8 +119,43 @@ export const Composer: FC<ComposerProps> = ({
   onDragOver,
   onDrop,
   onPaste,
+  everyTurnContextCount = 0,
+  textareaRef,
+  mentionPickerOpen = false,
+  mentionItems = [],
+  mentionHighlightedIndex = 0,
+  onMentionSelect,
+  onMentionHover,
+  onMentionDismiss,
+  onSelectionChange,
 }) => {
   const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
+    if (mentionPickerOpen && mentionItems.length > 0) {
+      if (e.key === 'ArrowDown') {
+        e.preventDefault()
+        onMentionHover?.((mentionHighlightedIndex + 1) % mentionItems.length)
+        return
+      }
+      if (e.key === 'ArrowUp') {
+        e.preventDefault()
+        onMentionHover?.(
+          (mentionHighlightedIndex - 1 + mentionItems.length) %
+            mentionItems.length,
+        )
+        return
+      }
+      if (e.key === 'Enter' && !e.metaKey && !e.ctrlKey) {
+        e.preventDefault()
+        const item = mentionItems[mentionHighlightedIndex]
+        if (item) onMentionSelect?.(item)
+        return
+      }
+      if (e.key === 'Escape') {
+        e.preventDefault()
+        onMentionDismiss?.()
+        return
+      }
+    }
     if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
       e.preventDefault()
       if (
@@ -182,17 +241,78 @@ export const Composer: FC<ComposerProps> = ({
             ))}
           </div>
         ) : null}
-        <Textarea
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          onKeyDown={handleKeyDown}
-          onInput={handleInput}
-          onPaste={onPaste}
-          placeholder={placeholder}
-          disabled={disabled}
-          rows={1}
-          className="min-h-0 resize-none border-0 px-0 py-0 text-foreground shadow-none focus-visible:ring-0"
-        />
+        {selectedContextItems.length > 0 ? (
+          <div
+            className="mb-2 flex flex-wrap gap-1.5"
+            data-testid="selected-project-context-row"
+          >
+            {selectedContextItems.map((item) => (
+              <span
+                key={item.id}
+                className="inline-flex max-w-full items-center gap-1 rounded-full border border-border/70 bg-muted/40 px-2 py-0.5 text-xs text-muted-foreground"
+              >
+                <FileText className="h-3 w-3 shrink-0" />
+                <span className="truncate">
+                  {item.label?.trim() ? item.label : 'Untitled'}
+                </span>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="h-4 w-4 rounded-full"
+                  aria-label={`Remove ${item.label?.trim() ? item.label : 'Untitled'} context`}
+                  onClick={() => onContextRemove(item.id)}
+                >
+                  <X className="h-3 w-3" />
+                </Button>
+              </span>
+            ))}
+          </div>
+        ) : null}
+        {everyTurnContextCount > 0 ? (
+          <div
+            className="mb-2 inline-flex items-center gap-1 rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-[11px] font-medium text-amber-700 dark:text-amber-200"
+            data-testid="every-turn-context-badge"
+            title="Every-turn project context items are re-sent on every message in this session."
+          >
+            <Repeat className="h-3 w-3" />
+            <span>
+              Every-turn context active · {everyTurnContextCount} item
+              {everyTurnContextCount === 1 ? '' : 's'}
+            </span>
+          </div>
+        ) : null}
+        <div className="relative">
+          <ComposerContextMentionPicker
+            open={mentionPickerOpen}
+            items={mentionItems}
+            highlightedIndex={mentionHighlightedIndex}
+            onSelect={(item) => onMentionSelect?.(item)}
+            onHover={(index) => onMentionHover?.(index)}
+            onDismiss={() => onMentionDismiss?.()}
+          />
+          <Textarea
+            ref={textareaRef}
+            value={value}
+            onChange={(e) => {
+              onChange(e.target.value)
+              onSelectionChange?.(e.target.selectionStart ?? 0)
+            }}
+            onKeyDown={handleKeyDown}
+            onKeyUp={(e) =>
+              onSelectionChange?.(e.currentTarget.selectionStart ?? 0)
+            }
+            onClick={(e) =>
+              onSelectionChange?.(e.currentTarget.selectionStart ?? 0)
+            }
+            onInput={handleInput}
+            onPaste={onPaste}
+            placeholder={placeholder}
+            disabled={disabled}
+            rows={1}
+            className="min-h-0 resize-none border-0 px-0 py-0 text-foreground shadow-none focus-visible:ring-0"
+          />
+        </div>
         <div className="mt-2 flex items-center justify-between">
           <div className="flex min-w-0 flex-wrap items-center gap-1">
             <Button
@@ -219,6 +339,14 @@ export const Composer: FC<ComposerProps> = ({
               disabled={disabled || !selection.provider}
               onToggleSkill={onSkillToggle}
               onBrowseAll={onSkillsBrowse}
+            />
+            <ProjectContextPicker
+              open={contextPickerOpen}
+              onOpenChange={onContextPickerOpenChange}
+              items={projectContextItems}
+              selectedIds={selectedContextItems.map((item) => item.id)}
+              disabled={disabled || selectionDisabled}
+              onToggleItem={onContextToggle}
             />
             <ComposerSelect
               selectedId={selection.providerId}

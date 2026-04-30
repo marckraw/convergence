@@ -312,6 +312,7 @@ interface SendSessionMessageInput {
   attachmentIds?: string[]
   skillSelections?: SkillSelection[]
   deliveryMode?: MidRunInputMode
+  contextItemIds?: string[]
 }
 
 type ConversationItemKind =
@@ -547,6 +548,31 @@ interface SystemInfo {
   prefersReducedTransparency: boolean
 }
 
+type ProjectContextReinjectModeData = 'boot' | 'every-turn'
+
+interface ProjectContextItemData {
+  id: string
+  projectId: string
+  label: string | null
+  body: string
+  reinjectMode: ProjectContextReinjectModeData
+  createdAt: string
+  updatedAt: string
+}
+
+interface CreateProjectContextItemInputData {
+  projectId: string
+  label?: string | null
+  body: string
+  reinjectMode: ProjectContextReinjectModeData
+}
+
+interface UpdateProjectContextItemInputData {
+  label?: string | null
+  body?: string
+  reinjectMode?: ProjectContextReinjectModeData
+}
+
 interface ElectronAPI {
   system: {
     getInfo: () => SystemInfo
@@ -562,6 +588,19 @@ interface ElectronAPI {
       id: string,
       settings: ProjectSettings,
     ) => Promise<ProjectData>
+  }
+  projectContext: {
+    list: (projectId: string) => Promise<ProjectContextItemData[]>
+    create: (
+      input: CreateProjectContextItemInputData,
+    ) => Promise<ProjectContextItemData>
+    update: (
+      id: string,
+      patch: UpdateProjectContextItemInputData,
+    ) => Promise<ProjectContextItemData>
+    delete: (id: string) => Promise<void>
+    attachToSession: (sessionId: string, itemIds: string[]) => Promise<void>
+    listForSession: (sessionId: string) => Promise<ProjectContextItemData[]>
   }
   initiative: {
     list: () => Promise<InitiativeData[]>

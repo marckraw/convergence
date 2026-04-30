@@ -30,6 +30,8 @@ describe('database', () => {
     expect(tableNames).toContain('initiatives')
     expect(tableNames).toContain('initiative_attempts')
     expect(tableNames).toContain('initiative_outputs')
+    expect(tableNames).toContain('project_context_items')
+    expect(tableNames).toContain('session_context_attachments')
 
     const sessionColumns = db
       .prepare("PRAGMA table_info('sessions')")
@@ -236,6 +238,132 @@ describe('database', () => {
         (fk) => fk.table === 'sessions' && fk.on_delete === 'SET NULL',
       ),
     ).toBe(true)
+  })
+
+  it('creates project_context_items with expected columns and FK', () => {
+    const db = getDatabase()
+    const columns = db
+      .prepare("PRAGMA table_info('project_context_items')")
+      .all() as Array<{ name: string; notnull: number }>
+    expect(columns.map((c) => c.name).sort()).toEqual(
+      [
+        'id',
+        'project_id',
+        'label',
+        'body',
+        'reinject_mode',
+        'created_at',
+        'updated_at',
+      ].sort(),
+    )
+
+    const foreignKeys = db
+      .prepare("PRAGMA foreign_key_list('project_context_items')")
+      .all() as Array<{ table: string; on_delete: string }>
+    expect(foreignKeys.some((fk) => fk.table === 'projects')).toBe(true)
+    expect(foreignKeys[0]?.on_delete).toBe('CASCADE')
+  })
+
+  it('rejects unknown reinject_mode values via the CHECK constraint', () => {
+    const db = getDatabase()
+    db.prepare(
+      "INSERT INTO projects (id, name, repository_path) VALUES ('p-ctx', 'p', '/tmp/p-ctx')",
+    ).run()
+    expect(() =>
+      db
+        .prepare(
+          `INSERT INTO project_context_items (id, project_id, body, reinject_mode)
+           VALUES (?, ?, ?, ?)`,
+        )
+        .run('ctx-1', 'p-ctx', 'body', 'bogus'),
+    ).toThrow()
+  })
+
+  it('cascades project_context_items deletion when its project is deleted', () => {
+    const db = getDatabase()
+    db.prepare(
+      "INSERT INTO projects (id, name, repository_path) VALUES ('p-cas', 'p', '/tmp/p-cas')",
+    ).run()
+    db.prepare(
+      `INSERT INTO project_context_items (id, project_id, body, reinject_mode)
+       VALUES ('ctx-cas', 'p-cas', 'body', 'boot')`,
+    ).run()
+
+    db.prepare('DELETE FROM projects WHERE id = ?').run('p-cas')
+
+    const remaining = db
+      .prepare('SELECT id FROM project_context_items WHERE id = ?')
+      .all('ctx-cas')
+    expect(remaining).toEqual([])
+  })
+
+  it('creates session_context_attachments with expected columns, PK, and FKs', () => {
+    const db = getDatabase()
+    const columns = db
+      .prepare("PRAGMA table_info('session_context_attachments')")
+      .all() as Array<{ name: string; pk: number }>
+    expect(columns.map((c) => c.name).sort()).toEqual(
+      ['session_id', 'context_item_id', 'sort_order'].sort(),
+    )
+    const pkColumns = columns
+      .filter((c) => c.pk > 0)
+      .map((c) => c.name)
+      .sort()
+    expect(pkColumns).toEqual(['context_item_id', 'session_id'])
+
+    const foreignKeys = db
+      .prepare("PRAGMA foreign_key_list('session_context_attachments')")
+      .all() as Array<{ table: string; on_delete: string }>
+    expect(foreignKeys.map((fk) => fk.table).sort()).toEqual(
+      ['project_context_items', 'sessions'].sort(),
+    )
+    for (const fk of foreignKeys) {
+      expect(fk.on_delete).toBe('CASCADE')
+    }
+  })
+
+  it('cascades session_context_attachments when its session or context item is deleted', () => {
+    const db = getDatabase()
+    db.prepare(
+      "INSERT INTO projects (id, name, repository_path) VALUES ('p-att', 'p', '/tmp/p-att')",
+    ).run()
+    db.prepare(
+      "INSERT INTO sessions (id, project_id, provider_id, name, working_directory) VALUES ('s-att', 'p-att', 'codex', 's', '/tmp/p-att')",
+    ).run()
+    db.prepare(
+      `INSERT INTO project_context_items (id, project_id, body, reinject_mode)
+       VALUES ('ctx-att', 'p-att', 'body', 'boot')`,
+    ).run()
+    db.prepare(
+      `INSERT INTO session_context_attachments (session_id, context_item_id, sort_order)
+       VALUES ('s-att', 'ctx-att', 0)`,
+    ).run()
+
+    db.prepare('DELETE FROM sessions WHERE id = ?').run('s-att')
+
+    const remainingAfterSessionDelete = db
+      .prepare(
+        'SELECT session_id FROM session_context_attachments WHERE session_id = ?',
+      )
+      .all('s-att')
+    expect(remainingAfterSessionDelete).toEqual([])
+
+    db.prepare(
+      "INSERT INTO sessions (id, project_id, provider_id, name, working_directory) VALUES ('s-att2', 'p-att', 'codex', 's2', '/tmp/p-att')",
+    ).run()
+    db.prepare(
+      `INSERT INTO session_context_attachments (session_id, context_item_id, sort_order)
+       VALUES ('s-att2', 'ctx-att', 0)`,
+    ).run()
+
+    db.prepare('DELETE FROM project_context_items WHERE id = ?').run('ctx-att')
+
+    const remainingAfterItemDelete = db
+      .prepare(
+        'SELECT context_item_id FROM session_context_attachments WHERE context_item_id = ?',
+      )
+      .all('ctx-att')
+    expect(remainingAfterItemDelete).toEqual([])
   })
 
   it('returns the same instance on repeated calls', () => {

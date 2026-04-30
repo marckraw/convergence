@@ -22,6 +22,13 @@ import {
   type SkillCatalogEntry,
   type SkillSelection,
 } from '@/entities/skill'
+import {
+  applyMentionExpansion,
+  detectMentionTrigger,
+  filterContextMentions,
+  useProjectContextStore,
+  type ProjectContextItem,
+} from '@/entities/project-context'
 import { Composer } from './composer.presentational'
 import { validateAttachmentsAgainstCapability } from './attachment-capability.pure'
 import {
@@ -40,6 +47,7 @@ interface ComposerContainerProps {
 
 const DRAFT_KEY_NEW = '__new__'
 const EMPTY_QUEUED_INPUTS: SessionQueuedInput[] = []
+const EMPTY_PROJECT_CONTEXT_ITEMS: ProjectContextItem[] = []
 
 const QUEUED_INPUT_STATE_LABELS: Record<SessionQueuedInput['state'], string> = {
   queued: 'Queued',
@@ -112,8 +120,10 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
     null,
   )
   const [skillPickerOpen, setSkillPickerOpen] = useState(false)
+  const [contextPickerOpen, setContextPickerOpen] = useState(false)
   const [skillQuery, setSkillQuery] = useState('')
   const [selectedSkills, setSelectedSkills] = useState<SkillSelection[]>([])
+  const [selectedContextIds, setSelectedContextIds] = useState<string[]>([])
   const [isDragging, setIsDragging] = useState(false)
   const dragDepth = useRef(0)
   const providers = useSessionStore((s) => s.providers)
@@ -134,6 +144,113 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
   )
   const canContinueActiveSession =
     !!activeSession && !!activeProvider?.supportsContinuation
+  const attachmentsBySessionId = useProjectContextStore(
+    (s) => s.attachmentsBySessionId,
+  )
+  const itemsByProjectId = useProjectContextStore((s) => s.itemsByProjectId)
+  const loadProjectContextForSession = useProjectContextStore(
+    (s) => s.loadForSession,
+  )
+  const loadProjectContextForProject = useProjectContextStore(
+    (s) => s.loadForProject,
+  )
+  const everyTurnContextCount = activeSessionId
+    ? (attachmentsBySessionId[activeSessionId] ?? []).filter(
+        (item) => item.reinjectMode === 'every-turn',
+      ).length
+    : 0
+  const projectContextItems =
+    itemsByProjectId[projectId] ?? EMPTY_PROJECT_CONTEXT_ITEMS
+  const selectedContextItems = useMemo(
+    () =>
+      projectContextItems.filter((item) =>
+        selectedContextIds.includes(item.id),
+      ),
+    [projectContextItems, selectedContextIds],
+  )
+
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null)
+  const [cursor, setCursor] = useState(0)
+  const [mentionHighlightedIndex, setMentionHighlightedIndex] = useState(0)
+  const [mentionDismissedRange, setMentionDismissedRange] = useState<{
+    start: number
+    end: number
+  } | null>(null)
+  const pendingCursorRef = useRef<number | null>(null)
+
+  const mentionTrigger = useMemo(
+    () => detectMentionTrigger(value, cursor),
+    [value, cursor],
+  )
+  const mentionPickerOpen =
+    mentionTrigger.open &&
+    projectContextItems.length > 0 &&
+    !(
+      mentionDismissedRange !== null &&
+      mentionDismissedRange.start === mentionTrigger.range.start
+    )
+  const mentionItems = useMemo(
+    () =>
+      mentionPickerOpen
+        ? filterContextMentions(projectContextItems, mentionTrigger.query)
+        : EMPTY_PROJECT_CONTEXT_ITEMS,
+    [mentionPickerOpen, mentionTrigger, projectContextItems],
+  )
+
+  useEffect(() => {
+    setMentionHighlightedIndex(0)
+  }, [mentionPickerOpen ? mentionTrigger.query : null])
+
+  useEffect(() => {
+    if (mentionDismissedRange === null) return
+    if (!mentionTrigger.open) {
+      setMentionDismissedRange(null)
+      return
+    }
+    if (mentionTrigger.range.start !== mentionDismissedRange.start) {
+      setMentionDismissedRange(null)
+    }
+  }, [mentionDismissedRange, mentionTrigger])
+
+  useEffect(() => {
+    if (!activeSessionId) return
+    void loadProjectContextForSession(activeSessionId)
+  }, [activeSessionId, loadProjectContextForSession])
+
+  useEffect(() => {
+    void loadProjectContextForProject(projectId)
+  }, [projectId, loadProjectContextForProject])
+
+  useEffect(() => {
+    if (pendingCursorRef.current === null) return
+    const next = pendingCursorRef.current
+    pendingCursorRef.current = null
+    const node = textareaRef.current
+    if (!node) return
+    node.focus()
+    node.setSelectionRange(next, next)
+    setCursor(next)
+  }, [value])
+
+  const handleMentionSelect = useCallback(
+    (item: ProjectContextItem) => {
+      if (!mentionTrigger.open) return
+      const result = applyMentionExpansion(
+        value,
+        mentionTrigger.range,
+        item.body,
+      )
+      pendingCursorRef.current = result.cursor
+      setValue(result.text)
+    },
+    [mentionTrigger, value],
+  )
+
+  const handleMentionDismiss = useCallback(() => {
+    if (!mentionTrigger.open) return
+    setMentionDismissedRange({ ...mentionTrigger.range })
+  }, [mentionTrigger])
+
   const appSettings = useAppSettingsStore((s) => s.settings)
   const storedDefaults = useMemo(
     () => ({
@@ -202,9 +319,18 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
 
   useEffect(() => {
     setSelectedSkills([])
+    setSelectedContextIds([])
     setSkillQuery('')
     setSkillPickerOpen(false)
+    setContextPickerOpen(false)
   }, [projectId, activeSessionId])
+
+  useEffect(() => {
+    const availableIds = new Set(projectContextItems.map((item) => item.id))
+    setSelectedContextIds((current) =>
+      current.filter((id) => availableIds.has(id)),
+    )
+  }, [projectContextItems])
 
   useEffect(() => {
     if (!midRunPolicy.availableModes.includes(deliveryMode)) {
@@ -271,6 +397,8 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
     const hasAttachments = attachmentIds.length > 0
     const skillSelections =
       selectedSkills.length > 0 ? selectedSkills : undefined
+    const contextItemIds =
+      selectedContextIds.length > 0 ? selectedContextIds : undefined
 
     if (activeSession && canContinueActiveSession) {
       const mode = deliveryMode === 'normal' ? undefined : deliveryMode
@@ -322,6 +450,7 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
         trimmed,
         hasAttachments ? attachmentIds : undefined,
         skillSelections,
+        contextItemIds,
       )
     } else {
       createAndStartSession(
@@ -332,10 +461,14 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
         selection.effort?.id ?? null,
         name,
         trimmed,
+        undefined,
+        undefined,
+        contextItemIds,
       )
     }
     setValue('')
     setSelectedSkills([])
+    setSelectedContextIds([])
     clearDraft(draftKey)
   }, [
     value,
@@ -344,6 +477,7 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
     selection.effort,
     attachments,
     selectedSkills,
+    selectedContextIds,
     capabilityResult.ok,
     activeSession,
     canContinueActiveSession,
@@ -397,6 +531,18 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
     setSelectedSkills((current) =>
       current.filter((selection) => selection.id !== skillId),
     )
+  }, [])
+
+  const handleContextToggle = useCallback((id: string) => {
+    setSelectedContextIds((current) =>
+      current.includes(id)
+        ? current.filter((value) => value !== id)
+        : [...current, id],
+    )
+  }, [])
+
+  const handleContextRemove = useCallback((id: string) => {
+    setSelectedContextIds((current) => current.filter((value) => value !== id))
   }, [])
 
   const handleModelChange = (nextModelId: string) => {
@@ -493,6 +639,15 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
         deliveryMode={deliveryMode}
         deliveryModes={midRunPolicy.availableModes}
         onDeliveryModeChange={setDeliveryMode}
+        everyTurnContextCount={everyTurnContextCount}
+        textareaRef={textareaRef}
+        mentionPickerOpen={mentionPickerOpen}
+        mentionItems={mentionItems}
+        mentionHighlightedIndex={mentionHighlightedIndex}
+        onMentionSelect={handleMentionSelect}
+        onMentionHover={setMentionHighlightedIndex}
+        onMentionDismiss={handleMentionDismiss}
+        onSelectionChange={setCursor}
         selectionDisabled={canContinueActiveSession}
         placeholder={
           activeSession?.attention === 'needs-input'
@@ -519,12 +674,18 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
         skillQuery={skillQuery}
         skillOptions={skillOptions}
         selectedSkills={selectedSkills}
+        contextPickerOpen={contextPickerOpen}
+        projectContextItems={projectContextItems}
+        selectedContextItems={selectedContextItems}
         skillCatalogLoading={skillCatalogLoading}
         skillCatalogError={skillCatalogError}
         onSkillPickerOpenChange={handleSkillPickerOpenChange}
         onSkillQueryChange={setSkillQuery}
         onSkillToggle={handleSkillToggle}
         onSkillRemove={handleSkillRemove}
+        onContextPickerOpenChange={setContextPickerOpen}
+        onContextToggle={handleContextToggle}
+        onContextRemove={handleContextRemove}
         onSkillsBrowse={handleSkillsBrowse}
         onAttachmentAdd={handleAttachmentAdd}
         onAttachmentRemove={handleAttachmentRemove}

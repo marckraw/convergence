@@ -20,6 +20,8 @@ import type {
 } from '../provider/provider.types'
 import type { ProviderAttachmentCapability } from '../provider/provider.types'
 import { AttachmentsService } from '../attachments/attachments.service'
+import { ProjectContextService } from '../project-context/project-context.service'
+import { SessionContextInjectionService } from './context-injection/session-context-injection.service'
 import type { SessionDelta } from './conversation-item.types'
 import { SessionService } from './session.service'
 
@@ -1832,5 +1834,468 @@ describe('SessionService — turn capture wiring', () => {
     const turns = capture.listTurns('rec1')
     expect(turns[0].status).toBe('errored')
     expect(turns[0].endedAt).not.toBeNull()
+  })
+})
+
+describe('SessionService project-context boot injection', () => {
+  let service: SessionService
+  let projectContext: ProjectContextService
+  let tempDir: string
+  let projectId: string
+
+  beforeEach(() => {
+    vi.useFakeTimers()
+    const db = getDatabase()
+    const registry = new ProviderRegistry()
+    registry.register(createTestProvider())
+
+    service = new SessionService(db, registry)
+    projectContext = new ProjectContextService(db)
+    service.setSessionContextInjectionService(
+      new SessionContextInjectionService(db, projectContext),
+    )
+
+    tempDir = mkdtempSync(join(tmpdir(), 'convergence-ctx-test-'))
+    projectId = 'ctx-test-project'
+    const repoPath = join(tempDir, 'repo')
+    mkdirSync(repoPath, { recursive: true })
+    mkdirSync(join(repoPath, '.git'), { recursive: true })
+    db.prepare(
+      'INSERT INTO projects (id, name, repository_path) VALUES (?, ?, ?)',
+    ).run(projectId, 'Convergence Demo', repoPath)
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+    closeDatabase()
+    resetDatabase()
+    rmSync(tempDir, { recursive: true, force: true })
+  })
+
+  it('does not insert a note or alter the message when no items are attached', async () => {
+    const session = service.create({
+      projectId,
+      workspaceId: null,
+      providerId: 'test-provider',
+      model: null,
+      effort: null,
+      name: 'no-context',
+    })
+
+    await service.start(session.id, { text: 'hello agent' })
+    await vi.advanceTimersByTimeAsync(50)
+
+    const items = service.getConversation(session.id)
+    expect(items.some((item) => item.kind === 'note')).toBe(false)
+    const userMessage = items.find(
+      (item) => item.kind === 'message' && item.actor === 'user',
+    )
+    expect(userMessage).toBeDefined()
+    if (userMessage && userMessage.kind === 'message') {
+      expect(userMessage.text).toBe('hello agent')
+    }
+  })
+
+  it('emits a sequence-1 note and prepends the block when boot items are attached', async () => {
+    const item = projectContext.create({
+      projectId,
+      label: 'monorepo',
+      body: 'See ~/work/monorepo',
+      reinjectMode: 'boot',
+    })
+
+    const session = service.create({
+      projectId,
+      workspaceId: null,
+      providerId: 'test-provider',
+      model: null,
+      effort: null,
+      name: 'with-context',
+    })
+
+    await service.start(session.id, {
+      text: 'hello agent',
+      contextItemIds: [item.id],
+    })
+    await vi.advanceTimersByTimeAsync(50)
+
+    const items = service.getConversation(session.id)
+    const note = items.find((entry) => entry.kind === 'note')
+    expect(note).toBeDefined()
+    if (note && note.kind === 'note') {
+      expect(note.level).toBe('info')
+      expect(note.text).toContain('<convergence-demo:context>')
+      expect(note.text).toContain('monorepo')
+      expect(note.text).toContain('See ~/work/monorepo')
+    }
+
+    const userMessage = items.find(
+      (entry) => entry.kind === 'message' && entry.actor === 'user',
+    )
+    expect(userMessage).toBeDefined()
+    if (userMessage && userMessage.kind === 'message') {
+      expect(userMessage.text.startsWith('<convergence-demo:context>')).toBe(
+        true,
+      )
+      expect(userMessage.text.endsWith('hello agent')).toBe(true)
+    }
+
+    expect(note?.sequence).toBeLessThan(userMessage?.sequence ?? Infinity)
+  })
+
+  it('persists the attachments so listForSession returns them after start', async () => {
+    const item = projectContext.create({
+      projectId,
+      body: 'persist me',
+      reinjectMode: 'boot',
+    })
+
+    const session = service.create({
+      projectId,
+      workspaceId: null,
+      providerId: 'test-provider',
+      model: null,
+      effort: null,
+      name: 'persists',
+    })
+
+    await service.start(session.id, {
+      text: 'go',
+      contextItemIds: [item.id],
+    })
+    await vi.advanceTimersByTimeAsync(50)
+
+    const attached = projectContext.listForSession(session.id)
+    expect(attached.map((entry) => entry.id)).toEqual([item.id])
+  })
+
+  it('slugifies project names with special characters in the wrapper tag', async () => {
+    const db = getDatabase()
+    db.prepare('UPDATE projects SET name = ? WHERE id = ?').run(
+      'My Awesome Repo!! ✨',
+      projectId,
+    )
+    const item = projectContext.create({
+      projectId,
+      label: 'a',
+      body: 'a',
+      reinjectMode: 'boot',
+    })
+
+    const session = service.create({
+      projectId,
+      workspaceId: null,
+      providerId: 'test-provider',
+      model: null,
+      effort: null,
+      name: 'slug-test',
+    })
+
+    await service.start(session.id, {
+      text: 'msg',
+      contextItemIds: [item.id],
+    })
+    await vi.advanceTimersByTimeAsync(50)
+
+    const note = service
+      .getConversation(session.id)
+      .find((entry) => entry.kind === 'note')
+    if (note && note.kind === 'note') {
+      expect(note.text).toMatch(/^<my-awesome-repo:context>/)
+      expect(note.text).toMatch(/<\/my-awesome-repo:context>$/m)
+    } else {
+      throw new Error('expected boot context note')
+    }
+  })
+})
+
+describe('SessionService project-context every-turn re-injection', () => {
+  let service: SessionService
+  let projectContext: ProjectContextService
+  let tempDir: string
+  let projectId: string
+
+  beforeEach(() => {
+    vi.useFakeTimers()
+    const db = getDatabase()
+    const registry = new ProviderRegistry()
+    registry.register(createTestProvider())
+
+    service = new SessionService(db, registry)
+    projectContext = new ProjectContextService(db)
+    service.setSessionContextInjectionService(
+      new SessionContextInjectionService(db, projectContext),
+    )
+
+    tempDir = mkdtempSync(join(tmpdir(), 'convergence-every-turn-test-'))
+    projectId = 'every-turn-project'
+    const repoPath = join(tempDir, 'repo')
+    mkdirSync(repoPath, { recursive: true })
+    mkdirSync(join(repoPath, '.git'), { recursive: true })
+    db.prepare(
+      'INSERT INTO projects (id, name, repository_path) VALUES (?, ?, ?)',
+    ).run(projectId, 'Repeat Project', repoPath)
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+    closeDatabase()
+    resetDatabase()
+    rmSync(tempDir, { recursive: true, force: true })
+  })
+
+  async function createReadySession(itemIds: string[] = []) {
+    const session = service.create({
+      projectId,
+      workspaceId: null,
+      providerId: 'test-provider',
+      model: null,
+      effort: null,
+      name: 'every-turn',
+    })
+    await service.start(session.id, {
+      text: 'go',
+      contextItemIds: itemIds,
+    })
+    await vi.advanceTimersByTimeAsync(2000)
+    return session
+  }
+
+  it('does not modify subsequent sends when no every-turn items are attached', async () => {
+    const bootOnly = projectContext.create({
+      projectId,
+      body: 'boot only',
+      reinjectMode: 'boot',
+    })
+    const session = await createReadySession([bootOnly.id])
+
+    await service.sendMessage(session.id, {
+      text: 'next message',
+      deliveryMode: 'normal',
+    })
+    await vi.advanceTimersByTimeAsync(50)
+
+    const items = service.getConversation(session.id)
+    const userMessages = items.filter(
+      (entry) => entry.kind === 'message' && entry.actor === 'user',
+    )
+    expect(userMessages.length).toBeGreaterThanOrEqual(2)
+    const second = userMessages[userMessages.length - 1]
+    if (second.kind === 'message') {
+      expect(second.text).toBe('next message')
+    }
+  })
+
+  it('prepends the every-turn block to every subsequent user-initiated send', async () => {
+    const everyTurn = projectContext.create({
+      projectId,
+      label: 'lint',
+      body: 'always run npm test',
+      reinjectMode: 'every-turn',
+    })
+    const session = await createReadySession([everyTurn.id])
+
+    await service.sendMessage(session.id, {
+      text: 'first follow-up',
+      deliveryMode: 'normal',
+    })
+    await vi.advanceTimersByTimeAsync(50)
+    await service.sendMessage(session.id, {
+      text: 'second follow-up',
+      deliveryMode: 'normal',
+    })
+    await vi.advanceTimersByTimeAsync(50)
+
+    const userMessages = service
+      .getConversation(session.id)
+      .filter((entry) => entry.kind === 'message' && entry.actor === 'user')
+    expect(userMessages.length).toBeGreaterThanOrEqual(3)
+    for (let i = 1; i < userMessages.length; i += 1) {
+      const message = userMessages[i]
+      if (message.kind !== 'message') continue
+      expect(message.text.startsWith('<repeat-project:context>')).toBe(true)
+      expect(message.text).toContain('always run npm test')
+    }
+    const last = userMessages[userMessages.length - 1]
+    if (last.kind === 'message') {
+      expect(last.text.endsWith('second follow-up')).toBe(true)
+    }
+  })
+
+  it('reads the latest item body at send time after an edit', async () => {
+    const everyTurn = projectContext.create({
+      projectId,
+      label: 'lint',
+      body: 'first version',
+      reinjectMode: 'every-turn',
+    })
+    const session = await createReadySession([everyTurn.id])
+
+    projectContext.update(everyTurn.id, { body: 'second version' })
+
+    await service.sendMessage(session.id, {
+      text: 'after edit',
+      deliveryMode: 'normal',
+    })
+    await vi.advanceTimersByTimeAsync(50)
+
+    const userMessages = service
+      .getConversation(session.id)
+      .filter((entry) => entry.kind === 'message' && entry.actor === 'user')
+    const latest = userMessages[userMessages.length - 1]
+    if (latest.kind === 'message') {
+      expect(latest.text).toContain('second version')
+      expect(latest.text).not.toContain('first version')
+    }
+  })
+
+  it('omits the block on the next send when an item is detached or deleted', async () => {
+    const everyTurn = projectContext.create({
+      projectId,
+      label: 'lint',
+      body: 'always run npm test',
+      reinjectMode: 'every-turn',
+    })
+    const session = await createReadySession([everyTurn.id])
+
+    projectContext.delete(everyTurn.id)
+
+    await service.sendMessage(session.id, {
+      text: 'after delete',
+      deliveryMode: 'normal',
+    })
+    await vi.advanceTimersByTimeAsync(50)
+
+    const userMessages = service
+      .getConversation(session.id)
+      .filter((entry) => entry.kind === 'message' && entry.actor === 'user')
+    const latest = userMessages[userMessages.length - 1]
+    if (latest.kind === 'message') {
+      expect(latest.text).toBe('after delete')
+    }
+  })
+})
+
+describe('SessionContextInjectionService', () => {
+  let service: SessionService
+  let contextInjection: SessionContextInjectionService
+  let projectContext: ProjectContextService
+  let tempDir: string
+  let projectId: string
+
+  beforeEach(() => {
+    const db = getDatabase()
+    const registry = new ProviderRegistry()
+    service = new SessionService(db, registry)
+    projectContext = new ProjectContextService(db)
+    contextInjection = new SessionContextInjectionService(db, projectContext)
+
+    tempDir = mkdtempSync(join(tmpdir(), 'convergence-context-injection-'))
+    projectId = 'context-injection-project'
+    const repoPath = join(tempDir, 'repo')
+    mkdirSync(repoPath, { recursive: true })
+    mkdirSync(join(repoPath, '.git'), { recursive: true })
+    db.prepare(
+      'INSERT INTO projects (id, name, repository_path) VALUES (?, ?, ?)',
+    ).run(projectId, 'Context Injection Test', repoPath)
+  })
+
+  afterEach(() => {
+    closeDatabase()
+    resetDatabase()
+    rmSync(tempDir, { recursive: true, force: true })
+  })
+
+  it('attaches selected items and prepares a boot note draft', () => {
+    const item = projectContext.create({
+      projectId,
+      label: 'sibling repo',
+      body: 'Also inspect ../api',
+      reinjectMode: 'boot',
+    })
+    const session = service.create({
+      projectId,
+      workspaceId: null,
+      providerId: 'test-provider',
+      model: null,
+      effort: null,
+      name: 'context injection',
+    })
+
+    const result = contextInjection.prepareBoot({
+      session,
+      originalText: 'start here',
+      contextItemIds: [item.id],
+    })
+
+    expect(result.augmentedText).toContain('<context-injection-test:context>')
+    expect(result.augmentedText).toContain('Also inspect ../api')
+    expect(result.augmentedText.endsWith('start here')).toBe(true)
+    expect(result.noteDraft).toMatchObject({
+      kind: 'note',
+      level: 'info',
+      text: expect.stringContaining('sibling repo'),
+      providerMeta: {
+        providerId: 'convergence',
+        providerItemId: null,
+        providerEventType: 'context.boot',
+      },
+    })
+    expect(
+      projectContext.listForSession(session.id).map((entry) => entry.id),
+    ).toEqual([item.id])
+  })
+
+  it('returns the original boot text and no note when no items are attached', () => {
+    const session = service.create({
+      projectId,
+      workspaceId: null,
+      providerId: 'test-provider',
+      model: null,
+      effort: null,
+      name: 'context injection',
+    })
+
+    const result = contextInjection.prepareBoot({
+      session,
+      originalText: 'plain start',
+      contextItemIds: [],
+    })
+
+    expect(result).toEqual({ augmentedText: 'plain start', noteDraft: null })
+  })
+
+  it('reads every-turn item bodies fresh for user turns', () => {
+    const item = projectContext.create({
+      projectId,
+      label: 'verify',
+      body: 'first instruction',
+      reinjectMode: 'every-turn',
+    })
+    const session = service.create({
+      projectId,
+      workspaceId: null,
+      providerId: 'test-provider',
+      model: null,
+      effort: null,
+      name: 'context injection',
+    })
+    contextInjection.prepareBoot({
+      session,
+      originalText: 'start',
+      contextItemIds: [item.id],
+    })
+
+    projectContext.update(item.id, { body: 'updated instruction' })
+
+    const result = contextInjection.prepareUserTurn({
+      session,
+      originalText: 'continue',
+    })
+
+    expect(result).toContain('<context-injection-test:context>')
+    expect(result).toContain('updated instruction')
+    expect(result).not.toContain('first instruction')
+    expect(result.endsWith('continue')).toBe(true)
   })
 })
