@@ -15,6 +15,7 @@ import { ProviderRegistry } from '../backend/provider/provider-registry'
 import { McpService } from '../backend/mcp/mcp.service'
 import { SkillsService } from '../backend/skills/skills.service'
 import { AppSettingsService } from '../backend/app-settings/app-settings.service'
+import type { AnalyticsService } from '../backend/analytics/analytics.service'
 import type { AttachmentsService } from '../backend/attachments/attachments.service'
 import type { IngestFileInput } from '../backend/attachments/attachments.types'
 import type { AppSettingsInput } from '../backend/app-settings/app-settings.types'
@@ -121,6 +122,7 @@ export function registerIpcHandlers(
   mcpService: McpService,
   skillsService: SkillsService,
   appSettingsService: AppSettingsService,
+  analyticsService: AnalyticsService,
   attachmentsService: AttachmentsService,
   turnCaptureService: TurnCaptureService,
   projectContextService: ProjectContextService,
@@ -357,6 +359,11 @@ export function registerIpcHandlers(
     onUpdatePrefsChanged?.(stored.updates)
     return stored
   })
+
+  // Analytics handlers
+  ipcMain.handle('analytics:getOverview', (_event, rangePreset: string) =>
+    analyticsService.getOverview(rangePreset),
+  )
 
   // Session handlers
   ipcMain.handle(

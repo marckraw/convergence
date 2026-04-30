@@ -279,6 +279,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
       }
     },
   },
+  analytics: {
+    getOverview: (rangePreset: '7d' | '30d' | '90d' | 'all') =>
+      ipcRenderer.invoke('analytics:getOverview', rangePreset),
+  },
   notifications: {
     getPrefs: () => ipcRenderer.invoke('notifications:get-prefs'),
     setPrefs: (input: unknown) =>
