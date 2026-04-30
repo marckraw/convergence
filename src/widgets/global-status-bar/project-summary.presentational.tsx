@@ -31,7 +31,7 @@ export const ProjectSummary: FC<ProjectSummaryProps> = ({
                 dotClass,
                 session.attention === 'needs-approval' ||
                   session.attention === 'needs-input'
-                  ? 'bg-amber-300'
+                  ? 'bg-warning'
                   : 'bg-emerald-400',
               )}
             />

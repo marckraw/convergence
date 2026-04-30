@@ -96,7 +96,7 @@ export const InitiativeContextPanel: FC<InitiativeContextPanelProps> = ({
                     {view.sessionName}
                   </span>
                   {view.attempt.isPrimary ? (
-                    <span className="inline-flex items-center gap-1 rounded-full border border-amber-500/25 bg-amber-500/10 px-2 py-0.5 text-[10px] font-medium text-amber-700 dark:text-amber-200">
+                    <span className="inline-flex items-center gap-1 rounded-full border border-warning/25 bg-warning/10 px-2 py-0.5 text-[10px] font-medium text-warning-foreground">
                       <Star className="h-3 w-3" />
                       Primary
                     </span>

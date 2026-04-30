@@ -92,7 +92,7 @@ const DEPENDENCY_STATE_LABELS: Record<SkillDependencyState, string> = {
 const DEPENDENCY_STATE_CLASSES: Record<SkillDependencyState, string> = {
   declared: 'border-border/70 bg-muted/30 text-muted-foreground',
   available: 'border-emerald-500/20 bg-emerald-500/10 text-emerald-300',
-  'needs-auth': 'border-amber-500/20 bg-amber-500/10 text-amber-200',
+  'needs-auth': 'border-warning/20 bg-warning/10 text-warning-foreground',
   'needs-install': 'border-sky-500/20 bg-sky-500/10 text-sky-200',
   unknown: 'border-border/70 bg-muted/30 text-muted-foreground',
 }
@@ -173,7 +173,7 @@ function renderWarningBadge(count: number) {
   }
 
   return (
-    <span className="inline-flex items-center gap-1 rounded-full border border-amber-500/20 bg-amber-500/10 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-amber-200">
+    <span className="inline-flex items-center gap-1 rounded-full border border-warning/20 bg-warning/10 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-warning-foreground">
       <AlertTriangle className="h-3 w-3" />
       {count}
     </span>
@@ -222,7 +222,7 @@ function renderWarningList(warnings: SkillWarning[]) {
       {warnings.map((warning) => (
         <div
           key={`${warning.code}-${warning.message}`}
-          className="rounded-md border border-amber-500/20 bg-amber-500/10 px-2 py-1.5 text-xs text-amber-100"
+          className="rounded-md border border-warning/20 bg-warning/10 px-2 py-1.5 text-xs text-warning-foreground"
         >
           <span className="font-medium">{warning.code}:</span> {warning.message}
         </div>
@@ -260,7 +260,7 @@ function renderSkillRow(
             {skill.displayName}
           </span>
           {duplicate ? (
-            <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-amber-300" />
+            <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-warning-foreground" />
           ) : null}
         </span>
         <span className="mt-1 line-clamp-2 block whitespace-normal text-xs font-normal leading-5 text-muted-foreground">

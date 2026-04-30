@@ -33,7 +33,7 @@ function renderStatusBadge(provider: ProviderStatusInfo) {
   const className =
     provider.availability === 'available'
       ? 'border-emerald-500/20 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300'
-      : 'border-amber-500/20 bg-amber-500/10 text-amber-700 dark:text-amber-200'
+      : 'border-warning/20 bg-warning/10 text-warning-foreground'
 
   return (
     <span
@@ -49,7 +49,7 @@ function renderUpdateBadge(provider: ProviderStatusInfo) {
     provider.update.status === 'current'
       ? 'border-sky-500/20 bg-sky-500/10 text-sky-700 dark:text-sky-300'
       : provider.update.status === 'outdated'
-        ? 'border-amber-500/20 bg-amber-500/10 text-amber-700 dark:text-amber-200'
+        ? 'border-warning/20 bg-warning/10 text-warning-foreground'
         : 'border-border bg-muted/40 text-muted-foreground'
 
   const label =
@@ -97,7 +97,7 @@ function renderProviderRow(provider: ProviderStatusInfo) {
         {provider.availability === 'available' ? (
           <CircleCheck className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
         ) : (
-          <CircleAlert className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+          <CircleAlert className="h-4 w-4 text-warning-foreground" />
         )}
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">

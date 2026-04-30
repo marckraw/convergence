@@ -14,7 +14,7 @@ interface SessionBadgeProps {
 export const SessionBadge: FC<SessionBadgeProps> = ({ attention }) => {
   switch (attention) {
     case 'needs-approval':
-      return <AlertTriangle className="shrink-0 text-amber-500" />
+      return <AlertTriangle className="shrink-0 text-warning" />
     case 'needs-input':
       return <MessageSquare className="shrink-0 text-blue-500" />
     case 'finished':

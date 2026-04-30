@@ -10,7 +10,7 @@ export const projectChipClass =
   'flex items-center gap-1 rounded-md border border-border/60 bg-background/60 px-1.5 py-0.5 text-foreground transition-colors hover:bg-accent'
 
 export const projectChipAttentionClass =
-  'border-amber-500/40 bg-amber-500/10 text-amber-100 hover:bg-amber-500/15'
+  'border-warning/40 bg-warning/10 text-warning-foreground hover:bg-warning/15'
 
 export const recencyBadgeClass =
   'ml-auto flex items-center gap-1 rounded-md border border-border/40 bg-background/40 px-1.5 py-0.5 text-muted-foreground transition-colors hover:bg-accent'
