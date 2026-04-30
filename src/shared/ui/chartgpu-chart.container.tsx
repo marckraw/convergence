@@ -59,7 +59,7 @@ export const ChartGpuChart: FC<ChartGpuChartProps> = ({
     <ChartGPU
       options={options}
       theme={theme}
-      className={cn('w-full', className)}
+      className={cn('w-full overflow-hidden rounded-md', className)}
       style={chartStyle}
       onReady={onReady}
       onClick={onClick}

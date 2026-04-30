@@ -88,7 +88,7 @@ export function buildDailyActivityChartOptions(
     },
     xAxis: { type: 'value', min: 0, max: Math.max(points.length - 1, 1) },
     yAxis: { type: 'value', min: 0 },
-    legend: { show: true, position: 'bottom' },
+    legend: { show: false },
     tooltip: { show: true, trigger: 'axis' },
     series: [
       {
@@ -130,7 +130,7 @@ export function buildProviderUsageChartOptions(
     },
     xAxis: { type: 'value', min: 0, max: Math.max(points.length - 1, 1) },
     yAxis: { type: 'value', min: 0 },
-    legend: { show: true, position: 'bottom' },
+    legend: { show: false },
     tooltip: { show: true, trigger: 'axis' },
     series: [
       {
@@ -172,7 +172,7 @@ export function buildConversationBalanceChartOptions(
     },
     xAxis: { type: 'value', min: 0, max: Math.max(points.length - 1, 1) },
     yAxis: { type: 'value', min: 0 },
-    legend: { show: true, position: 'bottom' },
+    legend: { show: false },
     tooltip: { show: true, trigger: 'axis' },
     series: [
       {

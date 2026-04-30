@@ -173,8 +173,8 @@ describe('AnalyticsInsights', () => {
   it('renders populated usage metrics and chart panels', () => {
     renderInsights()
 
-    expect(screen.getByText('User messages')).toBeInTheDocument()
-    expect(screen.getByText('Assistant messages')).toBeInTheDocument()
+    expect(screen.getAllByText('User messages').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('Assistant messages').length).toBeGreaterThan(0)
     expect(screen.getByText('Convergence')).toBeInTheDocument()
     expect(screen.getByText('Streak calendar')).toBeInTheDocument()
     expect(screen.getAllByTestId('chartgpu-chart')).toHaveLength(3)

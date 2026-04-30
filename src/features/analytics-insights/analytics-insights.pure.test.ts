@@ -132,7 +132,7 @@ describe('analytics insights view helpers', () => {
     expect(provider.series).toHaveLength(2)
     expect(balance.series).toHaveLength(2)
     expect(daily.xAxis?.max).toBe(1)
-    expect(provider.legend?.show).toBe(true)
+    expect(provider.legend?.show).toBe(false)
     expect(balance.tooltip?.trigger).toBe('axis')
   })
 
