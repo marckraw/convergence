@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import Fuse from 'fuse.js'
 import { useProjectStore } from '@/entities/project'
 import { useWorkspaceStore } from '@/entities/workspace'
@@ -99,6 +99,13 @@ export function CommandCenterContainer() {
     }
   }, [query, items, dismissals, recentSessionIds, fuse])
 
+  const firstItemId = useMemo(() => firstVisibleItemId(view), [view])
+  const [selectedValue, setSelectedValue] = useState('')
+
+  useEffect(() => {
+    setSelectedValue(firstItemId)
+  }, [firstItemId])
+
   const onOpenChange = useCallback(
     (next: boolean) => {
       if (next) open()
@@ -151,9 +158,21 @@ export function CommandCenterContainer() {
       open={isOpen}
       query={query}
       view={view}
+      selectedValue={selectedValue}
       onOpenChange={onOpenChange}
       onQueryChange={setQuery}
+      onSelectedValueChange={setSelectedValue}
       onSelect={onSelect}
     />
   )
+}
+
+function firstVisibleItemId(view: CommandCenterView): string {
+  if (view.mode === 'ranked') {
+    return view.items[0]?.item.id ?? ''
+  }
+  for (const section of view.sections) {
+    if (section.items.length > 0) return section.items[0].id
+  }
+  return ''
 }
