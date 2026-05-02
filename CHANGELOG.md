@@ -1,5 +1,11 @@
 # convergence
 
+## 0.31.4
+
+### Patch Changes
+
+- 0491e3a: Virtualize the active session transcript with TanStack Virtual, preserve turn dividers and approval actions, and keep the transcript pinned only while the user is already near the bottom.
+
 ## 0.31.3
 
 ### Patch Changes
