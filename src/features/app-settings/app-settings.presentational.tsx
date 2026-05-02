@@ -1,5 +1,6 @@
 import type { FC, ReactNode } from 'react'
 import type { AppSettingsDialogSection } from '@/entities/dialog'
+import type { DebugLoggingPrefs } from '@/entities/app-settings'
 import type {
   ProviderInfo,
   ReasoningEffort,
@@ -26,6 +27,7 @@ import { NamingModelDefaultsFields } from './naming-model-defaults.presentationa
 import { ExtractionModelDefaultsFields } from './extraction-model-defaults.presentational'
 import { NotificationsFields } from './notifications-fields.presentational'
 import { UpdatesFields } from './updates-fields.presentational'
+import { DebugLoggingFields } from './debug-logging-fields.presentational'
 import { AnalyticsInsightsContainer } from '../analytics-insights'
 
 export type AppSettingsSectionId = AppSettingsDialogSection
@@ -40,6 +42,7 @@ interface AppSettingsDialogProps {
   extractionDraft: Record<string, string>
   notificationsDraft: NotificationPrefs
   updatesDraft: UpdatePrefs
+  debugLoggingDraft: DebugLoggingPrefs
   updatesStatus: UpdateStatus
   updatesVersion: string | null
   updatesIsDev: boolean
@@ -59,6 +62,8 @@ interface AppSettingsDialogProps {
   onDownloadUpdate: () => void
   onInstallUpdate: () => void
   onOpenReleaseNotes: () => void
+  onToggleDebugLogging: (next: boolean) => void
+  onOpenDebugLogFolder: () => void
   onSectionChange: (section: AppSettingsSectionId) => void
   onSave: () => void
   onCancel: () => void
@@ -83,6 +88,7 @@ export const AppSettingsDialog: FC<AppSettingsDialogProps> = ({
   extractionDraft,
   notificationsDraft,
   updatesDraft,
+  debugLoggingDraft,
   updatesStatus,
   updatesVersion,
   updatesIsDev,
@@ -102,6 +108,8 @@ export const AppSettingsDialog: FC<AppSettingsDialogProps> = ({
   onDownloadUpdate,
   onInstallUpdate,
   onOpenReleaseNotes,
+  onToggleDebugLogging,
+  onOpenDebugLogFolder,
   onSectionChange,
   onSave,
   onCancel,
@@ -159,6 +167,14 @@ export const AppSettingsDialog: FC<AppSettingsDialogProps> = ({
       title: 'Insights',
       description:
         'Review local-only analytics about your conversations, sessions, projects, and agent activity.',
+    },
+    {
+      id: 'debug-logging',
+      navLabel: 'Debug logs',
+      navSummary: 'Capture provider events to disk',
+      title: 'Provider debug logs',
+      description:
+        'Diagnose stuck or unusual provider sessions by recording every event to a JSONL file on disk.',
     },
   ]
 
@@ -228,6 +244,15 @@ export const AppSettingsDialog: FC<AppSettingsDialogProps> = ({
         )
       case 'insights':
         return <AnalyticsInsightsContainer />
+      case 'debug-logging':
+        return (
+          <DebugLoggingFields
+            prefs={debugLoggingDraft}
+            isSaving={isSaving}
+            onToggleEnabled={onToggleDebugLogging}
+            onOpenLogFolder={onOpenDebugLogFolder}
+          />
+        )
     }
   }
 

@@ -18,6 +18,7 @@ export type AppSettingsDialogSection =
   | 'notifications'
   | 'updates'
   | 'insights'
+  | 'debug-logging'
 
 export type DialogPayload =
   | { appSettingsSection: AppSettingsDialogSection }

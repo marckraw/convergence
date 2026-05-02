@@ -10,7 +10,11 @@ import {
   type NotificationPrefs,
   type NotificationSeverity,
 } from '@/entities/notifications'
-import { useAppSettingsStore } from '@/entities/app-settings'
+import {
+  useAppSettingsStore,
+  type DebugLoggingPrefs,
+} from '@/entities/app-settings'
+import { providerDebugApi } from '@/entities/provider-debug'
 import { useDialogStore } from '@/entities/dialog'
 import { useUpdatesStore, type UpdatePrefs } from '@/entities/updates'
 import { systemApi } from '@/shared'
@@ -41,7 +45,8 @@ function isAppSettingsSection(value: unknown): value is AppSettingsSectionId {
     value === 'session-forking' ||
     value === 'notifications' ||
     value === 'updates' ||
-    value === 'insights'
+    value === 'insights' ||
+    value === 'debug-logging'
   )
 }
 
@@ -68,6 +73,8 @@ export const AppSettingsDialogContainer: FC<AppSettingsContainerProps> = ({
   const [notificationsDraft, setNotificationsDraft] =
     useState<NotificationPrefs | null>(null)
   const [updatesDraft, setUpdatesDraft] = useState<UpdatePrefs | null>(null)
+  const [debugLoggingDraft, setDebugLoggingDraft] =
+    useState<DebugLoggingPrefs | null>(null)
   const [activeSection, setActiveSection] =
     useState<AppSettingsSectionId>(DEFAULT_SECTION)
 
@@ -114,6 +121,7 @@ export const AppSettingsDialogContainer: FC<AppSettingsContainerProps> = ({
     setExtractionDraft({ ...settings.extractionModelByProvider })
     setNotificationsDraft(settings.notifications)
     setUpdatesDraft(settings.updates)
+    setDebugLoggingDraft(settings.debugLogging)
     clearError()
   }, [open, payload, settings, clearError])
 
@@ -220,6 +228,14 @@ export const AppSettingsDialogContainer: FC<AppSettingsContainerProps> = ({
     void openReleaseNotes()
   }, [openReleaseNotes])
 
+  const handleToggleDebugLogging = useCallback((next: boolean) => {
+    setDebugLoggingDraft({ enabled: next })
+  }, [])
+
+  const handleOpenDebugLogFolder = useCallback(() => {
+    void providerDebugApi.openFolder()
+  }, [])
+
   const platform = useMemo<string | null>(() => {
     const datasetPlatform = document.documentElement.dataset.platform
     if (datasetPlatform) return datasetPlatform
@@ -241,6 +257,7 @@ export const AppSettingsDialogContainer: FC<AppSettingsContainerProps> = ({
         notifications: notificationsDraft ?? settings.notifications,
         onboarding: settings.onboarding,
         updates: updatesDraft ?? settings.updates,
+        debugLogging: debugLoggingDraft ?? settings.debugLogging,
       })
       closeDialog()
     } catch {
@@ -253,9 +270,11 @@ export const AppSettingsDialogContainer: FC<AppSettingsContainerProps> = ({
     extractionDraft,
     notificationsDraft,
     updatesDraft,
+    debugLoggingDraft,
     settings.notifications,
     settings.onboarding,
     settings.updates,
+    settings.debugLogging,
     closeDialog,
   ])
 
@@ -270,6 +289,7 @@ export const AppSettingsDialogContainer: FC<AppSettingsContainerProps> = ({
       extractionDraft={extractionDraft}
       notificationsDraft={notificationsDraft ?? settings.notifications}
       updatesDraft={updatesDraft ?? settings.updates}
+      debugLoggingDraft={debugLoggingDraft ?? settings.debugLogging}
       updatesStatus={updatesStatus}
       updatesVersion={updatesVersion}
       updatesIsDev={updatesIsDev}
@@ -289,6 +309,8 @@ export const AppSettingsDialogContainer: FC<AppSettingsContainerProps> = ({
       onDownloadUpdate={handleDownloadUpdate}
       onInstallUpdate={handleInstallUpdate}
       onOpenReleaseNotes={handleOpenReleaseNotes}
+      onToggleDebugLogging={handleToggleDebugLogging}
+      onOpenDebugLogFolder={handleOpenDebugLogFolder}
       onSectionChange={setActiveSection}
       onSave={handleSave}
       onCancel={handleCancel}

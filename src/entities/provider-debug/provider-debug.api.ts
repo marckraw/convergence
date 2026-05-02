@@ -10,4 +10,8 @@ export const providerDebugApi = {
     const result = await window.electronAPI.providerDebug?.list?.(sessionId)
     return Array.isArray(result) ? result : []
   },
+  openFolder: async (): Promise<boolean> => {
+    const ok = await window.electronAPI.providerDebug?.openFolder?.()
+    return ok === true
+  },
 }

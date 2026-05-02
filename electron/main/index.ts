@@ -30,6 +30,7 @@ import {
   broadcastProviderDebug,
   registerProviderDebugIpcHandlers,
 } from '../backend/provider-debug/provider-debug.ipc'
+import { createJsonlWriter } from '../backend/provider-debug/provider-debug-jsonl'
 import { McpService } from '../backend/mcp/mcp.service'
 import { SkillsService } from '../backend/skills/skills.service'
 import { AppSettingsService } from '../backend/app-settings/app-settings.service'
@@ -200,11 +201,29 @@ async function startApp(): Promise<void> {
   }
 
   // Detect and register real providers
-  const providerDebugService = new ProviderDebugService(broadcastProviderDebug)
-  registerProviderDebugIpcHandlers(providerDebugService)
+  const debugLogsDirectory = join(app.getPath('userData'), 'debug-logs')
+  const jsonlWriter = createJsonlWriter({ directory: debugLogsDirectory })
+  const providerDebugService = new ProviderDebugService({
+    broadcast: broadcastProviderDebug,
+    jsonl: jsonlWriter,
+    isLoggingEnabled: () =>
+      appSettingsService.getDebugLoggingPrefsSync().enabled,
+  })
+  registerProviderDebugIpcHandlers({
+    service: providerDebugService,
+    logsDirectory: debugLogsDirectory,
+  })
   sessionService.setSessionTerminatedListener((sessionId) => {
     providerDebugService.drop(sessionId)
   })
+  try {
+    const knownSessionIds = new Set(
+      sessionService.getAll().map((session) => session.id),
+    )
+    jsonlWriter.cleanup(knownSessionIds)
+  } catch {
+    // Cleanup is best effort.
+  }
   const debugSink = providerDebugService
   const detected = await detectProviders()
   for (const p of detected) {

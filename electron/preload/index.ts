@@ -354,6 +354,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     },
     list: (sessionId: string) =>
       ipcRenderer.invoke('provider:debug:list', sessionId),
+    openFolder: () => ipcRenderer.invoke('provider:debug:openFolder'),
   },
   updates: {
     getStatus: () => ipcRenderer.invoke('updates:get-status'),

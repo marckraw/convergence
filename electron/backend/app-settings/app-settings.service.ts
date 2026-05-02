@@ -8,9 +8,11 @@ import type {
 import { DEFAULT_UPDATE_PREFS } from '../updates/updates.defaults'
 import type { UpdatePrefs } from '../updates/updates.types'
 import {
+  DEFAULT_DEBUG_LOGGING_PREFS,
   DEFAULT_ONBOARDING_PREFS,
   type AppSettings,
   type AppSettingsInput,
+  type DebugLoggingPrefs,
   type OnboardingPrefs,
   type ResolvedSessionDefaults,
 } from './app-settings.types'
@@ -100,6 +102,14 @@ function parseUpdatePrefs(value: unknown): UpdatePrefs {
   }
 }
 
+function parseDebugLoggingPrefs(value: unknown): DebugLoggingPrefs {
+  if (!value || typeof value !== 'object') return DEFAULT_DEBUG_LOGGING_PREFS
+  const raw = value as Partial<DebugLoggingPrefs>
+  return {
+    enabled: pickBoolean(raw.enabled, DEFAULT_DEBUG_LOGGING_PREFS.enabled),
+  }
+}
+
 function parse(raw: string | null): AppSettings {
   const empty: AppSettings = {
     defaultProviderId: null,
@@ -110,6 +120,7 @@ function parse(raw: string | null): AppSettings {
     notifications: DEFAULT_NOTIFICATION_PREFS,
     onboarding: DEFAULT_ONBOARDING_PREFS,
     updates: DEFAULT_UPDATE_PREFS,
+    debugLogging: DEFAULT_DEBUG_LOGGING_PREFS,
   }
 
   if (!raw) return empty
@@ -136,6 +147,7 @@ function parse(raw: string | null): AppSettings {
       notifications: parseNotificationPrefs(parsed.notifications),
       onboarding: parseOnboardingPrefs(parsed.onboarding),
       updates: parseUpdatePrefs(parsed.updates),
+      debugLogging: parseDebugLoggingPrefs(parsed.debugLogging),
     }
   } catch {
     return empty
@@ -187,6 +199,7 @@ function validateAgainst(
       notifications: settings.notifications,
       onboarding: settings.onboarding,
       updates: settings.updates,
+      debugLogging: settings.debugLogging,
     }
   }
 
@@ -203,6 +216,7 @@ function validateAgainst(
       notifications: settings.notifications,
       onboarding: settings.onboarding,
       updates: settings.updates,
+      debugLogging: settings.debugLogging,
     }
   }
 
@@ -218,6 +232,7 @@ function validateAgainst(
     notifications: settings.notifications,
     onboarding: settings.onboarding,
     updates: settings.updates,
+    debugLogging: settings.debugLogging,
   }
 }
 
@@ -240,6 +255,10 @@ export class AppSettingsService {
 
   getUpdatePrefsSync(): UpdatePrefs {
     return parse(this.stateService.get(APP_SETTINGS_KEY)).updates
+  }
+
+  getDebugLoggingPrefsSync(): DebugLoggingPrefs {
+    return parse(this.stateService.get(APP_SETTINGS_KEY)).debugLogging
   }
 
   async setAppSettings(input: AppSettingsInput): Promise<AppSettings> {
@@ -297,6 +316,10 @@ export class AppSettingsService {
       input.updates === undefined
         ? existing.updates
         : parseUpdatePrefs(input.updates)
+    const debugLogging =
+      input.debugLogging === undefined
+        ? existing.debugLogging
+        : parseDebugLoggingPrefs(input.debugLogging)
 
     const toStore: AppSettings = {
       defaultProviderId: provider ? provider.id : null,
@@ -308,6 +331,7 @@ export class AppSettingsService {
       notifications,
       onboarding,
       updates,
+      debugLogging,
     }
 
     this.stateService.set(APP_SETTINGS_KEY, JSON.stringify(toStore))

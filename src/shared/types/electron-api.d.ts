@@ -915,6 +915,7 @@ interface ElectronAPI {
   providerDebug: {
     subscribe: (callback: (entry: ProviderDebugEntry) => void) => () => void
     list: (sessionId: string) => Promise<ProviderDebugEntry[]>
+    openFolder: () => Promise<boolean>
   }
   terminal: {
     create: (input: {
@@ -1085,6 +1086,10 @@ interface UpdatePrefsData {
   backgroundCheckEnabled: boolean
 }
 
+interface DebugLoggingPrefsData {
+  enabled: boolean
+}
+
 interface AppSettingsData {
   defaultProviderId: string | null
   defaultModelId: string | null
@@ -1094,6 +1099,7 @@ interface AppSettingsData {
   notifications: NotificationPrefsData
   onboarding: OnboardingPrefsData
   updates: UpdatePrefsData
+  debugLogging: DebugLoggingPrefsData
 }
 
 declare global {

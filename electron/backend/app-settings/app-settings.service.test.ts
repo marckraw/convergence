@@ -9,7 +9,10 @@ import type {
 import { NO_MID_RUN_INPUT_CAPABILITY } from '../provider/provider-descriptor.pure'
 import { DEFAULT_UPDATE_PREFS } from '../updates/updates.defaults'
 import { AppSettingsService, APP_SETTINGS_KEY } from './app-settings.service'
-import { DEFAULT_ONBOARDING_PREFS } from './app-settings.types'
+import {
+  DEFAULT_DEBUG_LOGGING_PREFS,
+  DEFAULT_ONBOARDING_PREFS,
+} from './app-settings.types'
 
 const TEST_ATTACHMENT_CAPABILITY: ProviderAttachmentCapability = {
   supportsImage: true,
@@ -111,6 +114,7 @@ describe('AppSettingsService', () => {
         notifications: DEFAULT_NOTIFICATION_PREFS,
         onboarding: DEFAULT_ONBOARDING_PREFS,
         updates: DEFAULT_UPDATE_PREFS,
+        debugLogging: DEFAULT_DEBUG_LOGGING_PREFS,
       })
     })
 
@@ -124,6 +128,7 @@ describe('AppSettingsService', () => {
         notifications: DEFAULT_NOTIFICATION_PREFS,
         onboarding: DEFAULT_ONBOARDING_PREFS,
         updates: DEFAULT_UPDATE_PREFS,
+        debugLogging: DEFAULT_DEBUG_LOGGING_PREFS,
       })
       const settings = await service.getAppSettings()
       expect(settings).toEqual({
@@ -135,6 +140,7 @@ describe('AppSettingsService', () => {
         notifications: DEFAULT_NOTIFICATION_PREFS,
         onboarding: DEFAULT_ONBOARDING_PREFS,
         updates: DEFAULT_UPDATE_PREFS,
+        debugLogging: DEFAULT_DEBUG_LOGGING_PREFS,
       })
     })
 
@@ -157,6 +163,7 @@ describe('AppSettingsService', () => {
         notifications: DEFAULT_NOTIFICATION_PREFS,
         onboarding: DEFAULT_ONBOARDING_PREFS,
         updates: DEFAULT_UPDATE_PREFS,
+        debugLogging: DEFAULT_DEBUG_LOGGING_PREFS,
       })
     })
 
@@ -179,6 +186,7 @@ describe('AppSettingsService', () => {
         notifications: DEFAULT_NOTIFICATION_PREFS,
         onboarding: DEFAULT_ONBOARDING_PREFS,
         updates: DEFAULT_UPDATE_PREFS,
+        debugLogging: DEFAULT_DEBUG_LOGGING_PREFS,
       })
     })
 
@@ -201,6 +209,7 @@ describe('AppSettingsService', () => {
         notifications: DEFAULT_NOTIFICATION_PREFS,
         onboarding: DEFAULT_ONBOARDING_PREFS,
         updates: DEFAULT_UPDATE_PREFS,
+        debugLogging: DEFAULT_DEBUG_LOGGING_PREFS,
       })
     })
 
@@ -216,6 +225,7 @@ describe('AppSettingsService', () => {
         notifications: DEFAULT_NOTIFICATION_PREFS,
         onboarding: DEFAULT_ONBOARDING_PREFS,
         updates: DEFAULT_UPDATE_PREFS,
+        debugLogging: DEFAULT_DEBUG_LOGGING_PREFS,
       })
     })
   })
@@ -272,6 +282,7 @@ describe('AppSettingsService', () => {
         notifications: DEFAULT_NOTIFICATION_PREFS,
         onboarding: DEFAULT_ONBOARDING_PREFS,
         updates: DEFAULT_UPDATE_PREFS,
+        debugLogging: DEFAULT_DEBUG_LOGGING_PREFS,
       })
     })
 
@@ -540,6 +551,50 @@ describe('AppSettingsService', () => {
         defaultEffortId: 'medium',
       })
       expect(stored.updates).toEqual({ backgroundCheckEnabled: false })
+    })
+  })
+
+  describe('debug logging', () => {
+    it('defaults to disabled when nothing is stored', async () => {
+      const settings = await service.getAppSettings()
+      expect(settings.debugLogging).toEqual(DEFAULT_DEBUG_LOGGING_PREFS)
+    })
+
+    it('round-trips an enabled toggle', async () => {
+      const stored = await service.setAppSettings({
+        defaultProviderId: null,
+        defaultModelId: null,
+        defaultEffortId: null,
+        debugLogging: { enabled: true },
+      })
+      expect(stored.debugLogging).toEqual({ enabled: true })
+      const reloaded = await service.getAppSettings()
+      expect(reloaded.debugLogging).toEqual({ enabled: true })
+      expect(service.getDebugLoggingPrefsSync()).toEqual({ enabled: true })
+    })
+
+    it('rejects non-boolean enabled and falls back to default', async () => {
+      stateService.set(
+        APP_SETTINGS_KEY,
+        JSON.stringify({ debugLogging: { enabled: 'sure' } }),
+      )
+      const settings = await service.getAppSettings()
+      expect(settings.debugLogging).toEqual(DEFAULT_DEBUG_LOGGING_PREFS)
+    })
+
+    it('preserves existing debugLogging when input omits the field', async () => {
+      await service.setAppSettings({
+        defaultProviderId: null,
+        defaultModelId: null,
+        defaultEffortId: null,
+        debugLogging: { enabled: true },
+      })
+      const stored = await service.setAppSettings({
+        defaultProviderId: 'claude-code',
+        defaultModelId: 'sonnet',
+        defaultEffortId: 'medium',
+      })
+      expect(stored.debugLogging).toEqual({ enabled: true })
     })
   })
 })
