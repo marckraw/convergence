@@ -64,11 +64,17 @@ function createMockCodexServer(
   },
 ): {
   requests: Array<{ method: string; params?: Record<string, unknown> }>
+  responses: Array<{ id: string | number; result?: unknown; error?: unknown }>
 } {
   const missingThreadIds = new Set(options?.missingThreadIds ?? [])
   const requests: Array<{
     method: string
     params?: Record<string, unknown>
+  }> = []
+  const responses: Array<{
+    id: string | number
+    result?: unknown
+    error?: unknown
   }> = []
   let buffer = ''
   const enqueue = (fn: () => void) => {
@@ -103,9 +109,19 @@ function createMockCodexServer(
 
       if (line) {
         const message = JSON.parse(line) as {
-          id?: number
+          id?: string | number
           method?: string
           params?: Record<string, unknown>
+          result?: unknown
+          error?: unknown
+        }
+
+        if ('id' in message && !('method' in message)) {
+          responses.push({
+            id: message.id as string | number,
+            result: message.result,
+            error: message.error,
+          })
         }
 
         if (
@@ -199,7 +215,7 @@ function createMockCodexServer(
     }
   })
 
-  return { requests }
+  return { requests, responses }
 }
 
 describe('CodexProvider', () => {
@@ -479,6 +495,97 @@ describe('CodexProvider', () => {
         }),
       ]),
     )
+  })
+
+  it('surfaces MCP elicitation requests as approvals and responds on approve', async () => {
+    const child = new MockChildProcess()
+    const server = createMockCodexServer(child, {
+      autoCompleteTurns: false,
+      turnStartedId: 'codex-turn-1',
+    })
+    spawnMock.mockReturnValue(child)
+
+    const provider = new CodexProvider('/usr/local/bin/codex')
+    const handle = provider.start({
+      sessionId: 'session-1',
+      workingDirectory: process.cwd(),
+      initialMessage: 'open a Linear issue',
+      initialAttachments: undefined,
+      model: 'gpt-5.4',
+      effort: 'medium',
+      continuationToken: null,
+    })
+
+    const items: Array<
+      Extract<SessionDelta, { kind: 'conversation.item.add' }>['item']
+    > = []
+    const attentions: string[] = []
+
+    handle.onDelta((delta) => {
+      if (delta.kind === 'conversation.item.add') {
+        items.push(delta.item)
+      }
+    })
+    handle.onStatusChange(() => {})
+    handle.onContinuationToken(() => {})
+    handle.onAttentionChange((attention) => {
+      attentions.push(attention)
+    })
+    handle.onContextWindowChange(() => {})
+    handle.onActivityChange(() => {})
+
+    await waitFor(() => {
+      expect(
+        server.requests.some((request) => request.method === 'turn/start'),
+      ).toBe(true)
+    })
+
+    child.stdout.write(
+      JSON.stringify({
+        jsonrpc: '2.0',
+        id: 100,
+        method: 'mcpServer/elicitation/request',
+        params: {
+          threadId: 'fresh-thread',
+          turnId: 'codex-turn-1',
+          serverName: 'linear',
+          mode: 'form',
+          _meta: null,
+          message: 'Allow the linear MCP server to run tool "save_issue"?',
+          requestedSchema: {
+            type: 'object',
+            properties: {},
+          },
+        },
+      }) + '\n',
+    )
+
+    await waitFor(() => {
+      expect(attentions).toContain('needs-approval')
+      expect(items).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            kind: 'approval-request',
+            description: expect.stringContaining(
+              'Allow the linear MCP server to run tool',
+            ),
+          }),
+        ]),
+      )
+    })
+
+    handle.approve()
+
+    await waitFor(() => {
+      expect(server.responses).toContainEqual({
+        id: 100,
+        result: {
+          action: 'accept',
+          content: {},
+          _meta: null,
+        },
+      })
+    })
   })
 
   it('routes steering input to turn/steer without starting a second turn', async () => {

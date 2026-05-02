@@ -1,9 +1,11 @@
 import type { Readable, Writable } from 'stream'
 import { parseJsonLines } from '../line-parser'
 
+export type JsonRpcId = string | number
+
 interface JsonRpcRequest {
   jsonrpc: '2.0'
-  id: number
+  id: JsonRpcId
   method: string
   params?: unknown
 }
@@ -16,7 +18,7 @@ interface JsonRpcNotification {
 
 interface JsonRpcResponse {
   jsonrpc: '2.0'
-  id: number
+  id: JsonRpcId
   result?: unknown
   error?: { code: number; message: string; data?: unknown }
 }
@@ -26,7 +28,7 @@ type JsonRpcMessage = JsonRpcRequest | JsonRpcNotification | JsonRpcResponse
 export type ServerRequestHandler = (
   method: string,
   params: unknown,
-  id: number,
+  id: JsonRpcId,
 ) => void
 
 export type NotificationHandler = (method: string, params: unknown) => void
@@ -34,7 +36,7 @@ export type NotificationHandler = (method: string, params: unknown) => void
 export class JsonRpcClient {
   private nextId = 1
   private pending = new Map<
-    number,
+    JsonRpcId,
     { resolve: (value: unknown) => void; reject: (err: Error) => void }
   >()
   private requestHandler: ServerRequestHandler | null = null
@@ -66,12 +68,12 @@ export class JsonRpcClient {
     this.send(msg)
   }
 
-  respond(id: number, result: unknown): void {
+  respond(id: JsonRpcId, result: unknown): void {
     const msg: JsonRpcResponse = { jsonrpc: '2.0', id, result }
     this.send(msg)
   }
 
-  respondError(id: number, code: number, message: string): void {
+  respondError(id: JsonRpcId, code: number, message: string): void {
     const msg: JsonRpcResponse = {
       jsonrpc: '2.0',
       id,

@@ -1,15 +1,16 @@
 import type { ActivitySignal } from '../provider.types'
+import type { JsonRpcId } from './jsonrpc'
 
 export type ActivityDelta = ActivitySignal | 'keep'
 
 export interface CodexActivityState {
-  pendingApprovals: Map<number, string>
+  pendingApprovals: Map<JsonRpcId, string>
   lastActivity: ActivitySignal
 }
 
 export type CodexActivityInput =
   | { kind: 'notification'; method: string; params: unknown }
-  | { kind: 'request'; method: string; params: unknown; requestId: number }
+  | { kind: 'request'; method: string; params: unknown; requestId: JsonRpcId }
   | { kind: 'close' }
 
 export function initialCodexActivityState(): CodexActivityState {
@@ -21,6 +22,7 @@ const APPROVAL_METHODS = new Set([
   'item/fileChange/requestApproval',
   'item/fileRead/requestApproval',
   'item/mcpToolCall/requestApproval',
+  'mcpServer/elicitation/request',
 ])
 
 const TURN_END_METHODS = new Set(['turn/completed', 'turn/interrupt', 'error'])
@@ -33,6 +35,7 @@ function extractApprovalLabel(method: string, params: unknown): string {
   if (typeof record.command === 'string') return record.command
   if (typeof record.name === 'string') return record.name
   if (typeof record.path === 'string') return record.path
+  if (typeof record.serverName === 'string') return record.serverName
   return method.split('/')[1] ?? 'tool'
 }
 

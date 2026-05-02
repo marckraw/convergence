@@ -14,7 +14,7 @@ import type {
   OneShotInput,
   OneShotResult,
 } from '../provider.types'
-import { JsonRpcClient } from './jsonrpc'
+import { JsonRpcClient, type JsonRpcId } from './jsonrpc'
 import { ProviderSessionEmitter } from '../provider-session.emitter'
 import {
   buildFallbackCodexDescriptor,
@@ -96,6 +96,178 @@ function isContextCompactionItemType(itemType: string | null): boolean {
     itemType === 'compacted' ||
     itemType === 'context_compacted'
   )
+}
+
+interface PendingApprovalRequest {
+  description: string
+  approveResult: unknown
+  denyResult: unknown
+}
+
+function buildApprovalDescription(parts: Array<string | null>): string {
+  return parts
+    .map((part) => part?.trim() ?? null)
+    .filter((part): part is string => !!part)
+    .join('\n\n')
+}
+
+function readElicitationDefaultValue(schema: unknown): unknown {
+  if (!schema || typeof schema !== 'object') return undefined
+  const record = schema as {
+    default?: unknown
+    enum?: unknown
+    oneOf?: unknown
+  }
+
+  if (record.default !== undefined) {
+    return record.default
+  }
+
+  if (Array.isArray(record.enum) && record.enum.length === 1) {
+    return record.enum[0]
+  }
+
+  if (Array.isArray(record.oneOf) && record.oneOf.length === 1) {
+    const [option] = record.oneOf
+    if (
+      option &&
+      typeof option === 'object' &&
+      'const' in option &&
+      (option as { const?: unknown }).const !== undefined
+    ) {
+      return (option as { const?: unknown }).const
+    }
+  }
+
+  return undefined
+}
+
+function buildMcpElicitationApproval(
+  params: Record<string, unknown>,
+): PendingApprovalRequest {
+  const serverName =
+    typeof params.serverName === 'string' ? params.serverName : 'MCP server'
+  const message =
+    typeof params.message === 'string' ? params.message : 'Approval needed'
+  const mode = typeof params.mode === 'string' ? params.mode : null
+  const url = typeof params.url === 'string' ? params.url : null
+  const schema =
+    params.requestedSchema && typeof params.requestedSchema === 'object'
+      ? (params.requestedSchema as {
+          properties?: Record<string, unknown>
+          required?: unknown
+        })
+      : null
+  const propertyNames = schema?.properties ? Object.keys(schema.properties) : []
+  const requiredNames = Array.isArray(schema?.required)
+    ? schema.required.filter(
+        (value): value is string => typeof value === 'string',
+      )
+    : []
+  const content =
+    mode === 'form'
+      ? Object.fromEntries(
+          Object.entries(schema?.properties ?? {}).flatMap(([key, value]) => {
+            const defaultValue = readElicitationDefaultValue(value)
+            return defaultValue === undefined ? [] : [[key, defaultValue]]
+          }),
+        )
+      : null
+
+  return {
+    description: buildApprovalDescription([
+      `MCP server: ${serverName}`,
+      message,
+      url ? `URL: ${url}` : null,
+      propertyNames.length > 0
+        ? `Requested fields: ${propertyNames.join(', ')}`
+        : null,
+      requiredNames.length > 0
+        ? `Required fields: ${requiredNames.join(', ')}`
+        : null,
+    ]),
+    approveResult: {
+      action: 'accept',
+      content,
+      _meta:
+        params._meta && typeof params._meta === 'object' ? params._meta : null,
+    },
+    denyResult: {
+      action: 'decline',
+      content: null,
+      _meta: null,
+    },
+  }
+}
+
+function buildCodexApprovalRequest(
+  method: string,
+  params: Record<string, unknown>,
+): PendingApprovalRequest | null {
+  if (method === 'item/commandExecution/requestApproval') {
+    return {
+      description: buildApprovalDescription([
+        typeof params.command === 'string'
+          ? `Command: ${params.command}`
+          : null,
+        typeof params.reason === 'string' ? `Reason: ${params.reason}` : null,
+        typeof params.cwd === 'string'
+          ? `Working directory: ${params.cwd}`
+          : null,
+        typeof params.command !== 'string' ? 'Command approval needed' : null,
+      ]),
+      approveResult: { decision: 'accept' },
+      denyResult: { decision: 'decline' },
+    }
+  }
+
+  if (method === 'item/fileChange/requestApproval') {
+    return {
+      description: buildApprovalDescription([
+        'File change approval needed',
+        typeof params.reason === 'string' ? `Reason: ${params.reason}` : null,
+        typeof params.grantRoot === 'string'
+          ? `Grant root: ${params.grantRoot}`
+          : null,
+      ]),
+      approveResult: { decision: 'accept' },
+      denyResult: { decision: 'decline' },
+    }
+  }
+
+  if (method === 'item/fileRead/requestApproval') {
+    return {
+      description: buildApprovalDescription([
+        typeof params.path === 'string' ? `File: ${params.path}` : null,
+        'File read approval needed',
+      ]),
+      approveResult: { decision: 'accept' },
+      denyResult: { decision: 'deny' },
+    }
+  }
+
+  if (method === 'item/mcpToolCall/requestApproval') {
+    const server =
+      typeof params.server === 'string' ? `MCP server: ${params.server}` : null
+    const tool = typeof params.tool === 'string' ? `Tool: ${params.tool}` : null
+    const name = typeof params.name === 'string' ? `Tool: ${params.name}` : null
+    return {
+      description: buildApprovalDescription([
+        server,
+        tool ?? name,
+        typeof params.message === 'string' ? params.message : null,
+        'MCP tool approval needed',
+      ]),
+      approveResult: { decision: 'accept' },
+      denyResult: { decision: 'deny' },
+    }
+  }
+
+  if (method === 'mcpServer/elicitation/request') {
+    return buildMcpElicitationApproval(params)
+  }
+
+  return null
 }
 
 function runCodexOneShot(
@@ -260,9 +432,9 @@ export class CodexProvider implements Provider {
     let resolveThreadReady: (() => void) | null = null
     let activeProviderTurnId: string | null = null
 
-    // Map of pending approval request IDs (JSON-RPC id → our description)
-    const pendingApprovals = new Map<number, string>()
-    const pendingUserInputs = new Map<number, string[]>()
+    // Map of pending approval request IDs (JSON-RPC id → approval response plan)
+    const pendingApprovals = new Map<JsonRpcId, PendingApprovalRequest>()
+    const pendingUserInputs = new Map<JsonRpcId, string[]>()
 
     function emitDelta(delta: SessionDelta): void {
       listeners.delta.forEach((cb) => cb(delta))
@@ -882,6 +1054,18 @@ export class CodexProvider implements Provider {
             })
             break
 
+          case 'serverRequest/resolved': {
+            const requestId = (p.requestId ?? p.id) as JsonRpcId | undefined
+            if (requestId !== undefined) {
+              pendingApprovals.delete(requestId)
+              pendingUserInputs.delete(requestId)
+              if (pendingApprovals.size === 0 && pendingUserInputs.size === 0) {
+                setAttention('none')
+              }
+            }
+            break
+          }
+
           case 'item/started': {
             const item =
               typeof p.item === 'object' && p.item !== null
@@ -980,24 +1164,13 @@ export class CodexProvider implements Provider {
         applyActivity({ kind: 'request', method, params, requestId: id })
         const p = params as Record<string, unknown>
 
-        if (
-          method === 'item/commandExecution/requestApproval' ||
-          method === 'item/fileChange/requestApproval' ||
-          method === 'item/fileRead/requestApproval' ||
-          method === 'item/mcpToolCall/requestApproval'
-        ) {
+        const approvalRequest = buildCodexApprovalRequest(method, p)
+        if (approvalRequest) {
           flushAssistantBuffer()
-          const description =
-            typeof p.command === 'string'
-              ? `Command: ${p.command}`
-              : typeof p.path === 'string'
-                ? `File: ${p.path}`
-                : method.split('/')[1]
-
-          pendingApprovals.set(id, description)
+          pendingApprovals.set(id, approvalRequest)
 
           sessionEmitter.addApprovalRequest({
-            description,
+            description: approvalRequest.description,
             providerEventType: method,
           })
           setAttention('needs-approval')
@@ -1040,6 +1213,20 @@ export class CodexProvider implements Provider {
             providerEventType: method,
           })
           setAttention('needs-input')
+        } else {
+          flushAssistantBuffer()
+          rpc?.respondError(
+            id,
+            -32601,
+            `Convergence does not support Codex server request "${method}" yet`,
+          )
+          sessionEmitter.addNote({
+            text: `Unsupported Codex server request: ${method}`,
+            level: 'error',
+            providerEventType: method,
+          })
+          setStatus('failed')
+          setAttention('failed')
         }
       })
 
@@ -1212,25 +1399,30 @@ export class CodexProvider implements Provider {
       },
       approve: () => {
         if (!rpc) return
-        // Approve the first pending approval
-        const [id] = pendingApprovals.keys()
-        if (id !== undefined) {
-          rpc.respond(id, { decision: 'accept' })
-          pendingApprovals.delete(id)
-          if (pendingApprovals.size === 0) {
-            setAttention('none')
-          }
+        const pendingApproval = pendingApprovals.entries().next().value as
+          | [JsonRpcId, PendingApprovalRequest]
+          | undefined
+        if (!pendingApproval) return
+
+        const [id, approvalRequest] = pendingApproval
+        rpc.respond(id, approvalRequest.approveResult)
+        pendingApprovals.delete(id)
+        if (pendingApprovals.size === 0) {
+          setAttention('none')
         }
       },
       deny: () => {
         if (!rpc) return
-        const [id] = pendingApprovals.keys()
-        if (id !== undefined) {
-          rpc.respond(id, { decision: 'deny' })
-          pendingApprovals.delete(id)
-          if (pendingApprovals.size === 0) {
-            setAttention('none')
-          }
+        const pendingApproval = pendingApprovals.entries().next().value as
+          | [JsonRpcId, PendingApprovalRequest]
+          | undefined
+        if (!pendingApproval) return
+
+        const [id, approvalRequest] = pendingApproval
+        rpc.respond(id, approvalRequest.denyResult)
+        pendingApprovals.delete(id)
+        if (pendingApprovals.size === 0) {
+          setAttention('none')
         }
       },
       stop: () => {

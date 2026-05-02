@@ -163,6 +163,21 @@ export const SessionView: FC = () => {
     () => buildConversationRenderPlan(activeConversation),
     [activeConversation],
   )
+  const actionableApprovalId = useMemo(() => {
+    if (
+      session?.status !== 'running' ||
+      session.attention !== 'needs-approval'
+    ) {
+      return null
+    }
+
+    return (
+      [...conversationRenderPlan]
+        .reverse()
+        .find((candidate) => candidate.item.kind === 'approval-request')?.item
+        .id ?? null
+    )
+  }, [conversationRenderPlan, session?.attention, session?.status])
 
   const scrollToBottom = useCallback(() => {
     transcriptEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -504,11 +519,9 @@ export const SessionView: FC = () => {
           <div className="mx-auto max-w-2xl py-4">
             {conversationRenderPlan.map((renderEntry, i) => {
               const entry = renderEntry.item
-              const isLastApproval =
+              const isActionableApproval =
                 entry.kind === 'approval-request' &&
-                session.status === 'running' &&
-                session.attention === 'needs-approval' &&
-                i === conversationRenderPlan.length - 1
+                entry.id === actionableApprovalId
               const prev = conversationRenderPlan[i - 1]?.item ?? null
               const turnBoundary =
                 entry.turnId !== null &&
@@ -552,12 +565,14 @@ export const SessionView: FC = () => {
                         : null
                     }
                     onApprove={
-                      isLastApproval
+                      isActionableApproval
                         ? () => approveSession(session.id)
                         : undefined
                     }
                     onDeny={
-                      isLastApproval ? () => denySession(session.id) : undefined
+                      isActionableApproval
+                        ? () => denySession(session.id)
+                        : undefined
                     }
                   />
                 </div>
