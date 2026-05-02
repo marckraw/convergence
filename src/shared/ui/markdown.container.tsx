@@ -12,6 +12,8 @@ export const Markdown: FC<Omit<MarkdownProps, 'rootRef'>> = (props) => {
   const { content } = props
 
   useEffect(() => {
+    if (!import.meta.env.DEV) return
+
     const id = setTimeout(() => {
       const el = rootRef.current
       if (!el) return

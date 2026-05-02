@@ -3,6 +3,8 @@ import type { ConversationItem } from '@/entities/session'
 export interface ConversationRenderEntry {
   item: ConversationItem
   injectedContextText: string | null
+  turnBoundary: boolean
+  turnSequence: number | null
 }
 
 type NoteConversationItem = Extract<ConversationItem, { kind: 'note' }>
@@ -27,6 +29,34 @@ export function buildConversationRenderPlan(
 ): ConversationRenderEntry[] {
   const entries: ConversationRenderEntry[] = []
   const pendingBootContext: NoteConversationItem[] = []
+  const seenTurnIds = new Set<string>()
+  let previousRenderedTurnId: string | null = null
+  let turnCount = 0
+
+  const pushEntry = (
+    item: ConversationItem,
+    injectedContextText: string | null,
+  ) => {
+    const turnBoundary =
+      item.turnId !== null && previousRenderedTurnId !== item.turnId
+    let turnSequence: number | null = null
+
+    if (turnBoundary && item.turnId) {
+      if (!seenTurnIds.has(item.turnId)) {
+        seenTurnIds.add(item.turnId)
+        turnCount += 1
+      }
+      turnSequence = turnCount
+    }
+
+    previousRenderedTurnId = item.turnId
+    entries.push({
+      item,
+      injectedContextText,
+      turnBoundary,
+      turnSequence,
+    })
+  }
 
   for (const item of items) {
     if (isBootContextNote(item)) {
@@ -35,21 +65,19 @@ export function buildConversationRenderPlan(
     }
 
     if (isUserMessage(item) && pendingBootContext.length > 0) {
-      entries.push({
+      pushEntry(
         item,
-        injectedContextText: pendingBootContext
-          .map((entry) => entry.text)
-          .join('\n\n'),
-      })
+        pendingBootContext.map((entry) => entry.text).join('\n\n'),
+      )
       pendingBootContext.length = 0
       continue
     }
 
-    entries.push({ item, injectedContextText: null })
+    pushEntry(item, null)
   }
 
   for (const item of pendingBootContext) {
-    entries.push({ item, injectedContextText: null })
+    pushEntry(item, null)
   }
 
   return entries
