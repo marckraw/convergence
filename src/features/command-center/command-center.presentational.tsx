@@ -27,8 +27,10 @@ interface CommandCenterPaletteProps {
   open: boolean
   query: string
   view: CommandCenterView
+  selectedValue?: string
   onOpenChange: (open: boolean) => void
   onQueryChange: (query: string) => void
+  onSelectedValueChange?: (value: string) => void
   onSelect: (item: PaletteItem) => void
 }
 
@@ -36,8 +38,10 @@ export const CommandCenterPalette: FC<CommandCenterPaletteProps> = ({
   open,
   query,
   view,
+  selectedValue,
   onOpenChange,
   onQueryChange,
+  onSelectedValueChange,
   onSelect,
 }) => {
   const renderRow = (item: PaletteItem) => {
@@ -109,6 +113,8 @@ export const CommandCenterPalette: FC<CommandCenterPaletteProps> = ({
         <Command
           shouldFilter={false}
           label="Command palette"
+          value={selectedValue}
+          onValueChange={onSelectedValueChange}
           className="flex min-h-0 flex-1 flex-col"
         >
           <div className="border-b border-white/10 px-4 py-3">
