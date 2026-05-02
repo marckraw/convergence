@@ -43,7 +43,7 @@ describe('JsonRpcClient', () => {
     const { stdin, stdout } = createMockStreams()
     const client = new JsonRpcClient(stdin, stdout)
 
-    const requests: Array<{ method: string; id: number }> = []
+    const requests: Array<{ method: string; id: string | number }> = []
     client.onServerRequest((method, _params, id) => {
       requests.push({ method, id })
     })

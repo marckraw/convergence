@@ -46,6 +46,20 @@ describe('reduceCodexActivity', () => {
     expect(state.pendingApprovals.get(42)).toBe('rm -rf /')
   })
 
+  it('treats MCP elicitation requests as waiting-approval', () => {
+    const { state, activity } = reduceCodexActivity(
+      initialCodexActivityState(),
+      {
+        kind: 'request',
+        method: 'mcpServer/elicitation/request',
+        requestId: 'approval-1',
+        params: { serverName: 'linear' },
+      },
+    )
+    expect(activity).toBe('waiting-approval')
+    expect(state.pendingApprovals.get('approval-1')).toBe('linear')
+  })
+
   it('emits tool:name for completed command item', () => {
     const { activity } = reduceCodexActivity(initialCodexActivityState(), {
       kind: 'notification',

@@ -286,6 +286,62 @@ describe('SessionView changed files drawer', () => {
     expect(screen.queryByRole('button', { name: 'Deny' })).toBeNull()
   })
 
+  it('keeps the latest approval card actionable even after later notes', () => {
+    useSessionStore.setState((state) => ({
+      ...state,
+      sessions: state.sessions.map((session) =>
+        session.id === 'session-1'
+          ? { ...session, status: 'running', attention: 'needs-approval' }
+          : session,
+      ),
+      activeConversation: [
+        {
+          id: 'approval-1',
+          sessionId: 'session-1',
+          sequence: 1,
+          turnId: 'turn-1',
+          kind: 'approval-request',
+          description: 'Allow the linear MCP server to run tool save_issue?',
+          state: 'complete',
+          createdAt: '2026-01-01T00:00:00.000Z',
+          updatedAt: '2026-01-01T00:00:00.000Z',
+          providerMeta: {
+            providerId: 'codex',
+            providerItemId: null,
+            providerEventType: 'mcpServer/elicitation/request',
+          },
+        },
+        {
+          id: 'note-1',
+          sessionId: 'session-1',
+          sequence: 2,
+          turnId: 'turn-1',
+          kind: 'note',
+          level: 'warning',
+          text: 'No provider events for 60s. Still waiting; this can be normal for long reasoning steps.',
+          state: 'complete',
+          createdAt: '2026-01-01T00:01:00.000Z',
+          updatedAt: '2026-01-01T00:01:00.000Z',
+          providerMeta: {
+            providerId: 'convergence',
+            providerItemId: null,
+            providerEventType: 'liveness.quiet',
+          },
+        },
+      ],
+    }))
+
+    render(
+      <TooltipProvider>
+        <SessionView />
+      </TooltipProvider>,
+    )
+
+    expect(screen.getByText('Approval needed')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Approve' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Deny' })).toBeInTheDocument()
+  })
+
   it('renders boot context as revealable metadata on the first user message', () => {
     useSessionStore.setState((state) => ({
       ...state,
