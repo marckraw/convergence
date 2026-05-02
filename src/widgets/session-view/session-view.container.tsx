@@ -6,6 +6,8 @@ import { useDialogStore } from '@/entities/dialog'
 import { useInitiativeStore } from '@/entities/initiative'
 import { gitApi, useWorkspaceStore } from '@/entities/workspace'
 import { ComposerContainer } from '@/features/composer'
+import { SessionDebugDrawerContainer } from '@/widgets/session-debug-drawer'
+import { useAppSettingsStore } from '@/entities/app-settings'
 import { attachmentApi, useAttachmentStore } from '@/entities/attachment'
 import { useTerminalStore } from '@/entities/terminal'
 import { Button } from '@/shared/ui/button'
@@ -21,6 +23,7 @@ import {
   GitFork,
   Link2,
   MoreVertical,
+  ScrollText,
   Square,
   FileCode,
   GitBranch,
@@ -54,6 +57,10 @@ export const SessionView: FC = () => {
   const globalSessions = useSessionStore((s) => s.globalSessions)
   const setActiveSession = useSessionStore((s) => s.setActiveSession)
   const openDialog = useDialogStore((s) => s.open)
+  const debugLoggingEnabled = useAppSettingsStore(
+    (s) => s.settings.debugLogging.enabled,
+  )
+  const [debugDrawerOpen, setDebugDrawerOpen] = useState(false)
   const approveSession = useSessionStore((s) => s.approveSession)
   const denySession = useSessionStore((s) => s.denySession)
   const stopSession = useSessionStore((s) => s.stopSession)
@@ -478,6 +485,15 @@ export const SessionView: FC = () => {
                       : 'Show terminal as main'}
                   </DropdownMenuItem>
                 )}
+                {session.providerId !== 'shell' && debugLoggingEnabled && (
+                  <DropdownMenuItem
+                    onClick={() => setDebugDrawerOpen(true)}
+                    className="gap-2"
+                  >
+                    <ScrollText className="h-3.5 w-3.5" />
+                    Open debug log…
+                  </DropdownMenuItem>
+                )}
               </DropdownMenuContent>
             </DropdownMenu>
           </div>
@@ -607,6 +623,13 @@ export const SessionView: FC = () => {
           />
           <div className="min-w-0 flex-1">{renderChangedFilesPanel()}</div>
         </div>
+      )}
+      {session.providerId !== 'shell' && debugLoggingEnabled && (
+        <SessionDebugDrawerContainer
+          sessionId={session.id}
+          open={debugDrawerOpen}
+          onOpenChange={setDebugDrawerOpen}
+        />
       )}
     </div>
   )

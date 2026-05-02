@@ -1,4 +1,7 @@
-import { JSONL_RETAIN_AGE_MS, JSONL_RETAIN_ROTATIONS } from './provider-debug.pure'
+import {
+  JSONL_RETAIN_AGE_MS,
+  JSONL_RETAIN_ROTATIONS,
+} from './provider-debug.pure'
 
 export interface RotationFile {
   filename: string
@@ -25,7 +28,10 @@ export function parseSessionLogFilename(
   return null
 }
 
-export function nextRotationIndex(filenames: string[], sessionId: string): number {
+export function nextRotationIndex(
+  filenames: string[],
+  sessionId: string,
+): number {
   const indices = filenames
     .map(parseSessionLogFilename)
     .filter(
