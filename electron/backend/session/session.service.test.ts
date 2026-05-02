@@ -2299,3 +2299,117 @@ describe('SessionContextInjectionService', () => {
     expect(result.endsWith('continue')).toBe(true)
   })
 })
+
+describe('SessionService — liveness clock', () => {
+  let service: SessionService
+  let tempDir: string
+  let projectId: string
+
+  beforeEach(() => {
+    tempDir = mkdtempSync(join(tmpdir(), 'convergence-liveness-'))
+    mkdirSync(join(tempDir, 'workspaces'), { recursive: true })
+    resetDatabase()
+    const db = getDatabase()
+    db.prepare(
+      'INSERT INTO projects (id, name, repository_path) VALUES (?, ?, ?)',
+    ).run('liveness-project', 'Liveness Project', tempDir)
+    projectId = 'liveness-project'
+
+    const registry = new ProviderRegistry()
+    registry.register(createTestProvider())
+    service = new SessionService(db, registry)
+  })
+
+  afterEach(() => {
+    closeDatabase()
+    rmSync(tempDir, { recursive: true, force: true })
+    vi.useRealTimers()
+  })
+
+  it('emits an info note after 60s of silence and a warning after 180s', () => {
+    vi.useFakeTimers()
+    const baseline = new Date('2026-05-02T12:00:00.000Z').getTime()
+    vi.setSystemTime(baseline)
+
+    const session = service.create({
+      projectId,
+      workspaceId: null,
+      providerId: 'test-provider',
+      model: 'test-model',
+      effort: null,
+      name: 'liveness',
+    })
+
+    // Synthesize a running-state delta directly so we don't need to
+    // pump the test provider's scripted timeline.
+    service['applyDelta'](session.id, {
+      kind: 'session.patch',
+      patch: { status: 'running', updatedAt: new Date(baseline).toISOString() },
+    })
+
+    vi.setSystemTime(baseline + 60_000)
+    service.triggerLivenessTickForTest()
+
+    let conversation = service.getConversation(session.id)
+    let livenessNotes = conversation.filter(
+      (item) => item.kind === 'note' && item.level === 'info',
+    )
+    expect(livenessNotes).toHaveLength(1)
+    expect((livenessNotes[0] as { text: string }).text).toMatch(
+      /No provider events for 60s/i,
+    )
+
+    vi.setSystemTime(baseline + 180_000)
+    service.triggerLivenessTickForTest()
+
+    conversation = service.getConversation(session.id)
+    livenessNotes = conversation.filter(
+      (item) =>
+        item.kind === 'note' &&
+        (item.level === 'info' || item.level === 'warning'),
+    )
+    expect(livenessNotes.map((n) => (n as { level: string }).level)).toEqual([
+      'info',
+      'warning',
+    ])
+  })
+
+  it('resets warning flags when a fresh delta arrives', () => {
+    vi.useFakeTimers()
+    const baseline = new Date('2026-05-02T13:00:00.000Z').getTime()
+    vi.setSystemTime(baseline)
+
+    const session = service.create({
+      projectId,
+      workspaceId: null,
+      providerId: 'test-provider',
+      model: 'test-model',
+      effort: null,
+      name: 'liveness reset',
+    })
+
+    service['applyDelta'](session.id, {
+      kind: 'session.patch',
+      patch: { status: 'running', updatedAt: new Date(baseline).toISOString() },
+    })
+
+    vi.setSystemTime(baseline + 60_000)
+    service.triggerLivenessTickForTest()
+
+    // Bump liveness by replaying any delta — pi/codex emit lots of these.
+    vi.setSystemTime(baseline + 65_000)
+    service['applyDelta'](session.id, {
+      kind: 'session.patch',
+      patch: { activity: 'streaming' },
+    })
+
+    // Another 60s after the bump should re-trigger the info note.
+    vi.setSystemTime(baseline + 65_000 + 60_000)
+    service.triggerLivenessTickForTest()
+
+    const infoNotes = service
+      .getConversation(session.id)
+      .filter((item) => item.kind === 'note' && item.level === 'info')
+    expect(infoNotes).toHaveLength(2)
+  })
+})

@@ -1,6 +1,7 @@
 import { fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
+  DEFAULT_DEBUG_LOGGING_PREFS,
   DEFAULT_NOTIFICATION_PREFS,
   DEFAULT_ONBOARDING_PREFS,
   DEFAULT_UPDATE_PREFS,
@@ -40,6 +41,7 @@ function primeStores(opts: {
         notificationsCardDismissed: opts.dismissed,
       },
       updates: DEFAULT_UPDATE_PREFS,
+      debugLogging: DEFAULT_DEBUG_LOGGING_PREFS,
     },
     isLoaded: opts.isLoaded,
     isSaving: false,

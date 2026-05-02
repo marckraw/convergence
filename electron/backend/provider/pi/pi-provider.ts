@@ -24,6 +24,14 @@ import { PiRpcClient, type PiEvent, type PiExtensionUiRequest } from './pi-rpc'
 import type { TaskProgressService } from '../../task-progress/task-progress.service'
 import { createTaskProgressEmitter } from '../../task-progress/task-progress.emitter'
 import {
+  noopDebugSink,
+  type ProviderDebugSink,
+} from '../../provider-debug/provider-debug-sink'
+import type {
+  ProviderDebugChannel,
+  ProviderDebugEntry,
+} from '../../provider-debug/provider-debug.types'
+import {
   derivePiContextWindow,
   extractLastAssistantStopReason,
   extractToolCallFromEnd,
@@ -204,6 +212,7 @@ export class PiProvider implements Provider {
   constructor(
     private binaryPath: string,
     private taskProgress: TaskProgressService | null = null,
+    private debugSink: ProviderDebugSink = noopDebugSink,
   ) {}
 
   async oneShot(input: OneShotInput): Promise<OneShotResult> {
@@ -235,6 +244,8 @@ export class PiProvider implements Provider {
   start(config: SessionStartConfig): SessionHandle {
     const binaryPath = this.binaryPath
     const skillsService = this.skillsService
+    const debugSink = this.debugSink
+    const sessionId = config.sessionId
     const listeners = {
       delta: [] as ((delta: SessionDelta) => void)[],
       status: [] as ((status: SessionStatus) => void)[],
@@ -242,6 +253,28 @@ export class PiProvider implements Provider {
       continuationToken: [] as ((token: string) => void)[],
       contextWindow: [] as ((contextWindow: SessionContextWindow) => void)[],
       activity: [] as ((activity: ActivitySignal) => void)[],
+      heartbeat: [] as (() => void)[],
+    }
+
+    function fireHeartbeat(): void {
+      listeners.heartbeat.forEach((cb) => cb())
+    }
+
+    function recordDebug(
+      channel: ProviderDebugChannel,
+      partial: Omit<
+        ProviderDebugEntry,
+        'sessionId' | 'providerId' | 'at' | 'channel'
+      >,
+    ): void {
+      debugSink.record({
+        sessionId,
+        providerId: 'pi',
+        at: Date.now(),
+        channel,
+        ...partial,
+      })
+      fireHeartbeat()
     }
 
     let child: ChildProcess | null = null
@@ -971,16 +1004,38 @@ export class PiProvider implements Provider {
       }
 
       rpc = new PiRpcClient(child.stdin, child.stdout)
-      rpc.onEvent(handleEvent)
-      rpc.onExtensionUiRequest(handleExtensionUiRequest)
+      rpc.onEvent((event) => {
+        recordDebug('event', {
+          direction: 'in',
+          method: typeof event.type === 'string' ? event.type : undefined,
+          payload: event,
+        })
+        handleEvent(event)
+      })
+      rpc.onExtensionUiRequest((request) => {
+        recordDebug('request', {
+          direction: 'in',
+          method: request.method,
+          payload: request,
+        })
+        handleExtensionUiRequest(request)
+      })
+
+      child.stdout?.on('data', (chunk: Buffer) => {
+        recordDebug('stdout', { direction: 'in', bytes: chunk.length })
+      })
 
       if (child.stderr) {
-        child.stderr.on('data', () => {
-          // Drain to prevent blocking. Errors surface via events and exit codes.
+        child.stderr.on('data', (chunk: Buffer) => {
+          recordDebug('stderr', { direction: 'in', bytes: chunk.length })
         })
       }
 
       child.on('exit', (code) => {
+        recordDebug('lifecycle', {
+          direction: 'in',
+          note: `child exited with code ${code}`,
+        })
         if (stopped) return
         flushText()
         applyActivity({ kind: 'close' })
@@ -1015,6 +1070,10 @@ export class PiProvider implements Provider {
       })
 
       child.on('error', (err) => {
+        recordDebug('lifecycle', {
+          direction: 'in',
+          note: `child error: ${err.message}`,
+        })
         if (stopped) return
         patchUserMessageSkills(
           userMessageItemId,
@@ -1079,6 +1138,9 @@ export class PiProvider implements Provider {
       },
       onActivityChange: (cb) => {
         listeners.activity.push(cb)
+      },
+      onActivityHeartbeat: (cb) => {
+        listeners.heartbeat.push(cb)
       },
       sendMessage: (text, attachments, skillSelections, options) => {
         if (stopped) return

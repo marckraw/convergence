@@ -10,6 +10,14 @@ export const DEFAULT_ONBOARDING_PREFS: OnboardingPrefs = {
   notificationsCardDismissed: false,
 }
 
+export interface DebugLoggingPrefs {
+  enabled: boolean
+}
+
+export const DEFAULT_DEBUG_LOGGING_PREFS: DebugLoggingPrefs = {
+  enabled: false,
+}
+
 export interface AppSettings {
   defaultProviderId: string | null
   defaultModelId: string | null
@@ -19,6 +27,7 @@ export interface AppSettings {
   notifications: NotificationPrefs
   onboarding: OnboardingPrefs
   updates: UpdatePrefs
+  debugLogging: DebugLoggingPrefs
 }
 
 export type AppSettingsInput = Omit<
@@ -28,12 +37,14 @@ export type AppSettingsInput = Omit<
   | 'notifications'
   | 'onboarding'
   | 'updates'
+  | 'debugLogging'
 > & {
   namingModelByProvider?: Record<string, string>
   extractionModelByProvider?: Record<string, string>
   notifications?: NotificationPrefs
   onboarding?: OnboardingPrefs
   updates?: UpdatePrefs
+  debugLogging?: DebugLoggingPrefs
 }
 
 export interface ResolvedSessionDefaults {

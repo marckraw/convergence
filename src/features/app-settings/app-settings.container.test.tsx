@@ -2,6 +2,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { useSessionStore } from '@/entities/session'
 import {
+  DEFAULT_DEBUG_LOGGING_PREFS,
   DEFAULT_NOTIFICATION_PREFS,
   DEFAULT_ONBOARDING_PREFS,
   DEFAULT_UPDATE_PREFS,
@@ -148,6 +149,7 @@ function primeStores(stored: {
       notifications: DEFAULT_NOTIFICATION_PREFS,
       onboarding: DEFAULT_ONBOARDING_PREFS,
       updates: DEFAULT_UPDATE_PREFS,
+      debugLogging: DEFAULT_DEBUG_LOGGING_PREFS,
     },
     isLoaded: true,
     isSaving: false,
@@ -212,6 +214,7 @@ describe('AppSettingsDialogContainer', () => {
         notifications: DEFAULT_NOTIFICATION_PREFS,
         onboarding: DEFAULT_ONBOARDING_PREFS,
         updates: DEFAULT_UPDATE_PREFS,
+        debugLogging: DEFAULT_DEBUG_LOGGING_PREFS,
       })
     })
   })
@@ -242,6 +245,7 @@ describe('AppSettingsDialogContainer', () => {
         notifications: DEFAULT_NOTIFICATION_PREFS,
         onboarding: DEFAULT_ONBOARDING_PREFS,
         updates: DEFAULT_UPDATE_PREFS,
+        debugLogging: DEFAULT_DEBUG_LOGGING_PREFS,
       })
     })
   })

@@ -56,6 +56,14 @@ import {
 } from './codex-activity.pure'
 import type { TaskProgressService } from '../../task-progress/task-progress.service'
 import { createTaskProgressEmitter } from '../../task-progress/task-progress.emitter'
+import {
+  noopDebugSink,
+  type ProviderDebugSink,
+} from '../../provider-debug/provider-debug-sink'
+import type {
+  ProviderDebugChannel,
+  ProviderDebugEntry,
+} from '../../provider-debug/provider-debug.types'
 
 async function loadCodexParts(
   attachments: Attachment[] | undefined,
@@ -190,6 +198,7 @@ export class CodexProvider implements Provider {
   constructor(
     private binaryPath: string,
     private taskProgress: TaskProgressService | null = null,
+    private debugSink: ProviderDebugSink = noopDebugSink,
   ) {}
 
   describe(): Promise<ProviderDescriptor> {
@@ -208,6 +217,8 @@ export class CodexProvider implements Provider {
 
   start(config: SessionStartConfig): SessionHandle {
     const binaryPath = this.binaryPath
+    const debugSink = this.debugSink
+    const sessionId = config.sessionId
     const listeners = {
       delta: [] as ((delta: SessionDelta) => void)[],
       status: [] as ((status: SessionStatus) => void)[],
@@ -215,6 +226,28 @@ export class CodexProvider implements Provider {
       continuationToken: [] as ((token: string) => void)[],
       contextWindow: [] as ((contextWindow: SessionContextWindow) => void)[],
       activity: [] as ((activity: ActivitySignal) => void)[],
+      heartbeat: [] as (() => void)[],
+    }
+
+    function fireHeartbeat(): void {
+      listeners.heartbeat.forEach((cb) => cb())
+    }
+
+    function recordDebug(
+      channel: ProviderDebugChannel,
+      partial: Omit<
+        ProviderDebugEntry,
+        'sessionId' | 'providerId' | 'at' | 'channel'
+      >,
+    ): void {
+      debugSink.record({
+        sessionId,
+        providerId: 'codex',
+        at: Date.now(),
+        channel,
+        ...partial,
+      })
+      fireHeartbeat()
     }
 
     let child: ChildProcess | null = null
@@ -728,6 +761,11 @@ export class CodexProvider implements Provider {
       // Handle notifications (no response needed)
       rpc.onNotification((method, params) => {
         if (stopped) return
+        recordDebug('notification', {
+          direction: 'in',
+          method,
+          payload: params,
+        })
         applyActivity({ kind: 'notification', method, params })
         const p = params as Record<string, unknown>
 
@@ -938,6 +976,7 @@ export class CodexProvider implements Provider {
       // Handle server requests (need response — approvals)
       rpc.onServerRequest((method, params, id) => {
         if (stopped) return
+        recordDebug('request', { direction: 'in', method, payload: params })
         applyActivity({ kind: 'request', method, params, requestId: id })
         const p = params as Record<string, unknown>
 
@@ -1004,13 +1043,21 @@ export class CodexProvider implements Provider {
         }
       })
 
+      child.stdout?.on('data', (chunk: Buffer) => {
+        recordDebug('stdout', { direction: 'in', bytes: chunk.length })
+      })
+
       if (child.stderr) {
-        child.stderr.on('data', () => {
-          // Consume stderr to prevent blocking
+        child.stderr.on('data', (chunk: Buffer) => {
+          recordDebug('stderr', { direction: 'in', bytes: chunk.length })
         })
       }
 
       child.on('exit', (code) => {
+        recordDebug('lifecycle', {
+          direction: 'in',
+          note: `child exited with code ${code}`,
+        })
         if (stopped) return
         flushAssistantBuffer()
         activeProviderTurnId = null
@@ -1029,6 +1076,10 @@ export class CodexProvider implements Provider {
       })
 
       child.on('error', (err) => {
+        recordDebug('lifecycle', {
+          direction: 'in',
+          note: `child error: ${err.message}`,
+        })
         if (stopped) return
         activeProviderTurnId = null
         sessionEmitter.addNote({
@@ -1077,6 +1128,9 @@ export class CodexProvider implements Provider {
       },
       onActivityChange: (cb) => {
         listeners.activity.push(cb)
+      },
+      onActivityHeartbeat: (cb) => {
+        listeners.heartbeat.push(cb)
       },
       sendMessage: (text, attachments, skillSelections, options) => {
         if (stopped) return

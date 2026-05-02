@@ -10,6 +10,10 @@ import {
 } from '@/entities/notifications'
 import { updatesApi, useUpdatesStore } from '@/entities/updates'
 import { taskProgressApi, useTaskProgressStore } from '@/entities/task-progress'
+import {
+  providerDebugApi,
+  useProviderDebugStore,
+} from '@/entities/provider-debug'
 import { Toaster, toast } from 'sonner'
 import { TooltipProvider } from '@/shared/ui/tooltip'
 import { systemApi } from '@/shared'
@@ -54,6 +58,7 @@ export function App() {
   )
   const loadUpdates = useUpdatesStore((s) => s.loadInitial)
   const ingestTaskProgress = useTaskProgressStore((s) => s.ingest)
+  const ingestProviderDebug = useProviderDebugStore((s) => s.ingest)
 
   useEffect(() => {
     applyTheme(getStoredTheme())
@@ -133,6 +138,13 @@ export function App() {
     })
     return unsubscribe
   }, [ingestTaskProgress])
+
+  useEffect(() => {
+    const unsubscribe = providerDebugApi.subscribe((entry) => {
+      ingestProviderDebug(entry)
+    })
+    return unsubscribe
+  }, [ingestProviderDebug])
 
   useEffect(() => {
     const unsubscribeSummary = sessionApi.onSessionSummaryUpdate((summary) => {

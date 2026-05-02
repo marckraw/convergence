@@ -18,6 +18,7 @@ import {
   getMidRunInputCapabilityForProviderId,
   supportsMidRunInputMode,
 } from '../provider/provider-descriptor.pure'
+import { deriveLiveness } from '../provider/liveness.pure'
 import type { AttachmentsService } from '../attachments/attachments.service'
 import type { SkillSelection } from '../skills/skills.types'
 import {
@@ -77,9 +78,18 @@ export interface SessionAttentionObserver {
   ): void
 }
 
+interface LivenessState {
+  lastEventAt: number
+  warned: { quiet: boolean; silent: boolean }
+}
+
+const LIVENESS_TICK_MS = 5_000
+
 export class SessionService {
   private activeHandles = new Map<string, SessionHandle>()
   private activeTurnIds = new Map<string, string>()
+  private livenessState = new Map<string, LivenessState>()
+  private livenessTimer: ReturnType<typeof setInterval> | null = null
   private onSummaryUpdate: ((summary: SessionSummary) => void) | null = null
   private onConversationPatch:
     | ((event: ConversationPatchEvent) => void)
@@ -93,6 +103,7 @@ export class SessionService {
   private attentionObserver: SessionAttentionObserver | null = null
   private turnCapture: TurnCaptureService | null = null
   private contextInjection: SessionContextInjectionService | null = null
+  private onSessionTerminated: ((sessionId: string) => void) | null = null
 
   constructor(
     private db: Database.Database,
@@ -131,6 +142,10 @@ export class SessionService {
 
   setAttentionObserver(observer: SessionAttentionObserver): void {
     this.attentionObserver = observer
+  }
+
+  setSessionTerminatedListener(listener: (sessionId: string) => void): void {
+    this.onSessionTerminated = listener
   }
 
   rename(id: string, name: string): Session {
@@ -663,9 +678,12 @@ export class SessionService {
     }
     handle.stop()
     this.activeHandles.delete(id)
+    this.livenessState.delete(id)
+    this.onSessionTerminated?.(id)
   }
 
   private applyDelta(sessionId: string, delta: SessionDelta): void {
+    this.bumpLiveness(sessionId)
     switch (delta.kind) {
       case 'session.patch':
         this.applySessionPatch(sessionId, delta.patch)
@@ -1019,6 +1037,9 @@ export class SessionService {
     handle.onDelta((delta: SessionDelta) => {
       this.applyDelta(session.id, delta)
     })
+    handle.onActivityHeartbeat?.(() => {
+      this.bumpLiveness(session.id)
+    })
   }
 
   private handleLifecycle(
@@ -1027,6 +1048,8 @@ export class SessionService {
   ): void {
     if (status === 'failed') {
       this.activeHandles.delete(sessionId)
+      this.livenessState.delete(sessionId)
+      this.onSessionTerminated?.(sessionId)
       this.closeActiveTurn(sessionId, 'errored')
     } else if (status === 'completed') {
       const summary = this.getSummaryById(sessionId)
@@ -1035,7 +1058,9 @@ export class SessionService {
         !this.providers.get(summary.providerId)?.supportsContinuation
       ) {
         this.activeHandles.delete(sessionId)
+        this.onSessionTerminated?.(sessionId)
       }
+      this.livenessState.delete(sessionId)
       this.closeActiveTurn(sessionId, 'completed')
       this.dispatchNextQueuedInput(sessionId)
     }
@@ -1231,6 +1256,105 @@ export class SessionService {
     }
   }
 
+  private bumpLiveness(sessionId: string): void {
+    const now = Date.now()
+    const existing = this.livenessState.get(sessionId)
+    if (existing) {
+      existing.lastEventAt = now
+      existing.warned.quiet = false
+      existing.warned.silent = false
+    } else {
+      this.livenessState.set(sessionId, {
+        lastEventAt: now,
+        warned: { quiet: false, silent: false },
+      })
+    }
+    this.ensureLivenessTimer()
+  }
+
+  private ensureLivenessTimer(): void {
+    if (this.livenessTimer !== null) return
+    this.livenessTimer = setInterval(() => {
+      this.tickLiveness()
+    }, LIVENESS_TICK_MS)
+    if (typeof this.livenessTimer.unref === 'function') {
+      this.livenessTimer.unref()
+    }
+  }
+
+  private stopLivenessTimer(): void {
+    if (this.livenessTimer !== null) {
+      clearInterval(this.livenessTimer)
+      this.livenessTimer = null
+    }
+  }
+
+  /** @internal exposed for tests; do not call from production code. */
+  triggerLivenessTickForTest(): void {
+    this.tickLiveness()
+  }
+
+  private tickLiveness(): void {
+    if (this.livenessState.size === 0) {
+      this.stopLivenessTimer()
+      return
+    }
+    const now = Date.now()
+    for (const [sessionId, state] of this.livenessState) {
+      const summary = this.getSummaryById(sessionId)
+      if (!summary || summary.status !== 'running') {
+        this.livenessState.delete(sessionId)
+        continue
+      }
+      const signal = deriveLiveness({
+        lastEventAt: state.lastEventAt,
+        now,
+      })
+      if (signal.kind === 'silent' && !state.warned.silent) {
+        state.warned.silent = true
+        this.emitLivenessNote(sessionId, 'silent')
+      } else if (signal.kind === 'quiet' && !state.warned.quiet) {
+        state.warned.quiet = true
+        this.emitLivenessNote(sessionId, 'quiet')
+      }
+    }
+    if (this.livenessState.size === 0) {
+      this.stopLivenessTimer()
+    }
+  }
+
+  private emitLivenessNote(sessionId: string, kind: 'quiet' | 'silent'): void {
+    const session = this.getById(sessionId)
+    if (!session) return
+    const text =
+      kind === 'silent'
+        ? 'No provider events for 3 minutes. The provider may be stuck. Use Stop to abort if needed.'
+        : 'No provider events for 60s. Still waiting; long reasoning steps can be normal.'
+    const timestamp = new Date().toISOString()
+    const note = this.addConversationItem(sessionId, {
+      id: randomUUID(),
+      turnId: null,
+      kind: 'note',
+      state: 'complete',
+      level: kind === 'silent' ? 'warning' : 'info',
+      text,
+      createdAt: timestamp,
+      updatedAt: timestamp,
+      providerMeta: {
+        providerId: session.providerId,
+        providerItemId: null,
+        providerEventType: 'liveness',
+      },
+    })
+    if (note) {
+      this.notifySessionChange(sessionId, {
+        sessionId,
+        op: 'add',
+        item: note,
+      })
+    }
+  }
+
   private markStaleRunningSessionFailed(
     session: Session,
     reason: string,
@@ -1261,6 +1385,8 @@ export class SessionService {
     })
     this.failPendingQueuedInputsForSession(session.id, reason)
     this.activeHandles.delete(session.id)
+    this.livenessState.delete(session.id)
+    this.onSessionTerminated?.(session.id)
     this.closeActiveTurn(session.id, 'errored')
 
     if (notify) {

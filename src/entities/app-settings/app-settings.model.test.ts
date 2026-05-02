@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppSettingsStore } from './app-settings.model'
 import {
+  DEFAULT_DEBUG_LOGGING_PREFS,
   DEFAULT_NOTIFICATION_PREFS,
   DEFAULT_ONBOARDING_PREFS,
   DEFAULT_UPDATE_PREFS,
@@ -16,6 +17,7 @@ const EMPTY: AppSettings = {
   notifications: DEFAULT_NOTIFICATION_PREFS,
   onboarding: DEFAULT_ONBOARDING_PREFS,
   updates: DEFAULT_UPDATE_PREFS,
+  debugLogging: DEFAULT_DEBUG_LOGGING_PREFS,
 }
 
 type BroadcastCallback = (settings: AppSettings) => void
@@ -72,6 +74,7 @@ describe('useAppSettingsStore', () => {
       notifications: DEFAULT_NOTIFICATION_PREFS,
       onboarding: DEFAULT_ONBOARDING_PREFS,
       updates: DEFAULT_UPDATE_PREFS,
+      debugLogging: DEFAULT_DEBUG_LOGGING_PREFS,
     }
     installMockApi({ get: vi.fn().mockResolvedValue(stored) })
 
@@ -102,6 +105,7 @@ describe('useAppSettingsStore', () => {
       notifications: DEFAULT_NOTIFICATION_PREFS,
       onboarding: DEFAULT_ONBOARDING_PREFS,
       updates: DEFAULT_UPDATE_PREFS,
+      debugLogging: DEFAULT_DEBUG_LOGGING_PREFS,
     }
     installMockApi({ set: vi.fn().mockResolvedValue(stored) })
 
@@ -126,6 +130,7 @@ describe('useAppSettingsStore', () => {
       notifications: DEFAULT_NOTIFICATION_PREFS,
       onboarding: DEFAULT_ONBOARDING_PREFS,
       updates: DEFAULT_UPDATE_PREFS,
+      debugLogging: DEFAULT_DEBUG_LOGGING_PREFS,
     }
     listeners.forEach((cb) => cb(updated))
 

@@ -93,6 +93,8 @@ const mockElectronAPI = {
         suppressWhenFocused: true,
       },
       onboarding: { notificationsCardDismissed: false },
+      updates: { backgroundCheckEnabled: true },
+      debugLogging: { enabled: false },
     }),
     set: vi.fn().mockImplementation(async (input) => input),
     onUpdated: vi.fn().mockReturnValue(() => {}),

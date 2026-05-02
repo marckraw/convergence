@@ -77,6 +77,28 @@ describe('reduceCodexActivity', () => {
     expect(activity).toBe('keep')
   })
 
+  it('emits thinking when a reasoning item starts', () => {
+    const { state, activity } = reduceCodexActivity(
+      initialCodexActivityState(),
+      {
+        kind: 'notification',
+        method: 'item/started',
+        params: { item: { type: 'reasoning' } },
+      },
+    )
+    expect(activity).toBe('thinking')
+    expect(state.lastActivity).toBe('thinking')
+  })
+
+  it('emits thinking when an agentReasoning item starts (alt naming)', () => {
+    const { activity } = reduceCodexActivity(initialCodexActivityState(), {
+      kind: 'notification',
+      method: 'item/started',
+      params: { item: { type: 'agentReasoning' } },
+    })
+    expect(activity).toBe('thinking')
+  })
+
   it('emits compacting when context compaction starts', () => {
     const { state, activity } = reduceCodexActivity(
       initialCodexActivityState(),

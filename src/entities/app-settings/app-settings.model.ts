@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import { appSettingsApi } from './app-settings.api'
 import {
+  DEFAULT_DEBUG_LOGGING_PREFS,
   DEFAULT_NOTIFICATION_PREFS,
   DEFAULT_ONBOARDING_PREFS,
   DEFAULT_UPDATE_PREFS,
@@ -17,6 +18,7 @@ const EMPTY: AppSettings = {
   notifications: DEFAULT_NOTIFICATION_PREFS,
   onboarding: DEFAULT_ONBOARDING_PREFS,
   updates: DEFAULT_UPDATE_PREFS,
+  debugLogging: DEFAULT_DEBUG_LOGGING_PREFS,
 }
 
 interface AppSettingsState {

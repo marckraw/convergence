@@ -25,6 +25,12 @@ import { CodexProvider } from '../backend/provider/codex/codex-provider'
 import { PiProvider } from '../backend/provider/pi/pi-provider'
 import { ShellProvider } from '../backend/provider/shell/shell-provider'
 import { detectProviders } from '../backend/provider/detect'
+import { ProviderDebugService } from '../backend/provider-debug/provider-debug.service'
+import {
+  broadcastProviderDebug,
+  registerProviderDebugIpcHandlers,
+} from '../backend/provider-debug/provider-debug.ipc'
+import { createJsonlWriter } from '../backend/provider-debug/provider-debug-jsonl'
 import { McpService } from '../backend/mcp/mcp.service'
 import { SkillsService } from '../backend/skills/skills.service'
 import { AppSettingsService } from '../backend/app-settings/app-settings.service'
@@ -195,19 +201,43 @@ async function startApp(): Promise<void> {
   }
 
   // Detect and register real providers
+  const debugLogsDirectory = join(app.getPath('userData'), 'debug-logs')
+  const jsonlWriter = createJsonlWriter({ directory: debugLogsDirectory })
+  const providerDebugService = new ProviderDebugService({
+    broadcast: broadcastProviderDebug,
+    jsonl: jsonlWriter,
+    isLoggingEnabled: () =>
+      appSettingsService.getDebugLoggingPrefsSync().enabled,
+  })
+  registerProviderDebugIpcHandlers({
+    service: providerDebugService,
+    logsDirectory: debugLogsDirectory,
+  })
+  sessionService.setSessionTerminatedListener((sessionId) => {
+    providerDebugService.drop(sessionId)
+  })
+  try {
+    const knownSessionIds = new Set(
+      sessionService.getAll().map((session) => session.id),
+    )
+    jsonlWriter.cleanup(knownSessionIds)
+  } catch {
+    // Cleanup is best effort.
+  }
+  const debugSink = providerDebugService
   const detected = await detectProviders()
   for (const p of detected) {
     if (p.id === 'claude-code') {
       providerRegistry.register(
-        new ClaudeCodeProvider(p.binaryPath, taskProgressService),
+        new ClaudeCodeProvider(p.binaryPath, taskProgressService, debugSink),
       )
     } else if (p.id === 'codex') {
       providerRegistry.register(
-        new CodexProvider(p.binaryPath, taskProgressService),
+        new CodexProvider(p.binaryPath, taskProgressService, debugSink),
       )
     } else if (p.id === 'pi') {
       providerRegistry.register(
-        new PiProvider(p.binaryPath, taskProgressService),
+        new PiProvider(p.binaryPath, taskProgressService, debugSink),
       )
     }
   }

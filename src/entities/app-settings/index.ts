@@ -1,12 +1,14 @@
 export type {
   AppSettings,
   AppSettingsInput,
+  DebugLoggingPrefs,
   NotificationEventPrefs,
   NotificationPrefs,
   OnboardingPrefs,
   UpdatePrefs,
 } from './app-settings.types'
 export {
+  DEFAULT_DEBUG_LOGGING_PREFS,
   DEFAULT_NOTIFICATION_PREFS,
   DEFAULT_ONBOARDING_PREFS,
   DEFAULT_UPDATE_PREFS,

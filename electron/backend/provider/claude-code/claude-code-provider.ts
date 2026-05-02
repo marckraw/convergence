@@ -34,6 +34,14 @@ import { readClaudeLoggedContextWindow } from './claude-context-log.service'
 import { deriveClaudeActivity } from './claude-code-activity.pure'
 import type { TaskProgressService } from '../../task-progress/task-progress.service'
 import { createTaskProgressEmitter } from '../../task-progress/task-progress.emitter'
+import {
+  noopDebugSink,
+  type ProviderDebugSink,
+} from '../../provider-debug/provider-debug-sink'
+import type {
+  ProviderDebugChannel,
+  ProviderDebugEntry,
+} from '../../provider-debug/provider-debug.types'
 import { ClaudeCodeSkillsService } from '../../skills/claude-code-skills.service'
 import {
   failedNativeSkillInvocation,
@@ -184,6 +192,7 @@ export class ClaudeCodeProvider implements Provider {
   constructor(
     private binaryPath: string,
     private taskProgress: TaskProgressService | null = null,
+    private debugSink: ProviderDebugSink = noopDebugSink,
   ) {}
 
   async describe(): Promise<ProviderDescriptor> {
@@ -197,6 +206,8 @@ export class ClaudeCodeProvider implements Provider {
   start(config: SessionStartConfig): SessionHandle {
     const binaryPath = this.binaryPath
     const skillsService = this.skillsService
+    const debugSink = this.debugSink
+    const sessionId = config.sessionId
     const listeners = {
       delta: [] as ((delta: SessionDelta) => void)[],
       status: [] as ((status: SessionStatus) => void)[],
@@ -204,6 +215,28 @@ export class ClaudeCodeProvider implements Provider {
       continuationToken: [] as ((token: string) => void)[],
       contextWindow: [] as ((contextWindow: SessionContextWindow) => void)[],
       activity: [] as ((activity: ActivitySignal) => void)[],
+      heartbeat: [] as (() => void)[],
+    }
+
+    function fireHeartbeat(): void {
+      listeners.heartbeat.forEach((cb) => cb())
+    }
+
+    function recordDebug(
+      channel: ProviderDebugChannel,
+      partial: Omit<
+        ProviderDebugEntry,
+        'sessionId' | 'providerId' | 'at' | 'channel'
+      >,
+    ): void {
+      debugSink.record({
+        sessionId,
+        providerId: 'claude-code',
+        at: Date.now(),
+        channel,
+        ...partial,
+      })
+      fireHeartbeat()
     }
 
     let child: ChildProcess | null = null
@@ -831,18 +864,40 @@ export class ClaudeCodeProvider implements Provider {
       })
 
       if (child.stdout) {
-        parseJsonLines(child.stdout, handleEvent, (err) => {
-          if (!stopped) {
-            sessionEmitter.addNote({
-              text: `Stream error: ${err.message}`,
-              level: 'error',
+        parseJsonLines(
+          child.stdout,
+          (event) => {
+            const eventType =
+              event && typeof event === 'object' && 'type' in event
+                ? typeof (event as { type: unknown }).type === 'string'
+                  ? (event as { type: string }).type
+                  : undefined
+                : undefined
+            recordDebug('event', {
+              direction: 'in',
+              method: eventType,
+              payload: event,
             })
-          }
-        })
+            handleEvent(event)
+          },
+          (err) => {
+            recordDebug('lifecycle', {
+              direction: 'in',
+              note: `stream parse error: ${err.message}`,
+            })
+            if (!stopped) {
+              sessionEmitter.addNote({
+                text: `Stream error: ${err.message}`,
+                level: 'error',
+              })
+            }
+          },
+        )
       }
 
       if (child.stderr) {
         child.stderr.on('data', (chunk: Buffer) => {
+          recordDebug('stderr', { direction: 'in', bytes: chunk.length })
           stderrBuffer += chunk.toString()
         })
         child.stderr.on('end', () => {
@@ -906,6 +961,10 @@ export class ClaudeCodeProvider implements Provider {
       }
 
       child.on('exit', (code) => {
+        recordDebug('lifecycle', {
+          direction: 'in',
+          note: `child exited with code ${code}`,
+        })
         if (stopped) return
         flushAssistantBuffer()
         refreshContextWindowFromLogs()
@@ -935,6 +994,10 @@ export class ClaudeCodeProvider implements Provider {
       })
 
       child.on('error', (err) => {
+        recordDebug('lifecycle', {
+          direction: 'in',
+          note: `child error: ${err.message}`,
+        })
         if (stopped) return
         sessionEmitter.addNote({
           text: `Process error: ${err.message}`,
@@ -976,6 +1039,9 @@ export class ClaudeCodeProvider implements Provider {
       },
       onActivityChange: (cb) => {
         listeners.activity.push(cb)
+      },
+      onActivityHeartbeat: (cb) => {
+        listeners.heartbeat.push(cb)
       },
       sendMessage: (text, attachments, skillSelections) => {
         void startTurn(text, attachments, { skillSelections })

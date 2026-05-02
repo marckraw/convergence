@@ -912,6 +912,11 @@ interface ElectronAPI {
   taskProgress: {
     subscribe: (callback: (event: TaskProgressEvent) => void) => () => void
   }
+  providerDebug: {
+    subscribe: (callback: (entry: ProviderDebugEntry) => void) => () => void
+    list: (sessionId: string) => Promise<ProviderDebugEntry[]>
+    openFolder: () => Promise<boolean>
+  }
   terminal: {
     create: (input: {
       sessionId: string
@@ -994,6 +999,27 @@ type TaskProgressEvent =
       outcome: TaskProgressOutcome
     }
 
+type ProviderDebugChannel =
+  | 'notification'
+  | 'response'
+  | 'request'
+  | 'event'
+  | 'stdout'
+  | 'stderr'
+  | 'lifecycle'
+
+interface ProviderDebugEntry {
+  sessionId: string
+  providerId: string
+  at: number
+  direction: 'in' | 'out'
+  channel: ProviderDebugChannel
+  method?: string
+  payload?: unknown
+  bytes?: number
+  note?: string
+}
+
 interface NotificationEventPrefsData {
   finished: boolean
   needsInput: boolean
@@ -1060,6 +1086,10 @@ interface UpdatePrefsData {
   backgroundCheckEnabled: boolean
 }
 
+interface DebugLoggingPrefsData {
+  enabled: boolean
+}
+
 interface AppSettingsData {
   defaultProviderId: string | null
   defaultModelId: string | null
@@ -1069,6 +1099,7 @@ interface AppSettingsData {
   notifications: NotificationPrefsData
   onboarding: OnboardingPrefsData
   updates: UpdatePrefsData
+  debugLogging: DebugLoggingPrefsData
 }
 
 declare global {
