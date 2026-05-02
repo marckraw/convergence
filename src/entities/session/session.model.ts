@@ -411,6 +411,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
   },
 
   approveSession: async (id: string) => {
+    set({ error: null })
     try {
       await sessionApi.approve(id)
     } catch (err) {
@@ -421,6 +422,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
   },
 
   denySession: async (id: string) => {
+    set({ error: null })
     try {
       await sessionApi.deny(id)
     } catch (err) {

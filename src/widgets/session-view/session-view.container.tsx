@@ -506,6 +506,7 @@ export const SessionView: FC = () => {
               const entry = renderEntry.item
               const isLastApproval =
                 entry.kind === 'approval-request' &&
+                session.status === 'running' &&
                 session.attention === 'needs-approval' &&
                 i === conversationRenderPlan.length - 1
               const prev = conversationRenderPlan[i - 1]?.item ?? null
