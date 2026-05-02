@@ -1,5 +1,12 @@
 # convergence
 
+## 0.31.1
+
+### Patch Changes
+
+- 807d449: Recover stale approval requests when the provider session is no longer active
+  instead of surfacing a remote-method error.
+
 ## 0.31.0
 
 ### Minor Changes
