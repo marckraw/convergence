@@ -52,7 +52,10 @@ export const SessionTranscript: FC<SessionTranscriptProps> = ({
     [conversationItems],
   )
   const actionableApprovalId = useMemo(() => {
-    if (session.status !== 'running' || session.attention !== 'needs-approval') {
+    if (
+      session.status !== 'running' ||
+      session.attention !== 'needs-approval'
+    ) {
       return null
     }
 
