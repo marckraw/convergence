@@ -27,7 +27,7 @@ const KNOWN_PROVIDERS: KnownProvider[] = [
     binaryName: 'codex',
     packageName: '@openai/codex',
     installCommand: 'npm install -g @openai/codex@latest',
-    updateCommand: 'codex --upgrade',
+    updateCommand: 'npm install -g @openai/codex@latest',
   },
   {
     id: 'pi',

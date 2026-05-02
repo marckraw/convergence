@@ -84,7 +84,7 @@ describe('provider-status.pure', () => {
         status: 'unknown',
         packageName: '@openai/codex',
         installCommand: 'npm install -g @openai/codex@latest',
-        updateCommand: 'codex --upgrade',
+        updateCommand: 'npm install -g @openai/codex@latest',
         checkError: null,
       },
     })
@@ -113,7 +113,7 @@ describe('provider-status.pure', () => {
       latestVersion: '0.125.0',
       status: 'outdated',
       packageName: '@openai/codex',
-      updateCommand: 'codex --upgrade',
+      updateCommand: 'npm install -g @openai/codex@latest',
     })
   })
 })
