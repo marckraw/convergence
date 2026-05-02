@@ -52,6 +52,11 @@ function isContextCompactionItem(params: unknown): boolean {
   )
 }
 
+function isReasoningItem(params: unknown): boolean {
+  const item = extractItemRecord(params)
+  return item?.type === 'reasoning' || item?.type === 'agentReasoning'
+}
+
 function extractCompletedToolName(params: unknown): string | null {
   const item = extractItemRecord(params)
   if (!item) return null
@@ -131,6 +136,17 @@ export function reduceCodexActivity(
     isContextCompactionItem(input.params)
   ) {
     const activity: ActivitySignal = 'compacting'
+    if (prev.lastActivity === activity) {
+      return { state: prev, activity: 'keep' }
+    }
+    return {
+      state: { ...prev, lastActivity: activity },
+      activity,
+    }
+  }
+
+  if (input.method === 'item/started' && isReasoningItem(input.params)) {
+    const activity: ActivitySignal = 'thinking'
     if (prev.lastActivity === activity) {
       return { state: prev, activity: 'keep' }
     }

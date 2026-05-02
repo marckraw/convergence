@@ -185,6 +185,7 @@ export interface SessionHandle {
     callback: (contextWindow: SessionContextWindow) => void,
   ) => void
   onActivityChange: (callback: (activity: ActivitySignal) => void) => void
+  onActivityHeartbeat?: (callback: () => void) => void
 
   sendMessage: (
     text: string,
