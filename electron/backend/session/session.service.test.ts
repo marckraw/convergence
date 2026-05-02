@@ -746,6 +746,57 @@ describe('SessionService', () => {
     })
   })
 
+  it('marks a running approval request failed when its provider handle is gone', () => {
+    const session = service.create({
+      projectId,
+      workspaceId: null,
+      providerId: 'test-provider',
+      model: 'test-model',
+      effort: null,
+      name: 'stale approval test',
+    })
+
+    getDatabase()
+      .prepare(
+        "UPDATE sessions SET status = 'running', attention = 'needs-approval' WHERE id = ?",
+      )
+      .run(session.id)
+
+    expect(() => service.approve(session.id)).not.toThrow()
+
+    const updated = service.getById(session.id)!
+    expect(updated.status).toBe('failed')
+    expect(updated.attention).toBe('failed')
+    expect(service.getConversation(session.id).at(-1)).toMatchObject({
+      kind: 'note',
+      level: 'error',
+      text: expect.stringContaining('approval request'),
+    })
+  })
+
+  it('clears stale non-running approval attention without throwing', () => {
+    const session = service.create({
+      projectId,
+      workspaceId: null,
+      providerId: 'test-provider',
+      model: 'test-model',
+      effort: null,
+      name: 'completed stale approval test',
+    })
+
+    getDatabase()
+      .prepare(
+        "UPDATE sessions SET status = 'completed', attention = 'needs-approval' WHERE id = ?",
+      )
+      .run(session.id)
+
+    expect(() => service.deny(session.id)).not.toThrow()
+
+    const updated = service.getById(session.id)!
+    expect(updated.status).toBe('completed')
+    expect(updated.attention).toBe('finished')
+  })
+
   it('marks shell sessions finished when their last terminal exits cleanly', () => {
     const transitions: Array<{
       sessionId: string
@@ -1792,6 +1843,7 @@ describe('SessionService — turn capture wiring', () => {
 
     await service.start(session.id, { text: 'hi' })
     await waitFor(() => observed.some((d) => d.kind === 'turn.add'))
+    await new Promise((resolve) => setTimeout(resolve, 150))
 
     expect(observed.some((d) => d.kind === 'turn.add')).toBe(true)
     expect(observed.every((d) => d.sessionId === session.id)).toBe(true)

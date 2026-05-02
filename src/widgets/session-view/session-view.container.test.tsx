@@ -247,6 +247,45 @@ describe('SessionView changed files drawer', () => {
     )
   })
 
+  it('does not expose actions for stale approval cards on inactive sessions', () => {
+    useSessionStore.setState((state) => ({
+      ...state,
+      sessions: state.sessions.map((session) =>
+        session.id === 'session-1'
+          ? { ...session, status: 'completed', attention: 'needs-approval' }
+          : session,
+      ),
+      activeConversation: [
+        {
+          id: 'approval-1',
+          sessionId: 'session-1',
+          sequence: 1,
+          turnId: 'turn-1',
+          kind: 'approval-request',
+          description: 'Command: git status',
+          state: 'complete',
+          createdAt: '2026-01-01T00:00:00.000Z',
+          updatedAt: '2026-01-01T00:00:00.000Z',
+          providerMeta: {
+            providerId: 'claude-code',
+            providerItemId: null,
+            providerEventType: 'item/commandExecution/requestApproval',
+          },
+        },
+      ],
+    }))
+
+    render(
+      <TooltipProvider>
+        <SessionView />
+      </TooltipProvider>,
+    )
+
+    expect(screen.getByText('Approval needed')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Approve' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Deny' })).toBeNull()
+  })
+
   it('renders boot context as revealable metadata on the first user message', () => {
     useSessionStore.setState((state) => ({
       ...state,

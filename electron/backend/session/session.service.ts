@@ -652,14 +652,48 @@ export class SessionService {
 
   approve(id: string): void {
     const handle = this.activeHandles.get(id)
-    if (!handle) throw new Error(`Session not active: ${id}`)
+    if (!handle) {
+      this.handleInactiveApprovalAction(id)
+      return
+    }
     handle.approve()
   }
 
   deny(id: string): void {
     const handle = this.activeHandles.get(id)
-    if (!handle) throw new Error(`Session not active: ${id}`)
+    if (!handle) {
+      this.handleInactiveApprovalAction(id)
+      return
+    }
     handle.deny()
+  }
+
+  private handleInactiveApprovalAction(id: string): void {
+    const session = this.getById(id)
+    if (!session) throw new Error(`Session not found: ${id}`)
+
+    if (session.status === 'running') {
+      this.markStaleRunningSessionFailed(
+        session,
+        'Session marked failed because Convergence no longer has an active provider process for this approval request.',
+        true,
+      )
+      return
+    }
+
+    if (session.attention !== 'needs-approval') return
+
+    this.applySessionPatch(id, {
+      attention:
+        session.status === 'completed'
+          ? 'finished'
+          : session.status === 'failed'
+            ? 'failed'
+            : 'none',
+      activity: null,
+      updatedAt: new Date().toISOString(),
+    })
+    this.notifySessionChange(id)
   }
 
   stop(id: string): void {
