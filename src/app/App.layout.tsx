@@ -3,12 +3,17 @@ import type { FC } from 'react'
 import { Sidebar } from '@/widgets/sidebar'
 import { GlobalStatusBar } from '@/widgets/global-status-bar'
 import { WorkspaceLayout } from '@/widgets/workspace-layout'
+import { RalphTaskDashboard } from '@/widgets/ralph-task-dashboard'
 import { NotificationsOnboardingContainer } from '@/features/notifications-onboarding'
 import { cn } from '@/shared/lib/cn.pure'
+
+export type AppSurface = 'workspace' | 'ralph'
 
 interface AppShellProps {
   activeSessionId: string | null
   onSelectSession: (id: string) => void
+  activeSurface: AppSurface
+  onSelectSurface: (surface: AppSurface) => void
   loading: boolean
   hasProject: boolean
 }
@@ -20,6 +25,8 @@ const DEFAULT_SIDEBAR = 260
 export const AppShell: FC<AppShellProps> = ({
   activeSessionId,
   onSelectSession,
+  activeSurface,
+  onSelectSurface,
   loading,
   hasProject,
 }) => {
@@ -67,6 +74,8 @@ export const AppShell: FC<AppShellProps> = ({
           <Sidebar
             onSelectSession={onSelectSession}
             activeSessionId={activeSessionId}
+            activeSurface={activeSurface}
+            onSelectSurface={onSelectSurface}
           />
         </div>
 
@@ -79,7 +88,9 @@ export const AppShell: FC<AppShellProps> = ({
         />
 
         <div className="app-main-panel flex min-w-0 flex-1 flex-col">
-          {hasProject ? (
+          {activeSurface === 'ralph' ? (
+            <RalphTaskDashboard />
+          ) : hasProject ? (
             <>
               <NotificationsOnboardingContainer />
               <div className="min-h-0 flex-1">

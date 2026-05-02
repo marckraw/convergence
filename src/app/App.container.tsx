@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useProjectStore } from '@/entities/project'
 import { useWorkspaceStore } from '@/entities/workspace'
 import { sessionApi, useSessionStore } from '@/entities/session'
@@ -21,9 +21,10 @@ import { SessionIntentDialogContainer } from '@/features/session-intent-dialog'
 import { NotificationsToastHostContainer } from '@/features/notifications-toast-host'
 import { UpdatesToastContainer } from '@/features/updates-toast'
 import { FeedbackButtonContainer } from '@/features/feedback-button'
-import { AppShell } from './App.layout'
+import { AppShell, type AppSurface } from './App.layout'
 
 export function App() {
+  const [activeSurface, setActiveSurface] = useState<AppSurface>('workspace')
   const loadActiveProject = useProjectStore((s) => s.loadActiveProject)
   const activeProject = useProjectStore((s) => s.activeProject)
   const loading = useProjectStore((s) => s.loading)
@@ -195,11 +196,21 @@ export function App() {
     }
   }, [sessionError, clearSessionError])
 
+  const handleSelectSession = useCallback(
+    (id: string) => {
+      setActiveSurface('workspace')
+      setActiveSession(id)
+    },
+    [setActiveSession],
+  )
+
   return (
     <TooltipProvider delayDuration={1500}>
       <AppShell
         activeSessionId={activeSessionId}
-        onSelectSession={setActiveSession}
+        onSelectSession={handleSelectSession}
+        activeSurface={activeSurface}
+        onSelectSurface={setActiveSurface}
         loading={loading}
         hasProject={!!activeProject}
       />

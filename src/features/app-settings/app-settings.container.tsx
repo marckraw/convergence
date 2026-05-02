@@ -37,6 +37,7 @@ const DEFAULT_SECTION: AppSettingsSectionId = 'session-defaults'
 function isAppSettingsSection(value: unknown): value is AppSettingsSectionId {
   return (
     value === 'session-defaults' ||
+    value === 'workboard' ||
     value === 'session-naming' ||
     value === 'session-forking' ||
     value === 'notifications' ||

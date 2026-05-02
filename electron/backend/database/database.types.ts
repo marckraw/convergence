@@ -155,3 +155,111 @@ export interface AnalyticsProfileSnapshotRow {
   profile_json: string
   created_at: string
 }
+
+export interface WorkboardTrackerSourceRow {
+  id: string
+  type: string
+  name: string
+  enabled: number
+  auth_json: string
+  sync_json: string
+  last_sync_at: string | null
+  last_sync_error: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface WorkboardTrackerIssueRow {
+  id: string
+  source_id: string
+  external_id: string
+  external_key: string
+  url: string
+  title: string
+  body: string
+  labels_json: string
+  status: string
+  priority: string | null
+  assignee: string | null
+  updated_at_external: string | null
+  raw_json: string
+  last_seen_at: string
+  created_at: string
+  updated_at: string
+}
+
+export interface WorkboardProjectMappingRow {
+  id: string
+  source_id: string
+  name: string
+  enabled: number
+  priority: number
+  matcher_json: string
+  project_id: string
+  workflow_policy: string
+  sandbox_mode: string
+  branch_prefix: string
+  stage_defaults_json: string
+  created_at: string
+  updated_at: string
+}
+
+export interface WorkboardRunRow {
+  id: string
+  project_id: string
+  status: string
+  workflow_policy: string
+  sandbox_mode: string
+  branch_strategy: string
+  branch_name: string
+  repo_path: string
+  log_root: string
+  current_stage_id: string | null
+  progress_json: string
+  error: string | null
+  sandcastle_result_json: string
+  started_at: string | null
+  ended_at: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface WorkboardStageRow {
+  id: string
+  run_id: string
+  role: string
+  status: string
+  provider_id: string
+  model: string | null
+  effort: string | null
+  max_iterations: number
+  iteration_count: number
+  log_file_path: string
+  commit_shas_json: string
+  started_at: string | null
+  ended_at: string | null
+  error: string | null
+  result_json: string
+}
+
+export interface WorkboardEventRow {
+  id: string
+  run_id: string
+  stage_id: string | null
+  sequence: number
+  type: string
+  message: string
+  payload_json: string
+  created_at: string
+}
+
+export interface WorkboardRunIssueRow {
+  run_id: string
+  tracker_issue_id: string
+  sort_order: number
+  lane_status: string
+  branch_name: string | null
+  summary: string
+  created_at: string
+  updated_at: string
+}
