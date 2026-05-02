@@ -699,6 +699,223 @@ interface AnalyticsOverviewData {
   generatedProfile: GeneratedWorkProfileSnapshotData | null
 }
 
+type WorkboardTrackerTypeData = 'linear' | 'jira'
+type WorkboardTrackerStatusData = 'connected' | 'needs-auth' | 'syncing'
+
+interface WorkboardTrackerSourceData {
+  id: string
+  type: WorkboardTrackerTypeData
+  name: string
+  status: WorkboardTrackerStatusData
+  scope: string
+  syncedAt: string
+  candidateCount: number
+}
+
+type WorkboardIssueStateData =
+  | 'candidate'
+  | 'ready'
+  | 'running'
+  | 'blocked'
+  | 'review'
+  | 'done'
+  | 'failed'
+
+type WorkboardIssuePriorityData = 'urgent' | 'high' | 'medium' | 'low'
+
+type WorkboardMappingStatusData =
+  | 'mapped'
+  | 'needs-mapping'
+  | 'project-not-ready'
+
+interface WorkboardIssueCandidateData {
+  id: string
+  trackerType: WorkboardTrackerTypeData
+  trackerName: string
+  externalKey: string
+  title: string
+  projectName: string | null
+  mappingStatus: WorkboardMappingStatusData
+  mappingRule: string
+  state: WorkboardIssueStateData
+  priority: WorkboardIssuePriorityData
+  labels: string[]
+  estimate: string
+  summary: string
+  updatedAt: string
+}
+
+type WorkboardSandcastleStatusData =
+  | 'ready'
+  | 'missing-sandcastle'
+  | 'auth-risk'
+  | 'needs-docker'
+
+interface WorkboardSandcastleCheckData {
+  id: string
+  label: string
+  state: 'pass' | 'warn' | 'fail'
+}
+
+interface WorkboardProjectGroupData {
+  id: string
+  projectId: string
+  projectName: string
+  repoPath: string
+  trackerScopes: string[]
+  workflow: 'sequential reviewer' | 'simple loop' | 'parallel planner'
+  policy: 'safe smoke' | 'review-heavy' | 'parallel review'
+  sandcastleStatus: WorkboardSandcastleStatusData
+  checks: WorkboardSandcastleCheckData[]
+  candidateIds: string[]
+  selectedIssueIds: string[]
+}
+
+type WorkboardRunStatusData =
+  | 'queued'
+  | 'starting'
+  | 'running'
+  | 'blocked'
+  | 'review'
+  | 'done'
+  | 'failed'
+  | 'stopping'
+  | 'stopped'
+
+type WorkboardStageRoleData =
+  | 'sync'
+  | 'planner'
+  | 'implementer'
+  | 'reviewer'
+  | 'writeback'
+  | 'merger'
+
+type WorkboardStageStatusData =
+  | 'waiting'
+  | 'running'
+  | 'blocked'
+  | 'done'
+  | 'failed'
+  | 'stopping'
+  | 'stopped'
+
+interface WorkboardStageRunData {
+  id: string
+  role: WorkboardStageRoleData
+  status: WorkboardStageStatusData
+  provider: 'Claude Code' | 'Codex' | 'Convergence'
+  model: string
+  iteration: number
+  maxIterations: number
+  logPreview: string
+  elapsed: string
+}
+
+interface WorkboardRunEventData {
+  id: string
+  stageId: string | null
+  sequence: number
+  type: string
+  message: string
+  createdAt: string
+}
+
+interface WorkboardActiveRunData {
+  id: string
+  projectName: string
+  repoPath: string
+  workflow: WorkboardProjectGroupData['workflow']
+  policy: WorkboardProjectGroupData['policy']
+  status: WorkboardRunStatusData
+  branchStrategy: 'explicit branch' | 'merge-to-head'
+  branchName: string
+  sandbox: 'Docker' | 'No sandbox'
+  progressPercent: number
+  issueIds: string[]
+  currentStage: WorkboardStageRoleData
+  startedAt: string
+  logFilePath: string
+  commits: string[]
+  summary: string
+  stages: WorkboardStageRunData[]
+  recentEvents: WorkboardRunEventData[]
+}
+
+interface WorkboardSnapshotData {
+  trackerSources: WorkboardTrackerSourceData[]
+  candidates: WorkboardIssueCandidateData[]
+  projectGroups: WorkboardProjectGroupData[]
+  activeRuns: WorkboardActiveRunData[]
+  selectedRunId: string
+}
+
+interface StartWorkboardRunInputData {
+  projectId: string
+  issueIds: string[]
+  providerId?: 'claude-code' | 'codex'
+  model?: string
+  effort?: string
+  maxIterations?: number
+  sandboxMode?: string
+}
+
+interface WorkboardStartRunResultData {
+  runId: string
+  snapshot: WorkboardSnapshotData
+}
+
+interface UpsertWorkboardTrackerSourceInputData {
+  id?: string
+  type: WorkboardTrackerTypeData
+  name: string
+  enabled?: boolean
+  auth?: Record<string, unknown>
+  sync?: Record<string, unknown>
+}
+
+interface WorkboardTrackerSourceRecordData {
+  id: string
+  type: WorkboardTrackerTypeData
+  name: string
+  enabled: boolean
+  auth: Record<string, unknown>
+  sync: Record<string, unknown>
+  lastSyncAt: string | null
+  lastSyncError: string | null
+  createdAt: string
+  updatedAt: string
+}
+
+interface UpsertWorkboardProjectMappingInputData {
+  id?: string
+  sourceId: string
+  name: string
+  enabled?: boolean
+  priority?: number
+  matcher?: Record<string, unknown>
+  projectId: string
+  workflowPolicy?: string
+  sandboxMode?: string
+  branchPrefix?: string
+  stageDefaults?: Record<string, unknown>
+}
+
+interface WorkboardProjectMappingRecordData {
+  id: string
+  sourceId: string
+  name: string
+  enabled: boolean
+  priority: number
+  matcher: Record<string, unknown>
+  projectId: string
+  workflowPolicy: string
+  sandboxMode: string
+  branchPrefix: string
+  stageDefaults: Record<string, unknown>
+  createdAt: string
+  updatedAt: string
+}
+
 interface ElectronAPI {
   system: {
     getInfo: () => SystemInfo
@@ -855,6 +1072,26 @@ interface ElectronAPI {
       options?: SkillCatalogOptions,
     ) => Promise<ProjectSkillCatalog>
     readDetails: (input: SkillDetailsRequest) => Promise<SkillDetails>
+  }
+  workboard: {
+    getSnapshot: () => Promise<WorkboardSnapshotData>
+    syncSources: () => Promise<WorkboardSnapshotData>
+    listTrackerSources: () => Promise<WorkboardTrackerSourceRecordData[]>
+    upsertTrackerSource: (
+      input: UpsertWorkboardTrackerSourceInputData,
+    ) => Promise<WorkboardTrackerSourceRecordData>
+    listProjectMappings: () => Promise<WorkboardProjectMappingRecordData[]>
+    upsertProjectMapping: (
+      input: UpsertWorkboardProjectMappingInputData,
+    ) => Promise<WorkboardProjectMappingRecordData>
+    startRun: (
+      input: StartWorkboardRunInputData,
+    ) => Promise<WorkboardStartRunResultData>
+    stopRun: (runId: string) => Promise<WorkboardSnapshotData>
+    getRunEvents: (runId: string) => Promise<unknown[]>
+    onSnapshotUpdated: (
+      callback: (snapshot: WorkboardSnapshotData) => void,
+    ) => () => void
   }
   feedback: {
     submit: (

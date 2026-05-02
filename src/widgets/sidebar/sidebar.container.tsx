@@ -27,11 +27,16 @@ import { buildNeedsYouSummary } from './needs-you.presentational'
 import { ProjectTree } from './project-tree.container'
 import { ProjectSwitcher } from './project-switcher.presentational'
 import { Button } from '@/shared/ui/button'
-import { BarChart3, Plus, Settings } from 'lucide-react'
+import { BarChart3, Plus, Settings, Workflow } from 'lucide-react'
+import { cn } from '@/shared/lib/cn.pure'
+
+type SidebarSurface = 'workspace' | 'ralph'
 
 interface SidebarProps {
   onSelectSession: (id: string) => void
   activeSessionId: string | null
+  activeSurface: SidebarSurface
+  onSelectSurface: (surface: SidebarSurface) => void
 }
 
 interface AttentionSession {
@@ -44,6 +49,8 @@ interface AttentionSession {
 export const Sidebar: FC<SidebarProps> = ({
   onSelectSession,
   activeSessionId,
+  activeSurface,
+  onSelectSurface,
 }) => {
   const projects = useProjectStore((s) => s.projects)
   const activeProject = useProjectStore((s) => s.activeProject)
@@ -169,6 +176,7 @@ export const Sidebar: FC<SidebarProps> = ({
   }
 
   const handleSelectProject = async (projectId: string) => {
+    onSelectSurface('workspace')
     prepareForProject(projectId)
     await setActiveProject(projectId)
   }
@@ -184,6 +192,22 @@ export const Sidebar: FC<SidebarProps> = ({
           style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
         >
           <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className={cn(
+              'h-8 w-8',
+              activeSurface === 'ralph' && 'bg-accent text-foreground',
+            )}
+            title="Agent Workboard"
+            aria-label="Open Agent Workboard"
+            aria-pressed={activeSurface === 'ralph'}
+            onClick={() => onSelectSurface('ralph')}
+          >
+            <Workflow className="h-4 w-4" />
+          </Button>
+          <Button
+            type="button"
             variant="ghost"
             size="icon"
             className="h-8 w-8"

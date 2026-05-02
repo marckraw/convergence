@@ -13,6 +13,7 @@ export type DialogKind =
 
 export type AppSettingsDialogSection =
   | 'session-defaults'
+  | 'workboard'
   | 'session-naming'
   | 'session-forking'
   | 'notifications'

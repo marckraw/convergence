@@ -29,6 +29,7 @@ import { NotificationsFields } from './notifications-fields.presentational'
 import { UpdatesFields } from './updates-fields.presentational'
 import { DebugLoggingFields } from './debug-logging-fields.presentational'
 import { AnalyticsInsightsContainer } from '../analytics-insights'
+import { WorkboardSettings } from '../workboard-settings'
 
 export type AppSettingsSectionId = AppSettingsDialogSection
 
@@ -124,6 +125,14 @@ export const AppSettingsDialog: FC<AppSettingsDialogProps> = ({
       description:
         'Choose the provider stack Convergence should prefill whenever you start a new session.',
     },
+    {
+      id: 'workboard',
+      navLabel: 'Workboard',
+      navSummary: 'Trackers, tokens, and project routing',
+      title: 'Agent Workboard',
+      description:
+        'Configure global Linear and Jira sources, then route synced issues to local Convergence projects.',
+    },
     ...(providers.length > 0
       ? [
           {
@@ -200,6 +209,8 @@ export const AppSettingsDialog: FC<AppSettingsDialogProps> = ({
             onEffortChange={onEffortChange}
           />
         )
+      case 'workboard':
+        return <WorkboardSettings />
       case 'session-naming':
         return (
           <NamingModelDefaultsFields
@@ -270,7 +281,7 @@ export const AppSettingsDialog: FC<AppSettingsDialogProps> = ({
         <DialogHeader className="border-b border-border/70 px-6 py-5 pr-14">
           <DialogTitle>Settings</DialogTitle>
           <DialogDescription>
-            App-wide defaults used every time you start a new session.
+            App-wide configuration for Convergence.
           </DialogDescription>
         </DialogHeader>
 
@@ -373,16 +384,23 @@ export const AppSettingsDialog: FC<AppSettingsDialogProps> = ({
               <Button
                 type="button"
                 variant={
-                  currentSection.id === 'insights' ? 'default' : 'outline'
+                  currentSection.id === 'insights' ||
+                  currentSection.id === 'workboard'
+                    ? 'default'
+                    : 'outline'
                 }
                 size="sm"
                 onClick={onCancel}
                 disabled={isSaving}
               >
-                {currentSection.id === 'insights' ? 'Done' : 'Cancel'}
+                {currentSection.id === 'insights' ||
+                currentSection.id === 'workboard'
+                  ? 'Done'
+                  : 'Cancel'}
               </Button>
             </DialogClose>
-            {currentSection.id === 'insights' ? null : (
+            {currentSection.id === 'insights' ||
+            currentSection.id === 'workboard' ? null : (
               <Button
                 type="button"
                 size="sm"

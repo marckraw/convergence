@@ -1,6 +1,36 @@
 {
-  "currentVersion": "0.28.6",
+  "currentVersion": "0.30.0",
   "releases": [
+    {
+      "version": "0.30.0",
+      "date": null,
+      "notes": "### Minor Changes\n\n- 4628d1c: Add local-only analytics Insights for reviewing personal Convergence usage, including session and message totals, ChartGPU-backed activity charts, streak tracking, provider/project breakdowns, and opt-in generated Work Style summaries."
+    },
+    {
+      "version": "0.29.4",
+      "date": null,
+      "notes": "### Patch Changes\n\n- ad21133: Make selection and hover highlights visible in light mode by retuning `--accent` from `oklch(0.955 0 0)` (a near-white that gave only ~0.03 lightness delta against the popover surface) to a warm pale yellow `oklch(0.915 0.075 95)` with a matching darker `--accent-foreground`. The Command palette selected row, searchable-select highlight, dropdown focus state, button ghost/outline hover, sidebar active session, and selected file rows are now clearly distinguishable on the light theme. Dark mode is unchanged."
+    },
+    {
+      "version": "0.29.3",
+      "date": null,
+      "notes": "### Patch Changes\n\n- 361472d: Reduce static-analysis noise by keeping module-local helpers private."
+    },
+    {
+      "version": "0.29.2",
+      "date": null,
+      "notes": "### Patch Changes\n\n- a8d8e11: Configure Fallow for Electron entry points and prune unused static-analysis surface area."
+    },
+    {
+      "version": "0.29.1",
+      "date": null,
+      "notes": "### Patch Changes\n\n- 58067ef: Fix unreadable warning chips in light mode by introducing semantic `--warning` and `--warning-foreground` design tokens. The Skills dialog (and 16 other call sites) previously used `text-amber-100` / `text-amber-200` without a light-mode variant, which rendered as near-invisible pale text on light backgrounds. All amber warning utilities are now expressed as `bg-warning/X`, `border-warning/X`, `text-warning`, and `text-warning-foreground`, so retuning the warning hue is a one-line change in `src/app/global.css`."
+    },
+    {
+      "version": "0.29.0",
+      "date": null,
+      "notes": "### Minor Changes\n\n- 9a2bd21: Project-level context items can now be injected into agent sessions. Define reusable text blocks per project under Project Settings → Context (label, body, boot vs. every-turn re-inject mode), attach them at session create with a chip strip, and the active session shows an \"Every-turn context active\" badge above the composer when items are flagged for re-injection.\n\n  Three injection paths land in v1, all provider-neutral (Claude Code, Codex, PI):\n  - **Boot**: attached items are wrapped as `<{project-slug}:context>...</{project-slug}:context>`, emitted as a sequence-1 `note` ConversationItem, and prepended to the user's first message before the provider sees it.\n  - **Every-turn**: items flagged `every-turn` are read fresh per send and prepended to every user-initiated message — typed turns, queued follow-ups, and input-request answers — so an edit between turns is reflected on the next send. Approval responses, tool results, and assistant continuations are explicitly excluded.\n  - **Mention**: type `::name` in the composer to open a filtered picker that inlines the chosen item's body verbatim. Nothing is persisted as a token; the expanded text is what the provider sees and what the transcript stores.\n\n  Past sends are immutable: editing or deleting a project context item never rewrites prior transcript entries. Schema additions: `project_context_items` and `session_context_attachments` (both with `ON DELETE CASCADE`)."
+    },
     {
       "version": "0.28.6",
       "date": null,

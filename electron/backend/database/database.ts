@@ -246,6 +246,159 @@ const SCHEMA = `
 
   CREATE INDEX IF NOT EXISTS idx_analytics_profile_snapshots_range_created
     ON analytics_profile_snapshots(range_preset, created_at DESC);
+
+  CREATE TABLE IF NOT EXISTS workboard_tracker_sources (
+    id TEXT PRIMARY KEY,
+    type TEXT NOT NULL CHECK (type IN ('linear', 'jira')),
+    name TEXT NOT NULL,
+    enabled INTEGER NOT NULL DEFAULT 1,
+    auth_json TEXT NOT NULL DEFAULT '{}',
+    sync_json TEXT NOT NULL DEFAULT '{}',
+    last_sync_at TEXT,
+    last_sync_error TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+
+  CREATE TABLE IF NOT EXISTS workboard_tracker_issues (
+    id TEXT PRIMARY KEY,
+    source_id TEXT NOT NULL,
+    external_id TEXT NOT NULL,
+    external_key TEXT NOT NULL,
+    url TEXT NOT NULL,
+    title TEXT NOT NULL,
+    body TEXT NOT NULL DEFAULT '',
+    labels_json TEXT NOT NULL DEFAULT '[]',
+    status TEXT NOT NULL DEFAULT '',
+    priority TEXT,
+    assignee TEXT,
+    updated_at_external TEXT,
+    raw_json TEXT NOT NULL DEFAULT '{}',
+    last_seen_at TEXT NOT NULL DEFAULT (datetime('now')),
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+    FOREIGN KEY (source_id) REFERENCES workboard_tracker_sources(id) ON DELETE CASCADE,
+    UNIQUE(source_id, external_id)
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_workboard_tracker_issues_source
+    ON workboard_tracker_issues(source_id, updated_at_external DESC);
+
+  CREATE TABLE IF NOT EXISTS workboard_project_mappings (
+    id TEXT PRIMARY KEY,
+    source_id TEXT NOT NULL,
+    name TEXT NOT NULL,
+    enabled INTEGER NOT NULL DEFAULT 1,
+    priority INTEGER NOT NULL DEFAULT 0,
+    matcher_json TEXT NOT NULL DEFAULT '{}',
+    project_id TEXT NOT NULL,
+    workflow_policy TEXT NOT NULL DEFAULT 'simple-loop',
+    sandbox_mode TEXT NOT NULL DEFAULT 'docker',
+    branch_prefix TEXT NOT NULL DEFAULT 'sandcastle',
+    stage_defaults_json TEXT NOT NULL DEFAULT '{}',
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+    FOREIGN KEY (source_id) REFERENCES workboard_tracker_sources(id) ON DELETE CASCADE,
+    FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_workboard_project_mappings_source
+    ON workboard_project_mappings(source_id, priority DESC);
+
+  CREATE TABLE IF NOT EXISTS workboard_runs (
+    id TEXT PRIMARY KEY,
+    project_id TEXT NOT NULL,
+    status TEXT NOT NULL,
+    workflow_policy TEXT NOT NULL,
+    sandbox_mode TEXT NOT NULL,
+    branch_strategy TEXT NOT NULL,
+    branch_name TEXT NOT NULL,
+    repo_path TEXT NOT NULL,
+    log_root TEXT NOT NULL,
+    current_stage_id TEXT,
+    progress_json TEXT NOT NULL DEFAULT '{}',
+    error TEXT,
+    sandcastle_result_json TEXT NOT NULL DEFAULT '{}',
+    started_at TEXT,
+    ended_at TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+    FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_workboard_runs_project_status
+    ON workboard_runs(project_id, status, created_at DESC);
+
+  CREATE TABLE IF NOT EXISTS workboard_run_issues (
+    run_id TEXT NOT NULL,
+    tracker_issue_id TEXT NOT NULL,
+    sort_order INTEGER NOT NULL DEFAULT 0,
+    lane_status TEXT NOT NULL DEFAULT 'queued',
+    branch_name TEXT,
+    summary TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+    PRIMARY KEY (run_id, tracker_issue_id),
+    FOREIGN KEY (run_id) REFERENCES workboard_runs(id) ON DELETE CASCADE,
+    FOREIGN KEY (tracker_issue_id) REFERENCES workboard_tracker_issues(id) ON DELETE CASCADE
+  );
+
+  CREATE TABLE IF NOT EXISTS workboard_stages (
+    id TEXT PRIMARY KEY,
+    run_id TEXT NOT NULL,
+    role TEXT NOT NULL,
+    status TEXT NOT NULL,
+    provider_id TEXT NOT NULL,
+    model TEXT,
+    effort TEXT,
+    max_iterations INTEGER NOT NULL DEFAULT 1,
+    iteration_count INTEGER NOT NULL DEFAULT 0,
+    log_file_path TEXT NOT NULL DEFAULT '',
+    commit_shas_json TEXT NOT NULL DEFAULT '[]',
+    started_at TEXT,
+    ended_at TEXT,
+    error TEXT,
+    result_json TEXT NOT NULL DEFAULT '{}',
+    FOREIGN KEY (run_id) REFERENCES workboard_runs(id) ON DELETE CASCADE
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_workboard_stages_run
+    ON workboard_stages(run_id, role);
+
+  CREATE TABLE IF NOT EXISTS workboard_events (
+    id TEXT PRIMARY KEY,
+    run_id TEXT NOT NULL,
+    stage_id TEXT,
+    sequence INTEGER NOT NULL,
+    type TEXT NOT NULL,
+    message TEXT NOT NULL,
+    payload_json TEXT NOT NULL DEFAULT '{}',
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    FOREIGN KEY (run_id) REFERENCES workboard_runs(id) ON DELETE CASCADE,
+    FOREIGN KEY (stage_id) REFERENCES workboard_stages(id) ON DELETE SET NULL,
+    UNIQUE(run_id, sequence)
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_workboard_events_run_sequence
+    ON workboard_events(run_id, sequence);
+
+  CREATE TABLE IF NOT EXISTS workboard_writebacks (
+    id TEXT PRIMARY KEY,
+    run_id TEXT NOT NULL,
+    tracker_issue_id TEXT NOT NULL,
+    operation TEXT NOT NULL,
+    status TEXT NOT NULL,
+    external_update_id TEXT,
+    payload_json TEXT NOT NULL DEFAULT '{}',
+    error TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+    FOREIGN KEY (run_id) REFERENCES workboard_runs(id) ON DELETE CASCADE,
+    FOREIGN KEY (tracker_issue_id) REFERENCES workboard_tracker_issues(id) ON DELETE CASCADE
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_workboard_writebacks_run
+    ON workboard_writebacks(run_id, status);
 `
 
 function ensureAttachmentsTableNoFk(database: Database.Database): void {

@@ -229,6 +229,30 @@ contextBridge.exposeInMainWorld('electronAPI', {
     readDetails: (input: unknown) =>
       ipcRenderer.invoke('skills:readDetails', input),
   },
+  workboard: {
+    getSnapshot: () => ipcRenderer.invoke('workboard:getSnapshot'),
+    syncSources: () => ipcRenderer.invoke('workboard:syncSources'),
+    listTrackerSources: () =>
+      ipcRenderer.invoke('workboard:listTrackerSources'),
+    upsertTrackerSource: (input: unknown) =>
+      ipcRenderer.invoke('workboard:upsertTrackerSource', input),
+    listProjectMappings: () =>
+      ipcRenderer.invoke('workboard:listProjectMappings'),
+    upsertProjectMapping: (input: unknown) =>
+      ipcRenderer.invoke('workboard:upsertProjectMapping', input),
+    startRun: (input: unknown) =>
+      ipcRenderer.invoke('workboard:startRun', input),
+    stopRun: (runId: string) => ipcRenderer.invoke('workboard:stopRun', runId),
+    getRunEvents: (runId: string) =>
+      ipcRenderer.invoke('workboard:getRunEvents', runId),
+    onSnapshotUpdated: (callback: (snapshot: unknown) => void) => {
+      const handler = (_event: unknown, snapshot: unknown) => callback(snapshot)
+      ipcRenderer.on('workboard:snapshotUpdated', handler)
+      return () => {
+        ipcRenderer.removeListener('workboard:snapshotUpdated', handler)
+      }
+    },
+  },
   feedback: {
     submit: (input: {
       title: string

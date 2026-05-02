@@ -1,4 +1,5 @@
 export type { Project } from './project.types'
+export { projectApi } from './project.api'
 export { useProjectStore } from './project.model'
 export type { ProjectStore } from './project.model'
 export {

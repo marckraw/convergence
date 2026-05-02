@@ -13,6 +13,9 @@ import { ProjectService } from '../backend/project/project.service'
 import { InitiativeService } from '../backend/initiative/initiative.service'
 import { InitiativeSynthesisService } from '../backend/initiative/initiative-synthesis.service'
 import { ProjectContextService } from '../backend/project-context/project-context.service'
+import { WorkboardRepository } from '../backend/workboard/workboard.repository'
+import { WorkboardService } from '../backend/workboard/workboard.service'
+import { registerWorkboardIpcHandlers } from '../backend/workboard/workboard.ipc'
 import { StateService } from '../backend/state/state.service'
 import { WorkspaceService } from '../backend/workspace/workspace.service'
 import { GitService } from '../backend/git/git.service'
@@ -169,6 +172,7 @@ async function startApp(): Promise<void> {
   const projectService = new ProjectService(db)
   const initiativeService = new InitiativeService(db)
   const projectContextService = new ProjectContextService(db)
+  const workboardService = new WorkboardService(new WorkboardRepository(db))
   const sessionContextInjectionService = new SessionContextInjectionService(
     db,
     projectContextService,
@@ -418,6 +422,7 @@ async function startApp(): Promise<void> {
   })
   registerSessionForkIpcHandlers(sessionForkService)
   registerFeedbackIpcHandlers(feedbackService)
+  registerWorkboardIpcHandlers(workboardService)
 
   registerIpcHandlers(
     projectService,
