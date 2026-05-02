@@ -1,5 +1,5 @@
 ---
-"convergence": patch
+'convergence': patch
 ---
 
 Recover stale approval requests when the provider session is no longer active
