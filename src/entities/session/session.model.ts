@@ -150,11 +150,42 @@ function upsertConversationItem(
   items: ConversationItem[],
   nextItem: ConversationItem,
 ): ConversationItem[] {
-  const nextItems = items.some((item) => item.id === nextItem.id)
-    ? items.map((item) => (item.id === nextItem.id ? nextItem : item))
-    : [...items, nextItem]
+  const existingIndex = items.findIndex((item) => item.id === nextItem.id)
 
-  return [...nextItems].sort((left, right) => left.sequence - right.sequence)
+  if (existingIndex >= 0) {
+    const existing = items[existingIndex]
+    if (existing?.sequence === nextItem.sequence) {
+      const nextItems = items.slice()
+      nextItems[existingIndex] = nextItem
+      return nextItems
+    }
+
+    return insertConversationItem(
+      items.filter((item) => item.id !== nextItem.id),
+      nextItem,
+    )
+  }
+
+  return insertConversationItem(items, nextItem)
+}
+
+function insertConversationItem(
+  items: ConversationItem[],
+  nextItem: ConversationItem,
+): ConversationItem[] {
+  const last = items[items.length - 1]
+  if (!last || last.sequence <= nextItem.sequence) {
+    return [...items, nextItem]
+  }
+
+  const insertIndex = items.findIndex(
+    (item) => item.sequence > nextItem.sequence,
+  )
+  if (insertIndex < 0) {
+    return [...items, nextItem]
+  }
+
+  return [...items.slice(0, insertIndex), nextItem, ...items.slice(insertIndex)]
 }
 
 function upsertQueuedInput(

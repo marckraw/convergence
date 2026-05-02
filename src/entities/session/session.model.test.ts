@@ -65,6 +65,30 @@ function makeSession(overrides: {
   }
 }
 
+function makeConversationItem(overrides: {
+  id: string
+  sequence: number
+  text?: string
+}) {
+  return {
+    id: overrides.id,
+    sessionId: 'session-1',
+    sequence: overrides.sequence,
+    turnId: 'turn-1',
+    kind: 'message' as const,
+    state: 'complete' as const,
+    actor: 'assistant' as const,
+    text: overrides.text ?? `Message ${overrides.sequence}`,
+    createdAt: '2026-01-01T00:00:00.000Z',
+    updatedAt: '2026-01-01T00:00:00.000Z',
+    providerMeta: {
+      providerId: 'claude-code',
+      providerItemId: null,
+      providerEventType: 'assistant',
+    },
+  }
+}
+
 describe('useSessionStore', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -162,6 +186,61 @@ describe('useSessionStore', () => {
     expect(mockElectronAPI.session.getAllSummaries).toHaveBeenCalledOnce()
     expect(mockElectronAPI.session.getNeedsYouDismissals).toHaveBeenCalledOnce()
     expect(useSessionStore.getState().globalSessions).toHaveLength(2)
+  })
+
+  it('upserts active conversation patches without reordering existing items', () => {
+    const first = makeConversationItem({ id: 'item-1', sequence: 1 })
+    const second = makeConversationItem({ id: 'item-2', sequence: 2 })
+    useSessionStore.setState({
+      activeSessionId: 'session-1',
+      activeConversationSessionId: 'session-1',
+      activeConversation: [first, second],
+    })
+
+    useSessionStore.getState().handleConversationPatched({
+      sessionId: 'session-1',
+      op: 'patch',
+      item: makeConversationItem({
+        id: 'item-2',
+        sequence: 2,
+        text: 'Updated second message',
+      }),
+    })
+
+    expect(
+      useSessionStore
+        .getState()
+        .activeConversation.map((item) => [
+          item.id,
+          item.kind === 'message' ? item.text : null,
+        ]),
+    ).toEqual([
+      ['item-1', 'Message 1'],
+      ['item-2', 'Updated second message'],
+    ])
+  })
+
+  it('inserts out-of-order conversation adds by sequence', () => {
+    useSessionStore.setState({
+      activeSessionId: 'session-1',
+      activeConversationSessionId: 'session-1',
+      activeConversation: [
+        makeConversationItem({ id: 'item-1', sequence: 1 }),
+        makeConversationItem({ id: 'item-3', sequence: 3 }),
+      ],
+    })
+
+    useSessionStore.getState().handleConversationPatched({
+      sessionId: 'session-1',
+      op: 'add',
+      item: makeConversationItem({ id: 'item-2', sequence: 2 }),
+    })
+
+    expect(
+      useSessionStore
+        .getState()
+        .activeConversation.map((item) => item.sequence),
+    ).toEqual([1, 2, 3])
   })
 
   it('loads and prunes persisted needs-you dismissals', async () => {

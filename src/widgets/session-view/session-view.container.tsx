@@ -32,13 +32,12 @@ import {
 import { AttentionIndicator } from '@/shared/ui/attention-indicator.presentational'
 import { ContextWindowIndicator } from '@/shared/ui/context-window-indicator.presentational'
 import { cn } from '@/shared/lib/cn.pure'
-import { ConversationItem } from './conversation-item.container'
 import { ChangedFilesPanel } from './changed-files-panel.container'
 import {
   InitiativeContextPanel,
   type InitiativeContextAttemptView,
 } from './initiative-context-panel.presentational'
-import { buildConversationRenderPlan } from './session-transcript-render-plan.pure'
+import { SessionTranscript } from './session-transcript.container'
 
 const CHANGED_FILES_MIN_WIDTH = 320
 const CHANGED_FILES_MAX_WIDTH = 960
@@ -97,7 +96,6 @@ export const SessionView: FC = () => {
   const [branchName, setBranchName] = useState<string | null>(null)
   const changedFilesDraggingRef = useRef(false)
   const sessionRootRef = useRef<HTMLDivElement>(null)
-  const transcriptEndRef = useRef<HTMLDivElement>(null)
   const changedFilesExpanded = changedFilesMode === 'overlay'
 
   const session = sessions.find((s) => s.id === activeSessionId) ?? null
@@ -149,43 +147,6 @@ export const SessionView: FC = () => {
       }),
     [globalSessions, linkedInitiativeAttempts, projects, sessions, workspaces],
   )
-
-  const turnStartedAtById = useMemo(() => {
-    const startedAtById = new Map<string, string>()
-    for (const item of activeConversation) {
-      if (item.turnId && !startedAtById.has(item.turnId)) {
-        startedAtById.set(item.turnId, item.createdAt)
-      }
-    }
-    return startedAtById
-  }, [activeConversation])
-  const conversationRenderPlan = useMemo(
-    () => buildConversationRenderPlan(activeConversation),
-    [activeConversation],
-  )
-  const actionableApprovalId = useMemo(() => {
-    if (
-      session?.status !== 'running' ||
-      session.attention !== 'needs-approval'
-    ) {
-      return null
-    }
-
-    return (
-      [...conversationRenderPlan]
-        .reverse()
-        .find((candidate) => candidate.item.kind === 'approval-request')?.item
-        .id ?? null
-    )
-  }, [conversationRenderPlan, session?.attention, session?.status])
-
-  const scrollToBottom = useCallback(() => {
-    transcriptEndRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [])
-
-  useEffect(() => {
-    scrollToBottom()
-  }, [activeConversation.length, scrollToBottom])
 
   useEffect(() => {
     if (!session) return
@@ -514,73 +475,12 @@ export const SessionView: FC = () => {
           </div>
         </div>
 
-        {/* Transcript */}
-        <div className="app-scrollbar flex-1 overflow-y-auto px-4">
-          <div className="mx-auto max-w-2xl py-4">
-            {conversationRenderPlan.map((renderEntry, i) => {
-              const entry = renderEntry.item
-              const isActionableApproval =
-                entry.kind === 'approval-request' &&
-                entry.id === actionableApprovalId
-              const prev = conversationRenderPlan[i - 1]?.item ?? null
-              const turnBoundary =
-                entry.turnId !== null &&
-                (prev === null || prev.turnId !== entry.turnId)
-              const turnSequence = turnBoundary
-                ? conversationRenderPlan.slice(0, i + 1).reduce<{
-                    count: number
-                    seen: Set<string>
-                  }>(
-                    (acc, plannedEntry) => {
-                      const item = plannedEntry.item
-                      if (item.turnId && !acc.seen.has(item.turnId)) {
-                        acc.seen.add(item.turnId)
-                        acc.count += 1
-                      }
-                      return acc
-                    },
-                    { count: 0, seen: new Set() },
-                  ).count
-                : null
-
-              return (
-                <div key={entry.id}>
-                  {turnBoundary && (
-                    <div
-                      className="my-3 flex items-center gap-2 text-[10px] uppercase tracking-[0.2em] text-muted-foreground"
-                      data-turn-id={entry.turnId}
-                    >
-                      <span className="h-px flex-1 bg-border" />
-                      <span className="font-mono">Turn {turnSequence}</span>
-                      <span className="h-px flex-1 bg-border" />
-                    </div>
-                  )}
-                  <ConversationItem
-                    entry={entry}
-                    sessionId={session.id}
-                    injectedContextText={renderEntry.injectedContextText}
-                    turnStartedAt={
-                      entry.turnId
-                        ? (turnStartedAtById.get(entry.turnId) ?? null)
-                        : null
-                    }
-                    onApprove={
-                      isActionableApproval
-                        ? () => approveSession(session.id)
-                        : undefined
-                    }
-                    onDeny={
-                      isActionableApproval
-                        ? () => denySession(session.id)
-                        : undefined
-                    }
-                  />
-                </div>
-              )
-            })}
-            <div ref={transcriptEndRef} />
-          </div>
-        </div>
+        <SessionTranscript
+          session={session}
+          conversationItems={activeConversation}
+          onApprove={approveSession}
+          onDeny={denySession}
+        />
 
         {/* Composer */}
         <div className="shrink-0 px-4 py-3">

@@ -12,6 +12,27 @@ vi.mock('@/features/composer', () => ({
   ComposerContainer: () => <div>composer</div>,
 }))
 
+vi.mock('@tanstack/react-virtual', () => ({
+  useVirtualizer: (options: {
+    count: number
+    estimateSize: (index: number) => number
+    getItemKey?: (index: number) => string | number | bigint
+  }) => ({
+    getVirtualItems: () =>
+      Array.from({ length: options.count }, (_, index) => ({
+        index,
+        key: options.getItemKey?.(index) ?? index,
+        start: index * options.estimateSize(index),
+      })),
+    getTotalSize: () =>
+      Array.from({ length: options.count }, (_, index) =>
+        options.estimateSize(index),
+      ).reduce((total, size) => total + size, 0),
+    measureElement: vi.fn(),
+    scrollToIndex: vi.fn(),
+  }),
+}))
+
 const initiative = {
   id: 'initiative-1',
   title: 'Agent-native initiatives',
@@ -342,7 +363,7 @@ describe('SessionView changed files drawer', () => {
     expect(screen.getByRole('button', { name: 'Deny' })).toBeInTheDocument()
   })
 
-  it('renders boot context as revealable metadata on the first user message', () => {
+  it('renders boot context as revealable metadata on the first user message', async () => {
     useSessionStore.setState((state) => ({
       ...state,
       activeConversation: [
@@ -390,7 +411,7 @@ describe('SessionView changed files drawer', () => {
     )
 
     expect(
-      screen.getByText('do you have a chaperone project path ?'),
+      await screen.findByText('do you have a chaperone project path ?'),
     ).toBeInTheDocument()
     expect(screen.getByTestId('injected-context-details')).not.toHaveAttribute(
       'open',
