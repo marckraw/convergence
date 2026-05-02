@@ -1,5 +1,11 @@
 # convergence
 
+## 0.31.2
+
+### Patch Changes
+
+- 6c01676: Fix Codex provider update command in the Providers panel. The previous `codex --upgrade` flag does not exist in the Codex CLI; replaced it with `npm install -g @openai/codex@latest`, matching the install command and reliably upgrading any npm-managed installation.
+
 ## 0.31.1
 
 ### Patch Changes
