@@ -1,5 +1,11 @@
 # convergence
 
+## 0.31.3
+
+### Patch Changes
+
+- bacf03f: Fix Codex MCP approvals so elicitation requests appear as actionable approval cards in Convergence instead of leaving sessions stuck while Codex waits for a response.
+
 ## 0.31.2
 
 ### Patch Changes
