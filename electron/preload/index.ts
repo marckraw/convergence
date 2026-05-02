@@ -344,6 +344,17 @@ contextBridge.exposeInMainWorld('electronAPI', {
       }
     },
   },
+  providerDebug: {
+    subscribe: (callback: (entry: unknown) => void) => {
+      const handler = (_event: unknown, payload: unknown) => callback(payload)
+      ipcRenderer.on('provider:debug:event', handler)
+      return () => {
+        ipcRenderer.removeListener('provider:debug:event', handler)
+      }
+    },
+    list: (sessionId: string) =>
+      ipcRenderer.invoke('provider:debug:list', sessionId),
+  },
   updates: {
     getStatus: () => ipcRenderer.invoke('updates:get-status'),
     getAppVersion: () => ipcRenderer.invoke('updates:get-app-version'),

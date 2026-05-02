@@ -912,6 +912,10 @@ interface ElectronAPI {
   taskProgress: {
     subscribe: (callback: (event: TaskProgressEvent) => void) => () => void
   }
+  providerDebug: {
+    subscribe: (callback: (entry: ProviderDebugEntry) => void) => () => void
+    list: (sessionId: string) => Promise<ProviderDebugEntry[]>
+  }
   terminal: {
     create: (input: {
       sessionId: string
@@ -993,6 +997,27 @@ type TaskProgressEvent =
       at: number
       outcome: TaskProgressOutcome
     }
+
+type ProviderDebugChannel =
+  | 'notification'
+  | 'response'
+  | 'request'
+  | 'event'
+  | 'stdout'
+  | 'stderr'
+  | 'lifecycle'
+
+interface ProviderDebugEntry {
+  sessionId: string
+  providerId: string
+  at: number
+  direction: 'in' | 'out'
+  channel: ProviderDebugChannel
+  method?: string
+  payload?: unknown
+  bytes?: number
+  note?: string
+}
 
 interface NotificationEventPrefsData {
   finished: boolean

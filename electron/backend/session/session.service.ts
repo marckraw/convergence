@@ -103,6 +103,7 @@ export class SessionService {
   private attentionObserver: SessionAttentionObserver | null = null
   private turnCapture: TurnCaptureService | null = null
   private contextInjection: SessionContextInjectionService | null = null
+  private onSessionTerminated: ((sessionId: string) => void) | null = null
 
   constructor(
     private db: Database.Database,
@@ -141,6 +142,10 @@ export class SessionService {
 
   setAttentionObserver(observer: SessionAttentionObserver): void {
     this.attentionObserver = observer
+  }
+
+  setSessionTerminatedListener(listener: (sessionId: string) => void): void {
+    this.onSessionTerminated = listener
   }
 
   rename(id: string, name: string): Session {
@@ -674,6 +679,7 @@ export class SessionService {
     handle.stop()
     this.activeHandles.delete(id)
     this.livenessState.delete(id)
+    this.onSessionTerminated?.(id)
   }
 
   private applyDelta(sessionId: string, delta: SessionDelta): void {
@@ -1043,6 +1049,7 @@ export class SessionService {
     if (status === 'failed') {
       this.activeHandles.delete(sessionId)
       this.livenessState.delete(sessionId)
+      this.onSessionTerminated?.(sessionId)
       this.closeActiveTurn(sessionId, 'errored')
     } else if (status === 'completed') {
       const summary = this.getSummaryById(sessionId)
@@ -1051,6 +1058,7 @@ export class SessionService {
         !this.providers.get(summary.providerId)?.supportsContinuation
       ) {
         this.activeHandles.delete(sessionId)
+        this.onSessionTerminated?.(sessionId)
       }
       this.livenessState.delete(sessionId)
       this.closeActiveTurn(sessionId, 'completed')
@@ -1378,6 +1386,7 @@ export class SessionService {
     this.failPendingQueuedInputsForSession(session.id, reason)
     this.activeHandles.delete(session.id)
     this.livenessState.delete(session.id)
+    this.onSessionTerminated?.(session.id)
     this.closeActiveTurn(session.id, 'errored')
 
     if (notify) {

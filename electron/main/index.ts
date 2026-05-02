@@ -25,11 +25,11 @@ import { CodexProvider } from '../backend/provider/codex/codex-provider'
 import { PiProvider } from '../backend/provider/pi/pi-provider'
 import { ShellProvider } from '../backend/provider/shell/shell-provider'
 import { detectProviders } from '../backend/provider/detect'
+import { ProviderDebugService } from '../backend/provider-debug/provider-debug.service'
 import {
-  createConsoleDebugSink,
-  noopDebugSink,
-  type ProviderDebugSink,
-} from '../backend/provider-debug/provider-debug-sink'
+  broadcastProviderDebug,
+  registerProviderDebugIpcHandlers,
+} from '../backend/provider-debug/provider-debug.ipc'
 import { McpService } from '../backend/mcp/mcp.service'
 import { SkillsService } from '../backend/skills/skills.service'
 import { AppSettingsService } from '../backend/app-settings/app-settings.service'
@@ -200,9 +200,12 @@ async function startApp(): Promise<void> {
   }
 
   // Detect and register real providers
-  const debugSink: ProviderDebugSink = app.isPackaged
-    ? noopDebugSink
-    : createConsoleDebugSink()
+  const providerDebugService = new ProviderDebugService(broadcastProviderDebug)
+  registerProviderDebugIpcHandlers(providerDebugService)
+  sessionService.setSessionTerminatedListener((sessionId) => {
+    providerDebugService.drop(sessionId)
+  })
+  const debugSink = providerDebugService
   const detected = await detectProviders()
   for (const p of detected) {
     if (p.id === 'claude-code') {
