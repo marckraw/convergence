@@ -4,6 +4,10 @@ import { useProjectStore } from '@/entities/project'
 import { formatActivityLabel, useSessionStore } from '@/entities/session'
 import { useDialogStore } from '@/entities/dialog'
 import { useInitiativeStore } from '@/entities/initiative'
+import {
+  usePullRequestStore,
+  type WorkspacePullRequest,
+} from '@/entities/pull-request'
 import { gitApi, useWorkspaceStore } from '@/entities/workspace'
 import { ComposerContainer } from '@/features/composer'
 import { SessionDebugDrawerContainer } from '@/widgets/session-debug-drawer'
@@ -27,6 +31,7 @@ import {
   Square,
   FileCode,
   GitBranch,
+  GitPullRequest,
   TerminalSquare,
 } from 'lucide-react'
 import { AttentionIndicator } from '@/shared/ui/attention-indicator.presentational'
@@ -37,6 +42,7 @@ import {
   InitiativeContextPanel,
   type InitiativeContextAttemptView,
 } from './initiative-context-panel.presentational'
+import { PullRequestPanel } from './pull-request-panel.presentational'
 import { SessionTranscript } from './session-transcript.container'
 
 const CHANGED_FILES_MIN_WIDTH = 320
@@ -49,6 +55,19 @@ export const SessionView: FC = () => {
   const activeProject = useProjectStore((s) => s.activeProject)
   const projects = useProjectStore((s) => s.projects)
   const workspaces = useWorkspaceStore((s) => s.globalWorkspaces)
+  const pullRequestsByWorkspaceId = usePullRequestStore((s) => s.byWorkspaceId)
+  const pullRequestLoadingByWorkspaceId = usePullRequestStore(
+    (s) => s.loadingByWorkspaceId,
+  )
+  const pullRequestErrorsByWorkspaceId = usePullRequestStore(
+    (s) => s.errorByWorkspaceId,
+  )
+  const loadPullRequestByWorkspaceId = usePullRequestStore(
+    (s) => s.loadByWorkspaceId,
+  )
+  const refreshPullRequestForSession = usePullRequestStore(
+    (s) => s.refreshForSession,
+  )
   const activeSessionId = useSessionStore((s) => s.activeSessionId)
   const draftWorkspaceId = useSessionStore((s) => s.draftWorkspaceId)
   const sessions = useSessionStore((s) => s.sessions)
@@ -85,6 +104,7 @@ export const SessionView: FC = () => {
   )
   const hasTerminal = terminalTree !== null
   const [showChangedFiles, setShowChangedFiles] = useState(false)
+  const [showPullRequestPanel, setShowPullRequestPanel] = useState(false)
   const [changedFilesSide, setChangedFilesSide] = useState<'left' | 'right'>(
     'right',
   )
@@ -99,6 +119,19 @@ export const SessionView: FC = () => {
   const changedFilesExpanded = changedFilesMode === 'overlay'
 
   const session = sessions.find((s) => s.id === activeSessionId) ?? null
+  const sessionWorkspace = session?.workspaceId
+    ? (workspaces.find((entry) => entry.id === session.workspaceId) ?? null)
+    : null
+  const sessionWorktreeRemoved = !!sessionWorkspace?.worktreeRemovedAt
+  const workspacePullRequest = session?.workspaceId
+    ? (pullRequestsByWorkspaceId[session.workspaceId] ?? null)
+    : null
+  const pullRequestLoading = session?.workspaceId
+    ? (pullRequestLoadingByWorkspaceId[session.workspaceId] ?? false)
+    : false
+  const pullRequestError = session?.workspaceId
+    ? (pullRequestErrorsByWorkspaceId[session.workspaceId] ?? null)
+    : null
   const activityLabel = formatActivityLabel(session?.activity)
   const linkedSessionAttempts = session
     ? (attemptsBySessionId[session.id] ?? [])
@@ -180,6 +213,23 @@ export const SessionView: FC = () => {
     }
   }, [session?.workingDirectory])
 
+  useEffect(() => {
+    if (!session?.workspaceId) return
+    void loadPullRequestByWorkspaceId(session.workspaceId)
+  }, [loadPullRequestByWorkspaceId, session?.workspaceId])
+
+  useEffect(() => {
+    const sessionId = session?.id ?? null
+    const workspaceId = session?.workspaceId ?? null
+    if (!showPullRequestPanel || !sessionId) return
+    void refreshPullRequestForSession(sessionId, workspaceId)
+  }, [
+    refreshPullRequestForSession,
+    session?.id,
+    session?.workspaceId,
+    showPullRequestPanel,
+  ])
+
   // Hydrate attachment metadata for the active session so the transcript can render chips.
   const hydrateAttachments = useAttachmentStore((s) => s.hydrateForSession)
   useEffect(() => {
@@ -249,7 +299,20 @@ export const SessionView: FC = () => {
         return false
       }
 
+      setShowPullRequestPanel(false)
       return true
+    })
+  }, [])
+
+  const handleTogglePullRequestPanel = useCallback(() => {
+    setShowPullRequestPanel((current) => {
+      const next = !current
+      if (next) {
+        setShowChangedFiles(false)
+        setChangedFilesMode('docked')
+        setChangedFilesWidth(CHANGED_FILES_COMPACT_WIDTH)
+      }
+      return next
     })
   }, [])
 
@@ -344,10 +407,24 @@ export const SessionView: FC = () => {
                 Archived
               </span>
             )}
+            {sessionWorktreeRemoved && (
+              <span className="flex items-center gap-1 rounded-full border border-warning/30 bg-warning/10 px-2 py-0.5 text-[11px] text-warning-foreground">
+                Worktree removed
+              </span>
+            )}
             {branchName && (
               <span className="flex items-center gap-1 text-xs text-muted-foreground">
                 <GitBranch className="h-3 w-3" />
                 {branchName}
+              </span>
+            )}
+            {session.workspaceId && (
+              <span className="flex items-center gap-1 rounded-full border border-border/70 px-2 py-0.5 text-[11px] text-muted-foreground">
+                <GitPullRequest className="h-3 w-3" />
+                {formatPullRequestHeaderLabel(
+                  workspacePullRequest,
+                  pullRequestLoading,
+                )}
               </span>
             )}
             {activityLabel && (
@@ -370,8 +447,19 @@ export const SessionView: FC = () => {
               className="h-7 w-7"
               onClick={handleToggleChangedFiles}
               title="Changed files"
+              aria-pressed={showChangedFiles ? true : undefined}
             >
               <FileCode className="h-3.5 w-3.5" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7"
+              onClick={handleTogglePullRequestPanel}
+              title="Pull request status"
+              aria-pressed={showPullRequestPanel ? true : undefined}
+            >
+              <GitPullRequest className="h-3.5 w-3.5" />
             </Button>
             <Button
               variant="ghost"
@@ -484,12 +572,20 @@ export const SessionView: FC = () => {
 
         {/* Composer */}
         <div className="shrink-0 px-4 py-3">
-          {activeProject && (
-            <ComposerContainer
-              projectId={activeProject.id}
-              workspaceId={session.workspaceId}
-              activeSessionId={session.id}
-            />
+          {sessionWorktreeRemoved ? (
+            <div className="mx-auto w-full max-w-2xl rounded-md border border-warning/30 bg-warning/10 px-3 py-2 text-sm text-warning-foreground">
+              This workspace's git worktree was removed from disk. Conversation
+              history is preserved, but new agent work is disabled until restore
+              support exists.
+            </div>
+          ) : (
+            activeProject && (
+              <ComposerContainer
+                projectId={activeProject.id}
+                workspaceId={session.workspaceId}
+                activeSessionId={session.id}
+              />
+            )
           )}
         </div>
       </div>
@@ -502,6 +598,20 @@ export const SessionView: FC = () => {
             {renderChangedFilesPanel()}
           </div>
         )}
+
+      {showPullRequestPanel && !changedFilesExpanded && (
+        <PullRequestPanel
+          pullRequest={workspacePullRequest}
+          branchName={branchName}
+          loading={pullRequestLoading}
+          error={pullRequestError}
+          hasWorkspace={session.workspaceId !== null}
+          onRefresh={() => {
+            void refreshPullRequestForSession(session.id, session.workspaceId)
+          }}
+          onClose={() => setShowPullRequestPanel(false)}
+        />
+      )}
 
       {linkedInitiative && !changedFilesExpanded && (
         <InitiativeContextPanel
@@ -549,6 +659,21 @@ export const SessionView: FC = () => {
       )}
     </div>
   )
+}
+
+function formatPullRequestHeaderLabel(
+  pullRequest: WorkspacePullRequest | null,
+  loading: boolean,
+): string {
+  if (loading) return 'PR checking…'
+  if (!pullRequest) return 'PR unknown'
+  if (pullRequest.lookupStatus === 'not-found') return 'No PR'
+  if (pullRequest.lookupStatus === 'gh-unavailable') return 'gh missing'
+  if (pullRequest.lookupStatus === 'gh-auth-required') return 'gh auth needed'
+  if (pullRequest.lookupStatus !== 'found') return 'PR unknown'
+  if (pullRequest.number)
+    return `PR #${pullRequest.number} ${pullRequest.state}`
+  return pullRequest.state
 }
 
 function clampChangedFilesWidth(width: number): number {

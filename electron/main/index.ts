@@ -16,6 +16,7 @@ import { ProjectContextService } from '../backend/project-context/project-contex
 import { StateService } from '../backend/state/state.service'
 import { WorkspaceService } from '../backend/workspace/workspace.service'
 import { GitService } from '../backend/git/git.service'
+import { PullRequestService } from '../backend/pull-request/pull-request.service'
 import { SessionService } from '../backend/session/session.service'
 import { SessionContextInjectionService } from '../backend/session/context-injection/session-context-injection.service'
 import { TurnCaptureService } from '../backend/session/turn/turn-capture.service'
@@ -176,6 +177,7 @@ async function startApp(): Promise<void> {
   )
   const stateService = new StateService(db)
   const workspaceService = new WorkspaceService(db, gitService, workspacesRoot)
+  const pullRequestService = new PullRequestService(db, gitService)
   const providerRegistry = new ProviderRegistry()
   const taskProgressService = new TaskProgressService(broadcastTaskProgress)
   const sessionService = new SessionService(db, providerRegistry)
@@ -432,6 +434,7 @@ async function startApp(): Promise<void> {
     stateService,
     workspaceService,
     gitService,
+    pullRequestService,
     sessionService,
     providerRegistry,
     mcpService,

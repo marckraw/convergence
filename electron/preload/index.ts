@@ -85,7 +85,20 @@ contextBridge.exposeInMainWorld('electronAPI', {
     getByProjectId: (projectId: string) =>
       ipcRenderer.invoke('workspace:getByProjectId', projectId),
     getAll: () => ipcRenderer.invoke('workspace:getAll'),
+    archive: (input: { id: string; removeWorktree?: boolean }) =>
+      ipcRenderer.invoke('workspace:archive', input),
+    unarchive: (id: string) => ipcRenderer.invoke('workspace:unarchive', id),
+    removeWorktree: (id: string) =>
+      ipcRenderer.invoke('workspace:removeWorktree', id),
     delete: (id: string) => ipcRenderer.invoke('workspace:delete', id),
+  },
+  pullRequest: {
+    getByWorkspaceId: (workspaceId: string) =>
+      ipcRenderer.invoke('pullRequest:getByWorkspaceId', workspaceId),
+    listByProjectId: (projectId: string) =>
+      ipcRenderer.invoke('pullRequest:listByProjectId', projectId),
+    refreshForSession: (sessionId: string) =>
+      ipcRenderer.invoke('pullRequest:refreshForSession', sessionId),
   },
   git: {
     getBranches: (repoPath: string) =>

@@ -11,6 +11,9 @@ export { useInitiativeStore } from './initiative'
 export type { Workspace } from './workspace'
 export { useWorkspaceStore } from './workspace'
 
+export type { WorkspacePullRequest } from './pull-request'
+export { pullRequestApi, usePullRequestStore } from './pull-request'
+
 export type { Session, SessionStatus, AttentionState } from './session'
 export { useSessionStore } from './session'
 

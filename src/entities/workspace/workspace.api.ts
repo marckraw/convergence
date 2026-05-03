@@ -1,4 +1,5 @@
 import type {
+  ArchiveWorkspaceInput,
   BranchOutputFacts,
   GitStatusEntry,
   Workspace,
@@ -15,6 +16,15 @@ export const workspaceApi = {
     window.electronAPI.workspace.getByProjectId(projectId),
 
   getAll: (): Promise<Workspace[]> => window.electronAPI.workspace.getAll(),
+
+  archive: (input: ArchiveWorkspaceInput): Promise<Workspace> =>
+    window.electronAPI.workspace.archive(input),
+
+  unarchive: (id: string): Promise<Workspace> =>
+    window.electronAPI.workspace.unarchive(id),
+
+  removeWorktree: (id: string): Promise<Workspace> =>
+    window.electronAPI.workspace.removeWorktree(id),
 
   delete: (id: string): Promise<void> =>
     window.electronAPI.workspace.delete(id),

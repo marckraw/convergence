@@ -234,6 +234,148 @@ describe('WorkspaceService', () => {
     expect(workspaces).toHaveLength(2)
   })
 
+  it('archives a workspace and its sessions without removing the worktree', async () => {
+    const ws = await service.create({ projectId, branchName: 'archive-me' })
+    const db = getDatabase()
+    db.prepare(
+      `INSERT INTO sessions (id, project_id, workspace_id, provider_id, name, working_directory)
+       VALUES (?, ?, ?, ?, ?, ?)`,
+    ).run('session-1', projectId, ws.id, 'claude-code', 'Session 1', ws.path)
+
+    const archived = await service.archive({ id: ws.id })
+
+    expect(archived.archivedAt).toEqual(expect.any(String))
+    expect(archived.worktreeRemovedAt).toBeNull()
+    expect(existsSync(ws.path)).toBe(true)
+
+    const session = db
+      .prepare('SELECT archived_at FROM sessions WHERE id = ?')
+      .get('session-1') as { archived_at: string | null }
+    expect(session.archived_at).toBe(archived.archivedAt)
+  })
+
+  it('archives a workspace idempotently without changing session archive timestamps', async () => {
+    const ws = await service.create({ projectId, branchName: 'archive-twice' })
+    const db = getDatabase()
+    db.prepare(
+      `INSERT INTO sessions (id, project_id, workspace_id, provider_id, name, working_directory)
+       VALUES (?, ?, ?, ?, ?, ?)`,
+    ).run('session-1', projectId, ws.id, 'claude-code', 'Session 1', ws.path)
+
+    const first = await service.archive({ id: ws.id })
+    const second = await service.archive({ id: ws.id })
+
+    expect(second.archivedAt).toBe(first.archivedAt)
+    const session = db
+      .prepare('SELECT archived_at FROM sessions WHERE id = ?')
+      .get('session-1') as { archived_at: string | null }
+    expect(session.archived_at).toBe(first.archivedAt)
+  })
+
+  it('archives a workspace and removes the physical worktree when requested', async () => {
+    const ws = await service.create({ projectId, branchName: 'archive-remove' })
+    expect(existsSync(ws.path)).toBe(true)
+
+    const archived = await service.archive({ id: ws.id, removeWorktree: true })
+
+    expect(archived.archivedAt).toEqual(expect.any(String))
+    expect(archived.worktreeRemovedAt).toEqual(expect.any(String))
+    expect(existsSync(ws.path)).toBe(false)
+  })
+
+  it('does not remove the physical worktree again when it was already removed', async () => {
+    const ws = await service.create({
+      projectId,
+      branchName: 'archive-already-removed',
+    })
+    const removed = await service.removeWorktree(ws.id)
+
+    const archived = await service.archive({ id: ws.id, removeWorktree: true })
+
+    expect(archived.archivedAt).toEqual(expect.any(String))
+    expect(archived.worktreeRemovedAt).toBe(removed.worktreeRemovedAt)
+  })
+
+  it('removes the physical worktree without archiving the workspace', async () => {
+    const ws = await service.create({ projectId, branchName: 'remove-only' })
+    expect(existsSync(ws.path)).toBe(true)
+
+    const updated = await service.removeWorktree(ws.id)
+
+    expect(updated.archivedAt).toBeNull()
+    expect(updated.worktreeRemovedAt).toEqual(expect.any(String))
+    expect(existsSync(ws.path)).toBe(false)
+  })
+
+  it('preserves independently archived sessions when unarchiving a workspace', async () => {
+    const ws = await service.create({
+      projectId,
+      branchName: 'preserve-session-archive',
+    })
+    const db = getDatabase()
+    const independentArchivedAt = '2026-01-01T00:00:00.000Z'
+    db.prepare(
+      `INSERT INTO sessions (id, project_id, workspace_id, provider_id, name, working_directory, archived_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    ).run(
+      'session-archived-before',
+      projectId,
+      ws.id,
+      'claude-code',
+      'Session archived before',
+      ws.path,
+      independentArchivedAt,
+    )
+    db.prepare(
+      `INSERT INTO sessions (id, project_id, workspace_id, provider_id, name, working_directory)
+       VALUES (?, ?, ?, ?, ?, ?)`,
+    ).run(
+      'session-active-before',
+      projectId,
+      ws.id,
+      'claude-code',
+      'Session active before',
+      ws.path,
+    )
+
+    await service.archive({ id: ws.id })
+    service.unarchive(ws.id)
+
+    const rows = db
+      .prepare('SELECT id, archived_at FROM sessions ORDER BY id')
+      .all() as Array<{ id: string; archived_at: string | null }>
+    expect(rows).toEqual([
+      { id: 'session-active-before', archived_at: null },
+      {
+        id: 'session-archived-before',
+        archived_at: independentArchivedAt,
+      },
+    ])
+  })
+
+  it('unarchives a workspace and its sessions without recreating removed worktrees', async () => {
+    const ws = await service.create({ projectId, branchName: 'unarchive-me' })
+    const db = getDatabase()
+    db.prepare(
+      `INSERT INTO sessions (id, project_id, workspace_id, provider_id, name, working_directory)
+       VALUES (?, ?, ?, ?, ?, ?)`,
+    ).run('session-1', projectId, ws.id, 'claude-code', 'Session 1', ws.path)
+
+    const archived = await service.archive({ id: ws.id, removeWorktree: true })
+    expect(archived.worktreeRemovedAt).not.toBeNull()
+
+    const unarchived = service.unarchive(ws.id)
+
+    expect(unarchived.archivedAt).toBeNull()
+    expect(unarchived.worktreeRemovedAt).toBe(archived.worktreeRemovedAt)
+    expect(existsSync(ws.path)).toBe(false)
+
+    const session = db
+      .prepare('SELECT archived_at FROM sessions WHERE id = ?')
+      .get('session-1') as { archived_at: string | null }
+    expect(session.archived_at).toBeNull()
+  })
+
   it('deletes a workspace and cleans up worktree', async () => {
     const ws = await service.create({ projectId, branchName: 'delete-me' })
     expect(existsSync(ws.path)).toBe(true)

@@ -3,6 +3,28 @@ import { describe, expect, it, vi } from 'vitest'
 import { TooltipProvider } from '@/shared/ui/tooltip'
 import { ProjectTree } from './project-tree.container'
 
+const mergedPullRequest = {
+  id: 'pr-1',
+  projectId: 'project-1',
+  workspaceId: 'workspace-1',
+  provider: 'github' as const,
+  lookupStatus: 'found' as const,
+  state: 'merged' as const,
+  repositoryOwner: 'example',
+  repositoryName: 'repo',
+  number: 12,
+  title: 'Merged workspace',
+  url: 'https://github.com/example/repo/pull/12',
+  isDraft: false,
+  headBranch: 'feature-branch',
+  baseBranch: 'main',
+  mergedAt: '2026-01-02T00:00:00.000Z',
+  lastCheckedAt: '2026-01-02T00:00:00.000Z',
+  error: null,
+  createdAt: '2026-01-01T00:00:00.000Z',
+  updatedAt: '2026-01-02T00:00:00.000Z',
+}
+
 const baseSession = {
   projectId: 'project-1',
   workspaceId: null,
@@ -187,7 +209,192 @@ describe('ProjectTree', () => {
     ).toBeInTheDocument()
   })
 
-  it('deletes a workspace without toggling it open', () => {
+  it('renders a merged badge for a workspace with a merged PR', () => {
+    render(
+      <TooltipProvider>
+        <ProjectTree
+          baseBranchName="staging"
+          workspaces={[
+            {
+              id: 'workspace-1',
+              projectId: 'project-1',
+              branchName: 'feature-branch',
+              path: '/tmp/roomfinder-workspace',
+              type: 'worktree',
+              archivedAt: null,
+              worktreeRemovedAt: null,
+              createdAt: '2026-01-01T00:00:00.000Z',
+            },
+          ]}
+          sessions={[]}
+          activeSessionId={null}
+          pullRequestsByWorkspaceId={{ 'workspace-1': mergedPullRequest }}
+          onSelectSession={vi.fn()}
+          onArchiveSession={vi.fn()}
+          onUnarchiveSession={vi.fn()}
+          onDeleteSession={vi.fn()}
+          onRenameSession={vi.fn()}
+          onRegenerateSessionName={vi.fn()}
+          onDeleteWorkspace={vi.fn()}
+          onOpenCreateWorkspace={vi.fn()}
+        />
+      </TooltipProvider>,
+    )
+
+    expect(screen.getByText('Merged')).toBeInTheDocument()
+  })
+
+  it('archives a workspace from the workspace actions menu', async () => {
+    const onArchiveWorkspace = vi.fn()
+
+    render(
+      <TooltipProvider>
+        <ProjectTree
+          baseBranchName="staging"
+          workspaces={[
+            {
+              id: 'workspace-1',
+              projectId: 'project-1',
+              branchName: 'feature-branch',
+              path: '/tmp/roomfinder-workspace',
+              type: 'worktree',
+              archivedAt: null,
+              worktreeRemovedAt: null,
+              createdAt: '2026-01-01T00:00:00.000Z',
+            },
+          ]}
+          sessions={[]}
+          activeSessionId={null}
+          onSelectSession={vi.fn()}
+          onArchiveSession={vi.fn()}
+          onUnarchiveSession={vi.fn()}
+          onDeleteSession={vi.fn()}
+          onRenameSession={vi.fn()}
+          onRegenerateSessionName={vi.fn()}
+          onArchiveWorkspace={onArchiveWorkspace}
+          onDeleteWorkspace={vi.fn()}
+          onOpenCreateWorkspace={vi.fn()}
+        />
+      </TooltipProvider>,
+    )
+
+    fireEvent.pointerDown(
+      screen.getByRole('button', { name: /workspace actions feature-branch/i }),
+    )
+    fireEvent.click(
+      await screen.findByRole('menuitem', { name: /archive workspace/i }),
+    )
+
+    expect(onArchiveWorkspace).toHaveBeenCalledWith('workspace-1')
+  })
+
+  it('shows archived workspaces in the archived section and unarchives them', async () => {
+    const onUnarchiveWorkspace = vi.fn()
+
+    render(
+      <TooltipProvider>
+        <ProjectTree
+          baseBranchName="staging"
+          workspaces={[
+            {
+              id: 'workspace-1',
+              projectId: 'project-1',
+              branchName: 'feature-branch',
+              path: '/tmp/roomfinder-workspace',
+              type: 'worktree',
+              archivedAt: '2026-01-02T00:00:00.000Z',
+              worktreeRemovedAt: '2026-01-02T00:00:00.000Z',
+              createdAt: '2026-01-01T00:00:00.000Z',
+            },
+          ]}
+          sessions={[
+            {
+              ...baseSession,
+              id: 'session-1',
+              workspaceId: 'workspace-1',
+              providerId: 'claude-code',
+              name: 'archived workspace session',
+              archivedAt: '2026-01-02T00:00:00.000Z',
+            },
+          ]}
+          activeSessionId={null}
+          onSelectSession={vi.fn()}
+          onArchiveSession={vi.fn()}
+          onUnarchiveSession={vi.fn()}
+          onDeleteSession={vi.fn()}
+          onRenameSession={vi.fn()}
+          onRegenerateSessionName={vi.fn()}
+          onUnarchiveWorkspace={onUnarchiveWorkspace}
+          onDeleteWorkspace={vi.fn()}
+          onOpenCreateWorkspace={vi.fn()}
+        />
+      </TooltipProvider>,
+    )
+
+    expect(screen.queryByRole('button', { name: /feature-branch/i })).toBeNull()
+
+    fireEvent.click(screen.getByRole('button', { name: /archived/i }))
+
+    expect(screen.getByText('feature-branch')).toBeInTheDocument()
+    expect(screen.getByText('Worktree removed')).toBeInTheDocument()
+
+    fireEvent.pointerDown(
+      screen.getByRole('button', { name: /workspace actions feature-branch/i }),
+    )
+    fireEvent.click(
+      await screen.findByRole('menuitem', { name: /unarchive workspace/i }),
+    )
+
+    expect(onUnarchiveWorkspace).toHaveBeenCalledWith('workspace-1')
+  })
+
+  it('removes a workspace worktree from the workspace actions menu', async () => {
+    const onRemoveWorkspaceWorktree = vi.fn()
+
+    render(
+      <TooltipProvider>
+        <ProjectTree
+          baseBranchName="staging"
+          workspaces={[
+            {
+              id: 'workspace-1',
+              projectId: 'project-1',
+              branchName: 'feature-branch',
+              path: '/tmp/roomfinder-workspace',
+              type: 'worktree',
+              archivedAt: null,
+              worktreeRemovedAt: null,
+              createdAt: '2026-01-01T00:00:00.000Z',
+            },
+          ]}
+          sessions={[]}
+          activeSessionId={null}
+          onSelectSession={vi.fn()}
+          onArchiveSession={vi.fn()}
+          onUnarchiveSession={vi.fn()}
+          onDeleteSession={vi.fn()}
+          onRenameSession={vi.fn()}
+          onRegenerateSessionName={vi.fn()}
+          onRemoveWorkspaceWorktree={onRemoveWorkspaceWorktree}
+          onDeleteWorkspace={vi.fn()}
+          onOpenCreateWorkspace={vi.fn()}
+        />
+      </TooltipProvider>,
+    )
+
+    fireEvent.pointerDown(
+      screen.getByRole('button', { name: /workspace actions feature-branch/i }),
+    )
+    fireEvent.click(
+      await screen.findByRole('menuitem', {
+        name: /remove worktree from disk/i,
+      }),
+    )
+
+    expect(onRemoveWorkspaceWorktree).toHaveBeenCalledWith('workspace-1')
+  })
+
+  it('deletes a workspace permanently from the workspace actions menu', async () => {
     const onDeleteWorkspace = vi.fn()
 
     render(
@@ -201,6 +408,8 @@ describe('ProjectTree', () => {
               branchName: 'feature-branch',
               path: '/tmp/roomfinder-workspace',
               type: 'worktree',
+              archivedAt: null,
+              worktreeRemovedAt: null,
               createdAt: '2026-01-01T00:00:00.000Z',
             },
           ]}
@@ -218,8 +427,11 @@ describe('ProjectTree', () => {
       </TooltipProvider>,
     )
 
+    fireEvent.pointerDown(
+      screen.getByRole('button', { name: /workspace actions feature-branch/i }),
+    )
     fireEvent.click(
-      screen.getByRole('button', { name: /delete workspace feature-branch/i }),
+      await screen.findByRole('menuitem', { name: /delete permanently/i }),
     )
 
     expect(onDeleteWorkspace).toHaveBeenCalledWith('workspace-1')

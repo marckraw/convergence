@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import type { FC } from 'react'
 import { useProjectStore } from '@/entities/project'
+import { usePullRequestStore } from '@/entities/pull-request'
 import { useWorkspaceStore } from '@/entities/workspace'
 import {
   sessionApi,
@@ -50,9 +51,18 @@ export const Sidebar: FC<SidebarProps> = ({
   const createProject = useProjectStore((s) => s.createProject)
   const setActiveProject = useProjectStore((s) => s.setActiveProject)
   const workspaces = useWorkspaceStore((s) => s.workspaces)
+  const pullRequestsByWorkspaceId = usePullRequestStore((s) => s.byWorkspaceId)
+  const loadPullRequestsByProjectId = usePullRequestStore(
+    (s) => s.loadByProjectId,
+  )
   const currentBranch = useWorkspaceStore((s) => s.currentBranch)
   const loadWorkspaces = useWorkspaceStore((s) => s.loadWorkspaces)
   const loadCurrentBranch = useWorkspaceStore((s) => s.loadCurrentBranch)
+  const archiveWorkspace = useWorkspaceStore((s) => s.archiveWorkspace)
+  const unarchiveWorkspace = useWorkspaceStore((s) => s.unarchiveWorkspace)
+  const removeWorkspaceWorktree = useWorkspaceStore(
+    (s) => s.removeWorkspaceWorktree,
+  )
   const deleteWorkspace = useWorkspaceStore((s) => s.deleteWorkspace)
   const openDialog = useDialogStore((s) => s.open)
   const sessions = useSessionStore((s) => s.sessions)
@@ -112,6 +122,8 @@ export const Sidebar: FC<SidebarProps> = ({
     })
   }, [])
 
+  const workspaceIdsKey = workspaces.map((workspace) => workspace.id).join('|')
+
   useEffect(() => {
     if (activeProject) {
       loadWorkspaces(activeProject.id)
@@ -119,6 +131,12 @@ export const Sidebar: FC<SidebarProps> = ({
       loadSessions(activeProject.id)
     }
   }, [activeProject, loadWorkspaces, loadCurrentBranch, loadSessions])
+
+  useEffect(() => {
+    if (activeProject) {
+      void loadPullRequestsByProjectId(activeProject.id)
+    }
+  }, [activeProject, loadPullRequestsByProjectId, workspaceIdsKey])
 
   const attentionSessions = globalSessions
     .map((session) => {
@@ -174,10 +192,69 @@ export const Sidebar: FC<SidebarProps> = ({
     onSelectSession(sessionId)
   }
 
+  const handleArchiveWorkspace = async (workspaceId: string) => {
+    if (!activeProject) {
+      return
+    }
+
+    const workspace = workspaces.find((entry) => entry.id === workspaceId)
+    const branchName = workspace?.branchName ?? 'workspace'
+    const confirmed = window.confirm(
+      `Archive workspace "${branchName}"?\n\nThis will hide the workspace from the active sidebar and archive all sessions inside it. Conversation history will be kept.`,
+    )
+    if (!confirmed) return
+
+    const pullRequest = pullRequestsByWorkspaceId[workspaceId]
+    const removeWorktree =
+      pullRequest?.state === 'merged'
+        ? window.confirm(
+            'This workspace PR is merged. Also remove the git worktree from disk?',
+          )
+        : false
+
+    await archiveWorkspace(workspaceId, activeProject.id, removeWorktree)
+    await loadSessions(activeProject.id)
+    await loadGlobalSessions()
+    await loadRecents()
+  }
+
+  const handleUnarchiveWorkspace = async (workspaceId: string) => {
+    if (!activeProject) {
+      return
+    }
+
+    await unarchiveWorkspace(workspaceId, activeProject.id)
+    await loadSessions(activeProject.id)
+    await loadGlobalSessions()
+    await loadRecents()
+  }
+
+  const handleRemoveWorkspaceWorktree = async (workspaceId: string) => {
+    if (!activeProject) {
+      return
+    }
+
+    const workspace = workspaces.find((entry) => entry.id === workspaceId)
+    const branchName = workspace?.branchName ?? 'workspace'
+    const confirmed = window.confirm(
+      `Remove git worktree for "${branchName}" from disk?\n\nConvergence will keep the workspace and conversation history, but this workspace cannot be used for new agent work until restore support exists.`,
+    )
+    if (!confirmed) return
+
+    await removeWorkspaceWorktree(workspaceId, activeProject.id)
+  }
+
   const handleDeleteWorkspace = async (workspaceId: string) => {
     if (!activeProject) {
       return
     }
+
+    const workspace = workspaces.find((entry) => entry.id === workspaceId)
+    const branchName = workspace?.branchName ?? 'workspace'
+    const confirmed = window.confirm(
+      `Permanently delete workspace "${branchName}"?\n\nThis deletes the workspace and all sessions/conversations inside it. This cannot be undone.`,
+    )
+    if (!confirmed) return
 
     const deletedSessionIds = sessions
       .filter((session) => session.workspaceId === workspaceId)
@@ -267,6 +344,7 @@ export const Sidebar: FC<SidebarProps> = ({
             workspaces={workspaces}
             sessions={sessions}
             activeSessionId={activeSessionId}
+            pullRequestsByWorkspaceId={pullRequestsByWorkspaceId}
             pulsingSessionIds={pulsingSessionIds}
             expandedWorkspaces={expandedWorkspaces}
             onToggleWorkspace={toggleWorkspace}
@@ -281,6 +359,9 @@ export const Sidebar: FC<SidebarProps> = ({
             }
             regeneratingSessionIds={regeneratingSessionIds}
             onRegenerateSessionName={handleRegenerateSessionName}
+            onArchiveWorkspace={handleArchiveWorkspace}
+            onUnarchiveWorkspace={handleUnarchiveWorkspace}
+            onRemoveWorkspaceWorktree={handleRemoveWorkspaceWorktree}
             onDeleteWorkspace={handleDeleteWorkspace}
             onOpenCreateWorkspace={() => openDialog('workspace-create')}
           />

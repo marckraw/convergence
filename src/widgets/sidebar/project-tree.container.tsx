@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import type { FC } from 'react'
 import type { Workspace } from '@/entities/workspace'
+import type { WorkspacePullRequest } from '@/entities/pull-request'
 import type { SessionSummary } from '@/entities/session'
 import { SessionCreateInline } from '@/features/session-create-inline'
 import { Button } from '@/shared/ui/button'
@@ -34,6 +35,7 @@ interface ProjectTreeProps {
   workspaces: Workspace[]
   sessions: SessionSummary[]
   activeSessionId: string | null
+  pullRequestsByWorkspaceId?: Readonly<Record<string, WorkspacePullRequest>>
   regeneratingSessionIds?: ReadonlySet<string>
   pulsingSessionIds?: Readonly<Record<string, true>>
   expandedWorkspaces?: ReadonlySet<string>
@@ -44,6 +46,9 @@ interface ProjectTreeProps {
   onDeleteSession: (id: string) => void
   onRenameSession: (id: string, name: string) => void
   onRegenerateSessionName: (id: string) => void
+  onArchiveWorkspace?: (workspaceId: string) => void
+  onUnarchiveWorkspace?: (workspaceId: string) => void
+  onRemoveWorkspaceWorktree?: (workspaceId: string) => void
   onDeleteWorkspace: (workspaceId: string) => void
   onOpenCreateWorkspace: () => void
 }
@@ -53,6 +58,7 @@ export const ProjectTree: FC<ProjectTreeProps> = ({
   workspaces,
   sessions,
   activeSessionId,
+  pullRequestsByWorkspaceId,
   regeneratingSessionIds,
   pulsingSessionIds,
   expandedWorkspaces,
@@ -63,6 +69,9 @@ export const ProjectTree: FC<ProjectTreeProps> = ({
   onDeleteSession,
   onRenameSession,
   onRegenerateSessionName,
+  onArchiveWorkspace,
+  onUnarchiveWorkspace,
+  onRemoveWorkspaceWorktree,
   onDeleteWorkspace,
   onOpenCreateWorkspace,
 }) => {
@@ -70,7 +79,7 @@ export const ProjectTree: FC<ProjectTreeProps> = ({
     new Set(),
   )
   const effectiveExpanded = expandedWorkspaces ?? internalExpanded
-  const [showArchivedSessions, setShowArchivedSessions] = useState(false)
+  const [showArchived, setShowArchived] = useState(false)
   const [renamingSessionId, setRenamingSessionId] = useState<string | null>(
     null,
   )
@@ -104,13 +113,23 @@ export const ProjectTree: FC<ProjectTreeProps> = ({
     })
   }
 
-  const archivedSessions = sessions.filter((s) => s.archivedAt)
-  const activeArchivedSession = archivedSessions.some(
-    (session) => session.id === activeSessionId,
+  const activeWorkspaces = workspaces.filter(
+    (workspace) => !workspace.archivedAt,
+  )
+  const archivedWorkspaces = workspaces.filter(
+    (workspace) => workspace.archivedAt,
+  )
+  const archivedRootSessions = sessions.filter(
+    (session) => session.archivedAt && !session.workspaceId,
+  )
+  const activeArchivedSession = sessions.some(
+    (session) => session.id === activeSessionId && !!session.archivedAt,
   )
   const rootSessions = sessions.filter((s) => !s.workspaceId && !s.archivedAt)
-  const getWorkspaceSessions = (wsId: string) =>
+  const getActiveWorkspaceSessions = (wsId: string) =>
     sessions.filter((s) => s.workspaceId === wsId && !s.archivedAt)
+  const getWorkspaceSessions = (wsId: string) =>
+    sessions.filter((s) => s.workspaceId === wsId)
 
   const renderSessionActions = (session: SessionSummary) => {
     const isArchived = !!session.archivedAt
@@ -188,6 +207,64 @@ export const ProjectTree: FC<ProjectTreeProps> = ({
           >
             <Trash2 className="h-3.5 w-3.5" />
             <span>Delete session</span>
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+    )
+  }
+
+  const renderWorkspaceActions = (workspace: Workspace) => {
+    const isArchived = !!workspace.archivedAt
+
+    return (
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="h-6 w-6 shrink-0 text-muted-foreground opacity-0 transition-opacity hover:text-foreground group-hover/workspace:opacity-100 focus-visible:opacity-100"
+            aria-label={`Workspace actions ${workspace.branchName}`}
+            title="Workspace actions"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <MoreHorizontal className="h-3.5 w-3.5" />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end">
+          {isArchived ? (
+            <DropdownMenuItem
+              className="gap-2"
+              onClick={() => onUnarchiveWorkspace?.(workspace.id)}
+            >
+              <Undo2 className="h-3.5 w-3.5" />
+              <span>Unarchive workspace</span>
+            </DropdownMenuItem>
+          ) : (
+            <DropdownMenuItem
+              className="gap-2"
+              onClick={() => onArchiveWorkspace?.(workspace.id)}
+            >
+              <Archive className="h-3.5 w-3.5" />
+              <span>Archive workspace...</span>
+            </DropdownMenuItem>
+          )}
+          {!workspace.worktreeRemovedAt ? (
+            <DropdownMenuItem
+              className="gap-2"
+              onClick={() => onRemoveWorkspaceWorktree?.(workspace.id)}
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+              <span>Remove worktree from disk...</span>
+            </DropdownMenuItem>
+          ) : null}
+          <DropdownMenuSeparator />
+          <DropdownMenuItem
+            className="gap-2 text-destructive focus:text-destructive"
+            onClick={() => onDeleteWorkspace(workspace.id)}
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+            <span>Delete permanently...</span>
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
@@ -302,10 +379,12 @@ export const ProjectTree: FC<ProjectTreeProps> = ({
         </div>
       </div>
 
-      {/* Workspaces */}
-      {workspaces.map((ws) => {
-        const wsSessions = getWorkspaceSessions(ws.id)
+      {/* Active workspaces */}
+      {activeWorkspaces.map((ws) => {
+        const wsSessions = getActiveWorkspaceSessions(ws.id)
         const isExpanded = effectiveExpanded.has(ws.id)
+        const pullRequest = pullRequestsByWorkspaceId?.[ws.id] ?? null
+        const isMerged = pullRequest?.state === 'merged'
 
         return (
           <div key={ws.id} className="ml-2 border-l border-border pl-2">
@@ -326,6 +405,16 @@ export const ProjectTree: FC<ProjectTreeProps> = ({
                     />
                     <GitBranch className="h-3 w-3 shrink-0 text-muted-foreground" />
                     <span className="truncate">{ws.branchName}</span>
+                    {isMerged ? (
+                      <span className="shrink-0 rounded-full border border-teal-500/25 bg-teal-500/10 px-1.5 py-0.5 text-[10px] font-medium text-teal-700 dark:text-teal-200">
+                        Merged
+                      </span>
+                    ) : null}
+                    {ws.worktreeRemovedAt ? (
+                      <span className="shrink-0 rounded-full border border-border bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+                        Worktree removed
+                      </span>
+                    ) : null}
                     {wsSessions.length > 0 && (
                       <span className="ml-auto shrink-0 text-xs text-muted-foreground">
                         {wsSessions.length}
@@ -335,20 +424,7 @@ export const ProjectTree: FC<ProjectTreeProps> = ({
                 </TooltipTrigger>
                 <TooltipContent side="right">{ws.branchName}</TooltipContent>
               </Tooltip>
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                className="h-6 w-6 shrink-0 text-muted-foreground opacity-0 transition-opacity hover:text-destructive group-hover/workspace:opacity-100 focus-visible:opacity-100"
-                onClick={(event) => {
-                  event.stopPropagation()
-                  onDeleteWorkspace(ws.id)
-                }}
-                aria-label={`Delete workspace ${ws.branchName}`}
-                title="Delete workspace"
-              >
-                <Trash2 className="h-3.5 w-3.5" />
-              </Button>
+              {renderWorkspaceActions(ws)}
             </div>
 
             {isExpanded && (
@@ -363,7 +439,7 @@ export const ProjectTree: FC<ProjectTreeProps> = ({
         )
       })}
 
-      {archivedSessions.length > 0 && (
+      {archivedWorkspaces.length > 0 || archivedRootSessions.length > 0 ? (
         <div className="mt-3 ml-2 border-l border-border pl-2">
           <div className="group/workspace flex min-w-0 items-center gap-1 rounded pr-1 transition-colors hover:bg-accent">
             <Tooltip>
@@ -371,34 +447,92 @@ export const ProjectTree: FC<ProjectTreeProps> = ({
                 <Button
                   type="button"
                   variant="ghost"
-                  onClick={() => setShowArchivedSessions((current) => !current)}
+                  onClick={() => setShowArchived((current) => !current)}
                   className="h-auto min-w-0 flex-1 justify-start gap-1 py-1 text-left text-sm font-normal hover:text-foreground"
                 >
                   <ChevronRight
                     className={cn(
                       'h-3 w-3 shrink-0 transition-transform',
-                      (showArchivedSessions || activeArchivedSession) &&
-                        'rotate-90',
+                      (showArchived || activeArchivedSession) && 'rotate-90',
                     )}
                   />
                   <Archive className="h-3 w-3 shrink-0 text-muted-foreground" />
                   <span className="truncate">Archived</span>
                   <span className="ml-auto shrink-0 text-xs text-muted-foreground">
-                    {archivedSessions.length}
+                    {archivedWorkspaces.length + archivedRootSessions.length}
                   </span>
                 </Button>
               </TooltipTrigger>
-              <TooltipContent side="right">Archived sessions</TooltipContent>
+              <TooltipContent side="right">
+                Archived workspaces and sessions
+              </TooltipContent>
             </Tooltip>
           </div>
 
-          {(showArchivedSessions || activeArchivedSession) && (
+          {(showArchived || activeArchivedSession) && (
             <div className="ml-4 space-y-0.5">
-              {archivedSessions.map(renderSessionRow)}
+              {archivedWorkspaces.map((ws) => {
+                const wsSessions = getWorkspaceSessions(ws.id)
+                const isExpanded = effectiveExpanded.has(ws.id)
+                const pullRequest = pullRequestsByWorkspaceId?.[ws.id] ?? null
+                const isMerged = pullRequest?.state === 'merged'
+
+                return (
+                  <div key={ws.id}>
+                    <div className="group/workspace flex min-w-0 items-center gap-1 rounded pr-1 transition-colors hover:bg-accent">
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            onClick={() => toggleWorkspace(ws.id)}
+                            className="h-auto min-w-0 flex-1 justify-start gap-1 py-1 text-left text-sm font-normal hover:text-foreground"
+                          >
+                            <ChevronRight
+                              className={cn(
+                                'h-3 w-3 shrink-0 transition-transform',
+                                isExpanded && 'rotate-90',
+                              )}
+                            />
+                            <GitBranch className="h-3 w-3 shrink-0 text-muted-foreground" />
+                            <span className="truncate">{ws.branchName}</span>
+                            {isMerged ? (
+                              <span className="shrink-0 rounded-full border border-teal-500/25 bg-teal-500/10 px-1.5 py-0.5 text-[10px] font-medium text-teal-700 dark:text-teal-200">
+                                Merged
+                              </span>
+                            ) : null}
+                            {ws.worktreeRemovedAt ? (
+                              <span className="shrink-0 rounded-full border border-border bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+                                Worktree removed
+                              </span>
+                            ) : null}
+                            {wsSessions.length > 0 && (
+                              <span className="ml-auto shrink-0 text-xs text-muted-foreground">
+                                {wsSessions.length}
+                              </span>
+                            )}
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent side="right">
+                          {ws.branchName}
+                        </TooltipContent>
+                      </Tooltip>
+                      {renderWorkspaceActions(ws)}
+                    </div>
+
+                    {isExpanded && (
+                      <div className="ml-4 space-y-0.5">
+                        {wsSessions.map(renderSessionRow)}
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
+              {archivedRootSessions.map(renderSessionRow)}
             </div>
           )}
         </div>
-      )}
+      ) : null}
 
       {/* New workspace */}
       <div className="mt-2 ml-2">
