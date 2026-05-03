@@ -24,6 +24,7 @@ import {
 import {
   Archive,
   ArrowLeftRight,
+  Clock,
   GitFork,
   Link2,
   MoreVertical,
@@ -38,6 +39,7 @@ import { AttentionIndicator } from '@/shared/ui/attention-indicator.presentation
 import { ContextWindowIndicator } from '@/shared/ui/context-window-indicator.presentational'
 import { cn } from '@/shared/lib/cn.pure'
 import { ChangedFilesPanel } from './changed-files-panel.container'
+import { formatConversationTotalDuration } from './conversation-total-duration.pure'
 import {
   InitiativeContextPanel,
   type InitiativeContextAttemptView,
@@ -133,6 +135,10 @@ export const SessionView: FC = () => {
     ? (pullRequestErrorsByWorkspaceId[session.workspaceId] ?? null)
     : null
   const activityLabel = formatActivityLabel(session?.activity)
+  const totalDurationLabel = useMemo(
+    () => formatConversationTotalDuration(activeConversation),
+    [activeConversation],
+  )
   const linkedSessionAttempts = session
     ? (attemptsBySessionId[session.id] ?? [])
     : []
@@ -433,6 +439,16 @@ export const SessionView: FC = () => {
                 data-testid="session-activity-indicator"
               >
                 {activityLabel}
+              </span>
+            )}
+            {totalDurationLabel && (
+              <span
+                className="flex items-center gap-1 rounded-full border border-border/70 px-2 py-0.5 text-[11px] text-muted-foreground"
+                title="Total conversation duration (sum of turn durations)"
+                data-testid="session-total-duration"
+              >
+                <Clock className="h-3 w-3" />
+                {totalDurationLabel}
               </span>
             )}
             <ContextWindowIndicator contextWindow={session.contextWindow} />
