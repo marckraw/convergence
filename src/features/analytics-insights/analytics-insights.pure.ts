@@ -6,6 +6,7 @@ import type {
 import type {
   AnalyticsOverview,
   AnalyticsRangePreset,
+  ConversationBalancePoint,
   DailyActivityPoint,
   WeekdayHourActivityPoint,
 } from '@/entities/analytics'
@@ -108,9 +109,51 @@ export function formatHour(hour: number): string {
   return `${hour - 12}p`
 }
 
+const ONE_DAY_MS = 24 * 60 * 60 * 1000
+
+function dateKeyToTimestamp(date: string): number {
+  return new Date(`${date}T00:00:00`).getTime()
+}
+
+function timestampToDateKey(timestamp: number): string {
+  const date = new Date(timestamp)
+  const year = date.getFullYear()
+  const month = `${date.getMonth() + 1}`.padStart(2, '0')
+  const day = `${date.getDate()}`.padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
+function buildTimeAxisBounds(points: ReadonlyArray<{ date: string }>): {
+  min: number
+  max: number
+} {
+  if (points.length === 0) {
+    const now = Date.now()
+    return { min: now, max: now + ONE_DAY_MS }
+  }
+  const first = dateKeyToTimestamp(points[0].date)
+  const last = dateKeyToTimestamp(points[points.length - 1].date)
+  if (last <= first) return { min: first, max: first + ONE_DAY_MS }
+  return { min: first, max: last }
+}
+
+function resolveDateLabelForTimestamp(
+  points: ReadonlyArray<{ date: string }>,
+  timestamp: number,
+): string | null {
+  if (!Number.isFinite(timestamp)) return null
+  const exact = points.find(
+    (point) => dateKeyToTimestamp(point.date) === timestamp,
+  )
+  if (exact) return exact.date
+  return timestampToDateKey(timestamp)
+}
+
 export function buildDailyActivityChartOptions(
   points: DailyActivityPoint[],
 ): ChartGPUOptions {
+  const { min, max } = buildTimeAxisBounds(points)
+
   return {
     palette: CHART_PALETTE,
     grid: { left: 40, right: 16, top: 12, bottom: 28 },
@@ -119,7 +162,7 @@ export function buildDailyActivityChartOptions(
       horizontal: { count: 4 },
       vertical: false,
     },
-    xAxis: { type: 'value', min: 0, max: Math.max(points.length - 1, 1) },
+    xAxis: { type: 'time', min, max },
     yAxis: { type: 'value', min: 0 },
     legend: { show: false },
     tooltip: {
@@ -127,8 +170,8 @@ export function buildDailyActivityChartOptions(
       trigger: 'axis',
       formatter: createTooltipFormatter((params) => {
         const [first] = params
-        const index = first ? Math.round(first.value[0]) : 0
-        const date = points[index]?.date
+        if (!first) return 'Daily activity'
+        const date = resolveDateLabelForTimestamp(points, first.value[0])
         return date ? formatDateLabel(date) : 'Daily activity'
       }),
     },
@@ -138,8 +181,8 @@ export function buildDailyActivityChartOptions(
         name: 'User messages',
         color: '#2563eb',
         areaStyle: { opacity: 0.18, color: '#2563eb' },
-        data: points.map((point, index) => ({
-          x: index,
+        data: points.map((point) => ({
+          x: dateKeyToTimestamp(point.date),
           y: point.userMessages,
         })),
       },
@@ -148,58 +191,8 @@ export function buildDailyActivityChartOptions(
         name: 'Turns',
         color: '#14b8a6',
         lineStyle: { width: 2, color: '#14b8a6' },
-        data: points.map((point, index) => ({
-          x: index,
-          y: point.turnsCompleted,
-        })),
-      },
-    ],
-  }
-}
-
-export function buildProviderUsageChartOptions(
-  overview: AnalyticsOverview,
-): ChartGPUOptions {
-  const points = overview.providerUsage.slice(0, 8)
-
-  return {
-    palette: CHART_PALETTE,
-    grid: { left: 40, right: 16, top: 12, bottom: 28 },
-    gridLines: {
-      color: 'rgba(148, 163, 184, 0.22)',
-      horizontal: { count: 4 },
-      vertical: false,
-    },
-    xAxis: { type: 'value', min: 0, max: Math.max(points.length - 1, 1) },
-    yAxis: { type: 'value', min: 0 },
-    legend: { show: false },
-    tooltip: {
-      show: true,
-      trigger: 'axis',
-      formatter: createTooltipFormatter((params) => {
-        const [first] = params
-        const index = first ? Math.round(first.value[0]) : 0
-        return points[index]?.providerName ?? 'Provider usage'
-      }),
-    },
-    series: [
-      {
-        type: 'bar',
-        name: 'Sessions',
-        color: '#7c3aed',
-        barWidth: '34%',
-        data: points.map((point, index) => ({
-          x: index,
-          y: point.sessionsCreated,
-        })),
-      },
-      {
-        type: 'bar',
-        name: 'Turns',
-        color: '#f59e0b',
-        barWidth: '34%',
-        data: points.map((point, index) => ({
-          x: index,
+        data: points.map((point) => ({
+          x: dateKeyToTimestamp(point.date),
           y: point.turnsCompleted,
         })),
       },
@@ -210,7 +203,8 @@ export function buildProviderUsageChartOptions(
 export function buildConversationBalanceChartOptions(
   overview: AnalyticsOverview,
 ): ChartGPUOptions {
-  const points = overview.conversationBalance
+  const points: ConversationBalancePoint[] = overview.conversationBalance
+  const { min, max } = buildTimeAxisBounds(points)
 
   return {
     palette: CHART_PALETTE,
@@ -220,7 +214,7 @@ export function buildConversationBalanceChartOptions(
       horizontal: { count: 4 },
       vertical: false,
     },
-    xAxis: { type: 'value', min: 0, max: Math.max(points.length - 1, 1) },
+    xAxis: { type: 'time', min, max },
     yAxis: { type: 'value', min: 0 },
     legend: { show: false },
     tooltip: {
@@ -228,8 +222,8 @@ export function buildConversationBalanceChartOptions(
       trigger: 'axis',
       formatter: createTooltipFormatter((params) => {
         const [first] = params
-        const index = first ? Math.round(first.value[0]) : 0
-        const date = points[index]?.date
+        if (!first) return 'Conversation balance'
+        const date = resolveDateLabelForTimestamp(points, first.value[0])
         return date ? formatDateLabel(date) : 'Conversation balance'
       }),
     },
@@ -239,15 +233,18 @@ export function buildConversationBalanceChartOptions(
         name: 'User words',
         color: '#2563eb',
         lineStyle: { width: 2, color: '#2563eb' },
-        data: points.map((point, index) => ({ x: index, y: point.userWords })),
+        data: points.map((point) => ({
+          x: dateKeyToTimestamp(point.date),
+          y: point.userWords,
+        })),
       },
       {
         type: 'area',
         name: 'Assistant words',
         color: '#14b8a6',
         areaStyle: { opacity: 0.16, color: '#14b8a6' },
-        data: points.map((point, index) => ({
-          x: index,
+        data: points.map((point) => ({
+          x: dateKeyToTimestamp(point.date),
           y: point.assistantWords,
         })),
       },
