@@ -16,7 +16,6 @@ import { ChartGpuChart } from '@/shared/ui/chartgpu-chart.container'
 import {
   buildConversationBalanceChartOptions,
   buildDailyActivityChartOptions,
-  buildProviderUsageChartOptions,
   formatCompact,
   formatDateLabel,
   formatHour,
@@ -107,17 +106,7 @@ export function UsageTab({ overview, isLoading }: UsageTabProps) {
             { label: 'Turns', colorClassName: 'bg-amber-500' },
           ],
           empty: overview.providerUsage.length === 0,
-          children: (
-            <>
-              <ChartGpuChart
-                options={buildProviderUsageChartOptions(overview)}
-                height={CHART_HEIGHT}
-                fallbackTitle="Provider chart unavailable"
-                fallbackDescription="WebGPU is not available in this browser view. Provider totals are listed below."
-              />
-              {renderProviderList(overview)}
-            </>
-          ),
+          children: renderProviderUsageBars(overview),
         })}
       </section>
 
@@ -314,30 +303,69 @@ function renderEmptyPanel({
   )
 }
 
-function renderProviderList(overview: AnalyticsOverview) {
+function renderProviderUsageBars(overview: AnalyticsOverview) {
+  const points = overview.providerUsage.slice(0, 8)
   const max = Math.max(
-    ...overview.providerUsage.map((point) => point.turnsCompleted),
+    ...points.map((point) =>
+      Math.max(point.sessionsCreated, point.turnsCompleted),
+    ),
     1,
   )
 
   return (
-    <div className="mt-3 space-y-2">
-      {overview.providerUsage.slice(0, 5).map((point) => (
-        <div key={point.providerId} className="space-y-1">
-          <div className="flex items-center justify-between gap-3 text-xs">
-            <span className="truncate font-medium">{point.providerName}</span>
-            <span className="shrink-0 text-muted-foreground">
-              {formatInteger(point.turnsCompleted)} turns
-            </span>
-          </div>
-          <div className="h-1.5 overflow-hidden rounded-full bg-muted">
-            <div
-              className="h-full rounded-full bg-violet-500"
-              style={{ width: `${(point.turnsCompleted / max) * 100}%` }}
-            />
+    <div className="space-y-3">
+      {points.map((point) => (
+        <div
+          key={point.providerId}
+          className="grid grid-cols-[minmax(0,9rem)_minmax(0,1fr)] items-center gap-3"
+        >
+          <span className="truncate text-sm font-medium">
+            {point.providerName}
+          </span>
+          <div className="space-y-1.5">
+            {renderProviderUsageRow({
+              label: 'Sessions',
+              value: point.sessionsCreated,
+              max,
+              barClassName: 'bg-violet-500',
+            })}
+            {renderProviderUsageRow({
+              label: 'Turns',
+              value: point.turnsCompleted,
+              max,
+              barClassName: 'bg-amber-500',
+            })}
           </div>
         </div>
       ))}
+    </div>
+  )
+}
+
+function renderProviderUsageRow({
+  label,
+  value,
+  max,
+  barClassName,
+}: {
+  label: string
+  value: number
+  max: number
+  barClassName: string
+}) {
+  const widthPct = max > 0 ? (value / max) * 100 : 0
+  return (
+    <div className="grid grid-cols-[3.5rem_minmax(0,1fr)_3.5rem] items-center gap-2 text-[11px] text-muted-foreground">
+      <span>{label}</span>
+      <div className="h-2 overflow-hidden rounded-full bg-muted">
+        <div
+          className={cn('h-full rounded-full', barClassName)}
+          style={{ width: `${widthPct}%` }}
+        />
+      </div>
+      <span className="text-right font-medium text-foreground">
+        {formatInteger(value)}
+      </span>
     </div>
   )
 }

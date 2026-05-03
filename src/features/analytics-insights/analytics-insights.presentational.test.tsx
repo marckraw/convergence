@@ -177,7 +177,9 @@ describe('AnalyticsInsights', () => {
     expect(screen.getAllByText('Assistant messages').length).toBeGreaterThan(0)
     expect(screen.getByText('Convergence')).toBeInTheDocument()
     expect(screen.getByText('Streak calendar')).toBeInTheDocument()
-    expect(screen.getAllByTestId('chartgpu-chart')).toHaveLength(3)
+    expect(screen.getAllByTestId('chartgpu-chart')).toHaveLength(2)
+    expect(screen.getAllByText('Sessions').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('Turns').length).toBeGreaterThan(0)
   })
 
   it('calls onRangeChange when a range button is selected', () => {

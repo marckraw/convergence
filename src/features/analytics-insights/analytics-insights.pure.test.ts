@@ -4,7 +4,6 @@ import type { AnalyticsOverview } from '@/entities/analytics'
 import {
   buildConversationBalanceChartOptions,
   buildDailyActivityChartOptions,
-  buildProviderUsageChartOptions,
   formatCompact,
   formatDateLabel,
   formatHour,
@@ -124,32 +123,33 @@ describe('analytics insights view helpers', () => {
     ).toBe(false)
   })
 
-  it('builds chart options from overview data', () => {
+  it('builds time-aligned chart options from overview data', () => {
     const daily = buildDailyActivityChartOptions(overview.dailyActivity)
-    const provider = buildProviderUsageChartOptions(overview)
     const balance = buildConversationBalanceChartOptions(overview)
 
+    const firstDailyTimestamp = new Date('2026-04-29T00:00:00').getTime()
+    const lastDailyTimestamp = new Date('2026-04-30T00:00:00').getTime()
+
     expect(daily.series).toHaveLength(2)
-    expect(provider.series).toHaveLength(2)
+    expect(daily.xAxis?.type).toBe('time')
+    expect(daily.xAxis?.min).toBe(firstDailyTimestamp)
+    expect(daily.xAxis?.max).toBe(lastDailyTimestamp)
     expect(balance.series).toHaveLength(2)
-    expect(daily.xAxis?.max).toBe(1)
-    expect(provider.legend?.show).toBe(false)
+    expect(balance.xAxis?.type).toBe('time')
     expect(balance.tooltip?.trigger).toBe('axis')
   })
 
   it('formats chart tooltips with domain labels instead of raw x indexes', () => {
     const daily = buildDailyActivityChartOptions(overview.dailyActivity)
-    const provider = buildProviderUsageChartOptions(overview)
     const balance = buildConversationBalanceChartOptions(overview)
     const dailyFormatter = daily.tooltip?.formatter as (
-      params: ReadonlyArray<TooltipParams>,
-    ) => string
-    const providerFormatter = provider.tooltip?.formatter as (
       params: ReadonlyArray<TooltipParams>,
     ) => string
     const balanceFormatter = balance.tooltip?.formatter as (
       params: ReadonlyArray<TooltipParams>,
     ) => string
+
+    const apr30Timestamp = new Date('2026-04-30T00:00:00').getTime()
 
     expect(
       dailyFormatter([
@@ -157,29 +157,18 @@ describe('analytics insights view helpers', () => {
           seriesName: 'Turns',
           seriesIndex: 1,
           dataIndex: 1,
-          value: [1, 5],
+          value: [apr30Timestamp, 5],
           color: '#14b8a6',
         },
       ]),
     ).toContain('Apr')
-    expect(
-      providerFormatter([
-        {
-          seriesName: 'Turns',
-          seriesIndex: 1,
-          dataIndex: 0,
-          value: [0, 16],
-          color: '#f59e0b',
-        },
-      ]),
-    ).toContain('Codex')
     expect(
       balanceFormatter([
         {
           seriesName: 'Assistant words',
           seriesIndex: 1,
           dataIndex: 1,
-          value: [1, 1_100],
+          value: [apr30Timestamp, 1_100],
           color: '#14b8a6',
         },
       ]),
