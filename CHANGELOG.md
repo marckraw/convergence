@@ -1,5 +1,11 @@
 # convergence
 
+## 0.31.7
+
+### Patch Changes
+
+- baf2af6: Fix transcript scroll fighting the user. The virtualized transcript no longer re-anchors to the bottom on every render of the last row, so scrolling up stays where you left it. Auto-follow still re-engages while you're near the bottom (including streaming size growth) and resets on session switch.
+
 ## 0.31.6
 
 ### Patch Changes
