@@ -87,16 +87,88 @@ export class WorkspaceService {
     return rows.map(workspaceFromRow)
   }
 
+  async archive(input: {
+    id: string
+    removeWorktree?: boolean
+  }): Promise<Workspace> {
+    const row = this.getRowById(input.id)
+    if (!row) throw new Error(`Workspace not found: ${input.id}`)
+
+    const archivedAt = row.archived_at ?? new Date().toISOString()
+    let worktreeRemovedAt = row.worktree_removed_at
+
+    if (input.removeWorktree && !worktreeRemovedAt) {
+      worktreeRemovedAt = await this.removePhysicalWorktree(row)
+    }
+
+    const applyArchive = this.db.transaction(() => {
+      this.db
+        .prepare(
+          `UPDATE workspaces
+           SET archived_at = ?, worktree_removed_at = ?
+           WHERE id = ?`,
+        )
+        .run(archivedAt, worktreeRemovedAt, row.id)
+
+      this.db
+        .prepare(
+          `UPDATE sessions
+           SET archived_at = COALESCE(archived_at, ?),
+               updated_at = datetime('now')
+           WHERE workspace_id = ?`,
+        )
+        .run(archivedAt, row.id)
+    })
+
+    applyArchive()
+    return workspaceFromRow(this.getRowById(row.id)!)
+  }
+
+  async removeWorktree(id: string): Promise<Workspace> {
+    const row = this.getRowById(id)
+    if (!row) throw new Error(`Workspace not found: ${id}`)
+
+    if (row.worktree_removed_at) {
+      return workspaceFromRow(row)
+    }
+
+    const worktreeRemovedAt = await this.removePhysicalWorktree(row)
+    this.db
+      .prepare('UPDATE workspaces SET worktree_removed_at = ? WHERE id = ?')
+      .run(worktreeRemovedAt, id)
+
+    return workspaceFromRow(this.getRowById(id)!)
+  }
+
+  unarchive(id: string): Workspace {
+    const row = this.getRowById(id)
+    if (!row) throw new Error(`Workspace not found: ${id}`)
+
+    const applyUnarchive = this.db.transaction(() => {
+      this.db
+        .prepare('UPDATE workspaces SET archived_at = NULL WHERE id = ?')
+        .run(id)
+
+      this.db
+        .prepare(
+          `UPDATE sessions
+           SET archived_at = NULL,
+               updated_at = datetime('now')
+           WHERE workspace_id = ?`,
+        )
+        .run(id)
+    })
+
+    applyUnarchive()
+    return workspaceFromRow(this.getRowById(id)!)
+  }
+
   async delete(id: string): Promise<void> {
-    const row = this.db
-      .prepare('SELECT * FROM workspaces WHERE id = ?')
-      .get(id) as WorkspaceRow | undefined
+    const row = this.getRowById(id)
 
     if (!row) return
 
-    const project = this.db
-      .prepare('SELECT repository_path FROM projects WHERE id = ?')
-      .get(row.project_id) as { repository_path: string } | undefined
+    const project = this.getProjectRepository(row.project_id)
 
     if (project) {
       await this.git.removeWorktree(project.repository_path, row.path)
@@ -110,5 +182,31 @@ export class WorkspaceService {
     for (const ws of workspaces) {
       await this.delete(ws.id)
     }
+  }
+
+  private async removePhysicalWorktree(row: WorkspaceRow): Promise<string> {
+    const project = this.getProjectRepository(row.project_id)
+    if (project) {
+      await this.git.removeWorktree(project.repository_path, row.path)
+    }
+    return new Date().toISOString()
+  }
+
+  private getRowById(id: string): WorkspaceRow | null {
+    const row = this.db
+      .prepare('SELECT * FROM workspaces WHERE id = ?')
+      .get(id) as WorkspaceRow | undefined
+
+    return row ?? null
+  }
+
+  private getProjectRepository(
+    projectId: string,
+  ): { repository_path: string } | null {
+    const project = this.db
+      .prepare('SELECT repository_path FROM projects WHERE id = ?')
+      .get(projectId) as { repository_path: string } | undefined
+
+    return project ?? null
   }
 }

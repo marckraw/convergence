@@ -6,6 +6,8 @@ export interface Workspace {
   branchName: string
   path: string
   type: 'worktree'
+  archivedAt: string | null
+  worktreeRemovedAt: string | null
   createdAt: string
 }
 
@@ -22,6 +24,8 @@ export function workspaceFromRow(row: WorkspaceRow): Workspace {
     branchName: row.branch_name,
     path: row.path,
     type: row.type as 'worktree',
+    archivedAt: row.archived_at,
+    worktreeRemovedAt: row.worktree_removed_at,
     createdAt: row.created_at,
   }
 }

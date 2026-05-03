@@ -181,13 +181,58 @@ interface WorkspaceData {
   branchName: string
   path: string
   type: 'worktree'
+  archivedAt: string | null
+  worktreeRemovedAt: string | null
   createdAt: string
+}
+
+type PullRequestProviderData = 'github' | 'unknown'
+type PullRequestLookupStatusData =
+  | 'found'
+  | 'not-found'
+  | 'unsupported-remote'
+  | 'gh-unavailable'
+  | 'gh-auth-required'
+  | 'error'
+type PullRequestStateData =
+  | 'none'
+  | 'open'
+  | 'draft'
+  | 'closed'
+  | 'merged'
+  | 'unknown'
+
+interface WorkspacePullRequestData {
+  id: string
+  projectId: string
+  workspaceId: string
+  provider: PullRequestProviderData
+  lookupStatus: PullRequestLookupStatusData
+  state: PullRequestStateData
+  repositoryOwner: string | null
+  repositoryName: string | null
+  number: number | null
+  title: string | null
+  url: string | null
+  isDraft: boolean
+  headBranch: string | null
+  baseBranch: string | null
+  mergedAt: string | null
+  lastCheckedAt: string
+  error: string | null
+  createdAt: string
+  updatedAt: string
 }
 
 interface CreateWorkspaceInput {
   projectId: string
   branchName: string
   baseBranch?: string | null
+}
+
+interface ArchiveWorkspaceInputData {
+  id: string
+  removeWorktree?: boolean
 }
 
 type SessionStatus = 'idle' | 'running' | 'completed' | 'failed'
@@ -803,7 +848,18 @@ interface ElectronAPI {
     create: (input: CreateWorkspaceInput) => Promise<WorkspaceData>
     getByProjectId: (projectId: string) => Promise<WorkspaceData[]>
     getAll: () => Promise<WorkspaceData[]>
+    archive: (input: ArchiveWorkspaceInputData) => Promise<WorkspaceData>
+    unarchive: (id: string) => Promise<WorkspaceData>
+    removeWorktree: (id: string) => Promise<WorkspaceData>
     delete: (id: string) => Promise<void>
+  }
+  pullRequest: {
+    getByWorkspaceId: (
+      workspaceId: string,
+    ) => Promise<WorkspacePullRequestData | null>
+    refreshForSession: (
+      sessionId: string,
+    ) => Promise<WorkspacePullRequestData | null>
   }
   git: {
     getBranches: (repoPath: string) => Promise<string[]>

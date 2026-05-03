@@ -255,6 +255,8 @@ function setup(
       branchName: input.branchName,
       path: '/tmp/ws-new',
       type: 'worktree' as const,
+      archivedAt: null,
+      worktreeRemovedAt: null,
       createdAt: 'now',
     }),
   )

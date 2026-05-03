@@ -5,6 +5,7 @@ import type { InitiativeSynthesisService } from '../backend/initiative/initiativ
 import { StateService } from '../backend/state/state.service'
 import { WorkspaceService } from '../backend/workspace/workspace.service'
 import { GitService } from '../backend/git/git.service'
+import { PullRequestService } from '../backend/pull-request/pull-request.service'
 import { SessionService } from '../backend/session/session.service'
 import type { TurnCaptureService } from '../backend/session/turn/turn-capture.service'
 import {
@@ -122,6 +123,7 @@ export function registerIpcHandlers(
   stateService: StateService,
   workspaceService: WorkspaceService,
   gitService: GitService,
+  pullRequestService: PullRequestService,
   sessionService: SessionService,
   providerRegistry: ProviderRegistry,
   mcpService: McpService,
@@ -320,9 +322,34 @@ export function registerIpcHandlers(
 
   ipcMain.handle('workspace:getAll', () => workspaceService.listAll())
 
+  ipcMain.handle(
+    'workspace:archive',
+    async (_event, input: { id: string; removeWorktree?: boolean }) =>
+      workspaceService.archive(input),
+  )
+
+  ipcMain.handle('workspace:unarchive', (_event, id: string) =>
+    workspaceService.unarchive(id),
+  )
+
+  ipcMain.handle('workspace:removeWorktree', (_event, id: string) =>
+    workspaceService.removeWorktree(id),
+  )
+
   ipcMain.handle('workspace:delete', async (_event, id: string) => {
     await workspaceService.delete(id)
   })
+
+  // Pull request handlers
+  ipcMain.handle(
+    'pullRequest:getByWorkspaceId',
+    (_event, workspaceId: string) =>
+      pullRequestService.getByWorkspaceId(workspaceId),
+  )
+
+  ipcMain.handle('pullRequest:refreshForSession', (_event, sessionId: string) =>
+    pullRequestService.refreshForSession(sessionId),
+  )
 
   // Git handlers
   ipcMain.handle('git:getBranches', async (_event, repoPath: string) =>

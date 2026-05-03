@@ -44,6 +44,8 @@ function makeWorkspace(
     branchName,
     path: `/worktrees/${id}`,
     type: 'worktree',
+    archivedAt: null,
+    worktreeRemovedAt: null,
     createdAt: '2026-01-01T00:00:00.000Z',
     ...overrides,
   }

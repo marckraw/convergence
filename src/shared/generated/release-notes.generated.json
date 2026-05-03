@@ -1,6 +1,16 @@
 {
-  "currentVersion": "0.31.4",
+  "currentVersion": "0.31.6",
   "releases": [
+    {
+      "version": "0.31.6",
+      "date": null,
+      "notes": "### Patch Changes\n\n- cfbaa17: Clarify that provider CLIs use the detected shell Node/npm prefix, while Convergence itself runs on Electron's embedded Node runtime."
+    },
+    {
+      "version": "0.31.5",
+      "date": null,
+      "notes": "### Patch Changes\n\n- d4ee76f: Add provider self-updates from the Providers dialog. Convergence now detects npm-managed Claude Code, Codex, and Pi Agent installs, shows their npm prefix and runtime Node version, and can refresh an outdated provider in place using the npm binary from the detected install."
+    },
     {
       "version": "0.31.4",
       "date": null,

@@ -4,7 +4,14 @@ export interface Workspace {
   branchName: string
   path: string
   type: 'worktree'
+  archivedAt: string | null
+  worktreeRemovedAt: string | null
   createdAt: string
+}
+
+export interface ArchiveWorkspaceInput {
+  id: string
+  removeWorktree?: boolean
 }
 
 export interface BranchOutputFacts {

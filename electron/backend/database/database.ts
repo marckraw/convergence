@@ -180,10 +180,39 @@ const SCHEMA = `
     branch_name TEXT NOT NULL,
     path TEXT NOT NULL,
     type TEXT NOT NULL DEFAULT 'worktree',
+    archived_at TEXT,
+    worktree_removed_at TEXT,
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
     UNIQUE(project_id, branch_name),
     FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE
   );
+
+  CREATE TABLE IF NOT EXISTS workspace_pull_requests (
+    id TEXT PRIMARY KEY,
+    project_id TEXT NOT NULL,
+    workspace_id TEXT NOT NULL UNIQUE,
+    provider TEXT NOT NULL DEFAULT 'unknown',
+    lookup_status TEXT NOT NULL DEFAULT 'error',
+    state TEXT NOT NULL DEFAULT 'unknown',
+    repository_owner TEXT,
+    repository_name TEXT,
+    number INTEGER,
+    title TEXT,
+    url TEXT,
+    is_draft INTEGER NOT NULL DEFAULT 0,
+    head_branch TEXT,
+    base_branch TEXT,
+    merged_at TEXT,
+    last_checked_at TEXT NOT NULL,
+    error TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+    FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
+    FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_workspace_pull_requests_project
+    ON workspace_pull_requests(project_id);
 
   CREATE TABLE IF NOT EXISTS attachments (
     id TEXT PRIMARY KEY,
@@ -301,6 +330,18 @@ function getTableColumnNames(
 
 function hasLegacyTranscriptColumn(database: Database.Database): boolean {
   return getTableColumnNames(database, 'sessions').has('transcript')
+}
+
+function ensureWorkspaceColumns(database: Database.Database): void {
+  const columnNames = getTableColumnNames(database, 'workspaces')
+
+  if (!columnNames.has('archived_at')) {
+    database.exec('ALTER TABLE workspaces ADD COLUMN archived_at TEXT')
+  }
+
+  if (!columnNames.has('worktree_removed_at')) {
+    database.exec('ALTER TABLE workspaces ADD COLUMN worktree_removed_at TEXT')
+  }
 }
 
 function ensureSessionColumns(database: Database.Database): void {
@@ -625,6 +666,7 @@ export function getDatabase(dbPath?: string): Database.Database {
     database.pragma('journal_mode = WAL')
     database.pragma('foreign_keys = ON')
     database.exec(SCHEMA)
+    ensureWorkspaceColumns(database)
     ensureSessionColumns(database)
     ensureAttachmentsTableNoFk(database)
     migrateLegacySessionConversations(database)

@@ -72,7 +72,31 @@ export interface WorkspaceRow {
   branch_name: string
   path: string
   type: string
+  archived_at: string | null
+  worktree_removed_at: string | null
   created_at: string
+}
+
+export interface WorkspacePullRequestRow {
+  id: string
+  project_id: string
+  workspace_id: string
+  provider: string
+  lookup_status: string
+  state: string
+  repository_owner: string | null
+  repository_name: string | null
+  number: number | null
+  title: string | null
+  url: string | null
+  is_draft: number
+  head_branch: string | null
+  base_branch: string | null
+  merged_at: string | null
+  last_checked_at: string
+  error: string | null
+  created_at: string
+  updated_at: string
 }
 
 export interface SessionTurnRow {

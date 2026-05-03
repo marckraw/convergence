@@ -19,6 +19,13 @@ interface WorkspaceActions {
     branchName: string,
     baseBranch?: string | null,
   ) => Promise<void>
+  archiveWorkspace: (
+    id: string,
+    projectId: string,
+    removeWorktree?: boolean,
+  ) => Promise<void>
+  unarchiveWorkspace: (id: string, projectId: string) => Promise<void>
+  removeWorkspaceWorktree: (id: string, projectId: string) => Promise<void>
   deleteWorkspace: (id: string, projectId: string) => Promise<void>
   clearError: () => void
 }
@@ -74,6 +81,60 @@ export const useWorkspaceStore = create<WorkspaceStore>((set) => ({
       set({
         error:
           err instanceof Error ? err.message : 'Failed to create workspace',
+      })
+    }
+  },
+
+  archiveWorkspace: async (
+    id: string,
+    projectId: string,
+    removeWorktree?: boolean,
+  ) => {
+    try {
+      await workspaceApi.archive({ id, removeWorktree })
+      const [workspaces, globalWorkspaces] = await Promise.all([
+        workspaceApi.getByProjectId(projectId),
+        workspaceApi.getAll(),
+      ])
+      set({ workspaces, globalWorkspaces })
+    } catch (err) {
+      set({
+        error:
+          err instanceof Error ? err.message : 'Failed to archive workspace',
+      })
+    }
+  },
+
+  unarchiveWorkspace: async (id: string, projectId: string) => {
+    try {
+      await workspaceApi.unarchive(id)
+      const [workspaces, globalWorkspaces] = await Promise.all([
+        workspaceApi.getByProjectId(projectId),
+        workspaceApi.getAll(),
+      ])
+      set({ workspaces, globalWorkspaces })
+    } catch (err) {
+      set({
+        error:
+          err instanceof Error ? err.message : 'Failed to unarchive workspace',
+      })
+    }
+  },
+
+  removeWorkspaceWorktree: async (id: string, projectId: string) => {
+    try {
+      await workspaceApi.removeWorktree(id)
+      const [workspaces, globalWorkspaces] = await Promise.all([
+        workspaceApi.getByProjectId(projectId),
+        workspaceApi.getAll(),
+      ])
+      set({ workspaces, globalWorkspaces })
+    } catch (err) {
+      set({
+        error:
+          err instanceof Error
+            ? err.message
+            : 'Failed to remove workspace worktree',
       })
     }
   },

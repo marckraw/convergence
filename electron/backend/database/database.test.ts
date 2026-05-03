@@ -40,6 +40,13 @@ describe('database', () => {
     const columnNames = sessionColumns.map((column) => column.name)
     expect(columnNames).not.toContain('transcript')
     expect(columnNames).toContain('primary_surface')
+
+    const workspaceColumns = db
+      .prepare("PRAGMA table_info('workspaces')")
+      .all() as Array<{ name: string }>
+    const workspaceColumnNames = workspaceColumns.map((column) => column.name)
+    expect(workspaceColumnNames).toContain('archived_at')
+    expect(workspaceColumnNames).toContain('worktree_removed_at')
   })
 
   it('creates analytics_profile_snapshots with expected columns and delete behavior', () => {

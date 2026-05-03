@@ -96,9 +96,7 @@ export class GitService {
     ).catch(() => null)
     const remoteName = upstreamBranch?.split('/')[0] ?? null
     const remoteUrl = remoteName
-      ? await exec('git', ['remote', 'get-url', remoteName], repoPath).catch(
-          () => null,
-        )
+      ? await this.getRemoteUrl(repoPath, remoteName)
       : null
 
     return {
@@ -106,6 +104,15 @@ export class GitService {
       upstreamBranch,
       remoteUrl,
     }
+  }
+
+  async getRemoteUrl(
+    repoPath: string,
+    remoteName = 'origin',
+  ): Promise<string | null> {
+    return exec('git', ['remote', 'get-url', remoteName], repoPath).catch(
+      () => null,
+    )
   }
 
   async branchExists(repoPath: string, branchName: string): Promise<boolean> {

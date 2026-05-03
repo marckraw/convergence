@@ -7,6 +7,8 @@ const mockWorkspace = {
   branchName: 'feature-test',
   path: '/tmp/workspaces/proj-1/ws-1',
   type: 'worktree' as const,
+  archivedAt: null,
+  worktreeRemovedAt: null,
   createdAt: '2026-01-01T00:00:00.000Z',
 }
 
@@ -24,6 +26,9 @@ const mockElectronAPI = {
     create: vi.fn(),
     getByProjectId: vi.fn(),
     getAll: vi.fn(),
+    archive: vi.fn(),
+    unarchive: vi.fn(),
+    removeWorktree: vi.fn(),
     delete: vi.fn(),
   },
   git: {
@@ -101,6 +106,83 @@ describe('useWorkspaceStore', () => {
     expect(useWorkspaceStore.getState().error).toBe(
       'branch already checked out',
     )
+  })
+
+  it('archiveWorkspace calls API and refreshes both lists', async () => {
+    const archivedWorkspace = {
+      ...mockWorkspace,
+      archivedAt: '2026-01-02T00:00:00.000Z',
+      worktreeRemovedAt: '2026-01-02T00:00:00.000Z',
+    }
+    useWorkspaceStore.setState({
+      workspaces: [mockWorkspace],
+      globalWorkspaces: [mockWorkspace],
+    })
+    mockElectronAPI.workspace.archive.mockResolvedValue(archivedWorkspace)
+    mockElectronAPI.workspace.getByProjectId.mockResolvedValue([
+      archivedWorkspace,
+    ])
+    mockElectronAPI.workspace.getAll.mockResolvedValue([archivedWorkspace])
+
+    await useWorkspaceStore.getState().archiveWorkspace('ws-1', 'proj-1', true)
+
+    expect(mockElectronAPI.workspace.archive).toHaveBeenCalledWith({
+      id: 'ws-1',
+      removeWorktree: true,
+    })
+    expect(useWorkspaceStore.getState().workspaces).toEqual([archivedWorkspace])
+    expect(useWorkspaceStore.getState().globalWorkspaces).toEqual([
+      archivedWorkspace,
+    ])
+  })
+
+  it('unarchiveWorkspace calls API and refreshes both lists', async () => {
+    const archivedWorkspace = {
+      ...mockWorkspace,
+      archivedAt: '2026-01-02T00:00:00.000Z',
+      worktreeRemovedAt: '2026-01-02T00:00:00.000Z',
+    }
+    useWorkspaceStore.setState({
+      workspaces: [archivedWorkspace],
+      globalWorkspaces: [archivedWorkspace],
+    })
+    mockElectronAPI.workspace.unarchive.mockResolvedValue(mockWorkspace)
+    mockElectronAPI.workspace.getByProjectId.mockResolvedValue([mockWorkspace])
+    mockElectronAPI.workspace.getAll.mockResolvedValue([mockWorkspace])
+
+    await useWorkspaceStore.getState().unarchiveWorkspace('ws-1', 'proj-1')
+
+    expect(mockElectronAPI.workspace.unarchive).toHaveBeenCalledWith('ws-1')
+    expect(useWorkspaceStore.getState().workspaces).toEqual([mockWorkspace])
+    expect(useWorkspaceStore.getState().globalWorkspaces).toEqual([
+      mockWorkspace,
+    ])
+  })
+
+  it('removeWorkspaceWorktree calls API and refreshes both lists', async () => {
+    const removedWorkspace = {
+      ...mockWorkspace,
+      worktreeRemovedAt: '2026-01-02T00:00:00.000Z',
+    }
+    useWorkspaceStore.setState({
+      workspaces: [mockWorkspace],
+      globalWorkspaces: [mockWorkspace],
+    })
+    mockElectronAPI.workspace.removeWorktree.mockResolvedValue(removedWorkspace)
+    mockElectronAPI.workspace.getByProjectId.mockResolvedValue([
+      removedWorkspace,
+    ])
+    mockElectronAPI.workspace.getAll.mockResolvedValue([removedWorkspace])
+
+    await useWorkspaceStore.getState().removeWorkspaceWorktree('ws-1', 'proj-1')
+
+    expect(mockElectronAPI.workspace.removeWorktree).toHaveBeenCalledWith(
+      'ws-1',
+    )
+    expect(useWorkspaceStore.getState().workspaces).toEqual([removedWorkspace])
+    expect(useWorkspaceStore.getState().globalWorkspaces).toEqual([
+      removedWorkspace,
+    ])
   })
 
   it('deleteWorkspace calls API and refreshes both lists', async () => {
