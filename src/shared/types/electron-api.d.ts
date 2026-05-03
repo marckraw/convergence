@@ -504,9 +504,29 @@ interface ProviderStatusInfo {
   availability: 'available' | 'unavailable'
   statusLabel: string
   binaryPath: string | null
+  install: ProviderInstallInfo | null
   version: string | null
   reason: string | null
   update: ProviderUpdateInfo
+}
+
+interface ProviderInstallInfo {
+  manager: 'npm'
+  realBinaryPath: string
+  packageDirectory: string
+  prefixDirectory: string
+  npmPath: string
+  nodePath: string | null
+  nodeVersion: string | null
+}
+
+interface ProviderRuntimeInfo {
+  appNodeVersion: string
+  electronVersion: string | null
+  appVersion: string
+  isPackaged: boolean
+  platform: NodeJS.Platform
+  arch: string
 }
 
 type ProviderUpdateStatus = 'current' | 'outdated' | 'unknown'
@@ -519,6 +539,15 @@ interface ProviderUpdateInfo {
   installCommand: string
   updateCommand: string
   checkError: string | null
+}
+
+interface ProviderUpdateResult {
+  ok: boolean
+  providerId: string
+  command: string
+  stdout: string
+  stderr: string
+  error: string | null
 }
 
 type FeedbackPriorityData = 'low' | 'medium' | 'high'
@@ -845,6 +874,8 @@ interface ElectronAPI {
   provider: {
     getAll: () => Promise<ProviderInfo[]>
     getStatuses: () => Promise<ProviderStatusInfo[]>
+    getRuntimeInfo: () => Promise<ProviderRuntimeInfo>
+    update: (providerId: string) => Promise<ProviderUpdateResult>
   }
   mcp: {
     listByProjectId: (projectId: string) => Promise<ProjectMcpVisibility>

@@ -1,8 +1,11 @@
 import { execFile } from 'child_process'
-import type { ProviderStatusInfo } from './provider.types'
+import { join } from 'path'
+import { realpathSync } from 'fs'
+import type { ProviderInstallInfo, ProviderStatusInfo } from './provider.types'
 import { buildProviderStatus, getKnownProviders } from './provider-status.pure'
 import { fetchNpmLatestVersion } from './npm-registry'
 import { isPiAuthConfigured } from './pi/pi-auth-status'
+import { resolveNpmManagedProviderInstall } from './provider-updater.pure'
 
 function which(binary: string): Promise<string | null> {
   const cmd = process.platform === 'win32' ? 'where' : 'which'
@@ -29,6 +32,51 @@ function getVersion(binaryPath: string): Promise<string | null> {
   })
 }
 
+function getNodeVersion(nodePath: string): Promise<string | null> {
+  return new Promise((resolve) => {
+    execFile(nodePath, ['--version'], { timeout: 5_000 }, (error, stdout) => {
+      if (error || !stdout.trim()) {
+        resolve(null)
+      } else {
+        resolve(stdout.trim().split('\n')[0])
+      }
+    })
+  })
+}
+
+async function inspectNpmInstall(
+  binaryPath: string,
+  packageName: string,
+): Promise<ProviderInstallInfo | null> {
+  try {
+    const realBinaryPath = realpathSync(binaryPath)
+    const install = resolveNpmManagedProviderInstall(
+      realBinaryPath,
+      packageName,
+    )
+    if (!install) return null
+
+    const nodePath = join(
+      install.prefixDirectory,
+      'bin',
+      process.platform === 'win32' ? 'node.exe' : 'node',
+    )
+    const nodeVersion = await getNodeVersion(nodePath)
+
+    return {
+      manager: 'npm',
+      realBinaryPath,
+      packageDirectory: install.packageDirectory,
+      prefixDirectory: install.prefixDirectory,
+      npmPath: install.npmPath,
+      nodePath,
+      nodeVersion,
+    }
+  } catch {
+    return null
+  }
+}
+
 export interface DetectedProvider {
   id: string
   name: string
@@ -39,17 +87,24 @@ export async function inspectProviderStatuses(): Promise<ProviderStatusInfo[]> {
   const statuses = await Promise.all(
     getKnownProviders().map(async (provider) => {
       const binaryPath = await which(provider.binaryName)
-      const [{ version: latestVersion, error: updateCheckError }, version] =
-        await Promise.all([
-          fetchNpmLatestVersion(provider.packageName),
-          binaryPath ? getVersion(binaryPath) : Promise.resolve(null),
-        ])
+      const [
+        { version: latestVersion, error: updateCheckError },
+        version,
+        install,
+      ] = await Promise.all([
+        fetchNpmLatestVersion(provider.packageName),
+        binaryPath ? getVersion(binaryPath) : Promise.resolve(null),
+        binaryPath
+          ? inspectNpmInstall(binaryPath, provider.packageName)
+          : Promise.resolve(null),
+      ])
       const status = buildProviderStatus(
         provider,
         binaryPath,
         version,
         latestVersion,
         updateCheckError,
+        install,
       )
       if (
         provider.id === 'pi' &&

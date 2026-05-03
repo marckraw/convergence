@@ -28,6 +28,7 @@ describe('provider-status.pure', () => {
       availability: 'available',
       statusLabel: 'Available',
       binaryPath: '/usr/local/bin/claude',
+      install: null,
       version: '2.1.112',
       reason: null,
       update: {
@@ -52,6 +53,7 @@ describe('provider-status.pure', () => {
       availability: 'available',
       statusLabel: 'Available',
       binaryPath: '/usr/local/bin/claude',
+      install: null,
       version: null,
       reason: null,
       update: {
@@ -76,6 +78,7 @@ describe('provider-status.pure', () => {
       availability: 'unavailable',
       statusLabel: 'Not found',
       binaryPath: null,
+      install: null,
       version: null,
       reason: 'codex is not available on PATH for the app runtime.',
       update: {

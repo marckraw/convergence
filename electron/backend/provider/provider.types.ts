@@ -115,9 +115,29 @@ export interface ProviderStatusInfo {
   availability: 'available' | 'unavailable'
   statusLabel: string
   binaryPath: string | null
+  install: ProviderInstallInfo | null
   version: string | null
   reason: string | null
   update: ProviderUpdateInfo
+}
+
+export interface ProviderInstallInfo {
+  manager: 'npm'
+  realBinaryPath: string
+  packageDirectory: string
+  prefixDirectory: string
+  npmPath: string
+  nodePath: string | null
+  nodeVersion: string | null
+}
+
+export interface ProviderRuntimeInfo {
+  appNodeVersion: string
+  electronVersion: string | null
+  appVersion: string
+  isPackaged: boolean
+  platform: NodeJS.Platform
+  arch: string
 }
 
 export type ProviderUpdateStatus = 'current' | 'outdated' | 'unknown'
@@ -130,6 +150,15 @@ export interface ProviderUpdateInfo {
   installCommand: string
   updateCommand: string
   checkError: string | null
+}
+
+export interface ProviderUpdateResult {
+  ok: boolean
+  providerId: string
+  command: string
+  stdout: string
+  stderr: string
+  error: string | null
 }
 
 export type ProviderKind = 'conversation' | 'shell'
