@@ -112,7 +112,14 @@ export const SessionTranscript: FC<SessionTranscriptProps> = ({
     setScrollParent(node)
   }, [])
 
-  const lastItem = conversationItems[conversationItems.length - 1] ?? null
+  const measureRow = useCallback(
+    (node: HTMLDivElement | null) => {
+      rowVirtualizer.measureElement(node)
+    },
+    [rowVirtualizer],
+  )
+
+  const totalSize = rowVirtualizer.getTotalSize()
   useLayoutEffect(() => {
     const sessionChanged = previousSessionIdRef.current !== session.id
     previousSessionIdRef.current = session.id
@@ -124,13 +131,7 @@ export const SessionTranscript: FC<SessionTranscriptProps> = ({
     if (sessionChanged || bottomFollowRef.current) {
       scrollToLatest()
     }
-  }, [
-    conversationItems.length,
-    lastItem?.id,
-    lastItem?.updatedAt,
-    scrollToLatest,
-    session.id,
-  ])
+  }, [session.id, totalSize, scrollToLatest])
 
   useLayoutEffect(
     () => () => {
@@ -167,16 +168,7 @@ export const SessionTranscript: FC<SessionTranscriptProps> = ({
             return (
               <div
                 key={virtualItem.key}
-                ref={(node) => {
-                  rowVirtualizer.measureElement(node)
-                  if (
-                    node &&
-                    bottomFollowRef.current &&
-                    virtualItem.index === conversationRenderPlan.length - 1
-                  ) {
-                    scrollToLatest()
-                  }
-                }}
+                ref={measureRow}
                 data-index={virtualItem.index}
                 data-testid="session-transcript-row"
                 className="absolute top-0 left-0 w-full"
