@@ -1,5 +1,11 @@
 # convergence
 
+## 0.31.5
+
+### Patch Changes
+
+- d4ee76f: Add provider self-updates from the Providers dialog. Convergence now detects npm-managed Claude Code, Codex, and Pi Agent installs, shows their npm prefix and runtime Node version, and can refresh an outdated provider in place using the npm binary from the detected install.
+
 ## 0.31.4
 
 ### Patch Changes
