@@ -6,6 +6,7 @@ export type TerminalShortcut =
   | { kind: 'focus-adjacent'; direction: 'up' | 'down' | 'left' | 'right' }
   | { kind: 'clear' }
   | { kind: 'toggle-dock' }
+  | { kind: 'cycle-dock-placement' }
 
 export interface KeyEventLike {
   key: string
@@ -44,6 +45,7 @@ export function matchShortcut(
   if (altKey) return null
 
   if (key === 't' && !shiftKey) return { kind: 'new-tab' }
+  if (key === 't' && shiftKey) return { kind: 'cycle-dock-placement' }
   if (key === 'd' && !shiftKey) {
     return { kind: 'split', direction: 'vertical' }
   }

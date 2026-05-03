@@ -17,6 +17,7 @@ export type {
   SplitNode,
   PaneTree,
   SplitDirection,
+  DockPlacement,
   CreateTerminalArgs,
 } from './terminal.types'
 export { findLeaf, collectAllPtyIds, makeLeaf } from './pane-tree.pure'

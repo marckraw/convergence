@@ -2,6 +2,7 @@ import { create } from 'zustand'
 import { terminalApi } from './terminal.api'
 import { terminalLayoutApi } from './terminal-layout.api'
 import type {
+  DockPlacement,
   LeafNode,
   PaneTree,
   SplitDirection,
@@ -25,12 +26,25 @@ interface TerminalState {
   treesBySessionId: Record<string, PaneTree | null>
   focusedLeafBySessionId: Record<string, string | null>
   dockHeightBySessionId: Record<string, number>
+  dockWidthBySessionId: Record<string, number>
   dockVisibleBySessionId: Record<string, boolean>
+  dockPlacementBySessionId: Record<string, DockPlacement>
 }
 
 const DEFAULT_DOCK_HEIGHT = 280
 const MIN_DOCK_HEIGHT = 120
 const DOCK_MAX_HEIGHT_RATIO = 0.6
+
+const DEFAULT_DOCK_WIDTH = 480
+const MIN_DOCK_WIDTH = 240
+const DOCK_MAX_WIDTH_RATIO = 0.6
+
+const DEFAULT_DOCK_PLACEMENT: DockPlacement = 'bottom'
+const PLACEMENT_CYCLE: readonly DockPlacement[] = [
+  'bottom',
+  'right',
+  'left',
+] as const
 
 function clampDockHeight(height: number, maxWindowHeight: number): number {
   const max = Math.max(
@@ -38,6 +52,14 @@ function clampDockHeight(height: number, maxWindowHeight: number): number {
     Math.floor(maxWindowHeight * DOCK_MAX_HEIGHT_RATIO),
   )
   return Math.min(Math.max(height, MIN_DOCK_HEIGHT), max)
+}
+
+function clampDockWidth(width: number, maxWindowWidth: number): number {
+  const max = Math.max(
+    MIN_DOCK_WIDTH,
+    Math.floor(maxWindowWidth * DOCK_MAX_WIDTH_RATIO),
+  )
+  return Math.min(Math.max(width, MIN_DOCK_WIDTH), max)
 }
 
 interface OpenFirstPaneArgs {
@@ -92,6 +114,16 @@ interface TerminalActions {
   ) => void
   resetDockHeight: (sessionId: string) => void
   getDockHeight: (sessionId: string) => number
+  setDockWidth: (
+    sessionId: string,
+    width: number,
+    maxWindowWidth: number,
+  ) => void
+  resetDockWidth: (sessionId: string) => void
+  getDockWidth: (sessionId: string) => number
+  setDockPlacement: (sessionId: string, placement: DockPlacement) => void
+  cycleDockPlacement: (sessionId: string) => DockPlacement
+  getDockPlacement: (sessionId: string) => DockPlacement
   toggleDockVisible: (sessionId: string) => void
   setDockVisible: (sessionId: string, visible: boolean) => void
   isDockVisible: (sessionId: string) => boolean
@@ -216,7 +248,9 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
   treesBySessionId: {},
   focusedLeafBySessionId: {},
   dockHeightBySessionId: {},
+  dockWidthBySessionId: {},
   dockVisibleBySessionId: {},
+  dockPlacementBySessionId: {},
 
   getTree: (sessionId) => get().treesBySessionId[sessionId] ?? null,
 
@@ -395,6 +429,54 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
 
   getDockHeight: (sessionId) =>
     get().dockHeightBySessionId[sessionId] ?? DEFAULT_DOCK_HEIGHT,
+
+  setDockWidth: (sessionId, width, maxWindowWidth) => {
+    const clamped = clampDockWidth(width, maxWindowWidth)
+    set((state) => ({
+      dockWidthBySessionId: {
+        ...state.dockWidthBySessionId,
+        [sessionId]: clamped,
+      },
+    }))
+  },
+
+  resetDockWidth: (sessionId) => {
+    set((state) => ({
+      dockWidthBySessionId: {
+        ...state.dockWidthBySessionId,
+        [sessionId]: DEFAULT_DOCK_WIDTH,
+      },
+    }))
+  },
+
+  getDockWidth: (sessionId) =>
+    get().dockWidthBySessionId[sessionId] ?? DEFAULT_DOCK_WIDTH,
+
+  setDockPlacement: (sessionId, placement) => {
+    set((state) => ({
+      dockPlacementBySessionId: {
+        ...state.dockPlacementBySessionId,
+        [sessionId]: placement,
+      },
+    }))
+  },
+
+  cycleDockPlacement: (sessionId) => {
+    const current =
+      get().dockPlacementBySessionId[sessionId] ?? DEFAULT_DOCK_PLACEMENT
+    const idx = PLACEMENT_CYCLE.indexOf(current)
+    const next = PLACEMENT_CYCLE[(idx + 1) % PLACEMENT_CYCLE.length]!
+    set((state) => ({
+      dockPlacementBySessionId: {
+        ...state.dockPlacementBySessionId,
+        [sessionId]: next,
+      },
+    }))
+    return next
+  },
+
+  getDockPlacement: (sessionId) =>
+    get().dockPlacementBySessionId[sessionId] ?? DEFAULT_DOCK_PLACEMENT,
 
   toggleDockVisible: (sessionId) => {
     set((state) => ({

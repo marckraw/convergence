@@ -102,10 +102,10 @@ describe('matchShortcut (mac)', () => {
     expect(matchShortcut(ev('x', { metaKey: true }), 'mac')).toBeNull()
   })
 
-  it('Cmd-Shift-T (extra shift on new-tab) returns null', () => {
+  it('Cmd-Shift-T → cycle dock placement', () => {
     expect(
       matchShortcut(ev('T', { metaKey: true, shiftKey: true }), 'mac'),
-    ).toBeNull()
+    ).toEqual({ kind: 'cycle-dock-placement' })
   })
 
   it('Cmd-Alt-T (extra alt on new-tab) returns null', () => {

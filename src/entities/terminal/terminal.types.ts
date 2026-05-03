@@ -2,6 +2,8 @@ export type TerminalPaneStatus = 'starting' | 'running' | 'exited'
 
 export type SplitDirection = 'horizontal' | 'vertical'
 
+export type DockPlacement = 'bottom' | 'left' | 'right'
+
 export interface TerminalTab {
   id: string
   cwd: string

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import type { FC, ReactNode } from 'react'
 import { useSessionStore } from '@/entities/session'
+import { useTerminalStore } from '@/entities/terminal'
 import { SessionView } from '@/widgets/session-view'
 import { TerminalDock } from '@/widgets/terminal-dock'
 import { ConversationDockPlaceholder } from './conversation-dock-placeholder.presentational'
@@ -19,6 +20,12 @@ export const WorkspaceLayoutContainer: FC = () => {
     const session = s.sessions.find((entry) => entry.id === s.activeSessionId)
     return session?.primarySurface ?? 'conversation'
   })
+  const activeSessionId = useSessionStore((s) => s.activeSessionId)
+  const dockPlacement = useTerminalStore((s) =>
+    activeSessionId
+      ? (s.dockPlacementBySessionId[activeSessionId] ?? 'bottom')
+      : 'bottom',
+  )
 
   // The conversation dock is an opt-in companion to terminal-primary
   // sessions. Default hidden per spec; Cmd+J reveals/collapses it.
@@ -59,6 +66,12 @@ export const WorkspaceLayoutContainer: FC = () => {
     dockSlot = <TerminalDock />
   }
 
+  // Placement only applies to the secondary terminal dock in conversation-
+  // primary sessions. Terminal-primary sessions render the conversation
+  // placeholder dock at the bottom regardless.
+  const effectivePlacement =
+    primarySurface === 'terminal' ? 'bottom' : dockPlacement
+
   return (
     <WorkspaceLayoutView
       mainSlot={mainSlot}
@@ -66,6 +79,7 @@ export const WorkspaceLayoutContainer: FC = () => {
       dockVisible={
         primarySurface === 'terminal' ? conversationDockVisible : true
       }
+      dockPlacement={effectivePlacement}
     />
   )
 }
