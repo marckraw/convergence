@@ -1,7 +1,11 @@
 import { useCallback, useEffect, useState } from 'react'
 import type { FC } from 'react'
 import { Bot } from 'lucide-react'
-import { providerApi, type ProviderStatusInfo } from '@/entities/session'
+import {
+  providerApi,
+  type ProviderRuntimeInfo,
+  type ProviderStatusInfo,
+} from '@/entities/session'
 import { useDialogStore } from '@/entities/dialog'
 import { Button } from '@/shared/ui/button'
 import { ProviderStatusDialog } from './provider-status.presentational'
@@ -18,15 +22,27 @@ export const ProviderStatusDialogContainer: FC = () => {
     [openDialog, closeDialog],
   )
   const [statuses, setStatuses] = useState<ProviderStatusInfo[]>([])
+  const [runtimeInfo, setRuntimeInfo] = useState<ProviderRuntimeInfo | null>(
+    null,
+  )
   const [isLoading, setIsLoading] = useState(false)
+  const [updatingProviderId, setUpdatingProviderId] = useState<string | null>(
+    null,
+  )
   const [error, setError] = useState<string | null>(null)
+  const [message, setMessage] = useState<string | null>(null)
 
   const load = useCallback(async () => {
     setIsLoading(true)
     setError(null)
 
     try {
-      setStatuses(await providerApi.getStatuses())
+      const [nextStatuses, nextRuntimeInfo] = await Promise.all([
+        providerApi.getStatuses(),
+        providerApi.getRuntimeInfo(),
+      ])
+      setStatuses(nextStatuses)
+      setRuntimeInfo(nextRuntimeInfo)
     } catch (nextError) {
       setError(
         nextError instanceof Error
@@ -37,6 +53,36 @@ export const ProviderStatusDialogContainer: FC = () => {
       setIsLoading(false)
     }
   }, [])
+
+  const handleUpdateProvider = useCallback(
+    async (providerId: string) => {
+      setUpdatingProviderId(providerId)
+      setError(null)
+      setMessage(null)
+
+      try {
+        const result = await providerApi.update(providerId)
+        if (!result.ok) {
+          setError(result.error ?? 'Provider update failed')
+          return
+        }
+
+        setMessage(
+          `Updated ${providerId}. New sessions will use the refreshed provider.`,
+        )
+        await load()
+      } catch (nextError) {
+        setError(
+          nextError instanceof Error
+            ? nextError.message
+            : 'Provider update failed',
+        )
+      } finally {
+        setUpdatingProviderId(null)
+      }
+    },
+    [load],
+  )
 
   useEffect(() => {
     void load()
@@ -51,9 +97,13 @@ export const ProviderStatusDialogContainer: FC = () => {
       open={open}
       onOpenChange={handleOpenChange}
       statuses={statuses}
+      runtimeInfo={runtimeInfo}
       isLoading={isLoading}
+      updatingProviderId={updatingProviderId}
       error={error}
+      message={message}
       onRefresh={load}
+      onUpdateProvider={handleUpdateProvider}
       trigger={
         <Button
           type="button"

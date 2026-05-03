@@ -5,7 +5,9 @@ import type {
   SessionSummary,
   SessionQueuedInput,
   ProviderInfo,
+  ProviderRuntimeInfo,
   ProviderStatusInfo,
+  ProviderUpdateResult,
   ReasoningEffort,
   MidRunInputMode,
   NeedsYouDismissals,
@@ -131,4 +133,8 @@ export const providerApi = {
   getAll: (): Promise<ProviderInfo[]> => window.electronAPI.provider.getAll(),
   getStatuses: (): Promise<ProviderStatusInfo[]> =>
     window.electronAPI.provider.getStatuses(),
+  getRuntimeInfo: (): Promise<ProviderRuntimeInfo> =>
+    window.electronAPI.provider.getRuntimeInfo(),
+  update: (providerId: string): Promise<ProviderUpdateResult> =>
+    window.electronAPI.provider.update(providerId),
 }

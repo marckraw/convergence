@@ -1,4 +1,8 @@
-import type { ProviderStatusInfo, ProviderUpdateInfo } from './provider.types'
+import type {
+  ProviderInstallInfo,
+  ProviderStatusInfo,
+  ProviderUpdateInfo,
+} from './provider.types'
 
 interface KnownProvider {
   id: string
@@ -117,6 +121,7 @@ export function buildProviderStatus(
   version: string | null = null,
   latestVersion: string | null = null,
   updateCheckError: string | null = null,
+  install: ProviderInstallInfo | null = null,
 ): ProviderStatusInfo {
   const update = buildProviderUpdateInfo(
     provider,
@@ -133,6 +138,7 @@ export function buildProviderStatus(
       availability: 'available',
       statusLabel: 'Available',
       binaryPath,
+      install,
       version,
       reason: null,
       update,
@@ -146,6 +152,7 @@ export function buildProviderStatus(
     availability: 'unavailable',
     statusLabel: 'Not found',
     binaryPath: null,
+    install: null,
     version: null,
     reason: `${provider.binaryName} is not available on PATH for the app runtime.`,
     update,

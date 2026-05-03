@@ -25,6 +25,7 @@ import { CodexProvider } from '../backend/provider/codex/codex-provider'
 import { PiProvider } from '../backend/provider/pi/pi-provider'
 import { ShellProvider } from '../backend/provider/shell/shell-provider'
 import { detectProviders } from '../backend/provider/detect'
+import { updateProviderPackage } from '../backend/provider/provider-updater.service'
 import { ProviderDebugService } from '../backend/provider-debug/provider-debug.service'
 import {
   broadcastProviderDebug,
@@ -225,22 +226,28 @@ async function startApp(): Promise<void> {
     // Cleanup is best effort.
   }
   const debugSink = providerDebugService
-  const detected = await detectProviders()
-  for (const p of detected) {
-    if (p.id === 'claude-code') {
-      providerRegistry.register(
-        new ClaudeCodeProvider(p.binaryPath, taskProgressService, debugSink),
-      )
-    } else if (p.id === 'codex') {
-      providerRegistry.register(
-        new CodexProvider(p.binaryPath, taskProgressService, debugSink),
-      )
-    } else if (p.id === 'pi') {
-      providerRegistry.register(
-        new PiProvider(p.binaryPath, taskProgressService, debugSink),
-      )
+  async function refreshDetectedProviders() {
+    const nextDetected = await detectProviders()
+
+    for (const p of nextDetected) {
+      if (p.id === 'claude-code') {
+        providerRegistry.register(
+          new ClaudeCodeProvider(p.binaryPath, taskProgressService, debugSink),
+        )
+      } else if (p.id === 'codex') {
+        providerRegistry.register(
+          new CodexProvider(p.binaryPath, taskProgressService, debugSink),
+        )
+      } else if (p.id === 'pi') {
+        providerRegistry.register(
+          new PiProvider(p.binaryPath, taskProgressService, debugSink),
+        )
+      }
     }
+
+    return nextDetected
   }
+  let detected = await refreshDetectedProviders()
 
   // Synthetic provider for terminal-primary sessions; always available
   // regardless of which conversational binaries are installed.
@@ -436,6 +443,38 @@ async function startApp(): Promise<void> {
     projectContextService,
     initiativeSynthesisService,
     (prefs) => updatesScheduler?.onPrefsChanged(prefs),
+    {
+      getRuntimeInfo: () => ({
+        appNodeVersion: process.versions.node,
+        electronVersion: process.versions.electron ?? null,
+        appVersion: app.getVersion(),
+        isPackaged: app.isPackaged,
+        platform: process.platform,
+        arch: process.arch,
+      }),
+      updateProvider: async (providerId) => {
+        const provider = detected.find((item) => item.id === providerId)
+        if (!provider) {
+          return {
+            ok: false,
+            providerId,
+            command: '',
+            stdout: '',
+            stderr: '',
+            error: `Provider is not available: ${providerId}`,
+          }
+        }
+
+        const result = await updateProviderPackage(
+          providerId,
+          provider.binaryPath,
+        )
+        if (result.ok) {
+          detected = await refreshDetectedProviders()
+        }
+        return result
+      },
+    },
   )
 
   const terminalService = new TerminalService(

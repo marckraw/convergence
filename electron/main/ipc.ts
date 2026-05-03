@@ -12,6 +12,10 @@ import {
   setRecentSessionIds,
 } from '../backend/session/session-recents'
 import { ProviderRegistry } from '../backend/provider/provider-registry'
+import type {
+  ProviderRuntimeInfo,
+  ProviderUpdateResult,
+} from '../backend/provider/provider.types'
 import { McpService } from '../backend/mcp/mcp.service'
 import { SkillsService } from '../backend/skills/skills.service'
 import { AppSettingsService } from '../backend/app-settings/app-settings.service'
@@ -129,6 +133,10 @@ export function registerIpcHandlers(
   projectContextService: ProjectContextService,
   initiativeSynthesisService?: InitiativeSynthesisService,
   onUpdatePrefsChanged?: (prefs: { backgroundCheckEnabled: boolean }) => void,
+  providerActions?: {
+    getRuntimeInfo: () => ProviderRuntimeInfo
+    updateProvider: (providerId: string) => Promise<ProviderUpdateResult>
+  },
 ): void {
   // Project handlers
   ipcMain.handle('project:create', (_event, input: CreateProjectInput) => {
@@ -560,6 +568,25 @@ export function registerIpcHandlers(
     const { inspectProviderStatuses } =
       await import('../backend/provider/detect')
     return inspectProviderStatuses()
+  })
+
+  ipcMain.handle('provider:getRuntimeInfo', () =>
+    providerActions?.getRuntimeInfo(),
+  )
+
+  ipcMain.handle('provider:update', (_event, providerId: string) => {
+    if (!providerActions) {
+      return {
+        ok: false,
+        providerId,
+        command: '',
+        stdout: '',
+        stderr: '',
+        error: 'Provider updates are unavailable in this app runtime.',
+      } satisfies ProviderUpdateResult
+    }
+
+    return providerActions.updateProvider(providerId)
   })
 
   ipcMain.handle('mcp:listByProjectId', (_event, projectId: string) =>
