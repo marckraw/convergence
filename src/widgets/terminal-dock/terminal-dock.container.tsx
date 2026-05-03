@@ -54,6 +54,14 @@ export const TerminalDockContainer: FC<TerminalDockContainerProps> = ({
   const dockHeight = useTerminalStore((s) =>
     activeSessionId ? (s.dockHeightBySessionId[activeSessionId] ?? 280) : 280,
   )
+  const dockWidth = useTerminalStore((s) =>
+    activeSessionId ? (s.dockWidthBySessionId[activeSessionId] ?? 480) : 480,
+  )
+  const dockPlacement = useTerminalStore((s) =>
+    activeSessionId
+      ? (s.dockPlacementBySessionId[activeSessionId] ?? 'bottom')
+      : 'bottom',
+  )
   const dockVisible = useTerminalStore((s) =>
     activeSessionId
       ? (s.dockVisibleBySessionId[activeSessionId] ?? true)
@@ -67,6 +75,7 @@ export const TerminalDockContainer: FC<TerminalDockContainerProps> = ({
   const resizeSplit = useTerminalStore((s) => s.resizeSplit)
   const toggleDockVisible = useTerminalStore((s) => s.toggleDockVisible)
   const setDockVisible = useTerminalStore((s) => s.setDockVisible)
+  const cycleDockPlacement = useTerminalStore((s) => s.cycleDockPlacement)
   const hydratePaneTree = useTerminalStore((s) => s.hydratePaneTree)
 
   const [closeRequest, setCloseRequest] = useState<CloseConfirmRequest | null>(
@@ -204,6 +213,17 @@ export const TerminalDockContainer: FC<TerminalDockContainerProps> = ({
         return
       }
 
+      if (shortcut.kind === 'cycle-dock-placement') {
+        // Placement only applies to the secondary dock; the main-mode
+        // surface is always the full window.
+        if (mode === 'main') return
+        const visible =
+          useTerminalStore.getState().dockVisibleBySessionId[sessionId] ?? true
+        if (!visible) setDockVisible(sessionId, true)
+        cycleDockPlacement(sessionId)
+        return
+      }
+
       const currentTree = useTerminalStore.getState().getTree(sessionId)
       if (!currentTree) return
       const leafId =
@@ -261,6 +281,7 @@ export const TerminalDockContainer: FC<TerminalDockContainerProps> = ({
       setFocusedLeaf,
       toggleDockVisible,
       setDockVisible,
+      cycleDockPlacement,
       hydratePaneTree,
     ],
   )
@@ -354,29 +375,47 @@ export const TerminalDockContainer: FC<TerminalDockContainerProps> = ({
   if (!tree) return null
   if (!dockVisible) return null
 
+  const isSide = dockPlacement !== 'bottom'
+  const rootClass =
+    dockPlacement === 'left'
+      ? dockStyles.rootLeft
+      : dockPlacement === 'right'
+        ? dockStyles.rootRight
+        : dockStyles.rootBottom
+  const sizeStyle = isSide ? { width: dockWidth } : { height: dockHeight }
+  const handleAtStart = dockPlacement === 'bottom' || dockPlacement === 'right'
+  const resizeHandle = (
+    <DockResizeHandle sessionId={activeSessionId} placement={dockPlacement} />
+  )
+  const inner = (
+    <div className={dockStyles.inner}>
+      <SplitNodeView
+        tree={tree}
+        sessionId={activeSessionId}
+        focusedLeafId={focusedLeafId}
+        onSelectTab={handleSelectTab}
+        onNewTab={handleNewTab}
+        onSplit={handleSplit}
+        onCloseActiveTab={handleCloseActiveTab}
+        onCloseTab={handleCloseTab}
+        onFocusLeaf={handleFocusLeaf}
+        onResizeSplit={handleResizeSplit}
+      />
+    </div>
+  )
+
   return (
     <>
       <div
         ref={dockRef}
-        className={dockStyles.root}
-        style={{ height: dockHeight }}
+        className={rootClass}
+        style={sizeStyle}
         data-testid="terminal-dock"
+        data-placement={dockPlacement}
       >
-        <DockResizeHandle sessionId={activeSessionId} />
-        <div className={dockStyles.inner} style={{ height: dockHeight - 4 }}>
-          <SplitNodeView
-            tree={tree}
-            sessionId={activeSessionId}
-            focusedLeafId={focusedLeafId}
-            onSelectTab={handleSelectTab}
-            onNewTab={handleNewTab}
-            onSplit={handleSplit}
-            onCloseActiveTab={handleCloseActiveTab}
-            onCloseTab={handleCloseTab}
-            onFocusLeaf={handleFocusLeaf}
-            onResizeSplit={handleResizeSplit}
-          />
-        </div>
+        {handleAtStart ? resizeHandle : null}
+        {inner}
+        {!handleAtStart ? resizeHandle : null}
       </div>
       <CloseConfirmDialog
         request={closeRequest}

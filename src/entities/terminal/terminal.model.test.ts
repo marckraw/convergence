@@ -47,7 +47,9 @@ describe('terminal store', () => {
       treesBySessionId: {},
       focusedLeafBySessionId: {},
       dockHeightBySessionId: {},
+      dockWidthBySessionId: {},
       dockVisibleBySessionId: {},
+      dockPlacementBySessionId: {},
     })
     createMock.mockReset()
     disposeMock.mockReset()
@@ -312,6 +314,59 @@ describe('terminal store', () => {
       useTerminalStore.getState().setDockHeight('s1', 400, 1000)
       useTerminalStore.getState().resetDockHeight('s1')
       expect(useTerminalStore.getState().getDockHeight('s1')).toBe(280)
+    })
+  })
+
+  describe('dock width', () => {
+    it('returns default dock width when unset', () => {
+      expect(useTerminalStore.getState().getDockWidth('s1')).toBe(480)
+    })
+
+    it('clamps dock width to min 240', () => {
+      useTerminalStore.getState().setDockWidth('s1', 50, 2000)
+      expect(useTerminalStore.getState().getDockWidth('s1')).toBe(240)
+    })
+
+    it('clamps dock width to max (60% of window)', () => {
+      useTerminalStore.getState().setDockWidth('s1', 9999, 1000)
+      expect(useTerminalStore.getState().getDockWidth('s1')).toBe(600)
+    })
+
+    it('stores within-bounds dock width verbatim', () => {
+      useTerminalStore.getState().setDockWidth('s1', 600, 2000)
+      expect(useTerminalStore.getState().getDockWidth('s1')).toBe(600)
+    })
+
+    it('resetDockWidth sets to default 480', () => {
+      useTerminalStore.getState().setDockWidth('s1', 700, 2000)
+      useTerminalStore.getState().resetDockWidth('s1')
+      expect(useTerminalStore.getState().getDockWidth('s1')).toBe(480)
+    })
+  })
+
+  describe('dock placement', () => {
+    it('returns bottom by default', () => {
+      expect(useTerminalStore.getState().getDockPlacement('s1')).toBe('bottom')
+    })
+
+    it('setDockPlacement stores the value', () => {
+      useTerminalStore.getState().setDockPlacement('s1', 'right')
+      expect(useTerminalStore.getState().getDockPlacement('s1')).toBe('right')
+    })
+
+    it('cycleDockPlacement rotates bottom → right → left → bottom', () => {
+      const store = useTerminalStore.getState()
+      expect(store.cycleDockPlacement('s1')).toBe('right')
+      expect(store.cycleDockPlacement('s1')).toBe('left')
+      expect(store.cycleDockPlacement('s1')).toBe('bottom')
+      expect(useTerminalStore.getState().getDockPlacement('s1')).toBe('bottom')
+    })
+
+    it('cycle is independent per session', () => {
+      const store = useTerminalStore.getState()
+      store.cycleDockPlacement('s1')
+      expect(store.getDockPlacement('s1')).toBe('right')
+      expect(store.getDockPlacement('s2')).toBe('bottom')
     })
   })
 

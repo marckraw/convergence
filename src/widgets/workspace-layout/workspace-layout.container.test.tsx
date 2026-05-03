@@ -43,6 +43,13 @@ vi.mock('@/entities/session', () => ({
     }),
 }))
 
+let dockPlacementBySessionId: Record<string, 'bottom' | 'left' | 'right'> = {}
+
+vi.mock('@/entities/terminal', () => ({
+  useTerminalStore: (selector: (state: unknown) => unknown) =>
+    selector({ dockPlacementBySessionId }),
+}))
+
 vi.mock('@/widgets/session-view', () => ({
   SessionView: () => <div data-testid="session-view">SessionView</div>,
 }))
@@ -63,6 +70,7 @@ describe('WorkspaceLayoutContainer', () => {
     setPrimarySurfaceMock.mockReset()
     sessions = [baseSession()]
     activeSessionId = 's1'
+    dockPlacementBySessionId = {}
   })
 
   it('renders SessionView in main with TerminalDock below for conversation-primary sessions', () => {
@@ -118,5 +126,35 @@ describe('WorkspaceLayoutContainer', () => {
     sessions = []
     render(<WorkspaceLayoutContainer />)
     expect(screen.getByTestId('session-view')).toBeInTheDocument()
+  })
+
+  it('renders bottom dock placement by default', () => {
+    render(<WorkspaceLayoutContainer />)
+    expect(
+      screen
+        .getByTestId('workspace-layout')
+        .getAttribute('data-dock-placement'),
+    ).toBe('bottom')
+  })
+
+  it('renders side dock placement when terminal store reports left/right', () => {
+    dockPlacementBySessionId = { s1: 'right' }
+    render(<WorkspaceLayoutContainer />)
+    expect(
+      screen
+        .getByTestId('workspace-layout')
+        .getAttribute('data-dock-placement'),
+    ).toBe('right')
+  })
+
+  it('forces bottom placement for terminal-primary sessions even when store says side', () => {
+    sessions = [baseSession({ primarySurface: 'terminal' })]
+    dockPlacementBySessionId = { s1: 'left' }
+    render(<WorkspaceLayoutContainer />)
+    expect(
+      screen
+        .getByTestId('workspace-layout')
+        .getAttribute('data-dock-placement'),
+    ).toBe('bottom')
   })
 })

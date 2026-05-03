@@ -1,36 +1,49 @@
 import type { FC, PointerEvent } from 'react'
 import { useCallback, useEffect, useRef } from 'react'
-import { useTerminalStore } from '@/entities/terminal'
+import { useTerminalStore, type DockPlacement } from '@/entities/terminal'
 import { cn } from '@/shared/lib/cn.pure'
 
 interface DockResizeHandleProps {
   sessionId: string
+  placement: DockPlacement
 }
 
-export const DockResizeHandle: FC<DockResizeHandleProps> = ({ sessionId }) => {
+export const DockResizeHandle: FC<DockResizeHandleProps> = ({
+  sessionId,
+  placement,
+}) => {
   const setDockHeight = useTerminalStore((s) => s.setDockHeight)
   const resetDockHeight = useTerminalStore((s) => s.resetDockHeight)
+  const setDockWidth = useTerminalStore((s) => s.setDockWidth)
+  const resetDockWidth = useTerminalStore((s) => s.resetDockWidth)
+
   const dragStateRef = useRef<{
+    startX: number
     startY: number
-    startHeight: number
+    startSize: number
     pointerId: number
   } | null>(null)
-  const activeRef = useRef(false)
 
   const handlePointerMove = useCallback(
     (event: globalThis.PointerEvent) => {
       const drag = dragStateRef.current
       if (!drag) return
-      const delta = drag.startY - event.clientY
-      const nextHeight = drag.startHeight + delta
-      setDockHeight(sessionId, nextHeight, window.innerHeight)
+      if (placement === 'bottom') {
+        const delta = drag.startY - event.clientY
+        setDockHeight(sessionId, drag.startSize + delta, window.innerHeight)
+        return
+      }
+      const delta =
+        placement === 'right'
+          ? drag.startX - event.clientX
+          : event.clientX - drag.startX
+      setDockWidth(sessionId, drag.startSize + delta, window.innerWidth)
     },
-    [sessionId, setDockHeight],
+    [sessionId, placement, setDockHeight, setDockWidth],
   )
 
   const handlePointerUp = useCallback(() => {
     dragStateRef.current = null
-    activeRef.current = false
     window.removeEventListener('pointermove', handlePointerMove)
     window.removeEventListener('pointerup', handlePointerUp)
   }, [handlePointerMove])
@@ -44,31 +57,41 @@ export const DockResizeHandle: FC<DockResizeHandleProps> = ({ sessionId }) => {
 
   const onPointerDown = (event: PointerEvent<HTMLDivElement>) => {
     event.preventDefault()
-    const currentHeight = useTerminalStore.getState().getDockHeight(sessionId)
+    const startSize =
+      placement === 'bottom'
+        ? useTerminalStore.getState().getDockHeight(sessionId)
+        : useTerminalStore.getState().getDockWidth(sessionId)
     dragStateRef.current = {
+      startX: event.clientX,
       startY: event.clientY,
-      startHeight: currentHeight,
+      startSize,
       pointerId: event.pointerId,
     }
-    activeRef.current = true
     window.addEventListener('pointermove', handlePointerMove)
     window.addEventListener('pointerup', handlePointerUp)
   }
 
   const onDoubleClick = () => {
-    resetDockHeight(sessionId)
+    if (placement === 'bottom') resetDockHeight(sessionId)
+    else resetDockWidth(sessionId)
   }
+
+  const isVertical = placement === 'bottom'
 
   return (
     <div
       role="separator"
-      aria-orientation="horizontal"
+      aria-orientation={isVertical ? 'horizontal' : 'vertical'}
       aria-label="Resize terminal dock"
       onPointerDown={onPointerDown}
       onDoubleClick={onDoubleClick}
       data-testid="dock-resize-handle"
+      data-placement={placement}
       className={cn(
-        'h-1 w-full shrink-0 cursor-row-resize bg-border/40 transition-colors hover:bg-border',
+        'shrink-0 bg-border/40 transition-colors hover:bg-border',
+        isVertical
+          ? 'h-1 w-full cursor-row-resize'
+          : 'h-full w-1 cursor-col-resize',
       )}
     />
   )

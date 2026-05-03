@@ -184,7 +184,9 @@ describe('TerminalDock container', () => {
         treesBySessionId: {},
         focusedLeafBySessionId: {},
         dockHeightBySessionId: {},
+        dockWidthBySessionId: {},
         dockVisibleBySessionId: {},
+        dockPlacementBySessionId: {},
       },
       true,
     )
@@ -578,6 +580,36 @@ describe('TerminalDock container', () => {
           cwd: '/tmp/session-cwd',
         }),
       )
+    })
+
+    it('Cmd-Shift-T cycles dock placement', () => {
+      setupSingleLeaf()
+      const cycleSpy = vi.spyOn(
+        useTerminalStore.getState(),
+        'cycleDockPlacement',
+      )
+
+      render(<TerminalDock />)
+      fireEvent.keyDown(window, { key: 'T', metaKey: true, shiftKey: true })
+
+      expect(cycleSpy).toHaveBeenCalledWith('s-1')
+    })
+
+    it('Cmd-Shift-T re-shows the dock when it was hidden', () => {
+      setupSingleLeaf()
+      useTerminalStore.setState((state) => ({
+        ...state,
+        dockVisibleBySessionId: { 's-1': false },
+      }))
+      const setVisibleSpy = vi.spyOn(
+        useTerminalStore.getState(),
+        'setDockVisible',
+      )
+
+      render(<TerminalDock />)
+      fireEvent.keyDown(window, { key: 'T', metaKey: true, shiftKey: true })
+
+      expect(setVisibleSpy).toHaveBeenCalledWith('s-1', true)
     })
 
     it('Cmd-` toggles dock visibility', () => {
