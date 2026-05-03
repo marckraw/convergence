@@ -38,6 +38,8 @@ interface ProjectTreeProps {
   pullRequestsByWorkspaceId?: Readonly<Record<string, WorkspacePullRequest>>
   regeneratingSessionIds?: ReadonlySet<string>
   pulsingSessionIds?: Readonly<Record<string, true>>
+  expandedWorkspaces?: ReadonlySet<string>
+  onToggleWorkspace?: (id: string) => void
   onSelectSession: (id: string) => void
   onArchiveSession: (id: string) => void
   onUnarchiveSession: (id: string) => void
@@ -59,6 +61,8 @@ export const ProjectTree: FC<ProjectTreeProps> = ({
   pullRequestsByWorkspaceId,
   regeneratingSessionIds,
   pulsingSessionIds,
+  expandedWorkspaces,
+  onToggleWorkspace,
   onSelectSession,
   onArchiveSession,
   onUnarchiveSession,
@@ -71,9 +75,10 @@ export const ProjectTree: FC<ProjectTreeProps> = ({
   onDeleteWorkspace,
   onOpenCreateWorkspace,
 }) => {
-  const [expandedWorkspaces, setExpandedWorkspaces] = useState<Set<string>>(
+  const [internalExpanded, setInternalExpanded] = useState<Set<string>>(
     new Set(),
   )
+  const effectiveExpanded = expandedWorkspaces ?? internalExpanded
   const [showArchived, setShowArchived] = useState(false)
   const [renamingSessionId, setRenamingSessionId] = useState<string | null>(
     null,
@@ -96,7 +101,11 @@ export const ProjectTree: FC<ProjectTreeProps> = ({
   }
 
   const toggleWorkspace = (id: string) => {
-    setExpandedWorkspaces((prev) => {
+    if (onToggleWorkspace) {
+      onToggleWorkspace(id)
+      return
+    }
+    setInternalExpanded((prev) => {
       const next = new Set(prev)
       if (next.has(id)) next.delete(id)
       else next.add(id)
@@ -373,7 +382,7 @@ export const ProjectTree: FC<ProjectTreeProps> = ({
       {/* Active workspaces */}
       {activeWorkspaces.map((ws) => {
         const wsSessions = getActiveWorkspaceSessions(ws.id)
-        const isExpanded = expandedWorkspaces.has(ws.id)
+        const isExpanded = effectiveExpanded.has(ws.id)
         const pullRequest = pullRequestsByWorkspaceId?.[ws.id] ?? null
         const isMerged = pullRequest?.state === 'merged'
 
@@ -399,6 +408,11 @@ export const ProjectTree: FC<ProjectTreeProps> = ({
                     {isMerged ? (
                       <span className="shrink-0 rounded-full border border-teal-500/25 bg-teal-500/10 px-1.5 py-0.5 text-[10px] font-medium text-teal-700 dark:text-teal-200">
                         Merged
+                      </span>
+                    ) : null}
+                    {ws.worktreeRemovedAt ? (
+                      <span className="shrink-0 rounded-full border border-border bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+                        Worktree removed
                       </span>
                     ) : null}
                     {wsSessions.length > 0 && (
@@ -459,7 +473,7 @@ export const ProjectTree: FC<ProjectTreeProps> = ({
             <div className="ml-4 space-y-0.5">
               {archivedWorkspaces.map((ws) => {
                 const wsSessions = getWorkspaceSessions(ws.id)
-                const isExpanded = expandedWorkspaces.has(ws.id)
+                const isExpanded = effectiveExpanded.has(ws.id)
                 const pullRequest = pullRequestsByWorkspaceId?.[ws.id] ?? null
                 const isMerged = pullRequest?.state === 'merged'
 

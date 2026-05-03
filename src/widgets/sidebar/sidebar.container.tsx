@@ -83,6 +83,27 @@ export const Sidebar: FC<SidebarProps> = ({
   const [regeneratingSessionIds, setRegeneratingSessionIds] = useState<
     ReadonlySet<string>
   >(() => new Set())
+  const [expandedWorkspaces, setExpandedWorkspaces] = useState<Set<string>>(
+    () => new Set(),
+  )
+
+  const toggleWorkspace = useCallback((id: string) => {
+    setExpandedWorkspaces((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }, [])
+
+  const expandWorkspace = useCallback((id: string) => {
+    setExpandedWorkspaces((prev) => {
+      if (prev.has(id)) return prev
+      const next = new Set(prev)
+      next.add(id)
+      return next
+    })
+  }, [])
 
   const handleRegenerateSessionName = useCallback((sessionId: string) => {
     setRegeneratingSessionIds((prev) => {
@@ -161,7 +182,11 @@ export const Sidebar: FC<SidebarProps> = ({
   )
 
   const handleSelectNeedsYouSession = async (sessionId: string) => {
+    const target = globalSessions.find((session) => session.id === sessionId)
     await switchToSession(sessionId)
+    if (target?.workspaceId) {
+      expandWorkspace(target.workspaceId)
+    }
     onSelectSession(sessionId)
   }
 
@@ -319,6 +344,8 @@ export const Sidebar: FC<SidebarProps> = ({
             activeSessionId={activeSessionId}
             pullRequestsByWorkspaceId={pullRequestsByWorkspaceId}
             pulsingSessionIds={pulsingSessionIds}
+            expandedWorkspaces={expandedWorkspaces}
+            onToggleWorkspace={toggleWorkspace}
             onSelectSession={onSelectSession}
             onArchiveSession={archiveSession}
             onUnarchiveSession={unarchiveSession}
