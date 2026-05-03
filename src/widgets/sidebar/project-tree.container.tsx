@@ -36,6 +36,8 @@ interface ProjectTreeProps {
   activeSessionId: string | null
   regeneratingSessionIds?: ReadonlySet<string>
   pulsingSessionIds?: Readonly<Record<string, true>>
+  expandedWorkspaces?: ReadonlySet<string>
+  onToggleWorkspace?: (id: string) => void
   onSelectSession: (id: string) => void
   onArchiveSession: (id: string) => void
   onUnarchiveSession: (id: string) => void
@@ -53,6 +55,8 @@ export const ProjectTree: FC<ProjectTreeProps> = ({
   activeSessionId,
   regeneratingSessionIds,
   pulsingSessionIds,
+  expandedWorkspaces,
+  onToggleWorkspace,
   onSelectSession,
   onArchiveSession,
   onUnarchiveSession,
@@ -62,9 +66,10 @@ export const ProjectTree: FC<ProjectTreeProps> = ({
   onDeleteWorkspace,
   onOpenCreateWorkspace,
 }) => {
-  const [expandedWorkspaces, setExpandedWorkspaces] = useState<Set<string>>(
+  const [internalExpanded, setInternalExpanded] = useState<Set<string>>(
     new Set(),
   )
+  const effectiveExpanded = expandedWorkspaces ?? internalExpanded
   const [showArchivedSessions, setShowArchivedSessions] = useState(false)
   const [renamingSessionId, setRenamingSessionId] = useState<string | null>(
     null,
@@ -87,7 +92,11 @@ export const ProjectTree: FC<ProjectTreeProps> = ({
   }
 
   const toggleWorkspace = (id: string) => {
-    setExpandedWorkspaces((prev) => {
+    if (onToggleWorkspace) {
+      onToggleWorkspace(id)
+      return
+    }
+    setInternalExpanded((prev) => {
       const next = new Set(prev)
       if (next.has(id)) next.delete(id)
       else next.add(id)
@@ -296,7 +305,7 @@ export const ProjectTree: FC<ProjectTreeProps> = ({
       {/* Workspaces */}
       {workspaces.map((ws) => {
         const wsSessions = getWorkspaceSessions(ws.id)
-        const isExpanded = expandedWorkspaces.has(ws.id)
+        const isExpanded = effectiveExpanded.has(ws.id)
 
         return (
           <div key={ws.id} className="ml-2 border-l border-border pl-2">
