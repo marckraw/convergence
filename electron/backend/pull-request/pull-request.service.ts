@@ -16,20 +16,29 @@ import {
 
 interface GhExecError extends Error {
   code?: unknown
+  killed?: boolean
+  signal?: NodeJS.Signals | null
   stderr?: string
 }
 
+const GH_LOOKUP_TIMEOUT_MS = 15_000
+
 function execGh(args: string[], cwd: string): Promise<string> {
   return new Promise((resolve, reject) => {
-    execFile('gh', args, { cwd }, (error, stdout, stderr) => {
-      if (error) {
-        const nextError = error as GhExecError
-        nextError.stderr = stderr
-        reject(nextError)
-        return
-      }
-      resolve(stdout.trimEnd())
-    })
+    execFile(
+      'gh',
+      args,
+      { cwd, timeout: GH_LOOKUP_TIMEOUT_MS },
+      (error, stdout, stderr) => {
+        if (error) {
+          const nextError = error as GhExecError
+          nextError.stderr = stderr
+          reject(nextError)
+          return
+        }
+        resolve(stdout.trimEnd())
+      },
+    )
   })
 }
 
@@ -45,6 +54,18 @@ export class PullRequestService {
       .get(workspaceId) as WorkspacePullRequestRow | undefined
 
     return row ? workspacePullRequestFromRow(row) : null
+  }
+
+  listByProjectId(projectId: string): WorkspacePullRequest[] {
+    const rows = this.db
+      .prepare(
+        `SELECT * FROM workspace_pull_requests
+         WHERE project_id = ?
+         ORDER BY updated_at DESC`,
+      )
+      .all(projectId) as WorkspacePullRequestRow[]
+
+    return rows.map(workspacePullRequestFromRow)
   }
 
   async refreshForSession(
@@ -158,7 +179,9 @@ export class PullRequestService {
             ? 'GitHub CLI (gh) is not available on PATH.'
             : lookupStatus === 'gh-auth-required'
               ? 'GitHub CLI is not authenticated. Run gh auth login.'
-              : error.stderr?.trim() || error.message || 'GitHub CLI failed.',
+              : error.killed || error.signal
+                ? 'GitHub CLI timed out while looking up pull request.'
+                : error.stderr?.trim() || error.message || 'GitHub CLI failed.',
       }
     }
   }

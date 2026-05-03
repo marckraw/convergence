@@ -15,6 +15,7 @@ export const PullRequestDetails: FC<PullRequestDetailsProps> = ({
     pullRequest.repositoryOwner && pullRequest.repositoryName
       ? `${pullRequest.repositoryOwner}/${pullRequest.repositoryName}`
       : 'Unknown repository'
+  const externalPullRequestUrl = getSafeHttpUrl(pullRequest.url)
 
   return (
     <div className="space-y-4">
@@ -76,13 +77,13 @@ export const PullRequestDetails: FC<PullRequestDetailsProps> = ({
               Merged {new Date(pullRequest.mergedAt).toLocaleString()}
             </p>
           ) : null}
-          {pullRequest.url ? (
+          {externalPullRequestUrl ? (
             <Button
               type="button"
               variant="outline"
               size="sm"
               className="mt-3 w-full justify-center gap-2"
-              onClick={() => window.open(pullRequest.url!, '_blank')}
+              onClick={() => window.open(externalPullRequestUrl, '_blank')}
             >
               <ExternalLink className="h-3.5 w-3.5" />
               Open in browser
@@ -96,6 +97,18 @@ export const PullRequestDetails: FC<PullRequestDetailsProps> = ({
       </p>
     </div>
   )
+}
+
+function getSafeHttpUrl(value: string | null): string | null {
+  if (!value) return null
+  try {
+    const url = new URL(value)
+    return url.protocol === 'https:' || url.protocol === 'http:'
+      ? url.toString()
+      : null
+  } catch {
+    return null
+  }
 }
 
 function statusLabel(pullRequest: WorkspacePullRequest): string {

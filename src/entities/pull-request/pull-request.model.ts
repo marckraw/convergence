@@ -10,6 +10,7 @@ interface PullRequestState {
 
 interface PullRequestActions {
   loadByWorkspaceId: (workspaceId: string) => Promise<void>
+  loadByProjectId: (projectId: string) => Promise<void>
   refreshForSession: (
     sessionId: string,
     workspaceId: string | null,
@@ -45,6 +46,31 @@ export const usePullRequestStore = create<PullRequestStore>((set) => ({
           ...state.errorByWorkspaceId,
           [workspaceId]:
             err instanceof Error ? err.message : 'Failed to load PR status',
+        },
+      }))
+    }
+  },
+
+  loadByProjectId: async (projectId) => {
+    try {
+      const pullRequests = await pullRequestApi.listByProjectId(projectId)
+      set((state) => {
+        const nextEntries = Object.entries(state.byWorkspaceId).filter(
+          ([, pullRequest]) => pullRequest.projectId !== projectId,
+        )
+        for (const pullRequest of pullRequests) {
+          nextEntries.push([pullRequest.workspaceId, pullRequest])
+        }
+        return {
+          byWorkspaceId: Object.fromEntries(nextEntries),
+        }
+      })
+    } catch (err) {
+      set((state) => ({
+        errorByWorkspaceId: {
+          ...state.errorByWorkspaceId,
+          [projectId]:
+            err instanceof Error ? err.message : 'Failed to load PR statuses',
         },
       }))
     }

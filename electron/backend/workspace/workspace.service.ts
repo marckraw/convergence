@@ -144,19 +144,22 @@ export class WorkspaceService {
     const row = this.getRowById(id)
     if (!row) throw new Error(`Workspace not found: ${id}`)
 
+    const workspaceArchivedAt = row.archived_at
     const applyUnarchive = this.db.transaction(() => {
       this.db
         .prepare('UPDATE workspaces SET archived_at = NULL WHERE id = ?')
         .run(id)
 
-      this.db
-        .prepare(
-          `UPDATE sessions
-           SET archived_at = NULL,
-               updated_at = datetime('now')
-           WHERE workspace_id = ?`,
-        )
-        .run(id)
+      if (workspaceArchivedAt) {
+        this.db
+          .prepare(
+            `UPDATE sessions
+             SET archived_at = NULL,
+                 updated_at = datetime('now')
+             WHERE workspace_id = ? AND archived_at = ?`,
+          )
+          .run(id, workspaceArchivedAt)
+      }
     })
 
     applyUnarchive()
@@ -186,9 +189,13 @@ export class WorkspaceService {
 
   private async removePhysicalWorktree(row: WorkspaceRow): Promise<string> {
     const project = this.getProjectRepository(row.project_id)
-    if (project) {
-      await this.git.removeWorktree(project.repository_path, row.path)
+    if (!project) {
+      throw new Error(
+        `Cannot remove worktree for workspace ${row.id}: project not found`,
+      )
     }
+
+    await this.git.removeWorktree(project.repository_path, row.path)
     return new Date().toISOString()
   }
 

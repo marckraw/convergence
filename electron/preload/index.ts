@@ -95,6 +95,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   pullRequest: {
     getByWorkspaceId: (workspaceId: string) =>
       ipcRenderer.invoke('pullRequest:getByWorkspaceId', workspaceId),
+    listByProjectId: (projectId: string) =>
+      ipcRenderer.invoke('pullRequest:listByProjectId', projectId),
     refreshForSession: (sessionId: string) =>
       ipcRenderer.invoke('pullRequest:refreshForSession', sessionId),
   },

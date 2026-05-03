@@ -52,8 +52,8 @@ export const Sidebar: FC<SidebarProps> = ({
   const setActiveProject = useProjectStore((s) => s.setActiveProject)
   const workspaces = useWorkspaceStore((s) => s.workspaces)
   const pullRequestsByWorkspaceId = usePullRequestStore((s) => s.byWorkspaceId)
-  const loadPullRequestByWorkspaceId = usePullRequestStore(
-    (s) => s.loadByWorkspaceId,
+  const loadPullRequestsByProjectId = usePullRequestStore(
+    (s) => s.loadByProjectId,
   )
   const currentBranch = useWorkspaceStore((s) => s.currentBranch)
   const loadWorkspaces = useWorkspaceStore((s) => s.loadWorkspaces)
@@ -122,6 +122,8 @@ export const Sidebar: FC<SidebarProps> = ({
     })
   }, [])
 
+  const workspaceIdsKey = workspaces.map((workspace) => workspace.id).join('|')
+
   useEffect(() => {
     if (activeProject) {
       loadWorkspaces(activeProject.id)
@@ -131,10 +133,10 @@ export const Sidebar: FC<SidebarProps> = ({
   }, [activeProject, loadWorkspaces, loadCurrentBranch, loadSessions])
 
   useEffect(() => {
-    for (const workspace of workspaces) {
-      void loadPullRequestByWorkspaceId(workspace.id)
+    if (activeProject) {
+      void loadPullRequestsByProjectId(activeProject.id)
     }
-  }, [loadPullRequestByWorkspaceId, workspaces])
+  }, [activeProject, loadPullRequestsByProjectId, workspaceIdsKey])
 
   const attentionSessions = globalSessions
     .map((session) => {

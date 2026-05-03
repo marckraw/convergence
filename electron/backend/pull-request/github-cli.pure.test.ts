@@ -23,8 +23,14 @@ describe('parseGithubRepositoryRef', () => {
     })
   })
 
-  it('rejects non-GitHub remotes', () => {
+  it('rejects unsupported and malformed remotes', () => {
     expect(parseGithubRepositoryRef('git@gitlab.com:acme/app.git')).toBeNull()
+    expect(
+      parseGithubRepositoryRef('https://gitlab.com/acme/app.git'),
+    ).toBeNull()
+    expect(parseGithubRepositoryRef('https://github.com/acme')).toBeNull()
+    expect(parseGithubRepositoryRef('not a url')).toBeNull()
+    expect(parseGithubRepositoryRef(null)).toBeNull()
   })
 })
 
@@ -37,6 +43,19 @@ describe('parseGithubCliPullRequests', () => {
     ).toMatchObject({
       lookupStatus: 'not-found',
       state: 'none',
+      repositoryOwner: 'acme',
+      repositoryName: 'app',
+      headBranch: 'feature-x',
+    })
+  })
+
+  it('returns error when gh returns malformed JSON', () => {
+    expect(
+      parseGithubCliPullRequests('{not-json', repository, 'feature-x'),
+    ).toMatchObject({
+      lookupStatus: 'error',
+      state: 'unknown',
+      error: 'GitHub CLI returned invalid JSON.',
       repositoryOwner: 'acme',
       repositoryName: 'app',
       headBranch: 'feature-x',

@@ -6,6 +6,9 @@ export const pullRequestApi = {
   ): Promise<WorkspacePullRequest | null> =>
     window.electronAPI.pullRequest.getByWorkspaceId(workspaceId),
 
+  listByProjectId: (projectId: string): Promise<WorkspacePullRequest[]> =>
+    window.electronAPI.pullRequest.listByProjectId(projectId),
+
   refreshForSession: (
     sessionId: string,
   ): Promise<WorkspacePullRequest | null> =>

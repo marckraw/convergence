@@ -857,6 +857,7 @@ interface ElectronAPI {
     getByWorkspaceId: (
       workspaceId: string,
     ) => Promise<WorkspacePullRequestData | null>
+    listByProjectId: (projectId: string) => Promise<WorkspacePullRequestData[]>
     refreshForSession: (
       sessionId: string,
     ) => Promise<WorkspacePullRequestData | null>

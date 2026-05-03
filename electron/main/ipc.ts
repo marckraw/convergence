@@ -347,6 +347,10 @@ export function registerIpcHandlers(
       pullRequestService.getByWorkspaceId(workspaceId),
   )
 
+  ipcMain.handle('pullRequest:listByProjectId', (_event, projectId: string) =>
+    pullRequestService.listByProjectId(projectId),
+  )
+
   ipcMain.handle('pullRequest:refreshForSession', (_event, sessionId: string) =>
     pullRequestService.refreshForSession(sessionId),
   )
