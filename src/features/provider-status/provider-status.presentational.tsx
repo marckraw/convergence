@@ -107,7 +107,7 @@ function renderRuntimeInfo(runtimeInfo: ProviderRuntimeInfo | null) {
         </div>
         <div>
           <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground/80">
-            App Node
+            Embedded app Node
           </p>
           <p className="text-foreground/80">
             {runtimeInfo.appNodeVersion} via Electron
@@ -131,6 +131,10 @@ function renderRuntimeInfo(runtimeInfo: ProviderRuntimeInfo | null) {
           </p>
         </div>
       </div>
+      <p className="mt-3 text-xs text-muted-foreground">
+        Provider CLIs run outside Electron with the Node/npm prefix that owns
+        the detected binary below.
+      </p>
     </div>
   )
 }
@@ -221,7 +225,7 @@ function renderProviderRow(
             <div className="space-y-1">
               <p className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground/80">
                 <Wrench className="h-3.5 w-3.5" />
-                Binary path
+                CLI binary path
               </p>
               <p className="break-all text-foreground/80">
                 {provider.binaryPath}
@@ -231,7 +235,7 @@ function renderProviderRow(
               <div className="space-y-2">
                 <div className="space-y-1">
                   <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground/80">
-                    Provider Node
+                    CLI Node
                   </p>
                   <p className="break-all text-foreground/80">
                     {provider.install.nodeVersion ?? 'Unknown'} ·{' '}
@@ -240,10 +244,15 @@ function renderProviderRow(
                 </div>
                 <div className="space-y-1">
                   <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground/80">
-                    npm prefix
+                    Global npm prefix
                   </p>
                   <p className="break-all text-foreground/80">
                     {provider.install.prefixDirectory}
+                  </p>
+                  <p className="text-[11px] text-muted-foreground">
+                    Updates run in this prefix. To move a provider to another
+                    Node version, make that Node your default and reinstall the
+                    CLI there.
                   </p>
                 </div>
               </div>
@@ -288,8 +297,9 @@ export const ProviderStatusDialog: FC<ProviderStatusDialogProps> = ({
         <DialogHeader className="border-b border-border/70 px-6 py-5">
           <DialogTitle>Providers</DialogTitle>
           <DialogDescription>
-            Runtime availability for the local AI CLIs Convergence can use on
-            this machine.
+            Availability and update status for local AI CLIs. Convergence uses
+            your shell PATH to find them, then updates each CLI in its detected
+            npm install.
           </DialogDescription>
         </DialogHeader>
 
