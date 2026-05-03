@@ -1,5 +1,11 @@
 # convergence
 
+## 0.31.6
+
+### Patch Changes
+
+- cfbaa17: Clarify that provider CLIs use the detected shell Node/npm prefix, while Convergence itself runs on Electron's embedded Node runtime.
+
 ## 0.31.5
 
 ### Patch Changes
