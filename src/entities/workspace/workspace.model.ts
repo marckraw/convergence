@@ -18,7 +18,7 @@ interface WorkspaceActions {
     projectId: string,
     branchName: string,
     baseBranch?: string | null,
-  ) => Promise<void>
+  ) => Promise<Workspace | null>
   archiveWorkspace: (
     id: string,
     projectId: string,
@@ -71,17 +71,23 @@ export const useWorkspaceStore = create<WorkspaceStore>((set) => ({
   ) => {
     set({ error: null })
     try {
-      await workspaceApi.create({ projectId, branchName, baseBranch })
+      const created = await workspaceApi.create({
+        projectId,
+        branchName,
+        baseBranch,
+      })
       const [workspaces, globalWorkspaces] = await Promise.all([
         workspaceApi.getByProjectId(projectId),
         workspaceApi.getAll(),
       ])
       set({ workspaces, globalWorkspaces })
+      return created
     } catch (err) {
       set({
         error:
           err instanceof Error ? err.message : 'Failed to create workspace',
       })
+      return null
     }
   },
 
