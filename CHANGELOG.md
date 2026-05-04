@@ -1,5 +1,11 @@
 # convergence
 
+## 0.32.1
+
+### Patch Changes
+
+- 25b23ad: Document the refined Convergence domain language for attention, initiative outputs, attempts, session forks, and workspace lifecycle.
+
 ## 0.32.0
 
 ### Minor Changes
