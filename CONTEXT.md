@@ -42,13 +42,49 @@ _Avoid_: Project default, Workspace
 A Session understood as part of an Initiative's work history and delivery story.
 _Avoid_: Linked session, run, try
 
+**Primary Attempt**:
+The Attempt selected as the Initiative's canonical work thread or main delivery path.
+_Avoid_: First Attempt, latest Attempt, winning Session
+
+**Attempt Role**:
+The role an Attempt plays in an Initiative's work story, such as Seed, Exploration, Implementation, Review, Hardening, or Docs.
+_Avoid_: Session Status, Initiative Status, provider role
+
+**Seed Attempt**:
+An Attempt Role for a Session that contributed the originating context or starting point for an Initiative.
+_Avoid_: Primary Attempt, first Session
+
 **Output**:
-A concrete result expected from or produced by an Initiative, such as a pull request, branch, spec, documentation, migration note, release, or external issue.
+A concrete result, delivery artifact, or external reference expected from or produced by an Initiative.
 _Avoid_: Artifact, result
+
+**Output Kind**:
+The category of an Output, such as Pull Request, Branch, Commit Range, Release, Spec, Documentation, Migration Note, External Issue, or Other.
+_Avoid_: Artifact type, file type
+
+**Output Source**:
+The Attempt associated with producing, discovering, or justifying an Output.
+_Avoid_: Owner, assignee, Session link
 
 **Release**:
 A deliverable Output representing a published version, release notes, or deployment milestone produced by an Initiative.
 _Avoid_: App Update, generic update
+
+**Spec Output**:
+An Output that records intended behavior, constraints, or implementation direction for an Initiative.
+_Avoid_: Documentation Output, Migration Note Output
+
+**Documentation Output**:
+An Output that explains completed or stable product, technical, or operational knowledge to future readers.
+_Avoid_: Spec Output, Migration Note Output
+
+**Migration Note Output**:
+An Output that records transition steps, compatibility notes, rollout concerns, or cleanup requirements.
+_Avoid_: Documentation Output, Spec Output
+
+**External Issue Output**:
+An Output that references work tracked outside Convergence, such as a GitHub issue, Linear issue, or other external tracker item.
+_Avoid_: Pull Request, Product Feedback, first-class tracker sync
 
 **App Release**:
 A published Convergence app version.
@@ -70,6 +106,10 @@ _Avoid_: Summary, brief, notes
 A provider-generated proposal to change an Initiative's stable state before the user accepts it.
 _Avoid_: Auto-update, generated truth, draft state
 
+**Suggested Update Part**:
+A reviewable part of a Suggested Update, such as proposed Current Understanding text, decisions, open questions, next action, or proposed Outputs.
+_Avoid_: Stable Initiative state, separate domain object
+
 **App Update**:
 Convergence's own software update flow, including checking, downloading, and installing a newer app version.
 _Avoid_: Release Output, Suggested Update
@@ -77,6 +117,18 @@ _Avoid_: Release Output, Suggested Update
 **Release Notes**:
 Bundled or external notes describing changes in an App Release.
 _Avoid_: What's New surface, Initiative Current Understanding
+
+**Ready To Merge**:
+An Initiative Status indicating the Initiative's intended code delivery is prepared for merge.
+_Avoid_: Pull Request status, Output Status
+
+**Merged**:
+An Initiative Status indicating the Initiative's intended merge-stage delivery is complete.
+_Avoid_: Output Status, Pull Request state
+
+**Released**:
+An Initiative Status indicating the Initiative's intended release-stage delivery is complete.
+_Avoid_: App Release, Output Status
 
 ### Human Focus And Lifecycle
 
@@ -92,6 +144,26 @@ _Avoid_: Delete, complete
 A human-focus signal that indicates something needs user awareness or action.
 _Avoid_: Status, notification
 
+**Attention Reason**:
+The object-specific reason why an item currently has Attention.
+_Avoid_: Status, surface label
+
+**Session Attention Reason**:
+A Session-specific Attention Reason such as needing input, needing approval, finished, or failed.
+_Avoid_: Initiative Attention Reason, Session Status
+
+**Initiative Attention Reason**:
+An Initiative-specific Attention Reason such as needing a decision, being blocked, or becoming stale.
+_Avoid_: Session Attention Reason, Initiative Status
+
+**Blocked**:
+An Initiative Attention Reason indicating progress is prevented and human awareness or action is needed.
+_Avoid_: Initiative Status, Parked
+
+**Stale**:
+An Initiative Attention Reason indicating the Initiative has not been reconciled with recent Attempts, Outputs, or project reality and needs human review.
+_Avoid_: Status, automatic age label
+
 **Activity**:
 The ephemeral runtime signal of what a Session is doing right now.
 _Avoid_: Status, Attention
@@ -103,6 +175,18 @@ _Avoid_: Attention source of truth, Status
 **Notification Channel**:
 A delivery route for a Notification, such as Toast, System Notification, Dock Badge, Dock Bounce, Sound, or Inline Pulse.
 _Avoid_: Attention state, Notification event
+
+**Attention Dismissal**:
+A user-local dismissal of one current Attention instance for a work item, valid only while that item remains at the same update point.
+_Avoid_: Clearing Attention, Needs You state, Status change
+
+**Snooze**:
+A user action that creates an Attention Dismissal for active Attention such as waiting for input or approval.
+_Avoid_: Acknowledge, clear status
+
+**Acknowledge**:
+A user action that creates an Attention Dismissal for terminal review Attention such as finished or failed work.
+_Avoid_: Snooze, Archive, complete
 
 ### Product Surfaces And Insights
 
@@ -262,13 +346,17 @@ _Avoid_: Shell session, terminal tab
 A new Session derived from an existing Session's Conversation lineage.
 _Avoid_: Git branch, Workspace fork
 
-**Full Transcript Fork**:
-A Session Fork seeded by pasting the parent Conversation verbatim into the child Session.
+**Full Conversation Fork**:
+A Session Fork seeded from the parent Conversation.
 _Avoid_: Provider Continuation, transcript UI copy
 
 **Structured Summary Fork**:
 A Session Fork seeded from an editable provider-generated summary of decisions, facts, artifacts, questions, and next steps.
 _Avoid_: Current Understanding, automatic Initiative update
+
+**Fork Summary**:
+An editable provider-generated seed for a Structured Summary Fork, containing selected context such as decisions, facts, artifacts, questions, and next steps from the parent Session.
+_Avoid_: Session Summary, Current Understanding
 
 **Session Intent**:
 The user's creation-time choice of what kind of Session to start.
@@ -407,18 +495,38 @@ _Avoid_: Context Item, Session Context Injection
 - An **Initiative** may involve zero or more **Projects**.
 - An **Initiative** may link zero or more **Sessions**.
 - An **Initiative** may have zero or more **Outputs**.
+- An **Output** has exactly one **Output Kind**.
+- An **Output** may have zero or one **Output Source**.
+- An **Output Source** is an **Attempt**.
 - A **Release** is one kind of **Output**.
+- A **Spec Output**, **Documentation Output**, and **Migration Note Output** are distinct **Output** kinds with different audiences and done criteria.
+- An **External Issue Output** is a reference, not a synchronized issue-tracker object.
 - An **App Release** is not an **Initiative** **Output**.
 - An **Initiative** has exactly one **Current Understanding**.
+- **Ready To Merge**, **Merged**, and **Released** are **Initiative** lifecycle **Statuses**.
+- **Output Status** describes one deliverable artifact; **Initiative Status** describes the overall work lifecycle across Attempts and Outputs.
+- An **Output** may be merged or released while the **Initiative** remains in another **Status** if follow-up work remains.
 - A **Suggested Update** may propose changes to **Current Understanding** or **Outputs**.
 - A **Suggested Update** does not become stable Initiative state until accepted by the user.
+- A **Suggested Update** contains one or more **Suggested Update Parts**.
+- A **Suggested Update Part** becomes stable Initiative state only through explicit user acceptance and may be folded into **Current Understanding** rather than persisted as its own object.
 - An **App Update** may trigger **Notifications** but is not an **Initiative** or **Output**.
 - **Release Notes** describe an **App Release** and may be shown in a What's New UI surface.
 - **Status** and **Attention** are independent: lifecycle progress does not automatically mean user focus is required.
+- **Attention** is shared domain language, but **Attention Reasons** are object-specific.
+- A **Session Attention Reason** explains why a **Session** needs human focus.
+- An **Initiative Attention Reason** explains why an **Initiative** needs human focus.
+- A **Blocked** Initiative keeps its lifecycle **Status**; Blocked does not replace statuses such as implementing, reviewing, or planned.
+- **Parked** is a lifecycle **Status** for intentionally paused work; **Blocked** is an **Initiative Attention Reason** for work that needs focus because progress is prevented.
+- A **Stale** Initiative keeps its lifecycle **Status**; future freshness checks may suggest Stale Attention but should not silently set it unless that behavior is explicitly designed.
 - **Activity** is independent of **Status** and **Attention** and changes as runtime behavior changes.
 - A **Notification** may be triggered by an **Attention** transition or by another product event.
 - A **Notification Channel** delivers a **Notification** but is never the source of truth for **Attention**.
+- An **Attention Dismissal** hides one current **Attention** instance from user focus surfaces without changing the underlying **Attention** or **Status**.
+- **Snooze** and **Acknowledge** are user actions that create an **Attention Dismissal**.
 - **Archive** does not delete history and does not imply completion.
+- Archiving a **Workspace** archives its non-independently-archived **Sessions** as part of hiding that working context.
+- Unarchiving a **Workspace** restores only **Sessions** archived by that Workspace archive action.
 - **Needs You** displays work items because of their **Attention**.
 - **Waiting on You** and **Needs Review** are sections of **Needs You** derived from **Attention**.
 - **Insights** displays **Local Analytics** and may include a **Work Profile**.
@@ -428,6 +536,11 @@ _Avoid_: Context Item, Session Context Injection
 - **Project Settings** belong to exactly one **Project**.
 - **Session Defaults** prefill a new **Agent Session**; once the **Session** starts, selected **Provider**, **Model**, and **Effort** belong to that **Session**.
 - An **Attempt** is exactly one **Session** linked to exactly one **Initiative**.
+- An **Initiative** may have zero or one **Primary Attempt**.
+- A **Primary Attempt** is still an **Attempt** and does not own the **Initiative**.
+- An **Attempt** has exactly one **Attempt Role**.
+- An **Attempt Role** describes why a **Session** is linked to an **Initiative**; it does not change the **Session** **Status** or **Initiative** **Status**.
+- An **Initiative** may have zero or more **Seed Attempts**.
 - A **Provider** may expose zero or more **Models**.
 - A **Model** may expose zero or more **Effort** options.
 - A **Provider** exposes **Provider Capabilities** that Convergence uses to gate UI and behavior.
@@ -438,6 +551,7 @@ _Avoid_: Context Item, Session Context Injection
 - **Provider Continuation** belongs to an existing **Agent Session**.
 - A **Continuation Token** enables **Provider Continuation** and is opaque outside the Provider adapter.
 - **Continuation Recovery** preserves Convergence **Session** history while replacing stale provider-native continuation state.
+- **Continuation Recovery** should create a visible note **Conversation Item** when provider-native context may have been lost.
 - An **Attachment Capability** is one kind of **Provider Capability**.
 - A **Skill** is discovered in a **Skill Catalog** according to **Provider Capabilities**.
 - A **Skill** has a **Skill Scope**.
@@ -452,7 +566,8 @@ _Avoid_: Context Item, Session Context Injection
 - An **Agent Session** runs through an AI agent **Provider**.
 - A **Terminal Session** runs through the **Shell Provider**.
 - A **Session Fork** has one parent **Session** and creates one child **Session**.
-- A **Full Transcript Fork** and a **Structured Summary Fork** are the current **Session Fork** strategies.
+- A **Full Conversation Fork** and a **Structured Summary Fork** are the current **Session Fork** strategies.
+- A **Structured Summary Fork** is seeded from a **Fork Summary**.
 - A **Session Fork** may reuse the parent **Workspace** or create a new **Workspace** on a new **Branch**.
 - A **Session Intent** currently creates either an **Agent Session** or a **Terminal Session**.
 - A **Terminal Session** may have a persisted **Terminal Layout**.
@@ -465,6 +580,9 @@ _Avoid_: Context Item, Session Context Injection
 - A **Workspace** is backed by one **Branch**.
 - A **Workspace** is currently implemented by one **Worktree**.
 - A **Removed Worktree** means the **Workspace** remains in Convergence but cannot be used for new work until restore support exists.
+- A **Removed Worktree** preserves existing **Sessions**, **Outputs**, and **Workspace Pull Request** references for viewing.
+- A **Removed Worktree** cannot be used as a working directory for new **Agent Sessions** or **Terminal Sessions** until restore support exists.
+- A **Workspace** may be archived with or without its **Worktree** being removed.
 - A **Workspace** may be created from a **Base Branch**.
 - A **Workspace** may have zero or one cached **Workspace Pull Request**.
 - A **Pull Request** has a head **Branch** and may have a **Base Branch**.
@@ -480,6 +598,9 @@ _Avoid_: Context Item, Session Context Injection
 - An **Approval Request** usually causes **Attention** on its **Session**.
 - A **Transcript** renders a **Conversation**.
 - A **Turn** contains one or more **Conversation Items**.
+- Sending another message after an **Agent Session** completes creates a new **Turn** in the same **Session**, possibly using **Provider Continuation**.
+- **Provider Continuation** does not create a new Convergence **Session** by itself.
+- A **Session Fork** is the product action that creates a child **Session** for a separate work thread, seed strategy, or workspace/branch choice.
 - A **Queued Input** belongs to one **Session**.
 - **Mid-Run Input** may be an **Answer**, **Follow-up**, or **Steer**.
 - A **Queued Input** may become a future **Follow-up** or provider-native mid-run input.
@@ -519,8 +640,15 @@ _Avoid_: Context Item, Session Context Injection
 - "project" can mean a product codebase or a single Git repository. Resolved: **Project** is the product codebase context; **Repository Root** is the local Git path. Current implementation supports one **Repository Root** per **Project**.
 - Older docs mention Project copy flows and copy skip lists. Resolved current rule: **Workspace** is currently backed by a Git **Worktree**; copy-style workspaces may become another Workspace implementation type later, but **Project Copy** is not current product language.
 - **Current Understanding** currently contains decisions, open questions, and next actions as user-curated text. Resolved: keep them inside **Current Understanding** until real usage proves that separate first-class objects are needed.
+- "Decision" and "Open question" may appear as section labels in **Current Understanding** or **Suggested Update Parts**, but they are not yet durable domain objects with their own lifecycle.
+- "Next action" may appear in **Current Understanding** or **Suggested Update Parts**, but it is not yet a durable domain object with its own lifecycle.
 - Some code may blur **Status** and **Attention** through state names or UI labels. Resolved domain rule: **Status** is lifecycle; **Attention** is human focus.
+- Sessions and Initiatives use different concrete attention values. Resolved domain rule: **Attention** is the shared concept; **Session Attention Reasons** and **Initiative Attention Reasons** are type-specific reason vocabularies.
+- `needs-you` is currently an Initiative attention value but conflicts with **Needs You** as the UI surface. Resolved future rule: replace it with a more precise **Initiative Attention Reason** before Initiative workflows become heavily used.
+- `blocked` can sound like lifecycle status. Resolved domain rule: **Blocked** is an **Initiative Attention Reason**; **Parked** is the lifecycle status for intentionally paused work.
+- `stale` can mean an automatic age label or a human review signal. Resolved current rule: **Stale** is an **Initiative Attention Reason** curated by the user; future automation may suggest it but should not silently set it without an explicit product decision.
 - Notifications can make Attention visible, but are delivery policy rather than work state. Resolved domain rule: **Attention** is the domain signal; **Notification** is a delivery event; **Notification Channels** are concrete routes such as toast, system notification, dock badge, dock bounce, sound, and inline pulse.
+- User actions can hide items from Needs You without clearing Attention. Resolved domain rule: **Attention Dismissal** hides one current **Attention** instance; **Snooze** and **Acknowledge** create dismissals and do not change **Status** or **Attention**.
 - `useProjectContextStore.attachmentsBySessionId` uses "attachments" for selected context items, which conflicts with file **Attachments**. Resolved domain rule: selected Context Items are a **Session Context Selection**, not Attachments.
 - Some UI still says "Conversation" where the product language now means **Agent Session**. Resolved domain rule: **Agent Session** is the counterpart to **Terminal Session**.
 - Pull requests appear both as external delivery artifacts and as workspace lookup/cache data. Resolved domain rule: **Pull Request** is the external artifact; **Workspace Pull Request** is Convergence's cached association between a **Workspace** and a **Pull Request**; an **Output** may reference the external **Pull Request**.
@@ -528,12 +656,16 @@ _Avoid_: Context Item, Session Context Injection
 - "Settings" alone can refer to app-wide preferences, Project preferences, or defaults for starting Sessions. Resolved domain rule: use **App Settings**, **Project Settings**, or **Session Defaults**; active Sessions have selected Provider/Model/Effort, not live settings.
 - "Update" can mean Initiative synthesis, app distribution, settings persistence, or ordinary data mutation. Resolved domain rule: use **Suggested Update** for Initiative synthesis proposals and **App Update** for Convergence software updates; avoid generic "update" in product language unless it is ordinary UI copy.
 - "Release" can mean a deliverable produced by an Initiative or a published Convergence app version. Resolved domain rule: **Release** is an Initiative **Output**; **App Release** is Convergence distribution; **App Update** installs an **App Release**.
+- `merged` and `released` appear as both Initiative and Output statuses. Resolved domain rule: **Output Status** describes one deliverable artifact; **Initiative Status** describes the aggregate work lifecycle.
 - "What's New" is the UI label for viewing **Release Notes**. Resolved domain rule: **Release Notes** is the artifact/content term; What's New is not a separate domain term.
 - Provider diagnostics can blur availability, status, and update state. Resolved domain rule: **Provider Availability** is the core runtime usability signal; **Provider Status** is the report surface; **Provider Update** is external Provider package or binary maintenance.
 - MCP visibility can be confused with Project Context or Provider Availability. Resolved domain rule: **MCP Server Scope** describes configuration origin and visibility for an **MCP Server**, not selected text context or runtime Provider usability.
 - Skill discovery, selection, and activation can collapse into one "skill support" idea. Resolved domain rule: **Skill Catalog** is discovery, **Skill Selection** is the user's Turn-level choice, and **Skill Invocation** is Provider-specific execution mechanics.
 - Continuation can be confused with Session Fork or transcript replay. Resolved domain rule: **Provider Continuation** resumes provider-native state for the same **Agent Session**; **Continuation Token** is the opaque provider id; **Continuation Recovery** starts fresh only when that provider-native state is stale or missing.
-- Fork strategy can be confused with workspace choice. Resolved domain rule: **Full Transcript Fork** and **Structured Summary Fork** describe how the child Session is seeded; reusing or creating a Workspace is a fork configuration choice using existing **Workspace** and **Branch** terms.
+- Continuing a completed **Agent Session** can look like a new run. Resolved domain rule: a same-session continuation creates a new **Turn** in the same **Session**; only **Session Fork** creates a child **Session**.
+- Fork strategy can be confused with workspace choice. Resolved domain rule: **Full Conversation Fork** and **Structured Summary Fork** describe how the child Session is seeded; reusing or creating a Workspace is a fork configuration choice using existing **Workspace** and **Branch** terms.
+- "Full Transcript Fork" may remain UI copy or historical wording, but the domain term is **Full Conversation Fork** because the seed comes from **Conversation** data, not the **Transcript** surface.
+- A **Session Fork** currently creates a child Session in the same **Project**. Cross-Project follow-on work should not be assumed to be a normal Session Fork; it needs an explicit product decision.
 - Analytics language can drift between metrics, UI, and generated profile content. Resolved domain rule: **Local Analytics** is the local-only data and metrics domain; **Insights** is the UI surface; **Work Profile Snapshot** is persisted generated profile output for a selected range.
 - "Feedback" can mean app feedback, agent feedback, or ordinary UI validation. Resolved domain rule: **Product Feedback** is the cloud-submitted app feedback path; do not use it for Turn-level agent review flows or Local Analytics.
 - Review flows can blur local notes, cloud feedback, and PR review. Resolved domain rule: **Turn Review** is local inspection of agent-produced **File Changes**; **Review Comments** are local annotations; **Review Feedback** is the composed message sent back to the active **Agent Session**; **Risk Signals** are advisory decorations only.
