@@ -1,5 +1,14 @@
 # convergence
 
+## 0.32.2
+
+### Patch Changes
+
+- 72f06b0: Fix the Skills dialog so the right details pane scrolls all the way to
+  the bottom on large screens. The middle grid had no row track, so the
+  inner `overflow-y-auto` had no resolved height and the SKILL.md card got
+  clipped behind the footer.
+
 ## 0.32.1
 
 ### Patch Changes
