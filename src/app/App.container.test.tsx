@@ -231,7 +231,12 @@ describe('App', () => {
       expect(screen.getByText('Welcome to Convergence')).toBeInTheDocument()
     })
 
-    fireEvent.click(screen.getByRole('button', { name: 'Show chat surface' }))
+    const chatSurfaceButton = screen.getByRole('button', {
+      name: 'Show chat surface',
+    })
+    expect(chatSurfaceButton.closest('.app-sidebar-topbar')).toBeNull()
+
+    fireEvent.click(chatSurfaceButton)
 
     expect(screen.getByText('Convergence Chat')).toBeInTheDocument()
     expect(screen.getByText('No chats yet')).toBeInTheDocument()

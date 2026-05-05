@@ -300,38 +300,9 @@ export const Sidebar: FC<SidebarProps> = ({
   return (
     <div className="flex h-full flex-col">
       <div
-        className="app-sidebar-topbar flex h-12 items-center justify-between border-b border-white/10 px-3"
+        className="app-sidebar-topbar flex h-12 items-center justify-end border-b border-white/10 px-3"
         style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
       >
-        <div
-          className="flex items-center gap-1"
-          style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
-        >
-          <Button
-            type="button"
-            variant={activeSurface === 'code' ? 'secondary' : 'ghost'}
-            size="icon"
-            className="h-8 w-8"
-            title="Code"
-            aria-label="Show code surface"
-            aria-pressed={activeSurface === 'code'}
-            onClick={() => onSelectSurface('code')}
-          >
-            <Code2 className="h-4 w-4" />
-          </Button>
-          <Button
-            type="button"
-            variant={activeSurface === 'chat' ? 'secondary' : 'ghost'}
-            size="icon"
-            className="h-8 w-8"
-            title="Chat"
-            aria-label="Show chat surface"
-            aria-pressed={activeSurface === 'chat'}
-            onClick={() => onSelectSurface('chat')}
-          >
-            <MessageSquareText className="h-4 w-4" />
-          </Button>
-        </div>
         <div
           className="flex items-center gap-1"
           style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
@@ -363,6 +334,33 @@ export const Sidebar: FC<SidebarProps> = ({
           />
           <ThemeToggleButton />
         </div>
+      </div>
+
+      <div className="flex items-center gap-1 px-3 pt-3">
+        <Button
+          type="button"
+          variant={activeSurface === 'code' ? 'secondary' : 'ghost'}
+          size="icon"
+          className="h-8 w-8"
+          title="Code"
+          aria-label="Show code surface"
+          aria-pressed={activeSurface === 'code'}
+          onClick={() => onSelectSurface('code')}
+        >
+          <Code2 className="h-4 w-4" />
+        </Button>
+        <Button
+          type="button"
+          variant={activeSurface === 'chat' ? 'secondary' : 'ghost'}
+          size="icon"
+          className="h-8 w-8"
+          title="Chat"
+          aria-label="Show chat surface"
+          aria-pressed={activeSurface === 'chat'}
+          onClick={() => onSelectSurface('chat')}
+        >
+          <MessageSquareText className="h-4 w-4" />
+        </Button>
       </div>
 
       <div className="app-scrollbar flex-1 overflow-x-hidden overflow-y-auto py-3">
