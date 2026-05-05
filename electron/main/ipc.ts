@@ -6,6 +6,7 @@ import { StateService } from '../backend/state/state.service'
 import { WorkspaceService } from '../backend/workspace/workspace.service'
 import { GitService } from '../backend/git/git.service'
 import { PullRequestService } from '../backend/pull-request/pull-request.service'
+import type { PullRequestReviewService } from '../backend/pull-request/pull-request-review.service'
 import { SessionService } from '../backend/session/session.service'
 import type { TurnCaptureService } from '../backend/session/turn/turn-capture.service'
 import {
@@ -124,6 +125,7 @@ export function registerIpcHandlers(
   workspaceService: WorkspaceService,
   gitService: GitService,
   pullRequestService: PullRequestService,
+  pullRequestReviewService: PullRequestReviewService,
   sessionService: SessionService,
   providerRegistry: ProviderRegistry,
   mcpService: McpService,
@@ -353,6 +355,27 @@ export function registerIpcHandlers(
 
   ipcMain.handle('pullRequest:refreshForSession', (_event, sessionId: string) =>
     pullRequestService.refreshForSession(sessionId),
+  )
+
+  ipcMain.handle(
+    'pullRequest:previewReview',
+    (_event, input: { projectId?: string | null; reference: string }) =>
+      pullRequestReviewService.previewReview(input),
+  )
+
+  ipcMain.handle(
+    'pullRequest:prepareReviewSession',
+    (
+      _event,
+      input: {
+        projectId?: string | null
+        reference: string
+        providerId: string
+        model: string | null
+        effort: CreateSessionInput['effort']
+        sessionName?: string
+      },
+    ) => pullRequestReviewService.prepareReviewSession(input),
   )
 
   // Git handlers

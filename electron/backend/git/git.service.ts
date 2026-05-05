@@ -1,6 +1,7 @@
 import { execFile } from 'child_process'
 import { existsSync } from 'fs'
 import { join } from 'path'
+import { isPullRequestReviewBranchName } from '../pull-request/pull-request-reference.pure'
 
 function exec(command: string, args: string[], cwd: string): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -189,6 +190,75 @@ export class GitService {
     }
 
     await exec('git', args, repoPath)
+  }
+
+  async fetchPullRequestHead(input: {
+    repoPath: string
+    remoteName?: string
+    number: number
+    localBranch: string
+  }): Promise<void> {
+    if (!isPullRequestReviewBranchName(input.localBranch)) {
+      throw new Error(
+        `Refusing to fetch pull request into unsafe branch: ${input.localBranch}`,
+      )
+    }
+
+    await exec(
+      'git',
+      [
+        'fetch',
+        input.remoteName ?? 'origin',
+        `pull/${input.number}/head:${input.localBranch}`,
+      ],
+      input.repoPath,
+    )
+  }
+
+  async updateWorktreeToPullRequestHead(input: {
+    worktreePath: string
+    remoteName?: string
+    number: number
+  }): Promise<void> {
+    const currentBranch = await this.getCurrentBranch(input.worktreePath)
+    if (!isPullRequestReviewBranchName(currentBranch)) {
+      throw new Error(
+        `Refusing to update pull request review worktree on unsafe branch: ${currentBranch}`,
+      )
+    }
+
+    await exec(
+      'git',
+      ['fetch', input.remoteName ?? 'origin', `pull/${input.number}/head`],
+      input.worktreePath,
+    )
+    await exec('git', ['reset', '--hard', 'FETCH_HEAD'], input.worktreePath)
+  }
+
+  async getPullRequestDiff(input: {
+    repoPath: string
+    baseBranch: string
+    headBranch: string
+    remoteName?: string
+  }): Promise<string> {
+    const remoteName = input.remoteName ?? 'origin'
+    await exec(
+      'git',
+      ['fetch', remoteName, input.baseBranch],
+      input.repoPath,
+    ).catch(() => {})
+
+    const remoteBase = `${remoteName}/${input.baseBranch}`
+    const baseRef = (await this.refExists(input.repoPath, remoteBase))
+      ? remoteBase
+      : input.baseBranch
+
+    return execAllowExitCodes(
+      'git',
+      ['diff', '--no-color', `${baseRef}...${input.headBranch}`],
+      input.repoPath,
+      [0, 1],
+    )
   }
 
   async isGitRepository(repoPath: string): Promise<boolean> {

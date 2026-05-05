@@ -87,6 +87,19 @@ export class WorkspaceService {
     return rows.map(workspaceFromRow)
   }
 
+  getByProjectIdAndBranch(
+    projectId: string,
+    branchName: string,
+  ): Workspace | null {
+    const row = this.db
+      .prepare(
+        'SELECT * FROM workspaces WHERE project_id = ? AND branch_name = ?',
+      )
+      .get(projectId, branchName) as WorkspaceRow | undefined
+
+    return row ? workspaceFromRow(row) : null
+  }
+
   async archive(input: {
     id: string
     removeWorktree?: boolean

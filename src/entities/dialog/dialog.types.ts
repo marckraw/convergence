@@ -4,6 +4,7 @@ export type DialogKind =
   | 'initiative-workboard'
   | 'project-settings'
   | 'providers'
+  | 'pull-request-review-start'
   | 'mcp-servers'
   | 'skills-browser'
   | 'release-notes'

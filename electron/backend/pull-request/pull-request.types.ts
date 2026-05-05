@@ -56,6 +56,12 @@ export interface GithubCliPullRequestJson {
   baseRefName?: string
 }
 
+export interface GithubCliPullRequestViewJson extends GithubCliPullRequestJson {
+  headRepositoryOwner?: { login?: string } | string | null
+  headRepository?: { name?: string } | string | null
+  author?: { login?: string } | null
+}
+
 export interface PullRequestLookupResult {
   provider: PullRequestProvider
   lookupStatus: PullRequestLookupStatus

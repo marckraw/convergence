@@ -1,6 +1,41 @@
 {
-  "currentVersion": "0.31.6",
+  "currentVersion": "0.32.1",
   "releases": [
+    {
+      "version": "0.32.1",
+      "date": null,
+      "notes": "### Patch Changes\n\n- 25b23ad: Document the refined Convergence domain language for attention, initiative outputs, attempts, session forks, and workspace lifecycle."
+    },
+    {
+      "version": "0.32.0",
+      "date": null,
+      "notes": "### Minor Changes\n\n- d1db9a6: feat(terminal): per-session dock placement (bottom/left/right)\n\n  The secondary terminal dock can now sit on the left or right of the\n  conversation in addition to the bottom. Press `Cmd+Shift+T`\n  (`Ctrl+Shift+T` on non-mac) to cycle bottom → right → left → bottom.\n  Placement, height, and width are remembered per session, so one session\n  can keep the terminal at the bottom while another runs it as a side\n  panel. The dock resize handle automatically switches between vertical\n  and horizontal drag depending on placement, and double-click still\n  resets to the default size on the active axis. Terminal-primary\n  sessions are unaffected — their conversation placeholder stays at the\n  bottom."
+    },
+    {
+      "version": "0.31.11",
+      "date": null,
+      "notes": "### Patch Changes\n\n- 4a5f951: fix(usage-insights): readable axes on activity charts\n\n  The Daily activity and Conversation balance charts now render a real time x-axis\n  with date ticks (Apr 4, Apr 11, …) instead of a numeric index axis that produced\n  fractional labels like `7.25` or `21.5`. The Provider usage chart, which used a\n  categorical x-axis that the underlying chart engine could not label, has been\n  replaced with an HTML grouped-bar visualization that lists each provider with\n  sessions and turns side by side."
+    },
+    {
+      "version": "0.31.10",
+      "date": null,
+      "notes": "### Patch Changes\n\n- 684e162: Show total conversation duration in the session header. The chip displays the sum of every turn's elapsed span (clock icon + formatted duration), giving a quick sense of how long a conversation has taken alongside the existing per-turn timestamps."
+    },
+    {
+      "version": "0.31.9",
+      "date": null,
+      "notes": "### Patch Changes\n\n- adc33af: Add PR-aware workspace lifecycle controls. Workspaces now show cached pull request status, can be archived without deleting conversation history, can be unarchived, and can remove their git worktree from disk behind an explicit confirmation while keeping historical sessions available."
+    },
+    {
+      "version": "0.31.8",
+      "date": null,
+      "notes": "### Patch Changes\n\n- 594a78b: Auto-expand the parent worktree group in the sidebar when clicking a session from the \"Needs Review\" or \"Waiting on You\" lists. The sidebar previously opened the conversation but left the worktree collapsed, hiding where the session lived in the project tree."
+    },
+    {
+      "version": "0.31.7",
+      "date": null,
+      "notes": "### Patch Changes\n\n- baf2af6: Fix transcript scroll fighting the user. The virtualized transcript no longer re-anchors to the bottom on every render of the last row, so scrolling up stays where you left it. Auto-follow still re-engages while you're near the bottom (including streaming size growth) and resets on session switch."
+    },
     {
       "version": "0.31.6",
       "date": null,
