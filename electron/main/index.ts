@@ -16,6 +16,7 @@ import { ProjectContextService } from '../backend/project-context/project-contex
 import { StateService } from '../backend/state/state.service'
 import { WorkspaceService } from '../backend/workspace/workspace.service'
 import { GitService } from '../backend/git/git.service'
+import { ChangedFilesService } from '../backend/git/changed-files.service'
 import { PullRequestService } from '../backend/pull-request/pull-request.service'
 import { PullRequestReviewService } from '../backend/pull-request/pull-request-review.service'
 import { SessionService } from '../backend/session/session.service'
@@ -178,6 +179,7 @@ async function startApp(): Promise<void> {
   )
   const stateService = new StateService(db)
   const workspaceService = new WorkspaceService(db, gitService, workspacesRoot)
+  const changedFilesService = new ChangedFilesService(db, gitService)
   const pullRequestService = new PullRequestService(db, gitService)
   const providerRegistry = new ProviderRegistry()
   const taskProgressService = new TaskProgressService(broadcastTaskProgress)
@@ -442,6 +444,7 @@ async function startApp(): Promise<void> {
     stateService,
     workspaceService,
     gitService,
+    changedFilesService,
     pullRequestService,
     pullRequestReviewService,
     sessionService,

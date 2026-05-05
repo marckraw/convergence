@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { ChangedFilesPanel } from './changed-files-panel.container'
 
@@ -39,6 +39,18 @@ describe('ChangedFilesPanel', () => {
             .mockResolvedValue(
               '@@ -1 +1 @@\n-console.log("old")\n+console.log("new")',
             ),
+          getBaseBranchStatus: vi.fn().mockResolvedValue({
+            base: {
+              branchName: 'beta',
+              comparisonRef: 'origin/beta',
+              source: 'project-settings',
+              warning: null,
+            },
+            files: [{ status: 'M', file: 'src/base.ts' }],
+          }),
+          getBaseBranchDiff: vi
+            .fn()
+            .mockResolvedValue('@@ -1 +1 @@\n-old-base\n+new-base'),
         },
         turns: {
           listForSession: vi.fn().mockResolvedValue([]),
@@ -95,7 +107,7 @@ describe('ChangedFilesPanel', () => {
     )
 
     await waitFor(() => {
-      expect(screen.getByText('Turns')).toBeInTheDocument()
+      expect(screen.getAllByText('Turns').length).toBeGreaterThan(0)
     })
     await waitFor(() => {
       expect(
@@ -105,6 +117,47 @@ describe('ChangedFilesPanel', () => {
       ).toBeInTheDocument()
     })
     expect(screen.queryByText('Files')).not.toBeInTheDocument()
+  })
+
+  it('switches to base branch mode and shows base branch diffs', async () => {
+    render(
+      <ChangedFilesPanel
+        session={session}
+        side="right"
+        expanded={false}
+        onClose={vi.fn()}
+        onToggleSide={vi.fn()}
+        onToggleExpanded={vi.fn()}
+      />,
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: 'Base Branch' }))
+
+    await waitFor(() => {
+      expect(screen.getByText('Against beta (1)')).toBeInTheDocument()
+    })
+
+    expect(
+      screen.getByText(
+        'Changes compared with beta. Includes local uncommitted edits.',
+      ),
+    ).toBeInTheDocument()
+    expect(screen.getByText('base.ts')).toBeInTheDocument()
+
+    await waitFor(() => {
+      expect(screen.getByText('Diff against beta')).toBeInTheDocument()
+      expect(screen.getByText('+new-base')).toBeInTheDocument()
+    })
+
+    const electronAPI = (
+      window as unknown as { electronAPI: Record<string, unknown> }
+    ).electronAPI
+    const git = electronAPI.git as Record<string, ReturnType<typeof vi.fn>>
+    expect(git.getBaseBranchStatus).toHaveBeenCalledWith(session.id)
+    expect(git.getBaseBranchDiff).toHaveBeenCalledWith(
+      session.id,
+      'src/base.ts',
+    )
   })
 
   it('renders turn cards and streaming turn.add deltas when expanded', async () => {

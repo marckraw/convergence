@@ -132,10 +132,6 @@ export class TurnCaptureService {
     const nextSequence = this.getNextSequence(input.sessionId)
     const startedAt = new Date().toISOString()
 
-    const isGitRepo = await this.gitService.isGitRepository(
-      input.workingDirectory,
-    )
-
     const insertRow = {
       id: input.turnId,
       sessionId: input.sessionId,
@@ -152,6 +148,10 @@ export class TurnCaptureService {
          VALUES (@id, @sessionId, @sequence, @startedAt, @endedAt, @status, @summary)`,
       )
       .run(insertRow)
+
+    const isGitRepo = await this.gitService.isGitRepository(
+      input.workingDirectory,
+    )
 
     const files = isGitRepo
       ? await this.captureBaselineFiles(input.workingDirectory)

@@ -1,5 +1,27 @@
 # convergence
 
+## 0.32.3
+
+### Patch Changes
+
+- 67c5501: Fix: creating a worktree via the New Workspace dialog now auto-targets
+  that worktree for the next session. The empty session screen also shows
+  a chip indicating which worktree (or the main repo) the next session
+  will start in, with a one-click toggle back to the main repo.
+
+  Previously the dialog closed silently and the next session ran against
+  the root repo, causing users to repeat the action and accumulate orphan
+  worktrees.
+
+## 0.32.2
+
+### Patch Changes
+
+- 72f06b0: Fix the Skills dialog so the right details pane scrolls all the way to
+  the bottom on large screens. The middle grid had no row track, so the
+  inner `overflow-y-auto` had no resolved height and the SKILL.md card got
+  clipped behind the footer.
+
 ## 0.32.1
 
 ### Patch Changes

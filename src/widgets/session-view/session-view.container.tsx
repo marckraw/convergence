@@ -72,6 +72,7 @@ export const SessionView: FC = () => {
   )
   const activeSessionId = useSessionStore((s) => s.activeSessionId)
   const draftWorkspaceId = useSessionStore((s) => s.draftWorkspaceId)
+  const beginSessionDraft = useSessionStore((s) => s.beginSessionDraft)
   const sessions = useSessionStore((s) => s.sessions)
   const activeConversation = useSessionStore((s) => s.activeConversation)
   const globalSessions = useSessionStore((s) => s.globalSessions)
@@ -324,6 +325,9 @@ export const SessionView: FC = () => {
 
   // Empty state
   if (!session) {
+    const draftWorkspace = draftWorkspaceId
+      ? workspaces.find((w) => w.id === draftWorkspaceId)
+      : null
     return (
       <div className="flex h-full flex-col">
         <div
@@ -332,9 +336,35 @@ export const SessionView: FC = () => {
         />
         <div className="flex flex-1 flex-col items-center justify-center px-4">
           <p className="mb-1 text-lg font-medium">Convergence</p>
-          <p className="mb-8 text-sm text-muted-foreground">
+          <p className="mb-3 text-sm text-muted-foreground">
             What would you like to work on?
           </p>
+          {activeProject && (
+            <div className="mb-5 flex items-center gap-2 rounded-full border border-border bg-muted/40 px-3 py-1 text-xs text-muted-foreground">
+              <GitBranch className="h-3 w-3" />
+              {draftWorkspace ? (
+                <>
+                  <span>
+                    Starting in worktree:{' '}
+                    <span className="font-medium text-foreground">
+                      {draftWorkspace.branchName}
+                    </span>
+                  </span>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => beginSessionDraft(null)}
+                    className="ml-1 h-auto px-2 py-0 text-xs"
+                  >
+                    Use main repo
+                  </Button>
+                </>
+              ) : (
+                <span>Starting in main repo</span>
+              )}
+            </div>
+          )}
           {activeProject && (
             <ComposerContainer
               projectId={activeProject.id}

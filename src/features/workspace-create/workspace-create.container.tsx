@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { FC } from 'react'
+import { toast } from 'sonner'
 import { useDialogStore } from '@/entities/dialog'
 import { normalizeProjectSettings, useProjectStore } from '@/entities/project'
+import { useSessionStore } from '@/entities/session'
 import { gitApi, useWorkspaceStore } from '@/entities/workspace'
 import type { SearchableSelectItem } from '@/shared/ui/searchable-select.presentational'
 import {
@@ -12,6 +14,7 @@ import {
 export const WorkspaceCreateDialogContainer: FC = () => {
   const activeProject = useProjectStore((state) => state.activeProject)
   const createWorkspace = useWorkspaceStore((state) => state.createWorkspace)
+  const beginSessionDraft = useSessionStore((state) => state.beginSessionDraft)
 
   const open = useDialogStore((s) => s.openDialog === 'workspace-create')
   const openDialog = useDialogStore((s) => s.open)
@@ -113,12 +116,20 @@ export const WorkspaceCreateDialogContainer: FC = () => {
       selectedBaseBranchId === PROJECT_DEFAULT_ID ? null : selectedBaseBranchId
 
     try {
-      await createWorkspace(activeProject.id, trimmed, baseBranch)
+      const created = await createWorkspace(
+        activeProject.id,
+        trimmed,
+        baseBranch,
+      )
       const storeError = useWorkspaceStore.getState().error
-      if (storeError) {
-        setError(storeError)
+      if (storeError || !created) {
+        setError(storeError ?? 'Failed to create workspace')
         return
       }
+      beginSessionDraft(created.id)
+      toast.success(
+        `Worktree ${created.branchName} ready — start a session below`,
+      )
       closeDialog()
     } catch (nextError) {
       setError(
@@ -134,6 +145,7 @@ export const WorkspaceCreateDialogContainer: FC = () => {
     branchName,
     selectedBaseBranchId,
     createWorkspace,
+    beginSessionDraft,
     closeDialog,
   ])
 

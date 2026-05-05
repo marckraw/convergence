@@ -364,7 +364,7 @@ function renderDetailsPane({
   const selectedSkillHasMcpDependencies = hasMcpDependencies(selectedSkill)
 
   return (
-    <div className="app-scrollbar h-full overflow-y-auto px-6 py-5">
+    <div className="app-scrollbar h-full min-h-0 overflow-y-auto px-6 py-5">
       <div className="mb-4 flex min-w-0 items-start justify-between gap-4">
         <div className="min-w-0">
           <div className="mb-2 flex flex-wrap items-center gap-2">
@@ -593,9 +593,9 @@ export const SkillsBrowserDialog: FC<SkillsBrowserDialogProps> = ({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-[390px_minmax(0,1fr)]">
-          <div className="min-h-0 border-b border-border/70 lg:border-r lg:border-b-0">
-            <div className="border-b border-border/70 p-4">
+        <div className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-[390px_minmax(0,1fr)] lg:grid-rows-[minmax(0,1fr)]">
+          <div className="flex min-h-0 flex-col border-b border-border/70 lg:border-r lg:border-b-0">
+            <div className="shrink-0 border-b border-border/70 p-4">
               <div className="relative">
                 <Search className="pointer-events-none absolute top-2.5 left-2.5 h-4 w-4 text-muted-foreground" />
                 <Input
@@ -695,7 +695,7 @@ export const SkillsBrowserDialog: FC<SkillsBrowserDialogProps> = ({
               </div>
             </div>
 
-            <div className="app-scrollbar h-[min(52vh,520px)] overflow-y-auto p-4 lg:h-full">
+            <div className="app-scrollbar h-[min(52vh,520px)] overflow-y-auto p-4 lg:h-auto lg:min-h-0 lg:flex-1">
               {!projectName ? (
                 <p className="text-sm text-muted-foreground">
                   Open a project to browse skills.

@@ -5,6 +5,7 @@ import type { InitiativeSynthesisService } from '../backend/initiative/initiativ
 import { StateService } from '../backend/state/state.service'
 import { WorkspaceService } from '../backend/workspace/workspace.service'
 import { GitService } from '../backend/git/git.service'
+import { ChangedFilesService } from '../backend/git/changed-files.service'
 import { PullRequestService } from '../backend/pull-request/pull-request.service'
 import type { PullRequestReviewService } from '../backend/pull-request/pull-request-review.service'
 import { SessionService } from '../backend/session/session.service'
@@ -124,6 +125,7 @@ export function registerIpcHandlers(
   stateService: StateService,
   workspaceService: WorkspaceService,
   gitService: GitService,
+  changedFilesService: ChangedFilesService,
   pullRequestService: PullRequestService,
   pullRequestReviewService: PullRequestReviewService,
   sessionService: SessionService,
@@ -403,6 +405,16 @@ export function registerIpcHandlers(
     'git:getDiff',
     async (_event, repoPath: string, filePath?: string) =>
       gitService.getDiff(repoPath, filePath),
+  )
+
+  ipcMain.handle('git:getBaseBranchStatus', async (_event, sessionId: string) =>
+    changedFilesService.getBaseBranchStatus(sessionId),
+  )
+
+  ipcMain.handle(
+    'git:getBaseBranchDiff',
+    async (_event, sessionId: string, filePath: string) =>
+      changedFilesService.getBaseBranchDiff({ sessionId, filePath }),
   )
 
   // App settings handlers
