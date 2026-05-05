@@ -259,6 +259,28 @@ describe('buildPaletteIndex', () => {
     expect(session?.search.attentionAlias).toContain('input')
   })
 
+  it('adds terminal vocabulary aliases for shell sessions', () => {
+    const items = buildPaletteIndex({
+      projects: [makeProject('p1', 'alpha')],
+      workspaces: [],
+      sessions: [
+        makeSession('s1', 'p1', {
+          name: 'Local dev',
+          providerId: 'shell',
+          primarySurface: 'terminal',
+        }),
+      ],
+      recentSessionIds: [],
+      dismissals: {},
+    })
+    const session = items.find(
+      (item): item is SessionPaletteItem => item.kind === 'session',
+    )
+
+    expect(session?.search.aliases).toContain('terminal')
+    expect(session?.search.aliases).toContain('shell')
+  })
+
   it('emits a fork-session item when an active session is focused', () => {
     const items = buildPaletteIndex({
       projects: [makeProject('p1', 'alpha')],
