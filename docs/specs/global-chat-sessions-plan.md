@@ -197,3 +197,33 @@ Acceptance criteria:
 - Full verification status is recorded.
 - Follow-up roadmap is captured in docs and Linear.
 - User signs off that the MVP architecture is ready for iterative feature work.
+
+## Follow-Up Linear Roadmap
+
+The MVP is ready for iterative feature work once the user signs off on the
+current Chat Surface behavior. The next work should be tracked as separate
+Linear issues rather than added to the MVP branch:
+
+- Global memory and context items: introduce global context with explicit
+  inspectable provider injection.
+- Image generation: add image-capable model/tool selection, asset persistence,
+  and conversation rendering for generated outputs.
+- Web and OS tools: add permissioned global tools for research, browser
+  automation, filesystem, and operating-system work.
+- Multi-provider delegation: let a primary Session delegate bounded subtasks to
+  other providers/models and present the results in the conversation.
+- Capability catalog hardening: continue replacing project-only skills/MCP APIs
+  with context-aware capability catalogs and explicit unavailable states.
+
+## MVP Verification Record
+
+Latest verification on the global chat branch:
+
+- `npm install`
+- `npm run typecheck`
+- `npm run test:pure`
+- `npm run test:unit`
+- `chaperone check --fix`
+- `git diff --check`
+
+Manual sign-off remains required before marking the MVP roadmap issue Done.

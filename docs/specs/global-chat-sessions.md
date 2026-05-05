@@ -190,6 +190,92 @@ type ContextItemScope = 'project' | 'global'
 Global memory must be explicit and inspectable before provider-visible
 injection.
 
+## MVP Hardening Status
+
+The global chat MVP is intentionally scoped to a working general conversation
+surface backed by the existing Session runtime. The architecture now supports:
+
+- explicit Project Session Context and Global Session Context,
+- a top-level Code Surface and Chat Surface,
+- global session persistence, selection, continuation, attention, archive, and
+  delete behavior,
+- notification focus into the Chat Surface,
+- global skills catalog lookup for providers that can list outside a Project,
+- global MCP visibility/readiness lookup for Chat Surface context,
+- reusable transcript/composer pieces shared with the Code Surface.
+
+The MVP does not yet include persistent global memory, image generation, web or
+OS tool orchestration, or provider-to-provider delegation. Those features should
+build on the same Global Session Context instead of introducing a parallel chat
+runtime.
+
+## Follow-Up Roadmap
+
+### Global Memory And Context
+
+Add explicit global context items that are inspectable before provider-visible
+injection. This should generalize the current Project Context model rather than
+silently reusing project-scoped context for chat.
+
+Open design questions:
+
+- whether memory is user-curated only, provider-suggested with review, or both,
+- how global context items are grouped and searched,
+- how injected memory is shown in the composer before send,
+- how memory interacts with provider-native memory features.
+
+### Image Generation
+
+Add image generation as a first-class global chat capability. The Session should
+record generation requests and resulting assets in conversation history, while
+provider/model selection makes image-capable models explicit.
+
+Open design questions:
+
+- whether image generation uses the same composer or a mode-specific tool,
+- how generated assets are stored under app-owned data,
+- how edits/variants attach to existing generated images,
+- how provider billing or quota state is surfaced.
+
+### Web And OS Tools
+
+Add global tools for web research, browser automation, filesystem operations,
+and OS-level work that do not require a Project root. These tools need explicit
+permissions and visible execution history.
+
+Open design questions:
+
+- which tools are safe as default global chat capabilities,
+- how to separate app-owned global working files from user-selected files,
+- how approvals are requested for OS-affecting actions,
+- how web citations or browser traces are preserved.
+
+### Multi-Provider Delegation
+
+Add orchestration that lets a primary global chat Session delegate bounded work
+to another provider/model and incorporate the result back into the conversation.
+
+Open design questions:
+
+- whether delegated work is represented as child Sessions,
+- how delegated provider/model choices are exposed,
+- how intermediate artifacts and failures are shown,
+- how user approvals work before delegation starts.
+
+### Capability Catalog Hardening
+
+Continue generalizing skills and MCP from project-only APIs to context-aware
+capability catalogs:
+
+```ts
+type CapabilityContext =
+  | { kind: 'project'; projectId: string; repositoryPath: string }
+  | { kind: 'global'; workingDirectory: string }
+```
+
+Global capability surfaces should prefer explicit empty/unavailable states over
+throwing or hiding controls.
+
 ## Architecture
 
 ### Database
