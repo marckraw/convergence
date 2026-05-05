@@ -1,6 +1,6 @@
 import type { FC } from 'react'
 import { Button } from '@/shared/ui/button'
-import { ChevronRight } from 'lucide-react'
+import { ChevronRight, MessageSquare } from 'lucide-react'
 import { FileStatusIcon } from '@/shared/ui/file-status-icon.presentational'
 import { cn } from '@/shared/lib/cn.pure'
 
@@ -8,6 +8,7 @@ interface ChangedFileItemProps {
   status: string
   file: string
   selected: boolean
+  noteCount?: number
   onSelect: () => void
 }
 
@@ -29,6 +30,7 @@ export const ChangedFileItem: FC<ChangedFileItemProps> = ({
   status,
   file,
   selected,
+  noteCount = 0,
   onSelect,
 }) => {
   const { name, directory } = getFileParts(file)
@@ -61,6 +63,15 @@ export const ChangedFileItem: FC<ChangedFileItemProps> = ({
           </span>
         )}
       </span>
+      {noteCount > 0 && (
+        <span
+          className="ml-auto inline-flex h-5 shrink-0 items-center gap-1 rounded border border-border bg-background px-1.5 text-[10px] font-medium text-muted-foreground"
+          title={`${noteCount} review ${noteCount === 1 ? 'note' : 'notes'}`}
+        >
+          <MessageSquare className="h-3 w-3" />
+          {noteCount}
+        </span>
+      )}
     </Button>
   )
 }

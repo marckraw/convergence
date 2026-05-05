@@ -32,6 +32,12 @@ import {
   summarizeSelectedDiffLines,
   type DiffLine,
 } from './diff-lines.pure'
+import {
+  countDraftReviewNotes,
+  countReviewNotesByFile,
+  findReviewNoteDiffLineIds,
+  groupReviewNotesByFile,
+} from './review-notes.pure'
 import { TurnList } from './turn-list.container'
 
 interface ChangedFile {
@@ -76,6 +82,11 @@ export const ChangedFilesPanel: FC<ChangedFilesPanelProps> = ({
   const [noteDraftBody, setNoteDraftBody] = useState('')
   const [editingNoteId, setEditingNoteId] = useState<string | null>(null)
   const [editingBody, setEditingBody] = useState('')
+  const [activeReviewNoteId, setActiveReviewNoteId] = useState<string | null>(
+    null,
+  )
+  const [pendingReviewNoteSelection, setPendingReviewNoteSelection] =
+    useState<ReviewNote | null>(null)
   const reviewNotes =
     useReviewNoteStore((state) => state.notesBySessionId[session.id]) ??
     EMPTY_REVIEW_NOTES
@@ -84,6 +95,18 @@ export const ChangedFilesPanel: FC<ChangedFilesPanelProps> = ({
   const createReviewNote = useReviewNoteStore((state) => state.createNote)
   const updateReviewNote = useReviewNoteStore((state) => state.updateNote)
   const deleteReviewNote = useReviewNoteStore((state) => state.deleteNote)
+  const reviewNoteGroups = useMemo(
+    () => groupReviewNotesByFile(reviewNotes),
+    [reviewNotes],
+  )
+  const draftReviewNoteCount = useMemo(
+    () => countDraftReviewNotes(reviewNotes),
+    [reviewNotes],
+  )
+  const reviewNoteCountByFile = useMemo(
+    () => countReviewNotesByFile(reviewNotes),
+    [reviewNotes],
+  )
   const diffLines = useMemo(() => parseUnifiedDiff(diff), [diff])
   const selectedDiffLineIdSet = useMemo(
     () => new Set(selectedDiffLineIds),
@@ -183,6 +206,21 @@ export const ChangedFilesPanel: FC<ChangedFilesPanelProps> = ({
     setNoteDraftBody('')
   }, [session.id, mode, selectedFile, diff])
 
+  useEffect(() => {
+    if (!pendingReviewNoteSelection) return
+    if (mode !== pendingReviewNoteSelection.mode) return
+    if (selectedFile !== pendingReviewNoteSelection.filePath) return
+    if (diffLoading || diffLines.length === 0) return
+
+    const selectedLineIds = findReviewNoteDiffLineIds({
+      note: pendingReviewNoteSelection,
+      lines: diffLines,
+    })
+    setSelectedDiffLineIds(selectedLineIds)
+    setSelectionAnchorLineId(selectedLineIds[0] ?? null)
+    setPendingReviewNoteSelection(null)
+  }, [diffLines, diffLoading, mode, pendingReviewNoteSelection, selectedFile])
+
   const handleFileClick = (file: string) => {
     setSelectedFile((current) => (current === file ? null : file))
   }
@@ -256,6 +294,25 @@ export const ChangedFilesPanel: FC<ChangedFilesPanelProps> = ({
     setEditingBody('')
   }
 
+  const handleReviewNoteJump = (note: ReviewNote) => {
+    setActiveReviewNoteId(note.id)
+    setPendingReviewNoteSelection(note)
+    setNoteComposerOpen(false)
+    setNoteDraftBody('')
+    setDiff('')
+    setSelectedDiffLineIds([])
+    setSelectionAnchorLineId(null)
+
+    if (mode !== note.mode) {
+      setMode(note.mode)
+      setFiles([])
+      setBase(null)
+      setError(null)
+    }
+
+    setSelectedFile(note.filePath)
+  }
+
   const stopPanelControlEvent = (event: ReactMouseEvent) => {
     event.stopPropagation()
   }
@@ -269,10 +326,18 @@ export const ChangedFilesPanel: FC<ChangedFilesPanelProps> = ({
       style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
       onMouseDown={stopPanelControlEvent}
     >
-      <div className="flex h-12 shrink-0 items-center justify-between border-b px-3">
-        <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-          {getChangedFilesHeaderLabel({ mode, count: files.length, base })}
-        </span>
+      <div className="flex h-12 shrink-0 items-center justify-between gap-3 border-b px-3">
+        <div className="min-w-0">
+          <span className="truncate text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+            {getChangedFilesHeaderLabel({ mode, count: files.length, base })}
+          </span>
+          {draftReviewNoteCount > 0 && (
+            <span className="ml-2 rounded border border-border bg-background px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+              {draftReviewNoteCount} draft{' '}
+              {draftReviewNoteCount === 1 ? 'note' : 'notes'}
+            </span>
+          )}
+        </div>
         <div className="flex items-center gap-1">
           <Button
             type="button"
@@ -390,6 +455,8 @@ export const ChangedFilesPanel: FC<ChangedFilesPanelProps> = ({
                 </p>
                 <p className="text-[10px] text-muted-foreground">
                   {files.length} changed
+                  {reviewNotes.length > 0 &&
+                    ` · ${reviewNotes.length} ${reviewNotes.length === 1 ? 'note' : 'notes'}`}
                 </p>
               </div>
               <div
@@ -404,6 +471,7 @@ export const ChangedFilesPanel: FC<ChangedFilesPanelProps> = ({
                     status={f.status}
                     file={f.file}
                     selected={selectedFile === f.file}
+                    noteCount={reviewNoteCountByFile[f.file] ?? 0}
                     onSelect={() => handleFileClick(f.file)}
                   />
                 ))}
@@ -470,15 +538,15 @@ export const ChangedFilesPanel: FC<ChangedFilesPanelProps> = ({
                 </div>
               </div>
             )}
-            {(reviewNotes.length > 0 || reviewNotesError) && (
+            {(reviewNoteGroups.length > 0 || reviewNotesError) && (
               <div className="space-y-2 border-b border-border px-3 py-2">
                 <div className="flex items-center justify-between">
                   <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
                     Review Notes
                   </p>
-                  {reviewNotes.length > 0 && (
+                  {draftReviewNoteCount > 0 && (
                     <p className="text-[10px] text-muted-foreground">
-                      {reviewNotes.length} draft
+                      {draftReviewNoteCount} draft
                     </p>
                   )}
                 </div>
@@ -487,77 +555,115 @@ export const ChangedFilesPanel: FC<ChangedFilesPanelProps> = ({
                     {reviewNotesError}
                   </p>
                 )}
-                {reviewNotes.map((note) => (
+                {reviewNoteGroups.map((group) => (
                   <div
-                    key={note.id}
+                    key={group.filePath}
                     className="rounded-md border border-border bg-background/50 p-2"
                   >
-                    <div className="mb-1 flex items-start justify-between gap-2">
-                      <p className="min-w-0 truncate text-[11px] font-medium text-foreground">
-                        {note.filePath}:{formatReviewNoteLocation(note)}
+                    <div className="mb-2 flex items-center justify-between gap-2">
+                      <p className="min-w-0 truncate font-mono text-[11px] font-medium text-foreground">
+                        {group.filePath}
                       </p>
-                      <div className="flex shrink-0 items-center gap-1">
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon"
-                          className="h-6 w-6"
-                          onClick={() => handleEditReviewNote(note)}
-                          title="Edit review note"
-                        >
-                          <Pencil className="h-3 w-3" />
-                        </Button>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon"
-                          className="h-6 w-6"
-                          onClick={() => deleteReviewNote(note.id, session.id)}
-                          title="Delete review note"
-                        >
-                          <Trash2 className="h-3 w-3" />
-                        </Button>
-                      </div>
+                      <span className="shrink-0 text-[10px] text-muted-foreground">
+                        {group.notes.length}
+                      </span>
                     </div>
-                    {editingNoteId === note.id ? (
-                      <div className="space-y-2">
-                        <Textarea
-                          value={editingBody}
-                          onChange={(event) =>
-                            setEditingBody(event.target.value)
-                          }
-                          className="min-h-16 resize-none text-xs"
-                          aria-label="Edit review note body"
-                        />
-                        <div className="flex justify-end gap-2">
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="sm"
-                            className="h-7 px-2 text-xs"
-                            onClick={() => {
-                              setEditingNoteId(null)
-                              setEditingBody('')
-                            }}
-                          >
-                            Cancel
-                          </Button>
-                          <Button
-                            type="button"
-                            size="sm"
-                            className="h-7 px-2 text-xs"
-                            disabled={editingBody.trim().length === 0}
-                            onClick={() => handleSaveReviewNote(note.id)}
-                          >
-                            Save
-                          </Button>
+                    <div className="space-y-1.5">
+                      {group.notes.map((note) => (
+                        <div
+                          key={note.id}
+                          className={cn(
+                            'rounded border border-border/70 bg-card/70 p-2',
+                            activeReviewNoteId === note.id &&
+                              'border-primary/60 bg-primary/10',
+                          )}
+                        >
+                          <div className="mb-1 flex items-start justify-between gap-2">
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              className="h-auto min-w-0 flex-1 justify-start rounded px-1 py-0 text-left font-normal"
+                              onClick={() => handleReviewNoteJump(note)}
+                              title="Jump to review note"
+                            >
+                              <span className="truncate text-[11px] text-muted-foreground">
+                                {formatReviewNoteLocation(note)}
+                              </span>
+                            </Button>
+                            <div className="flex shrink-0 items-center gap-1">
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                className="h-6 w-6"
+                                onClick={() => handleEditReviewNote(note)}
+                                title="Edit review note"
+                              >
+                                <Pencil className="h-3 w-3" />
+                              </Button>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                className="h-6 w-6"
+                                onClick={() =>
+                                  deleteReviewNote(note.id, session.id)
+                                }
+                                title="Delete review note"
+                              >
+                                <Trash2 className="h-3 w-3" />
+                              </Button>
+                            </div>
+                          </div>
+                          {editingNoteId === note.id ? (
+                            <div className="space-y-2">
+                              <Textarea
+                                value={editingBody}
+                                onChange={(event) =>
+                                  setEditingBody(event.target.value)
+                                }
+                                className="min-h-16 resize-none text-xs"
+                                aria-label="Edit review note body"
+                              />
+                              <div className="flex justify-end gap-2">
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-7 px-2 text-xs"
+                                  onClick={() => {
+                                    setEditingNoteId(null)
+                                    setEditingBody('')
+                                  }}
+                                >
+                                  Cancel
+                                </Button>
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  className="h-7 px-2 text-xs"
+                                  disabled={editingBody.trim().length === 0}
+                                  onClick={() => handleSaveReviewNote(note.id)}
+                                >
+                                  Save
+                                </Button>
+                              </div>
+                            </div>
+                          ) : (
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              className="h-auto w-full justify-start rounded px-1 py-1 text-left font-normal"
+                              onClick={() => handleReviewNoteJump(note)}
+                            >
+                              <span className="line-clamp-2 whitespace-pre-wrap text-xs text-muted-foreground">
+                                {note.body}
+                              </span>
+                            </Button>
+                          )}
                         </div>
-                      </div>
-                    ) : (
-                      <p className="whitespace-pre-wrap text-xs text-muted-foreground">
-                        {note.body}
-                      </p>
-                    )}
+                      ))}
+                    </div>
                   </div>
                 ))}
               </div>

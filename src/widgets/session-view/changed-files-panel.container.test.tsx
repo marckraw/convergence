@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { useReviewNoteStore } from '@/entities/review-note'
+import { useReviewNoteStore, type ReviewNote } from '@/entities/review-note'
 import { ChangedFilesPanel } from './changed-files-panel.container'
 
 const session = {
@@ -197,6 +197,71 @@ describe('ChangedFilesPanel', () => {
     )
   })
 
+  it('shows grouped review notes, file badges, and jumps back to note ranges', async () => {
+    const notes = [
+      makeReviewNote({
+        id: 'note-app',
+        filePath: 'src/app.ts',
+        body: 'Question on app',
+        newStartLine: 1,
+      }),
+      makeReviewNote({
+        id: 'note-new',
+        filePath: 'src/new-file.ts',
+        body: 'Question on new file',
+        newStartLine: 1,
+      }),
+      makeReviewNote({
+        id: 'note-new-second',
+        filePath: 'src/new-file.ts',
+        body: 'Second question on new file',
+        oldStartLine: 1,
+        newStartLine: null,
+      }),
+    ]
+    const electronAPI = (
+      window as unknown as { electronAPI: Record<string, unknown> }
+    ).electronAPI
+    const reviewNotes = electronAPI.reviewNotes as Record<
+      string,
+      ReturnType<typeof vi.fn>
+    >
+    reviewNotes.listBySession.mockResolvedValue(notes)
+
+    render(
+      <ChangedFilesPanel
+        session={session}
+        side="right"
+        expanded={false}
+        onClose={vi.fn()}
+        onToggleSide={vi.fn()}
+        onToggleExpanded={vi.fn()}
+      />,
+    )
+
+    await waitFor(() => {
+      expect(screen.getByText('Question on new file')).toBeInTheDocument()
+    })
+
+    expect(screen.getByText('3 draft notes')).toBeInTheDocument()
+    expect(screen.getByText('Question on app')).toBeInTheDocument()
+    expect(screen.getByText('Second question on new file')).toBeInTheDocument()
+    expect(screen.getByTitle('2 review notes')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByText('Question on new file'))
+
+    await waitFor(() => {
+      expect(screen.getByText('1 line selected')).toBeInTheDocument()
+      expect(screen.getByText('New 1')).toBeInTheDocument()
+    })
+
+    const git = electronAPI.git as Record<string, ReturnType<typeof vi.fn>>
+    expect(git.getDiff).toHaveBeenCalledWith(
+      session.workingDirectory,
+      'src/new-file.ts',
+    )
+  })
+
   it('renders the turn list when expanded and no turns exist yet', async () => {
     render(
       <ChangedFilesPanel
@@ -322,3 +387,25 @@ describe('ChangedFilesPanel', () => {
     })
   })
 })
+
+function makeReviewNote(patch: Partial<ReviewNote>): ReviewNote {
+  return {
+    id: 'note-1',
+    sessionId: session.id,
+    workspaceId: session.workspaceId,
+    filePath: 'src/app.ts',
+    mode: 'working-tree',
+    oldStartLine: null,
+    oldEndLine: null,
+    newStartLine: 1,
+    newEndLine: 1,
+    hunkHeader: '@@ -1 +1 @@',
+    selectedDiff: '+line',
+    body: 'Question',
+    state: 'draft',
+    sentAt: null,
+    createdAt: '2026-01-01T00:00:00.000Z',
+    updatedAt: '2026-01-01T00:00:00.000Z',
+    ...patch,
+  }
+}
