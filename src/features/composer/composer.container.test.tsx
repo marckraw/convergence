@@ -144,6 +144,11 @@ describe('ComposerContainer', () => {
       detailsErrorBySkillId: {},
       loadingDetailsSkillId: null,
       loadCatalog: vi.fn().mockResolvedValue(catalog),
+      loadGlobalCatalog: vi.fn().mockResolvedValue({
+        ...catalog,
+        projectId: 'global',
+        projectName: 'Global chat',
+      }),
     })
 
     useProjectContextStore.setState({
@@ -305,6 +310,22 @@ describe('ComposerContainer', () => {
     expect(
       useProjectContextStore.getState().loadForProject,
     ).not.toHaveBeenCalled()
+  })
+
+  it('loads global skills when opening the skill picker in global chat', () => {
+    render(
+      <ComposerContainer
+        context={{
+          kind: 'global',
+          activeSessionId: null,
+        }}
+      />,
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: 'Select skills' }))
+
+    expect(useSkillStore.getState().loadGlobalCatalog).toHaveBeenCalled()
+    expect(useSkillStore.getState().loadCatalog).not.toHaveBeenCalled()
   })
 
   it('allows follow-up while a supported provider session is running', () => {

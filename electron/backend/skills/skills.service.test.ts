@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'fs'
 import { join } from 'path'
-import { tmpdir } from 'os'
+import { homedir, tmpdir } from 'os'
 import { getDatabase, closeDatabase, resetDatabase } from '../database/database'
 import { ProjectService } from '../project/project.service'
 import { SkillsService } from './skills.service'
@@ -125,6 +125,24 @@ describe('SkillsService', () => {
     expect(result).toEqual({
       projectId: project.id,
       projectName: project.name,
+      providers: [catalog()],
+      refreshedAt: FIXED_NOW.toISOString(),
+    })
+  })
+
+  it('returns a global catalog without requiring a project', async () => {
+    const list = vi.fn(async () => catalog())
+    const service = new SkillsService(projectService, [codexProvider()], {
+      now: () => FIXED_NOW,
+      createAdapter: () => ({ list }),
+    })
+
+    const result = await service.listGlobal({ forceReload: true })
+
+    expect(list).toHaveBeenCalledWith(homedir(), { forceReload: true })
+    expect(result).toEqual({
+      projectId: 'global',
+      projectName: 'Global chat',
       providers: [catalog()],
       refreshedAt: FIXED_NOW.toISOString(),
     })

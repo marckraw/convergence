@@ -258,6 +258,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   skills: {
     listByProjectId: (projectId: string, options?: { forceReload?: boolean }) =>
       ipcRenderer.invoke('skills:listByProjectId', projectId, options),
+    listGlobal: (options?: { forceReload?: boolean }) =>
+      ipcRenderer.invoke('skills:listGlobal', options),
     readDetails: (input: unknown) =>
       ipcRenderer.invoke('skills:readDetails', input),
   },

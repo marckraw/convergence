@@ -1011,6 +1011,7 @@ interface ElectronAPI {
       projectId: string,
       options?: SkillCatalogOptions,
     ) => Promise<ProjectSkillCatalog>
+    listGlobal: (options?: SkillCatalogOptions) => Promise<ProjectSkillCatalog>
     readDetails: (input: SkillDetailsRequest) => Promise<SkillDetails>
   }
   feedback: {

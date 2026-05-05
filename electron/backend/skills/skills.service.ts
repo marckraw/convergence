@@ -4,6 +4,7 @@ import { PiSkillsService } from './pi-skills.service'
 import { buildProviderSkillErrorCatalog } from './skill-catalog.pure'
 import { readdir, readFile, stat } from 'fs/promises'
 import { basename, dirname, join, resolve } from 'path'
+import { homedir } from 'os'
 import type { ProjectService } from '../project/project.service'
 import type { DetectedProvider } from '../provider/detect'
 import type {
@@ -119,6 +120,8 @@ function defaultCreateAdapter(
 
 const MAX_SKILL_DETAILS_BYTES = 1024 * 1024
 const MAX_RESOURCE_SUMMARIES = 80
+const GLOBAL_SKILL_CATALOG_ID = 'global'
+const GLOBAL_SKILL_CATALOG_NAME = 'Global chat'
 
 const RESOURCE_DIR_KINDS: Record<string, SkillResourceKind> = {
   scripts: 'script',
@@ -235,6 +238,33 @@ export class SkillsService {
     return {
       projectId: project.id,
       projectName: project.name,
+      providers: providers.filter(
+        (provider): provider is ProviderSkillCatalog => provider !== null,
+      ),
+      refreshedAt: this.now().toISOString(),
+    }
+  }
+
+  async listGlobal(
+    options: SkillCatalogOptions = {},
+  ): Promise<ProjectSkillCatalog> {
+    const providers = await Promise.all(
+      this.detectedProviders.map(async (provider) => {
+        try {
+          const adapter = this.createAdapter(provider)
+          if (!adapter) {
+            return null
+          }
+          return await adapter.list(homedir(), options)
+        } catch (error) {
+          return providerErrorCatalog(provider, error)
+        }
+      }),
+    )
+
+    return {
+      projectId: GLOBAL_SKILL_CATALOG_ID,
+      projectName: GLOBAL_SKILL_CATALOG_NAME,
       providers: providers.filter(
         (provider): provider is ProviderSkillCatalog => provider !== null,
       ),

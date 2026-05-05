@@ -669,6 +669,10 @@ export function registerIpcHandlers(
       skillsService.listByProjectId(projectId, options),
   )
 
+  ipcMain.handle('skills:listGlobal', (_event, options?: SkillCatalogOptions) =>
+    skillsService.listGlobal(options),
+  )
+
   ipcMain.handle('skills:readDetails', (_event, input: SkillDetailsRequest) =>
     skillsService.readDetails(input),
   )

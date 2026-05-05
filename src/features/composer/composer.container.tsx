@@ -319,6 +319,7 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({ context }) => {
   const clearRejections = useAttachmentStore((s) => s.clearRejections)
   const skillCatalog = useSkillStore((s) => s.catalog)
   const loadSkillCatalog = useSkillStore((s) => s.loadCatalog)
+  const loadGlobalSkillCatalog = useSkillStore((s) => s.loadGlobalCatalog)
   const skillCatalogLoading = useSkillStore((s) => s.isCatalogLoading)
   const skillCatalogError = useSkillStore((s) => s.catalogError)
 
@@ -547,9 +548,14 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({ context }) => {
   const handleSkillPickerOpenChange = useCallback(
     (nextOpen: boolean) => {
       setSkillPickerOpen(nextOpen)
-      if (nextOpen && projectId) void loadSkillCatalog(projectId)
+      if (!nextOpen) return
+      if (context.kind === 'global') {
+        void loadGlobalSkillCatalog()
+        return
+      }
+      if (projectId) void loadSkillCatalog(projectId)
     },
-    [loadSkillCatalog, projectId],
+    [context.kind, loadGlobalSkillCatalog, loadSkillCatalog, projectId],
   )
 
   const handleSkillToggle = useCallback((skill: SkillCatalogEntry) => {
