@@ -279,6 +279,47 @@ interface PullRequestReviewSessionResultData {
   session: SessionSummaryData
 }
 
+type ReviewNoteModeData = 'working-tree' | 'base-branch'
+type ReviewNoteStateData = 'draft' | 'sent' | 'resolved'
+
+interface ReviewNoteData {
+  id: string
+  sessionId: string
+  workspaceId: string | null
+  filePath: string
+  mode: ReviewNoteModeData
+  oldStartLine: number | null
+  oldEndLine: number | null
+  newStartLine: number | null
+  newEndLine: number | null
+  hunkHeader: string | null
+  selectedDiff: string
+  body: string
+  state: ReviewNoteStateData
+  sentAt: string | null
+  createdAt: string
+  updatedAt: string
+}
+
+interface CreateReviewNoteInputData {
+  sessionId: string
+  workspaceId?: string | null
+  filePath: string
+  mode: ReviewNoteModeData
+  oldStartLine?: number | null
+  oldEndLine?: number | null
+  newStartLine?: number | null
+  newEndLine?: number | null
+  hunkHeader?: string | null
+  selectedDiff: string
+  body: string
+}
+
+interface UpdateReviewNoteInputData {
+  body?: string
+  state?: ReviewNoteStateData
+}
+
 interface CreateWorkspaceInput {
   projectId: string
   branchName: string
@@ -923,6 +964,15 @@ interface ElectronAPI {
     prepareReviewSession: (
       input: PreparePullRequestReviewSessionInputData,
     ) => Promise<PullRequestReviewSessionResultData>
+  }
+  reviewNotes: {
+    listBySession: (sessionId: string) => Promise<ReviewNoteData[]>
+    create: (input: CreateReviewNoteInputData) => Promise<ReviewNoteData>
+    update: (
+      id: string,
+      patch: UpdateReviewNoteInputData,
+    ) => Promise<ReviewNoteData>
+    delete: (id: string) => Promise<void>
   }
   git: {
     getBranches: (repoPath: string) => Promise<string[]>

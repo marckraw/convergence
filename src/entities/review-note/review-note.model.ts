@@ -1,0 +1,122 @@
+import { create } from 'zustand'
+import { reviewNoteApi } from './review-note.api'
+import type {
+  CreateReviewNoteInput,
+  ReviewNote,
+  UpdateReviewNoteInput,
+} from './review-note.types'
+
+interface ReviewNoteState {
+  notesBySessionId: Record<string, ReviewNote[]>
+  loading: boolean
+  error: string | null
+}
+
+interface ReviewNoteActions {
+  loadBySession: (sessionId: string) => Promise<void>
+  createNote: (input: CreateReviewNoteInput) => Promise<ReviewNote | null>
+  updateNote: (
+    id: string,
+    patch: UpdateReviewNoteInput,
+  ) => Promise<ReviewNote | null>
+  deleteNote: (id: string, sessionId: string) => Promise<void>
+  clearError: () => void
+}
+
+export type ReviewNoteStore = ReviewNoteState & ReviewNoteActions
+
+function upsertById<T extends { id: string }>(items: T[], next: T): T[] {
+  return items.some((item) => item.id === next.id)
+    ? items.map((item) => (item.id === next.id ? next : item))
+    : [...items, next]
+}
+
+function removeById<T extends { id: string }>(items: T[], id: string): T[] {
+  return items.filter((item) => item.id !== id)
+}
+
+function errorMessage(err: unknown, fallback: string): string {
+  return err instanceof Error ? err.message : fallback
+}
+
+export const useReviewNoteStore = create<ReviewNoteStore>((set) => ({
+  notesBySessionId: {},
+  loading: false,
+  error: null,
+
+  loadBySession: async (sessionId) => {
+    set({ loading: true, error: null })
+    try {
+      const notes = await reviewNoteApi.listBySession(sessionId)
+      set((state) => ({
+        notesBySessionId: {
+          ...state.notesBySessionId,
+          [sessionId]: notes,
+        },
+        loading: false,
+      }))
+    } catch (err) {
+      set({
+        loading: false,
+        error: errorMessage(err, 'Failed to load review notes'),
+      })
+    }
+  },
+
+  createNote: async (input) => {
+    set({ error: null })
+    try {
+      const created = await reviewNoteApi.create(input)
+      set((state) => ({
+        notesBySessionId: {
+          ...state.notesBySessionId,
+          [input.sessionId]: upsertById(
+            state.notesBySessionId[input.sessionId] ?? [],
+            created,
+          ),
+        },
+      }))
+      return created
+    } catch (err) {
+      set({ error: errorMessage(err, 'Failed to create review note') })
+      return null
+    }
+  },
+
+  updateNote: async (id, patch) => {
+    set({ error: null })
+    try {
+      const updated = await reviewNoteApi.update(id, patch)
+      set((state) => ({
+        notesBySessionId: {
+          ...state.notesBySessionId,
+          [updated.sessionId]: upsertById(
+            state.notesBySessionId[updated.sessionId] ?? [],
+            updated,
+          ),
+        },
+      }))
+      return updated
+    } catch (err) {
+      set({ error: errorMessage(err, 'Failed to update review note') })
+      return null
+    }
+  },
+
+  deleteNote: async (id, sessionId) => {
+    set({ error: null })
+    try {
+      await reviewNoteApi.delete(id)
+      set((state) => ({
+        notesBySessionId: {
+          ...state.notesBySessionId,
+          [sessionId]: removeById(state.notesBySessionId[sessionId] ?? [], id),
+        },
+      }))
+    } catch (err) {
+      set({ error: errorMessage(err, 'Failed to delete review note') })
+    }
+  },
+
+  clearError: () => set({ error: null }),
+}))

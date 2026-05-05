@@ -1,15 +1,19 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import type { FC, MouseEvent as ReactMouseEvent } from 'react'
+import { useReviewNoteStore, type ReviewNote } from '@/entities/review-note'
 import type { SessionSummary } from '@/entities/session'
 import type { ResolvedBaseBranch } from '@/entities/workspace'
 import { gitApi } from '@/entities/workspace'
 import { Button } from '@/shared/ui/button'
+import { Textarea } from '@/shared/ui/textarea'
 import {
   ArrowLeftToLine,
   ArrowRightToLine,
   MessageSquarePlus,
   PanelRight,
+  Pencil,
   RefreshCw,
+  Trash2,
   X,
 } from 'lucide-react'
 import { cn } from '@/shared/lib/cn.pure'
@@ -44,6 +48,8 @@ interface ChangedFilesPanelProps {
   onToggleExpanded: () => void
 }
 
+const EMPTY_REVIEW_NOTES: ReviewNote[] = []
+
 export const ChangedFilesPanel: FC<ChangedFilesPanelProps> = ({
   session,
   side,
@@ -66,7 +72,27 @@ export const ChangedFilesPanel: FC<ChangedFilesPanelProps> = ({
   const [selectionAnchorLineId, setSelectionAnchorLineId] = useState<
     string | null
   >(null)
+  const [noteComposerOpen, setNoteComposerOpen] = useState(false)
+  const [noteDraftBody, setNoteDraftBody] = useState('')
+  const [editingNoteId, setEditingNoteId] = useState<string | null>(null)
+  const [editingBody, setEditingBody] = useState('')
+  const reviewNotes =
+    useReviewNoteStore((state) => state.notesBySessionId[session.id]) ??
+    EMPTY_REVIEW_NOTES
+  const reviewNotesError = useReviewNoteStore((state) => state.error)
+  const loadReviewNotes = useReviewNoteStore((state) => state.loadBySession)
+  const createReviewNote = useReviewNoteStore((state) => state.createNote)
+  const updateReviewNote = useReviewNoteStore((state) => state.updateNote)
+  const deleteReviewNote = useReviewNoteStore((state) => state.deleteNote)
   const diffLines = useMemo(() => parseUnifiedDiff(diff), [diff])
+  const selectedDiffLineIdSet = useMemo(
+    () => new Set(selectedDiffLineIds),
+    [selectedDiffLineIds],
+  )
+  const selectedDiffLines = useMemo(
+    () => diffLines.filter((line) => selectedDiffLineIdSet.has(line.id)),
+    [diffLines, selectedDiffLineIdSet],
+  )
   const selectedDiffSummary = useMemo(
     () =>
       summarizeSelectedDiffLines({
@@ -114,6 +140,10 @@ export const ChangedFilesPanel: FC<ChangedFilesPanelProps> = ({
     void loadFiles()
   }, [loadFiles, session.updatedAt])
 
+  useEffect(() => {
+    void loadReviewNotes(session.id)
+  }, [loadReviewNotes, session.id])
+
   const loadDiff = useCallback(
     async (file: string | null) => {
       if (mode === 'turns') {
@@ -149,6 +179,8 @@ export const ChangedFilesPanel: FC<ChangedFilesPanelProps> = ({
   useEffect(() => {
     setSelectedDiffLineIds([])
     setSelectionAnchorLineId(null)
+    setNoteComposerOpen(false)
+    setNoteDraftBody('')
   }, [session.id, mode, selectedFile, diff])
 
   const handleFileClick = (file: string) => {
@@ -185,6 +217,43 @@ export const ChangedFilesPanel: FC<ChangedFilesPanelProps> = ({
 
     setSelectedDiffLineIds([line.id])
     setSelectionAnchorLineId(line.id)
+  }
+
+  const handleCreateReviewNote = async () => {
+    if (!selectedFile || selectedDiffLines.length === 0) return
+
+    const created = await createReviewNote({
+      sessionId: session.id,
+      workspaceId: session.workspaceId,
+      filePath: selectedFile,
+      mode: mode === 'base-branch' ? 'base-branch' : 'working-tree',
+      oldStartLine: selectedDiffSummary.oldStartLine,
+      oldEndLine: selectedDiffSummary.oldEndLine,
+      newStartLine: selectedDiffSummary.newStartLine,
+      newEndLine: selectedDiffSummary.newEndLine,
+      hunkHeader:
+        selectedDiffLines.find((line) => line.hunkHeader)?.hunkHeader ?? null,
+      selectedDiff: selectedDiffLines.map((line) => line.text).join('\n'),
+      body: noteDraftBody,
+    })
+
+    if (!created) return
+    setNoteComposerOpen(false)
+    setNoteDraftBody('')
+    setSelectedDiffLineIds([])
+    setSelectionAnchorLineId(null)
+  }
+
+  const handleEditReviewNote = (note: ReviewNote) => {
+    setEditingNoteId(note.id)
+    setEditingBody(note.body)
+  }
+
+  const handleSaveReviewNote = async (noteId: string) => {
+    const updated = await updateReviewNote(noteId, { body: editingBody })
+    if (!updated) return
+    setEditingNoteId(null)
+    setEditingBody('')
   }
 
   const stopPanelControlEvent = (event: ReactMouseEvent) => {
@@ -360,12 +429,137 @@ export const ChangedFilesPanel: FC<ChangedFilesPanelProps> = ({
                   size="sm"
                   variant="outline"
                   className="h-7 shrink-0 gap-1.5 px-2 text-xs"
-                  disabled
-                  title="Review note persistence is planned in MAR-1138"
+                  onClick={() => setNoteComposerOpen(true)}
                 >
                   <MessageSquarePlus className="h-3.5 w-3.5" />
                   Add note
                 </Button>
+              </div>
+            )}
+            {noteComposerOpen && selectedDiffSummary.count > 0 && (
+              <div className="space-y-2 border-b border-border px-3 py-2">
+                <Textarea
+                  value={noteDraftBody}
+                  onChange={(event) => setNoteDraftBody(event.target.value)}
+                  placeholder="Ask a question or leave a draft review note..."
+                  className="min-h-20 resize-none text-xs"
+                  aria-label="Review note body"
+                />
+                <div className="flex items-center justify-end gap-2">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 px-2 text-xs"
+                    onClick={() => {
+                      setNoteComposerOpen(false)
+                      setNoteDraftBody('')
+                    }}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    className="h-7 px-2 text-xs"
+                    disabled={noteDraftBody.trim().length === 0}
+                    onClick={handleCreateReviewNote}
+                  >
+                    Save note
+                  </Button>
+                </div>
+              </div>
+            )}
+            {(reviewNotes.length > 0 || reviewNotesError) && (
+              <div className="space-y-2 border-b border-border px-3 py-2">
+                <div className="flex items-center justify-between">
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                    Review Notes
+                  </p>
+                  {reviewNotes.length > 0 && (
+                    <p className="text-[10px] text-muted-foreground">
+                      {reviewNotes.length} draft
+                    </p>
+                  )}
+                </div>
+                {reviewNotesError && (
+                  <p className="text-[11px] text-destructive">
+                    {reviewNotesError}
+                  </p>
+                )}
+                {reviewNotes.map((note) => (
+                  <div
+                    key={note.id}
+                    className="rounded-md border border-border bg-background/50 p-2"
+                  >
+                    <div className="mb-1 flex items-start justify-between gap-2">
+                      <p className="min-w-0 truncate text-[11px] font-medium text-foreground">
+                        {note.filePath}:{formatReviewNoteLocation(note)}
+                      </p>
+                      <div className="flex shrink-0 items-center gap-1">
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="h-6 w-6"
+                          onClick={() => handleEditReviewNote(note)}
+                          title="Edit review note"
+                        >
+                          <Pencil className="h-3 w-3" />
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="h-6 w-6"
+                          onClick={() => deleteReviewNote(note.id, session.id)}
+                          title="Delete review note"
+                        >
+                          <Trash2 className="h-3 w-3" />
+                        </Button>
+                      </div>
+                    </div>
+                    {editingNoteId === note.id ? (
+                      <div className="space-y-2">
+                        <Textarea
+                          value={editingBody}
+                          onChange={(event) =>
+                            setEditingBody(event.target.value)
+                          }
+                          className="min-h-16 resize-none text-xs"
+                          aria-label="Edit review note body"
+                        />
+                        <div className="flex justify-end gap-2">
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 px-2 text-xs"
+                            onClick={() => {
+                              setEditingNoteId(null)
+                              setEditingBody('')
+                            }}
+                          >
+                            Cancel
+                          </Button>
+                          <Button
+                            type="button"
+                            size="sm"
+                            className="h-7 px-2 text-xs"
+                            disabled={editingBody.trim().length === 0}
+                            onClick={() => handleSaveReviewNote(note.id)}
+                          >
+                            Save
+                          </Button>
+                        </div>
+                      </div>
+                    ) : (
+                      <p className="whitespace-pre-wrap text-xs text-muted-foreground">
+                        {note.body}
+                      </p>
+                    )}
+                  </div>
+                ))}
               </div>
             )}
             <DiffViewer
@@ -411,4 +605,14 @@ function formatLineRange(start: number | null, end: number | null): string {
   if (start === null) return ''
   if (end === null || end === start) return String(start)
   return `${start}-${end}`
+}
+
+function formatReviewNoteLocation(note: ReviewNote): string {
+  const newRange = formatLineRange(note.newStartLine, note.newEndLine)
+  if (newRange) return newRange
+
+  const oldRange = formatLineRange(note.oldStartLine, note.oldEndLine)
+  if (oldRange) return oldRange
+
+  return 'metadata'
 }

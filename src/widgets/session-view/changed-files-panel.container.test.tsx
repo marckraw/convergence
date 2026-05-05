@@ -1,5 +1,6 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { useReviewNoteStore } from '@/entities/review-note'
 import { ChangedFilesPanel } from './changed-files-panel.container'
 
 const session = {
@@ -27,6 +28,12 @@ const session = {
 
 describe('ChangedFilesPanel', () => {
   beforeEach(() => {
+    useReviewNoteStore.setState({
+      notesBySessionId: {},
+      loading: false,
+      error: null,
+    })
+
     Object.defineProperty(window, 'electronAPI', {
       value: {
         git: {
@@ -57,6 +64,42 @@ describe('ChangedFilesPanel', () => {
           getFileChanges: vi.fn().mockResolvedValue([]),
           getFileDiff: vi.fn().mockResolvedValue(''),
           onTurnDelta: vi.fn().mockReturnValue(() => {}),
+        },
+        reviewNotes: {
+          listBySession: vi.fn().mockResolvedValue([]),
+          create: vi.fn().mockImplementation((input: Record<string, unknown>) =>
+            Promise.resolve({
+              id: 'note-1',
+              ...input,
+              state: 'draft',
+              sentAt: null,
+              createdAt: '2026-01-01T00:00:00.000Z',
+              updatedAt: '2026-01-01T00:00:00.000Z',
+            }),
+          ),
+          update: vi
+            .fn()
+            .mockImplementation((id: string, patch: Record<string, unknown>) =>
+              Promise.resolve({
+                id,
+                sessionId: session.id,
+                workspaceId: session.workspaceId,
+                filePath: 'src/app.ts',
+                mode: 'working-tree',
+                oldStartLine: 1,
+                oldEndLine: null,
+                newStartLine: 1,
+                newEndLine: null,
+                hunkHeader: '@@ -1 +1 @@',
+                selectedDiff: '-console.log("old")\n+console.log("new")',
+                body: patch.body ?? 'Updated note',
+                state: patch.state ?? 'draft',
+                sentAt: null,
+                createdAt: '2026-01-01T00:00:00.000Z',
+                updatedAt: '2026-01-01T00:00:01.000Z',
+              }),
+            ),
+          delete: vi.fn().mockResolvedValue(undefined),
         },
       },
       configurable: true,
@@ -94,7 +137,7 @@ describe('ChangedFilesPanel', () => {
     })
   })
 
-  it('selects a diff line range and exposes the add-note affordance', async () => {
+  it('creates a draft review note from a selected diff line range', async () => {
     render(
       <ChangedFilesPanel
         session={session}
@@ -123,7 +166,35 @@ describe('ChangedFilesPanel', () => {
 
     expect(screen.getByText('2 lines selected')).toBeInTheDocument()
     expect(screen.getByText('Old 1 · New 1')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /add note/i })).toBeDisabled()
+    fireEvent.click(screen.getByRole('button', { name: /add note/i }))
+    fireEvent.change(screen.getByLabelText('Review note body'), {
+      target: { value: 'Why did this change?' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: /save note/i }))
+
+    await waitFor(() => {
+      expect(screen.getByText('Why did this change?')).toBeInTheDocument()
+    })
+
+    const electronAPI = (
+      window as unknown as { electronAPI: Record<string, unknown> }
+    ).electronAPI
+    const reviewNotes = electronAPI.reviewNotes as Record<
+      string,
+      ReturnType<typeof vi.fn>
+    >
+    expect(reviewNotes.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sessionId: session.id,
+        workspaceId: session.workspaceId,
+        filePath: 'src/app.ts',
+        mode: 'working-tree',
+        oldStartLine: 1,
+        newStartLine: 1,
+        selectedDiff: '-console.log("old")\n+console.log("new")',
+        body: 'Why did this change?',
+      }),
+    )
   })
 
   it('renders the turn list when expanded and no turns exist yet', async () => {

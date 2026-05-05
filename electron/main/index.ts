@@ -19,6 +19,7 @@ import { GitService } from '../backend/git/git.service'
 import { ChangedFilesService } from '../backend/git/changed-files.service'
 import { PullRequestService } from '../backend/pull-request/pull-request.service'
 import { PullRequestReviewService } from '../backend/pull-request/pull-request-review.service'
+import { ReviewNotesService } from '../backend/review-notes/review-notes.service'
 import { SessionService } from '../backend/session/session.service'
 import { SessionContextInjectionService } from '../backend/session/context-injection/session-context-injection.service'
 import { TurnCaptureService } from '../backend/session/turn/turn-capture.service'
@@ -181,6 +182,7 @@ async function startApp(): Promise<void> {
   const workspaceService = new WorkspaceService(db, gitService, workspacesRoot)
   const changedFilesService = new ChangedFilesService(db, gitService)
   const pullRequestService = new PullRequestService(db, gitService)
+  const reviewNotesService = new ReviewNotesService(db)
   const providerRegistry = new ProviderRegistry()
   const taskProgressService = new TaskProgressService(broadcastTaskProgress)
   const sessionService = new SessionService(db, providerRegistry)
@@ -447,6 +449,7 @@ async function startApp(): Promise<void> {
     changedFilesService,
     pullRequestService,
     pullRequestReviewService,
+    reviewNotesService,
     sessionService,
     providerRegistry,
     mcpService,

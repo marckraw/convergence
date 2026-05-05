@@ -14,6 +14,15 @@ export { useWorkspaceStore } from './workspace'
 export type { WorkspacePullRequest } from './pull-request'
 export { pullRequestApi, usePullRequestStore } from './pull-request'
 
+export type {
+  CreateReviewNoteInput,
+  ReviewNote,
+  ReviewNoteMode,
+  ReviewNoteState,
+  UpdateReviewNoteInput,
+} from './review-note'
+export { reviewNoteApi, useReviewNoteStore } from './review-note'
+
 export type { Session, SessionStatus, AttentionState } from './session'
 export { useSessionStore } from './session'
 

@@ -214,6 +214,33 @@ const SCHEMA = `
   CREATE INDEX IF NOT EXISTS idx_workspace_pull_requests_project
     ON workspace_pull_requests(project_id);
 
+  CREATE TABLE IF NOT EXISTS review_notes (
+    id TEXT PRIMARY KEY,
+    session_id TEXT NOT NULL,
+    workspace_id TEXT,
+    file_path TEXT NOT NULL,
+    mode TEXT NOT NULL CHECK (mode IN ('working-tree', 'base-branch')),
+    old_start_line INTEGER,
+    old_end_line INTEGER,
+    new_start_line INTEGER,
+    new_end_line INTEGER,
+    hunk_header TEXT,
+    selected_diff TEXT NOT NULL,
+    body TEXT NOT NULL,
+    state TEXT NOT NULL DEFAULT 'draft' CHECK (state IN ('draft', 'sent', 'resolved')),
+    sent_at TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+    FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE,
+    FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE SET NULL
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_review_notes_session_state_created
+    ON review_notes(session_id, state, created_at);
+
+  CREATE INDEX IF NOT EXISTS idx_review_notes_session_file
+    ON review_notes(session_id, file_path);
+
   CREATE TABLE IF NOT EXISTS attachments (
     id TEXT PRIMARY KEY,
     session_id TEXT NOT NULL,
