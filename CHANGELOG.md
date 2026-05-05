@@ -1,5 +1,20 @@
 # convergence
 
+## 0.33.0
+
+### Minor Changes
+
+- 8735565: Add a local pull request review flow. The command center can now open a
+  review dialog, resolve GitHub pull request URLs to the matching configured
+  project, prepare or refresh a dedicated `convergence/pr-<number>` worktree,
+  cache pull request metadata, and start an agent session with a code-review
+  prompt.
+
+### Patch Changes
+
+- 4a60e83: Add a Base Branch mode to the Changed Files panel so reviewers can switch
+  between working-tree changes, PR-style base-branch changes, and turn history.
+
 ## 0.32.3
 
 ### Patch Changes
