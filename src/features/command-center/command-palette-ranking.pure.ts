@@ -167,6 +167,10 @@ export interface PaletteFuse {
   search(query: string): FuseResult<PaletteItem>[]
 }
 
+function queryTokens(query: string): string[] {
+  return query.split(/\s+/).filter(Boolean)
+}
+
 export function rankForQuery(
   items: PaletteItem[],
   query: string,
@@ -174,8 +178,42 @@ export function rankForQuery(
 ): RankedItem[] {
   const trimmed = query.trim()
   if (!trimmed || items.length === 0) return []
-  return fuse.search(trimmed).map((result) => ({
-    item: result.item,
-    score: result.score ?? 1,
-  }))
+
+  const tokens = queryTokens(trimmed)
+  if (tokens.length === 1) {
+    return fuse.search(trimmed).map((result) => ({
+      item: result.item,
+      score: result.score ?? 1,
+    }))
+  }
+
+  const hitsById = new Map<
+    string,
+    { item: PaletteItem; score: number; tokenHits: number }
+  >()
+
+  for (const token of tokens) {
+    const tokenResults = fuse.search(token)
+    if (tokenResults.length === 0) return []
+
+    for (const result of tokenResults) {
+      const score = result.score ?? 1
+      const existing = hitsById.get(result.item.id)
+      if (existing) {
+        existing.score += score
+        existing.tokenHits += 1
+      } else {
+        hitsById.set(result.item.id, {
+          item: result.item,
+          score,
+          tokenHits: 1,
+        })
+      }
+    }
+  }
+
+  return [...hitsById.values()]
+    .filter((hit) => hit.tokenHits === tokens.length)
+    .map((hit) => ({ item: hit.item, score: hit.score }))
+    .sort((a, b) => a.score - b.score)
 }

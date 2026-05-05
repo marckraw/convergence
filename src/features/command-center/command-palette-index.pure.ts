@@ -105,6 +105,11 @@ function attentionAlias(attention: AttentionState): string | undefined {
   }
 }
 
+function providerAliases(providerId: string): string | undefined {
+  if (providerId === 'shell') return 'terminal shell console command line cli'
+  return undefined
+}
+
 export function buildPaletteIndex(
   input: BuildPaletteIndexInput,
 ): PaletteItem[] {
@@ -176,6 +181,7 @@ export function buildPaletteIndex(
         branchName: branchName ?? undefined,
         providerId: session.providerId,
         attentionAlias: attentionAlias(session.attention),
+        aliases: providerAliases(session.providerId),
       },
     }
     items.push(item)

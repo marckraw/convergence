@@ -283,6 +283,54 @@ describe('rankForQuery', () => {
     expect(workspaceHit).toBeDefined()
   })
 
+  it('matches multi-word session queries across separate fields in any order', () => {
+    const terminalItems = buildItems({
+      projects: [project('p-backpack', 'backpack')],
+      workspaces: [],
+      sessions: [
+        session('s-terminal', 'p-backpack', {
+          name: 'Local dev',
+          providerId: 'shell',
+          primarySurface: 'terminal',
+        }),
+      ],
+    })
+    const localFuse = new Fuse(terminalItems, PALETTE_FUSE_OPTIONS)
+
+    for (const query of ['backpack terminal', 'terminal backpack']) {
+      const ranked = rankForQuery(terminalItems, query, localFuse)
+      const sessionHits = ranked
+        .filter((entry) => entry.item.kind === 'session')
+        .map((entry) => (entry.item as SessionPaletteItem).sessionId)
+
+      expect(sessionHits).toContain('s-terminal')
+    }
+  })
+
+  it('matches shell terminal sessions by provider vocabulary and project', () => {
+    const terminalItems = buildItems({
+      projects: [project('p-backpack', 'backpack')],
+      workspaces: [],
+      sessions: [
+        session('s-terminal', 'p-backpack', {
+          name: 'Local dev',
+          providerId: 'shell',
+          primarySurface: 'terminal',
+        }),
+      ],
+    })
+    const localFuse = new Fuse(terminalItems, PALETTE_FUSE_OPTIONS)
+
+    for (const query of ['backpack shell', 'shell backpack']) {
+      const ranked = rankForQuery(terminalItems, query, localFuse)
+      const sessionHits = ranked
+        .filter((entry) => entry.item.kind === 'session')
+        .map((entry) => (entry.item as SessionPaletteItem).sessionId)
+
+      expect(sessionHits).toContain('s-terminal')
+    }
+  })
+
   it('does not apply attention boost on typed queries', () => {
     const itemsWithAttention = buildItems({
       projects: [project('p1', 'storefront')],
