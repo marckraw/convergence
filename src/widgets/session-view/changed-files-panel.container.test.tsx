@@ -94,6 +94,38 @@ describe('ChangedFilesPanel', () => {
     })
   })
 
+  it('selects a diff line range and exposes the add-note affordance', async () => {
+    render(
+      <ChangedFilesPanel
+        session={session}
+        side="right"
+        expanded={false}
+        onClose={vi.fn()}
+        onToggleSide={vi.fn()}
+        onToggleExpanded={vi.fn()}
+      />,
+    )
+
+    await waitFor(() => {
+      expect(screen.getByText('-console.log("old")')).toBeInTheDocument()
+      expect(screen.getByText('+console.log("new")')).toBeInTheDocument()
+    })
+
+    const deletedLine = screen
+      .getByText('-console.log("old")')
+      .closest('button')
+    const addedLine = screen.getByText('+console.log("new")').closest('button')
+    expect(deletedLine).not.toBeNull()
+    expect(addedLine).not.toBeNull()
+
+    fireEvent.click(deletedLine!)
+    fireEvent.click(addedLine!, { shiftKey: true })
+
+    expect(screen.getByText('2 lines selected')).toBeInTheDocument()
+    expect(screen.getByText('Old 1 · New 1')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /add note/i })).toBeDisabled()
+  })
+
   it('renders the turn list when expanded and no turns exist yet', async () => {
     render(
       <ChangedFilesPanel

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import type { FC, MouseEvent as ReactMouseEvent } from 'react'
 import type { SessionSummary } from '@/entities/session'
 import type { ResolvedBaseBranch } from '@/entities/workspace'
@@ -7,6 +7,7 @@ import { Button } from '@/shared/ui/button'
 import {
   ArrowLeftToLine,
   ArrowRightToLine,
+  MessageSquarePlus,
   PanelRight,
   RefreshCw,
   X,
@@ -21,6 +22,12 @@ import {
   type ChangedFilesReviewMode,
 } from './changed-files.pure'
 import { DiffViewer } from './diff-viewer.presentational'
+import {
+  parseUnifiedDiff,
+  selectDiffLineRange,
+  summarizeSelectedDiffLines,
+  type DiffLine,
+} from './diff-lines.pure'
 import { TurnList } from './turn-list.container'
 
 interface ChangedFile {
@@ -55,6 +62,19 @@ export const ChangedFilesPanel: FC<ChangedFilesPanelProps> = ({
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [diffLoading, setDiffLoading] = useState(false)
+  const [selectedDiffLineIds, setSelectedDiffLineIds] = useState<string[]>([])
+  const [selectionAnchorLineId, setSelectionAnchorLineId] = useState<
+    string | null
+  >(null)
+  const diffLines = useMemo(() => parseUnifiedDiff(diff), [diff])
+  const selectedDiffSummary = useMemo(
+    () =>
+      summarizeSelectedDiffLines({
+        lines: diffLines,
+        selectedIds: selectedDiffLineIds,
+      }),
+    [diffLines, selectedDiffLineIds],
+  )
 
   useEffect(() => {
     setMode((current) => {
@@ -126,6 +146,11 @@ export const ChangedFilesPanel: FC<ChangedFilesPanelProps> = ({
     void loadDiff(selectedFile)
   }, [loadDiff, selectedFile, session.updatedAt])
 
+  useEffect(() => {
+    setSelectedDiffLineIds([])
+    setSelectionAnchorLineId(null)
+  }, [session.id, mode, selectedFile, diff])
+
   const handleFileClick = (file: string) => {
     setSelectedFile((current) => (current === file ? null : file))
   }
@@ -138,6 +163,28 @@ export const ChangedFilesPanel: FC<ChangedFilesPanelProps> = ({
     setDiff('')
     setBase(null)
     setError(null)
+    setSelectedDiffLineIds([])
+    setSelectionAnchorLineId(null)
+  }
+
+  const handleDiffLineClick = (
+    line: DiffLine,
+    event: ReactMouseEvent<HTMLButtonElement>,
+  ) => {
+    if (event.shiftKey) {
+      setSelectedDiffLineIds(
+        selectDiffLineRange({
+          lines: diffLines,
+          anchorId: selectionAnchorLineId,
+          targetId: line.id,
+        }),
+      )
+      setSelectionAnchorLineId((current) => current ?? line.id)
+      return
+    }
+
+    setSelectedDiffLineIds([line.id])
+    setSelectionAnchorLineId(line.id)
   }
 
   const stopPanelControlEvent = (event: ReactMouseEvent) => {
@@ -296,9 +343,37 @@ export const ChangedFilesPanel: FC<ChangedFilesPanelProps> = ({
           )}
 
           <div className="min-h-0 flex-1">
+            {selectedDiffSummary.count > 0 && (
+              <div className="flex shrink-0 items-center justify-between gap-3 border-b border-border px-3 py-2">
+                <div className="min-w-0">
+                  <p className="text-xs font-medium text-foreground">
+                    {selectedDiffSummary.count}{' '}
+                    {selectedDiffSummary.count === 1 ? 'line' : 'lines'}{' '}
+                    selected
+                  </p>
+                  <p className="truncate text-[11px] text-muted-foreground">
+                    {formatSelectionSummary(selectedDiffSummary)}
+                  </p>
+                </div>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  className="h-7 shrink-0 gap-1.5 px-2 text-xs"
+                  disabled
+                  title="Review note persistence is planned in MAR-1138"
+                >
+                  <MessageSquarePlus className="h-3.5 w-3.5" />
+                  Add note
+                </Button>
+              </div>
+            )}
             <DiffViewer
               file={selectedFile}
               diff={diff}
+              lines={diffLines}
+              selectedLineIds={selectedDiffLineIds}
+              onLineClick={handleDiffLineClick}
               loading={diffLoading}
               title={
                 mode === 'base-branch'
@@ -316,4 +391,24 @@ export const ChangedFilesPanel: FC<ChangedFilesPanelProps> = ({
       )}
     </div>
   )
+}
+
+function formatSelectionSummary(summary: {
+  oldStartLine: number | null
+  oldEndLine: number | null
+  newStartLine: number | null
+  newEndLine: number | null
+}): string {
+  const oldRange = formatLineRange(summary.oldStartLine, summary.oldEndLine)
+  const newRange = formatLineRange(summary.newStartLine, summary.newEndLine)
+  if (oldRange && newRange) return `Old ${oldRange} · New ${newRange}`
+  if (oldRange) return `Old ${oldRange}`
+  if (newRange) return `New ${newRange}`
+  return 'Metadata lines'
+}
+
+function formatLineRange(start: number | null, end: number | null): string {
+  if (start === null) return ''
+  if (end === null || end === start) return String(start)
+  return `${start}-${end}`
 }
