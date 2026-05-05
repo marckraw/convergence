@@ -63,6 +63,12 @@ export const PALETTE_DIALOGS: DialogDescriptor[] = [
     description: 'Settings for the active project',
   },
   {
+    kind: 'pull-request-review-start',
+    title: 'Review Pull Request',
+    description: 'Create a local review workspace and agent session',
+    aliases: 'pr github code review pull request checkout',
+  },
+  {
     kind: 'providers',
     title: 'Providers',
     description: 'Provider status and availability',

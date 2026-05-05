@@ -99,6 +99,16 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.invoke('pullRequest:listByProjectId', projectId),
     refreshForSession: (sessionId: string) =>
       ipcRenderer.invoke('pullRequest:refreshForSession', sessionId),
+    previewReview: (input: { projectId?: string | null; reference: string }) =>
+      ipcRenderer.invoke('pullRequest:previewReview', input),
+    prepareReviewSession: (input: {
+      projectId?: string | null
+      reference: string
+      providerId: string
+      model: string | null
+      effort: string | null
+      sessionName?: string
+    }) => ipcRenderer.invoke('pullRequest:prepareReviewSession', input),
   },
   git: {
     getBranches: (repoPath: string) =>

@@ -248,6 +248,37 @@ interface WorkspacePullRequestData {
   updatedAt: string
 }
 
+interface PullRequestReviewPreviewData {
+  projectId: string
+  projectName: string
+  repositoryOwner: string
+  repositoryName: string
+  number: number
+  title: string | null
+  url: string | null
+  state: PullRequestStateData
+  isDraft: boolean
+  headBranch: string | null
+  baseBranch: string | null
+  mergedAt: string | null
+  reviewBranchName: string
+}
+
+interface PreparePullRequestReviewSessionInputData {
+  projectId?: string | null
+  reference: string
+  providerId: string
+  model: string | null
+  effort: ReasoningEffort | null
+  sessionName?: string
+}
+
+interface PullRequestReviewSessionResultData {
+  workspace: WorkspaceData
+  pullRequest: WorkspacePullRequestData
+  session: SessionSummaryData
+}
+
 interface CreateWorkspaceInput {
   projectId: string
   branchName: string
@@ -885,6 +916,13 @@ interface ElectronAPI {
     refreshForSession: (
       sessionId: string,
     ) => Promise<WorkspacePullRequestData | null>
+    previewReview: (input: {
+      projectId?: string | null
+      reference: string
+    }) => Promise<PullRequestReviewPreviewData>
+    prepareReviewSession: (
+      input: PreparePullRequestReviewSessionInputData,
+    ) => Promise<PullRequestReviewSessionResultData>
   }
   git: {
     getBranches: (repoPath: string) => Promise<string[]>

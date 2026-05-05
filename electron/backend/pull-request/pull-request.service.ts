@@ -112,6 +112,21 @@ export class PullRequestService {
     return this.getByWorkspaceId(session.workspace_id)
   }
 
+  upsertForWorkspace(input: {
+    projectId: string
+    workspaceId: string
+    result: PullRequestLookupResult
+  }): WorkspacePullRequest {
+    this.upsertWorkspacePullRequest(input)
+    const pullRequest = this.getByWorkspaceId(input.workspaceId)
+    if (!pullRequest) {
+      throw new Error(
+        `Failed to read cached pull request for workspace ${input.workspaceId}`,
+      )
+    }
+    return pullRequest
+  }
+
   private async lookupGithubPullRequest(
     workingDirectory: string,
   ): Promise<PullRequestLookupResult> {

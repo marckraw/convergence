@@ -22,6 +22,7 @@ import { CommandCenterContainer } from '@/features/command-center'
 import { InitiativeSessionLinkDialogContainer } from '@/features/initiative-session-link'
 import { SessionForkDialogContainer } from '@/features/session-fork'
 import { SessionIntentDialogContainer } from '@/features/session-intent-dialog'
+import { PullRequestReviewStartDialogContainer } from '@/features/pull-request-review-start'
 import { NotificationsToastHostContainer } from '@/features/notifications-toast-host'
 import { UpdatesToastContainer } from '@/features/updates-toast'
 import { FeedbackButtonContainer } from '@/features/feedback-button'
@@ -219,6 +220,7 @@ export function App() {
       <InitiativeSessionLinkDialogContainer />
       <SessionForkDialogContainer />
       <SessionIntentDialogContainer />
+      <PullRequestReviewStartDialogContainer />
       <NotificationsToastHostContainer />
       <UpdatesToastContainer />
       <FeedbackButtonContainer />

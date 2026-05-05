@@ -151,7 +151,7 @@ Goal: base-branch mode feels equivalent to working-tree mode for review.
 - [x] Add a short mode summary above the file list:
   - [x] Working tree: current copy can remain.
   - [x] Base branch: `Changes compared with {baseBranch}. Includes local
-    uncommitted edits.`
+uncommitted edits.`
 - [x] Preserve keyboard/mouse selection behavior.
 - [ ] Verify long branch names and long file paths do not overflow the panel.
 - [x] Add focused component tests for mode-specific copy and status rendering.
