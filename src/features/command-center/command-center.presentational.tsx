@@ -125,7 +125,10 @@ export const CommandCenterPalette: FC<CommandCenterPaletteProps> = ({
               className="w-full bg-transparent text-sm outline-none placeholder:text-muted-foreground"
             />
           </div>
-          <CommandList className="max-h-[60vh] overflow-y-auto px-2 py-2">
+          <CommandList
+            key={`${view.mode}:${query}`}
+            className="max-h-[60vh] overflow-y-auto px-2 py-2"
+          >
             {renderBody()}
           </CommandList>
         </Command>
