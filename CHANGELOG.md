@@ -1,5 +1,11 @@
 # convergence
 
+## 0.33.1
+
+### Patch Changes
+
+- b4dfaaf: Make command palette search match multi-word queries across separate fields, so terminal sessions can be found with project and surface terms like "backpack terminal" or "shell backpack".
+
 ## 0.33.0
 
 ### Minor Changes
