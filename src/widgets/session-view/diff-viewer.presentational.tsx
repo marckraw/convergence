@@ -5,17 +5,21 @@ interface DiffViewerProps {
   file: string | null
   diff: string
   loading?: boolean
+  emptyMessage?: string
+  title?: string
 }
 
 export const DiffViewer: FC<DiffViewerProps> = ({
   file,
   diff,
   loading = false,
+  emptyMessage = 'Select a changed file to inspect its working tree diff.',
+  title = 'Current workspace diff',
 }) => {
   if (!file) {
     return (
       <div className="flex h-full items-center justify-center p-3 text-center text-xs text-muted-foreground">
-        Select a changed file to inspect its working tree diff.
+        {emptyMessage}
       </div>
     )
   }
@@ -36,7 +40,7 @@ export const DiffViewer: FC<DiffViewerProps> = ({
           {file}
         </p>
         <p className="mt-1 text-[10px] uppercase tracking-wider text-muted-foreground">
-          Current workspace diff
+          {title}
         </p>
       </div>
       <pre className="app-scrollbar min-h-0 flex-1 overflow-auto bg-background/60 p-3 font-mono text-[11px] leading-relaxed text-muted-foreground">

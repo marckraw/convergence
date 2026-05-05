@@ -24,3 +24,24 @@ export interface GitStatusEntry {
   status: string
   file: string
 }
+
+export type ChangedFilesMode = 'working-tree' | 'base-branch' | 'turns'
+
+export type BaseBranchResolutionSource =
+  | 'pull-request'
+  | 'project-settings'
+  | 'remote-default'
+  | 'convention'
+  | 'current-branch'
+
+export interface ResolvedBaseBranch {
+  branchName: string
+  comparisonRef: string
+  source: BaseBranchResolutionSource
+  warning: string | null
+}
+
+export interface BaseBranchDiffSummary {
+  base: ResolvedBaseBranch
+  files: GitStatusEntry[]
+}

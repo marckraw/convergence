@@ -1,6 +1,8 @@
 import { execFile } from 'child_process'
 import { existsSync } from 'fs'
 import { join } from 'path'
+import { parseNameStatusOutput } from './base-branch-diff.pure'
+import type { ChangedFileEntry } from './changed-files.types'
 
 function exec(command: string, args: string[], cwd: string): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -120,13 +122,7 @@ export class GitService {
   }
 
   async getDefaultBranch(repoPath: string): Promise<string> {
-    const remoteHead = await exec(
-      'git',
-      ['symbolic-ref', '--quiet', '--short', 'refs/remotes/origin/HEAD'],
-      repoPath,
-    )
-      .then((output) => output.replace(/^origin\//, ''))
-      .catch(() => null)
+    const remoteHead = await this.getRemoteDefaultBranch(repoPath)
 
     if (remoteHead) {
       return remoteHead
@@ -141,6 +137,29 @@ export class GitService {
     }
 
     return this.getCurrentBranch(repoPath)
+  }
+
+  async getRemoteDefaultBranch(repoPath: string): Promise<string | null> {
+    return exec(
+      'git',
+      ['symbolic-ref', '--quiet', '--short', 'refs/remotes/origin/HEAD'],
+      repoPath,
+    )
+      .then((output) => output.replace(/^origin\//, ''))
+      .catch(() => null)
+  }
+
+  async getFirstExistingBranch(
+    repoPath: string,
+    branchNames: string[],
+  ): Promise<string | null> {
+    for (const branchName of branchNames) {
+      if (await this.branchExists(repoPath, branchName)) {
+        return branchName
+      }
+    }
+
+    return null
   }
 
   async resolveBaseBranchStartPoint(
@@ -189,6 +208,107 @@ export class GitService {
     }
 
     await exec('git', args, repoPath)
+  }
+
+  async resolveComparisonRef(
+    repoPath: string,
+    branchName: string,
+  ): Promise<string> {
+    const trimmedBranchName = branchName.trim()
+    if (!trimmedBranchName) {
+      throw new Error('Base branch not found: empty branch name')
+    }
+
+    const hasOrigin = await exec('git', ['remote'], repoPath)
+      .then((output) => output.split('\n').includes('origin'))
+      .catch(() => false)
+
+    if (hasOrigin) {
+      await exec('git', ['fetch', 'origin', trimmedBranchName], repoPath).catch(
+        () => {},
+      )
+
+      if (
+        await this.refExists(
+          repoPath,
+          `refs/remotes/origin/${trimmedBranchName}`,
+        )
+      ) {
+        return `origin/${trimmedBranchName}`
+      }
+    }
+
+    if (await this.branchExists(repoPath, trimmedBranchName)) {
+      return trimmedBranchName
+    }
+
+    throw new Error(`Base branch not found: ${trimmedBranchName}`)
+  }
+
+  async getMergeBase(
+    repoPath: string,
+    leftRef: string,
+    rightRef: string,
+  ): Promise<string> {
+    return exec('git', ['merge-base', leftRef, rightRef], repoPath)
+  }
+
+  async getNameStatusAgainstRef(
+    repoPath: string,
+    baseRef: string,
+  ): Promise<ChangedFileEntry[]> {
+    const output = await exec(
+      'git',
+      ['diff', '--name-status', '--find-renames', baseRef, '--'],
+      repoPath,
+    ).catch(() => '')
+
+    return parseNameStatusOutput(output)
+  }
+
+  async getUntrackedFiles(repoPath: string): Promise<string[]> {
+    const output = await exec(
+      'git',
+      ['ls-files', '--others', '--exclude-standard'],
+      repoPath,
+    ).catch(() => '')
+
+    if (!output) return []
+    return output.split('\n').filter(Boolean)
+  }
+
+  async getDiffAgainstRef(
+    repoPath: string,
+    baseRef: string,
+    filePath?: string,
+  ): Promise<string> {
+    const args = ['diff', '--no-color', '--find-renames', baseRef]
+    if (filePath) args.push('--', filePath)
+
+    const tracked = await exec('git', args, repoPath).catch(() => '')
+
+    if (!filePath) {
+      return tracked
+    }
+
+    const untracked = await this.getUntrackedFiles(repoPath)
+    if (!untracked.includes(filePath)) {
+      return tracked
+    }
+
+    const absoluteFilePath = join(repoPath, filePath)
+    if (!existsSync(absoluteFilePath)) {
+      return tracked
+    }
+
+    const syntheticUntracked = await execAllowExitCodes(
+      'git',
+      ['diff', '--no-index', '--no-color', '--', '/dev/null', absoluteFilePath],
+      repoPath,
+      [0, 1],
+    ).catch(() => '')
+
+    return [tracked, syntheticUntracked].filter(Boolean).join('\n')
   }
 
   async isGitRepository(repoPath: string): Promise<boolean> {
