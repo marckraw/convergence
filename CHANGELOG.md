@@ -1,5 +1,11 @@
 # convergence
 
+## 0.33.2
+
+### Patch Changes
+
+- 1ece782: Reset the Command Center results viewport when the search query changes so newly ranked results start at the top instead of preserving an old scroll position.
+
 ## 0.33.1
 
 ### Patch Changes
