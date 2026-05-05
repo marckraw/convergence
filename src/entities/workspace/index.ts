@@ -1,6 +1,9 @@
 export type {
+  BaseBranchDiffSummary,
   BranchOutputFacts,
+  ChangedFilesMode,
   GitStatusEntry,
+  ResolvedBaseBranch,
   Workspace,
 } from './workspace.types'
 export { useWorkspaceStore } from './workspace.model'

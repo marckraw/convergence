@@ -175,6 +175,30 @@ interface BranchOutputFactsData {
   remoteUrl: string | null
 }
 
+type BaseBranchResolutionSourceData =
+  | 'pull-request'
+  | 'project-settings'
+  | 'remote-default'
+  | 'convention'
+  | 'current-branch'
+
+interface ResolvedBaseBranchData {
+  branchName: string
+  comparisonRef: string
+  source: BaseBranchResolutionSourceData
+  warning: string | null
+}
+
+interface GitStatusEntryData {
+  status: string
+  file: string
+}
+
+interface BaseBranchDiffSummaryData {
+  base: ResolvedBaseBranchData
+  files: GitStatusEntryData[]
+}
+
 interface WorkspaceData {
   id: string
   projectId: string
@@ -867,10 +891,12 @@ interface ElectronAPI {
     getAllBranches: (repoPath: string) => Promise<string[]>
     getCurrentBranch: (repoPath: string) => Promise<string>
     getBranchOutputFacts: (repoPath: string) => Promise<BranchOutputFactsData>
-    getStatus: (
-      repoPath: string,
-    ) => Promise<Array<{ status: string; file: string }>>
+    getStatus: (repoPath: string) => Promise<GitStatusEntryData[]>
     getDiff: (repoPath: string, filePath?: string) => Promise<string>
+    getBaseBranchStatus: (
+      sessionId: string,
+    ) => Promise<BaseBranchDiffSummaryData>
+    getBaseBranchDiff: (sessionId: string, filePath: string) => Promise<string>
   }
   session: {
     create: (input: CreateSessionInput) => Promise<SessionSummaryData>
