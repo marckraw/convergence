@@ -437,6 +437,68 @@ describe('ChangedFilesPanel', () => {
     )
   })
 
+  it('falls back to the stored note diff when a note jump cannot reload the live base diff', async () => {
+    const staleNote = makeReviewNote({
+      id: 'note-stale-base',
+      filePath: 'src/stale.ts',
+      mode: 'base-branch',
+      newStartLine: 8,
+      newEndLine: 8,
+      hunkHeader: '@@ -8 +8 @@',
+      selectedDiff: '+const storedAnswer = true',
+      body: 'Why was this added?',
+    })
+    const electronAPI = (
+      window as unknown as { electronAPI: Record<string, unknown> }
+    ).electronAPI
+    const git = electronAPI.git as Record<string, ReturnType<typeof vi.fn>>
+    const reviewNotes = electronAPI.reviewNotes as Record<
+      string,
+      ReturnType<typeof vi.fn>
+    >
+    reviewNotes.listBySession.mockResolvedValue([staleNote])
+    git.getBaseBranchStatus.mockResolvedValue({
+      base: {
+        branchName: 'beta',
+        comparisonRef: 'origin/beta',
+        source: 'project-settings',
+        warning: null,
+      },
+      files: [{ status: 'M', file: 'src/base.ts' }],
+    })
+    git.getBaseBranchDiff.mockResolvedValue('')
+
+    render(
+      <ChangedFilesPanel
+        session={session}
+        side="right"
+        expanded={false}
+        onClose={vi.fn()}
+        onToggleSide={vi.fn()}
+        onToggleExpanded={vi.fn()}
+      />,
+    )
+
+    await waitFor(() => {
+      expect(screen.getByText('Why was this added?')).toBeInTheDocument()
+    })
+
+    fireEvent.click(screen.getByText('Why was this added?'))
+
+    await waitFor(() => {
+      expect(screen.getByText('Diff against beta')).toBeInTheDocument()
+      expect(screen.getByText('+const storedAnswer = true')).toBeInTheDocument()
+      expect(screen.getByText('1 line selected')).toBeInTheDocument()
+      expect(screen.getByText('New 8')).toBeInTheDocument()
+    })
+
+    expect(git.getBaseBranchDiff).toHaveBeenCalledWith(
+      session.id,
+      'src/stale.ts',
+    )
+    expect(screen.queryByText('(no diff available)')).not.toBeInTheDocument()
+  })
+
   it('renders turn cards and streaming turn.add deltas when expanded', async () => {
     const turns = [
       {

@@ -58,6 +58,12 @@ interface ChangedFilesPanelProps {
 
 const EMPTY_REVIEW_NOTES: ReviewNote[] = []
 
+interface StoredReviewNoteDiff {
+  filePath: string
+  mode: ReviewNote['mode']
+  diff: string
+}
+
 export const ChangedFilesPanel: FC<ChangedFilesPanelProps> = ({
   session,
   side,
@@ -90,6 +96,12 @@ export const ChangedFilesPanel: FC<ChangedFilesPanelProps> = ({
   const [packetPreviewOpen, setPacketPreviewOpen] = useState(false)
   const [pendingReviewNoteSelection, setPendingReviewNoteSelection] =
     useState<ReviewNote | null>(null)
+  const [storedReviewNoteDiff, setStoredReviewNoteDiff] =
+    useState<StoredReviewNoteDiff | null>(null)
+  const [pinnedReviewNoteFile, setPinnedReviewNoteFile] = useState<Pick<
+    StoredReviewNoteDiff,
+    'filePath' | 'mode'
+  > | null>(null)
   const reviewNotes =
     useReviewNoteStore((state) => state.notesBySessionId[session.id]) ??
     EMPTY_REVIEW_NOTES
@@ -154,9 +166,17 @@ export const ChangedFilesPanel: FC<ChangedFilesPanelProps> = ({
       const nextFiles = Array.isArray(result) ? result : result.files
       setBase(Array.isArray(result) ? null : result.base)
       setFiles(nextFiles)
-      setSelectedFile((current) =>
-        selectChangedFileAfterReload({ current, files: nextFiles }),
-      )
+      setSelectedFile((current) => {
+        if (
+          pinnedReviewNoteFile &&
+          pinnedReviewNoteFile.mode === mode &&
+          current === pinnedReviewNoteFile.filePath
+        ) {
+          return current
+        }
+
+        return selectChangedFileAfterReload({ current, files: nextFiles })
+      })
     } catch (err) {
       setFiles([])
       setBase(null)
@@ -165,7 +185,7 @@ export const ChangedFilesPanel: FC<ChangedFilesPanelProps> = ({
     } finally {
       setLoading(false)
     }
-  }, [mode, session.id, session.workingDirectory])
+  }, [mode, pinnedReviewNoteFile, session.id, session.workingDirectory])
 
   useEffect(() => {
     void loadFiles()
@@ -193,14 +213,29 @@ export const ChangedFilesPanel: FC<ChangedFilesPanelProps> = ({
           mode === 'base-branch'
             ? await gitApi.getBaseBranchDiff(session.id, file)
             : await gitApi.getDiff(session.workingDirectory, file)
-        setDiff(result || '(no diff available)')
+        if (result) {
+          setDiff(result)
+          setStoredReviewNoteDiff(null)
+          return
+        }
+
+        if (
+          storedReviewNoteDiff &&
+          storedReviewNoteDiff.filePath === file &&
+          storedReviewNoteDiff.mode === mode
+        ) {
+          setDiff(storedReviewNoteDiff.diff)
+          return
+        }
+
+        setDiff('(no diff available)')
       } catch {
         setDiff('Failed to load diff')
       } finally {
         setDiffLoading(false)
       }
     },
-    [mode, session.id, session.workingDirectory],
+    [mode, session.id, session.workingDirectory, storedReviewNoteDiff],
   )
 
   useEffect(() => {
@@ -231,6 +266,8 @@ export const ChangedFilesPanel: FC<ChangedFilesPanelProps> = ({
   }, [diffLines, diffLoading, mode, pendingReviewNoteSelection, selectedFile])
 
   const handleFileClick = (file: string) => {
+    setStoredReviewNoteDiff(null)
+    setPinnedReviewNoteFile(null)
     setSelectedFile((current) => (current === file ? null : file))
   }
 
@@ -244,6 +281,8 @@ export const ChangedFilesPanel: FC<ChangedFilesPanelProps> = ({
     setError(null)
     setSelectedDiffLineIds([])
     setSelectionAnchorLineId(null)
+    setStoredReviewNoteDiff(null)
+    setPinnedReviewNoteFile(null)
   }
 
   const handleDiffLineClick = (
@@ -311,6 +350,15 @@ export const ChangedFilesPanel: FC<ChangedFilesPanelProps> = ({
     setDiff('')
     setSelectedDiffLineIds([])
     setSelectionAnchorLineId(null)
+    setStoredReviewNoteDiff({
+      filePath: note.filePath,
+      mode: note.mode,
+      diff: buildStoredReviewNoteDiff(note),
+    })
+    setPinnedReviewNoteFile({
+      filePath: note.filePath,
+      mode: note.mode,
+    })
 
     if (mode !== note.mode) {
       setMode(note.mode)
@@ -762,6 +810,16 @@ export const ChangedFilesPanel: FC<ChangedFilesPanelProps> = ({
       )}
     </div>
   )
+}
+
+function buildStoredReviewNoteDiff(note: ReviewNote): string {
+  const selectedDiff = note.selectedDiff.trimEnd()
+  if (!note.hunkHeader) return selectedDiff
+
+  const firstSelectedLine = selectedDiff.split('\n')[0]
+  if (firstSelectedLine === note.hunkHeader) return selectedDiff
+
+  return `${note.hunkHeader}\n${selectedDiff}`
 }
 
 function formatSelectionSummary(summary: {
