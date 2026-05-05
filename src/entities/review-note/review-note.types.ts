@@ -38,3 +38,13 @@ export interface UpdateReviewNoteInput {
   body?: string
   state?: ReviewNoteState
 }
+
+export interface PreviewReviewNotePacketInput {
+  sessionId: string
+  noteIds?: string[]
+}
+
+export interface ReviewNotePacketPreview {
+  noteCount: number
+  text: string
+}

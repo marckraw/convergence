@@ -41,6 +41,35 @@ export interface UpdateReviewNoteInput {
   state?: ReviewNoteState
 }
 
+export interface PreviewReviewNotePacketInput {
+  sessionId: string
+  noteIds?: string[]
+}
+
+export interface ReviewNotePacketSessionContext {
+  sessionId: string
+  projectName: string | null
+  workspacePath: string | null
+  workspaceBranchName: string | null
+  workingDirectory: string
+}
+
+export interface ReviewNotePacketPullRequestContext {
+  repositoryOwner: string | null
+  repositoryName: string | null
+  number: number | null
+  title: string | null
+  url: string | null
+  state: string | null
+  baseBranch: string | null
+  headBranch: string | null
+}
+
+export interface ReviewNotePacketPreview {
+  noteCount: number
+  text: string
+}
+
 export function reviewNoteFromRow(row: ReviewNoteRow): ReviewNote {
   return {
     id: row.id,

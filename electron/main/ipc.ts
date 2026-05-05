@@ -44,6 +44,7 @@ import type {
 } from '../backend/project-context/project-context.types'
 import type {
   CreateReviewNoteInput,
+  PreviewReviewNotePacketInput,
   UpdateReviewNoteInput,
 } from '../backend/review-notes/review-notes.types'
 import type { CreateWorkspaceInput } from '../backend/workspace/workspace.types'
@@ -404,6 +405,12 @@ export function registerIpcHandlers(
   ipcMain.handle('reviewNotes:delete', (_event, id: string) => {
     reviewNotesService.delete(id)
   })
+
+  ipcMain.handle(
+    'reviewNotes:previewPacket',
+    (_event, input: PreviewReviewNotePacketInput) =>
+      reviewNotesService.previewPacket(input),
+  )
 
   // Git handlers
   ipcMain.handle('git:getBranches', async (_event, repoPath: string) =>

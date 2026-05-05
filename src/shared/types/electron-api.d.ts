@@ -320,6 +320,16 @@ interface UpdateReviewNoteInputData {
   state?: ReviewNoteStateData
 }
 
+interface PreviewReviewNotePacketInputData {
+  sessionId: string
+  noteIds?: string[]
+}
+
+interface ReviewNotePacketPreviewData {
+  noteCount: number
+  text: string
+}
+
 interface CreateWorkspaceInput {
   projectId: string
   branchName: string
@@ -973,6 +983,9 @@ interface ElectronAPI {
       patch: UpdateReviewNoteInputData,
     ) => Promise<ReviewNoteData>
     delete: (id: string) => Promise<void>
+    previewPacket: (
+      input: PreviewReviewNotePacketInputData,
+    ) => Promise<ReviewNotePacketPreviewData>
   }
   git: {
     getBranches: (repoPath: string) => Promise<string[]>

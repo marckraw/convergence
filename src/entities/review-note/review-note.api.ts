@@ -1,6 +1,8 @@
 import type {
   CreateReviewNoteInput,
+  PreviewReviewNotePacketInput,
   ReviewNote,
+  ReviewNotePacketPreview,
   UpdateReviewNoteInput,
 } from './review-note.types'
 
@@ -16,4 +18,9 @@ export const reviewNoteApi = {
 
   delete: (id: string): Promise<void> =>
     window.electronAPI.reviewNotes.delete(id),
+
+  previewPacket: (
+    input: PreviewReviewNotePacketInput,
+  ): Promise<ReviewNotePacketPreview> =>
+    window.electronAPI.reviewNotes.previewPacket(input),
 }

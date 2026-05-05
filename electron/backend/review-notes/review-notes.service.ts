@@ -1,12 +1,16 @@
 import { randomUUID } from 'crypto'
 import type Database from 'better-sqlite3'
 import type { ReviewNoteRow } from '../database/database.types'
+import { workspacePullRequestFromRow } from '../pull-request/pull-request.types'
+import { buildReviewNotePacket } from './review-note-prompt.pure'
 import {
   parseReviewNoteMode,
   parseReviewNoteState,
   reviewNoteFromRow,
   type CreateReviewNoteInput,
+  type PreviewReviewNotePacketInput,
   type ReviewNote,
+  type ReviewNotePacketPreview,
   type ReviewNoteMode,
   type ReviewNoteState,
   type UpdateReviewNoteInput,
@@ -148,6 +152,27 @@ export class ReviewNotesService {
     this.db.prepare('DELETE FROM review_notes WHERE id = ?').run(id)
   }
 
+  previewPacket(input: PreviewReviewNotePacketInput): ReviewNotePacketPreview {
+    const session = this.getSessionPacketContext(input.sessionId)
+    const notes = this.listBySession(input.sessionId)
+    const noteIds = input.noteIds ? new Set(input.noteIds) : null
+    const selectedNotes = notes.filter((note) =>
+      noteIds ? noteIds.has(note.id) : note.state === 'draft',
+    )
+
+    return buildReviewNotePacket({
+      notes: selectedNotes,
+      session: {
+        sessionId: session.id,
+        projectName: session.projectName,
+        workspacePath: session.workspacePath,
+        workspaceBranchName: session.workspaceBranchName,
+        workingDirectory: session.workingDirectory,
+      },
+      pullRequest: session.pullRequest,
+    })
+  }
+
   private assertSessionExists(sessionId: string): void {
     const row = this.db
       .prepare('SELECT id FROM sessions WHERE id = ?')
@@ -163,6 +188,114 @@ export class ReviewNotesService {
       .get(workspaceId)
     if (!row) {
       throw new Error(`Workspace not found: ${workspaceId}`)
+    }
+  }
+
+  private getSessionPacketContext(sessionId: string): {
+    id: string
+    projectName: string | null
+    workspacePath: string | null
+    workspaceBranchName: string | null
+    workingDirectory: string
+    pullRequest: ReturnType<typeof workspacePullRequestFromRow> | null
+  } {
+    const row = this.db
+      .prepare(
+        `SELECT
+           sessions.id,
+           sessions.working_directory,
+           projects.name AS project_name,
+           workspaces.path AS workspace_path,
+           workspaces.branch_name AS workspace_branch_name,
+           workspace_pull_requests.id AS pr_id,
+           workspace_pull_requests.project_id AS pr_project_id,
+           workspace_pull_requests.workspace_id AS pr_workspace_id,
+           workspace_pull_requests.provider AS pr_provider,
+           workspace_pull_requests.lookup_status AS pr_lookup_status,
+           workspace_pull_requests.state AS pr_state,
+           workspace_pull_requests.repository_owner AS pr_repository_owner,
+           workspace_pull_requests.repository_name AS pr_repository_name,
+           workspace_pull_requests.number AS pr_number,
+           workspace_pull_requests.title AS pr_title,
+           workspace_pull_requests.url AS pr_url,
+           workspace_pull_requests.is_draft AS pr_is_draft,
+           workspace_pull_requests.head_branch AS pr_head_branch,
+           workspace_pull_requests.base_branch AS pr_base_branch,
+           workspace_pull_requests.merged_at AS pr_merged_at,
+           workspace_pull_requests.last_checked_at AS pr_last_checked_at,
+           workspace_pull_requests.error AS pr_error,
+           workspace_pull_requests.created_at AS pr_created_at,
+           workspace_pull_requests.updated_at AS pr_updated_at
+         FROM sessions
+         INNER JOIN projects ON projects.id = sessions.project_id
+         LEFT JOIN workspaces ON workspaces.id = sessions.workspace_id
+         LEFT JOIN workspace_pull_requests
+           ON workspace_pull_requests.workspace_id = sessions.workspace_id
+         WHERE sessions.id = ?`,
+      )
+      .get(sessionId) as
+      | {
+          id: string
+          working_directory: string
+          project_name: string | null
+          workspace_path: string | null
+          workspace_branch_name: string | null
+          pr_id: string | null
+          pr_project_id: string | null
+          pr_workspace_id: string | null
+          pr_provider: string | null
+          pr_lookup_status: string | null
+          pr_state: string | null
+          pr_repository_owner: string | null
+          pr_repository_name: string | null
+          pr_number: number | null
+          pr_title: string | null
+          pr_url: string | null
+          pr_is_draft: number | null
+          pr_head_branch: string | null
+          pr_base_branch: string | null
+          pr_merged_at: string | null
+          pr_last_checked_at: string | null
+          pr_error: string | null
+          pr_created_at: string | null
+          pr_updated_at: string | null
+        }
+      | undefined
+
+    if (!row) {
+      throw new Error(`Session not found: ${sessionId}`)
+    }
+
+    return {
+      id: row.id,
+      projectName: row.project_name,
+      workspacePath: row.workspace_path,
+      workspaceBranchName: row.workspace_branch_name,
+      workingDirectory: row.working_directory,
+      pullRequest:
+        row.pr_id === null
+          ? null
+          : workspacePullRequestFromRow({
+              id: row.pr_id,
+              project_id: row.pr_project_id ?? '',
+              workspace_id: row.pr_workspace_id ?? '',
+              provider: row.pr_provider ?? 'unknown',
+              lookup_status: row.pr_lookup_status ?? 'error',
+              state: row.pr_state ?? 'unknown',
+              repository_owner: row.pr_repository_owner,
+              repository_name: row.pr_repository_name,
+              number: row.pr_number,
+              title: row.pr_title,
+              url: row.pr_url,
+              is_draft: row.pr_is_draft ?? 0,
+              head_branch: row.pr_head_branch,
+              base_branch: row.pr_base_branch,
+              merged_at: row.pr_merged_at,
+              last_checked_at: row.pr_last_checked_at ?? '',
+              error: row.pr_error,
+              created_at: row.pr_created_at ?? '',
+              updated_at: row.pr_updated_at ?? '',
+            }),
     }
   }
 }

@@ -9,6 +9,7 @@ import { Textarea } from '@/shared/ui/textarea'
 import {
   ArrowLeftToLine,
   ArrowRightToLine,
+  Eye,
   MessageSquarePlus,
   PanelRight,
   Pencil,
@@ -85,16 +86,21 @@ export const ChangedFilesPanel: FC<ChangedFilesPanelProps> = ({
   const [activeReviewNoteId, setActiveReviewNoteId] = useState<string | null>(
     null,
   )
+  const [packetPreviewOpen, setPacketPreviewOpen] = useState(false)
   const [pendingReviewNoteSelection, setPendingReviewNoteSelection] =
     useState<ReviewNote | null>(null)
   const reviewNotes =
     useReviewNoteStore((state) => state.notesBySessionId[session.id]) ??
     EMPTY_REVIEW_NOTES
+  const packetPreview = useReviewNoteStore(
+    (state) => state.packetPreviewBySessionId[session.id],
+  )
   const reviewNotesError = useReviewNoteStore((state) => state.error)
   const loadReviewNotes = useReviewNoteStore((state) => state.loadBySession)
   const createReviewNote = useReviewNoteStore((state) => state.createNote)
   const updateReviewNote = useReviewNoteStore((state) => state.updateNote)
   const deleteReviewNote = useReviewNoteStore((state) => state.deleteNote)
+  const previewReviewPacket = useReviewNoteStore((state) => state.previewPacket)
   const reviewNoteGroups = useMemo(
     () => groupReviewNotesByFile(reviewNotes),
     [reviewNotes],
@@ -204,6 +210,7 @@ export const ChangedFilesPanel: FC<ChangedFilesPanelProps> = ({
     setSelectionAnchorLineId(null)
     setNoteComposerOpen(false)
     setNoteDraftBody('')
+    setPacketPreviewOpen(false)
   }, [session.id, mode, selectedFile, diff])
 
   useEffect(() => {
@@ -311,6 +318,12 @@ export const ChangedFilesPanel: FC<ChangedFilesPanelProps> = ({
     }
 
     setSelectedFile(note.filePath)
+  }
+
+  const handlePreviewReviewPacket = async () => {
+    const preview = await previewReviewPacket({ sessionId: session.id })
+    if (!preview) return
+    setPacketPreviewOpen(true)
   }
 
   const stopPanelControlEvent = (event: ReactMouseEvent) => {
@@ -544,16 +557,54 @@ export const ChangedFilesPanel: FC<ChangedFilesPanelProps> = ({
                   <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
                     Review Notes
                   </p>
-                  {draftReviewNoteCount > 0 && (
-                    <p className="text-[10px] text-muted-foreground">
-                      {draftReviewNoteCount} draft
-                    </p>
-                  )}
+                  <div className="flex items-center gap-2">
+                    {draftReviewNoteCount > 0 && (
+                      <p className="text-[10px] text-muted-foreground">
+                        {draftReviewNoteCount} draft
+                      </p>
+                    )}
+                    {draftReviewNoteCount > 0 && (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="h-7 gap-1.5 px-2 text-xs"
+                        onClick={handlePreviewReviewPacket}
+                      >
+                        <Eye className="h-3.5 w-3.5" />
+                        Preview packet
+                      </Button>
+                    )}
+                  </div>
                 </div>
                 {reviewNotesError && (
                   <p className="text-[11px] text-destructive">
                     {reviewNotesError}
                   </p>
+                )}
+                {packetPreviewOpen && packetPreview && (
+                  <div className="space-y-2 rounded-md border border-border bg-background/60 p-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-[11px] font-medium text-foreground">
+                        AI packet preview
+                      </p>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 px-2 text-xs"
+                        onClick={() => setPacketPreviewOpen(false)}
+                      >
+                        Close
+                      </Button>
+                    </div>
+                    <Textarea
+                      readOnly
+                      value={packetPreview.text}
+                      className="max-h-80 min-h-48 resize-y font-mono text-[11px]"
+                      aria-label="Review packet preview"
+                    />
+                  </div>
                 )}
                 {reviewNoteGroups.map((group) => (
                   <div

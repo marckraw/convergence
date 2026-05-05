@@ -74,6 +74,82 @@ describe('ReviewNotesService', () => {
     })
   })
 
+  it('previews a packet from draft notes with cached PR metadata', () => {
+    const db = getDatabase()
+    db.prepare(
+      `INSERT INTO workspace_pull_requests (
+        id,
+        project_id,
+        workspace_id,
+        provider,
+        lookup_status,
+        state,
+        repository_owner,
+        repository_name,
+        number,
+        title,
+        url,
+        is_draft,
+        head_branch,
+        base_branch,
+        last_checked_at
+      ) VALUES (
+        'pr1',
+        'p1',
+        'w1',
+        'github',
+        'found',
+        'open',
+        'marckraw',
+        'convergence',
+        42,
+        'Review notes',
+        'https://github.com/marckraw/convergence/pull/42',
+        0,
+        'feature',
+        'master',
+        '2026-01-01T00:00:00.000Z'
+      )`,
+    ).run()
+    const draft = service.create({
+      sessionId: 's1',
+      workspaceId: 'w1',
+      filePath: 'src/app.ts',
+      mode: 'base-branch',
+      newStartLine: 8,
+      selectedDiff: '+line',
+      body: 'Why this line?',
+    })
+    service.update(
+      service.create({
+        sessionId: 's1',
+        workspaceId: 'w1',
+        filePath: 'src/sent.ts',
+        mode: 'working-tree',
+        selectedDiff: '+sent',
+        body: 'Already sent',
+      }).id,
+      { state: 'sent' },
+    )
+
+    const packet = service.previewPacket({ sessionId: 's1' })
+
+    expect(packet.noteCount).toBe(1)
+    expect(packet.text).toContain('Repository: marckraw/convergence')
+    expect(packet.text).toContain('Pull request: #42: Review notes')
+    expect(packet.text).toContain('Base branch: master')
+    expect(packet.text).toContain('## src/app.ts')
+    expect(packet.text).toContain('### Note 1 - new 8 (base-branch)')
+    expect(packet.text).toContain('Why this line?')
+    expect(packet.text).not.toContain('Already sent')
+
+    const explicitPacket = service.previewPacket({
+      sessionId: 's1',
+      noteIds: [draft.id],
+    })
+    expect(explicitPacket.noteCount).toBe(1)
+  })
+
   it('trims text fields and rejects empty body, path, and diff', () => {
     const note = service.create({
       sessionId: 's1',

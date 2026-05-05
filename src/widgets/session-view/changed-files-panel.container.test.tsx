@@ -30,6 +30,7 @@ describe('ChangedFilesPanel', () => {
   beforeEach(() => {
     useReviewNoteStore.setState({
       notesBySessionId: {},
+      packetPreviewBySessionId: {},
       loading: false,
       error: null,
     })
@@ -100,6 +101,10 @@ describe('ChangedFilesPanel', () => {
               }),
             ),
           delete: vi.fn().mockResolvedValue(undefined),
+          previewPacket: vi.fn().mockResolvedValue({
+            noteCount: 1,
+            text: 'Please help me understand these local code review notes.',
+          }),
         },
       },
       configurable: true,
@@ -260,6 +265,54 @@ describe('ChangedFilesPanel', () => {
       session.workingDirectory,
       'src/new-file.ts',
     )
+  })
+
+  it('previews an AI review packet from draft review notes', async () => {
+    const electronAPI = (
+      window as unknown as { electronAPI: Record<string, unknown> }
+    ).electronAPI
+    const reviewNotes = electronAPI.reviewNotes as Record<
+      string,
+      ReturnType<typeof vi.fn>
+    >
+    const packetText =
+      'Please help me understand these local code review notes.\n\nDo not change files unless I explicitly ask for fixes.'
+    reviewNotes.listBySession.mockResolvedValue([
+      makeReviewNote({
+        id: 'note-app',
+        body: 'Why this implementation?',
+      }),
+    ])
+    reviewNotes.previewPacket.mockResolvedValue({
+      noteCount: 1,
+      text: packetText,
+    })
+
+    render(
+      <ChangedFilesPanel
+        session={session}
+        side="right"
+        expanded={false}
+        onClose={vi.fn()}
+        onToggleSide={vi.fn()}
+        onToggleExpanded={vi.fn()}
+      />,
+    )
+
+    await waitFor(() => {
+      expect(screen.getByText('Why this implementation?')).toBeInTheDocument()
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: /preview packet/i }))
+
+    await waitFor(() => {
+      expect(screen.getByLabelText('Review packet preview')).toHaveValue(
+        packetText,
+      )
+    })
+    expect(reviewNotes.previewPacket).toHaveBeenCalledWith({
+      sessionId: session.id,
+    })
   })
 
   it('renders the turn list when expanded and no turns exist yet', async () => {

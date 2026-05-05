@@ -2,12 +2,15 @@ import { create } from 'zustand'
 import { reviewNoteApi } from './review-note.api'
 import type {
   CreateReviewNoteInput,
+  PreviewReviewNotePacketInput,
   ReviewNote,
+  ReviewNotePacketPreview,
   UpdateReviewNoteInput,
 } from './review-note.types'
 
 interface ReviewNoteState {
   notesBySessionId: Record<string, ReviewNote[]>
+  packetPreviewBySessionId: Record<string, ReviewNotePacketPreview>
   loading: boolean
   error: string | null
 }
@@ -20,6 +23,9 @@ interface ReviewNoteActions {
     patch: UpdateReviewNoteInput,
   ) => Promise<ReviewNote | null>
   deleteNote: (id: string, sessionId: string) => Promise<void>
+  previewPacket: (
+    input: PreviewReviewNotePacketInput,
+  ) => Promise<ReviewNotePacketPreview | null>
   clearError: () => void
 }
 
@@ -41,6 +47,7 @@ function errorMessage(err: unknown, fallback: string): string {
 
 export const useReviewNoteStore = create<ReviewNoteStore>((set) => ({
   notesBySessionId: {},
+  packetPreviewBySessionId: {},
   loading: false,
   error: null,
 
@@ -115,6 +122,23 @@ export const useReviewNoteStore = create<ReviewNoteStore>((set) => ({
       }))
     } catch (err) {
       set({ error: errorMessage(err, 'Failed to delete review note') })
+    }
+  },
+
+  previewPacket: async (input) => {
+    set({ error: null })
+    try {
+      const preview = await reviewNoteApi.previewPacket(input)
+      set((state) => ({
+        packetPreviewBySessionId: {
+          ...state.packetPreviewBySessionId,
+          [input.sessionId]: preview,
+        },
+      }))
+      return preview
+    } catch (err) {
+      set({ error: errorMessage(err, 'Failed to preview review packet') })
+      return null
     }
   },
 
