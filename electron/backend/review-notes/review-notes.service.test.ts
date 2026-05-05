@@ -279,6 +279,24 @@ describe('ReviewNotesService', () => {
     expect(sent.sentAt).not.toBeNull()
   })
 
+  it('preserves the first sentAt timestamp when a note is reopened and sent again', () => {
+    const note = service.create({
+      sessionId: 's1',
+      filePath: 'src/app.ts',
+      mode: 'working-tree',
+      selectedDiff: '+line',
+      body: 'Send this',
+    })
+    const sent = service.update(note.id, { state: 'sent' })
+    const reopened = service.update(note.id, { state: 'draft' })
+    const resent = service.update(note.id, { state: 'sent' })
+
+    expect(reopened.state).toBe('draft')
+    expect(reopened.sentAt).toBe(sent.sentAt)
+    expect(resent.state).toBe('sent')
+    expect(resent.sentAt).toBe(sent.sentAt)
+  })
+
   it('throws when related records or update targets are missing', () => {
     expect(() =>
       service.create({

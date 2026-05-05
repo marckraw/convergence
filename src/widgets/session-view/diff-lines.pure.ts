@@ -110,13 +110,26 @@ export function summarizeSelectedDiffLines(input: {
   const newLines = lines
     .map((line) => line.newLine)
     .filter((line): line is number => line !== null)
+  const oldRange = summarizeLineRange(oldLines)
+  const newRange = summarizeLineRange(newLines)
 
   return {
     count: lines.length,
-    oldStartLine: oldLines[0] ?? null,
-    oldEndLine: oldLines.at(-1) ?? null,
-    newStartLine: newLines[0] ?? null,
-    newEndLine: newLines.at(-1) ?? null,
+    oldStartLine: oldRange.start,
+    oldEndLine: oldRange.end,
+    newStartLine: newRange.start,
+    newEndLine: newRange.end,
+  }
+}
+
+function summarizeLineRange(lines: number[]): {
+  start: number | null
+  end: number | null
+} {
+  if (lines.length === 0) return { start: null, end: null }
+  return {
+    start: Math.min(...lines),
+    end: Math.max(...lines),
   }
 }
 

@@ -134,6 +134,8 @@ export class ReviewNotesService {
         : normalizeRequiredText(patch.body, 'Review note body')
     const state =
       patch.state === undefined ? existing.state : normalizeState(patch.state)
+    // Keep sentAt as the first-send timestamp, even if a sent note is reopened
+    // and sent again later.
     const sentAt = state === 'sent' && existing.sentAt === null ? true : false
 
     this.db

@@ -83,11 +83,12 @@ function formatPullRequestContext(
 
 function formatGroupedNotes(notes: ReviewNote[]): string[] {
   const groups = groupByFile(notes)
+  let noteIndex = 1
 
   return groups.flatMap((group) => [
     `## ${group.filePath}`,
     '',
-    ...group.notes.flatMap((note, index) => formatNote(note, index + 1)),
+    ...group.notes.flatMap((note) => formatNote(note, noteIndex++)),
   ])
 }
 
@@ -113,11 +114,21 @@ function formatNote(note: ReviewNote, index: number): string[] {
     note.body,
     '',
     'Selected diff:',
-    '```diff',
-    note.selectedDiff,
-    '```',
+    ...formatFencedDiff(note.selectedDiff),
     '',
   ]
+}
+
+function formatFencedDiff(diff: string): string[] {
+  const fence = '`'.repeat(Math.max(3, longestBacktickRun(diff) + 1))
+  return [`${fence}diff`, diff, fence]
+}
+
+function longestBacktickRun(value: string): number {
+  return Math.max(
+    0,
+    ...Array.from(value.matchAll(/`+/g), (match) => match[0].length),
+  )
 }
 
 function formatNoteLocation(note: ReviewNote): string {

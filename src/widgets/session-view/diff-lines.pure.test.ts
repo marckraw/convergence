@@ -117,4 +117,24 @@ describe('summarizeSelectedDiffLines', () => {
       newEndLine: 22,
     })
   })
+
+  it('summarizes selected ranges by min and max line numbers', () => {
+    const rows = parseUnifiedDiff(`@@ -10,4 +20,4 @@
++first
++second
++third`)
+
+    expect(
+      summarizeSelectedDiffLines({
+        lines: [rows[3], rows[1]],
+        selectedIds: [rows[3].id, rows[1].id],
+      }),
+    ).toEqual({
+      count: 2,
+      oldStartLine: null,
+      oldEndLine: null,
+      newStartLine: 20,
+      newEndLine: 22,
+    })
+  })
 })

@@ -88,8 +88,22 @@ describe('buildReviewNotePacket', () => {
     expect(packet.text.match(/## src\/a\.ts/g)?.length).toBe(1)
     expect(packet.text).toContain('### Note 1 - new 5-7 (working-tree)')
     expect(packet.text).toContain('### Note 2 - old 10, new 11 (working-tree)')
-    expect(packet.text).toContain('### Note 1 - old 2 (working-tree)')
+    expect(packet.text).toContain('### Note 3 - old 2 (working-tree)')
     expect(packet.text).toContain('```diff\n-old\n+new\n```')
+  })
+
+  it('uses a longer markdown fence when selected diff contains backticks', () => {
+    const packet = buildReviewNotePacket({
+      notes: [
+        makeNote({
+          selectedDiff: '+const markdown = "```diff"',
+        }),
+      ],
+      session: makeSessionContext(),
+      pullRequest: null,
+    })
+
+    expect(packet.text).toContain('````diff\n+const markdown = "```diff"\n````')
   })
 
   it('keeps working context when PR metadata is missing', () => {
