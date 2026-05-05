@@ -9,11 +9,13 @@ import { Textarea } from '@/shared/ui/textarea'
 import {
   ArrowLeftToLine,
   ArrowRightToLine,
+  CheckCircle2,
   Eye,
   MessageSquarePlus,
   PanelRight,
   Pencil,
   RefreshCw,
+  RotateCcw,
   Send,
   Trash2,
   X,
@@ -37,8 +39,12 @@ import {
 import {
   countDraftReviewNotes,
   countReviewNotesByFile,
+  countReviewNotesByState,
+  filterReviewNotes,
   findReviewNoteDiffLineIds,
   groupReviewNotesByFile,
+  isFileLevelReviewNote,
+  type ReviewNoteFilter,
 } from './review-notes.pure'
 import { TurnList } from './turn-list.container'
 
@@ -57,6 +63,12 @@ interface ChangedFilesPanelProps {
 }
 
 const EMPTY_REVIEW_NOTES: ReviewNote[] = []
+const REVIEW_NOTE_FILTERS: ReviewNoteFilter[] = [
+  'all',
+  'draft',
+  'sent',
+  'resolved',
+]
 
 interface StoredReviewNoteDiff {
   filePath: string
@@ -88,6 +100,8 @@ export const ChangedFilesPanel: FC<ChangedFilesPanelProps> = ({
   >(null)
   const [noteComposerOpen, setNoteComposerOpen] = useState(false)
   const [noteDraftBody, setNoteDraftBody] = useState('')
+  const [fileNoteComposerOpen, setFileNoteComposerOpen] = useState(false)
+  const [fileNoteDraftBody, setFileNoteDraftBody] = useState('')
   const [editingNoteId, setEditingNoteId] = useState<string | null>(null)
   const [editingBody, setEditingBody] = useState('')
   const [activeReviewNoteId, setActiveReviewNoteId] = useState<string | null>(
@@ -102,6 +116,8 @@ export const ChangedFilesPanel: FC<ChangedFilesPanelProps> = ({
     StoredReviewNoteDiff,
     'filePath' | 'mode'
   > | null>(null)
+  const [reviewNoteFilter, setReviewNoteFilter] =
+    useState<ReviewNoteFilter>('all')
   const reviewNotes =
     useReviewNoteStore((state) => state.notesBySessionId[session.id]) ??
     EMPTY_REVIEW_NOTES
@@ -115,8 +131,16 @@ export const ChangedFilesPanel: FC<ChangedFilesPanelProps> = ({
   const deleteReviewNote = useReviewNoteStore((state) => state.deleteNote)
   const previewReviewPacket = useReviewNoteStore((state) => state.previewPacket)
   const sendReviewPacket = useReviewNoteStore((state) => state.sendPacket)
+  const visibleReviewNotes = useMemo(
+    () => filterReviewNotes(reviewNotes, reviewNoteFilter),
+    [reviewNoteFilter, reviewNotes],
+  )
   const reviewNoteGroups = useMemo(
-    () => groupReviewNotesByFile(reviewNotes),
+    () => groupReviewNotesByFile(visibleReviewNotes),
+    [visibleReviewNotes],
+  )
+  const reviewNoteStateCounts = useMemo(
+    () => countReviewNotesByState(reviewNotes),
     [reviewNotes],
   )
   const draftReviewNoteCount = useMemo(
@@ -251,6 +275,11 @@ export const ChangedFilesPanel: FC<ChangedFilesPanelProps> = ({
   }, [session.id, mode, selectedFile, diff])
 
   useEffect(() => {
+    setFileNoteComposerOpen(false)
+    setFileNoteDraftBody('')
+  }, [session.id, mode, selectedFile])
+
+  useEffect(() => {
     if (!pendingReviewNoteSelection) return
     if (mode !== pendingReviewNoteSelection.mode) return
     if (selectedFile !== pendingReviewNoteSelection.filePath) return
@@ -268,6 +297,8 @@ export const ChangedFilesPanel: FC<ChangedFilesPanelProps> = ({
   const handleFileClick = (file: string) => {
     setStoredReviewNoteDiff(null)
     setPinnedReviewNoteFile(null)
+    setFileNoteComposerOpen(false)
+    setFileNoteDraftBody('')
     setSelectedFile((current) => (current === file ? null : file))
   }
 
@@ -283,6 +314,8 @@ export const ChangedFilesPanel: FC<ChangedFilesPanelProps> = ({
     setSelectionAnchorLineId(null)
     setStoredReviewNoteDiff(null)
     setPinnedReviewNoteFile(null)
+    setFileNoteComposerOpen(false)
+    setFileNoteDraftBody('')
   }
 
   const handleDiffLineClick = (
@@ -330,6 +363,28 @@ export const ChangedFilesPanel: FC<ChangedFilesPanelProps> = ({
     setSelectionAnchorLineId(null)
   }
 
+  const handleCreateFileReviewNote = async () => {
+    if (!selectedFile) return
+
+    const created = await createReviewNote({
+      sessionId: session.id,
+      workspaceId: session.workspaceId,
+      filePath: selectedFile,
+      mode: mode === 'base-branch' ? 'base-branch' : 'working-tree',
+      oldStartLine: null,
+      oldEndLine: null,
+      newStartLine: null,
+      newEndLine: null,
+      hunkHeader: null,
+      selectedDiff: buildFileLevelReviewNoteDiff(selectedFile),
+      body: fileNoteDraftBody,
+    })
+
+    if (!created) return
+    setFileNoteComposerOpen(false)
+    setFileNoteDraftBody('')
+  }
+
   const handleEditReviewNote = (note: ReviewNote) => {
     setEditingNoteId(note.id)
     setEditingBody(note.body)
@@ -340,6 +395,14 @@ export const ChangedFilesPanel: FC<ChangedFilesPanelProps> = ({
     if (!updated) return
     setEditingNoteId(null)
     setEditingBody('')
+  }
+
+  const handleResolveReviewNote = async (note: ReviewNote) => {
+    await updateReviewNote(note.id, { state: 'resolved' })
+  }
+
+  const handleReopenReviewNote = async (note: ReviewNote) => {
+    await updateReviewNote(note.id, { state: 'draft' })
   }
 
   const handleReviewNoteJump = (note: ReviewNote) => {
@@ -573,6 +636,20 @@ export const ChangedFilesPanel: FC<ChangedFilesPanelProps> = ({
                 </Button>
               </div>
             )}
+            {selectedFile && selectedDiffSummary.count === 0 && (
+              <div className="flex shrink-0 items-center justify-end border-b border-border px-3 py-2">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  className="h-7 shrink-0 gap-1.5 px-2 text-xs"
+                  onClick={() => setFileNoteComposerOpen(true)}
+                >
+                  <MessageSquarePlus className="h-3.5 w-3.5" />
+                  File note
+                </Button>
+              </div>
+            )}
             {noteComposerOpen && selectedDiffSummary.count > 0 && (
               <div className="space-y-2 border-b border-border px-3 py-2">
                 <Textarea
@@ -607,7 +684,41 @@ export const ChangedFilesPanel: FC<ChangedFilesPanelProps> = ({
                 </div>
               </div>
             )}
-            {(reviewNoteGroups.length > 0 || reviewNotesError) && (
+            {fileNoteComposerOpen && selectedFile && (
+              <div className="space-y-2 border-b border-border px-3 py-2">
+                <Textarea
+                  value={fileNoteDraftBody}
+                  onChange={(event) => setFileNoteDraftBody(event.target.value)}
+                  placeholder="Ask a file-level question..."
+                  className="min-h-20 resize-none text-xs"
+                  aria-label="File-level review note body"
+                />
+                <div className="flex items-center justify-end gap-2">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 px-2 text-xs"
+                    onClick={() => {
+                      setFileNoteComposerOpen(false)
+                      setFileNoteDraftBody('')
+                    }}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    className="h-7 px-2 text-xs"
+                    disabled={fileNoteDraftBody.trim().length === 0}
+                    onClick={handleCreateFileReviewNote}
+                  >
+                    Save note
+                  </Button>
+                </div>
+              </div>
+            )}
+            {(reviewNotes.length > 0 || reviewNotesError) && (
               <div className="space-y-2 border-b border-border px-3 py-2">
                 <div className="flex items-center justify-between">
                   <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
@@ -645,11 +756,39 @@ export const ChangedFilesPanel: FC<ChangedFilesPanelProps> = ({
                     )}
                   </div>
                 </div>
+                {reviewNotes.length > 0 && (
+                  <div className="flex flex-wrap items-center gap-1">
+                    {REVIEW_NOTE_FILTERS.map((filter) => (
+                      <Button
+                        key={filter}
+                        type="button"
+                        variant={
+                          reviewNoteFilter === filter ? 'secondary' : 'ghost'
+                        }
+                        size="sm"
+                        className="h-6 px-2 text-[11px]"
+                        onClick={() => setReviewNoteFilter(filter)}
+                      >
+                        {formatReviewNoteFilterLabel(
+                          filter,
+                          reviewNoteStateCounts[filter],
+                        )}
+                      </Button>
+                    ))}
+                  </div>
+                )}
                 {reviewNotesError && (
                   <p className="text-[11px] text-destructive">
                     {reviewNotesError}
                   </p>
                 )}
+                {reviewNotes.length > 0 &&
+                  reviewNoteGroups.length === 0 &&
+                  !reviewNotesError && (
+                    <p className="text-[11px] text-muted-foreground">
+                      No {reviewNoteFilter} review notes.
+                    </p>
+                  )}
                 {packetPreviewOpen && packetPreview && (
                   <div className="space-y-2 rounded-md border border-border bg-background/60 p-2">
                     <div className="flex items-center justify-between gap-2">
@@ -695,6 +834,7 @@ export const ChangedFilesPanel: FC<ChangedFilesPanelProps> = ({
                             'rounded border border-border/70 bg-card/70 p-2',
                             activeReviewNoteId === note.id &&
                               'border-primary/60 bg-primary/10',
+                            note.state === 'resolved' && 'opacity-70',
                           )}
                         >
                           <div className="mb-1 flex items-start justify-between gap-2">
@@ -710,6 +850,32 @@ export const ChangedFilesPanel: FC<ChangedFilesPanelProps> = ({
                               </span>
                             </Button>
                             <div className="flex shrink-0 items-center gap-1">
+                              <span className="rounded border border-border px-1.5 py-0.5 text-[10px] text-muted-foreground">
+                                {note.state}
+                              </span>
+                              {note.state === 'resolved' ? (
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-6 w-6"
+                                  onClick={() => handleReopenReviewNote(note)}
+                                  title="Reopen review note"
+                                >
+                                  <RotateCcw className="h-3 w-3" />
+                                </Button>
+                              ) : (
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-6 w-6"
+                                  onClick={() => handleResolveReviewNote(note)}
+                                  title="Resolve review note"
+                                >
+                                  <CheckCircle2 className="h-3 w-3" />
+                                </Button>
+                              )}
                               <Button
                                 type="button"
                                 variant="ghost"
@@ -822,6 +988,17 @@ function buildStoredReviewNoteDiff(note: ReviewNote): string {
   return `${note.hunkHeader}\n${selectedDiff}`
 }
 
+function buildFileLevelReviewNoteDiff(filePath: string): string {
+  return `(file-level note for ${filePath}; no specific diff lines selected)`
+}
+
+function formatReviewNoteFilterLabel(
+  filter: ReviewNoteFilter,
+  count: number,
+): string {
+  return `${capitalize(filter)} ${count}`
+}
+
 function formatSelectionSummary(summary: {
   oldStartLine: number | null
   oldEndLine: number | null
@@ -843,6 +1020,8 @@ function formatLineRange(start: number | null, end: number | null): string {
 }
 
 function formatReviewNoteLocation(note: ReviewNote): string {
+  if (isFileLevelReviewNote(note)) return 'file'
+
   const newRange = formatLineRange(note.newStartLine, note.newEndLine)
   if (newRange) return newRange
 
@@ -850,4 +1029,8 @@ function formatReviewNoteLocation(note: ReviewNote): string {
   if (oldRange) return oldRange
 
   return 'metadata'
+}
+
+function capitalize(value: string): string {
+  return value.charAt(0).toUpperCase() + value.slice(1)
 }

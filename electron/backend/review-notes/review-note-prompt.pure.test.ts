@@ -107,6 +107,25 @@ describe('buildReviewNotePacket', () => {
     expect(packet.text).toContain('Workspace path: Unknown')
     expect(packet.text).toContain('Pull request: Unknown for this workspace')
   })
+
+  it('labels file-level notes without line ranges', () => {
+    const packet = buildReviewNotePacket({
+      notes: [
+        makeNote({
+          oldStartLine: null,
+          oldEndLine: null,
+          newStartLine: null,
+          newEndLine: null,
+          hunkHeader: null,
+          selectedDiff: '(file-level note; no specific diff lines selected)',
+        }),
+      ],
+      session: makeSessionContext(),
+      pullRequest: null,
+    })
+
+    expect(packet.text).toContain('### Note 1 - file (working-tree)')
+  })
 })
 
 function makeSessionContext(

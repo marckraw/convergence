@@ -126,7 +126,7 @@ function formatNoteLocation(note: ReviewNote): string {
   if (oldRange && newRange) return `old ${oldRange}, new ${newRange}`
   if (oldRange) return `old ${oldRange}`
   if (newRange) return `new ${newRange}`
-  return 'metadata'
+  return 'file'
 }
 
 function formatLineRange(start: number | null, end: number | null): string {

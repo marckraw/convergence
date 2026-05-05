@@ -218,6 +218,63 @@ describe('ChangedFilesPanel', () => {
     )
   })
 
+  it('creates a file-level draft review note without selected diff lines', async () => {
+    render(
+      <ChangedFilesPanel
+        session={session}
+        side="right"
+        expanded={false}
+        onClose={vi.fn()}
+        onToggleSide={vi.fn()}
+        onToggleExpanded={vi.fn()}
+      />,
+    )
+
+    await waitFor(() => {
+      expect(screen.getByText('+console.log("new")')).toBeInTheDocument()
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: /file note/i }))
+    fireEvent.change(screen.getByLabelText('File-level review note body'), {
+      target: { value: 'Why did this whole file change?' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: /save note/i }))
+
+    await waitFor(() => {
+      expect(
+        screen.getByText('Why did this whole file change?'),
+      ).toBeInTheDocument()
+    })
+
+    const electronAPI = (
+      window as unknown as { electronAPI: Record<string, unknown> }
+    ).electronAPI
+    const reviewNotes = electronAPI.reviewNotes as Record<
+      string,
+      ReturnType<typeof vi.fn>
+    >
+    expect(reviewNotes.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sessionId: session.id,
+        workspaceId: session.workspaceId,
+        filePath: 'src/app.ts',
+        mode: 'working-tree',
+        oldStartLine: null,
+        oldEndLine: null,
+        newStartLine: null,
+        newEndLine: null,
+        hunkHeader: null,
+        body: 'Why did this whole file change?',
+      }),
+    )
+    expect(reviewNotes.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        selectedDiff:
+          '(file-level note for src/app.ts; no specific diff lines selected)',
+      }),
+    )
+  })
+
   it('shows grouped review notes, file badges, and jumps back to note ranges', async () => {
     const notes = [
       makeReviewNote({
@@ -281,6 +338,66 @@ describe('ChangedFilesPanel', () => {
       session.workingDirectory,
       'src/new-file.ts',
     )
+  })
+
+  it('filters review notes by state and resolves notes', async () => {
+    const notes = [
+      makeReviewNote({
+        id: 'note-draft',
+        body: 'Draft question',
+        state: 'draft',
+      }),
+      makeReviewNote({
+        id: 'note-sent',
+        body: 'Sent question',
+        state: 'sent',
+      }),
+      makeReviewNote({
+        id: 'note-resolved',
+        body: 'Resolved question',
+        state: 'resolved',
+      }),
+    ]
+    const electronAPI = (
+      window as unknown as { electronAPI: Record<string, unknown> }
+    ).electronAPI
+    const reviewNotes = electronAPI.reviewNotes as Record<
+      string,
+      ReturnType<typeof vi.fn>
+    >
+    reviewNotes.listBySession.mockResolvedValue(notes)
+
+    render(
+      <ChangedFilesPanel
+        session={session}
+        side="right"
+        expanded={false}
+        onClose={vi.fn()}
+        onToggleSide={vi.fn()}
+        onToggleExpanded={vi.fn()}
+      />,
+    )
+
+    await waitFor(() => {
+      expect(screen.getByText('Draft question')).toBeInTheDocument()
+      expect(screen.getByText('Sent question')).toBeInTheDocument()
+      expect(screen.getByText('Resolved question')).toBeInTheDocument()
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: 'Sent 1' }))
+
+    expect(screen.queryByText('Draft question')).not.toBeInTheDocument()
+    expect(screen.getByText('Sent question')).toBeInTheDocument()
+    expect(screen.queryByText('Resolved question')).not.toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'All 3' }))
+    fireEvent.click(screen.getAllByTitle('Resolve review note')[0]!)
+
+    await waitFor(() => {
+      expect(reviewNotes.update).toHaveBeenCalledWith('note-draft', {
+        state: 'resolved',
+      })
+    })
   })
 
   it('previews an AI review packet from draft review notes', async () => {

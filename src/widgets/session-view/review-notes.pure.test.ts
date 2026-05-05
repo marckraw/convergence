@@ -3,9 +3,12 @@ import type { ReviewNote } from '@/entities/review-note'
 import { parseUnifiedDiff } from './diff-lines.pure'
 import {
   countDraftReviewNotes,
+  countReviewNotesByState,
   countReviewNotesByFile,
+  filterReviewNotes,
   findReviewNoteDiffLineIds,
   groupReviewNotesByFile,
+  isFileLevelReviewNote,
 } from './review-notes.pure'
 
 describe('review-notes pure helpers', () => {
@@ -30,10 +33,42 @@ describe('review-notes pure helpers', () => {
     ]
 
     expect(countDraftReviewNotes(notes)).toBe(1)
+    expect(countReviewNotesByState(notes)).toEqual({
+      all: 3,
+      draft: 1,
+      sent: 1,
+      resolved: 1,
+    })
     expect(countReviewNotesByFile(notes)).toEqual({
       'src/a.ts': 2,
       'src/b.ts': 1,
     })
+  })
+
+  it('filters notes by lifecycle state', () => {
+    const draft = makeNote({ id: 'draft', state: 'draft' })
+    const sent = makeNote({ id: 'sent', state: 'sent' })
+    const resolved = makeNote({ id: 'resolved', state: 'resolved' })
+    const notes = [draft, sent, resolved]
+
+    expect(filterReviewNotes(notes, 'all')).toEqual(notes)
+    expect(filterReviewNotes(notes, 'draft')).toEqual([draft])
+    expect(filterReviewNotes(notes, 'sent')).toEqual([sent])
+    expect(filterReviewNotes(notes, 'resolved')).toEqual([resolved])
+  })
+
+  it('detects file-level notes without line ranges', () => {
+    expect(
+      isFileLevelReviewNote(
+        makeNote({
+          oldStartLine: null,
+          oldEndLine: null,
+          newStartLine: null,
+          newEndLine: null,
+        }),
+      ),
+    ).toBe(true)
+    expect(isFileLevelReviewNote(makeNote({ newStartLine: 8 }))).toBe(false)
   })
 
   it('finds diff rows covered by a mixed old/new note range', () => {

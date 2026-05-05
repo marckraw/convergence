@@ -1,9 +1,19 @@
 import type { ReviewNote } from '@/entities/review-note'
 import type { DiffLine } from './diff-lines.pure'
 
+export type ReviewNoteFilter = 'all' | ReviewNote['state']
+
 export interface ReviewNoteGroup {
   filePath: string
   notes: ReviewNote[]
+}
+
+export function filterReviewNotes(
+  notes: ReviewNote[],
+  filter: ReviewNoteFilter,
+): ReviewNote[] {
+  if (filter === 'all') return notes
+  return notes.filter((note) => note.state === filter)
 }
 
 export function groupReviewNotesByFile(notes: ReviewNote[]): ReviewNoteGroup[] {
@@ -21,6 +31,24 @@ export function groupReviewNotesByFile(notes: ReviewNote[]): ReviewNoteGroup[] {
 
 export function countDraftReviewNotes(notes: ReviewNote[]): number {
   return notes.filter((note) => note.state === 'draft').length
+}
+
+export function countReviewNotesByState(
+  notes: ReviewNote[],
+): Record<ReviewNoteFilter, number> {
+  return notes.reduce<Record<ReviewNoteFilter, number>>(
+    (counts, note) => {
+      counts.all += 1
+      counts[note.state] += 1
+      return counts
+    },
+    {
+      all: 0,
+      draft: 0,
+      sent: 0,
+      resolved: 0,
+    },
+  )
 }
 
 export function countReviewNotesByFile(
@@ -57,6 +85,15 @@ export function findReviewNoteDiffLineIds(input: {
       )
     })
     .map((line) => line.id)
+}
+
+export function isFileLevelReviewNote(note: ReviewNote): boolean {
+  return (
+    note.oldStartLine === null &&
+    note.oldEndLine === null &&
+    note.newStartLine === null &&
+    note.newEndLine === null
+  )
 }
 
 function isLineInRange(
