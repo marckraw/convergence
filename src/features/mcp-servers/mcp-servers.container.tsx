@@ -4,14 +4,18 @@ import { Cable } from 'lucide-react'
 import { mcpServerApi } from '@/entities/mcp-server'
 import { useProjectStore } from '@/entities/project'
 import { useDialogStore } from '@/entities/dialog'
+import { useAppSurfaceStore } from '@/entities/app-surface'
 import type { ProjectMcpVisibility } from '@/shared/types/mcp.types'
 import { Button } from '@/shared/ui/button'
 import { McpServersDialog } from './mcp-servers.presentational'
 
 export const McpServersDialogContainer: FC = () => {
+  const activeSurface = useAppSurfaceStore((state) => state.activeSurface)
   const activeProject = useProjectStore((state) => state.activeProject)
-  const projectId = activeProject?.id ?? null
-  const projectName = activeProject?.name ?? null
+  const projectId =
+    activeSurface === 'code' ? (activeProject?.id ?? null) : null
+  const projectName =
+    activeSurface === 'chat' ? 'Global chat' : (activeProject?.name ?? null)
 
   const open = useDialogStore((s) => s.openDialog === 'mcp-servers')
   const openDialog = useDialogStore((s) => s.open)
@@ -30,8 +34,25 @@ export const McpServersDialogContainer: FC = () => {
 
   const load = useCallback(async () => {
     if (!projectId) {
-      setSnapshot(null)
+      if (activeSurface !== 'chat') {
+        setSnapshot(null)
+        setError(null)
+        return
+      }
+      setIsLoading(true)
       setError(null)
+      try {
+        const nextSnapshot = await mcpServerApi.listGlobal()
+        setSnapshot(nextSnapshot)
+      } catch (nextError) {
+        setError(
+          nextError instanceof Error
+            ? nextError.message
+            : 'Failed to load MCP servers',
+        )
+      } finally {
+        setIsLoading(false)
+      }
       return
     }
 
@@ -50,7 +71,7 @@ export const McpServersDialogContainer: FC = () => {
     } finally {
       setIsLoading(false)
     }
-  }, [projectId])
+  }, [activeSurface, projectId])
 
   useEffect(() => {
     if (open) {
@@ -64,7 +85,7 @@ export const McpServersDialogContainer: FC = () => {
     if (useDialogStore.getState().openDialog === 'mcp-servers') {
       closeDialog()
     }
-  }, [projectId, closeDialog])
+  }, [activeSurface, projectId, closeDialog])
 
   return (
     <McpServersDialog
@@ -81,7 +102,7 @@ export const McpServersDialogContainer: FC = () => {
           variant="ghost"
           size="sm"
           className="w-full justify-between px-2 text-xs text-muted-foreground hover:text-foreground"
-          disabled={!projectId}
+          disabled={activeSurface === 'code' && !projectId}
         >
           <span className="flex items-center gap-2">
             <Cable className="h-3.5 w-3.5" />

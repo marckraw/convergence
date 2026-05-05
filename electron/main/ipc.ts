@@ -663,6 +663,8 @@ export function registerIpcHandlers(
     mcpService.listByProjectId(projectId),
   )
 
+  ipcMain.handle('mcp:listGlobal', () => mcpService.listGlobal())
+
   ipcMain.handle(
     'skills:listByProjectId',
     (_event, projectId: string, options?: SkillCatalogOptions) =>

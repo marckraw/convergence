@@ -254,6 +254,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   mcp: {
     listByProjectId: (projectId: string) =>
       ipcRenderer.invoke('mcp:listByProjectId', projectId),
+    listGlobal: () => ipcRenderer.invoke('mcp:listGlobal'),
   },
   skills: {
     listByProjectId: (projectId: string, options?: { forceReload?: boolean }) =>

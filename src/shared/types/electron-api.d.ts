@@ -1005,6 +1005,7 @@ interface ElectronAPI {
   }
   mcp: {
     listByProjectId: (projectId: string) => Promise<ProjectMcpVisibility>
+    listGlobal: () => Promise<ProjectMcpVisibility>
   }
   skills: {
     listByProjectId: (
