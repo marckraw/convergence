@@ -1,4 +1,5 @@
 export { Sidebar } from './sidebar'
 export { SessionView } from './session-view'
+export { ChatSurface } from './chat-surface'
 export { GlobalStatusBar } from './global-status-bar'
 export { TerminalDock } from './terminal-dock'

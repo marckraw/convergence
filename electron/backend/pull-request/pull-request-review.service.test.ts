@@ -40,6 +40,7 @@ const workspace: Workspace = {
 
 const session: SessionSummary = {
   id: 'session-1',
+  contextKind: 'project',
   projectId: 'project-1',
   workspaceId: workspace.id,
   providerId: 'codex',

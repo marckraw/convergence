@@ -29,6 +29,7 @@ const initiative: Initiative = {
 
 const session: SessionSummary = {
   id: 's1',
+  contextKind: 'project',
   projectId: 'p1',
   workspaceId: 'w1',
   providerId: 'codex',

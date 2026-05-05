@@ -42,6 +42,12 @@ function uniqueInOrder(values: string[]): string[] {
   return result
 }
 
+function isProjectSession(
+  session: SessionSummary,
+): session is SessionSummary & { contextKind: 'project'; projectId: string } {
+  return session.contextKind === 'project' && session.projectId !== null
+}
+
 export function selectGlobalStatus(
   sessions: SessionSummary[],
   dismissals: NeedsYouDismissals,
@@ -56,10 +62,11 @@ export function selectGlobalStatus(
     projects.map((project) => [project.id, project.name]),
   )
 
-  const projectIds = uniqueInOrder([
-    ...running.map((session) => session.projectId),
-    ...needsAttention.map((session) => session.projectId),
-  ])
+  const projectIds = uniqueInOrder(
+    [...running, ...needsAttention]
+      .filter(isProjectSession)
+      .map((session) => session.projectId),
+  )
 
   const byProject: ProjectActivity[] = projectIds.map((projectId) => {
     const projectRunning = running.filter(

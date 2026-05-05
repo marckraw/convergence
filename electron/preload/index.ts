@@ -142,8 +142,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   },
   session: {
     create: (input: {
-      projectId: string
-      workspaceId: string | null
+      contextKind?: 'project' | 'global'
+      projectId?: string | null
+      workspaceId?: string | null
       providerId: string
       model: string | null
       effort: string | null
@@ -152,6 +153,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     getSummariesByProjectId: (projectId: string) =>
       ipcRenderer.invoke('session:getSummariesByProjectId', projectId),
     getAllSummaries: () => ipcRenderer.invoke('session:getAllSummaries'),
+    getGlobalSummaries: () => ipcRenderer.invoke('session:getGlobalSummaries'),
     getSummaryById: (id: string) =>
       ipcRenderer.invoke('session:getSummaryById', id),
     getConversation: (id: string) =>
@@ -264,10 +266,13 @@ contextBridge.exposeInMainWorld('electronAPI', {
   mcp: {
     listByProjectId: (projectId: string) =>
       ipcRenderer.invoke('mcp:listByProjectId', projectId),
+    listGlobal: () => ipcRenderer.invoke('mcp:listGlobal'),
   },
   skills: {
     listByProjectId: (projectId: string, options?: { forceReload?: boolean }) =>
       ipcRenderer.invoke('skills:listByProjectId', projectId, options),
+    listGlobal: (options?: { forceReload?: boolean }) =>
+      ipcRenderer.invoke('skills:listGlobal', options),
     readDetails: (input: unknown) =>
       ipcRenderer.invoke('skills:readDetails', input),
   },

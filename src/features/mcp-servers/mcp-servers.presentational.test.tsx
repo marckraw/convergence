@@ -98,4 +98,30 @@ describe('McpServersDialog', () => {
       ),
     ).toBeInTheDocument()
   })
+
+  it('renders global chat as a valid MCP context', () => {
+    render(
+      <McpServersDialog
+        open
+        onOpenChange={() => {}}
+        trigger={<Button type="button">Open</Button>}
+        projectName="Global chat"
+        isLoading={false}
+        error={null}
+        onRefresh={() => {}}
+        snapshot={{
+          projectId: 'global',
+          projectName: 'Global chat',
+          providers: [],
+        }}
+      />,
+    )
+
+    expect(
+      screen.getByText(
+        'Available in Global chat, grouped by provider and scope.',
+      ),
+    ).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /refresh/i })).not.toBeDisabled()
+  })
 })

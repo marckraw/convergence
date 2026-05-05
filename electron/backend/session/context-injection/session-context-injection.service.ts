@@ -33,6 +33,10 @@ export class SessionContextInjectionService {
   ) {}
 
   prepareBoot(input: PrepareBootContextInput): PreparedBootContext {
+    if (input.session.contextKind === 'global' || !input.session.projectId) {
+      return { augmentedText: input.originalText, noteDraft: null }
+    }
+
     if (input.contextItemIds !== undefined) {
       this.projectContext.attachToSession(
         input.session.id,
@@ -58,6 +62,10 @@ export class SessionContextInjectionService {
   }
 
   prepareUserTurn(input: PrepareUserTurnContextInput): string {
+    if (input.session.contextKind === 'global' || !input.session.projectId) {
+      return input.originalText
+    }
+
     const items = this.projectContext.listForSession(input.session.id)
     if (items.length === 0) return input.originalText
 
@@ -69,6 +77,8 @@ export class SessionContextInjectionService {
   }
 
   private resolveProjectSlugForSession(session: Session): string {
+    if (!session.projectId) return ''
+
     const row = this.db
       .prepare('SELECT name FROM projects WHERE id = ?')
       .get(session.projectId) as { name: string } | undefined

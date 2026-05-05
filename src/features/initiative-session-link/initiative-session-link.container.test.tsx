@@ -27,6 +27,7 @@ const attempt: InitiativeAttempt = {
 
 const session = {
   id: 's1',
+  contextKind: 'project' as const,
   projectId: 'p1',
   workspaceId: 'w1',
   providerId: 'codex',

@@ -20,6 +20,12 @@ After every finished task, agents must run these commands in this repo:
 
 If a command fails because the current phase has not introduced that tool yet, report the failure clearly and fix the missing bootstrap in the next relevant task. Do not silently skip verification.
 
+## Local dev server
+
+Agents are not permitted to run `npm run dev` in this repo. When local UI
+testing is needed, tell the user what to verify and ask them to run
+`npm run dev` themselves.
+
 ## Prettier formatting
 
 Always accept Prettier's reformatting. `chaperone check --fix` runs Prettier

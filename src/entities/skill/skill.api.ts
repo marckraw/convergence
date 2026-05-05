@@ -12,6 +12,9 @@ export const skillApi = {
   ): Promise<ProjectSkillCatalog> =>
     window.electronAPI.skills.listByProjectId(projectId, options),
 
+  listGlobal: (options?: SkillCatalogOptions): Promise<ProjectSkillCatalog> =>
+    window.electronAPI.skills.listGlobal(options),
+
   readDetails: (input: SkillDetailsRequest): Promise<SkillDetails> =>
     window.electronAPI.skills.readDetails(input),
 }

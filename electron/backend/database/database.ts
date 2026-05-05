@@ -12,7 +12,9 @@ function buildSessionsTableSql(
   return `
     CREATE TABLE ${ifNotExistsClause}${tableName} (
       id TEXT PRIMARY KEY,
-      project_id TEXT NOT NULL,
+      context_kind TEXT NOT NULL DEFAULT 'project'
+        CHECK (context_kind IN ('project', 'global')),
+      project_id TEXT,
       workspace_id TEXT,
       provider_id TEXT NOT NULL,
       model TEXT,
@@ -35,7 +37,12 @@ function buildSessionsTableSql(
       updated_at TEXT NOT NULL DEFAULT (datetime('now')),
       FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
       FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE,
-      FOREIGN KEY (parent_session_id) REFERENCES sessions(id) ON DELETE SET NULL
+      FOREIGN KEY (parent_session_id) REFERENCES sessions(id) ON DELETE SET NULL,
+      CHECK (
+        (context_kind = 'project' AND project_id IS NOT NULL)
+        OR
+        (context_kind = 'global' AND project_id IS NULL AND workspace_id IS NULL)
+      )
     );
   `
 }
@@ -355,8 +362,46 @@ function getTableColumnNames(
   return new Set(columns.map((column) => column.name))
 }
 
+function getTableInfo(
+  database: Database.Database,
+  tableName: string,
+): Array<{ name: string; notnull: number }> {
+  return database.prepare(`PRAGMA table_info('${tableName}')`).all() as Array<{
+    name: string
+    notnull: number
+  }>
+}
+
+function getTableCreateSql(
+  database: Database.Database,
+  tableName: string,
+): string {
+  const row = database
+    .prepare(
+      "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = ? LIMIT 1",
+    )
+    .get(tableName) as { sql: string } | undefined
+
+  return row?.sql ?? ''
+}
+
 function hasLegacyTranscriptColumn(database: Database.Database): boolean {
   return getTableColumnNames(database, 'sessions').has('transcript')
+}
+
+function needsSessionContextShapeMigration(
+  database: Database.Database,
+): boolean {
+  const columns = getTableInfo(database, 'sessions')
+  const columnNames = new Set(columns.map((column) => column.name))
+  const projectIdColumn = columns.find((column) => column.name === 'project_id')
+  const createSql = getTableCreateSql(database, 'sessions')
+
+  return (
+    !columnNames.has('context_kind') ||
+    projectIdColumn?.notnull === 1 ||
+    !createSql.includes("context_kind IN ('project', 'global')")
+  )
 }
 
 function ensureWorkspaceColumns(database: Database.Database): void {
@@ -384,6 +429,12 @@ function ensureSessionColumns(database: Database.Database): void {
 
   if (!columnNames.has('continuation_token')) {
     database.exec('ALTER TABLE sessions ADD COLUMN continuation_token TEXT')
+  }
+
+  if (!columnNames.has('context_kind')) {
+    database.exec(
+      "ALTER TABLE sessions ADD COLUMN context_kind TEXT NOT NULL DEFAULT 'project'",
+    )
   }
 
   if (!columnNames.has('context_window')) {
@@ -592,12 +643,16 @@ function ensureLegacyTranscriptCoverage(database: Database.Database): void {
   }
 }
 
-function ensureSessionsTableWithoutTranscript(
-  database: Database.Database,
-): void {
-  if (!hasLegacyTranscriptColumn(database)) return
+function ensureSessionsTableShape(database: Database.Database): void {
+  const sourceColumnNames = getTableColumnNames(database, 'sessions')
+  const hasTranscriptColumn = sourceColumnNames.has('transcript')
+  const needsContextShape = needsSessionContextShapeMigration(database)
 
-  ensureLegacyTranscriptCoverage(database)
+  if (!hasTranscriptColumn && !needsContextShape) return
+
+  if (hasTranscriptColumn) {
+    ensureLegacyTranscriptCoverage(database)
+  }
 
   const foreignKeysEnabled =
     (database.pragma('foreign_keys', { simple: true }) as number) === 1
@@ -610,9 +665,19 @@ function ensureSessionsTableWithoutTranscript(
     database.transaction(() => {
       database.exec('DROP TABLE IF EXISTS sessions_next')
       database.exec(buildSessionsTableSql('sessions_next', false))
+      const contextKindSelect = sourceColumnNames.has('context_kind')
+        ? `CASE
+            WHEN context_kind = 'global'
+              AND project_id IS NULL
+              AND workspace_id IS NULL
+              THEN 'global'
+            ELSE 'project'
+          END`
+        : "'project'"
       database.exec(`
         INSERT INTO sessions_next (
           id,
+          context_kind,
           project_id,
           workspace_id,
           provider_id,
@@ -637,6 +702,7 @@ function ensureSessionsTableWithoutTranscript(
         )
         SELECT
           id,
+          ${contextKindSelect},
           project_id,
           workspace_id,
           provider_id,
@@ -673,7 +739,7 @@ function ensureSessionsTableWithoutTranscript(
 
       if (violations.length > 0) {
         throw new Error(
-          'Failed to rebuild sessions table without legacy transcript column: foreign key check failed',
+          'Failed to rebuild sessions table shape: foreign key check failed',
         )
       }
     })()
@@ -697,7 +763,7 @@ export function getDatabase(dbPath?: string): Database.Database {
     ensureSessionColumns(database)
     ensureAttachmentsTableNoFk(database)
     migrateLegacySessionConversations(database)
-    ensureSessionsTableWithoutTranscript(database)
+    ensureSessionsTableShape(database)
   } catch (error) {
     database.close()
     throw error

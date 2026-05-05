@@ -1,4 +1,5 @@
 import { randomUUID } from 'crypto'
+import { mkdirSync } from 'fs'
 import type Database from 'better-sqlite3'
 import type {
   ConversationItemRow,
@@ -108,6 +109,7 @@ export class SessionService {
   constructor(
     private db: Database.Database,
     private providers: ProviderRegistry,
+    private globalWorkingDirectory: string = process.cwd(),
   ) {
     this.recoverStaleRunningSessions()
     this.recoverDispatchingQueuedInputs()
@@ -241,27 +243,46 @@ export class SessionService {
 
   create(input: CreateSessionInput): Session {
     const id = randomUUID()
-
-    // Resolve working directory
     let workingDirectory: string
-    if (input.workspaceId) {
-      const ws = this.db
-        .prepare('SELECT path FROM workspaces WHERE id = ?')
-        .get(input.workspaceId) as { path: string } | undefined
-      if (!ws) throw new Error(`Workspace not found: ${input.workspaceId}`)
-      workingDirectory = ws.path
+    let projectId: string | null
+    let workspaceId: string | null
+    let primarySurface = input.primarySurface ?? 'conversation'
+
+    if (input.contextKind === 'global') {
+      if (input.projectId || input.workspaceId) {
+        throw new Error(
+          'Global sessions cannot be tied to a project or workspace',
+        )
+      }
+      mkdirSync(this.globalWorkingDirectory, { recursive: true })
+      workingDirectory = this.globalWorkingDirectory
+      projectId = null
+      workspaceId = null
+      primarySurface = 'conversation'
     } else {
-      const proj = this.db
-        .prepare('SELECT repository_path FROM projects WHERE id = ?')
-        .get(input.projectId) as { repository_path: string } | undefined
-      if (!proj) throw new Error(`Project not found: ${input.projectId}`)
-      workingDirectory = proj.repository_path
+      projectId = input.projectId
+      workspaceId = input.workspaceId
+
+      if (workspaceId) {
+        const ws = this.db
+          .prepare('SELECT path FROM workspaces WHERE id = ?')
+          .get(workspaceId) as { path: string } | undefined
+        if (!ws) throw new Error(`Workspace not found: ${workspaceId}`)
+        workingDirectory = ws.path
+      } else {
+        const proj = this.db
+          .prepare('SELECT repository_path FROM projects WHERE id = ?')
+          .get(projectId) as { repository_path: string } | undefined
+        if (!proj) throw new Error(`Project not found: ${projectId}`)
+        workingDirectory = proj.repository_path
+      }
     }
 
     this.db
       .prepare(
         `INSERT INTO sessions (
-           id,
+         id,
+           context_kind,
            project_id,
            workspace_id,
            provider_id,
@@ -273,12 +294,13 @@ export class SessionService {
            fork_strategy,
            primary_surface
          )
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
       .run(
         id,
-        input.projectId,
-        input.workspaceId,
+        input.contextKind ?? 'project',
+        projectId,
+        workspaceId,
         input.providerId,
         input.model,
         input.effort,
@@ -286,7 +308,7 @@ export class SessionService {
         workingDirectory,
         input.parentSessionId ?? null,
         input.forkStrategy ?? null,
-        input.primarySurface ?? 'conversation',
+        primarySurface,
       )
 
     return this.getSummaryById(id)!
@@ -295,7 +317,7 @@ export class SessionService {
   getByProjectId(projectId: string): Session[] {
     const rows = this.db
       .prepare(
-        'SELECT * FROM sessions WHERE project_id = ? ORDER BY created_at DESC',
+        "SELECT * FROM sessions WHERE context_kind = 'project' AND project_id = ? ORDER BY created_at DESC",
       )
       .all(projectId) as SessionRow[]
 
@@ -313,9 +335,19 @@ export class SessionService {
   getSummariesByProjectId(projectId: string): SessionSummary[] {
     const rows = this.db
       .prepare(
-        'SELECT * FROM sessions WHERE project_id = ? ORDER BY created_at DESC',
+        "SELECT * FROM sessions WHERE context_kind = 'project' AND project_id = ? ORDER BY created_at DESC",
       )
       .all(projectId) as SessionRow[]
+
+    return rows.map(sessionSummaryFromRow)
+  }
+
+  getGlobalSummaries(): SessionSummary[] {
+    const rows = this.db
+      .prepare(
+        "SELECT * FROM sessions WHERE context_kind = 'global' ORDER BY created_at DESC",
+      )
+      .all() as SessionRow[]
 
     return rows.map(sessionSummaryFromRow)
   }

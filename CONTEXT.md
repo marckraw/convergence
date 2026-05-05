@@ -206,6 +206,34 @@ _Avoid_: Turn Review, Status
 A global action and search surface for navigating and initiating work across Convergence.
 _Avoid_: Command model, palette state
 
+**Code Surface**:
+The Project-oriented app surface for coding work, including Projects,
+Workspaces, Sessions, Pull Requests, Changed Files, terminal affordances, and
+Project Settings.
+_Avoid_: Default view, repo mode
+
+**Chat Surface**:
+The global conversation app surface for non-project Agent Sessions. It reuses
+the Session runtime but omits repository, Workspace, branch, Pull Request,
+Changed Files, and Project Settings affordances.
+_Avoid_: ChatGPT clone, hidden Project, separate chat runtime
+
+**Session Context**:
+The explicit domain discriminator that tells whether a Session belongs to a
+Project Session Context or a Global Session Context.
+_Avoid_: Null project check, mode flag
+
+**Project Session Context**:
+A Session Context with Project and optional Workspace semantics. It can expose
+repository roots, Project Context, Workspace state, branch/worktree state, and
+coding-specific surfaces.
+_Avoid_: Normal Session, repo session
+
+**Global Session Context**:
+A Session Context without Project or Workspace semantics. It uses app-owned
+working storage and powers the Chat Surface.
+_Avoid_: Synthetic Project, projectless Project, standalone chat row
+
 **Local Analytics**:
 Local-only usage insight for the user derived from stored Convergence work data.
 _Avoid_: Product telemetry, remote analytics

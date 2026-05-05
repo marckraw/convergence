@@ -11,6 +11,7 @@ import {
 function makeSession(overrides: Partial<Session>): Session {
   return {
     id: 'session-1',
+    contextKind: 'project',
     projectId: 'project-1',
     workspaceId: null,
     providerId: 'claude-code',

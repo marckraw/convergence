@@ -37,6 +37,10 @@ export async function switchToSession(sessionId: string): Promise<void> {
     (session) => session.id === sessionId,
   )
   if (!target) return
+  if (!target.projectId) {
+    useSessionStore.getState().setActiveSession(sessionId)
+    return
+  }
 
   const activeProject = useProjectStore.getState().activeProject
   if (activeProject?.id !== target.projectId) {

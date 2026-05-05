@@ -21,11 +21,12 @@ export const GlobalStatusBarContainer: FC = () => {
   const recency = useMemo(() => {
     if (!status.lastCompleted) return null
     const session = status.lastCompleted
+    if (!session.projectId) return null
     const projectName =
       projects.find((project) => project.id === session.projectId)?.name ??
       'Unknown project'
     return {
-      session,
+      session: { ...session, projectId: session.projectId },
       projectName,
       kind:
         session.status === 'failed'

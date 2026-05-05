@@ -5,6 +5,7 @@ import { ChangedFilesPanel } from './changed-files-panel.container'
 
 const session = {
   id: 'session-1',
+  contextKind: 'project' as const,
   projectId: 'project-1',
   workspaceId: 'workspace-1',
   providerId: 'claude-code',

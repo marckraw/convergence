@@ -27,6 +27,7 @@ const promptInput: InitiativeSynthesisPromptInput = {
       },
       session: {
         id: 's1',
+        contextKind: 'project',
         projectId: 'p1',
         workspaceId: 'w1',
         providerId: 'codex',

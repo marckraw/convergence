@@ -10,6 +10,7 @@ import {
 import { useProjectStore } from '@/entities/project'
 import { useSessionStore } from '@/entities/session'
 import { useWorkspaceStore } from '@/entities/workspace'
+import { useAppSurfaceStore } from '@/entities/app-surface'
 import chimeSoftUrl from '@/shared/assets/sounds/chime-soft.wav'
 import chimeAlertUrl from '@/shared/assets/sounds/chime-alert.wav'
 
@@ -28,15 +29,21 @@ export async function focusSessionAcrossProjects(
   const sessionState = useSessionStore.getState()
   const target = sessionState.globalSessions.find((s) => s.id === sessionId)
   if (!target) return
+  if (target.contextKind === 'global') {
+    useAppSurfaceStore.getState().setActiveSurface('chat')
+    useSessionStore.getState().setActiveGlobalSession(sessionId)
+    return
+  }
+  useAppSurfaceStore.getState().setActiveSurface('code')
+  const projectId = target.projectId
+  if (!projectId) return
 
   const projectState = useProjectStore.getState()
   const activeProject = projectState.activeProject
-  if (activeProject?.id !== target.projectId) {
-    const targetProject = projectState.projects.find(
-      (p) => p.id === target.projectId,
-    )
-    sessionState.prepareForProject(target.projectId)
-    await projectState.setActiveProject(target.projectId)
+  if (activeProject?.id !== projectId) {
+    const targetProject = projectState.projects.find((p) => p.id === projectId)
+    sessionState.prepareForProject(projectId)
+    await projectState.setActiveProject(projectId)
     const workspaceState = useWorkspaceStore.getState()
     const refreshedSessionState = useSessionStore.getState()
     if (targetProject) {
@@ -46,7 +53,7 @@ export async function focusSessionAcrossProjects(
         refreshedSessionState.loadSessions(targetProject.id),
       ])
     } else {
-      await refreshedSessionState.loadSessions(target.projectId)
+      await refreshedSessionState.loadSessions(projectId)
     }
   }
 

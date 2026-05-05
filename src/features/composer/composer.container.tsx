@@ -39,10 +39,20 @@ import { resolveMidRunInputPolicy } from './mid-run-input.pure'
 import { Button } from '@/shared/ui/button'
 import { X } from 'lucide-react'
 
+export type ComposerSessionContext =
+  | {
+      kind: 'project'
+      projectId: string
+      workspaceId: string | null
+      activeSessionId: string | null
+    }
+  | {
+      kind: 'global'
+      activeSessionId: string | null
+    }
+
 interface ComposerContainerProps {
-  projectId: string
-  workspaceId: string | null
-  activeSessionId: string | null
+  context: ComposerSessionContext
 }
 
 const DRAFT_KEY_NEW = '__new__'
@@ -61,6 +71,13 @@ const DELIVERY_MODE_LABELS: Partial<Record<MidRunInputMode, string>> = {
   'follow-up': 'Follow-up',
   steer: 'Steer',
   interrupt: 'Interrupt',
+}
+
+function getComposerContextKey(context: ComposerSessionContext): string {
+  if (context.kind === 'project') {
+    return `project:${context.projectId}:${context.workspaceId ?? 'main'}`
+  }
+  return 'global'
 }
 
 function getQueuedInputPreview(input: SessionQueuedInput): string {
@@ -106,11 +123,11 @@ async function filesToIngestInputs(
   return inputs
 }
 
-export const ComposerContainer: FC<ComposerContainerProps> = ({
-  projectId,
-  workspaceId,
-  activeSessionId,
-}) => {
+export const ComposerContainer: FC<ComposerContainerProps> = ({ context }) => {
+  const activeSessionId = context.activeSessionId
+  const projectId = context.kind === 'project' ? context.projectId : null
+  const projectContextEnabled = context.kind === 'project'
+  const contextKey = getComposerContextKey(context)
   const [value, setValue] = useState('')
   const [providerId, setProviderId] = useState('')
   const [modelId, setModelId] = useState('')
@@ -130,15 +147,20 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
   const openDialog = useDialogStore((s) => s.open)
   const loadProviders = useSessionStore((s) => s.loadProviders)
   const createAndStartSession = useSessionStore((s) => s.createAndStartSession)
+  const createAndStartGlobalSession = useSessionStore(
+    (s) => s.createAndStartGlobalSession,
+  )
   const sendMessageToSession = useSessionStore((s) => s.sendMessageToSession)
   const cancelQueuedInput = useSessionStore((s) => s.cancelQueuedInput)
   const sessions = useSessionStore((s) => s.sessions)
+  const globalChatSessions = useSessionStore((s) => s.globalChatSessions)
   const queuedInputs = useSessionStore((s) =>
     activeSessionId
       ? (s.queuedInputsBySessionId[activeSessionId] ?? EMPTY_QUEUED_INPUTS)
       : EMPTY_QUEUED_INPUTS,
   )
-  const activeSession = sessions.find((s) => s.id === activeSessionId)
+  const sessionList = context.kind === 'project' ? sessions : globalChatSessions
+  const activeSession = sessionList.find((s) => s.id === activeSessionId)
   const activeProvider = providers.find(
     (p) => p.id === activeSession?.providerId,
   )
@@ -155,12 +177,16 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
     (s) => s.loadForProject,
   )
   const everyTurnContextCount = activeSessionId
-    ? (attachmentsBySessionId[activeSessionId] ?? []).filter(
-        (item) => item.reinjectMode === 'every-turn',
-      ).length
+    ? projectContextEnabled
+      ? (attachmentsBySessionId[activeSessionId] ?? []).filter(
+          (item) => item.reinjectMode === 'every-turn',
+        ).length
+      : 0
     : 0
   const projectContextItems =
-    itemsByProjectId[projectId] ?? EMPTY_PROJECT_CONTEXT_ITEMS
+    projectId && projectContextEnabled
+      ? (itemsByProjectId[projectId] ?? EMPTY_PROJECT_CONTEXT_ITEMS)
+      : EMPTY_PROJECT_CONTEXT_ITEMS
   const selectedContextItems = useMemo(
     () =>
       projectContextItems.filter((item) =>
@@ -183,6 +209,7 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
     [value, cursor],
   )
   const mentionPickerOpen =
+    projectContextEnabled &&
     mentionTrigger.open &&
     projectContextItems.length > 0 &&
     !(
@@ -213,13 +240,14 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
   }, [mentionDismissedRange, mentionTrigger])
 
   useEffect(() => {
-    if (!activeSessionId) return
+    if (!projectContextEnabled || !activeSessionId) return
     void loadProjectContextForSession(activeSessionId)
-  }, [activeSessionId, loadProjectContextForSession])
+  }, [activeSessionId, loadProjectContextForSession, projectContextEnabled])
 
   useEffect(() => {
+    if (!projectContextEnabled || !projectId) return
     void loadProjectContextForProject(projectId)
-  }, [projectId, loadProjectContextForProject])
+  }, [projectId, loadProjectContextForProject, projectContextEnabled])
 
   useEffect(() => {
     if (pendingCursorRef.current === null) return
@@ -282,7 +310,7 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
   )
   const availableDeliveryModesKey = midRunPolicy.availableModes.join('|')
 
-  const draftKey = activeSessionId ?? DRAFT_KEY_NEW
+  const draftKey = activeSessionId ?? `${contextKey}:${DRAFT_KEY_NEW}`
   const draft = useAttachmentStore((s) => s.drafts[draftKey])
   const ingestFiles = useAttachmentStore((s) => s.ingestFiles)
   const ingestFromPaths = useAttachmentStore((s) => s.ingestFromPaths)
@@ -291,6 +319,7 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
   const clearRejections = useAttachmentStore((s) => s.clearRejections)
   const skillCatalog = useSkillStore((s) => s.catalog)
   const loadSkillCatalog = useSkillStore((s) => s.loadCatalog)
+  const loadGlobalSkillCatalog = useSkillStore((s) => s.loadGlobalCatalog)
   const skillCatalogLoading = useSkillStore((s) => s.isCatalogLoading)
   const skillCatalogError = useSkillStore((s) => s.catalogError)
 
@@ -323,7 +352,7 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
     setSkillQuery('')
     setSkillPickerOpen(false)
     setContextPickerOpen(false)
-  }, [projectId, activeSessionId])
+  }, [contextKey, activeSessionId])
 
   useEffect(() => {
     const availableIds = new Set(projectContextItems.map((item) => item.id))
@@ -398,7 +427,9 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
     const skillSelections =
       selectedSkills.length > 0 ? selectedSkills : undefined
     const contextItemIds =
-      selectedContextIds.length > 0 ? selectedContextIds : undefined
+      projectContextEnabled && selectedContextIds.length > 0
+        ? selectedContextIds
+        : undefined
 
     if (activeSession && canContinueActiveSession) {
       const mode = deliveryMode === 'normal' ? undefined : deliveryMode
@@ -439,10 +470,20 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
     const baseName = trimmed || attachments[0]?.filename || 'New session'
     const name =
       baseName.length > 40 ? baseName.substring(0, 40) + '...' : baseName
-    if (hasAttachments || skillSelections) {
+    if (context.kind === 'global') {
+      void createAndStartGlobalSession(
+        selection.providerId,
+        selection.modelId,
+        selection.effort?.id ?? null,
+        name,
+        trimmed,
+        hasAttachments ? attachmentIds : undefined,
+        skillSelections,
+      )
+    } else if (hasAttachments || skillSelections) {
       createAndStartSession(
-        projectId,
-        workspaceId,
+        context.projectId,
+        context.workspaceId,
         selection.providerId,
         selection.modelId,
         selection.effort?.id ?? null,
@@ -454,8 +495,8 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
       )
     } else {
       createAndStartSession(
-        projectId,
-        workspaceId,
+        context.projectId,
+        context.workspaceId,
         selection.providerId,
         selection.modelId,
         selection.effort?.id ?? null,
@@ -484,10 +525,11 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
     deliveryMode,
     sendMessageToSession,
     createAndStartSession,
+    createAndStartGlobalSession,
     clearDraft,
     draftKey,
-    projectId,
-    workspaceId,
+    context,
+    projectContextEnabled,
   ])
 
   const handleProviderChange = (nextProviderId: string) => {
@@ -506,9 +548,14 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
   const handleSkillPickerOpenChange = useCallback(
     (nextOpen: boolean) => {
       setSkillPickerOpen(nextOpen)
-      if (nextOpen) void loadSkillCatalog(projectId)
+      if (!nextOpen) return
+      if (context.kind === 'global') {
+        void loadGlobalSkillCatalog()
+        return
+      }
+      if (projectId) void loadSkillCatalog(projectId)
     },
-    [loadSkillCatalog, projectId],
+    [context.kind, loadGlobalSkillCatalog, loadSkillCatalog, projectId],
   )
 
   const handleSkillToggle = useCallback((skill: SkillCatalogEntry) => {
@@ -675,6 +722,7 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
         skillOptions={skillOptions}
         selectedSkills={selectedSkills}
         contextPickerOpen={contextPickerOpen}
+        projectContextEnabled={projectContextEnabled}
         projectContextItems={projectContextItems}
         selectedContextItems={selectedContextItems}
         skillCatalogLoading={skillCatalogLoading}

@@ -18,6 +18,7 @@ const PROJECT_ID = 'project-1'
 function makeSession(overrides: Partial<Session> = {}): Session {
   return {
     id: SESSION_ID,
+    contextKind: 'project',
     projectId: PROJECT_ID,
     workspaceId: null,
     providerId: 'claude-code',

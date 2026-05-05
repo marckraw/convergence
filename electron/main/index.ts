@@ -166,6 +166,7 @@ async function startApp(): Promise<void> {
   const dbPath = join(app.getPath('userData'), 'convergence.db')
   const workspacesRoot = join(app.getPath('userData'), 'workspaces')
   const attachmentsRoot = join(app.getPath('userData'), 'attachments')
+  const globalSessionsRoot = join(app.getPath('userData'), 'global-sessions')
   loadEnvFile(join(app.getAppPath(), '.env'))
   loadEnvFile(join(process.cwd(), '.env'))
   const db = getDatabase(dbPath)
@@ -185,7 +186,11 @@ async function startApp(): Promise<void> {
   const reviewNotesService = new ReviewNotesService(db)
   const providerRegistry = new ProviderRegistry()
   const taskProgressService = new TaskProgressService(broadcastTaskProgress)
-  const sessionService = new SessionService(db, providerRegistry)
+  const sessionService = new SessionService(
+    db,
+    providerRegistry,
+    globalSessionsRoot,
+  )
   const pullRequestReviewService = new PullRequestReviewService({
     projects: projectService,
     workspaces: workspaceService,

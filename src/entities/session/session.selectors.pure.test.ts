@@ -7,6 +7,7 @@ import { selectGlobalStatus } from './session.selectors.pure'
 function makeSession(overrides: Partial<Session>): Session {
   return {
     id: 'session-1',
+    contextKind: 'project',
     projectId: 'project-1',
     workspaceId: null,
     providerId: 'claude-code',
@@ -216,5 +217,23 @@ describe('selectGlobalStatus', () => {
 
     expect(result.byProject).toHaveLength(1)
     expect(result.byProject[0].projectName).toBe('Unknown project')
+  })
+
+  it('keeps global chat sessions out of project group labels', () => {
+    const globalSession = makeSession({
+      id: 'global-1',
+      contextKind: 'global',
+      projectId: null,
+      status: 'running',
+      attention: 'needs-input',
+    })
+
+    const result = selectGlobalStatus([globalSession], {}, [])
+
+    expect(result.running.map((session) => session.id)).toEqual(['global-1'])
+    expect(result.needsAttention.map((session) => session.id)).toEqual([
+      'global-1',
+    ])
+    expect(result.byProject).toEqual([])
   })
 })

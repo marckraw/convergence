@@ -157,6 +157,7 @@ export function buildPaletteIndex(
 
   for (const session of sessions) {
     if (session.archivedAt) continue
+    if (session.contextKind !== 'project' || !session.projectId) continue
     const project = projectsById.get(session.projectId)
     const projectName = project?.name ?? ''
     const workspace = session.workspaceId
@@ -262,7 +263,13 @@ export function buildPaletteIndex(
 
   if (activeSessionId) {
     const focused = sessionsById.get(activeSessionId)
-    if (focused && !focused.archivedAt && focused.providerId !== 'shell') {
+    if (
+      focused &&
+      focused.contextKind === 'project' &&
+      focused.projectId &&
+      !focused.archivedAt &&
+      focused.providerId !== 'shell'
+    ) {
       const project = projectsById.get(focused.projectId)
       const projectName = project?.name ?? ''
       const title = `Fork session: ${focused.name}`

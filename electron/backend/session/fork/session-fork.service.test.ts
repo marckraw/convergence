@@ -20,6 +20,7 @@ import type { ForkSummary } from './session-fork.types'
 function makeParent(overrides: Partial<SessionSummary> = {}): SessionSummary {
   return {
     id: 'parent-1',
+    contextKind: 'project',
     projectId: 'proj-1',
     workspaceId: 'ws-1',
     providerId: 'claude-code',

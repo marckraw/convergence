@@ -34,6 +34,7 @@ function makeProject(id: string, name: string): Project {
 function makeSession(id: string, projectId: string): Session {
   return {
     id,
+    contextKind: 'project',
     projectId,
     workspaceId: null,
     providerId: 'claude-code',

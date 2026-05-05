@@ -28,11 +28,24 @@ import { buildNeedsYouSummary } from './needs-you.presentational'
 import { ProjectTree } from './project-tree.container'
 import { ProjectSwitcher } from './project-switcher.presentational'
 import { Button } from '@/shared/ui/button'
-import { BarChart3, Plus, Settings } from 'lucide-react'
+import type { AppSurface } from '@/shared/types/app-surface.types'
+import {
+  BarChart3,
+  Code2,
+  MessageSquareText,
+  Plus,
+  Settings,
+} from 'lucide-react'
+import { GlobalChatSessionList } from './global-chat-session-list.presentational'
 
 interface SidebarProps {
+  activeSurface: AppSurface
+  onSelectSurface: (surface: AppSurface) => void
   onSelectSession: (id: string) => void
   activeSessionId: string | null
+  onSelectGlobalSession: (id: string) => void
+  onNewGlobalSession: () => void
+  activeGlobalSessionId: string | null
 }
 
 interface AttentionSession {
@@ -43,8 +56,13 @@ interface AttentionSession {
 }
 
 export const Sidebar: FC<SidebarProps> = ({
+  activeSurface,
+  onSelectSurface,
   onSelectSession,
   activeSessionId,
+  onSelectGlobalSession,
+  onNewGlobalSession,
+  activeGlobalSessionId,
 }) => {
   const projects = useProjectStore((s) => s.projects)
   const activeProject = useProjectStore((s) => s.activeProject)
@@ -67,6 +85,7 @@ export const Sidebar: FC<SidebarProps> = ({
   const openDialog = useDialogStore((s) => s.open)
   const sessions = useSessionStore((s) => s.sessions)
   const globalSessions = useSessionStore((s) => s.globalSessions)
+  const globalChatSessions = useSessionStore((s) => s.globalChatSessions)
   const needsYouDismissals = useSessionStore((s) => s.needsYouDismissals)
   const loadSessions = useSessionStore((s) => s.loadSessions)
   const loadGlobalSessions = useSessionStore((s) => s.loadGlobalSessions)
@@ -154,8 +173,10 @@ export const Sidebar: FC<SidebarProps> = ({
       }
 
       const projectName =
-        projects.find((project) => project.id === session.projectId)?.name ??
-        'Unknown project'
+        session.contextKind === 'global'
+          ? 'Convergence'
+          : (projects.find((project) => project.id === session.projectId)
+              ?.name ?? 'Unknown project')
 
       return {
         session,
@@ -173,12 +194,18 @@ export const Sidebar: FC<SidebarProps> = ({
       return right.session.updatedAt.localeCompare(left.session.updatedAt)
     })
 
-  const waitingSessions = attentionSessions.filter(
+  const visibleAttentionSessions = attentionSessions.filter(({ session }) =>
+    activeSurface === 'chat'
+      ? session.contextKind === 'global'
+      : session.contextKind === 'project',
+  )
+
+  const waitingSessions = visibleAttentionSessions.filter(
     ({ session }) =>
       session.attention === 'needs-approval' ||
       session.attention === 'needs-input',
   )
-  const reviewSessions = attentionSessions.filter(
+  const reviewSessions = visibleAttentionSessions.filter(
     ({ session }) =>
       session.attention === 'finished' || session.attention === 'failed',
   )
@@ -186,8 +213,13 @@ export const Sidebar: FC<SidebarProps> = ({
   const handleSelectNeedsYouSession = async (sessionId: string) => {
     const target = globalSessions.find((session) => session.id === sessionId)
     await switchToSession(sessionId)
+    onSelectSurface(target?.contextKind === 'global' ? 'chat' : 'code')
     if (target?.workspaceId) {
       expandWorkspace(target.workspaceId)
+    }
+    if (target?.contextKind === 'global') {
+      onSelectGlobalSession(sessionId)
+      return
     }
     onSelectSession(sessionId)
   }
@@ -314,86 +346,135 @@ export const Sidebar: FC<SidebarProps> = ({
         </div>
       </div>
 
+      <div className="flex items-center gap-1 px-3 pt-3">
+        <Button
+          type="button"
+          variant={activeSurface === 'code' ? 'secondary' : 'ghost'}
+          size="icon"
+          className="h-8 w-8"
+          title="Code"
+          aria-label="Show code surface"
+          aria-pressed={activeSurface === 'code'}
+          onClick={() => onSelectSurface('code')}
+        >
+          <Code2 className="h-4 w-4" />
+        </Button>
+        <Button
+          type="button"
+          variant={activeSurface === 'chat' ? 'secondary' : 'ghost'}
+          size="icon"
+          className="h-8 w-8"
+          title="Chat"
+          aria-label="Show chat surface"
+          aria-pressed={activeSurface === 'chat'}
+          onClick={() => onSelectSurface('chat')}
+        >
+          <MessageSquareText className="h-4 w-4" />
+        </Button>
+      </div>
+
       <div className="app-scrollbar flex-1 overflow-x-hidden overflow-y-auto py-3">
         <NeedsYou
           waitingSessions={waitingSessions}
           reviewSessions={reviewSessions}
-          activeSessionId={activeSessionId}
+          activeSessionId={
+            activeSurface === 'chat' ? activeGlobalSessionId : activeSessionId
+          }
           pulsingSessionIds={pulsingSessionIds}
           onSelect={handleSelectNeedsYouSession}
           onDismiss={dismissNeedsYouSession}
           onArchive={archiveSession}
         />
 
-        {attentionSessions.length > 0 && (
+        {visibleAttentionSessions.length > 0 && (
           <div className="mx-3 mb-3 border-t border-border/50" />
         )}
 
-        {projects.length > 0 && (
-          <ProjectSwitcher
-            projects={projects}
-            activeProjectId={activeProject?.id ?? null}
-            onSelectProject={handleSelectProject}
-            onCreateProject={createProject}
-          />
-        )}
-
-        {activeProject ? (
-          <ProjectTree
-            baseBranchName={currentBranch}
-            workspaces={workspaces}
-            sessions={sessions}
-            activeSessionId={activeSessionId}
-            pullRequestsByWorkspaceId={pullRequestsByWorkspaceId}
-            pulsingSessionIds={pulsingSessionIds}
-            expandedWorkspaces={expandedWorkspaces}
-            onToggleWorkspace={toggleWorkspace}
-            onSelectSession={onSelectSession}
+        {activeSurface === 'chat' ? (
+          <GlobalChatSessionList
+            sessions={globalChatSessions}
+            activeSessionId={activeGlobalSessionId}
+            onNewSession={onNewGlobalSession}
+            onSelectSession={onSelectGlobalSession}
             onArchiveSession={archiveSession}
             onUnarchiveSession={unarchiveSession}
             onDeleteSession={(sessionId: string) =>
-              deleteSession(sessionId, activeProject.id)
+              deleteSession(sessionId, null)
             }
-            onRenameSession={(sessionId: string, name: string) =>
-              sessionApi.rename(sessionId, name).catch(() => undefined)
-            }
-            regeneratingSessionIds={regeneratingSessionIds}
-            onRegenerateSessionName={handleRegenerateSessionName}
-            onArchiveWorkspace={handleArchiveWorkspace}
-            onUnarchiveWorkspace={handleUnarchiveWorkspace}
-            onRemoveWorkspaceWorktree={handleRemoveWorkspaceWorktree}
-            onDeleteWorkspace={handleDeleteWorkspace}
-            onOpenCreateWorkspace={() => openDialog('workspace-create')}
           />
         ) : (
-          <div className="px-3 text-center">
-            <p className="mb-3 text-sm text-muted-foreground">
-              No project loaded
-            </p>
-          </div>
+          <>
+            {projects.length > 0 && (
+              <ProjectSwitcher
+                projects={projects}
+                activeProjectId={activeProject?.id ?? null}
+                onSelectProject={handleSelectProject}
+                onCreateProject={createProject}
+              />
+            )}
+
+            {activeProject ? (
+              <ProjectTree
+                baseBranchName={currentBranch}
+                workspaces={workspaces}
+                sessions={sessions}
+                activeSessionId={activeSessionId}
+                pullRequestsByWorkspaceId={pullRequestsByWorkspaceId}
+                pulsingSessionIds={pulsingSessionIds}
+                expandedWorkspaces={expandedWorkspaces}
+                onToggleWorkspace={toggleWorkspace}
+                onSelectSession={onSelectSession}
+                onArchiveSession={archiveSession}
+                onUnarchiveSession={unarchiveSession}
+                onDeleteSession={(sessionId: string) =>
+                  deleteSession(sessionId, activeProject.id)
+                }
+                onRenameSession={(sessionId: string, name: string) =>
+                  sessionApi.rename(sessionId, name).catch(() => undefined)
+                }
+                regeneratingSessionIds={regeneratingSessionIds}
+                onRegenerateSessionName={handleRegenerateSessionName}
+                onArchiveWorkspace={handleArchiveWorkspace}
+                onUnarchiveWorkspace={handleUnarchiveWorkspace}
+                onRemoveWorkspaceWorktree={handleRemoveWorkspaceWorktree}
+                onDeleteWorkspace={handleDeleteWorkspace}
+                onOpenCreateWorkspace={() => openDialog('workspace-create')}
+              />
+            ) : (
+              <div className="px-3 text-center">
+                <p className="mb-3 text-sm text-muted-foreground">
+                  No project loaded
+                </p>
+              </div>
+            )}
+          </>
         )}
       </div>
 
       <div className="app-sidebar-footer border-t border-white/10 p-3">
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={createProject}
-          className="w-full"
-        >
-          <Plus className="h-4 w-4" />
-          Open a project
-        </Button>
-        <div className="mt-2">
-          <InitiativeWorkboardDialogContainer />
-        </div>
-        <div className="mt-2">
-          <ProjectSettingsDialogContainer
-            contextSection={(projectId) => (
-              <ProjectContextSettings projectId={projectId} />
-            )}
-          />
-        </div>
+        {activeSurface === 'code' ? (
+          <>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={createProject}
+              className="w-full"
+            >
+              <Plus className="h-4 w-4" />
+              Open a project
+            </Button>
+            <div className="mt-2">
+              <InitiativeWorkboardDialogContainer />
+            </div>
+            <div className="mt-2">
+              <ProjectSettingsDialogContainer
+                contextSection={(projectId) => (
+                  <ProjectContextSettings projectId={projectId} />
+                )}
+              />
+            </div>
+          </>
+        ) : null}
         <div className="mt-2">
           <ProviderStatusDialogContainer />
         </div>
@@ -408,7 +489,7 @@ export const Sidebar: FC<SidebarProps> = ({
         </div>
       </div>
 
-      <WorkspaceCreateDialogContainer />
+      {activeSurface === 'code' ? <WorkspaceCreateDialogContainer /> : null}
     </div>
   )
 }

@@ -5,6 +5,7 @@ const mockElectronAPI = {
   session: {
     create: vi.fn(),
     getAllSummaries: vi.fn(),
+    getGlobalSummaries: vi.fn(),
     getSummariesByProjectId: vi.fn(),
     getSummaryById: vi.fn(),
     getConversation: vi.fn().mockResolvedValue([]),
@@ -43,6 +44,7 @@ function makeSession(overrides: {
 }) {
   return {
     id: overrides.id,
+    contextKind: 'project' as const,
     projectId: overrides.projectId ?? 'project-1',
     workspaceId: null,
     providerId: 'claude-code',
@@ -89,6 +91,32 @@ function makeConversationItem(overrides: {
   }
 }
 
+function makeGlobalSession(overrides: { id: string; updatedAt?: string }) {
+  return {
+    id: overrides.id,
+    contextKind: 'global' as const,
+    projectId: null,
+    workspaceId: null,
+    providerId: 'claude-code',
+    model: 'sonnet',
+    effort: 'medium' as const,
+    name: `Global ${overrides.id}`,
+    status: 'running' as const,
+    attention: 'none' as const,
+    activity: null,
+    contextWindow: null,
+    workingDirectory: '/tmp/global-sessions',
+    archivedAt: null,
+    parentSessionId: null,
+    forkStrategy: null,
+    primarySurface: 'conversation' as const,
+    continuationToken: null,
+    lastSequence: 0,
+    createdAt: '2026-01-01T00:00:00.000Z',
+    updatedAt: overrides.updatedAt ?? '2026-01-01T00:00:00.000Z',
+  }
+}
+
 describe('useSessionStore', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -100,11 +128,16 @@ describe('useSessionStore', () => {
     useSessionStore.setState({
       sessions: [],
       globalSessions: [],
+      globalChatSessions: [],
+      activeGlobalConversation: [],
+      activeGlobalConversationSessionId: null,
       queuedInputsBySessionId: {},
       needsYouDismissals: {},
       recentSessionIds: [],
       currentProjectId: null,
       activeSessionId: null,
+      activeProjectSessionId: null,
+      activeGlobalSessionId: null,
       draftWorkspaceId: null,
       providers: [],
       error: null,
@@ -186,6 +219,106 @@ describe('useSessionStore', () => {
     expect(mockElectronAPI.session.getAllSummaries).toHaveBeenCalledOnce()
     expect(mockElectronAPI.session.getNeedsYouDismissals).toHaveBeenCalledOnce()
     expect(useSessionStore.getState().globalSessions).toHaveLength(2)
+  })
+
+  it('loads global chat sessions independently from project sessions', async () => {
+    const projectSession = makeSession({ id: 'project-session' })
+    const globalSession = makeGlobalSession({ id: 'global-session' })
+    mockElectronAPI.session.getGlobalSummaries.mockResolvedValueOnce([
+      globalSession,
+    ])
+    useSessionStore.setState({
+      currentProjectId: 'project-1',
+      sessions: [projectSession],
+      activeSessionId: projectSession.id,
+      activeProjectSessionId: projectSession.id,
+    })
+
+    await useSessionStore.getState().loadGlobalChatSessions()
+
+    expect(mockElectronAPI.session.getGlobalSummaries).toHaveBeenCalledOnce()
+    expect(useSessionStore.getState().sessions).toEqual([projectSession])
+    expect(useSessionStore.getState().globalChatSessions).toEqual([
+      globalSession,
+    ])
+    expect(useSessionStore.getState().activeSessionId).toBe(projectSession.id)
+  })
+
+  it('creates and starts a global chat session without changing project selection', async () => {
+    const projectSession = makeSession({ id: 'project-session' })
+    const globalSession = makeGlobalSession({ id: 'global-session' })
+    mockElectronAPI.session.create.mockResolvedValueOnce(globalSession)
+    mockElectronAPI.session.start.mockResolvedValueOnce(undefined)
+    mockElectronAPI.session.getConversation.mockResolvedValueOnce([])
+    useSessionStore.setState({
+      currentProjectId: 'project-1',
+      sessions: [projectSession],
+      activeSessionId: projectSession.id,
+      activeProjectSessionId: projectSession.id,
+    })
+
+    const result = await useSessionStore
+      .getState()
+      .createAndStartGlobalSession(
+        'claude-code',
+        'sonnet',
+        'medium',
+        'Global chat',
+        'Hello',
+      )
+
+    expect(result?.id).toBe('global-session')
+    expect(mockElectronAPI.session.create).toHaveBeenCalledWith({
+      contextKind: 'global',
+      providerId: 'claude-code',
+      model: 'sonnet',
+      effort: 'medium',
+      name: 'Global chat',
+    })
+    expect(mockElectronAPI.session.start).toHaveBeenCalledWith(
+      'global-session',
+      {
+        text: 'Hello',
+        attachmentIds: undefined,
+        skillSelections: undefined,
+        contextItemIds: undefined,
+      },
+    )
+    const state = useSessionStore.getState()
+    expect(state.activeSessionId).toBe(projectSession.id)
+    expect(state.activeProjectSessionId).toBe(projectSession.id)
+    expect(state.activeGlobalSessionId).toBe(globalSession.id)
+    expect(state.globalChatSessions[0]?.id).toBe(globalSession.id)
+    expect(state.globalSessions[0]?.id).toBe(globalSession.id)
+  })
+
+  it('preserves separate project and global active selections', () => {
+    const projectSession = makeSession({ id: 'project-session' })
+    const globalSession = makeGlobalSession({ id: 'global-session' })
+    useSessionStore.setState({
+      sessions: [projectSession],
+      globalSessions: [projectSession, globalSession],
+      globalChatSessions: [globalSession],
+      activeSessionId: projectSession.id,
+      activeProjectSessionId: projectSession.id,
+    })
+
+    useSessionStore.getState().setActiveGlobalSession(globalSession.id)
+
+    expect(useSessionStore.getState().activeSessionId).toBe(projectSession.id)
+    expect(useSessionStore.getState().activeProjectSessionId).toBe(
+      projectSession.id,
+    )
+    expect(useSessionStore.getState().activeGlobalSessionId).toBe(
+      globalSession.id,
+    )
+
+    useSessionStore.getState().setActiveSession(globalSession.id)
+
+    expect(useSessionStore.getState().activeSessionId).toBe(projectSession.id)
+    expect(useSessionStore.getState().activeGlobalSessionId).toBe(
+      globalSession.id,
+    )
   })
 
   it('upserts active conversation patches without reordering existing items', () => {
@@ -523,6 +656,51 @@ describe('useSessionStore', () => {
     expect(mockElectronAPI.session.setRecentIds).toHaveBeenCalledWith([
       'session-2',
     ])
+  })
+
+  it('deleteSession removes global sessions without requiring a project id', async () => {
+    useSessionStore.setState({
+      sessions: [makeSession({ id: 'project-session' })],
+      globalSessions: [
+        makeGlobalSession({ id: 'global-1' }),
+        makeGlobalSession({ id: 'global-2' }),
+      ],
+      globalChatSessions: [
+        makeGlobalSession({ id: 'global-1' }),
+        makeGlobalSession({ id: 'global-2' }),
+      ],
+      activeGlobalSessionId: 'global-1',
+      activeGlobalConversation: [
+        makeConversationItem({ id: 'item-1', sequence: 1 }),
+      ],
+      activeGlobalConversationSessionId: 'global-1',
+      recentSessionIds: ['global-1', 'project-session'],
+      needsYouDismissals: {
+        'global-1': {
+          updatedAt: '2026-01-01T00:00:00.000Z',
+          disposition: 'acknowledged',
+        },
+      },
+    })
+
+    await useSessionStore.getState().deleteSession('global-1', null)
+
+    const state = useSessionStore.getState()
+    expect(
+      mockElectronAPI.session.getSummariesByProjectId,
+    ).not.toHaveBeenCalled()
+    expect(state.sessions).toEqual([makeSession({ id: 'project-session' })])
+    expect(state.globalSessions.map((session) => session.id)).toEqual([
+      'global-2',
+    ])
+    expect(state.globalChatSessions.map((session) => session.id)).toEqual([
+      'global-2',
+    ])
+    expect(state.activeGlobalSessionId).toBeNull()
+    expect(state.activeGlobalConversation).toEqual([])
+    expect(state.activeGlobalConversationSessionId).toBeNull()
+    expect(state.needsYouDismissals).toEqual({})
+    expect(state.recentSessionIds).toEqual(['project-session'])
   })
 
   describe('fork actions', () => {

@@ -525,6 +525,10 @@ export function registerIpcHandlers(
     sessionService.getAllSummaries(),
   )
 
+  ipcMain.handle('session:getGlobalSummaries', () =>
+    sessionService.getGlobalSummaries(),
+  )
+
   ipcMain.handle('session:getNeedsYouDismissals', () =>
     parseNeedsYouDismissals(stateService.get(NEEDS_YOU_DISMISSALS_KEY)),
   )
@@ -700,10 +704,16 @@ export function registerIpcHandlers(
     mcpService.listByProjectId(projectId),
   )
 
+  ipcMain.handle('mcp:listGlobal', () => mcpService.listGlobal())
+
   ipcMain.handle(
     'skills:listByProjectId',
     (_event, projectId: string, options?: SkillCatalogOptions) =>
       skillsService.listByProjectId(projectId, options),
+  )
+
+  ipcMain.handle('skills:listGlobal', (_event, options?: SkillCatalogOptions) =>
+    skillsService.listGlobal(options),
   )
 
   ipcMain.handle('skills:readDetails', (_event, input: SkillDetailsRequest) =>

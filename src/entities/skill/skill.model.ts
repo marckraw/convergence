@@ -22,6 +22,9 @@ interface SkillActions {
     projectId: string,
     options?: SkillCatalogOptions,
   ) => Promise<ProjectSkillCatalog | null>
+  loadGlobalCatalog: (
+    options?: SkillCatalogOptions,
+  ) => Promise<ProjectSkillCatalog | null>
   selectSkill: (skillId: string | null) => void
   loadDetails: (
     projectId: string,
@@ -75,6 +78,37 @@ export const useSkillStore = create<SkillStore>((set) => ({
       set({
         isCatalogLoading: false,
         catalogError: errorMessage(error, 'Failed to load skills'),
+      })
+      return null
+    }
+  },
+
+  loadGlobalCatalog: async (options) => {
+    set({ isCatalogLoading: true, catalogError: null })
+    try {
+      const catalog = await skillApi.listGlobal(options)
+      set((state) => {
+        const hasSelectedSkill =
+          state.selectedSkillId !== null &&
+          catalog.providers.some((provider) =>
+            provider.skills.some((skill) => skill.id === state.selectedSkillId),
+          )
+
+        return {
+          catalog,
+          isCatalogLoading: false,
+          selectedSkillId: hasSelectedSkill ? state.selectedSkillId : null,
+          detailsBySkillId: options?.forceReload ? {} : state.detailsBySkillId,
+          detailsErrorBySkillId: options?.forceReload
+            ? {}
+            : state.detailsErrorBySkillId,
+        }
+      })
+      return catalog
+    } catch (error) {
+      set({
+        isCatalogLoading: false,
+        catalogError: errorMessage(error, 'Failed to load global skills'),
       })
       return null
     }
