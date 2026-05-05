@@ -398,6 +398,9 @@ export const Sidebar: FC<SidebarProps> = ({
             onSelectSession={onSelectGlobalSession}
             onArchiveSession={archiveSession}
             onUnarchiveSession={unarchiveSession}
+            onDeleteSession={(sessionId: string) =>
+              deleteSession(sessionId, null)
+            }
           />
         ) : (
           <>

@@ -41,6 +41,7 @@ describe('GlobalChatSessionList', () => {
           onSelectSession={onSelectSession}
           onArchiveSession={vi.fn()}
           onUnarchiveSession={vi.fn()}
+          onDeleteSession={vi.fn()}
         />
       </TooltipProvider>,
     )
@@ -66,6 +67,7 @@ describe('GlobalChatSessionList', () => {
           onSelectSession={vi.fn()}
           onArchiveSession={vi.fn()}
           onUnarchiveSession={vi.fn()}
+          onDeleteSession={vi.fn()}
         />
       </TooltipProvider>,
     )
@@ -73,5 +75,32 @@ describe('GlobalChatSessionList', () => {
     fireEvent.click(screen.getByRole('button', { name: /new chat/i }))
 
     expect(onNewSession).toHaveBeenCalled()
+  })
+
+  it('deletes a global chat session from the actions menu', async () => {
+    const onDeleteSession = vi.fn()
+
+    render(
+      <TooltipProvider>
+        <GlobalChatSessionList
+          sessions={[baseSession]}
+          activeSessionId={null}
+          onNewSession={vi.fn()}
+          onSelectSession={vi.fn()}
+          onArchiveSession={vi.fn()}
+          onUnarchiveSession={vi.fn()}
+          onDeleteSession={onDeleteSession}
+        />
+      </TooltipProvider>,
+    )
+
+    fireEvent.pointerDown(
+      screen.getByRole('button', {
+        name: /chat session actions planning chat/i,
+      }),
+    )
+    fireEvent.click(await screen.findByText('Delete session'))
+
+    expect(onDeleteSession).toHaveBeenCalledWith('global-session-1')
   })
 })

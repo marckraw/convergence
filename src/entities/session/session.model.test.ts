@@ -658,6 +658,51 @@ describe('useSessionStore', () => {
     ])
   })
 
+  it('deleteSession removes global sessions without requiring a project id', async () => {
+    useSessionStore.setState({
+      sessions: [makeSession({ id: 'project-session' })],
+      globalSessions: [
+        makeGlobalSession({ id: 'global-1' }),
+        makeGlobalSession({ id: 'global-2' }),
+      ],
+      globalChatSessions: [
+        makeGlobalSession({ id: 'global-1' }),
+        makeGlobalSession({ id: 'global-2' }),
+      ],
+      activeGlobalSessionId: 'global-1',
+      activeGlobalConversation: [
+        makeConversationItem({ id: 'item-1', sequence: 1 }),
+      ],
+      activeGlobalConversationSessionId: 'global-1',
+      recentSessionIds: ['global-1', 'project-session'],
+      needsYouDismissals: {
+        'global-1': {
+          updatedAt: '2026-01-01T00:00:00.000Z',
+          disposition: 'acknowledged',
+        },
+      },
+    })
+
+    await useSessionStore.getState().deleteSession('global-1', null)
+
+    const state = useSessionStore.getState()
+    expect(
+      mockElectronAPI.session.getSummariesByProjectId,
+    ).not.toHaveBeenCalled()
+    expect(state.sessions).toEqual([makeSession({ id: 'project-session' })])
+    expect(state.globalSessions.map((session) => session.id)).toEqual([
+      'global-2',
+    ])
+    expect(state.globalChatSessions.map((session) => session.id)).toEqual([
+      'global-2',
+    ])
+    expect(state.activeGlobalSessionId).toBeNull()
+    expect(state.activeGlobalConversation).toEqual([])
+    expect(state.activeGlobalConversationSessionId).toBeNull()
+    expect(state.needsYouDismissals).toEqual({})
+    expect(state.recentSessionIds).toEqual(['project-session'])
+  })
+
   describe('fork actions', () => {
     const sampleSummary = {
       topic: 'Auth refactor',

@@ -10,7 +10,13 @@ import {
   DropdownMenuTrigger,
 } from '@/shared/ui/dropdown-menu'
 import { cn } from '@/shared/lib/cn.pure'
-import { Archive, MessageSquarePlus, MoreHorizontal, Undo2 } from 'lucide-react'
+import {
+  Archive,
+  MessageSquarePlus,
+  MoreHorizontal,
+  Trash2,
+  Undo2,
+} from 'lucide-react'
 
 interface GlobalChatSessionListProps {
   sessions: SessionSummary[]
@@ -19,6 +25,7 @@ interface GlobalChatSessionListProps {
   onSelectSession: (id: string) => void
   onArchiveSession: (id: string) => void
   onUnarchiveSession: (id: string) => void
+  onDeleteSession: (id: string) => void
 }
 
 export const GlobalChatSessionList: FC<GlobalChatSessionListProps> = ({
@@ -28,6 +35,7 @@ export const GlobalChatSessionList: FC<GlobalChatSessionListProps> = ({
   onSelectSession,
   onArchiveSession,
   onUnarchiveSession,
+  onDeleteSession,
 }) => {
   const activeSessions = sessions.filter((session) => !session.archivedAt)
   const archivedSessions = sessions.filter((session) => session.archivedAt)
@@ -88,6 +96,13 @@ export const GlobalChatSessionList: FC<GlobalChatSessionListProps> = ({
               <span>Archive session</span>
             </DropdownMenuItem>
           )}
+          <DropdownMenuItem
+            className="gap-2 text-destructive focus:text-destructive"
+            onClick={() => onDeleteSession(session.id)}
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+            <span>Delete session</span>
+          </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
     </div>

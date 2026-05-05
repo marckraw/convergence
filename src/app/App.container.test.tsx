@@ -9,6 +9,7 @@ import {
 import { useProjectStore } from '@/entities/project'
 import { useWorkspaceStore } from '@/entities/workspace'
 import { useSessionStore, type SessionSummary } from '@/entities/session'
+import { useAppSurfaceStore } from '@/entities/app-surface'
 import { App } from './App.container'
 import { DEFAULT_PROJECT_SETTINGS } from '@/entities/project'
 
@@ -261,6 +262,7 @@ describe('App', () => {
       providers: [],
       error: null,
     })
+    useAppSurfaceStore.setState({ activeSurface: 'code' })
   })
 
   it('shows welcome message when no project', async () => {

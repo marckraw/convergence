@@ -5,8 +5,8 @@ import { ChatSurface } from '@/widgets/chat-surface'
 import { GlobalStatusBar } from '@/widgets/global-status-bar'
 import { WorkspaceLayout } from '@/widgets/workspace-layout'
 import { NotificationsOnboardingContainer } from '@/features/notifications-onboarding'
+import { useAppSurfaceStore } from '@/entities/app-surface'
 import { cn } from '@/shared/lib/cn.pure'
-import type { AppSurface } from '@/shared/types/app-surface.types'
 
 interface AppShellProps {
   activeSessionId: string | null
@@ -30,7 +30,8 @@ export const AppShell: FC<AppShellProps> = ({
   hasProject,
 }) => {
   const [sidebarWidth, setSidebarWidth] = useState(DEFAULT_SIDEBAR)
-  const [activeSurface, setActiveSurface] = useState<AppSurface>('code')
+  const activeSurface = useAppSurfaceStore((state) => state.activeSurface)
+  const setActiveSurface = useAppSurfaceStore((state) => state.setActiveSurface)
   const dragging = useRef(false)
 
   const handleSelectCodeSession = useCallback(

@@ -89,7 +89,7 @@ interface SessionActions {
   stopSession: (id: string) => Promise<void>
   archiveSession: (id: string) => Promise<void>
   unarchiveSession: (id: string) => Promise<void>
-  deleteSession: (id: string, projectId: string) => Promise<void>
+  deleteSession: (id: string, projectId?: string | null) => Promise<void>
   loadActiveConversation: (sessionId: string) => Promise<void>
   loadActiveGlobalConversation: (sessionId: string) => Promise<void>
   loadQueuedInputs: (sessionId: string) => Promise<void>
@@ -644,10 +644,12 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     }
   },
 
-  deleteSession: async (id: string, projectId: string) => {
+  deleteSession: async (id: string, projectId?: string | null) => {
     try {
       await sessionApi.delete(id)
-      const sessions = await sessionApi.getSummariesByProjectId(projectId)
+      const sessions = projectId
+        ? await sessionApi.getSummariesByProjectId(projectId)
+        : get().sessions
       const globalSessions = get().globalSessions.filter(
         (session) => session.id !== id,
       )

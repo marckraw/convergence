@@ -5,6 +5,7 @@ import { useNotificationsStore } from '@/entities/notifications'
 import { useProjectStore } from '@/entities/project'
 import { useSessionStore } from '@/entities/session'
 import { useWorkspaceStore } from '@/entities/workspace'
+import { useAppSurfaceStore } from '@/entities/app-surface'
 import type { Project } from '@/entities/project'
 import type { Session } from '@/entities/session'
 import {
@@ -100,6 +101,7 @@ describe('NotificationsToastHostContainer', () => {
       pulsingSessionIds: {},
     })
     useSessionStore.setState({ activeSessionId: null })
+    useAppSurfaceStore.setState({ activeSurface: 'code' })
   })
 
   afterEach(() => {
@@ -300,6 +302,45 @@ describe('NotificationsToastHostContainer', () => {
     expect(loadCurrentBranch).toHaveBeenCalledWith('/tmp/b')
     expect(loadSessions).toHaveBeenCalledWith('proj-b')
     expect(setActiveSession).toHaveBeenCalledWith('sess-77')
+  })
+
+  it('focus-session opens chat and selects a global session', async () => {
+    const setActiveSession = vi.fn()
+    const setActiveGlobalSession = vi.fn()
+    const session: Session = {
+      id: 'sess-global',
+      contextKind: 'global',
+      projectId: null,
+      workspaceId: null,
+      providerId: 'claude-code',
+      model: 'sonnet',
+      effort: 'medium',
+      name: 'Global chat',
+      status: 'completed',
+      attention: 'finished',
+      workingDirectory: '/tmp/convergence/global',
+      activity: null,
+      contextWindow: null,
+      archivedAt: null,
+      parentSessionId: null,
+      forkStrategy: null,
+      primarySurface: 'conversation' as const,
+      continuationToken: null,
+      lastSequence: 0,
+      createdAt: '2026-01-01T00:00:00.000Z',
+      updatedAt: '2026-01-01T00:00:00.000Z',
+    } as Session
+    useSessionStore.setState({
+      globalSessions: [session],
+      setActiveSession,
+      setActiveGlobalSession,
+    } as never)
+
+    await focusSessionAcrossProjects('sess-global')
+
+    expect(useAppSurfaceStore.getState().activeSurface).toBe('chat')
+    expect(setActiveGlobalSession).toHaveBeenCalledWith('sess-global')
+    expect(setActiveSession).not.toHaveBeenCalled()
   })
 
   it('focus-session is a no-op when the session id is unknown', async () => {
