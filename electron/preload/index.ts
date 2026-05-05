@@ -119,6 +119,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
     delete: (id: string) => ipcRenderer.invoke('reviewNotes:delete', id),
     previewPacket: (input: unknown) =>
       ipcRenderer.invoke('reviewNotes:previewPacket', input),
+    sendPacket: (input: unknown) =>
+      ipcRenderer.invoke('reviewNotes:sendPacket', input),
   },
   git: {
     getBranches: (repoPath: string) =>

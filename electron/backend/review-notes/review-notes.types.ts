@@ -46,6 +46,11 @@ export interface PreviewReviewNotePacketInput {
   noteIds?: string[]
 }
 
+export interface SendReviewNotePacketInput {
+  sessionId: string
+  noteIds?: string[]
+}
+
 export interface ReviewNotePacketSessionContext {
   sessionId: string
   projectName: string | null
@@ -68,6 +73,10 @@ export interface ReviewNotePacketPullRequestContext {
 export interface ReviewNotePacketPreview {
   noteCount: number
   text: string
+}
+
+export interface ReviewNotePacketSendResult extends ReviewNotePacketPreview {
+  sentNotes: ReviewNote[]
 }
 
 export function reviewNoteFromRow(row: ReviewNoteRow): ReviewNote {

@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { closeDatabase, getDatabase, resetDatabase } from '../database/database'
 import { ReviewNotesService } from './review-notes.service'
 
@@ -148,6 +148,57 @@ describe('ReviewNotesService', () => {
       noteIds: [draft.id],
     })
     expect(explicitPacket.noteCount).toBe(1)
+  })
+
+  it('sends a packet through the supplied session sender and marks included notes sent', async () => {
+    const included = service.create({
+      sessionId: 's1',
+      workspaceId: 'w1',
+      filePath: 'src/app.ts',
+      mode: 'working-tree',
+      newStartLine: 3,
+      selectedDiff: '+included',
+      body: 'Ask about this',
+    })
+    const excluded = service.create({
+      sessionId: 's1',
+      workspaceId: 'w1',
+      filePath: 'src/excluded.ts',
+      mode: 'working-tree',
+      newStartLine: 4,
+      selectedDiff: '+excluded',
+      body: 'Keep draft',
+    })
+    const sendMessage = vi.fn().mockResolvedValue(undefined)
+
+    const result = await service.sendPacket(
+      { sessionId: 's1', noteIds: [included.id] },
+      sendMessage,
+    )
+
+    expect(result.noteCount).toBe(1)
+    expect(sendMessage).toHaveBeenCalledWith(
+      's1',
+      expect.stringContaining('Ask about this'),
+    )
+    expect(result.sentNotes).toHaveLength(1)
+    expect(result.sentNotes[0]).toMatchObject({
+      id: included.id,
+      state: 'sent',
+    })
+    expect(result.sentNotes[0]?.sentAt).not.toBeNull()
+    expect(service.getById(included.id)?.state).toBe('sent')
+    expect(service.getById(excluded.id)?.state).toBe('draft')
+  })
+
+  it('does not send or mark notes when a packet has no notes', async () => {
+    const sendMessage = vi.fn().mockResolvedValue(undefined)
+
+    await expect(
+      service.sendPacket({ sessionId: 's1' }, sendMessage),
+    ).rejects.toThrow(/without review notes/)
+
+    expect(sendMessage).not.toHaveBeenCalled()
   })
 
   it('trims text fields and rejects empty body, path, and diff', () => {

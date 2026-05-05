@@ -325,9 +325,18 @@ interface PreviewReviewNotePacketInputData {
   noteIds?: string[]
 }
 
+interface SendReviewNotePacketInputData {
+  sessionId: string
+  noteIds?: string[]
+}
+
 interface ReviewNotePacketPreviewData {
   noteCount: number
   text: string
+}
+
+interface ReviewNotePacketSendResultData extends ReviewNotePacketPreviewData {
+  sentNotes: ReviewNoteData[]
 }
 
 interface CreateWorkspaceInput {
@@ -986,6 +995,9 @@ interface ElectronAPI {
     previewPacket: (
       input: PreviewReviewNotePacketInputData,
     ) => Promise<ReviewNotePacketPreviewData>
+    sendPacket: (
+      input: SendReviewNotePacketInputData,
+    ) => Promise<ReviewNotePacketSendResultData>
   }
   git: {
     getBranches: (repoPath: string) => Promise<string[]>

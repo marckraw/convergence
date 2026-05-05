@@ -105,6 +105,22 @@ describe('ChangedFilesPanel', () => {
             noteCount: 1,
             text: 'Please help me understand these local code review notes.',
           }),
+          sendPacket: vi
+            .fn()
+            .mockImplementation((input: { sessionId: string }) =>
+              Promise.resolve({
+                noteCount: 1,
+                text: 'Please help me understand these local code review notes.',
+                sentNotes: [
+                  makeReviewNote({
+                    id: 'note-app',
+                    sessionId: input.sessionId,
+                    state: 'sent',
+                    sentAt: '2026-01-01T00:00:01.000Z',
+                  }),
+                ],
+              }),
+            ),
         },
       },
       configurable: true,
@@ -311,6 +327,46 @@ describe('ChangedFilesPanel', () => {
       )
     })
     expect(reviewNotes.previewPacket).toHaveBeenCalledWith({
+      sessionId: session.id,
+    })
+  })
+
+  it('sends an AI review packet and marks sent notes in the tray', async () => {
+    const electronAPI = (
+      window as unknown as { electronAPI: Record<string, unknown> }
+    ).electronAPI
+    const reviewNotes = electronAPI.reviewNotes as Record<
+      string,
+      ReturnType<typeof vi.fn>
+    >
+    reviewNotes.listBySession.mockResolvedValue([
+      makeReviewNote({
+        id: 'note-app',
+        body: 'Question to send',
+      }),
+    ])
+
+    render(
+      <ChangedFilesPanel
+        session={session}
+        side="right"
+        expanded={false}
+        onClose={vi.fn()}
+        onToggleSide={vi.fn()}
+        onToggleExpanded={vi.fn()}
+      />,
+    )
+
+    await waitFor(() => {
+      expect(screen.getByText('Question to send')).toBeInTheDocument()
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: /ask ai/i }))
+
+    await waitFor(() => {
+      expect(screen.queryByText('1 draft note')).not.toBeInTheDocument()
+    })
+    expect(reviewNotes.sendPacket).toHaveBeenCalledWith({
       sessionId: session.id,
     })
   })

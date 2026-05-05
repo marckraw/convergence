@@ -5,6 +5,8 @@ import type {
   PreviewReviewNotePacketInput,
   ReviewNote,
   ReviewNotePacketPreview,
+  ReviewNotePacketSendResult,
+  SendReviewNotePacketInput,
   UpdateReviewNoteInput,
 } from './review-note.types'
 
@@ -26,6 +28,9 @@ interface ReviewNoteActions {
   previewPacket: (
     input: PreviewReviewNotePacketInput,
   ) => Promise<ReviewNotePacketPreview | null>
+  sendPacket: (
+    input: SendReviewNotePacketInput,
+  ) => Promise<ReviewNotePacketSendResult | null>
   clearError: () => void
 }
 
@@ -142,5 +147,37 @@ export const useReviewNoteStore = create<ReviewNoteStore>((set) => ({
     }
   },
 
+  sendPacket: async (input) => {
+    set({ error: null })
+    try {
+      const result = await reviewNoteApi.sendPacket(input)
+      set((state) => ({
+        packetPreviewBySessionId: {
+          ...state.packetPreviewBySessionId,
+          [input.sessionId]: {
+            noteCount: result.noteCount,
+            text: result.text,
+          },
+        },
+        notesBySessionId: {
+          ...state.notesBySessionId,
+          [input.sessionId]: mergeById(
+            state.notesBySessionId[input.sessionId] ?? [],
+            result.sentNotes,
+          ),
+        },
+      }))
+      return result
+    } catch (err) {
+      set({ error: errorMessage(err, 'Failed to send review packet') })
+      return null
+    }
+  },
+
   clearError: () => set({ error: null }),
 }))
+
+function mergeById<T extends { id: string }>(items: T[], updates: T[]): T[] {
+  const byId = new Map(updates.map((item) => [item.id, item]))
+  return items.map((item) => byId.get(item.id) ?? item)
+}

@@ -45,6 +45,7 @@ import type {
 import type {
   CreateReviewNoteInput,
   PreviewReviewNotePacketInput,
+  SendReviewNotePacketInput,
   UpdateReviewNoteInput,
 } from '../backend/review-notes/review-notes.types'
 import type { CreateWorkspaceInput } from '../backend/workspace/workspace.types'
@@ -410,6 +411,14 @@ export function registerIpcHandlers(
     'reviewNotes:previewPacket',
     (_event, input: PreviewReviewNotePacketInput) =>
       reviewNotesService.previewPacket(input),
+  )
+
+  ipcMain.handle(
+    'reviewNotes:sendPacket',
+    (_event, input: SendReviewNotePacketInput) =>
+      reviewNotesService.sendPacket(input, (sessionId, text) =>
+        sessionService.sendMessage(sessionId, { text }),
+      ),
   )
 
   // Git handlers

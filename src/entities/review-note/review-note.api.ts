@@ -3,6 +3,8 @@ import type {
   PreviewReviewNotePacketInput,
   ReviewNote,
   ReviewNotePacketPreview,
+  ReviewNotePacketSendResult,
+  SendReviewNotePacketInput,
   UpdateReviewNoteInput,
 } from './review-note.types'
 
@@ -23,4 +25,9 @@ export const reviewNoteApi = {
     input: PreviewReviewNotePacketInput,
   ): Promise<ReviewNotePacketPreview> =>
     window.electronAPI.reviewNotes.previewPacket(input),
+
+  sendPacket: (
+    input: SendReviewNotePacketInput,
+  ): Promise<ReviewNotePacketSendResult> =>
+    window.electronAPI.reviewNotes.sendPacket(input),
 }

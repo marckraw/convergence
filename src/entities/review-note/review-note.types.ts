@@ -44,7 +44,16 @@ export interface PreviewReviewNotePacketInput {
   noteIds?: string[]
 }
 
+export interface SendReviewNotePacketInput {
+  sessionId: string
+  noteIds?: string[]
+}
+
 export interface ReviewNotePacketPreview {
   noteCount: number
   text: string
+}
+
+export interface ReviewNotePacketSendResult extends ReviewNotePacketPreview {
+  sentNotes: ReviewNote[]
 }

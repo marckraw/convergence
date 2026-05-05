@@ -11,8 +11,10 @@ import {
   type PreviewReviewNotePacketInput,
   type ReviewNote,
   type ReviewNotePacketPreview,
+  type ReviewNotePacketSendResult,
   type ReviewNoteMode,
   type ReviewNoteState,
+  type SendReviewNotePacketInput,
   type UpdateReviewNoteInput,
 } from './review-notes.types'
 
@@ -154,11 +156,7 @@ export class ReviewNotesService {
 
   previewPacket(input: PreviewReviewNotePacketInput): ReviewNotePacketPreview {
     const session = this.getSessionPacketContext(input.sessionId)
-    const notes = this.listBySession(input.sessionId)
-    const noteIds = input.noteIds ? new Set(input.noteIds) : null
-    const selectedNotes = notes.filter((note) =>
-      noteIds ? noteIds.has(note.id) : note.state === 'draft',
-    )
+    const selectedNotes = this.resolvePacketNotes(input)
 
     return buildReviewNotePacket({
       notes: selectedNotes,
@@ -171,6 +169,24 @@ export class ReviewNotesService {
       },
       pullRequest: session.pullRequest,
     })
+  }
+
+  async sendPacket(
+    input: SendReviewNotePacketInput,
+    sendMessage: (sessionId: string, text: string) => Promise<void>,
+  ): Promise<ReviewNotePacketSendResult> {
+    const packet = this.previewPacket(input)
+    if (packet.noteCount === 0) {
+      throw new Error('Cannot send a review packet without review notes')
+    }
+
+    await sendMessage(input.sessionId, packet.text)
+    const sentNotes = this.markPacketNotesSent(input)
+
+    return {
+      ...packet,
+      sentNotes,
+    }
   }
 
   private assertSessionExists(sessionId: string): void {
@@ -189,6 +205,38 @@ export class ReviewNotesService {
     if (!row) {
       throw new Error(`Workspace not found: ${workspaceId}`)
     }
+  }
+
+  private resolvePacketNotes(
+    input: PreviewReviewNotePacketInput,
+  ): ReviewNote[] {
+    const notes = this.listBySession(input.sessionId)
+    const noteIds = input.noteIds ? new Set(input.noteIds) : null
+    return notes.filter((note) =>
+      noteIds ? noteIds.has(note.id) : note.state === 'draft',
+    )
+  }
+
+  private markPacketNotesSent(input: SendReviewNotePacketInput): ReviewNote[] {
+    const notes = this.resolvePacketNotes(input)
+    const tx = this.db.transaction((noteIds: string[]) => {
+      for (const noteId of noteIds) {
+        this.db
+          .prepare(
+            `UPDATE review_notes
+             SET state = 'sent',
+                 sent_at = COALESCE(sent_at, datetime('now')),
+                 updated_at = datetime('now')
+             WHERE id = ?`,
+          )
+          .run(noteId)
+      }
+    })
+    tx(notes.map((note) => note.id))
+
+    return notes
+      .map((note) => this.getById(note.id))
+      .filter((note): note is ReviewNote => note !== null)
   }
 
   private getSessionPacketContext(sessionId: string): {

@@ -14,6 +14,7 @@ import {
   PanelRight,
   Pencil,
   RefreshCw,
+  Send,
   Trash2,
   X,
 } from 'lucide-react'
@@ -101,6 +102,7 @@ export const ChangedFilesPanel: FC<ChangedFilesPanelProps> = ({
   const updateReviewNote = useReviewNoteStore((state) => state.updateNote)
   const deleteReviewNote = useReviewNoteStore((state) => state.deleteNote)
   const previewReviewPacket = useReviewNoteStore((state) => state.previewPacket)
+  const sendReviewPacket = useReviewNoteStore((state) => state.sendPacket)
   const reviewNoteGroups = useMemo(
     () => groupReviewNotesByFile(reviewNotes),
     [reviewNotes],
@@ -324,6 +326,12 @@ export const ChangedFilesPanel: FC<ChangedFilesPanelProps> = ({
     const preview = await previewReviewPacket({ sessionId: session.id })
     if (!preview) return
     setPacketPreviewOpen(true)
+  }
+
+  const handleSendReviewPacket = async () => {
+    const result = await sendReviewPacket({ sessionId: session.id })
+    if (!result) return
+    setPacketPreviewOpen(false)
   }
 
   const stopPanelControlEvent = (event: ReactMouseEvent) => {
@@ -562,6 +570,18 @@ export const ChangedFilesPanel: FC<ChangedFilesPanelProps> = ({
                       <p className="text-[10px] text-muted-foreground">
                         {draftReviewNoteCount} draft
                       </p>
+                    )}
+                    {draftReviewNoteCount > 0 && (
+                      <Button
+                        type="button"
+                        variant="default"
+                        size="sm"
+                        className="h-7 gap-1.5 px-2 text-xs"
+                        onClick={handleSendReviewPacket}
+                      >
+                        <Send className="h-3.5 w-3.5" />
+                        Ask AI
+                      </Button>
                     )}
                     {draftReviewNoteCount > 0 && (
                       <Button

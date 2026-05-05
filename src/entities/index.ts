@@ -20,7 +20,9 @@ export type {
   ReviewNote,
   ReviewNoteMode,
   ReviewNotePacketPreview,
+  ReviewNotePacketSendResult,
   ReviewNoteState,
+  SendReviewNotePacketInput,
   UpdateReviewNoteInput,
 } from './review-note'
 export { reviewNoteApi, useReviewNoteStore } from './review-note'
