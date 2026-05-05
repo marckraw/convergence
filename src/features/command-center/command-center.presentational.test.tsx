@@ -137,6 +137,40 @@ describe('CommandCenterPalette', () => {
     expect(screen.getByText('alpha')).toBeInTheDocument()
   })
 
+  it('resets the result viewport to the top when the query changes', () => {
+    const items: RankedItem[] = [
+      { item: session, score: 0.1 },
+      { item: project, score: 0.3 },
+    ]
+
+    const { rerender } = render(
+      <CommandCenterPalette
+        open
+        query="term"
+        view={{ mode: 'ranked', items }}
+        onOpenChange={() => {}}
+        onQueryChange={() => {}}
+        onSelect={() => {}}
+      />,
+    )
+
+    const scrolledList = screen.getByRole('listbox')
+    scrolledList.scrollTop = 240
+
+    rerender(
+      <CommandCenterPalette
+        open
+        query="terminal"
+        view={{ mode: 'ranked', items }}
+        onOpenChange={() => {}}
+        onQueryChange={() => {}}
+        onSelect={() => {}}
+      />,
+    )
+
+    expect(screen.getByRole('listbox')).toHaveProperty('scrollTop', 0)
+  })
+
   it('shows a hint when ranked view has no hits', () => {
     render(
       <CommandCenterPalette
