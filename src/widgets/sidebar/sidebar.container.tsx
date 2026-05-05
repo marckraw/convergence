@@ -194,12 +194,18 @@ export const Sidebar: FC<SidebarProps> = ({
       return right.session.updatedAt.localeCompare(left.session.updatedAt)
     })
 
-  const waitingSessions = attentionSessions.filter(
+  const visibleAttentionSessions = attentionSessions.filter(({ session }) =>
+    activeSurface === 'chat'
+      ? session.contextKind === 'global'
+      : session.contextKind === 'project',
+  )
+
+  const waitingSessions = visibleAttentionSessions.filter(
     ({ session }) =>
       session.attention === 'needs-approval' ||
       session.attention === 'needs-input',
   )
-  const reviewSessions = attentionSessions.filter(
+  const reviewSessions = visibleAttentionSessions.filter(
     ({ session }) =>
       session.attention === 'finished' || session.attention === 'failed',
   )
@@ -210,6 +216,10 @@ export const Sidebar: FC<SidebarProps> = ({
     onSelectSurface(target?.contextKind === 'global' ? 'chat' : 'code')
     if (target?.workspaceId) {
       expandWorkspace(target.workspaceId)
+    }
+    if (target?.contextKind === 'global') {
+      onSelectGlobalSession(sessionId)
+      return
     }
     onSelectSession(sessionId)
   }
@@ -367,14 +377,16 @@ export const Sidebar: FC<SidebarProps> = ({
         <NeedsYou
           waitingSessions={waitingSessions}
           reviewSessions={reviewSessions}
-          activeSessionId={activeSessionId}
+          activeSessionId={
+            activeSurface === 'chat' ? activeGlobalSessionId : activeSessionId
+          }
           pulsingSessionIds={pulsingSessionIds}
           onSelect={handleSelectNeedsYouSession}
           onDismiss={dismissNeedsYouSession}
           onArchive={archiveSession}
         />
 
-        {attentionSessions.length > 0 && (
+        {visibleAttentionSessions.length > 0 && (
           <div className="mx-3 mb-3 border-t border-border/50" />
         )}
 
@@ -437,25 +449,29 @@ export const Sidebar: FC<SidebarProps> = ({
       </div>
 
       <div className="app-sidebar-footer border-t border-white/10 p-3">
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={createProject}
-          className="w-full"
-        >
-          <Plus className="h-4 w-4" />
-          Open a project
-        </Button>
-        <div className="mt-2">
-          <InitiativeWorkboardDialogContainer />
-        </div>
-        <div className="mt-2">
-          <ProjectSettingsDialogContainer
-            contextSection={(projectId) => (
-              <ProjectContextSettings projectId={projectId} />
-            )}
-          />
-        </div>
+        {activeSurface === 'code' ? (
+          <>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={createProject}
+              className="w-full"
+            >
+              <Plus className="h-4 w-4" />
+              Open a project
+            </Button>
+            <div className="mt-2">
+              <InitiativeWorkboardDialogContainer />
+            </div>
+            <div className="mt-2">
+              <ProjectSettingsDialogContainer
+                contextSection={(projectId) => (
+                  <ProjectContextSettings projectId={projectId} />
+                )}
+              />
+            </div>
+          </>
+        ) : null}
         <div className="mt-2">
           <ProviderStatusDialogContainer />
         </div>
@@ -470,7 +486,7 @@ export const Sidebar: FC<SidebarProps> = ({
         </div>
       </div>
 
-      <WorkspaceCreateDialogContainer />
+      {activeSurface === 'code' ? <WorkspaceCreateDialogContainer /> : null}
     </div>
   )
 }

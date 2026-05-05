@@ -1,8 +1,14 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest'
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import {
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from '@testing-library/react'
 import { useProjectStore } from '@/entities/project'
 import { useWorkspaceStore } from '@/entities/workspace'
-import { useSessionStore } from '@/entities/session'
+import { useSessionStore, type SessionSummary } from '@/entities/session'
 import { App } from './App.container'
 import { DEFAULT_PROJECT_SETTINGS } from '@/entities/project'
 
@@ -18,6 +24,45 @@ const mockProject = {
   settings: DEFAULT_PROJECT_SETTINGS,
   createdAt: '2026-01-01T00:00:00.000Z',
   updatedAt: '2026-01-01T00:00:00.000Z',
+}
+
+function makeSessionSummary(
+  overrides: Partial<SessionSummary> & Pick<SessionSummary, 'id' | 'name'>,
+): SessionSummary {
+  const { id, name, ...rest } = overrides
+
+  return {
+    id,
+    contextKind: 'project',
+    projectId: '1',
+    workspaceId: null,
+    providerId: 'claude-code',
+    model: 'sonnet',
+    effort: 'medium',
+    name,
+    status: 'completed',
+    attention: 'finished',
+    activity: null,
+    contextWindow: null,
+    workingDirectory: '/tmp/my-project',
+    archivedAt: null,
+    parentSessionId: null,
+    forkStrategy: null,
+    primarySurface: 'conversation',
+    continuationToken: null,
+    lastSequence: 0,
+    createdAt: '2026-01-01T00:00:00.000Z',
+    updatedAt: '2026-01-01T00:00:00.000Z',
+    ...rest,
+  }
+}
+
+function getSidebarQueries() {
+  const sidebar = document.querySelector('.app-sidebar-panel')
+  if (!(sidebar instanceof HTMLElement)) {
+    throw new Error('Sidebar panel not found')
+  }
+  return within(sidebar)
 }
 
 const mockElectronAPI = {
@@ -171,6 +216,16 @@ const mockElectronAPI = {
 describe('App', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    mockElectronAPI.project.getActive.mockResolvedValue(null)
+    mockElectronAPI.project.getAll.mockResolvedValue([])
+    mockElectronAPI.workspace.getByProjectId.mockResolvedValue([])
+    mockElectronAPI.git.getBranches.mockResolvedValue([])
+    mockElectronAPI.git.getCurrentBranch.mockResolvedValue('main')
+    mockElectronAPI.session.getAllSummaries.mockResolvedValue([])
+    mockElectronAPI.session.getGlobalSummaries.mockResolvedValue([])
+    mockElectronAPI.session.getSummariesByProjectId.mockResolvedValue([])
+    mockElectronAPI.session.getNeedsYouDismissals.mockResolvedValue({})
+    mockElectronAPI.session.getRecentIds.mockResolvedValue([])
     Object.defineProperty(window, 'electronAPI', {
       value: mockElectronAPI,
       writable: true,
@@ -238,8 +293,56 @@ describe('App', () => {
 
     fireEvent.click(chatSurfaceButton)
 
+    const sidebar = getSidebarQueries()
+
     expect(screen.getByText('Convergence Chat')).toBeInTheDocument()
-    expect(screen.getByText('No chats yet')).toBeInTheDocument()
+    expect(sidebar.getByText('No chats yet')).toBeInTheDocument()
+    expect(
+      sidebar.queryByRole('button', { name: /open a project/i }),
+    ).toBeNull()
+    expect(sidebar.queryByText('Initiatives')).toBeNull()
+    expect(sidebar.queryByText('Project Settings')).toBeNull()
+    expect(sidebar.getByText('Providers')).toBeInTheDocument()
+    expect(sidebar.getByText('MCP Servers')).toBeInTheDocument()
+    expect(sidebar.getByText('Skills')).toBeInTheDocument()
+  })
+
+  it('filters attention to global sessions in the chat surface', async () => {
+    const projectSession = makeSessionSummary({
+      id: 'project-session-1',
+      name: 'Project Needs Review',
+      contextKind: 'project',
+      projectId: '1',
+    })
+    const globalSession = makeSessionSummary({
+      id: 'global-session-1',
+      name: 'Chat Needs Review',
+      contextKind: 'global',
+      projectId: null,
+      workspaceId: null,
+      workingDirectory: '/tmp/convergence/global',
+    })
+    mockElectronAPI.session.getAllSummaries.mockResolvedValue([
+      projectSession,
+      globalSession,
+    ])
+    mockElectronAPI.session.getGlobalSummaries.mockResolvedValue([
+      globalSession,
+    ])
+
+    render(<App />)
+
+    await waitFor(() => {
+      expect(
+        getSidebarQueries().getByText('Project Needs Review'),
+      ).toBeInTheDocument()
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: 'Show chat surface' }))
+
+    const sidebar = getSidebarQueries()
+    expect(sidebar.getAllByText('Chat Needs Review').length).toBeGreaterThan(0)
+    expect(sidebar.queryByText('Project Needs Review')).toBeNull()
   })
 
   it('shows loading state', () => {
