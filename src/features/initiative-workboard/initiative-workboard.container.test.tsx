@@ -165,6 +165,7 @@ describe('InitiativeWorkboardDialogContainer', () => {
       globalSessions: [
         {
           id: 's1',
+          contextKind: 'project',
           projectId: 'p1',
           workspaceId: 'w1',
           providerId: 'codex',

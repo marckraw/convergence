@@ -27,6 +27,7 @@ vi.mock('@tanstack/react-virtual', () => ({
 
 const baseSession: Session = {
   id: 'session-1',
+  contextKind: 'project',
   projectId: 'project-1',
   workspaceId: 'workspace-1',
   providerId: 'claude-code',

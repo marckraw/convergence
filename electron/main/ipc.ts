@@ -484,6 +484,10 @@ export function registerIpcHandlers(
     sessionService.getAllSummaries(),
   )
 
+  ipcMain.handle('session:getGlobalSummaries', () =>
+    sessionService.getGlobalSummaries(),
+  )
+
   ipcMain.handle('session:getNeedsYouDismissals', () =>
     parseNeedsYouDismissals(stateService.get(NEEDS_YOU_DISMISSALS_KEY)),
   )

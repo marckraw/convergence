@@ -43,6 +43,7 @@ interface ComposerProps {
   skillOptions: SkillCatalogEntry[]
   selectedSkills: SkillSelection[]
   contextPickerOpen: boolean
+  projectContextEnabled?: boolean
   projectContextItems: ProjectContextItem[]
   selectedContextItems: ProjectContextItem[]
   skillCatalogLoading: boolean
@@ -99,6 +100,7 @@ export const Composer: FC<ComposerProps> = ({
   skillOptions,
   selectedSkills,
   contextPickerOpen,
+  projectContextEnabled = true,
   projectContextItems,
   selectedContextItems,
   skillCatalogLoading,
@@ -241,7 +243,7 @@ export const Composer: FC<ComposerProps> = ({
             ))}
           </div>
         ) : null}
-        {selectedContextItems.length > 0 ? (
+        {projectContextEnabled && selectedContextItems.length > 0 ? (
           <div
             className="mb-2 flex flex-wrap gap-1.5"
             data-testid="selected-project-context-row"
@@ -269,7 +271,7 @@ export const Composer: FC<ComposerProps> = ({
             ))}
           </div>
         ) : null}
-        {everyTurnContextCount > 0 ? (
+        {projectContextEnabled && everyTurnContextCount > 0 ? (
           <div
             className="mb-2 inline-flex items-center gap-1 rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-[11px] font-medium text-amber-700 dark:text-amber-200"
             data-testid="every-turn-context-badge"
@@ -284,7 +286,7 @@ export const Composer: FC<ComposerProps> = ({
         ) : null}
         <div className="relative">
           <ComposerContextMentionPicker
-            open={mentionPickerOpen}
+            open={projectContextEnabled && mentionPickerOpen}
             items={mentionItems}
             highlightedIndex={mentionHighlightedIndex}
             onSelect={(item) => onMentionSelect?.(item)}
@@ -340,14 +342,16 @@ export const Composer: FC<ComposerProps> = ({
               onToggleSkill={onSkillToggle}
               onBrowseAll={onSkillsBrowse}
             />
-            <ProjectContextPicker
-              open={contextPickerOpen}
-              onOpenChange={onContextPickerOpenChange}
-              items={projectContextItems}
-              selectedIds={selectedContextItems.map((item) => item.id)}
-              disabled={disabled || selectionDisabled}
-              onToggleItem={onContextToggle}
-            />
+            {projectContextEnabled ? (
+              <ProjectContextPicker
+                open={contextPickerOpen}
+                onOpenChange={onContextPickerOpenChange}
+                items={projectContextItems}
+                selectedIds={selectedContextItems.map((item) => item.id)}
+                disabled={disabled || selectionDisabled}
+                onToggleItem={onContextToggle}
+              />
+            ) : null}
             <ComposerSelect
               selectedId={selection.providerId}
               value={selection.providerLabel || 'Select provider'}

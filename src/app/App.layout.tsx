@@ -1,14 +1,18 @@
 import { useState, useCallback, useRef } from 'react'
 import type { FC } from 'react'
 import { Sidebar } from '@/widgets/sidebar'
+import { ChatSurface } from '@/widgets/chat-surface'
 import { GlobalStatusBar } from '@/widgets/global-status-bar'
 import { WorkspaceLayout } from '@/widgets/workspace-layout'
 import { NotificationsOnboardingContainer } from '@/features/notifications-onboarding'
 import { cn } from '@/shared/lib/cn.pure'
+import type { AppSurface } from '@/shared/types/app-surface.types'
 
 interface AppShellProps {
   activeSessionId: string | null
+  activeGlobalSessionId: string | null
   onSelectSession: (id: string) => void
+  onSelectGlobalSession: (id: string | null) => void
   loading: boolean
   hasProject: boolean
 }
@@ -19,12 +23,36 @@ const DEFAULT_SIDEBAR = 260
 
 export const AppShell: FC<AppShellProps> = ({
   activeSessionId,
+  activeGlobalSessionId,
   onSelectSession,
+  onSelectGlobalSession,
   loading,
   hasProject,
 }) => {
   const [sidebarWidth, setSidebarWidth] = useState(DEFAULT_SIDEBAR)
+  const [activeSurface, setActiveSurface] = useState<AppSurface>('code')
   const dragging = useRef(false)
+
+  const handleSelectCodeSession = useCallback(
+    (id: string) => {
+      setActiveSurface('code')
+      onSelectSession(id)
+    },
+    [onSelectSession],
+  )
+
+  const handleSelectGlobalSession = useCallback(
+    (id: string) => {
+      setActiveSurface('chat')
+      onSelectGlobalSession(id)
+    },
+    [onSelectGlobalSession],
+  )
+
+  const handleNewGlobalSession = useCallback(() => {
+    setActiveSurface('chat')
+    onSelectGlobalSession(null)
+  }, [onSelectGlobalSession])
 
   const handleMouseDown = useCallback(() => {
     dragging.current = true
@@ -65,8 +93,13 @@ export const AppShell: FC<AppShellProps> = ({
           style={{ width: sidebarWidth }}
         >
           <Sidebar
-            onSelectSession={onSelectSession}
+            activeSurface={activeSurface}
+            onSelectSurface={setActiveSurface}
+            onSelectSession={handleSelectCodeSession}
             activeSessionId={activeSessionId}
+            onSelectGlobalSession={handleSelectGlobalSession}
+            onNewGlobalSession={handleNewGlobalSession}
+            activeGlobalSessionId={activeGlobalSessionId}
           />
         </div>
 
@@ -79,7 +112,9 @@ export const AppShell: FC<AppShellProps> = ({
         />
 
         <div className="app-main-panel flex min-w-0 flex-1 flex-col">
-          {hasProject ? (
+          {activeSurface === 'chat' ? (
+            <ChatSurface />
+          ) : hasProject ? (
             <>
               <NotificationsOnboardingContainer />
               <div className="min-h-0 flex-1">

@@ -57,6 +57,8 @@ export type ForkStrategy = 'full' | 'summary'
 
 export type PrimarySurface = 'conversation' | 'terminal'
 
+export type SessionContextKind = 'project' | 'global'
+
 export type ProviderKind = 'conversation' | 'shell'
 
 export type NeedsYouDisposition = 'snoozed' | 'acknowledged'
@@ -182,7 +184,8 @@ export interface QueuedInputPatchEvent {
 
 export interface SessionSummary {
   id: string
-  projectId: string
+  contextKind: SessionContextKind
+  projectId: string | null
   workspaceId: string | null
   providerId: string
   model: string | null

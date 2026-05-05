@@ -63,6 +63,7 @@ function makeSession(
 ): Session {
   return {
     id,
+    contextKind: 'project',
     projectId,
     workspaceId,
     providerId: 'claude-code',

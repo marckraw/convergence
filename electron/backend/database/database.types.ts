@@ -14,7 +14,8 @@ export interface AppStateRow {
 
 export interface SessionRow {
   id: string
-  project_id: string
+  context_kind: string
+  project_id: string | null
   workspace_id: string | null
   provider_id: string
   model: string | null

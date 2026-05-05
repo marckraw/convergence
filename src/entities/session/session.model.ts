@@ -26,13 +26,18 @@ const RECENT_SESSIONS_CAP = 10
 interface SessionState {
   sessions: SessionSummary[]
   globalSessions: SessionSummary[]
+  globalChatSessions: SessionSummary[]
   activeConversation: ConversationItem[]
   activeConversationSessionId: string | null
+  activeGlobalConversation: ConversationItem[]
+  activeGlobalConversationSessionId: string | null
   queuedInputsBySessionId: Record<string, SessionQueuedInput[]>
   needsYouDismissals: NeedsYouDismissals
   recentSessionIds: string[]
   currentProjectId: string | null
   activeSessionId: string | null
+  activeProjectSessionId: string | null
+  activeGlobalSessionId: string | null
   draftWorkspaceId: string | null
   providers: ProviderInfo[]
   error: string | null
@@ -41,6 +46,7 @@ interface SessionState {
 interface SessionActions {
   loadSessions: (projectId: string) => Promise<void>
   loadGlobalSessions: () => Promise<void>
+  loadGlobalChatSessions: () => Promise<void>
   loadRecents: () => Promise<void>
   recordRecentSession: (id: string) => void
   loadProviders: () => Promise<void>
@@ -57,6 +63,15 @@ interface SessionActions {
     skillSelections?: SkillSelection[],
     contextItemIds?: string[],
   ) => Promise<void>
+  createAndStartGlobalSession: (
+    providerId: string,
+    model: string | null,
+    effort: ReasoningEffort | null,
+    name: string,
+    message: string,
+    attachmentIds?: string[],
+    skillSelections?: SkillSelection[],
+  ) => Promise<SessionSummary | null>
   createTerminalSession: (
     projectId: string,
     workspaceId: string | null,
@@ -76,11 +91,13 @@ interface SessionActions {
   unarchiveSession: (id: string) => Promise<void>
   deleteSession: (id: string, projectId: string) => Promise<void>
   loadActiveConversation: (sessionId: string) => Promise<void>
+  loadActiveGlobalConversation: (sessionId: string) => Promise<void>
   loadQueuedInputs: (sessionId: string) => Promise<void>
   cancelQueuedInput: (id: string) => Promise<void>
   prepareForProject: (projectId: string | null) => void
   beginSessionDraft: (workspaceId: string | null) => void
   setActiveSession: (id: string | null) => void
+  setActiveGlobalSession: (id: string | null) => void
   handleSessionSummaryUpdate: (summary: SessionSummary) => void
   handleConversationPatched: (event: ConversationPatchEvent) => void
   handleQueuedInputPatched: (event: QueuedInputPatchEvent) => void
@@ -146,6 +163,21 @@ function upsertSummary(
     : [summary, ...sessions]
 }
 
+function findSummaryById(
+  state: Pick<
+    SessionState,
+    'sessions' | 'globalSessions' | 'globalChatSessions'
+  >,
+  id: string,
+): SessionSummary | null {
+  return (
+    state.sessions.find((session) => session.id === id) ??
+    state.globalChatSessions.find((session) => session.id === id) ??
+    state.globalSessions.find((session) => session.id === id) ??
+    null
+  )
+}
+
 function upsertConversationItem(
   items: ConversationItem[],
   nextItem: ConversationItem,
@@ -209,13 +241,18 @@ function persistRecents(ids: string[]): void {
 export const useSessionStore = create<SessionStore>((set, get) => ({
   sessions: [],
   globalSessions: [],
+  globalChatSessions: [],
   activeConversation: [],
   activeConversationSessionId: null,
+  activeGlobalConversation: [],
+  activeGlobalConversationSessionId: null,
   queuedInputsBySessionId: {},
   needsYouDismissals: {},
   recentSessionIds: [],
   currentProjectId: null,
   activeSessionId: null,
+  activeProjectSessionId: null,
+  activeGlobalSessionId: null,
   draftWorkspaceId: null,
   providers: [],
   error: null,
@@ -227,6 +264,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
         currentProjectId: projectId,
         sessions: [],
         activeSessionId: null,
+        activeProjectSessionId: null,
         activeConversation: [],
         activeConversationSessionId: null,
         queuedInputsBySessionId: {},
@@ -242,6 +280,11 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
         (session) => session.id === state.activeSessionId,
       )
         ? state.activeSessionId
+        : null,
+      activeProjectSessionId: sessions.some(
+        (session) => session.id === state.activeProjectSessionId,
+      )
+        ? state.activeProjectSessionId
         : null,
       activeConversation: sessions.some(
         (session) => session.id === state.activeSessionId,
@@ -279,6 +322,28 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
       globalSessions,
       needsYouDismissals: nextDismissals,
     })
+  },
+
+  loadGlobalChatSessions: async () => {
+    const globalChatSessions = await sessionApi.getGlobalSummaries()
+    set((state) => ({
+      globalChatSessions,
+      activeGlobalSessionId: globalChatSessions.some(
+        (session) => session.id === state.activeGlobalSessionId,
+      )
+        ? state.activeGlobalSessionId
+        : null,
+      activeGlobalConversation: globalChatSessions.some(
+        (session) => session.id === state.activeGlobalSessionId,
+      )
+        ? state.activeGlobalConversation
+        : [],
+      activeGlobalConversationSessionId: globalChatSessions.some(
+        (session) => session.id === state.activeGlobalSessionId,
+      )
+        ? state.activeGlobalConversationSessionId
+        : null,
+    }))
   },
 
   loadRecents: async () => {
@@ -400,6 +465,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
           ),
         ),
         activeSessionId: session.id,
+        activeProjectSessionId: session.id,
         draftWorkspaceId: null,
       }))
       get().recordRecentSession(session.id)
@@ -408,6 +474,58 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
       set({
         error: err instanceof Error ? err.message : 'Failed to start session',
       })
+    }
+  },
+
+  createAndStartGlobalSession: async (
+    providerId,
+    model,
+    effort,
+    name,
+    message,
+    attachmentIds,
+    skillSelections,
+  ) => {
+    set({ error: null })
+    try {
+      const session = await sessionApi.create({
+        contextKind: 'global',
+        providerId,
+        model,
+        effort,
+        name,
+      })
+      await sessionApi.start(
+        session.id,
+        message,
+        attachmentIds,
+        skillSelections,
+      )
+      set((state) => ({
+        globalChatSessions: [session, ...state.globalChatSessions],
+        globalSessions: [session, ...state.globalSessions],
+        activeGlobalConversation: [],
+        activeGlobalConversationSessionId: session.id,
+        queuedInputsBySessionId: {
+          ...state.queuedInputsBySessionId,
+          [session.id]: [],
+        },
+        needsYouDismissals: Object.fromEntries(
+          Object.entries(state.needsYouDismissals).filter(
+            ([sessionId]) => sessionId !== session.id,
+          ),
+        ),
+        activeGlobalSessionId: session.id,
+      }))
+      get().recordRecentSession(session.id)
+      void get().loadActiveGlobalConversation(session.id)
+      return session
+    } catch (err) {
+      set({
+        error:
+          err instanceof Error ? err.message : 'Failed to start global session',
+      })
+      return null
     }
   },
 
@@ -435,6 +553,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
         [session.id]: [],
       },
       activeSessionId: session.id,
+      activeProjectSessionId: session.id,
       draftWorkspaceId: null,
     }))
     get().recordRecentSession(session.id)
@@ -532,7 +651,11 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
       const globalSessions = get().globalSessions.filter(
         (session) => session.id !== id,
       )
+      const globalChatSessions = get().globalChatSessions.filter(
+        (session) => session.id !== id,
+      )
       const { activeSessionId } = get()
+      const { activeGlobalSessionId } = get()
       const nextDismissals = removeNeedsYouDismissal(
         get().needsYouDismissals,
         id,
@@ -548,14 +671,25 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
       set({
         sessions,
         globalSessions,
+        globalChatSessions,
         needsYouDismissals: nextDismissals,
         recentSessionIds: nextRecents,
         queuedInputsBySessionId,
         activeSessionId: activeSessionId === id ? null : activeSessionId,
+        activeProjectSessionId:
+          activeSessionId === id ? null : get().activeProjectSessionId,
+        activeGlobalSessionId:
+          activeGlobalSessionId === id ? null : activeGlobalSessionId,
         activeConversation:
           activeSessionId === id ? [] : get().activeConversation,
         activeConversationSessionId:
           activeSessionId === id ? null : get().activeConversationSessionId,
+        activeGlobalConversation:
+          activeGlobalSessionId === id ? [] : get().activeGlobalConversation,
+        activeGlobalConversationSessionId:
+          activeGlobalSessionId === id
+            ? null
+            : get().activeGlobalConversationSessionId,
         draftWorkspaceId:
           activeSessionId === id ? null : get().draftWorkspaceId,
       })
@@ -581,10 +715,23 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     )
   },
 
+  loadActiveGlobalConversation: async (sessionId: string) => {
+    const conversation = await sessionApi.getConversation(sessionId)
+    set((state) =>
+      state.activeGlobalSessionId === sessionId
+        ? {
+            activeGlobalConversation: conversation,
+            activeGlobalConversationSessionId: sessionId,
+          }
+        : {},
+    )
+  },
+
   loadQueuedInputs: async (sessionId: string) => {
     const queuedInputs = await sessionApi.getQueuedInputs(sessionId)
     set((state) =>
-      state.activeSessionId === sessionId
+      state.activeSessionId === sessionId ||
+      state.activeGlobalSessionId === sessionId
         ? {
             queuedInputsBySessionId: {
               ...state.queuedInputsBySessionId,
@@ -612,6 +759,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
       currentProjectId: projectId,
       sessions: [],
       activeSessionId: null,
+      activeProjectSessionId: null,
       activeConversation: [],
       activeConversationSessionId: null,
       queuedInputsBySessionId: {},
@@ -621,6 +769,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
   beginSessionDraft: (workspaceId) =>
     set({
       activeSessionId: null,
+      activeProjectSessionId: null,
       activeConversation: [],
       activeConversationSessionId: null,
       queuedInputsBySessionId: {},
@@ -628,8 +777,15 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     }),
 
   setActiveSession: (id) => {
+    const target = id ? findSummaryById(get(), id) : null
+    if (target?.contextKind === 'global') {
+      get().setActiveGlobalSession(id)
+      return
+    }
+
     set((state) => ({
       activeSessionId: id,
+      activeProjectSessionId: id,
       activeConversation:
         id !== null && state.activeConversationSessionId === id
           ? state.activeConversation
@@ -644,13 +800,37 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     }
   },
 
+  setActiveGlobalSession: (id) => {
+    set((state) => ({
+      activeGlobalSessionId: id,
+      activeGlobalConversation:
+        id !== null && state.activeGlobalConversationSessionId === id
+          ? state.activeGlobalConversation
+          : [],
+      activeGlobalConversationSessionId: id,
+    }))
+    if (id !== null) {
+      get().recordRecentSession(id)
+      void get().loadActiveGlobalConversation(id)
+      void get().loadQueuedInputs(id)
+    }
+  },
+
   handleSessionSummaryUpdate: (session: SessionSummary) => {
     const currentProjectId = get().currentProjectId
     const state = get()
     const nextGlobalSessions = upsertSummary(state.globalSessions, session)
+    const nextGlobalChatSessions =
+      session.contextKind === 'global'
+        ? upsertSummary(state.globalChatSessions, session)
+        : state.globalChatSessions.some((entry) => entry.id === session.id)
+          ? state.globalChatSessions.filter((entry) => entry.id !== session.id)
+          : state.globalChatSessions
     const nextSessions =
       state.sessions.some((s) => s.id === session.id) ||
-      (currentProjectId && session.projectId === currentProjectId)
+      (session.contextKind === 'project' &&
+        currentProjectId &&
+        session.projectId === currentProjectId)
         ? upsertSummary(state.sessions, session)
         : state.sessions
     const nextDismissals = pruneNeedsYouDismissals(
@@ -661,6 +841,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     set({
       needsYouDismissals: nextDismissals,
       globalSessions: nextGlobalSessions,
+      globalChatSessions: nextGlobalChatSessions,
       sessions: nextSessions,
     })
 
@@ -682,7 +863,15 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
   handleConversationPatched: (event: ConversationPatchEvent) => {
     set((state) => {
       if (state.activeSessionId !== event.sessionId) {
-        return {}
+        return state.activeGlobalSessionId === event.sessionId
+          ? {
+              activeGlobalConversation: upsertConversationItem(
+                state.activeGlobalConversation,
+                event.item,
+              ),
+              activeGlobalConversationSessionId: event.sessionId,
+            }
+          : {}
       }
 
       return {
@@ -725,6 +914,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
         [session.id]: [],
       },
       activeSessionId: session.id,
+      activeProjectSessionId: session.id,
       draftWorkspaceId: null,
     }))
     get().recordRecentSession(session.id)
@@ -747,6 +937,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
         [session.id]: [],
       },
       activeSessionId: session.id,
+      activeProjectSessionId: session.id,
       draftWorkspaceId: null,
     }))
     get().recordRecentSession(session.id)

@@ -8,6 +8,7 @@ import { SessionNamingService } from './session-naming.service'
 function baseSession(overrides: Partial<SessionSummary> = {}): SessionSummary {
   return {
     id: 's1',
+    contextKind: 'project',
     projectId: 'p1',
     workspaceId: null,
     providerId: 'claude-code',

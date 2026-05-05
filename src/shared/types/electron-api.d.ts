@@ -550,9 +550,12 @@ type TurnDeltaData =
       fileChanges: TurnFileChangeData[]
     }
 
+type SessionContextKindData = 'project' | 'global'
+
 interface SessionSummaryData {
   id: string
-  projectId: string
+  contextKind: SessionContextKindData
+  projectId: string | null
   workspaceId: string | null
   providerId: string
   model: string | null
@@ -574,8 +577,9 @@ interface SessionSummaryData {
 }
 
 interface CreateSessionInput {
-  projectId: string
-  workspaceId: string | null
+  contextKind?: SessionContextKindData
+  projectId?: string | null
+  workspaceId?: string | null
   providerId: string
   model: string | null
   effort: ReasoningEffort | null
@@ -942,6 +946,7 @@ interface ElectronAPI {
       projectId: string,
     ) => Promise<SessionSummaryData[]>
     getAllSummaries: () => Promise<SessionSummaryData[]>
+    getGlobalSummaries: () => Promise<SessionSummaryData[]>
     getSummaryById: (id: string) => Promise<SessionSummaryData | null>
     getConversation: (id: string) => Promise<ConversationItemData[]>
     archive: (id: string) => Promise<void>

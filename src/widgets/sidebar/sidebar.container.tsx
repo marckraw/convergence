@@ -28,11 +28,24 @@ import { buildNeedsYouSummary } from './needs-you.presentational'
 import { ProjectTree } from './project-tree.container'
 import { ProjectSwitcher } from './project-switcher.presentational'
 import { Button } from '@/shared/ui/button'
-import { BarChart3, Plus, Settings } from 'lucide-react'
+import type { AppSurface } from '@/shared/types/app-surface.types'
+import {
+  BarChart3,
+  Code2,
+  MessageSquareText,
+  Plus,
+  Settings,
+} from 'lucide-react'
+import { GlobalChatSessionList } from './global-chat-session-list.presentational'
 
 interface SidebarProps {
+  activeSurface: AppSurface
+  onSelectSurface: (surface: AppSurface) => void
   onSelectSession: (id: string) => void
   activeSessionId: string | null
+  onSelectGlobalSession: (id: string) => void
+  onNewGlobalSession: () => void
+  activeGlobalSessionId: string | null
 }
 
 interface AttentionSession {
@@ -43,8 +56,13 @@ interface AttentionSession {
 }
 
 export const Sidebar: FC<SidebarProps> = ({
+  activeSurface,
+  onSelectSurface,
   onSelectSession,
   activeSessionId,
+  onSelectGlobalSession,
+  onNewGlobalSession,
+  activeGlobalSessionId,
 }) => {
   const projects = useProjectStore((s) => s.projects)
   const activeProject = useProjectStore((s) => s.activeProject)
@@ -67,6 +85,7 @@ export const Sidebar: FC<SidebarProps> = ({
   const openDialog = useDialogStore((s) => s.open)
   const sessions = useSessionStore((s) => s.sessions)
   const globalSessions = useSessionStore((s) => s.globalSessions)
+  const globalChatSessions = useSessionStore((s) => s.globalChatSessions)
   const needsYouDismissals = useSessionStore((s) => s.needsYouDismissals)
   const loadSessions = useSessionStore((s) => s.loadSessions)
   const loadGlobalSessions = useSessionStore((s) => s.loadGlobalSessions)
@@ -154,8 +173,10 @@ export const Sidebar: FC<SidebarProps> = ({
       }
 
       const projectName =
-        projects.find((project) => project.id === session.projectId)?.name ??
-        'Unknown project'
+        session.contextKind === 'global'
+          ? 'Convergence'
+          : (projects.find((project) => project.id === session.projectId)
+              ?.name ?? 'Unknown project')
 
       return {
         session,
@@ -186,6 +207,7 @@ export const Sidebar: FC<SidebarProps> = ({
   const handleSelectNeedsYouSession = async (sessionId: string) => {
     const target = globalSessions.find((session) => session.id === sessionId)
     await switchToSession(sessionId)
+    onSelectSurface(target?.contextKind === 'global' ? 'chat' : 'code')
     if (target?.workspaceId) {
       expandWorkspace(target.workspaceId)
     }
@@ -278,9 +300,38 @@ export const Sidebar: FC<SidebarProps> = ({
   return (
     <div className="flex h-full flex-col">
       <div
-        className="app-sidebar-topbar flex h-12 items-center justify-end border-b border-white/10 px-3"
+        className="app-sidebar-topbar flex h-12 items-center justify-between border-b border-white/10 px-3"
         style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
       >
+        <div
+          className="flex items-center gap-1"
+          style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
+        >
+          <Button
+            type="button"
+            variant={activeSurface === 'code' ? 'secondary' : 'ghost'}
+            size="icon"
+            className="h-8 w-8"
+            title="Code"
+            aria-label="Show code surface"
+            aria-pressed={activeSurface === 'code'}
+            onClick={() => onSelectSurface('code')}
+          >
+            <Code2 className="h-4 w-4" />
+          </Button>
+          <Button
+            type="button"
+            variant={activeSurface === 'chat' ? 'secondary' : 'ghost'}
+            size="icon"
+            className="h-8 w-8"
+            title="Chat"
+            aria-label="Show chat surface"
+            aria-pressed={activeSurface === 'chat'}
+            onClick={() => onSelectSurface('chat')}
+          >
+            <MessageSquareText className="h-4 w-4" />
+          </Button>
+        </div>
         <div
           className="flex items-center gap-1"
           style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
@@ -329,48 +380,61 @@ export const Sidebar: FC<SidebarProps> = ({
           <div className="mx-3 mb-3 border-t border-border/50" />
         )}
 
-        {projects.length > 0 && (
-          <ProjectSwitcher
-            projects={projects}
-            activeProjectId={activeProject?.id ?? null}
-            onSelectProject={handleSelectProject}
-            onCreateProject={createProject}
-          />
-        )}
-
-        {activeProject ? (
-          <ProjectTree
-            baseBranchName={currentBranch}
-            workspaces={workspaces}
-            sessions={sessions}
-            activeSessionId={activeSessionId}
-            pullRequestsByWorkspaceId={pullRequestsByWorkspaceId}
-            pulsingSessionIds={pulsingSessionIds}
-            expandedWorkspaces={expandedWorkspaces}
-            onToggleWorkspace={toggleWorkspace}
-            onSelectSession={onSelectSession}
+        {activeSurface === 'chat' ? (
+          <GlobalChatSessionList
+            sessions={globalChatSessions}
+            activeSessionId={activeGlobalSessionId}
+            onNewSession={onNewGlobalSession}
+            onSelectSession={onSelectGlobalSession}
             onArchiveSession={archiveSession}
             onUnarchiveSession={unarchiveSession}
-            onDeleteSession={(sessionId: string) =>
-              deleteSession(sessionId, activeProject.id)
-            }
-            onRenameSession={(sessionId: string, name: string) =>
-              sessionApi.rename(sessionId, name).catch(() => undefined)
-            }
-            regeneratingSessionIds={regeneratingSessionIds}
-            onRegenerateSessionName={handleRegenerateSessionName}
-            onArchiveWorkspace={handleArchiveWorkspace}
-            onUnarchiveWorkspace={handleUnarchiveWorkspace}
-            onRemoveWorkspaceWorktree={handleRemoveWorkspaceWorktree}
-            onDeleteWorkspace={handleDeleteWorkspace}
-            onOpenCreateWorkspace={() => openDialog('workspace-create')}
           />
         ) : (
-          <div className="px-3 text-center">
-            <p className="mb-3 text-sm text-muted-foreground">
-              No project loaded
-            </p>
-          </div>
+          <>
+            {projects.length > 0 && (
+              <ProjectSwitcher
+                projects={projects}
+                activeProjectId={activeProject?.id ?? null}
+                onSelectProject={handleSelectProject}
+                onCreateProject={createProject}
+              />
+            )}
+
+            {activeProject ? (
+              <ProjectTree
+                baseBranchName={currentBranch}
+                workspaces={workspaces}
+                sessions={sessions}
+                activeSessionId={activeSessionId}
+                pullRequestsByWorkspaceId={pullRequestsByWorkspaceId}
+                pulsingSessionIds={pulsingSessionIds}
+                expandedWorkspaces={expandedWorkspaces}
+                onToggleWorkspace={toggleWorkspace}
+                onSelectSession={onSelectSession}
+                onArchiveSession={archiveSession}
+                onUnarchiveSession={unarchiveSession}
+                onDeleteSession={(sessionId: string) =>
+                  deleteSession(sessionId, activeProject.id)
+                }
+                onRenameSession={(sessionId: string, name: string) =>
+                  sessionApi.rename(sessionId, name).catch(() => undefined)
+                }
+                regeneratingSessionIds={regeneratingSessionIds}
+                onRegenerateSessionName={handleRegenerateSessionName}
+                onArchiveWorkspace={handleArchiveWorkspace}
+                onUnarchiveWorkspace={handleUnarchiveWorkspace}
+                onRemoveWorkspaceWorktree={handleRemoveWorkspaceWorktree}
+                onDeleteWorkspace={handleDeleteWorkspace}
+                onOpenCreateWorkspace={() => openDialog('workspace-create')}
+              />
+            ) : (
+              <div className="px-3 text-center">
+                <p className="mb-3 text-sm text-muted-foreground">
+                  No project loaded
+                </p>
+              </div>
+            )}
+          </>
         )}
       </div>
 

@@ -11,13 +11,15 @@ import type {
   ReasoningEffort,
   MidRunInputMode,
   NeedsYouDismissals,
+  SessionContextKind,
 } from './session.types'
 import type { SkillSelection } from '@/shared/types/skill.types'
 
 export const sessionApi = {
   create: (input: {
-    projectId: string
-    workspaceId: string | null
+    contextKind?: SessionContextKind
+    projectId?: string | null
+    workspaceId?: string | null
     providerId: string
     model: string | null
     effort: ReasoningEffort | null
@@ -30,6 +32,9 @@ export const sessionApi = {
 
   getAllSummaries: (): Promise<SessionSummary[]> =>
     window.electronAPI.session.getAllSummaries(),
+
+  getGlobalSummaries: (): Promise<SessionSummary[]> =>
+    window.electronAPI.session.getGlobalSummaries(),
 
   getSummaryById: (id: string): Promise<SessionSummary | null> =>
     window.electronAPI.session.getSummaryById(id),

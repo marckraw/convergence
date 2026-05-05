@@ -58,6 +58,7 @@ function makeSession(
 ): Session {
   return {
     id,
+    contextKind: 'project',
     projectId,
     workspaceId: null,
     providerId: 'claude-code',

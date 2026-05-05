@@ -73,6 +73,7 @@ const providers: ProviderInfo[] = [
 function makeSession(overrides: Partial<Session>): Session {
   return {
     id: 's-1',
+    contextKind: 'project',
     projectId: 'project-one',
     workspaceId: null,
     providerId: 'claude-code',

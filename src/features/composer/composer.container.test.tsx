@@ -22,6 +22,7 @@ describe('ComposerContainer', () => {
   beforeEach(() => {
     const loadProviders = vi.fn()
     const createAndStartSession = vi.fn()
+    const createAndStartGlobalSession = vi.fn()
     const sendMessageToSession = vi.fn()
     const cancelQueuedInput = vi.fn()
     const testMidRunInput = {
@@ -70,6 +71,7 @@ describe('ComposerContainer', () => {
       sessions: [
         {
           id: 'session-1',
+          contextKind: 'project',
           projectId: 'project-1',
           workspaceId: null,
           providerId: 'claude-code',
@@ -91,6 +93,7 @@ describe('ComposerContainer', () => {
           updatedAt: '2026-01-01T00:00:00.000Z',
         },
       ],
+      globalChatSessions: [],
       providers: [
         {
           id: 'claude-code',
@@ -126,6 +129,7 @@ describe('ComposerContainer', () => {
       queuedInputsBySessionId: {},
       loadProviders,
       createAndStartSession,
+      createAndStartGlobalSession,
       sendMessageToSession,
       cancelQueuedInput,
       error: null,
@@ -154,9 +158,12 @@ describe('ComposerContainer', () => {
   it('continues a failed continuable session instead of creating a new one', () => {
     render(
       <ComposerContainer
-        projectId="project-1"
-        workspaceId={null}
-        activeSessionId="session-1"
+        context={{
+          kind: 'project',
+          projectId: 'project-1',
+          workspaceId: null,
+          activeSessionId: 'session-1',
+        }}
       />,
     )
 
@@ -182,9 +189,12 @@ describe('ComposerContainer', () => {
   it('sends selected skills with a continuable session message', () => {
     render(
       <ComposerContainer
-        projectId="project-1"
-        workspaceId={null}
-        activeSessionId="session-1"
+        context={{
+          kind: 'project',
+          projectId: 'project-1',
+          workspaceId: null,
+          activeSessionId: 'session-1',
+        }}
       />,
     )
 
@@ -222,9 +232,12 @@ describe('ComposerContainer', () => {
   it('passes selected project context items when creating a new session from the composer', () => {
     render(
       <ComposerContainer
-        projectId="project-1"
-        workspaceId={null}
-        activeSessionId={null}
+        context={{
+          kind: 'project',
+          projectId: 'project-1',
+          workspaceId: null,
+          activeSessionId: null,
+        }}
       />,
     )
 
@@ -255,6 +268,45 @@ describe('ComposerContainer', () => {
     )
   })
 
+  it('creates a global session and hides project context controls', () => {
+    render(
+      <ComposerContainer
+        context={{
+          kind: 'global',
+          activeSessionId: null,
+        }}
+      />,
+    )
+
+    expect(
+      screen.queryByRole('button', { name: 'Select project context' }),
+    ).not.toBeInTheDocument()
+
+    const textbox = screen.getByRole('textbox')
+    fireEvent.change(textbox, {
+      target: { value: 'General chat request' },
+    })
+    fireEvent.keyDown(textbox, { key: 'Enter', metaKey: true })
+
+    expect(
+      useSessionStore.getState().createAndStartGlobalSession,
+    ).toHaveBeenCalledWith(
+      'claude-code',
+      'claude-sonnet',
+      'medium',
+      'General chat request',
+      'General chat request',
+      undefined,
+      undefined,
+    )
+    expect(
+      useSessionStore.getState().createAndStartSession,
+    ).not.toHaveBeenCalled()
+    expect(
+      useProjectContextStore.getState().loadForProject,
+    ).not.toHaveBeenCalled()
+  })
+
   it('allows follow-up while a supported provider session is running', () => {
     useSessionStore.setState((state) => ({
       sessions: state.sessions.map((session) =>
@@ -266,9 +318,12 @@ describe('ComposerContainer', () => {
 
     render(
       <ComposerContainer
-        projectId="project-1"
-        workspaceId={null}
-        activeSessionId="session-1"
+        context={{
+          kind: 'project',
+          projectId: 'project-1',
+          workspaceId: null,
+          activeSessionId: 'session-1',
+        }}
       />,
     )
 
@@ -315,9 +370,12 @@ describe('ComposerContainer', () => {
 
     render(
       <ComposerContainer
-        projectId="project-1"
-        workspaceId={null}
-        activeSessionId="session-1"
+        context={{
+          kind: 'project',
+          projectId: 'project-1',
+          workspaceId: null,
+          activeSessionId: 'session-1',
+        }}
       />,
     )
 
@@ -346,9 +404,12 @@ describe('ComposerContainer', () => {
 
     render(
       <ComposerContainer
-        projectId="project-1"
-        workspaceId={null}
-        activeSessionId="session-1"
+        context={{
+          kind: 'project',
+          projectId: 'project-1',
+          workspaceId: null,
+          activeSessionId: 'session-1',
+        }}
       />,
     )
 

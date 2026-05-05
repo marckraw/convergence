@@ -181,6 +181,9 @@ export const PullRequestReviewStartDialogContainer: FC = () => {
         sessionName: sessionName.trim() || undefined,
       })
       const targetProjectId = result.session.projectId
+      if (!targetProjectId) {
+        throw new Error('Pull request review session did not resolve a project')
+      }
       const targetProject =
         projects.find((project) => project.id === targetProjectId) ?? null
 

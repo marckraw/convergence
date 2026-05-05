@@ -44,10 +44,20 @@ class SessionForkUnsupportedError extends Error {
   }
 }
 
-function assertForkableParent(parent: SessionSummary): void {
+function assertForkableParent(
+  parent: SessionSummary,
+): asserts parent is SessionSummary & {
+  contextKind: 'project'
+  projectId: string
+} {
   if (parent.providerId === 'shell') {
     throw new SessionForkUnsupportedError(
       `Session ${parent.id} uses the shell provider and cannot be forked`,
+    )
+  }
+  if (parent.contextKind !== 'project' || !parent.projectId) {
+    throw new SessionForkUnsupportedError(
+      `Session ${parent.id} is not tied to a project and cannot be forked into a workspace`,
     )
   }
 }
@@ -168,7 +178,7 @@ export class SessionForkService {
   }
 
   private async createAndStart(args: {
-    parent: SessionSummary
+    parent: SessionSummary & { contextKind: 'project'; projectId: string }
     name: string
     providerId: string
     modelId: string
@@ -185,6 +195,7 @@ export class SessionForkService {
     )
 
     const child = this.deps.sessions.create({
+      contextKind: 'project',
       projectId: args.parent.projectId,
       workspaceId,
       providerId: args.providerId,
@@ -201,7 +212,7 @@ export class SessionForkService {
   }
 
   private async resolveChildWorkspace(
-    parent: SessionSummary,
+    parent: SessionSummary & { contextKind: 'project'; projectId: string },
     mode: WorkspaceMode,
     branchName: string | null,
   ): Promise<string | null> {

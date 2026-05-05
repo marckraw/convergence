@@ -237,12 +237,13 @@ describe('SessionService', () => {
     const registry = new ProviderRegistry()
     registry.register(createTestProvider())
 
-    service = new SessionService(db, registry)
-
     tempDir = mkdtempSync(join(tmpdir(), 'convergence-session-test-'))
     const repoPath = join(tempDir, 'repo')
+    const globalSessionsRoot = join(tempDir, 'global-sessions')
     mkdirSync(repoPath)
     mkdirSync(join(repoPath, '.git'))
+
+    service = new SessionService(db, registry, globalSessionsRoot)
 
     projectId = 'test-project'
     db.prepare(
@@ -275,6 +276,42 @@ describe('SessionService', () => {
     expect(session.activity).toBeNull()
     expect(session.archivedAt).toBeNull()
     expect(session.lastSequence).toBe(0)
+  })
+
+  it('creates a global session in the app-owned global working directory', () => {
+    const session = service.create({
+      contextKind: 'global',
+      providerId: 'test-provider',
+      model: 'test-model',
+      effort: null,
+      name: 'global session',
+    })
+
+    expect(session).toMatchObject({
+      contextKind: 'global',
+      projectId: null,
+      workspaceId: null,
+      name: 'global session',
+      primarySurface: 'conversation',
+    })
+    expect(session.workingDirectory).toBe(join(tempDir, 'global-sessions'))
+    expect(service.getSummariesByProjectId(projectId)).toEqual([])
+    expect(service.getGlobalSummaries().map((entry) => entry.id)).toEqual([
+      session.id,
+    ])
+  })
+
+  it('rejects global sessions with project or workspace ids', () => {
+    expect(() =>
+      service.create({
+        contextKind: 'global',
+        projectId: projectId as never,
+        providerId: 'test-provider',
+        model: 'test-model',
+        effort: null,
+        name: 'invalid global',
+      }),
+    ).toThrow(/cannot be tied/)
   })
 
   it('lists sessions by project', () => {

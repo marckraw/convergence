@@ -18,7 +18,7 @@ import {
 } from './global-status-bar.styles'
 
 interface RecencyBadge {
-  session: SessionSummary
+  session: SessionSummary & { projectId: string }
   projectName: string
   kind: 'completed' | 'failed'
 }

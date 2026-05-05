@@ -40,7 +40,11 @@ export function App() {
   const sessionError = useSessionStore((s) => s.error)
   const clearSessionError = useSessionStore((s) => s.clearError)
   const activeSessionId = useSessionStore((s) => s.activeSessionId)
+  const activeGlobalSessionId = useSessionStore((s) => s.activeGlobalSessionId)
   const setActiveSession = useSessionStore((s) => s.setActiveSession)
+  const setActiveGlobalSession = useSessionStore(
+    (s) => s.setActiveGlobalSession,
+  )
   const handleSessionSummaryUpdate = useSessionStore(
     (s) => s.handleSessionSummaryUpdate,
   )
@@ -51,6 +55,9 @@ export function App() {
     (s) => s.handleQueuedInputPatched,
   )
   const loadGlobalSessions = useSessionStore((s) => s.loadGlobalSessions)
+  const loadGlobalChatSessions = useSessionStore(
+    (s) => s.loadGlobalChatSessions,
+  )
   const loadRecents = useSessionStore((s) => s.loadRecents)
   const loadAppSettings = useAppSettingsStore((s) => s.load)
   const loadNotificationPrefs = useNotificationsStore((s) => s.loadPrefs)
@@ -91,9 +98,10 @@ export function App() {
   useEffect(() => {
     void (async () => {
       await loadGlobalSessions()
+      await loadGlobalChatSessions()
       await loadRecents()
     })()
-  }, [loadGlobalSessions, loadRecents])
+  }, [loadGlobalSessions, loadGlobalChatSessions, loadRecents])
 
   useEffect(() => {
     void loadAppSettings()
@@ -212,7 +220,9 @@ export function App() {
     <TooltipProvider delayDuration={1500}>
       <AppShell
         activeSessionId={activeSessionId}
+        activeGlobalSessionId={activeGlobalSessionId}
         onSelectSession={setActiveSession}
+        onSelectGlobalSession={setActiveGlobalSession}
         loading={loading}
         hasProject={!!activeProject}
       />

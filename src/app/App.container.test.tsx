@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest'
-import { render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { useProjectStore } from '@/entities/project'
 import { useWorkspaceStore } from '@/entities/workspace'
 import { useSessionStore } from '@/entities/session'
@@ -49,6 +49,7 @@ const mockElectronAPI = {
   session: {
     create: vi.fn(),
     getAllSummaries: vi.fn().mockResolvedValue([]),
+    getGlobalSummaries: vi.fn().mockResolvedValue([]),
     getSummariesByProjectId: vi.fn().mockResolvedValue([]),
     getSummaryById: vi.fn().mockResolvedValue(null),
     getConversation: vi.fn().mockResolvedValue([]),
@@ -192,10 +193,15 @@ describe('App', () => {
     useSessionStore.setState({
       sessions: [],
       globalSessions: [],
+      globalChatSessions: [],
+      activeGlobalConversation: [],
+      activeGlobalConversationSessionId: null,
       queuedInputsBySessionId: {},
       needsYouDismissals: {},
       currentProjectId: null,
       activeSessionId: null,
+      activeProjectSessionId: null,
+      activeGlobalSessionId: null,
       draftWorkspaceId: null,
       providers: [],
       error: null,
@@ -213,6 +219,22 @@ describe('App', () => {
     })
     expect(document.documentElement.dataset.platform).toBe('darwin')
     expect(document.documentElement.dataset.reducedTransparency).toBe('false')
+  })
+
+  it('opens the chat surface without requiring a project', async () => {
+    mockElectronAPI.project.getActive.mockResolvedValue(null)
+    mockElectronAPI.project.getAll.mockResolvedValue([])
+
+    render(<App />)
+
+    await waitFor(() => {
+      expect(screen.getByText('Welcome to Convergence')).toBeInTheDocument()
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: 'Show chat surface' }))
+
+    expect(screen.getByText('Convergence Chat')).toBeInTheDocument()
+    expect(screen.getByText('No chats yet')).toBeInTheDocument()
   })
 
   it('shows loading state', () => {

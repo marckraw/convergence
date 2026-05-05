@@ -36,10 +36,14 @@ describe('database', () => {
 
     const sessionColumns = db
       .prepare("PRAGMA table_info('sessions')")
-      .all() as Array<{ name: string }>
+      .all() as Array<{ name: string; notnull: number }>
     const columnNames = sessionColumns.map((column) => column.name)
     expect(columnNames).not.toContain('transcript')
+    expect(columnNames).toContain('context_kind')
     expect(columnNames).toContain('primary_surface')
+    expect(
+      sessionColumns.find((column) => column.name === 'project_id')?.notnull,
+    ).toBe(0)
 
     const workspaceColumns = db
       .prepare("PRAGMA table_info('workspaces')")
@@ -133,6 +137,77 @@ describe('database', () => {
       )
       .all('s')
     expect(remaining).toEqual([])
+  })
+
+  it('enforces explicit project and global session context constraints', () => {
+    const db = getDatabase()
+    db.prepare(
+      "INSERT INTO projects (id, name, repository_path) VALUES ('p', 'p', '/tmp/p')",
+    ).run()
+
+    db.prepare(
+      `INSERT INTO sessions (
+         id, context_kind, project_id, provider_id, name, working_directory
+       ) VALUES ('project-session', 'project', 'p', 'codex', 'project', '/tmp/p')`,
+    ).run()
+    db.prepare(
+      `INSERT INTO sessions (
+         id, context_kind, project_id, workspace_id, provider_id, name, working_directory
+       ) VALUES ('global-session', 'global', NULL, NULL, 'codex', 'global', '/tmp/global')`,
+    ).run()
+
+    const rows = db
+      .prepare(
+        'SELECT id, context_kind, project_id, workspace_id FROM sessions ORDER BY id',
+      )
+      .all() as Array<{
+      id: string
+      context_kind: string
+      project_id: string | null
+      workspace_id: string | null
+    }>
+    expect(rows).toEqual([
+      {
+        id: 'global-session',
+        context_kind: 'global',
+        project_id: null,
+        workspace_id: null,
+      },
+      {
+        id: 'project-session',
+        context_kind: 'project',
+        project_id: 'p',
+        workspace_id: null,
+      },
+    ])
+
+    expect(() =>
+      db
+        .prepare(
+          `INSERT INTO sessions (
+             id, context_kind, project_id, provider_id, name, working_directory
+           ) VALUES ('bad-global', 'global', 'p', 'codex', 'bad', '/tmp/p')`,
+        )
+        .run(),
+    ).toThrow()
+    expect(() =>
+      db
+        .prepare(
+          `INSERT INTO sessions (
+             id, context_kind, project_id, provider_id, name, working_directory
+           ) VALUES ('bad-project', 'project', NULL, 'codex', 'bad', '/tmp/p')`,
+        )
+        .run(),
+    ).toThrow()
+    expect(() =>
+      db
+        .prepare(
+          `INSERT INTO sessions (
+             id, context_kind, project_id, provider_id, name, working_directory
+           ) VALUES ('bad-kind', 'other', 'p', 'codex', 'bad', '/tmp/p')`,
+        )
+        .run(),
+    ).toThrow()
   })
 
   it('creates session_turns with expected columns, FK, and unique constraint', () => {
@@ -640,9 +715,14 @@ describe('database', () => {
 
       const session = db
         .prepare(
-          'SELECT last_sequence, conversation_version FROM sessions WHERE id = ?',
+          'SELECT context_kind, project_id, last_sequence, conversation_version FROM sessions WHERE id = ?',
         )
-        .get('s1') as { last_sequence: number; conversation_version: number }
+        .get('s1') as {
+        context_kind: string
+        project_id: string | null
+        last_sequence: number
+        conversation_version: number
+      }
       const sessionColumns = db
         .prepare("PRAGMA table_info('sessions')")
         .all() as Array<{ name: string }>
@@ -654,6 +734,8 @@ describe('database', () => {
         'tool-call',
       ])
       expect(session).toEqual({
+        context_kind: 'project',
+        project_id: 'p1',
         last_sequence: 3,
         conversation_version: 2,
       })

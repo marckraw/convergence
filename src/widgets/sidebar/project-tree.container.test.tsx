@@ -26,6 +26,7 @@ const mergedPullRequest = {
 }
 
 const baseSession = {
+  contextKind: 'project' as const,
   projectId: 'project-1',
   workspaceId: null,
   model: 'sonnet',

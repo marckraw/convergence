@@ -22,9 +22,12 @@ export type ForkStrategy = 'full' | 'summary'
 
 export type PrimarySurface = 'conversation' | 'terminal'
 
+export type SessionContextKind = 'project' | 'global'
+
 export interface SessionSummary {
   id: string
-  projectId: string
+  contextKind: SessionContextKind
+  projectId: string | null
   workspaceId: string | null
   providerId: string
   model: string | null
@@ -57,7 +60,7 @@ function parsePrimarySurface(value: string | null | undefined): PrimarySurface {
   return 'conversation'
 }
 
-export interface CreateSessionInput {
+interface CreateSessionBaseInput {
   projectId: string
   workspaceId: string | null
   providerId: string
@@ -68,6 +71,18 @@ export interface CreateSessionInput {
   forkStrategy?: ForkStrategy | null
   primarySurface?: PrimarySurface
 }
+
+export type CreateSessionInput =
+  | (CreateSessionBaseInput & {
+      contextKind?: 'project'
+      projectId: string
+      workspaceId: string | null
+    })
+  | (Omit<CreateSessionBaseInput, 'projectId' | 'workspaceId'> & {
+      contextKind: 'global'
+      projectId?: null
+      workspaceId?: null
+    })
 
 export type QueuedInputState =
   | 'queued'
@@ -115,6 +130,7 @@ function parseActivity(value: string | null): ActivitySignal {
 export function sessionSummaryFromRow(row: SessionRow): SessionSummary {
   return {
     id: row.id,
+    contextKind: row.context_kind === 'global' ? 'global' : 'project',
     projectId: row.project_id,
     workspaceId: row.workspace_id,
     providerId: row.provider_id,

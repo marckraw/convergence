@@ -45,7 +45,7 @@ import {
   type InitiativeContextAttemptView,
 } from './initiative-context-panel.presentational'
 import { PullRequestPanel } from './pull-request-panel.presentational'
-import { SessionTranscript } from './session-transcript.container'
+import { SessionConversationSurface } from './session-conversation-surface.container'
 
 const CHANGED_FILES_MIN_WIDTH = 320
 const CHANGED_FILES_MAX_WIDTH = 960
@@ -367,9 +367,12 @@ export const SessionView: FC = () => {
           )}
           {activeProject && (
             <ComposerContainer
-              projectId={activeProject.id}
-              workspaceId={draftWorkspaceId}
-              activeSessionId={null}
+              context={{
+                kind: 'project',
+                projectId: activeProject.id,
+                workspaceId: draftWorkspaceId,
+                activeSessionId: null,
+              }}
             />
           )}
         </div>
@@ -609,31 +612,27 @@ export const SessionView: FC = () => {
           </div>
         </div>
 
-        <SessionTranscript
+        <SessionConversationSurface
           session={session}
           conversationItems={activeConversation}
+          composerContext={
+            activeProject
+              ? {
+                  kind: 'project',
+                  projectId: activeProject.id,
+                  workspaceId: session.workspaceId,
+                  activeSessionId: session.id,
+                }
+              : null
+          }
+          composerDisabledReason={
+            sessionWorktreeRemoved
+              ? "This workspace's git worktree was removed from disk. Conversation history is preserved, but new agent work is disabled until restore support exists."
+              : null
+          }
           onApprove={approveSession}
           onDeny={denySession}
         />
-
-        {/* Composer */}
-        <div className="shrink-0 px-4 py-3">
-          {sessionWorktreeRemoved ? (
-            <div className="mx-auto w-full max-w-2xl rounded-md border border-warning/30 bg-warning/10 px-3 py-2 text-sm text-warning-foreground">
-              This workspace's git worktree was removed from disk. Conversation
-              history is preserved, but new agent work is disabled until restore
-              support exists.
-            </div>
-          ) : (
-            activeProject && (
-              <ComposerContainer
-                projectId={activeProject.id}
-                workspaceId={session.workspaceId}
-                activeSessionId={session.id}
-              />
-            )
-          )}
-        </div>
       </div>
 
       {/* Changed files side panel */}

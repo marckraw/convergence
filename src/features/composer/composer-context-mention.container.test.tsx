@@ -126,9 +126,12 @@ describe('ComposerContainer — context mention picker', () => {
   function renderComposer() {
     return render(
       <ComposerContainer
-        projectId={PROJECT_ID}
-        workspaceId={null}
-        activeSessionId={null}
+        context={{
+          kind: 'project',
+          projectId: PROJECT_ID,
+          workspaceId: null,
+          activeSessionId: null,
+        }}
       />,
     )
   }

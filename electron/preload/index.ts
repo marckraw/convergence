@@ -130,8 +130,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   },
   session: {
     create: (input: {
-      projectId: string
-      workspaceId: string | null
+      contextKind?: 'project' | 'global'
+      projectId?: string | null
+      workspaceId?: string | null
       providerId: string
       model: string | null
       effort: string | null
@@ -140,6 +141,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     getSummariesByProjectId: (projectId: string) =>
       ipcRenderer.invoke('session:getSummariesByProjectId', projectId),
     getAllSummaries: () => ipcRenderer.invoke('session:getAllSummaries'),
+    getGlobalSummaries: () => ipcRenderer.invoke('session:getGlobalSummaries'),
     getSummaryById: (id: string) =>
       ipcRenderer.invoke('session:getSummaryById', id),
     getConversation: (id: string) =>

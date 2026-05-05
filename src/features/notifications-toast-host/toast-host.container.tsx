@@ -28,6 +28,10 @@ export async function focusSessionAcrossProjects(
   const sessionState = useSessionStore.getState()
   const target = sessionState.globalSessions.find((s) => s.id === sessionId)
   if (!target) return
+  if (!target.projectId) {
+    useSessionStore.getState().setActiveSession(sessionId)
+    return
+  }
 
   const projectState = useProjectStore.getState()
   const activeProject = projectState.activeProject

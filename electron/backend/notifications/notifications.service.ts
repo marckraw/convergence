@@ -56,12 +56,16 @@ export class NotificationsService {
     kind: NotificationEvent['kind'],
     session: Pick<Session, 'id' | 'name' | 'projectId'>,
   ): NotificationEvent {
+    const projectName = session.projectId
+      ? this.deps.getProjectName(session.projectId)
+      : null
+
     return {
       id: randomUUID(),
       kind,
       sessionId: session.id,
       sessionName: session.name,
-      projectName: this.deps.getProjectName(session.projectId) ?? 'Convergence',
+      projectName: projectName ?? 'Convergence',
       firedAt: this.deps.now ? this.deps.now() : Date.now(),
     }
   }
