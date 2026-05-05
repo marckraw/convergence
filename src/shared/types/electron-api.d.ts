@@ -279,6 +279,66 @@ interface PullRequestReviewSessionResultData {
   session: SessionSummaryData
 }
 
+type ReviewNoteModeData = 'working-tree' | 'base-branch'
+type ReviewNoteStateData = 'draft' | 'sent' | 'resolved'
+
+interface ReviewNoteData {
+  id: string
+  sessionId: string
+  workspaceId: string | null
+  filePath: string
+  mode: ReviewNoteModeData
+  oldStartLine: number | null
+  oldEndLine: number | null
+  newStartLine: number | null
+  newEndLine: number | null
+  hunkHeader: string | null
+  selectedDiff: string
+  body: string
+  state: ReviewNoteStateData
+  sentAt: string | null
+  createdAt: string
+  updatedAt: string
+}
+
+interface CreateReviewNoteInputData {
+  sessionId: string
+  workspaceId?: string | null
+  filePath: string
+  mode: ReviewNoteModeData
+  oldStartLine?: number | null
+  oldEndLine?: number | null
+  newStartLine?: number | null
+  newEndLine?: number | null
+  hunkHeader?: string | null
+  selectedDiff: string
+  body: string
+}
+
+interface UpdateReviewNoteInputData {
+  body?: string
+  state?: ReviewNoteStateData
+}
+
+interface PreviewReviewNotePacketInputData {
+  sessionId: string
+  noteIds?: string[]
+}
+
+interface SendReviewNotePacketInputData {
+  sessionId: string
+  noteIds?: string[]
+}
+
+interface ReviewNotePacketPreviewData {
+  noteCount: number
+  text: string
+}
+
+interface ReviewNotePacketSendResultData extends ReviewNotePacketPreviewData {
+  sentNotes: ReviewNoteData[]
+}
+
 interface CreateWorkspaceInput {
   projectId: string
   branchName: string
@@ -923,6 +983,21 @@ interface ElectronAPI {
     prepareReviewSession: (
       input: PreparePullRequestReviewSessionInputData,
     ) => Promise<PullRequestReviewSessionResultData>
+  }
+  reviewNotes: {
+    listBySession: (sessionId: string) => Promise<ReviewNoteData[]>
+    create: (input: CreateReviewNoteInputData) => Promise<ReviewNoteData>
+    update: (
+      id: string,
+      patch: UpdateReviewNoteInputData,
+    ) => Promise<ReviewNoteData>
+    delete: (id: string) => Promise<void>
+    previewPacket: (
+      input: PreviewReviewNotePacketInputData,
+    ) => Promise<ReviewNotePacketPreviewData>
+    sendPacket: (
+      input: SendReviewNotePacketInputData,
+    ) => Promise<ReviewNotePacketSendResultData>
   }
   git: {
     getBranches: (repoPath: string) => Promise<string[]>

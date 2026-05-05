@@ -99,6 +99,25 @@ export interface WorkspacePullRequestRow {
   updated_at: string
 }
 
+export interface ReviewNoteRow {
+  id: string
+  session_id: string
+  workspace_id: string | null
+  file_path: string
+  mode: string
+  old_start_line: number | null
+  old_end_line: number | null
+  new_start_line: number | null
+  new_end_line: number | null
+  hunk_header: string | null
+  selected_diff: string
+  body: string
+  state: string
+  sent_at: string | null
+  created_at: string
+  updated_at: string
+}
+
 export interface SessionTurnRow {
   id: string
   session_id: string

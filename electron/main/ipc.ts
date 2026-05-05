@@ -8,6 +8,7 @@ import { GitService } from '../backend/git/git.service'
 import { ChangedFilesService } from '../backend/git/changed-files.service'
 import { PullRequestService } from '../backend/pull-request/pull-request.service'
 import type { PullRequestReviewService } from '../backend/pull-request/pull-request-review.service'
+import type { ReviewNotesService } from '../backend/review-notes/review-notes.service'
 import { SessionService } from '../backend/session/session.service'
 import type { TurnCaptureService } from '../backend/session/turn/turn-capture.service'
 import {
@@ -41,6 +42,12 @@ import type {
   CreateProjectContextItemInput,
   UpdateProjectContextItemInput,
 } from '../backend/project-context/project-context.types'
+import type {
+  CreateReviewNoteInput,
+  PreviewReviewNotePacketInput,
+  SendReviewNotePacketInput,
+  UpdateReviewNoteInput,
+} from '../backend/review-notes/review-notes.types'
 import type { CreateWorkspaceInput } from '../backend/workspace/workspace.types'
 import type { CreateSessionInput } from '../backend/session/session.types'
 import type { ProjectSettings } from '../backend/project/project-settings.pure'
@@ -128,6 +135,7 @@ export function registerIpcHandlers(
   changedFilesService: ChangedFilesService,
   pullRequestService: PullRequestService,
   pullRequestReviewService: PullRequestReviewService,
+  reviewNotesService: ReviewNotesService,
   sessionService: SessionService,
   providerRegistry: ProviderRegistry,
   mcpService: McpService,
@@ -378,6 +386,39 @@ export function registerIpcHandlers(
         sessionName?: string
       },
     ) => pullRequestReviewService.prepareReviewSession(input),
+  )
+
+  // Review note handlers
+  ipcMain.handle('reviewNotes:listBySession', (_event, sessionId: string) =>
+    reviewNotesService.listBySession(sessionId),
+  )
+
+  ipcMain.handle('reviewNotes:create', (_event, input: CreateReviewNoteInput) =>
+    reviewNotesService.create(input),
+  )
+
+  ipcMain.handle(
+    'reviewNotes:update',
+    (_event, id: string, patch: UpdateReviewNoteInput) =>
+      reviewNotesService.update(id, patch),
+  )
+
+  ipcMain.handle('reviewNotes:delete', (_event, id: string) => {
+    reviewNotesService.delete(id)
+  })
+
+  ipcMain.handle(
+    'reviewNotes:previewPacket',
+    (_event, input: PreviewReviewNotePacketInput) =>
+      reviewNotesService.previewPacket(input),
+  )
+
+  ipcMain.handle(
+    'reviewNotes:sendPacket',
+    (_event, input: SendReviewNotePacketInput) =>
+      reviewNotesService.sendPacket(input, (sessionId, text) =>
+        sessionService.sendMessage(sessionId, { text }),
+      ),
   )
 
   // Git handlers

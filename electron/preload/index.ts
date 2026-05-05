@@ -110,6 +110,18 @@ contextBridge.exposeInMainWorld('electronAPI', {
       sessionName?: string
     }) => ipcRenderer.invoke('pullRequest:prepareReviewSession', input),
   },
+  reviewNotes: {
+    listBySession: (sessionId: string) =>
+      ipcRenderer.invoke('reviewNotes:listBySession', sessionId),
+    create: (input: unknown) => ipcRenderer.invoke('reviewNotes:create', input),
+    update: (id: string, patch: unknown) =>
+      ipcRenderer.invoke('reviewNotes:update', id, patch),
+    delete: (id: string) => ipcRenderer.invoke('reviewNotes:delete', id),
+    previewPacket: (input: unknown) =>
+      ipcRenderer.invoke('reviewNotes:previewPacket', input),
+    sendPacket: (input: unknown) =>
+      ipcRenderer.invoke('reviewNotes:sendPacket', input),
+  },
   git: {
     getBranches: (repoPath: string) =>
       ipcRenderer.invoke('git:getBranches', repoPath),
