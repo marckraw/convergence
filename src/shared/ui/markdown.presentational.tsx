@@ -1,13 +1,23 @@
 import { memo, useMemo, type FC, type Ref } from 'react'
-import ReactMarkdown, { type Components } from 'react-markdown'
-import remarkGfm from 'remark-gfm'
+import { Streamdown, type Components } from 'streamdown'
+import { mermaid as mermaidPlugin } from '@streamdown/mermaid'
+import { code as codePlugin } from '@streamdown/code'
 import { cn } from '@/shared/lib/cn.pure'
+
+const SHIKI_THEME: ['github-light', 'github-dark'] = [
+  'github-light',
+  'github-dark',
+]
+
+export type MermaidTheme = 'default' | 'dark'
 
 export interface MarkdownProps {
   content: string
   className?: string
   size?: 'sm' | 'md'
   rootRef?: Ref<HTMLDivElement>
+  isStreaming?: boolean
+  mermaidTheme?: MermaidTheme
 }
 
 function createMarkdownComponents(size: MarkdownProps['size']): Components {
@@ -140,53 +150,39 @@ function createMarkdownComponents(size: MarkdownProps['size']): Components {
         {...props}
       />
     ),
-    pre: ({ children }) => <>{children}</>,
-    code: ({ className, children, ...props }) => {
-      const normalized = String(children).replace(/\n$/, '')
-      const language = className?.match(/language-([\w-]+)/)?.[1]
-      const isBlock = Boolean(language) || normalized.includes('\n')
-
-      if (!isBlock) {
-        return (
-          <code
-            className={cn(
-              'rounded-md border border-border/80 bg-background/80 px-1.5 py-0.5 font-mono text-[0.92em] text-foreground',
-              className,
-            )}
-            {...props}
-          >
-            {children}
-          </code>
-        )
-      }
-
-      return (
-        <div className="my-4 overflow-hidden rounded-xl border border-border bg-background/80 shadow-[0_12px_30px_-24px_rgba(0,0,0,0.8)]">
-          <div className="flex items-center justify-between border-b border-border bg-muted/50 px-3 py-2">
-            <span className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
-              {language ?? 'code'}
-            </span>
-          </div>
-          <pre className="app-scrollbar overflow-x-auto p-4">
-            <code
-              className={cn(
-                'block font-mono text-[13px] leading-6 text-foreground',
-                className,
-              )}
-              {...props}
-            >
-              {normalized}
-            </code>
-          </pre>
-        </div>
-      )
-    },
+    inlineCode: ({ className, children, ...props }) => (
+      <code
+        className={cn(
+          'rounded-md border border-border/80 bg-background/80 px-1.5 py-0.5 font-mono text-[0.92em] text-foreground',
+          className,
+        )}
+        {...props}
+      >
+        {children}
+      </code>
+    ),
   }
 }
 
+const STREAMDOWN_PLUGINS = { mermaid: mermaidPlugin, code: codePlugin }
+
 export const MarkdownPresentational: FC<MarkdownProps> = memo(
-  ({ content, className, size = 'md', rootRef }) => {
+  ({
+    content,
+    className,
+    size = 'md',
+    rootRef,
+    isStreaming = false,
+    mermaidTheme = 'default',
+  }) => {
     const components = useMemo(() => createMarkdownComponents(size), [size])
+    const mermaidOptions = useMemo(
+      () =>
+        ({
+          config: { theme: mermaidTheme, securityLevel: 'strict' },
+        }) as const,
+      [mermaidTheme],
+    )
 
     return (
       <div
@@ -196,9 +192,15 @@ export const MarkdownPresentational: FC<MarkdownProps> = memo(
           className,
         )}
       >
-        <ReactMarkdown components={components} remarkPlugins={[remarkGfm]}>
+        <Streamdown
+          components={components}
+          plugins={STREAMDOWN_PLUGINS}
+          mermaid={mermaidOptions}
+          shikiTheme={SHIKI_THEME}
+          isAnimating={isStreaming}
+        >
           {content}
-        </ReactMarkdown>
+        </Streamdown>
       </div>
     )
   },

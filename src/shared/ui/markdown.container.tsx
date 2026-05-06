@@ -1,14 +1,41 @@
-import { useEffect, useRef, type FC } from 'react'
+import { useEffect, useRef, useState, type FC } from 'react'
 import { detectMarkdownCut } from '@/shared/lib/markdown-cut-detector.pure'
 import {
   MarkdownPresentational,
   type MarkdownProps,
 } from './markdown.presentational'
 
+function readIsDark(): boolean {
+  if (typeof document === 'undefined') return false
+  return document.documentElement.classList.contains('dark')
+}
+
+function useIsDark(): boolean {
+  const [isDark, setIsDark] = useState<boolean>(readIsDark)
+
+  useEffect(() => {
+    if (typeof document === 'undefined') return
+    const root = document.documentElement
+    setIsDark(root.classList.contains('dark'))
+    const observer = new MutationObserver(() => {
+      setIsDark(root.classList.contains('dark'))
+    })
+    observer.observe(root, { attributes: true, attributeFilter: ['class'] })
+    return () => observer.disconnect()
+  }, [])
+
+  return isDark
+}
+
 // Canary: warns when rendered textContent appears to drop the tail of `content`.
-// Catches silent cuts from react-markdown parser quirks or upstream data loss.
-export const Markdown: FC<Omit<MarkdownProps, 'rootRef'>> = (props) => {
+// Originally added to catch silent cuts from the previous markdown parser.
+// Streamdown's incomplete-markdown handling should make this redundant; left in
+// place dev-only until a few real streams confirm zero false positives.
+export const Markdown: FC<Omit<MarkdownProps, 'rootRef' | 'mermaidTheme'>> = (
+  props,
+) => {
   const rootRef = useRef<HTMLDivElement>(null)
+  const isDark = useIsDark()
   const { content } = props
 
   useEffect(() => {
@@ -26,5 +53,11 @@ export const Markdown: FC<Omit<MarkdownProps, 'rootRef'>> = (props) => {
     return () => clearTimeout(id)
   }, [content])
 
-  return <MarkdownPresentational {...props} rootRef={rootRef} />
+  return (
+    <MarkdownPresentational
+      {...props}
+      rootRef={rootRef}
+      mermaidTheme={isDark ? 'dark' : 'default'}
+    />
+  )
 }

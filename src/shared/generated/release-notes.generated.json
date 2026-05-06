@@ -1,6 +1,41 @@
 {
-  "currentVersion": "0.32.1",
+  "currentVersion": "0.35.0",
   "releases": [
+    {
+      "version": "0.35.0",
+      "date": null,
+      "notes": "### Minor Changes\n\n- c9d03ec: Add the first global Chat Surface for project-free agent conversations.\n\n  This introduces explicit project/global session context, global session persistence and APIs, a reusable conversation surface, a sidebar Chat switch, and a global chat session list. The Chat Surface can be opened without an active project and starts sessions through the shared composer without project, workspace, branch, pull request, changed-files, or terminal controls."
+    },
+    {
+      "version": "0.34.0",
+      "date": null,
+      "notes": "### Minor Changes\n\n- 43c43a1: Add interactive local code review notes for changed files. Reviewers can now\n  select diff lines, save draft questions, create file-level notes, filter notes\n  by lifecycle state, preview the generated review packet, and send the collected\n  context into the active agent session."
+    },
+    {
+      "version": "0.33.2",
+      "date": null,
+      "notes": "### Patch Changes\n\n- 1ece782: Reset the Command Center results viewport when the search query changes so newly ranked results start at the top instead of preserving an old scroll position."
+    },
+    {
+      "version": "0.33.1",
+      "date": null,
+      "notes": "### Patch Changes\n\n- b4dfaaf: Make command palette search match multi-word queries across separate fields, so terminal sessions can be found with project and surface terms like \"backpack terminal\" or \"shell backpack\"."
+    },
+    {
+      "version": "0.33.0",
+      "date": null,
+      "notes": "### Minor Changes\n\n- 8735565: Add a local pull request review flow. The command center can now open a\n  review dialog, resolve GitHub pull request URLs to the matching configured\n  project, prepare or refresh a dedicated `convergence/pr-<number>` worktree,\n  cache pull request metadata, and start an agent session with a code-review\n  prompt.\n\n### Patch Changes\n\n- 4a60e83: Add a Base Branch mode to the Changed Files panel so reviewers can switch\n  between working-tree changes, PR-style base-branch changes, and turn history."
+    },
+    {
+      "version": "0.32.3",
+      "date": null,
+      "notes": "### Patch Changes\n\n- 67c5501: Fix: creating a worktree via the New Workspace dialog now auto-targets\n  that worktree for the next session. The empty session screen also shows\n  a chip indicating which worktree (or the main repo) the next session\n  will start in, with a one-click toggle back to the main repo.\n\n  Previously the dialog closed silently and the next session ran against\n  the root repo, causing users to repeat the action and accumulate orphan\n  worktrees."
+    },
+    {
+      "version": "0.32.2",
+      "date": null,
+      "notes": "### Patch Changes\n\n- 72f06b0: Fix the Skills dialog so the right details pane scrolls all the way to\n  the bottom on large screens. The middle grid had no row track, so the\n  inner `overflow-y-auto` had no resolved height and the SKILL.md card got\n  clipped behind the footer."
+    },
     {
       "version": "0.32.1",
       "date": null,
