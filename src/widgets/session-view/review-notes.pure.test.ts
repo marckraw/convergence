@@ -1,17 +1,25 @@
 import { describe, expect, it } from 'vitest'
 import type { ReviewNote } from '@/entities/review-note'
-import { parseUnifiedDiff } from './diff-lines.pure'
+import { parseUnifiedDiffForReviewAnchors } from './diff-lines.pure'
 import {
   countDraftReviewNotes,
   countReviewNotesByState,
   countReviewNotesByFile,
   filterReviewNotes,
   findReviewNoteDiffLineIds,
+  getReviewNoteAnnotationElementId,
   groupReviewNotesByFile,
   isFileLevelReviewNote,
+  mapReviewNotesToDiffAnnotations,
 } from './review-notes.pure'
 
 describe('review-notes pure helpers', () => {
+  it('builds stable DOM ids for diff annotations', () => {
+    expect(getReviewNoteAnnotationElementId('note-123')).toBe(
+      'review-note-annotation-note-123',
+    )
+  })
+
   it('groups notes by first-seen file path in stable order', () => {
     const notes = [
       makeNote({ id: 'a', filePath: 'src/a.ts', body: 'first' }),
@@ -72,7 +80,7 @@ describe('review-notes pure helpers', () => {
   })
 
   it('finds diff rows covered by a mixed old/new note range', () => {
-    const lines = parseUnifiedDiff(
+    const lines = parseUnifiedDiffForReviewAnchors(
       '@@ -4,3 +4,4 @@\n context\n-old\n+new\n+extra\n tail',
     )
 
@@ -91,7 +99,7 @@ describe('review-notes pure helpers', () => {
   })
 
   it('returns no anchor ids for stale line ranges', () => {
-    const lines = parseUnifiedDiff('@@ -1 +1 @@\n-old\n+new')
+    const lines = parseUnifiedDiffForReviewAnchors('@@ -1 +1 @@\n-old\n+new')
 
     expect(
       findReviewNoteDiffLineIds({
@@ -104,6 +112,100 @@ describe('review-notes pure helpers', () => {
         }),
       }),
     ).toEqual([])
+  })
+
+  it('maps current-file review notes to Pierre diff annotations', () => {
+    const lines = parseUnifiedDiffForReviewAnchors(
+      '@@ -4,3 +4,4 @@\n context\n-old\n+new\n+extra\n tail',
+    )
+    const note = makeNote({
+      id: 'note-current',
+      oldStartLine: 5,
+      oldEndLine: 5,
+      newStartLine: 5,
+      newEndLine: 6,
+      hunkHeader: '@@ -4,3 +4,4 @@',
+    })
+
+    expect(
+      mapReviewNotesToDiffAnnotations({
+        notes: [
+          note,
+          makeNote({ id: 'other-file', filePath: 'src/other.ts' }),
+          makeNote({ id: 'file-level', newStartLine: null, newEndLine: null }),
+        ],
+        lines,
+        filePath: 'src/app.ts',
+        mode: 'working-tree',
+        activeNoteId: 'note-current',
+      }),
+    ).toEqual({
+      annotations: [
+        {
+          side: 'additions',
+          lineNumber: 5,
+          metadata: {
+            note,
+            lineIds: ['diff-line-2', 'diff-line-3', 'diff-line-4'],
+            active: true,
+          },
+        },
+      ],
+      staleNoteIds: [],
+    })
+  })
+
+  it('maps deletion-only notes to deletion annotations', () => {
+    const lines = parseUnifiedDiffForReviewAnchors(
+      '@@ -1,2 +1 @@\n-old\n context',
+    )
+    const note = makeNote({
+      oldStartLine: 1,
+      oldEndLine: 1,
+      newStartLine: null,
+      newEndLine: null,
+      hunkHeader: '@@ -1,2 +1 @@',
+    })
+
+    expect(
+      mapReviewNotesToDiffAnnotations({
+        notes: [note],
+        lines,
+        filePath: 'src/app.ts',
+        mode: 'working-tree',
+        activeNoteId: null,
+      }).annotations,
+    ).toEqual([
+      {
+        side: 'deletions',
+        lineNumber: 1,
+        metadata: {
+          note,
+          lineIds: ['diff-line-1'],
+          active: false,
+        },
+      },
+    ])
+  })
+
+  it('reports stale current-file note anchors without dropping tray notes', () => {
+    const lines = parseUnifiedDiffForReviewAnchors('@@ -1 +1 @@\n-old\n+new')
+
+    expect(
+      mapReviewNotesToDiffAnnotations({
+        notes: [
+          makeNote({ id: 'stale', newStartLine: 20, newEndLine: 20 }),
+          makeNote({ id: 'other-mode', mode: 'base-branch', newStartLine: 20 }),
+        ],
+        lines,
+        filePath: 'src/app.ts',
+        mode: 'working-tree',
+        activeNoteId: null,
+      }),
+    ).toMatchObject({
+      annotations: [],
+      staleNoteIds: ['stale'],
+    })
   })
 })
 

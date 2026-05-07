@@ -48,9 +48,9 @@ Make sessions deeply useful inside a project context. After a session runs, show
 
 ### Renderer
 
-| File                                                            | What it does                                    |
-| --------------------------------------------------------------- | ----------------------------------------------- |
-| `src/widgets/session-view/changed-files-panel.container.tsx`    | Loads changed files, shows collapsible panel    |
-| `src/widgets/session-view/changed-file-item.presentational.tsx` | Single file with status badge + click to diff   |
-| `src/widgets/session-view/diff-viewer.presentational.tsx`       | Basic diff display                              |
-| `src/widgets/session-view/session-view.container.tsx`           | Updated: add side panel + branch info in header |
+| File                                                             | What it does                                    |
+| ---------------------------------------------------------------- | ----------------------------------------------- |
+| `src/widgets/session-view/changed-files-panel.container.tsx`     | Loads changed files, shows collapsible panel    |
+| `src/widgets/session-view/changed-file-item.presentational.tsx`  | Single file with status badge + click to diff   |
+| `src/widgets/session-view/pierre-diff-viewer.presentational.tsx` | Pierre-backed diff display                      |
+| `src/widgets/session-view/session-view.container.tsx`            | Updated: add side panel + branch info in header |

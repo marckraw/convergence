@@ -1,7 +1,200 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import type { ReactNode } from 'react'
 import { useReviewNoteStore, type ReviewNote } from '@/entities/review-note'
 import { ChangedFilesPanel } from './changed-files-panel.container'
+
+vi.mock('./changed-files-tree.presentational', () => {
+  interface MockChangedFile {
+    status: string
+    file: string
+  }
+
+  interface MockChangedFilesTreeProps {
+    files: MockChangedFile[]
+    selectedFile: string | null
+    loading?: boolean
+    emptyMessage?: string
+    noteCountsByPath?: ReadonlyMap<string, number> | Record<string, number>
+    onSelectFile?: (file: string) => void
+  }
+
+  function getNoteCount(
+    noteCountsByPath:
+      | ReadonlyMap<string, number>
+      | Record<string, number>
+      | undefined,
+    path: string,
+  ): number {
+    if (!noteCountsByPath) return 0
+    const maybeMap = noteCountsByPath as ReadonlyMap<string, number>
+    if (typeof maybeMap.get === 'function') return maybeMap.get(path) ?? 0
+    return (noteCountsByPath as Record<string, number>)[path] ?? 0
+  }
+
+  function splitPath(file: string): { name: string; directory: string | null } {
+    const segments = file.split('/')
+    return {
+      name: segments[segments.length - 1] ?? file,
+      directory:
+        segments.length > 1
+          ? segments.slice(0, segments.length - 1).join('/')
+          : null,
+    }
+  }
+
+  return {
+    ChangedFilesTree: ({
+      files,
+      selectedFile,
+      loading = false,
+      emptyMessage = 'No changed files detected',
+      noteCountsByPath,
+      onSelectFile,
+    }: MockChangedFilesTreeProps) => {
+      if (loading) return <div>Loading changed files...</div>
+      if (files.length === 0) return <div>{emptyMessage}</div>
+
+      return (
+        <div aria-label="Changed files tree">
+          {files.map((file) => {
+            const { name, directory } = splitPath(file.file)
+            const noteCount = getNoteCount(noteCountsByPath, file.file)
+
+            return (
+              <button
+                key={file.file}
+                type="button"
+                aria-pressed={selectedFile === file.file}
+                title={file.file}
+                onClick={() => onSelectFile?.(file.file)}
+              >
+                <span>{name}</span>
+                {directory && <span>{directory}</span>}
+                {noteCount > 0 && (
+                  <span
+                    title={`${noteCount} review ${
+                      noteCount === 1 ? 'note' : 'notes'
+                    }`}
+                  >
+                    {noteCount}
+                  </span>
+                )}
+              </button>
+            )
+          })}
+        </div>
+      )
+    },
+  }
+})
+
+vi.mock('./pierre-diff-viewer.presentational', () => ({
+  PierreDiffViewer: ({
+    file,
+    diff,
+    loading = false,
+    emptyMessage,
+    title,
+    onSelectedLinesChange,
+    lineAnnotations = [],
+    renderAnnotation,
+  }: {
+    file: string | null
+    diff: string
+    loading?: boolean
+    emptyMessage?: string
+    title?: string
+    lineAnnotations?: Array<{
+      side: 'deletions' | 'additions'
+      lineNumber: number
+      metadata: {
+        note: ReviewNote
+      }
+    }>
+    renderAnnotation?: (annotation: {
+      side: 'deletions' | 'additions'
+      lineNumber: number
+      metadata: {
+        note: ReviewNote
+      }
+    }) => ReactNode
+    onSelectedLinesChange?: (range: {
+      start: number
+      side: 'deletions' | 'additions'
+      end: number
+      endSide: 'deletions' | 'additions'
+    }) => void
+  }) => {
+    if (!file) return <div>{emptyMessage}</div>
+    if (loading) return <div>Loading diff...</div>
+
+    return (
+      <div>
+        <p>{file.split('/').at(-1)}</p>
+        <p>{title}</p>
+        {diff.split('\n').map((line, index) => {
+          if (line.startsWith('-')) {
+            return (
+              <button
+                key={`${index}:${line}`}
+                type="button"
+                onClick={() =>
+                  onSelectedLinesChange?.({
+                    start: 1,
+                    side: 'deletions',
+                    end: 1,
+                    endSide: 'deletions',
+                  })
+                }
+              >
+                {line}
+              </button>
+            )
+          }
+
+          if (line.startsWith('+')) {
+            return (
+              <button
+                key={`${index}:${line}`}
+                type="button"
+                onClick={(event) =>
+                  onSelectedLinesChange?.(
+                    event.shiftKey
+                      ? {
+                          start: 1,
+                          side: 'deletions',
+                          end: 1,
+                          endSide: 'additions',
+                        }
+                      : {
+                          start: 1,
+                          side: 'additions',
+                          end: 1,
+                          endSide: 'additions',
+                        },
+                  )
+                }
+              >
+                {line}
+              </button>
+            )
+          }
+
+          return <span key={`${index}:${line}`}>{line}</span>
+        })}
+        {lineAnnotations.map((annotation) => (
+          <div
+            key={annotation.metadata.note.id}
+            data-testid={`diff-annotation-${annotation.metadata.note.id}`}
+          >
+            {renderAnnotation?.(annotation)}
+          </div>
+        ))}
+      </div>
+    )
+  },
+}))
 
 const session = {
   id: 'session-1',
@@ -150,10 +343,11 @@ describe('ChangedFilesPanel', () => {
     ).toBeInTheDocument()
     expect(screen.getByText('Files')).toBeInTheDocument()
     expect(screen.getByText('2 changed')).toBeInTheDocument()
+    expect(screen.getByLabelText('Changed files tree')).toBeInTheDocument()
 
     await waitFor(() => {
       expect(screen.getByText('Current workspace diff')).toBeInTheDocument()
-      expect(screen.getByText('app.ts')).toBeInTheDocument()
+      expect(screen.getAllByText('app.ts').length).toBeGreaterThan(0)
       expect(screen.getAllByText('src').length).toBeGreaterThan(0)
       expect(screen.getByText('+console.log("new")')).toBeInTheDocument()
     })
@@ -195,7 +389,9 @@ describe('ChangedFilesPanel', () => {
     fireEvent.click(screen.getByRole('button', { name: /save note/i }))
 
     await waitFor(() => {
-      expect(screen.getByText('Why did this change?')).toBeInTheDocument()
+      expect(
+        screen.getAllByText('Why did this change?').length,
+      ).toBeGreaterThan(0)
     })
 
     const electronAPI = (
@@ -323,7 +519,7 @@ describe('ChangedFilesPanel', () => {
     })
 
     expect(screen.getByText('3 draft notes')).toBeInTheDocument()
-    expect(screen.getByText('Question on app')).toBeInTheDocument()
+    expect(screen.getAllByText('Question on app').length).toBeGreaterThan(0)
     expect(screen.getByText('Second question on new file')).toBeInTheDocument()
     expect(screen.getByTitle('2 review notes')).toBeInTheDocument()
 
@@ -339,6 +535,209 @@ describe('ChangedFilesPanel', () => {
       session.workingDirectory,
       'src/new-file.ts',
     )
+  })
+
+  it('does not mark a note anchor stale while its target diff is still loading', async () => {
+    const note = makeReviewNote({
+      id: 'note-new',
+      filePath: 'src/new-file.ts',
+      body: 'Question on new file',
+      newStartLine: 1,
+    })
+    const targetDiff = createDeferred<string>()
+    const electronAPI = (
+      window as unknown as { electronAPI: Record<string, unknown> }
+    ).electronAPI
+    const git = electronAPI.git as Record<string, ReturnType<typeof vi.fn>>
+    const reviewNotes = electronAPI.reviewNotes as Record<
+      string,
+      ReturnType<typeof vi.fn>
+    >
+    reviewNotes.listBySession.mockResolvedValue([note])
+    git.getDiff.mockImplementation(
+      (_workingDirectory: string, filePath?: string) => {
+        if (filePath === 'src/new-file.ts') return targetDiff.promise
+        return Promise.resolve('@@ -1 +1 @@\n-old app\n+new app')
+      },
+    )
+
+    render(
+      <ChangedFilesPanel
+        session={session}
+        side="right"
+        expanded={false}
+        onClose={vi.fn()}
+        onToggleSide={vi.fn()}
+        onToggleExpanded={vi.fn()}
+      />,
+    )
+
+    await waitFor(() => {
+      expect(screen.getByText('Question on new file')).toBeInTheDocument()
+    })
+
+    fireEvent.click(screen.getByText('Question on new file'))
+
+    await waitFor(() => {
+      expect(screen.getByText('Loading diff...')).toBeInTheDocument()
+    })
+    expect(screen.queryByText('stale anchor')).not.toBeInTheDocument()
+
+    targetDiff.resolve('@@ -1 +1 @@\n-old new file\n+new file answer')
+
+    await waitFor(() => {
+      expect(screen.getByText('1 line selected')).toBeInTheDocument()
+      expect(screen.getByText('New 1')).toBeInTheDocument()
+    })
+  })
+
+  it('ignores stale diff responses after quickly selecting another file', async () => {
+    const newFileDiff = createDeferred<string>()
+    const electronAPI = (
+      window as unknown as { electronAPI: Record<string, unknown> }
+    ).electronAPI
+    const git = electronAPI.git as Record<string, ReturnType<typeof vi.fn>>
+    git.getDiff.mockImplementation(
+      (_workingDirectory: string, filePath?: string) => {
+        if (filePath === 'src/new-file.ts') return newFileDiff.promise
+        return Promise.resolve('@@ -1 +1 @@\n-old app\n+current app')
+      },
+    )
+
+    render(
+      <ChangedFilesPanel
+        session={session}
+        side="right"
+        expanded={false}
+        onClose={vi.fn()}
+        onToggleSide={vi.fn()}
+        onToggleExpanded={vi.fn()}
+      />,
+    )
+
+    await waitFor(() => {
+      expect(screen.getByText('+current app')).toBeInTheDocument()
+    })
+
+    fireEvent.click(screen.getByText('new-file.ts'))
+
+    await waitFor(() => {
+      expect(screen.getByText('Loading diff...')).toBeInTheDocument()
+    })
+
+    fireEvent.click(screen.getByText('app.ts'))
+
+    await waitFor(() => {
+      expect(screen.getByText('+current app')).toBeInTheDocument()
+    })
+
+    newFileDiff.resolve('@@ -1 +1 @@\n-old new file\n+late new file')
+    await Promise.resolve()
+
+    expect(screen.getByText('+current app')).toBeInTheDocument()
+    expect(screen.queryByText('+late new file')).not.toBeInTheDocument()
+  })
+
+  it('renders current-file review notes as inline Pierre diff annotations', async () => {
+    const notes = [
+      makeReviewNote({
+        id: 'note-draft',
+        body: 'Draft inline note',
+        state: 'draft',
+        newStartLine: 1,
+      }),
+      makeReviewNote({
+        id: 'note-sent',
+        body: 'Sent inline note',
+        state: 'sent',
+        newStartLine: 1,
+      }),
+      makeReviewNote({
+        id: 'note-resolved',
+        body: 'Resolved inline note',
+        state: 'resolved',
+        newStartLine: 1,
+      }),
+    ]
+    const electronAPI = (
+      window as unknown as { electronAPI: Record<string, unknown> }
+    ).electronAPI
+    const reviewNotes = electronAPI.reviewNotes as Record<
+      string,
+      ReturnType<typeof vi.fn>
+    >
+    reviewNotes.listBySession.mockResolvedValue(notes)
+
+    render(
+      <ChangedFilesPanel
+        session={session}
+        side="right"
+        expanded={false}
+        onClose={vi.fn()}
+        onToggleSide={vi.fn()}
+        onToggleExpanded={vi.fn()}
+      />,
+    )
+
+    await waitFor(() => {
+      expect(
+        screen.getByTestId('diff-annotation-note-draft'),
+      ).toHaveTextContent('Draft inline note')
+      expect(screen.getByTestId('diff-annotation-note-sent')).toHaveTextContent(
+        'Sent inline note',
+      )
+      expect(
+        screen.getByTestId('diff-annotation-note-resolved'),
+      ).toHaveTextContent('Resolved inline note')
+    })
+
+    expect(screen.getByTestId('diff-annotation-note-draft')).toHaveTextContent(
+      'draft',
+    )
+    expect(screen.getByTestId('diff-annotation-note-sent')).toHaveTextContent(
+      'sent',
+    )
+    expect(
+      screen.getByTestId('diff-annotation-note-resolved'),
+    ).toHaveTextContent('resolved')
+  })
+
+  it('marks stale current-file note anchors without hiding the tray note', async () => {
+    const staleNote = makeReviewNote({
+      id: 'note-stale',
+      body: 'Stale inline note',
+      newStartLine: 20,
+      newEndLine: 20,
+    })
+    const electronAPI = (
+      window as unknown as { electronAPI: Record<string, unknown> }
+    ).electronAPI
+    const reviewNotes = electronAPI.reviewNotes as Record<
+      string,
+      ReturnType<typeof vi.fn>
+    >
+    reviewNotes.listBySession.mockResolvedValue([staleNote])
+
+    render(
+      <ChangedFilesPanel
+        session={session}
+        side="right"
+        expanded={false}
+        onClose={vi.fn()}
+        onToggleSide={vi.fn()}
+        onToggleExpanded={vi.fn()}
+      />,
+    )
+
+    await waitFor(() => {
+      expect(screen.getByText('Stale inline note')).toBeInTheDocument()
+      expect(screen.getByText('stale anchor')).toBeInTheDocument()
+    })
+
+    expect(screen.queryByTestId('diff-annotation-note-stale')).toBeNull()
+    expect(
+      screen.getByTitle('Saved line anchor is not present in the current diff'),
+    ).toBeInTheDocument()
   })
 
   it('filters review notes by state and resolves notes', async () => {
@@ -380,15 +779,15 @@ describe('ChangedFilesPanel', () => {
     )
 
     await waitFor(() => {
-      expect(screen.getByText('Draft question')).toBeInTheDocument()
-      expect(screen.getByText('Sent question')).toBeInTheDocument()
-      expect(screen.getByText('Resolved question')).toBeInTheDocument()
+      expect(screen.getAllByText('Draft question').length).toBeGreaterThan(0)
+      expect(screen.getAllByText('Sent question').length).toBeGreaterThan(0)
+      expect(screen.getAllByText('Resolved question').length).toBeGreaterThan(0)
     })
 
     fireEvent.click(screen.getByRole('button', { name: 'Sent 1' }))
 
     expect(screen.queryByText('Draft question')).not.toBeInTheDocument()
-    expect(screen.getByText('Sent question')).toBeInTheDocument()
+    expect(screen.getAllByText('Sent question').length).toBeGreaterThan(0)
     expect(screen.queryByText('Resolved question')).not.toBeInTheDocument()
 
     fireEvent.click(screen.getByRole('button', { name: 'All 3' }))
@@ -537,7 +936,7 @@ describe('ChangedFilesPanel', () => {
         'Changes compared with beta. Includes local uncommitted edits.',
       ),
     ).toBeInTheDocument()
-    expect(screen.getByText('base.ts')).toBeInTheDocument()
+    expect(screen.getAllByText('base.ts').length).toBeGreaterThan(0)
 
     await waitFor(() => {
       expect(screen.getByText('Diff against beta')).toBeInTheDocument()
@@ -646,7 +1045,7 @@ describe('ChangedFilesPanel', () => {
     const electronAPI = (
       window as unknown as { electronAPI: Record<string, unknown> }
     ).electronAPI
-    ;(electronAPI.turns as Record<string, ReturnType<typeof vi.fn>>) = {
+    const turnsApiMock = {
       listForSession: vi.fn().mockResolvedValue(turns),
       getFileChanges: vi.fn().mockResolvedValue(fileChanges),
       getFileDiff: vi
@@ -654,6 +1053,8 @@ describe('ChangedFilesPanel', () => {
         .mockResolvedValue('--- a\n+++ b\n@@ -1 +1 @@\n-old\n+new\n'),
       onTurnDelta: vi.fn().mockReturnValue(() => {}),
     }
+    ;(electronAPI.turns as Record<string, ReturnType<typeof vi.fn>>) =
+      turnsApiMock
 
     render(
       <ChangedFilesPanel
@@ -672,10 +1073,43 @@ describe('ChangedFilesPanel', () => {
     await waitFor(() => {
       expect(screen.getByText('Fixed login bug')).toBeInTheDocument()
       expect(screen.getByText('1 file')).toBeInTheDocument()
+      expect(screen.getByLabelText('Changed files tree')).toBeInTheDocument()
       expect(screen.getByText('login.ts')).toBeInTheDocument()
     })
+
+    const getLoginTreeRow = () => screen.getAllByText('login.ts')[0]
+
+    fireEvent.click(getLoginTreeRow())
+
+    await waitFor(() => {
+      expect(turnsApiMock.getFileDiff).toHaveBeenCalledWith(
+        'turn-1',
+        'src/login.ts',
+      )
+      expect(screen.getByText('Turn diff')).toBeInTheDocument()
+      expect(screen.getByText('-old')).toBeInTheDocument()
+      expect(screen.getByText('+new')).toBeInTheDocument()
+    })
+
+    fireEvent.click(getLoginTreeRow())
+
+    expect(screen.getByText('Turn diff')).toBeInTheDocument()
+    expect(screen.queryByText('Select a changed file from a turn')).toBeNull()
+    expect(turnsApiMock.getFileDiff).toHaveBeenCalledTimes(1)
   })
 })
+
+function createDeferred<T>(): {
+  promise: Promise<T>
+  resolve: (value: T) => void
+} {
+  let resolve!: (value: T) => void
+  const promise = new Promise<T>((nextResolve) => {
+    resolve = nextResolve
+  })
+
+  return { promise, resolve }
+}
 
 function makeReviewNote(patch: Partial<ReviewNote>): ReviewNote {
   return {

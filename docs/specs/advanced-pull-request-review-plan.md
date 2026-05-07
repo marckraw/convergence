@@ -9,7 +9,7 @@ It builds on:
 - `docs/specs/pull-request-local-review.md`
 - `docs/specs/changed-files-base-branch.md`
 - `src/widgets/session-view/changed-files-panel.container.tsx`
-- `src/widgets/session-view/diff-viewer.presentational.tsx`
+- `src/widgets/session-view/pierre-diff-viewer.presentational.tsx`
 - `electron/backend/git/changed-files.service.ts`
 - `electron/backend/session/session.service.ts`
 
@@ -26,8 +26,9 @@ Session.
 
 ### Slice 1 - Parse and render selectable diff lines
 
-Goal: make the existing `DiffViewer` line-aware and selectable without
-persistence.
+Goal: make the shared diff viewer line-aware and selectable without
+persistence. The current implementation uses Pierre for rendering/selection and
+keeps local parsing only for persisted review-note anchors.
 
 Build:
 
@@ -36,8 +37,7 @@ Build:
   - preserve existing coloring semantics
   - handle file headers, hunk headers, additions, deletions, context, and empty
     diffs
-- Replace the current `diff.split('\n')` render path in
-  `diff-viewer.presentational.tsx`
+- Replace the raw local diff render path in the shared diff viewer
 - Add selectable row state in `ChangedFilesPanel`
   - click selects one row
   - shift-click selects a contiguous visible range

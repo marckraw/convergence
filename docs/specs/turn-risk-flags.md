@@ -125,7 +125,7 @@ background. No bulk backfill.
   tooltip listing each flag + reason.
 - Per-turn header: "N risk signals" chip in header when any file in
   the turn has any flag.
-- No visual change inside `diff-viewer.presentational.tsx`. Flags
+- No visual change inside the diff viewer. Flags
   surface at the file-list level only.
 
 ### IPC surface

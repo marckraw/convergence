@@ -142,7 +142,7 @@ Goal: base-branch mode feels equivalent to working-tree mode for review.
 
 - [x] Reuse `ChangedFileItem` for both modes unless base-mode status parsing
       requires a tiny status-label helper.
-- [x] Reuse `DiffViewer`, but update its empty title/copy so it can describe
+- [x] Reuse the shared diff viewer, but update its empty title/copy so it can describe
       the active mode:
   - [x] no file selected in working-tree mode
   - [x] no file selected in base-branch mode

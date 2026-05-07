@@ -17,7 +17,9 @@ export interface DiffLine {
 
 const HUNK_HEADER_RE = /^@@ -(\d+)(?:,\d+)? \+(\d+)(?:,\d+)? @@(?:.*)$/
 
-export function parseUnifiedDiff(diff: string): DiffLine[] {
+// Compatibility bridge for persisted ReviewNote anchors. Pierre owns rendering
+// and selection UI; this keeps old/new lines, hunk headers, and selected text.
+export function parseUnifiedDiffForReviewAnchors(diff: string): DiffLine[] {
   if (!diff) return []
 
   const rows: DiffLine[] = []
@@ -68,28 +70,6 @@ export function parseUnifiedDiff(diff: string): DiffLine[] {
   }
 
   return rows
-}
-
-export function selectDiffLineRange(input: {
-  lines: DiffLine[]
-  anchorId: string | null
-  targetId: string
-}): string[] {
-  const targetIndex = input.lines.findIndex(
-    (line) => line.id === input.targetId,
-  )
-  if (targetIndex < 0) return []
-
-  const anchorIndex = input.anchorId
-    ? input.lines.findIndex((line) => line.id === input.anchorId)
-    : targetIndex
-  const start = Math.min(
-    anchorIndex < 0 ? targetIndex : anchorIndex,
-    targetIndex,
-  )
-  const end = Math.max(anchorIndex < 0 ? targetIndex : anchorIndex, targetIndex)
-
-  return input.lines.slice(start, end + 1).map((line) => line.id)
 }
 
 export function summarizeSelectedDiffLines(input: {

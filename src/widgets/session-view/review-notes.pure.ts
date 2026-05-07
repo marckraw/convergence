@@ -1,3 +1,4 @@
+import type { DiffLineAnnotation } from '@pierre/diffs'
 import type { ReviewNote } from '@/entities/review-note'
 import type { DiffLine } from './diff-lines.pure'
 
@@ -6,6 +7,24 @@ export type ReviewNoteFilter = 'all' | ReviewNote['state']
 export interface ReviewNoteGroup {
   filePath: string
   notes: ReviewNote[]
+}
+
+export interface ReviewNoteDiffAnnotationMetadata {
+  note: ReviewNote
+  lineIds: string[]
+  active: boolean
+}
+
+export type ReviewNoteDiffAnnotation =
+  DiffLineAnnotation<ReviewNoteDiffAnnotationMetadata>
+
+export interface ReviewNoteDiffAnnotationMapping {
+  annotations: ReviewNoteDiffAnnotation[]
+  staleNoteIds: string[]
+}
+
+export function getReviewNoteAnnotationElementId(noteId: string): string {
+  return `review-note-annotation-${noteId}`
 }
 
 export function filterReviewNotes(
@@ -87,6 +106,49 @@ export function findReviewNoteDiffLineIds(input: {
     .map((line) => line.id)
 }
 
+export function mapReviewNotesToDiffAnnotations(input: {
+  notes: ReviewNote[]
+  lines: DiffLine[]
+  filePath: string | null
+  mode: ReviewNote['mode']
+  activeNoteId: string | null
+}): ReviewNoteDiffAnnotationMapping {
+  if (!input.filePath) {
+    return { annotations: [], staleNoteIds: [] }
+  }
+
+  const annotations: ReviewNoteDiffAnnotation[] = []
+  const staleNoteIds: string[] = []
+
+  for (const note of input.notes) {
+    if (note.filePath !== input.filePath || note.mode !== input.mode) continue
+    if (isFileLevelReviewNote(note)) continue
+
+    const lineIds = findReviewNoteDiffLineIds({ note, lines: input.lines })
+    const anchorLine = findReviewNoteAnnotationAnchor({
+      note,
+      lines: input.lines,
+    })
+
+    if (!anchorLine || lineIds.length === 0) {
+      staleNoteIds.push(note.id)
+      continue
+    }
+
+    annotations.push({
+      side: anchorLine.side,
+      lineNumber: anchorLine.lineNumber,
+      metadata: {
+        note,
+        lineIds,
+        active: note.id === input.activeNoteId,
+      },
+    })
+  }
+
+  return { annotations, staleNoteIds }
+}
+
 export function isFileLevelReviewNote(note: ReviewNote): boolean {
   return (
     note.oldStartLine === null &&
@@ -94,6 +156,42 @@ export function isFileLevelReviewNote(note: ReviewNote): boolean {
     note.newStartLine === null &&
     note.newEndLine === null
   )
+}
+
+function findReviewNoteAnnotationAnchor(input: {
+  note: ReviewNote
+  lines: DiffLine[]
+}): { side: ReviewNoteDiffAnnotation['side']; lineNumber: number } | null {
+  const oldEnd = input.note.oldEndLine ?? input.note.oldStartLine
+  const newEnd = input.note.newEndLine ?? input.note.newStartLine
+
+  if (input.note.newStartLine !== null && newEnd !== null) {
+    const additionLine = input.lines.find(
+      (line) =>
+        isLineInRange(line.newLine, input.note.newStartLine, newEnd) &&
+        isMatchingHunk(line, input.note.hunkHeader),
+    )
+    if (additionLine?.newLine !== null && additionLine?.newLine !== undefined) {
+      return { side: 'additions', lineNumber: additionLine.newLine }
+    }
+  }
+
+  if (input.note.oldStartLine !== null && oldEnd !== null) {
+    const deletionLine = input.lines.find(
+      (line) =>
+        isLineInRange(line.oldLine, input.note.oldStartLine, oldEnd) &&
+        isMatchingHunk(line, input.note.hunkHeader),
+    )
+    if (deletionLine?.oldLine !== null && deletionLine?.oldLine !== undefined) {
+      return { side: 'deletions', lineNumber: deletionLine.oldLine }
+    }
+  }
+
+  return null
+}
+
+function isMatchingHunk(line: DiffLine, hunkHeader: string | null): boolean {
+  return !hunkHeader || !line.hunkHeader || line.hunkHeader === hunkHeader
 }
 
 function isLineInRange(

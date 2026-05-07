@@ -1,5 +1,6 @@
-import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import type { FC, MouseEvent as ReactMouseEvent } from 'react'
+import type { SelectedLineRange } from '@pierre/diffs'
 import { useReviewNoteStore, type ReviewNote } from '@/entities/review-note'
 import type { SessionSummary } from '@/entities/session'
 import type { ResolvedBaseBranch } from '@/entities/workspace'
@@ -21,29 +22,35 @@ import {
   X,
 } from 'lucide-react'
 import { cn } from '@/shared/lib/cn.pure'
-import { ChangedFileItem } from './changed-file-item.presentational'
 import { ChangedFilesModeButton } from './changed-files-mode-button.presentational'
+import { ChangedFilesTree } from './changed-files-tree.presentational'
 import {
   getChangedFilesEmptyMessage,
   getChangedFilesHeaderLabel,
   selectChangedFileAfterReload,
   type ChangedFilesReviewMode,
 } from './changed-files.pure'
-import { DiffViewer } from './diff-viewer.presentational'
 import {
-  parseUnifiedDiff,
-  selectDiffLineRange,
+  parseUnifiedDiffForReviewAnchors,
   summarizeSelectedDiffLines,
-  type DiffLine,
 } from './diff-lines.pure'
+import { PierreDiffViewer } from './pierre-diff-viewer.presentational'
+import {
+  mapDiffLineIdsToPierreSelection,
+  mapPierreSelectionToDiffLineIds,
+} from './pierre-diff-selection.pure'
+import { ReviewNoteDiffAnnotation as ReviewNoteDiffAnnotationView } from './review-note-diff-annotation.presentational'
 import {
   countDraftReviewNotes,
   countReviewNotesByFile,
   countReviewNotesByState,
   filterReviewNotes,
   findReviewNoteDiffLineIds,
+  getReviewNoteAnnotationElementId,
   groupReviewNotesByFile,
   isFileLevelReviewNote,
+  mapReviewNotesToDiffAnnotations,
+  type ReviewNoteDiffAnnotation as ReviewNoteDiffAnnotationModel,
   type ReviewNoteFilter,
 } from './review-notes.pure'
 import { TurnList } from './turn-list.container'
@@ -95,9 +102,6 @@ export const ChangedFilesPanel: FC<ChangedFilesPanelProps> = ({
   const [loading, setLoading] = useState(false)
   const [diffLoading, setDiffLoading] = useState(false)
   const [selectedDiffLineIds, setSelectedDiffLineIds] = useState<string[]>([])
-  const [selectionAnchorLineId, setSelectionAnchorLineId] = useState<
-    string | null
-  >(null)
   const [noteComposerOpen, setNoteComposerOpen] = useState(false)
   const [noteDraftBody, setNoteDraftBody] = useState('')
   const [fileNoteComposerOpen, setFileNoteComposerOpen] = useState(false)
@@ -118,6 +122,9 @@ export const ChangedFilesPanel: FC<ChangedFilesPanelProps> = ({
   > | null>(null)
   const [reviewNoteFilter, setReviewNoteFilter] =
     useState<ReviewNoteFilter>('all')
+  const diffRequestIdRef = useRef(0)
+  const currentReviewNoteMode: ReviewNote['mode'] =
+    mode === 'base-branch' ? 'base-branch' : 'working-tree'
   const reviewNotes =
     useReviewNoteStore((state) => state.notesBySessionId[session.id]) ??
     EMPTY_REVIEW_NOTES
@@ -151,7 +158,10 @@ export const ChangedFilesPanel: FC<ChangedFilesPanelProps> = ({
     () => countReviewNotesByFile(reviewNotes),
     [reviewNotes],
   )
-  const diffLines = useMemo(() => parseUnifiedDiff(diff), [diff])
+  const diffLines = useMemo(
+    () => parseUnifiedDiffForReviewAnchors(diff),
+    [diff],
+  )
   const selectedDiffLineIdSet = useMemo(
     () => new Set(selectedDiffLineIds),
     [selectedDiffLineIds],
@@ -167,6 +177,48 @@ export const ChangedFilesPanel: FC<ChangedFilesPanelProps> = ({
         selectedIds: selectedDiffLineIds,
       }),
     [diffLines, selectedDiffLineIds],
+  )
+  const selectedPierreLineRange = useMemo(
+    () =>
+      mapDiffLineIdsToPierreSelection({
+        lines: diffLines,
+        selectedIds: selectedDiffLineIds,
+      }),
+    [diffLines, selectedDiffLineIds],
+  )
+  const reviewNoteAnnotationMapping = useMemo(() => {
+    if (diffLoading || diffLines.length === 0) {
+      return {
+        annotations: [],
+        staleNoteIds: [],
+      }
+    }
+
+    return mapReviewNotesToDiffAnnotations({
+      notes: visibleReviewNotes,
+      lines: diffLines,
+      filePath: selectedFile,
+      mode: currentReviewNoteMode,
+      activeNoteId: activeReviewNoteId,
+    })
+  }, [
+    activeReviewNoteId,
+    currentReviewNoteMode,
+    diffLines,
+    diffLoading,
+    selectedFile,
+    visibleReviewNotes,
+  ])
+  const reviewNoteAnnotations = reviewNoteAnnotationMapping.annotations
+  const staleReviewNoteIdSet = useMemo(
+    () => new Set(reviewNoteAnnotationMapping.staleNoteIds),
+    [reviewNoteAnnotationMapping.staleNoteIds],
+  )
+  const renderReviewNoteAnnotation = useCallback(
+    (annotation: ReviewNoteDiffAnnotationModel) => (
+      <ReviewNoteDiffAnnotationView metadata={annotation.metadata} />
+    ),
+    [],
   )
 
   useEffect(() => {
@@ -219,24 +271,55 @@ export const ChangedFilesPanel: FC<ChangedFilesPanelProps> = ({
     void loadReviewNotes(session.id)
   }, [loadReviewNotes, session.id])
 
+  useEffect(() => {
+    if (!activeReviewNoteId || diffLoading) return
+
+    const timeout = window.setTimeout(() => {
+      const target = document.getElementById(
+        getReviewNoteAnnotationElementId(activeReviewNoteId),
+      )
+      if (!target || typeof target.scrollIntoView !== 'function') return
+
+      target.scrollIntoView({ block: 'center', inline: 'nearest' })
+    }, 0)
+
+    return () => window.clearTimeout(timeout)
+  }, [activeReviewNoteId, diffLoading, reviewNoteAnnotations])
+
   const loadDiff = useCallback(
     async (file: string | null) => {
       if (mode === 'turns') {
+        diffRequestIdRef.current += 1
         setDiff('')
+        setDiffLoading(false)
         return
       }
 
       if (!file) {
+        diffRequestIdRef.current += 1
         setDiff('')
+        setDiffLoading(false)
         return
       }
 
+      const requestId = diffRequestIdRef.current + 1
+      diffRequestIdRef.current = requestId
+      const fallbackDiff =
+        storedReviewNoteDiff &&
+        storedReviewNoteDiff.filePath === file &&
+        storedReviewNoteDiff.mode === mode
+          ? storedReviewNoteDiff.diff
+          : ''
+
+      setDiff(fallbackDiff)
       setDiffLoading(true)
       try {
         const result =
           mode === 'base-branch'
             ? await gitApi.getBaseBranchDiff(session.id, file)
             : await gitApi.getDiff(session.workingDirectory, file)
+        if (diffRequestIdRef.current !== requestId) return
+
         if (result) {
           setDiff(result)
           setStoredReviewNoteDiff(null)
@@ -254,9 +337,12 @@ export const ChangedFilesPanel: FC<ChangedFilesPanelProps> = ({
 
         setDiff('(no diff available)')
       } catch {
+        if (diffRequestIdRef.current !== requestId) return
         setDiff('Failed to load diff')
       } finally {
-        setDiffLoading(false)
+        if (diffRequestIdRef.current === requestId) {
+          setDiffLoading(false)
+        }
       }
     },
     [mode, session.id, session.workingDirectory, storedReviewNoteDiff],
@@ -268,7 +354,6 @@ export const ChangedFilesPanel: FC<ChangedFilesPanelProps> = ({
 
   useEffect(() => {
     setSelectedDiffLineIds([])
-    setSelectionAnchorLineId(null)
     setNoteComposerOpen(false)
     setNoteDraftBody('')
     setPacketPreviewOpen(false)
@@ -290,7 +375,6 @@ export const ChangedFilesPanel: FC<ChangedFilesPanelProps> = ({
       lines: diffLines,
     })
     setSelectedDiffLineIds(selectedLineIds)
-    setSelectionAnchorLineId(selectedLineIds[0] ?? null)
     setPendingReviewNoteSelection(null)
   }, [diffLines, diffLoading, mode, pendingReviewNoteSelection, selectedFile])
 
@@ -311,31 +395,18 @@ export const ChangedFilesPanel: FC<ChangedFilesPanelProps> = ({
     setBase(null)
     setError(null)
     setSelectedDiffLineIds([])
-    setSelectionAnchorLineId(null)
     setStoredReviewNoteDiff(null)
     setPinnedReviewNoteFile(null)
     setFileNoteComposerOpen(false)
     setFileNoteDraftBody('')
   }
 
-  const handleDiffLineClick = (
-    line: DiffLine,
-    event: ReactMouseEvent<HTMLButtonElement>,
-  ) => {
-    if (event.shiftKey) {
-      setSelectedDiffLineIds(
-        selectDiffLineRange({
-          lines: diffLines,
-          anchorId: selectionAnchorLineId,
-          targetId: line.id,
-        }),
-      )
-      setSelectionAnchorLineId((current) => current ?? line.id)
-      return
-    }
-
-    setSelectedDiffLineIds([line.id])
-    setSelectionAnchorLineId(line.id)
+  const handlePierreDiffSelection = (range: SelectedLineRange | null) => {
+    const selectedLineIds = mapPierreSelectionToDiffLineIds({
+      lines: diffLines,
+      range,
+    })
+    setSelectedDiffLineIds(selectedLineIds)
   }
 
   const handleCreateReviewNote = async () => {
@@ -345,7 +416,7 @@ export const ChangedFilesPanel: FC<ChangedFilesPanelProps> = ({
       sessionId: session.id,
       workspaceId: session.workspaceId,
       filePath: selectedFile,
-      mode: mode === 'base-branch' ? 'base-branch' : 'working-tree',
+      mode: currentReviewNoteMode,
       oldStartLine: selectedDiffSummary.oldStartLine,
       oldEndLine: selectedDiffSummary.oldEndLine,
       newStartLine: selectedDiffSummary.newStartLine,
@@ -360,7 +431,6 @@ export const ChangedFilesPanel: FC<ChangedFilesPanelProps> = ({
     setNoteComposerOpen(false)
     setNoteDraftBody('')
     setSelectedDiffLineIds([])
-    setSelectionAnchorLineId(null)
   }
 
   const handleCreateFileReviewNote = async () => {
@@ -370,7 +440,7 @@ export const ChangedFilesPanel: FC<ChangedFilesPanelProps> = ({
       sessionId: session.id,
       workspaceId: session.workspaceId,
       filePath: selectedFile,
-      mode: mode === 'base-branch' ? 'base-branch' : 'working-tree',
+      mode: currentReviewNoteMode,
       oldStartLine: null,
       oldEndLine: null,
       newStartLine: null,
@@ -412,7 +482,6 @@ export const ChangedFilesPanel: FC<ChangedFilesPanelProps> = ({
     setNoteDraftBody('')
     setDiff('')
     setSelectedDiffLineIds([])
-    setSelectionAnchorLineId(null)
     setStoredReviewNoteDiff({
       filePath: note.filePath,
       mode: note.mode,
@@ -597,16 +666,13 @@ export const ChangedFilesPanel: FC<ChangedFilesPanelProps> = ({
                   expanded ? 'h-56' : 'h-44',
                 )}
               >
-                {files.map((f) => (
-                  <ChangedFileItem
-                    key={f.file}
-                    status={f.status}
-                    file={f.file}
-                    selected={selectedFile === f.file}
-                    noteCount={reviewNoteCountByFile[f.file] ?? 0}
-                    onSelect={() => handleFileClick(f.file)}
-                  />
-                ))}
+                <ChangedFilesTree
+                  files={files}
+                  selectedFile={selectedFile}
+                  noteCountsByPath={reviewNoteCountByFile}
+                  onSelectFile={handleFileClick}
+                  className="h-full"
+                />
               </div>
             </div>
           )}
@@ -850,6 +916,14 @@ export const ChangedFilesPanel: FC<ChangedFilesPanelProps> = ({
                               </span>
                             </Button>
                             <div className="flex shrink-0 items-center gap-1">
+                              {staleReviewNoteIdSet.has(note.id) && (
+                                <span
+                                  className="rounded border border-destructive/40 bg-destructive/10 px-1.5 py-0.5 text-[10px] text-destructive"
+                                  title="Saved line anchor is not present in the current diff"
+                                >
+                                  stale anchor
+                                </span>
+                              )}
                               <span className="rounded border border-border px-1.5 py-0.5 text-[10px] text-muted-foreground">
                                 {note.state}
                               </span>
@@ -953,12 +1027,13 @@ export const ChangedFilesPanel: FC<ChangedFilesPanelProps> = ({
                 ))}
               </div>
             )}
-            <DiffViewer
+            <PierreDiffViewer
               file={selectedFile}
               diff={diff}
-              lines={diffLines}
-              selectedLineIds={selectedDiffLineIds}
-              onLineClick={handleDiffLineClick}
+              selectedLines={selectedPierreLineRange}
+              onSelectedLinesChange={handlePierreDiffSelection}
+              lineAnnotations={reviewNoteAnnotations}
+              renderAnnotation={renderReviewNoteAnnotation}
               loading={diffLoading}
               title={
                 mode === 'base-branch'

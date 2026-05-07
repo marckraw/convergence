@@ -1,17 +1,17 @@
 import { describe, expect, it } from 'vitest'
 import {
-  parseUnifiedDiff,
-  selectDiffLineRange,
+  parseUnifiedDiffForReviewAnchors,
   summarizeSelectedDiffLines,
 } from './diff-lines.pure'
 
-describe('parseUnifiedDiff', () => {
+describe('parseUnifiedDiffForReviewAnchors', () => {
   it('returns no rows for an empty diff', () => {
-    expect(parseUnifiedDiff('')).toEqual([])
+    expect(parseUnifiedDiffForReviewAnchors('')).toEqual([])
   })
 
-  it('parses file headers, hunk headers, additions, deletions, and context', () => {
-    const rows = parseUnifiedDiff(`diff --git a/src/a.ts b/src/a.ts
+  it('parses the review-note anchor fields missing from Pierre selections', () => {
+    const rows =
+      parseUnifiedDiffForReviewAnchors(`diff --git a/src/a.ts b/src/a.ts
 index 1111111..2222222 100644
 --- a/src/a.ts
 +++ b/src/a.ts
@@ -64,7 +64,7 @@ index 1111111..2222222 100644
   })
 
   it('treats no-newline markers as metadata without moving line counters', () => {
-    const rows = parseUnifiedDiff(`@@ -1 +1 @@
+    const rows = parseUnifiedDiffForReviewAnchors(`@@ -1 +1 @@
 -old
 \\ No newline at end of file
 +new`)
@@ -79,26 +79,9 @@ index 1111111..2222222 100644
   })
 })
 
-describe('selectDiffLineRange', () => {
-  it('selects a contiguous range between anchor and target', () => {
-    const rows = parseUnifiedDiff(`@@ -1,3 +1,3 @@
- a
--b
-+c`)
-
-    expect(
-      selectDiffLineRange({
-        lines: rows,
-        anchorId: rows[1].id,
-        targetId: rows[3].id,
-      }),
-    ).toEqual([rows[1].id, rows[2].id, rows[3].id])
-  })
-})
-
 describe('summarizeSelectedDiffLines', () => {
   it('summarizes selected old and new line ranges', () => {
-    const rows = parseUnifiedDiff(`@@ -10,3 +20,4 @@
+    const rows = parseUnifiedDiffForReviewAnchors(`@@ -10,3 +20,4 @@
  context
 -old
 +new
@@ -119,7 +102,7 @@ describe('summarizeSelectedDiffLines', () => {
   })
 
   it('summarizes selected ranges by min and max line numbers', () => {
-    const rows = parseUnifiedDiff(`@@ -10,4 +20,4 @@
+    const rows = parseUnifiedDiffForReviewAnchors(`@@ -10,4 +20,4 @@
 +first
 +second
 +third`)
