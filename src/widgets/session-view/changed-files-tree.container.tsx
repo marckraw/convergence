@@ -33,7 +33,7 @@ export const ChangedFilesTree: FC<ChangedFilesTreeProps> = ({
     () => buildPierreChangedFilesTreeInput({ files, noteCountsByPath }),
     [files, noteCountsByPath],
   )
-  const treeKey = buildTreeModelKey(treeInput, selectedFile)
+  const treeKey = buildTreeModelKey(treeInput)
 
   if (loading) {
     return (
@@ -62,14 +62,10 @@ export const ChangedFilesTree: FC<ChangedFilesTreeProps> = ({
   )
 }
 
-function buildTreeModelKey(
-  treeInput: PierreChangedFilesTreeInput,
-  selectedFile: string | null,
-): string {
+function buildTreeModelKey(treeInput: PierreChangedFilesTreeInput): string {
   return JSON.stringify({
     paths: treeInput.paths,
     gitStatus: treeInput.gitStatus,
     noteCounts: [...treeInput.noteCountsByPath.entries()],
-    selectedFile,
   })
 }

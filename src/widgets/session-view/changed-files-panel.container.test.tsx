@@ -4,7 +4,7 @@ import type { ReactNode } from 'react'
 import { useReviewNoteStore, type ReviewNote } from '@/entities/review-note'
 import { ChangedFilesPanel } from './changed-files-panel.container'
 
-vi.mock('./changed-files-tree.presentational', () => {
+vi.mock('./changed-files-tree.container', () => {
   interface MockChangedFile {
     status: string
     file: string

@@ -1,5 +1,5 @@
 import type { CSSProperties, FC, KeyboardEvent } from 'react'
-import { useMemo } from 'react'
+import { useEffect, useMemo } from 'react'
 import type { FileTreeRowDecorationRenderer } from '@pierre/trees'
 import { FileTree, useFileTree, useFileTreeSearch } from '@pierre/trees/react'
 import { ChevronDown, ChevronUp, Search, X } from 'lucide-react'
@@ -48,6 +48,31 @@ export const ChangedFilesTreeModel: FC<ChangedFilesTreeModelProps> = ({
     searchBlurBehavior: 'retain',
   })
   const search = useFileTreeSearch(model)
+
+  useEffect(() => {
+    const selectedPaths = model.getSelectedPaths()
+
+    if (!selectedFile) {
+      for (const path of selectedPaths) {
+        model.getItem(path)?.deselect()
+      }
+      return
+    }
+
+    if (selectedPaths.length === 1 && selectedPaths[0] === selectedFile) {
+      return
+    }
+
+    for (const path of selectedPaths) {
+      if (path !== selectedFile) {
+        model.getItem(path)?.deselect()
+      }
+    }
+
+    const selectedItem = model.getItem(selectedFile)
+    selectedItem?.select()
+    selectedItem?.focus()
+  }, [model, selectedFile])
 
   const handleSearchKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
     if (event.key === 'Escape') {

@@ -1,7 +1,7 @@
 import type { GitStatus, GitStatusEntry } from '@pierre/trees'
 
 export interface PierreChangedFileInput {
-  status: string
+  status: GitStatus | string
   file: string
 }
 
@@ -26,7 +26,7 @@ export function buildPierreChangedFilesTreeInput(input: {
     if (!statusByPath.has(path)) {
       paths.push(path)
     }
-    statusByPath.set(path, mapGitStatusToPierre(changedFile.status))
+    statusByPath.set(path, mapChangedFileStatusToPierre(changedFile.status))
 
     const noteCount = getNoteCount(input.noteCountsByPath, path)
     if (noteCount > 0) {
@@ -44,7 +44,11 @@ export function buildPierreChangedFilesTreeInput(input: {
   }
 }
 
-export function mapGitStatusToPierre(status: string): GitStatus {
+export function mapChangedFileStatusToPierre(
+  status: GitStatus | string,
+): GitStatus {
+  if (isPierreGitStatus(status)) return status
+
   const normalized = status.trim().toUpperCase()
 
   if (normalized.includes('?')) return 'untracked'
@@ -54,6 +58,17 @@ export function mapGitStatusToPierre(status: string): GitStatus {
   if (normalized.includes('D') && !normalized.includes('A')) return 'deleted'
 
   return 'modified'
+}
+
+function isPierreGitStatus(status: string): status is GitStatus {
+  return (
+    status === 'added' ||
+    status === 'deleted' ||
+    status === 'ignored' ||
+    status === 'modified' ||
+    status === 'renamed' ||
+    status === 'untracked'
+  )
 }
 
 export function normalizeChangedFilePath(file: string): string {

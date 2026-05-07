@@ -204,4 +204,61 @@ describe('PierreDiffViewer', () => {
       preferredHighlighter: 'shiki-js',
     })
   })
+
+  it.each([
+    ['scripts/tool.py', 'python'],
+    ['cmd/main.go', 'go'],
+    ['src/lib.rs', 'rust'],
+    ['src/styles.css', 'css'],
+    ['docs/readme.md', 'markdown'],
+    ['data/config.json', 'json'],
+  ])('preloads the Pierre language hint for %s', (file, language) => {
+    vi.stubGlobal('Worker', vi.fn())
+
+    render(
+      <PierreDiffViewer file={file} diff={buildLargePierreDiffFixture(900)} />,
+    )
+
+    expect(patchDiff.workerProviders.at(-1)?.highlighterOptions).toMatchObject({
+      langs: [language],
+      preferredHighlighter: 'shiki-js',
+    })
+  })
+
+  it('clamps Pierre worker pool size to a bounded range', () => {
+    const originalHardwareConcurrency = window.navigator.hardwareConcurrency
+    Object.defineProperty(window.navigator, 'hardwareConcurrency', {
+      configurable: true,
+      value: 16,
+    })
+    vi.stubGlobal('Worker', vi.fn())
+
+    render(
+      <PierreDiffViewer
+        file="src/generated.ts"
+        diff={buildLargePierreDiffFixture(900)}
+      />,
+    )
+
+    expect(patchDiff.workerProviders.at(-1)?.poolOptions.poolSize).toBe(4)
+
+    Object.defineProperty(window.navigator, 'hardwareConcurrency', {
+      configurable: true,
+      value: 1,
+    })
+
+    render(
+      <PierreDiffViewer
+        file="src/generated.ts"
+        diff={buildLargePierreDiffFixture(900)}
+      />,
+    )
+
+    expect(patchDiff.workerProviders.at(-1)?.poolOptions.poolSize).toBe(1)
+
+    Object.defineProperty(window.navigator, 'hardwareConcurrency', {
+      configurable: true,
+      value: originalHardwareConcurrency,
+    })
+  })
 })

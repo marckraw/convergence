@@ -1,19 +1,26 @@
 import { describe, expect, it } from 'vitest'
 import {
   buildPierreChangedFilesTreeInput,
-  mapGitStatusToPierre,
+  mapChangedFileStatusToPierre,
   normalizeChangedFilePath,
 } from './changed-files-tree.pure'
 
 describe('Pierre changed files tree helpers', () => {
   it('maps Git porcelain statuses to Pierre statuses', () => {
-    expect(mapGitStatusToPierre('M')).toBe('modified')
-    expect(mapGitStatusToPierre('A')).toBe('added')
-    expect(mapGitStatusToPierre('D')).toBe('deleted')
-    expect(mapGitStatusToPierre('R')).toBe('renamed')
-    expect(mapGitStatusToPierre('??')).toBe('untracked')
-    expect(mapGitStatusToPierre('!!')).toBe('ignored')
-    expect(mapGitStatusToPierre('MM')).toBe('modified')
+    expect(mapChangedFileStatusToPierre('M')).toBe('modified')
+    expect(mapChangedFileStatusToPierre('A')).toBe('added')
+    expect(mapChangedFileStatusToPierre('D')).toBe('deleted')
+    expect(mapChangedFileStatusToPierre('R')).toBe('renamed')
+    expect(mapChangedFileStatusToPierre('??')).toBe('untracked')
+    expect(mapChangedFileStatusToPierre('!!')).toBe('ignored')
+    expect(mapChangedFileStatusToPierre('MM')).toBe('modified')
+  })
+
+  it('passes already-normalized Pierre statuses through', () => {
+    expect(mapChangedFileStatusToPierre('added')).toBe('added')
+    expect(mapChangedFileStatusToPierre('modified')).toBe('modified')
+    expect(mapChangedFileStatusToPierre('deleted')).toBe('deleted')
+    expect(mapChangedFileStatusToPierre('renamed')).toBe('renamed')
   })
 
   it('normalizes local changed-file paths for Pierre', () => {

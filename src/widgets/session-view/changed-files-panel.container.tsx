@@ -23,7 +23,7 @@ import {
 } from 'lucide-react'
 import { cn } from '@/shared/lib/cn.pure'
 import { ChangedFilesModeButton } from './changed-files-mode-button.presentational'
-import { ChangedFilesTree } from './changed-files-tree.presentational'
+import { ChangedFilesTree } from './changed-files-tree.container'
 import {
   getChangedFilesEmptyMessage,
   getChangedFilesHeaderLabel,

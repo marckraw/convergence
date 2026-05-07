@@ -4,6 +4,15 @@ import { ChangedFilesTreeModel } from './changed-files-tree-model.container'
 import type { PierreChangedFilesTreeInput } from './changed-files-tree.pure'
 
 const pierreTree = vi.hoisted(() => {
+  const itemHandles = new Map<
+    string,
+    {
+      deselect: ReturnType<typeof vi.fn>
+      focus: ReturnType<typeof vi.fn>
+      select: ReturnType<typeof vi.fn>
+    }
+  >()
+  let selectedPaths: string[] = []
   const searchState = {
     isOpen: false,
     matchingPaths: [] as string[],
@@ -14,11 +23,38 @@ const pierreTree = vi.hoisted(() => {
     open: vi.fn(),
     setValue: vi.fn(),
   }
+  const model = {
+    getItem: vi.fn((path: string) => itemHandles.get(path) ?? null),
+    getSelectedPaths: vi.fn(() => selectedPaths),
+  }
+
+  function createItemHandle(path: string) {
+    const handle = {
+      deselect: vi.fn(() => {
+        selectedPaths = selectedPaths.filter(
+          (selectedPath) => selectedPath !== path,
+        )
+      }),
+      focus: vi.fn(),
+      select: vi.fn(() => {
+        if (!selectedPaths.includes(path)) {
+          selectedPaths = [...selectedPaths, path]
+        }
+      }),
+    }
+    itemHandles.set(path, handle)
+    return handle
+  }
 
   return {
+    createItemHandle,
+    itemHandles,
+    model,
+    setSelectedPaths(paths: string[]) {
+      selectedPaths = paths
+    },
     searchState,
-    model: {},
-    useFileTree: vi.fn(() => ({ model: {} })),
+    useFileTree: vi.fn(() => ({ model })),
     useFileTreeSearch: vi.fn(() => searchState),
   }
 })
@@ -44,6 +80,10 @@ const treeInput: PierreChangedFilesTreeInput = {
 describe('ChangedFilesTreeModel', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    pierreTree.itemHandles.clear()
+    pierreTree.setSelectedPaths([])
+    pierreTree.createItemHandle('src/app.ts')
+    pierreTree.createItemHandle('src/components/very-long-review-file-name.tsx')
     pierreTree.searchState.isOpen = false
     pierreTree.searchState.matchingPaths = []
     pierreTree.searchState.value = ''
@@ -70,6 +110,49 @@ describe('ChangedFilesTreeModel', () => {
         searchBlurBehavior: 'retain',
       }),
     )
+  })
+
+  it('syncs selected file through the mounted Pierre tree model', () => {
+    const { rerender } = render(
+      <ChangedFilesTreeModel
+        treeInput={treeInput}
+        selectedFile={null}
+        onSelectFile={vi.fn()}
+      />,
+    )
+
+    rerender(
+      <ChangedFilesTreeModel
+        treeInput={treeInput}
+        selectedFile="src/app.ts"
+        onSelectFile={vi.fn()}
+      />,
+    )
+
+    const selectedHandle = pierreTree.itemHandles.get('src/app.ts')
+    expect(selectedHandle?.select).toHaveBeenCalledTimes(1)
+    expect(selectedHandle?.focus).toHaveBeenCalledTimes(1)
+  })
+
+  it('clears previous external tree selection before selecting a new file', () => {
+    pierreTree.setSelectedPaths(['src/app.ts'])
+
+    render(
+      <ChangedFilesTreeModel
+        treeInput={treeInput}
+        selectedFile="src/components/very-long-review-file-name.tsx"
+        onSelectFile={vi.fn()}
+      />,
+    )
+
+    expect(
+      pierreTree.itemHandles.get('src/app.ts')?.deselect,
+    ).toHaveBeenCalled()
+    expect(
+      pierreTree.itemHandles.get(
+        'src/components/very-long-review-file-name.tsx',
+      )?.select,
+    ).toHaveBeenCalled()
   })
 
   it('opens search from the compact control', () => {

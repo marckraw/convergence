@@ -26,6 +26,9 @@ export default defineConfig({
   },
   renderer: {
     root: 'src',
+    worker: {
+      format: 'es',
+    },
     build: {
       rollupOptions: {
         input: {

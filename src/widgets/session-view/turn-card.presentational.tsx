@@ -3,7 +3,7 @@ import { ChevronRight } from 'lucide-react'
 import { Button } from '@/shared/ui/button'
 import { cn } from '@/shared/lib/cn.pure'
 import type { Turn, TurnFileChange } from '@/entities/turn'
-import { ChangedFilesTree } from './changed-files-tree.presentational'
+import { ChangedFilesTree } from './changed-files-tree.container'
 
 interface TurnCardProps {
   turn: Turn
@@ -25,13 +25,6 @@ function sumCounts(changes: TurnFileChange[]): {
     deletions += change.deletions
   }
   return { additions, deletions }
-}
-
-const STATUS_TO_CODE: Record<TurnFileChange['status'], string> = {
-  added: 'A',
-  modified: 'M',
-  deleted: 'D',
-  renamed: 'R',
 }
 
 export const TurnCard: FC<TurnCardProps> = ({
@@ -101,7 +94,7 @@ export const TurnCard: FC<TurnCardProps> = ({
         <div className="h-44 pb-2 pl-4 pr-1">
           <ChangedFilesTree
             files={fileChanges.map((change) => ({
-              status: STATUS_TO_CODE[change.status],
+              status: change.status,
               file: change.filePath,
             }))}
             selectedFile={selectedFilePath}

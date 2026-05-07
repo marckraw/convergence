@@ -1,5 +1,10 @@
 import { useMemo, type ReactNode } from 'react'
-import type { DiffLineAnnotation, SelectedLineRange } from '@pierre/diffs'
+import {
+  getFiletypeFromFileName,
+  type DiffLineAnnotation,
+  type SelectedLineRange,
+  type SupportedLanguages,
+} from '@pierre/diffs'
 import {
   PatchDiff,
   Virtualizer,
@@ -31,7 +36,11 @@ export const PierreDiffViewer = <TAnnotation,>({
   renderAnnotation,
   onSelectedLinesChange,
 }: PierreDiffViewerProps<TAnnotation>) => {
-  const performancePlan = planPierreDiffPerformance(diff)
+  const performancePlan = useMemo(() => planPierreDiffPerformance(diff), [diff])
+  const patch = useMemo(
+    () => (file ? buildPierrePatch({ file, diff }) : null),
+    [diff, file],
+  )
   const canUseWorkerPool =
     performancePlan.useWorkerPool && canUsePierreDiffWorkerPool()
   const workerPoolOptions = useMemo(
@@ -71,7 +80,6 @@ export const PierreDiffViewer = <TAnnotation,>({
     )
   }
 
-  const patch = buildPierrePatch({ file, diff })
   const patchDiff = patch ? (
     <PatchDiff
       patch={patch}
@@ -203,7 +211,6 @@ function getPierreDiffWorkerPoolSize(): number {
   return Math.max(1, Math.min(4, cores - 1))
 }
 
-function getPierreDiffLanguageHint(file: string): 'typescript' | 'text' {
-  if (/\.[cm]?tsx?$/.test(file)) return 'typescript'
-  return 'text'
+function getPierreDiffLanguageHint(file: string): SupportedLanguages {
+  return getFiletypeFromFileName(file)
 }
