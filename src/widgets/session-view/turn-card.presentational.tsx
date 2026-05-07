@@ -3,7 +3,7 @@ import { ChevronRight } from 'lucide-react'
 import { Button } from '@/shared/ui/button'
 import { cn } from '@/shared/lib/cn.pure'
 import type { Turn, TurnFileChange } from '@/entities/turn'
-import { TurnFileItem } from './turn-file-item.presentational'
+import { ChangedFilesTree } from './changed-files-tree.container'
 
 interface TurnCardProps {
   turn: Turn
@@ -91,15 +91,17 @@ export const TurnCard: FC<TurnCardProps> = ({
         </span>
       </Button>
       {expanded && fileChanges.length > 0 && (
-        <div className="pb-2 pl-4 pr-1">
-          {fileChanges.map((change) => (
-            <TurnFileItem
-              key={change.id}
-              fileChange={change}
-              selected={selectedFilePath === change.filePath}
-              onSelect={() => onSelectFile(change.filePath)}
-            />
-          ))}
+        <div className="h-44 pb-2 pl-4 pr-1">
+          <ChangedFilesTree
+            files={fileChanges.map((change) => ({
+              status: change.status,
+              file: change.filePath,
+            }))}
+            selectedFile={selectedFilePath}
+            search={false}
+            onSelectFile={onSelectFile}
+            className="h-full"
+          />
         </div>
       )}
     </div>

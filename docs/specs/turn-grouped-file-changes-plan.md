@@ -211,7 +211,7 @@ untouched.
         newest first, with the in-flight turn pinned top.
   - [ ] When a file is selected, fetches its per-turn diff via
         `turnsApi.getFileDiff(turnId, filePath)` and passes it to
-        `diff-viewer.presentational.tsx`.
+        `pierre-diff-viewer.presentational.tsx`.
 - [ ] Create `src/widgets/session-view/turn-card.presentational.tsx`:
   - [ ] Props: `{ turn, fileChanges, selected, onTurnClick,
 onFileClick, expanded }`.

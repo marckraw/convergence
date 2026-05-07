@@ -2501,4 +2501,24 @@ describe('SessionService — liveness clock', () => {
       .filter((item) => item.kind === 'note' && item.level === 'info')
     expect(infoNotes).toHaveLength(2)
   })
+
+  it('stops liveness checks when the database connection closes', () => {
+    const session = service.create({
+      projectId,
+      workspaceId: null,
+      providerId: 'test-provider',
+      model: 'test-model',
+      effort: null,
+      name: 'liveness shutdown',
+    })
+
+    service['applyDelta'](session.id, {
+      kind: 'session.patch',
+      patch: { status: 'running', updatedAt: new Date().toISOString() },
+    })
+
+    closeDatabase()
+
+    expect(() => service.triggerLivenessTickForTest()).not.toThrow()
+  })
 })

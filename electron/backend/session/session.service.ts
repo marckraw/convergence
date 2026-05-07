@@ -1361,6 +1361,11 @@ export class SessionService {
   }
 
   private tickLiveness(): void {
+    if (!this.db.open) {
+      this.livenessState.clear()
+      this.stopLivenessTimer()
+      return
+    }
     if (this.livenessState.size === 0) {
       this.stopLivenessTimer()
       return

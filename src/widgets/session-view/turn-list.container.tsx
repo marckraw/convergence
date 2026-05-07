@@ -1,9 +1,9 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { FC } from 'react'
 import { turnsApi } from '@/entities/turn'
 import type { Turn, TurnFileChange } from '@/entities/turn'
 import { TurnCard } from './turn-card.presentational'
-import { DiffViewer } from './diff-viewer.presentational'
+import { PierreDiffViewer } from './pierre-diff-viewer.presentational'
 
 interface TurnListProps {
   sessionId: string
@@ -24,6 +24,7 @@ export const TurnList: FC<TurnListProps> = ({ sessionId }) => {
   const [diff, setDiff] = useState<string>('')
   const [diffLoading, setDiffLoading] = useState(false)
   const [loading, setLoading] = useState(true)
+  const diffRequestIdRef = useRef(0)
 
   useEffect(() => {
     let cancelled = false
@@ -79,19 +80,32 @@ export const TurnList: FC<TurnListProps> = ({ sessionId }) => {
 
   useEffect(() => {
     if (!selection) {
+      diffRequestIdRef.current += 1
       setDiff('')
+      setDiffLoading(false)
       return
     }
     let cancelled = false
+    const requestId = diffRequestIdRef.current + 1
+    diffRequestIdRef.current = requestId
+    setDiff('')
     setDiffLoading(true)
     void (async () => {
-      const result = await turnsApi.getFileDiff(
-        selection.turnId,
-        selection.filePath,
-      )
-      if (cancelled) return
-      setDiff(result || '(no diff available)')
-      setDiffLoading(false)
+      try {
+        const result = await turnsApi.getFileDiff(
+          selection.turnId,
+          selection.filePath,
+        )
+        if (cancelled || diffRequestIdRef.current !== requestId) return
+        setDiff(result || '(no diff available)')
+      } catch {
+        if (cancelled || diffRequestIdRef.current !== requestId) return
+        setDiff('Failed to load diff.')
+      } finally {
+        if (!cancelled && diffRequestIdRef.current === requestId) {
+          setDiffLoading(false)
+        }
+      }
     })()
     return () => {
       cancelled = true
@@ -104,12 +118,8 @@ export const TurnList: FC<TurnListProps> = ({ sessionId }) => {
 
   const handleSelectFile = useCallback((turnId: string, filePath: string) => {
     setSelection((current) => {
-      if (
-        current &&
-        current.turnId === turnId &&
-        current.filePath === filePath
-      ) {
-        return null
+      if (current?.turnId === turnId && current.filePath === filePath) {
+        return current
       }
       return { turnId, filePath }
     })
@@ -154,10 +164,12 @@ export const TurnList: FC<TurnListProps> = ({ sessionId }) => {
         )}
       </div>
       <div className="min-h-0 flex-[1.2] border-t border-border">
-        <DiffViewer
+        <PierreDiffViewer
           file={selection?.filePath ?? null}
           diff={diff}
           loading={diffLoading}
+          emptyMessage="Select a changed file from a turn to inspect its diff."
+          title="Turn diff"
         />
       </div>
     </div>

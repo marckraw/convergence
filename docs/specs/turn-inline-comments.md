@@ -90,7 +90,7 @@ Anchor semantics:
 
 ### UI — comment affordance
 
-- In `diff-viewer.presentational.tsx` (extended view path only), on hover
+- In `pierre-diff-viewer.presentational.tsx` (extended view path only), on hover
   of a line, a "+" button appears on the gutter.
 - Clicking the button opens an inline editor directly below the line:
   markdown textarea, `Save` and `Cancel` buttons, `Cmd+Enter` submits.
@@ -163,8 +163,8 @@ No streaming / delta channel — local, single-window, low latency.
   `src/entities/turn-comment/`.
 - New presentational `turn-comment.presentational.tsx` +
   `comment-composer.presentational.tsx`.
-- `diff-viewer.presentational.tsx` needs to expose per-line hover
-  callbacks so the container wrapping it (a new
+- `pierre-diff-viewer.presentational.tsx` needs to expose Pierre annotation and
+  line-selection callbacks so the container wrapping it (a new
   `turn-diff-view.container.tsx`?) can mount comment UI. May require
   extracting a light container around the diff viewer to keep the
   presentational file stateless per project rules.

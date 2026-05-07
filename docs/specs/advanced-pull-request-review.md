@@ -57,10 +57,10 @@ This feature connects those surfaces into a human-in-the-loop review workflow.
 - `src/widgets/session-view/changed-files-panel.container.tsx`
   - owns changed-files mode state: `working-tree`, `base-branch`, `turns`
   - loads file lists and file diffs through `gitApi`
-  - renders `DiffViewer`
-- `src/widgets/session-view/diff-viewer.presentational.tsx`
-  - currently renders a raw unified diff split into text lines
-  - has no parsed line metadata, anchors, selection, or inline actions yet
+  - renders `PierreDiffViewer`
+- `src/widgets/session-view/pierre-diff-viewer.presentational.tsx`
+  - wraps Pierre `PatchDiff` for unified diff rendering, selection, and
+    annotations
 - `src/entities/session/session.api.ts` and
   `src/entities/session/session.model.ts`
   - already support `sessionApi.sendMessage(sessionId, text, ...)`
@@ -277,7 +277,7 @@ expose actions that the Changed Files panel can call.
 
 ## Diff Line Model
 
-`DiffViewer` needs to stop treating diff text as unstructured lines.
+The diff viewer needs a compatibility anchor model for persisted review notes.
 
 Suggested pure parser:
 

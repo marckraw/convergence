@@ -417,7 +417,7 @@ The panel surfaces this as an errored turn.
   - Modified: `changed-files-panel.container.tsx` — delegates to
     `turn-list.container.tsx` when `expanded === true`, keeps current
     rendering when `expanded === false`.
-  - `diff-viewer.presentational.tsx` unchanged; the extended view calls
+  - `pierre-diff-viewer.presentational.tsx` handles rendering; the extended view calls
     `turnsApi.getFileDiff(turnId, filePath)` instead of
     `window.electronAPI.git.getDiff()`.
 
@@ -453,7 +453,7 @@ may add a retention knob.
 
 - **Inline comments.** Add `session_turn_file_comments` table keyed by
   `(turn_id, file_path, line_from, line_to)`. Render as margin
-  annotations in the existing `diff-viewer.presentational.tsx`. No
+  annotations in the Pierre-backed diff viewer. No
   changes to Phase A data model are needed to enable this.
 - **Revert turn.** Add `reverted_at` column to `session_turns`. Revert
   action applies the inverse of each row in
