@@ -1,5 +1,11 @@
 # convergence
 
+## 0.36.3
+
+### Patch Changes
+
+- aa0c8ae: Add OpenRouter credential settings so users can paste an API key in Convergence, store it in macOS Keychain, and have Pi/OpenRouter sessions receive it automatically through `OPENROUTER_API_KEY`.
+
 ## 0.36.2
 
 ### Patch Changes
