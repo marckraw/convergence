@@ -4,16 +4,18 @@ import { homedir } from 'os'
 import { join } from 'path'
 import { PiRpcClient } from './pi-rpc'
 import { collectPiModelsJsonModelIds } from './pi-models.pure'
+import { OpenRouterCredentialsService } from '../../credentials/openrouter-credentials.service'
 
 const PROBE_TIMEOUT_MS = 5000
 
 export async function probePiAvailableModels(
   binaryPath: string,
 ): Promise<unknown[]> {
+  const env = await new OpenRouterCredentialsService().withOpenRouterEnv()
   const child = spawn(binaryPath, ['--mode', 'rpc', '--no-session'], {
     cwd: process.cwd(),
     stdio: ['pipe', 'pipe', 'pipe'],
-    env: { ...process.env },
+    env,
   })
 
   const spawnFailure = new Promise<never>((_, reject) => {

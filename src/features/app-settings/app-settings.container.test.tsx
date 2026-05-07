@@ -220,6 +220,37 @@ describe('AppSettingsDialogContainer', () => {
         set: vi.fn().mockImplementation(async (input) => input),
         onUpdated: vi.fn().mockReturnValue(() => {}),
       },
+      credentials: {
+        openRouter: {
+          getStatus: vi.fn().mockResolvedValue({
+            providerId: 'openrouter',
+            configured: false,
+            source: null,
+            storage: null,
+            account: null,
+            service: null,
+            error: null,
+          }),
+          setToken: vi.fn().mockResolvedValue({
+            providerId: 'openrouter',
+            configured: true,
+            source: 'keychain',
+            storage: 'keychain',
+            account: 'default',
+            service: 'convergence.openrouter',
+            error: null,
+          }),
+          deleteToken: vi.fn().mockResolvedValue({
+            providerId: 'openrouter',
+            configured: false,
+            source: null,
+            storage: null,
+            account: null,
+            service: null,
+            error: null,
+          }),
+        },
+      },
       analytics: {
         getOverview: vi.fn().mockResolvedValue(EMPTY_ANALYTICS_OVERVIEW),
         generateWorkProfile: vi.fn(),
@@ -449,6 +480,36 @@ describe('AppSettingsDialogContainer', () => {
     ).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Done' })).toBeInTheDocument()
     expect(window.electronAPI.analytics.getOverview).toHaveBeenCalledWith('30d')
+  })
+
+  it('saves an OpenRouter API key from the Credentials section without saving app settings', async () => {
+    primeStores({
+      defaultProviderId: 'claude-code',
+      defaultModelId: 'sonnet',
+      defaultEffortId: 'medium',
+    })
+
+    render(<AppSettingsDialogContainer trigger={<Button>Open</Button>} />)
+    fireEvent.click(screen.getByText('Open'))
+
+    expect(await screen.findByText('Settings')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: /Credentials/ }))
+    expect(await screen.findByText('Provider credentials')).toBeInTheDocument()
+
+    fireEvent.change(screen.getByLabelText('API key'), {
+      target: { value: 'sk-or-test' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Save key' }))
+
+    await waitFor(() => {
+      expect(
+        window.electronAPI.credentials.openRouter.setToken,
+      ).toHaveBeenCalledWith('sk-or-test')
+    })
+    expect(window.electronAPI.appSettings.set).not.toHaveBeenCalled()
+    expect(await screen.findByText('OpenRouter API key saved.')).toBeVisible()
+    expect(screen.getByRole('button', { name: 'Done' })).toBeInTheDocument()
   })
 
   it('toggling the auto-update switch persists the new updates prefs on save', async () => {

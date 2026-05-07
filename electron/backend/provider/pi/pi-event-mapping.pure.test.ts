@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   derivePiContextWindow,
+  extractLastAssistantErrorMessage,
   extractLastAssistantStopReason,
   extractToolCallFromEnd,
   extractToolResultText,
@@ -132,6 +133,36 @@ describe('extractLastAssistantStopReason', () => {
   it('returns null when messages is missing', () => {
     expect(extractLastAssistantStopReason({})).toBeNull()
     expect(extractLastAssistantStopReason(null)).toBeNull()
+  })
+})
+
+describe('extractLastAssistantErrorMessage', () => {
+  it('returns the top-level PI error message when present', () => {
+    expect(
+      extractLastAssistantErrorMessage({
+        errorMessage: '401 Missing Authentication header',
+      }),
+    ).toBe('401 Missing Authentication header')
+  })
+
+  it('returns the last assistant message error', () => {
+    expect(
+      extractLastAssistantErrorMessage({
+        messages: [
+          { role: 'assistant', errorMessage: 'old error' },
+          { role: 'user', content: 'retry' },
+          { role: 'assistant', errorMessage: 'new error' },
+        ],
+      }),
+    ).toBe('new error')
+  })
+
+  it('returns null when no assistant error is present', () => {
+    expect(
+      extractLastAssistantErrorMessage({
+        messages: [{ role: 'assistant', stopReason: 'error' }],
+      }),
+    ).toBeNull()
   })
 })
 

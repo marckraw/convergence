@@ -47,3 +47,13 @@ export interface AppSettings {
 }
 
 export type AppSettingsInput = AppSettings
+
+export interface OpenRouterCredentialStatus {
+  providerId: 'openrouter'
+  configured: boolean
+  source: 'environment' | 'keychain' | null
+  storage: 'keychain' | null
+  account: string | null
+  service: string | null
+  error: string | null
+}

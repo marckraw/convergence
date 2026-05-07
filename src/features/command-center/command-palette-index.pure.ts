@@ -50,6 +50,14 @@ export const PALETTE_DIALOGS: DialogDescriptor[] = [
     description: 'Preferences, providers, and appearance',
   },
   {
+    id: 'app-settings:credentials',
+    kind: 'app-settings',
+    payload: { appSettingsSection: 'credentials' },
+    title: 'Open Credentials',
+    description: 'OpenRouter API keys and provider credential storage',
+    aliases: 'openrouter api key token keychain credentials provider',
+  },
+  {
     id: 'app-settings:insights',
     kind: 'app-settings',
     payload: { appSettingsSection: 'insights' },

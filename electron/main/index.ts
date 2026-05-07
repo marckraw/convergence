@@ -66,6 +66,7 @@ import { SessionForkService } from '../backend/session/fork/session-fork.service
 import { registerSessionForkIpcHandlers } from '../backend/session/fork/session-fork.ipc'
 import { loadEnvFile } from '../backend/environment/env-file.service'
 import { hydrateProcessPathFromShell } from '../backend/environment/shell-path.service'
+import { OpenRouterCredentialsService } from '../backend/credentials/openrouter-credentials.service'
 import { TerminalService } from '../backend/terminal/terminal.service'
 import {
   broadcastToRenderers,
@@ -185,6 +186,7 @@ async function startApp(): Promise<void> {
   const pullRequestService = new PullRequestService(db, gitService)
   const reviewNotesService = new ReviewNotesService(db)
   const providerRegistry = new ProviderRegistry()
+  const openRouterCredentials = new OpenRouterCredentialsService()
   const taskProgressService = new TaskProgressService(broadcastTaskProgress)
   const sessionService = new SessionService(
     db,
@@ -259,7 +261,9 @@ async function startApp(): Promise<void> {
         )
       } else if (p.id === 'pi') {
         providerRegistry.register(
-          new PiProvider(p.binaryPath, taskProgressService, debugSink),
+          new PiProvider(p.binaryPath, taskProgressService, debugSink, (env) =>
+            openRouterCredentials.withOpenRouterEnv(env),
+          ),
         )
       }
     }
@@ -460,6 +464,7 @@ async function startApp(): Promise<void> {
     mcpService,
     skillsService,
     appSettingsService,
+    openRouterCredentials,
     analyticsService,
     attachmentsService,
     turnCaptureService,

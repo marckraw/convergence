@@ -29,6 +29,7 @@ import { NotificationsFields } from './notifications-fields.presentational'
 import { UpdatesFields } from './updates-fields.presentational'
 import { DebugLoggingFields } from './debug-logging-fields.presentational'
 import { PiModelVisibilityContainer } from './pi-model-visibility.container'
+import { ProviderCredentialsContainer } from './provider-credentials.container'
 import { AnalyticsInsightsContainer } from '../analytics-insights'
 
 export type AppSettingsSectionId = AppSettingsDialogSection
@@ -151,6 +152,14 @@ export const AppSettingsDialog: FC<AppSettingsDialogProps> = ({
           },
         ]
       : []),
+    {
+      id: 'credentials',
+      navLabel: 'Credentials',
+      navSummary: 'Provider API keys and secure storage',
+      title: 'Provider credentials',
+      description:
+        'Paste provider API keys once. Convergence stores them in the operating system credential store and passes them to provider processes when needed.',
+    },
     ...(allProviders.some((provider) => provider.id === 'pi')
       ? [
           {
@@ -199,6 +208,8 @@ export const AppSettingsDialog: FC<AppSettingsDialogProps> = ({
 
   const currentSection =
     sections.find((section) => section.id === activeSection) ?? sections[0]
+  const usesIndependentSave =
+    currentSection.id === 'insights' || currentSection.id === 'credentials'
 
   const renderCurrentSection = () => {
     switch (currentSection.id) {
@@ -235,6 +246,8 @@ export const AppSettingsDialog: FC<AppSettingsDialogProps> = ({
             onExtractionModelChange={onExtractionModelChange}
           />
         )
+      case 'credentials':
+        return <ProviderCredentialsContainer />
       case 'notifications':
         return (
           <NotificationsFields
@@ -399,17 +412,15 @@ export const AppSettingsDialog: FC<AppSettingsDialogProps> = ({
             <DialogClose asChild>
               <Button
                 type="button"
-                variant={
-                  currentSection.id === 'insights' ? 'default' : 'outline'
-                }
+                variant={usesIndependentSave ? 'default' : 'outline'}
                 size="sm"
                 onClick={onCancel}
                 disabled={isSaving}
               >
-                {currentSection.id === 'insights' ? 'Done' : 'Cancel'}
+                {usesIndependentSave ? 'Done' : 'Cancel'}
               </Button>
             </DialogClose>
-            {currentSection.id === 'insights' ? null : (
+            {usesIndependentSave ? null : (
               <Button
                 type="button"
                 size="sm"
