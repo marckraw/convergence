@@ -1,5 +1,11 @@
 # convergence
 
+## 0.36.1
+
+### Patch Changes
+
+- 9d024b5: Integrate Pierre file tree and diff primitives into review changed-file flows.
+
 ## 0.36.0
 
 ### Minor Changes
