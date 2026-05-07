@@ -4,6 +4,7 @@ import {
   DEFAULT_DEBUG_LOGGING_PREFS,
   DEFAULT_NOTIFICATION_PREFS,
   DEFAULT_ONBOARDING_PREFS,
+  DEFAULT_PI_MODEL_VISIBILITY_PREFS,
   DEFAULT_UPDATE_PREFS,
   type AppSettings,
   type AppSettingsInput,
@@ -19,6 +20,7 @@ const EMPTY: AppSettings = {
   onboarding: DEFAULT_ONBOARDING_PREFS,
   updates: DEFAULT_UPDATE_PREFS,
   debugLogging: DEFAULT_DEBUG_LOGGING_PREFS,
+  piModelVisibility: DEFAULT_PI_MODEL_VISIBILITY_PREFS,
 }
 
 interface AppSettingsState {

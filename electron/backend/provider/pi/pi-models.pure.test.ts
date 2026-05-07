@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  collectPiModelsJsonModelIds,
   mapEffortToPiThinking,
   mapPiModel,
   mapPiModels,
@@ -37,6 +38,19 @@ describe('mapPiModel', () => {
         reasoning: true,
       })?.label,
     ).toBe('OpenAI · GPT-5')
+  })
+
+  it('marks models defined in models.json', () => {
+    const option = mapPiModel(
+      {
+        id: 'moonshotai/kimi-k2.6',
+        name: 'Cloud-test Kimi K2.6 128k',
+        provider: 'openrouter',
+        reasoning: true,
+      },
+      new Set(['openrouter/moonshotai/kimi-k2.6']),
+    )
+    expect(option?.source).toBe('pi-models-json')
   })
 
   it('falls back to id when name is missing', () => {
@@ -109,6 +123,29 @@ describe('mapPiModels', () => {
       { id: 'c', provider: 'google' },
     ])
     expect(result.map((r) => r.id)).toEqual(['anthropic/a', 'google/c'])
+  })
+})
+
+describe('collectPiModelsJsonModelIds', () => {
+  it('collects provider/model ids from models.json shape', () => {
+    expect(
+      [
+        ...collectPiModelsJsonModelIds({
+          providers: {
+            openrouter: {
+              models: [{ id: 'qwen/qwen3.6-27b' }, { id: 'openai/gpt-oss' }],
+            },
+            ollama: {
+              models: [{ id: 'gpt-oss:20b' }],
+            },
+          },
+        }),
+      ].sort(),
+    ).toEqual([
+      'ollama/gpt-oss:20b',
+      'openrouter/openai/gpt-oss',
+      'openrouter/qwen/qwen3.6-27b',
+    ])
   })
 })
 

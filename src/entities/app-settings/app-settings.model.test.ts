@@ -4,6 +4,7 @@ import {
   DEFAULT_DEBUG_LOGGING_PREFS,
   DEFAULT_NOTIFICATION_PREFS,
   DEFAULT_ONBOARDING_PREFS,
+  DEFAULT_PI_MODEL_VISIBILITY_PREFS,
   DEFAULT_UPDATE_PREFS,
   type AppSettings,
 } from './app-settings.types'
@@ -18,6 +19,7 @@ const EMPTY: AppSettings = {
   onboarding: DEFAULT_ONBOARDING_PREFS,
   updates: DEFAULT_UPDATE_PREFS,
   debugLogging: DEFAULT_DEBUG_LOGGING_PREFS,
+  piModelVisibility: DEFAULT_PI_MODEL_VISIBILITY_PREFS,
 }
 
 type BroadcastCallback = (settings: AppSettings) => void
@@ -75,6 +77,7 @@ describe('useAppSettingsStore', () => {
       onboarding: DEFAULT_ONBOARDING_PREFS,
       updates: DEFAULT_UPDATE_PREFS,
       debugLogging: DEFAULT_DEBUG_LOGGING_PREFS,
+      piModelVisibility: DEFAULT_PI_MODEL_VISIBILITY_PREFS,
     }
     installMockApi({ get: vi.fn().mockResolvedValue(stored) })
 
@@ -106,6 +109,7 @@ describe('useAppSettingsStore', () => {
       onboarding: DEFAULT_ONBOARDING_PREFS,
       updates: DEFAULT_UPDATE_PREFS,
       debugLogging: DEFAULT_DEBUG_LOGGING_PREFS,
+      piModelVisibility: DEFAULT_PI_MODEL_VISIBILITY_PREFS,
     }
     installMockApi({ set: vi.fn().mockResolvedValue(stored) })
 
@@ -131,6 +135,7 @@ describe('useAppSettingsStore', () => {
       onboarding: DEFAULT_ONBOARDING_PREFS,
       updates: DEFAULT_UPDATE_PREFS,
       debugLogging: DEFAULT_DEBUG_LOGGING_PREFS,
+      piModelVisibility: DEFAULT_PI_MODEL_VISIBILITY_PREFS,
     }
     listeners.forEach((cb) => cb(updated))
 

@@ -28,6 +28,7 @@ import { ExtractionModelDefaultsFields } from './extraction-model-defaults.prese
 import { NotificationsFields } from './notifications-fields.presentational'
 import { UpdatesFields } from './updates-fields.presentational'
 import { DebugLoggingFields } from './debug-logging-fields.presentational'
+import { PiModelVisibilityContainer } from './pi-model-visibility.container'
 import { AnalyticsInsightsContainer } from '../analytics-insights'
 
 export type AppSettingsSectionId = AppSettingsDialogSection
@@ -37,12 +38,14 @@ interface AppSettingsDialogProps {
   onOpenChange: (open: boolean) => void
   trigger: ReactNode
   providers: ProviderInfo[]
+  allProviders: ProviderInfo[]
   selection: ResolvedProviderSelection
   namingDraft: Record<string, string>
   extractionDraft: Record<string, string>
   notificationsDraft: NotificationPrefs
   updatesDraft: UpdatePrefs
   debugLoggingDraft: DebugLoggingPrefs
+  piModelIdsDraft: string[]
   updatesStatus: UpdateStatus
   updatesVersion: string | null
   updatesIsDev: boolean
@@ -63,6 +66,7 @@ interface AppSettingsDialogProps {
   onInstallUpdate: () => void
   onOpenReleaseNotes: () => void
   onToggleDebugLogging: (next: boolean) => void
+  onTogglePiModel: (modelId: string, next: boolean) => void
   onOpenDebugLogFolder: () => void
   onSectionChange: (section: AppSettingsSectionId) => void
   onSave: () => void
@@ -83,12 +87,14 @@ export const AppSettingsDialog: FC<AppSettingsDialogProps> = ({
   onOpenChange,
   trigger,
   providers,
+  allProviders,
   selection,
   namingDraft,
   extractionDraft,
   notificationsDraft,
   updatesDraft,
   debugLoggingDraft,
+  piModelIdsDraft,
   updatesStatus,
   updatesVersion,
   updatesIsDev,
@@ -109,6 +115,7 @@ export const AppSettingsDialog: FC<AppSettingsDialogProps> = ({
   onInstallUpdate,
   onOpenReleaseNotes,
   onToggleDebugLogging,
+  onTogglePiModel,
   onOpenDebugLogFolder,
   onSectionChange,
   onSave,
@@ -141,6 +148,18 @@ export const AppSettingsDialog: FC<AppSettingsDialogProps> = ({
             title: 'Session forking',
             description:
               'Choose the model that summarises prior conversation state before a session is forked.',
+          },
+        ]
+      : []),
+    ...(allProviders.some((provider) => provider.id === 'pi')
+      ? [
+          {
+            id: 'pi-models' as const,
+            navLabel: 'Pi models',
+            navSummary: 'Visible models in Pi pickers',
+            title: 'Pi models',
+            description:
+              'Choose which Pi models appear in Convergence model pickers.',
           },
         ]
       : []),
@@ -224,6 +243,14 @@ export const AppSettingsDialog: FC<AppSettingsDialogProps> = ({
             isSaving={isSaving}
             onChange={onNotificationsChange}
             onTestFire={onTestFireNotification}
+          />
+        )
+      case 'pi-models':
+        return (
+          <PiModelVisibilityContainer
+            provider={allProviders.find((provider) => provider.id === 'pi')}
+            selectedModelIds={piModelIdsDraft}
+            onToggleModel={onTogglePiModel}
           />
         )
       case 'updates':

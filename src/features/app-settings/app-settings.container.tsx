@@ -2,8 +2,10 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { FC, ReactNode } from 'react'
 import {
   resolveProviderSelection,
+  providerApi,
   useSessionStore,
   type ReasoningEffort,
+  type ProviderInfo,
 } from '@/entities/session'
 import {
   notificationsApi,
@@ -43,6 +45,7 @@ function isAppSettingsSection(value: unknown): value is AppSettingsSectionId {
     value === 'session-defaults' ||
     value === 'session-naming' ||
     value === 'session-forking' ||
+    value === 'pi-models' ||
     value === 'notifications' ||
     value === 'updates' ||
     value === 'insights' ||
@@ -75,6 +78,8 @@ export const AppSettingsDialogContainer: FC<AppSettingsContainerProps> = ({
   const [updatesDraft, setUpdatesDraft] = useState<UpdatePrefs | null>(null)
   const [debugLoggingDraft, setDebugLoggingDraft] =
     useState<DebugLoggingPrefs | null>(null)
+  const [piModelDraft, setPiModelDraft] = useState<string[] | null>(null)
+  const [allProviders, setAllProviders] = useState<ProviderInfo[]>([])
   const [activeSection, setActiveSection] =
     useState<AppSettingsSectionId>(DEFAULT_SECTION)
 
@@ -99,6 +104,7 @@ export const AppSettingsDialogContainer: FC<AppSettingsContainerProps> = ({
   useEffect(() => {
     if (open) {
       loadProviders()
+      void providerApi.getAllAvailable().then(setAllProviders)
       if (!isLoaded) void loadSettings()
     }
   }, [open, loadProviders, loadSettings, isLoaded])
@@ -122,6 +128,7 @@ export const AppSettingsDialogContainer: FC<AppSettingsContainerProps> = ({
     setNotificationsDraft(settings.notifications)
     setUpdatesDraft(settings.updates)
     setDebugLoggingDraft(settings.debugLogging)
+    setPiModelDraft(settings.piModelVisibility.additionalModelIds)
     clearError()
   }, [open, payload, settings, clearError])
 
@@ -232,6 +239,15 @@ export const AppSettingsDialogContainer: FC<AppSettingsContainerProps> = ({
     setDebugLoggingDraft({ enabled: next })
   }, [])
 
+  const handleTogglePiModel = useCallback((modelId: string, next: boolean) => {
+    setPiModelDraft((current) => {
+      const ids = new Set(current ?? [])
+      if (next) ids.add(modelId)
+      else ids.delete(modelId)
+      return [...ids]
+    })
+  }, [])
+
   const handleOpenDebugLogFolder = useCallback(() => {
     void providerDebugApi.openFolder()
   }, [])
@@ -258,7 +274,12 @@ export const AppSettingsDialogContainer: FC<AppSettingsContainerProps> = ({
         onboarding: settings.onboarding,
         updates: updatesDraft ?? settings.updates,
         debugLogging: debugLoggingDraft ?? settings.debugLogging,
+        piModelVisibility: {
+          additionalModelIds:
+            piModelDraft ?? settings.piModelVisibility.additionalModelIds,
+        },
       })
+      await loadProviders()
       closeDialog()
     } catch {
       // error already surfaced on store
@@ -271,10 +292,13 @@ export const AppSettingsDialogContainer: FC<AppSettingsContainerProps> = ({
     notificationsDraft,
     updatesDraft,
     debugLoggingDraft,
+    piModelDraft,
     settings.notifications,
     settings.onboarding,
     settings.updates,
     settings.debugLogging,
+    settings.piModelVisibility.additionalModelIds,
+    loadProviders,
     closeDialog,
   ])
 
@@ -284,12 +308,16 @@ export const AppSettingsDialogContainer: FC<AppSettingsContainerProps> = ({
       onOpenChange={handleOpenChange}
       trigger={trigger}
       providers={providers}
+      allProviders={allProviders}
       selection={selection}
       namingDraft={namingDraft}
       extractionDraft={extractionDraft}
       notificationsDraft={notificationsDraft ?? settings.notifications}
       updatesDraft={updatesDraft ?? settings.updates}
       debugLoggingDraft={debugLoggingDraft ?? settings.debugLogging}
+      piModelIdsDraft={
+        piModelDraft ?? settings.piModelVisibility.additionalModelIds
+      }
       updatesStatus={updatesStatus}
       updatesVersion={updatesVersion}
       updatesIsDev={updatesIsDev}
@@ -310,6 +338,7 @@ export const AppSettingsDialogContainer: FC<AppSettingsContainerProps> = ({
       onInstallUpdate={handleInstallUpdate}
       onOpenReleaseNotes={handleOpenReleaseNotes}
       onToggleDebugLogging={handleToggleDebugLogging}
+      onTogglePiModel={handleTogglePiModel}
       onOpenDebugLogFolder={handleOpenDebugLogFolder}
       onSectionChange={setActiveSection}
       onSave={handleSave}

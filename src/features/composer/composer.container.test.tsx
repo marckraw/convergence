@@ -1,7 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { fireEvent, render, screen } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { ComposerContainer } from './composer.container'
 import { useSessionStore } from '@/entities/session'
+import { useAppSettingsStore } from '@/entities/app-settings'
 import { useSkillStore } from '@/entities/skill'
 import {
   useProjectContextStore,
@@ -158,6 +159,14 @@ describe('ComposerContainer', () => {
       error: null,
       loadForProject: vi.fn().mockResolvedValue(undefined),
     })
+
+    useAppSettingsStore.setState((state) => ({
+      settings: {
+        ...state.settings,
+        piModelVisibility: { additionalModelIds: [] },
+      },
+      isLoaded: true,
+    }))
   })
 
   it('continues a failed continuable session instead of creating a new one', () => {
@@ -326,6 +335,32 @@ describe('ComposerContainer', () => {
 
     expect(useSkillStore.getState().loadGlobalCatalog).toHaveBeenCalled()
     expect(useSkillStore.getState().loadCatalog).not.toHaveBeenCalled()
+  })
+
+  it('reloads providers when Pi model visibility changes while mounted', async () => {
+    const loadProviders = useSessionStore.getState().loadProviders
+
+    render(
+      <ComposerContainer
+        context={{
+          kind: 'global',
+          activeSessionId: null,
+        }}
+      />,
+    )
+
+    await waitFor(() => expect(loadProviders).toHaveBeenCalledTimes(1))
+
+    act(() => {
+      useAppSettingsStore.setState((state) => ({
+        settings: {
+          ...state.settings,
+          piModelVisibility: { additionalModelIds: ['openai/gpt-5.5'] },
+        },
+      }))
+    })
+
+    await waitFor(() => expect(loadProviders).toHaveBeenCalledTimes(2))
   })
 
   it('allows follow-up while a supported provider session is running', () => {

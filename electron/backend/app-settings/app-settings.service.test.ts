@@ -12,6 +12,7 @@ import { AppSettingsService, APP_SETTINGS_KEY } from './app-settings.service'
 import {
   DEFAULT_DEBUG_LOGGING_PREFS,
   DEFAULT_ONBOARDING_PREFS,
+  DEFAULT_PI_MODEL_VISIBILITY_PREFS,
 } from './app-settings.types'
 
 const TEST_ATTACHMENT_CAPABILITY: ProviderAttachmentCapability = {
@@ -85,6 +86,42 @@ function buildDescriptors(): ProviderDescriptor[] {
   ]
 }
 
+function buildPiDescriptor(): ProviderDescriptor {
+  return {
+    id: 'pi',
+    name: 'Pi Agent',
+    vendorLabel: 'Pi',
+    kind: 'conversation',
+    supportsContinuation: true,
+    defaultModelId: 'openrouter/custom',
+    modelOptions: [
+      {
+        id: 'openrouter/custom',
+        label: 'OpenRouter Custom',
+        defaultEffort: 'medium',
+        effortOptions: [{ id: 'medium', label: 'Medium' }],
+        source: 'pi-models-json',
+      },
+      {
+        id: 'openrouter/builtin',
+        label: 'OpenRouter Built-in',
+        defaultEffort: 'medium',
+        effortOptions: [{ id: 'medium', label: 'Medium' }],
+        source: 'provider',
+      },
+      {
+        id: 'github-copilot/gpt-5.4',
+        label: 'GitHub Copilot GPT-5.4',
+        defaultEffort: 'medium',
+        effortOptions: [{ id: 'medium', label: 'Medium' }],
+        source: 'provider',
+      },
+    ],
+    attachments: TEST_ATTACHMENT_CAPABILITY,
+    midRunInput: NO_MID_RUN_INPUT_CAPABILITY,
+  }
+}
+
 describe('AppSettingsService', () => {
   let stateService: StateService
   let service: AppSettingsService
@@ -115,6 +152,7 @@ describe('AppSettingsService', () => {
         onboarding: DEFAULT_ONBOARDING_PREFS,
         updates: DEFAULT_UPDATE_PREFS,
         debugLogging: DEFAULT_DEBUG_LOGGING_PREFS,
+        piModelVisibility: DEFAULT_PI_MODEL_VISIBILITY_PREFS,
       })
     })
 
@@ -129,6 +167,7 @@ describe('AppSettingsService', () => {
         onboarding: DEFAULT_ONBOARDING_PREFS,
         updates: DEFAULT_UPDATE_PREFS,
         debugLogging: DEFAULT_DEBUG_LOGGING_PREFS,
+        piModelVisibility: DEFAULT_PI_MODEL_VISIBILITY_PREFS,
       })
       const settings = await service.getAppSettings()
       expect(settings).toEqual({
@@ -141,6 +180,7 @@ describe('AppSettingsService', () => {
         onboarding: DEFAULT_ONBOARDING_PREFS,
         updates: DEFAULT_UPDATE_PREFS,
         debugLogging: DEFAULT_DEBUG_LOGGING_PREFS,
+        piModelVisibility: DEFAULT_PI_MODEL_VISIBILITY_PREFS,
       })
     })
 
@@ -164,6 +204,7 @@ describe('AppSettingsService', () => {
         onboarding: DEFAULT_ONBOARDING_PREFS,
         updates: DEFAULT_UPDATE_PREFS,
         debugLogging: DEFAULT_DEBUG_LOGGING_PREFS,
+        piModelVisibility: DEFAULT_PI_MODEL_VISIBILITY_PREFS,
       })
     })
 
@@ -187,6 +228,7 @@ describe('AppSettingsService', () => {
         onboarding: DEFAULT_ONBOARDING_PREFS,
         updates: DEFAULT_UPDATE_PREFS,
         debugLogging: DEFAULT_DEBUG_LOGGING_PREFS,
+        piModelVisibility: DEFAULT_PI_MODEL_VISIBILITY_PREFS,
       })
     })
 
@@ -210,6 +252,7 @@ describe('AppSettingsService', () => {
         onboarding: DEFAULT_ONBOARDING_PREFS,
         updates: DEFAULT_UPDATE_PREFS,
         debugLogging: DEFAULT_DEBUG_LOGGING_PREFS,
+        piModelVisibility: DEFAULT_PI_MODEL_VISIBILITY_PREFS,
       })
     })
 
@@ -226,7 +269,31 @@ describe('AppSettingsService', () => {
         onboarding: DEFAULT_ONBOARDING_PREFS,
         updates: DEFAULT_UPDATE_PREFS,
         debugLogging: DEFAULT_DEBUG_LOGGING_PREFS,
+        piModelVisibility: DEFAULT_PI_MODEL_VISIBILITY_PREFS,
       })
+    })
+  })
+
+  describe('filterProviderDescriptors', () => {
+    it('always keeps models.json Pi models and adds selected available models', async () => {
+      descriptors.push(buildPiDescriptor())
+      await service.setAppSettings({
+        defaultProviderId: null,
+        defaultModelId: null,
+        defaultEffortId: null,
+        piModelVisibility: {
+          additionalModelIds: ['github-copilot/gpt-5.4'],
+        },
+      })
+
+      const pi = service
+        .filterProviderDescriptors(descriptors)
+        .find((descriptor) => descriptor.id === 'pi')
+
+      expect(pi?.modelOptions.map((model) => model.id)).toEqual([
+        'openrouter/custom',
+        'github-copilot/gpt-5.4',
+      ])
     })
   })
 
@@ -283,6 +350,7 @@ describe('AppSettingsService', () => {
         onboarding: DEFAULT_ONBOARDING_PREFS,
         updates: DEFAULT_UPDATE_PREFS,
         debugLogging: DEFAULT_DEBUG_LOGGING_PREFS,
+        piModelVisibility: DEFAULT_PI_MODEL_VISIBILITY_PREFS,
       })
     })
 

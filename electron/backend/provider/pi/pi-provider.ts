@@ -38,7 +38,10 @@ import {
   extractToolResultText,
 } from './pi-event-mapping.pure'
 import { mapEffortToPiThinking, mapPiModels } from './pi-models.pure'
-import { probePiAvailableModels } from './pi-models.service'
+import {
+  probePiAvailableModels,
+  readPiModelsJsonModelIds,
+} from './pi-models.service'
 import { buildPiPromptPayload, type PiMessagePart } from './pi-message.pure'
 import {
   initialPiActivityState,
@@ -230,8 +233,11 @@ export class PiProvider implements Provider {
 
   private async fetchDescriptor(): Promise<ProviderDescriptor> {
     const fallback = buildFallbackPiDescriptor()
-    const rawModels = await probePiAvailableModels(this.binaryPath)
-    const modelOptions = mapPiModels(rawModels)
+    const [rawModels, modelsJsonModelIds] = await Promise.all([
+      probePiAvailableModels(this.binaryPath),
+      readPiModelsJsonModelIds(),
+    ])
+    const modelOptions = mapPiModels(rawModels, modelsJsonModelIds)
     if (modelOptions.length === 0) return fallback
 
     return normalizeProviderDescriptor({

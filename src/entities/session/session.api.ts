@@ -136,6 +136,8 @@ export const sessionApi = {
 
 export const providerApi = {
   getAll: (): Promise<ProviderInfo[]> => window.electronAPI.provider.getAll(),
+  getAllAvailable: (): Promise<ProviderInfo[]> =>
+    window.electronAPI.provider.getAllAvailable(),
   getStatuses: (): Promise<ProviderStatusInfo[]> =>
     window.electronAPI.provider.getStatuses(),
   getRuntimeInfo: (): Promise<ProviderRuntimeInfo> =>

@@ -1,10 +1,11 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { useSessionStore } from '@/entities/session'
+import { useSessionStore, type ProviderInfo } from '@/entities/session'
 import {
   DEFAULT_DEBUG_LOGGING_PREFS,
   DEFAULT_NOTIFICATION_PREFS,
   DEFAULT_ONBOARDING_PREFS,
+  DEFAULT_PI_MODEL_VISIBILITY_PREFS,
   DEFAULT_UPDATE_PREFS,
   useAppSettingsStore,
 } from '@/entities/app-settings'
@@ -32,7 +33,7 @@ const TEST_MID_RUN_INPUT = {
   defaultRunningMode: null,
 }
 
-const providers = [
+const providers: ProviderInfo[] = [
   {
     id: 'claude-code',
     name: 'Claude Code',
@@ -78,6 +79,41 @@ const providers = [
     midRunInput: TEST_MID_RUN_INPUT,
   },
 ]
+
+const piProvider: ProviderInfo = {
+  id: 'pi',
+  name: 'Pi',
+  vendorLabel: 'Pi',
+  kind: 'conversation',
+  supportsContinuation: true,
+  defaultModelId: 'openrouter/custom-qwen',
+  modelOptions: [
+    {
+      id: 'openrouter/custom-qwen',
+      label: 'PGX-test Qwen',
+      defaultEffort: 'medium',
+      effortOptions: [
+        { id: 'low', label: 'Low' },
+        { id: 'medium', label: 'Medium' },
+        { id: 'high', label: 'High' },
+      ],
+      source: 'pi-models-json',
+    },
+    {
+      id: 'openai/gpt-5.5',
+      label: 'OpenAI GPT-5.5',
+      defaultEffort: 'medium',
+      effortOptions: [
+        { id: 'low', label: 'Low' },
+        { id: 'medium', label: 'Medium' },
+        { id: 'high', label: 'High' },
+      ],
+      source: 'provider',
+    },
+  ],
+  attachments: TEST_ATTACHMENTS,
+  midRunInput: TEST_MID_RUN_INPUT,
+}
 
 const EMPTY_ANALYTICS_OVERVIEW: AnalyticsOverview = {
   range: {
@@ -150,6 +186,7 @@ function primeStores(stored: {
       onboarding: DEFAULT_ONBOARDING_PREFS,
       updates: DEFAULT_UPDATE_PREFS,
       debugLogging: DEFAULT_DEBUG_LOGGING_PREFS,
+      piModelVisibility: DEFAULT_PI_MODEL_VISIBILITY_PREFS,
     },
     isLoaded: true,
     isSaving: false,
@@ -170,7 +207,10 @@ describe('AppSettingsDialogContainer', () => {
       error: null,
     })
     ;(window as unknown as { electronAPI: unknown }).electronAPI = {
-      provider: { getAll: vi.fn().mockResolvedValue(providers) },
+      provider: {
+        getAll: vi.fn().mockResolvedValue(providers),
+        getAllAvailable: vi.fn().mockResolvedValue(providers),
+      },
       appSettings: {
         get: vi.fn().mockResolvedValue({
           defaultProviderId: null,
@@ -215,7 +255,47 @@ describe('AppSettingsDialogContainer', () => {
         onboarding: DEFAULT_ONBOARDING_PREFS,
         updates: DEFAULT_UPDATE_PREFS,
         debugLogging: DEFAULT_DEBUG_LOGGING_PREFS,
+        piModelVisibility: DEFAULT_PI_MODEL_VISIBILITY_PREFS,
       })
+    })
+  })
+
+  it('persists selected additional Pi models and reloads filtered providers after save', async () => {
+    const allProviders = [...providers, piProvider]
+    vi.mocked(window.electronAPI.provider.getAll).mockResolvedValue(
+      allProviders,
+    )
+    vi.mocked(window.electronAPI.provider.getAllAvailable).mockResolvedValue(
+      allProviders,
+    )
+    primeStores({
+      defaultProviderId: 'claude-code',
+      defaultModelId: 'sonnet',
+      defaultEffortId: 'medium',
+    })
+
+    render(<AppSettingsDialogContainer trigger={<Button>Open</Button>} />)
+    fireEvent.click(screen.getByText('Open'))
+
+    expect(await screen.findByText('Settings')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: /Pi models/ }))
+    fireEvent.click(screen.getByRole('checkbox', { name: /OpenAI GPT-5\.5/ }))
+    const providerLoadsBeforeSave = vi.mocked(
+      window.electronAPI.provider.getAll,
+    ).mock.calls.length
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+
+    await waitFor(() => {
+      expect(window.electronAPI.appSettings.set).toHaveBeenCalledWith(
+        expect.objectContaining({
+          piModelVisibility: { additionalModelIds: ['openai/gpt-5.5'] },
+        }),
+      )
+    })
+    await waitFor(() => {
+      expect(
+        vi.mocked(window.electronAPI.provider.getAll).mock.calls.length,
+      ).toBeGreaterThan(providerLoadsBeforeSave)
     })
   })
 
@@ -246,6 +326,7 @@ describe('AppSettingsDialogContainer', () => {
         onboarding: DEFAULT_ONBOARDING_PREFS,
         updates: DEFAULT_UPDATE_PREFS,
         debugLogging: DEFAULT_DEBUG_LOGGING_PREFS,
+        piModelVisibility: DEFAULT_PI_MODEL_VISIBILITY_PREFS,
       })
     })
   })

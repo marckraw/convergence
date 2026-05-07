@@ -671,9 +671,17 @@ export function registerIpcHandlers(
   )
 
   // Provider handlers
+  async function loadProviderDescriptors() {
+    return Promise.all(providerRegistry.getAll().map((p) => p.describe()))
+  }
+
   ipcMain.handle('provider:getAll', async () =>
-    Promise.all(providerRegistry.getAll().map((p) => p.describe())),
+    appSettingsService.filterProviderDescriptors(
+      await loadProviderDescriptors(),
+    ),
   )
+
+  ipcMain.handle('provider:getAllAvailable', loadProviderDescriptors)
 
   ipcMain.handle('provider:getStatuses', async () => {
     const { inspectProviderStatuses } =

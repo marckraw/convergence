@@ -1,5 +1,9 @@
 import { spawn } from 'child_process'
+import { readFile } from 'fs/promises'
+import { homedir } from 'os'
+import { join } from 'path'
 import { PiRpcClient } from './pi-rpc'
+import { collectPiModelsJsonModelIds } from './pi-models.pure'
 
 const PROBE_TIMEOUT_MS = 5000
 
@@ -55,5 +59,16 @@ export async function probePiAvailableModels(
     } catch {
       // Already exited or failed to spawn
     }
+  }
+}
+
+export async function readPiModelsJsonModelIds(
+  modelsPath = join(homedir(), '.pi', 'agent', 'models.json'),
+): Promise<Set<string>> {
+  try {
+    const content = await readFile(modelsPath, 'utf8')
+    return collectPiModelsJsonModelIds(JSON.parse(content))
+  } catch {
+    return new Set()
   }
 }

@@ -1074,6 +1074,7 @@ interface ElectronAPI {
   }
   provider: {
     getAll: () => Promise<ProviderInfo[]>
+    getAllAvailable: () => Promise<ProviderInfo[]>
     getStatuses: () => Promise<ProviderStatusInfo[]>
     getRuntimeInfo: () => Promise<ProviderRuntimeInfo>
     update: (providerId: string) => Promise<ProviderUpdateResult>
@@ -1334,6 +1335,9 @@ interface AppSettingsData {
   onboarding: OnboardingPrefsData
   updates: UpdatePrefsData
   debugLogging: DebugLoggingPrefsData
+  piModelVisibility: {
+    additionalModelIds: string[]
+  }
 }
 
 declare global {
