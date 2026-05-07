@@ -351,6 +351,89 @@ describe('PiProvider continuation recovery', () => {
     )
   })
 
+  it('surfaces PI agent_end error messages as transcript notes', async () => {
+    const child = new MockChildProcess()
+    let buffer = ''
+    child.stdin.on('data', (chunk) => {
+      buffer += chunk.toString()
+
+      let newlineIndex = buffer.indexOf('\n')
+      while (newlineIndex >= 0) {
+        const line = buffer.slice(0, newlineIndex).trim()
+        buffer = buffer.slice(newlineIndex + 1)
+
+        if (line) {
+          const message = JSON.parse(line) as { id?: number; type?: string }
+          if (message.type === 'prompt') {
+            setTimeout(() => {
+              child.stdout.write(
+                JSON.stringify({
+                  type: 'response',
+                  command: 'prompt',
+                  id: message.id,
+                  success: true,
+                }) + '\n',
+              )
+              child.stdout.write(JSON.stringify({ type: 'agent_start' }) + '\n')
+              child.stdout.write(
+                JSON.stringify({
+                  type: 'agent_end',
+                  messages: [
+                    {
+                      role: 'assistant',
+                      stopReason: 'error',
+                      errorMessage: '401 Missing Authentication header',
+                    },
+                  ],
+                }) + '\n',
+              )
+            }, 0)
+          }
+        }
+
+        newlineIndex = buffer.indexOf('\n')
+      }
+    })
+    spawnMock.mockReturnValue(child)
+
+    const provider = new PiProvider('/usr/local/bin/pi')
+    const handle = provider.start({
+      sessionId: 'session-pi',
+      workingDirectory: process.cwd(),
+      initialMessage: 'hello pi',
+      initialAttachments: undefined,
+      model: null,
+      effort: null,
+      continuationToken: null,
+    })
+
+    const items: Array<
+      Extract<SessionDelta, { kind: 'conversation.item.add' }>['item']
+    > = []
+    handle.onDelta((delta) => {
+      if (delta.kind === 'conversation.item.add') {
+        items.push(delta.item)
+      }
+    })
+    handle.onStatusChange(() => {})
+    handle.onContinuationToken(() => {})
+    handle.onAttentionChange(() => {})
+    handle.onContextWindowChange(() => {})
+    handle.onActivityChange(() => {})
+
+    await waitFor(() => {
+      expect(items).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            kind: 'note',
+            level: 'error',
+            text: 'Agent failed: 401 Missing Authentication header',
+          }),
+        ]),
+      )
+    })
+  })
+
   it('keeps the active Pi session running when mid-run follow-up is rejected', async () => {
     const child = new MockChildProcess()
     const server = createPiCommandCaptureServer(child, {

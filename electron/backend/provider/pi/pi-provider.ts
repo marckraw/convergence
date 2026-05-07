@@ -33,6 +33,7 @@ import type {
 } from '../../provider-debug/provider-debug.types'
 import {
   derivePiContextWindow,
+  extractLastAssistantErrorMessage,
   extractLastAssistantStopReason,
   extractToolCallFromEnd,
   extractToolResultText,
@@ -66,11 +67,22 @@ function now(): string {
   return new Date().toISOString()
 }
 
-function runPiOneShot(
+export type PiEnvironmentResolver = (
+  env?: NodeJS.ProcessEnv,
+) => Promise<NodeJS.ProcessEnv>
+
+const defaultPiEnvironmentResolver: PiEnvironmentResolver = async (
+  env = process.env,
+) => ({ ...env })
+
+async function runPiOneShot(
   binaryPath: string,
   input: OneShotInput,
   taskProgress?: TaskProgressService | null,
+  resolveEnvironment: PiEnvironmentResolver = defaultPiEnvironmentResolver,
 ): Promise<OneShotResult> {
+  const childEnv = await resolveEnvironment(process.env)
+
   return new Promise<OneShotResult>((resolve, reject) => {
     const args = ['--mode', 'rpc']
     if (input.modelId.includes('/')) {
@@ -80,7 +92,7 @@ function runPiOneShot(
     const child = spawn(binaryPath, args, {
       cwd: input.workingDirectory,
       stdio: ['pipe', 'pipe', 'pipe'],
-      env: { ...process.env },
+      env: childEnv,
     })
 
     const progress = createTaskProgressEmitter(input.requestId, taskProgress)
@@ -216,10 +228,16 @@ export class PiProvider implements Provider {
     private binaryPath: string,
     private taskProgress: TaskProgressService | null = null,
     private debugSink: ProviderDebugSink = noopDebugSink,
+    private resolveEnvironment: PiEnvironmentResolver = defaultPiEnvironmentResolver,
   ) {}
 
   async oneShot(input: OneShotInput): Promise<OneShotResult> {
-    return runPiOneShot(this.binaryPath, input, this.taskProgress)
+    return runPiOneShot(
+      this.binaryPath,
+      input,
+      this.taskProgress,
+      this.resolveEnvironment,
+    )
   }
 
   describe(): Promise<ProviderDescriptor> {
@@ -251,6 +269,7 @@ export class PiProvider implements Provider {
     const binaryPath = this.binaryPath
     const skillsService = this.skillsService
     const debugSink = this.debugSink
+    const resolveEnvironment = this.resolveEnvironment
     const sessionId = config.sessionId
     const listeners = {
       delta: [] as ((delta: SessionDelta) => void)[],
@@ -593,8 +612,11 @@ export class PiProvider implements Provider {
             setAttention('failed')
             currentTurn = null
           } else if (stopReason === 'error') {
+            const errorMessage = extractLastAssistantErrorMessage(event)
             sessionEmitter.addNote({
-              text: 'Agent failed',
+              text: errorMessage
+                ? `Agent failed: ${errorMessage}`
+                : 'Agent failed',
               level: 'error',
             })
             setStatus('failed')
@@ -988,10 +1010,12 @@ export class PiProvider implements Provider {
         args.push('--thinking', thinking)
       }
 
+      const childEnv = await resolveEnvironment(process.env)
+
       child = spawn(binaryPath, args, {
         cwd: config.workingDirectory,
         stdio: ['pipe', 'pipe', 'pipe'],
-        env: { ...process.env },
+        env: childEnv,
       })
 
       if (!child.stdin || !child.stdout) {

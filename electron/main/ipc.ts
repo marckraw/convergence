@@ -23,6 +23,7 @@ import type {
 import { McpService } from '../backend/mcp/mcp.service'
 import { SkillsService } from '../backend/skills/skills.service'
 import { AppSettingsService } from '../backend/app-settings/app-settings.service'
+import { OpenRouterCredentialsService } from '../backend/credentials/openrouter-credentials.service'
 import type { AnalyticsService } from '../backend/analytics/analytics.service'
 import type { AnalyticsRangePreset } from '../backend/analytics/analytics.types'
 import type { AttachmentsService } from '../backend/attachments/attachments.service'
@@ -141,6 +142,7 @@ export function registerIpcHandlers(
   mcpService: McpService,
   skillsService: SkillsService,
   appSettingsService: AppSettingsService,
+  openRouterCredentials: OpenRouterCredentialsService,
   analyticsService: AnalyticsService,
   attachmentsService: AttachmentsService,
   turnCaptureService: TurnCaptureService,
@@ -475,6 +477,24 @@ export function registerIpcHandlers(
     onUpdatePrefsChanged?.(stored.updates)
     return stored
   })
+
+  ipcMain.handle('credentials:openrouter:getStatus', () =>
+    openRouterCredentials.getStatus(),
+  )
+
+  ipcMain.handle(
+    'credentials:openrouter:setToken',
+    (_event, input: { token?: unknown }) => {
+      if (!input || typeof input.token !== 'string') {
+        throw new Error('OpenRouter API key is required.')
+      }
+      return openRouterCredentials.setToken({ token: input.token })
+    },
+  )
+
+  ipcMain.handle('credentials:openrouter:deleteToken', () =>
+    openRouterCredentials.deleteToken(),
+  )
 
   // Analytics handlers
   ipcMain.handle('analytics:getOverview', (_event, rangePreset: string) =>

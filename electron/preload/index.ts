@@ -328,6 +328,15 @@ contextBridge.exposeInMainWorld('electronAPI', {
       }
     },
   },
+  credentials: {
+    openRouter: {
+      getStatus: () => ipcRenderer.invoke('credentials:openrouter:getStatus'),
+      setToken: (token: string) =>
+        ipcRenderer.invoke('credentials:openrouter:setToken', { token }),
+      deleteToken: () =>
+        ipcRenderer.invoke('credentials:openrouter:deleteToken'),
+    },
+  },
   analytics: {
     getOverview: (rangePreset: '7d' | '30d' | '90d' | 'all') =>
       ipcRenderer.invoke('analytics:getOverview', rangePreset),

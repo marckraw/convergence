@@ -95,6 +95,31 @@ export function extractLastAssistantStopReason(
   return null
 }
 
+export function extractLastAssistantErrorMessage(
+  event: unknown,
+): string | null {
+  if (!event || typeof event !== 'object') return null
+  const record = event as { messages?: unknown; errorMessage?: unknown }
+  if (typeof record.errorMessage === 'string' && record.errorMessage) {
+    return record.errorMessage
+  }
+
+  const messages = record.messages
+  if (!Array.isArray(messages)) return null
+
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const msg = messages[i]
+    if (!msg || typeof msg !== 'object') continue
+    const msgRec = msg as { role?: unknown; errorMessage?: unknown }
+    if (msgRec.role !== 'assistant') continue
+    return typeof msgRec.errorMessage === 'string' && msgRec.errorMessage
+      ? msgRec.errorMessage
+      : null
+  }
+
+  return null
+}
+
 export function extractToolCallFromEnd(event: unknown): {
   id: string | null
   name: string

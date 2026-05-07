@@ -218,6 +218,27 @@ describe('buildPaletteIndex', () => {
     })
   })
 
+  it('emits a direct Credentials dialog item with OpenRouter search aliases', () => {
+    const items = buildPaletteIndex({
+      projects: [],
+      workspaces: [],
+      sessions: [],
+      recentSessionIds: [],
+      dismissals: {},
+    })
+    const credentials = items.find(
+      (item): item is DialogPaletteItem =>
+        item.kind === 'dialog' && item.id === 'dialog:app-settings:credentials',
+    )
+
+    expect(credentials).toMatchObject({
+      dialogKind: 'app-settings',
+      dialogPayload: { appSettingsSection: 'credentials' },
+      title: 'Open Credentials',
+      search: { aliases: expect.stringContaining('openrouter') },
+    })
+  })
+
   it('emits a check-updates item exposed by the search title', () => {
     const items = buildPaletteIndex({
       projects: [],

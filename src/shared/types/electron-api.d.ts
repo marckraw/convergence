@@ -1116,6 +1116,13 @@ interface ElectronAPI {
     set: (input: AppSettingsData) => Promise<AppSettingsData>
     onUpdated: (callback: (settings: AppSettingsData) => void) => () => void
   }
+  credentials: {
+    openRouter: {
+      getStatus: () => Promise<OpenRouterCredentialStatusData>
+      setToken: (token: string) => Promise<OpenRouterCredentialStatusData>
+      deleteToken: () => Promise<OpenRouterCredentialStatusData>
+    }
+  }
   analytics: {
     getOverview: (
       rangePreset: AnalyticsRangePresetData,
@@ -1338,6 +1345,16 @@ interface AppSettingsData {
   piModelVisibility: {
     additionalModelIds: string[]
   }
+}
+
+interface OpenRouterCredentialStatusData {
+  providerId: 'openrouter'
+  configured: boolean
+  source: 'environment' | 'keychain' | null
+  storage: 'keychain' | null
+  account: string | null
+  service: string | null
+  error: string | null
 }
 
 declare global {

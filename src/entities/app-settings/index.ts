@@ -5,6 +5,7 @@ export type {
   NotificationEventPrefs,
   NotificationPrefs,
   OnboardingPrefs,
+  OpenRouterCredentialStatus,
   PiModelVisibilityPrefs,
   UpdatePrefs,
 } from './app-settings.types'
@@ -15,6 +16,6 @@ export {
   DEFAULT_PI_MODEL_VISIBILITY_PREFS,
   DEFAULT_UPDATE_PREFS,
 } from './app-settings.types'
-export { appSettingsApi } from './app-settings.api'
+export { appSettingsApi, openRouterCredentialsApi } from './app-settings.api'
 export { useAppSettingsStore } from './app-settings.model'
 export type { AppSettingsStore } from './app-settings.model'
