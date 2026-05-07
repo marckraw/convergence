@@ -18,6 +18,14 @@ export const DEFAULT_DEBUG_LOGGING_PREFS: DebugLoggingPrefs = {
   enabled: false,
 }
 
+export interface PiModelVisibilityPrefs {
+  additionalModelIds: string[]
+}
+
+export const DEFAULT_PI_MODEL_VISIBILITY_PREFS: PiModelVisibilityPrefs = {
+  additionalModelIds: [],
+}
+
 export interface AppSettings {
   defaultProviderId: string | null
   defaultModelId: string | null
@@ -28,6 +36,7 @@ export interface AppSettings {
   onboarding: OnboardingPrefs
   updates: UpdatePrefs
   debugLogging: DebugLoggingPrefs
+  piModelVisibility: PiModelVisibilityPrefs
 }
 
 export type AppSettingsInput = Omit<
@@ -38,6 +47,7 @@ export type AppSettingsInput = Omit<
   | 'onboarding'
   | 'updates'
   | 'debugLogging'
+  | 'piModelVisibility'
 > & {
   namingModelByProvider?: Record<string, string>
   extractionModelByProvider?: Record<string, string>
@@ -45,6 +55,7 @@ export type AppSettingsInput = Omit<
   onboarding?: OnboardingPrefs
   updates?: UpdatePrefs
   debugLogging?: DebugLoggingPrefs
+  piModelVisibility?: PiModelVisibilityPrefs
 }
 
 export interface ResolvedSessionDefaults {

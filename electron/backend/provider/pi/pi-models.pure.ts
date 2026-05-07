@@ -48,7 +48,36 @@ function effortOptionsFor(model: PiModel): ProviderEffortOption[] {
   return buildEffortOptions(ladder)
 }
 
-export function mapPiModel(raw: unknown): ProviderModelOption | null {
+export function collectPiModelsJsonModelIds(raw: unknown): Set<string> {
+  const ids = new Set<string>()
+  if (!raw || typeof raw !== 'object') return ids
+
+  const providers = (raw as { providers?: unknown }).providers
+  if (!providers || typeof providers !== 'object') return ids
+
+  for (const [providerId, providerConfig] of Object.entries(
+    providers as Record<string, unknown>,
+  )) {
+    if (!providerConfig || typeof providerConfig !== 'object') continue
+    const models = (providerConfig as { models?: unknown }).models
+    if (!Array.isArray(models)) continue
+
+    for (const model of models) {
+      if (!model || typeof model !== 'object') continue
+      const id = (model as { id?: unknown }).id
+      if (typeof id === 'string' && id.length > 0) {
+        ids.add(`${providerId}/${id}`)
+      }
+    }
+  }
+
+  return ids
+}
+
+export function mapPiModel(
+  raw: unknown,
+  modelsJsonModelIds: Set<string> = new Set(),
+): ProviderModelOption | null {
   if (!raw || typeof raw !== 'object') return null
   const record = raw as Record<string, unknown>
   const id = typeof record.id === 'string' ? record.id : null
@@ -69,13 +98,19 @@ export function mapPiModel(raw: unknown): ProviderModelOption | null {
     label: `${formatProviderLabel(provider)} · ${name}`,
     defaultEffort,
     effortOptions,
+    source: modelsJsonModelIds.has(`${provider}/${id}`)
+      ? 'pi-models-json'
+      : 'provider',
   }
 }
 
-export function mapPiModels(raw: unknown): ProviderModelOption[] {
+export function mapPiModels(
+  raw: unknown,
+  modelsJsonModelIds: Set<string> = new Set(),
+): ProviderModelOption[] {
   if (!Array.isArray(raw)) return []
   return raw.flatMap((item) => {
-    const mapped = mapPiModel(item)
+    const mapped = mapPiModel(item, modelsJsonModelIds)
     return mapped ? [mapped] : []
   })
 }

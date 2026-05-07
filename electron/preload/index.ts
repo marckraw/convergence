@@ -258,6 +258,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   },
   provider: {
     getAll: () => ipcRenderer.invoke('provider:getAll'),
+    getAllAvailable: () => ipcRenderer.invoke('provider:getAllAvailable'),
     getStatuses: () => ipcRenderer.invoke('provider:getStatuses'),
     getRuntimeInfo: () => ipcRenderer.invoke('provider:getRuntimeInfo'),
     update: (providerId: string) =>
@@ -317,6 +318,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
       namingModelByProvider: Record<string, string>
       extractionModelByProvider: Record<string, string>
       notifications?: unknown
+      piModelVisibility?: unknown
     }) => ipcRenderer.invoke('appSettings:set', input),
     onUpdated: (callback: (settings: unknown) => void) => {
       const handler = (_event: unknown, settings: unknown) => callback(settings)

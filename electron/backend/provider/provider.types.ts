@@ -106,6 +106,7 @@ export interface ProviderModelOption {
   label: string
   defaultEffort: ReasoningEffort | null
   effortOptions: ProviderEffortOption[]
+  source?: 'pi-models-json' | 'provider'
 }
 
 export interface ProviderStatusInfo {

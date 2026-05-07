@@ -5,12 +5,14 @@ export type {
   NotificationEventPrefs,
   NotificationPrefs,
   OnboardingPrefs,
+  PiModelVisibilityPrefs,
   UpdatePrefs,
 } from './app-settings.types'
 export {
   DEFAULT_DEBUG_LOGGING_PREFS,
   DEFAULT_NOTIFICATION_PREFS,
   DEFAULT_ONBOARDING_PREFS,
+  DEFAULT_PI_MODEL_VISIBILITY_PREFS,
   DEFAULT_UPDATE_PREFS,
 } from './app-settings.types'
 export { appSettingsApi } from './app-settings.api'

@@ -10,12 +10,15 @@ import type { UpdatePrefs } from '../updates/updates.types'
 import {
   DEFAULT_DEBUG_LOGGING_PREFS,
   DEFAULT_ONBOARDING_PREFS,
+  DEFAULT_PI_MODEL_VISIBILITY_PREFS,
   type AppSettings,
   type AppSettingsInput,
   type DebugLoggingPrefs,
   type OnboardingPrefs,
+  type PiModelVisibilityPrefs,
   type ResolvedSessionDefaults,
 } from './app-settings.types'
+import { normalizeProviderDescriptor } from '../provider/provider-descriptor.pure'
 
 export const APP_SETTINGS_KEY = 'app_settings'
 
@@ -110,6 +113,21 @@ function parseDebugLoggingPrefs(value: unknown): DebugLoggingPrefs {
   }
 }
 
+function parseStringArray(value: unknown): string[] {
+  if (!Array.isArray(value)) return []
+  return [...new Set(value.filter((item): item is string => !!item))]
+}
+
+function parsePiModelVisibilityPrefs(value: unknown): PiModelVisibilityPrefs {
+  if (!value || typeof value !== 'object') {
+    return DEFAULT_PI_MODEL_VISIBILITY_PREFS
+  }
+  const raw = value as Partial<PiModelVisibilityPrefs>
+  return {
+    additionalModelIds: parseStringArray(raw.additionalModelIds),
+  }
+}
+
 function parse(raw: string | null): AppSettings {
   const empty: AppSettings = {
     defaultProviderId: null,
@@ -121,6 +139,7 @@ function parse(raw: string | null): AppSettings {
     onboarding: DEFAULT_ONBOARDING_PREFS,
     updates: DEFAULT_UPDATE_PREFS,
     debugLogging: DEFAULT_DEBUG_LOGGING_PREFS,
+    piModelVisibility: DEFAULT_PI_MODEL_VISIBILITY_PREFS,
   }
 
   if (!raw) return empty
@@ -148,6 +167,7 @@ function parse(raw: string | null): AppSettings {
       onboarding: parseOnboardingPrefs(parsed.onboarding),
       updates: parseUpdatePrefs(parsed.updates),
       debugLogging: parseDebugLoggingPrefs(parsed.debugLogging),
+      piModelVisibility: parsePiModelVisibilityPrefs(parsed.piModelVisibility),
     }
   } catch {
     return empty
@@ -200,6 +220,10 @@ function validateAgainst(
       onboarding: settings.onboarding,
       updates: settings.updates,
       debugLogging: settings.debugLogging,
+      piModelVisibility: validatePiModelVisibility(
+        settings.piModelVisibility,
+        descriptors,
+      ),
     }
   }
 
@@ -217,6 +241,10 @@ function validateAgainst(
       onboarding: settings.onboarding,
       updates: settings.updates,
       debugLogging: settings.debugLogging,
+      piModelVisibility: validatePiModelVisibility(
+        settings.piModelVisibility,
+        descriptors,
+      ),
     }
   }
 
@@ -233,7 +261,61 @@ function validateAgainst(
     onboarding: settings.onboarding,
     updates: settings.updates,
     debugLogging: settings.debugLogging,
+    piModelVisibility: validatePiModelVisibility(
+      settings.piModelVisibility,
+      descriptors,
+    ),
   }
+}
+
+function validatePiModelVisibility(
+  prefs: PiModelVisibilityPrefs,
+  descriptors: ProviderDescriptor[],
+): PiModelVisibilityPrefs {
+  const pi = descriptors.find((descriptor) => descriptor.id === 'pi')
+  if (!pi) return DEFAULT_PI_MODEL_VISIBILITY_PREFS
+
+  const availableIds = new Set(pi.modelOptions.map((option) => option.id))
+  return {
+    additionalModelIds: prefs.additionalModelIds.filter((id) =>
+      availableIds.has(id),
+    ),
+  }
+}
+
+function filterPiDescriptor(
+  descriptor: ProviderDescriptor,
+  prefs: PiModelVisibilityPrefs,
+): ProviderDescriptor {
+  if (descriptor.id !== 'pi') return descriptor
+
+  const modelsJsonOptions = descriptor.modelOptions.filter(
+    (option) => option.source === 'pi-models-json',
+  )
+  const selectedIds = new Set(prefs.additionalModelIds)
+  const shouldFilter = modelsJsonOptions.length > 0 || selectedIds.size > 0
+  if (!shouldFilter) return descriptor
+
+  const modelOptions = descriptor.modelOptions.filter(
+    (option) =>
+      option.source === 'pi-models-json' || selectedIds.has(option.id),
+  )
+  if (modelOptions.length === 0) return descriptor
+
+  return normalizeProviderDescriptor({
+    ...descriptor,
+    defaultModelId: modelOptions.some(
+      (option) => option.id === descriptor.defaultModelId,
+    )
+      ? descriptor.defaultModelId
+      : modelOptions[0]!.id,
+    fastModelId:
+      descriptor.fastModelId &&
+      modelOptions.some((option) => option.id === descriptor.fastModelId)
+        ? descriptor.fastModelId
+        : null,
+    modelOptions,
+  })
 }
 
 export class AppSettingsService {
@@ -259,6 +341,18 @@ export class AppSettingsService {
 
   getDebugLoggingPrefsSync(): DebugLoggingPrefs {
     return parse(this.stateService.get(APP_SETTINGS_KEY)).debugLogging
+  }
+
+  filterProviderDescriptors(
+    descriptors: ProviderDescriptor[],
+  ): ProviderDescriptor[] {
+    const settings = validateAgainst(
+      parse(this.stateService.get(APP_SETTINGS_KEY)),
+      descriptors,
+    )
+    return descriptors.map((descriptor) =>
+      filterPiDescriptor(descriptor, settings.piModelVisibility),
+    )
   }
 
   async setAppSettings(input: AppSettingsInput): Promise<AppSettings> {
@@ -320,6 +414,13 @@ export class AppSettingsService {
       input.debugLogging === undefined
         ? existing.debugLogging
         : parseDebugLoggingPrefs(input.debugLogging)
+    const piModelVisibility =
+      input.piModelVisibility === undefined
+        ? existing.piModelVisibility
+        : validatePiModelVisibility(
+            parsePiModelVisibilityPrefs(input.piModelVisibility),
+            descriptors,
+          )
 
     const toStore: AppSettings = {
       defaultProviderId: provider ? provider.id : null,
@@ -332,6 +433,7 @@ export class AppSettingsService {
       onboarding,
       updates,
       debugLogging,
+      piModelVisibility,
     }
 
     this.stateService.set(APP_SETTINGS_KEY, JSON.stringify(toStore))

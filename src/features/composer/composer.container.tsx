@@ -280,6 +280,8 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({ context }) => {
   }, [mentionTrigger])
 
   const appSettings = useAppSettingsStore((s) => s.settings)
+  const piModelVisibilityKey =
+    appSettings.piModelVisibility.additionalModelIds.join('\u0000')
   const storedDefaults = useMemo(
     () => ({
       providerId: appSettings.defaultProviderId,
@@ -344,7 +346,7 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({ context }) => {
 
   useEffect(() => {
     loadProviders()
-  }, [loadProviders])
+  }, [loadProviders, piModelVisibilityKey])
 
   useEffect(() => {
     setSelectedSkills([])
