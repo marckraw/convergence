@@ -1,5 +1,11 @@
 # convergence
 
+## 0.36.2
+
+### Patch Changes
+
+- 1583ea8: Add Pi model visibility settings so models from `~/.pi/agent/models.json` stay visible while users can opt into additional Pi models from app settings.
+
 ## 0.36.1
 
 ### Patch Changes
