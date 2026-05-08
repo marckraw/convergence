@@ -1,5 +1,11 @@
 # convergence
 
+## 0.36.4
+
+### Patch Changes
+
+- 826c45c: Clarify that saved OpenRouter API keys are hidden after being stored in Keychain and that the credential field replaces an existing saved key.
+
 ## 0.36.3
 
 ### Patch Changes
