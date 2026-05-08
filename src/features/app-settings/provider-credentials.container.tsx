@@ -13,7 +13,7 @@ function statusText(status: OpenRouterCredentialStatus | null): string {
   if (status.error) return status.error
   if (!status.configured) return 'Not configured'
   if (status.source === 'environment') return 'Configured from environment'
-  if (status.source === 'keychain') return 'Configured in Keychain'
+  if (status.source === 'keychain') return 'Configured in Keychain, key hidden'
   return 'Configured'
 }
 
@@ -119,7 +119,9 @@ export const ProviderCredentialsContainer: FC = () => {
                 type={showToken ? 'text' : 'password'}
                 autoComplete="off"
                 value={token}
-                placeholder="sk-or-..."
+                placeholder={
+                  status?.configured ? 'Saved key hidden' : 'sk-or-...'
+                }
                 onChange={(event) => setToken(event.target.value)}
                 disabled={isSaving}
                 className="pr-10"
@@ -145,7 +147,7 @@ export const ProviderCredentialsContainer: FC = () => {
               onClick={handleSave}
               disabled={isSaving || token.trim().length === 0}
             >
-              Save key
+              {status?.configured ? 'Replace key' : 'Save key'}
             </Button>
           </div>
         </div>
