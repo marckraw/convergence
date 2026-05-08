@@ -33,7 +33,7 @@ export class McpService {
               project.repositoryPath,
             )
           case 'pi':
-            return new PiMcpService().list()
+            return new PiMcpService().list(project.repositoryPath)
           default:
             return null
         }
