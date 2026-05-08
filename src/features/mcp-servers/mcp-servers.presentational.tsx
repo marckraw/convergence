@@ -16,6 +16,12 @@ import {
 } from '@/shared/ui/dialog'
 import { Button } from '@/shared/ui/button'
 import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/shared/ui/tooltip'
+import {
   Ban,
   CircleAlert,
   CircleCheck,
@@ -72,6 +78,34 @@ function renderStatusBadge(status: McpServerStatus, label: string) {
   )
 }
 
+function renderPiHelp() {
+  return (
+    <TooltipProvider>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            aria-label="Pi MCP setup instructions"
+            className="h-6 w-6 text-muted-foreground"
+          >
+            <CircleHelp className="h-3.5 w-3.5" />
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent className="max-w-[280px] space-y-1.5 text-xs leading-relaxed">
+          <p>Pi MCP requires the pi-mcp-adapter extension.</p>
+          <p className="font-mono text-[11px]">pi install npm:pi-mcp-adapter</p>
+          <p>
+            Then restart Pi and use /mcp, /mcp setup, or /mcp-auth
+            &lt;server&gt; inside Pi.
+          </p>
+        </TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
+  )
+}
+
 function renderServerRow(
   providerId: string,
   scope: 'project' | 'global',
@@ -118,7 +152,10 @@ function renderProviderSection(provider: ProviderMcpVisibility) {
         <div className="flex items-center gap-2">
           <ServerCog className="h-4 w-4 text-muted-foreground" />
           <div>
-            <p className="text-sm font-semibold">{provider.providerName}</p>
+            <div className="flex items-center gap-1.5">
+              <p className="text-sm font-semibold">{provider.providerName}</p>
+              {provider.providerId === 'pi' ? renderPiHelp() : null}
+            </div>
             <p className="text-xs text-muted-foreground">
               {totalCount} configured server{totalCount === 1 ? '' : 's'}
             </p>

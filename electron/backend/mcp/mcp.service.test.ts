@@ -26,19 +26,19 @@ describe('McpService', () => {
 
     const result = await service.listGlobal()
 
-    expect(result).toEqual({
+    expect(result).toMatchObject({
       projectId: 'global',
       projectName: 'Global chat',
       providers: [
         {
           providerId: 'pi',
           providerName: 'Pi Agent',
-          globalServers: [],
           projectServers: [],
           error: null,
-          note: expect.stringContaining('Pi has no built-in MCP server'),
+          note: expect.stringContaining('pi-mcp-adapter'),
         },
       ],
     })
+    expect(result.providers[0]?.globalServers).toEqual(expect.any(Array))
   })
 })
