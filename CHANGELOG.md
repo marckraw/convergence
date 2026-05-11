@@ -1,5 +1,11 @@
 # convergence
 
+## 0.36.6
+
+### Patch Changes
+
+- beaf7a8: Keep the Settings dialog at the larger Insights size for every settings section so switching sections no longer changes the modal dimensions.
+
 ## 0.36.5
 
 ### Patch Changes
