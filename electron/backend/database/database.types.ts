@@ -142,28 +142,28 @@ export interface SessionTurnFileChangeRow {
   created_at: string
 }
 
-export interface InitiativeRow {
+export interface SpaceRow {
   id: string
   title: string
   status: string
   attention: string
-  current_understanding: string
+  brief: string
   created_at: string
   updated_at: string
 }
 
-export interface InitiativeAttemptRow {
+export interface SpaceAttemptRow {
   id: string
-  initiative_id: string
+  space_id: string
   session_id: string
   role: string
   is_primary: number
   created_at: string
 }
 
-export interface InitiativeOutputRow {
+export interface SpaceArtifactRow {
   id: string
-  initiative_id: string
+  space_id: string
   kind: string
   label: string
   value: string

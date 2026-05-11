@@ -1,14 +1,21 @@
 import type { FC } from 'react'
+import { useSpaceStore } from '@/entities/space'
 import { formatActivityLabel, useSessionStore } from '@/entities/session'
 import { ComposerContainer } from '@/features/composer'
 import { SessionConversationSurface } from '@/widgets/session-view'
 import { AttentionIndicator } from '@/shared/ui/attention-indicator.presentational'
 import { Button } from '@/shared/ui/button'
 import { ContextWindowIndicator } from '@/shared/ui/context-window-indicator.presentational'
-import { MessageSquareText, Square } from 'lucide-react'
+import { Folder, MessageSquareText, Square } from 'lucide-react'
 
-export const ChatSurface: FC = () => {
+interface ChatSurfaceProps {
+  selectedSpaceId: string | null
+}
+
+export const ChatSurface: FC<ChatSurfaceProps> = ({ selectedSpaceId }) => {
   const sessions = useSessionStore((state) => state.globalChatSessions)
+  const spaces = useSpaceStore((state) => state.spaces)
+  const attemptsBySpaceId = useSpaceStore((state) => state.attemptsBySpaceId)
   const activeSessionId = useSessionStore(
     (state) => state.activeGlobalSessionId,
   )
@@ -20,7 +27,46 @@ export const ChatSurface: FC = () => {
   const stopSession = useSessionStore((state) => state.stopSession)
 
   const session = sessions.find((entry) => entry.id === activeSessionId) ?? null
+  const selectedSpace =
+    spaces.find((entry) => entry.id === selectedSpaceId) ?? null
+  const selectedSpaceAttempts =
+    selectedSpaceId === null ? [] : (attemptsBySpaceId[selectedSpaceId] ?? [])
   const activityLabel = formatActivityLabel(session?.activity)
+
+  if (selectedSpaceId && !session) {
+    return (
+      <div className="flex h-full flex-col">
+        <div
+          className="flex h-12 shrink-0 items-center border-b border-border px-4"
+          style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
+        >
+          <div className="flex min-w-0 items-center gap-2 text-sm font-medium">
+            <Folder className="h-4 w-4 shrink-0 text-muted-foreground" />
+            <span className="truncate">{selectedSpace?.title ?? 'Space'}</span>
+          </div>
+        </div>
+        <div className="flex min-h-0 flex-1 flex-col px-8 py-8">
+          <div className="max-w-3xl">
+            <div className="mb-3 flex items-center gap-2 text-sm text-muted-foreground">
+              <Folder className="h-4 w-4" />
+              <span>Space home</span>
+            </div>
+            <h1 className="text-2xl font-semibold tracking-tight">
+              {selectedSpace?.title ?? 'Space'}
+            </h1>
+            <p className="mt-3 max-w-2xl whitespace-pre-wrap text-sm leading-6 text-muted-foreground">
+              {selectedSpace?.brief.trim() ||
+                'This Space is ready for grouped chats, attempts, sources, and artifacts. The full Space home lands in the next phase.'}
+            </p>
+            <div className="mt-6 inline-flex rounded-full border border-border px-3 py-1 text-xs text-muted-foreground">
+              {selectedSpaceAttempts.length}{' '}
+              {selectedSpaceAttempts.length === 1 ? 'attempt' : 'attempts'}
+            </div>
+          </div>
+        </div>
+      </div>
+    )
+  }
 
   if (!session) {
     return (

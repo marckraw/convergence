@@ -35,9 +35,16 @@ describe('GlobalChatSessionList', () => {
     render(
       <TooltipProvider>
         <GlobalChatSessionList
+          spaces={[]}
           sessions={[baseSession]}
           activeSessionId={null}
+          selectedSpaceId={null}
+          expandedSpaceIds={new Set()}
           onNewSession={vi.fn()}
+          onNewSpace={vi.fn()}
+          onSelectSpace={vi.fn()}
+          onToggleSpace={vi.fn()}
+          onSelectSpaceAttempt={vi.fn()}
           onSelectSession={onSelectSession}
           onArchiveSession={vi.fn()}
           onUnarchiveSession={vi.fn()}
@@ -61,9 +68,16 @@ describe('GlobalChatSessionList', () => {
     render(
       <TooltipProvider>
         <GlobalChatSessionList
+          spaces={[]}
           sessions={[]}
           activeSessionId={null}
+          selectedSpaceId={null}
+          expandedSpaceIds={new Set()}
           onNewSession={onNewSession}
+          onNewSpace={vi.fn()}
+          onSelectSpace={vi.fn()}
+          onToggleSpace={vi.fn()}
+          onSelectSpaceAttempt={vi.fn()}
           onSelectSession={vi.fn()}
           onArchiveSession={vi.fn()}
           onUnarchiveSession={vi.fn()}
@@ -83,9 +97,16 @@ describe('GlobalChatSessionList', () => {
     render(
       <TooltipProvider>
         <GlobalChatSessionList
+          spaces={[]}
           sessions={[baseSession]}
           activeSessionId={null}
+          selectedSpaceId={null}
+          expandedSpaceIds={new Set()}
           onNewSession={vi.fn()}
+          onNewSpace={vi.fn()}
+          onSelectSpace={vi.fn()}
+          onToggleSpace={vi.fn()}
+          onSelectSpaceAttempt={vi.fn()}
           onSelectSession={vi.fn()}
           onArchiveSession={vi.fn()}
           onUnarchiveSession={vi.fn()}
@@ -102,5 +123,60 @@ describe('GlobalChatSessionList', () => {
     fireEvent.click(await screen.findByText('Delete session'))
 
     expect(onDeleteSession).toHaveBeenCalledWith('global-session-1')
+  })
+
+  it('selects and expands Spaces with linked attempts', () => {
+    const onSelectSpace = vi.fn()
+    const onToggleSpace = vi.fn()
+    const onSelectSpaceAttempt = vi.fn()
+
+    render(
+      <TooltipProvider>
+        <GlobalChatSessionList
+          spaces={[
+            {
+              id: 'space-1',
+              title: 'Launch plan',
+              attempts: [
+                {
+                  attemptId: 'attempt-1',
+                  sessionId: baseSession.id,
+                  sessionName: baseSession.name,
+                  role: 'seed',
+                  session: baseSession,
+                },
+              ],
+            },
+          ]}
+          sessions={[]}
+          activeSessionId={baseSession.id}
+          selectedSpaceId="space-1"
+          expandedSpaceIds={new Set(['space-1'])}
+          onNewSession={vi.fn()}
+          onNewSpace={vi.fn()}
+          onSelectSpace={onSelectSpace}
+          onToggleSpace={onToggleSpace}
+          onSelectSpaceAttempt={onSelectSpaceAttempt}
+          onSelectSession={vi.fn()}
+          onArchiveSession={vi.fn()}
+          onUnarchiveSession={vi.fn()}
+          onDeleteSession={vi.fn()}
+        />
+      </TooltipProvider>,
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: /open space launch/i }))
+    fireEvent.click(
+      screen.getByRole('button', { name: /collapse space launch/i }),
+    )
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: /open space attempt planning chat/i,
+      }),
+    )
+
+    expect(onSelectSpace).toHaveBeenCalledWith('space-1')
+    expect(onToggleSpace).toHaveBeenCalledWith('space-1')
+    expect(onSelectSpaceAttempt).toHaveBeenCalledWith(baseSession.id)
   })
 })

@@ -19,7 +19,7 @@ import { TooltipProvider } from '@/shared/ui/tooltip'
 import { systemApi } from '@/shared'
 import { applyTheme, getStoredTheme } from '@/shared/lib/theme'
 import { CommandCenterContainer } from '@/features/command-center'
-import { InitiativeSessionLinkDialogContainer } from '@/features/initiative-session-link'
+import { SpaceSessionLinkDialogContainer } from '@/features/space-session-link'
 import { SessionForkDialogContainer } from '@/features/session-fork'
 import { SessionIntentDialogContainer } from '@/features/session-intent-dialog'
 import { PullRequestReviewStartDialogContainer } from '@/features/pull-request-review-start'
@@ -227,7 +227,7 @@ export function App() {
         hasProject={!!activeProject}
       />
       <CommandCenterContainer />
-      <InitiativeSessionLinkDialogContainer />
+      <SpaceSessionLinkDialogContainer />
       <SessionForkDialogContainer />
       <SessionIntentDialogContainer />
       <PullRequestReviewStartDialogContainer />

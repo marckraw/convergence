@@ -1,7 +1,7 @@
 export type DialogKind =
   | 'app-settings'
-  | 'initiative-session-link'
-  | 'initiative-workboard'
+  | 'space-session-link'
+  | 'space-workboard'
   | 'project-settings'
   | 'providers'
   | 'pull-request-review-start'
@@ -25,7 +25,7 @@ export type AppSettingsDialogSection =
 
 export type DialogPayload =
   | { appSettingsSection: AppSettingsDialogSection }
-  | { initiativeId: string }
+  | { spaceId: string }
   | { parentSessionId: string }
   | { sessionId: string }
   | { workspaceId: string | null }

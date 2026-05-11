@@ -135,38 +135,38 @@ const SCHEMA = `
   CREATE INDEX IF NOT EXISTS idx_session_turn_file_changes_session_turn
     ON session_turn_file_changes(session_id, turn_id);
 
-  CREATE TABLE IF NOT EXISTS initiatives (
+  CREATE TABLE IF NOT EXISTS spaces (
     id TEXT PRIMARY KEY,
     title TEXT NOT NULL,
     status TEXT NOT NULL DEFAULT 'exploring',
     attention TEXT NOT NULL DEFAULT 'none',
-    current_understanding TEXT NOT NULL DEFAULT '',
+    brief TEXT NOT NULL DEFAULT '',
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
     updated_at TEXT NOT NULL DEFAULT (datetime('now'))
   );
 
-  CREATE TABLE IF NOT EXISTS initiative_attempts (
+  CREATE TABLE IF NOT EXISTS space_attempts (
     id TEXT PRIMARY KEY,
-    initiative_id TEXT NOT NULL,
+    space_id TEXT NOT NULL,
     session_id TEXT NOT NULL,
     role TEXT NOT NULL DEFAULT 'exploration',
     is_primary INTEGER NOT NULL DEFAULT 0,
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
-    FOREIGN KEY (initiative_id) REFERENCES initiatives(id) ON DELETE CASCADE,
+    FOREIGN KEY (space_id) REFERENCES spaces(id) ON DELETE CASCADE,
     FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE,
-    UNIQUE (initiative_id, session_id)
+    UNIQUE (space_id, session_id)
   );
 
-  CREATE INDEX IF NOT EXISTS idx_initiative_attempts_initiative
-    ON initiative_attempts(initiative_id);
+  CREATE INDEX IF NOT EXISTS idx_space_attempts_space
+    ON space_attempts(space_id);
 
-  CREATE UNIQUE INDEX IF NOT EXISTS idx_initiative_attempts_one_primary
-    ON initiative_attempts(initiative_id)
+  CREATE UNIQUE INDEX IF NOT EXISTS idx_space_attempts_one_primary
+    ON space_attempts(space_id)
     WHERE is_primary = 1;
 
-  CREATE TABLE IF NOT EXISTS initiative_outputs (
+  CREATE TABLE IF NOT EXISTS space_artifacts (
     id TEXT PRIMARY KEY,
-    initiative_id TEXT NOT NULL,
+    space_id TEXT NOT NULL,
     kind TEXT NOT NULL,
     label TEXT NOT NULL,
     value TEXT NOT NULL,
@@ -174,12 +174,12 @@ const SCHEMA = `
     status TEXT NOT NULL DEFAULT 'planned',
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
     updated_at TEXT NOT NULL DEFAULT (datetime('now')),
-    FOREIGN KEY (initiative_id) REFERENCES initiatives(id) ON DELETE CASCADE,
+    FOREIGN KEY (space_id) REFERENCES spaces(id) ON DELETE CASCADE,
     FOREIGN KEY (source_session_id) REFERENCES sessions(id) ON DELETE SET NULL
   );
 
-  CREATE INDEX IF NOT EXISTS idx_initiative_outputs_initiative
-    ON initiative_outputs(initiative_id);
+  CREATE INDEX IF NOT EXISTS idx_space_artifacts_space
+    ON space_artifacts(space_id);
 
   CREATE TABLE IF NOT EXISTS workspaces (
     id TEXT PRIMARY KEY,
@@ -413,6 +413,90 @@ function ensureWorkspaceColumns(database: Database.Database): void {
 
   if (!columnNames.has('worktree_removed_at')) {
     database.exec('ALTER TABLE workspaces ADD COLUMN worktree_removed_at TEXT')
+  }
+}
+
+function tableExists(database: Database.Database, tableName: string): boolean {
+  const row = database
+    .prepare(
+      "SELECT name FROM sqlite_master WHERE type = 'table' AND name = ? LIMIT 1",
+    )
+    .get(tableName) as { name: string } | undefined
+
+  return row !== undefined
+}
+
+function ensureSpaceTablesMigrated(database: Database.Database): void {
+  if (!tableExists(database, 'initiatives')) return
+
+  const existingSpaces = (
+    database.prepare('SELECT COUNT(*) as count FROM spaces').get() as
+      | { count: number }
+      | undefined
+  )?.count
+
+  const migrate = database.transaction(() => {
+    database.exec(`
+      INSERT OR IGNORE INTO spaces (
+        id, title, status, attention, brief, created_at, updated_at
+      )
+      SELECT
+        id,
+        title,
+        status,
+        attention,
+        current_understanding,
+        created_at,
+        updated_at
+      FROM initiatives;
+    `)
+
+    if (tableExists(database, 'initiative_attempts')) {
+      database.exec(`
+        INSERT OR IGNORE INTO space_attempts (
+          id, space_id, session_id, role, is_primary, created_at
+        )
+        SELECT
+          id,
+          initiative_id,
+          session_id,
+          role,
+          is_primary,
+          created_at
+        FROM initiative_attempts;
+      `)
+    }
+
+    if (tableExists(database, 'initiative_outputs')) {
+      database.exec(`
+        INSERT OR IGNORE INTO space_artifacts (
+          id,
+          space_id,
+          kind,
+          label,
+          value,
+          source_session_id,
+          status,
+          created_at,
+          updated_at
+        )
+        SELECT
+          id,
+          initiative_id,
+          kind,
+          label,
+          value,
+          source_session_id,
+          status,
+          created_at,
+          updated_at
+        FROM initiative_outputs;
+      `)
+    }
+  })
+
+  if ((existingSpaces ?? 0) === 0) {
+    migrate()
   }
 }
 
@@ -759,6 +843,7 @@ export function getDatabase(dbPath?: string): Database.Database {
     database.pragma('journal_mode = WAL')
     database.pragma('foreign_keys = ON')
     database.exec(SCHEMA)
+    ensureSpaceTablesMigrated(database)
     ensureWorkspaceColumns(database)
     ensureSessionColumns(database)
     ensureAttachmentsTableNoFk(database)

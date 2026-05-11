@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { FC } from 'react'
 import { useProjectStore } from '@/entities/project'
 import { usePullRequestStore } from '@/entities/pull-request'
+import { useSpaceStore } from '@/entities/space'
 import { useWorkspaceStore } from '@/entities/workspace'
 import {
   sessionApi,
@@ -11,7 +12,7 @@ import {
 import { useNotificationsStore } from '@/entities/notifications'
 import {
   AppSettingsDialogContainer,
-  InitiativeWorkboardDialogContainer,
+  SpaceWorkboardDialogContainer,
   McpServersDialogContainer,
   ProjectContextSettings,
   ProjectSettingsDialogContainer,
@@ -36,7 +37,10 @@ import {
   Plus,
   Settings,
 } from 'lucide-react'
-import { GlobalChatSessionList } from './global-chat-session-list.presentational'
+import {
+  GlobalChatSessionList,
+  type ChatSidebarSpace,
+} from './global-chat-session-list.presentational'
 
 interface SidebarProps {
   activeSurface: AppSurface
@@ -45,6 +49,8 @@ interface SidebarProps {
   activeSessionId: string | null
   onSelectGlobalSession: (id: string) => void
   onNewGlobalSession: () => void
+  selectedSpaceId: string | null
+  onSelectSpace: (id: string) => void
   activeGlobalSessionId: string | null
 }
 
@@ -62,6 +68,8 @@ export const Sidebar: FC<SidebarProps> = ({
   activeSessionId,
   onSelectGlobalSession,
   onNewGlobalSession,
+  selectedSpaceId,
+  onSelectSpace,
   activeGlobalSessionId,
 }) => {
   const projects = useProjectStore((s) => s.projects)
@@ -98,11 +106,19 @@ export const Sidebar: FC<SidebarProps> = ({
   )
   const prepareForProject = useSessionStore((s) => s.prepareForProject)
   const setActiveSession = useSessionStore((s) => s.setActiveSession)
+  const spaces = useSpaceStore((s) => s.spaces)
+  const attemptsBySpaceId = useSpaceStore((s) => s.attemptsBySpaceId)
+  const loadSpaces = useSpaceStore((s) => s.loadSpaces)
+  const loadSpaceAttempts = useSpaceStore((s) => s.loadAttempts)
+  const createSpace = useSpaceStore((s) => s.createSpace)
   const pulsingSessionIds = useNotificationsStore((s) => s.pulsingSessionIds)
   const [regeneratingSessionIds, setRegeneratingSessionIds] = useState<
     ReadonlySet<string>
   >(() => new Set())
   const [expandedWorkspaces, setExpandedWorkspaces] = useState<Set<string>>(
+    () => new Set(),
+  )
+  const [expandedSpaceIds, setExpandedSpaceIds] = useState<Set<string>>(
     () => new Set(),
   )
 
@@ -120,6 +136,15 @@ export const Sidebar: FC<SidebarProps> = ({
       if (prev.has(id)) return prev
       const next = new Set(prev)
       next.add(id)
+      return next
+    })
+  }, [])
+
+  const toggleSpace = useCallback((id: string) => {
+    setExpandedSpaceIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
       return next
     })
   }, [])
@@ -156,6 +181,18 @@ export const Sidebar: FC<SidebarProps> = ({
       void loadPullRequestsByProjectId(activeProject.id)
     }
   }, [activeProject, loadPullRequestsByProjectId, workspaceIdsKey])
+
+  useEffect(() => {
+    if (activeSurface !== 'chat') return
+    void loadSpaces()
+  }, [activeSurface, loadSpaces])
+
+  useEffect(() => {
+    if (activeSurface !== 'chat') return
+    for (const space of spaces) {
+      void loadSpaceAttempts(space.id)
+    }
+  }, [activeSurface, loadSpaceAttempts, spaces])
 
   const attentionSessions = globalSessions
     .map((session) => {
@@ -220,6 +257,88 @@ export const Sidebar: FC<SidebarProps> = ({
     if (target?.contextKind === 'global') {
       onSelectGlobalSession(sessionId)
       return
+    }
+    onSelectSession(sessionId)
+  }
+
+  const sessionLookup = useMemo(() => {
+    const next = new Map<string, SessionSummary>()
+    for (const session of globalSessions) next.set(session.id, session)
+    for (const session of globalChatSessions) next.set(session.id, session)
+    for (const session of sessions) next.set(session.id, session)
+    return next
+  }, [globalChatSessions, globalSessions, sessions])
+
+  const chatSpaces = useMemo<ChatSidebarSpace[]>(
+    () =>
+      spaces.map((space) => ({
+        id: space.id,
+        title: space.title,
+        attempts: (attemptsBySpaceId[space.id] ?? []).map((attempt) => {
+          const session = sessionLookup.get(attempt.sessionId) ?? null
+          return {
+            attemptId: attempt.id,
+            sessionId: attempt.sessionId,
+            sessionName: session?.name ?? 'Unknown session',
+            role: attempt.role,
+            session,
+          }
+        }),
+      })),
+    [attemptsBySpaceId, sessionLookup, spaces],
+  )
+
+  const linkedChatSessionIds = useMemo(() => {
+    const next = new Set<string>()
+    for (const space of chatSpaces) {
+      for (const attempt of space.attempts) {
+        if (attempt.session?.contextKind === 'global') {
+          next.add(attempt.sessionId)
+        }
+      }
+    }
+    return next
+  }, [chatSpaces])
+
+  const ungroupedGlobalChatSessions = useMemo(
+    () =>
+      globalChatSessions.filter(
+        (session) => !linkedChatSessionIds.has(session.id),
+      ),
+    [globalChatSessions, linkedChatSessionIds],
+  )
+
+  const handleNewSpace = useCallback(async () => {
+    const title = window.prompt('Space title')
+    const trimmedTitle = title?.trim()
+    if (!trimmedTitle) return
+
+    const space = await createSpace({ title: trimmedTitle })
+    if (!space) return
+
+    setExpandedSpaceIds((prev) => {
+      const next = new Set(prev)
+      next.add(space.id)
+      return next
+    })
+    onSelectSpace(space.id)
+  }, [createSpace, onSelectSpace])
+
+  const handleSelectSpaceAttempt = async (sessionId: string) => {
+    const target = sessionLookup.get(sessionId)
+    if (!target) return
+
+    await switchToSession(sessionId)
+
+    if (target?.contextKind === 'global') {
+      onSelectSurface('chat')
+      onSelectGlobalSession(sessionId)
+      return
+    }
+
+    onSelectSurface('code')
+    if (target?.workspaceId) {
+      expandWorkspace(target.workspaceId)
     }
     onSelectSession(sessionId)
   }
@@ -392,9 +511,16 @@ export const Sidebar: FC<SidebarProps> = ({
 
         {activeSurface === 'chat' ? (
           <GlobalChatSessionList
-            sessions={globalChatSessions}
+            spaces={chatSpaces}
+            sessions={ungroupedGlobalChatSessions}
             activeSessionId={activeGlobalSessionId}
+            selectedSpaceId={selectedSpaceId}
+            expandedSpaceIds={expandedSpaceIds}
             onNewSession={onNewGlobalSession}
+            onNewSpace={handleNewSpace}
+            onSelectSpace={onSelectSpace}
+            onToggleSpace={toggleSpace}
+            onSelectSpaceAttempt={handleSelectSpaceAttempt}
             onSelectSession={onSelectGlobalSession}
             onArchiveSession={archiveSession}
             onUnarchiveSession={unarchiveSession}
@@ -464,7 +590,7 @@ export const Sidebar: FC<SidebarProps> = ({
               Open a project
             </Button>
             <div className="mt-2">
-              <InitiativeWorkboardDialogContainer />
+              <SpaceWorkboardDialogContainer />
             </div>
             <div className="mt-2">
               <ProjectSettingsDialogContainer

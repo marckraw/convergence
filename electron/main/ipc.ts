@@ -1,7 +1,7 @@
 import { ipcMain, dialog, BrowserWindow } from 'electron'
 import { ProjectService } from '../backend/project/project.service'
-import { InitiativeService } from '../backend/initiative/initiative.service'
-import type { InitiativeSynthesisService } from '../backend/initiative/initiative-synthesis.service'
+import { SpaceService } from '../backend/space/space.service'
+import type { SpaceSynthesisService } from '../backend/space/space-synthesis.service'
 import { StateService } from '../backend/state/state.service'
 import { WorkspaceService } from '../backend/workspace/workspace.service'
 import { GitService } from '../backend/git/git.service'
@@ -31,13 +31,13 @@ import type { IngestFileInput } from '../backend/attachments/attachments.types'
 import type { AppSettingsInput } from '../backend/app-settings/app-settings.types'
 import type { CreateProjectInput } from '../backend/project/project.types'
 import type {
-  CreateInitiativeInput,
-  CreateInitiativeOutputInput,
-  LinkInitiativeAttemptInput,
-  UpdateInitiativeAttemptInput,
-  UpdateInitiativeInput,
-  UpdateInitiativeOutputInput,
-} from '../backend/initiative/initiative.types'
+  CreateSpaceInput,
+  CreateSpaceArtifactInput,
+  LinkSpaceAttemptInput,
+  UpdateSpaceAttemptInput,
+  UpdateSpaceInput,
+  UpdateSpaceArtifactInput,
+} from '../backend/space/space.types'
 import type { ProjectContextService } from '../backend/project-context/project-context.service'
 import type {
   CreateProjectContextItemInput,
@@ -129,7 +129,7 @@ function parseNeedsYouDismissals(
 
 export function registerIpcHandlers(
   projectService: ProjectService,
-  initiativeService: InitiativeService,
+  spaceService: SpaceService,
   stateService: StateService,
   workspaceService: WorkspaceService,
   gitService: GitService,
@@ -147,7 +147,7 @@ export function registerIpcHandlers(
   attachmentsService: AttachmentsService,
   turnCaptureService: TurnCaptureService,
   projectContextService: ProjectContextService,
-  initiativeSynthesisService?: InitiativeSynthesisService,
+  spaceSynthesisService?: SpaceSynthesisService,
   onUpdatePrefsChanged?: (prefs: { backgroundCheckEnabled: boolean }) => void,
   providerActions?: {
     getRuntimeInfo: () => ProviderRuntimeInfo
@@ -228,86 +228,82 @@ export function registerIpcHandlers(
     projectContextService.listForSession(sessionId),
   )
 
-  // Initiative handlers
-  ipcMain.handle('initiative:list', () => initiativeService.list())
+  // Space handlers
+  ipcMain.handle('space:list', () => spaceService.list())
 
-  ipcMain.handle('initiative:getById', (_event, id: string) =>
-    initiativeService.getById(id),
+  ipcMain.handle('space:getById', (_event, id: string) =>
+    spaceService.getById(id),
   )
 
-  ipcMain.handle('initiative:create', (_event, input: CreateInitiativeInput) =>
-    initiativeService.create(input),
+  ipcMain.handle('space:create', (_event, input: CreateSpaceInput) =>
+    spaceService.create(input),
   )
 
   ipcMain.handle(
-    'initiative:update',
-    (_event, id: string, input: UpdateInitiativeInput) =>
-      initiativeService.update(id, input),
+    'space:update',
+    (_event, id: string, input: UpdateSpaceInput) =>
+      spaceService.update(id, input),
   )
 
-  ipcMain.handle('initiative:delete', (_event, id: string) => {
-    initiativeService.delete(id)
+  ipcMain.handle('space:delete', (_event, id: string) => {
+    spaceService.delete(id)
   })
 
-  ipcMain.handle('initiative:listAttempts', (_event, initiativeId: string) =>
-    initiativeService.listAttempts(initiativeId),
+  ipcMain.handle('space:listAttempts', (_event, spaceId: string) =>
+    spaceService.listAttempts(spaceId),
+  )
+
+  ipcMain.handle('space:listAttemptsForSession', (_event, sessionId: string) =>
+    spaceService.listAttemptsForSession(sessionId),
+  )
+
+  ipcMain.handle('space:linkAttempt', (_event, input: LinkSpaceAttemptInput) =>
+    spaceService.linkAttempt(input),
   )
 
   ipcMain.handle(
-    'initiative:listAttemptsForSession',
-    (_event, sessionId: string) =>
-      initiativeService.listAttemptsForSession(sessionId),
+    'space:updateAttempt',
+    (_event, id: string, input: UpdateSpaceAttemptInput) =>
+      spaceService.updateAttempt(id, input),
   )
 
-  ipcMain.handle(
-    'initiative:linkAttempt',
-    (_event, input: LinkInitiativeAttemptInput) =>
-      initiativeService.linkAttempt(input),
-  )
-
-  ipcMain.handle(
-    'initiative:updateAttempt',
-    (_event, id: string, input: UpdateInitiativeAttemptInput) =>
-      initiativeService.updateAttempt(id, input),
-  )
-
-  ipcMain.handle('initiative:unlinkAttempt', (_event, id: string) => {
-    initiativeService.unlinkAttempt(id)
+  ipcMain.handle('space:unlinkAttempt', (_event, id: string) => {
+    spaceService.unlinkAttempt(id)
   })
 
   ipcMain.handle(
-    'initiative:setPrimaryAttempt',
-    (_event, initiativeId: string, attemptId: string) =>
-      initiativeService.setPrimaryAttempt(initiativeId, attemptId),
+    'space:setPrimaryAttempt',
+    (_event, spaceId: string, attemptId: string) =>
+      spaceService.setPrimaryAttempt(spaceId, attemptId),
   )
 
-  ipcMain.handle('initiative:listOutputs', (_event, initiativeId: string) =>
-    initiativeService.listOutputs(initiativeId),
-  )
-
-  ipcMain.handle(
-    'initiative:addOutput',
-    (_event, input: CreateInitiativeOutputInput) =>
-      initiativeService.addOutput(input),
+  ipcMain.handle('space:listArtifacts', (_event, spaceId: string) =>
+    spaceService.listArtifacts(spaceId),
   )
 
   ipcMain.handle(
-    'initiative:updateOutput',
-    (_event, id: string, input: UpdateInitiativeOutputInput) =>
-      initiativeService.updateOutput(id, input),
+    'space:addArtifact',
+    (_event, input: CreateSpaceArtifactInput) =>
+      spaceService.addArtifact(input),
   )
 
-  ipcMain.handle('initiative:deleteOutput', (_event, id: string) => {
-    initiativeService.deleteOutput(id)
+  ipcMain.handle(
+    'space:updateArtifact',
+    (_event, id: string, input: UpdateSpaceArtifactInput) =>
+      spaceService.updateArtifact(id, input),
+  )
+
+  ipcMain.handle('space:deleteArtifact', (_event, id: string) => {
+    spaceService.deleteArtifact(id)
   })
 
   ipcMain.handle(
-    'initiative:synthesize',
-    (_event, initiativeId: string, requestId?: string) => {
-      if (!initiativeSynthesisService) {
-        throw new Error('Initiative synthesis service is unavailable')
+    'space:synthesize',
+    (_event, spaceId: string, requestId?: string) => {
+      if (!spaceSynthesisService) {
+        throw new Error('Space synthesis service is unavailable')
       }
-      return initiativeSynthesisService.synthesize(initiativeId, requestId)
+      return spaceSynthesisService.synthesize(spaceId, requestId)
     },
   )
 

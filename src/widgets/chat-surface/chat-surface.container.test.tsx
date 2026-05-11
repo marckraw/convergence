@@ -2,6 +2,7 @@ import { render, screen } from '@testing-library/react'
 import { describe, expect, it, vi, beforeEach } from 'vitest'
 import type { ConversationItem, Session } from '@/entities/session'
 import { useSessionStore } from '@/entities/session'
+import { useSpaceStore } from '@/entities/space'
 import type { ComposerSessionContext } from '@/features/composer'
 import { ChatSurface } from './chat-surface.container'
 
@@ -64,10 +65,18 @@ describe('ChatSurface', () => {
       denySession: vi.fn(),
       stopSession: vi.fn(),
     })
+    useSpaceStore.setState({
+      spaces: [],
+      attemptsBySpaceId: {},
+      attemptsBySessionId: {},
+      artifactsBySpaceId: {},
+      loading: false,
+      error: null,
+    })
   })
 
   it('renders a project-free new chat composer when no global session is active', () => {
-    render(<ChatSurface />)
+    render(<ChatSurface selectedSpaceId={null} />)
 
     expect(screen.getByText('Convergence Chat')).toBeInTheDocument()
     expect(screen.getByTestId('composer')).toHaveTextContent('global:new')
@@ -98,11 +107,48 @@ describe('ChatSurface', () => {
       ],
     })
 
-    render(<ChatSurface />)
+    render(<ChatSurface selectedSpaceId={null} />)
 
     expect(screen.getByText('Planning chat')).toBeInTheDocument()
     expect(screen.getByTestId('conversation-surface')).toHaveTextContent(
       'Planning chat:1:global',
     )
+  })
+
+  it('renders a selected Space placeholder when no chat session is active', () => {
+    useSpaceStore.setState({
+      spaces: [
+        {
+          id: 'space-1',
+          title: 'Launch plan',
+          status: 'exploring',
+          attention: 'none',
+          brief: 'Coordinate the launch work.',
+          createdAt: '2026-01-01T00:00:00.000Z',
+          updatedAt: '2026-01-01T00:00:00.000Z',
+        },
+      ],
+      attemptsBySpaceId: {
+        'space-1': [
+          {
+            id: 'attempt-1',
+            spaceId: 'space-1',
+            sessionId: 'global-session-1',
+            role: 'seed',
+            isPrimary: true,
+            createdAt: '2026-01-01T00:00:00.000Z',
+          },
+        ],
+      },
+    })
+
+    render(<ChatSurface selectedSpaceId="space-1" />)
+
+    expect(
+      screen.getByRole('heading', { name: 'Launch plan' }),
+    ).toBeInTheDocument()
+    expect(screen.getByText('Space home')).toBeInTheDocument()
+    expect(screen.getByText('Coordinate the launch work.')).toBeInTheDocument()
+    expect(screen.getByText('1 attempt')).toBeInTheDocument()
   })
 })

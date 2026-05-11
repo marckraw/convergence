@@ -1,5 +1,6 @@
 import type { FC } from 'react'
 import type { SessionSummary } from '@/entities/session'
+import type { SpaceAttemptRole } from '@/entities/space'
 import { Button } from '@/shared/ui/button'
 import { SessionBadge } from '@/shared/ui/session-badge.presentational'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/shared/ui/tooltip'
@@ -12,16 +13,41 @@ import {
 import { cn } from '@/shared/lib/cn.pure'
 import {
   Archive,
+  ChevronDown,
+  ChevronRight,
+  Folder,
+  FolderPlus,
   MessageSquarePlus,
   MoreHorizontal,
   Trash2,
   Undo2,
 } from 'lucide-react'
 
+export interface ChatSidebarSpaceAttempt {
+  attemptId: string
+  sessionId: string
+  sessionName: string
+  role: SpaceAttemptRole
+  session: SessionSummary | null
+}
+
+export interface ChatSidebarSpace {
+  id: string
+  title: string
+  attempts: ChatSidebarSpaceAttempt[]
+}
+
 interface GlobalChatSessionListProps {
+  spaces: ChatSidebarSpace[]
   sessions: SessionSummary[]
   activeSessionId: string | null
+  selectedSpaceId: string | null
+  expandedSpaceIds: ReadonlySet<string>
   onNewSession: () => void
+  onNewSpace: () => void
+  onSelectSpace: (id: string) => void
+  onToggleSpace: (id: string) => void
+  onSelectSpaceAttempt: (sessionId: string) => void
   onSelectSession: (id: string) => void
   onArchiveSession: (id: string) => void
   onUnarchiveSession: (id: string) => void
@@ -29,9 +55,16 @@ interface GlobalChatSessionListProps {
 }
 
 export const GlobalChatSessionList: FC<GlobalChatSessionListProps> = ({
+  spaces,
   sessions,
   activeSessionId,
+  selectedSpaceId,
+  expandedSpaceIds,
   onNewSession,
+  onNewSpace,
+  onSelectSpace,
+  onToggleSpace,
+  onSelectSpaceAttempt,
   onSelectSession,
   onArchiveSession,
   onUnarchiveSession,
@@ -110,7 +143,7 @@ export const GlobalChatSessionList: FC<GlobalChatSessionListProps> = ({
 
   return (
     <div className="px-3">
-      <div className="mb-3">
+      <div className="mb-3 space-y-2">
         <Button
           type="button"
           variant="outline"
@@ -121,11 +154,129 @@ export const GlobalChatSessionList: FC<GlobalChatSessionListProps> = ({
           <MessageSquarePlus className="h-4 w-4" />
           New chat
         </Button>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={onNewSpace}
+          className="w-full justify-start gap-2"
+        >
+          <FolderPlus className="h-4 w-4" />
+          New Space
+        </Button>
+      </div>
+
+      <div className="mb-3 ml-2 border-l border-border pl-2">
+        <p className="mb-0.5 truncate text-xs text-muted-foreground">
+          Spaces{spaces.length > 0 ? ` (${spaces.length})` : ''}
+        </p>
+        {spaces.length > 0 ? (
+          <div className="space-y-0.5">
+            {spaces.map((space) => {
+              const expanded = expandedSpaceIds.has(space.id)
+              return (
+                <div key={space.id}>
+                  <div
+                    className={cn(
+                      'group/space flex min-w-0 items-center gap-1 rounded pr-1 transition-colors hover:bg-accent',
+                      selectedSpaceId === space.id && 'bg-accent',
+                    )}
+                  >
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="h-6 w-6 shrink-0"
+                      aria-label={`${expanded ? 'Collapse' : 'Expand'} Space ${space.title}`}
+                      onClick={() => onToggleSpace(space.id)}
+                    >
+                      {expanded ? (
+                        <ChevronDown className="h-3.5 w-3.5" />
+                      ) : (
+                        <ChevronRight className="h-3.5 w-3.5" />
+                      )}
+                    </Button>
+
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          onClick={() => onSelectSpace(space.id)}
+                          aria-label={`Open Space ${space.title}`}
+                          className="h-auto min-w-0 flex-1 justify-start gap-1.5 px-1.5 py-1 text-left text-xs font-normal"
+                        >
+                          <Folder className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                          <span className="truncate">{space.title}</span>
+                          {space.attempts.length > 0 ? (
+                            <span className="ml-auto shrink-0 text-[10px] text-muted-foreground">
+                              {space.attempts.length}
+                            </span>
+                          ) : null}
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent side="right">
+                        {space.title}
+                      </TooltipContent>
+                    </Tooltip>
+                  </div>
+
+                  {expanded ? (
+                    <div className="ml-6 mt-0.5 space-y-0.5">
+                      {space.attempts.length > 0 ? (
+                        space.attempts.map((attempt) => (
+                          <Tooltip key={attempt.attemptId}>
+                            <TooltipTrigger asChild>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                onClick={() =>
+                                  onSelectSpaceAttempt(attempt.sessionId)
+                                }
+                                aria-label={`Open Space attempt ${attempt.sessionName}`}
+                                className={cn(
+                                  'h-auto w-full min-w-0 justify-start gap-1.5 px-1.5 py-1 text-left text-xs font-normal',
+                                  activeSessionId === attempt.sessionId &&
+                                    'bg-accent',
+                                )}
+                              >
+                                <SessionBadge
+                                  attention={
+                                    attempt.session?.attention ?? 'none'
+                                  }
+                                />
+                                <span className="truncate">
+                                  {attempt.sessionName}
+                                </span>
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent side="right">
+                              {attempt.sessionName}
+                            </TooltipContent>
+                          </Tooltip>
+                        ))
+                      ) : (
+                        <p className="px-1.5 py-1 text-xs text-muted-foreground">
+                          No attempts yet
+                        </p>
+                      )}
+                    </div>
+                  ) : null}
+                </div>
+              )
+            })}
+          </div>
+        ) : (
+          <p className="px-1.5 py-1 text-xs text-muted-foreground">
+            No Spaces yet
+          </p>
+        )}
       </div>
 
       <div className="mb-1 ml-2 border-l border-border pl-2">
         <p className="mb-0.5 truncate text-xs text-muted-foreground">
-          Chats{activeSessions.length > 0 ? ` (${activeSessions.length})` : ''}
+          Ungrouped chats
+          {activeSessions.length > 0 ? ` (${activeSessions.length})` : ''}
         </p>
         {activeSessions.length > 0 ? (
           activeSessions.map(renderSessionRow)
