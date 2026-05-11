@@ -1,6 +1,41 @@
 {
-  "currentVersion": "0.36.0",
+  "currentVersion": "0.36.7",
   "releases": [
+    {
+      "version": "0.36.7",
+      "date": null,
+      "notes": "### Patch Changes\n\n- ecec855: Add experimental agent UI response artifacts. Assistant Markdown can now include\n  a `convergence-ui-html` artifact block that is rendered in a sandboxed\n  right-side panel while the normal Markdown answer remains visible in the\n  transcript. Artifact-bearing turns can be reselected, and empty or malformed UI\n  HTML shows a safe placeholder instead of rendering an iframe."
+    },
+    {
+      "version": "0.36.6",
+      "date": null,
+      "notes": "### Patch Changes\n\n- beaf7a8: Keep the Settings dialog at the larger Insights size for every settings section so switching sections no longer changes the modal dimensions."
+    },
+    {
+      "version": "0.36.5",
+      "date": null,
+      "notes": "### Patch Changes\n\n- e75d845: Show Pi MCP servers from pi-mcp-adapter config files in the MCP Servers dialog, including OAuth authorization markers and setup guidance."
+    },
+    {
+      "version": "0.36.4",
+      "date": null,
+      "notes": "### Patch Changes\n\n- 826c45c: Clarify that saved OpenRouter API keys are hidden after being stored in Keychain and that the credential field replaces an existing saved key."
+    },
+    {
+      "version": "0.36.3",
+      "date": null,
+      "notes": "### Patch Changes\n\n- aa0c8ae: Add OpenRouter credential settings so users can paste an API key in Convergence, store it in macOS Keychain, and have Pi/OpenRouter sessions receive it automatically through `OPENROUTER_API_KEY`."
+    },
+    {
+      "version": "0.36.2",
+      "date": null,
+      "notes": "### Patch Changes\n\n- 1583ea8: Add Pi model visibility settings so models from `~/.pi/agent/models.json` stay visible while users can opt into additional Pi models from app settings."
+    },
+    {
+      "version": "0.36.1",
+      "date": null,
+      "notes": "### Patch Changes\n\n- 9d024b5: Integrate Pierre file tree and diff primitives into review changed-file flows."
+    },
     {
       "version": "0.36.0",
       "date": null,
