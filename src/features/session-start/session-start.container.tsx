@@ -121,14 +121,15 @@ export const SessionStart: FC<SessionStartProps> = ({
     setEffortId(nextSelection.effortId)
   }
 
-  const handleModelChange = (nextModelId: string) => {
+  const handleModelChange = (nextModelId: string, nextProviderId?: string) => {
     const nextSelection = resolveProviderSelection(
       providers,
-      selection.providerId,
+      nextProviderId ?? selection.providerId,
       nextModelId,
       null,
       storedDefaults,
     )
+    setProviderId(nextSelection.providerId)
     setModelId(nextSelection.modelId)
     setEffortId(nextSelection.effortId)
   }

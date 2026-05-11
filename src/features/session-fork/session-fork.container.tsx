@@ -232,14 +232,15 @@ export const SessionForkDialogContainer: FC = () => {
   )
 
   const handleModelChange = useCallback(
-    (nextModelId: string) => {
+    (nextModelId: string, nextProviderId?: string) => {
       const next = resolveProviderSelection(
         providers,
-        providerId || null,
+        nextProviderId ?? (providerId || null),
         nextModelId,
         null,
         storedDefaults,
       )
+      setProviderId(next.providerId)
       setModelId(next.modelId)
       setEffortId(next.effortId)
     },

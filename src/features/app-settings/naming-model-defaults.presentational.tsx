@@ -1,6 +1,6 @@
 import type { FC } from 'react'
 import type { ProviderInfo } from '@/entities/session'
-import { SessionStartSelect } from '@/features/session-start'
+import { ModelPickerDialog } from '@/features/model-picker'
 import { SettingsControlField } from './settings-control-field.presentational'
 
 interface NamingModelDefaultsFieldsProps {
@@ -39,22 +39,19 @@ export const NamingModelDefaultsFields: FC<NamingModelDefaultsFieldsProps> = ({
       const selectedLabel =
         provider.modelOptions.find((m) => m.id === selectedId)?.label ??
         selectedId
-      const items = provider.modelOptions.map((model) => ({
-        id: model.id,
-        label: model.label,
-        description: model.id,
-      }))
       return (
         <SettingsControlField
           key={provider.id}
           title={provider.vendorLabel || provider.name}
           description="Model used to auto-generate session names for this provider."
         >
-          <SessionStartSelect
-            selectedId={selectedId}
+          <ModelPickerDialog
+            providers={[provider]}
+            selectedProviderId={provider.id}
+            selectedModelId={selectedId}
             value={selectedLabel}
-            items={items}
-            onChange={(id) => onNamingModelChange(provider.id, id)}
+            onChange={(_, modelId) => onNamingModelChange(provider.id, modelId)}
+            triggerClassName="px-2 text-xs"
           />
         </SettingsControlField>
       )

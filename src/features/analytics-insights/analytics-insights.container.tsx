@@ -80,6 +80,16 @@ export const AnalyticsInsightsContainer: FC = () => {
     [profileProviders],
   )
 
+  const handleProfileModelChange = useCallback(
+    (modelId: string, providerId?: string) => {
+      if (providerId && providerId !== profileProviderId) {
+        setProfileProviderId(providerId)
+      }
+      setProfileModelId(modelId)
+    },
+    [profileProviderId],
+  )
+
   const handleGenerateProfile = useCallback(async () => {
     if (!selectedProvider || !selectedModel) return
     await generateWorkProfile({
@@ -113,7 +123,7 @@ export const AnalyticsInsightsContainer: FC = () => {
       onRetry={handleRetry}
       onGenerateDialogOpenChange={setGenerateDialogOpen}
       onProfileProviderChange={handleProfileProviderChange}
-      onProfileModelChange={setProfileModelId}
+      onProfileModelChange={handleProfileModelChange}
       onGenerateProfile={handleGenerateProfile}
       onDeleteGeneratedProfile={handleDeleteProfile}
     />

@@ -8,6 +8,7 @@ import type {
 import { AttachmentsRow, type Attachment } from '@/entities/attachment'
 import type { ProjectContextItem } from '@/entities/project-context'
 import type { SkillCatalogEntry, SkillSelection } from '@/entities/skill'
+import { ModelPickerDialog } from '@/features/model-picker'
 import { Button } from '@/shared/ui/button'
 import { Textarea } from '@/shared/ui/textarea'
 import { cn } from '@/shared/lib/cn.pure'
@@ -25,7 +26,7 @@ interface ComposerProps {
   providers: ProviderInfo[]
   selection: ResolvedProviderSelection
   onProviderChange: (id: string) => void
-  onModelChange: (id: string) => void
+  onModelChange: (id: string, providerId?: string) => void
   onEffortChange: (id: ReasoningEffort | '') => void
   deliveryMode: MidRunInputMode
   deliveryModes: MidRunInputMode[]
@@ -184,12 +185,6 @@ export const Composer: FC<ComposerProps> = ({
         ? provider.name
         : undefined,
   }))
-  const modelItems =
-    selection.provider?.modelOptions.map((model) => ({
-      id: model.id,
-      label: model.label,
-      description: model.id,
-    })) ?? []
   const effortItems =
     selection.model?.effortOptions.map((effort) => ({
       id: effort.id,
@@ -360,13 +355,18 @@ export const Composer: FC<ComposerProps> = ({
               disabled={selectionDisabled}
               className="gap-1.5 px-2 text-xs text-muted-foreground hover:text-foreground"
             />
-            <ComposerSelect
-              selectedId={selection.modelId}
+            <ModelPickerDialog
+              providers={providers}
+              selectedProviderId={selection.providerId}
+              selectedModelId={selection.modelId}
               value={selection.model?.label ?? 'Select model'}
-              items={modelItems}
-              onChange={onModelChange}
+              onChange={(providerId, modelId) =>
+                onModelChange(modelId, providerId)
+              }
               disabled={selectionDisabled || !selection.provider}
-              className="px-2 text-xs text-muted-foreground hover:text-foreground"
+              triggerVariant="ghost"
+              triggerSize="sm"
+              triggerClassName="px-2 text-xs text-muted-foreground hover:text-foreground"
             />
             {effortItems.length > 0 && (
               <ComposerSelect

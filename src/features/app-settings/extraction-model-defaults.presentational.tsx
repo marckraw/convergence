@@ -1,6 +1,6 @@
 import type { FC } from 'react'
 import type { ProviderInfo } from '@/entities/session'
-import { SessionStartSelect } from '@/features/session-start'
+import { ModelPickerDialog } from '@/features/model-picker'
 import { SettingsControlField } from './settings-control-field.presentational'
 
 interface ExtractionModelDefaultsFieldsProps {
@@ -31,22 +31,21 @@ export const ExtractionModelDefaultsFields: FC<
       const selectedLabel =
         provider.modelOptions.find((m) => m.id === selectedId)?.label ??
         selectedId
-      const items = provider.modelOptions.map((model) => ({
-        id: model.id,
-        label: model.label,
-        description: model.id,
-      }))
       return (
         <SettingsControlField
           key={provider.id}
           title={provider.vendorLabel || provider.name}
           description="Model used to summarise conversations when forking a session."
         >
-          <SessionStartSelect
-            selectedId={selectedId}
+          <ModelPickerDialog
+            providers={[provider]}
+            selectedProviderId={provider.id}
+            selectedModelId={selectedId}
             value={selectedLabel}
-            items={items}
-            onChange={(id) => onExtractionModelChange(provider.id, id)}
+            onChange={(_, modelId) =>
+              onExtractionModelChange(provider.id, modelId)
+            }
+            triggerClassName="px-2 text-xs"
           />
         </SettingsControlField>
       )
