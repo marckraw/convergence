@@ -1,5 +1,6 @@
 import type { Attachment } from '@/entities/attachment'
 import type { ConversationItem } from '@/entities/session'
+import { parseAssistantUiResponse } from '@/entities/ui-response-artifact'
 
 interface ConversationItemTimingOptions {
   locale?: string | string[]
@@ -36,6 +37,7 @@ export interface TranscriptEntryViewModel {
   missingAttachmentIds: string[]
   toolPreview: string | null
   actionableApproval: boolean
+  uiResponseArtifactTitle: string | null
 }
 
 export interface BuildTranscriptEntryViewModelInput {
@@ -74,6 +76,7 @@ export function buildTranscriptEntryViewModel({
     missingAttachmentIds,
     toolPreview: getToolPreviewForItem(item),
     actionableApproval: item.kind === 'approval-request' && actionableApproval,
+    uiResponseArtifactTitle: getUiResponseArtifactTitle(item),
   }
 }
 
@@ -82,6 +85,10 @@ export function getConversationItemDisplayText(
   injectedContextText: string | null = null,
 ): string {
   const rawText = getConversationItemCopyText(item)
+
+  if (item.kind === 'message' && item.actor === 'assistant') {
+    return parseAssistantUiResponse(rawText).markdown
+  }
 
   if (
     item.kind !== 'message' ||
@@ -93,6 +100,14 @@ export function getConversationItemDisplayText(
   }
 
   return rawText.slice(injectedContextText.length).replace(/^\s+/, '')
+}
+
+function getUiResponseArtifactTitle(item: ConversationItem): string | null {
+  if (item.kind !== 'message' || item.actor !== 'assistant') {
+    return null
+  }
+
+  return parseAssistantUiResponse(item.text).artifact?.title ?? null
 }
 
 export function getConversationItemCopyText(item: ConversationItem): string {

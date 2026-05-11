@@ -170,6 +170,43 @@ describe('ConversationItemView', () => {
     ).toBeInTheDocument()
   })
 
+  it('renders cleaned assistant markdown when a UI response artifact is present', () => {
+    renderConversationItemView({
+      entry: {
+        id: 'message-1',
+        sessionId: 'session-1',
+        sequence: 1,
+        turnId: null,
+        kind: 'message',
+        state: 'complete',
+        actor: 'assistant',
+        text: [
+          'This is the Markdown answer.',
+          '',
+          '```convergence-ui-html',
+          '---',
+          'title: Preview panel',
+          '---',
+          '<main>Generated UI</main>',
+          '```',
+        ].join('\n'),
+        createdAt: '2026-04-13T10:00:00.000Z',
+        updatedAt: '2026-04-13T10:00:00.000Z',
+        providerMeta: {
+          providerId: 'codex',
+          providerItemId: null,
+          providerEventType: 'assistant',
+        },
+      },
+    })
+
+    expect(screen.getByText('This is the Markdown answer.')).toBeInTheDocument()
+    expect(screen.queryByText('<main>Generated UI</main>')).toBeNull()
+    expect(
+      screen.getByTestId('ui-response-artifact-indicator'),
+    ).toHaveAttribute('title', 'Preview panel')
+  })
+
   it('renders elapsed timing metadata for assistant work', () => {
     renderConversationItemView({
       turnStartedAt: '2026-04-13T10:00:00.000Z',

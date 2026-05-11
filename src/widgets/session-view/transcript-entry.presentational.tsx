@@ -3,6 +3,7 @@ import type { SkillSelection } from '@/entities/skill'
 import {
   User,
   Bot,
+  Columns2,
   Wrench,
   Terminal,
   AlertTriangle,
@@ -119,10 +120,21 @@ export const ConversationItemView: FC<ConversationItemViewProps> = ({
                 createdAt={entry.createdAt}
                 label={viewModel.label}
                 timing={viewModel.timing}
-              />
+              >
+                {viewModel.uiResponseArtifactTitle ? (
+                  <span
+                    className="inline-flex items-center gap-1 rounded-full border border-border/70 bg-muted/30 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground"
+                    title={viewModel.uiResponseArtifactTitle}
+                    data-testid="ui-response-artifact-indicator"
+                  >
+                    <Columns2 className="h-3 w-3" />
+                    UI response
+                  </span>
+                ) : null}
+              </ConversationItemHeader>
               <Markdown
                 className="mt-1 text-foreground"
-                content={entry.text}
+                content={viewModel.displayText}
                 size="sm"
               />
             </div>

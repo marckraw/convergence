@@ -11,6 +11,8 @@ import type {
   ConversationItem as ConversationItemEntry,
   Session,
 } from '@/entities/session'
+import { artifactFromConversationItem } from '@/entities/ui-response-artifact'
+import { cn } from '@/shared/lib/cn.pure'
 import { ConversationItem } from './conversation-item.container'
 import { buildConversationRenderPlan } from './session-transcript-render-plan.pure'
 import { isTranscriptNearBottom } from './session-transcript-scroll.pure'
@@ -18,6 +20,8 @@ import { isTranscriptNearBottom } from './session-transcript-scroll.pure'
 interface SessionTranscriptProps {
   session: Session
   conversationItems: ConversationItemEntry[]
+  selectedUiResponseItemId?: string | null
+  onUiResponseArtifactSelect?: (conversationItemId: string) => void
   onApprove: (sessionId: string) => void
   onDeny: (sessionId: string) => void
 }
@@ -28,6 +32,8 @@ const TRANSCRIPT_OVERSCAN = 6
 export const SessionTranscript: FC<SessionTranscriptProps> = ({
   session,
   conversationItems,
+  selectedUiResponseItemId = null,
+  onUiResponseArtifactSelect,
   onApprove,
   onDeny,
 }) => {
@@ -164,6 +170,9 @@ export const SessionTranscript: FC<SessionTranscriptProps> = ({
             const isActionableApproval =
               entry.kind === 'approval-request' &&
               entry.id === actionableApprovalId
+            const hasUiResponseArtifact = hasArtifact(entry)
+            const isSelectedUiResponseArtifact =
+              hasUiResponseArtifact && entry.id === selectedUiResponseItemId
 
             return (
               <div
@@ -171,10 +180,25 @@ export const SessionTranscript: FC<SessionTranscriptProps> = ({
                 ref={measureRow}
                 data-index={virtualItem.index}
                 data-testid="session-transcript-row"
-                className="absolute top-0 left-0 w-full"
+                data-ui-response-artifact={
+                  hasUiResponseArtifact ? true : undefined
+                }
+                data-selected-ui-response-artifact={
+                  isSelectedUiResponseArtifact ? true : undefined
+                }
+                className={cn(
+                  'absolute top-0 left-0 w-full rounded-md transition-colors',
+                  hasUiResponseArtifact && 'cursor-pointer',
+                  isSelectedUiResponseArtifact && 'bg-muted/20',
+                )}
                 style={{
                   transform: `translateY(${virtualItem.start}px)`,
                 }}
+                onClick={
+                  hasUiResponseArtifact
+                    ? () => onUiResponseArtifactSelect?.(entry.id)
+                    : undefined
+                }
               >
                 {renderEntry.turnBoundary && (
                   <div
@@ -212,5 +236,20 @@ export const SessionTranscript: FC<SessionTranscriptProps> = ({
         </div>
       </div>
     </div>
+  )
+}
+
+function hasArtifact(item: ConversationItemEntry): boolean {
+  if (item.kind !== 'message' || item.actor !== 'assistant') {
+    return false
+  }
+
+  return (
+    artifactFromConversationItem({
+      sessionId: item.sessionId,
+      conversationItemId: item.id,
+      text: item.text,
+      createdAt: item.createdAt,
+    }) !== null
   )
 }
