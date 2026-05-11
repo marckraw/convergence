@@ -4,6 +4,7 @@ import {
   mapEffortToPiThinking,
   mapPiModel,
   mapPiModels,
+  mapPiModelsJsonFallbackModels,
 } from './pi-models.pure'
 
 describe('mapPiModel', () => {
@@ -146,6 +147,39 @@ describe('collectPiModelsJsonModelIds', () => {
       'openrouter/openai/gpt-oss',
       'openrouter/qwen/qwen3.6-27b',
     ])
+  })
+})
+
+describe('mapPiModelsJsonFallbackModels', () => {
+  it('creates selectable models from models.json ids when the live probe is unavailable', () => {
+    expect(
+      mapPiModelsJsonFallbackModels(
+        new Set(['openrouter/qwen/qwen3.6-27b', 'ollama/qwen2.5-coder:14b']),
+      ),
+    ).toEqual([
+      {
+        id: 'openrouter/qwen/qwen3.6-27b',
+        label: 'OpenRouter · qwen/qwen3.6-27b',
+        defaultEffort: null,
+        effortOptions: [],
+        source: 'pi-models-json',
+      },
+      {
+        id: 'ollama/qwen2.5-coder:14b',
+        label: 'Ollama · qwen2.5-coder:14b',
+        defaultEffort: null,
+        effortOptions: [],
+        source: 'pi-models-json',
+      },
+    ])
+  })
+
+  it('drops malformed model ids', () => {
+    expect(
+      mapPiModelsJsonFallbackModels(
+        new Set(['missing-provider', '/missing-provider', 'openrouter/']),
+      ),
+    ).toEqual([])
   })
 })
 

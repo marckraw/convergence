@@ -29,7 +29,7 @@ interface AnalyticsInsightsProps {
   onRetry: () => void
   onGenerateDialogOpenChange: (open: boolean) => void
   onProfileProviderChange: (providerId: string) => void
-  onProfileModelChange: (modelId: string) => void
+  onProfileModelChange: (modelId: string, providerId?: string) => void
   onGenerateProfile: () => void
   onDeleteGeneratedProfile: () => void
 }
@@ -69,13 +69,6 @@ export function AnalyticsInsights({
         ? provider.name
         : undefined,
   }))
-  const modelItems =
-    selectedProvider?.modelOptions.map((model) => ({
-      id: model.id,
-      label: model.label,
-      description: model.id,
-    })) ?? []
-
   return (
     <div className="space-y-5">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
@@ -143,8 +136,8 @@ export function AnalyticsInsights({
         }
         modelId={selectedModel?.id ?? ''}
         modelLabel={selectedModel?.label ?? 'Model'}
+        providers={providers}
         providerItems={providerItems}
-        modelItems={modelItems}
         isGenerating={isGeneratingProfile}
         onOpenChange={onGenerateDialogOpenChange}
         onProviderChange={onProfileProviderChange}

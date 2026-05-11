@@ -1,5 +1,7 @@
 import type { FC } from 'react'
 import { Bot, Sparkles } from 'lucide-react'
+import type { ProviderInfo } from '@/entities/session'
+import { ModelPickerDialog } from '@/features/model-picker'
 import { Button } from '@/shared/ui/button'
 import {
   Dialog,
@@ -17,12 +19,12 @@ interface GenerateProfileDialogProps {
   providerLabel: string
   modelId: string
   modelLabel: string
+  providers: ProviderInfo[]
   providerItems: Array<{ id: string; label: string; description?: string }>
-  modelItems: Array<{ id: string; label: string; description?: string }>
   isGenerating: boolean
   onOpenChange: (open: boolean) => void
   onProviderChange: (providerId: string) => void
-  onModelChange: (modelId: string) => void
+  onModelChange: (modelId: string, providerId?: string) => void
   onConfirm: () => void
 }
 
@@ -32,8 +34,8 @@ export const GenerateProfileDialog: FC<GenerateProfileDialogProps> = ({
   providerLabel,
   modelId,
   modelLabel,
+  providers,
   providerItems,
-  modelItems,
   isGenerating,
   onOpenChange,
   onProviderChange,
@@ -79,14 +81,15 @@ export const GenerateProfileDialog: FC<GenerateProfileDialogProps> = ({
             <label className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
               Model
             </label>
-            <SearchableSelect
-              selectedId={modelId}
+            <ModelPickerDialog
+              providers={providers}
+              selectedProviderId={providerId}
+              selectedModelId={modelId}
               value={modelLabel}
-              items={modelItems}
-              onChange={onModelChange}
-              disabled={isGenerating || modelItems.length === 0}
-              searchPlaceholder="Search models..."
-              emptyMessage="No models available."
+              onChange={(nextProviderId, nextModelId) =>
+                onModelChange(nextModelId, nextProviderId)
+              }
+              disabled={isGenerating || providers.length === 0}
               triggerVariant="outline"
               triggerSize="sm"
               triggerClassName="w-full justify-between px-2 text-xs"

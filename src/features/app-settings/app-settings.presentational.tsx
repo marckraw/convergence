@@ -55,7 +55,7 @@ interface AppSettingsDialogProps {
   error: string | null
   activeSection: AppSettingsSectionId
   onProviderChange: (id: string) => void
-  onModelChange: (id: string) => void
+  onModelChange: (id: string, providerId?: string) => void
   onEffortChange: (id: ReasoningEffort | '') => void
   onNamingModelChange: (providerId: string, modelId: string) => void
   onExtractionModelChange: (providerId: string, modelId: string) => void

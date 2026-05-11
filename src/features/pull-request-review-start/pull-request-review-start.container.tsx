@@ -151,14 +151,15 @@ export const PullRequestReviewStartDialogContainer: FC = () => {
   )
 
   const handleModelChange = useCallback(
-    (nextModelId: string) => {
+    (nextModelId: string, nextProviderId?: string) => {
       const next = resolveProviderSelection(
         providers,
-        selection.providerId,
+        nextProviderId ?? selection.providerId,
         nextModelId,
         null,
         storedDefaults,
       )
+      setProviderId(next.providerId)
       setModelId(next.modelId)
       setEffortId(next.effortId)
     },

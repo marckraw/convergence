@@ -116,6 +116,13 @@ function buildPiDescriptor(): ProviderDescriptor {
         effortOptions: [{ id: 'medium', label: 'Medium' }],
         source: 'provider',
       },
+      {
+        id: 'github-copilot/gpt-5.5',
+        label: 'GitHub Copilot GPT-5.5',
+        defaultEffort: 'medium',
+        effortOptions: [{ id: 'medium', label: 'Medium' }],
+        source: 'provider',
+      },
     ],
     attachments: TEST_ATTACHMENT_CAPABILITY,
     midRunInput: NO_MID_RUN_INPUT_CAPABILITY,
@@ -293,6 +300,31 @@ describe('AppSettingsService', () => {
       expect(pi?.modelOptions.map((model) => model.id)).toEqual([
         'openrouter/custom',
         'github-copilot/gpt-5.4',
+      ])
+    })
+
+    it('migrates legacy Pi Codex visibility ids to GitHub Copilot ids', async () => {
+      descriptors.push(buildPiDescriptor())
+      await service.setAppSettings({
+        defaultProviderId: null,
+        defaultModelId: null,
+        defaultEffortId: null,
+        piModelVisibility: {
+          additionalModelIds: ['openai-codex/gpt-5.5'],
+        },
+      })
+
+      const settings = await service.getAppSettings()
+      const pi = service
+        .filterProviderDescriptors(descriptors)
+        .find((descriptor) => descriptor.id === 'pi')
+
+      expect(settings.piModelVisibility.additionalModelIds).toEqual([
+        'github-copilot/gpt-5.5',
+      ])
+      expect(pi?.modelOptions.map((model) => model.id)).toEqual([
+        'openrouter/custom',
+        'github-copilot/gpt-5.5',
       ])
     })
   })

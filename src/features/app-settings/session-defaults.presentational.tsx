@@ -4,6 +4,7 @@ import type {
   ReasoningEffort,
   ResolvedProviderSelection,
 } from '@/entities/session'
+import { ModelPickerDialog } from '@/features/model-picker'
 import { SessionStartSelect } from '@/features/session-start'
 import { SettingsControlField } from './settings-control-field.presentational'
 
@@ -11,7 +12,7 @@ interface SessionDefaultsFieldsProps {
   providers: ProviderInfo[]
   selection: ResolvedProviderSelection
   onProviderChange: (id: string) => void
-  onModelChange: (id: string) => void
+  onModelChange: (id: string, providerId?: string) => void
   onEffortChange: (id: ReasoningEffort | '') => void
 }
 
@@ -30,12 +31,6 @@ export const SessionDefaultsFields: FC<SessionDefaultsFieldsProps> = ({
         ? provider.name
         : undefined,
   }))
-  const modelItems =
-    selection.provider?.modelOptions.map((model) => ({
-      id: model.id,
-      label: model.label,
-      description: model.id,
-    })) ?? []
   const effortItems =
     selection.model?.effortOptions.map((effort) => ({
       id: effort.id,
@@ -61,11 +56,13 @@ export const SessionDefaultsFields: FC<SessionDefaultsFieldsProps> = ({
         title="Default model"
         description="Model that runs by default for the selected provider."
       >
-        <SessionStartSelect
-          selectedId={selection.modelId}
+        <ModelPickerDialog
+          providers={providers}
+          selectedProviderId={selection.providerId}
+          selectedModelId={selection.modelId}
           value={selection.model?.label ?? 'Select model'}
-          items={modelItems}
-          onChange={onModelChange}
+          onChange={(providerId, modelId) => onModelChange(modelId, providerId)}
+          triggerClassName="px-2 text-xs"
         />
       </SettingsControlField>
 

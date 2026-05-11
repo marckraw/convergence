@@ -5,6 +5,7 @@ import type {
   ResolvedProviderSelection,
 } from '@/entities/session'
 import type { ProjectContextItem } from '@/entities/project-context'
+import { ModelPickerDialog } from '@/features/model-picker'
 import { Button } from '@/shared/ui/button'
 import { Input } from '@/shared/ui/input'
 import { cn } from '@/shared/lib/cn.pure'
@@ -21,7 +22,7 @@ interface SessionStartFormProps {
   onNameChange: (value: string) => void
   onMessageChange: (value: string) => void
   onProviderChange: (id: string) => void
-  onModelChange: (id: string) => void
+  onModelChange: (id: string, providerId?: string) => void
   onEffortChange: (id: ReasoningEffort | '') => void
   onToggleContextItem: (id: string) => void
   onSubmit: () => void
@@ -50,12 +51,6 @@ export const SessionStartForm: FC<SessionStartFormProps> = ({
         ? provider.name
         : undefined,
   }))
-  const modelItems =
-    selection.provider?.modelOptions.map((model) => ({
-      id: model.id,
-      label: model.label,
-      description: model.id,
-    })) ?? []
   const effortItems =
     selection.model?.effortOptions.map((effort) => ({
       id: effort.id,
@@ -84,11 +79,13 @@ export const SessionStartForm: FC<SessionStartFormProps> = ({
           items={providerItems}
           onChange={onProviderChange}
         />
-        <SessionStartSelect
-          selectedId={selection.modelId}
+        <ModelPickerDialog
+          providers={providers}
+          selectedProviderId={selection.providerId}
+          selectedModelId={selection.modelId}
           value={selection.model?.label ?? 'Select model'}
-          items={modelItems}
-          onChange={onModelChange}
+          onChange={(providerId, modelId) => onModelChange(modelId, providerId)}
+          triggerClassName="px-2 text-xs"
         />
         {effortItems.length > 0 && (
           <SessionStartSelect

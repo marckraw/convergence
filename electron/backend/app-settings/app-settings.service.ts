@@ -276,11 +276,31 @@ function validatePiModelVisibility(
   if (!pi) return DEFAULT_PI_MODEL_VISIBILITY_PREFS
 
   const availableIds = new Set(pi.modelOptions.map((option) => option.id))
-  return {
-    additionalModelIds: prefs.additionalModelIds.filter((id) =>
-      availableIds.has(id),
+  const additionalModelIds = [
+    ...new Set(
+      prefs.additionalModelIds.flatMap((id) => {
+        const normalizedId = normalizePiModelVisibilityId(id, availableIds)
+        return normalizedId ? [normalizedId] : []
+      }),
     ),
+  ]
+
+  return { additionalModelIds }
+}
+
+function normalizePiModelVisibilityId(
+  id: string,
+  availableIds: Set<string>,
+): string | null {
+  if (availableIds.has(id)) return id
+
+  const legacyCodexPrefix = 'openai-codex/'
+  if (id.startsWith(legacyCodexPrefix)) {
+    const currentCopilotId = `github-copilot/${id.slice(legacyCodexPrefix.length)}`
+    if (availableIds.has(currentCopilotId)) return currentCopilotId
   }
+
+  return null
 }
 
 function filterPiDescriptor(
@@ -292,7 +312,15 @@ function filterPiDescriptor(
   const modelsJsonOptions = descriptor.modelOptions.filter(
     (option) => option.source === 'pi-models-json',
   )
-  const selectedIds = new Set(prefs.additionalModelIds)
+  const availableIds = new Set(
+    descriptor.modelOptions.map((option) => option.id),
+  )
+  const selectedIds = new Set(
+    prefs.additionalModelIds.flatMap((id) => {
+      const normalizedId = normalizePiModelVisibilityId(id, availableIds)
+      return normalizedId ? [normalizedId] : []
+    }),
+  )
   const shouldFilter = modelsJsonOptions.length > 0 || selectedIds.size > 0
   if (!shouldFilter) return descriptor
 

@@ -594,14 +594,15 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({ context }) => {
     setSelectedContextIds((current) => current.filter((value) => value !== id))
   }, [])
 
-  const handleModelChange = (nextModelId: string) => {
+  const handleModelChange = (nextModelId: string, nextProviderId?: string) => {
     const nextSelection = resolveProviderSelection(
       providers,
-      selection.providerId,
+      nextProviderId ?? selection.providerId,
       nextModelId,
       null,
       activeSession ? undefined : storedDefaults,
     )
+    setProviderId(nextSelection.providerId)
     setModelId(nextSelection.modelId)
     setEffortId(nextSelection.effortId)
   }

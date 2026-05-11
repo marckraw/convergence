@@ -162,15 +162,16 @@ export const AppSettingsDialogContainer: FC<AppSettingsContainerProps> = ({
   )
 
   const handleModelChange = useCallback(
-    (nextModelId: string) => {
+    (nextModelId: string, nextProviderId?: string) => {
       const next = resolveProviderSelection(
         providers,
-        draft.providerId || null,
+        nextProviderId ?? (draft.providerId || null),
         nextModelId,
         null,
       )
       setDraft((current) => ({
         ...current,
+        providerId: next.providerId,
         modelId: next.modelId,
         effortId: next.effortId,
       }))
