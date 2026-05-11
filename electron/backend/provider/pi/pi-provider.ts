@@ -38,7 +38,11 @@ import {
   extractToolCallFromEnd,
   extractToolResultText,
 } from './pi-event-mapping.pure'
-import { mapEffortToPiThinking, mapPiModels } from './pi-models.pure'
+import {
+  mapEffortToPiThinking,
+  mapPiModels,
+  mapPiModelsJsonFallbackModels,
+} from './pi-models.pure'
 import {
   probePiAvailableModels,
   readPiModelsJsonModelIds,
@@ -256,7 +260,18 @@ export class PiProvider implements Provider {
       readPiModelsJsonModelIds(),
     ])
     const modelOptions = mapPiModels(rawModels, modelsJsonModelIds)
-    if (modelOptions.length === 0) return fallback
+    if (modelOptions.length === 0) {
+      const modelsJsonFallbackOptions =
+        mapPiModelsJsonFallbackModels(modelsJsonModelIds)
+      if (modelsJsonFallbackOptions.length === 0) return fallback
+
+      return normalizeProviderDescriptor({
+        ...fallback,
+        defaultModelId:
+          modelsJsonFallbackOptions[0]?.id ?? fallback.defaultModelId,
+        modelOptions: modelsJsonFallbackOptions,
+      })
+    }
 
     return normalizeProviderDescriptor({
       ...fallback,

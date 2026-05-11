@@ -115,6 +115,29 @@ export function mapPiModels(
   })
 }
 
+export function mapPiModelsJsonFallbackModels(
+  modelsJsonModelIds: Set<string>,
+): ProviderModelOption[] {
+  return [...modelsJsonModelIds].flatMap((modelId) => {
+    const separatorIndex = modelId.indexOf('/')
+    if (separatorIndex <= 0 || separatorIndex === modelId.length - 1) {
+      return []
+    }
+
+    const provider = modelId.slice(0, separatorIndex)
+    const id = modelId.slice(separatorIndex + 1)
+    return [
+      {
+        id: modelId,
+        label: `${formatProviderLabel(provider)} · ${id}`,
+        defaultEffort: null,
+        effortOptions: [],
+        source: 'pi-models-json',
+      },
+    ]
+  })
+}
+
 const PI_THINKING_LEVELS = new Set([
   'off',
   'minimal',
