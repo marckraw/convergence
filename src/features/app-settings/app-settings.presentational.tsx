@@ -299,14 +299,7 @@ export const AppSettingsDialog: FC<AppSettingsDialogProps> = ({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogTrigger asChild>{trigger}</DialogTrigger>
-      <DialogContent
-        className={cn(
-          'p-0',
-          currentSection.id === 'insights'
-            ? 'w-[min(1280px,calc(100vw-2rem))] max-h-[min(92vh,960px)]'
-            : 'w-[min(960px,calc(100vw-2rem))]',
-        )}
-      >
+      <DialogContent className="h-[min(92vh,960px)] w-[min(1280px,calc(100vw-2rem))] max-h-[min(92vh,960px)] p-0">
         <DialogHeader className="border-b border-border/70 px-6 py-5 pr-14">
           <DialogTitle>Settings</DialogTitle>
           <DialogDescription>
