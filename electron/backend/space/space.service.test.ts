@@ -1,4 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import {
+  existsSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'fs'
+import { join } from 'path'
+import { tmpdir } from 'os'
 import { closeDatabase, getDatabase, resetDatabase } from '../database/database'
 import { SpaceService } from './space.service'
 
@@ -151,6 +160,49 @@ describe('SpaceService', () => {
 
     service.deleteArtifact(artifact.id)
     expect(service.listArtifacts(space.id)).toEqual([])
+  })
+
+  it('creates Space roots and manages copied file sources', () => {
+    const spaceRoot = mkdtempSync(join(tmpdir(), 'convergence-space-root-'))
+    const sourceRoot = mkdtempSync(join(tmpdir(), 'convergence-source-root-'))
+
+    try {
+      const fsService = new SpaceService(getDatabase(), spaceRoot)
+      const sourcePath = join(sourceRoot, 'notes.md')
+      writeFileSync(sourcePath, '# Notes\n')
+
+      const space = fsService.create({ title: 'Source test' })
+      const root = join(spaceRoot, space.id)
+
+      expect(existsSync(join(root, 'sources'))).toBe(true)
+      expect(existsSync(join(root, 'memory'))).toBe(true)
+      expect(existsSync(join(root, 'artifacts'))).toBe(true)
+      expect(existsSync(join(root, 'attempts'))).toBe(true)
+      expect(existsSync(join(root, 'scratch'))).toBe(true)
+
+      fsService.linkAttempt({ spaceId: space.id, sessionId: 's1' })
+      expect(existsSync(join(root, 'attempts', 's1'))).toBe(true)
+
+      const [source] = fsService.addSourcesFromPaths(space.id, [sourcePath])
+
+      expect(source.filename).toBe('notes.md')
+      expect(source.originalPath).toBe(sourcePath)
+      expect(source.storagePath.startsWith(join(root, 'sources'))).toBe(true)
+      expect(readFileSync(source.storagePath, 'utf8')).toBe('# Notes\n')
+      expect(fsService.listSources(space.id)).toEqual([source])
+
+      fsService.deleteSource(source.id)
+      expect(existsSync(source.storagePath)).toBe(false)
+      expect(existsSync(sourcePath)).toBe(true)
+      expect(fsService.listSources(space.id)).toEqual([])
+
+      fsService.addSourcesFromPaths(space.id, [sourcePath])
+      fsService.delete(space.id)
+      expect(existsSync(root)).toBe(false)
+    } finally {
+      rmSync(spaceRoot, { recursive: true, force: true })
+      rmSync(sourceRoot, { recursive: true, force: true })
+    }
   })
 
   it('cascades attempts and artifacts when a space is deleted', () => {

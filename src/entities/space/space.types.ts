@@ -74,6 +74,16 @@ export interface SpaceArtifact {
   updatedAt: string
 }
 
+export interface SpaceSource {
+  id: string
+  spaceId: string
+  filename: string
+  originalPath: string
+  storagePath: string
+  sizeBytes: number
+  createdAt: string
+}
+
 export interface CreateSpaceInput {
   title: string
   status?: SpaceStatus

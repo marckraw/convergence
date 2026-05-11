@@ -1,6 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { useSpaceStore } from './space.model'
-import type { Space, SpaceAttempt, SpaceArtifact } from './space.types'
+import type {
+  Space,
+  SpaceAttempt,
+  SpaceArtifact,
+  SpaceSource,
+} from './space.types'
 
 const space: Space = {
   id: 'i1',
@@ -33,6 +38,16 @@ const artifact: SpaceArtifact = {
   updatedAt: '2026-01-01T00:00:00.000Z',
 }
 
+const source: SpaceSource = {
+  id: 'source-1',
+  spaceId: 'i1',
+  filename: 'notes.md',
+  originalPath: '/tmp/notes.md',
+  storagePath: '/tmp/spaces/i1/sources/source-1-notes.md',
+  sizeBytes: 128,
+  createdAt: '2026-01-01T00:00:00.000Z',
+}
+
 const mockElectronAPI = {
   space: {
     list: vi.fn(),
@@ -50,6 +65,10 @@ const mockElectronAPI = {
     addArtifact: vi.fn(),
     updateArtifact: vi.fn(),
     deleteArtifact: vi.fn(),
+    listSources: vi.fn(),
+    addSourcesFromPaths: vi.fn(),
+    deleteSource: vi.fn(),
+    showSourceOpenDialog: vi.fn(),
     synthesize: vi.fn(),
   },
 }
@@ -61,6 +80,7 @@ describe('useSpaceStore', () => {
       attemptsBySpaceId: {},
       attemptsBySessionId: {},
       artifactsBySpaceId: {},
+      sourcesBySpaceId: {},
       loading: false,
       error: null,
     })
@@ -174,6 +194,24 @@ describe('useSpaceStore', () => {
 
     await useSpaceStore.getState().deleteArtifact(artifact.id, space.id)
     expect(useSpaceStore.getState().artifactsBySpaceId[space.id]).toEqual([])
+  })
+
+  it('manages file-backed sources', async () => {
+    mockElectronAPI.space.listSources.mockResolvedValue([source])
+    mockElectronAPI.space.addSourcesFromPaths.mockResolvedValue([source])
+    mockElectronAPI.space.deleteSource.mockResolvedValue(undefined)
+
+    await useSpaceStore.getState().loadSources(space.id)
+    await useSpaceStore
+      .getState()
+      .addSourcesFromPaths(space.id, [source.originalPath])
+
+    expect(useSpaceStore.getState().sourcesBySpaceId[space.id]).toEqual([
+      source,
+    ])
+
+    await useSpaceStore.getState().deleteSource(source.id, space.id)
+    expect(useSpaceStore.getState().sourcesBySpaceId[space.id]).toEqual([])
   })
 
   it('sets error on failures', async () => {

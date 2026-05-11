@@ -181,6 +181,20 @@ const SCHEMA = `
   CREATE INDEX IF NOT EXISTS idx_space_artifacts_space
     ON space_artifacts(space_id);
 
+  CREATE TABLE IF NOT EXISTS space_sources (
+    id TEXT PRIMARY KEY,
+    space_id TEXT NOT NULL,
+    filename TEXT NOT NULL,
+    original_path TEXT NOT NULL,
+    storage_path TEXT NOT NULL,
+    size_bytes INTEGER NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    FOREIGN KEY (space_id) REFERENCES spaces(id) ON DELETE CASCADE
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_space_sources_space
+    ON space_sources(space_id);
+
   CREATE TABLE IF NOT EXISTS workspaces (
     id TEXT PRIMARY KEY,
     project_id TEXT NOT NULL,

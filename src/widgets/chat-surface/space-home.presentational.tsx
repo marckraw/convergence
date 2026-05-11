@@ -1,6 +1,11 @@
 import type { FC, ReactNode } from 'react'
 import type { SessionSummary } from '@/entities/session'
-import type { Space, SpaceArtifact, SpaceAttempt } from '@/entities/space'
+import type {
+  Space,
+  SpaceArtifact,
+  SpaceAttempt,
+  SpaceSource,
+} from '@/entities/space'
 import {
   spaceArtifactStatusLabels,
   spaceAttemptRoleLabels,
@@ -12,11 +17,13 @@ import { cn } from '@/shared/lib/cn.pure'
 import {
   Box,
   Brain,
+  FilePlus,
   FileText,
   Folder,
   MessageSquarePlus,
   MessagesSquare,
   Paperclip,
+  Trash2,
 } from 'lucide-react'
 
 export type SpaceHomeTab =
@@ -35,10 +42,13 @@ interface SpaceHomeProps {
   space: Space
   attempts: SpaceHomeAttemptView[]
   artifacts: SpaceArtifact[]
+  sources: SpaceSource[]
   activeTab: SpaceHomeTab
   newAttemptComposer: ReactNode
   onTabChange: (tab: SpaceHomeTab) => void
   onOpenAttempt: (sessionId: string) => void
+  onAddSources: () => void
+  onDeleteSource: (sourceId: string) => void
 }
 
 const TABS: Array<{
@@ -62,14 +72,23 @@ function renderEmptyState(title: string, detail: string): ReactNode {
   )
 }
 
+function formatBytes(sizeBytes: number): string {
+  if (sizeBytes < 1024) return `${sizeBytes} B`
+  if (sizeBytes < 1024 * 1024) return `${Math.round(sizeBytes / 1024)} KB`
+  return `${(sizeBytes / 1024 / 1024).toFixed(1)} MB`
+}
+
 export const SpaceHome: FC<SpaceHomeProps> = ({
   space,
   attempts,
   artifacts,
+  sources,
   activeTab,
   newAttemptComposer,
   onTabChange,
   onOpenAttempt,
+  onAddSources,
+  onDeleteSource,
 }) => {
   return (
     <div className="flex h-full flex-col">
@@ -179,12 +198,62 @@ export const SpaceHome: FC<SpaceHomeProps> = ({
             </section>
           ) : null}
 
-          {activeTab === 'sources'
-            ? renderEmptyState(
-                'No sources yet',
-                'Space sources will collect local files and references in a later phase.',
-              )
-            : null}
+          {activeTab === 'sources' ? (
+            <section className="space-y-3">
+              <div className="flex items-center justify-between gap-3">
+                <h2 className="text-sm font-medium">Sources</h2>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={onAddSources}
+                >
+                  <FilePlus className="h-4 w-4" />
+                  Add source
+                </Button>
+              </div>
+              {sources.length > 0 ? (
+                <div className="divide-y divide-border rounded-lg border border-border/70">
+                  {sources.map((source) => (
+                    <div
+                      key={source.id}
+                      className="flex min-w-0 items-center justify-between gap-3 px-4 py-3"
+                    >
+                      <div className="flex min-w-0 items-center gap-3">
+                        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-border/70 bg-card/40">
+                          <FileText className="h-4 w-4 text-muted-foreground" />
+                        </div>
+                        <div className="min-w-0">
+                          <div className="truncate text-sm font-medium">
+                            {source.filename}
+                          </div>
+                          <div className="mt-1 truncate text-xs text-muted-foreground">
+                            {formatBytes(source.sizeBytes)} -{' '}
+                            {source.storagePath}
+                          </div>
+                        </div>
+                      </div>
+                      <Button
+                        type="button"
+                        size="icon"
+                        variant="ghost"
+                        className="h-8 w-8 shrink-0 text-muted-foreground hover:text-destructive"
+                        aria-label={`Remove source ${source.filename}`}
+                        onClick={() => onDeleteSource(source.id)}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                renderEmptyState(
+                  'No sources yet',
+                  'Add local files to keep durable reference material inside this Space.',
+                )
+              )}
+            </section>
+          ) : null}
 
           {activeTab === 'memory'
             ? renderEmptyState(

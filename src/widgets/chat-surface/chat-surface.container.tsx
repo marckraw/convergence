@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { FC } from 'react'
 import { useAppSurfaceStore } from '@/entities/app-surface'
-import { useSpaceStore } from '@/entities/space'
+import { spaceApi, useSpaceStore } from '@/entities/space'
 import type { SessionSummary } from '@/entities/session'
 import { formatActivityLabel, useSessionStore } from '@/entities/session'
 import { switchToSession } from '@/features/command-center'
@@ -24,8 +24,14 @@ export const ChatSurface: FC<ChatSurfaceProps> = ({ selectedSpaceId }) => {
   const spaces = useSpaceStore((state) => state.spaces)
   const attemptsBySpaceId = useSpaceStore((state) => state.attemptsBySpaceId)
   const artifactsBySpaceId = useSpaceStore((state) => state.artifactsBySpaceId)
+  const sourcesBySpaceId = useSpaceStore((state) => state.sourcesBySpaceId)
   const loadAttempts = useSpaceStore((state) => state.loadAttempts)
   const loadArtifacts = useSpaceStore((state) => state.loadArtifacts)
+  const loadSources = useSpaceStore((state) => state.loadSources)
+  const addSourcesFromPaths = useSpaceStore(
+    (state) => state.addSourcesFromPaths,
+  )
+  const deleteSource = useSpaceStore((state) => state.deleteSource)
   const linkAttempt = useSpaceStore((state) => state.linkAttempt)
   const activeSessionId = useSessionStore(
     (state) => state.activeGlobalSessionId,
@@ -50,6 +56,8 @@ export const ChatSurface: FC<ChatSurfaceProps> = ({ selectedSpaceId }) => {
     selectedSpaceId === null ? [] : (attemptsBySpaceId[selectedSpaceId] ?? [])
   const selectedSpaceArtifacts =
     selectedSpaceId === null ? [] : (artifactsBySpaceId[selectedSpaceId] ?? [])
+  const selectedSpaceSources =
+    selectedSpaceId === null ? [] : (sourcesBySpaceId[selectedSpaceId] ?? [])
   const activityLabel = formatActivityLabel(session?.activity)
   const sessionLookup = useMemo(() => {
     const next = new Map<string, SessionSummary>()
@@ -72,7 +80,8 @@ export const ChatSurface: FC<ChatSurfaceProps> = ({ selectedSpaceId }) => {
     if (!selectedSpaceId) return
     void loadAttempts(selectedSpaceId)
     void loadArtifacts(selectedSpaceId)
-  }, [loadArtifacts, loadAttempts, selectedSpaceId])
+    void loadSources(selectedSpaceId)
+  }, [loadArtifacts, loadAttempts, loadSources, selectedSpaceId])
 
   useEffect(() => {
     setActiveSpaceTab('chats')
@@ -110,15 +119,33 @@ export const ChatSurface: FC<ChatSurfaceProps> = ({ selectedSpaceId }) => {
     [sessionLookup, setActiveGlobalSession, setActiveSession, setActiveSurface],
   )
 
+  const handleAddSources = useCallback(async () => {
+    if (!selectedSpaceId) return
+    const paths = await spaceApi.showSourceOpenDialog()
+    if (!paths || paths.length === 0) return
+    await addSourcesFromPaths(selectedSpaceId, paths)
+  }, [addSourcesFromPaths, selectedSpaceId])
+
+  const handleDeleteSource = useCallback(
+    async (sourceId: string) => {
+      if (!selectedSpaceId) return
+      await deleteSource(sourceId, selectedSpaceId)
+    },
+    [deleteSource, selectedSpaceId],
+  )
+
   if (selectedSpaceId && selectedSpace && !session) {
     return (
       <SpaceHome
         space={selectedSpace}
         attempts={attemptViews}
         artifacts={selectedSpaceArtifacts}
+        sources={selectedSpaceSources}
         activeTab={activeSpaceTab}
         onTabChange={setActiveSpaceTab}
         onOpenAttempt={handleOpenAttempt}
+        onAddSources={handleAddSources}
+        onDeleteSource={handleDeleteSource}
         newAttemptComposer={
           <ComposerContainer
             context={{ kind: 'global', activeSessionId: null }}

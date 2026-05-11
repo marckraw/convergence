@@ -297,6 +297,31 @@ export function registerIpcHandlers(
     spaceService.deleteArtifact(id)
   })
 
+  ipcMain.handle('space:listSources', (_event, spaceId: string) =>
+    spaceService.listSources(spaceId),
+  )
+
+  ipcMain.handle(
+    'space:addSourcesFromPaths',
+    (_event, spaceId: string, paths: string[]) =>
+      spaceService.addSourcesFromPaths(spaceId, paths),
+  )
+
+  ipcMain.handle('space:deleteSource', (_event, id: string) => {
+    spaceService.deleteSource(id)
+  })
+
+  ipcMain.handle('space:showSourceOpenDialog', async (event) => {
+    const window = BrowserWindow.fromWebContents(event.sender)
+    if (!window) return null
+    const result = await dialog.showOpenDialog(window, {
+      properties: ['openFile', 'multiSelections'],
+      title: 'Select Space Sources',
+    })
+    if (result.canceled || result.filePaths.length === 0) return null
+    return result.filePaths
+  })
+
   ipcMain.handle(
     'space:synthesize',
     (_event, spaceId: string, requestId?: string) => {

@@ -66,6 +66,10 @@ const mockElectronAPI = {
     addArtifact: vi.fn(),
     updateArtifact: vi.fn(),
     deleteArtifact: vi.fn(),
+    listSources: vi.fn(),
+    addSourcesFromPaths: vi.fn(),
+    deleteSource: vi.fn(),
+    showSourceOpenDialog: vi.fn(),
     synthesize: vi.fn(),
   },
 }
@@ -106,6 +110,7 @@ describe('SpaceSessionLinkDialogContainer', () => {
       attemptsBySpaceId: {},
       attemptsBySessionId: {},
       artifactsBySpaceId: {},
+      sourcesBySpaceId: {},
       loading: false,
       error: null,
     })

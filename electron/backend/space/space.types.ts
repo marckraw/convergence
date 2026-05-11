@@ -2,6 +2,7 @@ import type {
   SpaceAttemptRow,
   SpaceArtifactRow,
   SpaceRow,
+  SpaceSourceRow,
 } from '../database/database.types'
 
 export type SpaceStatus =
@@ -80,6 +81,16 @@ export interface SpaceArtifact {
   updatedAt: string
 }
 
+export interface SpaceSource {
+  id: string
+  spaceId: string
+  filename: string
+  originalPath: string
+  storagePath: string
+  sizeBytes: number
+  createdAt: string
+}
+
 export interface CreateSpaceInput {
   title: string
   status?: SpaceStatus
@@ -122,6 +133,11 @@ export interface UpdateSpaceArtifactInput {
   status?: SpaceArtifactStatus
 }
 
+export interface AddSpaceSourcesFromPathsInput {
+  spaceId: string
+  paths: string[]
+}
+
 export function spaceFromRow(row: SpaceRow): Space {
   return {
     id: row.id,
@@ -156,6 +172,18 @@ export function spaceArtifactFromRow(row: SpaceArtifactRow): SpaceArtifact {
     status: parseSpaceArtifactStatus(row.status),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
+  }
+}
+
+export function spaceSourceFromRow(row: SpaceSourceRow): SpaceSource {
+  return {
+    id: row.id,
+    spaceId: row.space_id,
+    filename: row.filename,
+    originalPath: row.original_path,
+    storagePath: row.storage_path,
+    sizeBytes: row.size_bytes,
+    createdAt: row.created_at,
   }
 }
 

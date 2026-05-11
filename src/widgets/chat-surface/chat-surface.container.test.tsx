@@ -118,6 +118,7 @@ describe('ChatSurface', () => {
       attemptsBySpaceId: {},
       attemptsBySessionId: {},
       artifactsBySpaceId: {},
+      sourcesBySpaceId: {},
       loading: false,
       error: null,
     })
@@ -210,6 +211,69 @@ describe('ChatSurface', () => {
     expect(screen.getByText('Planning chat')).toBeInTheDocument()
   })
 
+  it('lists and manages Space sources from the Sources tab', async () => {
+    const addSourcesFromPaths = vi.fn().mockResolvedValue([])
+    const deleteSource = vi.fn().mockResolvedValue(undefined)
+    Object.defineProperty(window, 'electronAPI', {
+      value: {
+        space: {
+          showSourceOpenDialog: vi.fn().mockResolvedValue(['/tmp/brief.md']),
+        },
+      },
+      writable: true,
+      configurable: true,
+    })
+    useSpaceStore.setState({
+      spaces: [
+        {
+          id: 'space-1',
+          title: 'Launch plan',
+          status: 'exploring',
+          attention: 'none',
+          brief: '',
+          createdAt: '2026-01-01T00:00:00.000Z',
+          updatedAt: '2026-01-01T00:00:00.000Z',
+        },
+      ],
+      sourcesBySpaceId: {
+        'space-1': [
+          {
+            id: 'source-1',
+            spaceId: 'space-1',
+            filename: 'brief.md',
+            originalPath: '/tmp/brief.md',
+            storagePath: '/tmp/spaces/space-1/sources/source-1-brief.md',
+            sizeBytes: 2048,
+            createdAt: '2026-01-01T00:00:00.000Z',
+          },
+        ],
+      },
+      loadAttempts: vi.fn().mockResolvedValue(undefined),
+      loadArtifacts: vi.fn().mockResolvedValue(undefined),
+      loadSources: vi.fn().mockResolvedValue(undefined),
+      addSourcesFromPaths,
+      deleteSource,
+    })
+
+    render(<ChatSurface selectedSpaceId="space-1" />)
+    fireEvent.click(screen.getByRole('button', { name: /sources/i }))
+
+    expect(screen.getByText('brief.md')).toBeInTheDocument()
+    expect(screen.getByText(/2 KB/)).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: /add source/i }))
+    await waitFor(() => {
+      expect(addSourcesFromPaths).toHaveBeenCalledWith('space-1', [
+        '/tmp/brief.md',
+      ])
+    })
+
+    fireEvent.click(
+      screen.getByRole('button', { name: /remove source brief.md/i }),
+    )
+    expect(deleteSource).toHaveBeenCalledWith('source-1', 'space-1')
+  })
+
   it('links a newly created global session as a Space attempt', async () => {
     const linkAttempt = vi.fn().mockResolvedValue(null)
     const loadAttempts = vi.fn().mockResolvedValue(undefined)
@@ -229,6 +293,7 @@ describe('ChatSurface', () => {
       linkAttempt,
       loadAttempts,
       loadArtifacts: vi.fn().mockResolvedValue(undefined),
+      loadSources: vi.fn().mockResolvedValue(undefined),
     })
 
     render(<ChatSurface selectedSpaceId="space-1" />)

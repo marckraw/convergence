@@ -1,19 +1,24 @@
 import { randomUUID } from 'crypto'
+import { copyFileSync, mkdirSync, rmSync, statSync } from 'fs'
+import { basename, join, resolve } from 'path'
 import type Database from 'better-sqlite3'
 import type {
   SpaceAttemptRow,
   SpaceArtifactRow,
   SpaceRow,
+  SpaceSourceRow,
 } from '../database/database.types'
 import {
   spaceAttemptFromRow,
   spaceFromRow,
   spaceArtifactFromRow,
+  spaceSourceFromRow,
   type CreateSpaceInput,
   type CreateSpaceArtifactInput,
   type Space,
   type SpaceAttempt,
   type SpaceArtifact,
+  type SpaceSource,
   type LinkSpaceAttemptInput,
   type UpdateSpaceAttemptInput,
   type UpdateSpaceInput,
@@ -21,19 +26,37 @@ import {
 } from './space.types'
 import { normalizeOptionalText, normalizeRequiredText } from './space.pure'
 
+function sanitizePathSegment(value: string): string {
+  const sanitized = value.replace(/[^a-zA-Z0-9._-]/g, '_')
+  return sanitized.length > 0 ? sanitized.slice(0, 200) : 'space'
+}
+
+function sanitizeFilename(path: string): string {
+  const name = basename(path).replace(/\s+/g, '_')
+  const sanitized = name.replace(/[^a-zA-Z0-9._-]/g, '_')
+  return sanitized.length > 0 ? sanitized.slice(0, 200) : 'source'
+}
+
 export class SpaceService {
-  constructor(private db: Database.Database) {}
+  constructor(
+    private db: Database.Database,
+    private rootDir?: string,
+  ) {}
 
   list(): Space[] {
     const rows = this.db
       .prepare('SELECT * FROM spaces ORDER BY updated_at DESC')
       .all() as SpaceRow[]
 
-    return rows.map(spaceFromRow)
+    return rows.map((row) => {
+      this.ensureSpaceRoot(row.id)
+      return spaceFromRow(row)
+    })
   }
 
   getById(id: string): Space | null {
     const row = this.getSpaceRow(id)
+    if (row) this.ensureSpaceRoot(row.id)
     return row ? spaceFromRow(row) : null
   }
 
@@ -56,6 +79,7 @@ export class SpaceService {
         brief,
       )
 
+    this.ensureSpaceRoot(id)
     return this.getById(id)!
   }
 
@@ -94,7 +118,11 @@ export class SpaceService {
   }
 
   delete(id: string): void {
+    const existing = this.getSpaceRow(id)
     this.db.prepare('DELETE FROM spaces WHERE id = ?').run(id)
+    if (existing) {
+      this.deleteSpaceRoot(id)
+    }
   }
 
   listAttempts(spaceId: string): SpaceAttempt[] {
@@ -166,6 +194,7 @@ export class SpaceService {
           input.role ?? 'exploration',
           isPrimary ? 1 : 0,
         )
+      this.ensureAttemptRoot(input.spaceId, input.sessionId)
       this.touchSpace(input.spaceId)
     })
 
@@ -295,6 +324,41 @@ export class SpaceService {
     this.touchSpace(existing.spaceId)
   }
 
+  listSources(spaceId: string): SpaceSource[] {
+    this.assertSpaceExists(spaceId)
+    this.ensureSpaceRoot(spaceId)
+    const rows = this.db
+      .prepare(
+        `SELECT * FROM space_sources
+         WHERE space_id = ?
+         ORDER BY created_at DESC`,
+      )
+      .all(spaceId) as SpaceSourceRow[]
+
+    return rows.map(spaceSourceFromRow)
+  }
+
+  addSourcesFromPaths(spaceId: string, paths: string[]): SpaceSource[] {
+    this.assertSpaceExists(spaceId)
+    this.ensureSpaceRoot(spaceId)
+    const added: SpaceSource[] = []
+
+    for (const path of paths) {
+      const source = this.addSourceFromPath(spaceId, path)
+      added.push(source)
+    }
+
+    return added
+  }
+
+  deleteSource(id: string): void {
+    const existing = this.getSourceById(id)
+    if (!existing) return
+    this.db.prepare('DELETE FROM space_sources WHERE id = ?').run(id)
+    rmSync(existing.storagePath, { force: true })
+    this.touchSpace(existing.spaceId)
+  }
+
   private getSpaceRow(id: string): SpaceRow | null {
     const row = this.db.prepare('SELECT * FROM spaces WHERE id = ?').get(id) as
       | SpaceRow
@@ -314,6 +378,13 @@ export class SpaceService {
       .prepare('SELECT * FROM space_artifacts WHERE id = ?')
       .get(id) as SpaceArtifactRow | undefined
     return row ? spaceArtifactFromRow(row) : null
+  }
+
+  private getSourceById(id: string): SpaceSource | null {
+    const row = this.db
+      .prepare('SELECT * FROM space_sources WHERE id = ?')
+      .get(id) as SpaceSourceRow | undefined
+    return row ? spaceSourceFromRow(row) : null
   }
 
   private assertSpaceExists(id: string): void {
@@ -341,5 +412,83 @@ export class SpaceService {
     this.db
       .prepare("UPDATE spaces SET updated_at = datetime('now') WHERE id = ?")
       .run(id)
+  }
+
+  private addSourceFromPath(spaceId: string, path: string): SpaceSource {
+    const sourcePath = resolve(path)
+    const stats = statSync(sourcePath)
+    if (!stats.isFile()) {
+      throw new Error(`Space source must be a file: ${path}`)
+    }
+
+    const id = randomUUID()
+    const filename = sanitizeFilename(sourcePath)
+    const destination = join(
+      this.getSpaceSourcesRoot(spaceId),
+      `${id}-${filename}`,
+    )
+
+    copyFileSync(sourcePath, destination)
+
+    try {
+      this.db
+        .prepare(
+          `INSERT INTO space_sources (
+             id, space_id, filename, original_path, storage_path, size_bytes
+           ) VALUES (?, ?, ?, ?, ?, ?)`,
+        )
+        .run(id, spaceId, filename, sourcePath, destination, stats.size)
+      this.touchSpace(spaceId)
+    } catch (error) {
+      rmSync(destination, { force: true })
+      throw error
+    }
+
+    return this.getSourceById(id)!
+  }
+
+  private ensureSpaceRoot(spaceId: string): void {
+    if (!this.rootDir) return
+    const root = this.getSpaceRoot(spaceId)
+    for (const directory of [
+      root,
+      join(root, 'sources'),
+      join(root, 'memory'),
+      join(root, 'artifacts'),
+      join(root, 'attempts'),
+      join(root, 'scratch'),
+    ]) {
+      mkdirSync(directory, { recursive: true })
+    }
+  }
+
+  private ensureAttemptRoot(spaceId: string, sessionId: string): void {
+    if (!this.rootDir) return
+    this.ensureSpaceRoot(spaceId)
+    mkdirSync(
+      join(
+        this.getSpaceRoot(spaceId),
+        'attempts',
+        sanitizePathSegment(sessionId),
+      ),
+      { recursive: true },
+    )
+  }
+
+  private deleteSpaceRoot(spaceId: string): void {
+    if (!this.rootDir) return
+    rmSync(this.getSpaceRoot(spaceId), { recursive: true, force: true })
+  }
+
+  private getSpaceSourcesRoot(spaceId: string): string {
+    this.ensureSpaceRoot(spaceId)
+    return join(this.getSpaceRoot(spaceId), 'sources')
+  }
+
+  private getSpaceRoot(spaceId: string): string {
+    if (!this.rootDir) {
+      throw new Error('Space filesystem root is not configured')
+    }
+    return join(this.rootDir, sanitizePathSegment(spaceId))
   }
 }

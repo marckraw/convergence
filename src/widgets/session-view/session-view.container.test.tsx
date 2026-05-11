@@ -156,6 +156,7 @@ describe('SessionView changed files drawer', () => {
       attemptsBySpaceId: {},
       attemptsBySessionId: {},
       artifactsBySpaceId: {},
+      sourcesBySpaceId: {},
       loading: false,
       error: null,
     })
@@ -178,6 +179,10 @@ describe('SessionView changed files drawer', () => {
           addArtifact: vi.fn(),
           updateArtifact: vi.fn(),
           deleteArtifact: vi.fn(),
+          listSources: vi.fn().mockResolvedValue([]),
+          addSourcesFromPaths: vi.fn(),
+          deleteSource: vi.fn(),
+          showSourceOpenDialog: vi.fn(),
           synthesize: vi.fn(),
         },
         git: {
@@ -467,6 +472,7 @@ describe('SessionView changed files drawer', () => {
       attemptsBySpaceId: { 'space-1': [attempt] },
       attemptsBySessionId: { 'session-1': [attempt] },
       artifactsBySpaceId: {},
+      sourcesBySpaceId: {},
       loading: false,
       error: null,
     })

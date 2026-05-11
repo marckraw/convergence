@@ -167,6 +167,7 @@ async function startApp(): Promise<void> {
   const dbPath = join(app.getPath('userData'), 'convergence.db')
   const workspacesRoot = join(app.getPath('userData'), 'workspaces')
   const attachmentsRoot = join(app.getPath('userData'), 'attachments')
+  const spacesRoot = join(app.getPath('userData'), 'spaces')
   const globalSessionsRoot = join(app.getPath('userData'), 'global-sessions')
   loadEnvFile(join(app.getAppPath(), '.env'))
   loadEnvFile(join(process.cwd(), '.env'))
@@ -174,7 +175,7 @@ async function startApp(): Promise<void> {
 
   const gitService = new GitService()
   const projectService = new ProjectService(db)
-  const spaceService = new SpaceService(db)
+  const spaceService = new SpaceService(db, spacesRoot)
   const projectContextService = new ProjectContextService(db)
   const sessionContextInjectionService = new SessionContextInjectionService(
     db,

@@ -72,6 +72,10 @@ const mockElectronAPI = {
     addArtifact: vi.fn(),
     updateArtifact: vi.fn(),
     deleteArtifact: vi.fn(),
+    listSources: vi.fn(),
+    addSourcesFromPaths: vi.fn(),
+    deleteSource: vi.fn(),
+    showSourceOpenDialog: vi.fn(),
     synthesize: vi.fn(),
   },
   git: {
@@ -123,6 +127,7 @@ describe('SpaceWorkboardDialogContainer', () => {
       spaces: [],
       attemptsBySpaceId: {},
       artifactsBySpaceId: {},
+      sourcesBySpaceId: {},
       loading: false,
       error: null,
     })

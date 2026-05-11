@@ -8,6 +8,7 @@ export type {
   SpaceArtifact,
   SpaceArtifactKind,
   SpaceArtifactStatus,
+  SpaceSource,
   SpaceSynthesisArtifactSuggestion,
   SpaceSynthesisResult,
   SpaceStatus,

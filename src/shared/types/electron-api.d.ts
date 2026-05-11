@@ -111,6 +111,16 @@ interface SpaceArtifactData {
   updatedAt: string
 }
 
+interface SpaceSourceData {
+  id: string
+  spaceId: string
+  filename: string
+  originalPath: string
+  storagePath: string
+  sizeBytes: number
+  createdAt: string
+}
+
 interface CreateSpaceInputData {
   title: string
   status?: SpaceStatusData
@@ -948,6 +958,13 @@ interface ElectronAPI {
       input: UpdateSpaceArtifactInputData,
     ) => Promise<SpaceArtifactData>
     deleteArtifact: (id: string) => Promise<void>
+    listSources: (spaceId: string) => Promise<SpaceSourceData[]>
+    addSourcesFromPaths: (
+      spaceId: string,
+      paths: string[],
+    ) => Promise<SpaceSourceData[]>
+    deleteSource: (id: string) => Promise<void>
+    showSourceOpenDialog: () => Promise<string[] | null>
     synthesize: (
       spaceId: string,
       requestId?: string,

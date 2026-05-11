@@ -173,6 +173,16 @@ export interface SpaceArtifactRow {
   updated_at: string
 }
 
+export interface SpaceSourceRow {
+  id: string
+  space_id: string
+  filename: string
+  original_path: string
+  storage_path: string
+  size_bytes: number
+  created_at: string
+}
+
 export interface ProjectContextItemRow {
   id: string
   project_id: string

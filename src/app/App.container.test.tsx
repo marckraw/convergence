@@ -105,6 +105,10 @@ const mockElectronAPI = {
     addArtifact: vi.fn(),
     updateArtifact: vi.fn(),
     deleteArtifact: vi.fn(),
+    listSources: vi.fn().mockResolvedValue([]),
+    addSourcesFromPaths: vi.fn(),
+    deleteSource: vi.fn(),
+    showSourceOpenDialog: vi.fn(),
     synthesize: vi.fn(),
   },
   git: {
@@ -289,6 +293,7 @@ describe('App', () => {
       attemptsBySpaceId: {},
       attemptsBySessionId: {},
       artifactsBySpaceId: {},
+      sourcesBySpaceId: {},
       loading: false,
       error: null,
     })

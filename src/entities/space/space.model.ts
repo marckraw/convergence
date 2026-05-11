@@ -6,6 +6,7 @@ import type {
   Space,
   SpaceAttempt,
   SpaceArtifact,
+  SpaceSource,
   SpaceSynthesisResult,
   LinkSpaceAttemptInput,
   UpdateSpaceAttemptInput,
@@ -18,6 +19,7 @@ interface SpaceState {
   attemptsBySpaceId: Record<string, SpaceAttempt[]>
   attemptsBySessionId: Record<string, SpaceAttempt[]>
   artifactsBySpaceId: Record<string, SpaceArtifact[]>
+  sourcesBySpaceId: Record<string, SpaceSource[]>
   loading: boolean
   error: string | null
 }
@@ -50,6 +52,12 @@ interface SpaceActions {
     input: UpdateSpaceArtifactInput,
   ) => Promise<SpaceArtifact | null>
   deleteArtifact: (id: string, spaceId: string) => Promise<void>
+  loadSources: (spaceId: string) => Promise<void>
+  addSourcesFromPaths: (
+    spaceId: string,
+    paths: string[],
+  ) => Promise<SpaceSource[]>
+  deleteSource: (id: string, spaceId: string) => Promise<void>
   synthesize: (
     spaceId: string,
     requestId?: string,
@@ -80,6 +88,7 @@ export const useSpaceStore = create<SpaceStore>((set) => ({
   attemptsBySpaceId: {},
   attemptsBySessionId: {},
   artifactsBySpaceId: {},
+  sourcesBySpaceId: {},
   loading: false,
   error: null,
 
@@ -136,6 +145,7 @@ export const useSpaceStore = create<SpaceStore>((set) => ({
         const attemptsBySpaceId = { ...state.attemptsBySpaceId }
         const attemptsBySessionId = { ...state.attemptsBySessionId }
         const artifactsBySpaceId = { ...state.artifactsBySpaceId }
+        const sourcesBySpaceId = { ...state.sourcesBySpaceId }
         delete attemptsBySpaceId[id]
         for (const [sessionId, attempts] of Object.entries(
           attemptsBySessionId,
@@ -145,11 +155,13 @@ export const useSpaceStore = create<SpaceStore>((set) => ({
           )
         }
         delete artifactsBySpaceId[id]
+        delete sourcesBySpaceId[id]
         return {
           spaces: removeById(state.spaces, id),
           attemptsBySpaceId,
           attemptsBySessionId,
           artifactsBySpaceId,
+          sourcesBySpaceId,
         }
       })
     } catch (err) {
@@ -381,6 +393,65 @@ export const useSpaceStore = create<SpaceStore>((set) => ({
     } catch (err) {
       set({
         error: err instanceof Error ? err.message : 'Failed to delete Artifact',
+      })
+    }
+  },
+
+  loadSources: async (spaceId) => {
+    set({ error: null })
+    try {
+      const sources = await spaceApi.listSources(spaceId)
+      set((state) => ({
+        sourcesBySpaceId: {
+          ...state.sourcesBySpaceId,
+          [spaceId]: sources,
+        },
+      }))
+    } catch (err) {
+      set({
+        error: err instanceof Error ? err.message : 'Failed to load Sources',
+      })
+    }
+  },
+
+  addSourcesFromPaths: async (spaceId, paths) => {
+    set({ error: null })
+    try {
+      const sources = await spaceApi.addSourcesFromPaths(spaceId, paths)
+      set((state) => ({
+        sourcesBySpaceId: {
+          ...state.sourcesBySpaceId,
+          [spaceId]: [
+            ...sources,
+            ...(state.sourcesBySpaceId[spaceId] ?? []).filter(
+              (existing) =>
+                !sources.some((source) => source.id === existing.id),
+            ),
+          ],
+        },
+      }))
+      return sources
+    } catch (err) {
+      set({
+        error: err instanceof Error ? err.message : 'Failed to add Sources',
+      })
+      return []
+    }
+  },
+
+  deleteSource: async (id, spaceId) => {
+    set({ error: null })
+    try {
+      await spaceApi.deleteSource(id)
+      set((state) => ({
+        sourcesBySpaceId: {
+          ...state.sourcesBySpaceId,
+          [spaceId]: removeById(state.sourcesBySpaceId[spaceId] ?? [], id),
+        },
+      }))
+    } catch (err) {
+      set({
+        error: err instanceof Error ? err.message : 'Failed to delete Source',
       })
     }
   },

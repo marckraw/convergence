@@ -30,6 +30,7 @@ describe('database', () => {
     expect(tableNames).toContain('spaces')
     expect(tableNames).toContain('space_attempts')
     expect(tableNames).toContain('space_artifacts')
+    expect(tableNames).toContain('space_sources')
     expect(tableNames).toContain('project_context_items')
     expect(tableNames).toContain('session_context_attachments')
     expect(tableNames).toContain('analytics_profile_snapshots')
@@ -381,6 +382,28 @@ describe('database', () => {
         (fk) => fk.table === 'sessions' && fk.on_delete === 'SET NULL',
       ),
     ).toBe(true)
+
+    const sourceColumns = db
+      .prepare("PRAGMA table_info('space_sources')")
+      .all() as Array<{ name: string }>
+    expect(sourceColumns.map((c) => c.name).sort()).toEqual(
+      [
+        'id',
+        'space_id',
+        'filename',
+        'original_path',
+        'storage_path',
+        'size_bytes',
+        'created_at',
+      ].sort(),
+    )
+
+    const sourceForeignKeys = db
+      .prepare("PRAGMA foreign_key_list('space_sources')")
+      .all() as Array<{ table: string; on_delete: string }>
+    expect(sourceForeignKeys).toEqual([
+      expect.objectContaining({ table: 'spaces', on_delete: 'CASCADE' }),
+    ])
   })
 
   it('migrates legacy initiative rows into spaces', () => {

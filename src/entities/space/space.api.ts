@@ -4,6 +4,7 @@ import type {
   Space,
   SpaceAttempt,
   SpaceArtifact,
+  SpaceSource,
   SpaceSynthesisResult,
   LinkSpaceAttemptInput,
   UpdateSpaceAttemptInput,
@@ -62,6 +63,21 @@ export const spaceApi = {
 
   deleteArtifact: (id: string): Promise<void> =>
     window.electronAPI.space.deleteArtifact(id),
+
+  listSources: (spaceId: string): Promise<SpaceSource[]> =>
+    window.electronAPI.space.listSources(spaceId),
+
+  addSourcesFromPaths: (
+    spaceId: string,
+    paths: string[],
+  ): Promise<SpaceSource[]> =>
+    window.electronAPI.space.addSourcesFromPaths(spaceId, paths),
+
+  deleteSource: (id: string): Promise<void> =>
+    window.electronAPI.space.deleteSource(id),
+
+  showSourceOpenDialog: (): Promise<string[] | null> =>
+    window.electronAPI.space.showSourceOpenDialog(),
 
   synthesize: (
     spaceId: string,
