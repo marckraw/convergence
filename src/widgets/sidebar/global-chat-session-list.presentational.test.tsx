@@ -46,6 +46,8 @@ describe('GlobalChatSessionList', () => {
           onToggleSpace={vi.fn()}
           onSelectSpaceAttempt={vi.fn()}
           onSelectSession={onSelectSession}
+          onManageSessionSpaces={vi.fn()}
+          onDetachSpaceAttempt={vi.fn()}
           onArchiveSession={vi.fn()}
           onUnarchiveSession={vi.fn()}
           onDeleteSession={vi.fn()}
@@ -79,6 +81,8 @@ describe('GlobalChatSessionList', () => {
           onToggleSpace={vi.fn()}
           onSelectSpaceAttempt={vi.fn()}
           onSelectSession={vi.fn()}
+          onManageSessionSpaces={vi.fn()}
+          onDetachSpaceAttempt={vi.fn()}
           onArchiveSession={vi.fn()}
           onUnarchiveSession={vi.fn()}
           onDeleteSession={vi.fn()}
@@ -108,6 +112,8 @@ describe('GlobalChatSessionList', () => {
           onToggleSpace={vi.fn()}
           onSelectSpaceAttempt={vi.fn()}
           onSelectSession={vi.fn()}
+          onManageSessionSpaces={vi.fn()}
+          onDetachSpaceAttempt={vi.fn()}
           onArchiveSession={vi.fn()}
           onUnarchiveSession={vi.fn()}
           onDeleteSession={onDeleteSession}
@@ -123,6 +129,42 @@ describe('GlobalChatSessionList', () => {
     fireEvent.click(await screen.findByText('Delete session'))
 
     expect(onDeleteSession).toHaveBeenCalledWith('global-session-1')
+  })
+
+  it('opens Space linking from an ungrouped chat actions menu', async () => {
+    const onManageSessionSpaces = vi.fn()
+
+    render(
+      <TooltipProvider>
+        <GlobalChatSessionList
+          spaces={[]}
+          sessions={[baseSession]}
+          activeSessionId={null}
+          selectedSpaceId={null}
+          expandedSpaceIds={new Set()}
+          onNewSession={vi.fn()}
+          onNewSpace={vi.fn()}
+          onSelectSpace={vi.fn()}
+          onToggleSpace={vi.fn()}
+          onSelectSpaceAttempt={vi.fn()}
+          onSelectSession={vi.fn()}
+          onManageSessionSpaces={onManageSessionSpaces}
+          onDetachSpaceAttempt={vi.fn()}
+          onArchiveSession={vi.fn()}
+          onUnarchiveSession={vi.fn()}
+          onDeleteSession={vi.fn()}
+        />
+      </TooltipProvider>,
+    )
+
+    fireEvent.pointerDown(
+      screen.getByRole('button', {
+        name: /chat session actions planning chat/i,
+      }),
+    )
+    fireEvent.click(await screen.findByText('Add to Space...'))
+
+    expect(onManageSessionSpaces).toHaveBeenCalledWith('global-session-1')
   })
 
   it('selects and expands Spaces with linked attempts', () => {
@@ -158,6 +200,8 @@ describe('GlobalChatSessionList', () => {
           onToggleSpace={onToggleSpace}
           onSelectSpaceAttempt={onSelectSpaceAttempt}
           onSelectSession={vi.fn()}
+          onManageSessionSpaces={vi.fn()}
+          onDetachSpaceAttempt={vi.fn()}
           onArchiveSession={vi.fn()}
           onUnarchiveSession={vi.fn()}
           onDeleteSession={vi.fn()}
@@ -178,5 +222,77 @@ describe('GlobalChatSessionList', () => {
     expect(onSelectSpace).toHaveBeenCalledWith('space-1')
     expect(onToggleSpace).toHaveBeenCalledWith('space-1')
     expect(onSelectSpaceAttempt).toHaveBeenCalledWith(baseSession.id)
+  })
+
+  it('detaches a linked Space attempt from the attempt actions menu', async () => {
+    const onDetachSpaceAttempt = vi.fn()
+    const onArchiveSession = vi.fn()
+    const onDeleteSession = vi.fn()
+
+    render(
+      <TooltipProvider>
+        <GlobalChatSessionList
+          spaces={[
+            {
+              id: 'space-1',
+              title: 'Launch plan',
+              attempts: [
+                {
+                  attemptId: 'attempt-1',
+                  sessionId: baseSession.id,
+                  sessionName: baseSession.name,
+                  role: 'seed',
+                  session: baseSession,
+                },
+              ],
+            },
+          ]}
+          sessions={[]}
+          activeSessionId={null}
+          selectedSpaceId="space-1"
+          expandedSpaceIds={new Set(['space-1'])}
+          onNewSession={vi.fn()}
+          onNewSpace={vi.fn()}
+          onSelectSpace={vi.fn()}
+          onToggleSpace={vi.fn()}
+          onSelectSpaceAttempt={vi.fn()}
+          onSelectSession={vi.fn()}
+          onManageSessionSpaces={vi.fn()}
+          onDetachSpaceAttempt={onDetachSpaceAttempt}
+          onArchiveSession={onArchiveSession}
+          onUnarchiveSession={vi.fn()}
+          onDeleteSession={onDeleteSession}
+        />
+      </TooltipProvider>,
+    )
+
+    fireEvent.pointerDown(
+      screen.getByRole('button', {
+        name: /space attempt actions planning chat/i,
+      }),
+    )
+    fireEvent.click(await screen.findByText('Detach from Space'))
+
+    expect(onDetachSpaceAttempt).toHaveBeenCalledWith(
+      'attempt-1',
+      'space-1',
+      baseSession.id,
+    )
+
+    fireEvent.pointerDown(
+      screen.getByRole('button', {
+        name: /space attempt actions planning chat/i,
+      }),
+    )
+    fireEvent.click(await screen.findByText('Archive session'))
+    expect(onArchiveSession).toHaveBeenCalledWith(baseSession.id)
+
+    fireEvent.pointerDown(
+      screen.getByRole('button', {
+        name: /space attempt actions planning chat/i,
+      }),
+    )
+    fireEvent.click(await screen.findByText('Delete session'))
+    expect(onDeleteSession).toHaveBeenCalledWith(baseSession.id)
   })
 })

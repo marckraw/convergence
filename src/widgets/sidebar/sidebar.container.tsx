@@ -111,6 +111,7 @@ export const Sidebar: FC<SidebarProps> = ({
   const loadSpaces = useSpaceStore((s) => s.loadSpaces)
   const loadSpaceAttempts = useSpaceStore((s) => s.loadAttempts)
   const createSpace = useSpaceStore((s) => s.createSpace)
+  const unlinkSpaceAttempt = useSpaceStore((s) => s.unlinkAttempt)
   const pulsingSessionIds = useNotificationsStore((s) => s.pulsingSessionIds)
   const [regeneratingSessionIds, setRegeneratingSessionIds] = useState<
     ReadonlySet<string>
@@ -343,6 +344,30 @@ export const Sidebar: FC<SidebarProps> = ({
     onSelectSession(sessionId)
   }
 
+  const handleManageSessionSpaces = useCallback(
+    (sessionId: string) => {
+      openDialog('space-session-link', { sessionId })
+    },
+    [openDialog],
+  )
+
+  const handleDetachSpaceAttempt = useCallback(
+    async (attemptId: string, spaceId: string) => {
+      await unlinkSpaceAttempt(attemptId, spaceId)
+    },
+    [unlinkSpaceAttempt],
+  )
+
+  const handleDeleteGlobalChatSession = useCallback(
+    async (sessionId: string) => {
+      await deleteSession(sessionId, null)
+      for (const space of spaces) {
+        void loadSpaceAttempts(space.id)
+      }
+    },
+    [deleteSession, loadSpaceAttempts, spaces],
+  )
+
   const handleArchiveWorkspace = async (workspaceId: string) => {
     if (!activeProject) {
       return
@@ -522,11 +547,11 @@ export const Sidebar: FC<SidebarProps> = ({
             onToggleSpace={toggleSpace}
             onSelectSpaceAttempt={handleSelectSpaceAttempt}
             onSelectSession={onSelectGlobalSession}
+            onManageSessionSpaces={handleManageSessionSpaces}
+            onDetachSpaceAttempt={handleDetachSpaceAttempt}
             onArchiveSession={archiveSession}
             onUnarchiveSession={unarchiveSession}
-            onDeleteSession={(sessionId: string) =>
-              deleteSession(sessionId, null)
-            }
+            onDeleteSession={handleDeleteGlobalChatSession}
           />
         ) : (
           <>

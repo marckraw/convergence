@@ -17,9 +17,11 @@ import {
   ChevronRight,
   Folder,
   FolderPlus,
+  Link2,
   MessageSquarePlus,
   MoreHorizontal,
   Trash2,
+  Unlink,
   Undo2,
 } from 'lucide-react'
 
@@ -49,6 +51,12 @@ interface GlobalChatSessionListProps {
   onToggleSpace: (id: string) => void
   onSelectSpaceAttempt: (sessionId: string) => void
   onSelectSession: (id: string) => void
+  onManageSessionSpaces: (id: string) => void
+  onDetachSpaceAttempt: (
+    attemptId: string,
+    spaceId: string,
+    sessionId: string,
+  ) => void
   onArchiveSession: (id: string) => void
   onUnarchiveSession: (id: string) => void
   onDeleteSession: (id: string) => void
@@ -66,6 +74,8 @@ export const GlobalChatSessionList: FC<GlobalChatSessionListProps> = ({
   onToggleSpace,
   onSelectSpaceAttempt,
   onSelectSession,
+  onManageSessionSpaces,
+  onDetachSpaceAttempt,
   onArchiveSession,
   onUnarchiveSession,
   onDeleteSession,
@@ -112,6 +122,15 @@ export const GlobalChatSessionList: FC<GlobalChatSessionListProps> = ({
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">
+          {!session.archivedAt ? (
+            <DropdownMenuItem
+              className="gap-2"
+              onClick={() => onManageSessionSpaces(session.id)}
+            >
+              <Link2 className="h-3.5 w-3.5" />
+              <span>Add to Space...</span>
+            </DropdownMenuItem>
+          ) : null}
           {session.archivedAt ? (
             <DropdownMenuItem
               className="gap-2"
@@ -225,35 +244,114 @@ export const GlobalChatSessionList: FC<GlobalChatSessionListProps> = ({
                     <div className="ml-6 mt-0.5 space-y-0.5">
                       {space.attempts.length > 0 ? (
                         space.attempts.map((attempt) => (
-                          <Tooltip key={attempt.attemptId}>
-                            <TooltipTrigger asChild>
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                onClick={() =>
-                                  onSelectSpaceAttempt(attempt.sessionId)
-                                }
-                                aria-label={`Open Space attempt ${attempt.sessionName}`}
-                                className={cn(
-                                  'h-auto w-full min-w-0 justify-start gap-1.5 px-1.5 py-1 text-left text-xs font-normal',
-                                  activeSessionId === attempt.sessionId &&
-                                    'bg-accent',
-                                )}
-                              >
-                                <SessionBadge
-                                  attention={
-                                    attempt.session?.attention ?? 'none'
+                          <div
+                            key={attempt.attemptId}
+                            className={cn(
+                              'group/attempt flex min-w-0 items-center gap-1 rounded pr-1 transition-colors hover:bg-accent',
+                              activeSessionId === attempt.sessionId &&
+                                'bg-accent',
+                            )}
+                          >
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  onClick={() =>
+                                    onSelectSpaceAttempt(attempt.sessionId)
                                   }
-                                />
-                                <span className="truncate">
-                                  {attempt.sessionName}
-                                </span>
-                              </Button>
-                            </TooltipTrigger>
-                            <TooltipContent side="right">
-                              {attempt.sessionName}
-                            </TooltipContent>
-                          </Tooltip>
+                                  aria-label={`Open Space attempt ${attempt.sessionName}`}
+                                  className="h-auto min-w-0 flex-1 justify-start gap-1.5 px-1.5 py-1 text-left text-xs font-normal"
+                                >
+                                  <SessionBadge
+                                    attention={
+                                      attempt.session?.attention ?? 'none'
+                                    }
+                                  />
+                                  <span className="truncate">
+                                    {attempt.sessionName}
+                                  </span>
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent side="right">
+                                {attempt.sessionName}
+                              </TooltipContent>
+                            </Tooltip>
+
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-6 w-6 shrink-0 text-muted-foreground opacity-0 transition-opacity hover:text-foreground group-hover/attempt:opacity-100 focus-visible:opacity-100"
+                                  aria-label={`Space attempt actions ${attempt.sessionName}`}
+                                  title="Attempt actions"
+                                  onClick={(event) => event.stopPropagation()}
+                                >
+                                  <MoreHorizontal className="h-3.5 w-3.5" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end">
+                                <DropdownMenuItem
+                                  className="gap-2"
+                                  onClick={() =>
+                                    onManageSessionSpaces(attempt.sessionId)
+                                  }
+                                >
+                                  <Link2 className="h-3.5 w-3.5" />
+                                  <span>Manage Spaces...</span>
+                                </DropdownMenuItem>
+                                {attempt.session ? (
+                                  attempt.session.archivedAt ? (
+                                    <DropdownMenuItem
+                                      className="gap-2"
+                                      onClick={() =>
+                                        onUnarchiveSession(attempt.sessionId)
+                                      }
+                                    >
+                                      <Undo2 className="h-3.5 w-3.5" />
+                                      <span>Unarchive session</span>
+                                    </DropdownMenuItem>
+                                  ) : (
+                                    <DropdownMenuItem
+                                      className="gap-2"
+                                      onClick={() =>
+                                        onArchiveSession(attempt.sessionId)
+                                      }
+                                    >
+                                      <Archive className="h-3.5 w-3.5" />
+                                      <span>Archive session</span>
+                                    </DropdownMenuItem>
+                                  )
+                                ) : null}
+                                <DropdownMenuItem
+                                  className="gap-2"
+                                  onClick={() =>
+                                    onDetachSpaceAttempt(
+                                      attempt.attemptId,
+                                      space.id,
+                                      attempt.sessionId,
+                                    )
+                                  }
+                                >
+                                  <Unlink className="h-3.5 w-3.5" />
+                                  <span>Detach from Space</span>
+                                </DropdownMenuItem>
+                                {attempt.session ? (
+                                  <DropdownMenuItem
+                                    className="gap-2 text-destructive focus:text-destructive"
+                                    onClick={() =>
+                                      onDeleteSession(attempt.sessionId)
+                                    }
+                                  >
+                                    <Trash2 className="h-3.5 w-3.5" />
+                                    <span>Delete session</span>
+                                  </DropdownMenuItem>
+                                ) : null}
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </div>
                         ))
                       ) : (
                         <p className="px-1.5 py-1 text-xs text-muted-foreground">
