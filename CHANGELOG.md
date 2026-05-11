@@ -1,5 +1,11 @@
 # convergence
 
+## 0.36.8
+
+### Patch Changes
+
+- 6dc3cec: Replace narrow model dropdowns with a two-panel command palette picker that supports provider filtering and full model IDs.
+
 ## 0.36.7
 
 ### Patch Changes
