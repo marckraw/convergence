@@ -368,7 +368,8 @@ describe('App', () => {
     })
     fireEvent.click(spaceButton)
 
-    expect(screen.getByText('Space home')).toBeInTheDocument()
+    expect(screen.getByText('Space')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /chats/i })).toBeInTheDocument()
     expect(
       screen.getByRole('heading', { name: 'Launch plan' }),
     ).toBeInTheDocument()

@@ -1,17 +1,65 @@
-import { render, screen } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { describe, expect, it, vi, beforeEach } from 'vitest'
-import type { ConversationItem, Session } from '@/entities/session'
+import type {
+  ConversationItem,
+  Session,
+  SessionSummary,
+} from '@/entities/session'
 import { useSessionStore } from '@/entities/session'
 import { useSpaceStore } from '@/entities/space'
 import type { ComposerSessionContext } from '@/features/composer'
 import { ChatSurface } from './chat-surface.container'
 
 vi.mock('@/features/composer', () => ({
-  ComposerContainer: ({ context }: { context: ComposerSessionContext }) => (
+  ComposerContainer: ({
+    context,
+    onGlobalSessionCreated,
+  }: {
+    context: ComposerSessionContext
+    onGlobalSessionCreated?: (session: SessionSummary) => void | Promise<void>
+  }) => (
     <div data-testid="composer">
-      {context.kind}:{context.activeSessionId ?? 'new'}
+      <span>
+        {context.kind}:{context.activeSessionId ?? 'new'}
+      </span>
+      {onGlobalSessionCreated ? (
+        <button
+          type="button"
+          onClick={() =>
+            onGlobalSessionCreated({
+              id: 'global-session-1',
+              contextKind: 'global',
+              projectId: null,
+              workspaceId: null,
+              providerId: 'claude-code',
+              model: 'sonnet',
+              effort: 'medium',
+              name: 'Planning chat',
+              status: 'completed',
+              attention: 'none',
+              activity: null,
+              workingDirectory: '/tmp/convergence/global',
+              contextWindow: null,
+              archivedAt: null,
+              parentSessionId: null,
+              forkStrategy: null,
+              primarySurface: 'conversation',
+              continuationToken: null,
+              lastSequence: 0,
+              createdAt: '2026-01-01T00:00:00.000Z',
+              updatedAt: '2026-01-01T00:00:00.000Z',
+            })
+          }
+        >
+          mock create attempt
+        </button>
+      ) : null}
     </div>
   ),
+}))
+
+vi.mock('@/features/command-center', () => ({
+  switchToSession: vi.fn(),
 }))
 
 vi.mock('@/widgets/session-view', () => ({
@@ -115,7 +163,7 @@ describe('ChatSurface', () => {
     )
   })
 
-  it('renders a selected Space placeholder when no chat session is active', () => {
+  it('renders a selected Space home when no chat session is active', () => {
     useSpaceStore.setState({
       spaces: [
         {
@@ -141,14 +189,61 @@ describe('ChatSurface', () => {
         ],
       },
     })
+    useSessionStore.setState({
+      globalSessions: [globalSession],
+      globalChatSessions: [globalSession],
+    })
 
     render(<ChatSurface selectedSpaceId="space-1" />)
 
     expect(
       screen.getByRole('heading', { name: 'Launch plan' }),
     ).toBeInTheDocument()
-    expect(screen.getByText('Space home')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /chats/i })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /sources/i })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /memory/i })).toBeInTheDocument()
+    expect(
+      screen.getByRole('button', { name: /artifacts/i }),
+    ).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /brief/i })).toBeInTheDocument()
     expect(screen.getByText('Coordinate the launch work.')).toBeInTheDocument()
-    expect(screen.getByText('1 attempt')).toBeInTheDocument()
+    expect(screen.getByText('Planning chat')).toBeInTheDocument()
+  })
+
+  it('links a newly created global session as a Space attempt', async () => {
+    const linkAttempt = vi.fn().mockResolvedValue(null)
+    const loadAttempts = vi.fn().mockResolvedValue(undefined)
+    useSpaceStore.setState({
+      spaces: [
+        {
+          id: 'space-1',
+          title: 'Launch plan',
+          status: 'exploring',
+          attention: 'none',
+          brief: '',
+          createdAt: '2026-01-01T00:00:00.000Z',
+          updatedAt: '2026-01-01T00:00:00.000Z',
+        },
+      ],
+      attemptsBySpaceId: {},
+      linkAttempt,
+      loadAttempts,
+      loadArtifacts: vi.fn().mockResolvedValue(undefined),
+    })
+
+    render(<ChatSurface selectedSpaceId="space-1" />)
+    fireEvent.click(
+      screen.getByRole('button', { name: /mock create attempt/i }),
+    )
+
+    await waitFor(() => {
+      expect(linkAttempt).toHaveBeenCalledWith({
+        spaceId: 'space-1',
+        sessionId: globalSession.id,
+        role: 'seed',
+        isPrimary: true,
+      })
+    })
+    expect(loadAttempts).toHaveBeenCalledWith('space-1')
   })
 })

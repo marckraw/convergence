@@ -1,12 +1,17 @@
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { FC } from 'react'
+import { useAppSurfaceStore } from '@/entities/app-surface'
 import { useSpaceStore } from '@/entities/space'
+import type { SessionSummary } from '@/entities/session'
 import { formatActivityLabel, useSessionStore } from '@/entities/session'
+import { switchToSession } from '@/features/command-center'
 import { ComposerContainer } from '@/features/composer'
 import { SessionConversationSurface } from '@/widgets/session-view'
 import { AttentionIndicator } from '@/shared/ui/attention-indicator.presentational'
 import { Button } from '@/shared/ui/button'
 import { ContextWindowIndicator } from '@/shared/ui/context-window-indicator.presentational'
-import { Folder, MessageSquareText, Square } from 'lucide-react'
+import { MessageSquareText, Square } from 'lucide-react'
+import { SpaceHome, type SpaceHomeTab } from './space-home.presentational'
 
 interface ChatSurfaceProps {
   selectedSpaceId: string | null
@@ -14,10 +19,20 @@ interface ChatSurfaceProps {
 
 export const ChatSurface: FC<ChatSurfaceProps> = ({ selectedSpaceId }) => {
   const sessions = useSessionStore((state) => state.globalChatSessions)
+  const globalSessions = useSessionStore((state) => state.globalSessions)
+  const projectSessions = useSessionStore((state) => state.sessions)
   const spaces = useSpaceStore((state) => state.spaces)
   const attemptsBySpaceId = useSpaceStore((state) => state.attemptsBySpaceId)
+  const artifactsBySpaceId = useSpaceStore((state) => state.artifactsBySpaceId)
+  const loadAttempts = useSpaceStore((state) => state.loadAttempts)
+  const loadArtifacts = useSpaceStore((state) => state.loadArtifacts)
+  const linkAttempt = useSpaceStore((state) => state.linkAttempt)
   const activeSessionId = useSessionStore(
     (state) => state.activeGlobalSessionId,
+  )
+  const setActiveSession = useSessionStore((state) => state.setActiveSession)
+  const setActiveGlobalSession = useSessionStore(
+    (state) => state.setActiveGlobalSession,
   )
   const conversationItems = useSessionStore(
     (state) => state.activeGlobalConversation,
@@ -25,46 +40,92 @@ export const ChatSurface: FC<ChatSurfaceProps> = ({ selectedSpaceId }) => {
   const approveSession = useSessionStore((state) => state.approveSession)
   const denySession = useSessionStore((state) => state.denySession)
   const stopSession = useSessionStore((state) => state.stopSession)
+  const setActiveSurface = useAppSurfaceStore((state) => state.setActiveSurface)
+  const [activeSpaceTab, setActiveSpaceTab] = useState<SpaceHomeTab>('chats')
 
   const session = sessions.find((entry) => entry.id === activeSessionId) ?? null
   const selectedSpace =
     spaces.find((entry) => entry.id === selectedSpaceId) ?? null
   const selectedSpaceAttempts =
     selectedSpaceId === null ? [] : (attemptsBySpaceId[selectedSpaceId] ?? [])
+  const selectedSpaceArtifacts =
+    selectedSpaceId === null ? [] : (artifactsBySpaceId[selectedSpaceId] ?? [])
   const activityLabel = formatActivityLabel(session?.activity)
+  const sessionLookup = useMemo(() => {
+    const next = new Map<string, SessionSummary>()
+    for (const entry of globalSessions) next.set(entry.id, entry)
+    for (const entry of sessions) next.set(entry.id, entry)
+    for (const entry of projectSessions) next.set(entry.id, entry)
+    return next
+  }, [globalSessions, projectSessions, sessions])
 
-  if (selectedSpaceId && !session) {
+  const attemptViews = useMemo(
+    () =>
+      selectedSpaceAttempts.map((attempt) => ({
+        attempt,
+        session: sessionLookup.get(attempt.sessionId) ?? null,
+      })),
+    [selectedSpaceAttempts, sessionLookup],
+  )
+
+  useEffect(() => {
+    if (!selectedSpaceId) return
+    void loadAttempts(selectedSpaceId)
+    void loadArtifacts(selectedSpaceId)
+  }, [loadArtifacts, loadAttempts, selectedSpaceId])
+
+  useEffect(() => {
+    setActiveSpaceTab('chats')
+  }, [selectedSpaceId])
+
+  const handleGlobalSessionCreated = useCallback(
+    async (createdSession: SessionSummary) => {
+      if (!selectedSpaceId) return
+      await linkAttempt({
+        spaceId: selectedSpaceId,
+        sessionId: createdSession.id,
+        role: selectedSpaceAttempts.length === 0 ? 'seed' : 'implementation',
+        isPrimary: selectedSpaceAttempts.length === 0,
+      })
+      await loadAttempts(selectedSpaceId)
+    },
+    [linkAttempt, loadAttempts, selectedSpaceAttempts.length, selectedSpaceId],
+  )
+
+  const handleOpenAttempt = useCallback(
+    async (sessionId: string) => {
+      const target = sessionLookup.get(sessionId)
+      if (!target) return
+
+      await switchToSession(sessionId)
+
+      if (target.contextKind === 'global') {
+        setActiveGlobalSession(sessionId)
+        return
+      }
+
+      setActiveSurface('code')
+      setActiveSession(sessionId)
+    },
+    [sessionLookup, setActiveGlobalSession, setActiveSession, setActiveSurface],
+  )
+
+  if (selectedSpaceId && selectedSpace && !session) {
     return (
-      <div className="flex h-full flex-col">
-        <div
-          className="flex h-12 shrink-0 items-center border-b border-border px-4"
-          style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
-        >
-          <div className="flex min-w-0 items-center gap-2 text-sm font-medium">
-            <Folder className="h-4 w-4 shrink-0 text-muted-foreground" />
-            <span className="truncate">{selectedSpace?.title ?? 'Space'}</span>
-          </div>
-        </div>
-        <div className="flex min-h-0 flex-1 flex-col px-8 py-8">
-          <div className="max-w-3xl">
-            <div className="mb-3 flex items-center gap-2 text-sm text-muted-foreground">
-              <Folder className="h-4 w-4" />
-              <span>Space home</span>
-            </div>
-            <h1 className="text-2xl font-semibold tracking-tight">
-              {selectedSpace?.title ?? 'Space'}
-            </h1>
-            <p className="mt-3 max-w-2xl whitespace-pre-wrap text-sm leading-6 text-muted-foreground">
-              {selectedSpace?.brief.trim() ||
-                'This Space is ready for grouped chats, attempts, sources, and artifacts. The full Space home lands in the next phase.'}
-            </p>
-            <div className="mt-6 inline-flex rounded-full border border-border px-3 py-1 text-xs text-muted-foreground">
-              {selectedSpaceAttempts.length}{' '}
-              {selectedSpaceAttempts.length === 1 ? 'attempt' : 'attempts'}
-            </div>
-          </div>
-        </div>
-      </div>
+      <SpaceHome
+        space={selectedSpace}
+        attempts={attemptViews}
+        artifacts={selectedSpaceArtifacts}
+        activeTab={activeSpaceTab}
+        onTabChange={setActiveSpaceTab}
+        onOpenAttempt={handleOpenAttempt}
+        newAttemptComposer={
+          <ComposerContainer
+            context={{ kind: 'global', activeSessionId: null }}
+            onGlobalSessionCreated={handleGlobalSessionCreated}
+          />
+        }
+      />
     )
   }
 

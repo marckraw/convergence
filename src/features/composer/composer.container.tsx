@@ -6,6 +6,7 @@ import {
   type SessionQueuedInput,
   useSessionStore,
   type ReasoningEffort,
+  type SessionSummary,
 } from '@/entities/session'
 import { useAppSettingsStore } from '@/entities/app-settings'
 import { useDialogStore } from '@/entities/dialog'
@@ -53,6 +54,7 @@ export type ComposerSessionContext =
 
 interface ComposerContainerProps {
   context: ComposerSessionContext
+  onGlobalSessionCreated?: (session: SessionSummary) => void | Promise<void>
 }
 
 const DRAFT_KEY_NEW = '__new__'
@@ -123,7 +125,10 @@ async function filesToIngestInputs(
   return inputs
 }
 
-export const ComposerContainer: FC<ComposerContainerProps> = ({ context }) => {
+export const ComposerContainer: FC<ComposerContainerProps> = ({
+  context,
+  onGlobalSessionCreated,
+}) => {
   const activeSessionId = context.activeSessionId
   const projectId = context.kind === 'project' ? context.projectId : null
   const projectContextEnabled = context.kind === 'project'
@@ -473,15 +478,20 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({ context }) => {
     const name =
       baseName.length > 40 ? baseName.substring(0, 40) + '...' : baseName
     if (context.kind === 'global') {
-      void createAndStartGlobalSession(
-        selection.providerId,
-        selection.modelId,
-        selection.effort?.id ?? null,
-        name,
-        trimmed,
-        hasAttachments ? attachmentIds : undefined,
-        skillSelections,
-      )
+      void (async () => {
+        const session = await createAndStartGlobalSession(
+          selection.providerId,
+          selection.modelId,
+          selection.effort?.id ?? null,
+          name,
+          trimmed,
+          hasAttachments ? attachmentIds : undefined,
+          skillSelections,
+        )
+        if (session) {
+          await onGlobalSessionCreated?.(session)
+        }
+      })()
     } else if (hasAttachments || skillSelections) {
       createAndStartSession(
         context.projectId,
@@ -532,6 +542,7 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({ context }) => {
     draftKey,
     context,
     projectContextEnabled,
+    onGlobalSessionCreated,
   ])
 
   const handleProviderChange = (nextProviderId: string) => {
