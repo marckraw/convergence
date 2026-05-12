@@ -1,5 +1,11 @@
 # convergence
 
+## 0.37.0
+
+### Minor Changes
+
+- 6b31686: Add Chat Spaces as a first-class grouping and context layer for global chat sessions. Spaces now support linked attempts, sources, editable brief and memory, explicit context previews for new attempts, and promoted artifacts with file-backed storage.
+
 ## 0.36.8
 
 ### Patch Changes
