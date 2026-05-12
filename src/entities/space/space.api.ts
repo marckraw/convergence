@@ -25,6 +25,11 @@ export const spaceApi = {
   update: (id: string, input: UpdateSpaceInput): Promise<Space> =>
     window.electronAPI.space.update(id, input),
 
+  archive: (id: string): Promise<Space> => window.electronAPI.space.archive(id),
+
+  unarchive: (id: string): Promise<Space> =>
+    window.electronAPI.space.unarchive(id),
+
   delete: (id: string): Promise<void> => window.electronAPI.space.delete(id),
 
   listAttempts: (spaceId: string): Promise<SpaceAttempt[]> =>

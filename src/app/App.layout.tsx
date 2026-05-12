@@ -33,6 +33,7 @@ export const AppShell: FC<AppShellProps> = ({
   const [selectedChatSpaceId, setSelectedChatSpaceId] = useState<string | null>(
     null,
   )
+  const [draftChatSpaceId, setDraftChatSpaceId] = useState<string | null>(null)
   const activeSurface = useAppSurfaceStore((state) => state.activeSurface)
   const setActiveSurface = useAppSurfaceStore((state) => state.setActiveSurface)
   const dragging = useRef(false)
@@ -41,6 +42,7 @@ export const AppShell: FC<AppShellProps> = ({
     (id: string) => {
       setActiveSurface('code')
       setSelectedChatSpaceId(null)
+      setDraftChatSpaceId(null)
       onSelectSession(id)
     },
     [onSelectSession, setActiveSurface],
@@ -50,6 +52,7 @@ export const AppShell: FC<AppShellProps> = ({
     (id: string) => {
       setActiveSurface('chat')
       setSelectedChatSpaceId(null)
+      setDraftChatSpaceId(null)
       onSelectGlobalSession(id)
     },
     [onSelectGlobalSession, setActiveSurface],
@@ -58,6 +61,7 @@ export const AppShell: FC<AppShellProps> = ({
   const handleNewGlobalSession = useCallback(() => {
     setActiveSurface('chat')
     setSelectedChatSpaceId(null)
+    setDraftChatSpaceId(null)
     onSelectGlobalSession(null)
   }, [onSelectGlobalSession, setActiveSurface])
 
@@ -65,6 +69,17 @@ export const AppShell: FC<AppShellProps> = ({
     (id: string) => {
       setActiveSurface('chat')
       setSelectedChatSpaceId(id)
+      setDraftChatSpaceId(null)
+      onSelectGlobalSession(null)
+    },
+    [onSelectGlobalSession, setActiveSurface],
+  )
+
+  const handleBeginChatSpaceAttempt = useCallback(
+    (id: string) => {
+      setActiveSurface('chat')
+      setSelectedChatSpaceId(id)
+      setDraftChatSpaceId(id)
       onSelectGlobalSession(null)
     },
     [onSelectGlobalSession, setActiveSurface],
@@ -131,7 +146,16 @@ export const AppShell: FC<AppShellProps> = ({
 
         <div className="app-main-panel flex min-w-0 flex-1 flex-col">
           {activeSurface === 'chat' ? (
-            <ChatSurface selectedSpaceId={selectedChatSpaceId} />
+            <ChatSurface
+              selectedSpaceId={selectedChatSpaceId}
+              draftSpaceId={draftChatSpaceId}
+              onBeginSpaceAttempt={handleBeginChatSpaceAttempt}
+              onCancelSpaceAttempt={() => setDraftChatSpaceId(null)}
+              onSpaceDeleted={() => {
+                setSelectedChatSpaceId(null)
+                setDraftChatSpaceId(null)
+              }}
+            />
           ) : hasProject ? (
             <>
               <NotificationsOnboardingContainer />

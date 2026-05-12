@@ -22,8 +22,8 @@ import { SessionBadge } from '@/shared/ui/session-badge.presentational'
 import { cn } from '@/shared/lib/cn.pure'
 import {
   Box,
+  Archive,
   Brain,
-  CheckSquare,
   FilePlus,
   FileText,
   Folder,
@@ -34,9 +34,9 @@ import {
   Plus,
   Save,
   Trash2,
+  Undo2,
   X,
 } from 'lucide-react'
-import type { SpaceContextSelection } from './space-context.pure'
 
 export type SpaceHomeTab =
   | 'chats'
@@ -64,22 +64,22 @@ interface SpaceHomeProps {
   artifacts: SpaceArtifact[]
   sources: SpaceSource[]
   activeTab: SpaceHomeTab
-  newAttemptComposer: ReactNode
   onTabChange: (tab: SpaceHomeTab) => void
+  onBeginAttempt: () => void
   onOpenAttempt: (sessionId: string) => void
   onAddSources: () => void
   onDeleteSource: (sourceId: string) => void
+  onArchiveSpace: () => void
+  onUnarchiveSpace: () => void
+  onDeleteSpace: () => void
   artifactDraft: SpaceArtifactDraft
   editingArtifactId: string | null
   briefDraft: string
   memoryDraft: string
-  contextSelection: SpaceContextSelection
-  contextPreview: string | null
   onBriefDraftChange: (value: string) => void
   onMemoryDraftChange: (value: string) => void
   onSaveBrief: () => void
   onSaveMemory: () => void
-  onContextSelectionChange: (selection: SpaceContextSelection) => void
   onArtifactDraftChange: (draft: SpaceArtifactDraft) => void
   onSubmitArtifact: () => void
   onCancelArtifactEdit: () => void
@@ -121,22 +121,22 @@ export const SpaceHome: FC<SpaceHomeProps> = ({
   artifacts,
   sources,
   activeTab,
-  newAttemptComposer,
   onTabChange,
+  onBeginAttempt,
   onOpenAttempt,
   onAddSources,
   onDeleteSource,
+  onArchiveSpace,
+  onUnarchiveSpace,
+  onDeleteSpace,
   artifactDraft,
   editingArtifactId,
   briefDraft,
   memoryDraft,
-  contextSelection,
-  contextPreview,
   onBriefDraftChange,
   onMemoryDraftChange,
   onSaveBrief,
   onSaveMemory,
-  onContextSelectionChange,
   onArtifactDraftChange,
   onSubmitArtifact,
   onCancelArtifactEdit,
@@ -144,7 +144,6 @@ export const SpaceHome: FC<SpaceHomeProps> = ({
   onDeleteArtifact,
   onAddArtifactFiles,
 }) => {
-  const selectedSourceSet = new Set(contextSelection.selectedSourceIds)
   const sourceAttemptOptions = attempts.filter(({ session }) => session)
 
   return (
@@ -159,6 +158,49 @@ export const SpaceHome: FC<SpaceHomeProps> = ({
           <span className="rounded-full border border-border/70 px-2 py-0.5 text-[11px] text-muted-foreground">
             {spaceStatusLabels[space.status]}
           </span>
+          {space.archivedAt ? (
+            <span className="rounded-full border border-border/70 px-2 py-0.5 text-[11px] text-muted-foreground">
+              Archived
+            </span>
+          ) : null}
+        </div>
+        <div
+          className="flex items-center gap-1"
+          style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
+        >
+          {space.archivedAt ? (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={onUnarchiveSpace}
+              className="gap-1.5 text-muted-foreground hover:text-foreground"
+            >
+              <Undo2 className="h-4 w-4" />
+              Unarchive Space
+            </Button>
+          ) : (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={onArchiveSpace}
+              className="gap-1.5 text-muted-foreground hover:text-foreground"
+            >
+              <Archive className="h-4 w-4" />
+              Archive Space
+            </Button>
+          )}
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={onDeleteSpace}
+            className="gap-1.5 text-muted-foreground hover:text-destructive"
+          >
+            <Trash2 className="h-4 w-4" />
+            Delete Space
+          </Button>
         </div>
       </div>
 
@@ -202,13 +244,24 @@ export const SpaceHome: FC<SpaceHomeProps> = ({
           </div>
 
           {activeTab === 'chats' ? (
-            <section className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(320px,420px)]">
+            <section className="space-y-5">
               <div className="space-y-2">
                 <div className="flex items-center justify-between gap-3">
                   <h2 className="text-sm font-medium">Attempts</h2>
-                  <span className="text-xs text-muted-foreground">
-                    {attempts.length}
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-muted-foreground">
+                      {attempts.length}
+                    </span>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      onClick={onBeginAttempt}
+                    >
+                      <MessageSquarePlus className="h-4 w-4" />
+                      New chat
+                    </Button>
+                  </div>
                 </div>
                 {attempts.length > 0 ? (
                   <div className="divide-y divide-border rounded-lg border border-border/70">
@@ -218,7 +271,7 @@ export const SpaceHome: FC<SpaceHomeProps> = ({
                         type="button"
                         variant="ghost"
                         onClick={() => onOpenAttempt(attempt.sessionId)}
-                        className="flex w-full min-w-0 items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-accent"
+                        className="flex h-auto w-full min-w-0 items-start gap-3 px-4 py-3 text-left transition-colors hover:bg-accent"
                         disabled={!session}
                       >
                         <SessionBadge
@@ -243,87 +296,6 @@ export const SpaceHome: FC<SpaceHomeProps> = ({
                     'Start a new Space attempt to create the first linked chat.',
                   )
                 )}
-              </div>
-
-              <div className="space-y-3">
-                <div className="flex items-center gap-2 text-sm font-medium">
-                  <MessageSquarePlus className="h-4 w-4" />
-                  <span>New attempt in this Space</span>
-                </div>
-                <div className="rounded-lg border border-border/70 bg-card/30 px-3 py-3">
-                  <div className="mb-3 flex items-center gap-2 text-xs font-medium uppercase text-muted-foreground">
-                    <CheckSquare className="h-3.5 w-3.5" />
-                    <span>Context for this attempt</span>
-                  </div>
-                  <div className="space-y-2 text-sm">
-                    <label className="flex items-center gap-2">
-                      <Input
-                        type="checkbox"
-                        className="h-4 w-4"
-                        checked={contextSelection.includeBrief}
-                        onChange={(event) =>
-                          onContextSelectionChange({
-                            ...contextSelection,
-                            includeBrief: event.target.checked,
-                          })
-                        }
-                      />
-                      <span>Space brief</span>
-                    </label>
-                    <label className="flex items-center gap-2">
-                      <Input
-                        type="checkbox"
-                        className="h-4 w-4"
-                        checked={contextSelection.includeMemory}
-                        onChange={(event) =>
-                          onContextSelectionChange({
-                            ...contextSelection,
-                            includeMemory: event.target.checked,
-                          })
-                        }
-                      />
-                      <span>Space memory/instructions</span>
-                    </label>
-                    {sources.length > 0 ? (
-                      <div className="space-y-1 border-t border-border/60 pt-2">
-                        <div className="text-xs text-muted-foreground">
-                          Selected sources
-                        </div>
-                        {sources.map((source) => (
-                          <label
-                            key={source.id}
-                            className="flex min-w-0 items-center gap-2"
-                          >
-                            <Input
-                              type="checkbox"
-                              className="h-4 w-4 shrink-0"
-                              checked={selectedSourceSet.has(source.id)}
-                              onChange={(event) => {
-                                const nextIds = event.target.checked
-                                  ? [
-                                      ...contextSelection.selectedSourceIds,
-                                      source.id,
-                                    ]
-                                  : contextSelection.selectedSourceIds.filter(
-                                      (id) => id !== source.id,
-                                    )
-                                onContextSelectionChange({
-                                  ...contextSelection,
-                                  selectedSourceIds: nextIds,
-                                })
-                              }}
-                            />
-                            <span className="truncate">{source.filename}</span>
-                          </label>
-                        ))}
-                      </div>
-                    ) : null}
-                  </div>
-                  <pre className="app-scrollbar mt-3 max-h-32 overflow-y-auto whitespace-pre-wrap rounded-md border border-border/60 bg-background/70 p-2 text-xs text-muted-foreground">
-                    {contextPreview ?? 'No Space context selected.'}
-                  </pre>
-                </div>
-                {newAttemptComposer}
               </div>
             </section>
           ) : null}

@@ -1,5 +1,6 @@
 export type DialogKind =
   | 'app-settings'
+  | 'space-create'
   | 'space-session-link'
   | 'space-workboard'
   | 'project-settings'

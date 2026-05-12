@@ -29,6 +29,8 @@ interface SpaceActions {
   loadSpaces: () => Promise<void>
   createSpace: (input: CreateSpaceInput) => Promise<Space | null>
   updateSpace: (id: string, input: UpdateSpaceInput) => Promise<Space | null>
+  archiveSpace: (id: string) => Promise<Space | null>
+  unarchiveSpace: (id: string) => Promise<Space | null>
   deleteSpace: (id: string) => Promise<void>
   loadAttempts: (spaceId: string) => Promise<void>
   loadAttemptsForSession: (sessionId: string) => Promise<void>
@@ -136,6 +138,38 @@ export const useSpaceStore = create<SpaceStore>((set) => ({
     } catch (err) {
       set({
         error: err instanceof Error ? err.message : 'Failed to update Space',
+      })
+      return null
+    }
+  },
+
+  archiveSpace: async (id) => {
+    set({ error: null })
+    try {
+      const space = await spaceApi.archive(id)
+      set((state) => ({
+        spaces: upsertSpace(state.spaces, space),
+      }))
+      return space
+    } catch (err) {
+      set({
+        error: err instanceof Error ? err.message : 'Failed to archive Space',
+      })
+      return null
+    }
+  },
+
+  unarchiveSpace: async (id) => {
+    set({ error: null })
+    try {
+      const space = await spaceApi.unarchive(id)
+      set((state) => ({
+        spaces: upsertSpace(state.spaces, space),
+      }))
+      return space
+    } catch (err) {
+      set({
+        error: err instanceof Error ? err.message : 'Failed to unarchive Space',
       })
       return null
     }

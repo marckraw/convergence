@@ -87,6 +87,7 @@ interface SpaceData {
   attention: SpaceAttentionData
   brief: string
   memory: string
+  archivedAt?: string | null
   createdAt: string
   updatedAt: string
 }
@@ -939,6 +940,8 @@ interface ElectronAPI {
     getById: (id: string) => Promise<SpaceData | null>
     create: (input: CreateSpaceInputData) => Promise<SpaceData>
     update: (id: string, input: UpdateSpaceInputData) => Promise<SpaceData>
+    archive: (id: string) => Promise<SpaceData>
+    unarchive: (id: string) => Promise<SpaceData>
     delete: (id: string) => Promise<void>
     listAttempts: (spaceId: string) => Promise<SpaceAttemptData[]>
     listAttemptsForSession: (sessionId: string) => Promise<SpaceAttemptData[]>

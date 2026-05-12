@@ -172,6 +172,7 @@ describe('ChatSurface', () => {
   })
 
   it('renders a selected Space home when no chat session is active', () => {
+    const onBeginSpaceAttempt = vi.fn()
     useSpaceStore.setState({
       spaces: [
         {
@@ -181,6 +182,7 @@ describe('ChatSurface', () => {
           attention: 'none',
           brief: 'Coordinate the launch work.',
           memory: 'Keep answers concise.',
+          archivedAt: null,
           createdAt: '2026-01-01T00:00:00.000Z',
           updatedAt: '2026-01-01T00:00:00.000Z',
         },
@@ -203,7 +205,12 @@ describe('ChatSurface', () => {
       globalChatSessions: [globalSession],
     })
 
-    render(<ChatSurface selectedSpaceId="space-1" />)
+    render(
+      <ChatSurface
+        selectedSpaceId="space-1"
+        onBeginSpaceAttempt={onBeginSpaceAttempt}
+      />,
+    )
 
     expect(
       screen.getByRole('heading', { name: 'Launch plan' }),
@@ -217,11 +224,72 @@ describe('ChatSurface', () => {
     expect(screen.getByRole('button', { name: /brief/i })).toBeInTheDocument()
     expect(screen.getByText('Coordinate the launch work.')).toBeInTheDocument()
     expect(screen.getByText('Planning chat')).toBeInTheDocument()
+    expect(screen.queryByTestId('composer')).not.toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: /new chat/i }))
+
+    expect(onBeginSpaceAttempt).toHaveBeenCalledWith('space-1')
+    expect(screen.queryByText(/starting in space:/i)).not.toBeInTheDocument()
+    expect(screen.queryByTestId('composer')).not.toBeInTheDocument()
+  })
+
+  it('renders a full-page composer for a new Space attempt draft', () => {
+    useSpaceStore.setState({
+      spaces: [
+        {
+          id: 'space-1',
+          title: 'Launch plan',
+          status: 'exploring',
+          attention: 'none',
+          brief: 'Coordinate the launch work.',
+          memory: 'Keep answers concise.',
+          archivedAt: null,
+          createdAt: '2026-01-01T00:00:00.000Z',
+          updatedAt: '2026-01-01T00:00:00.000Z',
+        },
+      ],
+      sourcesBySpaceId: {
+        'space-1': [
+          {
+            id: 'source-1',
+            spaceId: 'space-1',
+            filename: 'brief.md',
+            originalPath: '/tmp/brief.md',
+            storagePath: '/tmp/spaces/space-1/sources/source-1-brief.md',
+            sizeBytes: 2048,
+            createdAt: '2026-01-01T00:00:00.000Z',
+          },
+        ],
+      },
+    })
+
+    render(<ChatSurface selectedSpaceId="space-1" draftSpaceId="space-1" />)
+
+    expect(screen.getByText(/starting in space:/i)).toBeInTheDocument()
+    expect(screen.getByText('Launch plan')).toBeInTheDocument()
+    expect(screen.getByText('Context for this chat')).toBeInTheDocument()
+    expect(screen.getByLabelText('Space brief')).toBeChecked()
+    expect(screen.getByLabelText('Space memory/instructions')).toBeChecked()
+    expect(screen.getByLabelText('brief.md')).toBeChecked()
+    expect(screen.getByTestId('composer')).toHaveTextContent('global:new')
     expect(screen.getByTestId('prepared-message')).toHaveTextContent(
       'Space brief:',
     )
     expect(screen.getByTestId('prepared-message')).toHaveTextContent(
       'Keep answers concise.',
+    )
+    expect(screen.getByTestId('prepared-message')).toHaveTextContent(
+      '/tmp/spaces/space-1/sources/source-1-brief.md',
+    )
+
+    fireEvent.click(screen.getByLabelText('Space memory/instructions'))
+    expect(screen.getByTestId('prepared-message')).not.toHaveTextContent(
+      'Keep answers concise.',
+    )
+
+    fireEvent.click(screen.getByLabelText('brief.md'))
+    expect(screen.getByTestId('prepared-message')).not.toHaveTextContent(
+      '/tmp/spaces/space-1/sources/source-1-brief.md',
     )
   })
 
@@ -246,6 +314,7 @@ describe('ChatSurface', () => {
           attention: 'none',
           brief: '',
           memory: '',
+          archivedAt: null,
           createdAt: '2026-01-01T00:00:00.000Z',
           updatedAt: '2026-01-01T00:00:00.000Z',
         },
@@ -300,6 +369,7 @@ describe('ChatSurface', () => {
           attention: 'none',
           brief: 'Old brief',
           memory: 'Old memory',
+          archivedAt: null,
           createdAt: '2026-01-01T00:00:00.000Z',
           updatedAt: '2026-01-01T00:00:00.000Z',
         },
@@ -352,6 +422,7 @@ describe('ChatSurface', () => {
           attention: 'none',
           brief: '',
           memory: '',
+          archivedAt: null,
           createdAt: '2026-01-01T00:00:00.000Z',
           updatedAt: '2026-01-01T00:00:00.000Z',
         },
@@ -467,6 +538,7 @@ describe('ChatSurface', () => {
           attention: 'none',
           brief: '',
           memory: '',
+          archivedAt: null,
           createdAt: '2026-01-01T00:00:00.000Z',
           updatedAt: '2026-01-01T00:00:00.000Z',
         },
@@ -478,7 +550,7 @@ describe('ChatSurface', () => {
       loadSources: vi.fn().mockResolvedValue(undefined),
     })
 
-    render(<ChatSurface selectedSpaceId="space-1" />)
+    render(<ChatSurface selectedSpaceId="space-1" draftSpaceId="space-1" />)
     fireEvent.click(
       screen.getByRole('button', { name: /mock create attempt/i }),
     )
@@ -492,5 +564,59 @@ describe('ChatSurface', () => {
       })
     })
     expect(loadAttempts).toHaveBeenCalledWith('space-1')
+  })
+
+  it('deletes a Space and its attached sessions after confirmation', async () => {
+    const deleteSpace = vi.fn().mockResolvedValue(undefined)
+    const deleteSession = vi.fn().mockResolvedValue(undefined)
+    const onSpaceDeleted = vi.fn()
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+    useSpaceStore.setState({
+      spaces: [
+        {
+          id: 'space-1',
+          title: 'Launch plan',
+          status: 'exploring',
+          attention: 'none',
+          brief: '',
+          memory: '',
+          archivedAt: null,
+          createdAt: '2026-01-01T00:00:00.000Z',
+          updatedAt: '2026-01-01T00:00:00.000Z',
+        },
+      ],
+      attemptsBySpaceId: {
+        'space-1': [
+          {
+            id: 'attempt-1',
+            spaceId: 'space-1',
+            sessionId: 'global-session-1',
+            role: 'seed',
+            isPrimary: true,
+            createdAt: '2026-01-01T00:00:00.000Z',
+          },
+        ],
+      },
+      deleteSpace,
+      loadAttempts: vi.fn().mockResolvedValue(undefined),
+      loadArtifacts: vi.fn().mockResolvedValue(undefined),
+      loadSources: vi.fn().mockResolvedValue(undefined),
+    })
+    useSessionStore.setState({
+      globalSessions: [globalSession],
+      globalChatSessions: [globalSession],
+      deleteSession,
+    })
+
+    render(
+      <ChatSurface selectedSpaceId="space-1" onSpaceDeleted={onSpaceDeleted} />,
+    )
+    fireEvent.click(screen.getByRole('button', { name: /delete space/i }))
+
+    await waitFor(() => {
+      expect(deleteSession).toHaveBeenCalledWith('global-session-1', null)
+      expect(deleteSpace).toHaveBeenCalledWith('space-1')
+      expect(onSpaceDeleted).toHaveBeenCalledWith('space-1')
+    })
   })
 })

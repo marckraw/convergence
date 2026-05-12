@@ -245,6 +245,14 @@ export function registerIpcHandlers(
       spaceService.update(id, input),
   )
 
+  ipcMain.handle('space:archive', (_event, id: string) =>
+    spaceService.archive(id),
+  )
+
+  ipcMain.handle('space:unarchive', (_event, id: string) =>
+    spaceService.unarchive(id),
+  )
+
   ipcMain.handle('space:delete', (_event, id: string) => {
     spaceService.delete(id)
   })

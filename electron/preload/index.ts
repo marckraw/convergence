@@ -45,6 +45,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
     create: (input: unknown) => ipcRenderer.invoke('space:create', input),
     update: (id: string, input: unknown) =>
       ipcRenderer.invoke('space:update', id, input),
+    archive: (id: string) => ipcRenderer.invoke('space:archive', id),
+    unarchive: (id: string) => ipcRenderer.invoke('space:unarchive', id),
     delete: (id: string) => ipcRenderer.invoke('space:delete', id),
     listAttempts: (spaceId: string) =>
       ipcRenderer.invoke('space:listAttempts', spaceId),

@@ -50,6 +50,7 @@ export interface Space {
   attention: SpaceAttention
   brief: string
   memory: string
+  archivedAt?: string | null
   createdAt: string
   updatedAt: string
 }

@@ -36,6 +36,7 @@ export interface ChatSidebarSpaceAttempt {
 export interface ChatSidebarSpace {
   id: string
   title: string
+  archivedAt: string | null
   attempts: ChatSidebarSpaceAttempt[]
 }
 
@@ -45,10 +46,14 @@ interface GlobalChatSessionListProps {
   activeSessionId: string | null
   selectedSpaceId: string | null
   expandedSpaceIds: ReadonlySet<string>
+  archivedSpacesExpanded: boolean
   onNewSession: () => void
   onNewSpace: () => void
   onSelectSpace: (id: string) => void
   onToggleSpace: (id: string) => void
+  onToggleArchivedSpaces: () => void
+  onArchiveSpace: (id: string) => void
+  onUnarchiveSpace: (id: string) => void
   onSelectSpaceAttempt: (sessionId: string) => void
   onSelectSession: (id: string) => void
   onManageSessionSpaces: (id: string) => void
@@ -68,10 +73,14 @@ export const GlobalChatSessionList: FC<GlobalChatSessionListProps> = ({
   activeSessionId,
   selectedSpaceId,
   expandedSpaceIds,
+  archivedSpacesExpanded,
   onNewSession,
   onNewSpace,
   onSelectSpace,
   onToggleSpace,
+  onToggleArchivedSpaces,
+  onArchiveSpace,
+  onUnarchiveSpace,
   onSelectSpaceAttempt,
   onSelectSession,
   onManageSessionSpaces,
@@ -82,6 +91,12 @@ export const GlobalChatSessionList: FC<GlobalChatSessionListProps> = ({
 }) => {
   const activeSessions = sessions.filter((session) => !session.archivedAt)
   const archivedSessions = sessions.filter((session) => session.archivedAt)
+  const activeSpaces = spaces.filter((space) => !space.archivedAt)
+  const archivedSpaces = spaces.filter((space) => space.archivedAt)
+  const activeArchivedSpace = archivedSpaces.some(
+    (space) => space.id === selectedSpaceId,
+  )
+  const showArchivedSpaces = archivedSpacesExpanded || activeArchivedSpace
 
   const renderSessionRow = (session: SessionSummary) => (
     <div
@@ -187,11 +202,11 @@ export const GlobalChatSessionList: FC<GlobalChatSessionListProps> = ({
 
       <div className="mb-3 ml-2 border-l border-border pl-2">
         <p className="mb-0.5 truncate text-xs text-muted-foreground">
-          Spaces{spaces.length > 0 ? ` (${spaces.length})` : ''}
+          Spaces{activeSpaces.length > 0 ? ` (${activeSpaces.length})` : ''}
         </p>
-        {spaces.length > 0 ? (
+        {activeSpaces.length > 0 ? (
           <div className="space-y-0.5">
-            {spaces.map((space) => {
+            {activeSpaces.map((space) => {
               const expanded = expandedSpaceIds.has(space.id)
               return (
                 <div key={space.id}>
@@ -238,6 +253,30 @@ export const GlobalChatSessionList: FC<GlobalChatSessionListProps> = ({
                         {space.title}
                       </TooltipContent>
                     </Tooltip>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="h-6 w-6 shrink-0 text-muted-foreground opacity-0 transition-opacity hover:text-foreground group-hover/space:opacity-100 focus-visible:opacity-100"
+                          aria-label={`Space actions ${space.title}`}
+                          title="Space actions"
+                          onClick={(event) => event.stopPropagation()}
+                        >
+                          <MoreHorizontal className="h-3.5 w-3.5" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuItem
+                          className="gap-2"
+                          onClick={() => onArchiveSpace(space.id)}
+                        >
+                          <Archive className="h-3.5 w-3.5" />
+                          <span>Archive Space...</span>
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                   </div>
 
                   {expanded ? (
@@ -370,6 +409,93 @@ export const GlobalChatSessionList: FC<GlobalChatSessionListProps> = ({
           </p>
         )}
       </div>
+
+      {archivedSpaces.length > 0 ? (
+        <div className="mb-3 ml-2 border-l border-border pl-2">
+          <div className="group/space flex min-w-0 items-center gap-1 rounded pr-1 transition-colors hover:bg-accent">
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="h-6 w-6 shrink-0"
+              aria-label={`${showArchivedSpaces ? 'Collapse' : 'Expand'} archived Spaces`}
+              onClick={onToggleArchivedSpaces}
+            >
+              {showArchivedSpaces ? (
+                <ChevronDown className="h-3.5 w-3.5" />
+              ) : (
+                <ChevronRight className="h-3.5 w-3.5" />
+              )}
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={onToggleArchivedSpaces}
+              className="h-auto min-w-0 flex-1 justify-start gap-1.5 px-1.5 py-1 text-left text-xs font-normal"
+            >
+              <Archive className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+              <span className="truncate">Archived Spaces</span>
+              <span className="ml-auto shrink-0 text-[10px] text-muted-foreground">
+                {archivedSpaces.length}
+              </span>
+            </Button>
+          </div>
+
+          {showArchivedSpaces ? (
+            <div className="ml-6 mt-0.5 space-y-0.5">
+              {archivedSpaces.map((space) => (
+                <div
+                  key={space.id}
+                  className={cn(
+                    'group/space flex min-w-0 items-center gap-1 rounded pr-1 transition-colors hover:bg-accent',
+                    selectedSpaceId === space.id && 'bg-accent',
+                  )}
+                >
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        onClick={() => onSelectSpace(space.id)}
+                        aria-label={`Open archived Space ${space.title}`}
+                        className="h-auto min-w-0 flex-1 justify-start gap-1.5 px-1.5 py-1 text-left text-xs font-normal"
+                      >
+                        <Folder className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                        <span className="truncate">{space.title}</span>
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent side="right">{space.title}</TooltipContent>
+                  </Tooltip>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="h-6 w-6 shrink-0 text-muted-foreground opacity-0 transition-opacity hover:text-foreground group-hover/space:opacity-100 focus-visible:opacity-100"
+                        aria-label={`Archived Space actions ${space.title}`}
+                        title="Space actions"
+                        onClick={(event) => event.stopPropagation()}
+                      >
+                        <MoreHorizontal className="h-3.5 w-3.5" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem
+                        className="gap-2"
+                        onClick={() => onUnarchiveSpace(space.id)}
+                      >
+                        <Undo2 className="h-3.5 w-3.5" />
+                        <span>Unarchive Space</span>
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
+              ))}
+            </div>
+          ) : null}
+        </div>
+      ) : null}
 
       <div className="mb-1 ml-2 border-l border-border pl-2">
         <p className="mb-0.5 truncate text-xs text-muted-foreground">

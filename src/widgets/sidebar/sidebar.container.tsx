@@ -19,6 +19,7 @@ import {
   ProviderStatusDialogContainer,
   ReleaseNotesDialogContainer,
   SkillsBrowserDialogContainer,
+  SpaceCreateDialogContainer,
   ThemeToggleButton,
   WorkspaceCreateDialogContainer,
 } from '@/features'
@@ -97,6 +98,9 @@ export const Sidebar: FC<SidebarProps> = ({
   const needsYouDismissals = useSessionStore((s) => s.needsYouDismissals)
   const loadSessions = useSessionStore((s) => s.loadSessions)
   const loadGlobalSessions = useSessionStore((s) => s.loadGlobalSessions)
+  const loadGlobalChatSessions = useSessionStore(
+    (s) => s.loadGlobalChatSessions,
+  )
   const loadRecents = useSessionStore((s) => s.loadRecents)
   const archiveSession = useSessionStore((s) => s.archiveSession)
   const unarchiveSession = useSessionStore((s) => s.unarchiveSession)
@@ -110,7 +114,8 @@ export const Sidebar: FC<SidebarProps> = ({
   const attemptsBySpaceId = useSpaceStore((s) => s.attemptsBySpaceId)
   const loadSpaces = useSpaceStore((s) => s.loadSpaces)
   const loadSpaceAttempts = useSpaceStore((s) => s.loadAttempts)
-  const createSpace = useSpaceStore((s) => s.createSpace)
+  const archiveSpace = useSpaceStore((s) => s.archiveSpace)
+  const unarchiveSpace = useSpaceStore((s) => s.unarchiveSpace)
   const unlinkSpaceAttempt = useSpaceStore((s) => s.unlinkAttempt)
   const pulsingSessionIds = useNotificationsStore((s) => s.pulsingSessionIds)
   const [regeneratingSessionIds, setRegeneratingSessionIds] = useState<
@@ -122,6 +127,7 @@ export const Sidebar: FC<SidebarProps> = ({
   const [expandedSpaceIds, setExpandedSpaceIds] = useState<Set<string>>(
     () => new Set(),
   )
+  const [archivedSpacesExpanded, setArchivedSpacesExpanded] = useState(false)
 
   const toggleWorkspace = useCallback((id: string) => {
     setExpandedWorkspaces((prev) => {
@@ -148,6 +154,10 @@ export const Sidebar: FC<SidebarProps> = ({
       else next.add(id)
       return next
     })
+  }, [])
+
+  const toggleArchivedSpaces = useCallback(() => {
+    setArchivedSpacesExpanded((current) => !current)
   }, [])
 
   const handleRegenerateSessionName = useCallback((sessionId: string) => {
@@ -275,6 +285,7 @@ export const Sidebar: FC<SidebarProps> = ({
       spaces.map((space) => ({
         id: space.id,
         title: space.title,
+        archivedAt: space.archivedAt ?? null,
         attempts: (attemptsBySpaceId[space.id] ?? []).map((attempt) => {
           const session = sessionLookup.get(attempt.sessionId) ?? null
           return {
@@ -309,21 +320,17 @@ export const Sidebar: FC<SidebarProps> = ({
     [globalChatSessions, linkedChatSessionIds],
   )
 
-  const handleNewSpace = useCallback(async () => {
-    const title = window.prompt('Space title')
-    const trimmedTitle = title?.trim()
-    if (!trimmedTitle) return
-
-    const space = await createSpace({ title: trimmedTitle })
-    if (!space) return
-
-    setExpandedSpaceIds((prev) => {
-      const next = new Set(prev)
-      next.add(space.id)
-      return next
-    })
-    onSelectSpace(space.id)
-  }, [createSpace, onSelectSpace])
+  const handleSpaceCreated = useCallback(
+    (space: { id: string }) => {
+      setExpandedSpaceIds((prev) => {
+        const next = new Set(prev)
+        next.add(space.id)
+        return next
+      })
+      onSelectSpace(space.id)
+    },
+    [onSelectSpace],
+  )
 
   const handleSelectSpaceAttempt = async (sessionId: string) => {
     const target = sessionLookup.get(sessionId)
@@ -356,6 +363,57 @@ export const Sidebar: FC<SidebarProps> = ({
       await unlinkSpaceAttempt(attemptId, spaceId)
     },
     [unlinkSpaceAttempt],
+  )
+
+  const refreshSessionsForSpace = useCallback(
+    async (spaceId: string) => {
+      const attempts = attemptsBySpaceId[spaceId] ?? []
+      const projectIds = [
+        ...new Set(
+          attempts
+            .map((attempt) => sessionLookup.get(attempt.sessionId)?.projectId)
+            .filter((id): id is string => id !== null && id !== undefined),
+        ),
+      ]
+      await loadGlobalSessions()
+      await loadGlobalChatSessions()
+      for (const projectId of projectIds) {
+        await loadSessions(projectId)
+      }
+      await loadRecents()
+    },
+    [
+      attemptsBySpaceId,
+      loadGlobalChatSessions,
+      loadGlobalSessions,
+      loadRecents,
+      loadSessions,
+      sessionLookup,
+    ],
+  )
+
+  const handleArchiveSpace = useCallback(
+    async (spaceId: string) => {
+      const space = spaces.find((entry) => entry.id === spaceId)
+      const attempts = attemptsBySpaceId[spaceId] ?? []
+      const confirmed = window.confirm(
+        `Archive Space "${space?.title ?? 'Space'}"?\n\nThis will hide the Space from the active list and archive ${attempts.length} attached session${attempts.length === 1 ? '' : 's'}.`,
+      )
+      if (!confirmed) return
+      const archived = await archiveSpace(spaceId)
+      if (!archived) return
+      await refreshSessionsForSpace(spaceId)
+    },
+    [archiveSpace, attemptsBySpaceId, refreshSessionsForSpace, spaces],
+  )
+
+  const handleUnarchiveSpace = useCallback(
+    async (spaceId: string) => {
+      const unarchived = await unarchiveSpace(spaceId)
+      if (!unarchived) return
+      await refreshSessionsForSpace(spaceId)
+    },
+    [refreshSessionsForSpace, unarchiveSpace],
   )
 
   const handleDeleteGlobalChatSession = useCallback(
@@ -541,10 +599,14 @@ export const Sidebar: FC<SidebarProps> = ({
             activeSessionId={activeGlobalSessionId}
             selectedSpaceId={selectedSpaceId}
             expandedSpaceIds={expandedSpaceIds}
+            archivedSpacesExpanded={archivedSpacesExpanded}
             onNewSession={onNewGlobalSession}
-            onNewSpace={handleNewSpace}
+            onNewSpace={() => openDialog('space-create')}
             onSelectSpace={onSelectSpace}
             onToggleSpace={toggleSpace}
+            onToggleArchivedSpaces={toggleArchivedSpaces}
+            onArchiveSpace={handleArchiveSpace}
+            onUnarchiveSpace={handleUnarchiveSpace}
             onSelectSpaceAttempt={handleSelectSpaceAttempt}
             onSelectSession={onSelectGlobalSession}
             onManageSessionSpaces={handleManageSessionSpaces}
@@ -641,6 +703,7 @@ export const Sidebar: FC<SidebarProps> = ({
       </div>
 
       {activeSurface === 'code' ? <WorkspaceCreateDialogContainer /> : null}
+      <SpaceCreateDialogContainer onCreated={handleSpaceCreated} />
     </div>
   )
 }
