@@ -1,7 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { FC } from 'react'
 import { useAppSurfaceStore } from '@/entities/app-surface'
-import { spaceApi, useSpaceStore, type SpaceSource } from '@/entities/space'
+import {
+  spaceApi,
+  useSpaceStore,
+  type SpaceArtifact,
+  type SpaceSource,
+} from '@/entities/space'
 import type { SessionSummary } from '@/entities/session'
 import { formatActivityLabel, useSessionStore } from '@/entities/session'
 import { switchToSession } from '@/features/command-center'
@@ -11,7 +16,11 @@ import { AttentionIndicator } from '@/shared/ui/attention-indicator.presentation
 import { Button } from '@/shared/ui/button'
 import { ContextWindowIndicator } from '@/shared/ui/context-window-indicator.presentational'
 import { MessageSquareText, Square } from 'lucide-react'
-import { SpaceHome, type SpaceHomeTab } from './space-home.presentational'
+import {
+  SpaceHome,
+  type SpaceArtifactDraft,
+  type SpaceHomeTab,
+} from './space-home.presentational'
 import {
   applySpaceContextToMessage,
   buildSpaceContextBlock,
@@ -23,6 +32,14 @@ interface ChatSurfaceProps {
 }
 
 const EMPTY_SPACE_SOURCES: SpaceSource[] = []
+
+const DEFAULT_ARTIFACT_DRAFT: SpaceArtifactDraft = {
+  kind: 'documentation',
+  label: '',
+  value: '',
+  sourceSessionId: '',
+  status: 'ready',
+}
 
 export const ChatSurface: FC<ChatSurfaceProps> = ({ selectedSpaceId }) => {
   const sessions = useSessionStore((state) => state.globalChatSessions)
@@ -36,6 +53,12 @@ export const ChatSurface: FC<ChatSurfaceProps> = ({ selectedSpaceId }) => {
   const loadArtifacts = useSpaceStore((state) => state.loadArtifacts)
   const loadSources = useSpaceStore((state) => state.loadSources)
   const updateSpace = useSpaceStore((state) => state.updateSpace)
+  const addArtifact = useSpaceStore((state) => state.addArtifact)
+  const addArtifactsFromPaths = useSpaceStore(
+    (state) => state.addArtifactsFromPaths,
+  )
+  const updateArtifact = useSpaceStore((state) => state.updateArtifact)
+  const deleteArtifact = useSpaceStore((state) => state.deleteArtifact)
   const addSourcesFromPaths = useSpaceStore(
     (state) => state.addSourcesFromPaths,
   )
@@ -58,6 +81,12 @@ export const ChatSurface: FC<ChatSurfaceProps> = ({ selectedSpaceId }) => {
   const [activeSpaceTab, setActiveSpaceTab] = useState<SpaceHomeTab>('chats')
   const [briefDraft, setBriefDraft] = useState('')
   const [memoryDraft, setMemoryDraft] = useState('')
+  const [artifactDraft, setArtifactDraft] = useState<SpaceArtifactDraft>(
+    DEFAULT_ARTIFACT_DRAFT,
+  )
+  const [editingArtifactId, setEditingArtifactId] = useState<string | null>(
+    null,
+  )
   const [contextSelection, setContextSelection] =
     useState<SpaceContextSelection>({
       includeBrief: true,
@@ -103,6 +132,8 @@ export const ChatSurface: FC<ChatSurfaceProps> = ({ selectedSpaceId }) => {
 
   useEffect(() => {
     setActiveSpaceTab('chats')
+    setArtifactDraft(DEFAULT_ARTIFACT_DRAFT)
+    setEditingArtifactId(null)
   }, [selectedSpaceId])
 
   useEffect(() => {
@@ -178,6 +209,68 @@ export const ChatSurface: FC<ChatSurfaceProps> = ({ selectedSpaceId }) => {
     [deleteSource, selectedSpaceId],
   )
 
+  const handleSubmitArtifact = useCallback(async () => {
+    if (!selectedSpaceId) return
+    const input = {
+      kind: artifactDraft.kind,
+      label: artifactDraft.label.trim(),
+      value: artifactDraft.value.trim(),
+      sourceSessionId: artifactDraft.sourceSessionId || null,
+      status: artifactDraft.status,
+    }
+    if (input.label.length === 0 || input.value.length === 0) return
+
+    if (editingArtifactId) {
+      await updateArtifact(editingArtifactId, selectedSpaceId, input)
+    } else {
+      await addArtifact({ spaceId: selectedSpaceId, ...input })
+    }
+
+    setArtifactDraft(DEFAULT_ARTIFACT_DRAFT)
+    setEditingArtifactId(null)
+  }, [
+    addArtifact,
+    artifactDraft,
+    editingArtifactId,
+    selectedSpaceId,
+    updateArtifact,
+  ])
+
+  const handleEditArtifact = useCallback((artifact: SpaceArtifact) => {
+    setArtifactDraft({
+      kind: artifact.kind,
+      label: artifact.label,
+      value: artifact.value,
+      sourceSessionId: artifact.sourceSessionId ?? '',
+      status: artifact.status,
+    })
+    setEditingArtifactId(artifact.id)
+  }, [])
+
+  const handleCancelArtifactEdit = useCallback(() => {
+    setArtifactDraft(DEFAULT_ARTIFACT_DRAFT)
+    setEditingArtifactId(null)
+  }, [])
+
+  const handleDeleteArtifact = useCallback(
+    async (artifactId: string) => {
+      if (!selectedSpaceId) return
+      await deleteArtifact(artifactId, selectedSpaceId)
+      if (editingArtifactId === artifactId) {
+        setArtifactDraft(DEFAULT_ARTIFACT_DRAFT)
+        setEditingArtifactId(null)
+      }
+    },
+    [deleteArtifact, editingArtifactId, selectedSpaceId],
+  )
+
+  const handleAddArtifactFiles = useCallback(async () => {
+    if (!selectedSpaceId) return
+    const paths = await spaceApi.showArtifactOpenDialog()
+    if (!paths || paths.length === 0) return
+    await addArtifactsFromPaths({ spaceId: selectedSpaceId, paths })
+  }, [addArtifactsFromPaths, selectedSpaceId])
+
   const handleSaveBrief = useCallback(async () => {
     if (!selectedSpaceId) return
     await updateSpace(selectedSpaceId, { brief: briefDraft })
@@ -205,6 +298,8 @@ export const ChatSurface: FC<ChatSurfaceProps> = ({ selectedSpaceId }) => {
         onOpenAttempt={handleOpenAttempt}
         onAddSources={handleAddSources}
         onDeleteSource={handleDeleteSource}
+        artifactDraft={artifactDraft}
+        editingArtifactId={editingArtifactId}
         briefDraft={briefDraft}
         memoryDraft={memoryDraft}
         contextSelection={contextSelection}
@@ -214,6 +309,12 @@ export const ChatSurface: FC<ChatSurfaceProps> = ({ selectedSpaceId }) => {
         onSaveBrief={handleSaveBrief}
         onSaveMemory={handleSaveMemory}
         onContextSelectionChange={setContextSelection}
+        onArtifactDraftChange={setArtifactDraft}
+        onSubmitArtifact={handleSubmitArtifact}
+        onCancelArtifactEdit={handleCancelArtifactEdit}
+        onEditArtifact={handleEditArtifact}
+        onDeleteArtifact={handleDeleteArtifact}
+        onAddArtifactFiles={handleAddArtifactFiles}
         newAttemptComposer={
           <ComposerContainer
             context={{ kind: 'global', activeSessionId: null }}

@@ -173,7 +173,9 @@ describe('SpaceService', () => {
     try {
       const fsService = new SpaceService(getDatabase(), spaceRoot)
       const sourcePath = join(sourceRoot, 'notes.md')
+      const artifactPath = join(sourceRoot, 'result.md')
       writeFileSync(sourcePath, '# Notes\n')
+      writeFileSync(artifactPath, '# Result\n')
 
       const space = fsService.create({ title: 'Source test' })
       const root = join(spaceRoot, space.id)
@@ -200,12 +202,28 @@ describe('SpaceService', () => {
       expect(readFileSync(source.storagePath, 'utf8')).toBe('# Notes\n')
       expect(fsService.listSources(space.id)).toEqual([source])
 
+      const [artifact] = fsService.addArtifactsFromPaths(space.id, [
+        artifactPath,
+      ])
+      expect(artifact.kind).toBe('documentation')
+      expect(artifact.label).toBe('result.md')
+      expect(artifact.status).toBe('ready')
+      expect(artifact.value.startsWith(join(root, 'artifacts'))).toBe(true)
+      expect(readFileSync(artifact.value, 'utf8')).toBe('# Result\n')
+      expect(fsService.listArtifacts(space.id)).toEqual([artifact])
+
       fsService.deleteSource(source.id)
       expect(existsSync(source.storagePath)).toBe(false)
       expect(existsSync(sourcePath)).toBe(true)
       expect(fsService.listSources(space.id)).toEqual([])
 
+      fsService.deleteArtifact(artifact.id)
+      expect(existsSync(artifact.value)).toBe(false)
+      expect(existsSync(artifactPath)).toBe(true)
+      expect(fsService.listArtifacts(space.id)).toEqual([])
+
       fsService.addSourcesFromPaths(space.id, [sourcePath])
+      fsService.addArtifactsFromPaths(space.id, [artifactPath])
       fsService.delete(space.id)
       expect(existsSync(root)).toBe(false)
     } finally {

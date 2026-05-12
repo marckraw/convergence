@@ -121,6 +121,11 @@ export interface CreateSpaceArtifactInput {
   status?: SpaceArtifactStatus
 }
 
+export interface CreateSpaceArtifactsFromPathsInput {
+  spaceId: string
+  paths: string[]
+}
+
 export interface UpdateSpaceArtifactInput {
   kind?: SpaceArtifactKind
   label?: string

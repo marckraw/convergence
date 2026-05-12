@@ -956,6 +956,10 @@ interface ElectronAPI {
     addArtifact: (
       input: CreateSpaceArtifactInputData,
     ) => Promise<SpaceArtifactData>
+    addArtifactsFromPaths: (
+      spaceId: string,
+      paths: string[],
+    ) => Promise<SpaceArtifactData[]>
     updateArtifact: (
       id: string,
       input: UpdateSpaceArtifactInputData,
@@ -968,6 +972,7 @@ interface ElectronAPI {
     ) => Promise<SpaceSourceData[]>
     deleteSource: (id: string) => Promise<void>
     showSourceOpenDialog: () => Promise<string[] | null>
+    showArtifactOpenDialog: () => Promise<string[] | null>
     synthesize: (
       spaceId: string,
       requestId?: string,

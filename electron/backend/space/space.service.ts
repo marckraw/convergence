@@ -1,6 +1,6 @@
 import { randomUUID } from 'crypto'
 import { copyFileSync, mkdirSync, rmSync, statSync, writeFileSync } from 'fs'
-import { basename, join, resolve } from 'path'
+import { basename, isAbsolute, join, relative, resolve } from 'path'
 import type Database from 'better-sqlite3'
 import type {
   SpaceAttemptRow,
@@ -288,6 +288,19 @@ export class SpaceService {
     return this.getArtifactById(id)!
   }
 
+  addArtifactsFromPaths(spaceId: string, paths: string[]): SpaceArtifact[] {
+    this.assertSpaceExists(spaceId)
+    this.ensureSpaceRoot(spaceId)
+    const added: SpaceArtifact[] = []
+
+    for (const path of paths) {
+      const artifact = this.addArtifactFromPath(spaceId, path)
+      added.push(artifact)
+    }
+
+    return added
+  }
+
   updateArtifact(id: string, input: UpdateSpaceArtifactInput): SpaceArtifact {
     const existing = this.getArtifactById(id)
     if (!existing) throw new Error(`Space artifact not found: ${id}`)
@@ -329,6 +342,7 @@ export class SpaceService {
     const existing = this.getArtifactById(id)
     if (!existing) return
     this.db.prepare('DELETE FROM space_artifacts WHERE id = ?').run(id)
+    this.deleteArtifactFileIfOwned(existing.spaceId, existing.value)
     this.touchSpace(existing.spaceId)
   }
 
@@ -455,6 +469,47 @@ export class SpaceService {
     return this.getSourceById(id)!
   }
 
+  private addArtifactFromPath(spaceId: string, path: string): SpaceArtifact {
+    const artifactPath = resolve(path)
+    const stats = statSync(artifactPath)
+    if (!stats.isFile()) {
+      throw new Error(`Space artifact must be a file: ${path}`)
+    }
+
+    const id = randomUUID()
+    const filename = sanitizeFilename(artifactPath)
+    const destination = join(
+      this.getSpaceArtifactsRoot(spaceId),
+      `${id}-${filename}`,
+    )
+
+    copyFileSync(artifactPath, destination)
+
+    try {
+      this.db
+        .prepare(
+          `INSERT INTO space_artifacts (
+             id, space_id, kind, label, value, source_session_id, status
+           ) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        )
+        .run(
+          id,
+          spaceId,
+          'documentation',
+          basename(artifactPath),
+          destination,
+          null,
+          'ready',
+        )
+      this.touchSpace(spaceId)
+    } catch (error) {
+      rmSync(destination, { force: true })
+      throw error
+    }
+
+    return this.getArtifactById(id)!
+  }
+
   private ensureSpaceRoot(spaceId: string): void {
     if (!this.rootDir) return
     const root = this.getSpaceRoot(spaceId)
@@ -500,6 +555,25 @@ export class SpaceService {
   private getSpaceSourcesRoot(spaceId: string): string {
     this.ensureSpaceRoot(spaceId)
     return join(this.getSpaceRoot(spaceId), 'sources')
+  }
+
+  private getSpaceArtifactsRoot(spaceId: string): string {
+    this.ensureSpaceRoot(spaceId)
+    return join(this.getSpaceRoot(spaceId), 'artifacts')
+  }
+
+  private deleteArtifactFileIfOwned(spaceId: string, value: string): void {
+    if (!this.rootDir) return
+    const artifactPath = resolve(value)
+    const artifactRoot = this.getSpaceArtifactsRoot(spaceId)
+    const relativePath = relative(artifactRoot, artifactPath)
+    const isOwned =
+      relativePath.length > 0 &&
+      !relativePath.startsWith('..') &&
+      !isAbsolute(relativePath)
+    if (isOwned) {
+      rmSync(artifactPath, { force: true })
+    }
   }
 
   private getSpaceRoot(spaceId: string): string {

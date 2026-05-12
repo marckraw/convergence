@@ -62,6 +62,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.invoke('space:listArtifacts', spaceId),
     addArtifact: (input: unknown) =>
       ipcRenderer.invoke('space:addArtifact', input),
+    addArtifactsFromPaths: (spaceId: string, paths: string[]) =>
+      ipcRenderer.invoke('space:addArtifactsFromPaths', spaceId, paths),
     updateArtifact: (id: string, input: unknown) =>
       ipcRenderer.invoke('space:updateArtifact', id, input),
     deleteArtifact: (id: string) =>
@@ -73,6 +75,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
     deleteSource: (id: string) => ipcRenderer.invoke('space:deleteSource', id),
     showSourceOpenDialog: () =>
       ipcRenderer.invoke('space:showSourceOpenDialog'),
+    showArtifactOpenDialog: () =>
+      ipcRenderer.invoke('space:showArtifactOpenDialog'),
     synthesize: (spaceId: string, requestId?: string) =>
       ipcRenderer.invoke('space:synthesize', spaceId, requestId),
   },

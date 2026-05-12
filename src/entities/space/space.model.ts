@@ -3,6 +3,7 @@ import { spaceApi } from './space.api'
 import type {
   CreateSpaceInput,
   CreateSpaceArtifactInput,
+  CreateSpaceArtifactsFromPathsInput,
   Space,
   SpaceAttempt,
   SpaceArtifact,
@@ -46,6 +47,9 @@ interface SpaceActions {
   addArtifact: (
     input: CreateSpaceArtifactInput,
   ) => Promise<SpaceArtifact | null>
+  addArtifactsFromPaths: (
+    input: CreateSpaceArtifactsFromPathsInput,
+  ) => Promise<SpaceArtifact[]>
   updateArtifact: (
     id: string,
     spaceId: string,
@@ -355,6 +359,34 @@ export const useSpaceStore = create<SpaceStore>((set) => ({
         error: err instanceof Error ? err.message : 'Failed to add Artifact',
       })
       return null
+    }
+  },
+
+  addArtifactsFromPaths: async (input) => {
+    set({ error: null })
+    try {
+      const artifacts = await spaceApi.addArtifactsFromPaths(input)
+      set((state) => ({
+        artifactsBySpaceId: {
+          ...state.artifactsBySpaceId,
+          [input.spaceId]: [
+            ...artifacts,
+            ...(state.artifactsBySpaceId[input.spaceId] ?? []).filter(
+              (existing) =>
+                !artifacts.some((artifact) => artifact.id === existing.id),
+            ),
+          ],
+        },
+      }))
+      return artifacts
+    } catch (err) {
+      set({
+        error:
+          err instanceof Error
+            ? err.message
+            : 'Failed to add file-backed Artifacts',
+      })
+      return []
     }
   },
 

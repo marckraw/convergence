@@ -288,6 +288,12 @@ export function registerIpcHandlers(
   )
 
   ipcMain.handle(
+    'space:addArtifactsFromPaths',
+    (_event, spaceId: string, paths: string[]) =>
+      spaceService.addArtifactsFromPaths(spaceId, paths),
+  )
+
+  ipcMain.handle(
     'space:updateArtifact',
     (_event, id: string, input: UpdateSpaceArtifactInput) =>
       spaceService.updateArtifact(id, input),
@@ -317,6 +323,17 @@ export function registerIpcHandlers(
     const result = await dialog.showOpenDialog(window, {
       properties: ['openFile', 'multiSelections'],
       title: 'Select Space Sources',
+    })
+    if (result.canceled || result.filePaths.length === 0) return null
+    return result.filePaths
+  })
+
+  ipcMain.handle('space:showArtifactOpenDialog', async (event) => {
+    const window = BrowserWindow.fromWebContents(event.sender)
+    if (!window) return null
+    const result = await dialog.showOpenDialog(window, {
+      properties: ['openFile', 'multiSelections'],
+      title: 'Select Space Artifacts',
     })
     if (result.canceled || result.filePaths.length === 0) return null
     return result.filePaths

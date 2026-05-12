@@ -329,6 +329,132 @@ describe('ChatSurface', () => {
     })
   })
 
+  it('creates, edits, removes, and imports Space artifacts', async () => {
+    const addArtifact = vi.fn().mockResolvedValue(null)
+    const addArtifactsFromPaths = vi.fn().mockResolvedValue([])
+    const updateArtifact = vi.fn().mockResolvedValue(null)
+    const deleteArtifact = vi.fn().mockResolvedValue(undefined)
+    Object.defineProperty(window, 'electronAPI', {
+      value: {
+        space: {
+          showArtifactOpenDialog: vi.fn().mockResolvedValue(['/tmp/result.md']),
+        },
+      },
+      writable: true,
+      configurable: true,
+    })
+    useSpaceStore.setState({
+      spaces: [
+        {
+          id: 'space-1',
+          title: 'Launch plan',
+          status: 'exploring',
+          attention: 'none',
+          brief: '',
+          memory: '',
+          createdAt: '2026-01-01T00:00:00.000Z',
+          updatedAt: '2026-01-01T00:00:00.000Z',
+        },
+      ],
+      attemptsBySpaceId: {
+        'space-1': [
+          {
+            id: 'attempt-1',
+            spaceId: 'space-1',
+            sessionId: 'global-session-1',
+            role: 'seed',
+            isPrimary: true,
+            createdAt: '2026-01-01T00:00:00.000Z',
+          },
+        ],
+      },
+      artifactsBySpaceId: {
+        'space-1': [
+          {
+            id: 'artifact-1',
+            spaceId: 'space-1',
+            kind: 'documentation',
+            label: 'Existing doc',
+            value: '/tmp/spaces/space-1/artifacts/artifact-1-doc.md',
+            sourceSessionId: 'global-session-1',
+            status: 'ready',
+            createdAt: '2026-01-01T00:00:00.000Z',
+            updatedAt: '2026-01-01T00:00:00.000Z',
+          },
+        ],
+      },
+      loadAttempts: vi.fn().mockResolvedValue(undefined),
+      loadArtifacts: vi.fn().mockResolvedValue(undefined),
+      loadSources: vi.fn().mockResolvedValue(undefined),
+      addArtifact,
+      addArtifactsFromPaths,
+      updateArtifact,
+      deleteArtifact,
+    })
+    useSessionStore.setState({
+      globalSessions: [globalSession],
+      globalChatSessions: [globalSession],
+    })
+
+    render(<ChatSurface selectedSpaceId="space-1" />)
+    fireEvent.click(screen.getByRole('button', { name: /artifacts/i }))
+
+    expect(screen.getByText('Existing doc')).toBeInTheDocument()
+    expect(screen.getByText('From Planning chat')).toBeInTheDocument()
+
+    fireEvent.change(screen.getByLabelText('Artifact label'), {
+      target: { value: 'Decision record' },
+    })
+    fireEvent.change(screen.getByLabelText('Artifact value or path'), {
+      target: { value: 'Use manual promotion first.' },
+    })
+    fireEvent.change(screen.getByLabelText('Artifact kind'), {
+      target: { value: 'spec' },
+    })
+    fireEvent.change(screen.getByLabelText('Artifact source attempt'), {
+      target: { value: 'global-session-1' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: /^add artifact$/i }))
+
+    expect(addArtifact).toHaveBeenCalledWith({
+      spaceId: 'space-1',
+      kind: 'spec',
+      label: 'Decision record',
+      value: 'Use manual promotion first.',
+      sourceSessionId: 'global-session-1',
+      status: 'ready',
+    })
+
+    fireEvent.click(
+      screen.getByRole('button', { name: /edit artifact existing doc/i }),
+    )
+    fireEvent.change(screen.getByLabelText('Artifact value or path'), {
+      target: { value: '/tmp/updated.md' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: /save artifact/i }))
+
+    expect(updateArtifact).toHaveBeenCalledWith('artifact-1', 'space-1', {
+      kind: 'documentation',
+      label: 'Existing doc',
+      value: '/tmp/updated.md',
+      sourceSessionId: 'global-session-1',
+      status: 'ready',
+    })
+
+    fireEvent.click(
+      screen.getByRole('button', { name: /remove artifact existing doc/i }),
+    )
+    expect(deleteArtifact).toHaveBeenCalledWith('artifact-1', 'space-1')
+
+    fireEvent.click(screen.getByRole('button', { name: /add file/i }))
+    await waitFor(() => {
+      expect(addArtifactsFromPaths).toHaveBeenCalledWith({
+        spaceId: 'space-1',
+        paths: ['/tmp/result.md'],
+      })
+    })
+  })
+
   it('links a newly created global session as a Space attempt', async () => {
     const linkAttempt = vi.fn().mockResolvedValue(null)
     const loadAttempts = vi.fn().mockResolvedValue(undefined)

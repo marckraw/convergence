@@ -1,6 +1,7 @@
 export type {
   CreateSpaceInput,
   CreateSpaceArtifactInput,
+  CreateSpaceArtifactsFromPathsInput,
   Space,
   SpaceAttempt,
   SpaceAttemptRole,

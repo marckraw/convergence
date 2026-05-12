@@ -1,6 +1,7 @@
 import type {
   CreateSpaceInput,
   CreateSpaceArtifactInput,
+  CreateSpaceArtifactsFromPathsInput,
   Space,
   SpaceAttempt,
   SpaceArtifact,
@@ -55,6 +56,11 @@ export const spaceApi = {
   addArtifact: (input: CreateSpaceArtifactInput): Promise<SpaceArtifact> =>
     window.electronAPI.space.addArtifact(input),
 
+  addArtifactsFromPaths: (
+    input: CreateSpaceArtifactsFromPathsInput,
+  ): Promise<SpaceArtifact[]> =>
+    window.electronAPI.space.addArtifactsFromPaths(input.spaceId, input.paths),
+
   updateArtifact: (
     id: string,
     input: UpdateSpaceArtifactInput,
@@ -78,6 +84,9 @@ export const spaceApi = {
 
   showSourceOpenDialog: (): Promise<string[] | null> =>
     window.electronAPI.space.showSourceOpenDialog(),
+
+  showArtifactOpenDialog: (): Promise<string[] | null> =>
+    window.electronAPI.space.showArtifactOpenDialog(),
 
   synthesize: (
     spaceId: string,

@@ -64,12 +64,14 @@ const mockElectronAPI = {
     setPrimaryAttempt: vi.fn(),
     listArtifacts: vi.fn(),
     addArtifact: vi.fn(),
+    addArtifactsFromPaths: vi.fn(),
     updateArtifact: vi.fn(),
     deleteArtifact: vi.fn(),
     listSources: vi.fn(),
     addSourcesFromPaths: vi.fn(),
     deleteSource: vi.fn(),
     showSourceOpenDialog: vi.fn(),
+    showArtifactOpenDialog: vi.fn(),
     synthesize: vi.fn(),
   },
 }
@@ -170,8 +172,20 @@ describe('useSpaceStore', () => {
   })
 
   it('manages artifacts', async () => {
+    const fileArtifact: SpaceArtifact = {
+      ...artifact,
+      id: 'o2',
+      kind: 'documentation',
+      label: 'notes.md',
+      value: '/tmp/spaces/i1/artifacts/o2-notes.md',
+      sourceSessionId: null,
+      status: 'ready',
+    }
     mockElectronAPI.space.listArtifacts.mockResolvedValue([artifact])
     mockElectronAPI.space.addArtifact.mockResolvedValue(artifact)
+    mockElectronAPI.space.addArtifactsFromPaths.mockResolvedValue([
+      fileArtifact,
+    ])
     mockElectronAPI.space.updateArtifact.mockResolvedValue({
       ...artifact,
       status: 'merged',
@@ -185,15 +199,21 @@ describe('useSpaceStore', () => {
       label: artifact.label,
       value: artifact.value,
     })
+    await useSpaceStore.getState().addArtifactsFromPaths({
+      spaceId: space.id,
+      paths: ['/tmp/notes.md'],
+    })
     await useSpaceStore
       .getState()
       .updateArtifact(artifact.id, space.id, { status: 'merged' })
 
     expect(useSpaceStore.getState().artifactsBySpaceId[space.id]).toEqual([
+      fileArtifact,
       { ...artifact, status: 'merged' },
     ])
 
     await useSpaceStore.getState().deleteArtifact(artifact.id, space.id)
+    await useSpaceStore.getState().deleteArtifact(fileArtifact.id, space.id)
     expect(useSpaceStore.getState().artifactsBySpaceId[space.id]).toEqual([])
   })
 

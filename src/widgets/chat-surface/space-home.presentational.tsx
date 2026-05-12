@@ -3,11 +3,16 @@ import type { SessionSummary } from '@/entities/session'
 import type {
   Space,
   SpaceArtifact,
+  SpaceArtifactKind,
+  SpaceArtifactStatus,
   SpaceAttempt,
   SpaceSource,
 } from '@/entities/space'
 import {
+  spaceArtifactKindLabels,
+  spaceArtifactKindOptions,
   spaceArtifactStatusLabels,
+  spaceArtifactStatusOptions,
   spaceAttemptRoleLabels,
   spaceStatusLabels,
 } from '@/entities/space'
@@ -25,7 +30,11 @@ import {
   MessageSquarePlus,
   MessagesSquare,
   Paperclip,
+  Pencil,
+  Plus,
+  Save,
   Trash2,
+  X,
 } from 'lucide-react'
 import type { SpaceContextSelection } from './space-context.pure'
 
@@ -41,6 +50,14 @@ export interface SpaceHomeAttemptView {
   session: SessionSummary | null
 }
 
+export interface SpaceArtifactDraft {
+  kind: SpaceArtifactKind
+  label: string
+  value: string
+  sourceSessionId: string
+  status: SpaceArtifactStatus
+}
+
 interface SpaceHomeProps {
   space: Space
   attempts: SpaceHomeAttemptView[]
@@ -52,6 +69,8 @@ interface SpaceHomeProps {
   onOpenAttempt: (sessionId: string) => void
   onAddSources: () => void
   onDeleteSource: (sourceId: string) => void
+  artifactDraft: SpaceArtifactDraft
+  editingArtifactId: string | null
   briefDraft: string
   memoryDraft: string
   contextSelection: SpaceContextSelection
@@ -61,6 +80,12 @@ interface SpaceHomeProps {
   onSaveBrief: () => void
   onSaveMemory: () => void
   onContextSelectionChange: (selection: SpaceContextSelection) => void
+  onArtifactDraftChange: (draft: SpaceArtifactDraft) => void
+  onSubmitArtifact: () => void
+  onCancelArtifactEdit: () => void
+  onEditArtifact: (artifact: SpaceArtifact) => void
+  onDeleteArtifact: (artifactId: string) => void
+  onAddArtifactFiles: () => void
 }
 
 const TABS: Array<{
@@ -101,6 +126,8 @@ export const SpaceHome: FC<SpaceHomeProps> = ({
   onOpenAttempt,
   onAddSources,
   onDeleteSource,
+  artifactDraft,
+  editingArtifactId,
   briefDraft,
   memoryDraft,
   contextSelection,
@@ -110,8 +137,15 @@ export const SpaceHome: FC<SpaceHomeProps> = ({
   onSaveBrief,
   onSaveMemory,
   onContextSelectionChange,
+  onArtifactDraftChange,
+  onSubmitArtifact,
+  onCancelArtifactEdit,
+  onEditArtifact,
+  onDeleteArtifact,
+  onAddArtifactFiles,
 }) => {
   const selectedSourceSet = new Set(contextSelection.selectedSourceIds)
+  const sourceAttemptOptions = attempts.filter(({ session }) => session)
 
   return (
     <div className="flex h-full flex-col">
@@ -374,32 +408,223 @@ export const SpaceHome: FC<SpaceHomeProps> = ({
           ) : null}
 
           {activeTab === 'artifacts' ? (
-            artifacts.length > 0 ? (
-              <div className="divide-y divide-border rounded-lg border border-border/70">
-                {artifacts.map((artifact) => (
-                  <div key={artifact.id} className="px-4 py-3">
-                    <div className="flex min-w-0 items-center justify-between gap-3">
-                      <div className="min-w-0">
-                        <div className="truncate text-sm font-medium">
-                          {artifact.label}
+            <section className="space-y-4">
+              <div className="rounded-lg border border-border/70 px-4 py-4">
+                <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <h2 className="text-sm font-medium">
+                      {editingArtifactId ? 'Edit artifact' : 'Add artifact'}
+                    </h2>
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      Promoted outputs worth keeping with this Space.
+                    </p>
+                  </div>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={onAddArtifactFiles}
+                  >
+                    <FilePlus className="h-4 w-4" />
+                    Add file
+                  </Button>
+                </div>
+
+                <div className="grid gap-3 md:grid-cols-2">
+                  <label className="space-y-1 text-sm">
+                    <span className="text-xs font-medium text-muted-foreground">
+                      Label
+                    </span>
+                    <Input
+                      value={artifactDraft.label}
+                      onChange={(event) =>
+                        onArtifactDraftChange({
+                          ...artifactDraft,
+                          label: event.target.value,
+                        })
+                      }
+                      placeholder="Spec, PR, exported report..."
+                      aria-label="Artifact label"
+                    />
+                  </label>
+                  <label className="space-y-1 text-sm">
+                    <span className="text-xs font-medium text-muted-foreground">
+                      Kind
+                    </span>
+                    <select
+                      value={artifactDraft.kind}
+                      onChange={(event) =>
+                        onArtifactDraftChange({
+                          ...artifactDraft,
+                          kind: event.target.value as SpaceArtifactKind,
+                        })
+                      }
+                      className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                      aria-label="Artifact kind"
+                    >
+                      {spaceArtifactKindOptions.map((kind) => (
+                        <option key={kind} value={kind}>
+                          {spaceArtifactKindLabels[kind]}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="space-y-1 text-sm md:col-span-2">
+                    <span className="text-xs font-medium text-muted-foreground">
+                      Value or path
+                    </span>
+                    <Input
+                      value={artifactDraft.value}
+                      onChange={(event) =>
+                        onArtifactDraftChange({
+                          ...artifactDraft,
+                          value: event.target.value,
+                        })
+                      }
+                      placeholder="URL, decision, path, branch name, or durable result"
+                      aria-label="Artifact value or path"
+                    />
+                  </label>
+                  <label className="space-y-1 text-sm">
+                    <span className="text-xs font-medium text-muted-foreground">
+                      Status
+                    </span>
+                    <select
+                      value={artifactDraft.status}
+                      onChange={(event) =>
+                        onArtifactDraftChange({
+                          ...artifactDraft,
+                          status: event.target.value as SpaceArtifactStatus,
+                        })
+                      }
+                      className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                      aria-label="Artifact status"
+                    >
+                      {spaceArtifactStatusOptions.map((status) => (
+                        <option key={status} value={status}>
+                          {spaceArtifactStatusLabels[status]}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="space-y-1 text-sm">
+                    <span className="text-xs font-medium text-muted-foreground">
+                      Source attempt
+                    </span>
+                    <select
+                      value={artifactDraft.sourceSessionId}
+                      onChange={(event) =>
+                        onArtifactDraftChange({
+                          ...artifactDraft,
+                          sourceSessionId: event.target.value,
+                        })
+                      }
+                      className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                      aria-label="Artifact source attempt"
+                    >
+                      <option value="">None</option>
+                      {sourceAttemptOptions.map(({ attempt, session }) => (
+                        <option key={attempt.id} value={attempt.sessionId}>
+                          {session?.name ?? attempt.sessionId}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                </div>
+
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <Button
+                    type="button"
+                    size="sm"
+                    onClick={onSubmitArtifact}
+                    disabled={
+                      artifactDraft.label.trim().length === 0 ||
+                      artifactDraft.value.trim().length === 0
+                    }
+                  >
+                    {editingArtifactId ? (
+                      <Save className="h-4 w-4" />
+                    ) : (
+                      <Plus className="h-4 w-4" />
+                    )}
+                    {editingArtifactId ? 'Save artifact' : 'Add artifact'}
+                  </Button>
+                  {editingArtifactId ? (
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="ghost"
+                      onClick={onCancelArtifactEdit}
+                    >
+                      <X className="h-4 w-4" />
+                      Cancel
+                    </Button>
+                  ) : null}
+                </div>
+              </div>
+
+              {artifacts.length > 0 ? (
+                <div className="divide-y divide-border rounded-lg border border-border/70">
+                  {artifacts.map((artifact) => {
+                    const sourceAttempt = sourceAttemptOptions.find(
+                      ({ attempt }) =>
+                        attempt.sessionId === artifact.sourceSessionId,
+                    )
+                    return (
+                      <div
+                        key={artifact.id}
+                        className="flex min-w-0 items-center justify-between gap-3 px-4 py-3"
+                      >
+                        <div className="min-w-0">
+                          <div className="truncate text-sm font-medium">
+                            {artifact.label}
+                          </div>
+                          <div className="mt-1 truncate text-xs text-muted-foreground">
+                            {spaceArtifactKindLabels[artifact.kind]} -{' '}
+                            {artifact.value}
+                          </div>
+                          {sourceAttempt ? (
+                            <div className="mt-1 truncate text-xs text-muted-foreground">
+                              From {sourceAttempt.session?.name}
+                            </div>
+                          ) : null}
                         </div>
-                        <div className="mt-1 truncate text-xs text-muted-foreground">
-                          {artifact.kind} - {artifact.value}
+                        <div className="flex shrink-0 items-center gap-2">
+                          <span className="rounded-full border border-border/70 px-2 py-0.5 text-[11px] text-muted-foreground">
+                            {spaceArtifactStatusLabels[artifact.status]}
+                          </span>
+                          <Button
+                            type="button"
+                            size="icon"
+                            variant="ghost"
+                            className="h-8 w-8 text-muted-foreground"
+                            aria-label={`Edit artifact ${artifact.label}`}
+                            onClick={() => onEditArtifact(artifact)}
+                          >
+                            <Pencil className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            type="button"
+                            size="icon"
+                            variant="ghost"
+                            className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                            aria-label={`Remove artifact ${artifact.label}`}
+                            onClick={() => onDeleteArtifact(artifact.id)}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
                         </div>
                       </div>
-                      <span className="shrink-0 rounded-full border border-border/70 px-2 py-0.5 text-[11px] text-muted-foreground">
-                        {spaceArtifactStatusLabels[artifact.status]}
-                      </span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              renderEmptyState(
-                'No artifacts yet',
-                'Artifacts will track branches, pull requests, documents, releases, and other Space outputs.',
-              )
-            )
+                    )
+                  })}
+                </div>
+              ) : (
+                renderEmptyState(
+                  'No artifacts yet',
+                  'Add a manual artifact or copy a file-backed artifact into this Space.',
+                )
+              )}
+            </section>
           ) : null}
 
           {activeTab === 'brief' ? (
