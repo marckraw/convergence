@@ -1,5 +1,11 @@
 # convergence
 
+## 0.37.1
+
+### Patch Changes
+
+- 3f03115: Polish Chat Spaces follow-up flows by adding a proper Space creation dialog, Space archive/delete actions, and a full-page new-chat composer with selectable Space context.
+
 ## 0.37.0
 
 ### Minor Changes
