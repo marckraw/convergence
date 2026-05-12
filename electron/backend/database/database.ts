@@ -141,6 +141,7 @@ const SCHEMA = `
     status TEXT NOT NULL DEFAULT 'exploring',
     attention TEXT NOT NULL DEFAULT 'none',
     brief TEXT NOT NULL DEFAULT '',
+    memory TEXT NOT NULL DEFAULT '',
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
     updated_at TEXT NOT NULL DEFAULT (datetime('now'))
   );
@@ -427,6 +428,16 @@ function ensureWorkspaceColumns(database: Database.Database): void {
 
   if (!columnNames.has('worktree_removed_at')) {
     database.exec('ALTER TABLE workspaces ADD COLUMN worktree_removed_at TEXT')
+  }
+}
+
+function ensureSpaceColumns(database: Database.Database): void {
+  const columnNames = getTableColumnNames(database, 'spaces')
+
+  if (!columnNames.has('memory')) {
+    database.exec(
+      "ALTER TABLE spaces ADD COLUMN memory TEXT NOT NULL DEFAULT ''",
+    )
   }
 }
 
@@ -858,6 +869,7 @@ export function getDatabase(dbPath?: string): Database.Database {
     database.pragma('foreign_keys = ON')
     database.exec(SCHEMA)
     ensureSpaceTablesMigrated(database)
+    ensureSpaceColumns(database)
     ensureWorkspaceColumns(database)
     ensureSessionColumns(database)
     ensureAttachmentsTableNoFk(database)

@@ -356,6 +356,7 @@ describe('database', () => {
         'status',
         'attention',
         'brief',
+        'memory',
         'created_at',
         'updated_at',
       ].sort(),

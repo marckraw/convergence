@@ -39,6 +39,7 @@ const space = {
   status: 'exploring' as const,
   attention: 'none' as const,
   brief: 'Keep the session and Space visible together.',
+  memory: '',
   createdAt: '2026-01-01T00:00:00.000Z',
   updatedAt: '2026-01-02T00:00:00.000Z',
 }

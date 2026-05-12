@@ -49,6 +49,7 @@ export interface Space {
   status: SpaceStatus
   attention: SpaceAttention
   brief: string
+  memory: string
   createdAt: string
   updatedAt: string
 }
@@ -89,6 +90,7 @@ export interface CreateSpaceInput {
   status?: SpaceStatus
   attention?: SpaceAttention
   brief?: string
+  memory?: string
 }
 
 export interface UpdateSpaceInput {
@@ -96,6 +98,7 @@ export interface UpdateSpaceInput {
   status?: SpaceStatus
   attention?: SpaceAttention
   brief?: string
+  memory?: string
 }
 
 export interface LinkSpaceAttemptInput {

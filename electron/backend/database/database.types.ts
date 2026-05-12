@@ -148,6 +148,7 @@ export interface SpaceRow {
   status: string
   attention: string
   brief: string
+  memory: string
   created_at: string
   updated_at: string
 }

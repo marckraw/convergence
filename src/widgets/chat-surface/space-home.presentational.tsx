@@ -12,11 +12,13 @@ import {
   spaceStatusLabels,
 } from '@/entities/space'
 import { Button } from '@/shared/ui/button'
+import { Input } from '@/shared/ui/input'
 import { SessionBadge } from '@/shared/ui/session-badge.presentational'
 import { cn } from '@/shared/lib/cn.pure'
 import {
   Box,
   Brain,
+  CheckSquare,
   FilePlus,
   FileText,
   Folder,
@@ -25,6 +27,7 @@ import {
   Paperclip,
   Trash2,
 } from 'lucide-react'
+import type { SpaceContextSelection } from './space-context.pure'
 
 export type SpaceHomeTab =
   | 'chats'
@@ -49,6 +52,15 @@ interface SpaceHomeProps {
   onOpenAttempt: (sessionId: string) => void
   onAddSources: () => void
   onDeleteSource: (sourceId: string) => void
+  briefDraft: string
+  memoryDraft: string
+  contextSelection: SpaceContextSelection
+  contextPreview: string | null
+  onBriefDraftChange: (value: string) => void
+  onMemoryDraftChange: (value: string) => void
+  onSaveBrief: () => void
+  onSaveMemory: () => void
+  onContextSelectionChange: (selection: SpaceContextSelection) => void
 }
 
 const TABS: Array<{
@@ -89,7 +101,18 @@ export const SpaceHome: FC<SpaceHomeProps> = ({
   onOpenAttempt,
   onAddSources,
   onDeleteSource,
+  briefDraft,
+  memoryDraft,
+  contextSelection,
+  contextPreview,
+  onBriefDraftChange,
+  onMemoryDraftChange,
+  onSaveBrief,
+  onSaveMemory,
+  onContextSelectionChange,
 }) => {
+  const selectedSourceSet = new Set(contextSelection.selectedSourceIds)
+
   return (
     <div className="flex h-full flex-col">
       <div
@@ -193,6 +216,79 @@ export const SpaceHome: FC<SpaceHomeProps> = ({
                   <MessageSquarePlus className="h-4 w-4" />
                   <span>New attempt in this Space</span>
                 </div>
+                <div className="rounded-lg border border-border/70 bg-card/30 px-3 py-3">
+                  <div className="mb-3 flex items-center gap-2 text-xs font-medium uppercase text-muted-foreground">
+                    <CheckSquare className="h-3.5 w-3.5" />
+                    <span>Context for this attempt</span>
+                  </div>
+                  <div className="space-y-2 text-sm">
+                    <label className="flex items-center gap-2">
+                      <Input
+                        type="checkbox"
+                        className="h-4 w-4"
+                        checked={contextSelection.includeBrief}
+                        onChange={(event) =>
+                          onContextSelectionChange({
+                            ...contextSelection,
+                            includeBrief: event.target.checked,
+                          })
+                        }
+                      />
+                      <span>Space brief</span>
+                    </label>
+                    <label className="flex items-center gap-2">
+                      <Input
+                        type="checkbox"
+                        className="h-4 w-4"
+                        checked={contextSelection.includeMemory}
+                        onChange={(event) =>
+                          onContextSelectionChange({
+                            ...contextSelection,
+                            includeMemory: event.target.checked,
+                          })
+                        }
+                      />
+                      <span>Space memory/instructions</span>
+                    </label>
+                    {sources.length > 0 ? (
+                      <div className="space-y-1 border-t border-border/60 pt-2">
+                        <div className="text-xs text-muted-foreground">
+                          Selected sources
+                        </div>
+                        {sources.map((source) => (
+                          <label
+                            key={source.id}
+                            className="flex min-w-0 items-center gap-2"
+                          >
+                            <Input
+                              type="checkbox"
+                              className="h-4 w-4 shrink-0"
+                              checked={selectedSourceSet.has(source.id)}
+                              onChange={(event) => {
+                                const nextIds = event.target.checked
+                                  ? [
+                                      ...contextSelection.selectedSourceIds,
+                                      source.id,
+                                    ]
+                                  : contextSelection.selectedSourceIds.filter(
+                                      (id) => id !== source.id,
+                                    )
+                                onContextSelectionChange({
+                                  ...contextSelection,
+                                  selectedSourceIds: nextIds,
+                                })
+                              }}
+                            />
+                            <span className="truncate">{source.filename}</span>
+                          </label>
+                        ))}
+                      </div>
+                    ) : null}
+                  </div>
+                  <pre className="app-scrollbar mt-3 max-h-32 overflow-y-auto whitespace-pre-wrap rounded-md border border-border/60 bg-background/70 p-2 text-xs text-muted-foreground">
+                    {contextPreview ?? 'No Space context selected.'}
+                  </pre>
+                </div>
                 {newAttemptComposer}
               </div>
             </section>
@@ -255,12 +351,27 @@ export const SpaceHome: FC<SpaceHomeProps> = ({
             </section>
           ) : null}
 
-          {activeTab === 'memory'
-            ? renderEmptyState(
-                'No memory yet',
-                'Space memory will hold durable guidance that can be reused across attempts.',
-              )
-            : null}
+          {activeTab === 'memory' ? (
+            <section className="space-y-3">
+              <div>
+                <h2 className="text-sm font-medium">Memory and instructions</h2>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Durable guidance for future attempts. Retrieval and synthesis
+                  come later.
+                </p>
+              </div>
+              <textarea
+                value={memoryDraft}
+                onChange={(event) => onMemoryDraftChange(event.target.value)}
+                className="min-h-48 w-full resize-y rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                aria-label="Space memory and instructions"
+                placeholder="Rules, preferences, durable facts, and instructions for this Space."
+              />
+              <Button type="button" size="sm" onClick={onSaveMemory}>
+                Save memory
+              </Button>
+            </section>
+          ) : null}
 
           {activeTab === 'artifacts' ? (
             artifacts.length > 0 ? (
@@ -294,9 +405,24 @@ export const SpaceHome: FC<SpaceHomeProps> = ({
           {activeTab === 'brief' ? (
             <div className="rounded-lg border border-border/70 px-4 py-4">
               <h2 className="text-sm font-medium">Space brief</h2>
-              <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-muted-foreground">
-                {space.brief.trim() || 'No Space brief yet.'}
+              <p className="mt-1 text-sm text-muted-foreground">
+                User-curated current understanding for this Space.
               </p>
+              <textarea
+                value={briefDraft}
+                onChange={(event) => onBriefDraftChange(event.target.value)}
+                className="mt-3 min-h-40 w-full resize-y rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                aria-label="Space brief"
+                placeholder="Current purpose, decisions, constraints, and useful background."
+              />
+              <Button
+                type="button"
+                size="sm"
+                className="mt-3"
+                onClick={onSaveBrief}
+              >
+                Save brief
+              </Button>
             </div>
           ) : null}
         </div>

@@ -86,6 +86,7 @@ interface SpaceData {
   status: SpaceStatusData
   attention: SpaceAttentionData
   brief: string
+  memory: string
   createdAt: string
   updatedAt: string
 }
@@ -126,6 +127,7 @@ interface CreateSpaceInputData {
   status?: SpaceStatusData
   attention?: SpaceAttentionData
   brief?: string
+  memory?: string
 }
 
 interface UpdateSpaceInputData {
@@ -133,6 +135,7 @@ interface UpdateSpaceInputData {
   status?: SpaceStatusData
   attention?: SpaceAttentionData
   brief?: string
+  memory?: string
 }
 
 interface LinkSpaceAttemptInputData {

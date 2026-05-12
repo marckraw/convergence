@@ -321,6 +321,36 @@ describe('ComposerContainer', () => {
     ).not.toHaveBeenCalled()
   })
 
+  it('applies explicit context when starting a new global session', () => {
+    render(
+      <ComposerContainer
+        context={{
+          kind: 'global',
+          activeSessionId: null,
+        }}
+        prepareNewSessionMessage={(message) => `Context\n\n${message}`}
+      />,
+    )
+
+    const textbox = screen.getByRole('textbox')
+    fireEvent.change(textbox, {
+      target: { value: 'General chat request' },
+    })
+    fireEvent.keyDown(textbox, { key: 'Enter', metaKey: true })
+
+    expect(
+      useSessionStore.getState().createAndStartGlobalSession,
+    ).toHaveBeenCalledWith(
+      'claude-code',
+      'claude-sonnet',
+      'medium',
+      'General chat request',
+      'Context\n\nGeneral chat request',
+      undefined,
+      undefined,
+    )
+  })
+
   it('loads global skills when opening the skill picker in global chat', () => {
     render(
       <ComposerContainer

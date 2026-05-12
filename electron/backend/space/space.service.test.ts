@@ -40,22 +40,26 @@ describe('SpaceService', () => {
     const created = service.create({
       title: ' Agent-native spaces ',
       brief: '  rough idea  ',
+      memory: '  stable rule  ',
     })
 
     expect(created.title).toBe('Agent-native spaces')
     expect(created.status).toBe('exploring')
     expect(created.attention).toBe('none')
     expect(created.brief).toBe('rough idea')
+    expect(created.memory).toBe('stable rule')
 
     const updated = service.update(created.id, {
       status: 'implementing',
       attention: 'needs-decision',
       brief: 'implementation direction',
+      memory: 'updated memory',
     })
 
     expect(updated.status).toBe('implementing')
     expect(updated.attention).toBe('needs-decision')
     expect(updated.brief).toBe('implementation direction')
+    expect(updated.memory).toBe('updated memory')
   })
 
   it('rejects an empty title', () => {
@@ -179,6 +183,11 @@ describe('SpaceService', () => {
       expect(existsSync(join(root, 'artifacts'))).toBe(true)
       expect(existsSync(join(root, 'attempts'))).toBe(true)
       expect(existsSync(join(root, 'scratch'))).toBe(true)
+
+      fsService.update(space.id, { memory: 'Remember the source contract.' })
+      expect(readFileSync(join(root, 'memory', 'memory.md'), 'utf8')).toBe(
+        'Remember the source contract.',
+      )
 
       fsService.linkAttempt({ spaceId: space.id, sessionId: 's1' })
       expect(existsSync(join(root, 'attempts', 's1'))).toBe(true)

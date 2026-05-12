@@ -14,9 +14,11 @@ vi.mock('@/features/composer', () => ({
   ComposerContainer: ({
     context,
     onGlobalSessionCreated,
+    prepareNewSessionMessage,
   }: {
     context: ComposerSessionContext
     onGlobalSessionCreated?: (session: SessionSummary) => void | Promise<void>
+    prepareNewSessionMessage?: (message: string) => string
   }) => (
     <div data-testid="composer">
       <span>
@@ -53,6 +55,11 @@ vi.mock('@/features/composer', () => ({
         >
           mock create attempt
         </button>
+      ) : null}
+      {prepareNewSessionMessage ? (
+        <span data-testid="prepared-message">
+          {prepareNewSessionMessage('Ship it')}
+        </span>
       ) : null}
     </div>
   ),
@@ -173,6 +180,7 @@ describe('ChatSurface', () => {
           status: 'exploring',
           attention: 'none',
           brief: 'Coordinate the launch work.',
+          memory: 'Keep answers concise.',
           createdAt: '2026-01-01T00:00:00.000Z',
           updatedAt: '2026-01-01T00:00:00.000Z',
         },
@@ -209,6 +217,12 @@ describe('ChatSurface', () => {
     expect(screen.getByRole('button', { name: /brief/i })).toBeInTheDocument()
     expect(screen.getByText('Coordinate the launch work.')).toBeInTheDocument()
     expect(screen.getByText('Planning chat')).toBeInTheDocument()
+    expect(screen.getByTestId('prepared-message')).toHaveTextContent(
+      'Space brief:',
+    )
+    expect(screen.getByTestId('prepared-message')).toHaveTextContent(
+      'Keep answers concise.',
+    )
   })
 
   it('lists and manages Space sources from the Sources tab', async () => {
@@ -231,6 +245,7 @@ describe('ChatSurface', () => {
           status: 'exploring',
           attention: 'none',
           brief: '',
+          memory: '',
           createdAt: '2026-01-01T00:00:00.000Z',
           updatedAt: '2026-01-01T00:00:00.000Z',
         },
@@ -274,6 +289,46 @@ describe('ChatSurface', () => {
     expect(deleteSource).toHaveBeenCalledWith('source-1', 'space-1')
   })
 
+  it('saves Space brief and memory edits', async () => {
+    const updateSpace = vi.fn().mockResolvedValue(null)
+    useSpaceStore.setState({
+      spaces: [
+        {
+          id: 'space-1',
+          title: 'Launch plan',
+          status: 'exploring',
+          attention: 'none',
+          brief: 'Old brief',
+          memory: 'Old memory',
+          createdAt: '2026-01-01T00:00:00.000Z',
+          updatedAt: '2026-01-01T00:00:00.000Z',
+        },
+      ],
+      loadAttempts: vi.fn().mockResolvedValue(undefined),
+      loadArtifacts: vi.fn().mockResolvedValue(undefined),
+      loadSources: vi.fn().mockResolvedValue(undefined),
+      updateSpace,
+    })
+
+    render(<ChatSurface selectedSpaceId="space-1" />)
+
+    fireEvent.click(screen.getByRole('button', { name: /brief/i }))
+    fireEvent.change(screen.getByLabelText('Space brief'), {
+      target: { value: 'New brief' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: /save brief/i }))
+    expect(updateSpace).toHaveBeenCalledWith('space-1', { brief: 'New brief' })
+
+    fireEvent.click(screen.getByRole('button', { name: /memory/i }))
+    fireEvent.change(screen.getByLabelText('Space memory and instructions'), {
+      target: { value: 'New memory' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: /save memory/i }))
+    expect(updateSpace).toHaveBeenCalledWith('space-1', {
+      memory: 'New memory',
+    })
+  })
+
   it('links a newly created global session as a Space attempt', async () => {
     const linkAttempt = vi.fn().mockResolvedValue(null)
     const loadAttempts = vi.fn().mockResolvedValue(undefined)
@@ -285,6 +340,7 @@ describe('ChatSurface', () => {
           status: 'exploring',
           attention: 'none',
           brief: '',
+          memory: '',
           createdAt: '2026-01-01T00:00:00.000Z',
           updatedAt: '2026-01-01T00:00:00.000Z',
         },

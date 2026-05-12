@@ -1,5 +1,5 @@
 import { randomUUID } from 'crypto'
-import { copyFileSync, mkdirSync, rmSync, statSync } from 'fs'
+import { copyFileSync, mkdirSync, rmSync, statSync, writeFileSync } from 'fs'
 import { basename, join, resolve } from 'path'
 import type Database from 'better-sqlite3'
 import type {
@@ -64,12 +64,13 @@ export class SpaceService {
     const id = randomUUID()
     const title = normalizeRequiredText(input.title, 'Space title')
     const brief = normalizeOptionalText(input.brief)
+    const memory = normalizeOptionalText(input.memory)
 
     this.db
       .prepare(
         `INSERT INTO spaces (
-           id, title, status, attention, brief
-         ) VALUES (?, ?, ?, ?, ?)`,
+           id, title, status, attention, brief, memory
+         ) VALUES (?, ?, ?, ?, ?, ?)`,
       )
       .run(
         id,
@@ -77,9 +78,11 @@ export class SpaceService {
         input.status ?? 'exploring',
         input.attention ?? 'none',
         brief,
+        memory,
       )
 
     this.ensureSpaceRoot(id)
+    this.writeMemoryFile(id, memory)
     return this.getById(id)!
   }
 
@@ -95,6 +98,8 @@ export class SpaceService {
         : normalizeRequiredText(input.title, 'Space title')
     const brief =
       input.brief === undefined ? existing.brief : input.brief.trim()
+    const memory =
+      input.memory === undefined ? existing.memory : input.memory.trim()
 
     this.db
       .prepare(
@@ -103,6 +108,7 @@ export class SpaceService {
              status = ?,
              attention = ?,
              brief = ?,
+             memory = ?,
              updated_at = datetime('now')
          WHERE id = ?`,
       )
@@ -111,8 +117,10 @@ export class SpaceService {
         input.status ?? existing.status,
         input.attention ?? existing.attention,
         brief,
+        memory,
         id,
       )
+    this.writeMemoryFile(id, memory)
 
     return this.getById(id)!
   }
@@ -460,6 +468,15 @@ export class SpaceService {
     ]) {
       mkdirSync(directory, { recursive: true })
     }
+  }
+
+  private writeMemoryFile(spaceId: string, memory: string): void {
+    if (!this.rootDir) return
+    this.ensureSpaceRoot(spaceId)
+    writeFileSync(
+      join(this.getSpaceRoot(spaceId), 'memory', 'memory.md'),
+      memory,
+    )
   }
 
   private ensureAttemptRoot(spaceId: string, sessionId: string): void {

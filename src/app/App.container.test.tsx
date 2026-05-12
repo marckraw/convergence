@@ -354,6 +354,7 @@ describe('App', () => {
         status: 'exploring',
         attention: 'none',
         brief: 'Coordinate launch work.',
+        memory: '',
         createdAt: '2026-01-01T00:00:00.000Z',
         updatedAt: '2026-01-01T00:00:00.000Z',
       },

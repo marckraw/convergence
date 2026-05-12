@@ -55,6 +55,7 @@ export type ComposerSessionContext =
 interface ComposerContainerProps {
   context: ComposerSessionContext
   onGlobalSessionCreated?: (session: SessionSummary) => void | Promise<void>
+  prepareNewSessionMessage?: (message: string) => string
 }
 
 const DRAFT_KEY_NEW = '__new__'
@@ -128,6 +129,7 @@ async function filesToIngestInputs(
 export const ComposerContainer: FC<ComposerContainerProps> = ({
   context,
   onGlobalSessionCreated,
+  prepareNewSessionMessage,
 }) => {
   const activeSessionId = context.activeSessionId
   const projectId = context.kind === 'project' ? context.projectId : null
@@ -479,12 +481,15 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
       baseName.length > 40 ? baseName.substring(0, 40) + '...' : baseName
     if (context.kind === 'global') {
       void (async () => {
+        const startMessage = prepareNewSessionMessage
+          ? prepareNewSessionMessage(trimmed)
+          : trimmed
         const session = await createAndStartGlobalSession(
           selection.providerId,
           selection.modelId,
           selection.effort?.id ?? null,
           name,
-          trimmed,
+          startMessage,
           hasAttachments ? attachmentIds : undefined,
           skillSelections,
         )
@@ -543,6 +548,7 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
     context,
     projectContextEnabled,
     onGlobalSessionCreated,
+    prepareNewSessionMessage,
   ])
 
   const handleProviderChange = (nextProviderId: string) => {

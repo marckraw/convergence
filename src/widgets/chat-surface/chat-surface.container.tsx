@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { FC } from 'react'
 import { useAppSurfaceStore } from '@/entities/app-surface'
-import { spaceApi, useSpaceStore } from '@/entities/space'
+import { spaceApi, useSpaceStore, type SpaceSource } from '@/entities/space'
 import type { SessionSummary } from '@/entities/session'
 import { formatActivityLabel, useSessionStore } from '@/entities/session'
 import { switchToSession } from '@/features/command-center'
@@ -12,10 +12,17 @@ import { Button } from '@/shared/ui/button'
 import { ContextWindowIndicator } from '@/shared/ui/context-window-indicator.presentational'
 import { MessageSquareText, Square } from 'lucide-react'
 import { SpaceHome, type SpaceHomeTab } from './space-home.presentational'
+import {
+  applySpaceContextToMessage,
+  buildSpaceContextBlock,
+  type SpaceContextSelection,
+} from './space-context.pure'
 
 interface ChatSurfaceProps {
   selectedSpaceId: string | null
 }
+
+const EMPTY_SPACE_SOURCES: SpaceSource[] = []
 
 export const ChatSurface: FC<ChatSurfaceProps> = ({ selectedSpaceId }) => {
   const sessions = useSessionStore((state) => state.globalChatSessions)
@@ -28,6 +35,7 @@ export const ChatSurface: FC<ChatSurfaceProps> = ({ selectedSpaceId }) => {
   const loadAttempts = useSpaceStore((state) => state.loadAttempts)
   const loadArtifacts = useSpaceStore((state) => state.loadArtifacts)
   const loadSources = useSpaceStore((state) => state.loadSources)
+  const updateSpace = useSpaceStore((state) => state.updateSpace)
   const addSourcesFromPaths = useSpaceStore(
     (state) => state.addSourcesFromPaths,
   )
@@ -48,6 +56,14 @@ export const ChatSurface: FC<ChatSurfaceProps> = ({ selectedSpaceId }) => {
   const stopSession = useSessionStore((state) => state.stopSession)
   const setActiveSurface = useAppSurfaceStore((state) => state.setActiveSurface)
   const [activeSpaceTab, setActiveSpaceTab] = useState<SpaceHomeTab>('chats')
+  const [briefDraft, setBriefDraft] = useState('')
+  const [memoryDraft, setMemoryDraft] = useState('')
+  const [contextSelection, setContextSelection] =
+    useState<SpaceContextSelection>({
+      includeBrief: true,
+      includeMemory: true,
+      selectedSourceIds: [],
+    })
 
   const session = sessions.find((entry) => entry.id === activeSessionId) ?? null
   const selectedSpace =
@@ -57,7 +73,9 @@ export const ChatSurface: FC<ChatSurfaceProps> = ({ selectedSpaceId }) => {
   const selectedSpaceArtifacts =
     selectedSpaceId === null ? [] : (artifactsBySpaceId[selectedSpaceId] ?? [])
   const selectedSpaceSources =
-    selectedSpaceId === null ? [] : (sourcesBySpaceId[selectedSpaceId] ?? [])
+    selectedSpaceId === null
+      ? EMPTY_SPACE_SOURCES
+      : (sourcesBySpaceId[selectedSpaceId] ?? EMPTY_SPACE_SOURCES)
   const activityLabel = formatActivityLabel(session?.activity)
   const sessionLookup = useMemo(() => {
     const next = new Map<string, SessionSummary>()
@@ -86,6 +104,32 @@ export const ChatSurface: FC<ChatSurfaceProps> = ({ selectedSpaceId }) => {
   useEffect(() => {
     setActiveSpaceTab('chats')
   }, [selectedSpaceId])
+
+  useEffect(() => {
+    setBriefDraft(selectedSpace?.brief ?? '')
+    setMemoryDraft(selectedSpace?.memory ?? '')
+  }, [selectedSpace?.brief, selectedSpace?.id, selectedSpace?.memory])
+
+  useEffect(() => {
+    setContextSelection((previous) => {
+      const sourceIds = new Set(selectedSpaceSources.map((source) => source.id))
+      const selectedSourceIds = [
+        ...previous.selectedSourceIds.filter((id) => sourceIds.has(id)),
+        ...selectedSpaceSources
+          .map((source) => source.id)
+          .filter((id) => !previous.selectedSourceIds.includes(id)),
+      ]
+      return { ...previous, selectedSourceIds }
+    })
+  }, [selectedSpaceId, selectedSpaceSources])
+
+  const contextPreview = selectedSpace
+    ? buildSpaceContextBlock({
+        space: selectedSpace,
+        sources: selectedSpaceSources,
+        selection: contextSelection,
+      })
+    : null
 
   const handleGlobalSessionCreated = useCallback(
     async (createdSession: SessionSummary) => {
@@ -134,6 +178,21 @@ export const ChatSurface: FC<ChatSurfaceProps> = ({ selectedSpaceId }) => {
     [deleteSource, selectedSpaceId],
   )
 
+  const handleSaveBrief = useCallback(async () => {
+    if (!selectedSpaceId) return
+    await updateSpace(selectedSpaceId, { brief: briefDraft })
+  }, [briefDraft, selectedSpaceId, updateSpace])
+
+  const handleSaveMemory = useCallback(async () => {
+    if (!selectedSpaceId) return
+    await updateSpace(selectedSpaceId, { memory: memoryDraft })
+  }, [memoryDraft, selectedSpaceId, updateSpace])
+
+  const prepareSpaceAttemptMessage = useCallback(
+    (message: string) => applySpaceContextToMessage(message, contextPreview),
+    [contextPreview],
+  )
+
   if (selectedSpaceId && selectedSpace && !session) {
     return (
       <SpaceHome
@@ -146,10 +205,20 @@ export const ChatSurface: FC<ChatSurfaceProps> = ({ selectedSpaceId }) => {
         onOpenAttempt={handleOpenAttempt}
         onAddSources={handleAddSources}
         onDeleteSource={handleDeleteSource}
+        briefDraft={briefDraft}
+        memoryDraft={memoryDraft}
+        contextSelection={contextSelection}
+        contextPreview={contextPreview}
+        onBriefDraftChange={setBriefDraft}
+        onMemoryDraftChange={setMemoryDraft}
+        onSaveBrief={handleSaveBrief}
+        onSaveMemory={handleSaveMemory}
+        onContextSelectionChange={setContextSelection}
         newAttemptComposer={
           <ComposerContainer
             context={{ kind: 'global', activeSessionId: null }}
             onGlobalSessionCreated={handleGlobalSessionCreated}
+            prepareNewSessionMessage={prepareSpaceAttemptMessage}
           />
         }
       />

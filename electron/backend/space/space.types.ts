@@ -56,6 +56,7 @@ export interface Space {
   status: SpaceStatus
   attention: SpaceAttention
   brief: string
+  memory: string
   createdAt: string
   updatedAt: string
 }
@@ -96,6 +97,7 @@ export interface CreateSpaceInput {
   status?: SpaceStatus
   attention?: SpaceAttention
   brief?: string
+  memory?: string
 }
 
 export interface UpdateSpaceInput {
@@ -103,6 +105,7 @@ export interface UpdateSpaceInput {
   status?: SpaceStatus
   attention?: SpaceAttention
   brief?: string
+  memory?: string
 }
 
 export interface LinkSpaceAttemptInput {
@@ -145,6 +148,7 @@ export function spaceFromRow(row: SpaceRow): Space {
     status: parseSpaceStatus(row.status),
     attention: parseSpaceAttention(row.attention),
     brief: row.brief,
+    memory: row.memory ?? '',
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   }
