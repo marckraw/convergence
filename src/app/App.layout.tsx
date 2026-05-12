@@ -30,6 +30,9 @@ export const AppShell: FC<AppShellProps> = ({
   hasProject,
 }) => {
   const [sidebarWidth, setSidebarWidth] = useState(DEFAULT_SIDEBAR)
+  const [selectedChatSpaceId, setSelectedChatSpaceId] = useState<string | null>(
+    null,
+  )
   const activeSurface = useAppSurfaceStore((state) => state.activeSurface)
   const setActiveSurface = useAppSurfaceStore((state) => state.setActiveSurface)
   const dragging = useRef(false)
@@ -37,23 +40,35 @@ export const AppShell: FC<AppShellProps> = ({
   const handleSelectCodeSession = useCallback(
     (id: string) => {
       setActiveSurface('code')
+      setSelectedChatSpaceId(null)
       onSelectSession(id)
     },
-    [onSelectSession],
+    [onSelectSession, setActiveSurface],
   )
 
   const handleSelectGlobalSession = useCallback(
     (id: string) => {
       setActiveSurface('chat')
+      setSelectedChatSpaceId(null)
       onSelectGlobalSession(id)
     },
-    [onSelectGlobalSession],
+    [onSelectGlobalSession, setActiveSurface],
   )
 
   const handleNewGlobalSession = useCallback(() => {
     setActiveSurface('chat')
+    setSelectedChatSpaceId(null)
     onSelectGlobalSession(null)
-  }, [onSelectGlobalSession])
+  }, [onSelectGlobalSession, setActiveSurface])
+
+  const handleSelectChatSpace = useCallback(
+    (id: string) => {
+      setActiveSurface('chat')
+      setSelectedChatSpaceId(id)
+      onSelectGlobalSession(null)
+    },
+    [onSelectGlobalSession, setActiveSurface],
+  )
 
   const handleMouseDown = useCallback(() => {
     dragging.current = true
@@ -100,6 +115,8 @@ export const AppShell: FC<AppShellProps> = ({
             activeSessionId={activeSessionId}
             onSelectGlobalSession={handleSelectGlobalSession}
             onNewGlobalSession={handleNewGlobalSession}
+            selectedSpaceId={selectedChatSpaceId}
+            onSelectSpace={handleSelectChatSpace}
             activeGlobalSessionId={activeGlobalSessionId}
           />
         </div>
@@ -114,7 +131,7 @@ export const AppShell: FC<AppShellProps> = ({
 
         <div className="app-main-panel flex min-w-0 flex-1 flex-col">
           {activeSurface === 'chat' ? (
-            <ChatSurface />
+            <ChatSurface selectedSpaceId={selectedChatSpaceId} />
           ) : hasProject ? (
             <>
               <NotificationsOnboardingContainer />

@@ -39,39 +39,46 @@ contextBridge.exposeInMainWorld('electronAPI', {
     listForSession: (sessionId: string) =>
       ipcRenderer.invoke('projectContext:listForSession', sessionId),
   },
-  initiative: {
-    list: () => ipcRenderer.invoke('initiative:list'),
-    getById: (id: string) => ipcRenderer.invoke('initiative:getById', id),
-    create: (input: unknown) => ipcRenderer.invoke('initiative:create', input),
+  space: {
+    list: () => ipcRenderer.invoke('space:list'),
+    getById: (id: string) => ipcRenderer.invoke('space:getById', id),
+    create: (input: unknown) => ipcRenderer.invoke('space:create', input),
     update: (id: string, input: unknown) =>
-      ipcRenderer.invoke('initiative:update', id, input),
-    delete: (id: string) => ipcRenderer.invoke('initiative:delete', id),
-    listAttempts: (initiativeId: string) =>
-      ipcRenderer.invoke('initiative:listAttempts', initiativeId),
+      ipcRenderer.invoke('space:update', id, input),
+    delete: (id: string) => ipcRenderer.invoke('space:delete', id),
+    listAttempts: (spaceId: string) =>
+      ipcRenderer.invoke('space:listAttempts', spaceId),
     listAttemptsForSession: (sessionId: string) =>
-      ipcRenderer.invoke('initiative:listAttemptsForSession', sessionId),
+      ipcRenderer.invoke('space:listAttemptsForSession', sessionId),
     linkAttempt: (input: unknown) =>
-      ipcRenderer.invoke('initiative:linkAttempt', input),
+      ipcRenderer.invoke('space:linkAttempt', input),
     updateAttempt: (id: string, input: unknown) =>
-      ipcRenderer.invoke('initiative:updateAttempt', id, input),
+      ipcRenderer.invoke('space:updateAttempt', id, input),
     unlinkAttempt: (id: string) =>
-      ipcRenderer.invoke('initiative:unlinkAttempt', id),
-    setPrimaryAttempt: (initiativeId: string, attemptId: string) =>
-      ipcRenderer.invoke(
-        'initiative:setPrimaryAttempt',
-        initiativeId,
-        attemptId,
-      ),
-    listOutputs: (initiativeId: string) =>
-      ipcRenderer.invoke('initiative:listOutputs', initiativeId),
-    addOutput: (input: unknown) =>
-      ipcRenderer.invoke('initiative:addOutput', input),
-    updateOutput: (id: string, input: unknown) =>
-      ipcRenderer.invoke('initiative:updateOutput', id, input),
-    deleteOutput: (id: string) =>
-      ipcRenderer.invoke('initiative:deleteOutput', id),
-    synthesize: (initiativeId: string, requestId?: string) =>
-      ipcRenderer.invoke('initiative:synthesize', initiativeId, requestId),
+      ipcRenderer.invoke('space:unlinkAttempt', id),
+    setPrimaryAttempt: (spaceId: string, attemptId: string) =>
+      ipcRenderer.invoke('space:setPrimaryAttempt', spaceId, attemptId),
+    listArtifacts: (spaceId: string) =>
+      ipcRenderer.invoke('space:listArtifacts', spaceId),
+    addArtifact: (input: unknown) =>
+      ipcRenderer.invoke('space:addArtifact', input),
+    addArtifactsFromPaths: (spaceId: string, paths: string[]) =>
+      ipcRenderer.invoke('space:addArtifactsFromPaths', spaceId, paths),
+    updateArtifact: (id: string, input: unknown) =>
+      ipcRenderer.invoke('space:updateArtifact', id, input),
+    deleteArtifact: (id: string) =>
+      ipcRenderer.invoke('space:deleteArtifact', id),
+    listSources: (spaceId: string) =>
+      ipcRenderer.invoke('space:listSources', spaceId),
+    addSourcesFromPaths: (spaceId: string, paths: string[]) =>
+      ipcRenderer.invoke('space:addSourcesFromPaths', spaceId, paths),
+    deleteSource: (id: string) => ipcRenderer.invoke('space:deleteSource', id),
+    showSourceOpenDialog: () =>
+      ipcRenderer.invoke('space:showSourceOpenDialog'),
+    showArtifactOpenDialog: () =>
+      ipcRenderer.invoke('space:showArtifactOpenDialog'),
+    synthesize: (spaceId: string, requestId?: string) =>
+      ipcRenderer.invoke('space:synthesize', spaceId, requestId),
   },
   dialog: {
     selectDirectory: () => ipcRenderer.invoke('dialog:selectDirectory'),

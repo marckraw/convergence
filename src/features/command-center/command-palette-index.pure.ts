@@ -40,8 +40,8 @@ interface DialogDescriptor {
 
 export const PALETTE_DIALOGS: DialogDescriptor[] = [
   {
-    kind: 'initiative-workboard',
-    title: 'Initiatives',
+    kind: 'space-workboard',
+    title: 'Spaces',
     description: 'Global workboard for agent-driven delivery',
   },
   {

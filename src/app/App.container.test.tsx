@@ -8,6 +8,7 @@ import {
 } from '@testing-library/react'
 import { useProjectStore } from '@/entities/project'
 import { useWorkspaceStore } from '@/entities/workspace'
+import { useSpaceStore } from '@/entities/space'
 import { useSessionStore, type SessionSummary } from '@/entities/session'
 import { useAppSurfaceStore } from '@/entities/app-surface'
 import { App } from './App.container'
@@ -87,6 +88,28 @@ const mockElectronAPI = {
     create: vi.fn(),
     getByProjectId: vi.fn().mockResolvedValue([]),
     delete: vi.fn(),
+  },
+  space: {
+    list: vi.fn().mockResolvedValue([]),
+    getById: vi.fn().mockResolvedValue(null),
+    create: vi.fn(),
+    update: vi.fn(),
+    delete: vi.fn(),
+    listAttempts: vi.fn().mockResolvedValue([]),
+    listAttemptsForSession: vi.fn().mockResolvedValue([]),
+    linkAttempt: vi.fn(),
+    updateAttempt: vi.fn(),
+    unlinkAttempt: vi.fn(),
+    setPrimaryAttempt: vi.fn(),
+    listArtifacts: vi.fn().mockResolvedValue([]),
+    addArtifact: vi.fn(),
+    updateArtifact: vi.fn(),
+    deleteArtifact: vi.fn(),
+    listSources: vi.fn().mockResolvedValue([]),
+    addSourcesFromPaths: vi.fn(),
+    deleteSource: vi.fn(),
+    showSourceOpenDialog: vi.fn(),
+    synthesize: vi.fn(),
   },
   git: {
     getBranches: vi.fn().mockResolvedValue([]),
@@ -221,6 +244,8 @@ describe('App', () => {
     mockElectronAPI.project.getActive.mockResolvedValue(null)
     mockElectronAPI.project.getAll.mockResolvedValue([])
     mockElectronAPI.workspace.getByProjectId.mockResolvedValue([])
+    mockElectronAPI.space.list.mockResolvedValue([])
+    mockElectronAPI.space.listAttempts.mockResolvedValue([])
     mockElectronAPI.git.getBranches.mockResolvedValue([])
     mockElectronAPI.git.getCurrentBranch.mockResolvedValue('main')
     mockElectronAPI.session.getAllSummaries.mockResolvedValue([])
@@ -263,6 +288,15 @@ describe('App', () => {
       providers: [],
       error: null,
     })
+    useSpaceStore.setState({
+      spaces: [],
+      attemptsBySpaceId: {},
+      attemptsBySessionId: {},
+      artifactsBySpaceId: {},
+      sourcesBySpaceId: {},
+      loading: false,
+      error: null,
+    })
     useAppSurfaceStore.setState({ activeSurface: 'code' })
   })
 
@@ -300,14 +334,52 @@ describe('App', () => {
 
     expect(screen.getByText('Convergence Chat')).toBeInTheDocument()
     expect(sidebar.getByText('No chats yet')).toBeInTheDocument()
+    expect(sidebar.getByText('Spaces')).toBeInTheDocument()
     expect(
       sidebar.queryByRole('button', { name: /open a project/i }),
     ).toBeNull()
-    expect(sidebar.queryByText('Initiatives')).toBeNull()
     expect(sidebar.queryByText('Project Settings')).toBeNull()
     expect(sidebar.getByText('Providers')).toBeInTheDocument()
     expect(sidebar.getByText('MCP Servers')).toBeInTheDocument()
     expect(sidebar.getByText('Skills')).toBeInTheDocument()
+  })
+
+  it('opens a Space home from the Chat sidebar', async () => {
+    mockElectronAPI.project.getActive.mockResolvedValue(null)
+    mockElectronAPI.project.getAll.mockResolvedValue([])
+    mockElectronAPI.space.list.mockResolvedValue([
+      {
+        id: 'space-1',
+        title: 'Launch plan',
+        status: 'exploring',
+        attention: 'none',
+        brief: 'Coordinate launch work.',
+        memory: '',
+        createdAt: '2026-01-01T00:00:00.000Z',
+        updatedAt: '2026-01-01T00:00:00.000Z',
+      },
+    ])
+
+    render(<App />)
+
+    await waitFor(() => {
+      expect(screen.getByText('Welcome to Convergence')).toBeInTheDocument()
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: 'Show chat surface' }))
+
+    const sidebar = getSidebarQueries()
+    const spaceButton = await sidebar.findByRole('button', {
+      name: /open space launch plan/i,
+    })
+    fireEvent.click(spaceButton)
+
+    expect(screen.getByText('Space')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /chats/i })).toBeInTheDocument()
+    expect(
+      screen.getByRole('heading', { name: 'Launch plan' }),
+    ).toBeInTheDocument()
+    expect(screen.getByText('Coordinate launch work.')).toBeInTheDocument()
   })
 
   it('filters attention to global sessions in the chat surface', async () => {

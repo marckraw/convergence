@@ -35,7 +35,7 @@ interface CreateProjectInput {
   name?: string
 }
 
-type InitiativeStatusData =
+type SpaceStatusData =
   | 'exploring'
   | 'planned'
   | 'implementing'
@@ -46,14 +46,14 @@ type InitiativeStatusData =
   | 'parked'
   | 'discarded'
 
-type InitiativeAttentionData =
+type SpaceAttentionData =
   | 'none'
   | 'needs-you'
   | 'needs-decision'
   | 'blocked'
   | 'stale'
 
-type InitiativeAttemptRoleData =
+type SpaceAttemptRoleData =
   | 'seed'
   | 'exploration'
   | 'implementation'
@@ -61,7 +61,7 @@ type InitiativeAttemptRoleData =
   | 'hardening'
   | 'docs'
 
-type InitiativeOutputKindData =
+type SpaceArtifactKindData =
   | 'pull-request'
   | 'branch'
   | 'commit-range'
@@ -72,7 +72,7 @@ type InitiativeOutputKindData =
   | 'external-issue'
   | 'other'
 
-type InitiativeOutputStatusData =
+type SpaceArtifactStatusData =
   | 'planned'
   | 'in-progress'
   | 'ready'
@@ -80,93 +80,106 @@ type InitiativeOutputStatusData =
   | 'released'
   | 'abandoned'
 
-interface InitiativeData {
+interface SpaceData {
   id: string
   title: string
-  status: InitiativeStatusData
-  attention: InitiativeAttentionData
-  currentUnderstanding: string
+  status: SpaceStatusData
+  attention: SpaceAttentionData
+  brief: string
+  memory: string
   createdAt: string
   updatedAt: string
 }
 
-interface InitiativeAttemptData {
+interface SpaceAttemptData {
   id: string
-  initiativeId: string
+  spaceId: string
   sessionId: string
-  role: InitiativeAttemptRoleData
+  role: SpaceAttemptRoleData
   isPrimary: boolean
   createdAt: string
 }
 
-interface InitiativeOutputData {
+interface SpaceArtifactData {
   id: string
-  initiativeId: string
-  kind: InitiativeOutputKindData
+  spaceId: string
+  kind: SpaceArtifactKindData
   label: string
   value: string
   sourceSessionId: string | null
-  status: InitiativeOutputStatusData
+  status: SpaceArtifactStatusData
   createdAt: string
   updatedAt: string
 }
 
-interface CreateInitiativeInputData {
+interface SpaceSourceData {
+  id: string
+  spaceId: string
+  filename: string
+  originalPath: string
+  storagePath: string
+  sizeBytes: number
+  createdAt: string
+}
+
+interface CreateSpaceInputData {
   title: string
-  status?: InitiativeStatusData
-  attention?: InitiativeAttentionData
-  currentUnderstanding?: string
+  status?: SpaceStatusData
+  attention?: SpaceAttentionData
+  brief?: string
+  memory?: string
 }
 
-interface UpdateInitiativeInputData {
+interface UpdateSpaceInputData {
   title?: string
-  status?: InitiativeStatusData
-  attention?: InitiativeAttentionData
-  currentUnderstanding?: string
+  status?: SpaceStatusData
+  attention?: SpaceAttentionData
+  brief?: string
+  memory?: string
 }
 
-interface LinkInitiativeAttemptInputData {
-  initiativeId: string
+interface LinkSpaceAttemptInputData {
+  spaceId: string
   sessionId: string
-  role?: InitiativeAttemptRoleData
+  role?: SpaceAttemptRoleData
   isPrimary?: boolean
 }
 
-interface UpdateInitiativeAttemptInputData {
-  role?: InitiativeAttemptRoleData
+interface UpdateSpaceAttemptInputData {
+  role?: SpaceAttemptRoleData
 }
 
-interface CreateInitiativeOutputInputData {
-  initiativeId: string
-  kind: InitiativeOutputKindData
+interface CreateSpaceArtifactInputData {
+  spaceId: string
+  kind: SpaceArtifactKindData
   label: string
   value: string
   sourceSessionId?: string | null
-  status?: InitiativeOutputStatusData
+  status?: SpaceArtifactStatusData
 }
 
-interface UpdateInitiativeOutputInputData {
-  kind?: InitiativeOutputKindData
+interface UpdateSpaceArtifactInputData {
+  kind?: SpaceArtifactKindData
   label?: string
   value?: string
   sourceSessionId?: string | null
-  status?: InitiativeOutputStatusData
+  status?: SpaceArtifactStatusData
 }
 
-interface InitiativeSynthesisOutputSuggestionData {
-  kind: InitiativeOutputKindData
+interface SpaceSynthesisArtifactSuggestionData {
+  kind: SpaceArtifactKindData
   label: string
   value: string
   sourceSessionId: string | null
-  status: InitiativeOutputStatusData
+  status: SpaceArtifactStatusData
 }
 
-interface InitiativeSynthesisResultData {
-  currentUnderstanding: string
+interface SpaceSynthesisResultData {
+  brief: string
   decisions: string[]
   openQuestions: string[]
   nextAction: string
-  outputs: InitiativeSynthesisOutputSuggestionData[]
+  artifacts: SpaceSynthesisArtifactSuggestionData[]
 }
 
 interface BranchOutputFactsData {
@@ -921,44 +934,49 @@ interface ElectronAPI {
     attachToSession: (sessionId: string, itemIds: string[]) => Promise<void>
     listForSession: (sessionId: string) => Promise<ProjectContextItemData[]>
   }
-  initiative: {
-    list: () => Promise<InitiativeData[]>
-    getById: (id: string) => Promise<InitiativeData | null>
-    create: (input: CreateInitiativeInputData) => Promise<InitiativeData>
-    update: (
-      id: string,
-      input: UpdateInitiativeInputData,
-    ) => Promise<InitiativeData>
+  space: {
+    list: () => Promise<SpaceData[]>
+    getById: (id: string) => Promise<SpaceData | null>
+    create: (input: CreateSpaceInputData) => Promise<SpaceData>
+    update: (id: string, input: UpdateSpaceInputData) => Promise<SpaceData>
     delete: (id: string) => Promise<void>
-    listAttempts: (initiativeId: string) => Promise<InitiativeAttemptData[]>
-    listAttemptsForSession: (
-      sessionId: string,
-    ) => Promise<InitiativeAttemptData[]>
-    linkAttempt: (
-      input: LinkInitiativeAttemptInputData,
-    ) => Promise<InitiativeAttemptData>
+    listAttempts: (spaceId: string) => Promise<SpaceAttemptData[]>
+    listAttemptsForSession: (sessionId: string) => Promise<SpaceAttemptData[]>
+    linkAttempt: (input: LinkSpaceAttemptInputData) => Promise<SpaceAttemptData>
     updateAttempt: (
       id: string,
-      input: UpdateInitiativeAttemptInputData,
-    ) => Promise<InitiativeAttemptData>
+      input: UpdateSpaceAttemptInputData,
+    ) => Promise<SpaceAttemptData>
     unlinkAttempt: (id: string) => Promise<void>
     setPrimaryAttempt: (
-      initiativeId: string,
+      spaceId: string,
       attemptId: string,
-    ) => Promise<InitiativeAttemptData>
-    listOutputs: (initiativeId: string) => Promise<InitiativeOutputData[]>
-    addOutput: (
-      input: CreateInitiativeOutputInputData,
-    ) => Promise<InitiativeOutputData>
-    updateOutput: (
+    ) => Promise<SpaceAttemptData>
+    listArtifacts: (spaceId: string) => Promise<SpaceArtifactData[]>
+    addArtifact: (
+      input: CreateSpaceArtifactInputData,
+    ) => Promise<SpaceArtifactData>
+    addArtifactsFromPaths: (
+      spaceId: string,
+      paths: string[],
+    ) => Promise<SpaceArtifactData[]>
+    updateArtifact: (
       id: string,
-      input: UpdateInitiativeOutputInputData,
-    ) => Promise<InitiativeOutputData>
-    deleteOutput: (id: string) => Promise<void>
+      input: UpdateSpaceArtifactInputData,
+    ) => Promise<SpaceArtifactData>
+    deleteArtifact: (id: string) => Promise<void>
+    listSources: (spaceId: string) => Promise<SpaceSourceData[]>
+    addSourcesFromPaths: (
+      spaceId: string,
+      paths: string[],
+    ) => Promise<SpaceSourceData[]>
+    deleteSource: (id: string) => Promise<void>
+    showSourceOpenDialog: () => Promise<string[] | null>
+    showArtifactOpenDialog: () => Promise<string[] | null>
     synthesize: (
-      initiativeId: string,
+      spaceId: string,
       requestId?: string,
-    ) => Promise<InitiativeSynthesisResultData>
+    ) => Promise<SpaceSynthesisResultData>
   }
   dialog: {
     selectDirectory: () => Promise<string | null>

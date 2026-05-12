@@ -3,7 +3,7 @@ import type { FC, MouseEvent as ReactMouseEvent } from 'react'
 import { useProjectStore } from '@/entities/project'
 import { formatActivityLabel, useSessionStore } from '@/entities/session'
 import { useDialogStore } from '@/entities/dialog'
-import { useInitiativeStore } from '@/entities/initiative'
+import { useSpaceStore } from '@/entities/space'
 import {
   usePullRequestStore,
   type WorkspacePullRequest,
@@ -41,9 +41,9 @@ import { cn } from '@/shared/lib/cn.pure'
 import { ChangedFilesPanel } from './changed-files-panel.container'
 import { formatConversationTotalDuration } from './conversation-total-duration.pure'
 import {
-  InitiativeContextPanel,
-  type InitiativeContextAttemptView,
-} from './initiative-context-panel.presentational'
+  SpaceContextPanel,
+  type SpaceContextAttemptView,
+} from './space-context-panel.presentational'
 import { PullRequestPanel } from './pull-request-panel.presentational'
 import { SessionConversationSurface } from './session-conversation-surface.container'
 
@@ -88,20 +88,14 @@ export const SessionView: FC = () => {
   const hydratePaneTree = useTerminalStore((s) => s.hydratePaneTree)
   const closeAllTerminals = useTerminalStore((s) => s.closeAllForSession)
   const setPrimarySurface = useSessionStore((s) => s.setPrimarySurface)
-  const initiatives = useInitiativeStore((s) => s.initiatives)
-  const attemptsBySessionId = useInitiativeStore((s) => s.attemptsBySessionId)
-  const attemptsByInitiativeId = useInitiativeStore(
-    (s) => s.attemptsByInitiativeId,
-  )
-  const outputsByInitiativeId = useInitiativeStore(
-    (s) => s.outputsByInitiativeId,
-  )
-  const loadInitiatives = useInitiativeStore((s) => s.loadInitiatives)
-  const loadAttemptsForSession = useInitiativeStore(
-    (s) => s.loadAttemptsForSession,
-  )
-  const loadAttempts = useInitiativeStore((s) => s.loadAttempts)
-  const loadOutputs = useInitiativeStore((s) => s.loadOutputs)
+  const spaces = useSpaceStore((s) => s.spaces)
+  const attemptsBySessionId = useSpaceStore((s) => s.attemptsBySessionId)
+  const attemptsBySpaceId = useSpaceStore((s) => s.attemptsBySpaceId)
+  const artifactsBySpaceId = useSpaceStore((s) => s.artifactsBySpaceId)
+  const loadSpaces = useSpaceStore((s) => s.loadSpaces)
+  const loadAttemptsForSession = useSpaceStore((s) => s.loadAttemptsForSession)
+  const loadAttempts = useSpaceStore((s) => s.loadAttempts)
+  const loadArtifacts = useSpaceStore((s) => s.loadArtifacts)
   const terminalTree = useTerminalStore((s) =>
     activeSessionId ? (s.treesBySessionId[activeSessionId] ?? null) : null,
   )
@@ -144,24 +138,18 @@ export const SessionView: FC = () => {
     ? (attemptsBySessionId[session.id] ?? [])
     : []
   const linkedAttempt = linkedSessionAttempts[0] ?? null
-  const linkedInitiative =
+  const linkedSpace =
     linkedAttempt !== null
-      ? (initiatives.find(
-          (initiative) => initiative.id === linkedAttempt.initiativeId,
-        ) ?? null)
+      ? (spaces.find((space) => space.id === linkedAttempt.spaceId) ?? null)
       : null
-  const linkedInitiativeAttempts =
-    linkedInitiative !== null
-      ? (attemptsByInitiativeId[linkedInitiative.id] ?? [])
-      : []
-  const linkedInitiativeOutputs =
-    linkedInitiative !== null
-      ? (outputsByInitiativeId[linkedInitiative.id] ?? [])
-      : []
+  const linkedSpaceAttempts =
+    linkedSpace !== null ? (attemptsBySpaceId[linkedSpace.id] ?? []) : []
+  const linkedSpaceArtifacts =
+    linkedSpace !== null ? (artifactsBySpaceId[linkedSpace.id] ?? []) : []
 
-  const initiativeAttemptViews = useMemo<InitiativeContextAttemptView[]>(
+  const spaceAttemptViews = useMemo<SpaceContextAttemptView[]>(
     () =>
-      linkedInitiativeAttempts.map((attempt) => {
+      linkedSpaceAttempts.map((attempt) => {
         const attemptSession =
           sessions.find((entry) => entry.id === attempt.sessionId) ??
           globalSessions.find((entry) => entry.id === attempt.sessionId) ??
@@ -185,20 +173,20 @@ export const SessionView: FC = () => {
           providerId: attemptSession?.providerId ?? 'unknown',
         }
       }),
-    [globalSessions, linkedInitiativeAttempts, projects, sessions, workspaces],
+    [globalSessions, linkedSpaceAttempts, projects, sessions, workspaces],
   )
 
   useEffect(() => {
     if (!session) return
-    void loadInitiatives()
+    void loadSpaces()
     void loadAttemptsForSession(session.id)
-  }, [loadAttemptsForSession, loadInitiatives, session])
+  }, [loadAttemptsForSession, loadSpaces, session])
 
   useEffect(() => {
-    if (!linkedInitiative) return
-    void loadAttempts(linkedInitiative.id)
-    void loadOutputs(linkedInitiative.id)
-  }, [linkedInitiative, loadAttempts, loadOutputs])
+    if (!linkedSpace) return
+    void loadAttempts(linkedSpace.id)
+    void loadArtifacts(linkedSpace.id)
+  }, [linkedSpace, loadArtifacts, loadAttempts])
 
   useEffect(() => {
     if (!changedFilesExpanded) {
@@ -570,14 +558,14 @@ export const SessionView: FC = () => {
                 {session.providerId !== 'shell' && (
                   <DropdownMenuItem
                     onClick={() =>
-                      openDialog('initiative-session-link', {
+                      openDialog('space-session-link', {
                         sessionId: session.id,
                       })
                     }
                     className="gap-2"
                   >
                     <Link2 className="h-3.5 w-3.5" />
-                    Link to Initiative...
+                    Link to Space...
                   </DropdownMenuItem>
                 )}
                 {session.providerId !== 'shell' && (
@@ -658,14 +646,12 @@ export const SessionView: FC = () => {
         />
       )}
 
-      {linkedInitiative && !changedFilesExpanded && (
-        <InitiativeContextPanel
-          initiative={linkedInitiative}
-          attempts={initiativeAttemptViews}
-          outputs={linkedInitiativeOutputs}
-          onOpenInitiative={(initiativeId) =>
-            openDialog('initiative-workboard', { initiativeId })
-          }
+      {linkedSpace && !changedFilesExpanded && (
+        <SpaceContextPanel
+          space={linkedSpace}
+          attempts={spaceAttemptViews}
+          artifacts={linkedSpaceArtifacts}
+          onOpenSpace={(spaceId) => openDialog('space-workboard', { spaceId })}
         />
       )}
 

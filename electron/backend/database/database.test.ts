@@ -27,9 +27,10 @@ describe('database', () => {
     expect(tableNames).toContain('session_terminal_layout')
     expect(tableNames).toContain('session_turns')
     expect(tableNames).toContain('session_turn_file_changes')
-    expect(tableNames).toContain('initiatives')
-    expect(tableNames).toContain('initiative_attempts')
-    expect(tableNames).toContain('initiative_outputs')
+    expect(tableNames).toContain('spaces')
+    expect(tableNames).toContain('space_attempts')
+    expect(tableNames).toContain('space_artifacts')
+    expect(tableNames).toContain('space_sources')
     expect(tableNames).toContain('project_context_items')
     expect(tableNames).toContain('session_context_attachments')
     expect(tableNames).toContain('analytics_profile_snapshots')
@@ -343,44 +344,242 @@ describe('database', () => {
     expect(changes).toEqual([])
   })
 
-  it('creates initiative tables with expected constraints', () => {
+  it('creates space tables with expected constraints', () => {
     const db = getDatabase()
-    const initiativeColumns = db
-      .prepare("PRAGMA table_info('initiatives')")
+    const spaceColumns = db
+      .prepare("PRAGMA table_info('spaces')")
       .all() as Array<{ name: string }>
-    expect(initiativeColumns.map((c) => c.name).sort()).toEqual(
+    expect(spaceColumns.map((c) => c.name).sort()).toEqual(
       [
         'id',
         'title',
         'status',
         'attention',
-        'current_understanding',
+        'brief',
+        'memory',
         'created_at',
         'updated_at',
       ].sort(),
     )
 
     const attemptForeignKeys = db
-      .prepare("PRAGMA foreign_key_list('initiative_attempts')")
+      .prepare("PRAGMA foreign_key_list('space_attempts')")
       .all() as Array<{ table: string; on_delete: string }>
     expect(attemptForeignKeys.map((fk) => fk.table).sort()).toEqual(
-      ['initiatives', 'sessions'].sort(),
+      ['spaces', 'sessions'].sort(),
     )
     for (const fk of attemptForeignKeys) {
       expect(fk.on_delete).toBe('CASCADE')
     }
 
-    const outputForeignKeys = db
-      .prepare("PRAGMA foreign_key_list('initiative_outputs')")
+    const artifactForeignKeys = db
+      .prepare("PRAGMA foreign_key_list('space_artifacts')")
       .all() as Array<{ table: string; on_delete: string }>
-    expect(outputForeignKeys.map((fk) => fk.table).sort()).toEqual(
-      ['initiatives', 'sessions'].sort(),
+    expect(artifactForeignKeys.map((fk) => fk.table).sort()).toEqual(
+      ['spaces', 'sessions'].sort(),
     )
     expect(
-      outputForeignKeys.some(
+      artifactForeignKeys.some(
         (fk) => fk.table === 'sessions' && fk.on_delete === 'SET NULL',
       ),
     ).toBe(true)
+
+    const sourceColumns = db
+      .prepare("PRAGMA table_info('space_sources')")
+      .all() as Array<{ name: string }>
+    expect(sourceColumns.map((c) => c.name).sort()).toEqual(
+      [
+        'id',
+        'space_id',
+        'filename',
+        'original_path',
+        'storage_path',
+        'size_bytes',
+        'created_at',
+      ].sort(),
+    )
+
+    const sourceForeignKeys = db
+      .prepare("PRAGMA foreign_key_list('space_sources')")
+      .all() as Array<{ table: string; on_delete: string }>
+    expect(sourceForeignKeys).toEqual([
+      expect.objectContaining({ table: 'spaces', on_delete: 'CASCADE' }),
+    ])
+  })
+
+  it('migrates legacy initiative rows into spaces', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'convergence-space-migration-'))
+    const dbPath = join(dir, 'legacy.sqlite')
+    const legacyDb = new Database(dbPath)
+
+    try {
+      legacyDb.pragma('foreign_keys = ON')
+      legacyDb.exec(`
+        CREATE TABLE projects (
+          id TEXT PRIMARY KEY,
+          name TEXT NOT NULL,
+          repository_path TEXT NOT NULL UNIQUE,
+          settings TEXT NOT NULL DEFAULT '{}',
+          created_at TEXT NOT NULL DEFAULT (datetime('now')),
+          updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+        );
+
+        CREATE TABLE sessions (
+          id TEXT PRIMARY KEY,
+          context_kind TEXT NOT NULL DEFAULT 'project'
+            CHECK (context_kind IN ('project', 'global')),
+          project_id TEXT,
+          workspace_id TEXT,
+          provider_id TEXT NOT NULL,
+          model TEXT,
+          effort TEXT,
+          continuation_token TEXT,
+          name TEXT NOT NULL,
+          status TEXT NOT NULL DEFAULT 'idle',
+          attention TEXT NOT NULL DEFAULT 'none',
+          working_directory TEXT NOT NULL,
+          context_window TEXT,
+          activity TEXT,
+          archived_at TEXT,
+          last_sequence INTEGER NOT NULL DEFAULT 0,
+          conversation_version INTEGER NOT NULL DEFAULT 2,
+          name_auto_generated INTEGER NOT NULL DEFAULT 0,
+          parent_session_id TEXT,
+          fork_strategy TEXT,
+          primary_surface TEXT NOT NULL DEFAULT 'conversation',
+          created_at TEXT NOT NULL DEFAULT (datetime('now')),
+          updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+          FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
+          CHECK (
+            (context_kind = 'project' AND project_id IS NOT NULL)
+            OR
+            (context_kind = 'global' AND project_id IS NULL AND workspace_id IS NULL)
+          )
+        );
+
+        CREATE TABLE initiatives (
+          id TEXT PRIMARY KEY,
+          title TEXT NOT NULL,
+          status TEXT NOT NULL DEFAULT 'exploring',
+          attention TEXT NOT NULL DEFAULT 'none',
+          current_understanding TEXT NOT NULL DEFAULT '',
+          created_at TEXT NOT NULL DEFAULT (datetime('now')),
+          updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+        );
+
+        CREATE TABLE initiative_attempts (
+          id TEXT PRIMARY KEY,
+          initiative_id TEXT NOT NULL,
+          session_id TEXT NOT NULL,
+          role TEXT NOT NULL DEFAULT 'exploration',
+          is_primary INTEGER NOT NULL DEFAULT 0,
+          created_at TEXT NOT NULL DEFAULT (datetime('now')),
+          FOREIGN KEY (initiative_id) REFERENCES initiatives(id) ON DELETE CASCADE,
+          FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE,
+          UNIQUE (initiative_id, session_id)
+        );
+
+        CREATE TABLE initiative_outputs (
+          id TEXT PRIMARY KEY,
+          initiative_id TEXT NOT NULL,
+          kind TEXT NOT NULL,
+          label TEXT NOT NULL,
+          value TEXT NOT NULL,
+          source_session_id TEXT,
+          status TEXT NOT NULL DEFAULT 'planned',
+          created_at TEXT NOT NULL DEFAULT (datetime('now')),
+          updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+          FOREIGN KEY (initiative_id) REFERENCES initiatives(id) ON DELETE CASCADE,
+          FOREIGN KEY (source_session_id) REFERENCES sessions(id) ON DELETE SET NULL
+        );
+
+        INSERT INTO sessions (
+          id, context_kind, project_id, workspace_id, provider_id, name, working_directory
+        ) VALUES (
+          'session-1', 'global', NULL, NULL, 'codex', 'Attempt', '/tmp/global'
+        );
+
+        INSERT INTO initiatives (
+          id, title, status, attention, current_understanding, created_at, updated_at
+        ) VALUES (
+          'space-1',
+          'Legacy initiative',
+          'exploring',
+          'needs-decision',
+          'Stable context',
+          '2026-05-01T10:00:00.000Z',
+          '2026-05-01T11:00:00.000Z'
+        );
+
+        INSERT INTO initiative_attempts (
+          id, initiative_id, session_id, role, is_primary, created_at
+        ) VALUES (
+          'attempt-1',
+          'space-1',
+          'session-1',
+          'seed',
+          1,
+          '2026-05-01T10:05:00.000Z'
+        );
+
+        INSERT INTO initiative_outputs (
+          id, initiative_id, kind, label, value, source_session_id, status,
+          created_at, updated_at
+        ) VALUES (
+          'artifact-1',
+          'space-1',
+          'documentation',
+          'Spec',
+          'docs/spec.md',
+          'session-1',
+          'ready',
+          '2026-05-01T10:10:00.000Z',
+          '2026-05-01T10:20:00.000Z'
+        );
+      `)
+    } finally {
+      legacyDb.close()
+    }
+
+    try {
+      const db = getDatabase(dbPath)
+      const spaces = db.prepare('SELECT * FROM spaces').all()
+      const attempts = db.prepare('SELECT * FROM space_attempts').all()
+      const artifacts = db.prepare('SELECT * FROM space_artifacts').all()
+
+      expect(spaces).toMatchObject([
+        {
+          id: 'space-1',
+          title: 'Legacy initiative',
+          attention: 'needs-decision',
+          brief: 'Stable context',
+        },
+      ])
+      expect(attempts).toMatchObject([
+        {
+          id: 'attempt-1',
+          space_id: 'space-1',
+          session_id: 'session-1',
+          role: 'seed',
+          is_primary: 1,
+        },
+      ])
+      expect(artifacts).toMatchObject([
+        {
+          id: 'artifact-1',
+          space_id: 'space-1',
+          kind: 'documentation',
+          label: 'Spec',
+          value: 'docs/spec.md',
+          source_session_id: 'session-1',
+          status: 'ready',
+        },
+      ])
+    } finally {
+      closeDatabase()
+      resetDatabase()
+      rmSync(dir, { recursive: true, force: true })
+    }
   })
 
   it('creates project_context_items with expected columns and FK', () => {
