@@ -15,7 +15,8 @@ import { SessionConversationSurface } from '@/widgets/session-view'
 import { AttentionIndicator } from '@/shared/ui/attention-indicator.presentational'
 import { Button } from '@/shared/ui/button'
 import { ContextWindowIndicator } from '@/shared/ui/context-window-indicator.presentational'
-import { MessageSquareText, Square } from 'lucide-react'
+import { Input } from '@/shared/ui/input'
+import { CheckSquare, Folder, MessageSquareText, Square } from 'lucide-react'
 import {
   SpaceHome,
   type SpaceArtifactDraft,
@@ -29,6 +30,10 @@ import {
 
 interface ChatSurfaceProps {
   selectedSpaceId: string | null
+  draftSpaceId?: string | null
+  onBeginSpaceAttempt?: (spaceId: string) => void
+  onCancelSpaceAttempt?: () => void
+  onSpaceDeleted?: (spaceId: string) => void
 }
 
 const EMPTY_SPACE_SOURCES: SpaceSource[] = []
@@ -41,7 +46,13 @@ const DEFAULT_ARTIFACT_DRAFT: SpaceArtifactDraft = {
   status: 'ready',
 }
 
-export const ChatSurface: FC<ChatSurfaceProps> = ({ selectedSpaceId }) => {
+export const ChatSurface: FC<ChatSurfaceProps> = ({
+  selectedSpaceId,
+  draftSpaceId = null,
+  onBeginSpaceAttempt,
+  onCancelSpaceAttempt,
+  onSpaceDeleted,
+}) => {
   const sessions = useSessionStore((state) => state.globalChatSessions)
   const globalSessions = useSessionStore((state) => state.globalSessions)
   const projectSessions = useSessionStore((state) => state.sessions)
@@ -64,6 +75,9 @@ export const ChatSurface: FC<ChatSurfaceProps> = ({ selectedSpaceId }) => {
   )
   const deleteSource = useSpaceStore((state) => state.deleteSource)
   const linkAttempt = useSpaceStore((state) => state.linkAttempt)
+  const archiveSpace = useSpaceStore((state) => state.archiveSpace)
+  const unarchiveSpace = useSpaceStore((state) => state.unarchiveSpace)
+  const deleteSpace = useSpaceStore((state) => state.deleteSpace)
   const activeSessionId = useSessionStore(
     (state) => state.activeGlobalSessionId,
   )
@@ -77,6 +91,14 @@ export const ChatSurface: FC<ChatSurfaceProps> = ({ selectedSpaceId }) => {
   const approveSession = useSessionStore((state) => state.approveSession)
   const denySession = useSessionStore((state) => state.denySession)
   const stopSession = useSessionStore((state) => state.stopSession)
+  const deleteSession = useSessionStore((state) => state.deleteSession)
+  const loadGlobalSessions = useSessionStore(
+    (state) => state.loadGlobalSessions,
+  )
+  const loadGlobalChatSessions = useSessionStore(
+    (state) => state.loadGlobalChatSessions,
+  )
+  const loadProjectSessions = useSessionStore((state) => state.loadSessions)
   const setActiveSurface = useAppSurfaceStore((state) => state.setActiveSurface)
   const [activeSpaceTab, setActiveSpaceTab] = useState<SpaceHomeTab>('chats')
   const [briefDraft, setBriefDraft] = useState('')
@@ -97,14 +119,24 @@ export const ChatSurface: FC<ChatSurfaceProps> = ({ selectedSpaceId }) => {
   const session = sessions.find((entry) => entry.id === activeSessionId) ?? null
   const selectedSpace =
     spaces.find((entry) => entry.id === selectedSpaceId) ?? null
+  const draftSpace =
+    spaces.find((entry) => entry.id === draftSpaceId) ?? selectedSpace
+  const activeSpaceId = draftSpaceId ?? selectedSpaceId
+  const activeSpace = draftSpaceId ? draftSpace : selectedSpace
   const selectedSpaceAttempts =
     selectedSpaceId === null ? [] : (attemptsBySpaceId[selectedSpaceId] ?? [])
+  const activeSpaceAttempts =
+    activeSpaceId === null ? [] : (attemptsBySpaceId[activeSpaceId] ?? [])
   const selectedSpaceArtifacts =
     selectedSpaceId === null ? [] : (artifactsBySpaceId[selectedSpaceId] ?? [])
   const selectedSpaceSources =
     selectedSpaceId === null
       ? EMPTY_SPACE_SOURCES
       : (sourcesBySpaceId[selectedSpaceId] ?? EMPTY_SPACE_SOURCES)
+  const activeSpaceSources =
+    activeSpaceId === null
+      ? EMPTY_SPACE_SOURCES
+      : (sourcesBySpaceId[activeSpaceId] ?? EMPTY_SPACE_SOURCES)
   const activityLabel = formatActivityLabel(session?.activity)
   const sessionLookup = useMemo(() => {
     const next = new Map<string, SessionSummary>()
@@ -124,11 +156,11 @@ export const ChatSurface: FC<ChatSurfaceProps> = ({ selectedSpaceId }) => {
   )
 
   useEffect(() => {
-    if (!selectedSpaceId) return
-    void loadAttempts(selectedSpaceId)
-    void loadArtifacts(selectedSpaceId)
-    void loadSources(selectedSpaceId)
-  }, [loadArtifacts, loadAttempts, loadSources, selectedSpaceId])
+    if (!activeSpaceId) return
+    void loadAttempts(activeSpaceId)
+    void loadArtifacts(activeSpaceId)
+    void loadSources(activeSpaceId)
+  }, [activeSpaceId, loadArtifacts, loadAttempts, loadSources])
 
   useEffect(() => {
     setActiveSpaceTab('chats')
@@ -143,37 +175,48 @@ export const ChatSurface: FC<ChatSurfaceProps> = ({ selectedSpaceId }) => {
 
   useEffect(() => {
     setContextSelection((previous) => {
-      const sourceIds = new Set(selectedSpaceSources.map((source) => source.id))
+      const sourceIds = new Set(activeSpaceSources.map((source) => source.id))
       const selectedSourceIds = [
         ...previous.selectedSourceIds.filter((id) => sourceIds.has(id)),
-        ...selectedSpaceSources
+        ...activeSpaceSources
           .map((source) => source.id)
           .filter((id) => !previous.selectedSourceIds.includes(id)),
       ]
       return { ...previous, selectedSourceIds }
     })
-  }, [selectedSpaceId, selectedSpaceSources])
+  }, [activeSpaceId, activeSpaceSources])
 
-  const contextPreview = selectedSpace
+  const contextPreview = activeSpace
     ? buildSpaceContextBlock({
-        space: selectedSpace,
-        sources: selectedSpaceSources,
+        space: activeSpace,
+        sources: activeSpaceSources,
         selection: contextSelection,
       })
     : null
+  const selectedSourceSet = useMemo(
+    () => new Set(contextSelection.selectedSourceIds),
+    [contextSelection.selectedSourceIds],
+  )
 
   const handleGlobalSessionCreated = useCallback(
     async (createdSession: SessionSummary) => {
-      if (!selectedSpaceId) return
+      if (!activeSpaceId) return
       await linkAttempt({
-        spaceId: selectedSpaceId,
+        spaceId: activeSpaceId,
         sessionId: createdSession.id,
-        role: selectedSpaceAttempts.length === 0 ? 'seed' : 'implementation',
-        isPrimary: selectedSpaceAttempts.length === 0,
+        role: activeSpaceAttempts.length === 0 ? 'seed' : 'implementation',
+        isPrimary: activeSpaceAttempts.length === 0,
       })
-      await loadAttempts(selectedSpaceId)
+      await loadAttempts(activeSpaceId)
+      onCancelSpaceAttempt?.()
     },
-    [linkAttempt, loadAttempts, selectedSpaceAttempts.length, selectedSpaceId],
+    [
+      activeSpaceAttempts.length,
+      activeSpaceId,
+      linkAttempt,
+      loadAttempts,
+      onCancelSpaceAttempt,
+    ],
   )
 
   const handleOpenAttempt = useCallback(
@@ -281,10 +324,195 @@ export const ChatSurface: FC<ChatSurfaceProps> = ({ selectedSpaceId }) => {
     await updateSpace(selectedSpaceId, { memory: memoryDraft })
   }, [memoryDraft, selectedSpaceId, updateSpace])
 
+  const handleDeleteSpace = useCallback(async () => {
+    if (!selectedSpaceId || !selectedSpace) return
+
+    const linkedSessions = attemptViews
+      .map(({ session }) => session)
+      .filter((entry): entry is SessionSummary => entry !== null)
+    const sessionCount = linkedSessions.length
+    const confirmed = window.confirm(
+      `Delete Space "${selectedSpace.title}"?\n\nThis will permanently delete the Space and ${sessionCount} attached session${sessionCount === 1 ? '' : 's'}. This cannot be undone.`,
+    )
+    if (!confirmed) return
+
+    for (const linkedSession of linkedSessions) {
+      await deleteSession(linkedSession.id, linkedSession.projectId)
+    }
+    await deleteSpace(selectedSpaceId)
+    onSpaceDeleted?.(selectedSpaceId)
+  }, [
+    attemptViews,
+    deleteSession,
+    deleteSpace,
+    onSpaceDeleted,
+    selectedSpace,
+    selectedSpaceId,
+  ])
+
+  const refreshLinkedSessions = useCallback(async () => {
+    const projectIds = [
+      ...new Set(
+        attemptViews
+          .map(({ session }) => session?.projectId)
+          .filter((id): id is string => id !== null && id !== undefined),
+      ),
+    ]
+    await Promise.all([
+      loadGlobalSessions(),
+      loadGlobalChatSessions(),
+      ...projectIds.map((projectId) => loadProjectSessions(projectId)),
+    ])
+  }, [
+    attemptViews,
+    loadGlobalChatSessions,
+    loadGlobalSessions,
+    loadProjectSessions,
+  ])
+
+  const handleArchiveSpace = useCallback(async () => {
+    if (!selectedSpaceId || !selectedSpace) return
+
+    const sessionCount = attemptViews.filter(({ session }) => session).length
+    const confirmed = window.confirm(
+      `Archive Space "${selectedSpace.title}"?\n\nThis will hide the Space from the active list and archive ${sessionCount} attached session${sessionCount === 1 ? '' : 's'}.`,
+    )
+    if (!confirmed) return
+
+    const archived = await archiveSpace(selectedSpaceId)
+    if (!archived) return
+    await refreshLinkedSessions()
+    onSpaceDeleted?.(selectedSpaceId)
+  }, [
+    archiveSpace,
+    attemptViews,
+    onSpaceDeleted,
+    refreshLinkedSessions,
+    selectedSpace,
+    selectedSpaceId,
+  ])
+
+  const handleUnarchiveSpace = useCallback(async () => {
+    if (!selectedSpaceId) return
+    const unarchived = await unarchiveSpace(selectedSpaceId)
+    if (!unarchived) return
+    await refreshLinkedSessions()
+  }, [refreshLinkedSessions, selectedSpaceId, unarchiveSpace])
+
   const prepareSpaceAttemptMessage = useCallback(
     (message: string) => applySpaceContextToMessage(message, contextPreview),
     [contextPreview],
   )
+
+  if (draftSpaceId && draftSpace && !session) {
+    return (
+      <div className="flex h-full flex-col">
+        <div
+          className="h-12 shrink-0 border-b border-border"
+          style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
+        />
+        <div className="flex min-h-0 flex-1 flex-col items-center justify-center px-4">
+          <p className="mb-1 text-lg font-medium">Convergence</p>
+          <p className="mb-3 text-sm text-muted-foreground">
+            What would you like to work on?
+          </p>
+          <div className="mb-5 flex items-center gap-2 rounded-full border border-border bg-muted/40 px-3 py-1 text-xs text-muted-foreground">
+            <Folder className="h-3 w-3" />
+            <span>
+              Starting in Space:{' '}
+              <span className="font-medium text-foreground">
+                {draftSpace.title}
+              </span>
+            </span>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={onCancelSpaceAttempt}
+              className="ml-1 h-auto px-2 py-0 text-xs"
+            >
+              Open Space
+            </Button>
+          </div>
+          <div className="mb-3 w-full max-w-2xl rounded-lg border border-border/70 bg-card/30 px-3 py-3">
+            <div className="mb-3 flex items-center gap-2 text-xs font-medium uppercase text-muted-foreground">
+              <CheckSquare className="h-3.5 w-3.5" />
+              <span>Context for this chat</span>
+            </div>
+            <div className="space-y-2 text-sm">
+              <label className="flex items-center gap-2">
+                <Input
+                  type="checkbox"
+                  className="h-4 w-4"
+                  checked={contextSelection.includeBrief}
+                  onChange={(event) =>
+                    setContextSelection({
+                      ...contextSelection,
+                      includeBrief: event.target.checked,
+                    })
+                  }
+                />
+                <span>Space brief</span>
+              </label>
+              <label className="flex items-center gap-2">
+                <Input
+                  type="checkbox"
+                  className="h-4 w-4"
+                  checked={contextSelection.includeMemory}
+                  onChange={(event) =>
+                    setContextSelection({
+                      ...contextSelection,
+                      includeMemory: event.target.checked,
+                    })
+                  }
+                />
+                <span>Space memory/instructions</span>
+              </label>
+              {activeSpaceSources.length > 0 ? (
+                <div className="space-y-1 border-t border-border/60 pt-2">
+                  <div className="text-xs text-muted-foreground">
+                    Selected sources
+                  </div>
+                  {activeSpaceSources.map((source) => (
+                    <label
+                      key={source.id}
+                      className="flex min-w-0 items-center gap-2"
+                    >
+                      <Input
+                        type="checkbox"
+                        className="h-4 w-4 shrink-0"
+                        checked={selectedSourceSet.has(source.id)}
+                        onChange={(event) => {
+                          const nextSourceIds = event.target.checked
+                            ? [...contextSelection.selectedSourceIds, source.id]
+                            : contextSelection.selectedSourceIds.filter(
+                                (id) => id !== source.id,
+                              )
+                          setContextSelection({
+                            ...contextSelection,
+                            selectedSourceIds: nextSourceIds,
+                          })
+                        }}
+                      />
+                      <span className="truncate">{source.filename}</span>
+                    </label>
+                  ))}
+                </div>
+              ) : null}
+            </div>
+            <pre className="app-scrollbar mt-3 max-h-28 overflow-y-auto whitespace-pre-wrap rounded-md border border-border/60 bg-background/70 p-2 text-xs text-muted-foreground">
+              {contextPreview ?? 'No Space context selected.'}
+            </pre>
+          </div>
+          <ComposerContainer
+            context={{ kind: 'global', activeSessionId: null }}
+            onGlobalSessionCreated={handleGlobalSessionCreated}
+            prepareNewSessionMessage={prepareSpaceAttemptMessage}
+          />
+        </div>
+      </div>
+    )
+  }
 
   if (selectedSpaceId && selectedSpace && !session) {
     return (
@@ -295,33 +523,27 @@ export const ChatSurface: FC<ChatSurfaceProps> = ({ selectedSpaceId }) => {
         sources={selectedSpaceSources}
         activeTab={activeSpaceTab}
         onTabChange={setActiveSpaceTab}
+        onBeginAttempt={() => onBeginSpaceAttempt?.(selectedSpaceId)}
         onOpenAttempt={handleOpenAttempt}
         onAddSources={handleAddSources}
         onDeleteSource={handleDeleteSource}
+        onArchiveSpace={handleArchiveSpace}
+        onUnarchiveSpace={handleUnarchiveSpace}
+        onDeleteSpace={handleDeleteSpace}
         artifactDraft={artifactDraft}
         editingArtifactId={editingArtifactId}
         briefDraft={briefDraft}
         memoryDraft={memoryDraft}
-        contextSelection={contextSelection}
-        contextPreview={contextPreview}
         onBriefDraftChange={setBriefDraft}
         onMemoryDraftChange={setMemoryDraft}
         onSaveBrief={handleSaveBrief}
         onSaveMemory={handleSaveMemory}
-        onContextSelectionChange={setContextSelection}
         onArtifactDraftChange={setArtifactDraft}
         onSubmitArtifact={handleSubmitArtifact}
         onCancelArtifactEdit={handleCancelArtifactEdit}
         onEditArtifact={handleEditArtifact}
         onDeleteArtifact={handleDeleteArtifact}
         onAddArtifactFiles={handleAddArtifactFiles}
-        newAttemptComposer={
-          <ComposerContainer
-            context={{ kind: 'global', activeSessionId: null }}
-            onGlobalSessionCreated={handleGlobalSessionCreated}
-            prepareNewSessionMessage={prepareSpaceAttemptMessage}
-          />
-        }
       />
     )
   }

@@ -257,4 +257,43 @@ describe('SpaceService', () => {
         .all(space.id),
     ).toEqual([])
   })
+
+  it('archives and unarchives linked sessions with the space timestamp', () => {
+    const db = getDatabase()
+    const independentArchivedAt = '2026-01-01T00:00:00.000Z'
+    db.prepare(
+      `INSERT INTO sessions (
+         id, project_id, provider_id, name, working_directory, archived_at
+       ) VALUES ('s3', 'p1', 'codex', 's3', '/tmp/p1', ?)`,
+    ).run(independentArchivedAt)
+    const space = service.create({ title: 'Archive test' })
+    service.linkAttempt({ spaceId: space.id, sessionId: 's1' })
+    service.linkAttempt({ spaceId: space.id, sessionId: 's3' })
+
+    const archived = service.archive(space.id)
+
+    expect(archived.archivedAt).toEqual(expect.any(String))
+    const archivedSessions = db
+      .prepare(
+        'SELECT id, archived_at FROM sessions WHERE id IN (?, ?) ORDER BY id',
+      )
+      .all('s1', 's3') as Array<{ id: string; archived_at: string | null }>
+    expect(archivedSessions).toEqual([
+      { id: 's1', archived_at: archived.archivedAt },
+      { id: 's3', archived_at: independentArchivedAt },
+    ])
+
+    const unarchived = service.unarchive(space.id)
+
+    expect(unarchived.archivedAt).toBeNull()
+    const unarchivedSessions = db
+      .prepare(
+        'SELECT id, archived_at FROM sessions WHERE id IN (?, ?) ORDER BY id',
+      )
+      .all('s1', 's3') as Array<{ id: string; archived_at: string | null }>
+    expect(unarchivedSessions).toEqual([
+      { id: 's1', archived_at: null },
+      { id: 's3', archived_at: independentArchivedAt },
+    ])
+  })
 })

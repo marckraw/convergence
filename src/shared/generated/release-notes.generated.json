@@ -1,6 +1,16 @@
 {
-  "currentVersion": "0.36.7",
+  "currentVersion": "0.37.0",
   "releases": [
+    {
+      "version": "0.37.0",
+      "date": null,
+      "notes": "### Minor Changes\n\n- 6b31686: Add Chat Spaces as a first-class grouping and context layer for global chat sessions. Spaces now support linked attempts, sources, editable brief and memory, explicit context previews for new attempts, and promoted artifacts with file-backed storage."
+    },
+    {
+      "version": "0.36.8",
+      "date": null,
+      "notes": "### Patch Changes\n\n- 6dc3cec: Replace narrow model dropdowns with a two-panel command palette picker that supports provider filtering and full model IDs."
+    },
     {
       "version": "0.36.7",
       "date": null,

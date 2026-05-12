@@ -57,6 +57,7 @@ export interface Space {
   attention: SpaceAttention
   brief: string
   memory: string
+  archivedAt?: string | null
   createdAt: string
   updatedAt: string
 }
@@ -154,6 +155,7 @@ export function spaceFromRow(row: SpaceRow): Space {
     attention: parseSpaceAttention(row.attention),
     brief: row.brief,
     memory: row.memory ?? '',
+    archivedAt: row.archived_at ?? null,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   }

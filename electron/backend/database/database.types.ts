@@ -149,6 +149,7 @@ export interface SpaceRow {
   attention: string
   brief: string
   memory: string
+  archived_at: string | null
   created_at: string
   updated_at: string
 }

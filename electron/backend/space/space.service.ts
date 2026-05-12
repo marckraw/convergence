@@ -133,6 +133,71 @@ export class SpaceService {
     }
   }
 
+  archive(id: string): Space {
+    const row = this.getSpaceRow(id)
+    if (!row) throw new Error(`Space not found: ${id}`)
+
+    const archivedAt = row.archived_at ?? new Date().toISOString()
+    const applyArchive = this.db.transaction(() => {
+      this.db
+        .prepare(
+          `UPDATE spaces
+           SET archived_at = ?,
+               updated_at = datetime('now')
+           WHERE id = ?`,
+        )
+        .run(archivedAt, id)
+
+      this.db
+        .prepare(
+          `UPDATE sessions
+           SET archived_at = COALESCE(archived_at, ?),
+               updated_at = datetime('now')
+           WHERE id IN (
+             SELECT session_id FROM space_attempts WHERE space_id = ?
+           )`,
+        )
+        .run(archivedAt, id)
+    })
+
+    applyArchive()
+    return this.getById(id)!
+  }
+
+  unarchive(id: string): Space {
+    const row = this.getSpaceRow(id)
+    if (!row) throw new Error(`Space not found: ${id}`)
+
+    const spaceArchivedAt = row.archived_at
+    const applyUnarchive = this.db.transaction(() => {
+      this.db
+        .prepare(
+          `UPDATE spaces
+           SET archived_at = NULL,
+               updated_at = datetime('now')
+           WHERE id = ?`,
+        )
+        .run(id)
+
+      if (spaceArchivedAt) {
+        this.db
+          .prepare(
+            `UPDATE sessions
+             SET archived_at = NULL,
+                 updated_at = datetime('now')
+             WHERE archived_at = ?
+               AND id IN (
+                 SELECT session_id FROM space_attempts WHERE space_id = ?
+               )`,
+          )
+          .run(spaceArchivedAt, id)
+      }
+    })
+
+    applyUnarchive()
+    return this.getById(id)!
+  }
+
   listAttempts(spaceId: string): SpaceAttempt[] {
     this.assertSpaceExists(spaceId)
     const rows = this.db

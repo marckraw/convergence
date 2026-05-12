@@ -142,6 +142,7 @@ const SCHEMA = `
     attention TEXT NOT NULL DEFAULT 'none',
     brief TEXT NOT NULL DEFAULT '',
     memory TEXT NOT NULL DEFAULT '',
+    archived_at TEXT,
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
     updated_at TEXT NOT NULL DEFAULT (datetime('now'))
   );
@@ -438,6 +439,10 @@ function ensureSpaceColumns(database: Database.Database): void {
     database.exec(
       "ALTER TABLE spaces ADD COLUMN memory TEXT NOT NULL DEFAULT ''",
     )
+  }
+
+  if (!columnNames.has('archived_at')) {
+    database.exec('ALTER TABLE spaces ADD COLUMN archived_at TEXT')
   }
 }
 

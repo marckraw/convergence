@@ -14,6 +14,7 @@ const space: Space = {
   attention: 'none',
   brief: '',
   memory: '',
+  archivedAt: null,
   createdAt: '2026-01-01T00:00:00.000Z',
   updatedAt: '2026-01-01T00:00:00.000Z',
 }
@@ -55,6 +56,8 @@ const mockElectronAPI = {
     getById: vi.fn(),
     create: vi.fn(),
     update: vi.fn(),
+    archive: vi.fn(),
+    unarchive: vi.fn(),
     delete: vi.fn(),
     listAttempts: vi.fn(),
     listAttemptsForSession: vi.fn(),
@@ -122,6 +125,26 @@ describe('useSpaceStore', () => {
     expect(updated?.status).toBe('implementing')
     expect(useSpaceStore.getState().spaces).toEqual([
       { ...space, status: 'implementing' },
+    ])
+  })
+
+  it('archives and unarchives spaces', async () => {
+    mockElectronAPI.space.archive.mockResolvedValue({
+      ...space,
+      archivedAt: '2026-01-02T00:00:00.000Z',
+    })
+    mockElectronAPI.space.unarchive.mockResolvedValue({
+      ...space,
+      archivedAt: null,
+    })
+
+    const archived = await useSpaceStore.getState().archiveSpace(space.id)
+    const unarchived = await useSpaceStore.getState().unarchiveSpace(space.id)
+
+    expect(archived?.archivedAt).toBe('2026-01-02T00:00:00.000Z')
+    expect(unarchived?.archivedAt).toBeNull()
+    expect(useSpaceStore.getState().spaces).toEqual([
+      { ...space, archivedAt: null },
     ])
   })
 
