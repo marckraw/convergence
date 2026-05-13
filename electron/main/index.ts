@@ -38,6 +38,7 @@ import {
 import { createJsonlWriter } from '../backend/provider-debug/provider-debug-jsonl'
 import { McpService } from '../backend/mcp/mcp.service'
 import { SkillsService } from '../backend/skills/skills.service'
+import { PromptsService } from '../backend/prompts/prompts.service'
 import { AppSettingsService } from '../backend/app-settings/app-settings.service'
 import { AnalyticsService } from '../backend/analytics/analytics.service'
 import { AttachmentsService } from '../backend/attachments/attachments.service'
@@ -286,6 +287,7 @@ async function startApp(): Promise<void> {
 
   const mcpService = new McpService(projectService, detected)
   const skillsService = new SkillsService(projectService, detected)
+  const promptsService = new PromptsService(db, projectService)
 
   const appSettingsService = new AppSettingsService(stateService, async () =>
     Promise.all(providerRegistry.getAll().map((p) => p.describe())),
@@ -464,6 +466,7 @@ async function startApp(): Promise<void> {
     providerRegistry,
     mcpService,
     skillsService,
+    promptsService,
     appSettingsService,
     openRouterCredentials,
     analyticsService,

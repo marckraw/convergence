@@ -288,6 +288,17 @@ contextBridge.exposeInMainWorld('electronAPI', {
     readDetails: (input: unknown) =>
       ipcRenderer.invoke('skills:readDetails', input),
   },
+  prompts: {
+    listByProjectId: (projectId: string, options?: { forceReload?: boolean }) =>
+      ipcRenderer.invoke('prompts:listByProjectId', projectId, options),
+    listGlobal: (options?: { forceReload?: boolean }) =>
+      ipcRenderer.invoke('prompts:listGlobal', options),
+    readDetails: (input: unknown) =>
+      ipcRenderer.invoke('prompts:readDetails', input),
+    create: (input: unknown) => ipcRenderer.invoke('prompts:create', input),
+    update: (input: unknown) => ipcRenderer.invoke('prompts:update', input),
+    delete: (input: unknown) => ipcRenderer.invoke('prompts:delete', input),
+  },
   feedback: {
     submit: (input: {
       title: string

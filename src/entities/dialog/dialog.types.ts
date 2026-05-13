@@ -8,6 +8,7 @@ export type DialogKind =
   | 'pull-request-review-start'
   | 'mcp-servers'
   | 'skills-browser'
+  | 'prompt-library'
   | 'release-notes'
   | 'session-fork'
   | 'session-intent'

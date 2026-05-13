@@ -1,5 +1,15 @@
 import type { ProjectMcpVisibility } from './mcp.types'
 import type {
+  CreatePromptLibraryInput,
+  DeletePromptLibraryInput,
+  PromptLibraryCatalog,
+  PromptLibraryDetails,
+  PromptLibraryDetailsRequest,
+  PromptLibraryEntry,
+  PromptLibraryOptions,
+  UpdatePromptLibraryInput,
+} from './prompt-library.types'
+import type {
   ProjectSkillCatalog,
   SkillActivationConfirmation,
   SkillCatalogOptions,
@@ -1111,6 +1121,21 @@ interface ElectronAPI {
     ) => Promise<ProjectSkillCatalog>
     listGlobal: (options?: SkillCatalogOptions) => Promise<ProjectSkillCatalog>
     readDetails: (input: SkillDetailsRequest) => Promise<SkillDetails>
+  }
+  prompts: {
+    listByProjectId: (
+      projectId: string,
+      options?: PromptLibraryOptions,
+    ) => Promise<PromptLibraryCatalog>
+    listGlobal: (
+      options?: PromptLibraryOptions,
+    ) => Promise<PromptLibraryCatalog>
+    readDetails: (
+      input: PromptLibraryDetailsRequest,
+    ) => Promise<PromptLibraryDetails>
+    create: (input: CreatePromptLibraryInput) => Promise<PromptLibraryEntry>
+    update: (input: UpdatePromptLibraryInput) => Promise<PromptLibraryEntry>
+    delete: (input: DeletePromptLibraryInput) => Promise<void>
   }
   feedback: {
     submit: (

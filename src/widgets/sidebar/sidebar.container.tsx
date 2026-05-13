@@ -16,6 +16,7 @@ import {
   McpServersDialogContainer,
   ProjectContextSettings,
   ProjectSettingsDialogContainer,
+  PromptLibraryBrowserDialogContainer,
   ProviderStatusDialogContainer,
   ReleaseNotesDialogContainer,
   SkillsBrowserDialogContainer,
@@ -696,6 +697,9 @@ export const Sidebar: FC<SidebarProps> = ({
         </div>
         <div className="mt-2">
           <SkillsBrowserDialogContainer />
+        </div>
+        <div className="mt-2">
+          <PromptLibraryBrowserDialogContainer />
         </div>
         <div className="mt-2">
           <ReleaseNotesDialogContainer />
