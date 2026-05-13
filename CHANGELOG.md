@@ -1,5 +1,11 @@
 # convergence
 
+## 0.37.3
+
+### Patch Changes
+
+- d3c0b1f: Add a managed prompt library for project and global prompt files. Users can create, edit, delete, search, preview, and copy saved prompts before pasting them into the composer manually.
+
 ## 0.37.2
 
 ### Patch Changes
