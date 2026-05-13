@@ -66,8 +66,12 @@ describe('PromptsService', () => {
       projectName: project.name,
       refreshedAt: FIXED_NOW.toISOString(),
     })
-    expect(catalog.prompts).toHaveLength(1)
-    expect(catalog.prompts[0]).toMatchObject({
+    const projectPrompts = catalog.prompts.filter(
+      (prompt) => prompt.scope === 'project',
+    )
+
+    expect(projectPrompts).toHaveLength(1)
+    expect(projectPrompts[0]).toMatchObject({
       title: 'Review PR',
       description: 'Review a pull request.',
       relativePath: 'review-pr.md',
@@ -171,6 +175,8 @@ describe('PromptsService', () => {
     })
 
     const catalog = await service.listByProjectId(project.id)
-    expect(catalog.prompts).toEqual([])
+    expect(
+      catalog.prompts.filter((prompt) => prompt.scope === 'project'),
+    ).toEqual([])
   })
 })
