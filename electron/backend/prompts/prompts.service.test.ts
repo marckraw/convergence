@@ -12,9 +12,11 @@ describe('PromptsService', () => {
   let projectService: ProjectService
   let tempDir: string
   let gitRepoPath: string
+  let db: ReturnType<typeof getDatabase>
 
   beforeEach(() => {
-    projectService = new ProjectService(getDatabase())
+    db = getDatabase()
+    projectService = new ProjectService(db)
     tempDir = mkdtempSync(join(tmpdir(), 'convergence-prompts-test-'))
     gitRepoPath = join(tempDir, 'repo')
     mkdirSync(gitRepoPath)
@@ -28,7 +30,9 @@ describe('PromptsService', () => {
   })
 
   it('throws when the project is missing', async () => {
-    const service = new PromptsService(projectService, { now: () => FIXED_NOW })
+    const service = new PromptsService(db, projectService, {
+      now: () => FIXED_NOW,
+    })
 
     await expect(service.listByProjectId('missing')).rejects.toThrow(
       'Project not found: missing',
@@ -51,7 +55,9 @@ describe('PromptsService', () => {
       ].join('\n'),
     )
     writeFileSync(join(promptsDir, 'scratch.json'), '{}')
-    const service = new PromptsService(projectService, { now: () => FIXED_NOW })
+    const service = new PromptsService(db, projectService, {
+      now: () => FIXED_NOW,
+    })
 
     const catalog = await service.listByProjectId(project.id)
 
@@ -81,7 +87,9 @@ describe('PromptsService', () => {
       promptPath,
       ['---', 'title: Review PR', '---', 'Review this PR.'].join('\n'),
     )
-    const service = new PromptsService(projectService, { now: () => FIXED_NOW })
+    const service = new PromptsService(db, projectService, {
+      now: () => FIXED_NOW,
+    })
     const catalog = await service.listByProjectId(project.id)
     const prompt = catalog.prompts[0]
 
@@ -104,5 +112,65 @@ describe('PromptsService', () => {
         path: join(tempDir, 'other.md'),
       }),
     ).rejects.toThrow('Prompt not found in library')
+  })
+
+  it('creates, updates, and deletes managed prompt files', async () => {
+    const project = projectService.create({ repositoryPath: gitRepoPath })
+    const service = new PromptsService(db, projectService, {
+      now: () => FIXED_NOW,
+    })
+
+    const created = await service.create({
+      projectId: project.id,
+      scope: 'project',
+      title: 'Review PR',
+      description: 'Review pull requests.',
+      tags: ['review', 'github', 'review'],
+      promptText: 'Review this pull request.',
+      kind: 'markdown',
+    })
+
+    expect(created).toMatchObject({
+      title: 'Review PR',
+      description: 'Review pull requests.',
+      relativePath: 'review-pr.md',
+      scope: 'project',
+      tags: ['review', 'github'],
+    })
+
+    const updated = await service.update({
+      projectId: project.id,
+      promptId: created.id,
+      path: created.path,
+      title: 'Careful Review',
+      description: 'Review carefully.',
+      tags: ['review'],
+      promptText: 'Look for regressions.',
+    })
+
+    expect(updated).toMatchObject({
+      id: created.id,
+      title: 'Careful Review',
+      description: 'Review carefully.',
+      tags: ['review'],
+    })
+    await expect(
+      service.readDetails({
+        projectId: project.id,
+        promptId: created.id,
+        path: created.path,
+      }),
+    ).resolves.toMatchObject({
+      promptText: 'Look for regressions.',
+    })
+
+    await service.delete({
+      projectId: project.id,
+      promptId: created.id,
+      path: created.path,
+    })
+
+    const catalog = await service.listByProjectId(project.id)
+    expect(catalog.prompts).toEqual([])
   })
 })

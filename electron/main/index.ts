@@ -287,7 +287,7 @@ async function startApp(): Promise<void> {
 
   const mcpService = new McpService(projectService, detected)
   const skillsService = new SkillsService(projectService, detected)
-  const promptsService = new PromptsService(projectService)
+  const promptsService = new PromptsService(db, projectService)
 
   const appSettingsService = new AppSettingsService(stateService, async () =>
     Promise.all(providerRegistry.getAll().map((p) => p.describe())),

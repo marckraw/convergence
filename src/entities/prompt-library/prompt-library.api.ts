@@ -1,8 +1,12 @@
 import type {
+  CreatePromptLibraryInput,
+  DeletePromptLibraryInput,
   PromptLibraryCatalog,
   PromptLibraryDetails,
   PromptLibraryDetailsRequest,
+  PromptLibraryEntry,
   PromptLibraryOptions,
+  UpdatePromptLibraryInput,
 } from './prompt-library.types'
 
 export const promptLibraryApi = {
@@ -19,4 +23,13 @@ export const promptLibraryApi = {
     input: PromptLibraryDetailsRequest,
   ): Promise<PromptLibraryDetails> =>
     window.electronAPI.prompts.readDetails(input),
+
+  create: (input: CreatePromptLibraryInput): Promise<PromptLibraryEntry> =>
+    window.electronAPI.prompts.create(input),
+
+  update: (input: UpdatePromptLibraryInput): Promise<PromptLibraryEntry> =>
+    window.electronAPI.prompts.update(input),
+
+  delete: (input: DeletePromptLibraryInput): Promise<void> =>
+    window.electronAPI.prompts.delete(input),
 }

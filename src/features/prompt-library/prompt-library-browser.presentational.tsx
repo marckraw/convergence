@@ -5,8 +5,13 @@ import {
   FileText,
   Library,
   Loader2,
+  Pencil,
+  Plus,
   RefreshCw,
   Search,
+  Save,
+  Trash2,
+  X,
 } from 'lucide-react'
 import type {
   PromptLibraryCatalog,
@@ -27,8 +32,20 @@ import {
 } from '@/shared/ui/dialog'
 import { Input } from '@/shared/ui/input'
 import { Markdown } from '@/shared/ui/markdown.container'
+import { Textarea } from '@/shared/ui/textarea'
 import { cn } from '@/shared/lib/cn.pure'
 import type { PromptLibraryBrowserFilters } from './prompt-library-browser.pure'
+
+export interface PromptLibraryFormDraft {
+  mode: 'create' | 'edit'
+  scope: PromptLibraryScope
+  kind: PromptLibraryEntry['kind']
+  title: string
+  description: string
+  tagsText: string
+  filename: string
+  promptText: string
+}
 
 interface PromptLibraryBrowserDialogProps {
   open: boolean
@@ -47,9 +64,18 @@ interface PromptLibraryBrowserDialogProps {
   tagOptions: string[]
   totalPromptCount: number
   filteredPromptCount: number
+  formDraft: PromptLibraryFormDraft | null
+  formError: string | null
+  isMutating: boolean
   onFiltersChange: (patch: Partial<PromptLibraryBrowserFilters>) => void
   onSelectPrompt: (promptId: string) => void
   onRefresh: () => void
+  onStartCreate: () => void
+  onStartEdit: (prompt: PromptLibraryEntry) => void
+  onCancelForm: () => void
+  onFormChange: (patch: Partial<PromptLibraryFormDraft>) => void
+  onSubmitForm: () => void
+  onDeletePrompt: (prompt: PromptLibraryEntry) => void
 }
 
 const SCOPE_LABELS: Record<PromptLibraryScope, string> = {
@@ -141,6 +167,14 @@ function renderDetailsPane({
   selectedDetails,
   isDetailsLoading,
   detailsError,
+  formDraft,
+  formError,
+  isMutating,
+  onStartEdit,
+  onCancelForm,
+  onFormChange,
+  onSubmitForm,
+  onDeletePrompt,
 }: Pick<
   PromptLibraryBrowserDialogProps,
   | 'projectName'
@@ -148,6 +182,14 @@ function renderDetailsPane({
   | 'selectedDetails'
   | 'isDetailsLoading'
   | 'detailsError'
+  | 'formDraft'
+  | 'formError'
+  | 'isMutating'
+  | 'onStartEdit'
+  | 'onCancelForm'
+  | 'onFormChange'
+  | 'onSubmitForm'
+  | 'onDeletePrompt'
 >) {
   if (!projectName) {
     return (
@@ -155,6 +197,17 @@ function renderDetailsPane({
         Open a project to inspect prompts.
       </div>
     )
+  }
+
+  if (formDraft) {
+    return renderPromptForm({
+      draft: formDraft,
+      error: formError,
+      isMutating,
+      onCancel: onCancelForm,
+      onChange: onFormChange,
+      onSubmit: onSubmitForm,
+    })
   }
 
   if (!selectedPrompt) {
@@ -185,6 +238,29 @@ function renderDetailsPane({
           </p>
         </div>
         <div className="flex shrink-0 items-center gap-1.5">
+          {selectedDetails ? (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => onStartEdit(selectedPrompt)}
+              disabled={isMutating}
+            >
+              <Pencil className="h-3.5 w-3.5" />
+              Edit
+            </Button>
+          ) : null}
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="text-destructive hover:text-destructive"
+            onClick={() => onDeletePrompt(selectedPrompt)}
+            disabled={isMutating}
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+            Delete
+          </Button>
           <CopyButton text={selectedPrompt.path} label="Copy prompt path" />
           {selectedDetails ? (
             <CopyButton
@@ -276,6 +352,168 @@ function renderDetailsPane({
   )
 }
 
+function renderPromptForm({
+  draft,
+  error,
+  isMutating,
+  onCancel,
+  onChange,
+  onSubmit,
+}: {
+  draft: PromptLibraryFormDraft
+  error: string | null
+  isMutating: boolean
+  onCancel: () => void
+  onChange: (patch: Partial<PromptLibraryFormDraft>) => void
+  onSubmit: () => void
+}) {
+  return (
+    <div className="app-scrollbar h-full min-h-0 overflow-y-auto px-6 py-5">
+      <div className="mb-4 flex items-start justify-between gap-4">
+        <div>
+          <h3 className="text-lg font-semibold">
+            {draft.mode === 'create' ? 'Create Prompt' : 'Edit Prompt'}
+          </h3>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Prompt text is stored as a file; metadata is tracked by Convergence.
+          </p>
+        </div>
+        <div className="flex shrink-0 items-center gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={onCancel}
+            disabled={isMutating}
+          >
+            <X className="h-3.5 w-3.5" />
+            Cancel
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            onClick={onSubmit}
+            disabled={isMutating}
+          >
+            {isMutating ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <Save className="h-3.5 w-3.5" />
+            )}
+            Save
+          </Button>
+        </div>
+      </div>
+
+      <div className="grid gap-4">
+        <div className="grid gap-3 sm:grid-cols-2">
+          <label className="text-xs font-medium text-muted-foreground">
+            Title
+            <Input
+              value={draft.title}
+              onChange={(event) =>
+                onChange({ title: event.currentTarget.value })
+              }
+              className="mt-1"
+              placeholder="PR Review"
+            />
+          </label>
+          <label className="text-xs font-medium text-muted-foreground">
+            Tags
+            <Input
+              value={draft.tagsText}
+              onChange={(event) =>
+                onChange({ tagsText: event.currentTarget.value })
+              }
+              className="mt-1"
+              placeholder="review, github"
+            />
+          </label>
+        </div>
+
+        <div className="grid gap-3 sm:grid-cols-2">
+          <label className="text-xs font-medium text-muted-foreground">
+            Scope
+            <select
+              value={draft.scope}
+              onChange={(event) =>
+                onChange({
+                  scope: event.currentTarget.value as PromptLibraryScope,
+                })
+              }
+              disabled={draft.mode === 'edit'}
+              className="mt-1 h-9 w-full rounded-md border border-border bg-background px-2 text-sm font-normal text-foreground shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              <option value="project">Project</option>
+              <option value="global">Global</option>
+            </select>
+          </label>
+          <label className="text-xs font-medium text-muted-foreground">
+            File Kind
+            <select
+              value={draft.kind}
+              onChange={(event) =>
+                onChange({
+                  kind: event.currentTarget.value as PromptLibraryEntry['kind'],
+                })
+              }
+              disabled={draft.mode === 'edit'}
+              className="mt-1 h-9 w-full rounded-md border border-border bg-background px-2 text-sm font-normal text-foreground shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              <option value="markdown">Markdown</option>
+              <option value="text">Text</option>
+            </select>
+          </label>
+        </div>
+
+        {draft.mode === 'create' ? (
+          <label className="text-xs font-medium text-muted-foreground">
+            Filename
+            <Input
+              value={draft.filename}
+              onChange={(event) =>
+                onChange({ filename: event.currentTarget.value })
+              }
+              className="mt-1"
+              placeholder="Optional; generated from title"
+            />
+          </label>
+        ) : null}
+
+        <label className="text-xs font-medium text-muted-foreground">
+          Description
+          <Textarea
+            value={draft.description}
+            onChange={(event) =>
+              onChange({ description: event.currentTarget.value })
+            }
+            className="mt-1 min-h-20"
+            placeholder="What this prompt is for"
+          />
+        </label>
+
+        <label className="text-xs font-medium text-muted-foreground">
+          Prompt Text
+          <Textarea
+            value={draft.promptText}
+            onChange={(event) =>
+              onChange({ promptText: event.currentTarget.value })
+            }
+            className="mt-1 min-h-72 font-mono text-xs leading-5"
+            placeholder="Write the prompt text to copy into the composer"
+          />
+        </label>
+
+        {error ? (
+          <div className="rounded-lg border border-destructive/20 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+            {error}
+          </div>
+        ) : null}
+      </div>
+    </div>
+  )
+}
+
 export const PromptLibraryBrowserDialog: FC<
   PromptLibraryBrowserDialogProps
 > = ({
@@ -295,9 +533,18 @@ export const PromptLibraryBrowserDialog: FC<
   tagOptions,
   totalPromptCount,
   filteredPromptCount,
+  formDraft,
+  formError,
+  isMutating,
   onFiltersChange,
   onSelectPrompt,
   onRefresh,
+  onStartCreate,
+  onStartEdit,
+  onCancelForm,
+  onFormChange,
+  onSubmitForm,
+  onDeletePrompt,
 }) => {
   const selectedPromptId = selectedPrompt?.id ?? null
   const hasCatalog = Boolean(catalog)
@@ -310,6 +557,17 @@ export const PromptLibraryBrowserDialog: FC<
           <div className="flex items-center gap-2">
             <BookOpenText className="h-5 w-5 text-muted-foreground" />
             <DialogTitle>Prompt Library</DialogTitle>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="ml-auto"
+              onClick={onStartCreate}
+              disabled={!projectName || isMutating}
+            >
+              <Plus className="h-3.5 w-3.5" />
+              New
+            </Button>
           </div>
           <DialogDescription>
             {projectName
@@ -401,6 +659,16 @@ export const PromptLibraryBrowserDialog: FC<
                   <p className="text-xs">
                     Add Markdown or text files under `.convergence/prompts`.
                   </p>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={onStartCreate}
+                    disabled={isMutating}
+                  >
+                    <Plus className="h-3.5 w-3.5" />
+                    Create prompt
+                  </Button>
                 </div>
               ) : prompts.length > 0 ? (
                 <div className="space-y-2">
@@ -422,6 +690,14 @@ export const PromptLibraryBrowserDialog: FC<
             selectedDetails,
             isDetailsLoading,
             detailsError,
+            formDraft,
+            formError,
+            isMutating,
+            onStartEdit,
+            onCancelForm,
+            onFormChange,
+            onSubmitForm,
+            onDeletePrompt,
           })}
         </div>
 

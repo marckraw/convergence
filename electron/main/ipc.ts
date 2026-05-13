@@ -58,8 +58,11 @@ import type {
   SkillDetailsRequest,
 } from '../backend/skills/skills.types'
 import type {
+  CreatePromptLibraryInput,
+  DeletePromptLibraryInput,
   PromptLibraryDetailsRequest,
   PromptLibraryOptions,
+  UpdatePromptLibraryInput,
 } from '../backend/prompts/prompts.types'
 import {
   sendSessionMessageInputFromIpc,
@@ -816,6 +819,18 @@ export function registerIpcHandlers(
     'prompts:readDetails',
     (_event, input: PromptLibraryDetailsRequest) =>
       promptsService.readDetails(input),
+  )
+
+  ipcMain.handle('prompts:create', (_event, input: CreatePromptLibraryInput) =>
+    promptsService.create(input),
+  )
+
+  ipcMain.handle('prompts:update', (_event, input: UpdatePromptLibraryInput) =>
+    promptsService.update(input),
+  )
+
+  ipcMain.handle('prompts:delete', (_event, input: DeletePromptLibraryInput) =>
+    promptsService.delete(input),
   )
 
   // Session update event forwarding

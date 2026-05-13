@@ -12,7 +12,10 @@ import {
   firstPrompt,
   type PromptLibraryBrowserFilters,
 } from './prompt-library-browser.pure'
-import { PromptLibraryBrowserDialog } from './prompt-library-browser.presentational'
+import {
+  PromptLibraryBrowserDialog,
+  type PromptLibraryFormDraft,
+} from './prompt-library-browser.presentational'
 
 const DEFAULT_FILTERS: PromptLibraryBrowserFilters = {
   query: '',
@@ -42,9 +45,18 @@ export const PromptLibraryBrowserDialogContainer: FC = () => {
   const loadCatalog = usePromptLibraryStore((s) => s.loadCatalog)
   const selectPrompt = usePromptLibraryStore((s) => s.selectPrompt)
   const loadDetails = usePromptLibraryStore((s) => s.loadDetails)
+  const createPrompt = usePromptLibraryStore((s) => s.createPrompt)
+  const updatePrompt = usePromptLibraryStore((s) => s.updatePrompt)
+  const deletePrompt = usePromptLibraryStore((s) => s.deletePrompt)
+  const isMutating = usePromptLibraryStore((s) => s.isMutating)
+  const mutationError = usePromptLibraryStore((s) => s.mutationError)
   const resetPrompts = usePromptLibraryStore((s) => s.reset)
   const [filters, setFilters] =
     useState<PromptLibraryBrowserFilters>(DEFAULT_FILTERS)
+  const [formDraft, setFormDraft] = useState<PromptLibraryFormDraft | null>(
+    null,
+  )
+  const [formError, setFormError] = useState<string | null>(null)
 
   const handleOpenChange = useCallback(
     (next: boolean) => {
@@ -74,6 +86,8 @@ export const PromptLibraryBrowserDialogContainer: FC = () => {
   useEffect(() => {
     resetPrompts()
     setFilters(DEFAULT_FILTERS)
+    setFormDraft(null)
+    setFormError(null)
     if (useDialogStore.getState().openDialog === 'prompt-library') {
       closeDialog()
     }
@@ -85,6 +99,9 @@ export const PromptLibraryBrowserDialogContainer: FC = () => {
   )
   const selectedPrompt =
     findPrompt(prompts, selectedPromptId) ?? firstPrompt(prompts)
+  const selectedDetails = selectedPrompt
+    ? (detailsByPromptId[selectedPrompt.id] ?? null)
+    : null
 
   useEffect(() => {
     if (!open) {
@@ -132,6 +149,135 @@ export const PromptLibraryBrowserDialogContainer: FC = () => {
     [],
   )
 
+  const handleStartCreate = useCallback(() => {
+    setFormError(null)
+    setFormDraft({
+      mode: 'create',
+      scope: 'project',
+      kind: 'markdown',
+      title: '',
+      description: '',
+      tagsText: '',
+      filename: '',
+      promptText: '',
+    })
+  }, [])
+
+  const handleStartEdit = useCallback(
+    (prompt: typeof selectedPrompt) => {
+      if (!prompt || !selectedDetails) {
+        return
+      }
+
+      setFormError(null)
+      setFormDraft({
+        mode: 'edit',
+        scope: prompt.scope,
+        kind: prompt.kind,
+        title: prompt.title,
+        description: prompt.description,
+        tagsText: prompt.tags.join(', '),
+        filename: prompt.relativePath,
+        promptText: selectedDetails.promptText,
+      })
+    },
+    [selectedDetails],
+  )
+
+  const handleCancelForm = useCallback(() => {
+    setFormDraft(null)
+    setFormError(null)
+  }, [])
+
+  const handleFormChange = useCallback(
+    (patch: Partial<PromptLibraryFormDraft>) => {
+      setFormDraft((current) => (current ? { ...current, ...patch } : current))
+      setFormError(null)
+    },
+    [],
+  )
+
+  const parseTags = useCallback((value: string) => {
+    return value
+      .split(',')
+      .map((tag) => tag.trim())
+      .filter(Boolean)
+  }, [])
+
+  const handleSubmitForm = useCallback(async () => {
+    if (!projectId || !formDraft) {
+      return
+    }
+
+    if (!formDraft.title.trim()) {
+      setFormError('Prompt title cannot be empty.')
+      return
+    }
+    if (!formDraft.promptText.trim()) {
+      setFormError('Prompt text cannot be empty.')
+      return
+    }
+
+    const tags = parseTags(formDraft.tagsText)
+    const saved =
+      formDraft.mode === 'create'
+        ? await createPrompt({
+            projectId,
+            scope: formDraft.scope,
+            title: formDraft.title,
+            description: formDraft.description,
+            tags,
+            promptText: formDraft.promptText,
+            filename: formDraft.filename,
+            kind: formDraft.kind,
+          })
+        : selectedPrompt
+          ? await updatePrompt({
+              projectId,
+              promptId: selectedPrompt.id,
+              path: selectedPrompt.path,
+              title: formDraft.title,
+              description: formDraft.description,
+              tags,
+              promptText: formDraft.promptText,
+            })
+          : null
+
+    if (saved) {
+      setFormDraft(null)
+      setFormError(null)
+    }
+  }, [
+    createPrompt,
+    formDraft,
+    parseTags,
+    projectId,
+    selectedPrompt,
+    updatePrompt,
+  ])
+
+  const handleDeletePrompt = useCallback(
+    async (prompt: typeof selectedPrompt) => {
+      if (!projectId || !prompt) {
+        return
+      }
+
+      const confirmed = window.confirm(
+        `Delete prompt "${prompt.title}"?\n\nThis removes the prompt file from disk and deletes its Convergence metadata.`,
+      )
+      if (!confirmed) {
+        return
+      }
+
+      await deletePrompt({
+        projectId,
+        promptId: prompt.id,
+        path: prompt.path,
+      })
+    },
+    [deletePrompt, projectId],
+  )
+
   return (
     <PromptLibraryBrowserDialog
       open={open}
@@ -140,9 +286,7 @@ export const PromptLibraryBrowserDialogContainer: FC = () => {
       catalog={catalog}
       prompts={prompts}
       selectedPrompt={selectedPrompt}
-      selectedDetails={
-        selectedPrompt ? (detailsByPromptId[selectedPrompt.id] ?? null) : null
-      }
+      selectedDetails={selectedDetails}
       isCatalogLoading={isCatalogLoading}
       catalogError={catalogError}
       isDetailsLoading={
@@ -157,9 +301,18 @@ export const PromptLibraryBrowserDialogContainer: FC = () => {
       tagOptions={tagOptions}
       totalPromptCount={totalPromptCount}
       filteredPromptCount={filteredPromptCount}
+      formDraft={formDraft}
+      formError={formError ?? mutationError}
+      isMutating={isMutating}
       onFiltersChange={handleFiltersChange}
       onSelectPrompt={selectPrompt}
       onRefresh={() => void load(true)}
+      onStartCreate={handleStartCreate}
+      onStartEdit={handleStartEdit}
+      onCancelForm={handleCancelForm}
+      onFormChange={handleFormChange}
+      onSubmitForm={() => void handleSubmitForm()}
+      onDeletePrompt={handleDeletePrompt}
       trigger={
         <Button
           type="button"

@@ -300,6 +300,27 @@ const SCHEMA = `
   CREATE INDEX IF NOT EXISTS idx_project_context_items_project
     ON project_context_items(project_id);
 
+  CREATE TABLE IF NOT EXISTS prompt_library_entries (
+    id TEXT PRIMARY KEY,
+    project_id TEXT,
+    scope TEXT NOT NULL CHECK (scope IN ('project', 'global')),
+    path TEXT NOT NULL UNIQUE,
+    title TEXT NOT NULL,
+    description TEXT NOT NULL DEFAULT '',
+    tags_json TEXT NOT NULL DEFAULT '[]',
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+    FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
+    CHECK (
+      (scope = 'project' AND project_id IS NOT NULL)
+      OR
+      (scope = 'global' AND project_id IS NULL)
+    )
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_prompt_library_entries_project
+    ON prompt_library_entries(project_id, scope);
+
   CREATE TABLE IF NOT EXISTS session_context_attachments (
     session_id TEXT NOT NULL,
     context_item_id TEXT NOT NULL,

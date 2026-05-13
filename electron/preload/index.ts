@@ -293,6 +293,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.invoke('prompts:listGlobal', options),
     readDetails: (input: unknown) =>
       ipcRenderer.invoke('prompts:readDetails', input),
+    create: (input: unknown) => ipcRenderer.invoke('prompts:create', input),
+    update: (input: unknown) => ipcRenderer.invoke('prompts:update', input),
+    delete: (input: unknown) => ipcRenderer.invoke('prompts:delete', input),
   },
   feedback: {
     submit: (input: {

@@ -66,9 +66,18 @@ function renderDialog(
     tagOptions: ['review', 'github'],
     totalPromptCount: 1,
     filteredPromptCount: 1,
+    formDraft: null,
+    formError: null,
+    isMutating: false,
     onFiltersChange: vi.fn(),
     onSelectPrompt: vi.fn(),
     onRefresh: vi.fn(),
+    onStartCreate: vi.fn(),
+    onStartEdit: vi.fn(),
+    onCancelForm: vi.fn(),
+    onFormChange: vi.fn(),
+    onSubmitForm: vi.fn(),
+    onDeletePrompt: vi.fn(),
     ...overrides,
   }
 
@@ -122,5 +131,43 @@ describe('PromptLibraryBrowserDialog', () => {
     expect(onFiltersChange).toHaveBeenCalledWith({ query: 'review' })
     expect(onFiltersChange).toHaveBeenCalledWith({ scope: 'project' })
     expect(onFiltersChange).toHaveBeenCalledWith({ tag: 'github' })
+  })
+
+  it('renders create form controls and emits form actions', () => {
+    const onFormChange = vi.fn()
+    const onSubmitForm = vi.fn()
+    renderDialog({
+      formDraft: {
+        mode: 'create',
+        scope: 'project',
+        kind: 'markdown',
+        title: '',
+        description: '',
+        tagsText: '',
+        filename: '',
+        promptText: '',
+      },
+      onFormChange,
+      onSubmitForm,
+    })
+
+    fireEvent.change(screen.getByPlaceholderText('PR Review'), {
+      target: { value: 'PR Review' },
+    })
+    fireEvent.change(
+      screen.getByPlaceholderText(
+        'Write the prompt text to copy into the composer',
+      ),
+      {
+        target: { value: 'Review this PR.' },
+      },
+    )
+    fireEvent.click(screen.getByRole('button', { name: /Save/i }))
+
+    expect(onFormChange).toHaveBeenCalledWith({ title: 'PR Review' })
+    expect(onFormChange).toHaveBeenCalledWith({
+      promptText: 'Review this PR.',
+    })
+    expect(onSubmitForm).toHaveBeenCalledTimes(1)
   })
 })

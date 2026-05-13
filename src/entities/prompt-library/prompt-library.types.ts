@@ -1,4 +1,6 @@
 export type {
+  CreatePromptLibraryInput,
+  DeletePromptLibraryInput,
   PromptLibraryCatalog,
   PromptLibraryDetails,
   PromptLibraryDetailsRequest,
@@ -6,4 +8,5 @@ export type {
   PromptLibraryFileKind,
   PromptLibraryOptions,
   PromptLibraryScope,
+  UpdatePromptLibraryInput,
 } from '@/shared/types/prompt-library.types'

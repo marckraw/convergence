@@ -1,6 +1,8 @@
 export { promptLibraryApi } from './prompt-library.api'
 export { usePromptLibraryStore } from './prompt-library.model'
 export type {
+  CreatePromptLibraryInput,
+  DeletePromptLibraryInput,
   PromptLibraryCatalog,
   PromptLibraryDetails,
   PromptLibraryDetailsRequest,
@@ -8,4 +10,5 @@ export type {
   PromptLibraryFileKind,
   PromptLibraryOptions,
   PromptLibraryScope,
+  UpdatePromptLibraryInput,
 } from './prompt-library.types'

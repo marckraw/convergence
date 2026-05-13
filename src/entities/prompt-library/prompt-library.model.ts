@@ -1,10 +1,13 @@
 import { create } from 'zustand'
 import { promptLibraryApi } from './prompt-library.api'
 import type {
+  CreatePromptLibraryInput,
+  DeletePromptLibraryInput,
   PromptLibraryCatalog,
   PromptLibraryDetails,
   PromptLibraryEntry,
   PromptLibraryOptions,
+  UpdatePromptLibraryInput,
 } from './prompt-library.types'
 
 interface PromptLibraryState {
@@ -15,6 +18,8 @@ interface PromptLibraryState {
   detailsByPromptId: Record<string, PromptLibraryDetails>
   detailsErrorByPromptId: Record<string, string>
   loadingDetailsPromptId: string | null
+  isMutating: boolean
+  mutationError: string | null
 }
 
 interface PromptLibraryActions {
@@ -30,6 +35,13 @@ interface PromptLibraryActions {
     projectId: string,
     prompt: PromptLibraryEntry,
   ) => Promise<PromptLibraryDetails | null>
+  createPrompt: (
+    input: CreatePromptLibraryInput,
+  ) => Promise<PromptLibraryEntry | null>
+  updatePrompt: (
+    input: UpdatePromptLibraryInput,
+  ) => Promise<PromptLibraryEntry | null>
+  deletePrompt: (input: DeletePromptLibraryInput) => Promise<boolean>
   reset: () => void
 }
 
@@ -43,6 +55,8 @@ const initialState: PromptLibraryState = {
   detailsByPromptId: {},
   detailsErrorByPromptId: {},
   loadingDetailsPromptId: null,
+  isMutating: false,
+  mutationError: null,
 }
 
 function errorMessage(error: unknown, fallback: string): string {
@@ -151,6 +165,82 @@ export const usePromptLibraryStore = create<PromptLibraryStore>((set) => ({
             : state.loadingDetailsPromptId,
       }))
       return null
+    }
+  },
+
+  createPrompt: async (input) => {
+    set({ isMutating: true, mutationError: null })
+    try {
+      const prompt = await promptLibraryApi.create(input)
+      set({ isMutating: false, selectedPromptId: prompt.id })
+      await usePromptLibraryStore
+        .getState()
+        .loadCatalog(input.projectId, { forceReload: true })
+      return prompt
+    } catch (error) {
+      set({
+        isMutating: false,
+        mutationError: errorMessage(error, 'Failed to create prompt'),
+      })
+      return null
+    }
+  },
+
+  updatePrompt: async (input) => {
+    set({ isMutating: true, mutationError: null })
+    try {
+      const prompt = await promptLibraryApi.update(input)
+      set((state) => ({
+        isMutating: false,
+        selectedPromptId: prompt.id,
+        detailsByPromptId: Object.fromEntries(
+          Object.entries(state.detailsByPromptId).filter(
+            ([id]) => id !== prompt.id,
+          ),
+        ),
+      }))
+      await usePromptLibraryStore
+        .getState()
+        .loadCatalog(input.projectId, { forceReload: true })
+      return prompt
+    } catch (error) {
+      set({
+        isMutating: false,
+        mutationError: errorMessage(error, 'Failed to update prompt'),
+      })
+      return null
+    }
+  },
+
+  deletePrompt: async (input) => {
+    set({ isMutating: true, mutationError: null })
+    try {
+      await promptLibraryApi.delete(input)
+      set((state) => {
+        const nextDetails = { ...state.detailsByPromptId }
+        const nextErrors = { ...state.detailsErrorByPromptId }
+        delete nextDetails[input.promptId]
+        delete nextErrors[input.promptId]
+        return {
+          isMutating: false,
+          selectedPromptId:
+            state.selectedPromptId === input.promptId
+              ? null
+              : state.selectedPromptId,
+          detailsByPromptId: nextDetails,
+          detailsErrorByPromptId: nextErrors,
+        }
+      })
+      await usePromptLibraryStore
+        .getState()
+        .loadCatalog(input.projectId, { forceReload: true })
+      return true
+    } catch (error) {
+      set({
+        isMutating: false,
+        mutationError: errorMessage(error, 'Failed to delete prompt'),
+      })
+      return false
     }
   },
 
