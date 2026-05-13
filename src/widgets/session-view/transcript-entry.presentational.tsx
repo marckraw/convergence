@@ -31,6 +31,9 @@ interface ConversationItemViewProps {
   onAttachmentOpen?: (attachment: Attachment) => void
 }
 
+const attentionPromptMarkdownClassName =
+  'mt-1 max-w-full text-muted-foreground [overflow-wrap:anywhere] [&_*]:max-w-full [&_*]:[overflow-wrap:anywhere] [&_code]:whitespace-pre-wrap'
+
 export const ConversationItemView: FC<ConversationItemViewProps> = ({
   viewModel,
   onApprove,
@@ -226,10 +229,10 @@ export const ConversationItemView: FC<ConversationItemViewProps> = ({
     case 'approval-request':
       return (
         <ConversationItemShell copyText={viewModel.copyText}>
-          <div className="my-2 rounded-lg border border-warning/30 bg-warning/5 p-4">
-            <div className="flex items-start gap-3">
+          <div className="my-2 max-w-full overflow-hidden rounded-lg border border-warning/30 bg-warning/5 p-4">
+            <div className="flex min-w-0 items-start gap-3">
               <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-warning" />
-              <div className="flex-1">
+              <div className="min-w-0 flex-1">
                 <div className="flex flex-wrap items-center gap-x-2 gap-y-1 pr-8">
                   <p className="text-sm font-medium">Approval needed</p>
                   <ConversationItemTimestamp
@@ -238,7 +241,7 @@ export const ConversationItemView: FC<ConversationItemViewProps> = ({
                   />
                 </div>
                 <Markdown
-                  className="mt-1 text-muted-foreground"
+                  className={attentionPromptMarkdownClassName}
                   content={entry.description}
                   size="sm"
                 />
@@ -261,10 +264,10 @@ export const ConversationItemView: FC<ConversationItemViewProps> = ({
     case 'input-request':
       return (
         <ConversationItemShell copyText={viewModel.copyText}>
-          <div className="my-2 rounded-lg border border-blue-500/30 bg-blue-500/5 p-4">
-            <div className="flex items-start gap-3">
+          <div className="my-2 max-w-full overflow-hidden rounded-lg border border-blue-500/30 bg-blue-500/5 p-4">
+            <div className="flex min-w-0 items-start gap-3">
               <Info className="mt-0.5 h-5 w-5 shrink-0 text-blue-500" />
-              <div className="flex-1">
+              <div className="min-w-0 flex-1">
                 <div className="flex flex-wrap items-center gap-x-2 gap-y-1 pr-8">
                   <p className="text-sm font-medium">Input needed</p>
                   <ConversationItemTimestamp
@@ -273,7 +276,7 @@ export const ConversationItemView: FC<ConversationItemViewProps> = ({
                   />
                 </div>
                 <Markdown
-                  className="mt-1 text-muted-foreground"
+                  className={attentionPromptMarkdownClassName}
                   content={entry.prompt}
                   size="sm"
                 />
