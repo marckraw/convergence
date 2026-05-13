@@ -1,6 +1,11 @@
 {
-  "currentVersion": "0.37.0",
+  "currentVersion": "0.37.1",
   "releases": [
+    {
+      "version": "0.37.1",
+      "date": null,
+      "notes": "### Patch Changes\n\n- 3f03115: Polish Chat Spaces follow-up flows by adding a proper Space creation dialog, Space archive/delete actions, and a full-page new-chat composer with selectable Space context."
+    },
     {
       "version": "0.37.0",
       "date": null,
