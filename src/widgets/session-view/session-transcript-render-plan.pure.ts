@@ -82,32 +82,3 @@ export function buildConversationRenderPlan(
 
   return entries
 }
-
-export function findActionableApprovalIds(
-  entries: ConversationRenderEntry[],
-): string[] {
-  let latestNonNoteIndex = -1
-
-  for (let index = entries.length - 1; index >= 0; index -= 1) {
-    if (entries[index].item.kind !== 'note') {
-      latestNonNoteIndex = index
-      break
-    }
-  }
-
-  if (
-    latestNonNoteIndex === -1 ||
-    entries[latestNonNoteIndex].item.kind !== 'approval-request'
-  ) {
-    return []
-  }
-
-  const approvalIds: string[] = []
-  for (let index = latestNonNoteIndex; index >= 0; index -= 1) {
-    const item = entries[index].item
-    if (item.kind !== 'approval-request') break
-    approvalIds.push(item.id)
-  }
-
-  return approvalIds.reverse()
-}
