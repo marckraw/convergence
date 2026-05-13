@@ -22,7 +22,10 @@ import type { ProviderAttachmentCapability } from '../provider/provider.types'
 import { AttachmentsService } from '../attachments/attachments.service'
 import { ProjectContextService } from '../project-context/project-context.service'
 import { SessionContextInjectionService } from './context-injection/session-context-injection.service'
-import type { SessionDelta } from './conversation-item.types'
+import type {
+  ConversationPatchEvent,
+  SessionDelta,
+} from './conversation-item.types'
 import { SessionService } from './session.service'
 
 const TEST_ATTACHMENT_CAPABILITY: ProviderAttachmentCapability = {
@@ -228,13 +231,14 @@ function createTestProvider(): Provider {
 
 describe('SessionService', () => {
   let service: SessionService
+  let registry: ProviderRegistry
   let tempDir: string
   let projectId: string
 
   beforeEach(() => {
     vi.useFakeTimers()
     const db = getDatabase()
-    const registry = new ProviderRegistry()
+    registry = new ProviderRegistry()
     registry.register(createTestProvider())
 
     tempDir = mkdtempSync(join(tmpdir(), 'convergence-session-test-'))
@@ -355,6 +359,151 @@ describe('SessionService', () => {
       lastSequence: 0,
     })
     expect('transcript' in summary).toBe(false)
+  })
+
+  it('coalesces streaming conversation patches before persisting and broadcasting', async () => {
+    let emitter: ProviderSessionEmitter | null = null
+
+    registry.register({
+      ...createTestProvider(),
+      id: 'stream-provider',
+      name: 'Stream Provider',
+      start() {
+        const listeners = {
+          delta: [] as Array<(delta: SessionDelta) => void>,
+        }
+
+        emitter = new ProviderSessionEmitter({
+          providerId: 'stream-provider',
+          now,
+          emitDelta: (delta) => {
+            listeners.delta.forEach((cb) => cb(delta))
+          },
+        })
+
+        return {
+          onDelta: (cb) => {
+            listeners.delta.push(cb)
+          },
+          onStatusChange: () => {},
+          onAttentionChange: () => {},
+          onContextWindowChange: () => {},
+          onActivityChange: () => {},
+          onContinuationToken: () => {},
+          sendMessage: () => {},
+          approve: () => {},
+          deny: () => {},
+          stop: () => {},
+        }
+      },
+    })
+
+    const patches: ConversationPatchEvent[] = []
+    const summaries: string[] = []
+    service.setConversationPatchListener((event) => patches.push(event))
+    service.setSummaryUpdateListener((summary) => summaries.push(summary.id))
+
+    const session = service.create({
+      projectId,
+      workspaceId: null,
+      providerId: 'stream-provider',
+      model: 'test-model',
+      effort: null,
+      name: 'stream session',
+    })
+
+    await service.start(session.id, { text: 'go' })
+    const itemId = emitter!.addAssistantMessage({
+      text: 'A',
+      state: 'streaming',
+    })
+    summaries.length = 0
+    emitter!.patchMessage(itemId, { text: 'AB', state: 'streaming' })
+    emitter!.patchMessage(itemId, { text: 'ABC', state: 'streaming' })
+
+    expect(patches.filter((event) => event.op === 'patch')).toHaveLength(0)
+
+    await vi.advanceTimersByTimeAsync(49)
+    expect(patches.filter((event) => event.op === 'patch')).toHaveLength(0)
+
+    await vi.advanceTimersByTimeAsync(1)
+    const patchEvents = patches.filter((event) => event.op === 'patch')
+    expect(patchEvents).toHaveLength(1)
+    expect(patchEvents[0]?.item).toMatchObject({
+      id: itemId,
+      text: 'ABC',
+      state: 'streaming',
+    })
+    expect(summaries).toEqual([])
+  })
+
+  it('flushes a pending streaming patch into the terminal patch for the same item', async () => {
+    let emitter: ProviderSessionEmitter | null = null
+
+    registry.register({
+      ...createTestProvider(),
+      id: 'stream-provider',
+      name: 'Stream Provider',
+      start() {
+        const listeners = {
+          delta: [] as Array<(delta: SessionDelta) => void>,
+        }
+
+        emitter = new ProviderSessionEmitter({
+          providerId: 'stream-provider',
+          now,
+          emitDelta: (delta) => {
+            listeners.delta.forEach((cb) => cb(delta))
+          },
+        })
+
+        return {
+          onDelta: (cb) => {
+            listeners.delta.push(cb)
+          },
+          onStatusChange: () => {},
+          onAttentionChange: () => {},
+          onContextWindowChange: () => {},
+          onActivityChange: () => {},
+          onContinuationToken: () => {},
+          sendMessage: () => {},
+          approve: () => {},
+          deny: () => {},
+          stop: () => {},
+        }
+      },
+    })
+
+    const patches: ConversationPatchEvent[] = []
+    service.setConversationPatchListener((event) => patches.push(event))
+
+    const session = service.create({
+      projectId,
+      workspaceId: null,
+      providerId: 'stream-provider',
+      model: 'test-model',
+      effort: null,
+      name: 'stream session',
+    })
+
+    await service.start(session.id, { text: 'go' })
+    const itemId = emitter!.addAssistantMessage({
+      text: 'A',
+      state: 'streaming',
+    })
+    emitter!.patchMessage(itemId, { text: 'AB', state: 'streaming' })
+    emitter!.patchMessage(itemId, { text: 'ABC', state: 'complete' })
+
+    const patchEvents = patches.filter((event) => event.op === 'patch')
+    expect(patchEvents).toHaveLength(1)
+    expect(patchEvents[0]?.item).toMatchObject({
+      id: itemId,
+      text: 'ABC',
+      state: 'complete',
+    })
+
+    await vi.advanceTimersByTimeAsync(50)
+    expect(patches.filter((event) => event.op === 'patch')).toHaveLength(1)
   })
 
   it('captures activity while running and clears on completion', async () => {
