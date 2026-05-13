@@ -1,5 +1,11 @@
 # convergence
 
+## 0.37.4
+
+### Patch Changes
+
+- 0104332: Keep long approval and input prompts wrapped inside the transcript frame.
+
 ## 0.37.3
 
 ### Patch Changes
