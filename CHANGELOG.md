@@ -1,5 +1,11 @@
 # convergence
 
+## 0.37.2
+
+### Patch Changes
+
+- d485dab: Fix simultaneous Codex approval cards so each pending approval shows actions on its own card and responds to the matching backend request.
+
 ## 0.37.1
 
 ### Patch Changes
