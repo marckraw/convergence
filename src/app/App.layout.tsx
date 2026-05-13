@@ -20,6 +20,7 @@ interface AppShellProps {
 const MIN_SIDEBAR = 220
 const MAX_SIDEBAR = 400
 const DEFAULT_SIDEBAR = 260
+const COLLAPSED_SIDEBAR = 56
 
 export const AppShell: FC<AppShellProps> = ({
   activeSessionId,
@@ -30,6 +31,8 @@ export const AppShell: FC<AppShellProps> = ({
   hasProject,
 }) => {
   const [sidebarWidth, setSidebarWidth] = useState(DEFAULT_SIDEBAR)
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
+  const [sidebarPeekOpen, setSidebarPeekOpen] = useState(false)
   const [selectedChatSpaceId, setSelectedChatSpaceId] = useState<string | null>(
     null,
   )
@@ -86,6 +89,8 @@ export const AppShell: FC<AppShellProps> = ({
   )
 
   const handleMouseDown = useCallback(() => {
+    if (sidebarCollapsed) return
+
     dragging.current = true
     document.body.style.cursor = 'col-resize'
     document.body.style.userSelect = 'none'
@@ -106,7 +111,34 @@ export const AppShell: FC<AppShellProps> = ({
 
     window.addEventListener('mousemove', handleMouseMove)
     window.addEventListener('mouseup', handleMouseUp)
+  }, [sidebarCollapsed])
+
+  const handleCollapseSidebar = useCallback(() => {
+    setSidebarCollapsed(true)
+    setSidebarPeekOpen(false)
   }, [])
+
+  const handleExpandSidebar = useCallback(() => {
+    setSidebarCollapsed(false)
+    setSidebarPeekOpen(false)
+  }, [])
+
+  const handlePinSidebarPeek = useCallback(() => {
+    setSidebarCollapsed(false)
+    setSidebarPeekOpen(false)
+  }, [])
+
+  const handlePeekSidebar = useCallback(() => {
+    if (sidebarCollapsed) {
+      setSidebarPeekOpen(true)
+    }
+  }, [sidebarCollapsed])
+
+  const handleSidebarMouseLeave = useCallback(() => {
+    if (sidebarCollapsed) {
+      setSidebarPeekOpen(false)
+    }
+  }, [sidebarCollapsed])
 
   if (loading) {
     return (
@@ -120,29 +152,57 @@ export const AppShell: FC<AppShellProps> = ({
     <div className="app-chrome flex h-screen flex-col overflow-hidden text-foreground">
       <div className="flex min-h-0 flex-1 overflow-hidden">
         <div
-          className="app-sidebar-panel shrink-0 border-r border-white/10"
-          style={{ width: sidebarWidth }}
+          className="relative shrink-0"
+          style={{
+            width: sidebarCollapsed ? COLLAPSED_SIDEBAR : sidebarWidth,
+          }}
         >
-          <Sidebar
-            activeSurface={activeSurface}
-            onSelectSurface={setActiveSurface}
-            onSelectSession={handleSelectCodeSession}
-            activeSessionId={activeSessionId}
-            onSelectGlobalSession={handleSelectGlobalSession}
-            onNewGlobalSession={handleNewGlobalSession}
-            selectedSpaceId={selectedChatSpaceId}
-            onSelectSpace={handleSelectChatSpace}
-            activeGlobalSessionId={activeGlobalSessionId}
-          />
+          <div
+            className={cn(
+              'app-sidebar-panel h-full border-r border-white/10 transition-[width] duration-150',
+              sidebarCollapsed && sidebarPeekOpen
+                ? 'absolute top-0 left-0 z-30 shadow-2xl'
+                : 'relative',
+            )}
+            style={{
+              width:
+                sidebarCollapsed && sidebarPeekOpen
+                  ? sidebarWidth
+                  : sidebarCollapsed
+                    ? COLLAPSED_SIDEBAR
+                    : sidebarWidth,
+            }}
+            onMouseLeave={handleSidebarMouseLeave}
+          >
+            <Sidebar
+              activeSurface={activeSurface}
+              onSelectSurface={setActiveSurface}
+              onSelectSession={handleSelectCodeSession}
+              activeSessionId={activeSessionId}
+              onSelectGlobalSession={handleSelectGlobalSession}
+              onNewGlobalSession={handleNewGlobalSession}
+              selectedSpaceId={selectedChatSpaceId}
+              onSelectSpace={handleSelectChatSpace}
+              activeGlobalSessionId={activeGlobalSessionId}
+              collapsed={sidebarCollapsed && !sidebarPeekOpen}
+              peek={sidebarCollapsed && sidebarPeekOpen}
+              onCollapse={handleCollapseSidebar}
+              onExpand={handleExpandSidebar}
+              onPeek={handlePeekSidebar}
+              onPinPeek={handlePinSidebarPeek}
+            />
+          </div>
         </div>
 
-        <div
-          onMouseDown={handleMouseDown}
-          onDoubleClick={() => setSidebarWidth(DEFAULT_SIDEBAR)}
-          className={cn(
-            'app-resize-handle relative z-10 -mx-1.5 w-px shrink-0 cursor-col-resize border-x-[6px] border-x-transparent bg-clip-content transition-colors hover:bg-white/10',
-          )}
-        />
+        {sidebarCollapsed ? null : (
+          <div
+            onMouseDown={handleMouseDown}
+            onDoubleClick={() => setSidebarWidth(DEFAULT_SIDEBAR)}
+            className={cn(
+              'app-resize-handle relative z-10 -mx-1.5 w-px shrink-0 cursor-col-resize border-x-[6px] border-x-transparent bg-clip-content transition-colors hover:bg-white/10',
+            )}
+          />
+        )}
 
         <div className="app-main-panel flex min-w-0 flex-1 flex-col">
           {activeSurface === 'chat' ? (

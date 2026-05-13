@@ -12,6 +12,7 @@ describe('PromptsService', () => {
   let projectService: ProjectService
   let tempDir: string
   let gitRepoPath: string
+  let globalPromptsPath: string
   let db: ReturnType<typeof getDatabase>
 
   beforeEach(() => {
@@ -19,6 +20,7 @@ describe('PromptsService', () => {
     projectService = new ProjectService(db)
     tempDir = mkdtempSync(join(tmpdir(), 'convergence-prompts-test-'))
     gitRepoPath = join(tempDir, 'repo')
+    globalPromptsPath = join(tempDir, 'home', '.convergence', 'prompts')
     mkdirSync(gitRepoPath)
     mkdirSync(join(gitRepoPath, '.git'))
   })
@@ -32,6 +34,7 @@ describe('PromptsService', () => {
   it('throws when the project is missing', async () => {
     const service = new PromptsService(db, projectService, {
       now: () => FIXED_NOW,
+      globalPromptsPath,
     })
 
     await expect(service.listByProjectId('missing')).rejects.toThrow(
@@ -57,6 +60,7 @@ describe('PromptsService', () => {
     writeFileSync(join(promptsDir, 'scratch.json'), '{}')
     const service = new PromptsService(db, projectService, {
       now: () => FIXED_NOW,
+      globalPromptsPath,
     })
 
     const catalog = await service.listByProjectId(project.id)
@@ -89,6 +93,7 @@ describe('PromptsService', () => {
     )
     const service = new PromptsService(db, projectService, {
       now: () => FIXED_NOW,
+      globalPromptsPath,
     })
     const catalog = await service.listByProjectId(project.id)
     const prompt = catalog.prompts[0]
@@ -118,6 +123,7 @@ describe('PromptsService', () => {
     const project = projectService.create({ repositoryPath: gitRepoPath })
     const service = new PromptsService(db, projectService, {
       now: () => FIXED_NOW,
+      globalPromptsPath,
     })
 
     const created = await service.create({

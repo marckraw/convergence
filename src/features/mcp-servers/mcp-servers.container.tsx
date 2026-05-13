@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import type { FC } from 'react'
+import type { FC, ReactNode } from 'react'
 import { Cable } from 'lucide-react'
 import { mcpServerApi } from '@/entities/mcp-server'
 import { useProjectStore } from '@/entities/project'
@@ -9,7 +9,13 @@ import type { ProjectMcpVisibility } from '@/shared/types/mcp.types'
 import { Button } from '@/shared/ui/button'
 import { McpServersDialog } from './mcp-servers.presentational'
 
-export const McpServersDialogContainer: FC = () => {
+interface McpServersDialogContainerProps {
+  trigger?: ReactNode
+}
+
+export const McpServersDialogContainer: FC<McpServersDialogContainerProps> = ({
+  trigger,
+}) => {
   const activeSurface = useAppSurfaceStore((state) => state.activeSurface)
   const activeProject = useProjectStore((state) => state.activeProject)
   const projectId =
@@ -97,29 +103,31 @@ export const McpServersDialogContainer: FC = () => {
       error={error}
       onRefresh={load}
       trigger={
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          className="w-full justify-between px-2 text-xs text-muted-foreground hover:text-foreground"
-          disabled={activeSurface === 'code' && !projectId}
-        >
-          <span className="flex items-center gap-2">
-            <Cable className="h-3.5 w-3.5" />
-            MCP Servers
-          </span>
-          <span className="text-[11px] text-muted-foreground/80">
-            {snapshot
-              ? snapshot.providers.reduce(
-                  (count, provider) =>
-                    count +
-                    provider.globalServers.length +
-                    provider.projectServers.length,
-                  0,
-                )
-              : 'View'}
-          </span>
-        </Button>
+        trigger ?? (
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="w-full justify-between px-2 text-xs text-muted-foreground hover:text-foreground"
+            disabled={activeSurface === 'code' && !projectId}
+          >
+            <span className="flex items-center gap-2">
+              <Cable className="h-3.5 w-3.5" />
+              MCP Servers
+            </span>
+            <span className="text-[11px] text-muted-foreground/80">
+              {snapshot
+                ? snapshot.providers.reduce(
+                    (count, provider) =>
+                      count +
+                      provider.globalServers.length +
+                      provider.projectServers.length,
+                    0,
+                  )
+                : 'View'}
+            </span>
+          </Button>
+        )
       }
     />
   )

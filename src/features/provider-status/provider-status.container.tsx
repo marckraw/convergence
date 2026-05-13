@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import type { FC } from 'react'
+import type { FC, ReactNode } from 'react'
 import { Bot } from 'lucide-react'
 import {
   providerApi,
@@ -10,7 +10,13 @@ import { useDialogStore } from '@/entities/dialog'
 import { Button } from '@/shared/ui/button'
 import { ProviderStatusDialog } from './provider-status.presentational'
 
-export const ProviderStatusDialogContainer: FC = () => {
+interface ProviderStatusDialogContainerProps {
+  trigger?: ReactNode
+}
+
+export const ProviderStatusDialogContainer: FC<
+  ProviderStatusDialogContainerProps
+> = ({ trigger }) => {
   const open = useDialogStore((s) => s.openDialog === 'providers')
   const openDialog = useDialogStore((s) => s.open)
   const closeDialog = useDialogStore((s) => s.close)
@@ -105,22 +111,24 @@ export const ProviderStatusDialogContainer: FC = () => {
       onRefresh={load}
       onUpdateProvider={handleUpdateProvider}
       trigger={
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          className="w-full justify-between px-2 text-xs text-muted-foreground hover:text-foreground"
-        >
-          <span className="flex items-center gap-2">
-            <Bot className="h-3.5 w-3.5" />
-            Providers
-          </span>
-          <span className="text-[11px] text-muted-foreground/80">
-            {statuses.length > 0
-              ? `${availableCount}/${statuses.length}`
-              : 'View'}
-          </span>
-        </Button>
+        trigger ?? (
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="w-full justify-between px-2 text-xs text-muted-foreground hover:text-foreground"
+          >
+            <span className="flex items-center gap-2">
+              <Bot className="h-3.5 w-3.5" />
+              Providers
+            </span>
+            <span className="text-[11px] text-muted-foreground/80">
+              {statuses.length > 0
+                ? `${availableCount}/${statuses.length}`
+                : 'View'}
+            </span>
+          </Button>
+        )
       }
     />
   )

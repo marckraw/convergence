@@ -32,10 +32,16 @@ import { ProjectTree } from './project-tree.container'
 import { ProjectSwitcher } from './project-switcher.presentational'
 import { Button } from '@/shared/ui/button'
 import type { AppSurface } from '@/shared/types/app-surface.types'
+import { cn } from '@/shared/lib/cn.pure'
 import {
   BarChart3,
+  ChevronRight,
   Code2,
+  FolderGit2,
   MessageSquareText,
+  PanelLeftClose,
+  PanelLeftOpen,
+  Pin,
   Plus,
   Settings,
 } from 'lucide-react'
@@ -43,6 +49,7 @@ import {
   GlobalChatSessionList,
   type ChatSidebarSpace,
 } from './global-chat-session-list.presentational'
+import { SidebarToolsMenu } from './sidebar-tools-menu.presentational'
 
 interface SidebarProps {
   activeSurface: AppSurface
@@ -54,6 +61,12 @@ interface SidebarProps {
   selectedSpaceId: string | null
   onSelectSpace: (id: string) => void
   activeGlobalSessionId: string | null
+  collapsed: boolean
+  peek: boolean
+  onCollapse: () => void
+  onExpand: () => void
+  onPeek: () => void
+  onPinPeek: () => void
 }
 
 interface AttentionSession {
@@ -73,6 +86,12 @@ export const Sidebar: FC<SidebarProps> = ({
   selectedSpaceId,
   onSelectSpace,
   activeGlobalSessionId,
+  collapsed,
+  peek,
+  onCollapse,
+  onExpand,
+  onPeek,
+  onPinPeek,
 }) => {
   const projects = useProjectStore((s) => s.projects)
   const activeProject = useProjectStore((s) => s.activeProject)
@@ -510,11 +529,197 @@ export const Sidebar: FC<SidebarProps> = ({
     await setActiveProject(projectId)
   }
 
+  const hiddenDialogTrigger = () => (
+    <Button
+      type="button"
+      variant="ghost"
+      size="sm"
+      className="hidden"
+      tabIndex={-1}
+      aria-hidden="true"
+    />
+  )
+
+  const dialogHosts = (
+    <>
+      <SpaceWorkboardDialogContainer trigger={hiddenDialogTrigger()} />
+      <ProjectSettingsDialogContainer
+        contextSection={(projectId) => (
+          <ProjectContextSettings projectId={projectId} />
+        )}
+        trigger={hiddenDialogTrigger()}
+      />
+      <ProviderStatusDialogContainer trigger={hiddenDialogTrigger()} />
+      <McpServersDialogContainer trigger={hiddenDialogTrigger()} />
+      <SkillsBrowserDialogContainer trigger={hiddenDialogTrigger()} />
+      <PromptLibraryBrowserDialogContainer trigger={hiddenDialogTrigger()} />
+      <ReleaseNotesDialogContainer trigger={hiddenDialogTrigger()} />
+    </>
+  )
+
+  if (collapsed) {
+    return (
+      <div className="relative flex h-full w-14 flex-col items-center">
+        <div
+          className="absolute top-1/2 right-[-11px] z-20 flex h-14 w-5 -translate-y-1/2 items-center justify-center rounded-r-md border border-l-0 border-white/10 bg-background/90 text-muted-foreground shadow-lg backdrop-blur-sm transition-colors hover:bg-accent hover:text-foreground"
+          role="button"
+          tabIndex={0}
+          aria-label="Peek sidebar"
+          title="Peek sidebar"
+          onMouseEnter={onPeek}
+          onFocus={onPeek}
+        >
+          <ChevronRight className="h-3.5 w-3.5" />
+        </div>
+        <div
+          className="app-sidebar-topbar h-12 w-full border-b border-white/10"
+          style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
+        />
+
+        <div className="flex w-full flex-col items-center gap-1 border-b border-white/10 py-3">
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="h-9 w-9"
+            title="Expand sidebar"
+            aria-label="Expand sidebar"
+            onClick={onExpand}
+          >
+            <PanelLeftOpen className="h-4 w-4" />
+          </Button>
+          <Button
+            type="button"
+            variant={activeSurface === 'code' ? 'secondary' : 'ghost'}
+            size="icon"
+            className="h-9 w-9"
+            title="Code"
+            aria-label="Show code surface"
+            aria-pressed={activeSurface === 'code'}
+            onClick={() => onSelectSurface('code')}
+          >
+            <Code2 className="h-4 w-4" />
+          </Button>
+          <Button
+            type="button"
+            variant={activeSurface === 'chat' ? 'secondary' : 'ghost'}
+            size="icon"
+            className="h-9 w-9"
+            title="Chat"
+            aria-label="Show chat surface"
+            aria-pressed={activeSurface === 'chat'}
+            onClick={() => onSelectSurface('chat')}
+          >
+            <MessageSquareText className="h-4 w-4" />
+          </Button>
+        </div>
+
+        <div className="flex min-h-0 flex-1 flex-col items-center gap-2 py-3">
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="relative h-9 w-9"
+            title={`Needs You (${visibleAttentionSessions.length})`}
+            aria-label={`Needs You (${visibleAttentionSessions.length})`}
+          >
+            <span
+              className={cn(
+                'h-3 w-3 rounded-full border-2',
+                waitingSessions.length > 0
+                  ? 'border-warning'
+                  : reviewSessions.some(
+                        ({ session }) => session.attention === 'failed',
+                      )
+                    ? 'border-destructive'
+                    : 'border-emerald-500',
+              )}
+            />
+            {visibleAttentionSessions.length > 0 ? (
+              <span className="absolute -top-1 -right-1 rounded-full bg-destructive px-1.5 py-0.5 text-[10px] font-medium leading-none text-destructive-foreground">
+                {visibleAttentionSessions.length}
+              </span>
+            ) : null}
+          </Button>
+
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="h-9 w-9"
+            title={
+              activeSurface === 'chat'
+                ? 'Convergence Chat'
+                : (activeProject?.name ?? 'No project')
+            }
+            aria-label={
+              activeSurface === 'chat'
+                ? 'Convergence Chat'
+                : (activeProject?.name ?? 'No project')
+            }
+            onClick={() => onSelectSurface(activeSurface)}
+          >
+            {activeSurface === 'chat' ? (
+              <MessageSquareText className="h-4 w-4" />
+            ) : (
+              <FolderGit2 className="h-4 w-4" />
+            )}
+          </Button>
+
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="h-9 w-9"
+            title={activeSurface === 'chat' ? 'New chat' : 'Open a project'}
+            aria-label={
+              activeSurface === 'chat' ? 'New chat' : 'Open a project'
+            }
+            onClick={
+              activeSurface === 'chat' ? onNewGlobalSession : createProject
+            }
+          >
+            <Plus className="h-4 w-4" />
+          </Button>
+        </div>
+
+        <div className="app-sidebar-footer flex w-full flex-col items-center gap-1 border-t border-white/10 py-3">
+          <SidebarToolsMenu
+            activeSurface={activeSurface}
+            hasActiveProject={!!activeProject}
+            iconOnly
+            onOpenDialog={openDialog}
+          />
+          <AppSettingsDialogContainer
+            trigger={
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8"
+                title="Settings"
+                aria-label="Open settings"
+              >
+                <Settings className="h-4 w-4" />
+              </Button>
+            }
+          />
+          <ThemeToggleButton />
+        </div>
+
+        {dialogHosts}
+        {activeSurface === 'code' ? <WorkspaceCreateDialogContainer /> : null}
+        <SpaceCreateDialogContainer onCreated={handleSpaceCreated} />
+      </div>
+    )
+  }
+
   return (
     <div className="flex h-full flex-col">
       <div
         className="app-sidebar-topbar flex h-12 items-center justify-end border-b border-white/10 px-3"
-        style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
+        style={
+          { WebkitAppRegion: peek ? 'no-drag' : 'drag' } as React.CSSProperties
+        }
       >
         <div
           className="flex items-center gap-1"
@@ -532,6 +737,12 @@ export const Sidebar: FC<SidebarProps> = ({
           >
             <BarChart3 className="h-4 w-4" />
           </Button>
+          <SidebarToolsMenu
+            activeSurface={activeSurface}
+            hasActiveProject={!!activeProject}
+            iconOnly
+            onOpenDialog={openDialog}
+          />
           <AppSettingsDialogContainer
             trigger={
               <Button
@@ -549,31 +760,59 @@ export const Sidebar: FC<SidebarProps> = ({
         </div>
       </div>
 
-      <div className="flex items-center gap-1 px-3 pt-3">
-        <Button
-          type="button"
-          variant={activeSurface === 'code' ? 'secondary' : 'ghost'}
-          size="icon"
-          className="h-8 w-8"
-          title="Code"
-          aria-label="Show code surface"
-          aria-pressed={activeSurface === 'code'}
-          onClick={() => onSelectSurface('code')}
-        >
-          <Code2 className="h-4 w-4" />
-        </Button>
-        <Button
-          type="button"
-          variant={activeSurface === 'chat' ? 'secondary' : 'ghost'}
-          size="icon"
-          className="h-8 w-8"
-          title="Chat"
-          aria-label="Show chat surface"
-          aria-pressed={activeSurface === 'chat'}
-          onClick={() => onSelectSurface('chat')}
-        >
-          <MessageSquareText className="h-4 w-4" />
-        </Button>
+      <div className="flex items-center justify-between gap-2 px-3 pt-3">
+        <div className="flex items-center gap-1">
+          <Button
+            type="button"
+            variant={activeSurface === 'code' ? 'secondary' : 'ghost'}
+            size="icon"
+            className="h-8 w-8"
+            title="Code"
+            aria-label="Show code surface"
+            aria-pressed={activeSurface === 'code'}
+            onClick={() => onSelectSurface('code')}
+          >
+            <Code2 className="h-4 w-4" />
+          </Button>
+          <Button
+            type="button"
+            variant={activeSurface === 'chat' ? 'secondary' : 'ghost'}
+            size="icon"
+            className="h-8 w-8"
+            title="Chat"
+            aria-label="Show chat surface"
+            aria-pressed={activeSurface === 'chat'}
+            onClick={() => onSelectSurface('chat')}
+          >
+            <MessageSquareText className="h-4 w-4" />
+          </Button>
+        </div>
+
+        {peek ? (
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8"
+            title="Pin sidebar"
+            aria-label="Pin sidebar"
+            onClick={onPinPeek}
+          >
+            <Pin className="h-4 w-4" />
+          </Button>
+        ) : (
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8"
+            title="Collapse sidebar"
+            aria-label="Collapse sidebar"
+            onClick={onCollapse}
+          >
+            <PanelLeftClose className="h-4 w-4" />
+          </Button>
+        )}
       </div>
 
       <div className="app-scrollbar flex-1 overflow-x-hidden overflow-y-auto py-3">
@@ -667,45 +906,19 @@ export const Sidebar: FC<SidebarProps> = ({
 
       <div className="app-sidebar-footer border-t border-white/10 p-3">
         {activeSurface === 'code' ? (
-          <>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={createProject}
-              className="w-full"
-            >
-              <Plus className="h-4 w-4" />
-              Open a project
-            </Button>
-            <div className="mt-2">
-              <SpaceWorkboardDialogContainer />
-            </div>
-            <div className="mt-2">
-              <ProjectSettingsDialogContainer
-                contextSection={(projectId) => (
-                  <ProjectContextSettings projectId={projectId} />
-                )}
-              />
-            </div>
-          </>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={createProject}
+            className="w-full"
+          >
+            <Plus className="h-4 w-4" />
+            Open a project
+          </Button>
         ) : null}
-        <div className="mt-2">
-          <ProviderStatusDialogContainer />
-        </div>
-        <div className="mt-2">
-          <McpServersDialogContainer />
-        </div>
-        <div className="mt-2">
-          <SkillsBrowserDialogContainer />
-        </div>
-        <div className="mt-2">
-          <PromptLibraryBrowserDialogContainer />
-        </div>
-        <div className="mt-2">
-          <ReleaseNotesDialogContainer />
-        </div>
       </div>
 
+      {dialogHosts}
       {activeSurface === 'code' ? <WorkspaceCreateDialogContainer /> : null}
       <SpaceCreateDialogContainer onCreated={handleSpaceCreated} />
     </div>

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import type { FC } from 'react'
+import type { FC, ReactNode } from 'react'
 import { BookOpenText } from 'lucide-react'
 import { useDialogStore } from '@/entities/dialog'
 import { useProjectStore } from '@/entities/project'
@@ -24,7 +24,13 @@ const DEFAULT_FILTERS: PromptLibraryBrowserFilters = {
   tag: 'all',
 }
 
-export const PromptLibraryBrowserDialogContainer: FC = () => {
+interface PromptLibraryBrowserDialogContainerProps {
+  trigger?: ReactNode
+}
+
+export const PromptLibraryBrowserDialogContainer: FC<
+  PromptLibraryBrowserDialogContainerProps
+> = ({ trigger }) => {
   const activeProject = useProjectStore((state) => state.activeProject)
   const projectId = activeProject?.id ?? null
   const projectName = activeProject?.name ?? null
@@ -314,21 +320,23 @@ export const PromptLibraryBrowserDialogContainer: FC = () => {
       onSubmitForm={() => void handleSubmitForm()}
       onDeletePrompt={handleDeletePrompt}
       trigger={
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          className="w-full justify-between px-2 text-xs text-muted-foreground hover:text-foreground"
-          disabled={!projectId}
-        >
-          <span className="flex items-center gap-2">
-            <BookOpenText className="h-3.5 w-3.5" />
-            Prompts
-          </span>
-          <span className="text-[11px] text-muted-foreground/80">
-            {catalog ? totalPromptCount : 'View'}
-          </span>
-        </Button>
+        trigger ?? (
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="w-full justify-between px-2 text-xs text-muted-foreground hover:text-foreground"
+            disabled={!projectId}
+          >
+            <span className="flex items-center gap-2">
+              <BookOpenText className="h-3.5 w-3.5" />
+              Prompts
+            </span>
+            <span className="text-[11px] text-muted-foreground/80">
+              {catalog ? totalPromptCount : 'View'}
+            </span>
+          </Button>
+        )
       }
     />
   )
