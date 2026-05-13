@@ -286,6 +286,14 @@ contextBridge.exposeInMainWorld('electronAPI', {
     readDetails: (input: unknown) =>
       ipcRenderer.invoke('skills:readDetails', input),
   },
+  prompts: {
+    listByProjectId: (projectId: string, options?: { forceReload?: boolean }) =>
+      ipcRenderer.invoke('prompts:listByProjectId', projectId, options),
+    listGlobal: (options?: { forceReload?: boolean }) =>
+      ipcRenderer.invoke('prompts:listGlobal', options),
+    readDetails: (input: unknown) =>
+      ipcRenderer.invoke('prompts:readDetails', input),
+  },
   feedback: {
     submit: (input: {
       title: string
