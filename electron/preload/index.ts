@@ -202,8 +202,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
         id,
         typeof input === 'string' ? { text: input } : input,
       ),
-    approve: (id: string) => ipcRenderer.invoke('session:approve', id),
-    deny: (id: string) => ipcRenderer.invoke('session:deny', id),
+    approve: (id: string, providerApprovalId?: string) =>
+      ipcRenderer.invoke('session:approve', id, providerApprovalId),
+    deny: (id: string, providerApprovalId?: string) =>
+      ipcRenderer.invoke('session:deny', id, providerApprovalId),
     stop: (id: string) => ipcRenderer.invoke('session:stop', id),
     rename: (id: string, name: string) =>
       ipcRenderer.invoke('session:rename', id, name),

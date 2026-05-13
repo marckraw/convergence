@@ -77,8 +77,8 @@ interface SessionActions {
     workspaceId: string | null,
     name: string,
   ) => Promise<SessionSummary>
-  approveSession: (id: string) => Promise<void>
-  denySession: (id: string) => Promise<void>
+  approveSession: (id: string, providerApprovalId?: string) => Promise<void>
+  denySession: (id: string, providerApprovalId?: string) => Promise<void>
   sendMessageToSession: (
     id: string,
     text: string,
@@ -560,10 +560,10 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     return session
   },
 
-  approveSession: async (id: string) => {
+  approveSession: async (id: string, providerApprovalId?: string) => {
     set({ error: null })
     try {
-      await sessionApi.approve(id)
+      await sessionApi.approve(id, providerApprovalId)
     } catch (err) {
       set({
         error: err instanceof Error ? err.message : 'Failed to approve',
@@ -571,10 +571,10 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     }
   },
 
-  denySession: async (id: string) => {
+  denySession: async (id: string, providerApprovalId?: string) => {
     set({ error: null })
     try {
-      await sessionApi.deny(id)
+      await sessionApi.deny(id, providerApprovalId)
     } catch (err) {
       set({
         error: err instanceof Error ? err.message : 'Failed to deny',

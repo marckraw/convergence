@@ -1,4 +1,10 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import {
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 import type { ConversationItem, Session } from '@/entities/session'
 import { useAttachmentStore } from '@/entities/attachment'
@@ -77,6 +83,8 @@ function userMessage(overrides: {
 function approvalRequest(overrides: {
   id: string
   sequence: number
+  description?: string
+  providerItemId?: string | null
 }): ConversationItem {
   return {
     id: overrides.id,
@@ -84,13 +92,13 @@ function approvalRequest(overrides: {
     sequence: overrides.sequence,
     turnId: `turn-${overrides.sequence}`,
     kind: 'approval-request',
-    description: 'Allow file edit?',
+    description: overrides.description ?? 'Allow file edit?',
     state: 'complete',
     createdAt: '2026-01-01T00:00:00.000Z',
     updatedAt: '2026-01-01T00:00:00.000Z',
     providerMeta: {
       providerId: 'claude-code',
-      providerItemId: null,
+      providerItemId: overrides.providerItemId ?? null,
       providerEventType: 'approval',
     },
   }
@@ -141,9 +149,60 @@ describe('SessionTranscript', () => {
     )
 
     fireEvent.click(await screen.findByRole('button', { name: 'Approve' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Deny' }))
 
-    expect(onApprove).toHaveBeenCalledWith('session-1')
-    expect(onDeny).toHaveBeenCalledWith('session-1')
+    expect(onApprove).toHaveBeenCalledWith('session-1', undefined)
+    expect(onDeny).not.toHaveBeenCalled()
+  })
+
+  it('renders actions inside each active approval request card', async () => {
+    const onApprove = vi.fn()
+    const onDeny = vi.fn()
+
+    render(
+      <SessionTranscript
+        session={{
+          ...baseSession,
+          attention: 'needs-approval',
+        }}
+        conversationItems={[
+          approvalRequest({
+            id: 'approval-1',
+            sequence: 1,
+            description: 'Allow diskutil?',
+            providerItemId: '100',
+          }),
+          approvalRequest({
+            id: 'approval-2',
+            sequence: 2,
+            description: 'Allow top?',
+            providerItemId: '101',
+          }),
+        ]}
+        onApprove={onApprove}
+        onDeny={onDeny}
+      />,
+    )
+
+    await waitFor(() => {
+      expect(screen.getAllByTestId('approval-request-card')).toHaveLength(2)
+    })
+
+    const [firstCard, secondCard] = screen.getAllByTestId(
+      'approval-request-card',
+    )
+    expect(within(firstCard).getByText('Allow diskutil?')).toBeInTheDocument()
+    expect(
+      within(firstCard).getByRole('button', { name: 'Approve' }),
+    ).toBeInTheDocument()
+    expect(within(secondCard).getByText('Allow top?')).toBeInTheDocument()
+    expect(
+      within(secondCard).getByRole('button', { name: 'Approve' }),
+    ).toBeInTheDocument()
+
+    fireEvent.click(within(firstCard).getByRole('button', { name: 'Deny' }))
+    fireEvent.click(within(secondCard).getByRole('button', { name: 'Approve' }))
+
+    expect(onDeny).toHaveBeenCalledWith('session-1', '100')
+    expect(onApprove).toHaveBeenCalledWith('session-1', '101')
   })
 })

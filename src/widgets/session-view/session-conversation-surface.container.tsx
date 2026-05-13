@@ -16,8 +16,8 @@ interface SessionConversationSurfaceProps {
   conversationItems: ConversationItem[]
   composerContext: ComposerSessionContext | null
   composerDisabledReason?: string | null
-  onApprove: (sessionId: string) => void
-  onDeny: (sessionId: string) => void
+  onApprove: (sessionId: string, providerApprovalId?: string) => void
+  onDeny: (sessionId: string, providerApprovalId?: string) => void
 }
 
 export const SessionConversationSurface: FC<
@@ -84,8 +84,8 @@ interface RenderConversationColumnInput {
   composerDisabledReason: string | null
   selectedUiResponseItemId: string | null
   onUiResponseArtifactSelect: (conversationItemId: string) => void
-  onApprove: (sessionId: string) => void
-  onDeny: (sessionId: string) => void
+  onApprove: (sessionId: string, providerApprovalId?: string) => void
+  onDeny: (sessionId: string, providerApprovalId?: string) => void
 }
 
 function renderConversationColumn({

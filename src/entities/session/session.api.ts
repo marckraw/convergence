@@ -78,10 +78,11 @@ export const sessionApi = {
       deliveryMode,
     }),
 
-  approve: (id: string): Promise<void> =>
-    window.electronAPI.session.approve(id),
+  approve: (id: string, providerApprovalId?: string): Promise<void> =>
+    window.electronAPI.session.approve(id, providerApprovalId),
 
-  deny: (id: string): Promise<void> => window.electronAPI.session.deny(id),
+  deny: (id: string, providerApprovalId?: string): Promise<void> =>
+    window.electronAPI.session.deny(id, providerApprovalId),
 
   stop: (id: string): Promise<void> => window.electronAPI.session.stop(id),
 
