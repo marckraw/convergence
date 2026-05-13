@@ -237,6 +237,40 @@ describe('ConversationItemView', () => {
     ).toHaveTextContent('5s')
   })
 
+  it('keeps long approval descriptions within the approval frame', () => {
+    const { container } = renderConversationItemView({
+      entry: {
+        id: 'approval-1',
+        sessionId: 'session-1',
+        sequence: 1,
+        turnId: null,
+        kind: 'approval-request',
+        state: 'complete',
+        description: `Command: /bin/zsh -lc "${'node-e-very-long-unbroken-command'.repeat(80)}"`,
+        createdAt: '2026-04-13T10:00:00.000Z',
+        updatedAt: '2026-04-13T10:00:00.000Z',
+        providerMeta: {
+          providerId: 'codex',
+          providerItemId: null,
+          providerEventType: 'approval-request',
+        },
+      },
+    })
+
+    const approvalFrame = screen
+      .getByText('Approval needed')
+      .closest('[class*="border-warning"]')
+    const approvalBody =
+      screen.getByText('Approval needed').parentElement?.parentElement
+    const wrappingMarkdown = container.querySelector(
+      '[class*="overflow-wrap:anywhere"]',
+    )
+
+    expect(approvalFrame).toHaveClass('max-w-full', 'overflow-hidden')
+    expect(approvalBody).toHaveClass('min-w-0')
+    expect(wrappingMarkdown).toHaveClass('max-w-full')
+  })
+
   it('collapses tool results by default and expands inline on demand', () => {
     const result = [
       '/bin/zsh -lc "sed -n 1,20p app.tsx"',

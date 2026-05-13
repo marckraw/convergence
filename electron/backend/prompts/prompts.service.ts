@@ -161,16 +161,16 @@ async function fileExists(path: string): Promise<boolean> {
 
 export class PromptsService {
   private now: () => Date
-  private globalPromptsPath: string
+  private globalPromptsRoot: string
 
   constructor(
     private db: Database.Database,
     private projectService: ProjectService,
-    options: { now?: () => Date; globalPromptsPath?: string } = {},
+    options: { now?: () => Date; globalPromptsRoot?: string } = {},
   ) {
     this.now = options.now ?? (() => new Date())
-    this.globalPromptsPath =
-      options.globalPromptsPath ?? join(homedir(), '.convergence', 'prompts')
+    this.globalPromptsRoot =
+      options.globalPromptsRoot ?? join(homedir(), '.convergence', 'prompts')
   }
 
   async listByProjectId(
@@ -192,7 +192,7 @@ export class PromptsService {
         },
         {
           scope: 'global',
-          path: this.globalPromptsPath,
+          path: this.globalPromptsRoot,
         },
       ],
     })
@@ -207,7 +207,7 @@ export class PromptsService {
       roots: [
         {
           scope: 'global',
-          path: this.globalPromptsPath,
+          path: this.globalPromptsRoot,
         },
       ],
     })
@@ -441,7 +441,7 @@ export class PromptsService {
       path:
         scope === 'project'
           ? join(projectPath, '.convergence', 'prompts')
-          : this.globalPromptsPath,
+          : this.globalPromptsRoot,
     }
   }
 
