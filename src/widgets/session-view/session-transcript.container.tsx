@@ -15,10 +15,7 @@ import type {
 import { artifactFromConversationItem } from '@/entities/ui-response-artifact'
 import { cn } from '@/shared/lib/cn.pure'
 import { ConversationItem } from './conversation-item.container'
-import {
-  buildConversationRenderPlan,
-  findActionableApprovalIds,
-} from './session-transcript-render-plan.pure'
+import { buildConversationRenderPlan } from './session-transcript-render-plan.pure'
 import { isTranscriptNearBottom } from './session-transcript-scroll.pure'
 
 interface SessionTranscriptProps {
@@ -72,11 +69,16 @@ export const SessionTranscript: FC<SessionTranscriptProps> = ({
       return new Set<string>()
     }
 
-    return new Set(
-      findActionableApprovalIds(conversationRenderPlan).filter(
-        (id) => !resolvedApprovalIds.has(id),
-      ),
-    )
+    const ids = new Set<string>()
+    for (const entry of conversationRenderPlan) {
+      if (
+        entry.item.kind === 'approval-request' &&
+        !resolvedApprovalIds.has(entry.item.id)
+      ) {
+        ids.add(entry.item.id)
+      }
+    }
+    return ids
   }, [
     conversationRenderPlan,
     resolvedApprovalIds,

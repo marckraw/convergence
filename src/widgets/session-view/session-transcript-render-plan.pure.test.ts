@@ -1,9 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { ConversationItem } from '@/entities/session'
-import {
-  buildConversationRenderPlan,
-  findActionableApprovalIds,
-} from './session-transcript-render-plan.pure'
+import { buildConversationRenderPlan } from './session-transcript-render-plan.pure'
 
 const base = {
   sessionId: 'session-1',
@@ -43,17 +40,6 @@ function userMessage(sequence: number, text: string): ConversationItem {
     kind: 'message',
     actor: 'user',
     text,
-  }
-}
-
-function approvalRequest(sequence: number): ConversationItem {
-  return {
-    ...base,
-    id: `approval-${sequence}`,
-    sequence,
-    turnId: `turn-${sequence}`,
-    kind: 'approval-request',
-    description: `Approval ${sequence}`,
   }
 }
 
@@ -142,46 +128,5 @@ describe('buildConversationRenderPlan', () => {
       { id: assistant.id, turnBoundary: false, turnSequence: null },
       { id: secondUser.id, turnBoundary: true, turnSequence: 2 },
     ])
-  })
-
-  it('marks the final approval block as actionable and ignores trailing notes', () => {
-    const first = approvalRequest(1)
-    const second = approvalRequest(2)
-    const note: ConversationItem = {
-      ...base,
-      id: 'note-3',
-      sequence: 3,
-      turnId: second.turnId,
-      kind: 'note',
-      level: 'warning',
-      text: 'Still waiting',
-    }
-
-    expect(
-      findActionableApprovalIds(
-        buildConversationRenderPlan([first, second, note]),
-      ),
-    ).toEqual([first.id, second.id])
-  })
-
-  it('does not mark historical approvals before later work as actionable', () => {
-    const stale = approvalRequest(1)
-    const result: ConversationItem = {
-      ...base,
-      id: 'result-2',
-      sequence: 2,
-      turnId: stale.turnId,
-      kind: 'tool-result',
-      toolName: 'shell',
-      relatedItemId: null,
-      outputText: 'done',
-    }
-    const current = approvalRequest(3)
-
-    expect(
-      findActionableApprovalIds(
-        buildConversationRenderPlan([stale, result, current]),
-      ),
-    ).toEqual([current.id])
   })
 })

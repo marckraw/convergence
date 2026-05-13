@@ -80,6 +80,32 @@ function userMessage(overrides: {
   }
 }
 
+function assistantMessage(overrides: {
+  id: string
+  sequence: number
+  text: string
+  turnId?: string
+  state?: 'streaming' | 'complete'
+}): ConversationItem {
+  return {
+    id: overrides.id,
+    sessionId: 'session-1',
+    sequence: overrides.sequence,
+    turnId: overrides.turnId ?? `turn-${overrides.sequence}`,
+    kind: 'message',
+    actor: 'assistant',
+    text: overrides.text,
+    state: overrides.state ?? 'streaming',
+    createdAt: '2026-01-01T00:00:00.000Z',
+    updatedAt: '2026-01-01T00:00:00.000Z',
+    providerMeta: {
+      providerId: 'claude-code',
+      providerItemId: null,
+      providerEventType: 'assistant',
+    },
+  }
+}
+
 function approvalRequest(overrides: {
   id: string
   sequence: number
@@ -152,6 +178,40 @@ describe('SessionTranscript', () => {
 
     expect(onApprove).toHaveBeenCalledWith('session-1', undefined)
     expect(onDeny).not.toHaveBeenCalled()
+  })
+
+  it('keeps the approval button when an assistant delta lands after the request', async () => {
+    const onApprove = vi.fn()
+    const onDeny = vi.fn()
+
+    render(
+      <SessionTranscript
+        session={{
+          ...baseSession,
+          attention: 'needs-approval',
+        }}
+        conversationItems={[
+          approvalRequest({
+            id: 'approval-1',
+            sequence: 1,
+            providerItemId: '100',
+          }),
+          assistantMessage({
+            id: 'message-1',
+            sequence: 2,
+            text: 'Still thinking…',
+            turnId: 'turn-1',
+            state: 'streaming',
+          }),
+        ]}
+        onApprove={onApprove}
+        onDeny={onDeny}
+      />,
+    )
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Approve' }))
+
+    expect(onApprove).toHaveBeenCalledWith('session-1', '100')
   })
 
   it('renders actions inside each active approval request card', async () => {
