@@ -92,6 +92,11 @@ export const PALETTE_DIALOGS: DialogDescriptor[] = [
     description: 'Provider skill browser for this project',
   },
   {
+    kind: 'prompt-library',
+    title: 'Prompt Library',
+    description: 'Reusable project prompts and templates',
+  },
+  {
     kind: 'release-notes',
     title: "What's New",
     description: 'Latest release notes and changes',

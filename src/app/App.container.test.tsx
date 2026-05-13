@@ -339,9 +339,13 @@ describe('App', () => {
       sidebar.queryByRole('button', { name: /open a project/i }),
     ).toBeNull()
     expect(sidebar.queryByText('Project Settings')).toBeNull()
-    expect(sidebar.getByText('Providers')).toBeInTheDocument()
-    expect(sidebar.getByText('MCP Servers')).toBeInTheDocument()
-    expect(sidebar.getByText('Skills')).toBeInTheDocument()
+    fireEvent.pointerDown(
+      sidebar.getByRole('button', { name: /open sidebar tools/i }),
+    )
+    expect(screen.getByText('Providers')).toBeInTheDocument()
+    expect(screen.getByText('MCP Servers')).toBeInTheDocument()
+    expect(screen.getAllByText('Skills').length).toBeGreaterThan(0)
+    expect(screen.getByText('Prompt Library')).toBeInTheDocument()
   })
 
   it('opens a Space home from the Chat sidebar', async () => {

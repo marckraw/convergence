@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import type { FC } from 'react'
+import type { FC, ReactNode } from 'react'
 import { Library } from 'lucide-react'
 import { useDialogStore } from '@/entities/dialog'
 import { useProjectStore } from '@/entities/project'
@@ -26,7 +26,13 @@ const DEFAULT_FILTERS: SkillBrowserFilters = {
   dependencyState: 'all',
 }
 
-export const SkillsBrowserDialogContainer: FC = () => {
+interface SkillsBrowserDialogContainerProps {
+  trigger?: ReactNode
+}
+
+export const SkillsBrowserDialogContainer: FC<
+  SkillsBrowserDialogContainerProps
+> = ({ trigger }) => {
   const activeProject = useProjectStore((state) => state.activeProject)
   const projectId = activeProject?.id ?? null
   const projectName = activeProject?.name ?? null
@@ -192,21 +198,23 @@ export const SkillsBrowserDialogContainer: FC = () => {
       onRefresh={() => void load(true)}
       onOpenMcpServers={handleOpenMcpServers}
       trigger={
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          className="w-full justify-between px-2 text-xs text-muted-foreground hover:text-foreground"
-          disabled={!projectId}
-        >
-          <span className="flex items-center gap-2">
-            <Library className="h-3.5 w-3.5" />
-            Skills
-          </span>
-          <span className="text-[11px] text-muted-foreground/80">
-            {catalog ? totalSkillCount : 'View'}
-          </span>
-        </Button>
+        trigger ?? (
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="w-full justify-between px-2 text-xs text-muted-foreground hover:text-foreground"
+            disabled={!projectId}
+          >
+            <span className="flex items-center gap-2">
+              <Library className="h-3.5 w-3.5" />
+              Skills
+            </span>
+            <span className="text-[11px] text-muted-foreground/80">
+              {catalog ? totalSkillCount : 'View'}
+            </span>
+          </Button>
+        )
       }
     />
   )

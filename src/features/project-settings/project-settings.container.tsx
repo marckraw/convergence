@@ -12,11 +12,12 @@ import { ProjectSettingsDialog } from './project-settings.presentational'
 
 interface ProjectSettingsDialogContainerProps {
   contextSection?: (projectId: string) => ReactNode
+  trigger?: ReactNode
 }
 
 export const ProjectSettingsDialogContainer: FC<
   ProjectSettingsDialogContainerProps
-> = ({ contextSection }) => {
+> = ({ contextSection, trigger }) => {
   const activeProject = useProjectStore((state) => state.activeProject)
   const updateProjectSettings = useProjectStore(
     (state) => state.updateProjectSettings,
@@ -113,21 +114,23 @@ export const ProjectSettingsDialogContainer: FC<
       onSave={() => void handleSave()}
       contextSection={contextSection?.(activeProject.id)}
       trigger={
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          className="w-full justify-between px-2 text-xs text-muted-foreground hover:text-foreground"
-        >
-          <span className="flex items-center gap-2">
-            <Settings2 className="h-3.5 w-3.5" />
-            Project Settings
-          </span>
-          <span className="flex items-center gap-1 text-[11px] text-muted-foreground/80">
-            <GitBranch className="h-3 w-3" />
-            {summary}
-          </span>
-        </Button>
+        trigger ?? (
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="w-full justify-between px-2 text-xs text-muted-foreground hover:text-foreground"
+          >
+            <span className="flex items-center gap-2">
+              <Settings2 className="h-3.5 w-3.5" />
+              Project Settings
+            </span>
+            <span className="flex items-center gap-1 text-[11px] text-muted-foreground/80">
+              <GitBranch className="h-3 w-3" />
+              {summary}
+            </span>
+          </Button>
+        )
       }
     />
   )
