@@ -1,5 +1,11 @@
 # convergence
 
+## 0.37.5
+
+### Patch Changes
+
+- 6282022: Condense the sidebar footer into a tools menu and add a collapsed rail with an explicit peek handle.
+
 ## 0.37.4
 
 ### Patch Changes
