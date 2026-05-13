@@ -682,22 +682,22 @@ export class SessionService {
     return resolved
   }
 
-  approve(id: string): void {
+  approve(id: string, providerApprovalId?: string): void {
     const handle = this.activeHandles.get(id)
     if (!handle) {
       this.handleInactiveApprovalAction(id)
       return
     }
-    handle.approve()
+    handle.approve(providerApprovalId)
   }
 
-  deny(id: string): void {
+  deny(id: string, providerApprovalId?: string): void {
     const handle = this.activeHandles.get(id)
     if (!handle) {
       this.handleInactiveApprovalAction(id)
       return
     }
-    handle.deny()
+    handle.deny(providerApprovalId)
   }
 
   private handleInactiveApprovalAction(id: string): void {

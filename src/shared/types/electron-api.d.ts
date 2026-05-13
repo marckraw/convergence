@@ -1056,8 +1056,8 @@ interface ElectronAPI {
       id: string,
       input: SendSessionMessageInput | string,
     ) => Promise<void>
-    approve: (id: string) => Promise<void>
-    deny: (id: string) => Promise<void>
+    approve: (id: string, providerApprovalId?: string) => Promise<void>
+    deny: (id: string, providerApprovalId?: string) => Promise<void>
     stop: (id: string) => Promise<void>
     rename: (id: string, name: string) => Promise<void>
     regenerateName: (id: string) => Promise<void>

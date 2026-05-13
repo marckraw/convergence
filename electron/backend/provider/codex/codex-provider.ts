@@ -104,6 +104,24 @@ interface PendingApprovalRequest {
   denyResult: unknown
 }
 
+function findPendingApproval(
+  pendingApprovals: Map<JsonRpcId, PendingApprovalRequest>,
+  providerApprovalId: string | undefined,
+): [JsonRpcId, PendingApprovalRequest] | undefined {
+  if (providerApprovalId) {
+    for (const entry of pendingApprovals.entries()) {
+      if (String(entry[0]) === providerApprovalId) {
+        return entry
+      }
+    }
+    return undefined
+  }
+
+  return pendingApprovals.entries().next().value as
+    | [JsonRpcId, PendingApprovalRequest]
+    | undefined
+}
+
 function buildApprovalDescription(parts: Array<string | null>): string {
   return parts
     .map((part) => part?.trim() ?? null)
@@ -1171,6 +1189,7 @@ export class CodexProvider implements Provider {
 
           sessionEmitter.addApprovalRequest({
             description: approvalRequest.description,
+            providerItemId: String(id),
             providerEventType: method,
           })
           setAttention('needs-approval')
@@ -1397,11 +1416,12 @@ export class CodexProvider implements Provider {
           setAttention('failed')
         })
       },
-      approve: () => {
+      approve: (providerApprovalId) => {
         if (!rpc) return
-        const pendingApproval = pendingApprovals.entries().next().value as
-          | [JsonRpcId, PendingApprovalRequest]
-          | undefined
+        const pendingApproval = findPendingApproval(
+          pendingApprovals,
+          providerApprovalId,
+        )
         if (!pendingApproval) return
 
         const [id, approvalRequest] = pendingApproval
@@ -1411,11 +1431,12 @@ export class CodexProvider implements Provider {
           setAttention('none')
         }
       },
-      deny: () => {
+      deny: (providerApprovalId) => {
         if (!rpc) return
-        const pendingApproval = pendingApprovals.entries().next().value as
-          | [JsonRpcId, PendingApprovalRequest]
-          | undefined
+        const pendingApproval = findPendingApproval(
+          pendingApprovals,
+          providerApprovalId,
+        )
         if (!pendingApproval) return
 
         const [id, approvalRequest] = pendingApproval

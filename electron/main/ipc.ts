@@ -710,13 +710,19 @@ export function registerIpcHandlers(
     return result.filePaths
   })
 
-  ipcMain.handle('session:approve', (_event, id: string) => {
-    sessionService.approve(id)
-  })
+  ipcMain.handle(
+    'session:approve',
+    (_event, id: string, providerApprovalId?: string) => {
+      sessionService.approve(id, providerApprovalId)
+    },
+  )
 
-  ipcMain.handle('session:deny', (_event, id: string) => {
-    sessionService.deny(id)
-  })
+  ipcMain.handle(
+    'session:deny',
+    (_event, id: string, providerApprovalId?: string) => {
+      sessionService.deny(id, providerApprovalId)
+    },
+  )
 
   ipcMain.handle('session:stop', (_event, id: string) => {
     sessionService.stop(id)

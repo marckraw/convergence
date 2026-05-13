@@ -1,6 +1,7 @@
 import { useVirtualizer } from '@tanstack/react-virtual'
 import {
   useCallback,
+  useEffect,
   useLayoutEffect,
   useMemo,
   useRef,
@@ -14,7 +15,10 @@ import type {
 import { artifactFromConversationItem } from '@/entities/ui-response-artifact'
 import { cn } from '@/shared/lib/cn.pure'
 import { ConversationItem } from './conversation-item.container'
-import { buildConversationRenderPlan } from './session-transcript-render-plan.pure'
+import {
+  buildConversationRenderPlan,
+  findActionableApprovalIds,
+} from './session-transcript-render-plan.pure'
 import { isTranscriptNearBottom } from './session-transcript-scroll.pure'
 
 interface SessionTranscriptProps {
@@ -22,8 +26,8 @@ interface SessionTranscriptProps {
   conversationItems: ConversationItemEntry[]
   selectedUiResponseItemId?: string | null
   onUiResponseArtifactSelect?: (conversationItemId: string) => void
-  onApprove: (sessionId: string) => void
-  onDeny: (sessionId: string) => void
+  onApprove: (sessionId: string, providerApprovalId?: string) => void
+  onDeny: (sessionId: string, providerApprovalId?: string) => void
 }
 
 const TRANSCRIPT_ROW_ESTIMATE_PX = 160
@@ -42,6 +46,9 @@ export const SessionTranscript: FC<SessionTranscriptProps> = ({
   const bottomFollowRef = useRef(true)
   const pendingScrollFrameRef = useRef<number | null>(null)
   const previousSessionIdRef = useRef<string | null>(null)
+  const [resolvedApprovalIds, setResolvedApprovalIds] = useState<Set<string>>(
+    () => new Set(),
+  )
 
   const turnStartedAtById = useMemo(() => {
     const startedAtById = new Map<string, string>()
@@ -57,21 +64,35 @@ export const SessionTranscript: FC<SessionTranscriptProps> = ({
     () => buildConversationRenderPlan(conversationItems),
     [conversationItems],
   )
-  const actionableApprovalId = useMemo(() => {
+  const actionableApprovalIds = useMemo(() => {
     if (
       session.status !== 'running' ||
       session.attention !== 'needs-approval'
     ) {
-      return null
+      return new Set<string>()
     }
 
-    return (
-      [...conversationRenderPlan]
-        .reverse()
-        .find((candidate) => candidate.item.kind === 'approval-request')?.item
-        .id ?? null
+    return new Set(
+      findActionableApprovalIds(conversationRenderPlan).filter(
+        (id) => !resolvedApprovalIds.has(id),
+      ),
     )
-  }, [conversationRenderPlan, session.attention, session.status])
+  }, [
+    conversationRenderPlan,
+    resolvedApprovalIds,
+    session.attention,
+    session.status,
+  ])
+
+  useEffect(() => {
+    setResolvedApprovalIds(new Set())
+  }, [session.id])
+
+  useEffect(() => {
+    if (session.attention !== 'needs-approval') {
+      setResolvedApprovalIds(new Set())
+    }
+  }, [session.attention])
 
   const rowVirtualizer = useVirtualizer({
     count: conversationRenderPlan.length,
@@ -169,7 +190,7 @@ export const SessionTranscript: FC<SessionTranscriptProps> = ({
             const entry = renderEntry.item
             const isActionableApproval =
               entry.kind === 'approval-request' &&
-              entry.id === actionableApprovalId
+              actionableApprovalIds.has(entry.id)
             const hasUiResponseArtifact = hasArtifact(entry)
             const isSelectedUiResponseArtifact =
               hasUiResponseArtifact && entry.id === selectedUiResponseItemId
@@ -223,11 +244,33 @@ export const SessionTranscript: FC<SessionTranscriptProps> = ({
                   }
                   onApprove={
                     isActionableApproval
-                      ? () => onApprove(session.id)
+                      ? () => {
+                          setResolvedApprovalIds((current) => {
+                            const next = new Set(current)
+                            next.add(entry.id)
+                            return next
+                          })
+                          onApprove(
+                            session.id,
+                            entry.providerMeta.providerItemId ?? undefined,
+                          )
+                        }
                       : undefined
                   }
                   onDeny={
-                    isActionableApproval ? () => onDeny(session.id) : undefined
+                    isActionableApproval
+                      ? () => {
+                          setResolvedApprovalIds((current) => {
+                            const next = new Set(current)
+                            next.add(entry.id)
+                            return next
+                          })
+                          onDeny(
+                            session.id,
+                            entry.providerMeta.providerItemId ?? undefined,
+                          )
+                        }
+                      : undefined
                   }
                 />
               </div>

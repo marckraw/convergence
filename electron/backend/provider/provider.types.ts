@@ -227,8 +227,8 @@ export interface SessionHandle {
       expectedProviderTurnId?: string | null
     },
   ) => void
-  approve: () => void
-  deny: () => void
+  approve: (providerApprovalId?: string) => void
+  deny: (providerApprovalId?: string) => void
   stop: () => void
 }
 
