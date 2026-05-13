@@ -195,6 +195,18 @@ export interface ProjectContextItemRow {
   updated_at: string
 }
 
+export interface PromptLibraryEntryRow {
+  id: string
+  project_id: string | null
+  scope: string
+  path: string
+  title: string
+  description: string
+  tags_json: string
+  created_at: string
+  updated_at: string
+}
+
 export interface SessionContextAttachmentRow {
   session_id: string
   context_item_id: string

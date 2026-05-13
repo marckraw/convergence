@@ -22,6 +22,7 @@ import type {
 } from '../backend/provider/provider.types'
 import { McpService } from '../backend/mcp/mcp.service'
 import { SkillsService } from '../backend/skills/skills.service'
+import { PromptsService } from '../backend/prompts/prompts.service'
 import { AppSettingsService } from '../backend/app-settings/app-settings.service'
 import { OpenRouterCredentialsService } from '../backend/credentials/openrouter-credentials.service'
 import type { AnalyticsService } from '../backend/analytics/analytics.service'
@@ -56,6 +57,13 @@ import type {
   SkillCatalogOptions,
   SkillDetailsRequest,
 } from '../backend/skills/skills.types'
+import type {
+  CreatePromptLibraryInput,
+  DeletePromptLibraryInput,
+  PromptLibraryDetailsRequest,
+  PromptLibraryOptions,
+  UpdatePromptLibraryInput,
+} from '../backend/prompts/prompts.types'
 import {
   sendSessionMessageInputFromIpc,
   type SendSessionMessageIpcInput,
@@ -141,6 +149,7 @@ export function registerIpcHandlers(
   providerRegistry: ProviderRegistry,
   mcpService: McpService,
   skillsService: SkillsService,
+  promptsService: PromptsService,
   appSettingsService: AppSettingsService,
   openRouterCredentials: OpenRouterCredentialsService,
   analyticsService: AnalyticsService,
@@ -710,13 +719,19 @@ export function registerIpcHandlers(
     return result.filePaths
   })
 
-  ipcMain.handle('session:approve', (_event, id: string) => {
-    sessionService.approve(id)
-  })
+  ipcMain.handle(
+    'session:approve',
+    (_event, id: string, providerApprovalId?: string) => {
+      sessionService.approve(id, providerApprovalId)
+    },
+  )
 
-  ipcMain.handle('session:deny', (_event, id: string) => {
-    sessionService.deny(id)
-  })
+  ipcMain.handle(
+    'session:deny',
+    (_event, id: string, providerApprovalId?: string) => {
+      sessionService.deny(id, providerApprovalId)
+    },
+  )
 
   ipcMain.handle('session:stop', (_event, id: string) => {
     sessionService.stop(id)
@@ -792,6 +807,36 @@ export function registerIpcHandlers(
 
   ipcMain.handle('skills:readDetails', (_event, input: SkillDetailsRequest) =>
     skillsService.readDetails(input),
+  )
+
+  ipcMain.handle(
+    'prompts:listByProjectId',
+    (_event, projectId: string, options?: PromptLibraryOptions) =>
+      promptsService.listByProjectId(projectId, options),
+  )
+
+  ipcMain.handle(
+    'prompts:listGlobal',
+    (_event, options?: PromptLibraryOptions) =>
+      promptsService.listGlobal(options),
+  )
+
+  ipcMain.handle(
+    'prompts:readDetails',
+    (_event, input: PromptLibraryDetailsRequest) =>
+      promptsService.readDetails(input),
+  )
+
+  ipcMain.handle('prompts:create', (_event, input: CreatePromptLibraryInput) =>
+    promptsService.create(input),
+  )
+
+  ipcMain.handle('prompts:update', (_event, input: UpdatePromptLibraryInput) =>
+    promptsService.update(input),
+  )
+
+  ipcMain.handle('prompts:delete', (_event, input: DeletePromptLibraryInput) =>
+    promptsService.delete(input),
   )
 
   // Session update event forwarding

@@ -71,3 +71,11 @@ export {
   skillSelectionFromCatalogEntry,
   useSkillStore,
 } from './skill'
+
+export type {
+  PromptLibraryCatalog,
+  PromptLibraryDetails,
+  PromptLibraryEntry,
+  PromptLibraryScope,
+} from './prompt-library'
+export { promptLibraryApi, usePromptLibraryStore } from './prompt-library'

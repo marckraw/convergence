@@ -229,7 +229,10 @@ export const ConversationItemView: FC<ConversationItemViewProps> = ({
     case 'approval-request':
       return (
         <ConversationItemShell copyText={viewModel.copyText}>
-          <div className="my-2 max-w-full overflow-hidden rounded-lg border border-warning/30 bg-warning/5 p-4">
+          <div
+            className="my-2 max-w-full overflow-hidden rounded-lg border border-warning/30 bg-warning/5 p-4"
+            data-testid="approval-request-card"
+          >
             <div className="flex min-w-0 items-start gap-3">
               <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-warning" />
               <div className="min-w-0 flex-1">

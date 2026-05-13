@@ -1,5 +1,17 @@
 # convergence
 
+## 0.37.3
+
+### Patch Changes
+
+- d3c0b1f: Add a managed prompt library for project and global prompt files. Users can create, edit, delete, search, preview, and copy saved prompts before pasting them into the composer manually.
+
+## 0.37.2
+
+### Patch Changes
+
+- d485dab: Fix simultaneous Codex approval cards so each pending approval shows actions on its own card and responds to the matching backend request.
+
 ## 0.37.1
 
 ### Patch Changes

@@ -569,6 +569,9 @@ describe('CodexProvider', () => {
             description: expect.stringContaining(
               'Allow the linear MCP server to run tool',
             ),
+            providerMeta: expect.objectContaining({
+              providerItemId: '100',
+            }),
           }),
         ]),
       )
@@ -585,6 +588,89 @@ describe('CodexProvider', () => {
           _meta: null,
         },
       })
+    })
+  })
+
+  it('responds to the requested Codex approval when an approval id is provided', async () => {
+    const child = new MockChildProcess()
+    const server = createMockCodexServer(child, {
+      autoCompleteTurns: false,
+      turnStartedId: 'codex-turn-1',
+    })
+    spawnMock.mockReturnValue(child)
+
+    const provider = new CodexProvider('/usr/local/bin/codex')
+    const handle = provider.start({
+      sessionId: 'session-1',
+      workingDirectory: process.cwd(),
+      initialMessage: 'run commands',
+      initialAttachments: undefined,
+      model: 'gpt-5.4',
+      effort: 'medium',
+      continuationToken: null,
+    })
+
+    const items: Array<
+      Extract<SessionDelta, { kind: 'conversation.item.add' }>['item']
+    > = []
+
+    handle.onDelta((delta) => {
+      if (delta.kind === 'conversation.item.add') {
+        items.push(delta.item)
+      }
+    })
+    handle.onStatusChange(() => {})
+    handle.onContinuationToken(() => {})
+    handle.onAttentionChange(() => {})
+    handle.onContextWindowChange(() => {})
+    handle.onActivityChange(() => {})
+
+    await waitFor(() => {
+      expect(
+        server.requests.some((request) => request.method === 'turn/start'),
+      ).toBe(true)
+    })
+
+    child.stdout.write(
+      JSON.stringify({
+        jsonrpc: '2.0',
+        id: 100,
+        method: 'item/commandExecution/requestApproval',
+        params: {
+          command: 'diskutil apfs list',
+          reason: 'Inspect volumes',
+        },
+      }) + '\n',
+    )
+    child.stdout.write(
+      JSON.stringify({
+        jsonrpc: '2.0',
+        id: 101,
+        method: 'item/commandExecution/requestApproval',
+        params: {
+          command: 'top -l 1',
+          reason: 'Inspect processes',
+        },
+      }) + '\n',
+    )
+
+    await waitFor(() => {
+      expect(
+        items.filter((item) => item.kind === 'approval-request'),
+      ).toHaveLength(2)
+    })
+
+    handle.approve('101')
+
+    await waitFor(() => {
+      expect(server.responses).toContainEqual({
+        id: 101,
+        result: { decision: 'accept' },
+      })
+    })
+    expect(server.responses).not.toContainEqual({
+      id: 100,
+      result: { decision: 'accept' },
     })
   })
 

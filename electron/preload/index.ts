@@ -202,8 +202,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
         id,
         typeof input === 'string' ? { text: input } : input,
       ),
-    approve: (id: string) => ipcRenderer.invoke('session:approve', id),
-    deny: (id: string) => ipcRenderer.invoke('session:deny', id),
+    approve: (id: string, providerApprovalId?: string) =>
+      ipcRenderer.invoke('session:approve', id, providerApprovalId),
+    deny: (id: string, providerApprovalId?: string) =>
+      ipcRenderer.invoke('session:deny', id, providerApprovalId),
     stop: (id: string) => ipcRenderer.invoke('session:stop', id),
     rename: (id: string, name: string) =>
       ipcRenderer.invoke('session:rename', id, name),
@@ -285,6 +287,17 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.invoke('skills:listGlobal', options),
     readDetails: (input: unknown) =>
       ipcRenderer.invoke('skills:readDetails', input),
+  },
+  prompts: {
+    listByProjectId: (projectId: string, options?: { forceReload?: boolean }) =>
+      ipcRenderer.invoke('prompts:listByProjectId', projectId, options),
+    listGlobal: (options?: { forceReload?: boolean }) =>
+      ipcRenderer.invoke('prompts:listGlobal', options),
+    readDetails: (input: unknown) =>
+      ipcRenderer.invoke('prompts:readDetails', input),
+    create: (input: unknown) => ipcRenderer.invoke('prompts:create', input),
+    update: (input: unknown) => ipcRenderer.invoke('prompts:update', input),
+    delete: (input: unknown) => ipcRenderer.invoke('prompts:delete', input),
   },
   feedback: {
     submit: (input: {
