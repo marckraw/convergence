@@ -1,4 +1,5 @@
 import { dirname, join, posix, win32 } from 'path'
+import type { ProviderInstallInfo } from './provider.types'
 
 export interface NpmManagedProviderInstall {
   packageDirectory: string
@@ -44,6 +45,93 @@ export function resolveNpmManagedProviderInstall(
     prefixDirectory,
     npmPath,
   }
+}
+
+export function buildNpmProviderInstallInfo(input: {
+  realBinaryPath: string
+  packageDirectory: string
+  prefixDirectory: string
+  npmPath: string
+  nodePath: string | null
+  nodeVersion: string | null
+}): ProviderInstallInfo {
+  return {
+    manager: 'npm',
+    realBinaryPath: input.realBinaryPath,
+    packageDirectory: input.packageDirectory,
+    prefixDirectory: input.prefixDirectory,
+    npmPath: input.npmPath,
+    nodePath: input.nodePath,
+    nodeVersion: input.nodeVersion,
+    brewPrefix: null,
+    formulaName: null,
+  }
+}
+
+export function buildNonNpmProviderInstallInfo(
+  realBinaryPath: string,
+  providerId: string,
+): ProviderInstallInfo {
+  const homebrew = resolveHomebrewProviderInstall(realBinaryPath)
+
+  if (homebrew) {
+    return {
+      manager: 'homebrew',
+      realBinaryPath,
+      packageDirectory: null,
+      prefixDirectory: homebrew.prefixDirectory,
+      npmPath: null,
+      nodePath: null,
+      nodeVersion: null,
+      brewPrefix: homebrew.prefixDirectory,
+      formulaName: homebrew.formulaName,
+    }
+  }
+
+  return {
+    manager: providerId === 'claude-code' ? 'self' : 'unknown',
+    realBinaryPath,
+    packageDirectory: null,
+    prefixDirectory: null,
+    npmPath: null,
+    nodePath: null,
+    nodeVersion: null,
+    brewPrefix: null,
+    formulaName: null,
+  }
+}
+
+export function resolveHomebrewProviderInstall(
+  realBinaryPath: string,
+  platform: NodeJS.Platform = process.platform,
+): { prefixDirectory: string; formulaName: string | null } | null {
+  if (platform !== 'darwin') return null
+
+  const normalized = realBinaryPath.split(posix.sep).join(posix.sep)
+  const match = normalized.match(
+    /^(\/(?:opt\/homebrew|usr\/local))\/Cellar\/([^/]+)\//,
+  )
+  if (match) {
+    return {
+      prefixDirectory: match[1]!,
+      formulaName: match[2]!,
+    }
+  }
+
+  if (
+    normalized.startsWith('/opt/homebrew/') ||
+    normalized.startsWith('/usr/local/')
+  ) {
+    const prefixDirectory = normalized.startsWith('/opt/homebrew/')
+      ? '/opt/homebrew'
+      : '/usr/local'
+    return {
+      prefixDirectory,
+      formulaName: null,
+    }
+  }
+
+  return null
 }
 
 export function buildNpmProviderUpdateArgs(packageName: string): string[] {

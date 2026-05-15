@@ -274,6 +274,13 @@ contextBridge.exposeInMainWorld('electronAPI', {
     getRuntimeInfo: () => ipcRenderer.invoke('provider:getRuntimeInfo'),
     update: (providerId: string) =>
       ipcRenderer.invoke('provider:update', providerId),
+    onStatusesChanged: (callback: (statuses: unknown) => void) => {
+      const handler = (_event: unknown, statuses: unknown) => callback(statuses)
+      ipcRenderer.on('provider:statuses-changed', handler)
+      return () => {
+        ipcRenderer.removeListener('provider:statuses-changed', handler)
+      }
+    },
   },
   mcp: {
     listByProjectId: (projectId: string) =>

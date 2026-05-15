@@ -2,9 +2,10 @@ import type {
   ProviderInstallInfo,
   ProviderStatusInfo,
   ProviderUpdateInfo,
+  ProviderUpdateStrategy,
 } from './provider.types'
 
-interface KnownProvider {
+export interface KnownProvider {
   id: string
   name: string
   vendorLabel: string
@@ -12,6 +13,7 @@ interface KnownProvider {
   packageName: string
   installCommand: string
   updateCommand: string
+  supportsSelfUpdate: boolean
 }
 
 const KNOWN_PROVIDERS: KnownProvider[] = [
@@ -23,6 +25,7 @@ const KNOWN_PROVIDERS: KnownProvider[] = [
     packageName: '@anthropic-ai/claude-code',
     installCommand: 'npm install -g @anthropic-ai/claude-code@latest',
     updateCommand: 'claude update',
+    supportsSelfUpdate: true,
   },
   {
     id: 'codex',
@@ -32,6 +35,7 @@ const KNOWN_PROVIDERS: KnownProvider[] = [
     packageName: '@openai/codex',
     installCommand: 'npm install -g @openai/codex@latest',
     updateCommand: 'npm install -g @openai/codex@latest',
+    supportsSelfUpdate: false,
   },
   {
     id: 'pi',
@@ -41,6 +45,7 @@ const KNOWN_PROVIDERS: KnownProvider[] = [
     packageName: '@mariozechner/pi-coding-agent',
     installCommand: 'npm install -g @mariozechner/pi-coding-agent@latest',
     updateCommand: 'npm update -g @mariozechner/pi-coding-agent',
+    supportsSelfUpdate: false,
   },
 ]
 
@@ -95,6 +100,8 @@ export function buildProviderUpdateInfo(
   currentVersionOutput: string | null,
   latestVersion: string | null,
   checkError: string | null = null,
+  install: ProviderInstallInfo | null = null,
+  binaryPath: string | null = null,
 ): ProviderUpdateInfo {
   const currentVersion = extractSemver(currentVersionOutput)
   const normalizedLatestVersion = extractSemver(latestVersion)
@@ -102,6 +109,8 @@ export function buildProviderUpdateInfo(
     currentVersion && normalizedLatestVersion
       ? compareSemver(currentVersion, normalizedLatestVersion)
       : null
+
+  const strategy = resolveProviderUpdateStrategy(provider, install, binaryPath)
 
   return {
     currentVersion,
@@ -111,7 +120,40 @@ export function buildProviderUpdateInfo(
     packageName: provider.packageName,
     installCommand: provider.installCommand,
     updateCommand: provider.updateCommand,
+    manualUpdateCommand: provider.updateCommand,
+    automaticUpdateCommand: strategy.command,
+    updateCapability: strategy.strategy ? 'automatic' : 'manual',
+    updateStrategy: strategy.strategy,
     checkError,
+  }
+}
+
+export function resolveProviderUpdateStrategy(
+  provider: KnownProvider,
+  install: ProviderInstallInfo | null,
+  binaryPath: string | null,
+): { strategy: ProviderUpdateStrategy; command: string | null } {
+  if (install?.manager === 'npm' && install.npmPath) {
+    return {
+      strategy: 'npm-global',
+      command: `${install.npmPath} install -g ${provider.packageName}@latest`,
+    }
+  }
+
+  if (
+    provider.supportsSelfUpdate &&
+    binaryPath &&
+    install?.manager !== 'homebrew'
+  ) {
+    return {
+      strategy: 'provider-self-update',
+      command: `${binaryPath} update`,
+    }
+  }
+
+  return {
+    strategy: null,
+    command: null,
   }
 }
 
@@ -128,6 +170,8 @@ export function buildProviderStatus(
     version,
     latestVersion,
     updateCheckError,
+    install,
+    binaryPath,
   )
 
   if (binaryPath) {

@@ -4,6 +4,7 @@ import { delimiter } from 'path'
 import type { ProviderUpdateResult } from './provider.types'
 import { getKnownProviders } from './provider-status.pure'
 import {
+  buildNonNpmProviderInstallInfo,
   buildNpmProviderUpdateArgs,
   getProviderBinaryDirectory,
   resolveNpmManagedProviderInstall,
@@ -23,6 +24,39 @@ function execNpmUpdate(
         env: {
           ...process.env,
           PATH: [envPathPrefix, process.env.PATH]
+            .filter(Boolean)
+            .join(delimiter),
+        },
+        maxBuffer: 1024 * 1024 * 8,
+      },
+      (error, stdout, stderr) => {
+        if (error) {
+          reject(
+            new Error(
+              [error.message, stderr.trim()].filter(Boolean).join('\n'),
+            ),
+          )
+          return
+        }
+
+        resolve({ stdout, stderr })
+      },
+    )
+  })
+}
+
+function execProviderSelfUpdate(
+  binaryPath: string,
+): Promise<{ stdout: string; stderr: string }> {
+  return new Promise((resolve, reject) => {
+    execFile(
+      binaryPath,
+      ['update'],
+      {
+        timeout: 120_000,
+        env: {
+          ...process.env,
+          PATH: [getProviderBinaryDirectory(binaryPath), process.env.PATH]
             .filter(Boolean)
             .join(delimiter),
         },
@@ -82,13 +116,45 @@ export async function updateProviderPackage(
     provider.packageName,
   )
   if (!install) {
+    const nonNpmInstall = buildNonNpmProviderInstallInfo(
+      realBinaryPath,
+      providerId,
+    )
+    if (nonNpmInstall.manager === 'self' && provider.supportsSelfUpdate) {
+      const command = `${binaryPath} update`
+      try {
+        const output = await execProviderSelfUpdate(binaryPath)
+        return {
+          ok: true,
+          providerId,
+          command,
+          stdout: output.stdout,
+          stderr: output.stderr,
+          error: null,
+        }
+      } catch (error) {
+        return {
+          ok: false,
+          providerId,
+          command,
+          stdout: '',
+          stderr: '',
+          error:
+            error instanceof Error ? error.message : 'Provider update failed',
+        }
+      }
+    }
+
     return {
       ok: false,
       providerId,
       command: provider.updateCommand,
       stdout: '',
       stderr: '',
-      error: `${provider.name} was found at ${binaryPath}, but it does not look like an npm global install for ${provider.packageName}.`,
+      error:
+        nonNpmInstall.manager === 'homebrew'
+          ? `${provider.name} was found in a Homebrew-managed location. Run ${provider.updateCommand} in a terminal for now.`
+          : `${provider.name} was found at ${binaryPath}, but it does not look like an npm global install for ${provider.packageName}.`,
     }
   }
 

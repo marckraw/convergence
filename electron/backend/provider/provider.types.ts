@@ -122,14 +122,18 @@ export interface ProviderStatusInfo {
   update: ProviderUpdateInfo
 }
 
+export type ProviderInstallManager = 'npm' | 'homebrew' | 'self' | 'unknown'
+
 export interface ProviderInstallInfo {
-  manager: 'npm'
+  manager: ProviderInstallManager
   realBinaryPath: string
-  packageDirectory: string
-  prefixDirectory: string
-  npmPath: string
+  packageDirectory: string | null
+  prefixDirectory: string | null
+  npmPath: string | null
   nodePath: string | null
   nodeVersion: string | null
+  brewPrefix: string | null
+  formulaName: string | null
 }
 
 export interface ProviderRuntimeInfo {
@@ -142,6 +146,12 @@ export interface ProviderRuntimeInfo {
 }
 
 export type ProviderUpdateStatus = 'current' | 'outdated' | 'unknown'
+export type ProviderUpdateCapability = 'automatic' | 'manual'
+export type ProviderUpdateStrategy =
+  | 'npm-global'
+  | 'provider-self-update'
+  | 'brew-upgrade'
+  | null
 
 export interface ProviderUpdateInfo {
   currentVersion: string | null
@@ -150,6 +160,10 @@ export interface ProviderUpdateInfo {
   packageName: string
   installCommand: string
   updateCommand: string
+  manualUpdateCommand: string
+  automaticUpdateCommand: string | null
+  updateCapability: ProviderUpdateCapability
+  updateStrategy: ProviderUpdateStrategy
   checkError: string | null
 }
 

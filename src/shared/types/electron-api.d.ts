@@ -699,13 +699,15 @@ interface ProviderStatusInfo {
 }
 
 interface ProviderInstallInfo {
-  manager: 'npm'
+  manager: 'npm' | 'homebrew' | 'self' | 'unknown'
   realBinaryPath: string
-  packageDirectory: string
-  prefixDirectory: string
-  npmPath: string
+  packageDirectory: string | null
+  prefixDirectory: string | null
+  npmPath: string | null
   nodePath: string | null
   nodeVersion: string | null
+  brewPrefix: string | null
+  formulaName: string | null
 }
 
 interface ProviderRuntimeInfo {
@@ -718,6 +720,12 @@ interface ProviderRuntimeInfo {
 }
 
 type ProviderUpdateStatus = 'current' | 'outdated' | 'unknown'
+type ProviderUpdateCapability = 'automatic' | 'manual'
+type ProviderUpdateStrategy =
+  | 'npm-global'
+  | 'provider-self-update'
+  | 'brew-upgrade'
+  | null
 
 interface ProviderUpdateInfo {
   currentVersion: string | null
@@ -726,6 +734,10 @@ interface ProviderUpdateInfo {
   packageName: string
   installCommand: string
   updateCommand: string
+  manualUpdateCommand: string
+  automaticUpdateCommand: string | null
+  updateCapability: ProviderUpdateCapability
+  updateStrategy: ProviderUpdateStrategy
   checkError: string | null
 }
 
@@ -1109,6 +1121,9 @@ interface ElectronAPI {
     getStatuses: () => Promise<ProviderStatusInfo[]>
     getRuntimeInfo: () => Promise<ProviderRuntimeInfo>
     update: (providerId: string) => Promise<ProviderUpdateResult>
+    onStatusesChanged: (
+      callback: (statuses: ProviderStatusInfo[]) => void,
+    ) => () => void
   }
   mcp: {
     listByProjectId: (projectId: string) => Promise<ProjectMcpVisibility>
