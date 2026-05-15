@@ -1,5 +1,11 @@
 # convergence
 
+## 0.37.7
+
+### Patch Changes
+
+- 3ed49cd: Add in-app provider update actions and provider update notifications.
+
 ## 0.37.6
 
 ### Patch Changes
