@@ -38,6 +38,10 @@ describe('provider-status.pure', () => {
         packageName: '@anthropic-ai/claude-code',
         installCommand: 'npm install -g @anthropic-ai/claude-code@latest',
         updateCommand: 'claude update',
+        manualUpdateCommand: 'claude update',
+        automaticUpdateCommand: '/usr/local/bin/claude update',
+        updateCapability: 'automatic',
+        updateStrategy: 'provider-self-update',
         checkError: null,
       },
     })
@@ -63,6 +67,10 @@ describe('provider-status.pure', () => {
         packageName: '@anthropic-ai/claude-code',
         installCommand: 'npm install -g @anthropic-ai/claude-code@latest',
         updateCommand: 'claude update',
+        manualUpdateCommand: 'claude update',
+        automaticUpdateCommand: '/usr/local/bin/claude update',
+        updateCapability: 'automatic',
+        updateStrategy: 'provider-self-update',
         checkError: null,
       },
     })
@@ -88,6 +96,10 @@ describe('provider-status.pure', () => {
         packageName: '@openai/codex',
         installCommand: 'npm install -g @openai/codex@latest',
         updateCommand: 'npm install -g @openai/codex@latest',
+        manualUpdateCommand: 'npm install -g @openai/codex@latest',
+        automaticUpdateCommand: null,
+        updateCapability: 'manual',
+        updateStrategy: null,
         checkError: null,
       },
     })
@@ -117,6 +129,68 @@ describe('provider-status.pure', () => {
       status: 'outdated',
       packageName: '@openai/codex',
       updateCommand: 'npm install -g @openai/codex@latest',
+      updateCapability: 'manual',
+    })
+  })
+
+  it('marks npm-managed providers as automatically updatable', () => {
+    const provider = getKnownProviders()[1]!
+    const status = buildProviderStatus(
+      provider,
+      '/Users/me/.fnm/bin/codex',
+      'codex-cli 0.124.0',
+      '0.125.0',
+      null,
+      {
+        manager: 'npm',
+        realBinaryPath:
+          '/Users/me/.fnm/installation/lib/node_modules/@openai/codex/bin/codex.js',
+        packageDirectory:
+          '/Users/me/.fnm/installation/lib/node_modules/@openai/codex',
+        prefixDirectory: '/Users/me/.fnm/installation',
+        npmPath: '/Users/me/.fnm/installation/bin/npm',
+        nodePath: '/Users/me/.fnm/installation/bin/node',
+        nodeVersion: 'v24.15.0',
+        brewPrefix: null,
+        formulaName: null,
+      },
+    )
+
+    expect(status.update).toMatchObject({
+      status: 'outdated',
+      automaticUpdateCommand:
+        '/Users/me/.fnm/installation/bin/npm install -g @openai/codex@latest',
+      updateCapability: 'automatic',
+      updateStrategy: 'npm-global',
+    })
+  })
+
+  it('keeps Homebrew-managed providers manual even when self-update exists', () => {
+    const provider = getKnownProviders()[0]!
+    const status = buildProviderStatus(
+      provider,
+      '/opt/homebrew/bin/claude',
+      '2.1.138',
+      '2.1.141',
+      null,
+      {
+        manager: 'homebrew',
+        realBinaryPath: '/opt/homebrew/Cellar/claude-code/2.1.138/bin/claude',
+        packageDirectory: null,
+        prefixDirectory: '/opt/homebrew',
+        npmPath: null,
+        nodePath: null,
+        nodeVersion: null,
+        brewPrefix: '/opt/homebrew',
+        formulaName: 'claude-code',
+      },
+    )
+
+    expect(status.update).toMatchObject({
+      status: 'outdated',
+      automaticUpdateCommand: null,
+      updateCapability: 'manual',
+      updateStrategy: null,
     })
   })
 })

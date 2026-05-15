@@ -756,6 +756,22 @@ export function registerIpcHandlers(
     return Promise.all(providerRegistry.getAll().map((p) => p.describe()))
   }
 
+  function broadcastProviderStatuses(statuses: unknown): void {
+    for (const win of BrowserWindow.getAllWindows()) {
+      if (!win.isDestroyed()) {
+        win.webContents.send('provider:statuses-changed', statuses)
+      }
+    }
+  }
+
+  async function inspectAndBroadcastProviderStatuses() {
+    const { inspectProviderStatuses } =
+      await import('../backend/provider/detect')
+    const statuses = await inspectProviderStatuses()
+    broadcastProviderStatuses(statuses)
+    return statuses
+  }
+
   ipcMain.handle('provider:getAll', async () =>
     appSettingsService.filterProviderDescriptors(
       await loadProviderDescriptors(),
@@ -764,17 +780,13 @@ export function registerIpcHandlers(
 
   ipcMain.handle('provider:getAllAvailable', loadProviderDescriptors)
 
-  ipcMain.handle('provider:getStatuses', async () => {
-    const { inspectProviderStatuses } =
-      await import('../backend/provider/detect')
-    return inspectProviderStatuses()
-  })
+  ipcMain.handle('provider:getStatuses', inspectAndBroadcastProviderStatuses)
 
   ipcMain.handle('provider:getRuntimeInfo', () =>
     providerActions?.getRuntimeInfo(),
   )
 
-  ipcMain.handle('provider:update', (_event, providerId: string) => {
+  ipcMain.handle('provider:update', async (_event, providerId: string) => {
     if (!providerActions) {
       return {
         ok: false,
@@ -786,7 +798,9 @@ export function registerIpcHandlers(
       } satisfies ProviderUpdateResult
     }
 
-    return providerActions.updateProvider(providerId)
+    const result = await providerActions.updateProvider(providerId)
+    void inspectAndBroadcastProviderStatuses()
+    return result
   })
 
   ipcMain.handle('mcp:listByProjectId', (_event, projectId: string) =>

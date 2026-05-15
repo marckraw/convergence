@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import {
+  buildNonNpmProviderInstallInfo,
   buildNpmProviderUpdateArgs,
+  resolveHomebrewProviderInstall,
   resolveNpmManagedProviderInstall,
 } from './provider-updater.pure'
 
@@ -51,5 +53,29 @@ describe('provider-updater.pure', () => {
       '-g',
       '@openai/codex@latest',
     ])
+  })
+
+  it('detects Homebrew-managed provider paths on macOS', () => {
+    expect(
+      resolveHomebrewProviderInstall(
+        '/opt/homebrew/Cellar/codex/0.130.0/bin/codex',
+        'darwin',
+      ),
+    ).toEqual({
+      prefixDirectory: '/opt/homebrew',
+      formulaName: 'codex',
+    })
+  })
+
+  it('classifies non-npm Claude installs as provider-managed', () => {
+    expect(
+      buildNonNpmProviderInstallInfo(
+        '/Users/me/.local/bin/claude',
+        'claude-code',
+      ),
+    ).toMatchObject({
+      manager: 'self',
+      realBinaryPath: '/Users/me/.local/bin/claude',
+    })
   })
 })

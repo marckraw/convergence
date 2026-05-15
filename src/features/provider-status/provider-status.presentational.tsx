@@ -150,7 +150,10 @@ function renderProviderRow(
     provider.update.status === 'outdated'
   const isUpdating = updatingProviderId === provider.id
   const isAnyProviderUpdating = updatingProviderId !== null
-  const canSelfUpdate = provider.install !== null
+  const canSelfUpdate = provider.update.updateCapability === 'automatic'
+  const updateCommand =
+    provider.update.automaticUpdateCommand ??
+    provider.update.manualUpdateCommand
 
   return (
     <div
@@ -201,7 +204,7 @@ function renderProviderRow(
             </div>
             {showUpdateCommand && (
               <div className="space-y-2">
-                {renderCommand('Update command', provider.update.updateCommand)}
+                {renderCommand('Update command', updateCommand)}
                 {canSelfUpdate ? (
                   <Button
                     type="button"
@@ -217,7 +220,8 @@ function renderProviderRow(
                   </Button>
                 ) : (
                   <p className="text-xs text-muted-foreground">
-                    Automatic update is available for npm-managed installs.
+                    Automatic update is unavailable for this install. Run the
+                    command above in a terminal.
                   </p>
                 )}
               </div>
@@ -235,6 +239,14 @@ function renderProviderRow(
               <div className="space-y-2">
                 <div className="space-y-1">
                   <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground/80">
+                    Install manager
+                  </p>
+                  <p className="text-foreground/80">
+                    {formatInstallManager(provider.install.manager)}
+                  </p>
+                </div>
+                <div className="space-y-1">
+                  <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground/80">
                     CLI Node
                   </p>
                   <p className="break-all text-foreground/80">
@@ -242,19 +254,32 @@ function renderProviderRow(
                     {provider.install.nodePath ?? 'Node path unknown'}
                   </p>
                 </div>
-                <div className="space-y-1">
-                  <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground/80">
-                    Global npm prefix
-                  </p>
-                  <p className="break-all text-foreground/80">
-                    {provider.install.prefixDirectory}
-                  </p>
-                  <p className="text-[11px] text-muted-foreground">
-                    Updates run in this prefix. To move a provider to another
-                    Node version, make that Node your default and reinstall the
-                    CLI there.
-                  </p>
-                </div>
+                {provider.install.manager === 'npm' &&
+                  provider.install.prefixDirectory && (
+                    <div className="space-y-1">
+                      <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground/80">
+                        Global npm prefix
+                      </p>
+                      <p className="break-all text-foreground/80">
+                        {provider.install.prefixDirectory}
+                      </p>
+                      <p className="text-[11px] text-muted-foreground">
+                        Updates run in this prefix. To move a provider to
+                        another Node version, make that Node your default and
+                        reinstall the CLI there.
+                      </p>
+                    </div>
+                  )}
+                {provider.install.manager === 'homebrew' && (
+                  <div className="space-y-1">
+                    <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground/80">
+                      Homebrew prefix
+                    </p>
+                    <p className="break-all text-foreground/80">
+                      {provider.install.brewPrefix ?? 'Unknown'}
+                    </p>
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -271,6 +296,21 @@ function renderProviderRow(
       </div>
     </div>
   )
+}
+
+function formatInstallManager(
+  manager: NonNullable<ProviderStatusInfo['install']>['manager'],
+) {
+  switch (manager) {
+    case 'npm':
+      return 'npm global install'
+    case 'homebrew':
+      return 'Homebrew'
+    case 'self':
+      return 'Provider-managed install'
+    case 'unknown':
+      return 'Unknown'
+  }
 }
 
 export const ProviderStatusDialog: FC<ProviderStatusDialogProps> = ({

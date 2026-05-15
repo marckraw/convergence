@@ -9,6 +9,7 @@ import {
   useNotificationsStore,
 } from '@/entities/notifications'
 import { updatesApi, useUpdatesStore } from '@/entities/updates'
+import { useProviderUpdatesStore } from '@/entities/provider-updates'
 import { taskProgressApi, useTaskProgressStore } from '@/entities/task-progress'
 import {
   providerDebugApi,
@@ -25,6 +26,7 @@ import { SessionIntentDialogContainer } from '@/features/session-intent-dialog'
 import { PullRequestReviewStartDialogContainer } from '@/features/pull-request-review-start'
 import { NotificationsToastHostContainer } from '@/features/notifications-toast-host'
 import { UpdatesToastContainer } from '@/features/updates-toast'
+import { ProviderUpdatesToastContainer } from '@/features/provider-updates-toast'
 import { FeedbackButtonContainer } from '@/features/feedback-button'
 import { AppShell } from './App.layout'
 
@@ -65,6 +67,10 @@ export function App() {
     (s) => s.setActiveSession,
   )
   const loadUpdates = useUpdatesStore((s) => s.loadInitial)
+  const loadProviderUpdates = useProviderUpdatesStore((s) => s.loadInitial)
+  const stopProviderUpdates = useProviderUpdatesStore(
+    (s) => s.stopBackgroundChecks,
+  )
   const ingestTaskProgress = useTaskProgressStore((s) => s.ingest)
   const ingestProviderDebug = useProviderDebugStore((s) => s.ingest)
 
@@ -114,6 +120,11 @@ export function App() {
   useEffect(() => {
     void loadUpdates()
   }, [loadUpdates])
+
+  useEffect(() => {
+    void loadProviderUpdates()
+    return () => stopProviderUpdates()
+  }, [loadProviderUpdates, stopProviderUpdates])
 
   useEffect(() => {
     if (!import.meta.env.DEV) return
@@ -233,6 +244,7 @@ export function App() {
       <PullRequestReviewStartDialogContainer />
       <NotificationsToastHostContainer />
       <UpdatesToastContainer />
+      <ProviderUpdatesToastContainer />
       <FeedbackButtonContainer />
       <Toaster position="bottom-right" />
     </TooltipProvider>

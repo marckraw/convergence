@@ -5,7 +5,11 @@ import type { ProviderInstallInfo, ProviderStatusInfo } from './provider.types'
 import { buildProviderStatus, getKnownProviders } from './provider-status.pure'
 import { fetchNpmLatestVersion } from './npm-registry'
 import { isPiAuthConfigured } from './pi/pi-auth-status'
-import { resolveNpmManagedProviderInstall } from './provider-updater.pure'
+import {
+  buildNonNpmProviderInstallInfo,
+  buildNpmProviderInstallInfo,
+  resolveNpmManagedProviderInstall,
+} from './provider-updater.pure'
 
 function which(binary: string): Promise<string | null> {
   const cmd = process.platform === 'win32' ? 'where' : 'which'
@@ -47,6 +51,7 @@ function getNodeVersion(nodePath: string): Promise<string | null> {
 async function inspectNpmInstall(
   binaryPath: string,
   packageName: string,
+  providerId: string,
 ): Promise<ProviderInstallInfo | null> {
   try {
     const realBinaryPath = realpathSync(binaryPath)
@@ -54,7 +59,9 @@ async function inspectNpmInstall(
       realBinaryPath,
       packageName,
     )
-    if (!install) return null
+    if (!install) {
+      return buildNonNpmProviderInstallInfo(realBinaryPath, providerId)
+    }
 
     const nodePath = join(
       install.prefixDirectory,
@@ -63,15 +70,14 @@ async function inspectNpmInstall(
     )
     const nodeVersion = await getNodeVersion(nodePath)
 
-    return {
-      manager: 'npm',
+    return buildNpmProviderInstallInfo({
       realBinaryPath,
       packageDirectory: install.packageDirectory,
       prefixDirectory: install.prefixDirectory,
       npmPath: install.npmPath,
       nodePath,
       nodeVersion,
-    }
+    })
   } catch {
     return null
   }
@@ -95,7 +101,7 @@ export async function inspectProviderStatuses(): Promise<ProviderStatusInfo[]> {
         fetchNpmLatestVersion(provider.packageName),
         binaryPath ? getVersion(binaryPath) : Promise.resolve(null),
         binaryPath
-          ? inspectNpmInstall(binaryPath, provider.packageName)
+          ? inspectNpmInstall(binaryPath, provider.packageName, provider.id)
           : Promise.resolve(null),
       ])
       const status = buildProviderStatus(

@@ -16,7 +16,13 @@ import { DEFAULT_PROJECT_SETTINGS } from '@/entities/project'
 
 vi.mock('sonner', () => ({
   Toaster: () => null,
-  toast: { error: vi.fn() },
+  toast: {
+    error: vi.fn(),
+    info: vi.fn(),
+    loading: vi.fn(),
+    success: vi.fn(),
+    dismiss: vi.fn(),
+  },
 }))
 
 const mockProject = {
@@ -235,6 +241,25 @@ const mockElectronAPI = {
         },
       },
     ]),
+    getAllAvailable: vi.fn().mockResolvedValue([]),
+    getStatuses: vi.fn().mockResolvedValue([]),
+    getRuntimeInfo: vi.fn().mockResolvedValue({
+      appNodeVersion: '24.15.0',
+      electronVersion: '41.2.0',
+      appVersion: '0.0.0',
+      isPackaged: false,
+      platform: 'darwin',
+      arch: 'arm64',
+    }),
+    update: vi.fn().mockResolvedValue({
+      ok: true,
+      providerId: 'claude-code',
+      command: 'claude update',
+      stdout: '',
+      stderr: '',
+      error: null,
+    }),
+    onStatusesChanged: vi.fn().mockReturnValue(() => {}),
   },
 }
 
