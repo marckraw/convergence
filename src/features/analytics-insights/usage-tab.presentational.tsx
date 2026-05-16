@@ -24,6 +24,7 @@ import {
   getHeatmapCount,
   getHeatmapLevel,
   hasUsageActivity,
+  WEEKDAY_FULL_NAMES,
   WEEKDAY_LABELS,
 } from './analytics-insights.pure'
 
@@ -451,6 +452,15 @@ function renderStreakCalendar(overview: AnalyticsOverview) {
       </div>
 
       <div className="grid grid-cols-7 gap-1.5" aria-label="Recent activity">
+        {/* Weekday header row */}
+        {WEEKDAY_LABELS.map((label) => (
+          <div
+            key={label}
+            className="flex items-center justify-center text-[10px] font-medium text-muted-foreground"
+          >
+            {label}
+          </div>
+        ))}
         {days.map((day) => {
           const active = activeDays.has(day)
           const isCurrent = day === currentMarker
@@ -513,6 +523,18 @@ function renderHeatmap(overview: AnalyticsOverview) {
                 {hour % 6 === 0 ? formatHour(hour) : ''}
               </div>
             ))}
+            {/* Weekday header row with full names */}
+            <div />
+            {WEEKDAY_FULL_NAMES.map((name) => (
+              <div
+                key={name}
+                className="flex items-center justify-center text-[10px] font-medium text-foreground"
+                title={name}
+              >
+                {name}
+              </div>
+            ))}
+            {/* Weekday data rows */}
             {WEEKDAY_LABELS.map((label, weekday) => (
               <div key={label} className="contents">
                 {renderHeatmapRow({ label, weekday, overview, max })}

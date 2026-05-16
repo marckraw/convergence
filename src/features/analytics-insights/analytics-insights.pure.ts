@@ -26,6 +26,15 @@ const COMPACT_FORMATTER = new Intl.NumberFormat(undefined, {
 })
 
 export const WEEKDAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+export const WEEKDAY_FULL_NAMES = [
+  'Sunday',
+  'Monday',
+  'Tuesday',
+  'Wednesday',
+  'Thursday',
+  'Friday',
+  'Saturday',
+]
 
 const CHART_PALETTE = ['#2563eb', '#14b8a6', '#f59e0b', '#7c3aed', '#ef4444']
 
