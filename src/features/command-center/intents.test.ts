@@ -5,6 +5,7 @@ import { useWorkspaceStore } from '@/entities/workspace'
 import { useSessionStore } from '@/entities/session'
 import type { Session } from '@/entities/session'
 import { useDialogStore } from '@/entities/dialog'
+import { useAppSurfaceStore } from '@/entities/app-surface'
 import type { Workspace } from '@/entities/workspace'
 import {
   INITIAL_UPDATE_STATUS,
@@ -14,6 +15,7 @@ import {
 import {
   activateProject,
   beginSessionDraft,
+  beginTerminalSessionDraft,
   beginWorkspaceDraft,
   checkForUpdates,
   openDialog,
@@ -57,6 +59,16 @@ function makeSession(id: string, projectId: string): Session {
   }
 }
 
+function makeGlobalSession(id: string): Session {
+  return {
+    ...makeSession(id, 'p1'),
+    contextKind: 'global',
+    projectId: null,
+    workspaceId: null,
+    workingDirectory: '/tmp',
+  }
+}
+
 describe('command-center intents', () => {
   const alpha = makeProject('p1', 'alpha')
   const beta = makeProject('p2', 'beta')
@@ -78,6 +90,15 @@ describe('command-center intents', () => {
   let beginSessionDraftMock: ReturnType<
     typeof vi.fn<(workspaceId: string | null) => void>
   >
+  let createTerminalSession: ReturnType<
+    typeof vi.fn<
+      (
+        projectId: string,
+        workspaceId: string | null,
+        name: string,
+      ) => Promise<Session>
+    >
+  >
 
   const betaWorkspace: Workspace = {
     id: 'w-beta',
@@ -91,9 +112,12 @@ describe('command-center intents', () => {
   }
 
   beforeEach(() => {
-    setActiveProject = vi.fn<(id: string) => Promise<void>>(
-      async () => undefined,
-    )
+    setActiveProject = vi.fn<(id: string) => Promise<void>>(async (id) => {
+      useProjectStore.setState({
+        activeProject:
+          [alpha, beta].find((project) => project.id === id) ?? null,
+      })
+    })
     loadWorkspaces = vi.fn<(projectId: string) => Promise<void>>(
       async () => undefined,
     )
@@ -106,6 +130,13 @@ describe('command-center intents', () => {
     prepareForProject = vi.fn<(projectId: string | null) => void>()
     setActiveSession = vi.fn<(id: string | null) => void>()
     beginSessionDraftMock = vi.fn<(workspaceId: string | null) => void>()
+    createTerminalSession = vi.fn<
+      (
+        projectId: string,
+        workspaceId: string | null,
+        name: string,
+      ) => Promise<Session>
+    >(async (projectId) => makeSession('terminal', projectId))
 
     useProjectStore.setState({
       projects: [alpha, beta],
@@ -121,7 +152,7 @@ describe('command-center intents', () => {
     })
     useSessionStore.setState({
       sessions: [],
-      globalSessions: [makeSession('s1', 'p2')],
+      globalSessions: [makeSession('s1', 'p2'), makeGlobalSession('global-1')],
       needsYouDismissals: {},
       recentSessionIds: [],
       currentProjectId: 'p1',
@@ -133,14 +164,17 @@ describe('command-center intents', () => {
       setActiveSession,
       loadSessions,
       beginSessionDraft: beginSessionDraftMock,
+      createTerminalSession,
     })
     useDialogStore.setState({ openDialog: null, payload: null })
+    useAppSurfaceStore.setState({ activeSurface: 'chat' })
   })
 
   describe('switchToSession', () => {
     it('hops to the target project and activates the session', async () => {
       await switchToSession('s1')
 
+      expect(useAppSurfaceStore.getState().activeSurface).toBe('code')
       expect(prepareForProject).toHaveBeenCalledWith('p2')
       expect(setActiveProject).toHaveBeenCalledWith('p2')
       expect(loadWorkspaces).toHaveBeenCalledWith('p2')
@@ -178,6 +212,16 @@ describe('command-center intents', () => {
       expect(setActiveSession).toHaveBeenCalledWith('s1')
     })
 
+    it('switches to the chat surface for global sessions', async () => {
+      useAppSurfaceStore.setState({ activeSurface: 'code' })
+
+      await switchToSession('global-1')
+
+      expect(useAppSurfaceStore.getState().activeSurface).toBe('chat')
+      expect(setActiveProject).not.toHaveBeenCalled()
+      expect(setActiveSession).toHaveBeenCalledWith('global-1')
+    })
+
     it('no-ops when the session id is not in globalSessions', async () => {
       await switchToSession('missing')
 
@@ -193,6 +237,7 @@ describe('command-center intents', () => {
 
       await activateProject('p2')
 
+      expect(useAppSurfaceStore.getState().activeSurface).toBe('code')
       expect(prepareForProject).toHaveBeenCalledWith('p2')
       expect(setActiveProject).toHaveBeenCalledWith('p2')
       expect(loadWorkspaces).toHaveBeenCalledWith('p2')
@@ -275,7 +320,22 @@ describe('command-center intents', () => {
 
       await beginWorkspaceDraft('p2')
 
+      expect(useAppSurfaceStore.getState().activeSurface).toBe('code')
       expect(setActiveProject).not.toHaveBeenCalled()
+    })
+  })
+
+  describe('beginTerminalSessionDraft', () => {
+    it('switches to code and starts a terminal in the selected workspace project', async () => {
+      await beginTerminalSessionDraft('w-beta')
+
+      expect(useAppSurfaceStore.getState().activeSurface).toBe('code')
+      expect(setActiveProject).toHaveBeenCalledWith('p2')
+      expect(createTerminalSession).toHaveBeenCalledWith(
+        'p2',
+        'w-beta',
+        'Terminal — feature-x',
+      )
     })
   })
 

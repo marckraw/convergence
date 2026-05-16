@@ -1,6 +1,7 @@
 import { useProjectStore } from '@/entities/project'
 import { useWorkspaceStore } from '@/entities/workspace'
 import { useSessionStore } from '@/entities/session'
+import { useAppSurfaceStore } from '@/entities/app-surface'
 import {
   useDialogStore,
   type DialogKind,
@@ -38,10 +39,12 @@ export async function switchToSession(sessionId: string): Promise<void> {
   )
   if (!target) return
   if (!target.projectId) {
+    useAppSurfaceStore.getState().setActiveSurface('chat')
     useSessionStore.getState().setActiveSession(sessionId)
     return
   }
 
+  useAppSurfaceStore.getState().setActiveSurface('code')
   const activeProject = useProjectStore.getState().activeProject
   if (activeProject?.id !== target.projectId) {
     await hopToProject(target.projectId)
@@ -51,6 +54,7 @@ export async function switchToSession(sessionId: string): Promise<void> {
 }
 
 export async function activateProject(projectId: string): Promise<void> {
+  useAppSurfaceStore.getState().setActiveSurface('code')
   const activeProject = useProjectStore.getState().activeProject
   if (activeProject?.id === projectId) return
   await hopToProject(projectId)
@@ -76,6 +80,7 @@ export async function beginSessionDraft(workspaceId: string): Promise<void> {
     .getState()
     .globalWorkspaces.find((w) => w.id === workspaceId)
   if (!workspace) return
+  useAppSurfaceStore.getState().setActiveSurface('code')
   await activateProject(workspace.projectId)
   useDialogStore.getState().open('session-intent', { workspaceId })
 }
@@ -90,11 +95,13 @@ export async function beginTerminalSessionDraft(
       .globalWorkspaces.find((w) => w.id === workspaceId)
     if (workspace) {
       branchName = workspace.branchName
+      useAppSurfaceStore.getState().setActiveSurface('code')
       await activateProject(workspace.projectId)
     }
   }
   const activeProject = useProjectStore.getState().activeProject
   if (!activeProject) return
+  useAppSurfaceStore.getState().setActiveSurface('code')
   const name = branchName ? `Terminal — ${branchName}` : 'Terminal'
   await useSessionStore
     .getState()
@@ -102,6 +109,7 @@ export async function beginTerminalSessionDraft(
 }
 
 export async function beginWorkspaceDraft(projectId: string): Promise<void> {
+  useAppSurfaceStore.getState().setActiveSurface('code')
   await activateProject(projectId)
 }
 
