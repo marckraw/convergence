@@ -24,7 +24,7 @@ import {
   getHeatmapCount,
   getHeatmapLevel,
   hasUsageActivity,
-  WEEKDAY_LABELS,
+  WEEKDAY_LABELS_MONDAY_FIRST,
 } from './analytics-insights.pure'
 
 interface UsageTabProps {
@@ -451,6 +451,15 @@ function renderStreakCalendar(overview: AnalyticsOverview) {
       </div>
 
       <div className="grid grid-cols-7 gap-1.5" aria-label="Recent activity">
+        {/* Weekday header row (Monday first) */}
+        {WEEKDAY_LABELS_MONDAY_FIRST.map((label) => (
+          <div
+            key={label}
+            className="flex items-center justify-center text-[10px] font-medium text-muted-foreground"
+          >
+            {label}
+          </div>
+        ))}
         {days.map((day) => {
           const active = activeDays.has(day)
           const isCurrent = day === currentMarker
@@ -513,11 +522,16 @@ function renderHeatmap(overview: AnalyticsOverview) {
                 {hour % 6 === 0 ? formatHour(hour) : ''}
               </div>
             ))}
-            {WEEKDAY_LABELS.map((label, weekday) => (
-              <div key={label} className="contents">
-                {renderHeatmapRow({ label, weekday, overview, max })}
-              </div>
-            ))}
+            {/* Weekday data rows (Monday first) */}
+            {WEEKDAY_LABELS_MONDAY_FIRST.map((label, index) => {
+              // Map Monday-first index to weekday number (0=Sunday, 1=Monday, etc.)
+              const weekday = index === 6 ? 0 : index + 1
+              return (
+                <div key={label} className="contents">
+                  {renderHeatmapRow({ label, weekday, overview, max })}
+                </div>
+              )
+            })}
           </div>
         </div>
       )}
