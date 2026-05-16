@@ -11,6 +11,7 @@ export interface KnownProvider {
   vendorLabel: string
   binaryName: string
   packageName: string
+  legacyPackageNames?: string[]
   installCommand: string
   updateCommand: string
   supportsSelfUpdate: boolean
@@ -42,9 +43,10 @@ const KNOWN_PROVIDERS: KnownProvider[] = [
     name: 'Pi Agent',
     vendorLabel: 'Pi',
     binaryName: 'pi',
-    packageName: '@mariozechner/pi-coding-agent',
-    installCommand: 'npm install -g @mariozechner/pi-coding-agent@latest',
-    updateCommand: 'npm update -g @mariozechner/pi-coding-agent',
+    packageName: '@earendil-works/pi-coding-agent',
+    legacyPackageNames: ['@mariozechner/pi-coding-agent'],
+    installCommand: 'npm install -g @earendil-works/pi-coding-agent@latest',
+    updateCommand: 'npm install -g @earendil-works/pi-coding-agent@latest',
     supportsSelfUpdate: false,
   },
 ]
@@ -134,6 +136,17 @@ export function resolveProviderUpdateStrategy(
   binaryPath: string | null,
 ): { strategy: ProviderUpdateStrategy; command: string | null } {
   if (install?.manager === 'npm' && install.npmPath) {
+    if (
+      install.packageName &&
+      install.packageName !== provider.packageName &&
+      provider.legacyPackageNames?.includes(install.packageName)
+    ) {
+      return {
+        strategy: 'npm-global',
+        command: `${install.npmPath} uninstall -g ${install.packageName} && ${install.npmPath} install -g ${provider.packageName}@latest`,
+      }
+    }
+
     return {
       strategy: 'npm-global',
       command: `${install.npmPath} install -g ${provider.packageName}@latest`,

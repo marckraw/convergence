@@ -701,6 +701,7 @@ interface ProviderStatusInfo {
 interface ProviderInstallInfo {
   manager: 'npm' | 'homebrew' | 'self' | 'unknown'
   realBinaryPath: string
+  packageName: string | null
   packageDirectory: string | null
   prefixDirectory: string | null
   npmPath: string | null

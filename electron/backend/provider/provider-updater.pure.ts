@@ -2,6 +2,7 @@ import { dirname, join, posix, win32 } from 'path'
 import type { ProviderInstallInfo } from './provider.types'
 
 export interface NpmManagedProviderInstall {
+  packageName: string
   packageDirectory: string
   prefixDirectory: string
   npmPath: string
@@ -41,6 +42,7 @@ export function resolveNpmManagedProviderInstall(
       : join(prefixDirectory, 'bin', 'npm')
 
   return {
+    packageName,
     packageDirectory,
     prefixDirectory,
     npmPath,
@@ -49,6 +51,7 @@ export function resolveNpmManagedProviderInstall(
 
 export function buildNpmProviderInstallInfo(input: {
   realBinaryPath: string
+  packageName: string
   packageDirectory: string
   prefixDirectory: string
   npmPath: string
@@ -58,6 +61,7 @@ export function buildNpmProviderInstallInfo(input: {
   return {
     manager: 'npm',
     realBinaryPath: input.realBinaryPath,
+    packageName: input.packageName,
     packageDirectory: input.packageDirectory,
     prefixDirectory: input.prefixDirectory,
     npmPath: input.npmPath,
@@ -78,6 +82,7 @@ export function buildNonNpmProviderInstallInfo(
     return {
       manager: 'homebrew',
       realBinaryPath,
+      packageName: null,
       packageDirectory: null,
       prefixDirectory: homebrew.prefixDirectory,
       npmPath: null,
@@ -91,6 +96,7 @@ export function buildNonNpmProviderInstallInfo(
   return {
     manager: providerId === 'claude-code' ? 'self' : 'unknown',
     realBinaryPath,
+    packageName: null,
     packageDirectory: null,
     prefixDirectory: null,
     npmPath: null,

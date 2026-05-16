@@ -15,6 +15,7 @@ describe('provider-updater.pure', () => {
         'darwin',
       ),
     ).toEqual({
+      packageName: '@openai/codex',
       packageDirectory:
         '/Users/me/.fnm/node-versions/v24.14.1/installation/lib/node_modules/@openai/codex',
       prefixDirectory: '/Users/me/.fnm/node-versions/v24.14.1/installation',
@@ -30,6 +31,7 @@ describe('provider-updater.pure', () => {
         'win32',
       ),
     ).toEqual({
+      packageName: '@openai/codex',
       packageDirectory:
         'C:\\Users\\me\\AppData\\Roaming\\npm\\node_modules\\@openai\\codex',
       prefixDirectory: 'C:\\Users\\me\\AppData\\Roaming\\npm',
