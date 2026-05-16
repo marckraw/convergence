@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { FC } from 'react'
+import { useCodeReviewStore } from '@/entities/code-review'
 import { useProjectStore } from '@/entities/project'
 import { usePullRequestStore } from '@/entities/pull-request'
 import { useSpaceStore } from '@/entities/space'
@@ -37,6 +38,7 @@ import {
   BarChart3,
   ChevronRight,
   Code2,
+  FileCode2,
   FolderGit2,
   MessageSquareText,
   PanelLeftClose,
@@ -97,6 +99,7 @@ export const Sidebar: FC<SidebarProps> = ({
   const activeProject = useProjectStore((s) => s.activeProject)
   const createProject = useProjectStore((s) => s.createProject)
   const setActiveProject = useProjectStore((s) => s.setActiveProject)
+  const openCodeReview = useCodeReviewStore((s) => s.openReview)
   const workspaces = useWorkspaceStore((s) => s.workspaces)
   const pullRequestsByWorkspaceId = usePullRequestStore((s) => s.byWorkspaceId)
   const loadPullRequestsByProjectId = usePullRequestStore(
@@ -454,6 +457,11 @@ export const Sidebar: FC<SidebarProps> = ({
     [deleteSession, loadSpaceAttempts, spaces],
   )
 
+  const handleOpenCodeReview = useCallback(() => {
+    onSelectSurface('code')
+    openCodeReview()
+  }, [onSelectSurface, openCodeReview])
+
   const handleArchiveWorkspace = async (workspaceId: string) => {
     if (!activeProject) {
       return
@@ -619,6 +627,18 @@ export const Sidebar: FC<SidebarProps> = ({
             onClick={() => onSelectSurface('chat')}
           >
             <MessageSquareText className="h-4 w-4" />
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="h-9 w-9"
+            title="Open Code Review"
+            aria-label="Open Code Review"
+            disabled={!activeProject}
+            onClick={handleOpenCodeReview}
+          >
+            <FileCode2 className="h-4 w-4" />
           </Button>
         </div>
 
@@ -793,6 +813,18 @@ export const Sidebar: FC<SidebarProps> = ({
             onClick={() => onSelectSurface('chat')}
           >
             <MessageSquareText className="h-4 w-4" />
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8"
+            title="Open Code Review"
+            aria-label="Open Code Review"
+            disabled={!activeProject}
+            onClick={handleOpenCodeReview}
+          >
+            <FileCode2 className="h-4 w-4" />
           </Button>
         </div>
 

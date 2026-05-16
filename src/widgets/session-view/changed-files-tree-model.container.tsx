@@ -1,7 +1,10 @@
 import type { CSSProperties, FC, KeyboardEvent } from 'react'
-import { useEffect, useMemo } from 'react'
-import type { FileTreeRowDecorationRenderer } from '@pierre/trees'
-import { FileTree, useFileTree, useFileTreeSearch } from '@pierre/trees/react'
+import { useEffect, useMemo, useReducer, useRef } from 'react'
+import {
+  FileTree as PierreFileTreeModel,
+  type FileTreeRowDecorationRenderer,
+} from '@pierre/trees'
+import { FileTree, useFileTreeSearch } from '@pierre/trees/react'
 import { ChevronDown, ChevronUp, Search, X } from 'lucide-react'
 import { Button } from '@/shared/ui/button'
 import { Input } from '@/shared/ui/input'
@@ -31,22 +34,43 @@ export const ChangedFilesTreeModel: FC<ChangedFilesTreeModelProps> = ({
     }
   }, [treeInput.noteCountsByPath])
 
-  const { model } = useFileTree({
-    paths: treeInput.paths,
-    gitStatus: treeInput.gitStatus,
-    density: 'compact',
-    flattenEmptyDirectories: true,
-    initialExpansion: 'open',
-    initialSelectedPaths: selectedFile ? [selectedFile] : [],
-    fileTreeSearchMode: 'hide-non-matches',
-    onSelectionChange: (selectedPaths) => {
-      const nextFile = selectedPaths[0]
-      if (nextFile) onSelectFile?.(nextFile)
-    },
-    renderRowDecoration,
-    search: searchEnabled,
-    searchBlurBehavior: 'retain',
-  })
+  const modelRef = useRef<PierreFileTreeModel | null>(null)
+  const [, forceUpdate] = useReducer((tick: number) => tick + 1, 0)
+
+  if (modelRef.current == null) {
+    modelRef.current = new PierreFileTreeModel({
+      paths: treeInput.paths,
+      gitStatus: treeInput.gitStatus,
+      density: 'compact',
+      flattenEmptyDirectories: true,
+      initialExpansion: 'open',
+      initialSelectedPaths: selectedFile ? [selectedFile] : [],
+      fileTreeSearchMode: 'hide-non-matches',
+      onSelectionChange: (selectedPaths) => {
+        const nextFile = selectedPaths[0]
+        if (nextFile) onSelectFile?.(nextFile)
+      },
+      renderRowDecoration,
+      search: searchEnabled,
+      searchBlurBehavior: 'retain',
+    })
+  }
+  const model = modelRef.current
+
+  useEffect(() => {
+    return () => {
+      // React 18 StrictMode dev double-invokes effects: cleanup then re-setup.
+      // Pierre's `useFileTree` calls cleanUp() on the simulated unmount but
+      // never recreates the model on re-setup, leaving the DOM bound to a
+      // dead model with no controller listeners. We replicate the hook here
+      // but force a re-render after cleanup so the render-time `??=` builds
+      // a fresh model. On real unmount, forceUpdate is a no-op.
+      modelRef.current?.cleanUp()
+      modelRef.current = null
+      forceUpdate()
+    }
+  }, [])
+
   const search = useFileTreeSearch(model)
 
   useEffect(() => {

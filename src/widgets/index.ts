@@ -1,5 +1,7 @@
 export { Sidebar } from './sidebar'
 export { SessionView } from './session-view'
 export { ChatSurface } from './chat-surface'
+export { CodeReviewDashboard } from './code-review-dashboard'
+export { CodeReviewSurface } from './code-review-surface'
 export { GlobalStatusBar } from './global-status-bar'
 export { TerminalDock } from './terminal-dock'

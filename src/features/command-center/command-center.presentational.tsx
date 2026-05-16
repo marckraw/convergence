@@ -170,6 +170,8 @@ function describeItem(item: PaletteItem): {
       return { primary: item.title, secondary: item.projectName || null }
     case 'check-updates':
       return { primary: item.title, secondary: item.description }
+    case 'open-code-review':
+      return { primary: item.title, secondary: item.description }
   }
 }
 
@@ -195,5 +197,7 @@ function describeKind(kind: PaletteItem['kind']): string {
       return 'Swap primary surface'
     case 'check-updates':
       return 'Updates'
+    case 'open-code-review':
+      return 'Code review'
   }
 }

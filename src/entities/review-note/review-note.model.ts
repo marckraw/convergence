@@ -36,6 +36,16 @@ interface ReviewNoteActions {
 
 export type ReviewNoteStore = ReviewNoteState & ReviewNoteActions
 
+const EMPTY_REVIEW_NOTES: ReviewNote[] = []
+
+export function selectReviewNotesForSession(
+  state: Pick<ReviewNoteState, 'notesBySessionId'>,
+  sessionId: string | null | undefined,
+): ReviewNote[] {
+  if (!sessionId) return EMPTY_REVIEW_NOTES
+  return state.notesBySessionId[sessionId] ?? EMPTY_REVIEW_NOTES
+}
+
 function upsertById<T extends { id: string }>(items: T[], next: T): T[] {
   return items.some((item) => item.id === next.id)
     ? items.map((item) => (item.id === next.id ? next : item))

@@ -6,6 +6,7 @@ import { StateService } from '../backend/state/state.service'
 import { WorkspaceService } from '../backend/workspace/workspace.service'
 import { GitService } from '../backend/git/git.service'
 import { ChangedFilesService } from '../backend/git/changed-files.service'
+import type { CodeReviewService } from '../backend/code-review/code-review.service'
 import { PullRequestService } from '../backend/pull-request/pull-request.service'
 import type { PullRequestReviewService } from '../backend/pull-request/pull-request-review.service'
 import type { ReviewNotesService } from '../backend/review-notes/review-notes.service'
@@ -50,6 +51,11 @@ import type {
   SendReviewNotePacketInput,
   UpdateReviewNoteInput,
 } from '../backend/review-notes/review-notes.types'
+import type {
+  CodeReviewFilePatchRequest,
+  CodeReviewListTargetsRequest,
+  CodeReviewSummaryRequest,
+} from '../backend/code-review/code-review.types'
 import type { CreateWorkspaceInput } from '../backend/workspace/workspace.types'
 import type { CreateSessionInput } from '../backend/session/session.types'
 import type { ProjectSettings } from '../backend/project/project-settings.pure'
@@ -142,6 +148,7 @@ export function registerIpcHandlers(
   workspaceService: WorkspaceService,
   gitService: GitService,
   changedFilesService: ChangedFilesService,
+  codeReviewService: CodeReviewService,
   pullRequestService: PullRequestService,
   pullRequestReviewService: PullRequestReviewService,
   reviewNotesService: ReviewNotesService,
@@ -513,6 +520,24 @@ export function registerIpcHandlers(
     'git:getBaseBranchDiff',
     async (_event, sessionId: string, filePath: string) =>
       changedFilesService.getBaseBranchDiff({ sessionId, filePath }),
+  )
+
+  ipcMain.handle(
+    'codeReview:listTargets',
+    async (_event, input: CodeReviewListTargetsRequest) =>
+      codeReviewService.listTargets(input),
+  )
+
+  ipcMain.handle(
+    'codeReview:getSummary',
+    async (_event, input: CodeReviewSummaryRequest) =>
+      codeReviewService.getSummary(input),
+  )
+
+  ipcMain.handle(
+    'codeReview:getFilePatch',
+    async (_event, input: CodeReviewFilePatchRequest) =>
+      codeReviewService.getFilePatch(input),
   )
 
   // App settings handlers

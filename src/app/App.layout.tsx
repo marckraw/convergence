@@ -7,6 +7,7 @@ import { WorkspaceLayout } from '@/widgets/workspace-layout'
 import { NotificationsOnboardingContainer } from '@/features/notifications-onboarding'
 import { useAppSurfaceStore } from '@/entities/app-surface'
 import { cn } from '@/shared/lib/cn.pure'
+import { DevBuildRibbon } from './dev-build-ribbon.presentational'
 
 interface AppShellProps {
   activeSessionId: string | null
@@ -15,6 +16,7 @@ interface AppShellProps {
   onSelectGlobalSession: (id: string | null) => void
   loading: boolean
   hasProject: boolean
+  showDevelopmentRibbon: boolean
 }
 
 const MIN_SIDEBAR = 220
@@ -29,6 +31,7 @@ export const AppShell: FC<AppShellProps> = ({
   onSelectGlobalSession,
   loading,
   hasProject,
+  showDevelopmentRibbon,
 }) => {
   const [sidebarWidth, setSidebarWidth] = useState(DEFAULT_SIDEBAR)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
@@ -143,6 +146,7 @@ export const AppShell: FC<AppShellProps> = ({
   if (loading) {
     return (
       <div className="app-chrome flex h-screen items-center justify-center text-foreground">
+        {showDevelopmentRibbon ? <DevBuildRibbon /> : null}
         <p className="text-muted-foreground">Loading...</p>
       </div>
     )
@@ -150,6 +154,7 @@ export const AppShell: FC<AppShellProps> = ({
 
   return (
     <div className="app-chrome flex h-screen flex-col overflow-hidden text-foreground">
+      {showDevelopmentRibbon ? <DevBuildRibbon /> : null}
       <div className="flex min-h-0 flex-1 overflow-hidden">
         <div
           className="relative shrink-0"

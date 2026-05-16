@@ -13,6 +13,7 @@ const pierreTree = vi.hoisted(() => {
     }
   >()
   let selectedPaths: string[] = []
+  const constructorCalls: Array<Record<string, unknown>> = []
   const searchState = {
     isOpen: false,
     matchingPaths: [] as string[],
@@ -24,6 +25,7 @@ const pierreTree = vi.hoisted(() => {
     setValue: vi.fn(),
   }
   const model = {
+    cleanUp: vi.fn(),
     getItem: vi.fn((path: string) => itemHandles.get(path) ?? null),
     getSelectedPaths: vi.fn(() => selectedPaths),
   }
@@ -46,6 +48,13 @@ const pierreTree = vi.hoisted(() => {
     return handle
   }
 
+  class FileTreeMock {
+    constructor(options: Record<string, unknown>) {
+      constructorCalls.push(options)
+      return model as unknown as FileTreeMock
+    }
+  }
+
   return {
     createItemHandle,
     itemHandles,
@@ -53,15 +62,22 @@ const pierreTree = vi.hoisted(() => {
     setSelectedPaths(paths: string[]) {
       selectedPaths = paths
     },
+    resetConstructorCalls() {
+      constructorCalls.length = 0
+    },
+    constructorCalls,
+    FileTreeMock,
     searchState,
-    useFileTree: vi.fn(() => ({ model })),
     useFileTreeSearch: vi.fn(() => searchState),
   }
 })
 
+vi.mock('@pierre/trees', () => ({
+  FileTree: pierreTree.FileTreeMock,
+}))
+
 vi.mock('@pierre/trees/react', () => ({
   FileTree: () => <div aria-label="Changed files" />,
-  useFileTree: pierreTree.useFileTree,
   useFileTreeSearch: pierreTree.useFileTreeSearch,
 }))
 
@@ -82,6 +98,7 @@ describe('ChangedFilesTreeModel', () => {
     vi.clearAllMocks()
     pierreTree.itemHandles.clear()
     pierreTree.setSelectedPaths([])
+    pierreTree.resetConstructorCalls()
     pierreTree.createItemHandle('src/app.ts')
     pierreTree.createItemHandle('src/components/very-long-review-file-name.tsx')
     pierreTree.searchState.isOpen = false
@@ -98,7 +115,7 @@ describe('ChangedFilesTreeModel', () => {
       />,
     )
 
-    expect(pierreTree.useFileTree).toHaveBeenCalledWith(
+    expect(pierreTree.constructorCalls[0]).toEqual(
       expect.objectContaining({
         density: 'compact',
         fileTreeSearchMode: 'hide-non-matches',

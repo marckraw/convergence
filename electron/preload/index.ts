@@ -149,6 +149,14 @@ contextBridge.exposeInMainWorld('electronAPI', {
     getBaseBranchDiff: (sessionId: string, filePath: string) =>
       ipcRenderer.invoke('git:getBaseBranchDiff', sessionId, filePath),
   },
+  codeReview: {
+    listTargets: (input: unknown) =>
+      ipcRenderer.invoke('codeReview:listTargets', input),
+    getSummary: (input: unknown) =>
+      ipcRenderer.invoke('codeReview:getSummary', input),
+    getFilePatch: (input: unknown) =>
+      ipcRenderer.invoke('codeReview:getFilePatch', input),
+  },
   session: {
     create: (input: {
       contextKind?: 'project' | 'global'

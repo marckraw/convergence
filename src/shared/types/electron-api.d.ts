@@ -223,6 +223,55 @@ interface BaseBranchDiffSummaryData {
   files: GitStatusEntryData[]
 }
 
+type CodeReviewModeData = 'working-tree' | 'base-branch'
+
+type CodeReviewTargetSourceData =
+  | 'session'
+  | 'workspace'
+  | 'project-repository'
+  | 'pull-request'
+
+interface CodeReviewTargetStatusData {
+  workingTreeFileCount: number
+  workingTreeStatusCounts: Record<string, number>
+  error: string | null
+}
+
+interface CodeReviewTargetData {
+  id: string
+  projectId: string
+  projectName: string
+  repositoryPath: string
+  workspaceId: string | null
+  sessionId: string | null
+  sessionName: string | null
+  branchName: string | null
+  pullRequestId: string | null
+  pullRequestLabel: string | null
+  source: CodeReviewTargetSourceData
+  updatedAt: string | null
+  status: CodeReviewTargetStatusData
+}
+
+interface CodeReviewListTargetsRequestData {
+  projectId: string
+  sessionId?: string | null
+}
+
+interface CodeReviewSummaryRequestData {
+  target: CodeReviewTargetData
+  mode: CodeReviewModeData
+}
+
+interface CodeReviewFilePatchRequestData extends CodeReviewSummaryRequestData {
+  filePath: string
+}
+
+interface CodeReviewSummaryData {
+  base: ResolvedBaseBranchData | null
+  files: GitStatusEntryData[]
+}
+
 interface WorkspaceData {
   id: string
   projectId: string
@@ -1058,6 +1107,15 @@ interface ElectronAPI {
       sessionId: string,
     ) => Promise<BaseBranchDiffSummaryData>
     getBaseBranchDiff: (sessionId: string, filePath: string) => Promise<string>
+  }
+  codeReview: {
+    listTargets: (
+      input: CodeReviewListTargetsRequestData,
+    ) => Promise<CodeReviewTargetData[]>
+    getSummary: (
+      input: CodeReviewSummaryRequestData,
+    ) => Promise<CodeReviewSummaryData>
+    getFilePatch: (input: CodeReviewFilePatchRequestData) => Promise<string>
   }
   session: {
     create: (input: CreateSessionInput) => Promise<SessionSummaryData>

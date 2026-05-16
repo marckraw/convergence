@@ -18,6 +18,7 @@ import {
   beginWorkspaceDraft,
   checkForUpdates,
   forkCurrentSession,
+  openCodeReview,
   openDialog,
   swapPrimarySurface,
   switchToSession,
@@ -147,6 +148,9 @@ export function CommandCenterContainer() {
           return
         case 'check-updates':
           void checkForUpdates()
+          return
+        case 'open-code-review':
+          openCodeReview()
           return
       }
     },

@@ -11,6 +11,18 @@ export type { WorkspacePullRequest } from './pull-request'
 export { pullRequestApi, usePullRequestStore } from './pull-request'
 
 export type {
+  CodeReviewBaseBranch,
+  CodeReviewFileEntry,
+  CodeReviewFilePatchRequest,
+  CodeReviewMode,
+  CodeReviewPanelMode,
+  CodeReviewSummary,
+  CodeReviewSummaryRequest,
+  CodeReviewTarget,
+} from './code-review'
+export { codeReviewApi, useCodeReviewStore } from './code-review'
+
+export type {
   CreateReviewNoteInput,
   PreviewReviewNotePacketInput,
   ReviewNote,

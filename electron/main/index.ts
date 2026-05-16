@@ -17,6 +17,7 @@ import { StateService } from '../backend/state/state.service'
 import { WorkspaceService } from '../backend/workspace/workspace.service'
 import { GitService } from '../backend/git/git.service'
 import { ChangedFilesService } from '../backend/git/changed-files.service'
+import { CodeReviewService } from '../backend/code-review/code-review.service'
 import { PullRequestService } from '../backend/pull-request/pull-request.service'
 import { PullRequestReviewService } from '../backend/pull-request/pull-request-review.service'
 import { ReviewNotesService } from '../backend/review-notes/review-notes.service'
@@ -195,6 +196,14 @@ async function startApp(): Promise<void> {
     providerRegistry,
     globalSessionsRoot,
   )
+  const codeReviewService = new CodeReviewService({
+    git: gitService,
+    changedFiles: changedFilesService,
+    projects: projectService,
+    workspaces: workspaceService,
+    sessions: sessionService,
+    pullRequests: pullRequestService,
+  })
   const pullRequestReviewService = new PullRequestReviewService({
     projects: projectService,
     workspaces: workspaceService,
@@ -459,6 +468,7 @@ async function startApp(): Promise<void> {
     workspaceService,
     gitService,
     changedFilesService,
+    codeReviewService,
     pullRequestService,
     pullRequestReviewService,
     reviewNotesService,
