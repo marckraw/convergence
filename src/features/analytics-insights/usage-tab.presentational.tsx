@@ -24,9 +24,7 @@ import {
   getHeatmapCount,
   getHeatmapLevel,
   hasUsageActivity,
-  WEEKDAY_FULL_NAMES,
   WEEKDAY_FULL_NAMES_MONDAY_FIRST,
-  WEEKDAY_LABELS,
   WEEKDAY_LABELS_MONDAY_FIRST,
 } from './analytics-insights.pure'
 
