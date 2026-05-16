@@ -191,6 +191,26 @@ describe('GlobalChatSessionList', () => {
     expect(onUnarchiveSpace).toHaveBeenCalledWith('space-2')
   })
 
+  it('lets archived Spaces collapse even when an archived Space is selected', () => {
+    renderList({
+      spaces: [
+        {
+          ...linkedSpace,
+          id: 'space-2',
+          title: 'Old plan',
+          archivedAt: 'now',
+        },
+      ],
+      selectedSpaceId: 'space-2',
+      archivedSpacesExpanded: false,
+    })
+
+    expect(screen.queryByText('Old plan')).toBeNull()
+    expect(
+      screen.getByRole('button', { name: /expand archived spaces/i }),
+    ).toBeInTheDocument()
+  })
+
   it('detaches a linked Space attempt from the attempt actions menu', async () => {
     const onDetachSpaceAttempt = vi.fn()
     const onArchiveSession = vi.fn()

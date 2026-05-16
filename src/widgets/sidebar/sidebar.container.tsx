@@ -225,6 +225,14 @@ export const Sidebar: FC<SidebarProps> = ({
     }
   }, [activeSurface, loadSpaceAttempts, spaces])
 
+  useEffect(() => {
+    if (activeSurface !== 'chat' || !selectedSpaceId) return
+    const selectedSpace = spaces.find((space) => space.id === selectedSpaceId)
+    if (selectedSpace?.archivedAt) {
+      setArchivedSpacesExpanded(true)
+    }
+  }, [activeSurface, selectedSpaceId, spaces])
+
   const attentionSessions = globalSessions
     .map((session) => {
       if (session.archivedAt) {

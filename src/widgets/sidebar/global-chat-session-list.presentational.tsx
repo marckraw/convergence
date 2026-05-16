@@ -93,10 +93,7 @@ export const GlobalChatSessionList: FC<GlobalChatSessionListProps> = ({
   const archivedSessions = sessions.filter((session) => session.archivedAt)
   const activeSpaces = spaces.filter((space) => !space.archivedAt)
   const archivedSpaces = spaces.filter((space) => space.archivedAt)
-  const activeArchivedSpace = archivedSpaces.some(
-    (space) => space.id === selectedSpaceId,
-  )
-  const showArchivedSpaces = archivedSpacesExpanded || activeArchivedSpace
+  const showArchivedSpaces = archivedSpacesExpanded
 
   const renderSessionRow = (session: SessionSummary) => (
     <div
