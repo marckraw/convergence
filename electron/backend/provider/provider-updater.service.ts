@@ -111,10 +111,16 @@ export async function updateProviderPackage(
     }
   }
 
-  const install = resolveNpmManagedProviderInstall(
-    realBinaryPath,
+  const providerPackageNames = [
     provider.packageName,
-  )
+    ...(provider.legacyPackageNames ?? []),
+  ]
+  const install =
+    providerPackageNames
+      .map((packageName) =>
+        resolveNpmManagedProviderInstall(realBinaryPath, packageName),
+      )
+      .find((item) => item !== null) ?? null
   if (!install) {
     const nonNpmInstall = buildNonNpmProviderInstallInfo(
       realBinaryPath,
@@ -154,7 +160,7 @@ export async function updateProviderPackage(
       error:
         nonNpmInstall.manager === 'homebrew'
           ? `${provider.name} was found in a Homebrew-managed location. Run ${provider.updateCommand} in a terminal for now.`
-          : `${provider.name} was found at ${binaryPath}, but it does not look like an npm global install for ${provider.packageName}.`,
+          : `${provider.name} was found at ${binaryPath}, but it does not look like an npm global install for ${providerPackageNames.join(' or ')}.`,
     }
   }
 
@@ -170,9 +176,25 @@ export async function updateProviderPackage(
   }
 
   const args = buildNpmProviderUpdateArgs(provider.packageName)
-  const command = [install.npmPath, ...args].join(' ')
+  const isLegacyInstall =
+    install.packageName !== provider.packageName &&
+    provider.legacyPackageNames?.includes(install.packageName) === true
+  const uninstallLegacyArgs = ['uninstall', '-g', install.packageName]
+  const command = isLegacyInstall
+    ? [
+        [install.npmPath, ...uninstallLegacyArgs].join(' '),
+        [install.npmPath, ...args].join(' '),
+      ].join(' && ')
+    : [install.npmPath, ...args].join(' ')
 
   try {
+    if (isLegacyInstall) {
+      await execNpmUpdate(
+        install.npmPath,
+        uninstallLegacyArgs,
+        getProviderBinaryDirectory(binaryPath),
+      )
+    }
     const output = await execNpmUpdate(
       install.npmPath,
       args,

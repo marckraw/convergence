@@ -2,7 +2,11 @@ import { execFile } from 'child_process'
 import { join } from 'path'
 import { realpathSync } from 'fs'
 import type { ProviderInstallInfo, ProviderStatusInfo } from './provider.types'
-import { buildProviderStatus, getKnownProviders } from './provider-status.pure'
+import {
+  buildProviderStatus,
+  getKnownProviders,
+  type KnownProvider,
+} from './provider-status.pure'
 import { fetchNpmLatestVersion } from './npm-registry'
 import { isPiAuthConfigured } from './pi/pi-auth-status'
 import {
@@ -50,15 +54,21 @@ function getNodeVersion(nodePath: string): Promise<string | null> {
 
 async function inspectNpmInstall(
   binaryPath: string,
-  packageName: string,
+  provider: KnownProvider,
   providerId: string,
 ): Promise<ProviderInstallInfo | null> {
   try {
     const realBinaryPath = realpathSync(binaryPath)
-    const install = resolveNpmManagedProviderInstall(
-      realBinaryPath,
-      packageName,
-    )
+    const packageNames = [
+      provider.packageName,
+      ...(provider.legacyPackageNames ?? []),
+    ]
+    const install =
+      packageNames
+        .map((packageName) =>
+          resolveNpmManagedProviderInstall(realBinaryPath, packageName),
+        )
+        .find((item) => item !== null) ?? null
     if (!install) {
       return buildNonNpmProviderInstallInfo(realBinaryPath, providerId)
     }
@@ -72,6 +82,7 @@ async function inspectNpmInstall(
 
     return buildNpmProviderInstallInfo({
       realBinaryPath,
+      packageName: install.packageName,
       packageDirectory: install.packageDirectory,
       prefixDirectory: install.prefixDirectory,
       npmPath: install.npmPath,
@@ -101,7 +112,7 @@ export async function inspectProviderStatuses(): Promise<ProviderStatusInfo[]> {
         fetchNpmLatestVersion(provider.packageName),
         binaryPath ? getVersion(binaryPath) : Promise.resolve(null),
         binaryPath
-          ? inspectNpmInstall(binaryPath, provider.packageName, provider.id)
+          ? inspectNpmInstall(binaryPath, provider, provider.id)
           : Promise.resolve(null),
       ])
       const status = buildProviderStatus(

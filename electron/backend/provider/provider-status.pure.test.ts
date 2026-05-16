@@ -145,6 +145,7 @@ describe('provider-status.pure', () => {
         manager: 'npm',
         realBinaryPath:
           '/Users/me/.fnm/installation/lib/node_modules/@openai/codex/bin/codex.js',
+        packageName: '@openai/codex',
         packageDirectory:
           '/Users/me/.fnm/installation/lib/node_modules/@openai/codex',
         prefixDirectory: '/Users/me/.fnm/installation',
@@ -176,6 +177,7 @@ describe('provider-status.pure', () => {
       {
         manager: 'homebrew',
         realBinaryPath: '/opt/homebrew/Cellar/claude-code/2.1.138/bin/claude',
+        packageName: null,
         packageDirectory: null,
         prefixDirectory: '/opt/homebrew',
         npmPath: null,
@@ -191,6 +193,51 @@ describe('provider-status.pure', () => {
       automaticUpdateCommand: null,
       updateCapability: 'manual',
       updateStrategy: null,
+    })
+  })
+
+  it('uses the new Pi package for registry checks and install commands', () => {
+    const provider = getKnownProviders().find((item) => item.id === 'pi')!
+
+    expect(provider).toMatchObject({
+      packageName: '@earendil-works/pi-coding-agent',
+      legacyPackageNames: ['@mariozechner/pi-coding-agent'],
+      installCommand: 'npm install -g @earendil-works/pi-coding-agent@latest',
+      updateCommand: 'npm install -g @earendil-works/pi-coding-agent@latest',
+    })
+  })
+
+  it('builds a migration command for npm-managed legacy Pi installs', () => {
+    const provider = getKnownProviders().find((item) => item.id === 'pi')!
+    const status = buildProviderStatus(
+      provider,
+      '/Users/me/.fnm/bin/pi',
+      '0.73.1',
+      '0.74.0',
+      null,
+      {
+        manager: 'npm',
+        realBinaryPath:
+          '/Users/me/.fnm/installation/lib/node_modules/@mariozechner/pi-coding-agent/dist/cli.js',
+        packageName: '@mariozechner/pi-coding-agent',
+        packageDirectory:
+          '/Users/me/.fnm/installation/lib/node_modules/@mariozechner/pi-coding-agent',
+        prefixDirectory: '/Users/me/.fnm/installation',
+        npmPath: '/Users/me/.fnm/installation/bin/npm',
+        nodePath: '/Users/me/.fnm/installation/bin/node',
+        nodeVersion: 'v24.15.0',
+        brewPrefix: null,
+        formulaName: null,
+      },
+    )
+
+    expect(status.update).toMatchObject({
+      status: 'outdated',
+      packageName: '@earendil-works/pi-coding-agent',
+      automaticUpdateCommand:
+        '/Users/me/.fnm/installation/bin/npm uninstall -g @mariozechner/pi-coding-agent && /Users/me/.fnm/installation/bin/npm install -g @earendil-works/pi-coding-agent@latest',
+      updateCapability: 'automatic',
+      updateStrategy: 'npm-global',
     })
   })
 })

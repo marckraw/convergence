@@ -127,6 +127,7 @@ export type ProviderInstallManager = 'npm' | 'homebrew' | 'self' | 'unknown'
 export interface ProviderInstallInfo {
   manager: ProviderInstallManager
   realBinaryPath: string
+  packageName: string | null
   packageDirectory: string | null
   prefixDirectory: string | null
   npmPath: string | null
