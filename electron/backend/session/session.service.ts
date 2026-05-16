@@ -85,12 +85,27 @@ interface LivenessState {
 }
 
 const LIVENESS_TICK_MS = 5_000
+const CONVERSATION_PATCH_FLUSH_MS = 50
+
+interface PendingConversationPatch {
+  sessionId: string
+  itemId: string
+  patch: Partial<ConversationItem>
+}
 
 export class SessionService {
   private activeHandles = new Map<string, SessionHandle>()
   private activeTurnIds = new Map<string, string>()
   private livenessState = new Map<string, LivenessState>()
   private livenessTimer: ReturnType<typeof setInterval> | null = null
+  private pendingConversationPatches = new Map<
+    string,
+    PendingConversationPatch
+  >()
+  private pendingConversationPatchTimers = new Map<
+    string,
+    ReturnType<typeof setTimeout>
+  >()
   private onSummaryUpdate: ((summary: SessionSummary) => void) | null = null
   private onConversationPatch:
     | ((event: ConversationPatchEvent) => void)
@@ -372,6 +387,8 @@ export class SessionService {
   }
 
   getConversation(id: string): ConversationItem[] {
+    this.flushPendingConversationPatchesForSession(id)
+
     const rows = this.db
       .prepare(
         `SELECT items.*, sessions.provider_id
@@ -410,6 +427,7 @@ export class SessionService {
   }
 
   delete(id: string): void {
+    this.clearPendingConversationPatchesForSession(id)
     const handle = this.activeHandles.get(id)
     if (handle) {
       handle.stop()
@@ -752,6 +770,12 @@ export class SessionService {
     this.bumpLiveness(sessionId)
     switch (delta.kind) {
       case 'session.patch':
+        if (
+          delta.patch.status === 'completed' ||
+          delta.patch.status === 'failed'
+        ) {
+          this.flushPendingConversationPatchesForSession(sessionId)
+        }
         this.applySessionPatch(sessionId, delta.patch)
         this.handleLifecycle(sessionId, delta.patch.status)
         this.notifySessionChange(sessionId)
@@ -770,17 +794,147 @@ export class SessionService {
       }
 
       case 'conversation.item.patch': {
-        const item = this.patchConversationItem(
+        if (this.shouldCoalesceConversationPatch(delta.patch)) {
+          this.enqueueConversationPatch(sessionId, delta.itemId, delta.patch)
+          return
+        }
+
+        const pending = this.takePendingConversationPatch(
           sessionId,
           delta.itemId,
-          delta.patch,
         )
+        const patch = pending
+          ? this.mergeConversationPatch(pending.patch, delta.patch)
+          : delta.patch
+        const item = this.patchConversationItem(sessionId, delta.itemId, patch)
         if (!item) return
         this.notifySessionChange(sessionId, {
           sessionId,
           op: 'patch',
           item,
         })
+      }
+    }
+  }
+
+  private shouldCoalesceConversationPatch(
+    patch: Partial<ConversationItem>,
+  ): boolean {
+    return patch.state === 'streaming'
+  }
+
+  private pendingConversationPatchKey(
+    sessionId: string,
+    itemId: string,
+  ): string {
+    return `${sessionId}:${itemId}`
+  }
+
+  private enqueueConversationPatch(
+    sessionId: string,
+    itemId: string,
+    patch: Partial<ConversationItem>,
+  ): void {
+    const key = this.pendingConversationPatchKey(sessionId, itemId)
+    const existing = this.pendingConversationPatches.get(key)
+    this.pendingConversationPatches.set(key, {
+      sessionId,
+      itemId,
+      patch: existing
+        ? this.mergeConversationPatch(existing.patch, patch)
+        : patch,
+    })
+
+    if (this.pendingConversationPatchTimers.has(key)) return
+
+    const timer = setTimeout(() => {
+      this.pendingConversationPatchTimers.delete(key)
+      this.flushPendingConversationPatchByKey(key)
+    }, CONVERSATION_PATCH_FLUSH_MS)
+    if (typeof timer.unref === 'function') {
+      timer.unref()
+    }
+    this.pendingConversationPatchTimers.set(key, timer)
+  }
+
+  private mergeConversationPatch(
+    current: Partial<ConversationItem>,
+    next: Partial<ConversationItem>,
+  ): Partial<ConversationItem> {
+    return {
+      ...current,
+      ...next,
+      providerMeta:
+        current.providerMeta || next.providerMeta
+          ? {
+              ...current.providerMeta,
+              ...next.providerMeta,
+            }
+          : undefined,
+    } as Partial<ConversationItem>
+  }
+
+  private takePendingConversationPatch(
+    sessionId: string,
+    itemId: string,
+  ): PendingConversationPatch | null {
+    const key = this.pendingConversationPatchKey(sessionId, itemId)
+    const pending = this.pendingConversationPatches.get(key) ?? null
+    if (!pending) return null
+
+    this.pendingConversationPatches.delete(key)
+    const timer = this.pendingConversationPatchTimers.get(key)
+    if (timer) {
+      clearTimeout(timer)
+      this.pendingConversationPatchTimers.delete(key)
+    }
+    return pending
+  }
+
+  private flushPendingConversationPatchByKey(key: string): void {
+    const pending = this.pendingConversationPatches.get(key)
+    if (!pending) return
+
+    this.pendingConversationPatches.delete(key)
+    const timer = this.pendingConversationPatchTimers.get(key)
+    if (timer) {
+      clearTimeout(timer)
+      this.pendingConversationPatchTimers.delete(key)
+    }
+
+    const item = this.patchConversationItem(
+      pending.sessionId,
+      pending.itemId,
+      pending.patch,
+    )
+    if (!item) return
+    this.notifyConversationPatch({
+      sessionId: pending.sessionId,
+      op: 'patch',
+      item,
+    })
+  }
+
+  private flushPendingConversationPatchesForSession(sessionId: string): void {
+    for (const [key, pending] of Array.from(
+      this.pendingConversationPatches.entries(),
+    )) {
+      if (pending.sessionId === sessionId) {
+        this.flushPendingConversationPatchByKey(key)
+      }
+    }
+  }
+
+  private clearPendingConversationPatchesForSession(sessionId: string): void {
+    for (const [key, pending] of Array.from(
+      this.pendingConversationPatches.entries(),
+    )) {
+      if (pending.sessionId !== sessionId) continue
+      this.pendingConversationPatches.delete(key)
+      const timer = this.pendingConversationPatchTimers.get(key)
+      if (timer) {
+        clearTimeout(timer)
+        this.pendingConversationPatchTimers.delete(key)
       }
     }
   }
@@ -1058,6 +1212,10 @@ export class SessionService {
     if (conversationPatch && this.onConversationPatch) {
       this.onConversationPatch(conversationPatch)
     }
+  }
+
+  private notifyConversationPatch(event: ConversationPatchEvent): void {
+    this.onConversationPatch?.(event)
   }
 
   private getRowById(id: string): SessionRow | undefined {
