@@ -1,5 +1,13 @@
 # convergence
 
+## 0.37.8
+
+### Patch Changes
+
+- 875c4e7: Allow the archived sidebar sections to be collapsed after they auto-open for an archived workspace, session, or Space.
+- e3c36a0: Switch Command Center to the matching chat or code surface when opening projects, workspaces, and sessions.
+- cc5e0fb: Update Pi Agent provider version checks and automatic updates to use the new `@earendil-works/pi-coding-agent` npm package, while migrating legacy global installs from the deprecated `@mariozechner/pi-coding-agent` package.
+
 ## 0.37.7
 
 ### Patch Changes
