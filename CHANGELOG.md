@@ -1,5 +1,12 @@
 # convergence
 
+## 0.37.9
+
+### Patch Changes
+
+- 60c403e: Throttle streaming transcript persistence to reduce SQLite and IPC churn while multiple agent sessions are active.
+- 7ea81c2: Add weekday headers to heatmap and streak calendar for better day identification
+
 ## 0.37.8
 
 ### Patch Changes
