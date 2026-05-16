@@ -27,7 +27,9 @@
     "format": "prettier --check .",
     "format:fix": "prettier --write .",
     "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.node.json",
-    "rebuild:electron": "electron-rebuild -o better-sqlite3,node-pty"
+    "rebuild:electron": "electron-rebuild -o better-sqlite3,node-pty",
+    "agent:pre-commit": "npm run format:fix && npm run lint:fix && npm run typecheck",
+    "agent:pre-push": "chaperone check --fix && (git diff --quiet --exit-code || (echo \"chaperone produced changes; commit them before pushing.\" && exit 1))"
   },
   "keywords": [],
   "author": "",
@@ -85,6 +87,7 @@
     "electron-vite": "^5.0.0",
     "eslint": "^10.2.0",
     "jsdom": "^29.0.2",
+    "lefthook": "^2.1.6",
     "prettier": "^3.8.2",
     "tailwindcss": "^4.2.2",
     "typescript": "^6.0.2",
