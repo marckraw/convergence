@@ -1,6 +1,36 @@
 {
-  "currentVersion": "0.37.2",
+  "currentVersion": "0.37.8",
   "releases": [
+    {
+      "version": "0.37.8",
+      "date": null,
+      "notes": "### Patch Changes\n\n- 875c4e7: Allow the archived sidebar sections to be collapsed after they auto-open for an archived workspace, session, or Space.\n- e3c36a0: Switch Command Center to the matching chat or code surface when opening projects, workspaces, and sessions.\n- cc5e0fb: Update Pi Agent provider version checks and automatic updates to use the new `@earendil-works/pi-coding-agent` npm package, while migrating legacy global installs from the deprecated `@mariozechner/pi-coding-agent` package."
+    },
+    {
+      "version": "0.37.7",
+      "date": null,
+      "notes": "### Patch Changes\n\n- 3ed49cd: Add in-app provider update actions and provider update notifications."
+    },
+    {
+      "version": "0.37.6",
+      "date": null,
+      "notes": "### Patch Changes\n\n- c6e3283: fix: keep approval buttons visible while a tool/approval is pending\n\n  Approval buttons used to disappear when Codex streamed an assistant\n  delta (or other non-note item) after raising the approval, leaving the\n  session stuck waiting. Approval actionability is now derived from\n  `session.attention` plus the local resolved-id set, not from the\n  ordering of conversation items."
+    },
+    {
+      "version": "0.37.5",
+      "date": null,
+      "notes": "### Patch Changes\n\n- 6282022: Condense the sidebar footer into a tools menu and add a collapsed rail with an explicit peek handle."
+    },
+    {
+      "version": "0.37.4",
+      "date": null,
+      "notes": "### Patch Changes\n\n- 0104332: Keep long approval and input prompts wrapped inside the transcript frame."
+    },
+    {
+      "version": "0.37.3",
+      "date": null,
+      "notes": "### Patch Changes\n\n- d3c0b1f: Add a managed prompt library for project and global prompt files. Users can create, edit, delete, search, preview, and copy saved prompts before pasting them into the composer manually."
+    },
     {
       "version": "0.37.2",
       "date": null,
