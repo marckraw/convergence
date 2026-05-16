@@ -26,7 +26,15 @@ const COMPACT_FORMATTER = new Intl.NumberFormat(undefined, {
 })
 
 export const WEEKDAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
-export const WEEKDAY_LABELS_MONDAY_FIRST = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
+export const WEEKDAY_LABELS_MONDAY_FIRST = [
+  'Mon',
+  'Tue',
+  'Wed',
+  'Thu',
+  'Fri',
+  'Sat',
+  'Sun',
+]
 export const WEEKDAY_FULL_NAMES = [
   'Sunday',
   'Monday',
