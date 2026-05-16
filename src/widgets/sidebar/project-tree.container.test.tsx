@@ -119,7 +119,11 @@ describe('ProjectTree', () => {
       </TooltipProvider>,
     )
 
-    fireEvent.click(screen.getByRole('button', { name: /archived/i }))
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: /expand archived workspaces and sessions/i,
+      }),
+    )
     fireEvent.pointerDown(
       screen.getByRole('button', { name: /session actions archived note/i }),
     )
@@ -128,6 +132,46 @@ describe('ProjectTree', () => {
     )
 
     expect(onUnarchiveSession).toHaveBeenCalledWith('session-archived')
+  })
+
+  it('auto-opens archived for the active archived session but still allows manual collapse', async () => {
+    render(
+      <TooltipProvider>
+        <ProjectTree
+          baseBranchName="master"
+          workspaces={[]}
+          sessions={[
+            {
+              ...baseSession,
+              id: 'session-archived',
+              providerId: 'claude-code',
+              name: 'archived note',
+              archivedAt: '2026-01-02T00:00:00.000Z',
+              updatedAt: '2026-01-02T00:00:00.000Z',
+            },
+          ]}
+          activeSessionId="session-archived"
+          onSelectSession={vi.fn()}
+          onArchiveSession={vi.fn()}
+          onUnarchiveSession={vi.fn()}
+          onDeleteSession={vi.fn()}
+          onRenameSession={vi.fn()}
+          onRegenerateSessionName={vi.fn()}
+          onDeleteWorkspace={vi.fn()}
+          onOpenCreateWorkspace={vi.fn()}
+        />
+      </TooltipProvider>,
+    )
+
+    expect(await screen.findByText('archived note')).toBeInTheDocument()
+
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: /collapse archived workspaces and sessions/i,
+      }),
+    )
+
+    expect(screen.queryByText('archived note')).toBeNull()
   })
 
   it('shows regenerate name for conversation sessions', async () => {
