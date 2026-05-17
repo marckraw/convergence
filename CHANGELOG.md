@@ -1,5 +1,11 @@
 # convergence
 
+## 0.37.10
+
+### Patch Changes
+
+- c9f6973: Add a first-class Code Review workspace for reviewing changed files, local review notes, agent handoff, and cached diff loading.
+
 ## 0.37.9
 
 ### Patch Changes
