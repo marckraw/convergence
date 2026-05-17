@@ -9,6 +9,7 @@ import type {
   ForkSessionPaletteItem,
   SwapPrimarySurfacePaletteItem,
   CheckUpdatesPaletteItem,
+  OpenCodeReviewPaletteItem,
   CuratedSection,
   CuratedSections,
   RankedItem,
@@ -90,6 +91,10 @@ export function buildCuratedSections(
   const checkUpdatesItems = items.filter(
     (item): item is CheckUpdatesPaletteItem => item.kind === 'check-updates',
   )
+  const openCodeReviewItems = items.filter(
+    (item): item is OpenCodeReviewPaletteItem =>
+      item.kind === 'open-code-review',
+  )
   const forkSessionItems = items.filter(
     (item): item is ForkSessionPaletteItem => item.kind === 'fork-session',
   )
@@ -156,7 +161,7 @@ export function buildCuratedSections(
     {
       id: 'dialogs',
       title: 'Dialogs',
-      items: [...dialogItems, ...checkUpdatesItems],
+      items: [...dialogItems, ...checkUpdatesItems, ...openCodeReviewItems],
     },
   ]
 

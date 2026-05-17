@@ -1,6 +1,13 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import type { FC, MouseEvent as ReactMouseEvent } from 'react'
 import type { SelectedLineRange } from '@pierre/diffs'
+import {
+  countCodeReviewFilesByStatus,
+  useCodeReviewStore,
+  type CodeReviewTarget,
+} from '@/entities/code-review'
+import { useAppSurfaceStore } from '@/entities/app-surface'
+import { useProjectStore } from '@/entities/project'
 import { useReviewNoteStore, type ReviewNote } from '@/entities/review-note'
 import type { SessionSummary } from '@/entities/session'
 import type { ResolvedBaseBranch } from '@/entities/workspace'
@@ -12,6 +19,7 @@ import {
   ArrowRightToLine,
   CheckCircle2,
   Eye,
+  Maximize2,
   MessageSquarePlus,
   PanelRight,
   Pencil,
@@ -123,6 +131,9 @@ export const ChangedFilesPanel: FC<ChangedFilesPanelProps> = ({
   const [reviewNoteFilter, setReviewNoteFilter] =
     useState<ReviewNoteFilter>('all')
   const diffRequestIdRef = useRef(0)
+  const activeProject = useProjectStore((state) => state.activeProject)
+  const setActiveSurface = useAppSurfaceStore((state) => state.setActiveSurface)
+  const openCodeReview = useCodeReviewStore((state) => state.openReview)
   const currentReviewNoteMode: ReviewNote['mode'] =
     mode === 'base-branch' ? 'base-branch' : 'working-tree'
   const reviewNotes =
@@ -514,6 +525,37 @@ export const ChangedFilesPanel: FC<ChangedFilesPanelProps> = ({
     setPacketPreviewOpen(false)
   }
 
+  const handleOpenFullReview = () => {
+    if (!activeProject || mode === 'turns') return
+
+    const target: CodeReviewTarget = {
+      id: `session:${session.id}`,
+      projectId: activeProject.id,
+      projectName: activeProject.name,
+      repositoryPath: session.workingDirectory,
+      workspaceId: session.workspaceId,
+      sessionId: session.id,
+      sessionName: session.name,
+      branchName: null,
+      pullRequestId: null,
+      pullRequestLabel: null,
+      source: 'session',
+      updatedAt: session.updatedAt,
+      status: {
+        workingTreeFileCount: files.length,
+        workingTreeStatusCounts: countCodeReviewFilesByStatus(files),
+        error,
+      },
+    }
+
+    setActiveSurface('code')
+    openCodeReview({
+      target,
+      mode,
+      selectedFile,
+    })
+  }
+
   const stopPanelControlEvent = (event: ReactMouseEvent) => {
     event.stopPropagation()
   }
@@ -566,6 +608,19 @@ export const ChangedFilesPanel: FC<ChangedFilesPanelProps> = ({
           >
             <PanelRight className={cn('h-3 w-3', expanded && 'scale-x-125')} />
           </Button>
+          {mode !== 'turns' && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="h-6 w-6"
+              onClick={handleOpenFullReview}
+              onMouseDown={stopPanelControlEvent}
+              title="Open full review"
+            >
+              <Maximize2 className="h-3 w-3" />
+            </Button>
+          )}
           {mode !== 'turns' && (
             <Button
               type="button"

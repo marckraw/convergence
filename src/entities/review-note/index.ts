@@ -10,4 +10,7 @@ export type {
   UpdateReviewNoteInput,
 } from './review-note.types'
 export { reviewNoteApi } from './review-note.api'
-export { useReviewNoteStore } from './review-note.model'
+export {
+  selectReviewNotesForSession,
+  useReviewNoteStore,
+} from './review-note.model'

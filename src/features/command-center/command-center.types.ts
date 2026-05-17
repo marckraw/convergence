@@ -116,6 +116,14 @@ export type CheckUpdatesPaletteItem = {
   search: PaletteSearchFields
 }
 
+export type OpenCodeReviewPaletteItem = {
+  kind: 'open-code-review'
+  id: string
+  title: string
+  description: string
+  search: PaletteSearchFields
+}
+
 export type PaletteItem =
   | ProjectPaletteItem
   | WorkspacePaletteItem
@@ -127,6 +135,7 @@ export type PaletteItem =
   | ForkSessionPaletteItem
   | SwapPrimarySurfacePaletteItem
   | CheckUpdatesPaletteItem
+  | OpenCodeReviewPaletteItem
 
 export type CuratedSectionId =
   | 'waiting-on-you'

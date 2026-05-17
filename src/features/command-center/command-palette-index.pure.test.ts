@@ -14,6 +14,7 @@ import type {
   WorkspacePaletteItem,
   ProjectPaletteItem,
   ForkSessionPaletteItem,
+  OpenCodeReviewPaletteItem,
 } from './command-center.types'
 
 function makeProject(
@@ -253,6 +254,26 @@ describe('buildPaletteIndex', () => {
       id: 'check-updates',
       title: 'Check for updates…',
       search: { title: 'Check for updates' },
+    })
+  })
+
+  it('emits an Open Code Review command with review search aliases', () => {
+    const items = buildPaletteIndex({
+      projects: [],
+      workspaces: [],
+      sessions: [],
+      recentSessionIds: [],
+      dismissals: {},
+    })
+    const openReview = items.find(
+      (item): item is OpenCodeReviewPaletteItem =>
+        item.kind === 'open-code-review',
+    )
+
+    expect(openReview).toMatchObject({
+      id: 'open-code-review',
+      title: 'Open Code Review',
+      search: { aliases: expect.stringContaining('changed files') },
     })
   })
 

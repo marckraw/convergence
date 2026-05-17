@@ -17,3 +17,11 @@ export { ThemeToggleButton } from './theme-toggle'
 export { ComposerContainer } from './composer'
 export { AppSettingsDialogContainer } from './app-settings'
 export { TerminalPaneContainer } from './terminal-pane'
+export type {
+  CodeReviewDiffLine,
+  ReviewNoteDiffAnnotation,
+  ReviewNoteDiffAnnotationMapping,
+  ReviewNoteDiffAnnotationMetadata,
+  ReviewNoteFilter,
+  ReviewNoteGroup,
+} from './code-review-notes'

@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useState } from 'react'
 import type { FC, ReactNode } from 'react'
+import { useCodeReviewStore } from '@/entities/code-review'
 import { useSessionStore } from '@/entities/session'
 import { useTerminalStore } from '@/entities/terminal'
+import { CodeReviewSurface } from '@/widgets/code-review-surface'
 import { SessionView } from '@/widgets/session-view'
 import { TerminalDock } from '@/widgets/terminal-dock'
 import { ConversationDockPlaceholder } from './conversation-dock-placeholder.presentational'
@@ -26,6 +28,7 @@ export const WorkspaceLayoutContainer: FC = () => {
       ? (s.dockPlacementBySessionId[activeSessionId] ?? 'bottom')
       : 'bottom',
   )
+  const reviewOpen = useCodeReviewStore((s) => s.isReviewOpen)
 
   // The conversation dock is an opt-in companion to terminal-primary
   // sessions. Default hidden per spec; Cmd+J reveals/collapses it.
@@ -58,7 +61,10 @@ export const WorkspaceLayoutContainer: FC = () => {
   let mainSlot: ReactNode
   let dockSlot: ReactNode | null
 
-  if (primarySurface === 'terminal') {
+  if (reviewOpen) {
+    mainSlot = <CodeReviewSurface />
+    dockSlot = null
+  } else if (primarySurface === 'terminal') {
     mainSlot = <TerminalDock mode="main" />
     dockSlot = <ConversationDockPlaceholder />
   } else {

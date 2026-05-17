@@ -2,6 +2,7 @@ import { useProjectStore } from '@/entities/project'
 import { useWorkspaceStore } from '@/entities/workspace'
 import { useSessionStore } from '@/entities/session'
 import { useAppSurfaceStore } from '@/entities/app-surface'
+import { useCodeReviewStore } from '@/entities/code-review'
 import {
   useDialogStore,
   type DialogKind,
@@ -115,4 +116,9 @@ export async function beginWorkspaceDraft(projectId: string): Promise<void> {
 
 export async function checkForUpdates(): Promise<void> {
   await useUpdatesStore.getState().check()
+}
+
+export function openCodeReview(): void {
+  useAppSurfaceStore.getState().setActiveSurface('code')
+  useCodeReviewStore.getState().openReview()
 }

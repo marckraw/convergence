@@ -236,6 +236,7 @@ export function App() {
         onSelectGlobalSession={setActiveGlobalSession}
         loading={loading}
         hasProject={!!activeProject}
+        showDevelopmentRibbon={import.meta.env.DEV}
       />
       <CommandCenterContainer />
       <SpaceSessionLinkDialogContainer />
