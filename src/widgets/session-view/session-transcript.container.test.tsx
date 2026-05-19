@@ -175,6 +175,35 @@ function inputRequest(overrides: {
   }
 }
 
+function planRequest(overrides: {
+  id: string
+  sequence: number
+  providerItemId?: string | null
+}): ConversationItem {
+  return {
+    id: overrides.id,
+    sessionId: 'session-1',
+    sequence: overrides.sequence,
+    turnId: `turn-${overrides.sequence}`,
+    kind: 'input-request',
+    prompt: '# Plan\n\n- Add ExitPlanMode support',
+    request: {
+      kind: 'plan',
+      plan: '# Plan\n\n- Add ExitPlanMode support',
+      planPath: '/tmp/claude-plan.md',
+      allowedPrompts: ['Edit files'],
+    },
+    state: 'complete',
+    createdAt: '2026-01-01T00:00:00.000Z',
+    updatedAt: '2026-01-01T00:00:00.000Z',
+    providerMeta: {
+      providerId: 'claude-code',
+      providerItemId: overrides.providerItemId ?? null,
+      providerEventType: 'deferred_tool_use',
+    },
+  }
+}
+
 describe('SessionTranscript', () => {
   it('renders conversation rows through the virtual transcript surface', async () => {
     useAttachmentStore.setState({ resolved: {} })
@@ -355,6 +384,44 @@ describe('SessionTranscript', () => {
         ],
       },
       'Where should scripts run?\nActive workspace',
+    )
+  })
+
+  it('answers active plan requests from the transcript', async () => {
+    const onInputAnswer = vi.fn()
+
+    render(
+      <SessionTranscript
+        session={{
+          ...baseSession,
+          attention: 'needs-input',
+        }}
+        conversationItems={[
+          planRequest({
+            id: 'plan-1',
+            sequence: 1,
+            providerItemId: 'toolu_plan',
+          }),
+        ]}
+        onApprove={vi.fn()}
+        onDeny={vi.fn()}
+        onInputAnswer={onInputAnswer}
+      />,
+    )
+
+    expect(await screen.findByText('Plan review needed')).toBeInTheDocument()
+    expect(screen.getByText('/tmp/claude-plan.md')).toBeInTheDocument()
+    expect(screen.getByText('Add ExitPlanMode support')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Approve plan' }))
+
+    expect(onInputAnswer).toHaveBeenCalledWith(
+      'session-1',
+      {
+        kind: 'plan',
+        decision: 'approve',
+      },
+      'Approved plan',
     )
   })
 })

@@ -62,13 +62,16 @@ import {
   type ClaudeSkillTelemetrySink,
 } from './claude-skill-telemetry.service'
 import {
+  buildClaudeAskUserQuestionHookResponse,
   buildClaudeAskUserQuestionHookSettings,
   buildClaudeAskUserQuestionRequest,
-  buildClaudeAskUserQuestionUpdatedInput,
+  buildClaudeExitPlanModeHookResponse,
+  buildClaudeExitPlanModeRequest,
   CLAUDE_DEFERRED_TOOL_USE_MIN_VERSION,
   normalizeClaudeDeferredToolUse,
   supportsClaudeDeferredToolUseVersion,
-  type PendingClaudeAskUserQuestion,
+  type ClaudeDeferredToolHookResponse,
+  type PendingClaudeDeferredToolUse,
 } from './claude-ask-user-question.pure'
 
 function now(): string {
@@ -285,7 +288,7 @@ export class ClaudeCodeProvider implements Provider {
       null
     let sawTurnOutput = false
     let stderrBuffer = ''
-    let pendingAskUserQuestion: PendingClaudeAskUserQuestion | null = null
+    let pendingDeferredToolUse: PendingClaudeDeferredToolUse | null = null
     let warnedUnsupportedDeferredToolUse = false
 
     function emitDelta(delta: SessionDelta): void {
@@ -680,11 +683,21 @@ export class ClaudeCodeProvider implements Provider {
               event.deferred_tool_use,
             )
             const inputRequest = deferredToolUse
-              ? buildClaudeAskUserQuestionRequest(deferredToolUse)
+              ? (buildClaudeAskUserQuestionRequest(deferredToolUse) ??
+                buildClaudeExitPlanModeRequest(deferredToolUse))
               : null
 
             if (inputRequest) {
-              pendingAskUserQuestion = inputRequest.pending
+              pendingDeferredToolUse =
+                inputRequest.kind === 'exit-plan-mode'
+                  ? {
+                      kind: 'exit-plan-mode',
+                      pending: inputRequest.pending,
+                    }
+                  : {
+                      kind: 'ask-user-question',
+                      pending: inputRequest.pending,
+                    }
               sessionEmitter.addInputRequest({
                 prompt: inputRequest.prompt,
                 request: inputRequest.request,
@@ -826,7 +839,7 @@ export class ClaudeCodeProvider implements Provider {
         emitUserEntry?: boolean
         allowContinuationRecovery?: boolean
         skipPromptInput?: boolean
-        askUserQuestionUpdatedInput?: Record<string, unknown>
+        deferredToolResponse?: ClaudeDeferredToolHookResponse
       },
     ): Promise<void> {
       if (stopped || child) return
@@ -891,7 +904,7 @@ export class ClaudeCodeProvider implements Provider {
       if (!supportsDeferredToolUse && !warnedUnsupportedDeferredToolUse) {
         warnedUnsupportedDeferredToolUse = true
         sessionEmitter.addNote({
-          text: `Claude Code ${claudeCodeVersion} does not support deferred tool-use. AskUserQuestion cards require Claude Code ${CLAUDE_DEFERRED_TOOL_USE_MIN_VERSION} or newer.`,
+          text: `Claude Code ${claudeCodeVersion} does not support deferred tool-use. AskUserQuestion and ExitPlanMode cards require Claude Code ${CLAUDE_DEFERRED_TOOL_USE_MIN_VERSION} or newer.`,
           level: 'warning',
         })
       }
@@ -925,10 +938,11 @@ export class ClaudeCodeProvider implements Provider {
         env: {
           ...process.env,
           ...(telemetrySink?.env ?? {}),
-          ...(options?.askUserQuestionUpdatedInput
+          ...(options?.deferredToolResponse
             ? {
-                CONVERGENCE_CLAUDE_ASK_USER_QUESTION_UPDATED_INPUT:
-                  JSON.stringify(options.askUserQuestionUpdatedInput),
+                CONVERGENCE_CLAUDE_DEFERRED_TOOL_RESPONSE: JSON.stringify(
+                  options.deferredToolResponse,
+                ),
               }
             : {}),
         },
@@ -1118,25 +1132,32 @@ export class ClaudeCodeProvider implements Provider {
       },
       sendMessage: (text, attachments, skillSelections, options) => {
         if (
-          pendingAskUserQuestion &&
+          pendingDeferredToolUse &&
           options?.deliveryMode === 'answer' &&
           claudeSessionId
         ) {
-          const pending = pendingAskUserQuestion
-          pendingAskUserQuestion = null
+          const pending = pendingDeferredToolUse
+          pendingDeferredToolUse = null
           const interactionResponse = options.interactionResponse as
             | InteractionResponse
             | undefined
-          const updatedInput = buildClaudeAskUserQuestionUpdatedInput(
-            pending,
-            interactionResponse,
-            text,
-          )
+          const deferredToolResponse =
+            pending.kind === 'ask-user-question'
+              ? buildClaudeAskUserQuestionHookResponse(
+                  pending.pending,
+                  interactionResponse,
+                  text,
+                )
+              : buildClaudeExitPlanModeHookResponse(
+                  pending.pending,
+                  interactionResponse,
+                  text,
+                )
           void startTurn('', undefined, {
             emitUserEntry: false,
             allowContinuationRecovery: false,
             skipPromptInput: true,
-            askUserQuestionUpdatedInput: updatedInput,
+            deferredToolResponse,
           })
           return
         }

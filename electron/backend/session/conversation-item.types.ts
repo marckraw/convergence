@@ -37,6 +37,12 @@ export type InteractionRequest =
       kind: 'choice'
       questions: InteractionQuestion[]
     }
+  | {
+      kind: 'plan'
+      plan: string
+      planPath?: string
+      allowedPrompts?: string[]
+    }
 
 export interface InteractionChoiceResponse {
   kind: 'choice'
@@ -46,7 +52,15 @@ export interface InteractionChoiceResponse {
   }>
 }
 
-export type InteractionResponse = InteractionChoiceResponse
+export interface InteractionPlanResponse {
+  kind: 'plan'
+  decision: 'approve' | 'reject'
+  message?: string
+}
+
+export type InteractionResponse =
+  | InteractionChoiceResponse
+  | InteractionPlanResponse
 
 export interface ConversationItemBase {
   id: string

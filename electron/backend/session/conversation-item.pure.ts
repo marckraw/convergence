@@ -239,6 +239,24 @@ function parseInteractionRequest(
     }
   }
 
+  if (value.kind === 'plan' && typeof value.plan === 'string') {
+    const allowedPrompts = Array.isArray(value.allowedPrompts)
+      ? value.allowedPrompts.filter(
+          (prompt): prompt is string => typeof prompt === 'string',
+        )
+      : undefined
+
+    return {
+      kind: 'plan',
+      plan: value.plan,
+      planPath: typeof value.planPath === 'string' ? value.planPath : undefined,
+      allowedPrompts:
+        allowedPrompts && allowedPrompts.length > 0
+          ? allowedPrompts
+          : undefined,
+    }
+  }
+
   return undefined
 }
 

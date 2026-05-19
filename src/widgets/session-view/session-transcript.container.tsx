@@ -104,7 +104,8 @@ export const SessionTranscript: FC<SessionTranscriptProps> = ({
     for (const entry of conversationRenderPlan) {
       if (
         entry.item.kind === 'input-request' &&
-        entry.item.request?.kind === 'choice' &&
+        (entry.item.request?.kind === 'choice' ||
+          entry.item.request?.kind === 'plan') &&
         !resolvedInputIds.has(entry.item.id)
       ) {
         ids.add(entry.item.id)

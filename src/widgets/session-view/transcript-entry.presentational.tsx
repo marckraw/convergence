@@ -24,6 +24,7 @@ import { ConversationItemShell } from './conversation-item-shell.presentational'
 import { ConversationItemHeader } from './conversation-item-header.presentational'
 import { ConversationItemTimestamp } from './conversation-item-timestamp.presentational'
 import { ChoiceRequestForm } from './choice-request-form.presentational'
+import { PlanRequestForm } from './plan-request-form.presentational'
 import type { TranscriptEntryViewModel } from './transcript-entry.pure'
 
 interface ConversationItemViewProps {
@@ -271,30 +272,79 @@ export const ConversationItemView: FC<ConversationItemViewProps> = ({
     case 'input-request':
       return (
         <ConversationItemShell copyText={viewModel.copyText}>
-          <div className="my-2 max-w-full overflow-hidden rounded-lg border border-blue-500/30 bg-blue-500/5 p-4">
+          <div
+            className={[
+              'my-2 max-w-full overflow-hidden rounded-lg border p-4',
+              entry.request?.kind === 'plan'
+                ? 'border-warning/30 bg-warning/5'
+                : 'border-blue-500/30 bg-blue-500/5',
+            ].join(' ')}
+          >
             <div className="flex min-w-0 items-start gap-3">
-              <Info className="mt-0.5 h-5 w-5 shrink-0 text-blue-500" />
+              {entry.request?.kind === 'plan' ? (
+                <FileText className="mt-0.5 h-5 w-5 shrink-0 text-warning" />
+              ) : (
+                <Info className="mt-0.5 h-5 w-5 shrink-0 text-blue-500" />
+              )}
               <div className="min-w-0 flex-1">
                 <div className="flex flex-wrap items-center gap-x-2 gap-y-1 pr-8">
-                  <p className="text-sm font-medium">Input needed</p>
+                  <p className="text-sm font-medium">
+                    {entry.request?.kind === 'plan'
+                      ? 'Plan review needed'
+                      : 'Input needed'}
+                  </p>
                   <ConversationItemTimestamp
                     createdAt={entry.createdAt}
                     timing={viewModel.timing}
                   />
                 </div>
-                <Markdown
-                  className={attentionPromptMarkdownClassName}
-                  content={entry.prompt}
-                  size="sm"
-                />
-                {entry.request?.kind === 'choice' &&
-                  viewModel.actionableInput &&
-                  onInputAnswer && (
-                    <ChoiceRequestForm
-                      questions={entry.request.questions}
-                      onSubmit={onInputAnswer}
+                {entry.request?.kind === 'plan' ? (
+                  <>
+                    {entry.request.planPath ? (
+                      <p className="mt-1 truncate font-mono text-xs text-muted-foreground">
+                        {entry.request.planPath}
+                      </p>
+                    ) : null}
+                    <Markdown
+                      className={attentionPromptMarkdownClassName}
+                      content={entry.request.plan}
+                      size="sm"
                     />
-                  )}
+                    {entry.request.allowedPrompts &&
+                    entry.request.allowedPrompts.length > 0 ? (
+                      <details className="group/prompts mt-3 max-w-full">
+                        <summary className="inline-flex cursor-pointer list-none items-center gap-1.5 rounded-full border border-border/70 bg-background/60 px-2 py-0.5 text-xs text-muted-foreground hover:bg-muted/50 hover:text-foreground">
+                          <ChevronRight className="h-3 w-3 transition-transform group-open/prompts:rotate-90" />
+                          <span>Requested prompts</span>
+                        </summary>
+                        <ul className="mt-2 list-disc space-y-1 pl-5 text-xs text-muted-foreground">
+                          {entry.request.allowedPrompts.map((prompt) => (
+                            <li key={prompt}>{prompt}</li>
+                          ))}
+                        </ul>
+                      </details>
+                    ) : null}
+                    {viewModel.actionableInput && onInputAnswer ? (
+                      <PlanRequestForm onSubmit={onInputAnswer} />
+                    ) : null}
+                  </>
+                ) : (
+                  <>
+                    <Markdown
+                      className={attentionPromptMarkdownClassName}
+                      content={entry.prompt}
+                      size="sm"
+                    />
+                    {entry.request?.kind === 'choice' &&
+                      viewModel.actionableInput &&
+                      onInputAnswer && (
+                        <ChoiceRequestForm
+                          questions={entry.request.questions}
+                          onSubmit={onInputAnswer}
+                        />
+                      )}
+                  </>
+                )}
               </div>
             </div>
           </div>

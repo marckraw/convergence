@@ -572,6 +572,12 @@ type InteractionRequestData =
       kind: 'choice'
       questions: InteractionQuestionData[]
     }
+  | {
+      kind: 'plan'
+      plan: string
+      planPath?: string
+      allowedPrompts?: string[]
+    }
 
 interface InteractionChoiceResponseData {
   kind: 'choice'
@@ -581,7 +587,15 @@ interface InteractionChoiceResponseData {
   }>
 }
 
-type InteractionResponseData = InteractionChoiceResponseData
+interface InteractionPlanResponseData {
+  kind: 'plan'
+  decision: 'approve' | 'reject'
+  message?: string
+}
+
+type InteractionResponseData =
+  | InteractionChoiceResponseData
+  | InteractionPlanResponseData
 
 type ConversationItemKind =
   | 'message'

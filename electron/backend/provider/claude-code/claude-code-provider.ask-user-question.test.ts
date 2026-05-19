@@ -196,29 +196,31 @@ describe('ClaudeCodeProvider AskUserQuestion bridge', () => {
     expect(resumedArgs).toContain('--settings')
     expect(
       JSON.parse(
-        resumedOptions.env
-          ?.CONVERGENCE_CLAUDE_ASK_USER_QUESTION_UPDATED_INPUT ?? '{}',
+        resumedOptions.env?.CONVERGENCE_CLAUDE_DEFERRED_TOOL_RESPONSE ?? '{}',
       ),
     ).toEqual({
-      questions: [
-        {
-          question: 'Where should scripts run?',
-          header: 'Working dir',
-          multiSelect: false,
-          options: [
-            {
-              label: 'Project root only',
-              description: 'Run in the main repo.',
-            },
-            {
-              label: 'Active workspace',
-              description: 'Run in the worktree.',
-            },
-          ],
+      permissionDecision: 'allow',
+      updatedInput: {
+        questions: [
+          {
+            question: 'Where should scripts run?',
+            header: 'Working dir',
+            multiSelect: false,
+            options: [
+              {
+                label: 'Project root only',
+                description: 'Run in the main repo.',
+              },
+              {
+                label: 'Active workspace',
+                description: 'Run in the worktree.',
+              },
+            ],
+          },
+        ],
+        answers: {
+          'Where should scripts run?': 'Active workspace',
         },
-      ],
-      answers: {
-        'Where should scripts run?': 'Active workspace',
       },
     })
 
@@ -286,5 +288,117 @@ describe('ClaudeCodeProvider AskUserQuestion bridge', () => {
 
     const args = spawnMock.mock.calls[0]?.[1] as string[]
     expect(args).not.toContain('--settings')
+  })
+
+  it('surfaces deferred ExitPlanMode and resumes with approval', async () => {
+    const deferredChild = new MockChildProcess()
+    const resumedChild = new MockChildProcess()
+    spawnMock
+      .mockReturnValueOnce(deferredChild)
+      .mockReturnValueOnce(resumedChild)
+
+    const provider = new ClaudeCodeProvider('/usr/local/bin/claude')
+    const handle = provider.start({
+      sessionId: 'session-plan',
+      workingDirectory: process.cwd(),
+      initialMessage: 'make a plan first',
+      initialAttachments: undefined,
+      model: null,
+      effort: null,
+      continuationToken: null,
+    })
+
+    const items: Array<
+      Extract<SessionDelta, { kind: 'conversation.item.add' }>['item']
+    > = []
+    handle.onDelta((delta) => {
+      if (delta.kind === 'conversation.item.add') {
+        items.push(delta.item)
+      }
+    })
+    handle.onStatusChange(() => {})
+    handle.onAttentionChange(() => {})
+    handle.onContinuationToken(() => {})
+    handle.onContextWindowChange(() => {})
+    handle.onActivityChange(() => {})
+
+    await waitFor(() => {
+      expect(spawnMock).toHaveBeenCalledTimes(1)
+    })
+
+    deferredChild.stdout.write(
+      JSON.stringify({
+        type: 'system',
+        subtype: 'init',
+        session_id: 'claude-session-plan',
+      }) + '\n',
+    )
+    deferredChild.stdout.write(
+      JSON.stringify({
+        type: 'result',
+        subtype: 'success',
+        stop_reason: 'tool_deferred',
+        session_id: 'claude-session-plan',
+        deferred_tool_use: {
+          id: 'toolu_plan',
+          name: 'ExitPlanMode',
+          input: {
+            plan: '# Plan\n\n- Update the provider bridge',
+            planPath: '/tmp/claude-plan.md',
+            allowedPrompts: ['Edit files'],
+          },
+        },
+      }) + '\n',
+    )
+    deferredChild.emitExit(0)
+
+    await waitFor(() => {
+      expect(items).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            kind: 'input-request',
+            request: {
+              kind: 'plan',
+              plan: '# Plan\n\n- Update the provider bridge',
+              planPath: '/tmp/claude-plan.md',
+              allowedPrompts: ['Edit files'],
+            },
+            providerMeta: expect.objectContaining({
+              providerItemId: 'toolu_plan',
+              providerEventType: 'deferred_tool_use',
+            }),
+          }),
+        ]),
+      )
+    })
+
+    handle.sendMessage('Approved plan', undefined, undefined, {
+      deliveryMode: 'answer',
+      interactionResponse: {
+        kind: 'plan',
+        decision: 'approve',
+      },
+    })
+
+    await waitFor(() => {
+      expect(spawnMock).toHaveBeenCalledTimes(2)
+    })
+
+    const resumedOptions = spawnMock.mock.calls[1]?.[2] as {
+      env?: Record<string, string>
+    }
+    expect(
+      JSON.parse(
+        resumedOptions.env?.CONVERGENCE_CLAUDE_DEFERRED_TOOL_RESPONSE ?? '{}',
+      ),
+    ).toEqual({
+      permissionDecision: 'allow',
+      permissionDecisionReason: 'The user approved the plan in Convergence.',
+      updatedInput: {
+        plan: '# Plan\n\n- Update the provider bridge',
+        planPath: '/tmp/claude-plan.md',
+        allowedPrompts: ['Edit files'],
+      },
+    })
   })
 })

@@ -127,6 +127,9 @@ export function getConversationItemCopyText(item: ConversationItem): string {
     case 'approval-request':
       return item.description
     case 'input-request':
+      if (item.request?.kind === 'plan') {
+        return item.request.plan
+      }
       return item.prompt
     case 'note':
       return item.text
