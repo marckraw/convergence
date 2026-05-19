@@ -1,6 +1,9 @@
 import { spawn, type ChildProcess } from 'child_process'
 import { promises as fs } from 'fs'
-import type { SessionDelta } from '../../session/conversation-item.types'
+import type {
+  InteractionResponse,
+  SessionDelta,
+} from '../../session/conversation-item.types'
 import type {
   Provider,
   SessionStartConfig,
@@ -58,6 +61,15 @@ import {
   startClaudeSkillTelemetrySink,
   type ClaudeSkillTelemetrySink,
 } from './claude-skill-telemetry.service'
+import {
+  buildClaudeAskUserQuestionHookSettings,
+  buildClaudeAskUserQuestionRequest,
+  buildClaudeAskUserQuestionUpdatedInput,
+  CLAUDE_DEFERRED_TOOL_USE_MIN_VERSION,
+  normalizeClaudeDeferredToolUse,
+  supportsClaudeDeferredToolUseVersion,
+  type PendingClaudeAskUserQuestion,
+} from './claude-ask-user-question.pure'
 
 function now(): string {
   return new Date().toISOString()
@@ -88,6 +100,8 @@ interface ClaudeStreamEvent {
   }
   is_error?: boolean
   result?: string
+  stop_reason?: string
+  deferred_tool_use?: unknown
   usage?: {
     input_tokens?: number
     cache_creation_input_tokens?: number
@@ -193,6 +207,7 @@ export class ClaudeCodeProvider implements Provider {
     private binaryPath: string,
     private taskProgress: TaskProgressService | null = null,
     private debugSink: ProviderDebugSink = noopDebugSink,
+    private version: string | null = null,
   ) {}
 
   async describe(): Promise<ProviderDescriptor> {
@@ -207,6 +222,7 @@ export class ClaudeCodeProvider implements Provider {
     const binaryPath = this.binaryPath
     const skillsService = this.skillsService
     const debugSink = this.debugSink
+    const claudeCodeVersion = this.version
     const sessionId = config.sessionId
     const listeners = {
       delta: [] as ((delta: SessionDelta) => void)[],
@@ -269,6 +285,8 @@ export class ClaudeCodeProvider implements Provider {
       null
     let sawTurnOutput = false
     let stderrBuffer = ''
+    let pendingAskUserQuestion: PendingClaudeAskUserQuestion | null = null
+    let warnedUnsupportedDeferredToolUse = false
 
     function emitDelta(delta: SessionDelta): void {
       listeners.delta.forEach((cb) => cb(delta))
@@ -657,6 +675,38 @@ export class ClaudeCodeProvider implements Provider {
           sawTurnOutput = true
           flushAssistantBuffer()
           refreshContextWindowFromLogs()
+          if (event.stop_reason === 'tool_deferred') {
+            const deferredToolUse = normalizeClaudeDeferredToolUse(
+              event.deferred_tool_use,
+            )
+            const inputRequest = deferredToolUse
+              ? buildClaudeAskUserQuestionRequest(deferredToolUse)
+              : null
+
+            if (inputRequest) {
+              pendingAskUserQuestion = inputRequest.pending
+              sessionEmitter.addInputRequest({
+                prompt: inputRequest.prompt,
+                request: inputRequest.request,
+                providerItemId: inputRequest.pending.toolUseId,
+                providerEventType: 'deferred_tool_use',
+              })
+              setStatus('running')
+              setAttention('needs-input')
+              setActivity(null)
+              currentTurn = null
+              break
+            }
+
+            sessionEmitter.addNote({
+              text: 'Claude Code deferred a tool call that Convergence could not render.',
+              level: 'error',
+            })
+            setStatus('failed')
+            setAttention('failed')
+            currentTurn = null
+            break
+          }
           if (event.is_error) {
             if (shouldRecoverFromMessage(event.result)) {
               scheduleContinuationRecovery()
@@ -775,6 +825,8 @@ export class ClaudeCodeProvider implements Provider {
         userMessageItemId?: string | null
         emitUserEntry?: boolean
         allowContinuationRecovery?: boolean
+        skipPromptInput?: boolean
+        askUserQuestionUpdatedInput?: Record<string, unknown>
       },
     ): Promise<void> {
       if (stopped || child) return
@@ -833,6 +885,16 @@ export class ClaudeCodeProvider implements Provider {
           'Waiting for Claude turn usage. When available, Convergence will show an estimated context value because Claude headless mode does not expose exact live context telemetry yet.',
         ),
       )
+      const supportsDeferredToolUse =
+        claudeCodeVersion === null ||
+        supportsClaudeDeferredToolUseVersion(claudeCodeVersion)
+      if (!supportsDeferredToolUse && !warnedUnsupportedDeferredToolUse) {
+        warnedUnsupportedDeferredToolUse = true
+        sessionEmitter.addNote({
+          text: `Claude Code ${claudeCodeVersion} does not support deferred tool-use. AskUserQuestion cards require Claude Code ${CLAUDE_DEFERRED_TOOL_USE_MIN_VERSION} or newer.`,
+          level: 'warning',
+        })
+      }
 
       const args = [
         '-p',
@@ -844,6 +906,9 @@ export class ClaudeCodeProvider implements Provider {
         '--dangerously-skip-permissions',
         '--include-partial-messages',
       ]
+      if (supportsDeferredToolUse) {
+        args.push('--settings', buildClaudeAskUserQuestionHookSettings())
+      }
       if (claudeSessionId) {
         args.push('--resume', claudeSessionId)
       }
@@ -860,6 +925,12 @@ export class ClaudeCodeProvider implements Provider {
         env: {
           ...process.env,
           ...(telemetrySink?.env ?? {}),
+          ...(options?.askUserQuestionUpdatedInput
+            ? {
+                CONVERGENCE_CLAUDE_ASK_USER_QUESTION_UPDATED_INPUT:
+                  JSON.stringify(options.askUserQuestionUpdatedInput),
+              }
+            : {}),
         },
       })
 
@@ -927,7 +998,9 @@ export class ClaudeCodeProvider implements Provider {
               text: skillResolution.promptText,
               parts,
             })
-            stdin.write(line + '\n')
+            if (!options?.skipPromptInput) {
+              stdin.write(line + '\n')
+            }
             if (userMessageItemId) {
               patchUserMessageSkills(
                 userMessageItemId,
@@ -1043,7 +1116,31 @@ export class ClaudeCodeProvider implements Provider {
       onActivityHeartbeat: (cb) => {
         listeners.heartbeat.push(cb)
       },
-      sendMessage: (text, attachments, skillSelections) => {
+      sendMessage: (text, attachments, skillSelections, options) => {
+        if (
+          pendingAskUserQuestion &&
+          options?.deliveryMode === 'answer' &&
+          claudeSessionId
+        ) {
+          const pending = pendingAskUserQuestion
+          pendingAskUserQuestion = null
+          const interactionResponse = options.interactionResponse as
+            | InteractionResponse
+            | undefined
+          const updatedInput = buildClaudeAskUserQuestionUpdatedInput(
+            pending,
+            interactionResponse,
+            text,
+          )
+          void startTurn('', undefined, {
+            emitUserEntry: false,
+            allowContinuationRecovery: false,
+            skipPromptInput: true,
+            askUserQuestionUpdatedInput: updatedInput,
+          })
+          return
+        }
+
         void startTurn(text, attachments, { skillSelections })
       },
       approve: () => {

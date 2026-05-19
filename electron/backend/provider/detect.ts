@@ -98,6 +98,7 @@ export interface DetectedProvider {
   id: string
   name: string
   binaryPath: string
+  version?: string | null
 }
 
 export async function inspectProviderStatuses(): Promise<ProviderStatusInfo[]> {
@@ -151,6 +152,7 @@ export async function detectProviders(): Promise<DetectedProvider[]> {
             id: provider.id,
             name: provider.name,
             binaryPath: provider.binaryPath,
+            version: provider.version,
           },
         ]
       : [],
