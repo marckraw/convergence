@@ -11,6 +11,7 @@ import {
   type ProjectContextItem,
 } from '@/entities/project-context'
 import { SessionStartForm } from './session-start.presentational'
+import { useFormSubmitShortcut } from '@/shared/lib/use-form-submit-shortcut.pure'
 
 const EMPTY_CONTEXT_ITEMS: ProjectContextItem[] = []
 
@@ -99,6 +100,9 @@ export const SessionStart: FC<SessionStartProps> = ({
     setMessage('')
     setSelectedContextIds([])
   }
+
+  // Enable cmd+Enter to submit the form
+  useFormSubmitShortcut(true, handleSubmit)
 
   const handleToggleContextItem = (id: string) => {
     setSelectedContextIds((current) =>
