@@ -260,6 +260,7 @@ describe('PiProvider continuation recovery', () => {
 
     await waitFor(() => {
       expect(statuses).toContain('completed')
+      expect(continuationTokens).toContain('/tmp/fresh-pi-session.json')
     })
 
     expect(spawnMock).toHaveBeenCalledTimes(2)

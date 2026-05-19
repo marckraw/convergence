@@ -1,4 +1,5 @@
 import { execFile } from 'child_process'
+import { buildWindowsHiddenProcessOptions } from '../provider/shell-exec.pure'
 
 export interface CommandResult {
   stdout: string
@@ -20,6 +21,7 @@ export const execFileRunner: CommandRunner = (binaryPath, args, options) =>
         cwd: options?.cwd,
         timeout: 15_000,
         maxBuffer: 8 * 1024 * 1024,
+        ...buildWindowsHiddenProcessOptions(binaryPath, process.platform),
       },
       (error, stdout, stderr) => {
         if (error) {

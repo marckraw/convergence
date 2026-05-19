@@ -15,6 +15,7 @@ const sourcePath = join(
 const buildDir = join(repoRoot, 'build')
 const iconPngPath = join(buildDir, 'icon.png')
 const iconIcnsPath = join(buildDir, 'icon.icns')
+const iconIcoPath = join(buildDir, 'icon.ico')
 const tempDir = join(buildDir, '.icon-build')
 const tempSourcePath = join(tempDir, 'icon-source.png')
 const iconsetDir = join(tempDir, 'icon.iconset')
@@ -73,6 +74,15 @@ function generateIconset() {
   run('iconutil', ['-c', 'icns', iconsetDir, '-o', iconIcnsPath])
 }
 
+function generateWindowsIcon() {
+  run('magick', [
+    tempSourcePath,
+    '-define',
+    'icon:auto-resize=256,128,64,48,32,16',
+    iconIcoPath,
+  ])
+}
+
 function main() {
   if (!existsSync(sourcePath)) {
     throw new Error(`Missing source artwork: ${sourcePath}`)
@@ -87,11 +97,13 @@ function main() {
 
   generateSquareSource()
   generateIconset()
+  generateWindowsIcon()
 
   rmSync(tempDir, { recursive: true, force: true })
 
   console.log(`Generated ${iconPngPath}`)
   console.log(`Generated ${iconIcnsPath}`)
+  console.log(`Generated ${iconIcoPath}`)
 }
 
 main()

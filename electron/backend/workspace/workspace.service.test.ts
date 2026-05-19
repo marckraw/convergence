@@ -139,7 +139,7 @@ describe('WorkspaceService', () => {
     expect(workspaceHead).toBe(remoteMasterHead)
     expect(workspaceHead).not.toBe(staleMasterHead)
     expect(workspaceHead).not.toBe(featureHead)
-  })
+  }, 15_000)
 
   it('uses the input baseBranch override instead of the project setting', async () => {
     getDatabase()

@@ -157,8 +157,10 @@ export class TerminalService {
     const rows = parsePsOutput(output)
     const result = findForegroundDescendant(rows, handle.pid)
     if (!result) return null
-    const shellBasename = handle.shell.split('/').pop() ?? handle.shell
-    if (result.name === shellBasename) return null
+    const shellBasename =
+      handle.shell.split(/[\\/]/).pop()?.toLowerCase() ??
+      handle.shell.toLowerCase()
+    if (result.name.toLowerCase() === shellBasename) return null
     return result
   }
 

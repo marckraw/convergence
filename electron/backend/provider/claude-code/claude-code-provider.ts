@@ -58,6 +58,7 @@ import {
   startClaudeSkillTelemetrySink,
   type ClaudeSkillTelemetrySink,
 } from './claude-skill-telemetry.service'
+import { buildWindowsHiddenProcessOptions } from '../shell-exec.pure'
 
 function now(): string {
   return new Date().toISOString()
@@ -114,6 +115,7 @@ function runClaudeOneShot(
       cwd: input.workingDirectory,
       stdio: ['pipe', 'pipe', 'pipe'],
       env: { ...process.env },
+      ...buildWindowsHiddenProcessOptions(binaryPath, process.platform),
     })
 
     const progress = createTaskProgressEmitter(input.requestId, taskProgress)
@@ -861,6 +863,7 @@ export class ClaudeCodeProvider implements Provider {
           ...process.env,
           ...(telemetrySink?.env ?? {}),
         },
+        ...buildWindowsHiddenProcessOptions(binaryPath, process.platform),
       })
 
       if (child.stdout) {

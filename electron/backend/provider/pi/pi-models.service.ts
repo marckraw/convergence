@@ -5,6 +5,7 @@ import { join } from 'path'
 import { PiRpcClient } from './pi-rpc'
 import { collectPiModelsJsonModelIds } from './pi-models.pure'
 import { OpenRouterCredentialsService } from '../../credentials/openrouter-credentials.service'
+import { buildWindowsHiddenProcessOptions } from '../shell-exec.pure'
 
 const PROBE_TIMEOUT_MS = 5000
 
@@ -16,6 +17,7 @@ export async function probePiAvailableModels(
     cwd: process.cwd(),
     stdio: ['pipe', 'pipe', 'pipe'],
     env,
+    ...buildWindowsHiddenProcessOptions(binaryPath, process.platform),
   })
 
   const spawnFailure = new Promise<never>((_, reject) => {
