@@ -26,6 +26,7 @@ import { TooltipProvider } from '@/shared/ui/tooltip'
 import { systemApi } from '@/shared'
 import { applyTheme, getStoredTheme } from '@/shared/lib/theme'
 import {
+  activateProject,
   beginSessionDraft,
   CommandCenterContainer,
   switchToSession,
@@ -74,7 +75,7 @@ interface AppProps {
   onBeginChatSpaceAttempt?: (spaceId: string) => void
   onCancelChatSpaceAttempt?: (spaceId: string) => void
   onSelectAnySession?: (session: SessionSummary) => void
-  onShowCode?: () => void
+  onShowCode?: () => void | Promise<void>
   onShowChat?: () => void
   onNewGlobalChat?: () => void
 }
@@ -127,6 +128,7 @@ export function App({
   const loadGlobalWorkspaces = useWorkspaceStore((s) => s.loadGlobalWorkspaces)
   const sessionError = useSessionStore((s) => s.error)
   const clearSessionError = useSessionStore((s) => s.clearError)
+  const prepareForProject = useSessionStore((s) => s.prepareForProject)
   const activeSessionId = useSessionStore((s) => s.activeSessionId)
   const activeGlobalSessionId = useSessionStore((s) => s.activeGlobalSessionId)
   const setActiveSession = useSessionStore((s) => s.setActiveSession)
@@ -414,6 +416,13 @@ export function App({
     })
   }
 
+  const handleSelectProjectRoot = async (projectId: string) => {
+    setActiveSurface('code')
+    await onShowCode?.()
+    prepareForProject(projectId)
+    await activateProject(projectId)
+  }
+
   return (
     <TooltipProvider delayDuration={1500}>
       <AppShell
@@ -436,6 +445,7 @@ export function App({
         onCancelChatSpaceAttempt={onCancelChatSpaceAttempt}
         onSelectAnySession={onSelectAnySession}
         onShowCode={onShowCode}
+        onSelectProjectRoot={handleSelectProjectRoot}
         onShowChat={onShowChat}
         onNewGlobalChat={onNewGlobalChat}
         loading={loading}
@@ -446,6 +456,7 @@ export function App({
         onSelectCodeSession={onSelectCodeSession}
         onSelectChatSession={onSelectChatSession}
         onBeginCodeSessionDraft={onBeginCodeSessionDraft}
+        onSelectProject={handleSelectProjectRoot}
         onOpenCodeReview={() => handleOpenCodeReview()}
       />
       <SpaceSessionLinkDialogContainer />

@@ -43,8 +43,9 @@ interface AppShellProps {
   onBeginChatSpaceAttempt?: (id: string) => void
   onCancelChatSpaceAttempt?: (id: string) => void
   onSelectAnySession?: (session: SessionSummary) => void
-  onShowCode?: () => void
+  onShowCode?: () => void | Promise<void>
   onShowChat?: () => void
+  onSelectProjectRoot?: (projectId: string) => void | Promise<void>
   onNewGlobalChat?: () => void
   loading: boolean
   hasProject: boolean
@@ -77,6 +78,7 @@ export const AppShell: FC<AppShellProps> = ({
   onSelectAnySession,
   onShowCode,
   onShowChat,
+  onSelectProjectRoot,
   onNewGlobalChat,
   loading,
   hasProject,
@@ -163,7 +165,7 @@ export const AppShell: FC<AppShellProps> = ({
     (surface: 'code' | 'chat') => {
       setActiveSurface(surface)
       if (surface === 'code') {
-        onShowCode?.()
+        void onShowCode?.()
         return
       }
       onShowChat?.()
@@ -270,6 +272,7 @@ export const AppShell: FC<AppShellProps> = ({
               onSelectSpace={handleSelectChatSpace}
               activeGlobalSessionId={activeGlobalSessionId}
               onOpenCodeReview={onOpenCodeReview}
+              onSelectProjectRoot={onSelectProjectRoot}
               onSelectAnySession={onSelectAnySession}
               collapsed={sidebarCollapsed && !sidebarPeekOpen}
               peek={sidebarCollapsed && sidebarPeekOpen}

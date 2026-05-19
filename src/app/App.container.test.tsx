@@ -35,6 +35,13 @@ const mockProject = {
   updatedAt: '2026-01-01T00:00:00.000Z',
 }
 
+const otherProject = {
+  ...mockProject,
+  id: '2',
+  name: 'other-project',
+  repositoryPath: '/tmp/other-project',
+}
+
 function makeSessionSummary(
   overrides: Partial<SessionSummary> & Pick<SessionSummary, 'id' | 'name'>,
 ): SessionSummary {
@@ -146,6 +153,27 @@ const mockElectronAPI = {
     onSessionSummaryUpdate: vi.fn().mockReturnValue(() => {}),
     onSessionConversationPatched: vi.fn().mockReturnValue(() => {}),
     onSessionQueuedInputPatched: vi.fn().mockReturnValue(() => {}),
+  },
+  turns: {
+    listForSession: vi.fn().mockResolvedValue([]),
+    getFileChanges: vi.fn().mockResolvedValue([]),
+    getFileDiff: vi.fn().mockResolvedValue(''),
+    onTurnDelta: vi.fn().mockReturnValue(() => {}),
+  },
+  attachments: {
+    getForSession: vi.fn().mockResolvedValue([]),
+    getById: vi.fn().mockResolvedValue(null),
+    ingestFiles: vi.fn().mockResolvedValue({
+      attachments: [],
+      rejections: [],
+    }),
+    ingestFromPaths: vi.fn().mockResolvedValue({
+      attachments: [],
+      rejections: [],
+    }),
+    readBytes: vi.fn().mockResolvedValue(new Uint8Array()),
+    delete: vi.fn().mockResolvedValue(undefined),
+    showOpenDialog: vi.fn().mockResolvedValue([]),
   },
   appSettings: {
     get: vi.fn().mockResolvedValue({
@@ -514,6 +542,46 @@ describe('App', () => {
     await waitFor(() => {
       expect(screen.getByText('my-project')).toBeInTheDocument()
     })
+  })
+
+  it('clears the routed session view when selecting a project root', async () => {
+    const routeSession = makeSessionSummary({
+      id: 'session-1',
+      name: 'Route Session',
+      projectId: mockProject.id,
+    })
+    const onShowCode = vi.fn(async () => undefined)
+    mockElectronAPI.project.getActive.mockResolvedValue(mockProject)
+    mockElectronAPI.project.getAll.mockResolvedValue([
+      mockProject,
+      otherProject,
+    ])
+    mockElectronAPI.project.getById.mockResolvedValue(otherProject)
+    mockElectronAPI.project.setActive.mockResolvedValue(undefined)
+    mockElectronAPI.session.getAllSummaries.mockResolvedValue([routeSession])
+    mockElectronAPI.session.getSummariesByProjectId.mockImplementation(
+      async (projectId: string) =>
+        projectId === mockProject.id ? [routeSession] : [],
+    )
+
+    render(
+      <App
+        mainViewRoute={{ kind: 'code-session', sessionId: 'session-1' }}
+        onShowCode={onShowCode}
+      />,
+    )
+
+    fireEvent.click(
+      await screen.findByRole('combobox', { name: /my-project/i }),
+    )
+    fireEvent.click(
+      await screen.findByRole('option', { name: /other-project/i }),
+    )
+
+    await waitFor(() => {
+      expect(onShowCode).toHaveBeenCalledTimes(1)
+    })
+    expect(mockElectronAPI.project.setActive).toHaveBeenCalledWith('2')
   })
 
   it('applies code review route search state to the review store', async () => {

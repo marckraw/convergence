@@ -204,6 +204,25 @@ describe('CommandCenterContainer', () => {
     expect(useCommandCenterStore.getState().isOpen).toBe(false)
   })
 
+  it('selecting a project uses routed project-root navigation when provided', () => {
+    const onSelectProject = vi.fn()
+    render(<CommandCenterContainer onSelectProject={onSelectProject} />)
+
+    act(() => {
+      useCommandCenterStore.getState().open()
+    })
+
+    fireEvent.change(screen.getByPlaceholderText(/Search projects/i), {
+      target: { value: 'beta' },
+    })
+
+    fireEvent.click(screen.getByRole('option', { name: /Project: beta/i }))
+
+    expect(onSelectProject).toHaveBeenCalledWith('p2')
+    expect(intents.activateProject).not.toHaveBeenCalled()
+    expect(useCommandCenterStore.getState().isOpen).toBe(false)
+  })
+
   it('selecting a global chat session uses the chat route when provided', () => {
     const onSelectCodeSession = vi.fn()
     const onSelectChatSession = vi.fn()

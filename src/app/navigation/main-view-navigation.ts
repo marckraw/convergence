@@ -10,7 +10,7 @@ export interface CodeReviewRouteSearch {
 }
 
 export interface MainViewNavigation {
-  navigateToWelcome: () => void
+  navigateToWelcome: () => Promise<void>
   navigateToCodeSession: (sessionId: string) => void
   navigateToNewCodeSession: (workspaceId: string | null) => void
   navigateToCodeReview: (search?: CodeReviewRouteSearch) => void
@@ -24,7 +24,7 @@ export function useMainViewNavigation(): MainViewNavigation {
   const navigate = useNavigate()
 
   const navigateToWelcome = useCallback(() => {
-    void navigate({ to: '/' })
+    return navigate({ to: '/' })
   }, [navigate])
 
   const navigateToCodeSession = useCallback(

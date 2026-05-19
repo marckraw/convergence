@@ -38,6 +38,7 @@ interface CommandCenterContainerProps {
   onSelectCodeSession?: (sessionId: string) => void
   onSelectChatSession?: (sessionId: string) => void
   onBeginCodeSessionDraft?: (workspaceId: string) => void
+  onSelectProject?: (projectId: string) => void | Promise<void>
   onOpenCodeReview?: () => void
 }
 
@@ -45,6 +46,7 @@ export function CommandCenterContainer({
   onSelectCodeSession,
   onSelectChatSession,
   onBeginCodeSessionDraft,
+  onSelectProject,
   onOpenCodeReview,
 }: CommandCenterContainerProps = {}) {
   const isOpen = useCommandCenterStore((s) => s.isOpen)
@@ -143,10 +145,18 @@ export function CommandCenterContainer({
           }
           return
         case 'project':
-          void activateProject(item.projectId)
+          if (onSelectProject) {
+            void onSelectProject(item.projectId)
+          } else {
+            void activateProject(item.projectId)
+          }
           return
         case 'workspace':
-          void activateProject(item.projectId)
+          if (onSelectProject) {
+            void onSelectProject(item.projectId)
+          } else {
+            void activateProject(item.projectId)
+          }
           return
         case 'dialog':
           openDialog(item.dialogKind, item.dialogPayload)
@@ -186,6 +196,7 @@ export function CommandCenterContainer({
       close,
       onBeginCodeSessionDraft,
       onOpenCodeReview,
+      onSelectProject,
       onSelectChatSession,
       onSelectCodeSession,
     ],

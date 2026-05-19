@@ -67,6 +67,7 @@ interface SidebarProps {
     mode?: CodeReviewMode
     file?: string | null
   }) => void
+  onSelectProjectRoot?: (projectId: string) => void | Promise<void>
   onSelectAnySession?: (session: SessionSummary) => void
   collapsed: boolean
   peek: boolean
@@ -94,6 +95,7 @@ export const Sidebar: FC<SidebarProps> = ({
   onSelectSpace,
   activeGlobalSessionId,
   onOpenCodeReview,
+  onSelectProjectRoot,
   onSelectAnySession,
   collapsed,
   peek,
@@ -562,6 +564,11 @@ export const Sidebar: FC<SidebarProps> = ({
   }
 
   const handleSelectProject = async (projectId: string) => {
+    if (onSelectProjectRoot) {
+      void onSelectProjectRoot(projectId)
+      return
+    }
+
     prepareForProject(projectId)
     await setActiveProject(projectId)
   }
