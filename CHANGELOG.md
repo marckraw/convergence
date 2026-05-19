@@ -1,5 +1,11 @@
 # convergence
 
+## 0.37.11
+
+### Patch Changes
+
+- 44fc4cf: feat: add cmd+Enter shortcut to all form submissions
+
 ## 0.37.10
 
 ### Patch Changes
