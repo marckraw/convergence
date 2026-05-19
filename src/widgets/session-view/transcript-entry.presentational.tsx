@@ -12,6 +12,7 @@ import {
   ChevronRight,
   Library,
   FileText,
+  Link,
 } from 'lucide-react'
 import { Button } from '@/shared/ui/button'
 import { Markdown } from '@/shared/ui/markdown.container'
@@ -25,6 +26,8 @@ import { ConversationItemHeader } from './conversation-item-header.presentationa
 import { ConversationItemTimestamp } from './conversation-item-timestamp.presentational'
 import { ChoiceRequestForm } from './choice-request-form.presentational'
 import { PlanRequestForm } from './plan-request-form.presentational'
+import { FormRequestForm } from './form-request-form.presentational'
+import { UrlRequestForm } from './url-request-form.presentational'
 import type { TranscriptEntryViewModel } from './transcript-entry.pure'
 
 interface ConversationItemViewProps {
@@ -277,12 +280,18 @@ export const ConversationItemView: FC<ConversationItemViewProps> = ({
               'my-2 max-w-full overflow-hidden rounded-lg border p-4',
               entry.request?.kind === 'plan'
                 ? 'border-warning/30 bg-warning/5'
-                : 'border-blue-500/30 bg-blue-500/5',
+                : entry.request?.kind === 'form' ||
+                    entry.request?.kind === 'url'
+                  ? 'border-emerald-500/30 bg-emerald-500/5'
+                  : 'border-blue-500/30 bg-blue-500/5',
             ].join(' ')}
           >
             <div className="flex min-w-0 items-start gap-3">
               {entry.request?.kind === 'plan' ? (
                 <FileText className="mt-0.5 h-5 w-5 shrink-0 text-warning" />
+              ) : entry.request?.kind === 'form' ||
+                entry.request?.kind === 'url' ? (
+                <Link className="mt-0.5 h-5 w-5 shrink-0 text-emerald-600" />
               ) : (
                 <Info className="mt-0.5 h-5 w-5 shrink-0 text-blue-500" />
               )}
@@ -291,7 +300,11 @@ export const ConversationItemView: FC<ConversationItemViewProps> = ({
                   <p className="text-sm font-medium">
                     {entry.request?.kind === 'plan'
                       ? 'Plan review needed'
-                      : 'Input needed'}
+                      : entry.request?.kind === 'form'
+                        ? 'Form input needed'
+                        : entry.request?.kind === 'url'
+                          ? 'URL confirmation needed'
+                          : 'Input needed'}
                   </p>
                   <ConversationItemTimestamp
                     createdAt={entry.createdAt}
@@ -326,6 +339,40 @@ export const ConversationItemView: FC<ConversationItemViewProps> = ({
                     ) : null}
                     {viewModel.actionableInput && onInputAnswer ? (
                       <PlanRequestForm onSubmit={onInputAnswer} />
+                    ) : null}
+                  </>
+                ) : entry.request?.kind === 'form' ? (
+                  <>
+                    <p className="mt-1 text-sm font-medium">
+                      {entry.request.title}
+                    </p>
+                    <Markdown
+                      className={attentionPromptMarkdownClassName}
+                      content={entry.request.message}
+                      size="sm"
+                    />
+                    {viewModel.actionableInput && onInputAnswer ? (
+                      <FormRequestForm
+                        fields={entry.request.fields}
+                        onSubmit={onInputAnswer}
+                      />
+                    ) : null}
+                  </>
+                ) : entry.request?.kind === 'url' ? (
+                  <>
+                    <p className="mt-1 text-sm font-medium">
+                      {entry.request.title}
+                    </p>
+                    <Markdown
+                      className={attentionPromptMarkdownClassName}
+                      content={entry.request.message}
+                      size="sm"
+                    />
+                    <p className="mt-2 break-all font-mono text-xs text-muted-foreground">
+                      {entry.request.url}
+                    </p>
+                    {viewModel.actionableInput && onInputAnswer ? (
+                      <UrlRequestForm onSubmit={onInputAnswer} />
                     ) : null}
                   </>
                 ) : (

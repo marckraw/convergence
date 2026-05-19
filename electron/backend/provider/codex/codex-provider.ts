@@ -3,6 +3,7 @@ import { promises as fs } from 'fs'
 import type { SessionDelta } from '../../session/conversation-item.types'
 import type {
   InteractionChoiceOption,
+  InteractionFormField,
   InteractionQuestion,
   InteractionRequest,
   InteractionResponse,
@@ -116,8 +117,18 @@ interface PendingUserInputQuestion {
 }
 
 interface PendingUserInputRequest {
+  kind: 'questions'
   questions: PendingUserInputQuestion[]
 }
+
+interface PendingMcpElicitationRequest {
+  kind: 'mcp-elicitation'
+  _meta: unknown
+}
+
+type PendingInputRequest =
+  | PendingUserInputRequest
+  | PendingMcpElicitationRequest
 
 function findPendingApproval(
   pendingApprovals: Map<JsonRpcId, PendingApprovalRequest>,
@@ -247,24 +258,57 @@ function buildCodexUserInputRequest(params: Record<string, unknown>): {
     prompt,
     request,
     pending: {
+      kind: 'questions',
       questions: normalized.map((entry) => entry.pending),
     },
   }
 }
 
 function buildLegacyCodexAnswer(
-  pending: PendingUserInputRequest,
+  pending: PendingInputRequest,
   text: string,
-): Record<string, { answers: string[] }> {
+): unknown {
+  if (pending.kind === 'mcp-elicitation') {
+    return {
+      action: 'decline',
+      content: null,
+      _meta: null,
+    }
+  }
+
   return Object.fromEntries(
     pending.questions.map((question) => [question.id, { answers: [text] }]),
   )
 }
 
 function buildStructuredCodexAnswer(
-  pending: PendingUserInputRequest,
+  pending: PendingInputRequest,
   response: InteractionResponse,
-): Record<string, { answers: string[] }> {
+): unknown {
+  if (pending.kind === 'mcp-elicitation') {
+    if (response.kind === 'form') {
+      return {
+        action: response.action,
+        content: response.action === 'accept' ? response.values : null,
+        _meta: response.action === 'accept' ? pending._meta : null,
+      }
+    }
+
+    if (response.kind === 'url') {
+      return {
+        action: response.action,
+        content: null,
+        _meta: response.action === 'accept' ? pending._meta : null,
+      }
+    }
+
+    return {
+      action: 'decline',
+      content: null,
+      _meta: null,
+    }
+  }
+
   if (response.kind !== 'choice') {
     return {}
   }
@@ -310,6 +354,155 @@ function readElicitationDefaultValue(schema: unknown): unknown {
   }
 
   return undefined
+}
+
+function normalizePrimitiveDefault(
+  type: InteractionFormField['type'],
+  value: unknown,
+): string | number | boolean | undefined {
+  if (type === 'boolean') {
+    return typeof value === 'boolean' ? value : undefined
+  }
+
+  if (type === 'number') {
+    return typeof value === 'number' && Number.isFinite(value)
+      ? value
+      : undefined
+  }
+
+  return typeof value === 'string' ||
+    typeof value === 'number' ||
+    typeof value === 'boolean'
+    ? String(value)
+    : undefined
+}
+
+function formFieldTypeFromSchema(
+  schema: unknown,
+): InteractionFormField['type'] | null {
+  if (!schema || typeof schema !== 'object') return 'string'
+  const record = schema as { type?: unknown }
+  if (record.type === 'boolean') return 'boolean'
+  if (record.type === 'number' || record.type === 'integer') return 'number'
+  if (record.type === 'string' || record.type === undefined) return 'string'
+  return null
+}
+
+function buildMcpElicitationFormField(input: {
+  key: string
+  schema: unknown
+  required: boolean
+}): InteractionFormField | null {
+  const type = formFieldTypeFromSchema(input.schema)
+  if (!type) return null
+  const record =
+    input.schema && typeof input.schema === 'object'
+      ? (input.schema as {
+          title?: unknown
+          description?: unknown
+        })
+      : {}
+  const defaultValue = normalizePrimitiveDefault(
+    type,
+    readElicitationDefaultValue(input.schema),
+  )
+
+  return {
+    id: input.key,
+    label: stringFromUnknown(record.title) ?? input.key,
+    description: stringFromUnknown(record.description) ?? undefined,
+    type,
+    required: input.required,
+    defaultValue,
+  }
+}
+
+function buildMcpElicitationInputRequest(params: Record<string, unknown>): {
+  prompt: string
+  request: InteractionRequest
+  pending: PendingMcpElicitationRequest
+} | null {
+  const mode = typeof params.mode === 'string' ? params.mode : null
+  const serverName =
+    typeof params.serverName === 'string' ? params.serverName : 'MCP server'
+  const message =
+    typeof params.message === 'string' ? params.message : 'Input needed'
+  const title = `${serverName} request`
+  const schema =
+    params.requestedSchema && typeof params.requestedSchema === 'object'
+      ? (params.requestedSchema as {
+          properties?: Record<string, unknown>
+          required?: unknown
+        })
+      : null
+  const _meta =
+    params._meta && typeof params._meta === 'object' ? params._meta : null
+
+  if (mode === 'form') {
+    const requiredNames = new Set(
+      Array.isArray(schema?.required)
+        ? schema.required.filter(
+            (value): value is string => typeof value === 'string',
+          )
+        : [],
+    )
+    const fields = Object.entries(schema?.properties ?? {})
+      .map(([key, fieldSchema]) =>
+        buildMcpElicitationFormField({
+          key,
+          schema: fieldSchema,
+          required: requiredNames.has(key),
+        }),
+      )
+      .filter((field): field is InteractionFormField => field !== null)
+
+    if (fields.length === 0) return null
+
+    return {
+      prompt: message,
+      request: {
+        kind: 'form',
+        title,
+        message,
+        fields,
+      },
+      pending: {
+        kind: 'mcp-elicitation',
+        _meta,
+      },
+    }
+  }
+
+  const url = typeof params.url === 'string' ? params.url : null
+  if ((mode === 'url' || (url && !schema)) && url) {
+    return {
+      prompt: message,
+      request: {
+        kind: 'url',
+        title,
+        message,
+        url,
+      },
+      pending: {
+        kind: 'mcp-elicitation',
+        _meta,
+      },
+    }
+  }
+
+  return null
+}
+
+function shouldFailUnsupportedMcpElicitation(
+  params: Record<string, unknown>,
+): boolean {
+  if (params.mode === 'url') return true
+  if (params.mode !== 'form') return false
+  const schema =
+    params.requestedSchema && typeof params.requestedSchema === 'object'
+      ? (params.requestedSchema as { properties?: Record<string, unknown> })
+      : null
+  return Object.keys(schema?.properties ?? {}).length > 0
 }
 
 function buildMcpElicitationApproval(
@@ -604,7 +797,7 @@ export class CodexProvider implements Provider {
 
     // Map of pending approval request IDs (JSON-RPC id → approval response plan)
     const pendingApprovals = new Map<JsonRpcId, PendingApprovalRequest>()
-    const pendingUserInputs = new Map<JsonRpcId, PendingUserInputRequest>()
+    const pendingUserInputs = new Map<JsonRpcId, PendingInputRequest>()
 
     function emitDelta(delta: SessionDelta): void {
       listeners.delta.forEach((cb) => cb(delta))
@@ -1334,44 +1527,78 @@ export class CodexProvider implements Provider {
         applyActivity({ kind: 'request', method, params, requestId: id })
         const p = params as Record<string, unknown>
 
-        const approvalRequest = buildCodexApprovalRequest(method, p)
-        if (approvalRequest) {
+        const mcpElicitationRequest =
+          method === 'mcpServer/elicitation/request'
+            ? buildMcpElicitationInputRequest(p)
+            : null
+        if (mcpElicitationRequest) {
           flushAssistantBuffer()
-          pendingApprovals.set(id, approvalRequest)
-
-          sessionEmitter.addApprovalRequest({
-            description: approvalRequest.description,
-            providerItemId: String(id),
-            providerEventType: method,
-          })
-          setAttention('needs-approval')
-        } else if (method === 'item/tool/requestUserInput') {
-          flushAssistantBuffer()
-          const inputRequest = buildCodexUserInputRequest(p)
-
-          pendingUserInputs.set(id, inputRequest.pending)
+          pendingUserInputs.set(id, mcpElicitationRequest.pending)
 
           sessionEmitter.addInputRequest({
-            prompt: inputRequest.prompt,
-            request: inputRequest.request,
+            prompt: mcpElicitationRequest.prompt,
+            request: mcpElicitationRequest.request,
             providerItemId: String(id),
             providerEventType: method,
           })
           setAttention('needs-input')
-        } else {
+        } else if (
+          method === 'mcpServer/elicitation/request' &&
+          shouldFailUnsupportedMcpElicitation(p)
+        ) {
           flushAssistantBuffer()
           rpc?.respondError(
             id,
-            -32601,
-            `Convergence does not support Codex server request "${method}" yet`,
+            -32602,
+            `Convergence could not render Codex MCP elicitation mode "${String(p.mode)}"`,
           )
           sessionEmitter.addNote({
-            text: `Unsupported Codex server request: ${method}`,
+            text: `Unsupported Codex MCP elicitation schema for mode: ${String(p.mode)}`,
             level: 'error',
             providerEventType: method,
           })
           setStatus('failed')
           setAttention('failed')
+        } else {
+          const approvalRequest = buildCodexApprovalRequest(method, p)
+          if (approvalRequest) {
+            flushAssistantBuffer()
+            pendingApprovals.set(id, approvalRequest)
+
+            sessionEmitter.addApprovalRequest({
+              description: approvalRequest.description,
+              providerItemId: String(id),
+              providerEventType: method,
+            })
+            setAttention('needs-approval')
+          } else if (method === 'item/tool/requestUserInput') {
+            flushAssistantBuffer()
+            const inputRequest = buildCodexUserInputRequest(p)
+
+            pendingUserInputs.set(id, inputRequest.pending)
+
+            sessionEmitter.addInputRequest({
+              prompt: inputRequest.prompt,
+              request: inputRequest.request,
+              providerItemId: String(id),
+              providerEventType: method,
+            })
+            setAttention('needs-input')
+          } else {
+            flushAssistantBuffer()
+            rpc?.respondError(
+              id,
+              -32601,
+              `Convergence does not support Codex server request "${method}" yet`,
+            )
+            sessionEmitter.addNote({
+              text: `Unsupported Codex server request: ${method}`,
+              level: 'error',
+              providerEventType: method,
+            })
+            setStatus('failed')
+            setAttention('failed')
+          }
         }
       })
 
@@ -1475,14 +1702,17 @@ export class CodexProvider implements Provider {
         const activeRpc = rpc
 
         const pendingUserInput = pendingUserInputs.entries().next().value as
-          | [JsonRpcId, PendingUserInputRequest]
+          | [JsonRpcId, PendingInputRequest]
           | undefined
         if (pendingUserInput && deliveryMode !== 'steer') {
           const [requestId, request] = pendingUserInput
-          const answers = options?.interactionResponse
+          const response = options?.interactionResponse
             ? buildStructuredCodexAnswer(request, options.interactionResponse)
             : buildLegacyCodexAnswer(request, text)
-          rpc.respond(requestId, { answers })
+          rpc.respond(
+            requestId,
+            request.kind === 'questions' ? { answers: response } : response,
+          )
           pendingUserInputs.delete(requestId)
           setAttention('none')
           return

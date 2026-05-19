@@ -4,6 +4,8 @@ export type {
   ConversationItemKind,
   ConversationItemState,
   InteractionChoiceOption,
+  InteractionFormField,
+  InteractionFormFieldType,
   InteractionQuestion,
   InteractionRequest,
   InteractionResponse,

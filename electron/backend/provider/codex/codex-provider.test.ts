@@ -591,6 +591,243 @@ describe('CodexProvider', () => {
     })
   })
 
+  it('surfaces MCP form elicitations as structured input requests', async () => {
+    const child = new MockChildProcess()
+    const server = createMockCodexServer(child, {
+      autoCompleteTurns: false,
+      turnStartedId: 'codex-turn-1',
+    })
+    spawnMock.mockReturnValue(child)
+
+    const provider = new CodexProvider('/usr/local/bin/codex')
+    const handle = provider.start({
+      sessionId: 'session-1',
+      workingDirectory: process.cwd(),
+      initialMessage: 'create a Linear issue',
+      initialAttachments: undefined,
+      model: 'gpt-5.4',
+      effort: 'medium',
+      continuationToken: null,
+    })
+
+    const items: Array<
+      Extract<SessionDelta, { kind: 'conversation.item.add' }>['item']
+    > = []
+    const attentions: string[] = []
+
+    handle.onDelta((delta) => {
+      if (delta.kind === 'conversation.item.add') {
+        items.push(delta.item)
+      }
+    })
+    handle.onStatusChange(() => {})
+    handle.onContinuationToken(() => {})
+    handle.onAttentionChange((attention) => {
+      attentions.push(attention)
+    })
+    handle.onContextWindowChange(() => {})
+    handle.onActivityChange(() => {})
+
+    await waitFor(() => {
+      expect(
+        server.requests.some((request) => request.method === 'turn/start'),
+      ).toBe(true)
+    })
+
+    child.stdout.write(
+      JSON.stringify({
+        jsonrpc: '2.0',
+        id: 100,
+        method: 'mcpServer/elicitation/request',
+        params: {
+          serverName: 'linear',
+          mode: 'form',
+          _meta: { requestId: 'mcp-1' },
+          message: 'Create an issue?',
+          requestedSchema: {
+            type: 'object',
+            required: ['title'],
+            properties: {
+              title: {
+                type: 'string',
+                title: 'Title',
+                default: 'Bug report',
+              },
+              estimate: {
+                type: 'number',
+                title: 'Estimate',
+                default: 3,
+              },
+              urgent: {
+                type: 'boolean',
+                title: 'Urgent',
+                default: true,
+              },
+            },
+          },
+        },
+      }) + '\n',
+    )
+
+    await waitFor(() => {
+      expect(attentions).toContain('needs-input')
+      expect(items).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            kind: 'input-request',
+            prompt: 'Create an issue?',
+            request: {
+              kind: 'form',
+              title: 'linear request',
+              message: 'Create an issue?',
+              fields: [
+                expect.objectContaining({
+                  id: 'title',
+                  label: 'Title',
+                  type: 'string',
+                  required: true,
+                  defaultValue: 'Bug report',
+                }),
+                expect.objectContaining({
+                  id: 'estimate',
+                  type: 'number',
+                  defaultValue: 3,
+                }),
+                expect.objectContaining({
+                  id: 'urgent',
+                  type: 'boolean',
+                  defaultValue: true,
+                }),
+              ],
+            },
+            providerMeta: expect.objectContaining({
+              providerItemId: '100',
+              providerEventType: 'mcpServer/elicitation/request',
+            }),
+          }),
+        ]),
+      )
+    })
+
+    handle.sendMessage('Submitted form', undefined, undefined, {
+      deliveryMode: 'answer',
+      interactionResponse: {
+        kind: 'form',
+        action: 'accept',
+        values: {
+          title: 'Bug report',
+          estimate: 5,
+          urgent: false,
+        },
+      },
+    })
+
+    await waitFor(() => {
+      expect(server.responses).toContainEqual({
+        id: 100,
+        result: {
+          action: 'accept',
+          content: {
+            title: 'Bug report',
+            estimate: 5,
+            urgent: false,
+          },
+          _meta: { requestId: 'mcp-1' },
+        },
+      })
+      expect(attentions).toContain('none')
+    })
+  })
+
+  it('surfaces MCP URL elicitations and responds on decline', async () => {
+    const child = new MockChildProcess()
+    const server = createMockCodexServer(child, {
+      autoCompleteTurns: false,
+      turnStartedId: 'codex-turn-1',
+    })
+    spawnMock.mockReturnValue(child)
+
+    const provider = new CodexProvider('/usr/local/bin/codex')
+    const handle = provider.start({
+      sessionId: 'session-1',
+      workingDirectory: process.cwd(),
+      initialMessage: 'open auth URL',
+      initialAttachments: undefined,
+      model: 'gpt-5.4',
+      effort: 'medium',
+      continuationToken: null,
+    })
+
+    const items: Array<
+      Extract<SessionDelta, { kind: 'conversation.item.add' }>['item']
+    > = []
+    handle.onDelta((delta) => {
+      if (delta.kind === 'conversation.item.add') {
+        items.push(delta.item)
+      }
+    })
+    handle.onStatusChange(() => {})
+    handle.onContinuationToken(() => {})
+    handle.onAttentionChange(() => {})
+    handle.onContextWindowChange(() => {})
+    handle.onActivityChange(() => {})
+
+    await waitFor(() => {
+      expect(
+        server.requests.some((request) => request.method === 'turn/start'),
+      ).toBe(true)
+    })
+
+    child.stdout.write(
+      JSON.stringify({
+        jsonrpc: '2.0',
+        id: 101,
+        method: 'mcpServer/elicitation/request',
+        params: {
+          serverName: 'github',
+          mode: 'url',
+          message: 'Open GitHub authorization URL?',
+          url: 'https://github.com/login/oauth/authorize',
+        },
+      }) + '\n',
+    )
+
+    await waitFor(() => {
+      expect(items).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            kind: 'input-request',
+            request: {
+              kind: 'url',
+              title: 'github request',
+              message: 'Open GitHub authorization URL?',
+              url: 'https://github.com/login/oauth/authorize',
+            },
+          }),
+        ]),
+      )
+    })
+
+    handle.sendMessage('Declined URL', undefined, undefined, {
+      deliveryMode: 'answer',
+      interactionResponse: {
+        kind: 'url',
+        action: 'decline',
+      },
+    })
+
+    await waitFor(() => {
+      expect(server.responses).toContainEqual({
+        id: 101,
+        result: {
+          action: 'decline',
+          content: null,
+          _meta: null,
+        },
+      })
+    })
+  })
+
   it('surfaces Codex user-input questions as structured choice requests and answers them', async () => {
     const child = new MockChildProcess()
     const server = createMockCodexServer(child, {

@@ -109,6 +109,17 @@ export interface InteractionQuestion {
   multiSelect: boolean
 }
 
+export type InteractionFormFieldType = 'string' | 'number' | 'boolean'
+
+export interface InteractionFormField {
+  id: string
+  label: string
+  description?: string
+  type: InteractionFormFieldType
+  required: boolean
+  defaultValue?: string | number | boolean
+}
+
 export type InteractionRequest =
   | {
       kind: 'text'
@@ -123,6 +134,18 @@ export type InteractionRequest =
       plan: string
       planPath?: string
       allowedPrompts?: string[]
+    }
+  | {
+      kind: 'form'
+      title: string
+      message: string
+      fields: InteractionFormField[]
+    }
+  | {
+      kind: 'url'
+      title: string
+      message: string
+      url: string
     }
 
 export interface InteractionChoiceResponse {
@@ -139,9 +162,22 @@ export interface InteractionPlanResponse {
   message?: string
 }
 
+export interface InteractionFormResponse {
+  kind: 'form'
+  action: 'accept' | 'decline'
+  values: Record<string, string | number | boolean>
+}
+
+export interface InteractionUrlResponse {
+  kind: 'url'
+  action: 'accept' | 'decline'
+}
+
 export type InteractionResponse =
   | InteractionChoiceResponse
   | InteractionPlanResponse
+  | InteractionFormResponse
+  | InteractionUrlResponse
 
 export interface ConversationItemBase {
   id: string

@@ -7,6 +7,7 @@ import type {
   ConversationItemKind,
   ConversationItemState,
   InteractionChoiceOption,
+  InteractionFormField,
   InteractionQuestion,
   InteractionRequest,
 } from './conversation-item.types'
@@ -212,6 +213,38 @@ function parseInteractionQuestion(value: unknown): InteractionQuestion | null {
   }
 }
 
+function parseInteractionFormField(
+  value: unknown,
+): InteractionFormField | null {
+  if (
+    !isRecord(value) ||
+    typeof value.id !== 'string' ||
+    typeof value.label !== 'string' ||
+    typeof value.type !== 'string' ||
+    !['string', 'number', 'boolean'].includes(value.type) ||
+    typeof value.required !== 'boolean'
+  ) {
+    return null
+  }
+
+  const defaultValue =
+    typeof value.defaultValue === 'string' ||
+    typeof value.defaultValue === 'number' ||
+    typeof value.defaultValue === 'boolean'
+      ? value.defaultValue
+      : undefined
+
+  return {
+    id: value.id,
+    label: value.label,
+    description:
+      typeof value.description === 'string' ? value.description : undefined,
+    type: value.type as InteractionFormField['type'],
+    required: value.required,
+    defaultValue,
+  }
+}
+
 function parseInteractionRequest(
   value: unknown,
 ): InteractionRequest | undefined {
@@ -254,6 +287,40 @@ function parseInteractionRequest(
         allowedPrompts && allowedPrompts.length > 0
           ? allowedPrompts
           : undefined,
+    }
+  }
+
+  if (
+    value.kind === 'form' &&
+    typeof value.title === 'string' &&
+    typeof value.message === 'string' &&
+    Array.isArray(value.fields)
+  ) {
+    const fields = value.fields
+      .map(parseInteractionFormField)
+      .filter((field): field is InteractionFormField => field !== null)
+
+    if (fields.length > 0) {
+      return {
+        kind: 'form',
+        title: value.title,
+        message: value.message,
+        fields,
+      }
+    }
+  }
+
+  if (
+    value.kind === 'url' &&
+    typeof value.title === 'string' &&
+    typeof value.message === 'string' &&
+    typeof value.url === 'string'
+  ) {
+    return {
+      kind: 'url',
+      title: value.title,
+      message: value.message,
+      url: value.url,
     }
   }
 

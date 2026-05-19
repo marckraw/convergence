@@ -130,6 +130,12 @@ export function getConversationItemCopyText(item: ConversationItem): string {
       if (item.request?.kind === 'plan') {
         return item.request.plan
       }
+      if (item.request?.kind === 'form') {
+        return item.request.message
+      }
+      if (item.request?.kind === 'url') {
+        return `${item.request.message}\n${item.request.url}`
+      }
       return item.prompt
     case 'note':
       return item.text

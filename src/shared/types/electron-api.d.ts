@@ -563,6 +563,17 @@ interface InteractionQuestionData {
   multiSelect: boolean
 }
 
+type InteractionFormFieldTypeData = 'string' | 'number' | 'boolean'
+
+interface InteractionFormFieldData {
+  id: string
+  label: string
+  description?: string
+  type: InteractionFormFieldTypeData
+  required: boolean
+  defaultValue?: string | number | boolean
+}
+
 type InteractionRequestData =
   | {
       kind: 'text'
@@ -577,6 +588,18 @@ type InteractionRequestData =
       plan: string
       planPath?: string
       allowedPrompts?: string[]
+    }
+  | {
+      kind: 'form'
+      title: string
+      message: string
+      fields: InteractionFormFieldData[]
+    }
+  | {
+      kind: 'url'
+      title: string
+      message: string
+      url: string
     }
 
 interface InteractionChoiceResponseData {
@@ -593,9 +616,22 @@ interface InteractionPlanResponseData {
   message?: string
 }
 
+interface InteractionFormResponseData {
+  kind: 'form'
+  action: 'accept' | 'decline'
+  values: Record<string, string | number | boolean>
+}
+
+interface InteractionUrlResponseData {
+  kind: 'url'
+  action: 'accept' | 'decline'
+}
+
 type InteractionResponseData =
   | InteractionChoiceResponseData
   | InteractionPlanResponseData
+  | InteractionFormResponseData
+  | InteractionUrlResponseData
 
 type ConversationItemKind =
   | 'message'

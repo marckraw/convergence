@@ -105,7 +105,9 @@ export const SessionTranscript: FC<SessionTranscriptProps> = ({
       if (
         entry.item.kind === 'input-request' &&
         (entry.item.request?.kind === 'choice' ||
-          entry.item.request?.kind === 'plan') &&
+          entry.item.request?.kind === 'plan' ||
+          entry.item.request?.kind === 'form' ||
+          entry.item.request?.kind === 'url') &&
         !resolvedInputIds.has(entry.item.id)
       ) {
         ids.add(entry.item.id)
