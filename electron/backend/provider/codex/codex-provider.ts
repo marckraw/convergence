@@ -451,6 +451,12 @@ export class CodexProvider implements Provider {
     let assistantMessageItemId: string | null = null
     let resolveThreadReady: (() => void) | null = null
     let activeProviderTurnId: string | null = null
+    let activeTurnReady: {
+      promise: Promise<string>
+      resolve: (turnId: string) => void
+      reject: (err: Error) => void
+      timeout: NodeJS.Timeout
+    } | null = null
 
     // Map of pending approval request IDs (JSON-RPC id → approval response plan)
     const pendingApprovals = new Map<JsonRpcId, PendingApprovalRequest>()
@@ -497,6 +503,47 @@ export class CodexProvider implements Provider {
     function setContextWindow(contextWindow: SessionContextWindow): void {
       listeners.contextWindow.forEach((cb) => cb(contextWindow))
       sessionEmitter.patchSession({ contextWindow })
+    }
+
+    function clearActiveTurnReady(): void {
+      if (!activeTurnReady) return
+      clearTimeout(activeTurnReady.timeout)
+      activeTurnReady = null
+    }
+
+    function setActiveProviderTurnId(providerTurnId: string): void {
+      activeProviderTurnId = providerTurnId
+      activeTurnReady?.resolve(providerTurnId)
+      clearActiveTurnReady()
+    }
+
+    function beginActiveTurnReady(): void {
+      clearActiveTurnReady()
+      let resolveTurn!: (turnId: string) => void
+      let rejectTurn!: (err: Error) => void
+      const promise = new Promise<string>((resolve, reject) => {
+        resolveTurn = resolve
+        rejectTurn = reject
+      })
+      promise.catch(() => {})
+      const timeout = setTimeout(() => {
+        rejectTurn(new Error('No active Codex turn is available to steer'))
+        if (activeTurnReady?.promise === promise) {
+          activeTurnReady = null
+        }
+      }, 1000)
+      activeTurnReady = {
+        promise,
+        resolve: resolveTurn,
+        reject: rejectTurn,
+        timeout,
+      }
+    }
+
+    async function getActiveProviderTurnId(): Promise<string> {
+      if (activeProviderTurnId) return activeProviderTurnId
+      if (activeTurnReady) return activeTurnReady.promise
+      throw new Error('No active Codex turn is available to steer')
     }
 
     let activityState: CodexActivityState = initialCodexActivityState()
@@ -670,6 +717,7 @@ export class CodexProvider implements Provider {
     ): Promise<void> {
       assistantTextBuffer = ''
       assistantMessageItemId = null
+      beginActiveTurnReady()
       const currentThreadId = await ensureThread(activeRpc)
 
       try {
@@ -681,7 +729,7 @@ export class CodexProvider implements Provider {
         })
         const providerTurnId = readProviderTurnId(turnResult)
         if (providerTurnId) {
-          activeProviderTurnId = providerTurnId
+          setActiveProviderTurnId(providerTurnId)
         }
       } catch (err) {
         if (!threadId || !isCodexThreadNotFoundError(err)) {
@@ -705,7 +753,7 @@ export class CodexProvider implements Provider {
         })
         const providerTurnId = readProviderTurnId(turnResult)
         if (providerTurnId) {
-          activeProviderTurnId = providerTurnId
+          setActiveProviderTurnId(providerTurnId)
         }
       }
     }
@@ -825,10 +873,7 @@ export class CodexProvider implements Provider {
       expectedProviderTurnId?: string | null
     }): Promise<void> {
       const expectedTurnId =
-        input.expectedProviderTurnId ?? activeProviderTurnId
-      if (!expectedTurnId) {
-        throw new Error('No active Codex turn is available to steer')
-      }
+        input.expectedProviderTurnId ?? (await getActiveProviderTurnId())
 
       const skillResolution = await resolveSelectedSkills(
         input.activeRpc,
@@ -978,7 +1023,7 @@ export class CodexProvider implements Provider {
             {
               const providerTurnId = readProviderTurnId(params)
               if (providerTurnId) {
-                activeProviderTurnId = providerTurnId
+                setActiveProviderTurnId(providerTurnId)
               }
             }
             setStatus('running')
@@ -1023,6 +1068,7 @@ export class CodexProvider implements Provider {
           case 'turn/completed':
             flushAssistantBuffer()
             activeProviderTurnId = null
+            clearActiveTurnReady()
             {
               const contextWindow = deriveCodexContextWindow(
                 (p.usage ??
@@ -1069,6 +1115,7 @@ export class CodexProvider implements Provider {
           case 'turn/interrupt':
             flushAssistantBuffer()
             activeProviderTurnId = null
+            clearActiveTurnReady()
             sessionEmitter.addNote({
               text: 'Turn interrupted',
               level: 'warning',
@@ -1163,6 +1210,12 @@ export class CodexProvider implements Provider {
           case 'error': {
             flushAssistantBuffer()
             activeProviderTurnId = null
+            activeTurnReady?.reject(
+              new Error(
+                typeof p.message === 'string' ? p.message : 'Unknown error',
+              ),
+            )
+            clearActiveTurnReady()
             const error =
               typeof p.error === 'object' && p.error !== null
                 ? (p.error as { message?: unknown })
@@ -1270,6 +1323,7 @@ export class CodexProvider implements Provider {
         if (stopped) return
         flushAssistantBuffer()
         activeProviderTurnId = null
+        clearActiveTurnReady()
         applyActivity({ kind: 'close' })
         if (code !== 0 && code !== null) {
           sessionEmitter.addNote({
@@ -1291,6 +1345,7 @@ export class CodexProvider implements Provider {
         })
         if (stopped) return
         activeProviderTurnId = null
+        clearActiveTurnReady()
         sessionEmitter.addNote({
           text: `Process error: ${err.message}`,
           level: 'error',

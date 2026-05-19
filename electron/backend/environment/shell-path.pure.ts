@@ -1,4 +1,4 @@
-import { delimiter, join } from 'path'
+import { posix } from 'path'
 import { homedir } from 'os'
 
 const START_MARKER = '__CONVERGENCE_PATH_START__'
@@ -35,11 +35,11 @@ export function getFallbackPathEntries(): string[] {
     '/bin',
     '/usr/sbin',
     '/sbin',
-    join(home, '.local', 'bin'),
-    join(home, '.bun', 'bin'),
-    join(home, '.cargo', 'bin'),
-    join(home, 'Library', 'pnpm'),
-    join(
+    posix.join(home, '.local', 'bin'),
+    posix.join(home, '.bun', 'bin'),
+    posix.join(home, '.cargo', 'bin'),
+    posix.join(home, 'Library', 'pnpm'),
+    posix.join(
       home,
       'Library',
       'Application Support',
@@ -57,12 +57,12 @@ export function mergePathValues(
 
   for (const value of values) {
     if (!value) continue
-    for (const entry of value.split(delimiter)) {
+    for (const entry of value.split(':')) {
       const trimmed = entry.trim()
       if (!trimmed) continue
       entries.add(trimmed)
     }
   }
 
-  return Array.from(entries).join(delimiter)
+  return Array.from(entries).join(':')
 }

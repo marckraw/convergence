@@ -274,6 +274,8 @@ describe('AttachmentsService', () => {
       .all() as Array<{ table: string }>
     expect(foreignKeys.some((fk) => fk.table === 'sessions')).toBe(false)
 
+    closeDatabase()
+    resetDatabase()
     rmSync(legacyDir, { recursive: true, force: true })
   })
 })

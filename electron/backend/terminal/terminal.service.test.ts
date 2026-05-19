@@ -1,4 +1,12 @@
-import { describe, expect, it, beforeEach, vi, type Mock } from 'vitest'
+import {
+  afterEach,
+  describe,
+  expect,
+  it,
+  beforeEach,
+  vi,
+  type Mock,
+} from 'vitest'
 import {
   TerminalService,
   dataChannel,
@@ -83,6 +91,7 @@ describe('TerminalService', () => {
   let service: TerminalService
 
   beforeEach(() => {
+    vi.spyOn(process, 'platform', 'get').mockReturnValue('darwin')
     const built = createFakePtyFactory()
     factory = built.factory
     created = built.created
@@ -92,6 +101,10 @@ describe('TerminalService', () => {
       SHELL: '/bin/zsh',
     })
     service.setSessionLastTerminalExitObserver(onSessionLastTerminalExit)
+  })
+
+  afterEach(() => {
+    vi.restoreAllMocks()
   })
 
   it('spawns a pty on create with cwd, cols, rows', () => {
