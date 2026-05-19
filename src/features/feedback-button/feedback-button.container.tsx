@@ -4,6 +4,7 @@ import { feedbackApi, type FeedbackPriority } from '@/entities/feedback'
 import { useProjectStore } from '@/entities/project'
 import { useSessionStore } from '@/entities/session'
 import { FeedbackButton } from './feedback-button.presentational'
+import { useFormSubmitShortcut } from '@/shared/lib/use-form-submit-shortcut.pure'
 
 export function FeedbackButtonContainer() {
   const activeProject = useProjectStore((state) => state.activeProject)
@@ -56,6 +57,9 @@ export function FeedbackButtonContainer() {
       setSubmitting(false)
     }
   }
+
+  // Enable cmd+Enter to submit the form
+  useFormSubmitShortcut(open, handleSubmit)
 
   return (
     <FeedbackButton

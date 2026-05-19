@@ -27,6 +27,7 @@ import {
   buildBranchArtifactSuggestions,
   type SpaceArtifactSuggestion,
 } from './space-artifact-suggestions.pure'
+import { useFormSubmitShortcut } from '@/shared/lib/use-form-submit-shortcut.pure'
 
 const emptyDraft: SpaceDraft = {
   title: '',
@@ -210,6 +211,9 @@ export const SpaceWorkboardDialogContainer: FC<{
     setDraft(draftFromSpace(space))
   }, [createSpace, createTitle])
 
+  // Enable cmd+Enter to submit the New Space form
+  useFormSubmitShortcut(!!createTitle.trim(), handleCreate)
+
   const handleSave = useCallback(async () => {
     if (!selectedSpace) return
     const title = draft.title.trim()
@@ -329,6 +333,14 @@ export const SpaceWorkboardDialogContainer: FC<{
       setArtifactDialogOpen(false)
     }
   }, [addArtifact, artifactDraft, selectedSpace])
+
+  // Enable cmd+Enter to submit the Add Artifact form
+  useFormSubmitShortcut(
+    artifactDialogOpen &&
+      !!artifactDraft.label.trim() &&
+      !!artifactDraft.value.trim(),
+    handleCreateArtifact,
+  )
 
   const handleArtifactKindChange = useCallback(
     async (artifactId: string, kind: SpaceArtifactKind) => {

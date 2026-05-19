@@ -10,6 +10,7 @@ import {
   PROJECT_DEFAULT_ID,
   WorkspaceCreateDialog,
 } from './workspace-create.presentational'
+import { useFormSubmitShortcut } from '@/shared/lib/use-form-submit-shortcut.pure'
 
 export const WorkspaceCreateDialogContainer: FC = () => {
   const activeProject = useProjectStore((state) => state.activeProject)
@@ -148,6 +149,9 @@ export const WorkspaceCreateDialogContainer: FC = () => {
     beginSessionDraft,
     closeDialog,
   ])
+
+  // Enable cmd+Enter to submit the form
+  useFormSubmitShortcut(open, handleSubmit)
 
   if (!activeProject) return null
 

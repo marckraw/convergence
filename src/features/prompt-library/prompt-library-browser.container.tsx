@@ -16,6 +16,7 @@ import {
   PromptLibraryBrowserDialog,
   type PromptLibraryFormDraft,
 } from './prompt-library-browser.presentational'
+import { useFormSubmitShortcut } from '@/shared/lib/use-form-submit-shortcut.pure'
 
 const DEFAULT_FILTERS: PromptLibraryBrowserFilters = {
   query: '',
@@ -261,6 +262,9 @@ export const PromptLibraryBrowserDialogContainer: FC<
     selectedPrompt,
     updatePrompt,
   ])
+
+  // Enable cmd+Enter to submit the form
+  useFormSubmitShortcut(formDraft !== null, handleSubmitForm)
 
   const handleDeletePrompt = useCallback(
     async (prompt: typeof selectedPrompt) => {
