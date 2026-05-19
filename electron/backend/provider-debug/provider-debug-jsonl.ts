@@ -53,7 +53,7 @@ export function createJsonlWriter(options: JsonlWriterOptions): JsonlWriter {
     }
     if (size < rotateBytes) return
     const baseName = filename.replace(/\.jsonl$/, '')
-    const sessionId = baseName.split('/').pop() ?? ''
+    const sessionId = baseName.split(/[\\/]/).pop() ?? ''
     const filenames = readdirSync(directory)
     const idx = nextRotationIndex(filenames, sessionId)
     const target = `${baseName}.${idx}.jsonl`

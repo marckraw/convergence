@@ -14,6 +14,7 @@ import type {
   SessionTurnRow,
 } from '../../database/database.types'
 import type { GitService } from '../../git/git.service'
+import { getNullDevicePath } from '../../git/null-device.pure'
 import {
   countAdditionsAndDeletions,
   deriveTurnSummary,
@@ -428,11 +429,11 @@ export class TurnCaptureService {
     try {
       const leftPath =
         startContent === null
-          ? '/dev/null'
+          ? getNullDevicePath()
           : this.writeSandboxFile(sandbox, 'before', filePath, startContent)
       const rightPath =
         endContent === null
-          ? '/dev/null'
+          ? getNullDevicePath()
           : this.writeSandboxFile(sandbox, 'after', filePath, endContent)
 
       return await this.gitService.diffTwoPaths(

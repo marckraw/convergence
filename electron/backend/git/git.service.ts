@@ -4,6 +4,7 @@ import { join } from 'path'
 import { isPullRequestReviewBranchName } from '../pull-request/pull-request-reference.pure'
 import { parseNameStatusOutput } from './base-branch-diff.pure'
 import type { ChangedFileEntry } from './changed-files.types'
+import { getNullDevicePath } from './null-device.pure'
 
 function exec(command: string, args: string[], cwd: string): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -373,7 +374,14 @@ export class GitService {
 
     const syntheticUntracked = await execAllowExitCodes(
       'git',
-      ['diff', '--no-index', '--no-color', '--', '/dev/null', absoluteFilePath],
+      [
+        'diff',
+        '--no-index',
+        '--no-color',
+        '--',
+        getNullDevicePath(),
+        absoluteFilePath,
+      ],
       repoPath,
       [0, 1],
     ).catch(() => '')
@@ -475,7 +483,7 @@ export class GitService {
           '--no-index',
           '--no-color',
           '--',
-          '/dev/null',
+          getNullDevicePath(),
           absoluteFilePath,
         ],
         repoPath,
