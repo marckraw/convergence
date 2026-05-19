@@ -1,5 +1,11 @@
 # convergence
 
+## 0.37.12
+
+### Patch Changes
+
+- ba7197b: lefthook pre-commit hook management
+
 ## 0.37.11
 
 ### Patch Changes
