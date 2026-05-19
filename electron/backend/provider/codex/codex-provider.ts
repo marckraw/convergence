@@ -2,6 +2,12 @@ import { spawn, type ChildProcess } from 'child_process'
 import { promises as fs } from 'fs'
 import type { SessionDelta } from '../../session/conversation-item.types'
 import type {
+  InteractionChoiceOption,
+  InteractionQuestion,
+  InteractionRequest,
+  InteractionResponse,
+} from '../../session/conversation-item.types'
+import type {
   Provider,
   SessionStartConfig,
   SessionHandle,
@@ -104,6 +110,15 @@ interface PendingApprovalRequest {
   denyResult: unknown
 }
 
+interface PendingUserInputQuestion {
+  id: string
+  requestQuestionId: string
+}
+
+interface PendingUserInputRequest {
+  questions: PendingUserInputQuestion[]
+}
+
 function findPendingApproval(
   pendingApprovals: Map<JsonRpcId, PendingApprovalRequest>,
   providerApprovalId: string | undefined,
@@ -127,6 +142,143 @@ function buildApprovalDescription(parts: Array<string | null>): string {
     .map((part) => part?.trim() ?? null)
     .filter((part): part is string => !!part)
     .join('\n\n')
+}
+
+function stringFromUnknown(value: unknown): string | null {
+  return typeof value === 'string' && value.trim() ? value.trim() : null
+}
+
+function normalizeCodexUserInputOption(
+  value: unknown,
+): InteractionChoiceOption | null {
+  if (!value || typeof value !== 'object') return null
+  const record = value as {
+    label?: unknown
+    value?: unknown
+    description?: unknown
+    preview?: unknown
+  }
+  const label =
+    stringFromUnknown(record.label) ?? stringFromUnknown(record.value)
+  if (!label) return null
+
+  return {
+    label,
+    description: stringFromUnknown(record.description) ?? undefined,
+    preview: stringFromUnknown(record.preview) ?? undefined,
+  }
+}
+
+function normalizeCodexUserInputQuestion(value: unknown): {
+  pending: PendingUserInputQuestion
+  question: InteractionQuestion
+} | null {
+  if (!value || typeof value !== 'object') return null
+  const record = value as {
+    id?: unknown
+    question?: unknown
+    prompt?: unknown
+    header?: unknown
+    options?: unknown
+    multiSelect?: unknown
+  }
+  const text =
+    stringFromUnknown(record.question) ??
+    stringFromUnknown(record.prompt) ??
+    stringFromUnknown(record.header)
+  if (!text) return null
+
+  const providerQuestionId =
+    stringFromUnknown(record.id) ?? stringFromUnknown(record.question) ?? text
+  const requestQuestionId = providerQuestionId
+  const options = Array.isArray(record.options)
+    ? record.options
+        .map(normalizeCodexUserInputOption)
+        .filter((option): option is InteractionChoiceOption => option !== null)
+    : []
+
+  return {
+    pending: {
+      id: providerQuestionId,
+      requestQuestionId,
+    },
+    question: {
+      id: requestQuestionId,
+      question: text,
+      header: stringFromUnknown(record.header) ?? text,
+      options,
+      multiSelect: record.multiSelect === true,
+    },
+  }
+}
+
+function buildCodexUserInputRequest(params: Record<string, unknown>): {
+  prompt: string
+  request: InteractionRequest
+  pending: PendingUserInputRequest
+} {
+  const normalized = Array.isArray(params.questions)
+    ? params.questions
+        .map(normalizeCodexUserInputQuestion)
+        .filter((entry): entry is NonNullable<typeof entry> => entry !== null)
+    : []
+
+  const prompt =
+    normalized.map((entry) => entry.question.question).join('\n') ||
+    stringFromUnknown(params.prompt) ||
+    stringFromUnknown(params.message) ||
+    'Input needed'
+
+  const choiceQuestions = normalized
+    .map((entry) => entry.question)
+    .filter((question) => question.options.length > 0)
+  const request: InteractionRequest =
+    choiceQuestions.length > 0
+      ? {
+          kind: 'choice',
+          questions: choiceQuestions,
+        }
+      : {
+          kind: 'text',
+          prompt,
+        }
+
+  return {
+    prompt,
+    request,
+    pending: {
+      questions: normalized.map((entry) => entry.pending),
+    },
+  }
+}
+
+function buildLegacyCodexAnswer(
+  pending: PendingUserInputRequest,
+  text: string,
+): Record<string, { answers: string[] }> {
+  return Object.fromEntries(
+    pending.questions.map((question) => [question.id, { answers: [text] }]),
+  )
+}
+
+function buildStructuredCodexAnswer(
+  pending: PendingUserInputRequest,
+  response: InteractionResponse,
+): Record<string, { answers: string[] }> {
+  if (response.kind !== 'choice') {
+    return {}
+  }
+
+  const answersByQuestionId = new Map(
+    response.answers.map((answer) => [answer.questionId, answer.values]),
+  )
+
+  return Object.fromEntries(
+    pending.questions.map((question) => [
+      question.id,
+      { answers: answersByQuestionId.get(question.requestQuestionId) ?? [] },
+    ]),
+  )
 }
 
 function readElicitationDefaultValue(schema: unknown): unknown {
@@ -452,7 +604,7 @@ export class CodexProvider implements Provider {
 
     // Map of pending approval request IDs (JSON-RPC id → approval response plan)
     const pendingApprovals = new Map<JsonRpcId, PendingApprovalRequest>()
-    const pendingUserInputs = new Map<JsonRpcId, string[]>()
+    const pendingUserInputs = new Map<JsonRpcId, PendingUserInputRequest>()
 
     function emitDelta(delta: SessionDelta): void {
       listeners.delta.forEach((cb) => cb(delta))
@@ -1195,40 +1347,14 @@ export class CodexProvider implements Provider {
           setAttention('needs-approval')
         } else if (method === 'item/tool/requestUserInput') {
           flushAssistantBuffer()
-          const questions = Array.isArray(p.questions) ? p.questions : []
-          const questionIds = questions
-            .map((question) => {
-              if (!question || typeof question !== 'object') return null
-              const record = question as {
-                id?: unknown
-                question?: unknown
-                prompt?: unknown
-                header?: unknown
-              }
-              return typeof record.id === 'string' ? record.id : null
-            })
-            .filter((questionId): questionId is string => questionId !== null)
-          const prompt =
-            questions
-              .map((question) => {
-                if (!question || typeof question !== 'object') return null
-                const record = question as {
-                  question?: unknown
-                  prompt?: unknown
-                  header?: unknown
-                }
-                if (typeof record.question === 'string') return record.question
-                if (typeof record.prompt === 'string') return record.prompt
-                if (typeof record.header === 'string') return record.header
-                return null
-              })
-              .filter((question): question is string => !!question)
-              .join('\n') || 'Input needed'
+          const inputRequest = buildCodexUserInputRequest(p)
 
-          pendingUserInputs.set(id, questionIds)
+          pendingUserInputs.set(id, inputRequest.pending)
 
           sessionEmitter.addInputRequest({
-            prompt,
+            prompt: inputRequest.prompt,
+            request: inputRequest.request,
+            providerItemId: String(id),
             providerEventType: method,
           })
           setAttention('needs-input')
@@ -1349,13 +1475,13 @@ export class CodexProvider implements Provider {
         const activeRpc = rpc
 
         const pendingUserInput = pendingUserInputs.entries().next().value as
-          | [number, string[]]
+          | [JsonRpcId, PendingUserInputRequest]
           | undefined
         if (pendingUserInput && deliveryMode !== 'steer') {
-          const [requestId, questionIds] = pendingUserInput
-          const answers = Object.fromEntries(
-            questionIds.map((questionId) => [questionId, { answers: [text] }]),
-          )
+          const [requestId, request] = pendingUserInput
+          const answers = options?.interactionResponse
+            ? buildStructuredCodexAnswer(request, options.interactionResponse)
+            : buildLegacyCodexAnswer(request, text)
           rpc.respond(requestId, { answers })
           pendingUserInputs.delete(requestId)
           setAttention('none')

@@ -6,6 +6,9 @@ import type {
   ConversationItemInsertRow,
   ConversationItemKind,
   ConversationItemState,
+  InteractionChoiceOption,
+  InteractionQuestion,
+  InteractionRequest,
 } from './conversation-item.types'
 import type {
   SkillInvocationStatus,
@@ -169,6 +172,76 @@ function parseSkillSelections(value: unknown): SkillSelection[] | undefined {
   return selections.length > 0 ? selections : undefined
 }
 
+function parseInteractionChoiceOption(
+  value: unknown,
+): InteractionChoiceOption | null {
+  if (!isRecord(value) || typeof value.label !== 'string') {
+    return null
+  }
+
+  return {
+    label: value.label,
+    description:
+      typeof value.description === 'string' ? value.description : undefined,
+    preview: typeof value.preview === 'string' ? value.preview : undefined,
+  }
+}
+
+function parseInteractionQuestion(value: unknown): InteractionQuestion | null {
+  if (
+    !isRecord(value) ||
+    typeof value.id !== 'string' ||
+    typeof value.question !== 'string' ||
+    typeof value.header !== 'string' ||
+    !Array.isArray(value.options) ||
+    typeof value.multiSelect !== 'boolean'
+  ) {
+    return null
+  }
+
+  const options = value.options
+    .map(parseInteractionChoiceOption)
+    .filter((option): option is InteractionChoiceOption => option !== null)
+
+  return {
+    id: value.id,
+    question: value.question,
+    header: value.header,
+    options,
+    multiSelect: value.multiSelect,
+  }
+}
+
+function parseInteractionRequest(
+  value: unknown,
+): InteractionRequest | undefined {
+  if (!isRecord(value)) {
+    return undefined
+  }
+
+  if (value.kind === 'text' && typeof value.prompt === 'string') {
+    return {
+      kind: 'text',
+      prompt: value.prompt,
+    }
+  }
+
+  if (value.kind === 'choice' && Array.isArray(value.questions)) {
+    const questions = value.questions
+      .map(parseInteractionQuestion)
+      .filter((question): question is InteractionQuestion => question !== null)
+
+    if (questions.length > 0) {
+      return {
+        kind: 'choice',
+        questions,
+      }
+    }
+  }
+
+  return undefined
+}
+
 export function buildConversationItemFromTranscriptEntry(
   input: BuildConversationItemFromTranscriptEntryInput,
 ): ConversationItem {
@@ -234,6 +307,10 @@ export function buildConversationItemFromTranscriptEntry(
         ...base,
         kind: 'input-request',
         prompt: input.entry.prompt,
+        request: {
+          kind: 'text',
+          prompt: input.entry.prompt,
+        },
       }
 
     case 'system':
@@ -380,6 +457,7 @@ export function conversationItemFromRow(
         ...base,
         kind,
         prompt: payload.prompt as string,
+        request: parseInteractionRequest(payload.request),
       }
 
     case 'note':

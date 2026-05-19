@@ -35,6 +35,7 @@ import type {
   ConversationItem,
   ConversationItemDraft,
   ConversationPatchEvent,
+  InteractionResponse,
   SessionDelta,
 } from './conversation-item.types'
 import {
@@ -56,6 +57,7 @@ export interface SendMessageInput {
   attachmentIds?: string[]
   skillSelections?: SkillSelection[]
   deliveryMode?: MidRunInputMode
+  interactionResponse?: InteractionResponse
   /**
    * Only consumed by `start`. Replaces the session's attached project context
    * items before computing the boot-injected block. Pass an empty array to
@@ -646,6 +648,7 @@ export class SessionService {
       input.input.skillSelections,
       {
         deliveryMode,
+        interactionResponse: input.input.interactionResponse,
       },
     )
   }

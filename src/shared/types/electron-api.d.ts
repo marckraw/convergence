@@ -545,8 +545,43 @@ interface SendSessionMessageInput {
   attachmentIds?: string[]
   skillSelections?: SkillSelection[]
   deliveryMode?: MidRunInputMode
+  interactionResponse?: InteractionResponseData
   contextItemIds?: string[]
 }
+
+interface InteractionChoiceOptionData {
+  label: string
+  description?: string
+  preview?: string
+}
+
+interface InteractionQuestionData {
+  id: string
+  question: string
+  header: string
+  options: InteractionChoiceOptionData[]
+  multiSelect: boolean
+}
+
+type InteractionRequestData =
+  | {
+      kind: 'text'
+      prompt: string
+    }
+  | {
+      kind: 'choice'
+      questions: InteractionQuestionData[]
+    }
+
+interface InteractionChoiceResponseData {
+  kind: 'choice'
+  answers: Array<{
+    questionId: string
+    values: string[]
+  }>
+}
+
+type InteractionResponseData = InteractionChoiceResponseData
 
 type ConversationItemKind =
   | 'message'
@@ -607,6 +642,7 @@ type ConversationItemData =
   | (ConversationItemDataBase & {
       kind: 'input-request'
       prompt: string
+      request?: InteractionRequestData
     })
   | (ConversationItemDataBase & {
       kind: 'note'

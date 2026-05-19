@@ -130,6 +130,51 @@ function approvalRequest(overrides: {
   }
 }
 
+function inputRequest(overrides: {
+  id: string
+  sequence: number
+  prompt?: string
+  providerItemId?: string | null
+}): ConversationItem {
+  return {
+    id: overrides.id,
+    sessionId: 'session-1',
+    sequence: overrides.sequence,
+    turnId: `turn-${overrides.sequence}`,
+    kind: 'input-request',
+    prompt: overrides.prompt ?? 'Where should scripts run?',
+    request: {
+      kind: 'choice',
+      questions: [
+        {
+          id: 'working_dir',
+          question: 'Where should scripts run?',
+          header: 'Working dir',
+          multiSelect: false,
+          options: [
+            {
+              label: 'Project root only',
+              description: 'Scripts always run in the main repo path.',
+            },
+            {
+              label: 'Active workspace',
+              description: 'Scripts run in the active worktree.',
+            },
+          ],
+        },
+      ],
+    },
+    state: 'complete',
+    createdAt: '2026-01-01T00:00:00.000Z',
+    updatedAt: '2026-01-01T00:00:00.000Z',
+    providerMeta: {
+      providerId: 'codex',
+      providerItemId: overrides.providerItemId ?? null,
+      providerEventType: 'item/tool/requestUserInput',
+    },
+  }
+}
+
 describe('SessionTranscript', () => {
   it('renders conversation rows through the virtual transcript surface', async () => {
     useAttachmentStore.setState({ resolved: {} })
@@ -143,6 +188,7 @@ describe('SessionTranscript', () => {
         ]}
         onApprove={vi.fn()}
         onDeny={vi.fn()}
+        onInputAnswer={vi.fn()}
       />,
     )
 
@@ -171,6 +217,7 @@ describe('SessionTranscript', () => {
         conversationItems={[approvalRequest({ id: 'approval-1', sequence: 1 })]}
         onApprove={onApprove}
         onDeny={onDeny}
+        onInputAnswer={vi.fn()}
       />,
     )
 
@@ -206,6 +253,7 @@ describe('SessionTranscript', () => {
         ]}
         onApprove={onApprove}
         onDeny={onDeny}
+        onInputAnswer={vi.fn()}
       />,
     )
 
@@ -240,6 +288,7 @@ describe('SessionTranscript', () => {
         ]}
         onApprove={onApprove}
         onDeny={onDeny}
+        onInputAnswer={vi.fn()}
       />,
     )
 
@@ -264,5 +313,48 @@ describe('SessionTranscript', () => {
 
     expect(onDeny).toHaveBeenCalledWith('session-1', '100')
     expect(onApprove).toHaveBeenCalledWith('session-1', '101')
+  })
+
+  it('answers active structured input requests from the transcript', async () => {
+    const onInputAnswer = vi.fn()
+
+    render(
+      <SessionTranscript
+        session={{
+          ...baseSession,
+          providerId: 'codex',
+          attention: 'needs-input',
+        }}
+        conversationItems={[
+          inputRequest({
+            id: 'input-1',
+            sequence: 1,
+            providerItemId: '100',
+          }),
+        ]}
+        onApprove={vi.fn()}
+        onDeny={vi.fn()}
+        onInputAnswer={onInputAnswer}
+      />,
+    )
+
+    fireEvent.click(
+      await screen.findByRole('button', { name: /Active workspace/ }),
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Answer' }))
+
+    expect(onInputAnswer).toHaveBeenCalledWith(
+      'session-1',
+      {
+        kind: 'choice',
+        answers: [
+          {
+            questionId: 'working_dir',
+            values: ['Active workspace'],
+          },
+        ],
+      },
+      'Where should scripts run?\nActive workspace',
+    )
   })
 })

@@ -591,6 +591,140 @@ describe('CodexProvider', () => {
     })
   })
 
+  it('surfaces Codex user-input questions as structured choice requests and answers them', async () => {
+    const child = new MockChildProcess()
+    const server = createMockCodexServer(child, {
+      autoCompleteTurns: false,
+      turnStartedId: 'codex-turn-1',
+    })
+    spawnMock.mockReturnValue(child)
+
+    const provider = new CodexProvider('/usr/local/bin/codex')
+    const handle = provider.start({
+      sessionId: 'session-1',
+      workingDirectory: process.cwd(),
+      initialMessage: 'configure project scripts',
+      initialAttachments: undefined,
+      model: 'gpt-5.4',
+      effort: 'medium',
+      continuationToken: null,
+    })
+
+    const items: Array<
+      Extract<SessionDelta, { kind: 'conversation.item.add' }>['item']
+    > = []
+    const attentions: string[] = []
+
+    handle.onDelta((delta) => {
+      if (delta.kind === 'conversation.item.add') {
+        items.push(delta.item)
+      }
+    })
+    handle.onStatusChange(() => {})
+    handle.onContinuationToken(() => {})
+    handle.onAttentionChange((attention) => {
+      attentions.push(attention)
+    })
+    handle.onContextWindowChange(() => {})
+    handle.onActivityChange(() => {})
+
+    await waitFor(() => {
+      expect(
+        server.requests.some((request) => request.method === 'turn/start'),
+      ).toBe(true)
+    })
+
+    child.stdout.write(
+      JSON.stringify({
+        jsonrpc: '2.0',
+        id: 100,
+        method: 'item/tool/requestUserInput',
+        params: {
+          questions: [
+            {
+              id: 'working_dir',
+              question: 'Where should scripts run?',
+              header: 'Working dir',
+              multiSelect: false,
+              options: [
+                {
+                  label: 'Project root only',
+                  description:
+                    'Scripts always run in the project main repo path.',
+                },
+                {
+                  label: 'Active workspace',
+                  description: 'Scripts run in the current worktree.',
+                },
+              ],
+            },
+          ],
+        },
+      }) + '\n',
+    )
+
+    await waitFor(() => {
+      expect(attentions).toContain('needs-input')
+      expect(items).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            kind: 'input-request',
+            prompt: 'Where should scripts run?',
+            request: {
+              kind: 'choice',
+              questions: [
+                expect.objectContaining({
+                  id: 'working_dir',
+                  question: 'Where should scripts run?',
+                  header: 'Working dir',
+                  options: [
+                    expect.objectContaining({
+                      label: 'Project root only',
+                    }),
+                    expect.objectContaining({
+                      label: 'Active workspace',
+                    }),
+                  ],
+                }),
+              ],
+            },
+            providerMeta: expect.objectContaining({
+              providerItemId: '100',
+              providerEventType: 'item/tool/requestUserInput',
+            }),
+          }),
+        ]),
+      )
+    })
+
+    handle.sendMessage('Active workspace', undefined, undefined, {
+      deliveryMode: 'answer',
+      interactionResponse: {
+        kind: 'choice',
+        answers: [
+          {
+            questionId: 'working_dir',
+            values: ['Active workspace'],
+          },
+        ],
+      },
+    })
+
+    await waitFor(() => {
+      expect(server.responses).toContainEqual({
+        id: 100,
+        result: {
+          answers: {
+            working_dir: {
+              answers: ['Active workspace'],
+            },
+          },
+        },
+      })
+      expect(attentions).toContain('none')
+    })
+  })
+
   it('responds to the requested Codex approval when an approval id is provided', async () => {
     const child = new MockChildProcess()
     const server = createMockCodexServer(child, {

@@ -1,4 +1,5 @@
 import type { FC } from 'react'
+import type { InteractionResponse } from '@/entities/session'
 import type { SkillSelection } from '@/entities/skill'
 import {
   User,
@@ -22,12 +23,14 @@ import {
 import { ConversationItemShell } from './conversation-item-shell.presentational'
 import { ConversationItemHeader } from './conversation-item-header.presentational'
 import { ConversationItemTimestamp } from './conversation-item-timestamp.presentational'
+import { ChoiceRequestForm } from './choice-request-form.presentational'
 import type { TranscriptEntryViewModel } from './transcript-entry.pure'
 
 interface ConversationItemViewProps {
   viewModel: TranscriptEntryViewModel
   onApprove?: () => void
   onDeny?: () => void
+  onInputAnswer?: (response: InteractionResponse, displayText: string) => void
   onAttachmentOpen?: (attachment: Attachment) => void
 }
 
@@ -38,6 +41,7 @@ export const ConversationItemView: FC<ConversationItemViewProps> = ({
   viewModel,
   onApprove,
   onDeny,
+  onInputAnswer,
   onAttachmentOpen,
 }) => {
   const { item: entry } = viewModel
@@ -283,6 +287,14 @@ export const ConversationItemView: FC<ConversationItemViewProps> = ({
                   content={entry.prompt}
                   size="sm"
                 />
+                {entry.request?.kind === 'choice' &&
+                  viewModel.actionableInput &&
+                  onInputAnswer && (
+                    <ChoiceRequestForm
+                      questions={entry.request.questions}
+                      onSubmit={onInputAnswer}
+                    />
+                  )}
               </div>
             </div>
           </div>

@@ -14,6 +14,40 @@ export type ConversationItemKind =
 
 export type ConversationItemState = 'streaming' | 'complete' | 'error'
 
+export interface InteractionChoiceOption {
+  label: string
+  description?: string
+  preview?: string
+}
+
+export interface InteractionQuestion {
+  id: string
+  question: string
+  header: string
+  options: InteractionChoiceOption[]
+  multiSelect: boolean
+}
+
+export type InteractionRequest =
+  | {
+      kind: 'text'
+      prompt: string
+    }
+  | {
+      kind: 'choice'
+      questions: InteractionQuestion[]
+    }
+
+export interface InteractionChoiceResponse {
+  kind: 'choice'
+  answers: Array<{
+    questionId: string
+    values: string[]
+  }>
+}
+
+export type InteractionResponse = InteractionChoiceResponse
+
 export interface ConversationItemBase {
   id: string
   sessionId: string
@@ -62,6 +96,7 @@ export type ConversationItem =
   | (ConversationItemBase & {
       kind: 'input-request'
       prompt: string
+      request?: InteractionRequest
     })
   | (ConversationItemBase & {
       kind: 'note'
