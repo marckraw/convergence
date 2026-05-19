@@ -242,6 +242,8 @@ function parseInteractionFormField(
     type: value.type as InteractionFormField['type'],
     required: value.required,
     defaultValue,
+    multiline:
+      typeof value.multiline === 'boolean' ? value.multiline : undefined,
   }
 }
 

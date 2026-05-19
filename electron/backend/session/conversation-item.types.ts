@@ -37,6 +37,7 @@ export interface InteractionFormField {
   type: InteractionFormFieldType
   required: boolean
   defaultValue?: string | number | boolean
+  multiline?: boolean
 }
 
 export type InteractionRequest =

@@ -572,6 +572,7 @@ interface InteractionFormFieldData {
   type: InteractionFormFieldTypeData
   required: boolean
   defaultValue?: string | number | boolean
+  multiline?: boolean
 }
 
 type InteractionRequestData =

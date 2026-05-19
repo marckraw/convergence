@@ -5,6 +5,7 @@ import type {
 } from '@/entities/session'
 import { Button } from '@/shared/ui/button'
 import { Input } from '@/shared/ui/input'
+import { Textarea } from '@/shared/ui/textarea'
 
 interface FormRequestFormProps {
   fields: InteractionFormField[]
@@ -60,6 +61,17 @@ export const FormRequestForm: FC<FormRequestFormProps> = ({
             defaultChecked={field.defaultValue === true}
             name={field.id}
             type="checkbox"
+          />
+        ) : field.multiline ? (
+          <Textarea
+            defaultValue={
+              field.defaultValue === undefined
+                ? undefined
+                : String(field.defaultValue)
+            }
+            name={field.id}
+            required={field.required}
+            rows={6}
           />
         ) : (
           <Input
