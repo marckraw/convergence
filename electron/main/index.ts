@@ -579,8 +579,8 @@ function handleStartupFailure(err: unknown): void {
 // Required for `<audio>.play()` to fire without a user gesture in the
 // renderer (notification chimes are dispatched from main-process events).
 app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required')
-// Windows forward-compat for system notifications; harmless on macOS.
-app.setAppUserModelId('com.convergence.app')
+// Windows notifications and taskbar identity need the packaged appId.
+app.setAppUserModelId('com.marckraw.convergence')
 
 app.whenReady().then(startApp).catch(handleStartupFailure)
 

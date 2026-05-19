@@ -9,6 +9,7 @@ import {
   getProviderBinaryDirectory,
   resolveNpmManagedProviderInstall,
 } from './provider-updater.pure'
+import { buildWindowsHiddenProcessOptions } from './shell-exec.pure'
 
 function execNpmUpdate(
   npmPath: string,
@@ -28,6 +29,7 @@ function execNpmUpdate(
             .join(delimiter),
         },
         maxBuffer: 1024 * 1024 * 8,
+        ...buildWindowsHiddenProcessOptions(npmPath, process.platform),
       },
       (error, stdout, stderr) => {
         if (error) {
@@ -61,6 +63,7 @@ function execProviderSelfUpdate(
             .join(delimiter),
         },
         maxBuffer: 1024 * 1024 * 8,
+        ...buildWindowsHiddenProcessOptions(binaryPath, process.platform),
       },
       (error, stdout, stderr) => {
         if (error) {

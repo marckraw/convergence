@@ -66,6 +66,7 @@ import {
 } from '../../skills/native-skill-invocation.pure'
 import { markSkillSelectionsStatus } from '../../skills/skill-invocation.pure'
 import type { SkillSelection } from '../../skills/skills.types'
+import { buildWindowsHiddenProcessOptions } from '../shell-exec.pure'
 
 function now(): string {
   return new Date().toISOString()
@@ -97,6 +98,7 @@ async function runPiOneShot(
       cwd: input.workingDirectory,
       stdio: ['pipe', 'pipe', 'pipe'],
       env: childEnv,
+      ...buildWindowsHiddenProcessOptions(binaryPath, process.platform),
     })
 
     const progress = createTaskProgressEmitter(input.requestId, taskProgress)
@@ -1031,6 +1033,7 @@ export class PiProvider implements Provider {
         cwd: config.workingDirectory,
         stdio: ['pipe', 'pipe', 'pipe'],
         env: childEnv,
+        ...buildWindowsHiddenProcessOptions(binaryPath, process.platform),
       })
 
       if (!child.stdin || !child.stdout) {

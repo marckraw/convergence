@@ -64,6 +64,7 @@ import type {
   ProviderDebugChannel,
   ProviderDebugEntry,
 } from '../../provider-debug/provider-debug.types'
+import { buildWindowsHiddenProcessOptions } from '../shell-exec.pure'
 
 async function loadCodexParts(
   attachments: Attachment[] | undefined,
@@ -305,6 +306,7 @@ function runCodexOneShot(
       cwd: input.workingDirectory,
       stdio: ['ignore', 'pipe', 'pipe'],
       env: { ...process.env },
+      ...buildWindowsHiddenProcessOptions(binaryPath, process.platform),
     })
 
     const progress = createTaskProgressEmitter(input.requestId, taskProgress)
@@ -934,6 +936,7 @@ export class CodexProvider implements Provider {
         cwd: config.workingDirectory,
         stdio: ['pipe', 'pipe', 'pipe'],
         env: { ...process.env },
+        ...buildWindowsHiddenProcessOptions(binaryPath, process.platform),
       })
 
       if (!child.stdin || !child.stdout) {
@@ -1474,6 +1477,7 @@ export class CodexProvider implements Provider {
       cwd: process.cwd(),
       stdio: ['pipe', 'pipe', 'pipe'],
       env: { ...process.env },
+      ...buildWindowsHiddenProcessOptions(this.binaryPath, process.platform),
     })
 
     if (!child.stdin || !child.stdout) {

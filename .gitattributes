@@ -1,0 +1,16 @@
+# Keep text diffs stable across macOS, Linux, and Windows checkouts.
+* text=auto eol=lf
+
+# Binary assets must not be line-ending normalized.
+*.png binary
+*.ico binary
+*.icns binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.webp binary
+*.zip binary
+*.dmg binary
+*.exe binary
+*.node binary
+*.wasm binary

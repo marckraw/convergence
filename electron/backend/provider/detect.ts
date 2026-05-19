@@ -14,6 +14,7 @@ import {
   buildNpmProviderInstallInfo,
   resolveNpmManagedProviderInstall,
 } from './provider-updater.pure'
+import { buildWindowsHiddenProcessOptions } from './shell-exec.pure'
 
 function which(binary: string): Promise<string | null> {
   const cmd = process.platform === 'win32' ? 'where' : 'which'
@@ -22,7 +23,13 @@ function which(binary: string): Promise<string | null> {
       if (error || !stdout.trim()) {
         resolve(null)
       } else {
-        resolve(stdout.trim().split('\n')[0])
+        resolve(
+          stdout
+            .trim()
+            .split(/\r?\n/)
+            .map((line) => line.trim())
+            .find(Boolean) ?? null,
+        )
       }
     })
   })
@@ -30,23 +37,33 @@ function which(binary: string): Promise<string | null> {
 
 function getVersion(binaryPath: string): Promise<string | null> {
   return new Promise((resolve) => {
-    execFile(binaryPath, ['--version'], { timeout: 5_000 }, (error, stdout) => {
-      if (error || !stdout.trim()) {
-        resolve(null)
-      } else {
-        resolve(stdout.trim().split('\n')[0])
-      }
-    })
+    execFile(
+      binaryPath,
+      ['--version'],
+      {
+        timeout: 5_000,
+        ...buildWindowsHiddenProcessOptions(binaryPath, process.platform),
+      },
+      (error, stdout) => {
+        if (error || !stdout.trim()) {
+          resolve(null)
+        } else {
+          resolve(stdout.trim().split(/\r?\n/)[0] ?? null)
+        }
+      },
+    )
   })
 }
 
-function getNodeVersion(nodePath: string): Promise<string | null> {
+function getNodeVersion(nodePath: string | null): Promise<string | null> {
+  if (!nodePath) return Promise.resolve(null)
+
   return new Promise((resolve) => {
     execFile(nodePath, ['--version'], { timeout: 5_000 }, (error, stdout) => {
       if (error || !stdout.trim()) {
         resolve(null)
       } else {
-        resolve(stdout.trim().split('\n')[0])
+        resolve(stdout.trim().split(/\r?\n/)[0] ?? null)
       }
     })
   })
@@ -73,11 +90,10 @@ async function inspectNpmInstall(
       return buildNonNpmProviderInstallInfo(realBinaryPath, providerId)
     }
 
-    const nodePath = join(
-      install.prefixDirectory,
-      'bin',
-      process.platform === 'win32' ? 'node.exe' : 'node',
-    )
+    const nodePath =
+      process.platform === 'win32'
+        ? await which('node')
+        : join(install.prefixDirectory, 'bin', 'node')
     const nodeVersion = await getNodeVersion(nodePath)
 
     return buildNpmProviderInstallInfo({
