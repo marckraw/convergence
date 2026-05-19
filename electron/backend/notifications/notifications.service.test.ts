@@ -132,6 +132,17 @@ describe('NotificationsService.onAttentionTransition', () => {
     expect(harness.dispatched[0].event.kind).toBe('agent.needs_input')
   })
 
+  it('formats structured input request notifications through needs-input settings', () => {
+    const session = makeSession({ attentionRequestKind: 'form' })
+    harness.service.onAttentionTransition('none', 'needs-input', session)
+
+    expect(harness.dispatched.length).toBeGreaterThan(0)
+    expect(harness.dispatched[0].event.kind).toBe('agent.needs_input')
+    expect(harness.dispatched[0].formatted.title).toBe(
+      'Refactor auth needs form input',
+    )
+  })
+
   it('fires nothing when next is none (resolution)', () => {
     const session = makeSession()
     harness.service.onAttentionTransition('none', 'finished', session)

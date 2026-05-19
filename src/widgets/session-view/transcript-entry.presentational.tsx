@@ -240,6 +240,8 @@ export const ConversationItemView: FC<ConversationItemViewProps> = ({
           <div
             className="my-2 max-w-full overflow-hidden rounded-lg border border-warning/30 bg-warning/5 p-4"
             data-testid="approval-request-card"
+            role="group"
+            aria-label="Approval needed"
           >
             <div className="flex min-w-0 items-start gap-3">
               <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-warning" />
@@ -285,6 +287,16 @@ export const ConversationItemView: FC<ConversationItemViewProps> = ({
                   ? 'border-emerald-500/30 bg-emerald-500/5'
                   : 'border-blue-500/30 bg-blue-500/5',
             ].join(' ')}
+            role="group"
+            aria-label={
+              entry.request?.kind === 'plan'
+                ? 'Plan review needed'
+                : entry.request?.kind === 'form'
+                  ? 'Form input needed'
+                  : entry.request?.kind === 'url'
+                    ? 'URL confirmation needed'
+                    : 'Input needed'
+            }
           >
             <div className="flex min-w-0 items-start gap-3">
               {entry.request?.kind === 'plan' ? (
@@ -343,7 +355,7 @@ export const ConversationItemView: FC<ConversationItemViewProps> = ({
                   </>
                 ) : entry.request?.kind === 'form' ? (
                   <>
-                    <p className="mt-1 text-sm font-medium">
+                    <p className="mt-1 break-words text-sm font-medium">
                       {entry.request.title}
                     </p>
                     <Markdown
@@ -360,7 +372,7 @@ export const ConversationItemView: FC<ConversationItemViewProps> = ({
                   </>
                 ) : entry.request?.kind === 'url' ? (
                   <>
-                    <p className="mt-1 text-sm font-medium">
+                    <p className="mt-1 break-words text-sm font-medium">
                       {entry.request.title}
                     </p>
                     <Markdown

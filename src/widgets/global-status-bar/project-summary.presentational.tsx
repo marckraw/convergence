@@ -1,6 +1,9 @@
 import type { FC } from 'react'
-import type { ProjectActivity } from '@/entities/session'
-import { formatActivityLabel } from '@/entities/session'
+import {
+  formatActivityLabel,
+  formatSessionAttentionLabel,
+  type ProjectActivity,
+} from '@/entities/session'
 import { cn } from '@/shared/lib/cn.pure'
 import { dotClass } from './global-status-bar.styles'
 
@@ -21,6 +24,11 @@ export const ProjectSummary: FC<ProjectSummaryProps> = ({
       </p>
       {rows.map((session) => {
         const activityLabel = formatActivityLabel(session.activity)
+        const attentionLabel =
+          session.attention === 'needs-approval' ||
+          session.attention === 'needs-input'
+            ? formatSessionAttentionLabel(session)
+            : null
         return (
           <div
             key={session.id}
@@ -41,12 +49,12 @@ export const ProjectSummary: FC<ProjectSummaryProps> = ({
             <span className="shrink-0 text-muted-foreground/80">
               · {providerLabel(session.providerId)}
             </span>
-            {activityLabel ? (
+            {attentionLabel || activityLabel ? (
               <span
                 className="shrink-0 truncate text-muted-foreground/70"
                 data-testid={`global-status-activity-${session.id}`}
               >
-                · {activityLabel}
+                · {attentionLabel ?? activityLabel}
               </span>
             ) : null}
           </div>

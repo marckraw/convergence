@@ -772,6 +772,14 @@ type TurnDeltaData =
 
 type SessionContextKindData = 'project' | 'global'
 
+type AttentionRequestKindData =
+  | 'approval'
+  | 'question'
+  | 'plan'
+  | 'form'
+  | 'url'
+  | 'input'
+
 interface SessionSummaryData {
   id: string
   contextKind: SessionContextKindData
@@ -783,6 +791,7 @@ interface SessionSummaryData {
   name: string
   status: SessionStatus
   attention: AttentionState
+  attentionRequestKind?: AttentionRequestKindData | null
   activity: ActivitySignal
   contextWindow: SessionContextWindow | null
   workingDirectory: string

@@ -76,7 +76,7 @@ export const ChoiceRequestForm: FC<ChoiceRequestFormProps> = ({
                     }))
                   }}
                 >
-                  <span className="min-w-0">
+                  <span className="min-w-0 break-words">
                     <span className="block font-medium">{option.label}</span>
                     {option.description ? (
                       <span className="mt-0.5 block text-xs leading-relaxed text-muted-foreground">
