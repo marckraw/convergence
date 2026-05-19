@@ -21,6 +21,7 @@ export type {
   ProviderUpdateStrategy,
   SessionQueuedInput,
   SessionContextWindow,
+  SessionContextKind,
   ActivitySignal,
   ReasoningEffort,
   ProviderEffortOption,

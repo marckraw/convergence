@@ -86,12 +86,22 @@ function makeSession(
   }
 }
 
+function makeGlobalChatSession(id: string, name: string): Session {
+  return {
+    ...makeSession(id, 'global', null, name),
+    contextKind: 'global',
+    projectId: null,
+    workingDirectory: '/tmp/convergence/global',
+  }
+}
+
 const alpha = makeProject('p1', 'alpha')
 const beta = makeProject('p2', 'beta')
 const alphaMain = makeWorkspace('w1', 'p1', 'main')
 const betaFeature = makeWorkspace('w2', 'p2', 'feature-x')
 const alphaSession = makeSession('s1', 'p1', 'w1', 'resolve auth bug')
 const betaSession = makeSession('s2', 'p2', 'w2', 'add telemetry')
+const chatSession = makeGlobalChatSession('chat-1', 'summarize roadmap')
 
 describe('CommandCenterContainer', () => {
   beforeEach(() => {
@@ -114,6 +124,7 @@ describe('CommandCenterContainer', () => {
     useSessionStore.setState({
       sessions: [alphaSession],
       globalSessions: [alphaSession, betaSession],
+      globalChatSessions: [chatSession],
       needsYouDismissals: {},
       recentSessionIds: [],
       currentProjectId: 'p1',
@@ -174,6 +185,69 @@ describe('CommandCenterContainer', () => {
     expect(useCommandCenterStore.getState().isOpen).toBe(false)
   })
 
+  it('selecting a session uses routed navigation when provided', () => {
+    const onSelectCodeSession = vi.fn()
+    render(<CommandCenterContainer onSelectCodeSession={onSelectCodeSession} />)
+
+    act(() => {
+      useCommandCenterStore.getState().open()
+    })
+
+    fireEvent.change(screen.getByPlaceholderText(/Search projects/i), {
+      target: { value: 'telemetry' },
+    })
+
+    fireEvent.click(screen.getByText('add telemetry'))
+
+    expect(onSelectCodeSession).toHaveBeenCalledWith('s2')
+    expect(intents.switchToSession).not.toHaveBeenCalled()
+    expect(useCommandCenterStore.getState().isOpen).toBe(false)
+  })
+
+  it('selecting a project uses routed project-root navigation when provided', () => {
+    const onSelectProject = vi.fn()
+    render(<CommandCenterContainer onSelectProject={onSelectProject} />)
+
+    act(() => {
+      useCommandCenterStore.getState().open()
+    })
+
+    fireEvent.change(screen.getByPlaceholderText(/Search projects/i), {
+      target: { value: 'beta' },
+    })
+
+    fireEvent.click(screen.getByRole('option', { name: /Project: beta/i }))
+
+    expect(onSelectProject).toHaveBeenCalledWith('p2')
+    expect(intents.activateProject).not.toHaveBeenCalled()
+    expect(useCommandCenterStore.getState().isOpen).toBe(false)
+  })
+
+  it('selecting a global chat session uses the chat route when provided', () => {
+    const onSelectCodeSession = vi.fn()
+    const onSelectChatSession = vi.fn()
+    render(
+      <CommandCenterContainer
+        onSelectCodeSession={onSelectCodeSession}
+        onSelectChatSession={onSelectChatSession}
+      />,
+    )
+
+    act(() => {
+      useCommandCenterStore.getState().open()
+    })
+
+    fireEvent.change(screen.getByPlaceholderText(/Search projects/i), {
+      target: { value: 'roadmap' },
+    })
+
+    fireEvent.click(screen.getByText('summarize roadmap'))
+
+    expect(onSelectChatSession).toHaveBeenCalledWith('chat-1')
+    expect(onSelectCodeSession).not.toHaveBeenCalled()
+    expect(intents.switchToSession).not.toHaveBeenCalled()
+  })
+
   it('Cmd+K keydown toggles the palette open and closed', () => {
     render(<CommandCenterContainer />)
 
@@ -208,6 +282,29 @@ describe('CommandCenterContainer', () => {
     fireEvent.click(screen.getByText('New session in feature-x'))
 
     expect(intents.beginSessionDraft).toHaveBeenCalledWith('w2')
+    expect(useCommandCenterStore.getState().isOpen).toBe(false)
+  })
+
+  it('uses routed navigation for New session when provided', () => {
+    const onBeginCodeSessionDraft = vi.fn()
+    render(
+      <CommandCenterContainer
+        onBeginCodeSessionDraft={onBeginCodeSessionDraft}
+      />,
+    )
+
+    act(() => {
+      useCommandCenterStore.getState().open()
+    })
+
+    fireEvent.change(screen.getByPlaceholderText(/Search projects/i), {
+      target: { value: 'feature-x' },
+    })
+
+    fireEvent.click(screen.getByText('New session in feature-x'))
+
+    expect(onBeginCodeSessionDraft).toHaveBeenCalledWith('w2')
+    expect(intents.beginSessionDraft).not.toHaveBeenCalled()
     expect(useCommandCenterStore.getState().isOpen).toBe(false)
   })
 
