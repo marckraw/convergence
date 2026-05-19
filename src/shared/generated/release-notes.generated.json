@@ -1,6 +1,11 @@
 {
-  "currentVersion": "0.37.11",
+  "currentVersion": "0.37.12",
   "releases": [
+    {
+      "version": "0.37.12",
+      "date": null,
+      "notes": "### Patch Changes\n\n- ba7197b: lefthook pre-commit hook management"
+    },
     {
       "version": "0.37.11",
       "date": null,

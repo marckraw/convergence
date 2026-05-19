@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { FC } from 'react'
 import type { SelectedLineRange } from '@pierre/diffs'
 import {
@@ -119,6 +119,9 @@ export const CodeReviewSurface: FC<CodeReviewSurfaceProps> = ({
   )
   const [pendingReviewNoteSelection, setPendingReviewNoteSelection] =
     useState<ReviewNote | null>(null)
+  const lastAppliedRouteFilePathRef = useRef<string | null | undefined>(
+    undefined,
+  )
 
   useEffect(() => {
     if (!activeProject) return
@@ -135,11 +138,10 @@ export const CodeReviewSurface: FC<CodeReviewSurfaceProps> = ({
   }, [routeMode, selectedMode, setSelectedMode])
 
   useEffect(() => {
-    if (routeFilePath === null) return
-    if (selectedFile !== routeFilePath) {
-      setSelectedFile(routeFilePath)
-    }
-  }, [routeFilePath, selectedFile, setSelectedFile])
+    if (lastAppliedRouteFilePathRef.current === routeFilePath) return
+    lastAppliedRouteFilePathRef.current = routeFilePath
+    setSelectedFile(routeFilePath)
+  }, [routeFilePath, setSelectedFile])
 
   useEffect(() => {
     if (!routeTargetId) return
@@ -394,8 +396,9 @@ export const CodeReviewSurface: FC<CodeReviewSurfaceProps> = ({
       setHoldEmptySelection(true)
       setStatusFilter(nextFilter)
       setSelectedFile(null)
+      onRouteSearchChange?.({ file: null })
     },
-    [setSelectedFile],
+    [onRouteSearchChange, setSelectedFile],
   )
 
   const handleSelectFile = useCallback(

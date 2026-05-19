@@ -3,47 +3,62 @@ import { render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { router } from './router'
 
-vi.mock('./App.container', () => ({
-  App: (props: {
-    mainViewRoute?: {
-      kind: string
-      sessionId?: string
-      workspaceId?: string | null
-      spaceId?: string
-      draftAttempt?: boolean
-      targetId?: string | null
-      mode?: string
-      filePath?: string | null
-    }
-    onSelectCodeSession?: (sessionId: string) => void
-    onBeginCodeSessionDraft?: (workspaceId: string) => void
-    onOpenCodeReview?: () => void
-  }) => (
-    <div
-      data-testid="app-shell"
-      data-route-kind={props.mainViewRoute?.kind ?? 'home'}
-      data-session-id={props.mainViewRoute?.sessionId ?? ''}
-      data-workspace-id={
-        'workspaceId' in (props.mainViewRoute ?? {})
-          ? String(props.mainViewRoute?.workspaceId ?? '')
-          : ''
-      }
-      data-space-id={props.mainViewRoute?.spaceId ?? ''}
-      data-space-draft={String(props.mainViewRoute?.draftAttempt ?? false)}
-      data-review-target-id={props.mainViewRoute?.targetId ?? ''}
-      data-review-mode={props.mainViewRoute?.mode ?? ''}
-      data-review-file={props.mainViewRoute?.filePath ?? ''}
-      data-routed-navigation={props.onSelectCodeSession ? 'true' : 'false'}
-      data-routed-draft={props.onBeginCodeSessionDraft ? 'true' : 'false'}
-      data-routed-review={props.onOpenCodeReview ? 'true' : 'false'}
-    >
-      App Shell
-    </div>
-  ),
+const { appMounts } = vi.hoisted(() => ({
+  appMounts: vi.fn(),
 }))
+
+vi.mock('./App.container', async () => {
+  const React = await import('react')
+
+  return {
+    App: (props: {
+      mainViewRoute?: {
+        kind: string
+        sessionId?: string
+        workspaceId?: string | null
+        spaceId?: string
+        draftAttempt?: boolean
+        targetId?: string | null
+        mode?: string
+        filePath?: string | null
+      }
+      onSelectCodeSession?: (sessionId: string) => void
+      onBeginCodeSessionDraft?: (workspaceId: string) => void
+      onOpenCodeReview?: () => void
+    }) => {
+      React.useEffect(() => {
+        appMounts()
+      }, [])
+
+      return (
+        <div
+          data-testid="app-shell"
+          data-route-kind={props.mainViewRoute?.kind ?? 'home'}
+          data-session-id={props.mainViewRoute?.sessionId ?? ''}
+          data-workspace-id={
+            'workspaceId' in (props.mainViewRoute ?? {})
+              ? String(props.mainViewRoute?.workspaceId ?? '')
+              : ''
+          }
+          data-space-id={props.mainViewRoute?.spaceId ?? ''}
+          data-space-draft={String(props.mainViewRoute?.draftAttempt ?? false)}
+          data-review-target-id={props.mainViewRoute?.targetId ?? ''}
+          data-review-mode={props.mainViewRoute?.mode ?? ''}
+          data-review-file={props.mainViewRoute?.filePath ?? ''}
+          data-routed-navigation={props.onSelectCodeSession ? 'true' : 'false'}
+          data-routed-draft={props.onBeginCodeSessionDraft ? 'true' : 'false'}
+          data-routed-review={props.onOpenCodeReview ? 'true' : 'false'}
+        >
+          App Shell
+        </div>
+      )
+    },
+  }
+})
 
 describe('app router', () => {
   beforeEach(async () => {
+    appMounts.mockClear()
     await router.navigate({ to: '/', replace: true })
   })
 
@@ -199,5 +214,52 @@ describe('app router', () => {
       'data-space-draft',
       'true',
     )
+  })
+
+  it('keeps the app shell mounted while navigating between main views', async () => {
+    render(<RouterProvider router={router} />)
+
+    await waitFor(() => {
+      expect(screen.getByTestId('app-shell')).toHaveAttribute(
+        'data-route-kind',
+        'home',
+      )
+    })
+    expect(appMounts).toHaveBeenCalledTimes(1)
+
+    await router.navigate({
+      to: '/code/sessions/$sessionId',
+      params: { sessionId: 'session-1' },
+    })
+    await waitFor(() => {
+      expect(screen.getByTestId('app-shell')).toHaveAttribute(
+        'data-route-kind',
+        'code-session',
+      )
+    })
+
+    await router.navigate({
+      to: '/code/review',
+      search: { targetId: null, mode: 'working-tree', file: null },
+    })
+    await waitFor(() => {
+      expect(screen.getByTestId('app-shell')).toHaveAttribute(
+        'data-route-kind',
+        'code-review',
+      )
+    })
+
+    await router.navigate({
+      to: '/chat/session/$sessionId',
+      params: { sessionId: 'chat-1' },
+    })
+    await waitFor(() => {
+      expect(screen.getByTestId('app-shell')).toHaveAttribute(
+        'data-route-kind',
+        'chat-session',
+      )
+    })
+
+    expect(appMounts).toHaveBeenCalledTimes(1)
   })
 })

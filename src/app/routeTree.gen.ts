@@ -13,9 +13,9 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as ChatIndexRouteImport } from './routes/chat/index'
 import { Route as CodeReviewRouteImport } from './routes/code/review'
 import { Route as CodeSessionsNewRouteImport } from './routes/code/sessions/new'
-import { Route as ChatSessionSessionIdRouteImport } from './routes/chat/session/$sessionId'
-import { Route as ChatSpaceSpaceIdRouteImport } from './routes/chat/space/$spaceId'
 import { Route as CodeSessionsSessionIdRouteImport } from './routes/code/sessions/$sessionId'
+import { Route as ChatSpaceSpaceIdRouteImport } from './routes/chat/space/$spaceId'
+import { Route as ChatSessionSessionIdRouteImport } from './routes/chat/session/$sessionId'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -23,8 +23,8 @@ const IndexRoute = IndexRouteImport.update({
   getParentRoute: () => rootRouteImport,
 } as any)
 const ChatIndexRoute = ChatIndexRouteImport.update({
-  id: '/chat',
-  path: '/chat',
+  id: '/chat/',
+  path: '/chat/',
   getParentRoute: () => rootRouteImport,
 } as any)
 const CodeReviewRoute = CodeReviewRouteImport.update({
@@ -37,9 +37,9 @@ const CodeSessionsNewRoute = CodeSessionsNewRouteImport.update({
   path: '/code/sessions/new',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ChatSessionSessionIdRoute = ChatSessionSessionIdRouteImport.update({
-  id: '/chat/session/$sessionId',
-  path: '/chat/session/$sessionId',
+const CodeSessionsSessionIdRoute = CodeSessionsSessionIdRouteImport.update({
+  id: '/code/sessions/$sessionId',
+  path: '/code/sessions/$sessionId',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ChatSpaceSpaceIdRoute = ChatSpaceSpaceIdRouteImport.update({
@@ -47,16 +47,16 @@ const ChatSpaceSpaceIdRoute = ChatSpaceSpaceIdRouteImport.update({
   path: '/chat/space/$spaceId',
   getParentRoute: () => rootRouteImport,
 } as any)
-const CodeSessionsSessionIdRoute = CodeSessionsSessionIdRouteImport.update({
-  id: '/code/sessions/$sessionId',
-  path: '/code/sessions/$sessionId',
+const ChatSessionSessionIdRoute = ChatSessionSessionIdRouteImport.update({
+  id: '/chat/session/$sessionId',
+  path: '/chat/session/$sessionId',
   getParentRoute: () => rootRouteImport,
 } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
-  '/chat': typeof ChatIndexRoute
   '/code/review': typeof CodeReviewRoute
+  '/chat/': typeof ChatIndexRoute
   '/chat/session/$sessionId': typeof ChatSessionSessionIdRoute
   '/chat/space/$spaceId': typeof ChatSpaceSpaceIdRoute
   '/code/sessions/$sessionId': typeof CodeSessionsSessionIdRoute
@@ -64,8 +64,8 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
-  '/chat': typeof ChatIndexRoute
   '/code/review': typeof CodeReviewRoute
+  '/chat': typeof ChatIndexRoute
   '/chat/session/$sessionId': typeof ChatSessionSessionIdRoute
   '/chat/space/$spaceId': typeof ChatSpaceSpaceIdRoute
   '/code/sessions/$sessionId': typeof CodeSessionsSessionIdRoute
@@ -74,8 +74,8 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
-  '/chat': typeof ChatIndexRoute
   '/code/review': typeof CodeReviewRoute
+  '/chat/': typeof ChatIndexRoute
   '/chat/session/$sessionId': typeof ChatSessionSessionIdRoute
   '/chat/space/$spaceId': typeof ChatSpaceSpaceIdRoute
   '/code/sessions/$sessionId': typeof CodeSessionsSessionIdRoute
@@ -85,8 +85,8 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
-    | '/chat'
     | '/code/review'
+    | '/chat/'
     | '/chat/session/$sessionId'
     | '/chat/space/$spaceId'
     | '/code/sessions/$sessionId'
@@ -94,8 +94,8 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
-    | '/chat'
     | '/code/review'
+    | '/chat'
     | '/chat/session/$sessionId'
     | '/chat/space/$spaceId'
     | '/code/sessions/$sessionId'
@@ -103,8 +103,8 @@ export interface FileRouteTypes {
   id:
     | '__root__'
     | '/'
-    | '/chat'
     | '/code/review'
+    | '/chat/'
     | '/chat/session/$sessionId'
     | '/chat/space/$spaceId'
     | '/code/sessions/$sessionId'
@@ -113,8 +113,8 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
-  ChatIndexRoute: typeof ChatIndexRoute
   CodeReviewRoute: typeof CodeReviewRoute
+  ChatIndexRoute: typeof ChatIndexRoute
   ChatSessionSessionIdRoute: typeof ChatSessionSessionIdRoute
   ChatSpaceSpaceIdRoute: typeof ChatSpaceSpaceIdRoute
   CodeSessionsSessionIdRoute: typeof CodeSessionsSessionIdRoute
@@ -130,10 +130,10 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/chat': {
-      id: '/chat'
+    '/chat/': {
+      id: '/chat/'
       path: '/chat'
-      fullPath: '/chat'
+      fullPath: '/chat/'
       preLoaderRoute: typeof ChatIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
@@ -142,20 +142,6 @@ declare module '@tanstack/react-router' {
       path: '/code/review'
       fullPath: '/code/review'
       preLoaderRoute: typeof CodeReviewRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/chat/session/$sessionId': {
-      id: '/chat/session/$sessionId'
-      path: '/chat/session/$sessionId'
-      fullPath: '/chat/session/$sessionId'
-      preLoaderRoute: typeof ChatSessionSessionIdRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/chat/space/$spaceId': {
-      id: '/chat/space/$spaceId'
-      path: '/chat/space/$spaceId'
-      fullPath: '/chat/space/$spaceId'
-      preLoaderRoute: typeof ChatSpaceSpaceIdRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/code/sessions/new': {
@@ -172,13 +158,27 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof CodeSessionsSessionIdRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/chat/space/$spaceId': {
+      id: '/chat/space/$spaceId'
+      path: '/chat/space/$spaceId'
+      fullPath: '/chat/space/$spaceId'
+      preLoaderRoute: typeof ChatSpaceSpaceIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/chat/session/$sessionId': {
+      id: '/chat/session/$sessionId'
+      path: '/chat/session/$sessionId'
+      fullPath: '/chat/session/$sessionId'
+      preLoaderRoute: typeof ChatSessionSessionIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
-  ChatIndexRoute: ChatIndexRoute,
   CodeReviewRoute: CodeReviewRoute,
+  ChatIndexRoute: ChatIndexRoute,
   ChatSessionSessionIdRoute: ChatSessionSessionIdRoute,
   ChatSpaceSpaceIdRoute: ChatSpaceSpaceIdRoute,
   CodeSessionsSessionIdRoute: CodeSessionsSessionIdRoute,
