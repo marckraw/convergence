@@ -11,6 +11,7 @@ import { useWorkspaceStore } from '@/entities/workspace'
 import { useSpaceStore } from '@/entities/space'
 import { useSessionStore, type SessionSummary } from '@/entities/session'
 import { useAppSurfaceStore } from '@/entities/app-surface'
+import { useCodeReviewStore } from '@/entities/code-review'
 import { App } from './App.container'
 import { DEFAULT_PROJECT_SETTINGS } from '@/entities/project'
 
@@ -323,6 +324,12 @@ describe('App', () => {
       error: null,
     })
     useAppSurfaceStore.setState({ activeSurface: 'code' })
+    useCodeReviewStore.setState({
+      isReviewOpen: false,
+      selectedMode: 'working-tree',
+      selectedFile: null,
+      selectedTarget: null,
+    })
   })
 
   it('shows welcome message when no project', async () => {
@@ -449,6 +456,34 @@ describe('App', () => {
     expect(sidebar.queryByText('Project Needs Review')).toBeNull()
   })
 
+  it('opens a direct chat session route', async () => {
+    const globalSession = makeSessionSummary({
+      id: 'global-session-1',
+      name: 'Route Chat',
+      contextKind: 'global',
+      projectId: null,
+      workspaceId: null,
+      workingDirectory: '/tmp/convergence/global',
+    })
+    mockElectronAPI.session.getGlobalSummaries.mockResolvedValue([
+      globalSession,
+    ])
+
+    render(
+      <App
+        mainViewRoute={{ kind: 'chat-session', sessionId: 'global-session-1' }}
+      />,
+    )
+
+    await waitFor(() => {
+      expect(screen.getAllByText('Route Chat').length).toBeGreaterThan(0)
+    })
+    expect(useAppSurfaceStore.getState().activeSurface).toBe('chat')
+    expect(useSessionStore.getState().activeGlobalSessionId).toBe(
+      'global-session-1',
+    )
+  })
+
   it('shows loading state', () => {
     mockElectronAPI.project.getActive.mockReturnValue(new Promise(() => {}))
 
@@ -479,5 +514,24 @@ describe('App', () => {
     await waitFor(() => {
       expect(screen.getByText('my-project')).toBeInTheDocument()
     })
+  })
+
+  it('applies code review route search state to the review store', async () => {
+    render(
+      <App
+        mainViewRoute={{
+          kind: 'code-review',
+          targetId: 'session:session-1',
+          mode: 'base-branch',
+          filePath: 'src/app.ts',
+        }}
+      />,
+    )
+
+    await waitFor(() => {
+      expect(useCodeReviewStore.getState().isReviewOpen).toBe(true)
+    })
+    expect(useCodeReviewStore.getState().selectedMode).toBe('base-branch')
+    expect(useCodeReviewStore.getState().selectedFile).toBe('src/app.ts')
   })
 })

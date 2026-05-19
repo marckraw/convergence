@@ -34,7 +34,19 @@ function detectPlatform(): 'mac' | 'other' {
   return navigator.platform.toLowerCase().includes('mac') ? 'mac' : 'other'
 }
 
-export function CommandCenterContainer() {
+interface CommandCenterContainerProps {
+  onSelectCodeSession?: (sessionId: string) => void
+  onSelectChatSession?: (sessionId: string) => void
+  onBeginCodeSessionDraft?: (workspaceId: string) => void
+  onOpenCodeReview?: () => void
+}
+
+export function CommandCenterContainer({
+  onSelectCodeSession,
+  onSelectChatSession,
+  onBeginCodeSessionDraft,
+  onOpenCodeReview,
+}: CommandCenterContainerProps = {}) {
   const isOpen = useCommandCenterStore((s) => s.isOpen)
   const query = useCommandCenterStore((s) => s.query)
   const open = useCommandCenterStore((s) => s.open)
@@ -45,6 +57,7 @@ export function CommandCenterContainer() {
   const projects = useProjectStore((s) => s.projects)
   const globalWorkspaces = useWorkspaceStore((s) => s.globalWorkspaces)
   const globalSessions = useSessionStore((s) => s.globalSessions)
+  const globalChatSessions = useSessionStore((s) => s.globalChatSessions)
   const recentSessionIds = useSessionStore((s) => s.recentSessionIds)
   const dismissals = useSessionStore((s) => s.needsYouDismissals)
   const activeSessionId = useSessionStore((s) => s.activeSessionId)
@@ -66,7 +79,7 @@ export function CommandCenterContainer() {
     return buildPaletteIndex({
       projects,
       workspaces: globalWorkspaces,
-      sessions: globalSessions,
+      sessions: [...globalSessions, ...globalChatSessions],
       recentSessionIds,
       dismissals,
       activeSessionId,
@@ -76,6 +89,7 @@ export function CommandCenterContainer() {
     projects,
     globalWorkspaces,
     globalSessions,
+    globalChatSessions,
     recentSessionIds,
     dismissals,
     activeSessionId,
@@ -120,7 +134,13 @@ export function CommandCenterContainer() {
       close()
       switch (item.kind) {
         case 'session':
-          void switchToSession(item.sessionId)
+          if (item.contextKind === 'global' && onSelectChatSession) {
+            onSelectChatSession(item.sessionId)
+          } else if (onSelectCodeSession) {
+            onSelectCodeSession(item.sessionId)
+          } else {
+            void switchToSession(item.sessionId)
+          }
           return
         case 'project':
           void activateProject(item.projectId)
@@ -132,7 +152,11 @@ export function CommandCenterContainer() {
           openDialog(item.dialogKind, item.dialogPayload)
           return
         case 'new-session':
-          void beginSessionDraft(item.workspaceId)
+          if (onBeginCodeSessionDraft) {
+            onBeginCodeSessionDraft(item.workspaceId)
+          } else {
+            void beginSessionDraft(item.workspaceId)
+          }
           return
         case 'new-terminal-session':
           void beginTerminalSessionDraft(item.workspaceId)
@@ -150,11 +174,21 @@ export function CommandCenterContainer() {
           void checkForUpdates()
           return
         case 'open-code-review':
-          openCodeReview()
+          if (onOpenCodeReview) {
+            onOpenCodeReview()
+          } else {
+            openCodeReview()
+          }
           return
       }
     },
-    [close],
+    [
+      close,
+      onBeginCodeSessionDraft,
+      onOpenCodeReview,
+      onSelectChatSession,
+      onSelectCodeSession,
+    ],
   )
 
   return (

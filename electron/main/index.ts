@@ -87,6 +87,7 @@ import { shouldOpenInSystemBrowser } from './external-links.pure'
 import { resolveAutoUpdater } from './auto-updater-module.pure'
 import { getWindowAppearanceOptions } from './window-effects.pure'
 import { formatStartupFailure } from './startup-failure.pure'
+import { resolveUserDataPath } from './user-data-path.pure'
 
 function createWindow(
   onClose?: () => void,
@@ -165,6 +166,14 @@ async function startApp(): Promise<void> {
   await hydrateProcessPathFromShell()
 
   let currentMainWindow: BrowserWindow | null = null
+
+  app.setPath(
+    'userData',
+    resolveUserDataPath({
+      defaultPath: app.getPath('userData'),
+      override: process.env.CONVERGENCE_USER_DATA_DIR,
+    }),
+  )
 
   const dbPath = join(app.getPath('userData'), 'convergence.db')
   const workspacesRoot = join(app.getPath('userData'), 'workspaces')

@@ -1,9 +1,15 @@
 import { useEffect } from 'react'
 import { useProjectStore } from '@/entities/project'
 import { useWorkspaceStore } from '@/entities/workspace'
-import { sessionApi, useSessionStore } from '@/entities/session'
+import {
+  sessionApi,
+  useSessionStore,
+  type SessionSummary,
+} from '@/entities/session'
 import { useTerminalStore } from '@/entities/terminal'
 import { useAppSettingsStore } from '@/entities/app-settings'
+import { useAppSurfaceStore } from '@/entities/app-surface'
+import { useCodeReviewStore, type CodeReviewMode } from '@/entities/code-review'
 import {
   notificationsApi,
   useNotificationsStore,
@@ -19,7 +25,11 @@ import { Toaster, toast } from 'sonner'
 import { TooltipProvider } from '@/shared/ui/tooltip'
 import { systemApi } from '@/shared'
 import { applyTheme, getStoredTheme } from '@/shared/lib/theme'
-import { CommandCenterContainer } from '@/features/command-center'
+import {
+  beginSessionDraft,
+  CommandCenterContainer,
+  switchToSession,
+} from '@/features/command-center'
 import { SpaceSessionLinkDialogContainer } from '@/features/space-session-link'
 import { SessionForkDialogContainer } from '@/features/session-fork'
 import { SessionIntentDialogContainer } from '@/features/session-intent-dialog'
@@ -30,7 +40,83 @@ import { ProviderUpdatesToastContainer } from '@/features/provider-updates-toast
 import { FeedbackButtonContainer } from '@/features/feedback-button'
 import { AppShell } from './App.layout'
 
-export function App() {
+export type MainViewRoute =
+  | { kind: 'home' }
+  | { kind: 'code-session'; sessionId: string }
+  | { kind: 'new-code-session'; workspaceId: string | null }
+  | { kind: 'chat-home' }
+  | { kind: 'chat-session'; sessionId: string }
+  | { kind: 'chat-space'; spaceId: string; draftAttempt: boolean }
+  | {
+      kind: 'code-review'
+      targetId: string | null
+      mode: CodeReviewMode
+      filePath: string | null
+    }
+
+interface AppProps {
+  mainViewRoute?: MainViewRoute
+  onSelectCodeSession?: (sessionId: string) => void
+  onBeginCodeSessionDraft?: (workspaceId: string) => void
+  onOpenCodeReview?: (search?: {
+    targetId?: string | null
+    mode?: CodeReviewMode
+    file?: string | null
+  }) => void
+  onCodeReviewSearchChange?: (search: {
+    targetId?: string | null
+    mode?: CodeReviewMode
+    file?: string | null
+  }) => void
+  onCloseCodeReview?: () => void
+  onSelectChatSession?: (sessionId: string) => void
+  onSelectChatSpace?: (spaceId: string, options?: { draft?: boolean }) => void
+  onBeginChatSpaceAttempt?: (spaceId: string) => void
+  onCancelChatSpaceAttempt?: (spaceId: string) => void
+  onSelectAnySession?: (session: SessionSummary) => void
+  onShowCode?: () => void
+  onShowChat?: () => void
+  onNewGlobalChat?: () => void
+}
+
+export function App({
+  mainViewRoute = { kind: 'home' },
+  onSelectCodeSession,
+  onBeginCodeSessionDraft,
+  onOpenCodeReview,
+  onCodeReviewSearchChange,
+  onCloseCodeReview,
+  onSelectChatSession,
+  onSelectChatSpace,
+  onBeginChatSpaceAttempt,
+  onCancelChatSpaceAttempt,
+  onSelectAnySession,
+  onShowCode,
+  onShowChat,
+  onNewGlobalChat,
+}: AppProps) {
+  const routeCodeSessionId =
+    mainViewRoute.kind === 'code-session' ? mainViewRoute.sessionId : null
+  const routeNewCodeSessionWorkspaceId =
+    mainViewRoute.kind === 'new-code-session' ? mainViewRoute.workspaceId : null
+  const routeNewCodeSessionActive = mainViewRoute.kind === 'new-code-session'
+  const routeCodeReviewMode =
+    mainViewRoute.kind === 'code-review' ? mainViewRoute.mode : null
+  const routeCodeReviewFilePath =
+    mainViewRoute.kind === 'code-review' ? mainViewRoute.filePath : null
+  const routeCodeReviewTargetId =
+    mainViewRoute.kind === 'code-review' ? mainViewRoute.targetId : null
+  const routeCodeReviewActive = mainViewRoute.kind === 'code-review'
+  const routeChatSessionId =
+    mainViewRoute.kind === 'chat-session' ? mainViewRoute.sessionId : null
+  const routeChatSpaceId =
+    mainViewRoute.kind === 'chat-space' ? mainViewRoute.spaceId : null
+  const routeChatSpaceDraftAttempt =
+    mainViewRoute.kind === 'chat-space' ? mainViewRoute.draftAttempt : false
+  const routeChatActive =
+    mainViewRoute.kind === 'chat-home' ||
+    mainViewRoute.kind === 'chat-session' ||
+    mainViewRoute.kind === 'chat-space'
   const loadActiveProject = useProjectStore((s) => s.loadActiveProject)
   const activeProject = useProjectStore((s) => s.activeProject)
   const loading = useProjectStore((s) => s.loading)
@@ -60,9 +146,24 @@ export function App() {
   const loadGlobalChatSessions = useSessionStore(
     (s) => s.loadGlobalChatSessions,
   )
+  const routeSessionLoaded = useSessionStore((s) =>
+    routeCodeSessionId
+      ? s.globalSessions.some((session) => session.id === routeCodeSessionId)
+      : false,
+  )
+  const routeChatSessionLoaded = useSessionStore((s) =>
+    routeChatSessionId
+      ? s.globalChatSessions.some(
+          (session) => session.id === routeChatSessionId,
+        )
+      : false,
+  )
   const loadRecents = useSessionStore((s) => s.loadRecents)
   const loadAppSettings = useAppSettingsStore((s) => s.load)
   const loadNotificationPrefs = useNotificationsStore((s) => s.loadPrefs)
+  const setActiveSurface = useAppSurfaceStore((s) => s.setActiveSurface)
+  const openCodeReview = useCodeReviewStore((s) => s.openReview)
+  const closeCodeReview = useCodeReviewStore((s) => s.closeReview)
   const setNotificationActiveSession = useNotificationsStore(
     (s) => s.setActiveSession,
   )
@@ -136,6 +237,78 @@ export function App() {
   useEffect(() => {
     void setNotificationActiveSession(activeSessionId)
   }, [activeSessionId, setNotificationActiveSession])
+
+  useEffect(() => {
+    if (!routeCodeSessionId) return
+    if (!routeSessionLoaded) return
+    if (activeSessionId === routeCodeSessionId) return
+
+    void switchToSession(routeCodeSessionId)
+  }, [activeSessionId, routeCodeSessionId, routeSessionLoaded])
+
+  useEffect(() => {
+    if (!routeChatActive) return
+
+    closeCodeReview()
+    setActiveSurface('chat')
+
+    if (!routeChatSessionId) {
+      if (activeGlobalSessionId !== null) {
+        setActiveGlobalSession(null)
+      }
+      return
+    }
+
+    if (!routeChatSessionLoaded) return
+    if (activeGlobalSessionId === routeChatSessionId) return
+    setActiveGlobalSession(routeChatSessionId)
+  }, [
+    activeGlobalSessionId,
+    closeCodeReview,
+    routeChatActive,
+    routeChatSessionId,
+    routeChatSessionLoaded,
+    setActiveGlobalSession,
+    setActiveSurface,
+  ])
+
+  useEffect(() => {
+    if (routeCodeReviewActive) {
+      setActiveSurface('code')
+      openCodeReview({
+        mode: routeCodeReviewMode ?? 'working-tree',
+        selectedFile: routeCodeReviewFilePath,
+      })
+      return
+    }
+
+    if (routeCodeSessionId) {
+      closeCodeReview()
+    }
+  }, [
+    closeCodeReview,
+    openCodeReview,
+    routeCodeReviewActive,
+    routeCodeReviewFilePath,
+    routeCodeReviewMode,
+    routeCodeSessionId,
+    setActiveSurface,
+  ])
+
+  useEffect(() => {
+    if (!routeNewCodeSessionActive) return
+
+    closeCodeReview()
+    setActiveSurface('code')
+    if (routeNewCodeSessionWorkspaceId) {
+      void beginSessionDraft(routeNewCodeSessionWorkspaceId)
+    }
+  }, [
+    closeCodeReview,
+    routeNewCodeSessionActive,
+    routeNewCodeSessionWorkspaceId,
+    setActiveSurface,
+  ])
 
   useEffect(() => {
     // Drain pending terminal-layout debounced saves on window close so a
@@ -227,23 +400,59 @@ export function App() {
     }
   }, [sessionError, clearSessionError])
 
+  const handleOpenCodeReview = (
+    search?: Parameters<NonNullable<AppProps['onOpenCodeReview']>>[0],
+  ) => {
+    if (onOpenCodeReview) {
+      onOpenCodeReview(search)
+      return
+    }
+
+    openCodeReview({
+      mode: search?.mode,
+      selectedFile: search?.file,
+    })
+  }
+
   return (
     <TooltipProvider delayDuration={1500}>
       <AppShell
         activeSessionId={activeSessionId}
         activeGlobalSessionId={activeGlobalSessionId}
-        onSelectSession={setActiveSession}
+        onSelectSession={onSelectCodeSession ?? setActiveSession}
         onSelectGlobalSession={setActiveGlobalSession}
+        onOpenCodeReview={handleOpenCodeReview}
+        onCodeReviewSearchChange={onCodeReviewSearchChange}
+        onCloseCodeReview={onCloseCodeReview ?? closeCodeReview}
+        codeReviewActive={routeCodeReviewActive}
+        codeReviewTargetId={routeCodeReviewTargetId}
+        codeReviewMode={routeCodeReviewMode ?? 'working-tree'}
+        codeReviewFilePath={routeCodeReviewFilePath}
+        selectedChatSpaceId={routeChatSpaceId}
+        draftChatSpaceId={routeChatSpaceDraftAttempt ? routeChatSpaceId : null}
+        onSelectChatSession={onSelectChatSession ?? setActiveGlobalSession}
+        onSelectChatSpace={onSelectChatSpace}
+        onBeginChatSpaceAttempt={onBeginChatSpaceAttempt}
+        onCancelChatSpaceAttempt={onCancelChatSpaceAttempt}
+        onSelectAnySession={onSelectAnySession}
+        onShowCode={onShowCode}
+        onShowChat={onShowChat}
+        onNewGlobalChat={onNewGlobalChat}
         loading={loading}
         hasProject={!!activeProject}
         showDevelopmentRibbon={import.meta.env.DEV}
       />
-      <CommandCenterContainer />
+      <CommandCenterContainer
+        onSelectCodeSession={onSelectCodeSession}
+        onSelectChatSession={onSelectChatSession}
+        onBeginCodeSessionDraft={onBeginCodeSessionDraft}
+        onOpenCodeReview={() => handleOpenCodeReview()}
+      />
       <SpaceSessionLinkDialogContainer />
       <SessionForkDialogContainer />
       <SessionIntentDialogContainer />
       <PullRequestReviewStartDialogContainer />
-      <NotificationsToastHostContainer />
+      <NotificationsToastHostContainer onFocusSession={onSelectAnySession} />
       <UpdatesToastContainer />
       <ProviderUpdatesToastContainer />
       <FeedbackButtonContainer />

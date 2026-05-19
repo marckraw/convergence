@@ -382,6 +382,20 @@ describe('CodeReviewSurface', () => {
     expect(setSelectedFile).toHaveBeenCalledWith(null)
   })
 
+  it('emits route search changes for target, mode, and file selections', () => {
+    const onRouteSearchChange = vi.fn()
+    render(<CodeReviewSurface onRouteSearchChange={onRouteSearchChange} />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Base Branch' }))
+    expect(onRouteSearchChange).toHaveBeenCalledWith({
+      mode: 'base-branch',
+      file: null,
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: 'src/new.ts' }))
+    expect(onRouteSearchChange).toHaveBeenCalledWith({ file: 'src/new.ts' })
+  })
+
   it('force refreshes the active summary and selected-file patch', () => {
     render(<CodeReviewSurface />)
 

@@ -43,7 +43,25 @@ import { CodeReviewNotesRail } from './code-review-notes-rail.presentational'
 import { CodeReviewTargetRail } from './code-review-target-rail.presentational'
 import { CodeReviewToolbar } from './code-review-toolbar.presentational'
 
-export const CodeReviewSurface: FC = () => {
+interface CodeReviewSurfaceProps {
+  routeTargetId?: string | null
+  routeMode?: CodeReviewMode
+  routeFilePath?: string | null
+  onRouteSearchChange?: (search: {
+    targetId?: string | null
+    mode?: CodeReviewMode
+    file?: string | null
+  }) => void
+  onClose?: () => void
+}
+
+export const CodeReviewSurface: FC<CodeReviewSurfaceProps> = ({
+  routeTargetId = null,
+  routeMode = 'working-tree',
+  routeFilePath = null,
+  onRouteSearchChange,
+  onClose,
+}) => {
   const activeProject = useProjectStore((state) => state.activeProject)
   const activeSessionId = useSessionStore((state) => state.activeSessionId)
   const targets = useCodeReviewStore((state) => state.targets)
@@ -109,6 +127,28 @@ export const CodeReviewSurface: FC = () => {
       sessionId: activeSessionId,
     })
   }, [activeProject, activeSessionId, loadTargets])
+
+  useEffect(() => {
+    if (selectedMode !== routeMode) {
+      setSelectedMode(routeMode)
+    }
+  }, [routeMode, selectedMode, setSelectedMode])
+
+  useEffect(() => {
+    if (routeFilePath === null) return
+    if (selectedFile !== routeFilePath) {
+      setSelectedFile(routeFilePath)
+    }
+  }, [routeFilePath, selectedFile, setSelectedFile])
+
+  useEffect(() => {
+    if (!routeTargetId) return
+    if (selectedTarget?.id === routeTargetId) return
+
+    const nextTarget = targets.find((target) => target.id === routeTargetId)
+    if (!nextTarget) return
+    setSelectedTarget(nextTarget)
+  }, [routeTargetId, selectedTarget?.id, setSelectedTarget, targets])
 
   useEffect(() => {
     if (selectedMode === 'base-branch' && !selectedTarget?.sessionId) {
@@ -333,8 +373,9 @@ export const CodeReviewSurface: FC = () => {
       setSelectedTarget(target)
       setSelectedFile(null)
       setStatusFilter('all')
+      onRouteSearchChange?.({ targetId: target.id, file: null })
     },
-    [setSelectedFile, setSelectedTarget],
+    [onRouteSearchChange, setSelectedFile, setSelectedTarget],
   )
 
   const handleModeChange = useCallback(
@@ -343,8 +384,9 @@ export const CodeReviewSurface: FC = () => {
       setSelectedMode(mode)
       setSelectedFile(null)
       setStatusFilter('all')
+      onRouteSearchChange?.({ mode, file: null })
     },
-    [setSelectedFile, setSelectedMode],
+    [onRouteSearchChange, setSelectedFile, setSelectedMode],
   )
 
   const handleStatusFilterChange = useCallback(
@@ -361,9 +403,10 @@ export const CodeReviewSurface: FC = () => {
       if (visibleFiles.some((file) => file.file === filePath)) {
         setHoldEmptySelection(false)
         setSelectedFile(filePath)
+        onRouteSearchChange?.({ file: filePath })
       }
     },
-    [setSelectedFile, visibleFiles],
+    [onRouteSearchChange, setSelectedFile, visibleFiles],
   )
 
   const handlePierreDiffSelection = useCallback(
@@ -523,7 +566,7 @@ export const CodeReviewSurface: FC = () => {
         loading={summaryLoading || diffLoading}
         onModeChange={handleModeChange}
         onRefresh={handleRefresh}
-        onClose={closeReview}
+        onClose={onClose ?? closeReview}
       />
 
       <div className="grid min-h-0 flex-1 grid-cols-[minmax(280px,360px)_minmax(260px,320px)_minmax(0,1fr)_minmax(240px,300px)] overflow-hidden">

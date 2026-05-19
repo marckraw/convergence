@@ -343,6 +343,40 @@ describe('NotificationsToastHostContainer', () => {
     expect(setActiveSession).not.toHaveBeenCalled()
   })
 
+  it('focus-session delegates to routed navigation when provided', () => {
+    const { hooks } = installNotificationApi()
+    const onFocusSession = vi.fn()
+    const session: Session = {
+      id: 'sess-routed',
+      contextKind: 'global',
+      projectId: null,
+      workspaceId: null,
+      providerId: 'claude-code',
+      model: 'sonnet',
+      effort: 'medium',
+      name: 'Routed chat',
+      status: 'completed',
+      attention: 'finished',
+      workingDirectory: '/tmp/convergence/global',
+      activity: null,
+      contextWindow: null,
+      archivedAt: null,
+      parentSessionId: null,
+      forkStrategy: null,
+      primarySurface: 'conversation' as const,
+      continuationToken: null,
+      lastSequence: 0,
+      createdAt: '2026-01-01T00:00:00.000Z',
+      updatedAt: '2026-01-01T00:00:00.000Z',
+    } as Session
+    useSessionStore.setState({ globalSessions: [session] } as never)
+
+    render(<NotificationsToastHostContainer onFocusSession={onFocusSession} />)
+    hooks.focus?.('sess-routed')
+
+    expect(onFocusSession).toHaveBeenCalledWith(session)
+  })
+
   it('focus-session is a no-op when the session id is unknown', async () => {
     const setActiveSession = vi.fn()
     useSessionStore.setState({ globalSessions: [], setActiveSession } as never)

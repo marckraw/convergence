@@ -23,6 +23,7 @@ const session: SessionPaletteItem = {
   kind: 'session',
   id: 'session:s1',
   sessionId: 's1',
+  contextKind: 'project',
   projectId: 'p1',
   workspaceId: 'w1',
   sessionName: 'fix login bug',
