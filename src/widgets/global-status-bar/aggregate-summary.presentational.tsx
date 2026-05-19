@@ -1,5 +1,8 @@
 import type { FC } from 'react'
-import type { ProjectActivity } from '@/entities/session'
+import {
+  summarizeAttentionRequests,
+  type ProjectActivity,
+} from '@/entities/session'
 
 interface AggregateSummaryProps {
   byProject: ProjectActivity[]
@@ -21,8 +24,11 @@ export const AggregateSummary: FC<AggregateSummaryProps> = ({
             {project.projectName}
           </p>
           <p className="text-[11px] text-muted-foreground">
-            {project.running.length} running · {project.needsAttention.length}{' '}
-            need you · {project.providerIds.map(providerLabel).join(', ')}
+            {project.running.length} running ·{' '}
+            {project.needsAttention.length > 0
+              ? summarizeAttentionRequests(project.needsAttention)
+              : '0 need you'}{' '}
+            · {project.providerIds.map(providerLabel).join(', ')}
           </p>
         </div>
       ))}

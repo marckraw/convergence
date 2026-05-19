@@ -84,6 +84,7 @@ export const SessionView: FC = () => {
   const [debugDrawerOpen, setDebugDrawerOpen] = useState(false)
   const approveSession = useSessionStore((s) => s.approveSession)
   const denySession = useSessionStore((s) => s.denySession)
+  const sendMessageToSession = useSessionStore((s) => s.sendMessageToSession)
   const stopSession = useSessionStore((s) => s.stopSession)
   const hydratePaneTree = useTerminalStore((s) => s.hydratePaneTree)
   const closeAllTerminals = useTerminalStore((s) => s.closeAllForSession)
@@ -620,6 +621,16 @@ export const SessionView: FC = () => {
           }
           onApprove={approveSession}
           onDeny={denySession}
+          onInputAnswer={(sessionId, response, displayText) => {
+            void sendMessageToSession(
+              sessionId,
+              displayText,
+              undefined,
+              undefined,
+              'answer',
+              response,
+            )
+          }}
         />
       </div>
 

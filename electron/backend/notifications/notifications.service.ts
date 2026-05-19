@@ -54,7 +54,10 @@ export class NotificationsService {
 
   buildEvent(
     kind: NotificationEvent['kind'],
-    session: Pick<Session, 'id' | 'name' | 'projectId'>,
+    session: Pick<
+      Session,
+      'id' | 'name' | 'projectId' | 'attentionRequestKind'
+    >,
   ): NotificationEvent {
     const projectName = session.projectId
       ? this.deps.getProjectName(session.projectId)
@@ -66,6 +69,7 @@ export class NotificationsService {
       sessionId: session.id,
       sessionName: session.name,
       projectName: projectName ?? 'Convergence',
+      attentionRequestKind: session.attentionRequestKind ?? null,
       firedAt: this.deps.now ? this.deps.now() : Date.now(),
     }
   }

@@ -24,6 +24,7 @@ import type { AttachmentsService } from '../attachments/attachments.service'
 import type { SkillSelection } from '../skills/skills.types'
 import {
   sessionSummaryFromRow,
+  type AttentionRequestKind,
   type Session,
   type SessionSummary,
   type CreateSessionInput,
@@ -35,6 +36,7 @@ import type {
   ConversationItem,
   ConversationItemDraft,
   ConversationPatchEvent,
+  InteractionResponse,
   SessionDelta,
 } from './conversation-item.types'
 import {
@@ -56,6 +58,7 @@ export interface SendMessageInput {
   attachmentIds?: string[]
   skillSelections?: SkillSelection[]
   deliveryMode?: MidRunInputMode
+  interactionResponse?: InteractionResponse
   /**
    * Only consumed by `start`. Replaces the session's attached project context
    * items before computing the boot-injected block. Pass an empty array to
@@ -336,7 +339,7 @@ export class SessionService {
       )
       .all(projectId) as SessionRow[]
 
-    return rows.map(sessionSummaryFromRow)
+    return rows.map((row) => this.buildSessionSummary(row))
   }
 
   getAll(): Session[] {
@@ -344,7 +347,7 @@ export class SessionService {
       .prepare('SELECT * FROM sessions ORDER BY created_at DESC')
       .all() as SessionRow[]
 
-    return rows.map(sessionSummaryFromRow)
+    return rows.map((row) => this.buildSessionSummary(row))
   }
 
   getSummariesByProjectId(projectId: string): SessionSummary[] {
@@ -354,7 +357,7 @@ export class SessionService {
       )
       .all(projectId) as SessionRow[]
 
-    return rows.map(sessionSummaryFromRow)
+    return rows.map((row) => this.buildSessionSummary(row))
   }
 
   getGlobalSummaries(): SessionSummary[] {
@@ -364,7 +367,7 @@ export class SessionService {
       )
       .all() as SessionRow[]
 
-    return rows.map(sessionSummaryFromRow)
+    return rows.map((row) => this.buildSessionSummary(row))
   }
 
   getAllSummaries(): SessionSummary[] {
@@ -372,18 +375,78 @@ export class SessionService {
       .prepare('SELECT * FROM sessions ORDER BY created_at DESC')
       .all() as SessionRow[]
 
-    return rows.map(sessionSummaryFromRow)
+    return rows.map((row) => this.buildSessionSummary(row))
   }
 
   getById(id: string): Session | null {
     const row = this.getRowById(id)
 
-    return row ? sessionSummaryFromRow(row) : null
+    return row ? this.buildSessionSummary(row) : null
   }
 
   getSummaryById(id: string): SessionSummary | null {
     const row = this.getRowById(id)
-    return row ? sessionSummaryFromRow(row) : null
+    return row ? this.buildSessionSummary(row) : null
+  }
+
+  private buildSessionSummary(row: SessionRow): SessionSummary {
+    const summary = sessionSummaryFromRow(row)
+    const attentionRequestKind = this.readAttentionRequestKind(summary)
+    return attentionRequestKind ? { ...summary, attentionRequestKind } : summary
+  }
+
+  private readAttentionRequestKind(
+    summary: Pick<SessionSummary, 'id' | 'attention'>,
+  ): AttentionRequestKind | null {
+    if (
+      summary.attention !== 'needs-approval' &&
+      summary.attention !== 'needs-input'
+    ) {
+      return null
+    }
+
+    const row = this.db
+      .prepare(
+        `SELECT kind, payload_json
+         FROM session_conversation_items
+         WHERE session_id = ?
+           AND kind IN ('approval-request', 'input-request')
+         ORDER BY sequence DESC
+         LIMIT 1`,
+      )
+      .get(summary.id) as
+      | { kind: 'approval-request' | 'input-request'; payload_json: string }
+      | undefined
+
+    if (!row) {
+      return summary.attention === 'needs-approval' ? 'approval' : 'input'
+    }
+
+    if (row.kind === 'approval-request') {
+      return 'approval'
+    }
+
+    try {
+      const payload = JSON.parse(row.payload_json) as {
+        request?: { kind?: unknown }
+      }
+      switch (payload.request?.kind) {
+        case 'choice':
+          return 'question'
+        case 'plan':
+          return 'plan'
+        case 'form':
+          return 'form'
+        case 'url':
+          return 'url'
+        case 'text':
+          return 'input'
+        default:
+          return 'input'
+      }
+    } catch {
+      return 'input'
+    }
   }
 
   getConversation(id: string): ConversationItem[] {
@@ -646,6 +709,7 @@ export class SessionService {
       input.input.skillSelections,
       {
         deliveryMode,
+        interactionResponse: input.input.interactionResponse,
       },
     )
   }

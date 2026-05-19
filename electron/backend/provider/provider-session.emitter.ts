@@ -3,6 +3,7 @@ import type {
   SessionDelta,
   ConversationItem,
   ConversationItemDraft,
+  InteractionRequest,
 } from '../session/conversation-item.types'
 import type { SessionSummary } from '../session/session.types'
 import type { SkillSelection } from '../skills/skills.types'
@@ -171,6 +172,7 @@ export class ProviderSessionEmitter {
 
   addInputRequest(input: {
     prompt: string
+    request?: InteractionRequest
     timestamp?: string
     providerItemId?: string | null
     providerEventType?: string | null
@@ -184,6 +186,7 @@ export class ProviderSessionEmitter {
       providerEventType: input.providerEventType ?? 'input-request',
       payload: {
         prompt: input.prompt,
+        ...(input.request ? { request: input.request } : {}),
       },
     })
     this.emitItem(item)

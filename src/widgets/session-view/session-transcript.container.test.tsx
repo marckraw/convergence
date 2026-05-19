@@ -130,6 +130,160 @@ function approvalRequest(overrides: {
   }
 }
 
+function inputRequest(overrides: {
+  id: string
+  sequence: number
+  prompt?: string
+  providerItemId?: string | null
+}): ConversationItem {
+  return {
+    id: overrides.id,
+    sessionId: 'session-1',
+    sequence: overrides.sequence,
+    turnId: `turn-${overrides.sequence}`,
+    kind: 'input-request',
+    prompt: overrides.prompt ?? 'Where should scripts run?',
+    request: {
+      kind: 'choice',
+      questions: [
+        {
+          id: 'working_dir',
+          question: 'Where should scripts run?',
+          header: 'Working dir',
+          multiSelect: false,
+          options: [
+            {
+              label: 'Project root only',
+              description: 'Scripts always run in the main repo path.',
+            },
+            {
+              label: 'Active workspace',
+              description: 'Scripts run in the active worktree.',
+            },
+          ],
+        },
+      ],
+    },
+    state: 'complete',
+    createdAt: '2026-01-01T00:00:00.000Z',
+    updatedAt: '2026-01-01T00:00:00.000Z',
+    providerMeta: {
+      providerId: 'codex',
+      providerItemId: overrides.providerItemId ?? null,
+      providerEventType: 'item/tool/requestUserInput',
+    },
+  }
+}
+
+function planRequest(overrides: {
+  id: string
+  sequence: number
+  providerItemId?: string | null
+}): ConversationItem {
+  return {
+    id: overrides.id,
+    sessionId: 'session-1',
+    sequence: overrides.sequence,
+    turnId: `turn-${overrides.sequence}`,
+    kind: 'input-request',
+    prompt: '# Plan\n\n- Add ExitPlanMode support',
+    request: {
+      kind: 'plan',
+      plan: '# Plan\n\n- Add ExitPlanMode support',
+      planPath: '/tmp/claude-plan.md',
+      allowedPrompts: ['Edit files'],
+    },
+    state: 'complete',
+    createdAt: '2026-01-01T00:00:00.000Z',
+    updatedAt: '2026-01-01T00:00:00.000Z',
+    providerMeta: {
+      providerId: 'claude-code',
+      providerItemId: overrides.providerItemId ?? null,
+      providerEventType: 'deferred_tool_use',
+    },
+  }
+}
+
+function formRequest(overrides: {
+  id: string
+  sequence: number
+  providerItemId?: string | null
+}): ConversationItem {
+  return {
+    id: overrides.id,
+    sessionId: 'session-1',
+    sequence: overrides.sequence,
+    turnId: `turn-${overrides.sequence}`,
+    kind: 'input-request',
+    prompt: 'Create issue?',
+    request: {
+      kind: 'form',
+      title: 'linear request',
+      message: 'Create issue?',
+      fields: [
+        {
+          id: 'title',
+          label: 'Title',
+          type: 'string',
+          required: true,
+          defaultValue: 'Bug report',
+        },
+        {
+          id: 'estimate',
+          label: 'Estimate',
+          type: 'number',
+          required: false,
+          defaultValue: 3,
+        },
+        {
+          id: 'urgent',
+          label: 'Urgent',
+          type: 'boolean',
+          required: false,
+          defaultValue: true,
+        },
+      ],
+    },
+    state: 'complete',
+    createdAt: '2026-01-01T00:00:00.000Z',
+    updatedAt: '2026-01-01T00:00:00.000Z',
+    providerMeta: {
+      providerId: 'codex',
+      providerItemId: overrides.providerItemId ?? null,
+      providerEventType: 'mcpServer/elicitation/request',
+    },
+  }
+}
+
+function urlRequest(overrides: {
+  id: string
+  sequence: number
+  providerItemId?: string | null
+}): ConversationItem {
+  return {
+    id: overrides.id,
+    sessionId: 'session-1',
+    sequence: overrides.sequence,
+    turnId: `turn-${overrides.sequence}`,
+    kind: 'input-request',
+    prompt: 'Open authorization URL?',
+    request: {
+      kind: 'url',
+      title: 'github request',
+      message: 'Open authorization URL?',
+      url: 'https://github.com/login/oauth/authorize',
+    },
+    state: 'complete',
+    createdAt: '2026-01-01T00:00:00.000Z',
+    updatedAt: '2026-01-01T00:00:00.000Z',
+    providerMeta: {
+      providerId: 'codex',
+      providerItemId: overrides.providerItemId ?? null,
+      providerEventType: 'mcpServer/elicitation/request',
+    },
+  }
+}
+
 describe('SessionTranscript', () => {
   it('renders conversation rows through the virtual transcript surface', async () => {
     useAttachmentStore.setState({ resolved: {} })
@@ -143,6 +297,7 @@ describe('SessionTranscript', () => {
         ]}
         onApprove={vi.fn()}
         onDeny={vi.fn()}
+        onInputAnswer={vi.fn()}
       />,
     )
 
@@ -171,6 +326,7 @@ describe('SessionTranscript', () => {
         conversationItems={[approvalRequest({ id: 'approval-1', sequence: 1 })]}
         onApprove={onApprove}
         onDeny={onDeny}
+        onInputAnswer={vi.fn()}
       />,
     )
 
@@ -206,6 +362,7 @@ describe('SessionTranscript', () => {
         ]}
         onApprove={onApprove}
         onDeny={onDeny}
+        onInputAnswer={vi.fn()}
       />,
     )
 
@@ -240,6 +397,7 @@ describe('SessionTranscript', () => {
         ]}
         onApprove={onApprove}
         onDeny={onDeny}
+        onInputAnswer={vi.fn()}
       />,
     )
 
@@ -264,5 +422,173 @@ describe('SessionTranscript', () => {
 
     expect(onDeny).toHaveBeenCalledWith('session-1', '100')
     expect(onApprove).toHaveBeenCalledWith('session-1', '101')
+  })
+
+  it('answers active structured input requests from the transcript', async () => {
+    const onInputAnswer = vi.fn()
+
+    render(
+      <SessionTranscript
+        session={{
+          ...baseSession,
+          providerId: 'codex',
+          attention: 'needs-input',
+        }}
+        conversationItems={[
+          inputRequest({
+            id: 'input-1',
+            sequence: 1,
+            providerItemId: '100',
+          }),
+        ]}
+        onApprove={vi.fn()}
+        onDeny={vi.fn()}
+        onInputAnswer={onInputAnswer}
+      />,
+    )
+
+    fireEvent.click(
+      await screen.findByRole('button', { name: /Active workspace/ }),
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Answer' }))
+
+    expect(onInputAnswer).toHaveBeenCalledWith(
+      'session-1',
+      {
+        kind: 'choice',
+        answers: [
+          {
+            questionId: 'working_dir',
+            values: ['Active workspace'],
+          },
+        ],
+      },
+      'Where should scripts run?\nActive workspace',
+    )
+  })
+
+  it('answers active plan requests from the transcript', async () => {
+    const onInputAnswer = vi.fn()
+
+    render(
+      <SessionTranscript
+        session={{
+          ...baseSession,
+          attention: 'needs-input',
+        }}
+        conversationItems={[
+          planRequest({
+            id: 'plan-1',
+            sequence: 1,
+            providerItemId: 'toolu_plan',
+          }),
+        ]}
+        onApprove={vi.fn()}
+        onDeny={vi.fn()}
+        onInputAnswer={onInputAnswer}
+      />,
+    )
+
+    expect(await screen.findByText('Plan review needed')).toBeInTheDocument()
+    expect(screen.getByText('/tmp/claude-plan.md')).toBeInTheDocument()
+    expect(screen.getByText('Add ExitPlanMode support')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Approve plan' }))
+
+    expect(onInputAnswer).toHaveBeenCalledWith(
+      'session-1',
+      {
+        kind: 'plan',
+        decision: 'approve',
+      },
+      'Approved plan',
+    )
+  })
+
+  it('submits active form requests from the transcript', async () => {
+    const onInputAnswer = vi.fn()
+
+    render(
+      <SessionTranscript
+        session={{
+          ...baseSession,
+          attention: 'needs-input',
+        }}
+        conversationItems={[
+          formRequest({
+            id: 'form-1',
+            sequence: 1,
+            providerItemId: '100',
+          }),
+        ]}
+        onApprove={vi.fn()}
+        onDeny={vi.fn()}
+        onInputAnswer={onInputAnswer}
+      />,
+    )
+
+    expect(await screen.findByText('Form input needed')).toBeInTheDocument()
+    fireEvent.change(screen.getByRole('textbox', { name: /Title/ }), {
+      target: { value: 'New issue' },
+    })
+    fireEvent.change(screen.getByRole('spinbutton', { name: /Estimate/ }), {
+      target: { value: '5' },
+    })
+    fireEvent.click(screen.getByRole('checkbox', { name: /Urgent/ }))
+    fireEvent.click(screen.getByRole('button', { name: 'Submit' }))
+
+    expect(onInputAnswer).toHaveBeenCalledWith(
+      'session-1',
+      {
+        kind: 'form',
+        action: 'accept',
+        values: {
+          title: 'New issue',
+          estimate: 5,
+          urgent: false,
+        },
+      },
+      'Title\nNew issue\n\nEstimate\n5\n\nUrgent\nfalse',
+    )
+  })
+
+  it('declines active URL requests from the transcript', async () => {
+    const onInputAnswer = vi.fn()
+
+    render(
+      <SessionTranscript
+        session={{
+          ...baseSession,
+          attention: 'needs-input',
+        }}
+        conversationItems={[
+          urlRequest({
+            id: 'url-1',
+            sequence: 1,
+            providerItemId: '101',
+          }),
+        ]}
+        onApprove={vi.fn()}
+        onDeny={vi.fn()}
+        onInputAnswer={onInputAnswer}
+      />,
+    )
+
+    expect(
+      await screen.findByText('URL confirmation needed'),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByText('https://github.com/login/oauth/authorize'),
+    ).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Decline' }))
+
+    expect(onInputAnswer).toHaveBeenCalledWith(
+      'session-1',
+      {
+        kind: 'url',
+        action: 'decline',
+      },
+      'Declined URL request',
+    )
   })
 })

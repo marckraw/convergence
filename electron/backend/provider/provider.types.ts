@@ -2,7 +2,10 @@ import type {
   Attachment,
   ProviderAttachmentCapability,
 } from '../attachments/attachments.types'
-import type { SessionDelta } from '../session/conversation-item.types'
+import type {
+  InteractionResponse,
+  SessionDelta,
+} from '../session/conversation-item.types'
 import type {
   SkillActivationConfirmation,
   SkillCatalogSource,
@@ -240,6 +243,7 @@ export interface SessionHandle {
       deliveryMode: MidRunInputMode
       queuedInputId?: string | null
       expectedProviderTurnId?: string | null
+      interactionResponse?: InteractionResponse
     },
   ) => void
   approve: (providerApprovalId?: string) => void

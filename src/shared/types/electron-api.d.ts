@@ -545,8 +545,94 @@ interface SendSessionMessageInput {
   attachmentIds?: string[]
   skillSelections?: SkillSelection[]
   deliveryMode?: MidRunInputMode
+  interactionResponse?: InteractionResponseData
   contextItemIds?: string[]
 }
+
+interface InteractionChoiceOptionData {
+  label: string
+  description?: string
+  preview?: string
+}
+
+interface InteractionQuestionData {
+  id: string
+  question: string
+  header: string
+  options: InteractionChoiceOptionData[]
+  multiSelect: boolean
+}
+
+type InteractionFormFieldTypeData = 'string' | 'number' | 'boolean'
+
+interface InteractionFormFieldData {
+  id: string
+  label: string
+  description?: string
+  type: InteractionFormFieldTypeData
+  required: boolean
+  defaultValue?: string | number | boolean
+  multiline?: boolean
+}
+
+type InteractionRequestData =
+  | {
+      kind: 'text'
+      prompt: string
+    }
+  | {
+      kind: 'choice'
+      questions: InteractionQuestionData[]
+    }
+  | {
+      kind: 'plan'
+      plan: string
+      planPath?: string
+      allowedPrompts?: string[]
+    }
+  | {
+      kind: 'form'
+      title: string
+      message: string
+      fields: InteractionFormFieldData[]
+    }
+  | {
+      kind: 'url'
+      title: string
+      message: string
+      url: string
+    }
+
+interface InteractionChoiceResponseData {
+  kind: 'choice'
+  answers: Array<{
+    questionId: string
+    values: string[]
+  }>
+}
+
+interface InteractionPlanResponseData {
+  kind: 'plan'
+  decision: 'approve' | 'reject'
+  message?: string
+}
+
+interface InteractionFormResponseData {
+  kind: 'form'
+  action: 'accept' | 'decline'
+  values: Record<string, string | number | boolean>
+}
+
+interface InteractionUrlResponseData {
+  kind: 'url'
+  action: 'accept' | 'decline'
+}
+
+type InteractionResponseData =
+  | InteractionChoiceResponseData
+  | InteractionPlanResponseData
+  | InteractionFormResponseData
+  | InteractionUrlResponseData
 
 type ConversationItemKind =
   | 'message'
@@ -607,6 +693,7 @@ type ConversationItemData =
   | (ConversationItemDataBase & {
       kind: 'input-request'
       prompt: string
+      request?: InteractionRequestData
     })
   | (ConversationItemDataBase & {
       kind: 'note'
@@ -685,6 +772,14 @@ type TurnDeltaData =
 
 type SessionContextKindData = 'project' | 'global'
 
+type AttentionRequestKindData =
+  | 'approval'
+  | 'question'
+  | 'plan'
+  | 'form'
+  | 'url'
+  | 'input'
+
 interface SessionSummaryData {
   id: string
   contextKind: SessionContextKindData
@@ -696,6 +791,7 @@ interface SessionSummaryData {
   name: string
   status: SessionStatus
   attention: AttentionState
+  attentionRequestKind?: AttentionRequestKindData | null
   activity: ActivitySignal
   contextWindow: SessionContextWindow | null
   workingDirectory: string

@@ -70,6 +70,7 @@ describe('SessionConversationSurface', () => {
         composerContext={{ kind: 'global', activeSessionId: 'session-1' }}
         onApprove={vi.fn()}
         onDeny={vi.fn()}
+        onInputAnswer={vi.fn()}
       />,
     )
 
@@ -87,6 +88,7 @@ describe('SessionConversationSurface', () => {
         composerDisabledReason="Conversation input is disabled."
         onApprove={vi.fn()}
         onDeny={vi.fn()}
+        onInputAnswer={vi.fn()}
       />,
     )
 
@@ -129,6 +131,7 @@ describe('SessionConversationSurface', () => {
         composerContext={{ kind: 'global', activeSessionId: 'session-1' }}
         onApprove={vi.fn()}
         onDeny={vi.fn()}
+        onInputAnswer={vi.fn()}
       />,
     )
 
@@ -157,6 +160,7 @@ describe('SessionConversationSurface', () => {
         composerContext={{ kind: 'global', activeSessionId: 'session-1' }}
         onApprove={vi.fn()}
         onDeny={vi.fn()}
+        onInputAnswer={vi.fn()}
       />,
     )
 
