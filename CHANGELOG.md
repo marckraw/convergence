@@ -1,5 +1,12 @@
 # convergence
 
+## 0.37.13
+
+### Patch Changes
+
+- a38948a: Introduce route-driven Main Views for Code Sessions, Chat Sessions, Spaces, and Code Review.
+- 4611319: Keep routed Code and Chat surface switching synchronized with active session routes and avoid duplicate Code Review route/store updates.
+
 ## 0.37.12
 
 ### Patch Changes
