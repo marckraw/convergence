@@ -27,7 +27,6 @@ import { systemApi } from '@/shared'
 import { applyTheme, getStoredTheme } from '@/shared/lib/theme'
 import {
   activateProject,
-  beginSessionDraft,
   CommandCenterContainer,
   switchToSession,
 } from '@/features/command-center'
@@ -58,7 +57,7 @@ export type MainViewRoute =
 interface AppProps {
   mainViewRoute?: MainViewRoute
   onSelectCodeSession?: (sessionId: string) => void
-  onBeginCodeSessionDraft?: (workspaceId: string) => void
+  onBeginCodeSessionDraft?: (workspaceId: string | null) => void
   onOpenCodeReview?: (search?: {
     targetId?: string | null
     mode?: CodeReviewMode
@@ -131,6 +130,7 @@ export function App({
   const sessionError = useSessionStore((s) => s.error)
   const clearSessionError = useSessionStore((s) => s.clearError)
   const prepareForProject = useSessionStore((s) => s.prepareForProject)
+  const beginStoreSessionDraft = useSessionStore((s) => s.beginSessionDraft)
   const activeSessionId = useSessionStore((s) => s.activeSessionId)
   const activeGlobalSessionId = useSessionStore((s) => s.activeGlobalSessionId)
   const setActiveSession = useSessionStore((s) => s.setActiveSession)
@@ -313,10 +313,9 @@ export function App({
 
     closeCodeReview()
     setActiveSurface('code')
-    if (routeNewCodeSessionWorkspaceId) {
-      void beginSessionDraft(routeNewCodeSessionWorkspaceId)
-    }
+    beginStoreSessionDraft(routeNewCodeSessionWorkspaceId)
   }, [
+    beginStoreSessionDraft,
     closeCodeReview,
     routeNewCodeSessionActive,
     routeNewCodeSessionWorkspaceId,
@@ -472,7 +471,10 @@ export function App({
       />
       <SpaceSessionLinkDialogContainer />
       <SessionForkDialogContainer />
-      <SessionIntentDialogContainer />
+      <SessionIntentDialogContainer
+        onBeginCodeSessionDraft={onBeginCodeSessionDraft}
+        onSelectCodeSession={onSelectCodeSession}
+      />
       <PullRequestReviewStartDialogContainer />
       <NotificationsToastHostContainer onFocusSession={onSelectAnySession} />
       <UpdatesToastContainer />

@@ -1,6 +1,16 @@
 {
-  "currentVersion": "0.37.12",
+  "currentVersion": "0.37.14",
   "releases": [
+    {
+      "version": "0.37.14",
+      "date": null,
+      "notes": "### Patch Changes\n\n- 512d631: Harden structured interaction request labels, notifications, and docs.\n- 13f22de: Add structured provider interaction requests so Codex choice questions can be answered directly from the conversation transcript.\n- 0471809: Harden provider interaction request answers for mixed Codex prompts, unsupported MCP form schemas, and declining required forms.\n- 45e7d49: Handle Pi extension UI dialog requests in the session transcript.\n- a9da86d: Add Claude Code ExitPlanMode handling so deferred plans can be approved or rejected from the transcript.\n- 49682a9: Add structured Codex MCP elicitation handling for form and URL requests.\n- 45713b4: Add Claude Code AskUserQuestion handling so deferred choice prompts can be answered from the Convergence transcript."
+    },
+    {
+      "version": "0.37.13",
+      "date": null,
+      "notes": "### Patch Changes\n\n- a38948a: Introduce route-driven Main Views for Code Sessions, Chat Sessions, Spaces, and Code Review.\n- 4611319: Keep routed Code and Chat surface switching synchronized with active session routes and avoid duplicate Code Review route/store updates."
+    },
     {
       "version": "0.37.12",
       "date": null,

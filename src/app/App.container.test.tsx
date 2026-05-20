@@ -512,6 +512,40 @@ describe('App', () => {
     )
   })
 
+  it('clears the active code session for a routed root draft', async () => {
+    const routeSession = makeSessionSummary({
+      id: 'session-1',
+      name: 'Existing Session',
+      projectId: mockProject.id,
+    })
+    mockElectronAPI.project.getActive.mockResolvedValue(mockProject)
+    mockElectronAPI.project.getAll.mockResolvedValue([mockProject])
+    mockElectronAPI.session.getAllSummaries.mockResolvedValue([routeSession])
+    mockElectronAPI.session.getSummariesByProjectId.mockResolvedValue([
+      routeSession,
+    ])
+    useSessionStore.setState({
+      sessions: [routeSession],
+      globalSessions: [routeSession],
+      activeSessionId: 'session-1',
+      activeProjectSessionId: 'session-1',
+      activeConversationSessionId: 'session-1',
+    })
+
+    render(
+      <App mainViewRoute={{ kind: 'new-code-session', workspaceId: null }} />,
+    )
+
+    await waitFor(() => {
+      expect(useSessionStore.getState().activeSessionId).toBeNull()
+    })
+    expect(useSessionStore.getState().draftWorkspaceId).toBeNull()
+    expect(
+      await screen.findByText('What would you like to work on?'),
+    ).toBeInTheDocument()
+    expect(screen.getByText('Starting in main repo')).toBeInTheDocument()
+  })
+
   it('shows loading state', () => {
     mockElectronAPI.project.getActive.mockReturnValue(new Promise(() => {}))
 

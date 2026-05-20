@@ -351,7 +351,7 @@ export const AppShell: FC<AppShellProps> = ({
         </div>
       </div>
 
-      <GlobalStatusBar />
+      <GlobalStatusBar onSelectProject={onSelectProjectRoot} />
     </div>
   )
 }

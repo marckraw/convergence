@@ -7,7 +7,14 @@ import { useSessionStore } from '@/entities/session'
 import { useWorkspaceStore } from '@/entities/workspace'
 import { SessionIntentDialog } from './session-intent-dialog.presentational'
 
-export const SessionIntentDialogContainer: FC = () => {
+interface SessionIntentDialogContainerProps {
+  onBeginCodeSessionDraft?: (workspaceId: string | null) => void
+  onSelectCodeSession?: (sessionId: string) => void
+}
+
+export const SessionIntentDialogContainer: FC<
+  SessionIntentDialogContainerProps
+> = ({ onBeginCodeSessionDraft, onSelectCodeSession }) => {
   const open = useDialogStore((s) => s.openDialog === 'session-intent')
   const payload = useDialogStore((s) => s.payload)
   const closeDialog = useDialogStore((s) => s.close)
@@ -22,8 +29,12 @@ export const SessionIntentDialogContainer: FC = () => {
 
   const handleSelectConversation = useCallback(() => {
     closeDialog()
+    if (onBeginCodeSessionDraft) {
+      onBeginCodeSessionDraft(workspaceId)
+      return
+    }
     beginSessionDraft(workspaceId)
-  }, [closeDialog, beginSessionDraft, workspaceId])
+  }, [beginSessionDraft, closeDialog, onBeginCodeSessionDraft, workspaceId])
 
   const handleSelectTerminal = useCallback(async () => {
     if (creating) return
@@ -38,8 +49,13 @@ export const SessionIntentDialogContainer: FC = () => {
     const name = workspace ? `Terminal — ${workspace.branchName}` : 'Terminal'
     setCreating(true)
     try {
-      await createTerminalSession(activeProject.id, workspaceId, name)
+      const session = await createTerminalSession(
+        activeProject.id,
+        workspaceId,
+        name,
+      )
       closeDialog()
+      onSelectCodeSession?.(session.id)
     } catch (err) {
       toast.error(
         err instanceof Error
@@ -56,6 +72,7 @@ export const SessionIntentDialogContainer: FC = () => {
     creating,
     closeDialog,
     createTerminalSession,
+    onSelectCodeSession,
   ])
 
   const handleOpenChange = useCallback(

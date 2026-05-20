@@ -4,7 +4,13 @@ import { useProjectStore } from '@/entities/project'
 import { selectGlobalStatus, useSessionStore } from '@/entities/session'
 import { GlobalStatusBar } from './global-status-bar.presentational'
 
-export const GlobalStatusBarContainer: FC = () => {
+interface GlobalStatusBarContainerProps {
+  onSelectProject?: (projectId: string) => void | Promise<void>
+}
+
+export const GlobalStatusBarContainer: FC<GlobalStatusBarContainerProps> = ({
+  onSelectProject,
+}) => {
   const globalSessions = useSessionStore((state) => state.globalSessions)
   const dismissals = useSessionStore((state) => state.needsYouDismissals)
   const providers = useSessionStore((state) => state.providers)
@@ -36,6 +42,10 @@ export const GlobalStatusBarContainer: FC = () => {
   }, [status.lastCompleted, projects])
 
   const handleSelectProject = (projectId: string) => {
+    if (onSelectProject) {
+      void onSelectProject(projectId)
+      return
+    }
     if (activeProject?.id === projectId) return
     prepareForProject(projectId)
     void setActiveProject(projectId)
