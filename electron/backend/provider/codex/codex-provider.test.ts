@@ -739,6 +739,105 @@ describe('CodexProvider', () => {
     })
   })
 
+  it('fails MCP form elicitations with unsupported fields instead of rendering partial forms', async () => {
+    const child = new MockChildProcess()
+    const server = createMockCodexServer(child, {
+      autoCompleteTurns: false,
+      turnStartedId: 'codex-turn-1',
+    })
+    spawnMock.mockReturnValue(child)
+
+    const provider = new CodexProvider('/usr/local/bin/codex')
+    const handle = provider.start({
+      sessionId: 'session-1',
+      workingDirectory: process.cwd(),
+      initialMessage: 'create a Linear issue',
+      initialAttachments: undefined,
+      model: 'gpt-5.4',
+      effort: 'medium',
+      continuationToken: null,
+    })
+
+    const items: Array<
+      Extract<SessionDelta, { kind: 'conversation.item.add' }>['item']
+    > = []
+    const statuses: string[] = []
+    const attentions: string[] = []
+
+    handle.onDelta((delta) => {
+      if (delta.kind === 'conversation.item.add') {
+        items.push(delta.item)
+      }
+    })
+    handle.onStatusChange((status) => {
+      statuses.push(status)
+    })
+    handle.onContinuationToken(() => {})
+    handle.onAttentionChange((attention) => {
+      attentions.push(attention)
+    })
+    handle.onContextWindowChange(() => {})
+    handle.onActivityChange(() => {})
+
+    await waitFor(() => {
+      expect(
+        server.requests.some((request) => request.method === 'turn/start'),
+      ).toBe(true)
+    })
+
+    child.stdout.write(
+      JSON.stringify({
+        jsonrpc: '2.0',
+        id: 102,
+        method: 'mcpServer/elicitation/request',
+        params: {
+          serverName: 'linear',
+          mode: 'form',
+          message: 'Create an issue?',
+          requestedSchema: {
+            type: 'object',
+            required: ['title', 'labels'],
+            properties: {
+              title: {
+                type: 'string',
+                title: 'Title',
+              },
+              labels: {
+                type: 'array',
+                title: 'Labels',
+              },
+            },
+          },
+        },
+      }) + '\n',
+    )
+
+    await waitFor(() => {
+      expect(server.responses).toContainEqual({
+        id: 102,
+        error: {
+          code: -32602,
+          message:
+            'Convergence could not render Codex MCP elicitation mode "form"',
+        },
+        result: undefined,
+      })
+      expect(statuses).toContain('failed')
+      expect(attentions).toContain('failed')
+      expect(items).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            kind: 'note',
+            level: 'error',
+            text: 'Unsupported Codex MCP elicitation schema for mode: form',
+          }),
+        ]),
+      )
+    })
+
+    expect(items.some((item) => item.kind === 'input-request')).toBe(false)
+  })
+
   it('surfaces MCP URL elicitations and responds on decline', async () => {
     const child = new MockChildProcess()
     const server = createMockCodexServer(child, {
@@ -959,6 +1058,102 @@ describe('CodexProvider', () => {
         },
       })
       expect(attentions).toContain('none')
+    })
+  })
+
+  it('falls back to text input for mixed Codex user-input questions', async () => {
+    const child = new MockChildProcess()
+    const server = createMockCodexServer(child, {
+      autoCompleteTurns: false,
+      turnStartedId: 'codex-turn-1',
+    })
+    spawnMock.mockReturnValue(child)
+
+    const provider = new CodexProvider('/usr/local/bin/codex')
+    const handle = provider.start({
+      sessionId: 'session-1',
+      workingDirectory: process.cwd(),
+      initialMessage: 'configure project scripts',
+      initialAttachments: undefined,
+      model: 'gpt-5.4',
+      effort: 'medium',
+      continuationToken: null,
+    })
+
+    const items: Array<
+      Extract<SessionDelta, { kind: 'conversation.item.add' }>['item']
+    > = []
+    handle.onDelta((delta) => {
+      if (delta.kind === 'conversation.item.add') {
+        items.push(delta.item)
+      }
+    })
+    handle.onStatusChange(() => {})
+    handle.onContinuationToken(() => {})
+    handle.onAttentionChange(() => {})
+    handle.onContextWindowChange(() => {})
+    handle.onActivityChange(() => {})
+
+    await waitFor(() => {
+      expect(
+        server.requests.some((request) => request.method === 'turn/start'),
+      ).toBe(true)
+    })
+
+    child.stdout.write(
+      JSON.stringify({
+        jsonrpc: '2.0',
+        id: 103,
+        method: 'item/tool/requestUserInput',
+        params: {
+          questions: [
+            {
+              id: 'working_dir',
+              question: 'Where should scripts run?',
+              options: [{ label: 'Project root only' }, { label: 'Workspace' }],
+            },
+            {
+              id: 'script_name',
+              question: 'Which script should run?',
+            },
+          ],
+        },
+      }) + '\n',
+    )
+
+    await waitFor(() => {
+      expect(items).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            kind: 'input-request',
+            prompt: 'Where should scripts run?\nWhich script should run?',
+            request: {
+              kind: 'text',
+              prompt: 'Where should scripts run?\nWhich script should run?',
+            },
+          }),
+        ]),
+      )
+    })
+
+    handle.sendMessage('Workspace; npm test', undefined, undefined, {
+      deliveryMode: 'answer',
+    })
+
+    await waitFor(() => {
+      expect(server.responses).toContainEqual({
+        id: 103,
+        result: {
+          answers: {
+            working_dir: {
+              answers: ['Workspace; npm test'],
+            },
+            script_name: {
+              answers: ['Workspace; npm test'],
+            },
+          },
+        },
+      })
     })
   })
 

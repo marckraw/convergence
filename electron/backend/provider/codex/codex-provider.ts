@@ -244,7 +244,7 @@ function buildCodexUserInputRequest(params: Record<string, unknown>): {
     .map((entry) => entry.question)
     .filter((question) => question.options.length > 0)
   const request: InteractionRequest =
-    choiceQuestions.length > 0
+    normalized.length > 0 && choiceQuestions.length === normalized.length
       ? {
           kind: 'choice',
           questions: choiceQuestions,
@@ -446,17 +446,23 @@ function buildMcpElicitationInputRequest(params: Record<string, unknown>): {
           )
         : [],
     )
-    const fields = Object.entries(schema?.properties ?? {})
-      .map(([key, fieldSchema]) =>
+    const normalizedFields = Object.entries(schema?.properties ?? {}).map(
+      ([key, fieldSchema]) =>
         buildMcpElicitationFormField({
           key,
           schema: fieldSchema,
           required: requiredNames.has(key),
         }),
-      )
-      .filter((field): field is InteractionFormField => field !== null)
+    )
 
-    if (fields.length === 0) return null
+    if (
+      normalizedFields.length === 0 ||
+      normalizedFields.some((field) => field === null)
+    ) {
+      return null
+    }
+
+    const fields = normalizedFields as InteractionFormField[]
 
     return {
       prompt: message,

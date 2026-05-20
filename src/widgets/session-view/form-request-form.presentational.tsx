@@ -97,6 +97,7 @@ export const FormRequestForm: FC<FormRequestFormProps> = ({
         name="decision"
         value="decline"
         variant="ghost"
+        formNoValidate
       >
         Decline
       </Button>

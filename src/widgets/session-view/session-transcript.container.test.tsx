@@ -528,6 +528,9 @@ describe('SessionTranscript', () => {
     )
 
     expect(await screen.findByText('Form input needed')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Decline' })).toHaveAttribute(
+      'formnovalidate',
+    )
     fireEvent.change(screen.getByRole('textbox', { name: /Title/ }), {
       target: { value: 'New issue' },
     })
