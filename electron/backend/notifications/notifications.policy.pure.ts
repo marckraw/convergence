@@ -96,11 +96,14 @@ export function decideChannels(
   return channels
 }
 
-const TITLE_BY_KIND: Record<NotificationEventKind, (name: string) => string> = {
-  'agent.finished': (name) => `${name} finished`,
-  'agent.needs_input': (name) => `${name} needs input`,
-  'agent.needs_approval': (name) => `${name} needs approval`,
-  'agent.errored': (name) => `${name} errored`,
+const TITLE_BY_KIND: Record<
+  NotificationEventKind,
+  (event: NotificationEvent) => string
+> = {
+  'agent.finished': (event) => `${event.sessionName} finished`,
+  'agent.needs_input': formatNeedsInputTitle,
+  'agent.needs_approval': (event) => `${event.sessionName} needs approval`,
+  'agent.errored': (event) => `${event.sessionName} errored`,
 }
 
 function truncate(value: string, max: number): string {
@@ -111,7 +114,22 @@ function truncate(value: string, max: number): string {
 export function formatTitleAndBody(
   event: NotificationEvent,
 ): FormattedNotification {
-  const title = TITLE_BY_KIND[event.kind](event.sessionName)
+  const title = TITLE_BY_KIND[event.kind](event)
   const body = truncate(event.projectName, MAX_BODY_LENGTH)
   return { title, body }
+}
+
+function formatNeedsInputTitle(event: NotificationEvent): string {
+  switch (event.attentionRequestKind) {
+    case 'question':
+      return `${event.sessionName} has a question`
+    case 'plan':
+      return `${event.sessionName} has a plan to review`
+    case 'form':
+      return `${event.sessionName} needs form input`
+    case 'url':
+      return `${event.sessionName} needs URL confirmation`
+    default:
+      return `${event.sessionName} needs input`
+  }
 }

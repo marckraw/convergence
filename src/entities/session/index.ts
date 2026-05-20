@@ -3,9 +3,16 @@ export type {
   ConversationPatchEvent,
   ConversationItemKind,
   ConversationItemState,
+  InteractionChoiceOption,
+  InteractionFormField,
+  InteractionFormFieldType,
+  InteractionQuestion,
+  InteractionRequest,
+  InteractionResponse,
   Session,
   SessionSummary,
   SessionStatus,
+  AttentionRequestKind,
   AttentionState,
   MidRunInputMode,
   NeedsYouDisposition,
@@ -39,6 +46,10 @@ export type {
   StoredProviderDefaults,
 } from './provider-selection.pure'
 export { selectGlobalStatus } from './session.selectors.pure'
+export {
+  formatSessionAttentionLabel,
+  summarizeAttentionRequests,
+} from './session-attention.pure'
 export type { GlobalStatus, ProjectActivity } from './session.selectors.pure'
 export { formatActivityLabel } from './session.activity.pure'
 export { providerApi, sessionApi } from './session.api'

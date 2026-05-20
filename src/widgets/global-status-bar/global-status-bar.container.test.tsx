@@ -144,7 +144,8 @@ describe('GlobalStatusBar container', () => {
           projectId: 'project-two',
           providerId: 'codex',
           status: 'running',
-          attention: 'needs-approval',
+          attention: 'needs-input',
+          attentionRequestKind: 'form',
           name: 'Approve edits',
           updatedAt: '2026-02-01T00:00:00.000Z',
         }),
@@ -168,6 +169,9 @@ describe('GlobalStatusBar container', () => {
     ).toBeInTheDocument()
     expect(
       screen.getByTestId('global-status-chip-project-two'),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByRole('button', { name: /project two.*1 form/i }),
     ).toBeInTheDocument()
     expect(screen.getByTestId('global-status-recency')).toHaveTextContent(
       'Wrapped up',

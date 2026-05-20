@@ -1,3 +1,5 @@
+import type { AttentionRequestKind } from '../session/session.types'
+
 export type NotificationEventKind =
   | 'agent.finished'
   | 'agent.needs_approval'
@@ -12,6 +14,7 @@ export interface NotificationEvent {
   sessionId: string
   sessionName: string
   projectName: string
+  attentionRequestKind?: AttentionRequestKind | null
   firedAt: number
 }
 

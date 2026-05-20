@@ -1,5 +1,6 @@
 import type { FC } from 'react'
 import type { ProjectActivity } from '@/entities/session'
+import { summarizeAttentionRequests } from '@/entities/session'
 import type { ProviderInfo, SessionSummary } from '@/entities/session'
 import { CheckCircle2, CircleAlert, CircleDot, CircleOff } from 'lucide-react'
 import { cn } from '@/shared/lib/cn.pure'
@@ -129,7 +130,7 @@ export const GlobalStatusBar: FC<GlobalStatusBarProps> = ({
                         projectChipAttentionClass,
                     )}
                     data-testid={`global-status-chip-${project.projectId}`}
-                    aria-label={`Switch to project ${project.projectName}`}
+                    aria-label={formatProjectChipLabel(project)}
                   >
                     <span
                       className={cn(
@@ -208,4 +209,15 @@ export const GlobalStatusBar: FC<GlobalStatusBarProps> = ({
       )}
     </div>
   )
+}
+
+function formatProjectChipLabel(project: ProjectActivity): string {
+  const parts = [`Switch to project ${project.projectName}`]
+  if (project.running.length > 0) {
+    parts.push(`${project.running.length} running`)
+  }
+  if (project.needsAttention.length > 0) {
+    parts.push(summarizeAttentionRequests(project.needsAttention))
+  }
+  return parts.join(', ')
 }

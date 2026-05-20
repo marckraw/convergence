@@ -334,6 +334,22 @@ the transcript and the queue pill disappears.
 - A user answer must route to the pending provider request, not to follow-up or
   steer
 
+Structured provider requests should also set `attentionRequestKind` on the
+session summary by looking at the latest actionable transcript item:
+
+- plain approval card -> `approval`
+- choice/question request -> `question`
+- plan approval request -> `plan`
+- typed form request -> `form`
+- URL confirmation request -> `url`
+- legacy text input request -> `input`
+
+Future providers should map their native request payloads into the shared
+`InteractionRequest` model first, then serialize answers back to the provider at
+the adapter boundary. Unsupported request payloads must either render a safe
+fallback or send a provider cancellation/error response and add a visible debug
+note; they must not leave the provider blocked waiting for UI.
+
 ## Provider-Specific Design
 
 ### Pi

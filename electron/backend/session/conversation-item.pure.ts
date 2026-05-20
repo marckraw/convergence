@@ -6,6 +6,10 @@ import type {
   ConversationItemInsertRow,
   ConversationItemKind,
   ConversationItemState,
+  InteractionChoiceOption,
+  InteractionFormField,
+  InteractionQuestion,
+  InteractionRequest,
 } from './conversation-item.types'
 import type {
   SkillInvocationStatus,
@@ -169,6 +173,162 @@ function parseSkillSelections(value: unknown): SkillSelection[] | undefined {
   return selections.length > 0 ? selections : undefined
 }
 
+function parseInteractionChoiceOption(
+  value: unknown,
+): InteractionChoiceOption | null {
+  if (!isRecord(value) || typeof value.label !== 'string') {
+    return null
+  }
+
+  return {
+    label: value.label,
+    description:
+      typeof value.description === 'string' ? value.description : undefined,
+    preview: typeof value.preview === 'string' ? value.preview : undefined,
+  }
+}
+
+function parseInteractionQuestion(value: unknown): InteractionQuestion | null {
+  if (
+    !isRecord(value) ||
+    typeof value.id !== 'string' ||
+    typeof value.question !== 'string' ||
+    typeof value.header !== 'string' ||
+    !Array.isArray(value.options) ||
+    typeof value.multiSelect !== 'boolean'
+  ) {
+    return null
+  }
+
+  const options = value.options
+    .map(parseInteractionChoiceOption)
+    .filter((option): option is InteractionChoiceOption => option !== null)
+
+  return {
+    id: value.id,
+    question: value.question,
+    header: value.header,
+    options,
+    multiSelect: value.multiSelect,
+  }
+}
+
+function parseInteractionFormField(
+  value: unknown,
+): InteractionFormField | null {
+  if (
+    !isRecord(value) ||
+    typeof value.id !== 'string' ||
+    typeof value.label !== 'string' ||
+    typeof value.type !== 'string' ||
+    !['string', 'number', 'boolean'].includes(value.type) ||
+    typeof value.required !== 'boolean'
+  ) {
+    return null
+  }
+
+  const defaultValue =
+    typeof value.defaultValue === 'string' ||
+    typeof value.defaultValue === 'number' ||
+    typeof value.defaultValue === 'boolean'
+      ? value.defaultValue
+      : undefined
+
+  return {
+    id: value.id,
+    label: value.label,
+    description:
+      typeof value.description === 'string' ? value.description : undefined,
+    type: value.type as InteractionFormField['type'],
+    required: value.required,
+    defaultValue,
+    multiline:
+      typeof value.multiline === 'boolean' ? value.multiline : undefined,
+  }
+}
+
+function parseInteractionRequest(
+  value: unknown,
+): InteractionRequest | undefined {
+  if (!isRecord(value)) {
+    return undefined
+  }
+
+  if (value.kind === 'text' && typeof value.prompt === 'string') {
+    return {
+      kind: 'text',
+      prompt: value.prompt,
+    }
+  }
+
+  if (value.kind === 'choice' && Array.isArray(value.questions)) {
+    const questions = value.questions
+      .map(parseInteractionQuestion)
+      .filter((question): question is InteractionQuestion => question !== null)
+
+    if (questions.length > 0) {
+      return {
+        kind: 'choice',
+        questions,
+      }
+    }
+  }
+
+  if (value.kind === 'plan' && typeof value.plan === 'string') {
+    const allowedPrompts = Array.isArray(value.allowedPrompts)
+      ? value.allowedPrompts.filter(
+          (prompt): prompt is string => typeof prompt === 'string',
+        )
+      : undefined
+
+    return {
+      kind: 'plan',
+      plan: value.plan,
+      planPath: typeof value.planPath === 'string' ? value.planPath : undefined,
+      allowedPrompts:
+        allowedPrompts && allowedPrompts.length > 0
+          ? allowedPrompts
+          : undefined,
+    }
+  }
+
+  if (
+    value.kind === 'form' &&
+    typeof value.title === 'string' &&
+    typeof value.message === 'string' &&
+    Array.isArray(value.fields)
+  ) {
+    const fields = value.fields
+      .map(parseInteractionFormField)
+      .filter((field): field is InteractionFormField => field !== null)
+
+    if (fields.length > 0) {
+      return {
+        kind: 'form',
+        title: value.title,
+        message: value.message,
+        fields,
+      }
+    }
+  }
+
+  if (
+    value.kind === 'url' &&
+    typeof value.title === 'string' &&
+    typeof value.message === 'string' &&
+    typeof value.url === 'string'
+  ) {
+    return {
+      kind: 'url',
+      title: value.title,
+      message: value.message,
+      url: value.url,
+    }
+  }
+
+  return undefined
+}
+
 export function buildConversationItemFromTranscriptEntry(
   input: BuildConversationItemFromTranscriptEntryInput,
 ): ConversationItem {
@@ -234,6 +394,10 @@ export function buildConversationItemFromTranscriptEntry(
         ...base,
         kind: 'input-request',
         prompt: input.entry.prompt,
+        request: {
+          kind: 'text',
+          prompt: input.entry.prompt,
+        },
       }
 
     case 'system':
@@ -380,6 +544,7 @@ export function conversationItemFromRow(
         ...base,
         kind,
         prompt: payload.prompt as string,
+        request: parseInteractionRequest(payload.request),
       }
 
     case 'note':

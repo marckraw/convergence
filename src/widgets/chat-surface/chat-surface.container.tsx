@@ -92,6 +92,9 @@ export const ChatSurface: FC<ChatSurfaceProps> = ({
   )
   const approveSession = useSessionStore((state) => state.approveSession)
   const denySession = useSessionStore((state) => state.denySession)
+  const sendMessageToSession = useSessionStore(
+    (state) => state.sendMessageToSession,
+  )
   const stopSession = useSessionStore((state) => state.stopSession)
   const deleteSession = useSessionStore((state) => state.deleteSession)
   const loadGlobalSessions = useSessionStore(
@@ -634,6 +637,16 @@ export const ChatSurface: FC<ChatSurfaceProps> = ({
         composerContext={{ kind: 'global', activeSessionId: session.id }}
         onApprove={approveSession}
         onDeny={denySession}
+        onInputAnswer={(sessionId, response, displayText) => {
+          void sendMessageToSession(
+            sessionId,
+            displayText,
+            undefined,
+            undefined,
+            'answer',
+            response,
+          )
+        }}
       />
     </div>
   )

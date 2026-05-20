@@ -273,7 +273,12 @@ async function startApp(): Promise<void> {
     for (const p of nextDetected) {
       if (p.id === 'claude-code') {
         providerRegistry.register(
-          new ClaudeCodeProvider(p.binaryPath, taskProgressService, debugSink),
+          new ClaudeCodeProvider(
+            p.binaryPath,
+            taskProgressService,
+            debugSink,
+            p.version,
+          ),
         )
       } else if (p.id === 'codex') {
         providerRegistry.register(

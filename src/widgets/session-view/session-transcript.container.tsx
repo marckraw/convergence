@@ -10,6 +10,7 @@ import {
 } from 'react'
 import type {
   ConversationItem as ConversationItemEntry,
+  InteractionResponse,
   Session,
 } from '@/entities/session'
 import { artifactFromConversationItem } from '@/entities/ui-response-artifact'
@@ -25,6 +26,11 @@ interface SessionTranscriptProps {
   onUiResponseArtifactSelect?: (conversationItemId: string) => void
   onApprove: (sessionId: string, providerApprovalId?: string) => void
   onDeny: (sessionId: string, providerApprovalId?: string) => void
+  onInputAnswer: (
+    sessionId: string,
+    response: InteractionResponse,
+    displayText: string,
+  ) => void
 }
 
 const TRANSCRIPT_ROW_ESTIMATE_PX = 160
@@ -37,6 +43,7 @@ export const SessionTranscript: FC<SessionTranscriptProps> = ({
   onUiResponseArtifactSelect,
   onApprove,
   onDeny,
+  onInputAnswer,
 }) => {
   const scrollParentRef = useRef<HTMLDivElement>(null)
   const [scrollParent, setScrollParent] = useState<HTMLDivElement | null>(null)
@@ -44,6 +51,9 @@ export const SessionTranscript: FC<SessionTranscriptProps> = ({
   const pendingScrollFrameRef = useRef<number | null>(null)
   const previousSessionIdRef = useRef<string | null>(null)
   const [resolvedApprovalIds, setResolvedApprovalIds] = useState<Set<string>>(
+    () => new Set(),
+  )
+  const [resolvedInputIds, setResolvedInputIds] = useState<Set<string>>(
     () => new Set(),
   )
 
@@ -85,14 +95,46 @@ export const SessionTranscript: FC<SessionTranscriptProps> = ({
     session.attention,
     session.status,
   ])
+  const actionableInputIds = useMemo(() => {
+    if (session.status !== 'running' || session.attention !== 'needs-input') {
+      return new Set<string>()
+    }
+
+    const ids = new Set<string>()
+    for (const entry of conversationRenderPlan) {
+      if (
+        entry.item.kind === 'input-request' &&
+        (entry.item.request?.kind === 'choice' ||
+          entry.item.request?.kind === 'plan' ||
+          entry.item.request?.kind === 'form' ||
+          entry.item.request?.kind === 'url') &&
+        !resolvedInputIds.has(entry.item.id)
+      ) {
+        ids.add(entry.item.id)
+      }
+    }
+    return ids
+  }, [
+    conversationRenderPlan,
+    resolvedInputIds,
+    session.attention,
+    session.status,
+  ])
 
   useEffect(() => {
     setResolvedApprovalIds(new Set())
+    setResolvedInputIds(new Set())
   }, [session.id])
 
   useEffect(() => {
     if (session.attention !== 'needs-approval') {
       setResolvedApprovalIds(new Set())
+    }
+  }, [session.attention])
+
+  useEffect(() => {
+    if (session.attention !== 'needs-input') {
+      setResolvedInputIds(new Set())
     }
   }, [session.attention])
 
@@ -193,6 +235,8 @@ export const SessionTranscript: FC<SessionTranscriptProps> = ({
             const isActionableApproval =
               entry.kind === 'approval-request' &&
               actionableApprovalIds.has(entry.id)
+            const isActionableInput =
+              entry.kind === 'input-request' && actionableInputIds.has(entry.id)
             const hasUiResponseArtifact = hasArtifact(entry)
             const isSelectedUiResponseArtifact =
               hasUiResponseArtifact && entry.id === selectedUiResponseItemId
@@ -271,6 +315,18 @@ export const SessionTranscript: FC<SessionTranscriptProps> = ({
                             session.id,
                             entry.providerMeta.providerItemId ?? undefined,
                           )
+                        }
+                      : undefined
+                  }
+                  onInputAnswer={
+                    isActionableInput
+                      ? (response, displayText) => {
+                          setResolvedInputIds((current) => {
+                            const next = new Set(current)
+                            next.add(entry.id)
+                            return next
+                          })
+                          onInputAnswer(session.id, response, displayText)
                         }
                       : undefined
                   }
