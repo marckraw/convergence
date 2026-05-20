@@ -171,9 +171,14 @@ export function buildPaletteIndex(
 
   for (const session of sessions) {
     if (session.archivedAt) continue
-    if (session.contextKind !== 'project' || !session.projectId) continue
-    const project = projectsById.get(session.projectId)
-    const projectName = project?.name ?? ''
+    if (session.contextKind === 'project' && !session.projectId) continue
+    const project = session.projectId
+      ? projectsById.get(session.projectId)
+      : undefined
+    const projectName =
+      session.contextKind === 'global'
+        ? 'Convergence Chat'
+        : (project?.name ?? '')
     const workspace = session.workspaceId
       ? (workspacesById.get(session.workspaceId) ?? null)
       : null
@@ -182,6 +187,7 @@ export function buildPaletteIndex(
       kind: 'session',
       id: `session:${session.id}`,
       sessionId: session.id,
+      contextKind: session.contextKind,
       projectId: session.projectId,
       workspaceId: session.workspaceId,
       sessionName: session.name,

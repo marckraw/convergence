@@ -3,6 +3,7 @@ import Fuse from 'fuse.js'
 import { useProjectStore } from '@/entities/project'
 import { useWorkspaceStore } from '@/entities/workspace'
 import { useSessionStore } from '@/entities/session'
+import type { CodeReviewMode } from '@/entities/code-review'
 import { useCommandCenterStore } from './command-center.model'
 import { buildPaletteIndex } from './command-palette-index.pure'
 import {
@@ -29,12 +30,32 @@ import {
 } from './command-center.presentational'
 import type { PaletteItem } from './command-center.types'
 
+interface CodeReviewRouteSearch {
+  targetId?: string | null
+  mode?: CodeReviewMode
+  file?: string | null
+}
+
 function detectPlatform(): 'mac' | 'other' {
   if (typeof navigator === 'undefined') return 'other'
   return navigator.platform.toLowerCase().includes('mac') ? 'mac' : 'other'
 }
 
-export function CommandCenterContainer() {
+interface CommandCenterContainerProps {
+  onSelectCodeSession?: (sessionId: string) => void
+  onSelectChatSession?: (sessionId: string) => void
+  onBeginCodeSessionDraft?: (workspaceId: string) => void
+  onSelectProject?: (projectId: string) => void | Promise<void>
+  onOpenCodeReview?: (search?: CodeReviewRouteSearch) => void
+}
+
+export function CommandCenterContainer({
+  onSelectCodeSession,
+  onSelectChatSession,
+  onBeginCodeSessionDraft,
+  onSelectProject,
+  onOpenCodeReview,
+}: CommandCenterContainerProps = {}) {
   const isOpen = useCommandCenterStore((s) => s.isOpen)
   const query = useCommandCenterStore((s) => s.query)
   const open = useCommandCenterStore((s) => s.open)
@@ -45,6 +66,7 @@ export function CommandCenterContainer() {
   const projects = useProjectStore((s) => s.projects)
   const globalWorkspaces = useWorkspaceStore((s) => s.globalWorkspaces)
   const globalSessions = useSessionStore((s) => s.globalSessions)
+  const globalChatSessions = useSessionStore((s) => s.globalChatSessions)
   const recentSessionIds = useSessionStore((s) => s.recentSessionIds)
   const dismissals = useSessionStore((s) => s.needsYouDismissals)
   const activeSessionId = useSessionStore((s) => s.activeSessionId)
@@ -66,7 +88,7 @@ export function CommandCenterContainer() {
     return buildPaletteIndex({
       projects,
       workspaces: globalWorkspaces,
-      sessions: globalSessions,
+      sessions: [...globalSessions, ...globalChatSessions],
       recentSessionIds,
       dismissals,
       activeSessionId,
@@ -76,6 +98,7 @@ export function CommandCenterContainer() {
     projects,
     globalWorkspaces,
     globalSessions,
+    globalChatSessions,
     recentSessionIds,
     dismissals,
     activeSessionId,
@@ -120,19 +143,37 @@ export function CommandCenterContainer() {
       close()
       switch (item.kind) {
         case 'session':
-          void switchToSession(item.sessionId)
+          if (item.contextKind === 'global' && onSelectChatSession) {
+            onSelectChatSession(item.sessionId)
+          } else if (onSelectCodeSession) {
+            onSelectCodeSession(item.sessionId)
+          } else {
+            void switchToSession(item.sessionId)
+          }
           return
         case 'project':
-          void activateProject(item.projectId)
+          if (onSelectProject) {
+            void onSelectProject(item.projectId)
+          } else {
+            void activateProject(item.projectId)
+          }
           return
         case 'workspace':
-          void activateProject(item.projectId)
+          if (onSelectProject) {
+            void onSelectProject(item.projectId)
+          } else {
+            void activateProject(item.projectId)
+          }
           return
         case 'dialog':
           openDialog(item.dialogKind, item.dialogPayload)
           return
         case 'new-session':
-          void beginSessionDraft(item.workspaceId)
+          if (onBeginCodeSessionDraft) {
+            onBeginCodeSessionDraft(item.workspaceId)
+          } else {
+            void beginSessionDraft(item.workspaceId)
+          }
           return
         case 'new-terminal-session':
           void beginTerminalSessionDraft(item.workspaceId)
@@ -150,11 +191,26 @@ export function CommandCenterContainer() {
           void checkForUpdates()
           return
         case 'open-code-review':
-          openCodeReview()
+          if (onOpenCodeReview) {
+            onOpenCodeReview({
+              mode: 'working-tree',
+              targetId: null,
+              file: null,
+            })
+          } else {
+            openCodeReview()
+          }
           return
       }
     },
-    [close],
+    [
+      close,
+      onBeginCodeSessionDraft,
+      onOpenCodeReview,
+      onSelectProject,
+      onSelectChatSession,
+      onSelectCodeSession,
+    ],
   )
 
   return (

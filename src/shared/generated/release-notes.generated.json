@@ -1,6 +1,26 @@
 {
-  "currentVersion": "0.37.8",
+  "currentVersion": "0.37.12",
   "releases": [
+    {
+      "version": "0.37.12",
+      "date": null,
+      "notes": "### Patch Changes\n\n- ba7197b: lefthook pre-commit hook management"
+    },
+    {
+      "version": "0.37.11",
+      "date": null,
+      "notes": "### Patch Changes\n\n- 44fc4cf: feat: add cmd+Enter shortcut to all form submissions"
+    },
+    {
+      "version": "0.37.10",
+      "date": null,
+      "notes": "### Patch Changes\n\n- c9f6973: Add a first-class Code Review workspace for reviewing changed files, local review notes, agent handoff, and cached diff loading."
+    },
+    {
+      "version": "0.37.9",
+      "date": null,
+      "notes": "### Patch Changes\n\n- 60c403e: Throttle streaming transcript persistence to reduce SQLite and IPC churn while multiple agent sessions are active.\n- 7ea81c2: Add weekday headers to heatmap and streak calendar for better day identification"
+    },
     {
       "version": "0.37.8",
       "date": null,
