@@ -1,5 +1,17 @@
 # convergence
 
+## 0.37.14
+
+### Patch Changes
+
+- 512d631: Harden structured interaction request labels, notifications, and docs.
+- 13f22de: Add structured provider interaction requests so Codex choice questions can be answered directly from the conversation transcript.
+- 0471809: Harden provider interaction request answers for mixed Codex prompts, unsupported MCP form schemas, and declining required forms.
+- 45e7d49: Handle Pi extension UI dialog requests in the session transcript.
+- a9da86d: Add Claude Code ExitPlanMode handling so deferred plans can be approved or rejected from the transcript.
+- 49682a9: Add structured Codex MCP elicitation handling for form and URL requests.
+- 45713b4: Add Claude Code AskUserQuestion handling so deferred choice prompts can be answered from the Convergence transcript.
+
 ## 0.37.13
 
 ### Patch Changes
