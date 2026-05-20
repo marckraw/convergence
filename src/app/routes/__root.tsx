@@ -1,5 +1,6 @@
 import { createRootRoute, Outlet, useRouterState } from '@tanstack/react-router'
 import type { CodeReviewMode } from '@/entities/code-review'
+import { useSessionStore } from '@/entities/session'
 import { App } from '../App.container'
 import { useMainViewNavigation } from '../navigation'
 import { routeMatchToMainViewRoute } from './route-state.pure'
@@ -10,6 +11,10 @@ export const Route = createRootRoute({
 
 function RootRoute() {
   const navigation = useMainViewNavigation()
+  const activeSessionId = useSessionStore((state) => state.activeSessionId)
+  const activeGlobalSessionId = useSessionStore(
+    (state) => state.activeGlobalSessionId,
+  )
   const mainViewRoute = useRouterState({
     select: (state) => {
       const match = state.matches[state.matches.length - 1]
@@ -51,7 +56,13 @@ function RootRoute() {
             ...nextSearch,
           })
         }
-        onCloseCodeReview={navigation.navigateToWelcome}
+        onCloseCodeReview={() => {
+          if (activeSessionId) {
+            navigation.navigateToCodeSession(activeSessionId)
+            return
+          }
+          void navigation.navigateToWelcome()
+        }}
         onSelectChatSession={navigation.navigateToChatSession}
         onSelectChatSpace={navigation.navigateToChatSpace}
         onBeginChatSpaceAttempt={(spaceId) =>
@@ -61,8 +72,21 @@ function RootRoute() {
           navigation.navigateToChatSpace(spaceId)
         }
         onSelectAnySession={navigation.navigateToSession}
-        onShowCode={navigation.navigateToWelcome}
-        onShowChat={navigation.navigateToChatHome}
+        onShowCode={() => {
+          if (activeSessionId) {
+            navigation.navigateToCodeSession(activeSessionId)
+            return
+          }
+          void navigation.navigateToWelcome()
+        }}
+        onShowCodeHome={navigation.navigateToWelcome}
+        onShowChat={() => {
+          if (activeGlobalSessionId) {
+            navigation.navigateToChatSession(activeGlobalSessionId)
+            return
+          }
+          navigation.navigateToChatHome()
+        }}
         onNewGlobalChat={navigation.navigateToChatHome}
       />
       <Outlet />

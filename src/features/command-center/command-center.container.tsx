@@ -3,6 +3,7 @@ import Fuse from 'fuse.js'
 import { useProjectStore } from '@/entities/project'
 import { useWorkspaceStore } from '@/entities/workspace'
 import { useSessionStore } from '@/entities/session'
+import type { CodeReviewMode } from '@/entities/code-review'
 import { useCommandCenterStore } from './command-center.model'
 import { buildPaletteIndex } from './command-palette-index.pure'
 import {
@@ -29,6 +30,12 @@ import {
 } from './command-center.presentational'
 import type { PaletteItem } from './command-center.types'
 
+interface CodeReviewRouteSearch {
+  targetId?: string | null
+  mode?: CodeReviewMode
+  file?: string | null
+}
+
 function detectPlatform(): 'mac' | 'other' {
   if (typeof navigator === 'undefined') return 'other'
   return navigator.platform.toLowerCase().includes('mac') ? 'mac' : 'other'
@@ -39,7 +46,7 @@ interface CommandCenterContainerProps {
   onSelectChatSession?: (sessionId: string) => void
   onBeginCodeSessionDraft?: (workspaceId: string) => void
   onSelectProject?: (projectId: string) => void | Promise<void>
-  onOpenCodeReview?: () => void
+  onOpenCodeReview?: (search?: CodeReviewRouteSearch) => void
 }
 
 export function CommandCenterContainer({
@@ -185,7 +192,11 @@ export function CommandCenterContainer({
           return
         case 'open-code-review':
           if (onOpenCodeReview) {
-            onOpenCodeReview()
+            onOpenCodeReview({
+              mode: 'working-tree',
+              targetId: null,
+              file: null,
+            })
           } else {
             openCodeReview()
           }

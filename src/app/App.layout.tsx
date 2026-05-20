@@ -107,6 +107,8 @@ export const AppShell: FC<AppShellProps> = ({
   const handleSelectCodeSession = useCallback(
     (id: string) => {
       setActiveSurface('code')
+      setFallbackSelectedChatSpaceId(null)
+      setFallbackDraftChatSpaceId(null)
       onSelectSession(id)
     },
     [onSelectSession, setActiveSurface],

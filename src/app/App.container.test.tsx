@@ -550,7 +550,7 @@ describe('App', () => {
       name: 'Route Session',
       projectId: mockProject.id,
     })
-    const onShowCode = vi.fn(async () => undefined)
+    const onShowCodeHome = vi.fn(async () => undefined)
     mockElectronAPI.project.getActive.mockResolvedValue(mockProject)
     mockElectronAPI.project.getAll.mockResolvedValue([
       mockProject,
@@ -567,7 +567,7 @@ describe('App', () => {
     render(
       <App
         mainViewRoute={{ kind: 'code-session', sessionId: 'session-1' }}
-        onShowCode={onShowCode}
+        onShowCodeHome={onShowCodeHome}
       />,
     )
 
@@ -579,9 +579,10 @@ describe('App', () => {
     )
 
     await waitFor(() => {
-      expect(onShowCode).toHaveBeenCalledTimes(1)
+      expect(onShowCodeHome).toHaveBeenCalledTimes(1)
+      expect(mockElectronAPI.project.setActive).toHaveBeenCalledWith('2')
     })
-    expect(mockElectronAPI.project.setActive).toHaveBeenCalledWith('2')
+    expect(useAppSurfaceStore.getState().activeSurface).toBe('code')
   })
 
   it('applies code review route search state to the review store', async () => {
