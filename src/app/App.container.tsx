@@ -76,6 +76,7 @@ interface AppProps {
   onCancelChatSpaceAttempt?: (spaceId: string) => void
   onSelectAnySession?: (session: SessionSummary) => void
   onShowCode?: () => void | Promise<void>
+  onShowCodeHome?: () => void | Promise<void>
   onShowChat?: () => void
   onNewGlobalChat?: () => void
 }
@@ -93,6 +94,7 @@ export function App({
   onCancelChatSpaceAttempt,
   onSelectAnySession,
   onShowCode,
+  onShowCodeHome,
   onShowChat,
   onNewGlobalChat,
 }: AppProps) {
@@ -242,11 +244,20 @@ export function App({
 
   useEffect(() => {
     if (!routeCodeSessionId) return
+    setActiveSurface('code')
+    closeCodeReview()
+
     if (!routeSessionLoaded) return
     if (activeSessionId === routeCodeSessionId) return
 
     void switchToSession(routeCodeSessionId)
-  }, [activeSessionId, routeCodeSessionId, routeSessionLoaded])
+  }, [
+    activeSessionId,
+    routeCodeSessionId,
+    routeSessionLoaded,
+    closeCodeReview,
+    setActiveSurface,
+  ])
 
   useEffect(() => {
     if (!routeChatActive) return
@@ -418,8 +429,8 @@ export function App({
 
   const handleSelectProjectRoot = async (projectId: string) => {
     setActiveSurface('code')
-    await onShowCode?.()
     prepareForProject(projectId)
+    await onShowCodeHome?.()
     await activateProject(projectId)
   }
 

@@ -557,11 +557,6 @@ export const ChangedFilesPanel: FC<ChangedFilesPanelProps> = ({
 
     setActiveSurface('code')
     if (onOpenCodeReview) {
-      openCodeReview({
-        target,
-        mode,
-        selectedFile,
-      })
       onOpenCodeReview({
         targetId: target.id,
         mode,
