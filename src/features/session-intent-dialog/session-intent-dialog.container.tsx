@@ -29,11 +29,11 @@ export const SessionIntentDialogContainer: FC<
 
   const handleSelectConversation = useCallback(() => {
     closeDialog()
+    beginSessionDraft(workspaceId)
     if (onBeginCodeSessionDraft) {
       onBeginCodeSessionDraft(workspaceId)
       return
     }
-    beginSessionDraft(workspaceId)
   }, [beginSessionDraft, closeDialog, onBeginCodeSessionDraft, workspaceId])
 
   const handleSelectTerminal = useCallback(async () => {
