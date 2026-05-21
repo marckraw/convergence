@@ -1,5 +1,11 @@
 # convergence
 
+## 0.37.16
+
+### Patch Changes
+
+- 8b574ec: Fix starting a conversation session while a terminal-primary session is open so the main view switches to the conversation composer immediately.
+
 ## 0.37.15
 
 ### Patch Changes
