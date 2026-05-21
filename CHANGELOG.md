@@ -1,5 +1,11 @@
 # convergence
 
+## 0.37.17
+
+### Patch Changes
+
+- 7351bee: Show Codex usage limits in Settings and add a composer quota pill for Codex-backed model selections.
+
 ## 0.37.16
 
 ### Patch Changes
