@@ -290,6 +290,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
       }
     },
   },
+  providerQuota: {
+    getCodex: (forceRefresh?: boolean) =>
+      ipcRenderer.invoke('providerQuota:getCodex', forceRefresh),
+  },
   mcp: {
     listByProjectId: (projectId: string) =>
       ipcRenderer.invoke('mcp:listByProjectId', projectId),

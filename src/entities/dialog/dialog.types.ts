@@ -19,6 +19,7 @@ export type AppSettingsDialogSection =
   | 'session-naming'
   | 'session-forking'
   | 'credentials'
+  | 'usage'
   | 'pi-models'
   | 'notifications'
   | 'updates'

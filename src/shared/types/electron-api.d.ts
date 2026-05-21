@@ -896,6 +896,44 @@ interface ProviderUpdateResult {
   error: string | null
 }
 
+type ProviderQuotaWindowKindData = 'five-hour' | 'weekly' | 'other'
+
+interface ProviderQuotaWindowData {
+  kind: ProviderQuotaWindowKindData
+  label: string
+  usedPercent: number
+  remainingPercent: number
+  windowMinutes: number | null
+  resetsAt: string | null
+}
+
+interface ProviderCreditsQuotaData {
+  hasCredits: boolean
+  unlimited: boolean
+  balance: string | null
+}
+
+type ProviderQuotaSnapshotData =
+  | {
+      providerId: 'codex' | 'claude-code'
+      status: 'available'
+      source: 'provider-api' | 'provider-event'
+      planType: string | null
+      windows: ProviderQuotaWindowData[]
+      credits: ProviderCreditsQuotaData | null
+      limitReachedType: string | null
+      lastCheckedAt: string
+      stale: boolean
+    }
+  | {
+      providerId: 'codex' | 'claude-code'
+      status: 'unavailable'
+      source: 'provider-api' | 'provider-event'
+      reason: string
+      lastCheckedAt: string
+      stale: boolean
+    }
+
 type FeedbackPriorityData = 'low' | 'medium' | 'high'
 
 interface FeedbackContextData {
@@ -1279,6 +1317,9 @@ interface ElectronAPI {
     onStatusesChanged: (
       callback: (statuses: ProviderStatusInfo[]) => void,
     ) => () => void
+  }
+  providerQuota: {
+    getCodex: (forceRefresh?: boolean) => Promise<ProviderQuotaSnapshotData>
   }
   mcp: {
     listByProjectId: (projectId: string) => Promise<ProjectMcpVisibility>

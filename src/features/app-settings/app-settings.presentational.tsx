@@ -30,6 +30,7 @@ import { UpdatesFields } from './updates-fields.presentational'
 import { DebugLoggingFields } from './debug-logging-fields.presentational'
 import { PiModelVisibilityContainer } from './pi-model-visibility.container'
 import { ProviderCredentialsContainer } from './provider-credentials.container'
+import { ProviderUsageContainer } from './provider-usage.container'
 import { AnalyticsInsightsContainer } from '../analytics-insights'
 
 export type AppSettingsSectionId = AppSettingsDialogSection
@@ -160,6 +161,14 @@ export const AppSettingsDialog: FC<AppSettingsDialogProps> = ({
       description:
         'Paste provider API keys once. Convergence stores them in the operating system credential store and passes them to provider processes when needed.',
     },
+    {
+      id: 'usage',
+      navLabel: 'Usage',
+      navSummary: 'Provider quota windows and credits',
+      title: 'Usage',
+      description:
+        'Check provider plan windows that reset automatically, including Codex five-hour and weekly limits.',
+    },
     ...(allProviders.some((provider) => provider.id === 'pi')
       ? [
           {
@@ -209,7 +218,9 @@ export const AppSettingsDialog: FC<AppSettingsDialogProps> = ({
   const currentSection =
     sections.find((section) => section.id === activeSection) ?? sections[0]
   const usesIndependentSave =
-    currentSection.id === 'insights' || currentSection.id === 'credentials'
+    currentSection.id === 'insights' ||
+    currentSection.id === 'credentials' ||
+    currentSection.id === 'usage'
 
   const renderCurrentSection = () => {
     switch (currentSection.id) {
@@ -248,6 +259,8 @@ export const AppSettingsDialog: FC<AppSettingsDialogProps> = ({
         )
       case 'credentials':
         return <ProviderCredentialsContainer />
+      case 'usage':
+        return <ProviderUsageContainer />
       case 'notifications':
         return (
           <NotificationsFields
