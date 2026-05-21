@@ -81,7 +81,7 @@ describe('SessionIntentDialogContainer', () => {
     expect(beginSessionDraftMock).toHaveBeenCalledWith('ws-1')
   })
 
-  it('picking Conversation uses routed draft navigation when provided', () => {
+  it('picking Conversation clears the active session before routed draft navigation', () => {
     const close = vi.fn()
     const onBeginCodeSessionDraft = vi.fn()
     useDialogStore.setState({
@@ -100,8 +100,8 @@ describe('SessionIntentDialogContainer', () => {
     fireEvent.click(screen.getByTestId('session-intent-conversation'))
 
     expect(close).toHaveBeenCalled()
+    expect(beginSessionDraftMock).toHaveBeenCalledWith(null)
     expect(onBeginCodeSessionDraft).toHaveBeenCalledWith(null)
-    expect(beginSessionDraftMock).not.toHaveBeenCalled()
   })
 
   it('picking Terminal creates a shell session in the payload workspace, with a name derived from the branch, and closes the dialog', async () => {
