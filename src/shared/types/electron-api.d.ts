@@ -481,6 +481,8 @@ interface ProviderModelOption {
   label: string
   defaultEffort: ReasoningEffort | null
   effortOptions: ProviderEffortOption[]
+  inputModalities?: Array<'text' | 'image'>
+  source?: 'pi-models-json' | 'provider'
 }
 
 type AttachmentKind = 'image' | 'pdf' | 'text'

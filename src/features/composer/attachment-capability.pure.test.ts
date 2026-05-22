@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import type { Attachment } from '@/entities/attachment'
 import type { ProviderAttachmentCapability } from '@/entities/session'
-import { validateAttachmentsAgainstCapability } from './attachment-capability.pure'
+import {
+  resolveAttachmentCapabilityForModel,
+  validateAttachmentsAgainstCapability,
+} from './attachment-capability.pure'
 
 const CLAUDE: ProviderAttachmentCapability = {
   supportsImage: true,
@@ -119,5 +122,36 @@ describe('validateAttachmentsAgainstCapability', () => {
 
     expect(result.ok).toBe(false)
     expect(Object.keys(result.errorByAttachmentId).sort()).toEqual(['a', 'b'])
+  })
+})
+
+describe('resolveAttachmentCapabilityForModel', () => {
+  it('preserves provider capability when the model has no modality metadata', () => {
+    expect(resolveAttachmentCapabilityForModel(CODEX, null)).toEqual(CODEX)
+  })
+
+  it('disables image attachments for text-only models', () => {
+    const capability = resolveAttachmentCapabilityForModel(CODEX, {
+      id: 'ollama/devstral-small-2',
+      label: 'Ollama · Devstral Small 2',
+      defaultEffort: null,
+      effortOptions: [],
+      inputModalities: ['text'],
+    })
+
+    expect(capability?.supportsImage).toBe(false)
+    expect(capability?.supportsText).toBe(true)
+  })
+
+  it('keeps image attachments enabled for image-capable models', () => {
+    const capability = resolveAttachmentCapabilityForModel(CODEX, {
+      id: 'pgx-ollama/pgx-devstral-small-2-64k',
+      label: 'PGX Devstral Small 2',
+      defaultEffort: null,
+      effortOptions: [],
+      inputModalities: ['text', 'image'],
+    })
+
+    expect(capability?.supportsImage).toBe(true)
   })
 })

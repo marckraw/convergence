@@ -104,11 +104,14 @@ export interface ProviderEffortOption {
   description?: string
 }
 
+export type ProviderInputModality = 'text' | 'image'
+
 export interface ProviderModelOption {
   id: string
   label: string
   defaultEffort: ReasoningEffort | null
   effortOptions: ProviderEffortOption[]
+  inputModalities?: ProviderInputModality[]
   source?: 'pi-models-json' | 'provider'
 }
 

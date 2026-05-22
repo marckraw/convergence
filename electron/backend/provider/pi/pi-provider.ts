@@ -82,6 +82,27 @@ function now(): string {
   return new Date().toISOString()
 }
 
+type PiPromptCommand = {
+  type: string
+  message: string
+  streamingBehavior?: string
+  images?: ReturnType<typeof buildPiPromptPayload>['images']
+}
+
+function summarizePiPromptCommand(command: PiPromptCommand): unknown {
+  return {
+    type: command.type,
+    messageLength: command.message.length,
+    streamingBehavior: command.streamingBehavior,
+    imageCount: command.images?.length ?? 0,
+    images: command.images?.map((image) => ({
+      type: image.type,
+      mimeType: image.mimeType,
+      bytes: Buffer.byteLength(image.data, 'base64'),
+    })),
+  }
+}
+
 export type PiEnvironmentResolver = (
   env?: NodeJS.ProcessEnv,
 ) => Promise<NodeJS.ProcessEnv>
@@ -841,12 +862,7 @@ export class PiProvider implements Provider {
 
       const isMidRunInput =
         deliveryMode === 'follow-up' || deliveryMode === 'steer'
-      const command: {
-        type: string
-        message: string
-        streamingBehavior?: string
-        images?: ReturnType<typeof buildPiPromptPayload>['images']
-      } = {
+      const command: PiPromptCommand = {
         type:
           deliveryMode === 'follow-up'
             ? 'follow_up'
@@ -859,6 +875,12 @@ export class PiProvider implements Provider {
         command.streamingBehavior = 'steer'
       }
       if (images && images.length > 0) command.images = images
+
+      recordDebug('request', {
+        direction: 'out',
+        method: command.type,
+        payload: summarizePiPromptCommand(command),
+      })
 
       rpc.request(command).then(
         (response) => {

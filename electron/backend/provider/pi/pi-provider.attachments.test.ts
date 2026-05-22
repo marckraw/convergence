@@ -1,4 +1,7 @@
 import { EventEmitter } from 'events'
+import { mkdtempSync, rmSync, writeFileSync } from 'fs'
+import { tmpdir } from 'os'
+import { join } from 'path'
 import { PassThrough } from 'stream'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { SessionDelta } from '../../session/conversation-item.types'
@@ -57,7 +60,11 @@ function waitFor(
   })
 }
 
-function makeAttachment(id: string, filename: string): Attachment {
+function makeAttachment(
+  id: string,
+  filename: string,
+  storagePath = `/nonexistent/${id}.png`,
+): Attachment {
   return {
     id,
     sessionId: 'session-x',
@@ -65,7 +72,7 @@ function makeAttachment(id: string, filename: string): Attachment {
     mimeType: 'image/png',
     filename,
     sizeBytes: 1,
-    storagePath: `/nonexistent/${id}.png`,
+    storagePath,
     thumbnailPath: null,
     textPreview: null,
     createdAt: new Date().toISOString(),
@@ -130,6 +137,88 @@ describe('PiProvider addUserMessage attachmentIds', () => {
     })
 
     handle.stop()
+  })
+
+  it('sends image attachments as Pi RPC images on the outbound prompt command', async () => {
+    const tmp = mkdtempSync(join(tmpdir(), 'convergence-pi-attachment-'))
+    const imagePath = join(tmp, 'pixel.png')
+    writeFileSync(imagePath, Buffer.from([0x89, 0x50, 0x4e, 0x47]))
+
+    try {
+      const child = new MockChildProcess()
+      const stdinChunks: string[] = []
+      child.stdin.on('data', (chunk: Buffer) => {
+        stdinChunks.push(chunk.toString('utf8'))
+      })
+      spawnMock.mockReturnValue(child)
+
+      const debugEntries: unknown[] = []
+      const provider = new PiProvider('/usr/local/bin/pi', null, {
+        record: (entry) => {
+          debugEntries.push(entry)
+        },
+      })
+      const handle = provider.start({
+        sessionId: 'session-3',
+        workingDirectory: process.cwd(),
+        initialMessage: 'describe this image',
+        initialAttachments: [makeAttachment('att-1', 'pixel.png', imagePath)],
+        model: null,
+        effort: null,
+        continuationToken: null,
+      })
+
+      handle.onDelta(() => {})
+      handle.onStatusChange(() => {})
+      handle.onAttentionChange(() => {})
+      handle.onContinuationToken(() => {})
+      handle.onContextWindowChange(() => {})
+      handle.onActivityChange(() => {})
+
+      await waitFor(() => {
+        const promptLine = stdinChunks
+          .join('')
+          .split('\n')
+          .filter(Boolean)
+          .find((line) => JSON.parse(line).type === 'prompt')
+        expect(promptLine).toBeDefined()
+
+        const prompt = JSON.parse(promptLine ?? '{}') as {
+          message?: string
+          images?: Array<{ type?: string; data?: string; mimeType?: string }>
+        }
+        expect(prompt.message).toBe('describe this image')
+        expect(prompt.images).toEqual([
+          {
+            type: 'image',
+            data: Buffer.from([0x89, 0x50, 0x4e, 0x47]).toString('base64'),
+            mimeType: 'image/png',
+          },
+        ])
+      })
+
+      expect(debugEntries).toContainEqual(
+        expect.objectContaining({
+          channel: 'request',
+          direction: 'out',
+          method: 'prompt',
+          payload: expect.objectContaining({
+            imageCount: 1,
+            images: [
+              {
+                type: 'image',
+                mimeType: 'image/png',
+                bytes: 4,
+              },
+            ],
+          }),
+        }),
+      )
+
+      handle.stop()
+    } finally {
+      rmSync(tmp, { force: true, recursive: true })
+    }
   })
 
   it('omits attachmentIds when no attachments are provided', async () => {
