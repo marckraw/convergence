@@ -27,6 +27,8 @@ describe('database', () => {
     expect(tableNames).toContain('session_terminal_layout')
     expect(tableNames).toContain('session_turns')
     expect(tableNames).toContain('session_turn_file_changes')
+    expect(tableNames).toContain('project_scripts')
+    expect(tableNames).toContain('project_script_runs')
     expect(tableNames).toContain('spaces')
     expect(tableNames).toContain('space_attempts')
     expect(tableNames).toContain('space_artifacts')
