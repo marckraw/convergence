@@ -1,5 +1,12 @@
 # convergence
 
+## 0.37.22
+
+### Patch Changes
+
+- 46147c8: Add managed local model SSH tunnel profiles with a status-bar pill, quick controls, and an editable tunnel manager.
+- 4c8af85: Add project actions in the session header with icon-backed action definitions, background execution, live output drawers, and compact session details.
+
 ## 0.37.21
 
 ### Patch Changes
