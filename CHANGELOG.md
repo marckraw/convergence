@@ -1,5 +1,11 @@
 # convergence
 
+## 0.37.23
+
+### Patch Changes
+
+- fe474b8: Fix duplicate provider thinking transcript items when streaming reasoning is followed by final thinking metadata.
+
 ## 0.37.22
 
 ### Patch Changes
