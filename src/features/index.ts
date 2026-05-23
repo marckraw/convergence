@@ -17,6 +17,7 @@ export { ThemeToggleButton } from './theme-toggle'
 export { ComposerContainer } from './composer'
 export { AppSettingsDialogContainer } from './app-settings'
 export { TerminalPaneContainer } from './terminal-pane'
+export { LocalModelTunnelStatusContainer } from './local-model-tunnel'
 export type {
   CodeReviewDiffLine,
   ReviewNoteDiffAnnotation,

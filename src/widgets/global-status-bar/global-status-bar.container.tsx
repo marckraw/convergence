@@ -2,6 +2,7 @@ import { useMemo } from 'react'
 import type { FC } from 'react'
 import { useProjectStore } from '@/entities/project'
 import { selectGlobalStatus, useSessionStore } from '@/entities/session'
+import { LocalModelTunnelStatusContainer } from '@/features/local-model-tunnel'
 import { GlobalStatusBar } from './global-status-bar.presentational'
 
 interface GlobalStatusBarContainerProps {
@@ -59,6 +60,7 @@ export const GlobalStatusBarContainer: FC<GlobalStatusBarContainerProps> = ({
       recency={recency}
       providers={providers}
       onSelectProject={handleSelectProject}
+      localModelTunnelSlot={<LocalModelTunnelStatusContainer />}
     />
   )
 }

@@ -1,4 +1,4 @@
-import type { FC } from 'react'
+import type { FC, ReactNode } from 'react'
 import type { ProjectActivity } from '@/entities/session'
 import { summarizeAttentionRequests } from '@/entities/session'
 import type { ProviderInfo, SessionSummary } from '@/entities/session'
@@ -31,6 +31,7 @@ interface GlobalStatusBarProps {
   recency: RecencyBadge | null
   providers: ProviderInfo[]
   onSelectProject: (projectId: string) => void
+  localModelTunnelSlot?: ReactNode
 }
 
 export const GlobalStatusBar: FC<GlobalStatusBarProps> = ({
@@ -40,6 +41,7 @@ export const GlobalStatusBar: FC<GlobalStatusBarProps> = ({
   recency,
   providers,
   onSelectProject,
+  localModelTunnelSlot,
 }) => {
   const isEmpty =
     runningCount === 0 && attentionCount === 0 && byProject.length === 0
@@ -53,6 +55,7 @@ export const GlobalStatusBar: FC<GlobalStatusBarProps> = ({
 
   return (
     <div className={barClass} data-testid="global-status-bar">
+      {localModelTunnelSlot}
       {isEmpty ? (
         <div className={zoneClass}>
           <CircleOff className="h-3 w-3" />

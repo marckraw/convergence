@@ -1418,6 +1418,23 @@ interface ElectronAPI {
     list: (sessionId: string) => Promise<ProviderDebugEntry[]>
     openFolder: () => Promise<boolean>
   }
+  localModelTunnel: {
+    getSnapshot: () => Promise<LocalModelTunnelSnapshotData>
+    start: (profileId: string) => Promise<LocalModelTunnelSnapshotData>
+    stop: (profileId: string) => Promise<LocalModelTunnelSnapshotData>
+    restart: (profileId: string) => Promise<LocalModelTunnelSnapshotData>
+    createProfile: (
+      input: LocalModelTunnelProfileInputData,
+    ) => Promise<LocalModelTunnelSnapshotData>
+    updateProfile: (
+      profileId: string,
+      input: LocalModelTunnelProfileInputData,
+    ) => Promise<LocalModelTunnelSnapshotData>
+    deleteProfile: (profileId: string) => Promise<LocalModelTunnelSnapshotData>
+    onChanged: (
+      callback: (snapshot: LocalModelTunnelSnapshotData) => void,
+    ) => () => void
+  }
   terminal: {
     create: (input: {
       sessionId: string
@@ -1604,6 +1621,62 @@ interface AppSettingsData {
   piModelVisibility: {
     additionalModelIds: string[]
   }
+}
+
+type LocalModelTunnelStateData =
+  | 'stopped'
+  | 'starting'
+  | 'running'
+  | 'external'
+  | 'failed'
+
+interface LocalModelTunnelProfileData {
+  id: string
+  name: string
+  sshTarget: string
+  autoStart: boolean
+  useCustomLocalBindHost: boolean
+  localBindHost: string
+  localPort: number
+  remoteHost: string
+  remotePort: number
+  healthCheckEnabled: boolean
+  healthCheckUrl: string
+  createdAt: string
+  updatedAt: string
+}
+
+interface LocalModelTunnelProfileInputData {
+  name?: string
+  sshTarget?: string
+  autoStart?: boolean
+  useCustomLocalBindHost?: boolean
+  localBindHost?: string
+  localPort?: number
+  remoteHost?: string
+  remotePort?: number
+  healthCheckEnabled?: boolean
+  healthCheckUrl?: string
+}
+
+interface LocalModelTunnelRuntimeStatusData {
+  profileId: string
+  state: LocalModelTunnelStateData
+  managed: boolean
+  pid: number | null
+  error: string | null
+  lastCheckedAt: string | null
+  commandPreview: string
+}
+
+interface LocalModelTunnelProfileWithStatusData {
+  profile: LocalModelTunnelProfileData
+  status: LocalModelTunnelRuntimeStatusData
+}
+
+interface LocalModelTunnelSnapshotData {
+  profiles: LocalModelTunnelProfileWithStatusData[]
+  updatedAt: string
 }
 
 interface OpenRouterCredentialStatusData {
