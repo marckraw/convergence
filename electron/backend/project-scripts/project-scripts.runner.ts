@@ -133,7 +133,11 @@ export class ProjectScriptsRunner {
     stream: 'stdout' | 'stderr',
     text: string,
   ): void {
-    const updated = this.service.appendRunOutput(runId, stream, text)
+    const updated = this.tryAppendRunOutput(runId, stream, text)
+    if (!updated) {
+      return
+    }
+
     const output: ProjectScriptRunOutput = {
       runId,
       stream,
@@ -156,17 +160,60 @@ export class ProjectScriptsRunner {
     },
   ): void {
     this.active.delete(runId)
-    const updated = this.service.finishRun({
+    const updated = this.tryFinishRun({
       id: runId,
       status: input.status,
       exitCode: input.exitCode,
       signal: input.signal,
       errorMessage: input.errorMessage,
     })
+    if (!updated) {
+      return
+    }
     this.broadcastRunUpdated(updated)
   }
 
   private broadcastRunUpdated(run: ProjectScriptRun): void {
     this.broadcast('project-script-run:updated', run)
   }
+
+  private tryAppendRunOutput(
+    runId: string,
+    stream: 'stdout' | 'stderr',
+    text: string,
+  ): ProjectScriptRun | null {
+    try {
+      return this.service.appendRunOutput(runId, stream, text)
+    } catch (error) {
+      if (isMissingRunError(error)) {
+        this.active.delete(runId)
+        return null
+      }
+      throw error
+    }
+  }
+
+  private tryFinishRun(input: {
+    id: string
+    status: 'succeeded' | 'failed' | 'stopped'
+    exitCode?: number | null
+    signal?: string | null
+    errorMessage?: string | null
+  }): ProjectScriptRun | null {
+    try {
+      return this.service.finishRun(input)
+    } catch (error) {
+      if (isMissingRunError(error)) {
+        return null
+      }
+      throw error
+    }
+  }
+}
+
+function isMissingRunError(error: unknown): boolean {
+  return (
+    error instanceof Error &&
+    error.message.startsWith('Project script run not found:')
+  )
 }

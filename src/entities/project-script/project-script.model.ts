@@ -41,6 +41,9 @@ interface ProjectScriptActions {
 
 export type ProjectScriptStore = ProjectScriptState & ProjectScriptActions
 
+const MAX_OUTPUT_CHUNKS_PER_RUN = 500
+const MAX_OUTPUT_TEXT_CHARS_PER_RUN = 524288
+
 let runEventsSubscriberCount = 0
 let unsubscribeRunEvents: (() => void) | null = null
 
@@ -77,7 +80,35 @@ function upsertRunInState(
   }
 }
 
-export const useProjectScriptStore = create<ProjectScriptStore>((set, get) => ({
+function appendBoundedRunOutput(
+  current: ProjectScriptRunOutput[],
+  next: ProjectScriptRunOutput,
+): ProjectScriptRunOutput[] {
+  const chunks = [...current, next].slice(-MAX_OUTPUT_CHUNKS_PER_RUN)
+  const bounded: ProjectScriptRunOutput[] = []
+  let remainingChars = MAX_OUTPUT_TEXT_CHARS_PER_RUN
+
+  for (let index = chunks.length - 1; index >= 0; index -= 1) {
+    if (remainingChars <= 0) break
+
+    const chunk = chunks[index]
+    if (chunk.text.length <= remainingChars) {
+      bounded.push(chunk)
+      remainingChars -= chunk.text.length
+      continue
+    }
+
+    bounded.push({
+      ...chunk,
+      text: chunk.text.slice(-remainingChars),
+    })
+    remainingChars = 0
+  }
+
+  return bounded.reverse()
+}
+
+export const useProjectScriptStore = create<ProjectScriptStore>((set) => ({
   scriptsByProjectId: {},
   runsByProjectId: {},
   globalActiveRuns: [],
@@ -180,12 +211,11 @@ export const useProjectScriptStore = create<ProjectScriptStore>((set, get) => ({
     }
   },
 
-  runScript: async (scriptId, projectId) => {
+  runScript: async (scriptId, _projectId) => {
     set({ error: null })
     try {
       const run = await projectScriptApi.run(scriptId)
       set((state) => upsertRunInState(state, run))
-      void get().loadForProject(projectId)
       return run
     } catch (error) {
       set({ error: errorMessage(error, 'Failed to run project script') })
@@ -214,10 +244,10 @@ export const useProjectScriptStore = create<ProjectScriptStore>((set, get) => ({
         set((state) => ({
           outputByRunId: {
             ...state.outputByRunId,
-            [output.runId]: [
-              ...(state.outputByRunId[output.runId] ?? []),
+            [output.runId]: appendBoundedRunOutput(
+              state.outputByRunId[output.runId] ?? [],
               output,
-            ],
+            ),
           },
         }))
       })
@@ -242,9 +272,20 @@ export const useProjectScriptStore = create<ProjectScriptStore>((set, get) => ({
     set((state) => {
       const scriptsByProjectId = { ...state.scriptsByProjectId }
       const runsByProjectId = { ...state.runsByProjectId }
+      const outputByRunId = { ...state.outputByRunId }
+      for (const run of runsByProjectId[projectId] ?? []) {
+        delete outputByRunId[run.id]
+      }
       delete scriptsByProjectId[projectId]
       delete runsByProjectId[projectId]
-      return { scriptsByProjectId, runsByProjectId }
+      return {
+        scriptsByProjectId,
+        runsByProjectId,
+        outputByRunId,
+        globalActiveRuns: state.globalActiveRuns.filter(
+          (run) => run.projectId !== projectId,
+        ),
+      }
     }),
 
   clearError: () => set({ error: null }),

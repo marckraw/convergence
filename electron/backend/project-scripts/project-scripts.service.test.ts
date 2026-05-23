@@ -176,6 +176,26 @@ describe('ProjectScriptsService', () => {
     expect(run.status).toBe('queued')
   })
 
+  it('returns active runs and null for missing runs', () => {
+    const script = service.create({
+      projectId: 'project-1',
+      name: 'Build',
+      command: 'npm run build',
+    })
+    const queued = service.createRunRecord({ scriptId: script.id })
+    const running = service.markRunRunning(queued.id)
+    const finished = service.finishRun({
+      id: service.createRunRecord({ scriptId: script.id }).id,
+      status: 'succeeded',
+      exitCode: 0,
+    })
+
+    expect(service.getRun(running.id)).toMatchObject({ id: running.id })
+    expect(service.getRun('missing')).toBeNull()
+    expect(service.listActiveRuns()).toEqual([running])
+    expect(service.listActiveRuns()).not.toContainEqual(finished)
+  })
+
   it('runs a non-interactive command and captures output', async () => {
     insertProject('runner-project', process.cwd())
     const events: Array<{ channel: string; payload: unknown }> = []
@@ -218,6 +238,58 @@ describe('ProjectScriptsService', () => {
     const finished = await waitForFinishedRun(run.id)
 
     expect(finished.status).toBe('stopped')
+  })
+
+  it('handles stop requests for missing and already finished runs', () => {
+    insertProject('runner-project', process.cwd())
+    const runner = new ProjectScriptsRunner({
+      service,
+      broadcast: () => undefined,
+    })
+    const script = service.create({
+      projectId: 'runner-project',
+      name: 'Echo',
+      command: 'printf ok',
+    })
+    const run = service.finishRun({
+      id: service.createRunRecord({ scriptId: script.id }).id,
+      status: 'succeeded',
+      exitCode: 0,
+    })
+
+    expect(runner.stop(run.id)).toEqual(run)
+    expect(() => runner.stop('missing-run')).toThrow(
+      'Project script run not found: missing-run',
+    )
+  })
+
+  it('ignores process output and exit after the run row is deleted', async () => {
+    insertProject('runner-project', process.cwd())
+    const events: Array<{ channel: string; payload: unknown }> = []
+    const runner = new ProjectScriptsRunner({
+      service,
+      broadcast: (channel, payload) => events.push({ channel, payload }),
+    })
+    const script = service.create({
+      projectId: 'runner-project',
+      name: 'Delayed',
+      command: 'sleep 0.1; printf done',
+    })
+
+    const run = runner.run(script.id)
+    getDatabase()
+      .prepare('DELETE FROM projects WHERE id = ?')
+      .run('runner-project')
+    await delay(250)
+
+    expect(service.getRun(run.id)).toBeNull()
+    expect(
+      events.filter(
+        (event) =>
+          event.channel === 'project-script-run:updated' &&
+          (event.payload as ProjectScriptRun).id === run.id,
+      ),
+    ).toHaveLength(1)
   })
 })
 
