@@ -1,5 +1,11 @@
 # convergence
 
+## 0.37.20
+
+### Patch Changes
+
+- 3dc1f32: Move the session context-window indicator from conversation headers into the composer as a compact hoverable status dot.
+
 ## 0.37.19
 
 ### Patch Changes
