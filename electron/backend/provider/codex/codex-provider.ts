@@ -125,7 +125,7 @@ function readProviderItemId(
   )
 }
 
-function readReasoningDelta(params: Record<string, unknown>): string {
+function readReasoningDelta(params: Record<string, unknown>): string | null {
   const part =
     typeof params.part === 'object' && params.part !== null
       ? (params.part as Record<string, unknown>)
@@ -137,7 +137,7 @@ function readReasoningDelta(params: Record<string, unknown>): string {
     readString(params.summaryTextDelta) ??
     readString(params.text) ??
     readString(part?.text) ??
-    ''
+    null
   )
 }
 
@@ -1458,12 +1458,15 @@ export class CodexProvider implements Provider {
           case 'item/reasoning/textDelta':
           case 'item/reasoning/summaryTextDelta':
           case 'item/reasoning/summaryPartAdded': {
-            appendThinking({
-              text: readReasoningDelta(p),
-              providerItemId:
-                readProviderItemId(p) ?? pendingThinkingProviderItemId,
-              providerEventType: method,
-            })
+            const text = readReasoningDelta(p)
+            if (text) {
+              appendThinking({
+                text,
+                providerItemId:
+                  readProviderItemId(p) ?? pendingThinkingProviderItemId,
+                providerEventType: method,
+              })
+            }
             break
           }
 
