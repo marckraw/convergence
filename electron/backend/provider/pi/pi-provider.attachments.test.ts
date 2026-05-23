@@ -187,7 +187,9 @@ describe('PiProvider addUserMessage attachmentIds', () => {
           message?: string
           images?: Array<{ type?: string; data?: string; mimeType?: string }>
         }
-        expect(prompt.message).toBe('describe this image')
+        expect(prompt.message).toContain('describe this image')
+        expect(prompt.message).toContain('<attached-files>')
+        expect(prompt.message).toContain(`path: ${imagePath}`)
         expect(prompt.images).toEqual([
           {
             type: 'image',
