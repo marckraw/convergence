@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import type { SessionContextWindow } from '@/entities/session'
 import { Button } from '@/shared/ui/button'
 import { Popover, PopoverContent, PopoverTrigger } from '@/shared/ui/popover'
@@ -75,6 +75,8 @@ export function ContextWindowDot({ contextWindow }: ContextWindowDotProps) {
       closeTimerRef.current = null
     }, 120)
   }, [clearCloseTimer])
+
+  useEffect(() => clearCloseTimer, [clearCloseTimer])
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
