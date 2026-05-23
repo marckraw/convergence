@@ -105,6 +105,42 @@ function isContextCompactionItemType(itemType: string | null): boolean {
   )
 }
 
+function isReasoningItemType(itemType: string | null): boolean {
+  return itemType === 'reasoning' || itemType === 'agentReasoning'
+}
+
+function readString(value: unknown): string | null {
+  return typeof value === 'string' ? value : null
+}
+
+function readProviderItemId(
+  params: Record<string, unknown>,
+  item?: Record<string, unknown> | null,
+): string | null {
+  return (
+    readString(params.itemId) ??
+    readString(params.item_id) ??
+    readString(item?.id) ??
+    null
+  )
+}
+
+function readReasoningDelta(params: Record<string, unknown>): string {
+  const part =
+    typeof params.part === 'object' && params.part !== null
+      ? (params.part as Record<string, unknown>)
+      : null
+
+  return (
+    readString(params.delta) ??
+    readString(params.textDelta) ??
+    readString(params.summaryTextDelta) ??
+    readString(params.text) ??
+    readString(part?.text) ??
+    ''
+  )
+}
+
 interface PendingApprovalRequest {
   description: string
   approveResult: unknown
@@ -798,6 +834,9 @@ export class CodexProvider implements Provider {
     let threadReady = config.continuationToken === null
     let assistantTextBuffer = ''
     let assistantMessageItemId: string | null = null
+    let thinkingBuffer = ''
+    let thinkingItemId: string | null = null
+    let pendingThinkingProviderItemId: string | null = null
     let resolveThreadReady: (() => void) | null = null
     let activeProviderTurnId: string | null = null
 
@@ -878,6 +917,49 @@ export class CodexProvider implements Provider {
         }
         assistantTextBuffer = ''
         assistantMessageItemId = null
+      }
+    }
+
+    function flushThinkingBuffer(): void {
+      if (thinkingBuffer) {
+        const timestamp = now()
+        if (thinkingItemId) {
+          sessionEmitter.patchThinking(thinkingItemId, {
+            text: thinkingBuffer,
+            state: 'complete',
+            updatedAt: timestamp,
+          })
+        } else {
+          thinkingItemId = sessionEmitter.addThinking({
+            text: thinkingBuffer,
+            state: 'complete',
+            timestamp,
+          })
+        }
+        thinkingBuffer = ''
+        thinkingItemId = null
+      }
+    }
+
+    function appendThinking(input: {
+      text: string
+      providerItemId?: string | null
+      providerEventType?: string | null
+    }): void {
+      if (!input.text) return
+      thinkingBuffer += input.text
+      if (!thinkingItemId) {
+        thinkingItemId = sessionEmitter.addThinking({
+          text: thinkingBuffer,
+          state: 'streaming',
+          providerItemId: input.providerItemId,
+          providerEventType: input.providerEventType,
+        })
+      } else {
+        sessionEmitter.patchThinking(thinkingItemId, {
+          text: thinkingBuffer,
+          state: 'streaming',
+        })
       }
     }
 
@@ -1019,6 +1101,9 @@ export class CodexProvider implements Provider {
     ): Promise<void> {
       assistantTextBuffer = ''
       assistantMessageItemId = null
+      thinkingBuffer = ''
+      thinkingItemId = null
+      pendingThinkingProviderItemId = null
       const currentThreadId = await ensureThread(activeRpc)
 
       try {
@@ -1347,6 +1432,7 @@ export class CodexProvider implements Provider {
           }
 
           case 'item/agentMessage/delta':
+            flushThinkingBuffer()
             if (typeof p.delta === 'string') {
               assistantTextBuffer += p.delta
             } else if (typeof p.textDelta === 'string') {
@@ -1368,7 +1454,21 @@ export class CodexProvider implements Provider {
             }
             break
 
+          case 'item/reasoning/delta':
+          case 'item/reasoning/textDelta':
+          case 'item/reasoning/summaryTextDelta':
+          case 'item/reasoning/summaryPartAdded': {
+            appendThinking({
+              text: readReasoningDelta(p),
+              providerItemId:
+                readProviderItemId(p) ?? pendingThinkingProviderItemId,
+              providerEventType: method,
+            })
+            break
+          }
+
           case 'turn/completed':
+            flushThinkingBuffer()
             flushAssistantBuffer()
             activeProviderTurnId = null
             {
@@ -1415,6 +1515,7 @@ export class CodexProvider implements Provider {
             break
 
           case 'turn/interrupt':
+            flushThinkingBuffer()
             flushAssistantBuffer()
             activeProviderTurnId = null
             sessionEmitter.addNote({
@@ -1449,6 +1550,9 @@ export class CodexProvider implements Provider {
                 providerEventType: itemType,
               })
             }
+            if (isReasoningItemType(itemType)) {
+              pendingThinkingProviderItemId = readProviderItemId(p, item)
+            }
             break
           }
 
@@ -1468,8 +1572,22 @@ export class CodexProvider implements Provider {
               break
             }
 
+            if (isReasoningItemType(itemType)) {
+              const text =
+                readString(item?.text) ??
+                readString(item?.summary) ??
+                readString(item?.content) ??
+                ''
+              if (!thinkingBuffer && text) {
+                thinkingBuffer = text
+              }
+              flushThinkingBuffer()
+              break
+            }
+
             if (itemType === 'agentMessage') {
               const hadBufferedText = assistantTextBuffer.length > 0
+              flushThinkingBuffer()
               flushAssistantBuffer()
               const text = typeof item?.text === 'string' ? item.text : ''
               if (text && !hadBufferedText) {

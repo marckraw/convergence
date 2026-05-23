@@ -14,6 +14,18 @@ describe('deriveClaudeActivity', () => {
     ).toBe('streaming')
   })
 
+  it('maps thinking delta stream events to thinking', () => {
+    expect(
+      deriveClaudeActivity({
+        type: 'stream_event',
+        event: {
+          type: 'content_block_delta',
+          delta: { type: 'thinking_delta', thinking: 'checking' },
+        },
+      }),
+    ).toBe('thinking')
+  })
+
   it('ignores non-text stream deltas', () => {
     expect(
       deriveClaudeActivity({

@@ -83,7 +83,7 @@ interface ClaudeStreamEvent {
   session_id?: string
   event?: {
     type: string
-    delta?: { type: string; text?: string }
+    delta?: { type: string; text?: string; thinking?: string }
   }
   message?: {
     model?: string
@@ -95,6 +95,7 @@ interface ClaudeStreamEvent {
     content?: Array<{
       type: string
       text?: string
+      thinking?: string
       name?: string
       input?: unknown
       tool_use_id?: string
@@ -263,7 +264,10 @@ export class ClaudeCodeProvider implements Provider {
     let claudeSessionId: string | null = config.continuationToken
     let assistantTextBuffer = ''
     let assistantMessageItemId: string | null = null
+    let thinkingBuffer = ''
+    let thinkingItemId: string | null = null
     let currentTurnHasAssistantText = false
+    let currentTurnHasThinkingText = false
     let currentTurn: {
       message: string
       attachments?: Attachment[]
@@ -461,6 +465,29 @@ export class ClaudeCodeProvider implements Provider {
       }
     }
 
+    function flushThinkingBuffer(): void {
+      if (thinkingBuffer) {
+        const timestamp = now()
+        if (thinkingItemId) {
+          sessionEmitter.patchThinking(thinkingItemId, {
+            text: thinkingBuffer,
+            state: 'complete',
+            updatedAt: timestamp,
+          })
+        } else {
+          thinkingItemId = sessionEmitter.addThinking({
+            text: thinkingBuffer,
+            state: 'complete',
+            timestamp,
+          })
+        }
+        thinkingBuffer = ''
+        thinkingItemId = null
+        currentTurnHasThinkingText = true
+        sawTurnOutput = true
+      }
+    }
+
     function canRecoverContinuation(): boolean {
       return !!(
         currentTurn?.allowContinuationRecovery &&
@@ -598,9 +625,28 @@ export class ClaudeCodeProvider implements Provider {
           sawTurnOutput = true
           if (
             event.event?.type === 'content_block_delta' &&
+            event.event.delta?.type === 'thinking_delta' &&
+            typeof event.event.delta.thinking === 'string'
+          ) {
+            thinkingBuffer += event.event.delta.thinking
+            if (!thinkingItemId) {
+              thinkingItemId = sessionEmitter.addThinking({
+                text: thinkingBuffer,
+                state: 'streaming',
+                providerEventType: 'stream_event',
+              })
+            } else {
+              sessionEmitter.patchThinking(thinkingItemId, {
+                text: thinkingBuffer,
+                state: 'streaming',
+              })
+            }
+          } else if (
+            event.event?.type === 'content_block_delta' &&
             event.event.delta?.type === 'text_delta' &&
             event.event.delta?.text
           ) {
+            flushThinkingBuffer()
             assistantTextBuffer += event.event.delta.text
             if (!assistantMessageItemId) {
               assistantMessageItemId = sessionEmitter.addAssistantMessage({
@@ -626,6 +672,7 @@ export class ClaudeCodeProvider implements Provider {
           if (event.message?.content) {
             for (const block of event.message.content) {
               if (block.type === 'tool_use' && block.name) {
+                flushThinkingBuffer()
                 sessionEmitter.addToolCall({
                   toolName: block.name,
                   inputText:
@@ -634,6 +681,17 @@ export class ClaudeCodeProvider implements Provider {
                       : JSON.stringify(block.input, null, 2),
                   providerEventType: 'tool_use',
                 })
+              } else if (
+                block.type === 'thinking' &&
+                block.thinking &&
+                !currentTurnHasThinkingText
+              ) {
+                sessionEmitter.addThinking({
+                  text: block.thinking,
+                  state: 'complete',
+                  providerEventType: 'thinking',
+                })
+                currentTurnHasThinkingText = true
               } else if (
                 block.type === 'text' &&
                 block.text &&
@@ -676,6 +734,7 @@ export class ClaudeCodeProvider implements Provider {
 
         case 'result':
           sawTurnOutput = true
+          flushThinkingBuffer()
           flushAssistantBuffer()
           refreshContextWindowFromLogs()
           if (event.stop_reason === 'tool_deferred') {
@@ -879,7 +938,10 @@ export class ClaudeCodeProvider implements Provider {
 
       assistantTextBuffer = ''
       assistantMessageItemId = null
+      thinkingBuffer = ''
+      thinkingItemId = null
       currentTurnHasAssistantText = false
+      currentTurnHasThinkingText = false
       sawTurnOutput = false
       stderrBuffer = ''
       currentTurn = {
@@ -1053,6 +1115,7 @@ export class ClaudeCodeProvider implements Provider {
           note: `child exited with code ${code}`,
         })
         if (stopped) return
+        flushThinkingBuffer()
         flushAssistantBuffer()
         refreshContextWindowFromLogs()
         const significant = getSignificantStderr()

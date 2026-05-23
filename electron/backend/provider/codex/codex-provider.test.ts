@@ -223,6 +223,110 @@ describe('CodexProvider', () => {
     spawnMock.mockReset()
   })
 
+  it('emits thinking conversation items from Codex reasoning deltas', async () => {
+    const child = new MockChildProcess()
+    const server = createMockCodexServer(child, { autoCompleteTurns: false })
+    spawnMock.mockReturnValue(child)
+
+    const provider = new CodexProvider('/usr/local/bin/codex')
+    const handle = provider.start({
+      sessionId: 'session-1',
+      workingDirectory: process.cwd(),
+      initialMessage: 'think first',
+      initialAttachments: undefined,
+      model: 'gpt-5.4',
+      effort: 'medium',
+      continuationToken: null,
+    })
+
+    const items = new Map<
+      string,
+      Extract<SessionDelta, { kind: 'conversation.item.add' }>['item']
+    >()
+    const statuses: string[] = []
+
+    handle.onDelta((delta) => {
+      if (delta.kind === 'conversation.item.add') {
+        items.set(delta.item.id, delta.item)
+      }
+      if (delta.kind === 'conversation.item.patch') {
+        const existing = items.get(delta.itemId)
+        if (existing) {
+          items.set(delta.itemId, {
+            ...existing,
+            ...delta.patch,
+          } as Extract<SessionDelta, { kind: 'conversation.item.add' }>['item'])
+        }
+      }
+    })
+    handle.onStatusChange((status) => {
+      statuses.push(status)
+    })
+    handle.onContinuationToken(() => {})
+    handle.onAttentionChange(() => {})
+    handle.onContextWindowChange(() => {})
+    handle.onActivityChange(() => {})
+
+    await waitFor(() => {
+      expect(
+        server.requests.some((request) => request.method === 'turn/start'),
+      ).toBe(true)
+    })
+
+    child.stdout.write(
+      JSON.stringify({
+        jsonrpc: '2.0',
+        method: 'item/started',
+        params: { item: { id: 'reasoning-1', type: 'reasoning' } },
+      }) + '\n',
+    )
+    child.stdout.write(
+      JSON.stringify({
+        jsonrpc: '2.0',
+        method: 'item/reasoning/textDelta',
+        params: { itemId: 'reasoning-1', delta: 'Checking ' },
+      }) + '\n',
+    )
+    child.stdout.write(
+      JSON.stringify({
+        jsonrpc: '2.0',
+        method: 'item/reasoning/summaryTextDelta',
+        params: { itemId: 'reasoning-1', delta: 'constraints' },
+      }) + '\n',
+    )
+    child.stdout.write(
+      JSON.stringify({
+        jsonrpc: '2.0',
+        method: 'item/completed',
+        params: { item: { id: 'reasoning-1', type: 'reasoning' } },
+      }) + '\n',
+    )
+    child.stdout.write(
+      JSON.stringify({
+        jsonrpc: '2.0',
+        method: 'turn/completed',
+        params: { turn: { status: 'completed' } },
+      }) + '\n',
+    )
+
+    await waitFor(() => {
+      expect(statuses).toContain('completed')
+    })
+
+    expect([...items.values()]).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          kind: 'thinking',
+          text: 'Checking constraints',
+          state: 'complete',
+          providerMeta: expect.objectContaining({
+            providerItemId: 'reasoning-1',
+          }),
+        }),
+      ]),
+    )
+  })
+
   it('resumes a continuation thread before starting a new turn', async () => {
     const child = new MockChildProcess()
     const server = createMockCodexServer(child)

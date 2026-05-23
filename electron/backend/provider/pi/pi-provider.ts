@@ -356,6 +356,8 @@ export class PiProvider implements Provider {
     let continuationCaptured = !!config.continuationToken
     let textBuffer = ''
     let assistantMessageItemId: string | null = null
+    let thinkingBuffer = ''
+    let thinkingItemId: string | null = null
     let isStreaming = false
     let currentTurn: {
       message: string
@@ -435,6 +437,28 @@ export class PiProvider implements Provider {
         }
         textBuffer = ''
         assistantMessageItemId = null
+        sawTurnActivity = true
+      }
+    }
+
+    function flushThinking(): void {
+      if (thinkingBuffer) {
+        const timestamp = now()
+        if (thinkingItemId) {
+          sessionEmitter.patchThinking(thinkingItemId, {
+            text: thinkingBuffer,
+            state: 'complete',
+            updatedAt: timestamp,
+          })
+        } else {
+          thinkingItemId = sessionEmitter.addThinking({
+            text: thinkingBuffer,
+            state: 'complete',
+            timestamp,
+          })
+        }
+        thinkingBuffer = ''
+        thinkingItemId = null
         sawTurnActivity = true
       }
     }
@@ -538,6 +562,7 @@ export class PiProvider implements Provider {
       const deltaType = event.type
 
       if (deltaType === 'text_delta') {
+        flushThinking()
         if (typeof event.delta === 'string') textBuffer += event.delta
         if (textBuffer) {
           if (!assistantMessageItemId) {
@@ -557,8 +582,38 @@ export class PiProvider implements Provider {
         return
       }
 
-      if (deltaType === 'thinking_delta') {
+      if (deltaType === 'thinking_start') {
         applyActivity({ kind: 'thinking_delta' })
+        return
+      }
+
+      if (deltaType === 'thinking_delta') {
+        if (typeof event.delta === 'string') {
+          thinkingBuffer += event.delta
+        }
+        if (thinkingBuffer) {
+          if (!thinkingItemId) {
+            thinkingItemId = sessionEmitter.addThinking({
+              text: thinkingBuffer,
+              state: 'streaming',
+              providerEventType: 'thinking_delta',
+            })
+          } else {
+            sessionEmitter.patchThinking(thinkingItemId, {
+              text: thinkingBuffer,
+              state: 'streaming',
+            })
+          }
+        }
+        applyActivity({ kind: 'thinking_delta' })
+        return
+      }
+
+      if (deltaType === 'thinking_end') {
+        if (!thinkingBuffer && typeof event.content === 'string') {
+          thinkingBuffer = event.content
+        }
+        flushThinking()
         return
       }
 
@@ -568,6 +623,7 @@ export class PiProvider implements Provider {
       }
 
       if (deltaType === 'toolcall_start') {
+        flushThinking()
         const tc = event.toolCall as
           | { id?: unknown; name?: unknown }
           | undefined
@@ -647,6 +703,7 @@ export class PiProvider implements Provider {
 
         case 'turn_end':
           sawTurnActivity = true
+          flushThinking()
           flushText()
           applyActivity({ kind: 'turn_end' })
           void refreshContextWindow()
@@ -654,6 +711,7 @@ export class PiProvider implements Provider {
 
         case 'agent_end': {
           sawTurnActivity = true
+          flushThinking()
           flushText()
           applyActivity({ kind: 'agent_end' })
           isStreaming = false
@@ -1153,6 +1211,7 @@ export class PiProvider implements Provider {
           note: `child exited with code ${code}`,
         })
         if (stopped) return
+        flushThinking()
         flushText()
         applyActivity({ kind: 'close' })
         if (
@@ -1209,6 +1268,8 @@ export class PiProvider implements Provider {
       sawTurnActivity = false
       textBuffer = ''
       assistantMessageItemId = null
+      thinkingBuffer = ''
+      thinkingItemId = null
       currentTurn = {
         message: initialMessage,
         attachments: initialAttachments,
