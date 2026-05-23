@@ -36,6 +36,7 @@ interface ComposerProps {
   onModelChange: (id: string, providerId?: string) => void
   onEffortChange: (id: ReasoningEffort | '') => void
   codexUsagePill?: ReactNode
+  contextWindowDot?: ReactNode
   deliveryMode: MidRunInputMode
   deliveryModes: MidRunInputMode[]
   onDeliveryModeChange: (mode: MidRunInputMode) => void
@@ -94,6 +95,7 @@ export const Composer: FC<ComposerProps> = ({
   onModelChange,
   onEffortChange,
   codexUsagePill,
+  contextWindowDot,
   deliveryMode,
   deliveryModes,
   onDeliveryModeChange,
@@ -388,6 +390,7 @@ export const Composer: FC<ComposerProps> = ({
               />
             )}
             {codexUsagePill}
+            {contextWindowDot}
             {visibleDeliveryModes.length > 1 ? (
               <div
                 className="flex h-7 items-center rounded-md border border-border bg-background p-0.5"

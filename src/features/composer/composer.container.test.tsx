@@ -477,6 +477,65 @@ describe('ComposerContainer', () => {
     )
   })
 
+  it('shows Codex usage in the composer for Pi OpenAI model selections', async () => {
+    const baseProvider = useSessionStore.getState().providers[0]
+    if (!baseProvider) throw new Error('missing base test provider')
+
+    useSessionStore.setState({
+      providers: [
+        {
+          id: 'pi',
+          name: 'Pi',
+          vendorLabel: 'Pi',
+          kind: 'conversation',
+          supportsContinuation: true,
+          defaultModelId: 'openai/gpt-5.3-codex',
+          modelOptions: [
+            {
+              id: 'openai/gpt-5.3-codex',
+              label: 'GPT-5.3 Codex',
+              defaultEffort: 'medium',
+              effortOptions: [
+                { id: 'low', label: 'Low' },
+                { id: 'medium', label: 'Medium' },
+              ],
+            },
+          ],
+          attachments: baseProvider.attachments,
+          midRunInput: baseProvider.midRunInput,
+        },
+      ],
+    })
+    useAppSettingsStore.setState((state) => ({
+      settings: {
+        ...state.settings,
+        defaultProviderId: 'pi',
+        defaultModelId: 'openai/gpt-5.3-codex',
+        defaultEffortId: 'medium',
+      },
+    }))
+
+    render(
+      <ComposerContainer
+        context={{
+          kind: 'project',
+          projectId: 'project-1',
+          workspaceId: null,
+          activeSessionId: null,
+        }}
+      />,
+    )
+
+    expect(
+      await screen.findByRole('button', {
+        name: 'Codex usage 87% remaining',
+      }),
+    ).toBeInTheDocument()
+    expect(window.electronAPI.providerQuota.getCodex).toHaveBeenCalledWith(
+      false,
+    )
+  })
+
   it('allows follow-up while a supported provider session is running', () => {
     useSessionStore.setState((state) => ({
       sessions: state.sessions.map((session) =>

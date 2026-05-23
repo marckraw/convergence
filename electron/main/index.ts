@@ -43,6 +43,11 @@ import {
   registerProviderDebugIpcHandlers,
 } from '../backend/provider-debug/provider-debug.ipc'
 import { createJsonlWriter } from '../backend/provider-debug/provider-debug-jsonl'
+import { LocalModelTunnelService } from '../backend/local-model-tunnel/local-model-tunnel.service'
+import {
+  broadcastLocalModelTunnelSnapshot,
+  registerLocalModelTunnelIpcHandlers,
+} from '../backend/local-model-tunnel/local-model-tunnel.ipc'
 import { McpService } from '../backend/mcp/mcp.service'
 import { SkillsService } from '../backend/skills/skills.service'
 import { PromptsService } from '../backend/prompts/prompts.service'
@@ -76,6 +81,8 @@ import { registerSessionForkIpcHandlers } from '../backend/session/fork/session-
 import { loadEnvFile } from '../backend/environment/env-file.service'
 import { hydrateProcessPathFromShell } from '../backend/environment/shell-path.service'
 import { OpenRouterCredentialsService } from '../backend/credentials/openrouter-credentials.service'
+import { ProjectOpenService } from '../backend/project-open/project-open.service'
+import { registerProjectOpenIpcHandlers } from '../backend/project-open/project-open.ipc'
 import { TerminalService } from '../backend/terminal/terminal.service'
 import {
   broadcastToRenderers,
@@ -201,6 +208,12 @@ async function startApp(): Promise<void> {
     projectContextService,
   )
   const stateService = new StateService(db)
+  const localModelTunnelService = new LocalModelTunnelService(
+    stateService,
+    broadcastLocalModelTunnelSnapshot,
+  )
+  registerLocalModelTunnelIpcHandlers(localModelTunnelService)
+  void localModelTunnelService.startAutoStartProfiles()
   const workspaceService = new WorkspaceService(db, gitService, workspacesRoot)
   const changedFilesService = new ChangedFilesService(db, gitService)
   const pullRequestService = new PullRequestService(db, gitService)
@@ -334,6 +347,8 @@ async function startApp(): Promise<void> {
     appSettings: appSettingsService,
     workingDirectory: app.getPath('userData'),
   })
+  const projectOpenService = new ProjectOpenService()
+  registerProjectOpenIpcHandlers(projectOpenService)
 
   const notificationsState = new NotificationsStateService()
   const dockBadge = new DockBadgeService({
@@ -566,6 +581,7 @@ async function startApp(): Promise<void> {
   registerTerminalLayoutIpcHandlers(terminalLayoutService)
 
   app.on('before-quit', () => {
+    localModelTunnelService.stopAllManaged()
     terminalService.disposeAll()
     projectScriptsRunner.disposeAll()
   })

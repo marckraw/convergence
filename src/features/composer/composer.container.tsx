@@ -46,6 +46,7 @@ import {
 import { resolveMidRunInputPolicy } from './mid-run-input.pure'
 import { CodexUsagePillContainer } from './codex-usage-pill.container'
 import { shouldShowCodexUsagePill } from './codex-usage-pill.pure'
+import { ContextWindowDot } from './context-window-dot.container'
 import { Button } from '@/shared/ui/button'
 import { X } from 'lucide-react'
 
@@ -768,6 +769,11 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
               onRefresh={() => void loadCodexUsage(true)}
               onOpenSettings={handleCodexUsageSettingsOpen}
             />
+          ) : null
+        }
+        contextWindowDot={
+          activeSession ? (
+            <ContextWindowDot contextWindow={activeSession.contextWindow} />
           ) : null
         }
         deliveryMode={deliveryMode}

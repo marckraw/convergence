@@ -15,6 +15,7 @@ import {
 } from '@/entities/pull-request'
 import { gitApi, useWorkspaceStore } from '@/entities/workspace'
 import { ComposerContainer } from '@/features/composer'
+import { ProjectOpenMenuContainer } from '@/features/project-open-menu'
 import { SessionDebugDrawerContainer } from '@/widgets/session-debug-drawer'
 import { ProjectActionsMenu } from '@/widgets/project-actions-menu'
 import { ProjectScriptsPanel } from '@/widgets/project-scripts-panel'
@@ -136,6 +137,9 @@ export const SessionView: FC<SessionViewProps> = ({ onOpenCodeReview }) => {
   const sessionWorkspace = session?.workspaceId
     ? (workspaces.find((entry) => entry.id === session.workspaceId) ?? null)
     : null
+  const sessionOpenPath = sessionWorkspace?.worktreeRemovedAt
+    ? (activeProject?.repositoryPath ?? null)
+    : (sessionWorkspace?.path ?? session?.workingDirectory ?? null)
   const sessionWorktreeRemoved = !!sessionWorkspace?.worktreeRemovedAt
   const workspacePullRequest = session?.workspaceId
     ? (pullRequestsByWorkspaceId[session.workspaceId] ?? null)
@@ -342,12 +346,18 @@ export const SessionView: FC<SessionViewProps> = ({ onOpenCodeReview }) => {
     const draftWorkspace = draftWorkspaceId
       ? workspaces.find((w) => w.id === draftWorkspaceId)
       : null
+    const draftOpenPath =
+      draftWorkspace?.path ?? activeProject?.repositoryPath ?? null
     return (
       <div className="flex h-full flex-col">
         <div
-          className="h-12 shrink-0 border-b border-border"
+          className="flex h-12 shrink-0 items-center justify-end border-b border-border px-4"
           style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
-        />
+        >
+          <div style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
+            <ProjectOpenMenuContainer targetPath={draftOpenPath} />
+          </div>
+        </div>
         <div className="flex min-h-0 flex-1">
           <div className="flex min-w-0 flex-1 flex-col items-center justify-center px-4">
             <p className="mb-1 text-lg font-medium">Convergence</p>
@@ -546,6 +556,7 @@ export const SessionView: FC<SessionViewProps> = ({ onOpenCodeReview }) => {
                 onManage={handleOpenScriptsPanel}
               />
             )}
+            <ProjectOpenMenuContainer targetPath={sessionOpenPath} />
             <Button
               variant="ghost"
               size="icon"

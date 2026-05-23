@@ -42,6 +42,13 @@ export type { AppSettings, AppSettingsInput } from './app-settings'
 export { useAppSettingsStore } from './app-settings'
 
 export type {
+  LocalModelTunnelProfile,
+  LocalModelTunnelSnapshot,
+  LocalModelTunnelState,
+} from './local-model-tunnel'
+export { useLocalModelTunnelStore } from './local-model-tunnel'
+
+export type {
   AnalyticsOverview,
   AnalyticsRangePreset,
   AnalyticsTotals,

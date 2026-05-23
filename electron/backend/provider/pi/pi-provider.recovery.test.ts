@@ -216,6 +216,267 @@ describe('PiProvider continuation recovery', () => {
     spawnMock.mockReset()
   })
 
+  it('emits thinking conversation items from Pi thinking deltas', async () => {
+    const child = new MockChildProcess()
+    spawnMock.mockReturnValue(child)
+    let buffer = ''
+
+    child.stdin.on('data', (chunk) => {
+      buffer += chunk.toString()
+      let newlineIndex = buffer.indexOf('\n')
+      while (newlineIndex >= 0) {
+        const line = buffer.slice(0, newlineIndex).trim()
+        buffer = buffer.slice(newlineIndex + 1)
+        if (line) {
+          const message = JSON.parse(line) as { id?: number; type?: string }
+          if (message.type === 'prompt') {
+            child.stdout.write(
+              JSON.stringify({
+                type: 'response',
+                command: 'prompt',
+                id: message.id,
+                success: true,
+              }) + '\n',
+            )
+            child.stdout.write(JSON.stringify({ type: 'agent_start' }) + '\n')
+            child.stdout.write(
+              JSON.stringify({
+                type: 'message_update',
+                assistantMessageEvent: {
+                  type: 'thinking_delta',
+                  delta: 'Inspecting ',
+                },
+              }) + '\n',
+            )
+            child.stdout.write(
+              JSON.stringify({
+                type: 'message_update',
+                assistantMessageEvent: {
+                  type: 'thinking_delta',
+                  delta: 'the repo',
+                },
+              }) + '\n',
+            )
+            child.stdout.write(
+              JSON.stringify({
+                type: 'message_update',
+                assistantMessageEvent: { type: 'thinking_end' },
+              }) + '\n',
+            )
+            child.stdout.write(
+              JSON.stringify({
+                type: 'message_update',
+                assistantMessageEvent: {
+                  type: 'text_delta',
+                  delta: 'Done',
+                },
+              }) + '\n',
+            )
+            child.stdout.write(
+              JSON.stringify({
+                type: 'agent_end',
+                messages: [{ role: 'assistant', stopReason: 'stop' }],
+              }) + '\n',
+            )
+          }
+        }
+        newlineIndex = buffer.indexOf('\n')
+      }
+    })
+
+    const provider = new PiProvider('/usr/local/bin/pi')
+    const handle = provider.start({
+      sessionId: 'session-pi',
+      workingDirectory: process.cwd(),
+      initialMessage: 'hello pi',
+      initialAttachments: undefined,
+      model: null,
+      effort: null,
+      continuationToken: null,
+    })
+
+    const items = new Map<
+      string,
+      Extract<SessionDelta, { kind: 'conversation.item.add' }>['item']
+    >()
+    const statuses: string[] = []
+
+    handle.onDelta((delta) => {
+      if (delta.kind === 'conversation.item.add') {
+        items.set(delta.item.id, delta.item)
+      }
+      if (delta.kind === 'conversation.item.patch') {
+        const existing = items.get(delta.itemId)
+        if (existing) {
+          items.set(delta.itemId, {
+            ...existing,
+            ...delta.patch,
+          } as Extract<SessionDelta, { kind: 'conversation.item.add' }>['item'])
+        }
+      }
+    })
+    handle.onStatusChange((status) => {
+      statuses.push(status)
+    })
+    handle.onContinuationToken(() => {})
+    handle.onAttentionChange(() => {})
+    handle.onContextWindowChange(() => {})
+    handle.onActivityChange(() => {})
+
+    await waitFor(() => {
+      expect(statuses).toContain('completed')
+    })
+
+    expect([...items.values()]).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          kind: 'thinking',
+          text: 'Inspecting the repo',
+          state: 'complete',
+        }),
+        expect.objectContaining({
+          kind: 'message',
+          actor: 'assistant',
+          text: 'Done',
+        }),
+      ]),
+    )
+  })
+
+  it('isolates Pi thinking blocks and uses thinking_end content fallback', async () => {
+    const child = new MockChildProcess()
+    spawnMock.mockReturnValue(child)
+    let buffer = ''
+
+    child.stdin.on('data', (chunk) => {
+      buffer += chunk.toString()
+      let newlineIndex = buffer.indexOf('\n')
+      while (newlineIndex >= 0) {
+        const line = buffer.slice(0, newlineIndex).trim()
+        buffer = buffer.slice(newlineIndex + 1)
+        if (line) {
+          const message = JSON.parse(line) as { id?: number; type?: string }
+          if (message.type === 'prompt') {
+            child.stdout.write(
+              JSON.stringify({
+                type: 'response',
+                command: 'prompt',
+                id: message.id,
+                success: true,
+              }) + '\n',
+            )
+            child.stdout.write(JSON.stringify({ type: 'agent_start' }) + '\n')
+            child.stdout.write(
+              JSON.stringify({
+                type: 'message_update',
+                assistantMessageEvent: {
+                  type: 'thinking_delta',
+                  delta: 'First block',
+                },
+              }) + '\n',
+            )
+            child.stdout.write(
+              JSON.stringify({
+                type: 'message_update',
+                assistantMessageEvent: { type: 'thinking_start' },
+              }) + '\n',
+            )
+            child.stdout.write(
+              JSON.stringify({
+                type: 'message_update',
+                assistantMessageEvent: {
+                  type: 'thinking_delta',
+                  delta: 'Second block',
+                },
+              }) + '\n',
+            )
+            child.stdout.write(
+              JSON.stringify({
+                type: 'message_update',
+                assistantMessageEvent: { type: 'thinking_end' },
+              }) + '\n',
+            )
+            child.stdout.write(
+              JSON.stringify({
+                type: 'message_update',
+                assistantMessageEvent: { type: 'thinking_start' },
+              }) + '\n',
+            )
+            child.stdout.write(
+              JSON.stringify({
+                type: 'message_update',
+                assistantMessageEvent: {
+                  type: 'thinking_end',
+                  content: 'Fallback block',
+                },
+              }) + '\n',
+            )
+            child.stdout.write(
+              JSON.stringify({
+                type: 'agent_end',
+                messages: [{ role: 'assistant', stopReason: 'stop' }],
+              }) + '\n',
+            )
+          }
+        }
+        newlineIndex = buffer.indexOf('\n')
+      }
+    })
+
+    const provider = new PiProvider('/usr/local/bin/pi')
+    const handle = provider.start({
+      sessionId: 'session-pi',
+      workingDirectory: process.cwd(),
+      initialMessage: 'hello pi',
+      initialAttachments: undefined,
+      model: null,
+      effort: null,
+      continuationToken: null,
+    })
+
+    const items = new Map<
+      string,
+      Extract<SessionDelta, { kind: 'conversation.item.add' }>['item']
+    >()
+    const statuses: string[] = []
+
+    handle.onDelta((delta) => {
+      if (delta.kind === 'conversation.item.add') {
+        items.set(delta.item.id, delta.item)
+      }
+      if (delta.kind === 'conversation.item.patch') {
+        const existing = items.get(delta.itemId)
+        if (existing) {
+          items.set(delta.itemId, {
+            ...existing,
+            ...delta.patch,
+          } as Extract<SessionDelta, { kind: 'conversation.item.add' }>['item'])
+        }
+      }
+    })
+    handle.onStatusChange((status) => {
+      statuses.push(status)
+    })
+    handle.onContinuationToken(() => {})
+    handle.onAttentionChange(() => {})
+    handle.onContextWindowChange(() => {})
+    handle.onActivityChange(() => {})
+
+    await waitFor(() => {
+      expect(statuses).toContain('completed')
+    })
+
+    const thinkingTexts = [...items.values()]
+      .filter((item) => item.kind === 'thinking')
+      .map((item) => (item.kind === 'thinking' ? item.text : null))
+
+    expect(thinkingTexts).toEqual([
+      'First block',
+      'Second block',
+      'Fallback block',
+    ])
+  })
+
   it('retries once without --session when the stored Pi session file is gone', async () => {
     const staleChild = new MockChildProcess()
     const recoveredChild = new MockChildProcess()

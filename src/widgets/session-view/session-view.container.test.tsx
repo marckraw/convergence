@@ -240,6 +240,13 @@ describe('SessionView changed files drawer', () => {
           delete: vi.fn().mockResolvedValue(undefined),
           showOpenDialog: vi.fn().mockResolvedValue([]),
         },
+        projectOpen: {
+          listApps: vi.fn().mockResolvedValue([
+            { id: 'vscode', label: 'VS Code', kind: 'editor' },
+            { id: 'finder', label: 'Finder', kind: 'file-manager' },
+          ]),
+          open: vi.fn().mockResolvedValue(undefined),
+        },
       },
       configurable: true,
       writable: true,
@@ -256,6 +263,8 @@ describe('SessionView changed files drawer', () => {
         <SessionView />
       </TooltipProvider>,
     )
+
+    expect(screen.queryByText('80% left')).not.toBeInTheDocument()
 
     fireEvent.click(screen.getByRole('button', { name: 'Changed files' }))
 
@@ -295,6 +304,32 @@ describe('SessionView changed files drawer', () => {
     expect(screen.getByTestId('session-activity-indicator')).toHaveTextContent(
       'compacting context…',
     )
+  })
+
+  it('opens the session workspace from the header menu', async () => {
+    render(
+      <TooltipProvider>
+        <SessionView />
+      </TooltipProvider>,
+    )
+
+    fireEvent.pointerDown(screen.getByRole('button', { name: 'Open project' }))
+    fireEvent.click(await screen.findByText('VS Code'))
+
+    const projectOpen = (
+      window as unknown as {
+        electronAPI: {
+          projectOpen: { open: ReturnType<typeof vi.fn> }
+        }
+      }
+    ).electronAPI.projectOpen
+
+    await waitFor(() => {
+      expect(projectOpen.open).toHaveBeenCalledWith({
+        appId: 'vscode',
+        path: '/tmp/project',
+      })
+    })
   })
 
   it('does not expose actions for stale approval cards on inactive sessions', () => {

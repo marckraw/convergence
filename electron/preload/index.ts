@@ -116,6 +116,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
   dialog: {
     selectDirectory: () => ipcRenderer.invoke('dialog:selectDirectory'),
   },
+  projectOpen: {
+    listApps: () => ipcRenderer.invoke('projectOpen:listApps'),
+    open: (input: { appId: string; path: string }) =>
+      ipcRenderer.invoke('projectOpen:open', input),
+  },
   workspace: {
     create: (input: {
       projectId: string
@@ -485,6 +490,28 @@ contextBridge.exposeInMainWorld('electronAPI', {
     list: (sessionId: string) =>
       ipcRenderer.invoke('provider:debug:list', sessionId),
     openFolder: () => ipcRenderer.invoke('provider:debug:openFolder'),
+  },
+  localModelTunnel: {
+    getSnapshot: () => ipcRenderer.invoke('localModelTunnel:getSnapshot'),
+    start: (profileId: string) =>
+      ipcRenderer.invoke('localModelTunnel:start', profileId),
+    stop: (profileId: string) =>
+      ipcRenderer.invoke('localModelTunnel:stop', profileId),
+    restart: (profileId: string) =>
+      ipcRenderer.invoke('localModelTunnel:restart', profileId),
+    createProfile: (input: unknown) =>
+      ipcRenderer.invoke('localModelTunnel:createProfile', input),
+    updateProfile: (profileId: string, input: unknown) =>
+      ipcRenderer.invoke('localModelTunnel:updateProfile', profileId, input),
+    deleteProfile: (profileId: string) =>
+      ipcRenderer.invoke('localModelTunnel:deleteProfile', profileId),
+    onChanged: (callback: (snapshot: unknown) => void) => {
+      const handler = (_event: unknown, snapshot: unknown) => callback(snapshot)
+      ipcRenderer.on('localModelTunnel:changed', handler)
+      return () => {
+        ipcRenderer.removeListener('localModelTunnel:changed', handler)
+      }
+    },
   },
   updates: {
     getStatus: () => ipcRenderer.invoke('updates:get-status'),
