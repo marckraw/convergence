@@ -66,6 +66,167 @@ describe('ClaudeCodeProvider continuation recovery', () => {
     spawnMock.mockReset()
   })
 
+  it('emits multiple non-streamed Claude thinking blocks', async () => {
+    const child = new MockChildProcess()
+    spawnMock.mockReturnValue(child)
+
+    setTimeout(() => {
+      child.stdout.write(
+        JSON.stringify({
+          type: 'assistant',
+          message: {
+            content: [
+              { type: 'thinking', thinking: 'First thought' },
+              {
+                type: 'tool_use',
+                name: 'read',
+                input: { path: 'src/main.ts' },
+              },
+              { type: 'thinking', thinking: 'Second thought' },
+              { type: 'text', text: 'Done' },
+            ],
+          },
+        }) + '\n',
+      )
+      child.stdout.write(
+        JSON.stringify({
+          type: 'result',
+          is_error: false,
+          result: 'Done',
+        }) + '\n',
+      )
+      child.emitExit(0)
+    }, 0)
+
+    const provider = new ClaudeCodeProvider('/usr/local/bin/claude')
+    const handle = provider.start({
+      sessionId: 'session-claude',
+      workingDirectory: process.cwd(),
+      initialMessage: 'hello claude',
+      initialAttachments: undefined,
+      model: null,
+      effort: null,
+      continuationToken: null,
+    })
+
+    const items: Array<
+      Extract<SessionDelta, { kind: 'conversation.item.add' }>['item']
+    > = []
+    const statuses: string[] = []
+
+    handle.onDelta((delta) => {
+      if (delta.kind === 'conversation.item.add') {
+        items.push(delta.item)
+      }
+    })
+    handle.onStatusChange((status) => {
+      statuses.push(status)
+    })
+    handle.onContinuationToken(() => {})
+    handle.onAttentionChange(() => {})
+    handle.onContextWindowChange(() => {})
+    handle.onActivityChange(() => {})
+
+    await waitFor(() => {
+      expect(statuses).toContain('completed')
+    })
+
+    const thinkingTexts = items
+      .filter((item) => item.kind === 'thinking')
+      .map((item) => (item.kind === 'thinking' ? item.text : null))
+
+    expect(thinkingTexts).toEqual(['First thought', 'Second thought'])
+  })
+
+  it('deduplicates streamed Claude thinking against the first final thinking block only', async () => {
+    const child = new MockChildProcess()
+    spawnMock.mockReturnValue(child)
+
+    setTimeout(() => {
+      child.stdout.write(
+        JSON.stringify({
+          type: 'stream_event',
+          event: {
+            type: 'content_block_delta',
+            delta: { type: 'thinking_delta', thinking: 'Streamed thought' },
+          },
+        }) + '\n',
+      )
+      child.stdout.write(
+        JSON.stringify({
+          type: 'assistant',
+          message: {
+            content: [
+              { type: 'thinking', thinking: 'Streamed thought' },
+              { type: 'thinking', thinking: 'Additional final thought' },
+              { type: 'text', text: 'Done' },
+            ],
+          },
+        }) + '\n',
+      )
+      child.stdout.write(
+        JSON.stringify({
+          type: 'result',
+          is_error: false,
+          result: 'Done',
+        }) + '\n',
+      )
+      child.emitExit(0)
+    }, 0)
+
+    const provider = new ClaudeCodeProvider('/usr/local/bin/claude')
+    const handle = provider.start({
+      sessionId: 'session-claude',
+      workingDirectory: process.cwd(),
+      initialMessage: 'hello claude',
+      initialAttachments: undefined,
+      model: null,
+      effort: null,
+      continuationToken: null,
+    })
+
+    const items = new Map<
+      string,
+      Extract<SessionDelta, { kind: 'conversation.item.add' }>['item']
+    >()
+    const statuses: string[] = []
+
+    handle.onDelta((delta) => {
+      if (delta.kind === 'conversation.item.add') {
+        items.set(delta.item.id, delta.item)
+      }
+      if (delta.kind === 'conversation.item.patch') {
+        const existing = items.get(delta.itemId)
+        if (existing) {
+          items.set(delta.itemId, {
+            ...existing,
+            ...delta.patch,
+          } as Extract<SessionDelta, { kind: 'conversation.item.add' }>['item'])
+        }
+      }
+    })
+    handle.onStatusChange((status) => {
+      statuses.push(status)
+    })
+    handle.onContinuationToken(() => {})
+    handle.onAttentionChange(() => {})
+    handle.onContextWindowChange(() => {})
+    handle.onActivityChange(() => {})
+
+    await waitFor(() => {
+      expect(statuses).toContain('completed')
+    })
+
+    const thinkingTexts = [...items.values()]
+      .filter((item) => item.kind === 'thinking')
+      .map((item) => (item.kind === 'thinking' ? item.text : null))
+
+    expect(thinkingTexts).toEqual([
+      'Streamed thought',
+      'Additional final thought',
+    ])
+  })
+
   it('retries once without --resume when the stored Claude session is gone', async () => {
     const staleChild = new MockChildProcess()
     const recoveredChild = new MockChildProcess()

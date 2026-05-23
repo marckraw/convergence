@@ -12,7 +12,7 @@ interface ClaudeActivityEvent {
   event?: {
     type?: unknown
     content_block?: { type?: unknown }
-    delta?: { type?: unknown; text?: unknown }
+    delta?: { type?: unknown; text?: unknown; thinking?: unknown }
   }
   message?: {
     content?: Array<{ type?: unknown; name?: unknown }>
@@ -102,6 +102,14 @@ export function deriveClaudeActivity(
   }
 
   if (event.type === 'stream_event') {
+    if (
+      event.event?.type === 'content_block_delta' &&
+      event.event.delta?.type === 'thinking_delta' &&
+      typeof event.event.delta.thinking === 'string'
+    ) {
+      return 'thinking'
+    }
+
     if (
       event.event?.type === 'content_block_delta' &&
       event.event.delta?.type === 'text_delta' &&
