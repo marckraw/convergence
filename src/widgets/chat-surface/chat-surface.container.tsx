@@ -14,7 +14,6 @@ import { ComposerContainer } from '@/features/composer'
 import { SessionConversationSurface } from '@/widgets/session-view'
 import { AttentionIndicator } from '@/shared/ui/attention-indicator.presentational'
 import { Button } from '@/shared/ui/button'
-import { ContextWindowIndicator } from '@/shared/ui/context-window-indicator.presentational'
 import { Input } from '@/shared/ui/input'
 import { CheckSquare, Folder, MessageSquareText, Square } from 'lucide-react'
 import {
@@ -615,7 +614,6 @@ export const ChatSurface: FC<ChatSurfaceProps> = ({
               {activityLabel}
             </span>
           ) : null}
-          <ContextWindowIndicator contextWindow={session.contextWindow} />
         </div>
         {session.status === 'running' ? (
           <Button
