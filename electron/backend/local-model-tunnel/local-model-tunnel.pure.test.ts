@@ -33,10 +33,11 @@ describe('local model tunnel pure helpers', () => {
         'ServerAliveCountMax=2',
         '-L',
         '0.0.0.0:11435:10.0.0.5:8080',
+        '--',
         'gpu-box',
       ],
       preview:
-        'ssh -N -T -o BatchMode=yes -o ExitOnForwardFailure=yes -o ServerAliveInterval=30 -o ServerAliveCountMax=2 -L 0.0.0.0:11435:10.0.0.5:8080 gpu-box',
+        'ssh -N -T -o BatchMode=yes -o ExitOnForwardFailure=yes -o ServerAliveInterval=30 -o ServerAliveCountMax=2 -L 0.0.0.0:11435:10.0.0.5:8080 -- gpu-box',
     })
   })
 
@@ -65,5 +66,23 @@ describe('local model tunnel pure helpers', () => {
     expect(next.localPort).toBe(11435)
     expect(next.healthCheckUrl).toBe('http://127.0.0.1:11435/api/tags')
     expect(next.updatedAt).toBe('2026-01-02T00:00:00.000Z')
+  })
+
+  it('rejects ssh fields that would be parsed as ssh options', () => {
+    const profile = {
+      ...buildDefaultLocalModelTunnelProfile('2026-01-01T00:00:00.000Z'),
+      sshTarget: 'gpu-box',
+      localBindHost: '127.0.0.1',
+      remoteHost: '127.0.0.1',
+    }
+    const next = applyLocalModelTunnelProfileInput(profile, {
+      sshTarget: '-oProxyCommand=sh',
+      localBindHost: '-bad-local-host',
+      remoteHost: '-bad-remote-host',
+    })
+
+    expect(next.sshTarget).toBe('gpu-box')
+    expect(next.localBindHost).toBe('127.0.0.1')
+    expect(next.remoteHost).toBe('127.0.0.1')
   })
 })

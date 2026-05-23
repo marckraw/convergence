@@ -46,7 +46,11 @@ export const TunnelProfileEditor: FC<TunnelProfileEditorProps> = ({
   const updatePort =
     (key: keyof LocalModelTunnelProfileInput) =>
     (event: ChangeEvent<HTMLInputElement>) => {
-      patchDraft({ [key]: Number(event.target.value) })
+      const value = Number(event.target.value)
+      const port = Number.isFinite(value)
+        ? Math.min(65535, Math.max(1, Math.floor(value)))
+        : 1
+      patchDraft({ [key]: port })
     }
 
   return (

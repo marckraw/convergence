@@ -25,11 +25,14 @@ type SpawnTunnel = (binary: string, args: string[]) => ChildProcess
 const STARTUP_PROBE_ATTEMPTS = 12
 const STARTUP_PROBE_DELAY_MS = 250
 const PROBE_TIMEOUT_MS = 800
+const STOP_WAIT_TIMEOUT_MS = 1000
 
 interface ManagedProcess {
   child: ChildProcess
   stopping: boolean
   stderr: string
+  exitPromise: Promise<void>
+  resolveExit: () => void
 }
 
 export class LocalModelTunnelService {
@@ -76,7 +79,17 @@ export class LocalModelTunnelService {
 
     const command = buildLocalModelTunnelCommand(profile)
     const child = this.spawnTunnel(command.binary, command.args)
-    const managed: ManagedProcess = { child, stopping: false, stderr: '' }
+    let resolveExit: () => void = () => undefined
+    const exitPromise = new Promise<void>((resolve) => {
+      resolveExit = resolve
+    })
+    const managed: ManagedProcess = {
+      child,
+      stopping: false,
+      stderr: '',
+      exitPromise,
+      resolveExit,
+    }
     this.processes.set(profile.id, managed)
     this.setStatus(profile, {
       state: 'starting',
@@ -91,6 +104,8 @@ export class LocalModelTunnelService {
     })
 
     child.on('error', (error) => {
+      managed.resolveExit()
+      if (this.processes.get(profile.id) !== managed) return
       this.processes.delete(profile.id)
       this.setStatus(profile, {
         state: 'failed',
@@ -102,6 +117,8 @@ export class LocalModelTunnelService {
     })
 
     child.on('exit', (code, signal) => {
+      managed.resolveExit()
+      if (this.processes.get(profile.id) !== managed) return
       this.processes.delete(profile.id)
       if (managed.stopping) {
         this.setStatus(profile, {
@@ -123,7 +140,7 @@ export class LocalModelTunnelService {
       void this.broadcast()
     })
 
-    void this.markRunningWhenAvailable(profile)
+    void this.markRunningWhenAvailable(profile, managed)
     return this.buildSnapshot()
   }
 
@@ -157,7 +174,12 @@ export class LocalModelTunnelService {
   }
 
   async restart(profileId: string): Promise<LocalModelTunnelSnapshot> {
+    const profile = this.requireProfile(profileId)
+    const managed = this.processes.get(profile.id)
     await this.stop(profileId)
+    if (managed) {
+      await Promise.race([managed.exitPromise, delay(STOP_WAIT_TIMEOUT_MS)])
+    }
     await delay(STARTUP_PROBE_DELAY_MS)
     return this.start(profileId)
   }
@@ -203,6 +225,7 @@ export class LocalModelTunnelService {
     input: LocalModelTunnelProfileInput,
   ): Promise<LocalModelTunnelSnapshot> {
     const profiles = this.getProfiles()
+    const wasManaged = this.processes.has(profileId)
     const nextProfiles = profiles.map((profile) =>
       profile.id === profileId
         ? applyLocalModelTunnelProfileInput(profile, input)
@@ -216,6 +239,9 @@ export class LocalModelTunnelService {
         ...current,
         commandPreview: buildLocalModelTunnelCommand(nextProfile).preview,
       })
+      if (wasManaged) {
+        return this.restart(nextProfile.id)
+      }
     }
     return this.broadcast()
   }
@@ -236,12 +262,15 @@ export class LocalModelTunnelService {
 
   private async markRunningWhenAvailable(
     profile: LocalModelTunnelProfile,
+    managed: ManagedProcess,
   ): Promise<void> {
     for (let attempt = 0; attempt < STARTUP_PROBE_ATTEMPTS; attempt += 1) {
       await delay(STARTUP_PROBE_DELAY_MS)
-      const managed = this.processes.get(profile.id)
-      if (!managed || managed.stopping) return
+      if (this.processes.get(profile.id) !== managed || managed.stopping) return
       if (await this.isEndpointAvailable(profile)) {
+        if (this.processes.get(profile.id) !== managed || managed.stopping) {
+          return
+        }
         this.setStatus(profile, {
           state: 'running',
           managed: true,
@@ -253,8 +282,7 @@ export class LocalModelTunnelService {
       }
     }
 
-    const managed = this.processes.get(profile.id)
-    if (!managed || managed.stopping) return
+    if (this.processes.get(profile.id) !== managed || managed.stopping) return
     managed.stopping = true
     try {
       managed.child.kill('SIGTERM')
@@ -272,26 +300,28 @@ export class LocalModelTunnelService {
   }
 
   private async refreshExternalStatuses(): Promise<void> {
-    for (const profile of this.getProfiles()) {
-      if (this.processes.has(profile.id)) continue
-      const current = this.getStatus(profile)
-      const available = await this.isEndpointAvailable(profile)
-      if (available) {
-        this.setStatus(profile, {
-          state: 'external',
-          managed: false,
-          pid: null,
-          error: null,
-        })
-      } else if (current.state === 'external') {
-        this.setStatus(profile, {
-          state: 'stopped',
-          managed: false,
-          pid: null,
-          error: null,
-        })
-      }
-    }
+    await Promise.all(
+      this.getProfiles().map(async (profile) => {
+        if (this.processes.has(profile.id)) return
+        const current = this.getStatus(profile)
+        const available = await this.isEndpointAvailable(profile)
+        if (available) {
+          this.setStatus(profile, {
+            state: 'external',
+            managed: false,
+            pid: null,
+            error: null,
+          })
+        } else if (current.state === 'external') {
+          this.setStatus(profile, {
+            state: 'stopped',
+            managed: false,
+            pid: null,
+            error: null,
+          })
+        }
+      }),
+    )
   }
 
   private async isEndpointAvailable(

@@ -58,7 +58,7 @@ The local bind portion defaults to `127.0.0.1`.
 
 ## Backend Shape
 
-- `electron/backend/local-model-tunnel/types.ts`
+- `electron/backend/local-model-tunnel/local-model-tunnel.types.ts`
 - `electron/backend/local-model-tunnel/local-model-tunnel.pure.ts`
 - `electron/backend/local-model-tunnel/local-model-tunnel.service.ts`
 - `electron/backend/local-model-tunnel/local-model-tunnel.ipc.ts`

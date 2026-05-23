@@ -39,18 +39,15 @@ export function normalizeLocalModelTunnelProfile(
   return {
     id: pickNonEmptyString(raw.id, fallback.id),
     name: pickNonEmptyString(raw.name, fallback.name),
-    sshTarget: pickNonEmptyString(raw.sshTarget, fallback.sshTarget),
+    sshTarget: pickSafeSshValue(raw.sshTarget, fallback.sshTarget),
     autoStart: typeof raw.autoStart === 'boolean' ? raw.autoStart : false,
     useCustomLocalBindHost:
       typeof raw.useCustomLocalBindHost === 'boolean'
         ? raw.useCustomLocalBindHost
         : false,
-    localBindHost: pickNonEmptyString(
-      raw.localBindHost,
-      DEFAULT_LOCAL_BIND_HOST,
-    ),
+    localBindHost: pickSafeSshValue(raw.localBindHost, DEFAULT_LOCAL_BIND_HOST),
     localPort: normalizePort(raw.localPort, fallback.localPort),
-    remoteHost: pickNonEmptyString(raw.remoteHost, fallback.remoteHost),
+    remoteHost: pickSafeSshValue(raw.remoteHost, fallback.remoteHost),
     remotePort: normalizePort(raw.remotePort, fallback.remotePort),
     healthCheckEnabled:
       typeof raw.healthCheckEnabled === 'boolean'
@@ -95,8 +92,8 @@ export function applyLocalModelTunnelProfileInput(
         ? input.name.trim()
         : profile.name,
     sshTarget:
-      typeof input.sshTarget === 'string' && input.sshTarget.trim()
-        ? input.sshTarget.trim()
+      typeof input.sshTarget === 'string'
+        ? pickSafeSshValue(input.sshTarget, profile.sshTarget)
         : profile.sshTarget,
     autoStart:
       typeof input.autoStart === 'boolean'
@@ -107,13 +104,13 @@ export function applyLocalModelTunnelProfileInput(
         ? input.useCustomLocalBindHost
         : profile.useCustomLocalBindHost,
     localBindHost:
-      typeof input.localBindHost === 'string' && input.localBindHost.trim()
-        ? input.localBindHost.trim()
+      typeof input.localBindHost === 'string'
+        ? pickSafeSshValue(input.localBindHost, profile.localBindHost)
         : profile.localBindHost,
     localPort: normalizePort(input.localPort, profile.localPort),
     remoteHost:
-      typeof input.remoteHost === 'string' && input.remoteHost.trim()
-        ? input.remoteHost.trim()
+      typeof input.remoteHost === 'string'
+        ? pickSafeSshValue(input.remoteHost, profile.remoteHost)
         : profile.remoteHost,
     remotePort: normalizePort(input.remotePort, profile.remotePort),
     healthCheckEnabled:
@@ -153,6 +150,7 @@ export function buildLocalModelTunnelCommand(
     'ServerAliveCountMax=2',
     '-L',
     forward,
+    '--',
     profile.sshTarget,
   ]
 
@@ -173,6 +171,11 @@ export function getEffectiveLocalBindHost(
 
 function pickNonEmptyString(value: unknown, fallback: string): string {
   return typeof value === 'string' && value.trim() ? value.trim() : fallback
+}
+
+function pickSafeSshValue(value: unknown, fallback: string): string {
+  const text = pickNonEmptyString(value, fallback)
+  return text.startsWith('-') ? fallback : text
 }
 
 function normalizePort(value: unknown, fallback: number): number {
