@@ -68,18 +68,13 @@ describe('detectProjectOpenApps', () => {
     })
   })
 
-  it('omits Finder on other platforms', () => {
+  it('does not detect macOS apps on other platforms without matching paths', () => {
     expect(
       detectProjectOpenApps({
         platform: 'linux',
         homeDir: '/home/marc',
-        exists: () => true,
+        exists: () => false,
       }),
-    ).toEqual([
-      { id: 'cursor', label: 'Cursor', kind: 'editor' },
-      { id: 'vscode', label: 'VS Code', kind: 'editor' },
-      { id: 'zed', label: 'Zed', kind: 'editor' },
-      { id: 'webstorm', label: 'WebStorm', kind: 'editor' },
-    ])
+    ).toEqual([])
   })
 })

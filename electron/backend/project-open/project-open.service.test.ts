@@ -87,6 +87,58 @@ describe('ProjectOpenService', () => {
     ])
   })
 
+  it('deduplicates concurrent app scans while the cache is cold', async () => {
+    const calls: Array<{ file: string; args: string[] }> = []
+    const execFile: ExecFileFn = (file, args, callback) => {
+      calls.push({ file, args })
+      setTimeout(() => callback(null, '', ''), 0)
+      return makeChildProcess()
+    }
+
+    const service = new ProjectOpenService({
+      platform: 'darwin',
+      exists: () => false,
+      execFile,
+      openPath: vi.fn().mockResolvedValue(''),
+      now: () => 1000,
+    })
+
+    await Promise.all([service.listApps(), service.listApps()])
+
+    expect(
+      calls.filter((call) => call.file === '/usr/bin/mdfind'),
+    ).toHaveLength(5)
+  })
+
+  it('applies a timeout to editor open commands', async () => {
+    const kill = vi.fn()
+    const calls: Array<{ file: string; args: string[] }> = []
+    const execFile: ExecFileFn = (file, args, callback) => {
+      calls.push({ file, args })
+      if (file === '/usr/bin/mdfind') {
+        queueMicrotask(() => callback(null, '', ''))
+      }
+      return makeChildProcess(kill)
+    }
+
+    const service = new ProjectOpenService({
+      platform: 'darwin',
+      exists: () => true,
+      execFile,
+      openPath: vi.fn().mockResolvedValue(''),
+      appOpenTimeoutMs: 1,
+    })
+
+    await expect(
+      service.open({ appId: 'cursor', path: '/repo' }),
+    ).rejects.toThrow('Command timed out: /usr/bin/open')
+    expect(kill).toHaveBeenCalled()
+    expect(calls).toContainEqual({
+      file: '/usr/bin/open',
+      args: ['-a', 'Cursor', '/repo'],
+    })
+  })
+
   it('refreshes the app scan after the cache expires', async () => {
     let now = 1000
     const calls: Array<{ file: string; args: string[] }> = []

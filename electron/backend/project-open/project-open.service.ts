@@ -34,10 +34,12 @@ export interface ProjectOpenServiceDeps {
   now?: () => number
   appCacheTtlMs?: number
   mdfindTimeoutMs?: number
+  appOpenTimeoutMs?: number
 }
 
 const DEFAULT_APP_CACHE_TTL_MS = 30_000
 const DEFAULT_MDFIND_TIMEOUT_MS = 1_500
+const DEFAULT_APP_OPEN_TIMEOUT_MS = 10_000
 
 export class ProjectOpenService {
   private readonly platform: NodeJS.Platform | string
@@ -48,7 +50,9 @@ export class ProjectOpenService {
   private readonly now: () => number
   private readonly appCacheTtlMs: number
   private readonly mdfindTimeoutMs: number
+  private readonly appOpenTimeoutMs: number
   private appCache: { expiresAt: number; apps: ProjectOpenApp[] } | null = null
+  private pendingAppScan: Promise<ProjectOpenApp[]> | null = null
 
   constructor(deps: ProjectOpenServiceDeps = {}) {
     this.platform = deps.platform ?? process.platform
@@ -59,6 +63,7 @@ export class ProjectOpenService {
     this.now = deps.now ?? Date.now
     this.appCacheTtlMs = deps.appCacheTtlMs ?? DEFAULT_APP_CACHE_TTL_MS
     this.mdfindTimeoutMs = deps.mdfindTimeoutMs ?? DEFAULT_MDFIND_TIMEOUT_MS
+    this.appOpenTimeoutMs = deps.appOpenTimeoutMs ?? DEFAULT_APP_OPEN_TIMEOUT_MS
   }
 
   async listApps(): Promise<ProjectOpenApp[]> {
@@ -68,6 +73,20 @@ export class ProjectOpenService {
       return cached.apps
     }
 
+    if (this.pendingAppScan) {
+      return this.pendingAppScan
+    }
+
+    this.pendingAppScan = this.scanApps(now)
+
+    try {
+      return await this.pendingAppScan
+    } finally {
+      this.pendingAppScan = null
+    }
+  }
+
+  private async scanApps(now: number): Promise<ProjectOpenApp[]> {
     const spotlightPathsByBundleId =
       this.platform === 'darwin' ? await this.detectSpotlightApps() : {}
 
@@ -116,11 +135,12 @@ export class ProjectOpenService {
       throw new Error(`Unknown project open app: ${request.appId}`)
     }
 
-    await runExecFile(this.execFile, '/usr/bin/open', [
-      '-a',
-      definition.appName,
-      request.path,
-    ])
+    await runExecFile(
+      this.execFile,
+      '/usr/bin/open',
+      ['-a', definition.appName, request.path],
+      this.appOpenTimeoutMs,
+    )
   }
 
   private async detectSpotlightApps(): Promise<

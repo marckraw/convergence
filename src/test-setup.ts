@@ -69,6 +69,9 @@ if (typeof navigator !== 'undefined') {
   }
 }
 
-afterEach(() => {
+afterEach(async () => {
   cleanup()
+  await new Promise<void>((resolve) => {
+    setTimeout(resolve, 0)
+  })
 })

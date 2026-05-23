@@ -131,7 +131,7 @@ export const SessionView: FC<SessionViewProps> = ({ onOpenCodeReview }) => {
     ? (workspaces.find((entry) => entry.id === session.workspaceId) ?? null)
     : null
   const sessionOpenPath = sessionWorkspace?.worktreeRemovedAt
-    ? (activeProject?.repositoryPath ?? session?.workingDirectory ?? null)
+    ? (activeProject?.repositoryPath ?? null)
     : (sessionWorkspace?.path ?? session?.workingDirectory ?? null)
   const sessionWorktreeRemoved = !!sessionWorkspace?.worktreeRemovedAt
   const workspacePullRequest = session?.workspaceId
