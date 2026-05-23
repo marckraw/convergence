@@ -12,6 +12,7 @@ export interface AnalyticsSessionInput {
   projectName: string
   providerId: string
   providerName: string
+  model: string | null
   status: string
   primarySurface: string
   archivedAt: string | null
@@ -123,6 +124,17 @@ export interface ProjectUsagePoint {
   assistantMessages: number
 }
 
+export interface ModelUsagePoint {
+  modelId: string
+  modelLabel: string
+  sessionsCreated: number
+  turnsCompleted: number
+  userMessages: number
+  assistantMessages: number
+  providerId: string | null
+  providerName: string
+}
+
 export interface WeekdayHourActivityPoint {
   weekday: number
   hour: number
@@ -198,6 +210,7 @@ export interface AnalyticsOverview {
   streaks: AnalyticsStreaks
   dailyActivity: DailyActivityPoint[]
   providerUsage: ProviderUsagePoint[]
+  modelUsage: ModelUsagePoint[]
   projectUsage: ProjectUsagePoint[]
   weekdayHourActivity: WeekdayHourActivityPoint[]
   conversationBalance: ConversationBalancePoint[]

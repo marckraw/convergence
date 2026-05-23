@@ -108,6 +108,17 @@ export function UsageTab({ overview, isLoading }: UsageTabProps) {
           empty: overview.providerUsage.length === 0,
           children: renderProviderUsageBars(overview),
         })}
+
+        {renderChartPanel({
+          title: 'Model usage',
+          description: 'Sessions and completed turns by model.',
+          legend: [
+            { label: 'Sessions', colorClassName: 'bg-blue-600' },
+            { label: 'Turns', colorClassName: 'bg-teal-500' },
+          ],
+          empty: overview.modelUsage.length === 0,
+          children: renderModelUsageBars(overview),
+        })}
       </section>
 
       <section className="grid gap-4 2xl:grid-cols-2">
@@ -366,6 +377,45 @@ function renderProviderUsageRow({
       <span className="text-right font-medium text-foreground">
         {formatInteger(value)}
       </span>
+    </div>
+  )
+}
+
+function renderModelUsageBars(overview: AnalyticsOverview) {
+  const points = overview.modelUsage.slice(0, 8)
+  const max = Math.max(
+    ...points.map((point) =>
+      Math.max(point.sessionsCreated, point.turnsCompleted),
+    ),
+    1,
+  )
+
+  return (
+    <div className="space-y-3">
+      {points.map((point) => (
+        <div
+          key={point.modelId}
+          className="grid grid-cols-[minmax(0,9rem)_minmax(0,1fr)] items-center gap-3"
+        >
+          <span className="truncate text-sm font-medium">
+            {point.modelLabel}
+          </span>
+          <div className="space-y-1.5">
+            {renderProviderUsageRow({
+              label: 'Sessions',
+              value: point.sessionsCreated,
+              max,
+              barClassName: 'bg-blue-500',
+            })}
+            {renderProviderUsageRow({
+              label: 'Turns',
+              value: point.turnsCompleted,
+              max,
+              barClassName: 'bg-teal-500',
+            })}
+          </div>
+        </div>
+      ))}
     </div>
   )
 }

@@ -35,6 +35,7 @@ function session(
     projectName: 'Convergence',
     providerId: 'codex',
     providerName: 'Codex',
+    model: 'gpt-5.4',
     status: 'completed',
     primarySurface: 'conversation',
     archivedAt: null,
@@ -290,6 +291,18 @@ describe('analytics pure helpers', () => {
     expect(overview.providerUsage.map((point) => point.providerId)).toEqual([
       'claude-code',
       'codex',
+    ])
+    expect(overview.modelUsage).toEqual([
+      {
+        modelId: 'gpt-5.4',
+        modelLabel: 'gpt-5.4',
+        sessionsCreated: 3,
+        turnsCompleted: 3,
+        userMessages: 0,
+        assistantMessages: 0,
+        providerId: 'codex',
+        providerName: 'Codex',
+      },
     ])
     expect(overview.projectUsage.map((point) => point.projectName)).toEqual([
       'Backpack',

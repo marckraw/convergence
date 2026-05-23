@@ -32,6 +32,7 @@ interface AnalyticsSessionRow {
   project_id: string
   project_name: string | null
   provider_id: string
+  model: string | null
   status: string
   primary_surface: string
   archived_at: string | null
@@ -268,6 +269,7 @@ export class AnalyticsService {
             sessions.project_id,
             projects.name AS project_name,
             sessions.provider_id,
+            sessions.model,
             sessions.status,
             sessions.primary_surface,
             sessions.archived_at,
@@ -285,8 +287,9 @@ export class AnalyticsService {
       projectId: row.project_id,
       projectName: row.project_name ?? 'Unknown project',
       providerId: row.provider_id,
-      providerName: providerNameFromId(row.provider_id),
+      model: row.model,
       status: row.status,
+      providerName: providerNameFromId(row.provider_id),
       primarySurface: row.primary_surface,
       archivedAt: row.archived_at,
       createdAt: row.created_at,

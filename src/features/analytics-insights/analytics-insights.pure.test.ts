@@ -74,6 +74,7 @@ const overview: AnalyticsOverview = {
       assistantMessages: 3,
     },
   ],
+  modelUsage: [],
   projectUsage: [],
   weekdayHourActivity: [{ weekday: 4, hour: 13, count: 5 }],
   conversationBalance: [

@@ -1,4 +1,5 @@
 import type {
+  AnalyticsConversationItemInput,
   AnalyticsFileChangeInput,
   AnalyticsOverview,
   AnalyticsRange,
@@ -6,12 +7,14 @@ import type {
   AnalyticsSessionInput,
   AnalyticsStreaks,
   AnalyticsTotals,
+  AnalyticsTurnInput,
   BuildAnalyticsOverviewInput,
   ConversationBalancePoint,
   DailyActivityPoint,
   DeterministicWorkProfile,
   ProjectUsagePoint,
   ProviderUsagePoint,
+  ModelUsagePoint,
   WeekdayHourActivityPoint,
   WorkStyleInteractionShape,
   WorkStyleSessionSizeBucket,
@@ -459,6 +462,98 @@ function buildProjectUsage(
   )
 }
 
+function buildModelUsage(
+  sessions: AnalyticsSessionInput[],
+  conversationItems: AnalyticsConversationItemInput[],
+  turns: AnalyticsTurnInput[],
+  range: AnalyticsRange,
+): ModelUsagePoint[] {
+  const points = new Map<string, ModelUsagePoint>()
+
+  for (const session of sessions) {
+    if (!isInRange(toLocalDate(session.createdAt), range)) continue
+    const key = makeUsagePointKey(session.model)
+    const point = points.get(key) ?? {
+      modelId: session.model ?? '__none__',
+      modelLabel: session.model ?? '__none__',
+      sessionsCreated: 0,
+      turnsCompleted: 0,
+      userMessages: 0,
+      assistantMessages: 0,
+      providerId: session.providerId || null,
+      providerName: session.providerName,
+    }
+    point.sessionsCreated += 1
+    points.set(key, point)
+  }
+
+  const turnsByModel = new Map<string, number>()
+  for (const turn of turns) {
+    if (
+      turn.status !== 'completed' ||
+      !isInRange(toLocalDate(turn.endedAt ?? turn.startedAt), range)
+    ) {
+      continue
+    }
+    const session = sessions.find((s) => s.id === turn.sessionId)
+    if (!session) continue
+    const key = makeUsagePointKey(session.model)
+    const current = points.get(key)
+    if (current) {
+      current.turnsCompleted += 1
+      points.set(key, current)
+    } else {
+      turnsByModel.set(key, (turnsByModel.get(key) ?? 0) + 1)
+    }
+  }
+
+  const itemsByModel = new Map<string, { user: number; assistant: number }>()
+  for (const item of conversationItems) {
+    if (!isInRange(toLocalDate(item.createdAt), range)) continue
+    if (item.kind !== 'message') continue
+    const session = sessions.find((s) => s.id === item.sessionId)
+    if (!session) continue
+    const key = makeUsagePointKey(session.model)
+    const entry = itemsByModel.get(key) ?? { user: 0, assistant: 0 }
+    if (item.actor === 'user') {
+      entry.user += 1
+    } else if (item.actor === 'assistant') {
+      entry.assistant += 1
+    }
+    itemsByModel.set(key, entry)
+  }
+
+  for (const [key, count] of turnsByModel) {
+    if (!points.has(key)) {
+      points.set(key, {
+        modelId: key,
+        modelLabel: key,
+        sessionsCreated: 0,
+        turnsCompleted: count,
+        userMessages: itemsByModel.get(key)?.user ?? 0,
+        assistantMessages: itemsByModel.get(key)?.assistant ?? 0,
+        providerId: null,
+        providerName: 'Unknown',
+      })
+    }
+  }
+
+  for (const [key, counts] of itemsByModel) {
+    const point = points.get(key)
+    if (point) {
+      point.userMessages += counts.user
+      point.assistantMessages += counts.assistant
+    }
+  }
+
+  return [...points.values()].sort(
+    (left, right) =>
+      right.sessionsCreated - left.sessionsCreated ||
+      right.turnsCompleted - left.turnsCompleted ||
+      left.modelLabel.localeCompare(right.modelLabel),
+  )
+}
+
 function buildWeekdayHourActivity(
   activities: DatedActivity[],
   range: AnalyticsRange,
@@ -633,6 +728,12 @@ export function buildAnalyticsOverview(
     fileChangesInRange,
   )
   const providerUsage = buildProviderUsage(activities, range)
+  const modelUsage = buildModelUsage(
+    input.sessions,
+    input.conversationItems,
+    input.turns,
+    range,
+  )
   const projectUsage = buildProjectUsage(activities, range)
   const weekdayHourActivity = buildWeekdayHourActivity(activities, range)
   const totals = buildTotals(range, input)
@@ -643,6 +744,7 @@ export function buildAnalyticsOverview(
     streaks: calculateStreaks(getActiveDates(range, activities), range.endDate),
     dailyActivity,
     providerUsage,
+    modelUsage,
     projectUsage,
     weekdayHourActivity,
     conversationBalance: buildConversationBalance(dailyActivity),

@@ -30,6 +30,7 @@ function insertSession(
     status?: string
     createdAt: string
     updatedAt?: string
+    model?: string | null
   },
 ): void {
   db.prepare(
@@ -39,6 +40,7 @@ function insertSession(
         project_id,
         provider_id,
         name,
+        model,
         status,
         attention,
         working_directory,
@@ -46,7 +48,7 @@ function insertSession(
         created_at,
         updated_at
       )
-      VALUES (?, ?, ?, ?, ?, 'none', ?, 'conversation', ?, ?)
+      VALUES (?, ?, ?, ?, 'gpt-5.4', ?, 'none', ?, 'conversation', ?, ?)
     `,
   ).run(
     input.id,
@@ -289,6 +291,9 @@ describe('AnalyticsService', () => {
     expect(overview.providerUsage.map((point) => point.providerName)).toEqual([
       'Codex',
       'Claude Code',
+    ])
+    expect(overview.modelUsage.map((point) => point.modelLabel)).toEqual([
+      'gpt-5.4',
     ])
     expect(overview.projectUsage.map((point) => point.projectName)).toEqual([
       'Convergence',

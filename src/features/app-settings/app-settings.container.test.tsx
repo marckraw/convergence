@@ -140,6 +140,7 @@ const EMPTY_ANALYTICS_OVERVIEW: AnalyticsOverview = {
   streaks: { current: 0, longest: 0, activeDays: [] },
   dailyActivity: [],
   providerUsage: [],
+  modelUsage: [],
   projectUsage: [],
   weekdayHourActivity: [],
   conversationBalance: [],
