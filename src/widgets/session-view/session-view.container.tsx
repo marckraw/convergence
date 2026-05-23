@@ -37,7 +37,6 @@ import {
   TerminalSquare,
 } from 'lucide-react'
 import { AttentionIndicator } from '@/shared/ui/attention-indicator.presentational'
-import { ContextWindowIndicator } from '@/shared/ui/context-window-indicator.presentational'
 import { cn } from '@/shared/lib/cn.pure'
 import { ChangedFilesPanel } from './changed-files-panel.container'
 import { formatConversationTotalDuration } from './conversation-total-duration.pure'
@@ -483,7 +482,6 @@ export const SessionView: FC<SessionViewProps> = ({ onOpenCodeReview }) => {
                 {totalDurationLabel}
               </span>
             )}
-            <ContextWindowIndicator contextWindow={session.contextWindow} />
           </div>
           <div
             className="flex items-center gap-1"

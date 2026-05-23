@@ -235,7 +235,7 @@ describe('SessionView changed files drawer', () => {
       </TooltipProvider>,
     )
 
-    expect(screen.getByText('80% left')).toBeInTheDocument()
+    expect(screen.queryByText('80% left')).not.toBeInTheDocument()
 
     fireEvent.click(screen.getByRole('button', { name: 'Changed files' }))
 
