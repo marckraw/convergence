@@ -5,6 +5,7 @@ import {
   compareSemver,
   extractSemver,
   getKnownProviders,
+  selectProviderVersionOutput,
 } from './provider-status.pure'
 
 describe('provider-status.pure', () => {
@@ -109,6 +110,25 @@ describe('provider-status.pure', () => {
     expect(extractSemver('2.1.119 (Claude Code)')).toBe('2.1.119')
     expect(extractSemver('codex-cli 0.124.0')).toBe('0.124.0')
     expect(extractSemver('0.67.6')).toBe('0.67.6')
+  })
+
+  it('selects version output from stdout or stderr', () => {
+    expect(selectProviderVersionOutput('0.74.0\n', '')).toBe('0.74.0')
+    expect(selectProviderVersionOutput('', 'codex-cli 0.133.0\n')).toBe(
+      'codex-cli 0.133.0',
+    )
+    expect(
+      selectProviderVersionOutput(
+        'Checking provider status\n',
+        'pi v0.74.0\nUpdate available: 0.75.4\n',
+      ),
+    ).toBe('pi v0.74.0')
+    expect(
+      selectProviderVersionOutput(
+        '',
+        'Error: crash\n    at file:///tmp/node-v24.15.0/app.js\nNode.js v24.15.0\n',
+      ),
+    ).toBeNull()
   })
 
   it('compares semver values', () => {

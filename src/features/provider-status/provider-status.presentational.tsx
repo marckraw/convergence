@@ -64,7 +64,9 @@ function renderUpdateBadge(provider: ProviderStatusInfo) {
       ? 'Latest'
       : provider.update.status === 'outdated'
         ? 'Update available'
-        : 'Latest unknown'
+        : provider.update.latestVersion
+          ? 'Version unknown'
+          : 'Latest unknown'
 
   return (
     <span
