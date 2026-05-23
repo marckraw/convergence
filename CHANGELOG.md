@@ -1,5 +1,12 @@
 # convergence
 
+## 0.37.21
+
+### Patch Changes
+
+- f363d91: Add a project Open menu that detects installed macOS editors and opens the active workspace or project root in Cursor, VS Code, Zed, WebStorm, or Finder.
+- 2aa9eaa: Show provider reasoning and thinking deltas in the session transcript when supported by the active model.
+
 ## 0.37.20
 
 ### Patch Changes
