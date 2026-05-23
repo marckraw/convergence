@@ -836,7 +836,16 @@ export class CodexProvider implements Provider {
     let assistantMessageItemId: string | null = null
     let thinkingBuffer = ''
     let thinkingItemId: string | null = null
+    let thinkingProviderItemId: string | null = null
+    let thinkingProviderEventType: string | null = null
     let pendingThinkingProviderItemId: string | null = null
+    const flushedThinkingByProviderItemId = new Map<
+      string,
+      {
+        itemId: string
+        text: string
+      }
+    >()
     let resolveThreadReady: (() => void) | null = null
     let activeProviderTurnId: string | null = null
 
@@ -926,23 +935,39 @@ export class CodexProvider implements Provider {
     }): void {
       if (thinkingBuffer) {
         const timestamp = now()
+        const providerItemId =
+          input?.providerItemId ??
+          thinkingProviderItemId ??
+          pendingThinkingProviderItemId
+        const providerEventType =
+          input?.providerEventType ?? thinkingProviderEventType
+        let flushedItemId: string
         if (thinkingItemId) {
           sessionEmitter.patchThinking(thinkingItemId, {
             text: thinkingBuffer,
             state: 'complete',
             updatedAt: timestamp,
           })
+          flushedItemId = thinkingItemId
         } else {
-          thinkingItemId = sessionEmitter.addThinking({
+          flushedItemId = sessionEmitter.addThinking({
             text: thinkingBuffer,
             state: 'complete',
             timestamp,
-            providerItemId: input?.providerItemId,
-            providerEventType: input?.providerEventType,
+            providerItemId,
+            providerEventType,
+          })
+        }
+        if (providerItemId) {
+          flushedThinkingByProviderItemId.set(providerItemId, {
+            itemId: flushedItemId,
+            text: thinkingBuffer,
           })
         }
         thinkingBuffer = ''
         thinkingItemId = null
+        thinkingProviderItemId = null
+        thinkingProviderEventType = null
       }
     }
 
@@ -952,13 +977,19 @@ export class CodexProvider implements Provider {
       providerEventType?: string | null
     }): void {
       if (!input.text) return
+      if (input.providerItemId) {
+        thinkingProviderItemId = input.providerItemId
+      }
+      if (input.providerEventType) {
+        thinkingProviderEventType = input.providerEventType
+      }
       thinkingBuffer += input.text
       if (!thinkingItemId) {
         thinkingItemId = sessionEmitter.addThinking({
           text: thinkingBuffer,
           state: 'streaming',
-          providerItemId: input.providerItemId,
-          providerEventType: input.providerEventType,
+          providerItemId: thinkingProviderItemId,
+          providerEventType: thinkingProviderEventType,
         })
       } else {
         sessionEmitter.patchThinking(thinkingItemId, {
@@ -1108,7 +1139,10 @@ export class CodexProvider implements Provider {
       assistantMessageItemId = null
       thinkingBuffer = ''
       thinkingItemId = null
+      thinkingProviderItemId = null
+      thinkingProviderEventType = null
       pendingThinkingProviderItemId = null
+      flushedThinkingByProviderItemId.clear()
       const currentThreadId = await ensureThread(activeRpc)
 
       try {
@@ -1588,6 +1622,21 @@ export class CodexProvider implements Provider {
                 ''
               const providerItemId =
                 readProviderItemId(p, item) ?? pendingThinkingProviderItemId
+              const flushedThinking = providerItemId
+                ? flushedThinkingByProviderItemId.get(providerItemId)
+                : null
+              if (flushedThinking) {
+                if (text && text !== flushedThinking.text) {
+                  sessionEmitter.patchThinking(flushedThinking.itemId, {
+                    text,
+                    state: 'complete',
+                    updatedAt: now(),
+                  })
+                  flushedThinking.text = text
+                }
+                pendingThinkingProviderItemId = null
+                break
+              }
               if (!thinkingBuffer && text) {
                 thinkingBuffer = text
               }
