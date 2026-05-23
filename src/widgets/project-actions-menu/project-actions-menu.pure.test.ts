@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest'
 import type { ProjectScriptRun } from '@/entities/project-script'
 import {
   formatProjectActionRunMeta,
-  formatProjectActionTimestamp,
   isProjectScriptRunActive,
 } from './project-actions-menu.pure'
 
@@ -39,12 +38,6 @@ describe('project actions menu helpers', () => {
     expect(formatProjectActionRunMeta(null)).toBe('idle')
     expect(formatProjectActionRunMeta(makeRun({ status: 'failed' }))).toBe(
       'failed',
-    )
-  })
-
-  it('formats timestamps as local time strings', () => {
-    expect(formatProjectActionTimestamp('2026-01-01T12:34:56.000Z')).toMatch(
-      /\d{2}:\d{2}:\d{2}/,
     )
   })
 })

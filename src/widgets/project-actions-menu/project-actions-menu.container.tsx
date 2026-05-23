@@ -9,14 +9,10 @@ import {
 } from '@/entities/project-script'
 import { ProjectScriptEditor } from '@/features/project-script-editor'
 import { DropdownMenu, DropdownMenuTrigger } from '@/shared/ui/dropdown-menu'
-import { ProjectActionLogDrawerPresentational } from './project-action-log-drawer.presentational'
 import { isProjectScriptRunActive } from './project-actions-menu.pure'
 import { ProjectActionsMenuPresentational } from './project-actions-menu.presentational'
 import { ProjectActionsTrigger } from './project-actions-trigger.presentational'
-import type {
-  ProjectActionItem,
-  ProjectActionLogDrawerView,
-} from './project-actions-menu.types'
+import type { ProjectActionItem } from './project-actions-menu.types'
 
 interface ProjectActionsMenuProps {
   project: Project
@@ -46,11 +42,9 @@ export const ProjectActionsMenu: FC<ProjectActionsMenuProps> = ({
   const stopRun = useProjectScriptStore((state) => state.stopRun)
   const error = useProjectScriptStore((state) => state.error)
   const [menuOpen, setMenuOpen] = useState(false)
-  const [menuMode, setMenuMode] = useState<'quick' | 'manage'>('quick')
   const [editorOpen, setEditorOpen] = useState(false)
   const [editingScript, setEditingScript] = useState<ProjectScript | null>(null)
   const [selectedScriptId, setSelectedScriptId] = useState<string | null>(null)
-  const [drawerRunId, setDrawerRunId] = useState<string | null>(null)
   const [expandedRunIds, setExpandedRunIds] = useState<Set<string>>(
     () => new Set(),
   )
@@ -77,18 +71,6 @@ export const ProjectActionsMenu: FC<ProjectActionsMenuProps> = ({
     items.find((item) => item.script.id === selectedScriptId) ??
     items[0] ??
     null
-  const drawerView = useMemo<ProjectActionLogDrawerView | null>(() => {
-    if (!drawerRunId) return null
-    const run = runs.find((entry) => entry.id === drawerRunId)
-    if (!run) return null
-    const script = scripts.find((entry) => entry.id === run.scriptId)
-    if (!script) return null
-    return {
-      script,
-      run,
-      output: outputByRunId[run.id] ?? [],
-    }
-  }, [drawerRunId, outputByRunId, runs, scripts])
 
   useEffect(() => {
     void loadForProject(project.id)
@@ -98,13 +80,7 @@ export const ProjectActionsMenu: FC<ProjectActionsMenuProps> = ({
 
   return (
     <>
-      <DropdownMenu
-        open={menuOpen}
-        onOpenChange={(open) => {
-          setMenuOpen(open)
-          if (!open) setMenuMode('quick')
-        }}
-      >
+      <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
         <DropdownMenuTrigger asChild>
           <ProjectActionsTrigger
             selectedScript={selectedItem?.script ?? null}
@@ -114,23 +90,20 @@ export const ProjectActionsMenu: FC<ProjectActionsMenuProps> = ({
         <ProjectActionsMenuPresentational
           projectName={project.name}
           items={items}
-          mode={menuMode}
           outputByRunId={outputByRunId}
           expandedRunIds={expandedRunIds}
           error={error}
           onRun={(item) => {
             setSelectedScriptId(item.script.id)
             if (item.running && item.latestRun) {
-              setDrawerRunId(item.latestRun.id)
+              setExpandedRunIds((current) =>
+                new Set(current).add(item.latestRun!.id),
+              )
               return
             }
             void runScript(item.script.id, project.id).then((run) => {
               if (!run) return
-              if (menuMode === 'manage') {
-                setExpandedRunIds((current) => new Set(current).add(run.id))
-              } else {
-                setDrawerRunId(run.id)
-              }
+              setExpandedRunIds((current) => new Set(current).add(run.id))
             })
           }}
           onStop={(run) => {
@@ -141,8 +114,6 @@ export const ProjectActionsMenu: FC<ProjectActionsMenuProps> = ({
             setMenuOpen(false)
             setEditorOpen(true)
           }}
-          onManage={() => setMenuMode('manage')}
-          onQuickMode={() => setMenuMode('quick')}
           onEdit={(script) => {
             setEditingScript(script)
             setMenuOpen(false)
@@ -169,16 +140,6 @@ export const ProjectActionsMenu: FC<ProjectActionsMenuProps> = ({
           }}
         />
       </DropdownMenu>
-
-      {drawerView && (
-        <ProjectActionLogDrawerPresentational
-          view={drawerView}
-          onStop={() => {
-            void stopRun(drawerView.run.id)
-          }}
-          onClose={() => setDrawerRunId(null)}
-        />
-      )}
 
       <ProjectScriptEditor
         open={editorOpen}

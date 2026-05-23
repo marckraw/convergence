@@ -16,11 +16,3 @@ export function formatProjectActionRunMeta(
   if (run.status === 'failed') return 'failed'
   return 'stopped'
 }
-
-export function formatProjectActionTimestamp(value: string): string {
-  return new Date(value).toLocaleTimeString([], {
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-  })
-}
