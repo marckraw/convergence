@@ -35,7 +35,10 @@ import {
   type ProjectContextItem,
 } from '@/entities/project-context'
 import { Composer } from './composer.presentational'
-import { validateAttachmentsAgainstCapability } from './attachment-capability.pure'
+import {
+  resolveAttachmentCapabilityForModel,
+  validateAttachmentsAgainstCapability,
+} from './attachment-capability.pure'
 import {
   filterComposerSkills,
   filterSelectionsForProvider,
@@ -346,7 +349,10 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
   const rejections = draft?.rejections ?? []
   const ingestInFlight = draft?.ingestInFlight ?? false
 
-  const capability = selection.provider?.attachments ?? null
+  const capability = resolveAttachmentCapabilityForModel(
+    selection.provider?.attachments,
+    selection.model,
+  )
   const capabilityResult = useMemo(
     () => validateAttachmentsAgainstCapability(attachments, capability),
     [attachments, capability],

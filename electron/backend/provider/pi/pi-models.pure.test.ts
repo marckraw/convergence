@@ -74,6 +74,17 @@ describe('mapPiModel', () => {
     expect(option?.defaultEffort).toBeNull()
   })
 
+  it('preserves advertised input modalities for model-specific attachment gating', () => {
+    const option = mapPiModel({
+      id: 'pgx-devstral-small-2-64k',
+      name: 'PGX Devstral Small 2 64k',
+      provider: 'pgx-ollama',
+      input: ['text', 'image'],
+    })
+
+    expect(option?.inputModalities).toEqual(['text', 'image'])
+  })
+
   it('gives the standard effort ladder for reasoning models (no xhigh for non-openai)', () => {
     const option = mapPiModel({
       id: 'claude-opus-4-6',

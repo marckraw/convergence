@@ -1,5 +1,8 @@
 import type { Attachment } from '@/entities/attachment'
-import type { ProviderAttachmentCapability } from '@/entities/session'
+import type {
+  ProviderAttachmentCapability,
+  ProviderModelOption,
+} from '@/entities/session'
 
 export interface AttachmentCapabilityError {
   attachmentId: string
@@ -34,6 +37,21 @@ function capabilityRejection(
       if (attachment.sizeBytes > capability.maxTextBytes)
         return `Text file exceeds ${capability.maxTextBytes} byte limit`
       return null
+  }
+}
+
+export function resolveAttachmentCapabilityForModel(
+  capability: ProviderAttachmentCapability | null | undefined,
+  model: ProviderModelOption | null | undefined,
+): ProviderAttachmentCapability | null {
+  if (!capability) return null
+  const modalities = model?.inputModalities
+  if (!modalities) return capability
+
+  return {
+    ...capability,
+    supportsImage: capability.supportsImage && modalities.includes('image'),
+    supportsText: capability.supportsText && modalities.includes('text'),
   }
 }
 
