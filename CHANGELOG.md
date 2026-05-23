@@ -1,5 +1,11 @@
 # convergence
 
+## 0.37.24
+
+### Patch Changes
+
+- af6b799: Fix project action dropdown clicks and keep action management inside the top-bar menu.
+
 ## 0.37.23
 
 ### Patch Changes
