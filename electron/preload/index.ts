@@ -85,6 +85,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
   dialog: {
     selectDirectory: () => ipcRenderer.invoke('dialog:selectDirectory'),
   },
+  projectOpen: {
+    listApps: () => ipcRenderer.invoke('projectOpen:listApps'),
+    open: (input: { appId: string; path: string }) =>
+      ipcRenderer.invoke('projectOpen:open', input),
+  },
   workspace: {
     create: (input: {
       projectId: string
