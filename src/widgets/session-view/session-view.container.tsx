@@ -18,7 +18,6 @@ import { ComposerContainer } from '@/features/composer'
 import { ProjectOpenMenuContainer } from '@/features/project-open-menu'
 import { SessionDebugDrawerContainer } from '@/widgets/session-debug-drawer'
 import { ProjectActionsMenu } from '@/widgets/project-actions-menu'
-import { ProjectScriptsPanel } from '@/widgets/project-scripts-panel'
 import { useAppSettingsStore } from '@/entities/app-settings'
 import { attachmentApi, useAttachmentStore } from '@/entities/attachment'
 import { useTerminalStore } from '@/entities/terminal'
@@ -119,7 +118,6 @@ export const SessionView: FC<SessionViewProps> = ({ onOpenCodeReview }) => {
   const hasTerminal = terminalTree !== null
   const [showChangedFiles, setShowChangedFiles] = useState(false)
   const [showPullRequestPanel, setShowPullRequestPanel] = useState(false)
-  const [showScriptsPanel, setShowScriptsPanel] = useState(false)
   const [changedFilesSide, setChangedFilesSide] = useState<'left' | 'right'>(
     'right',
   )
@@ -325,20 +323,11 @@ export const SessionView: FC<SessionViewProps> = ({ onOpenCodeReview }) => {
       const next = !current
       if (next) {
         setShowChangedFiles(false)
-        setShowScriptsPanel(false)
         setChangedFilesMode('docked')
         setChangedFilesWidth(CHANGED_FILES_COMPACT_WIDTH)
       }
       return next
     })
-  }, [])
-
-  const handleOpenScriptsPanel = useCallback(() => {
-    setShowChangedFiles(false)
-    setShowPullRequestPanel(false)
-    setShowScriptsPanel(true)
-    setChangedFilesMode('docked')
-    setChangedFilesWidth(CHANGED_FILES_COMPACT_WIDTH)
   }, [])
 
   // Empty state
@@ -349,12 +338,16 @@ export const SessionView: FC<SessionViewProps> = ({ onOpenCodeReview }) => {
     const draftOpenPath =
       draftWorkspace?.path ?? activeProject?.repositoryPath ?? null
     return (
-      <div className="flex h-full flex-col">
+      <div className="relative flex h-full flex-col overflow-hidden">
         <div
-          className="flex h-12 shrink-0 items-center justify-end border-b border-border px-4"
+          className="flex h-12 shrink-0 items-center justify-end gap-1 border-b border-border px-4"
           style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
         >
-          <div style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
+          <div
+            className="flex items-center gap-1"
+            style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
+          >
+            {activeProject && <ProjectActionsMenu project={activeProject} />}
             <ProjectOpenMenuContainer targetPath={draftOpenPath} />
           </div>
         </div>
@@ -401,11 +394,6 @@ export const SessionView: FC<SessionViewProps> = ({ onOpenCodeReview }) => {
               />
             )}
           </div>
-          {activeProject && (
-            <div className="w-96 shrink-0">
-              <ProjectScriptsPanel project={activeProject} />
-            </div>
-          )}
         </div>
       </div>
     )
@@ -550,12 +538,7 @@ export const SessionView: FC<SessionViewProps> = ({ onOpenCodeReview }) => {
             className="flex items-center gap-1"
             style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
           >
-            {activeProject && (
-              <ProjectActionsMenu
-                project={activeProject}
-                onManage={handleOpenScriptsPanel}
-              />
-            )}
+            {activeProject && <ProjectActionsMenu project={activeProject} />}
             <ProjectOpenMenuContainer targetPath={sessionOpenPath} />
             <Button
               variant="ghost"
@@ -733,12 +716,6 @@ export const SessionView: FC<SessionViewProps> = ({ onOpenCodeReview }) => {
           }}
           onClose={() => setShowPullRequestPanel(false)}
         />
-      )}
-
-      {activeProject && showScriptsPanel && !changedFilesExpanded && (
-        <div className="w-96 shrink-0">
-          <ProjectScriptsPanel project={activeProject} />
-        </div>
       )}
 
       {linkedSpace && !changedFilesExpanded && (

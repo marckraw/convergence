@@ -20,7 +20,6 @@ import type {
 
 interface ProjectActionsMenuProps {
   project: Project
-  onManage: () => void
 }
 
 const EMPTY_SCRIPTS: ProjectScript[] = []
@@ -28,7 +27,6 @@ const EMPTY_RUNS: ProjectScriptRun[] = []
 
 export const ProjectActionsMenu: FC<ProjectActionsMenuProps> = ({
   project,
-  onManage,
 }) => {
   const scripts = useProjectScriptStore(
     (state) => state.scriptsByProjectId[project.id] ?? EMPTY_SCRIPTS,
@@ -42,11 +40,20 @@ export const ProjectActionsMenu: FC<ProjectActionsMenuProps> = ({
     (state) => state.subscribeToRunEvents,
   )
   const createScript = useProjectScriptStore((state) => state.createScript)
+  const updateScript = useProjectScriptStore((state) => state.updateScript)
+  const deleteScript = useProjectScriptStore((state) => state.deleteScript)
   const runScript = useProjectScriptStore((state) => state.runScript)
   const stopRun = useProjectScriptStore((state) => state.stopRun)
+  const error = useProjectScriptStore((state) => state.error)
+  const [menuOpen, setMenuOpen] = useState(false)
+  const [menuMode, setMenuMode] = useState<'quick' | 'manage'>('quick')
   const [editorOpen, setEditorOpen] = useState(false)
+  const [editingScript, setEditingScript] = useState<ProjectScript | null>(null)
   const [selectedScriptId, setSelectedScriptId] = useState<string | null>(null)
   const [drawerRunId, setDrawerRunId] = useState<string | null>(null)
+  const [expandedRunIds, setExpandedRunIds] = useState<Set<string>>(
+    () => new Set(),
+  )
 
   const latestRunsByScriptId = useMemo(
     () => selectLatestRunsByScriptId(runs),
@@ -91,7 +98,13 @@ export const ProjectActionsMenu: FC<ProjectActionsMenuProps> = ({
 
   return (
     <>
-      <DropdownMenu>
+      <DropdownMenu
+        open={menuOpen}
+        onOpenChange={(open) => {
+          setMenuOpen(open)
+          if (!open) setMenuMode('quick')
+        }}
+      >
         <DropdownMenuTrigger asChild>
           <ProjectActionsTrigger
             selectedScript={selectedItem?.script ?? null}
@@ -101,6 +114,10 @@ export const ProjectActionsMenu: FC<ProjectActionsMenuProps> = ({
         <ProjectActionsMenuPresentational
           projectName={project.name}
           items={items}
+          mode={menuMode}
+          outputByRunId={outputByRunId}
+          expandedRunIds={expandedRunIds}
+          error={error}
           onRun={(item) => {
             setSelectedScriptId(item.script.id)
             if (item.running && item.latestRun) {
@@ -108,11 +125,48 @@ export const ProjectActionsMenu: FC<ProjectActionsMenuProps> = ({
               return
             }
             void runScript(item.script.id, project.id).then((run) => {
-              if (run) setDrawerRunId(run.id)
+              if (!run) return
+              if (menuMode === 'manage') {
+                setExpandedRunIds((current) => new Set(current).add(run.id))
+              } else {
+                setDrawerRunId(run.id)
+              }
             })
           }}
-          onAdd={() => setEditorOpen(true)}
-          onManage={onManage}
+          onStop={(run) => {
+            void stopRun(run.id)
+          }}
+          onAdd={() => {
+            setEditingScript(null)
+            setMenuOpen(false)
+            setEditorOpen(true)
+          }}
+          onManage={() => setMenuMode('manage')}
+          onQuickMode={() => setMenuMode('quick')}
+          onEdit={(script) => {
+            setEditingScript(script)
+            setMenuOpen(false)
+            setEditorOpen(true)
+          }}
+          onDelete={(script) => {
+            const confirmed = window.confirm(
+              `Delete action "${script.name}"?\n\nRun history for this action will also be removed.`,
+            )
+            if (confirmed) {
+              void deleteScript(script.id, project.id)
+            }
+          }}
+          onToggleRun={(runId) => {
+            setExpandedRunIds((current) => {
+              const next = new Set(current)
+              if (next.has(runId)) {
+                next.delete(runId)
+              } else {
+                next.add(runId)
+              }
+              return next
+            })
+          }}
         />
       </DropdownMenu>
 
@@ -128,10 +182,14 @@ export const ProjectActionsMenu: FC<ProjectActionsMenuProps> = ({
 
       <ProjectScriptEditor
         open={editorOpen}
-        script={null}
+        script={editingScript}
         onOpenChange={setEditorOpen}
         onSave={async (input) => {
-          await createScript({ projectId: project.id, ...input })
+          if (editingScript) {
+            await updateScript(editingScript.id, project.id, input)
+          } else {
+            await createScript({ projectId: project.id, ...input })
+          }
         }}
       />
     </>

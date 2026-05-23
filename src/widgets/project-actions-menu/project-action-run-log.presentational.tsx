@@ -4,12 +4,12 @@ import type {
   ProjectScriptRunOutput,
 } from '@/entities/project-script'
 
-interface ProjectScriptRunLogProps {
+interface ProjectActionRunLogProps {
   run: ProjectScriptRun
   liveOutput: ProjectScriptRunOutput[]
 }
 
-export const ProjectScriptRunLog: FC<ProjectScriptRunLogProps> = ({
+export const ProjectActionRunLog: FC<ProjectActionRunLogProps> = ({
   run,
   liveOutput,
 }) => {
@@ -30,7 +30,7 @@ export const ProjectScriptRunLog: FC<ProjectScriptRunLogProps> = ({
           {run.endedAt ? ` · ended: ${formatTimestamp(run.endedAt)}` : ''}
           {run.exitCode !== null ? ` · exit: ${run.exitCode}` : ''}
         </span>
-        <span>stdin is not supported for project scripts.</span>
+        <span>stdin is not supported for project actions.</span>
       </div>
       <pre className="app-scrollbar max-h-72 overflow-auto rounded-md border border-border bg-background p-2 font-mono text-[11px] leading-relaxed">
         {chunks.length === 0 ? (
