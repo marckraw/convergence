@@ -39,6 +39,37 @@ contextBridge.exposeInMainWorld('electronAPI', {
     listForSession: (sessionId: string) =>
       ipcRenderer.invoke('projectContext:listForSession', sessionId),
   },
+  projectScripts: {
+    list: (projectId: string) =>
+      ipcRenderer.invoke('projectScripts:list', projectId),
+    create: (input: unknown) =>
+      ipcRenderer.invoke('projectScripts:create', input),
+    update: (id: string, input: unknown) =>
+      ipcRenderer.invoke('projectScripts:update', id, input),
+    delete: (id: string) => ipcRenderer.invoke('projectScripts:delete', id),
+    listRuns: (projectId: string) =>
+      ipcRenderer.invoke('projectScripts:listRuns', projectId),
+    listActiveRuns: () => ipcRenderer.invoke('projectScripts:listActiveRuns'),
+    getRun: (runId: string) =>
+      ipcRenderer.invoke('projectScripts:getRun', runId),
+    run: (scriptId: string) =>
+      ipcRenderer.invoke('projectScripts:run', scriptId),
+    stop: (runId: string) => ipcRenderer.invoke('projectScripts:stop', runId),
+    onRunUpdated: (callback: (run: unknown) => void) => {
+      const handler = (_event: unknown, run: unknown) => callback(run)
+      ipcRenderer.on('project-script-run:updated', handler)
+      return () => {
+        ipcRenderer.removeListener('project-script-run:updated', handler)
+      }
+    },
+    onRunOutput: (callback: (output: unknown) => void) => {
+      const handler = (_event: unknown, output: unknown) => callback(output)
+      ipcRenderer.on('project-script-run:output', handler)
+      return () => {
+        ipcRenderer.removeListener('project-script-run:output', handler)
+      }
+    },
+  },
   space: {
     list: () => ipcRenderer.invoke('space:list'),
     getById: (id: string) => ipcRenderer.invoke('space:getById', id),

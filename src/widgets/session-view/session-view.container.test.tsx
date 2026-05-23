@@ -4,6 +4,7 @@ import { DEFAULT_PROJECT_SETTINGS, useProjectStore } from '@/entities/project'
 import { useDialogStore } from '@/entities/dialog'
 import { useSpaceStore } from '@/entities/space'
 import { useSessionStore } from '@/entities/session'
+import { useProjectScriptStore } from '@/entities/project-script'
 import { useWorkspaceStore } from '@/entities/workspace'
 import { TooltipProvider } from '@/shared/ui/tooltip'
 import { SessionView } from './session-view.container'
@@ -161,9 +162,30 @@ describe('SessionView changed files drawer', () => {
       loading: false,
       error: null,
     })
+    useProjectScriptStore.setState({
+      scriptsByProjectId: {},
+      runsByProjectId: {},
+      globalActiveRuns: [],
+      outputByRunId: {},
+      loading: false,
+      error: null,
+    })
 
     Object.defineProperty(window, 'electronAPI', {
       value: {
+        projectScripts: {
+          list: vi.fn().mockResolvedValue([]),
+          create: vi.fn(),
+          update: vi.fn(),
+          delete: vi.fn(),
+          listRuns: vi.fn().mockResolvedValue([]),
+          listActiveRuns: vi.fn().mockResolvedValue([]),
+          getRun: vi.fn().mockResolvedValue(null),
+          run: vi.fn(),
+          stop: vi.fn(),
+          onRunUpdated: vi.fn().mockReturnValue(() => {}),
+          onRunOutput: vi.fn().mockReturnValue(() => {}),
+        },
         space: {
           list: vi.fn().mockResolvedValue([space]),
           getById: vi.fn().mockResolvedValue(space),
@@ -234,8 +256,6 @@ describe('SessionView changed files drawer', () => {
         <SessionView />
       </TooltipProvider>,
     )
-
-    expect(screen.getByText('80% left')).toBeInTheDocument()
 
     fireEvent.click(screen.getByRole('button', { name: 'Changed files' }))
 

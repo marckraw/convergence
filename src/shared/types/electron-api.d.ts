@@ -852,6 +852,71 @@ interface UpdateProjectContextItemInputData {
   reinjectMode?: ProjectContextReinjectModeData
 }
 
+type ProjectScriptRunStatusData =
+  | 'queued'
+  | 'running'
+  | 'succeeded'
+  | 'failed'
+  | 'stopped'
+
+type ProjectScriptIconIdData =
+  | 'play'
+  | 'check'
+  | 'build'
+  | 'test'
+  | 'wrench'
+  | 'bug'
+
+interface ProjectScriptData {
+  id: string
+  projectId: string
+  name: string
+  command: string
+  icon: ProjectScriptIconIdData
+  cwd: string | null
+  createdAt: string
+  updatedAt: string
+}
+
+interface ProjectScriptRunData {
+  id: string
+  scriptId: string
+  projectId: string
+  command: string
+  cwd: string
+  status: ProjectScriptRunStatusData
+  startedAt: string
+  endedAt: string | null
+  exitCode: number | null
+  signal: string | null
+  errorMessage: string | null
+  stdout: string
+  stderr: string
+}
+
+interface ProjectScriptRunOutputData {
+  runId: string
+  stream: 'stdout' | 'stderr'
+  text: string
+  sequence: number
+  emittedAt: string
+}
+
+interface CreateProjectScriptInputData {
+  projectId: string
+  name: string
+  command: string
+  icon?: ProjectScriptIconIdData
+  cwd?: string | null
+}
+
+interface UpdateProjectScriptInputData {
+  name?: string
+  command?: string
+  icon?: ProjectScriptIconIdData
+  cwd?: string | null
+}
+
 type AnalyticsRangePresetData = '7d' | '30d' | '90d' | 'all'
 
 interface AnalyticsRangeData {
@@ -1006,6 +1071,24 @@ interface ElectronAPI {
     delete: (id: string) => Promise<void>
     attachToSession: (sessionId: string, itemIds: string[]) => Promise<void>
     listForSession: (sessionId: string) => Promise<ProjectContextItemData[]>
+  }
+  projectScripts: {
+    list: (projectId: string) => Promise<ProjectScriptData[]>
+    create: (input: CreateProjectScriptInputData) => Promise<ProjectScriptData>
+    update: (
+      id: string,
+      input: UpdateProjectScriptInputData,
+    ) => Promise<ProjectScriptData>
+    delete: (id: string) => Promise<void>
+    listRuns: (projectId: string) => Promise<ProjectScriptRunData[]>
+    listActiveRuns: () => Promise<ProjectScriptRunData[]>
+    getRun: (runId: string) => Promise<ProjectScriptRunData | null>
+    run: (scriptId: string) => Promise<ProjectScriptRunData>
+    stop: (runId: string) => Promise<ProjectScriptRunData>
+    onRunUpdated: (callback: (run: ProjectScriptRunData) => void) => () => void
+    onRunOutput: (
+      callback: (output: ProjectScriptRunOutputData) => void,
+    ) => () => void
   }
   space: {
     list: () => Promise<SpaceData[]>

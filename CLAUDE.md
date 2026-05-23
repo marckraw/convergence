@@ -155,3 +155,17 @@ Electron main-process and backend code should follow the same split discipline t
 ### Migration behavior for agents
 
 When adding new code, prefer landing the final intended architecture directly instead of creating throwaway legacy folders. If a shortcut would make the next phase harder, do not take it.
+
+## Agent skills
+
+### Issue tracker
+
+Issues and roadmap tasks are tracked in the Linear `convergence` project. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Linear does not currently have the canonical triage label set configured for this repo; use the repo's triage mapping when labels exist. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+This repo uses a single-context documentation layout rooted at `docs/specs/`, `docs/architecture/`, and `docs/adr/`. See `docs/agents/domain.md`.

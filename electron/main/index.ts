@@ -10,6 +10,12 @@ import { existsSync } from 'fs'
 import { join } from 'path'
 import { getDatabase } from '../backend/database/database'
 import { ProjectService } from '../backend/project/project.service'
+import { ProjectScriptsService } from '../backend/project-scripts/project-scripts.service'
+import { ProjectScriptsRunner } from '../backend/project-scripts/project-scripts.runner'
+import {
+  broadcastProjectScriptRun,
+  registerProjectScriptsIpcHandlers,
+} from '../backend/project-scripts/project-scripts.ipc'
 import { SpaceService } from '../backend/space/space.service'
 import { SpaceSynthesisService } from '../backend/space/space-synthesis.service'
 import { ProjectContextService } from '../backend/project-context/project-context.service'
@@ -177,6 +183,7 @@ async function startApp(): Promise<void> {
 
   const gitService = new GitService()
   const projectService = new ProjectService(db)
+  const projectScriptsService = new ProjectScriptsService(db)
   const spaceService = new SpaceService(db, spacesRoot)
   const projectContextService = new ProjectContextService(db)
   const sessionContextInjectionService = new SessionContextInjectionService(
@@ -297,6 +304,11 @@ async function startApp(): Promise<void> {
   const mcpService = new McpService(projectService, detected)
   const skillsService = new SkillsService(projectService, detected)
   const promptsService = new PromptsService(db, projectService)
+  const projectScriptsRunner = new ProjectScriptsRunner({
+    service: projectScriptsService,
+    broadcast: broadcastProjectScriptRun,
+  })
+  registerProjectScriptsIpcHandlers(projectScriptsService, projectScriptsRunner)
 
   const appSettingsService = new AppSettingsService(stateService, async () =>
     Promise.all(providerRegistry.getAll().map((p) => p.describe())),
@@ -536,6 +548,7 @@ async function startApp(): Promise<void> {
 
   app.on('before-quit', () => {
     terminalService.disposeAll()
+    projectScriptsRunner.disposeAll()
   })
 
   const runtimeIconPath = resolveRuntimeIconPath()
@@ -545,6 +558,7 @@ async function startApp(): Promise<void> {
 
   const onWindowClosed = () => {
     terminalService.disposeAll()
+    projectScriptsRunner.disposeAll()
     currentMainWindow = null
   }
 

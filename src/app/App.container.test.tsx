@@ -7,6 +7,7 @@ import {
   within,
 } from '@testing-library/react'
 import { useProjectStore } from '@/entities/project'
+import { useProjectScriptStore } from '@/entities/project-script'
 import { useWorkspaceStore } from '@/entities/workspace'
 import { useSpaceStore } from '@/entities/space'
 import { useSessionStore, type SessionSummary } from '@/entities/session'
@@ -93,7 +94,21 @@ const mockElectronAPI = {
   workspace: {
     create: vi.fn(),
     getByProjectId: vi.fn().mockResolvedValue([]),
+    getAll: vi.fn().mockResolvedValue([]),
     delete: vi.fn(),
+  },
+  projectScripts: {
+    list: vi.fn().mockResolvedValue([]),
+    create: vi.fn(),
+    update: vi.fn(),
+    delete: vi.fn(),
+    listRuns: vi.fn().mockResolvedValue([]),
+    listActiveRuns: vi.fn().mockResolvedValue([]),
+    getRun: vi.fn().mockResolvedValue(null),
+    run: vi.fn(),
+    stop: vi.fn(),
+    onRunUpdated: vi.fn().mockReturnValue(() => {}),
+    onRunOutput: vi.fn().mockReturnValue(() => {}),
   },
   space: {
     list: vi.fn().mockResolvedValue([]),
@@ -269,6 +284,10 @@ describe('App', () => {
     mockElectronAPI.project.getActive.mockResolvedValue(null)
     mockElectronAPI.project.getAll.mockResolvedValue([])
     mockElectronAPI.workspace.getByProjectId.mockResolvedValue([])
+    mockElectronAPI.workspace.getAll.mockResolvedValue([])
+    mockElectronAPI.projectScripts.list.mockResolvedValue([])
+    mockElectronAPI.projectScripts.listRuns.mockResolvedValue([])
+    mockElectronAPI.projectScripts.listActiveRuns.mockResolvedValue([])
     mockElectronAPI.space.list.mockResolvedValue([])
     mockElectronAPI.space.listAttempts.mockResolvedValue([])
     mockElectronAPI.git.getBranches.mockResolvedValue([])
@@ -319,6 +338,14 @@ describe('App', () => {
       attemptsBySessionId: {},
       artifactsBySpaceId: {},
       sourcesBySpaceId: {},
+      loading: false,
+      error: null,
+    })
+    useProjectScriptStore.setState({
+      scriptsByProjectId: {},
+      runsByProjectId: {},
+      globalActiveRuns: [],
+      outputByRunId: {},
       loading: false,
       error: null,
     })
