@@ -7,6 +7,7 @@ import {
 } from '@/entities/project-context'
 import { ProjectContextForm } from './project-context-form.presentational'
 import { ProjectContextList } from './project-context-list.presentational'
+import { useFormSubmitShortcut } from '@/shared/lib/use-form-submit-shortcut.pure'
 
 interface ProjectContextSettingsProps {
   projectId: string
@@ -109,6 +110,9 @@ export const ProjectContextSettings: FC<ProjectContextSettingsProps> = ({
       setIsSaving(false)
     }
   }
+
+  // Enable cmd+Enter to submit the form
+  useFormSubmitShortcut(formState.mode !== 'closed', handleSubmit)
 
   const handleDeleteConfirm = async (id: string) => {
     await deleteItem(id, projectId)

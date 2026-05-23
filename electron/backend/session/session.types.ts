@@ -24,6 +24,14 @@ export type PrimarySurface = 'conversation' | 'terminal'
 
 export type SessionContextKind = 'project' | 'global'
 
+export type AttentionRequestKind =
+  | 'approval'
+  | 'question'
+  | 'plan'
+  | 'form'
+  | 'url'
+  | 'input'
+
 export interface SessionSummary {
   id: string
   contextKind: SessionContextKind
@@ -35,6 +43,7 @@ export interface SessionSummary {
   name: string
   status: SessionStatus
   attention: AttentionState
+  attentionRequestKind?: AttentionRequestKind | null
   activity: ActivitySignal
   contextWindow: SessionContextWindow | null
   workingDirectory: string

@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { FC } from 'react'
-import { useCodeReviewStore } from '@/entities/code-review'
 import { useProjectStore } from '@/entities/project'
 import { usePullRequestStore } from '@/entities/pull-request'
 import { useSpaceStore } from '@/entities/space'
@@ -10,6 +9,7 @@ import {
   useSessionStore,
   type SessionSummary,
 } from '@/entities/session'
+import type { CodeReviewMode } from '@/entities/code-review'
 import { useNotificationsStore } from '@/entities/notifications'
 import {
   AppSettingsDialogContainer,
@@ -38,7 +38,6 @@ import {
   BarChart3,
   ChevronRight,
   Code2,
-  FileCode2,
   FolderGit2,
   MessageSquareText,
   PanelLeftClose,
@@ -63,6 +62,13 @@ interface SidebarProps {
   selectedSpaceId: string | null
   onSelectSpace: (id: string) => void
   activeGlobalSessionId: string | null
+  onOpenCodeReview?: (search?: {
+    targetId?: string | null
+    mode?: CodeReviewMode
+    file?: string | null
+  }) => void
+  onSelectProjectRoot?: (projectId: string) => void | Promise<void>
+  onSelectAnySession?: (session: SessionSummary) => void
   collapsed: boolean
   peek: boolean
   onCollapse: () => void
@@ -88,6 +94,9 @@ export const Sidebar: FC<SidebarProps> = ({
   selectedSpaceId,
   onSelectSpace,
   activeGlobalSessionId,
+  onOpenCodeReview,
+  onSelectProjectRoot,
+  onSelectAnySession,
   collapsed,
   peek,
   onCollapse,
@@ -99,7 +108,6 @@ export const Sidebar: FC<SidebarProps> = ({
   const activeProject = useProjectStore((s) => s.activeProject)
   const createProject = useProjectStore((s) => s.createProject)
   const setActiveProject = useProjectStore((s) => s.setActiveProject)
-  const openCodeReview = useCodeReviewStore((s) => s.openReview)
   const workspaces = useWorkspaceStore((s) => s.workspaces)
   const pullRequestsByWorkspaceId = usePullRequestStore((s) => s.byWorkspaceId)
   const loadPullRequestsByProjectId = usePullRequestStore(
@@ -291,6 +299,13 @@ export const Sidebar: FC<SidebarProps> = ({
 
   const handleSelectNeedsYouSession = async (sessionId: string) => {
     const target = globalSessions.find((session) => session.id === sessionId)
+    if (target && onSelectAnySession) {
+      onSelectAnySession(target)
+      if (target.workspaceId) {
+        expandWorkspace(target.workspaceId)
+      }
+      return
+    }
     await switchToSession(sessionId)
     onSelectSurface(target?.contextKind === 'global' ? 'chat' : 'code')
     if (target?.workspaceId) {
@@ -366,6 +381,14 @@ export const Sidebar: FC<SidebarProps> = ({
   const handleSelectSpaceAttempt = async (sessionId: string) => {
     const target = sessionLookup.get(sessionId)
     if (!target) return
+
+    if (onSelectAnySession) {
+      onSelectAnySession(target)
+      if (target.workspaceId) {
+        expandWorkspace(target.workspaceId)
+      }
+      return
+    }
 
     await switchToSession(sessionId)
 
@@ -459,8 +482,8 @@ export const Sidebar: FC<SidebarProps> = ({
 
   const handleOpenCodeReview = useCallback(() => {
     onSelectSurface('code')
-    openCodeReview()
-  }, [onSelectSurface, openCodeReview])
+    onOpenCodeReview?.()
+  }, [onOpenCodeReview, onSelectSurface])
 
   const handleArchiveWorkspace = async (workspaceId: string) => {
     if (!activeProject) {
@@ -541,6 +564,11 @@ export const Sidebar: FC<SidebarProps> = ({
   }
 
   const handleSelectProject = async (projectId: string) => {
+    if (onSelectProjectRoot) {
+      void onSelectProjectRoot(projectId)
+      return
+    }
+
     prepareForProject(projectId)
     await setActiveProject(projectId)
   }
@@ -628,18 +656,6 @@ export const Sidebar: FC<SidebarProps> = ({
           >
             <MessageSquareText className="h-4 w-4" />
           </Button>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            className="h-9 w-9"
-            title="Open Code Review"
-            aria-label="Open Code Review"
-            disabled={!activeProject}
-            onClick={handleOpenCodeReview}
-          >
-            <FileCode2 className="h-4 w-4" />
-          </Button>
         </div>
 
         <div className="flex min-h-0 flex-1 flex-col items-center gap-2 py-3">
@@ -716,6 +732,7 @@ export const Sidebar: FC<SidebarProps> = ({
             activeSurface={activeSurface}
             hasActiveProject={!!activeProject}
             iconOnly
+            onOpenCodeReview={handleOpenCodeReview}
             onOpenDialog={openDialog}
           />
           <AppSettingsDialogContainer
@@ -769,6 +786,7 @@ export const Sidebar: FC<SidebarProps> = ({
             activeSurface={activeSurface}
             hasActiveProject={!!activeProject}
             iconOnly
+            onOpenCodeReview={handleOpenCodeReview}
             onOpenDialog={openDialog}
           />
           <AppSettingsDialogContainer
@@ -813,18 +831,6 @@ export const Sidebar: FC<SidebarProps> = ({
             onClick={() => onSelectSurface('chat')}
           >
             <MessageSquareText className="h-4 w-4" />
-          </Button>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            className="h-8 w-8"
-            title="Open Code Review"
-            aria-label="Open Code Review"
-            disabled={!activeProject}
-            onClick={handleOpenCodeReview}
-          >
-            <FileCode2 className="h-4 w-4" />
           </Button>
         </div>
 

@@ -1,0 +1,10 @@
+pre-commit:
+  commands:
+    agent-pre-commit:
+      run: npm run agent:pre-commit
+      stage_fixed: true
+
+pre-push:
+  commands:
+    agent-pre-push:
+      run: npm run agent:pre-push

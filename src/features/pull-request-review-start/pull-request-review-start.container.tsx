@@ -15,6 +15,7 @@ import {
 } from '@/entities/session'
 import { useWorkspaceStore } from '@/entities/workspace'
 import { PullRequestReviewStartDialog } from './pull-request-review-start.presentational'
+import { useFormSubmitShortcut } from '@/shared/lib/use-form-submit-shortcut.pure'
 
 export const PullRequestReviewStartDialogContainer: FC = () => {
   const open = useDialogStore(
@@ -238,6 +239,9 @@ export const PullRequestReviewStartDialogContainer: FC = () => {
     setActiveProject,
     setActiveSession,
   ])
+
+  // Enable cmd+Enter to submit the form
+  useFormSubmitShortcut(open, handleSubmit)
 
   return (
     <PullRequestReviewStartDialog

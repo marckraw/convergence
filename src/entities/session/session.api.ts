@@ -1,6 +1,7 @@
 import type {
   ConversationItem,
   ConversationPatchEvent,
+  InteractionResponse,
   QueuedInputPatchEvent,
   SessionSummary,
   SessionQueuedInput,
@@ -70,12 +71,14 @@ export const sessionApi = {
     attachmentIds?: string[],
     skillSelections?: SkillSelection[],
     deliveryMode?: MidRunInputMode,
+    interactionResponse?: InteractionResponse,
   ): Promise<void> =>
     window.electronAPI.session.sendMessage(id, {
       text,
       attachmentIds,
       skillSelections,
       deliveryMode,
+      interactionResponse,
     }),
 
   approve: (id: string, providerApprovalId?: string): Promise<void> =>

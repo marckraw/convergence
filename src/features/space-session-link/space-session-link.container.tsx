@@ -4,6 +4,7 @@ import { useDialogStore } from '@/entities/dialog'
 import { useSpaceStore, type SpaceAttemptRole } from '@/entities/space'
 import { useSessionStore } from '@/entities/session'
 import { SpaceSessionLinkDialog } from './space-session-link.presentational'
+import { useFormSubmitShortcut } from '@/shared/lib/use-form-submit-shortcut.pure'
 
 export const SpaceSessionLinkDialogContainer: FC = () => {
   const open = useDialogStore((s) => s.openDialog === 'space-session-link')
@@ -136,6 +137,12 @@ export const SpaceSessionLinkDialogContainer: FC = () => {
       setIsDetaching(false)
     },
     [loadAttemptsForSession, session, unlinkAttempt],
+  )
+
+  // Enable cmd+Enter to submit the Create from Session form
+  useFormSubmitShortcut(
+    open && !!session && !!createTitle.trim(),
+    handleCreateFromSession,
   )
 
   return (

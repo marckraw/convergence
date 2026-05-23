@@ -59,6 +59,14 @@ export type PrimarySurface = 'conversation' | 'terminal'
 
 export type SessionContextKind = 'project' | 'global'
 
+export type AttentionRequestKind =
+  | 'approval'
+  | 'question'
+  | 'plan'
+  | 'form'
+  | 'url'
+  | 'input'
+
 export type ProviderKind = 'conversation' | 'shell'
 
 export type NeedsYouDisposition = 'snoozed' | 'acknowledged'
@@ -76,11 +84,14 @@ export interface ProviderEffortOption {
   description?: string
 }
 
+export type ProviderInputModality = 'text' | 'image'
+
 export interface ProviderModelOption {
   id: string
   label: string
   defaultEffort: ReasoningEffort | null
   effortOptions: ProviderEffortOption[]
+  inputModalities?: ProviderInputModality[]
   source?: 'pi-models-json' | 'provider'
 }
 
@@ -94,6 +105,91 @@ export type ConversationItemKind =
   | 'note'
 
 export type ConversationItemState = 'streaming' | 'complete' | 'error'
+
+export interface InteractionChoiceOption {
+  label: string
+  description?: string
+  preview?: string
+}
+
+export interface InteractionQuestion {
+  id: string
+  question: string
+  header: string
+  options: InteractionChoiceOption[]
+  multiSelect: boolean
+}
+
+export type InteractionFormFieldType = 'string' | 'number' | 'boolean'
+
+export interface InteractionFormField {
+  id: string
+  label: string
+  description?: string
+  type: InteractionFormFieldType
+  required: boolean
+  defaultValue?: string | number | boolean
+  multiline?: boolean
+}
+
+export type InteractionRequest =
+  | {
+      kind: 'text'
+      prompt: string
+    }
+  | {
+      kind: 'choice'
+      questions: InteractionQuestion[]
+    }
+  | {
+      kind: 'plan'
+      plan: string
+      planPath?: string
+      allowedPrompts?: string[]
+    }
+  | {
+      kind: 'form'
+      title: string
+      message: string
+      fields: InteractionFormField[]
+    }
+  | {
+      kind: 'url'
+      title: string
+      message: string
+      url: string
+    }
+
+export interface InteractionChoiceResponse {
+  kind: 'choice'
+  answers: Array<{
+    questionId: string
+    values: string[]
+  }>
+}
+
+export interface InteractionPlanResponse {
+  kind: 'plan'
+  decision: 'approve' | 'reject'
+  message?: string
+}
+
+export interface InteractionFormResponse {
+  kind: 'form'
+  action: 'accept' | 'decline'
+  values: Record<string, string | number | boolean>
+}
+
+export interface InteractionUrlResponse {
+  kind: 'url'
+  action: 'accept' | 'decline'
+}
+
+export type InteractionResponse =
+  | InteractionChoiceResponse
+  | InteractionPlanResponse
+  | InteractionFormResponse
+  | InteractionUrlResponse
 
 export interface ConversationItemBase {
   id: string
@@ -143,6 +239,7 @@ export type ConversationItem =
   | (ConversationItemBase & {
       kind: 'input-request'
       prompt: string
+      request?: InteractionRequest
     })
   | (ConversationItemBase & {
       kind: 'note'
@@ -194,6 +291,7 @@ export interface SessionSummary {
   name: string
   status: SessionStatus
   attention: AttentionState
+  attentionRequestKind?: AttentionRequestKind | null
   activity: ActivitySignal
   contextWindow: SessionContextWindow | null
   workingDirectory: string

@@ -21,6 +21,39 @@ const projectContextItem: ProjectContextItem = {
 
 describe('ComposerContainer', () => {
   beforeEach(() => {
+    ;(window as unknown as { electronAPI: unknown }).electronAPI = {
+      providerQuota: {
+        getCodex: vi.fn().mockResolvedValue({
+          providerId: 'codex',
+          status: 'available',
+          source: 'provider-api',
+          planType: 'pro',
+          windows: [
+            {
+              kind: 'five-hour',
+              label: '5 hour usage limit',
+              usedPercent: 13,
+              remainingPercent: 87,
+              windowMinutes: 300,
+              resetsAt: '2026-05-21T15:21:00.000Z',
+            },
+            {
+              kind: 'weekly',
+              label: 'Weekly usage limit',
+              usedPercent: 5,
+              remainingPercent: 95,
+              windowMinutes: 10_080,
+              resetsAt: '2026-05-26T22:00:00.000Z',
+            },
+          ],
+          credits: null,
+          limitReachedType: null,
+          lastCheckedAt: '2026-05-21T12:00:00.000Z',
+          stale: false,
+        }),
+      },
+    }
+
     const loadProviders = vi.fn()
     const createAndStartSession = vi.fn()
     const createAndStartGlobalSession = vi.fn()
@@ -391,6 +424,57 @@ describe('ComposerContainer', () => {
     })
 
     await waitFor(() => expect(loadProviders).toHaveBeenCalledTimes(2))
+  })
+
+  it('shows Codex usage in the composer for Codex provider selections', async () => {
+    const baseProvider = useSessionStore.getState().providers[0]
+    if (!baseProvider) throw new Error('missing base test provider')
+
+    useSessionStore.setState({
+      providers: [
+        {
+          id: 'codex',
+          name: 'Codex',
+          vendorLabel: 'OpenAI',
+          kind: 'conversation',
+          supportsContinuation: true,
+          defaultModelId: 'gpt-5.3-codex',
+          modelOptions: [
+            {
+              id: 'gpt-5.3-codex',
+              label: 'GPT-5.3 Codex',
+              defaultEffort: 'medium',
+              effortOptions: [
+                { id: 'low', label: 'Low' },
+                { id: 'medium', label: 'Medium' },
+              ],
+            },
+          ],
+          attachments: baseProvider.attachments,
+          midRunInput: baseProvider.midRunInput,
+        },
+      ],
+    })
+
+    render(
+      <ComposerContainer
+        context={{
+          kind: 'project',
+          projectId: 'project-1',
+          workspaceId: null,
+          activeSessionId: null,
+        }}
+      />,
+    )
+
+    expect(
+      await screen.findByRole('button', {
+        name: 'Codex usage 87% remaining',
+      }),
+    ).toBeInTheDocument()
+    expect(window.electronAPI.providerQuota.getCodex).toHaveBeenCalledWith(
+      false,
+    )
   })
 
   it('allows follow-up while a supported provider session is running', () => {

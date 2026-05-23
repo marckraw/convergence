@@ -4,6 +4,7 @@ import { toast } from 'sonner'
 import { useDialogStore } from '@/entities/dialog'
 import { useSpaceStore, type Space } from '@/entities/space'
 import { SpaceCreateDialog } from './space-create.presentational'
+import { useFormSubmitShortcut } from '@/shared/lib/use-form-submit-shortcut.pure'
 
 interface SpaceCreateDialogContainerProps {
   onCreated?: (space: Space) => void
@@ -69,6 +70,9 @@ export const SpaceCreateDialogContainer: FC<
       setIsSubmitting(false)
     }
   }, [brief, closeDialog, createSpace, onCreated, title])
+
+  // Enable cmd+Enter to submit the form
+  useFormSubmitShortcut(open, handleSubmit)
 
   return (
     <SpaceCreateDialog

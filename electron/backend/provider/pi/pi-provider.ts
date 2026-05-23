@@ -1,6 +1,9 @@
 import { spawn, type ChildProcess } from 'child_process'
 import { promises as fs } from 'fs'
-import type { SessionDelta } from '../../session/conversation-item.types'
+import type {
+  InteractionResponse,
+  SessionDelta,
+} from '../../session/conversation-item.types'
 import type {
   ActivitySignal,
   Attachment,
@@ -55,6 +58,14 @@ import {
   type PiActivityState,
 } from './pi-activity.pure'
 import {
+  buildPiExtensionUiInputRequest,
+  buildPiExtensionUiResponse,
+  buildPiFireAndForgetNote,
+  isPiExtensionUiDialogMethod,
+  isPiExtensionUiFireAndForgetMethod,
+  type PendingPiExtensionUiRequest,
+} from './pi-extension-ui.pure'
+import {
   buildContinuationRecoveryEntry,
   isMissingContinuationError,
 } from '../continuation-recovery.pure'
@@ -69,6 +80,27 @@ import type { SkillSelection } from '../../skills/skills.types'
 
 function now(): string {
   return new Date().toISOString()
+}
+
+type PiPromptCommand = {
+  type: string
+  message: string
+  streamingBehavior?: string
+  images?: ReturnType<typeof buildPiPromptPayload>['images']
+}
+
+function summarizePiPromptCommand(command: PiPromptCommand): unknown {
+  return {
+    type: command.type,
+    messageLength: command.message.length,
+    streamingBehavior: command.streamingBehavior,
+    imageCount: command.images?.length ?? 0,
+    images: command.images?.map((image) => ({
+      type: image.type,
+      mimeType: image.mimeType,
+      bytes: Buffer.byteLength(image.data, 'base64'),
+    })),
+  }
 }
 
 export type PiEnvironmentResolver = (
@@ -343,6 +375,10 @@ export class PiProvider implements Provider {
     const pendingToolCallArgs = new Map<
       string,
       { name: string; args: string }
+    >()
+    const pendingExtensionUiRequests = new Map<
+      string,
+      PendingPiExtensionUiRequest
     >()
 
     function emitDelta(delta: SessionDelta): void {
@@ -683,16 +719,50 @@ export class PiProvider implements Provider {
 
     function handleExtensionUiRequest(request: PiExtensionUiRequest): void {
       if (stopped || !rpc) return
-      // v1: auto-cancel dialog methods so pi is not left waiting.
-      // Fire-and-forget methods expect no response — ignore.
-      if (
-        request.method === 'select' ||
-        request.method === 'confirm' ||
-        request.method === 'input' ||
-        request.method === 'editor'
-      ) {
-        rpc.sendExtensionUiResponse(request.id, { cancelled: true })
+      const inputRequest = buildPiExtensionUiInputRequest(request)
+      if (inputRequest) {
+        pendingExtensionUiRequests.set(request.id, inputRequest.pending)
+        sessionEmitter.addInputRequest({
+          prompt: inputRequest.prompt,
+          request: inputRequest.request,
+          providerItemId: request.id,
+          providerEventType: `extension-ui:${request.method}`,
+        })
+        setAttention('needs-input')
+        return
       }
+
+      if (isPiExtensionUiFireAndForgetMethod(request.method)) {
+        const note = buildPiFireAndForgetNote(request)
+        if (note) {
+          sessionEmitter.addNote({
+            text: note.text,
+            level: note.level,
+            providerItemId: request.id,
+            providerEventType: `extension-ui:${request.method}`,
+          })
+        }
+        return
+      }
+
+      if (isPiExtensionUiDialogMethod(request.method)) {
+        rpc.sendExtensionUiResponse(request.id, { cancelled: true })
+        sessionEmitter.addNote({
+          text: `Pi extension UI request '${request.method}' could not be rendered and was cancelled.`,
+          level: 'warning',
+          providerItemId: request.id,
+          providerEventType: `extension-ui:${request.method}`,
+        })
+        return
+      }
+
+      rpc.sendExtensionUiResponse(request.id, { cancelled: true })
+      sessionEmitter.addNote({
+        text: `Unsupported Pi extension UI method '${request.method}' was cancelled.`,
+        level: 'warning',
+        providerItemId: request.id,
+        providerEventType: `extension-ui:${request.method}`,
+      })
     }
 
     async function loadPiParts(
@@ -792,12 +862,7 @@ export class PiProvider implements Provider {
 
       const isMidRunInput =
         deliveryMode === 'follow-up' || deliveryMode === 'steer'
-      const command: {
-        type: string
-        message: string
-        streamingBehavior?: string
-        images?: ReturnType<typeof buildPiPromptPayload>['images']
-      } = {
+      const command: PiPromptCommand = {
         type:
           deliveryMode === 'follow-up'
             ? 'follow_up'
@@ -810,6 +875,12 @@ export class PiProvider implements Provider {
         command.streamingBehavior = 'steer'
       }
       if (images && images.length > 0) command.images = images
+
+      recordDebug('request', {
+        direction: 'out',
+        method: command.type,
+        payload: summarizePiPromptCommand(command),
+      })
 
       rpc.request(command).then(
         (response) => {
@@ -1208,6 +1279,22 @@ export class PiProvider implements Provider {
             skillSelections,
             deliveryMode,
           )
+          return
+        }
+        const pendingExtensionUiRequest = pendingExtensionUiRequests
+          .entries()
+          .next().value as [string, PendingPiExtensionUiRequest] | undefined
+        if (pendingExtensionUiRequest && deliveryMode === 'answer') {
+          const [requestId, pending] = pendingExtensionUiRequest
+          const interactionResponse = options?.interactionResponse as
+            | InteractionResponse
+            | undefined
+          rpc.sendExtensionUiResponse(
+            requestId,
+            buildPiExtensionUiResponse(pending, interactionResponse, text),
+          )
+          pendingExtensionUiRequests.delete(requestId)
+          setAttention('none')
           return
         }
         void sendPiTurn(text, attachments, skillSelections)

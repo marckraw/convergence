@@ -48,6 +48,7 @@ import { SkillsService } from '../backend/skills/skills.service'
 import { PromptsService } from '../backend/prompts/prompts.service'
 import { AppSettingsService } from '../backend/app-settings/app-settings.service'
 import { AnalyticsService } from '../backend/analytics/analytics.service'
+import { CodexQuotaService } from '../backend/provider-quota/codex-quota.service'
 import { AttachmentsService } from '../backend/attachments/attachments.service'
 import { NotificationsService } from '../backend/notifications/notifications.service'
 import { NotificationsStateService } from '../backend/notifications/notifications.state'
@@ -93,6 +94,7 @@ import { shouldOpenInSystemBrowser } from './external-links.pure'
 import { resolveAutoUpdater } from './auto-updater-module.pure'
 import { getWindowAppearanceOptions } from './window-effects.pure'
 import { formatStartupFailure } from './startup-failure.pure'
+import { resolveUserDataPath } from './user-data-path.pure'
 
 function createWindow(
   onClose?: () => void,
@@ -172,6 +174,14 @@ async function startApp(): Promise<void> {
 
   let currentMainWindow: BrowserWindow | null = null
 
+  app.setPath(
+    'userData',
+    resolveUserDataPath({
+      defaultPath: app.getPath('userData'),
+      override: process.env.CONVERGENCE_USER_DATA_DIR,
+    }),
+  )
+
   const dbPath = join(app.getPath('userData'), 'convergence.db')
   const workspacesRoot = join(app.getPath('userData'), 'workspaces')
   const attachmentsRoot = join(app.getPath('userData'), 'attachments')
@@ -198,6 +208,7 @@ async function startApp(): Promise<void> {
   const providerRegistry = new ProviderRegistry()
   const openRouterCredentials = new OpenRouterCredentialsService()
   const taskProgressService = new TaskProgressService(broadcastTaskProgress)
+  const codexQuotaService = new CodexQuotaService()
   const sessionService = new SessionService(
     db,
     providerRegistry,
@@ -271,7 +282,12 @@ async function startApp(): Promise<void> {
     for (const p of nextDetected) {
       if (p.id === 'claude-code') {
         providerRegistry.register(
-          new ClaudeCodeProvider(p.binaryPath, taskProgressService, debugSink),
+          new ClaudeCodeProvider(
+            p.binaryPath,
+            taskProgressService,
+            debugSink,
+            p.version,
+          ),
         )
       } else if (p.id === 'codex') {
         providerRegistry.register(
@@ -528,6 +544,9 @@ async function startApp(): Promise<void> {
         }
         return result
       },
+    },
+    {
+      codex: codexQuotaService,
     },
   )
 

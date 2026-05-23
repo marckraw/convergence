@@ -1,4 +1,11 @@
-import type { FC, ClipboardEvent, DragEvent, KeyboardEvent, Ref } from 'react'
+import type {
+  FC,
+  ClipboardEvent,
+  DragEvent,
+  KeyboardEvent,
+  ReactNode,
+  Ref,
+} from 'react'
 import type {
   MidRunInputMode,
   ProviderInfo,
@@ -28,6 +35,7 @@ interface ComposerProps {
   onProviderChange: (id: string) => void
   onModelChange: (id: string, providerId?: string) => void
   onEffortChange: (id: ReasoningEffort | '') => void
+  codexUsagePill?: ReactNode
   deliveryMode: MidRunInputMode
   deliveryModes: MidRunInputMode[]
   onDeliveryModeChange: (mode: MidRunInputMode) => void
@@ -85,6 +93,7 @@ export const Composer: FC<ComposerProps> = ({
   onProviderChange,
   onModelChange,
   onEffortChange,
+  codexUsagePill,
   deliveryMode,
   deliveryModes,
   onDeliveryModeChange,
@@ -378,6 +387,7 @@ export const Composer: FC<ComposerProps> = ({
                 className="px-2 text-xs text-muted-foreground hover:text-foreground"
               />
             )}
+            {codexUsagePill}
             {visibleDeliveryModes.length > 1 ? (
               <div
                 className="flex h-7 items-center rounded-md border border-border bg-background p-0.5"

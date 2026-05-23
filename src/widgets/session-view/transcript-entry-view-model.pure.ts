@@ -37,6 +37,7 @@ export interface TranscriptEntryViewModel {
   missingAttachmentIds: string[]
   toolPreview: string | null
   actionableApproval: boolean
+  actionableInput: boolean
   uiResponseArtifactTitle: string | null
 }
 
@@ -45,6 +46,7 @@ export interface BuildTranscriptEntryViewModelInput {
   turnStartedAt?: string | null
   resolvedAttachmentsById?: Record<string, Attachment>
   actionableApproval?: boolean
+  actionableInput?: boolean
   injectedContextText?: string | null
   timingOptions?: ConversationItemTimingOptions
 }
@@ -54,6 +56,7 @@ export function buildTranscriptEntryViewModel({
   turnStartedAt = null,
   resolvedAttachmentsById = {},
   actionableApproval = false,
+  actionableInput = false,
   injectedContextText = null,
   timingOptions = {},
 }: BuildTranscriptEntryViewModelInput): TranscriptEntryViewModel {
@@ -76,6 +79,7 @@ export function buildTranscriptEntryViewModel({
     missingAttachmentIds,
     toolPreview: getToolPreviewForItem(item),
     actionableApproval: item.kind === 'approval-request' && actionableApproval,
+    actionableInput: item.kind === 'input-request' && actionableInput,
     uiResponseArtifactTitle: getUiResponseArtifactTitle(item),
   }
 }
@@ -123,6 +127,15 @@ export function getConversationItemCopyText(item: ConversationItem): string {
     case 'approval-request':
       return item.description
     case 'input-request':
+      if (item.request?.kind === 'plan') {
+        return item.request.plan
+      }
+      if (item.request?.kind === 'form') {
+        return item.request.message
+      }
+      if (item.request?.kind === 'url') {
+        return `${item.request.message}\n${item.request.url}`
+      }
       return item.prompt
     case 'note':
       return item.text

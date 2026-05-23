@@ -29,6 +29,7 @@ import {
   Trash2,
   Undo2,
 } from 'lucide-react'
+import { useFormSubmitShortcut } from '@/shared/lib/use-form-submit-shortcut.pure'
 
 interface ProjectTreeProps {
   baseBranchName: string | null
@@ -94,6 +95,9 @@ export const ProjectTree: FC<ProjectTreeProps> = ({
     setRenamingSessionId(null)
     setRenameDraft('')
   }
+
+  // Enable cmd+Enter to submit the rename form
+  useFormSubmitShortcut(renamingSessionId !== null, submitRename)
 
   const cancelRename = () => {
     setRenamingSessionId(null)

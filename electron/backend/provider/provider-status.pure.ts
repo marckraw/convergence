@@ -66,6 +66,30 @@ export function extractSemver(value: string | null): string | null {
   return value?.match(/\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?/)?.[0] ?? null
 }
 
+function isLikelyProviderVersionLine(line: string): boolean {
+  return (
+    extractSemver(line) !== null &&
+    !line.includes('/') &&
+    !line.includes('\\') &&
+    !line.startsWith('at ') &&
+    !line.startsWith('file:') &&
+    !line.startsWith('Node.js ')
+  )
+}
+
+export function selectProviderVersionOutput(
+  ...outputs: Array<string | null | undefined>
+): string | null {
+  const lines = outputs.flatMap((output) =>
+    (output ?? '')
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter(Boolean),
+  )
+
+  return lines.find(isLikelyProviderVersionLine) ?? null
+}
+
 function parseSemver(value: string | null): SemverParts | null {
   const version = extractSemver(value)
   if (!version) return null

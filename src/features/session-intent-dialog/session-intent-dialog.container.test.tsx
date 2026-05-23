@@ -81,8 +81,32 @@ describe('SessionIntentDialogContainer', () => {
     expect(beginSessionDraftMock).toHaveBeenCalledWith('ws-1')
   })
 
+  it('picking Conversation clears the active session before routed draft navigation', () => {
+    const close = vi.fn()
+    const onBeginCodeSessionDraft = vi.fn()
+    useDialogStore.setState({
+      openDialog: 'session-intent',
+      payload: { workspaceId: null },
+      open: vi.fn(),
+      close,
+    })
+
+    render(
+      <SessionIntentDialogContainer
+        onBeginCodeSessionDraft={onBeginCodeSessionDraft}
+      />,
+    )
+
+    fireEvent.click(screen.getByTestId('session-intent-conversation'))
+
+    expect(close).toHaveBeenCalled()
+    expect(beginSessionDraftMock).toHaveBeenCalledWith(null)
+    expect(onBeginCodeSessionDraft).toHaveBeenCalledWith(null)
+  })
+
   it('picking Terminal creates a shell session in the payload workspace, with a name derived from the branch, and closes the dialog', async () => {
     const close = vi.fn()
+    const onSelectCodeSession = vi.fn()
     useDialogStore.setState({
       openDialog: 'session-intent',
       payload: { workspaceId: 'ws-1' },
@@ -90,7 +114,11 @@ describe('SessionIntentDialogContainer', () => {
       close,
     })
 
-    render(<SessionIntentDialogContainer />)
+    render(
+      <SessionIntentDialogContainer
+        onSelectCodeSession={onSelectCodeSession}
+      />,
+    )
 
     fireEvent.click(screen.getByTestId('session-intent-terminal'))
 
@@ -105,6 +133,7 @@ describe('SessionIntentDialogContainer', () => {
     await waitFor(() => {
       expect(close).toHaveBeenCalled()
     })
+    expect(onSelectCodeSession).toHaveBeenCalledWith('new-session')
   })
 
   it('picking Terminal at project root passes null workspaceId and a plain "Terminal" name', async () => {

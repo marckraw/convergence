@@ -1,5 +1,9 @@
 import { useMemo, useState, type FC, type ReactNode } from 'react'
-import type { ConversationItem, Session } from '@/entities/session'
+import type {
+  ConversationItem,
+  InteractionResponse,
+  Session,
+} from '@/entities/session'
 import {
   artifactFromConversationItem,
   type UiResponseArtifact,
@@ -18,6 +22,11 @@ interface SessionConversationSurfaceProps {
   composerDisabledReason?: string | null
   onApprove: (sessionId: string, providerApprovalId?: string) => void
   onDeny: (sessionId: string, providerApprovalId?: string) => void
+  onInputAnswer: (
+    sessionId: string,
+    response: InteractionResponse,
+    displayText: string,
+  ) => void
 }
 
 export const SessionConversationSurface: FC<
@@ -29,6 +38,7 @@ export const SessionConversationSurface: FC<
   composerDisabledReason = null,
   onApprove,
   onDeny,
+  onInputAnswer,
 }) => {
   const [selectedArtifactItemId, setSelectedArtifactItemId] = useState<
     string | null
@@ -55,6 +65,7 @@ export const SessionConversationSurface: FC<
     onUiResponseArtifactSelect: setSelectedArtifactItemId,
     onApprove,
     onDeny,
+    onInputAnswer,
   })
 
   if (!artifact) {
@@ -86,6 +97,11 @@ interface RenderConversationColumnInput {
   onUiResponseArtifactSelect: (conversationItemId: string) => void
   onApprove: (sessionId: string, providerApprovalId?: string) => void
   onDeny: (sessionId: string, providerApprovalId?: string) => void
+  onInputAnswer: (
+    sessionId: string,
+    response: InteractionResponse,
+    displayText: string,
+  ) => void
 }
 
 function renderConversationColumn({
@@ -97,6 +113,7 @@ function renderConversationColumn({
   onUiResponseArtifactSelect,
   onApprove,
   onDeny,
+  onInputAnswer,
 }: RenderConversationColumnInput): ReactNode {
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -107,6 +124,7 @@ function renderConversationColumn({
         onUiResponseArtifactSelect={onUiResponseArtifactSelect}
         onApprove={onApprove}
         onDeny={onDeny}
+        onInputAnswer={onInputAnswer}
       />
 
       <div className="shrink-0 px-4 py-3">

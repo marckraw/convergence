@@ -23,6 +23,40 @@ if (
   Element.prototype.scrollIntoView = function scrollIntoView() {}
 }
 
+// Radix FocusScope dispatches CustomEvent instances. In Vitest/jsdom, the
+// Node globals can differ from window event constructors, causing dispatchEvent
+// to reject the event after async focus timers fire.
+if (
+  typeof window !== 'undefined' &&
+  typeof window.Event !== 'undefined' &&
+  globalThis.Event !== window.Event
+) {
+  Object.defineProperty(globalThis, 'Event', {
+    value: window.Event,
+    configurable: true,
+    writable: true,
+  })
+}
+
+if (
+  typeof window !== 'undefined' &&
+  typeof window.CustomEvent !== 'undefined' &&
+  globalThis.CustomEvent !== window.CustomEvent
+) {
+  Object.defineProperty(globalThis, 'CustomEvent', {
+    value: window.CustomEvent,
+    configurable: true,
+    writable: true,
+  })
+}
+
+// TanStack Router calls scrollTo during route commits. jsdom's implementation
+// reports "not implemented", and route tests only need the navigation state
+// change.
+if (typeof window !== 'undefined') {
+  window.scrollTo = function scrollTo() {}
+}
+
 // Pin navigator.platform so shortcut tests exercise the mac branch by default.
 if (typeof navigator !== 'undefined') {
   try {

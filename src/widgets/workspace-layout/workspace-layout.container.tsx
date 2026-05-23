@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import type { FC, ReactNode } from 'react'
-import { useCodeReviewStore } from '@/entities/code-review'
+import type { CodeReviewMode } from '@/entities/code-review'
 import { useSessionStore } from '@/entities/session'
 import { useTerminalStore } from '@/entities/terminal'
 import { CodeReviewSurface } from '@/widgets/code-review-surface'
@@ -16,7 +16,33 @@ function isEditableTarget(target: EventTarget | null): boolean {
   return target.isContentEditable
 }
 
-export const WorkspaceLayoutContainer: FC = () => {
+interface WorkspaceLayoutContainerProps {
+  codeReviewActive?: boolean
+  codeReviewTargetId?: string | null
+  codeReviewMode?: CodeReviewMode
+  codeReviewFilePath?: string | null
+  onOpenCodeReview?: (search?: {
+    targetId?: string | null
+    mode?: CodeReviewMode
+    file?: string | null
+  }) => void
+  onCodeReviewSearchChange?: (search: {
+    targetId?: string | null
+    mode?: CodeReviewMode
+    file?: string | null
+  }) => void
+  onCloseCodeReview?: () => void
+}
+
+export const WorkspaceLayoutContainer: FC<WorkspaceLayoutContainerProps> = ({
+  codeReviewActive = false,
+  codeReviewTargetId = null,
+  codeReviewMode = 'working-tree',
+  codeReviewFilePath = null,
+  onOpenCodeReview,
+  onCodeReviewSearchChange,
+  onCloseCodeReview,
+}) => {
   const primarySurface = useSessionStore((s) => {
     if (!s.activeSessionId) return 'conversation' as const
     const session = s.sessions.find((entry) => entry.id === s.activeSessionId)
@@ -28,7 +54,6 @@ export const WorkspaceLayoutContainer: FC = () => {
       ? (s.dockPlacementBySessionId[activeSessionId] ?? 'bottom')
       : 'bottom',
   )
-  const reviewOpen = useCodeReviewStore((s) => s.isReviewOpen)
 
   // The conversation dock is an opt-in companion to terminal-primary
   // sessions. Default hidden per spec; Cmd+J reveals/collapses it.
@@ -61,14 +86,22 @@ export const WorkspaceLayoutContainer: FC = () => {
   let mainSlot: ReactNode
   let dockSlot: ReactNode | null
 
-  if (reviewOpen) {
-    mainSlot = <CodeReviewSurface />
+  if (codeReviewActive) {
+    mainSlot = (
+      <CodeReviewSurface
+        routeTargetId={codeReviewTargetId}
+        routeMode={codeReviewMode}
+        routeFilePath={codeReviewFilePath}
+        onRouteSearchChange={onCodeReviewSearchChange}
+        onClose={onCloseCodeReview}
+      />
+    )
     dockSlot = null
   } else if (primarySurface === 'terminal') {
     mainSlot = <TerminalDock mode="main" />
     dockSlot = <ConversationDockPlaceholder />
   } else {
-    mainSlot = <SessionView />
+    mainSlot = <SessionView onOpenCodeReview={onOpenCodeReview} />
     dockSlot = <TerminalDock />
   }
 

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, useCallback, useMemo } from 'react'
 import type { FC, MouseEvent as ReactMouseEvent } from 'react'
 import { useProjectStore } from '@/entities/project'
+import type { CodeReviewMode } from '@/entities/code-review'
 import {
   formatActivityLabel,
   useSessionStore,
@@ -59,7 +60,15 @@ const CHANGED_FILES_COMPACT_WIDTH = 320
 const CHANGED_FILES_DEFAULT_EXPANDED_WIDTH = 720
 type ChangedFilesMode = 'docked' | 'overlay'
 
-export const SessionView: FC = () => {
+interface SessionViewProps {
+  onOpenCodeReview?: (search?: {
+    targetId?: string | null
+    mode?: CodeReviewMode
+    file?: string | null
+  }) => void
+}
+
+export const SessionView: FC<SessionViewProps> = ({ onOpenCodeReview }) => {
   const activeProject = useProjectStore((s) => s.activeProject)
   const projects = useProjectStore((s) => s.projects)
   const workspaces = useWorkspaceStore((s) => s.globalWorkspaces)
@@ -90,6 +99,7 @@ export const SessionView: FC = () => {
   const [debugDrawerOpen, setDebugDrawerOpen] = useState(false)
   const approveSession = useSessionStore((s) => s.approveSession)
   const denySession = useSessionStore((s) => s.denySession)
+  const sendMessageToSession = useSessionStore((s) => s.sendMessageToSession)
   const stopSession = useSessionStore((s) => s.stopSession)
   const hydratePaneTree = useTerminalStore((s) => s.hydratePaneTree)
   const closeAllTerminals = useTerminalStore((s) => s.closeAllForSession)
@@ -407,6 +417,7 @@ export const SessionView: FC = () => {
         )
       }
       onToggleExpanded={handleToggleExpanded}
+      onOpenCodeReview={onOpenCodeReview}
     />
   )
 
@@ -677,6 +688,16 @@ export const SessionView: FC = () => {
           }
           onApprove={approveSession}
           onDeny={denySession}
+          onInputAnswer={(sessionId, response, displayText) => {
+            void sendMessageToSession(
+              sessionId,
+              displayText,
+              undefined,
+              undefined,
+              'answer',
+              response,
+            )
+          }}
         />
       </div>
 

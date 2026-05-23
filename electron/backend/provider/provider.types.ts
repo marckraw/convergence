@@ -2,7 +2,10 @@ import type {
   Attachment,
   ProviderAttachmentCapability,
 } from '../attachments/attachments.types'
-import type { SessionDelta } from '../session/conversation-item.types'
+import type {
+  InteractionResponse,
+  SessionDelta,
+} from '../session/conversation-item.types'
 import type {
   SkillActivationConfirmation,
   SkillCatalogSource,
@@ -101,11 +104,14 @@ export interface ProviderEffortOption {
   description?: string
 }
 
+export type ProviderInputModality = 'text' | 'image'
+
 export interface ProviderModelOption {
   id: string
   label: string
   defaultEffort: ReasoningEffort | null
   effortOptions: ProviderEffortOption[]
+  inputModalities?: ProviderInputModality[]
   source?: 'pi-models-json' | 'provider'
 }
 
@@ -240,6 +246,7 @@ export interface SessionHandle {
       deliveryMode: MidRunInputMode
       queuedInputId?: string | null
       expectedProviderTurnId?: string | null
+      interactionResponse?: InteractionResponse
     },
   ) => void
   approve: (providerApprovalId?: string) => void

@@ -324,6 +324,24 @@ describe('formatTitleAndBody', () => {
       title: 'Refactor auth needs input',
       body: 'Convergence',
     })
+    expect(
+      formatTitleAndBody({
+        ...makeEvent('agent.needs_input'),
+        attentionRequestKind: 'plan',
+      }),
+    ).toEqual({
+      title: 'Refactor auth has a plan to review',
+      body: 'Convergence',
+    })
+    expect(
+      formatTitleAndBody({
+        ...makeEvent('agent.needs_input'),
+        attentionRequestKind: 'form',
+      }),
+    ).toEqual({
+      title: 'Refactor auth needs form input',
+      body: 'Convergence',
+    })
     expect(formatTitleAndBody(makeEvent('agent.needs_approval'))).toEqual({
       title: 'Refactor auth needs approval',
       body: 'Convergence',

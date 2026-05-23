@@ -2,6 +2,7 @@ import { create } from 'zustand'
 import type {
   ConversationItem,
   ConversationPatchEvent,
+  InteractionResponse,
   MidRunInputMode,
   ProviderInfo,
   QueuedInputPatchEvent,
@@ -85,6 +86,7 @@ interface SessionActions {
     attachmentIds?: string[],
     skillSelections?: SkillSelection[],
     deliveryMode?: MidRunInputMode,
+    interactionResponse?: InteractionResponse,
   ) => Promise<void>
   stopSession: (id: string) => Promise<void>
   archiveSession: (id: string) => Promise<void>
@@ -588,6 +590,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     attachmentIds?: string[],
     skillSelections?: SkillSelection[],
     deliveryMode?: MidRunInputMode,
+    interactionResponse?: InteractionResponse,
   ) => {
     set({ error: null })
     try {
@@ -597,6 +600,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
         attachmentIds,
         skillSelections,
         deliveryMode,
+        interactionResponse,
       )
     } catch (err) {
       set({

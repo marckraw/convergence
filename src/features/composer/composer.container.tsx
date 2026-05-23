@@ -11,6 +11,10 @@ import {
 import { useAppSettingsStore } from '@/entities/app-settings'
 import { useDialogStore } from '@/entities/dialog'
 import {
+  providerQuotaApi,
+  type ProviderQuotaSnapshot,
+} from '@/entities/provider-quota'
+import {
   attachmentApi,
   useAttachmentStore,
   AttachmentPreviewContainer,
@@ -31,12 +35,17 @@ import {
   type ProjectContextItem,
 } from '@/entities/project-context'
 import { Composer } from './composer.presentational'
-import { validateAttachmentsAgainstCapability } from './attachment-capability.pure'
+import {
+  resolveAttachmentCapabilityForModel,
+  validateAttachmentsAgainstCapability,
+} from './attachment-capability.pure'
 import {
   filterComposerSkills,
   filterSelectionsForProvider,
 } from './composer-skill-picker.pure'
 import { resolveMidRunInputPolicy } from './mid-run-input.pure'
+import { CodexUsagePillContainer } from './codex-usage-pill.container'
+import { shouldShowCodexUsagePill } from './codex-usage-pill.pure'
 import { Button } from '@/shared/ui/button'
 import { X } from 'lucide-react'
 
@@ -149,6 +158,9 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
   const [selectedSkills, setSelectedSkills] = useState<SkillSelection[]>([])
   const [selectedContextIds, setSelectedContextIds] = useState<string[]>([])
   const [isDragging, setIsDragging] = useState(false)
+  const [codexUsageSnapshot, setCodexUsageSnapshot] =
+    useState<ProviderQuotaSnapshot | null>(null)
+  const [codexUsageLoading, setCodexUsageLoading] = useState(false)
   const dragDepth = useRef(0)
   const providers = useSessionStore((s) => s.providers)
   const openDialog = useDialogStore((s) => s.open)
@@ -308,6 +320,7 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
     activeSession?.effort ?? (effortId || null),
     activeSession ? undefined : storedDefaults,
   )
+  const showCodexUsagePill = shouldShowCodexUsagePill(selection)
   const midRunPolicy = useMemo(
     () =>
       resolveMidRunInputPolicy({
@@ -336,7 +349,10 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
   const rejections = draft?.rejections ?? []
   const ingestInFlight = draft?.ingestInFlight ?? false
 
-  const capability = selection.provider?.attachments ?? null
+  const capability = resolveAttachmentCapabilityForModel(
+    selection.provider?.attachments,
+    selection.model,
+  )
   const capabilityResult = useMemo(
     () => validateAttachmentsAgainstCapability(attachments, capability),
     [attachments, capability],
@@ -408,6 +424,43 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
     selection.modelId,
     selection.effortId,
   ])
+
+  const loadCodexUsage = useCallback(
+    async (forceRefresh = false) => {
+      if (!showCodexUsagePill) return
+      setCodexUsageLoading(true)
+      try {
+        setCodexUsageSnapshot(await providerQuotaApi.getCodex(forceRefresh))
+      } catch (err) {
+        setCodexUsageSnapshot({
+          providerId: 'codex',
+          status: 'unavailable',
+          source: 'provider-api',
+          reason:
+            err instanceof Error ? err.message : 'Codex usage is unavailable.',
+          lastCheckedAt: new Date().toISOString(),
+          stale: false,
+        })
+      } finally {
+        setCodexUsageLoading(false)
+      }
+    },
+    [showCodexUsagePill],
+  )
+
+  useEffect(() => {
+    if (!showCodexUsagePill) {
+      setCodexUsageSnapshot(null)
+      setCodexUsageLoading(false)
+      return undefined
+    }
+
+    void loadCodexUsage(false)
+    const intervalId = window.setInterval(() => {
+      void loadCodexUsage(false)
+    }, 120_000)
+    return () => window.clearInterval(intervalId)
+  }, [loadCodexUsage, showCodexUsagePill])
 
   useEffect(() => {
     if (rejections.length > 0) {
@@ -692,6 +745,10 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
     openDialog('skills-browser')
   }, [openDialog])
 
+  const handleCodexUsageSettingsOpen = useCallback(() => {
+    openDialog('app-settings', { appSettingsSection: 'usage' })
+  }, [openDialog])
+
   return (
     <>
       <Composer
@@ -703,6 +760,16 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
         onProviderChange={handleProviderChange}
         onModelChange={handleModelChange}
         onEffortChange={setEffortId}
+        codexUsagePill={
+          showCodexUsagePill ? (
+            <CodexUsagePillContainer
+              snapshot={codexUsageSnapshot}
+              isLoading={codexUsageLoading}
+              onRefresh={() => void loadCodexUsage(true)}
+              onOpenSettings={handleCodexUsageSettingsOpen}
+            />
+          ) : null
+        }
         deliveryMode={deliveryMode}
         deliveryModes={midRunPolicy.availableModes}
         onDeliveryModeChange={setDeliveryMode}

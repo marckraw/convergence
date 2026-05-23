@@ -1,5 +1,66 @@
 # convergence
 
+## 0.37.19
+
+### Patch Changes
+
+- a89c55d: Fix provider update detection so Pi, Codex, and Claude Code can compare the installed CLI version against the latest npm version when version output is emitted on stderr or mixed with other CLI output.
+
+## 0.37.18
+
+### Patch Changes
+
+- 32e8abc: Respect Pi model image support metadata, add safe outbound image diagnostics, and include local attachment paths so Pi can inspect files through its read tool when native image transport is unreliable.
+
+## 0.37.17
+
+### Patch Changes
+
+- 7351bee: Show Codex usage limits in Settings and add a composer quota pill for Codex-backed model selections.
+
+## 0.37.16
+
+### Patch Changes
+
+- 8b574ec: Fix starting a conversation session while a terminal-primary session is open so the main view switches to the conversation composer immediately.
+
+## 0.37.15
+
+### Patch Changes
+
+- 0d01a42: Keep project session draft and status-bar project navigation aligned with routed main views so creating a new root conversation or switching projects from the status bar no longer snaps back to the previous session.
+
+## 0.37.14
+
+### Patch Changes
+
+- 512d631: Harden structured interaction request labels, notifications, and docs.
+- 13f22de: Add structured provider interaction requests so Codex choice questions can be answered directly from the conversation transcript.
+- 0471809: Harden provider interaction request answers for mixed Codex prompts, unsupported MCP form schemas, and declining required forms.
+- 45e7d49: Handle Pi extension UI dialog requests in the session transcript.
+- a9da86d: Add Claude Code ExitPlanMode handling so deferred plans can be approved or rejected from the transcript.
+- 49682a9: Add structured Codex MCP elicitation handling for form and URL requests.
+- 45713b4: Add Claude Code AskUserQuestion handling so deferred choice prompts can be answered from the Convergence transcript.
+
+## 0.37.13
+
+### Patch Changes
+
+- a38948a: Introduce route-driven Main Views for Code Sessions, Chat Sessions, Spaces, and Code Review.
+- 4611319: Keep routed Code and Chat surface switching synchronized with active session routes and avoid duplicate Code Review route/store updates.
+
+## 0.37.12
+
+### Patch Changes
+
+- ba7197b: lefthook pre-commit hook management
+
+## 0.37.11
+
+### Patch Changes
+
+- 44fc4cf: feat: add cmd+Enter shortcut to all form submissions
+
 ## 0.37.10
 
 ### Patch Changes

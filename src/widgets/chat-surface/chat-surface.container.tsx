@@ -34,6 +34,7 @@ interface ChatSurfaceProps {
   onBeginSpaceAttempt?: (spaceId: string) => void
   onCancelSpaceAttempt?: () => void
   onSpaceDeleted?: (spaceId: string) => void
+  onOpenSession?: (session: SessionSummary) => void
 }
 
 const EMPTY_SPACE_SOURCES: SpaceSource[] = []
@@ -52,6 +53,7 @@ export const ChatSurface: FC<ChatSurfaceProps> = ({
   onBeginSpaceAttempt,
   onCancelSpaceAttempt,
   onSpaceDeleted,
+  onOpenSession,
 }) => {
   const sessions = useSessionStore((state) => state.globalChatSessions)
   const globalSessions = useSessionStore((state) => state.globalSessions)
@@ -90,6 +92,9 @@ export const ChatSurface: FC<ChatSurfaceProps> = ({
   )
   const approveSession = useSessionStore((state) => state.approveSession)
   const denySession = useSessionStore((state) => state.denySession)
+  const sendMessageToSession = useSessionStore(
+    (state) => state.sendMessageToSession,
+  )
   const stopSession = useSessionStore((state) => state.stopSession)
   const deleteSession = useSessionStore((state) => state.deleteSession)
   const loadGlobalSessions = useSessionStore(
@@ -224,6 +229,11 @@ export const ChatSurface: FC<ChatSurfaceProps> = ({
       const target = sessionLookup.get(sessionId)
       if (!target) return
 
+      if (onOpenSession) {
+        onOpenSession(target)
+        return
+      }
+
       await switchToSession(sessionId)
 
       if (target.contextKind === 'global') {
@@ -234,7 +244,13 @@ export const ChatSurface: FC<ChatSurfaceProps> = ({
       setActiveSurface('code')
       setActiveSession(sessionId)
     },
-    [sessionLookup, setActiveGlobalSession, setActiveSession, setActiveSurface],
+    [
+      onOpenSession,
+      sessionLookup,
+      setActiveGlobalSession,
+      setActiveSession,
+      setActiveSurface,
+    ],
   )
 
   const handleAddSources = useCallback(async () => {
@@ -621,6 +637,16 @@ export const ChatSurface: FC<ChatSurfaceProps> = ({
         composerContext={{ kind: 'global', activeSessionId: session.id }}
         onApprove={approveSession}
         onDeny={denySession}
+        onInputAnswer={(sessionId, response, displayText) => {
+          void sendMessageToSession(
+            sessionId,
+            displayText,
+            undefined,
+            undefined,
+            'answer',
+            response,
+          )
+        }}
       />
     </div>
   )

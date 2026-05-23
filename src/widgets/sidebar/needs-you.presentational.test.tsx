@@ -61,6 +61,18 @@ describe('NeedsYou', () => {
     expect(
       buildNeedsYouSummary(
         makeSession({
+          id: 'session-plan',
+          name: 'Plan',
+          status: 'running',
+          attention: 'needs-input',
+          attentionRequestKind: 'plan',
+        }),
+      )?.summary,
+    ).toBe('Plan review needed')
+
+    expect(
+      buildNeedsYouSummary(
+        makeSession({
           id: 'session-3',
           name: 'Finished',
           status: 'completed',

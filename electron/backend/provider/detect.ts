@@ -5,6 +5,7 @@ import type { ProviderInstallInfo, ProviderStatusInfo } from './provider.types'
 import {
   buildProviderStatus,
   getKnownProviders,
+  selectProviderVersionOutput,
   type KnownProvider,
 } from './provider-status.pure'
 import { fetchNpmLatestVersion } from './npm-registry'
@@ -30,25 +31,37 @@ function which(binary: string): Promise<string | null> {
 
 function getVersion(binaryPath: string): Promise<string | null> {
   return new Promise((resolve) => {
-    execFile(binaryPath, ['--version'], { timeout: 5_000 }, (error, stdout) => {
-      if (error || !stdout.trim()) {
-        resolve(null)
-      } else {
-        resolve(stdout.trim().split('\n')[0])
-      }
-    })
+    execFile(
+      binaryPath,
+      ['--version'],
+      { timeout: 5_000 },
+      (_error, stdout, stderr) => {
+        const versionOutput = selectProviderVersionOutput(stdout, stderr)
+        if (!versionOutput) {
+          resolve(null)
+        } else {
+          resolve(versionOutput)
+        }
+      },
+    )
   })
 }
 
 function getNodeVersion(nodePath: string): Promise<string | null> {
   return new Promise((resolve) => {
-    execFile(nodePath, ['--version'], { timeout: 5_000 }, (error, stdout) => {
-      if (error || !stdout.trim()) {
-        resolve(null)
-      } else {
-        resolve(stdout.trim().split('\n')[0])
-      }
-    })
+    execFile(
+      nodePath,
+      ['--version'],
+      { timeout: 5_000 },
+      (_error, stdout, stderr) => {
+        const versionOutput = selectProviderVersionOutput(stdout, stderr)
+        if (!versionOutput) {
+          resolve(null)
+        } else {
+          resolve(versionOutput)
+        }
+      },
+    )
   })
 }
 
@@ -98,6 +111,7 @@ export interface DetectedProvider {
   id: string
   name: string
   binaryPath: string
+  version?: string | null
 }
 
 export async function inspectProviderStatuses(): Promise<ProviderStatusInfo[]> {
@@ -151,6 +165,7 @@ export async function detectProviders(): Promise<DetectedProvider[]> {
             id: provider.id,
             name: provider.name,
             binaryPath: provider.binaryPath,
+            version: provider.version,
           },
         ]
       : [],

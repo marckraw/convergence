@@ -1,5 +1,9 @@
 import type { FC } from 'react'
-import type { SessionSummary, NeedsYouDisposition } from '@/entities/session'
+import {
+  formatSessionAttentionLabel,
+  type NeedsYouDisposition,
+  type SessionSummary,
+} from '@/entities/session'
 import { NeedsYouSection } from './needs-you-section.presentational'
 
 interface NeedsYouSession {
@@ -86,14 +90,32 @@ export function buildNeedsYouSummary(session: SessionSummary): {
 } | null {
   switch (session.attention) {
     case 'needs-approval':
-      return { summary: 'Approval needed', priority: 0 }
+      return { summary: formatSessionAttentionLabel(session), priority: 0 }
     case 'needs-input':
-      return { summary: 'Input needed', priority: 1 }
+      return {
+        summary: formatSessionAttentionLabel(session),
+        priority: priorityForInputRequest(session),
+      }
     case 'failed':
-      return { summary: 'Session failed', priority: 2 }
+      return { summary: formatSessionAttentionLabel(session), priority: 20 }
     case 'finished':
-      return { summary: 'Finished', priority: 3 }
+      return { summary: formatSessionAttentionLabel(session), priority: 30 }
     default:
       return null
+  }
+}
+
+function priorityForInputRequest(session: SessionSummary): number {
+  switch (session.attentionRequestKind) {
+    case 'plan':
+      return 1
+    case 'question':
+      return 2
+    case 'form':
+      return 3
+    case 'url':
+      return 4
+    default:
+      return 5
   }
 }
