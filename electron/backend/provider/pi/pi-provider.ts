@@ -583,6 +583,7 @@ export class PiProvider implements Provider {
       }
 
       if (deltaType === 'thinking_start') {
+        flushThinking()
         applyActivity({ kind: 'thinking_delta' })
         return
       }

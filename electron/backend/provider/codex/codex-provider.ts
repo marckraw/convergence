@@ -920,7 +920,10 @@ export class CodexProvider implements Provider {
       }
     }
 
-    function flushThinkingBuffer(): void {
+    function flushThinkingBuffer(input?: {
+      providerItemId?: string | null
+      providerEventType?: string | null
+    }): void {
       if (thinkingBuffer) {
         const timestamp = now()
         if (thinkingItemId) {
@@ -934,6 +937,8 @@ export class CodexProvider implements Provider {
             text: thinkingBuffer,
             state: 'complete',
             timestamp,
+            providerItemId: input?.providerItemId,
+            providerEventType: input?.providerEventType,
           })
         }
         thinkingBuffer = ''
@@ -1581,10 +1586,16 @@ export class CodexProvider implements Provider {
                 readString(item?.summary) ??
                 readString(item?.content) ??
                 ''
+              const providerItemId =
+                readProviderItemId(p, item) ?? pendingThinkingProviderItemId
               if (!thinkingBuffer && text) {
                 thinkingBuffer = text
               }
-              flushThinkingBuffer()
+              flushThinkingBuffer({
+                providerItemId,
+                providerEventType: itemType,
+              })
+              pendingThinkingProviderItemId = null
               break
             }
 

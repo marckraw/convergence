@@ -327,6 +327,93 @@ describe('CodexProvider', () => {
     )
   })
 
+  it('preserves provider metadata for completed-only Codex reasoning items', async () => {
+    const child = new MockChildProcess()
+    const server = createMockCodexServer(child, { autoCompleteTurns: false })
+    spawnMock.mockReturnValue(child)
+
+    const provider = new CodexProvider('/usr/local/bin/codex')
+    const handle = provider.start({
+      sessionId: 'session-1',
+      workingDirectory: process.cwd(),
+      initialMessage: 'think without deltas',
+      initialAttachments: undefined,
+      model: 'gpt-5.4',
+      effort: 'medium',
+      continuationToken: null,
+    })
+
+    const items: Array<
+      Extract<SessionDelta, { kind: 'conversation.item.add' }>['item']
+    > = []
+    const statuses: string[] = []
+
+    handle.onDelta((delta) => {
+      if (delta.kind === 'conversation.item.add') {
+        items.push(delta.item)
+      }
+    })
+    handle.onStatusChange((status) => {
+      statuses.push(status)
+    })
+    handle.onContinuationToken(() => {})
+    handle.onAttentionChange(() => {})
+    handle.onContextWindowChange(() => {})
+    handle.onActivityChange(() => {})
+
+    await waitFor(() => {
+      expect(
+        server.requests.some((request) => request.method === 'turn/start'),
+      ).toBe(true)
+    })
+
+    child.stdout.write(
+      JSON.stringify({
+        jsonrpc: '2.0',
+        method: 'item/started',
+        params: { item: { id: 'reasoning-complete', type: 'reasoning' } },
+      }) + '\n',
+    )
+    child.stdout.write(
+      JSON.stringify({
+        jsonrpc: '2.0',
+        method: 'item/completed',
+        params: {
+          item: {
+            id: 'reasoning-complete',
+            type: 'reasoning',
+            text: 'Completed-only reasoning',
+          },
+        },
+      }) + '\n',
+    )
+    child.stdout.write(
+      JSON.stringify({
+        jsonrpc: '2.0',
+        method: 'turn/completed',
+        params: { turn: { status: 'completed' } },
+      }) + '\n',
+    )
+
+    await waitFor(() => {
+      expect(statuses).toContain('completed')
+    })
+
+    expect(items).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          kind: 'thinking',
+          text: 'Completed-only reasoning',
+          state: 'complete',
+          providerMeta: expect.objectContaining({
+            providerItemId: 'reasoning-complete',
+            providerEventType: 'reasoning',
+          }),
+        }),
+      ]),
+    )
+  })
+
   it('resumes a continuation thread before starting a new turn', async () => {
     const child = new MockChildProcess()
     const server = createMockCodexServer(child)

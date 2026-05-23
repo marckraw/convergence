@@ -668,6 +668,10 @@ export class ClaudeCodeProvider implements Provider {
           // If we already streamed text via stream_events, flush that
           // and skip text blocks in the assistant message (they're duplicates)
           const hadStreamedText = assistantTextBuffer.length > 0
+          const hadStreamedThinking =
+            currentTurnHasThinkingText || thinkingBuffer.length > 0
+          let skippedStreamedThinkingBlock = false
+          flushThinkingBuffer()
           flushAssistantBuffer()
           if (event.message?.content) {
             for (const block of event.message.content) {
@@ -681,11 +685,11 @@ export class ClaudeCodeProvider implements Provider {
                       : JSON.stringify(block.input, null, 2),
                   providerEventType: 'tool_use',
                 })
-              } else if (
-                block.type === 'thinking' &&
-                block.thinking &&
-                !currentTurnHasThinkingText
-              ) {
+              } else if (block.type === 'thinking' && block.thinking) {
+                if (hadStreamedThinking && !skippedStreamedThinkingBlock) {
+                  skippedStreamedThinkingBlock = true
+                  continue
+                }
                 sessionEmitter.addThinking({
                   text: block.thinking,
                   state: 'complete',
