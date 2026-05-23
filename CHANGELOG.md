@@ -1,5 +1,11 @@
 # convergence
 
+## 0.37.19
+
+### Patch Changes
+
+- a89c55d: Fix provider update detection so Pi, Codex, and Claude Code can compare the installed CLI version against the latest npm version when version output is emitted on stderr or mixed with other CLI output.
+
 ## 0.37.18
 
 ### Patch Changes
