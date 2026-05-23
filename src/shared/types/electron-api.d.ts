@@ -45,6 +45,21 @@ interface CreateProjectInput {
   name?: string
 }
 
+type ProjectOpenAppIdData = 'cursor' | 'vscode' | 'zed' | 'webstorm' | 'finder'
+
+type ProjectOpenAppKindData = 'editor' | 'file-manager'
+
+interface ProjectOpenAppData {
+  id: ProjectOpenAppIdData
+  label: string
+  kind: ProjectOpenAppKindData
+}
+
+interface ProjectOpenRequestData {
+  appId: ProjectOpenAppIdData
+  path: string
+}
+
 type SpaceStatusData =
   | 'exploring'
   | 'planned'
@@ -1191,6 +1206,10 @@ interface ElectronAPI {
   }
   dialog: {
     selectDirectory: () => Promise<string | null>
+  }
+  projectOpen?: {
+    listApps: () => Promise<ProjectOpenAppData[]>
+    open: (input: ProjectOpenRequestData) => Promise<void>
   }
   workspace: {
     create: (input: CreateWorkspaceInput) => Promise<WorkspaceData>

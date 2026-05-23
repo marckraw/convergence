@@ -70,6 +70,8 @@ import { registerSessionForkIpcHandlers } from '../backend/session/fork/session-
 import { loadEnvFile } from '../backend/environment/env-file.service'
 import { hydrateProcessPathFromShell } from '../backend/environment/shell-path.service'
 import { OpenRouterCredentialsService } from '../backend/credentials/openrouter-credentials.service'
+import { ProjectOpenService } from '../backend/project-open/project-open.service'
+import { registerProjectOpenIpcHandlers } from '../backend/project-open/project-open.ipc'
 import { TerminalService } from '../backend/terminal/terminal.service'
 import {
   broadcastToRenderers,
@@ -322,6 +324,8 @@ async function startApp(): Promise<void> {
     appSettings: appSettingsService,
     workingDirectory: app.getPath('userData'),
   })
+  const projectOpenService = new ProjectOpenService()
+  registerProjectOpenIpcHandlers(projectOpenService)
 
   const notificationsState = new NotificationsStateService()
   const dockBadge = new DockBadgeService({

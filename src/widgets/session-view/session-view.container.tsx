@@ -11,6 +11,7 @@ import {
 } from '@/entities/pull-request'
 import { gitApi, useWorkspaceStore } from '@/entities/workspace'
 import { ComposerContainer } from '@/features/composer'
+import { ProjectOpenMenuContainer } from '@/features/project-open-menu'
 import { SessionDebugDrawerContainer } from '@/widgets/session-debug-drawer'
 import { useAppSettingsStore } from '@/entities/app-settings'
 import { attachmentApi, useAttachmentStore } from '@/entities/attachment'
@@ -129,6 +130,9 @@ export const SessionView: FC<SessionViewProps> = ({ onOpenCodeReview }) => {
   const sessionWorkspace = session?.workspaceId
     ? (workspaces.find((entry) => entry.id === session.workspaceId) ?? null)
     : null
+  const sessionOpenPath = sessionWorkspace?.worktreeRemovedAt
+    ? (activeProject?.repositoryPath ?? session?.workingDirectory ?? null)
+    : (sessionWorkspace?.path ?? session?.workingDirectory ?? null)
   const sessionWorktreeRemoved = !!sessionWorkspace?.worktreeRemovedAt
   const workspacePullRequest = session?.workspaceId
     ? (pullRequestsByWorkspaceId[session.workspaceId] ?? null)
@@ -326,12 +330,18 @@ export const SessionView: FC<SessionViewProps> = ({ onOpenCodeReview }) => {
     const draftWorkspace = draftWorkspaceId
       ? workspaces.find((w) => w.id === draftWorkspaceId)
       : null
+    const draftOpenPath =
+      draftWorkspace?.path ?? activeProject?.repositoryPath ?? null
     return (
       <div className="flex h-full flex-col">
         <div
-          className="h-12 shrink-0 border-b border-border"
+          className="flex h-12 shrink-0 items-center justify-end border-b border-border px-4"
           style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
-        />
+        >
+          <div style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
+            <ProjectOpenMenuContainer targetPath={draftOpenPath} />
+          </div>
+        </div>
         <div className="flex flex-1 flex-col items-center justify-center px-4">
           <p className="mb-1 text-lg font-medium">Convergence</p>
           <p className="mb-3 text-sm text-muted-foreground">
@@ -489,6 +499,7 @@ export const SessionView: FC<SessionViewProps> = ({ onOpenCodeReview }) => {
             className="flex items-center gap-1"
             style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
           >
+            <ProjectOpenMenuContainer targetPath={sessionOpenPath} />
             <Button
               variant="ghost"
               size="icon"
