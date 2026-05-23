@@ -37,6 +37,11 @@ import {
   registerProviderDebugIpcHandlers,
 } from '../backend/provider-debug/provider-debug.ipc'
 import { createJsonlWriter } from '../backend/provider-debug/provider-debug-jsonl'
+import { LocalModelTunnelService } from '../backend/local-model-tunnel/local-model-tunnel.service'
+import {
+  broadcastLocalModelTunnelSnapshot,
+  registerLocalModelTunnelIpcHandlers,
+} from '../backend/local-model-tunnel/local-model-tunnel.ipc'
 import { McpService } from '../backend/mcp/mcp.service'
 import { SkillsService } from '../backend/skills/skills.service'
 import { PromptsService } from '../backend/prompts/prompts.service'
@@ -196,6 +201,12 @@ async function startApp(): Promise<void> {
     projectContextService,
   )
   const stateService = new StateService(db)
+  const localModelTunnelService = new LocalModelTunnelService(
+    stateService,
+    broadcastLocalModelTunnelSnapshot,
+  )
+  registerLocalModelTunnelIpcHandlers(localModelTunnelService)
+  void localModelTunnelService.startAutoStartProfiles()
   const workspaceService = new WorkspaceService(db, gitService, workspacesRoot)
   const changedFilesService = new ChangedFilesService(db, gitService)
   const pullRequestService = new PullRequestService(db, gitService)
@@ -558,6 +569,7 @@ async function startApp(): Promise<void> {
   registerTerminalLayoutIpcHandlers(terminalLayoutService)
 
   app.on('before-quit', () => {
+    localModelTunnelService.stopAllManaged()
     terminalService.disposeAll()
   })
 
