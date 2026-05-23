@@ -7,7 +7,7 @@ import type {
 
 export interface ProjectOpenAppDefinition extends ProjectOpenApp {
   appName: string
-  bundleId: string
+  bundleIds: string[]
   candidatePaths: (homeDir: string) => string[]
 }
 
@@ -24,7 +24,7 @@ export const PROJECT_OPEN_APP_DEFINITIONS: ProjectOpenAppDefinition[] = [
     label: 'Cursor',
     kind: 'editor',
     appName: 'Cursor',
-    bundleId: 'com.todesktop.230313mzl4w4u92',
+    bundleIds: ['com.todesktop.230313mzl4w4u92', 'com.cursor.cursor'],
     candidatePaths: (homeDir) => [
       '/Applications/Cursor.app',
       join(homeDir, 'Applications', 'Cursor.app'),
@@ -35,7 +35,7 @@ export const PROJECT_OPEN_APP_DEFINITIONS: ProjectOpenAppDefinition[] = [
     label: 'VS Code',
     kind: 'editor',
     appName: 'Visual Studio Code',
-    bundleId: 'com.microsoft.VSCode',
+    bundleIds: ['com.microsoft.VSCode'],
     candidatePaths: (homeDir) => [
       '/Applications/Visual Studio Code.app',
       join(homeDir, 'Applications', 'Visual Studio Code.app'),
@@ -46,7 +46,7 @@ export const PROJECT_OPEN_APP_DEFINITIONS: ProjectOpenAppDefinition[] = [
     label: 'Zed',
     kind: 'editor',
     appName: 'Zed',
-    bundleId: 'dev.zed.Zed',
+    bundleIds: ['dev.zed.Zed'],
     candidatePaths: (homeDir) => [
       '/Applications/Zed.app',
       join(homeDir, 'Applications', 'Zed.app'),
@@ -57,11 +57,10 @@ export const PROJECT_OPEN_APP_DEFINITIONS: ProjectOpenAppDefinition[] = [
     label: 'WebStorm',
     kind: 'editor',
     appName: 'WebStorm',
-    bundleId: 'com.jetbrains.WebStorm',
+    bundleIds: ['com.jetbrains.WebStorm'],
     candidatePaths: (homeDir) => [
       '/Applications/WebStorm.app',
       join(homeDir, 'Applications', 'WebStorm.app'),
-      join(homeDir, 'Applications', 'JetBrains Toolbox', 'WebStorm.app'),
     ],
   },
   {
@@ -69,7 +68,7 @@ export const PROJECT_OPEN_APP_DEFINITIONS: ProjectOpenAppDefinition[] = [
     label: 'Finder',
     kind: 'file-manager',
     appName: 'Finder',
-    bundleId: 'com.apple.finder',
+    bundleIds: ['com.apple.finder'],
     candidatePaths: () => [],
   },
 ]
@@ -85,7 +84,9 @@ export function detectProjectOpenApps({
       return platform === 'darwin' ? [toApp(definition)] : []
     }
 
-    const spotlightPaths = spotlightPathsByBundleId[definition.bundleId] ?? []
+    const spotlightPaths = definition.bundleIds.flatMap(
+      (bundleId) => spotlightPathsByBundleId[bundleId] ?? [],
+    )
     const installed =
       spotlightPaths.length > 0 ||
       definition.candidatePaths(homeDir).some((path) => exists(path))

@@ -38,6 +38,23 @@ describe('detectProjectOpenApps', () => {
       homeDir: '/Users/marc',
       exists: () => false,
       spotlightPathsByBundleId: {
+        'com.cursor.cursor': ['/Volumes/Dev/Cursor.app'],
+      },
+    })
+
+    expect(apps).toContainEqual({
+      id: 'cursor',
+      label: 'Cursor',
+      kind: 'editor',
+    })
+  })
+
+  it('includes WebStorm from Spotlight without a Toolbox candidate path', () => {
+    const apps = detectProjectOpenApps({
+      platform: 'darwin',
+      homeDir: '/Users/marc',
+      exists: (path) => path.includes('JetBrains Toolbox'),
+      spotlightPathsByBundleId: {
         'com.jetbrains.WebStorm': [
           '/Users/marc/Library/Application Support/JetBrains/Toolbox/apps/WebStorm/ch-0/WebStorm.app',
         ],

@@ -1,4 +1,4 @@
-import { execFile as nodeExecFile } from 'child_process'
+import { execFile as nodeExecFile, type ChildProcess } from 'child_process'
 import { shell } from 'electron'
 import { existsSync } from 'fs'
 import { homedir } from 'os'
@@ -7,7 +7,11 @@ import {
   getProjectOpenAppDefinition,
   PROJECT_OPEN_APP_DEFINITIONS,
 } from './project-open.pure'
-import type { ProjectOpenApp, ProjectOpenRequest } from './project-open.types'
+import type {
+  ProjectOpenApp,
+  ProjectOpenAppId,
+  ProjectOpenRequest,
+} from './project-open.types'
 
 type ExecFileCallback = (
   error: Error | null,
@@ -19,7 +23,7 @@ type ExecFileFn = (
   file: string,
   args: string[],
   callback: ExecFileCallback,
-) => void
+) => ChildProcess
 
 export interface ProjectOpenServiceDeps {
   platform?: NodeJS.Platform | string
@@ -27,7 +31,13 @@ export interface ProjectOpenServiceDeps {
   exists?: (path: string) => boolean
   execFile?: ExecFileFn
   openPath?: (path: string) => Promise<string>
+  now?: () => number
+  appCacheTtlMs?: number
+  mdfindTimeoutMs?: number
 }
+
+const DEFAULT_APP_CACHE_TTL_MS = 30_000
+const DEFAULT_MDFIND_TIMEOUT_MS = 1_500
 
 export class ProjectOpenService {
   private readonly platform: NodeJS.Platform | string
@@ -35,6 +45,10 @@ export class ProjectOpenService {
   private readonly exists: (path: string) => boolean
   private readonly execFile: ExecFileFn
   private readonly openPath: (path: string) => Promise<string>
+  private readonly now: () => number
+  private readonly appCacheTtlMs: number
+  private readonly mdfindTimeoutMs: number
+  private appCache: { expiresAt: number; apps: ProjectOpenApp[] } | null = null
 
   constructor(deps: ProjectOpenServiceDeps = {}) {
     this.platform = deps.platform ?? process.platform
@@ -42,21 +56,38 @@ export class ProjectOpenService {
     this.exists = deps.exists ?? existsSync
     this.execFile = deps.execFile ?? nodeExecFile
     this.openPath = deps.openPath ?? shell.openPath
+    this.now = deps.now ?? Date.now
+    this.appCacheTtlMs = deps.appCacheTtlMs ?? DEFAULT_APP_CACHE_TTL_MS
+    this.mdfindTimeoutMs = deps.mdfindTimeoutMs ?? DEFAULT_MDFIND_TIMEOUT_MS
   }
 
   async listApps(): Promise<ProjectOpenApp[]> {
+    const cached = this.appCache
+    const now = this.now()
+    if (cached && cached.expiresAt > now) {
+      return cached.apps
+    }
+
     const spotlightPathsByBundleId =
       this.platform === 'darwin' ? await this.detectSpotlightApps() : {}
 
-    return detectProjectOpenApps({
+    const apps = detectProjectOpenApps({
       platform: this.platform,
       homeDir: this.homeDir,
       exists: this.exists,
       spotlightPathsByBundleId,
     })
+    this.appCache = {
+      apps,
+      expiresAt: now + this.appCacheTtlMs,
+    }
+
+    return apps
   }
 
   async open(request: ProjectOpenRequest): Promise<void> {
+    validateProjectOpenAppId(request.appId)
+
     if (!request.path) {
       throw new Error('No project path was provided.')
     }
@@ -82,7 +113,7 @@ export class ProjectOpenService {
 
     const definition = getProjectOpenAppDefinition(request.appId)
     if (!definition) {
-      throw new Error(`Unsupported editor: ${request.appId}`)
+      throw new Error(`Unknown project open app: ${request.appId}`)
     }
 
     await runExecFile(this.execFile, '/usr/bin/open', [
@@ -97,21 +128,27 @@ export class ProjectOpenService {
   > {
     const entries = await Promise.all(
       PROJECT_OPEN_APP_DEFINITIONS.filter((app) => app.kind === 'editor').map(
-        async (app) => {
-          const paths = await this.detectSpotlightPaths(app.bundleId)
-          return [app.bundleId, paths] as const
-        },
+        (app) =>
+          Promise.all(
+            app.bundleIds.map(async (bundleId) => {
+              const paths = await this.detectSpotlightPaths(bundleId)
+              return [bundleId, paths] as const
+            }),
+          ),
       ),
     )
 
-    return Object.fromEntries(entries)
+    return Object.fromEntries(entries.flat())
   }
 
   private async detectSpotlightPaths(bundleId: string): Promise<string[]> {
     try {
-      const { stdout } = await runExecFile(this.execFile, '/usr/bin/mdfind', [
-        `kMDItemCFBundleIdentifier == "${bundleId}"`,
-      ])
+      const { stdout } = await runExecFile(
+        this.execFile,
+        '/usr/bin/mdfind',
+        [`kMDItemCFBundleIdentifier == "${bundleId}"`],
+        this.mdfindTimeoutMs,
+      )
       return stdout
         .split('\n')
         .map((path) => path.trim())
@@ -126,9 +163,16 @@ function runExecFile(
   execFile: ExecFileFn,
   file: string,
   args: string[],
+  timeoutMs?: number,
 ): Promise<{ stdout: string; stderr: string }> {
   return new Promise((resolve, reject) => {
-    execFile(file, args, (error, stdout, stderr) => {
+    let settled = false
+    let timeout: ReturnType<typeof setTimeout> | null = null
+    const child = execFile(file, args, (error, stdout, stderr) => {
+      if (settled) return
+      settled = true
+      if (timeout) clearTimeout(timeout)
+
       if (error) {
         reject(error)
         return
@@ -139,5 +183,31 @@ function runExecFile(
         stderr: String(stderr),
       })
     })
+
+    if (timeoutMs !== undefined) {
+      timeout = setTimeout(() => {
+        if (settled) return
+        settled = true
+        child.kill()
+        reject(new Error(`Command timed out: ${file}`))
+      }, timeoutMs)
+    }
   })
+}
+
+function validateProjectOpenAppId(
+  appId: unknown,
+): asserts appId is ProjectOpenAppId {
+  if (
+    PROJECT_OPEN_APP_DEFINITIONS.some((definition) => definition.id === appId)
+  ) {
+    return
+  }
+
+  const available = PROJECT_OPEN_APP_DEFINITIONS.map(
+    (definition) => definition.id,
+  ).join(', ')
+  throw new Error(
+    `Unknown project open app: ${String(appId)}. Available: ${available}`,
+  )
 }
