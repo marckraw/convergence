@@ -358,6 +358,7 @@ export class PiProvider implements Provider {
     let assistantMessageItemId: string | null = null
     let thinkingBuffer = ''
     let thinkingItemId: string | null = null
+    let lastFlushedThinking: { itemId: string; text: string } | null = null
     let isStreaming = false
     let currentTurn: {
       message: string
@@ -444,18 +445,24 @@ export class PiProvider implements Provider {
     function flushThinking(): void {
       if (thinkingBuffer) {
         const timestamp = now()
+        let flushedItemId: string
         if (thinkingItemId) {
           sessionEmitter.patchThinking(thinkingItemId, {
             text: thinkingBuffer,
             state: 'complete',
             updatedAt: timestamp,
           })
+          flushedItemId = thinkingItemId
         } else {
-          thinkingItemId = sessionEmitter.addThinking({
+          flushedItemId = sessionEmitter.addThinking({
             text: thinkingBuffer,
             state: 'complete',
             timestamp,
           })
+        }
+        lastFlushedThinking = {
+          itemId: flushedItemId,
+          text: thinkingBuffer,
         }
         thinkingBuffer = ''
         thinkingItemId = null
@@ -584,6 +591,7 @@ export class PiProvider implements Provider {
 
       if (deltaType === 'thinking_start') {
         flushThinking()
+        lastFlushedThinking = null
         applyActivity({ kind: 'thinking_delta' })
         return
       }
@@ -611,8 +619,23 @@ export class PiProvider implements Provider {
       }
 
       if (deltaType === 'thinking_end') {
-        if (!thinkingBuffer && typeof event.content === 'string') {
-          thinkingBuffer = event.content
+        const content = typeof event.content === 'string' ? event.content : null
+        if (!thinkingBuffer && content && lastFlushedThinking) {
+          if (content !== lastFlushedThinking.text) {
+            sessionEmitter.patchThinking(lastFlushedThinking.itemId, {
+              text: content,
+              state: 'complete',
+              updatedAt: now(),
+            })
+            lastFlushedThinking = {
+              ...lastFlushedThinking,
+              text: content,
+            }
+          }
+          return
+        }
+        if (!thinkingBuffer && content) {
+          thinkingBuffer = content
         }
         flushThinking()
         return
@@ -1271,6 +1294,7 @@ export class PiProvider implements Provider {
       assistantMessageItemId = null
       thinkingBuffer = ''
       thinkingItemId = null
+      lastFlushedThinking = null
       currentTurn = {
         message: initialMessage,
         attachments: initialAttachments,
