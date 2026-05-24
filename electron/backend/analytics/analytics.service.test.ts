@@ -30,7 +30,7 @@ function insertSession(
     status?: string
     createdAt: string
     updatedAt?: string
-    model?: string | null
+    model: string | null
   },
 ): void {
   db.prepare(
@@ -48,13 +48,14 @@ function insertSession(
         created_at,
         updated_at
       )
-      VALUES (?, ?, ?, ?, 'gpt-5.4', ?, 'none', ?, 'conversation', ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, 'none', ?, 'conversation', ?, ?)
     `,
   ).run(
     input.id,
     input.projectId,
     input.providerId,
     input.id,
+    input.model,
     input.status ?? 'completed',
     `/tmp/${input.projectId}`,
     input.createdAt,
@@ -219,6 +220,7 @@ describe('AnalyticsService', () => {
       projectId: 'p1',
       providerId: 'codex',
       createdAt: '2026-04-29T09:00:00.000Z',
+      model: 'gpt-5.4',
     })
     insertSession(db, {
       id: 's2',
@@ -226,6 +228,7 @@ describe('AnalyticsService', () => {
       providerId: 'claude-code',
       status: 'failed',
       createdAt: '2026-04-28T09:00:00.000Z',
+      model: 'gpt-5.4',
     })
     insertConversationItem(db, {
       id: 'm1',
@@ -320,12 +323,14 @@ describe('AnalyticsService', () => {
       projectId: 'p1',
       providerId: 'codex',
       createdAt: '2026-01-15T09:00:00.000Z',
+      model: 'gpt-5.4',
     })
     insertSession(db, {
       id: 'recent',
       projectId: 'p1',
       providerId: 'codex',
       createdAt: '2026-04-29T09:00:00.000Z',
+      model: 'gpt-5.4',
     })
 
     const recent = service.getOverview('7d', '2026-04-30T12:00:00.000Z')
@@ -341,6 +346,52 @@ describe('AnalyticsService', () => {
     expect(() =>
       service.getOverview('forever', '2026-04-30T12:00:00.000Z'),
     ).toThrow('Invalid analytics range preset: forever')
+  })
+
+  it('handles sessions with null model in model usage', () => {
+    insertProject(db, 'p1', 'Convergence')
+    insertSession(db, {
+      id: 's1',
+      projectId: 'p1',
+      providerId: 'codex',
+      createdAt: '2026-04-29T09:00:00.000Z',
+      model: null,
+    })
+    insertSession(db, {
+      id: 's2',
+      projectId: 'p1',
+      providerId: 'codex',
+      createdAt: '2026-04-29T10:00:00.000Z',
+      model: 'gpt-5.4',
+    })
+    insertTurn(db, {
+      id: 't1',
+      sessionId: 's1',
+      sequence: 1,
+      startedAt: '2026-04-29T09:10:00.000Z',
+      endedAt: '2026-04-29T09:11:00.000Z',
+    })
+    insertTurn(db, {
+      id: 't2',
+      sessionId: 's2',
+      sequence: 1,
+      startedAt: '2026-04-29T10:10:00.000Z',
+      endedAt: '2026-04-29T10:11:00.000Z',
+    })
+
+    const overview = service.getOverview('30d', '2026-04-30T12:00:00.000Z')
+
+    const nullModelPoint = overview.modelUsage.find(
+      (p) => p.modelLabel === 'No model',
+    )
+    expect(nullModelPoint).toBeDefined()
+    expect(nullModelPoint!.modelId).toBe(null)
+    expect(nullModelPoint!.turnsCompleted).toBe(1)
+
+    const gptPoint = overview.modelUsage.find((p) => p.modelLabel === 'gpt-5.4')
+    expect(gptPoint).toBeDefined()
+    expect(gptPoint!.modelId).toBe('gpt-5.4')
+    expect(gptPoint!.turnsCompleted).toBe(1)
   })
 
   it('includes the latest generated profile snapshot for the selected range', () => {
@@ -377,6 +428,7 @@ describe('AnalyticsService', () => {
       projectId: 'p1',
       providerId: 'codex',
       createdAt: '2026-04-29T09:00:00.000Z',
+      model: 'gpt-5.4',
     })
     insertConversationItem(db, {
       id: 'm1',

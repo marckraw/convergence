@@ -386,6 +386,14 @@ function buildTotals(
   return totals
 }
 
+function normalizeNullModelLabel(model: string | null): string {
+  return model || 'No model'
+}
+
+function findModelKey(model: string | null): string | null {
+  return model || null
+}
+
 function makeUsagePointKey(id: string | null): string {
   return id ?? '__unknown__'
 }
@@ -468,82 +476,101 @@ function buildModelUsage(
   turns: AnalyticsTurnInput[],
   range: AnalyticsRange,
 ): ModelUsagePoint[] {
-  const points = new Map<string, ModelUsagePoint>()
+  // 1) Seed model points from all sessions that have any in-range activity.
+  //    Sessions outside the range but with in-range turns/messages still
+  //    need a row so their message counts appear in the chart.
+  const seedModels = new Map<
+    string,
+    { point: ModelUsagePoint; session: AnalyticsSessionInput }
+  >()
 
   for (const session of sessions) {
     if (!isInRange(toLocalDate(session.createdAt), range)) continue
-    const key = makeUsagePointKey(session.model)
-    const point = points.get(key) ?? {
-      modelId: session.model ?? '__none__',
-      modelLabel: session.model ?? '__none__',
-      sessionsCreated: 0,
-      turnsCompleted: 0,
-      userMessages: 0,
-      assistantMessages: 0,
-      providerId: session.providerId || null,
-      providerName: session.providerName,
+    const modelKey = findModelKey(session.model)
+    const modelNorm = normalizeNullModelLabel(session.model)
+    const entry = seedModels.get(modelNorm)
+    if (entry) {
+      entry.point.sessionsCreated += 1
+    } else {
+      seedModels.set(modelNorm, {
+        point: {
+          modelId: modelKey,
+          modelLabel: modelNorm,
+          sessionsCreated: 1,
+          turnsCompleted: 0,
+          userMessages: 0,
+          assistantMessages: 0,
+          providerId: session.providerId || null,
+          providerName: session.providerName,
+        },
+        session,
+      })
     }
-    point.sessionsCreated += 1
-    points.set(key, point)
   }
 
-  const turnsByModel = new Map<string, number>()
+  // 2) Add models that appear in in-range turns/messages but whose sessions
+  //    were all created outside the range (e.g. long-lived sessions).
+  const turnAndItemSessions = new Set<string>()
   for (const turn of turns) {
-    if (
-      turn.status !== 'completed' ||
-      !isInRange(toLocalDate(turn.endedAt ?? turn.startedAt), range)
-    ) {
-      continue
+    if (turn.status !== 'completed') continue
+    if (!isInRange(toLocalDate(turn.endedAt ?? turn.startedAt), range)) continue
+    turnAndItemSessions.add(turn.sessionId)
+  }
+  for (const item of conversationItems) {
+    if (item.kind !== 'message') continue
+    if (!isInRange(toLocalDate(item.createdAt), range)) continue
+    turnAndItemSessions.add(item.sessionId)
+  }
+
+  for (const id of turnAndItemSessions) {
+    const session = sessions.find((s) => s.id === id)
+    if (!session) continue
+    const modelNorm = normalizeNullModelLabel(session.model)
+    const existing = seedModels.get(modelNorm)
+    if (!existing) {
+      seedModels.set(modelNorm, {
+        point: {
+          modelId: findModelKey(session.model),
+          modelLabel: modelNorm,
+          sessionsCreated: 0,
+          turnsCompleted: 0,
+          userMessages: 0,
+          assistantMessages: 0,
+          providerId: session.providerId || null,
+          providerName: session.providerName,
+        },
+        session,
+      })
     }
+  }
+
+  const points = new Map<string, ModelUsagePoint>()
+  for (const { point } of seedModels.values()) {
+    points.set(point.modelLabel, point)
+  }
+
+  // 3) Count turns completed in range (any session — in or out of range).
+  for (const turn of turns) {
+    if (turn.status !== 'completed') continue
+    if (!isInRange(toLocalDate(turn.endedAt ?? turn.startedAt), range)) continue
     const session = sessions.find((s) => s.id === turn.sessionId)
     if (!session) continue
-    const key = makeUsagePointKey(session.model)
+    const key = normalizeNullModelLabel(session.model)
     const current = points.get(key)
-    if (current) {
-      current.turnsCompleted += 1
-      points.set(key, current)
-    } else {
-      turnsByModel.set(key, (turnsByModel.get(key) ?? 0) + 1)
-    }
+    if (current) current.turnsCompleted += 1
   }
 
-  const itemsByModel = new Map<string, { user: number; assistant: number }>()
+  // 4) Count conversation items in range (only for seeded models).
   for (const item of conversationItems) {
     if (!isInRange(toLocalDate(item.createdAt), range)) continue
     if (item.kind !== 'message') continue
     const session = sessions.find((s) => s.id === item.sessionId)
     if (!session) continue
-    const key = makeUsagePointKey(session.model)
-    const entry = itemsByModel.get(key) ?? { user: 0, assistant: 0 }
-    if (item.actor === 'user') {
-      entry.user += 1
-    } else if (item.actor === 'assistant') {
-      entry.assistant += 1
-    }
-    itemsByModel.set(key, entry)
-  }
-
-  for (const [key, count] of turnsByModel) {
-    if (!points.has(key)) {
-      points.set(key, {
-        modelId: key,
-        modelLabel: key,
-        sessionsCreated: 0,
-        turnsCompleted: count,
-        userMessages: itemsByModel.get(key)?.user ?? 0,
-        assistantMessages: itemsByModel.get(key)?.assistant ?? 0,
-        providerId: null,
-        providerName: 'Unknown',
-      })
-    }
-  }
-
-  for (const [key, counts] of itemsByModel) {
+    const key = normalizeNullModelLabel(session.model)
     const point = points.get(key)
-    if (point) {
-      point.userMessages += counts.user
-      point.assistantMessages += counts.assistant
-    }
+    if (!point) continue
+    if (item.actor === 'user') point.userMessages += 1
+    else if (item.actor === 'assistant') point.assistantMessages += 1
   }
 
   return [...points.values()].sort(

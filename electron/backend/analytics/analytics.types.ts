@@ -125,7 +125,7 @@ export interface ProjectUsagePoint {
 }
 
 export interface ModelUsagePoint {
-  modelId: string
+  modelId: string | null
   modelLabel: string
   sessionsCreated: number
   turnsCompleted: number
