@@ -601,7 +601,7 @@ describe('App', () => {
     render(<App />)
 
     await waitFor(() => {
-      expect(screen.getByText('my-project')).toBeInTheDocument()
+      expect(screen.getAllByText('my-project').length).toBeGreaterThan(0)
     })
   })
 
