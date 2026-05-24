@@ -332,6 +332,31 @@ describe('SessionView changed files drawer', () => {
     })
   })
 
+  it('uses the active project name as the new session composer title', () => {
+    useProjectStore.setState((state) => ({
+      ...state,
+      activeProject: state.activeProject
+        ? { ...state.activeProject, name: 'Roomfinder' }
+        : null,
+    }))
+    useSessionStore.setState((state) => ({
+      ...state,
+      sessions: [],
+      activeSessionId: null,
+      activeConversation: [],
+      activeConversationSessionId: null,
+    }))
+
+    render(
+      <TooltipProvider>
+        <SessionView />
+      </TooltipProvider>,
+    )
+
+    expect(screen.getByText('Roomfinder')).toBeInTheDocument()
+    expect(screen.queryByText('Convergence')).not.toBeInTheDocument()
+  })
+
   it('does not expose actions for stale approval cards on inactive sessions', () => {
     useSessionStore.setState((state) => ({
       ...state,

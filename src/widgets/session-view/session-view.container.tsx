@@ -337,6 +337,7 @@ export const SessionView: FC<SessionViewProps> = ({ onOpenCodeReview }) => {
       : null
     const draftOpenPath =
       draftWorkspace?.path ?? activeProject?.repositoryPath ?? null
+    const title = activeProject?.name ?? 'Convergence'
     return (
       <div className="relative flex h-full flex-col overflow-hidden">
         <div
@@ -353,7 +354,12 @@ export const SessionView: FC<SessionViewProps> = ({ onOpenCodeReview }) => {
         </div>
         <div className="flex min-h-0 flex-1">
           <div className="flex min-w-0 flex-1 flex-col items-center justify-center px-4">
-            <p className="mb-1 text-lg font-medium">Convergence</p>
+            <p
+              className="mb-1 max-w-full truncate text-lg font-medium"
+              title={title}
+            >
+              {title}
+            </p>
             <p className="mb-3 text-sm text-muted-foreground">
               What would you like to work on?
             </p>
