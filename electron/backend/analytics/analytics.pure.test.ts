@@ -35,6 +35,7 @@ function session(
     projectName: 'Convergence',
     providerId: 'codex',
     providerName: 'Codex',
+    model: 'gpt-5.4',
     status: 'completed',
     primarySurface: 'conversation',
     archivedAt: null,
@@ -291,9 +292,123 @@ describe('analytics pure helpers', () => {
       'claude-code',
       'codex',
     ])
+    expect(overview.modelUsage).toEqual([
+      {
+        modelId: 'gpt-5.4',
+        modelLabel: 'gpt-5.4',
+        sessionsCreated: 3,
+        turnsCompleted: 3,
+        userMessages: 0,
+        assistantMessages: 0,
+        providerId: 'codex',
+        providerName: 'Codex',
+      },
+    ])
     expect(overview.projectUsage.map((point) => point.projectName)).toEqual([
       'Backpack',
       'Convergence',
+    ])
+  })
+
+  it('handles null and empty model values correctly', () => {
+    const overview = buildAnalyticsOverview({
+      ...baseInput,
+      sessions: [
+        session({ id: 's1', model: null, createdAt: '2026-04-29T09:00:00' }),
+        session({
+          id: 's2',
+          model: 'gpt-5.4',
+          createdAt: '2026-04-29T10:00:00',
+        }),
+      ],
+      turns: [
+        turn({ id: 't1', sessionId: 's1' }),
+        turn({ id: 't2', sessionId: 's2' }),
+      ],
+      conversationItems: [
+        message({ id: 'm1', actor: 'user', createdAt: '2026-04-29T09:05:00' }),
+        message({
+          id: 'm2',
+          actor: 'assistant',
+          createdAt: '2026-04-29T09:06:00',
+        }),
+        message({
+          id: 'm3',
+          sessionId: 's2',
+          actor: 'user',
+          createdAt: '2026-04-29T10:05:00',
+        }),
+      ],
+    })
+
+    expect(overview.modelUsage).toEqual([
+      {
+        modelId: 'gpt-5.4',
+        modelLabel: 'gpt-5.4',
+        sessionsCreated: 1,
+        turnsCompleted: 1,
+        userMessages: 1, // m3
+        assistantMessages: 0,
+        providerId: 'codex',
+        providerName: 'Codex',
+      },
+      {
+        modelId: null,
+        modelLabel: 'No model',
+        sessionsCreated: 1,
+        turnsCompleted: 1,
+        userMessages: 1, // m1
+        assistantMessages: 1, // m2
+        providerId: 'codex',
+        providerName: 'Codex',
+      },
+    ])
+  })
+
+  it('does not double-count messages for sessions outside the date range', () => {
+    // Session created before the 30-day range but with activity inside it
+    const now = '2026-04-30T12:00:00.000Z'
+    const overview = buildAnalyticsOverview({
+      ...baseInput,
+      now,
+      rangePreset: '30d',
+      sessions: [
+        session({
+          id: 's1',
+          model: 'gpt-5.4',
+          createdAt: '2026-03-01T09:00:00', // outside range
+        }),
+      ],
+      turns: [
+        turn({
+          id: 't1',
+          sessionId: 's1',
+          startedAt: '2026-04-29T10:00:00',
+          endedAt: '2026-04-29T10:05:00',
+        }),
+      ],
+      conversationItems: [
+        message({ id: 'm1', actor: 'user', createdAt: '2026-04-29T10:01:00' }),
+        message({
+          id: 'm2',
+          actor: 'assistant',
+          createdAt: '2026-04-29T10:02:00',
+        }),
+        message({ id: 'm3', actor: 'user', createdAt: '2026-04-29T10:03:00' }),
+      ],
+    })
+
+    expect(overview.modelUsage).toEqual([
+      {
+        modelId: 'gpt-5.4',
+        modelLabel: 'gpt-5.4',
+        sessionsCreated: 0, // session created outside range
+        turnsCompleted: 1, // turn completed inside range
+        userMessages: 2, // m1 + m3 user messages, counted once
+        assistantMessages: 1, // m2 assistant message
+        providerId: 'codex',
+        providerName: 'Codex',
+      },
     ])
   })
 

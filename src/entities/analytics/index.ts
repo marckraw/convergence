@@ -10,6 +10,7 @@ export type {
   GeneratedWorkProfileSnapshot,
   GeneratedWorkProfileSnapshotPayload,
   GenerateWorkProfileInput,
+  ModelUsagePoint,
   ProjectUsagePoint,
   ProviderUsagePoint,
   WeekdayHourActivityPoint,

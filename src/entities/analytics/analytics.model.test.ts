@@ -23,6 +23,7 @@ const overview: AnalyticsOverview = {
   streaks: { current: 2, longest: 4, activeDays: ['2026-04-29'] },
   dailyActivity: [],
   providerUsage: [],
+  modelUsage: [],
   projectUsage: [],
   weekdayHourActivity: [],
   conversationBalance: [],

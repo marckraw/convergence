@@ -1,6 +1,51 @@
 {
-  "currentVersion": "0.37.14",
+  "currentVersion": "0.37.23",
   "releases": [
+    {
+      "version": "0.37.23",
+      "date": null,
+      "notes": "### Patch Changes\n\n- fe474b8: Fix duplicate provider thinking transcript items when streaming reasoning is followed by final thinking metadata."
+    },
+    {
+      "version": "0.37.22",
+      "date": null,
+      "notes": "### Patch Changes\n\n- 46147c8: Add managed local model SSH tunnel profiles with a status-bar pill, quick controls, and an editable tunnel manager.\n- 4c8af85: Add project actions in the session header with icon-backed action definitions, background execution, live output drawers, and compact session details."
+    },
+    {
+      "version": "0.37.21",
+      "date": null,
+      "notes": "### Patch Changes\n\n- f363d91: Add a project Open menu that detects installed macOS editors and opens the active workspace or project root in Cursor, VS Code, Zed, WebStorm, or Finder.\n- 2aa9eaa: Show provider reasoning and thinking deltas in the session transcript when supported by the active model."
+    },
+    {
+      "version": "0.37.20",
+      "date": null,
+      "notes": "### Patch Changes\n\n- 3dc1f32: Move the session context-window indicator from conversation headers into the composer as a compact hoverable status dot."
+    },
+    {
+      "version": "0.37.19",
+      "date": null,
+      "notes": "### Patch Changes\n\n- a89c55d: Fix provider update detection so Pi, Codex, and Claude Code can compare the installed CLI version against the latest npm version when version output is emitted on stderr or mixed with other CLI output."
+    },
+    {
+      "version": "0.37.18",
+      "date": null,
+      "notes": "### Patch Changes\n\n- 32e8abc: Respect Pi model image support metadata, add safe outbound image diagnostics, and include local attachment paths so Pi can inspect files through its read tool when native image transport is unreliable."
+    },
+    {
+      "version": "0.37.17",
+      "date": null,
+      "notes": "### Patch Changes\n\n- 7351bee: Show Codex usage limits in Settings and add a composer quota pill for Codex-backed model selections."
+    },
+    {
+      "version": "0.37.16",
+      "date": null,
+      "notes": "### Patch Changes\n\n- 8b574ec: Fix starting a conversation session while a terminal-primary session is open so the main view switches to the conversation composer immediately."
+    },
+    {
+      "version": "0.37.15",
+      "date": null,
+      "notes": "### Patch Changes\n\n- 0d01a42: Keep project session draft and status-bar project navigation aligned with routed main views so creating a new root conversation or switching projects from the status bar no longer snaps back to the previous session."
+    },
     {
       "version": "0.37.14",
       "date": null,

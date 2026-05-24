@@ -1119,6 +1119,17 @@ interface ProviderUsagePointData {
   assistantMessages: number
 }
 
+interface ModelUsagePointData {
+  modelId: string
+  modelLabel: string
+  sessionsCreated: number
+  turnsCompleted: number
+  userMessages: number
+  assistantMessages: number
+  providerId: string | null
+  providerName: string
+}
+
 interface ProjectUsagePointData {
   projectId: string
   projectName: string
@@ -1187,6 +1198,7 @@ interface AnalyticsOverviewData {
   streaks: AnalyticsStreaksData
   dailyActivity: DailyActivityPointData[]
   providerUsage: ProviderUsagePointData[]
+  modelUsage: ModelUsagePointData[]
   projectUsage: ProjectUsagePointData[]
   weekdayHourActivity: WeekdayHourActivityPointData[]
   conversationBalance: ConversationBalancePointData[]
