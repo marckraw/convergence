@@ -1,5 +1,11 @@
 # convergence
 
+## 0.37.27
+
+### Patch Changes
+
+- 315145c: Show the active project or Space name in new composer titles instead of the app name.
+
 ## 0.37.26
 
 ### Patch Changes
