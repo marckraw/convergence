@@ -427,7 +427,12 @@ export const ChatSurface: FC<ChatSurfaceProps> = ({
           style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
         />
         <div className="flex min-h-0 flex-1 flex-col items-center justify-center px-4">
-          <p className="mb-1 text-lg font-medium">Convergence</p>
+          <p
+            className="mb-1 max-w-full truncate text-lg font-medium"
+            title={draftSpace.title}
+          >
+            {draftSpace.title}
+          </p>
           <p className="mb-3 text-sm text-muted-foreground">
             What would you like to work on?
           </p>
@@ -576,7 +581,6 @@ export const ChatSurface: FC<ChatSurfaceProps> = ({
           </div>
         </div>
         <div className="flex min-h-0 flex-1 flex-col items-center justify-center px-4">
-          <p className="mb-1 text-lg font-medium">Convergence Chat</p>
           <p className="mb-5 text-sm text-muted-foreground">
             Start a project-free agent conversation.
           </p>

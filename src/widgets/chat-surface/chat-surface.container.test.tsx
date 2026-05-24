@@ -134,7 +134,7 @@ describe('ChatSurface', () => {
   it('renders a project-free new chat composer when no global session is active', () => {
     render(<ChatSurface selectedSpaceId={null} />)
 
-    expect(screen.getByText('Convergence Chat')).toBeInTheDocument()
+    expect(screen.queryByText('Convergence Chat')).not.toBeInTheDocument()
     expect(screen.getByTestId('composer')).toHaveTextContent('global:new')
   })
 
@@ -265,8 +265,9 @@ describe('ChatSurface', () => {
 
     render(<ChatSurface selectedSpaceId="space-1" draftSpaceId="space-1" />)
 
+    expect(screen.getAllByText('Launch plan').length).toBeGreaterThan(0)
+    expect(screen.queryByText('Convergence')).not.toBeInTheDocument()
     expect(screen.getByText(/starting in space:/i)).toBeInTheDocument()
-    expect(screen.getByText('Launch plan')).toBeInTheDocument()
     expect(screen.getByText('Context for this chat')).toBeInTheDocument()
     expect(screen.getByLabelText('Space brief')).toBeChecked()
     expect(screen.getByLabelText('Space memory/instructions')).toBeChecked()

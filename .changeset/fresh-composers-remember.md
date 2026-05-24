@@ -2,4 +2,4 @@
 'convergence': patch
 ---
 
-Show the active project name in the new session composer title instead of the app name.
+Show the active project or Space name in new composer titles instead of the app name.
