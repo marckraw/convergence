@@ -332,6 +332,65 @@ describe('SessionView changed files drawer', () => {
     })
   })
 
+  it('runs project actions from the active session working directory', async () => {
+    const script = {
+      id: 'script-1',
+      projectId: 'project-1',
+      name: 'Dev',
+      command: 'npm run dev',
+      icon: 'play' as const,
+      cwd: null,
+      createdAt: '2026-01-01T00:00:00.000Z',
+      updatedAt: '2026-01-01T00:00:00.000Z',
+    }
+    const run = {
+      id: 'run-1',
+      scriptId: script.id,
+      projectId: 'project-1',
+      command: script.command,
+      cwd: '/tmp/project/.worktrees/yolo-mode',
+      status: 'queued' as const,
+      startedAt: '2026-01-01T00:00:00.000Z',
+      endedAt: null,
+      exitCode: null,
+      signal: null,
+      errorMessage: null,
+      stdout: '',
+      stderr: '',
+    }
+    vi.mocked(window.electronAPI.projectScripts.list).mockResolvedValue([
+      script,
+    ])
+    vi.mocked(window.electronAPI.projectScripts.run).mockResolvedValue(run)
+    useSessionStore.setState((state) => ({
+      ...state,
+      sessions: state.sessions.map((session) =>
+        session.id === 'session-1'
+          ? {
+              ...session,
+              workingDirectory: '/tmp/project/.worktrees/yolo-mode',
+            }
+          : session,
+      ),
+    }))
+
+    render(
+      <TooltipProvider>
+        <SessionView />
+      </TooltipProvider>,
+    )
+
+    fireEvent.pointerDown(await screen.findByRole('button', { name: /dev/i }))
+    fireEvent.click(await screen.findByTitle('Run Dev'))
+
+    await waitFor(() => {
+      expect(window.electronAPI.projectScripts.run).toHaveBeenCalledWith(
+        'script-1',
+        { cwd: '/tmp/project/.worktrees/yolo-mode' },
+      )
+    })
+  })
+
   it('uses the active project name as the new session composer title', () => {
     useProjectStore.setState((state) => ({
       ...state,

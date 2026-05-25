@@ -176,6 +176,37 @@ describe('ProjectScriptsService', () => {
     expect(run.status).toBe('queued')
   })
 
+  it('uses runtime cwd when the script has no cwd override', () => {
+    const script = service.create({
+      projectId: 'project-1',
+      name: 'Dev',
+      command: 'npm run dev',
+    })
+
+    const run = service.createRunRecord({
+      scriptId: script.id,
+      cwd: '/tmp/project-1/.worktrees/yolo-mode',
+    })
+
+    expect(run.cwd).toBe('/tmp/project-1/.worktrees/yolo-mode')
+  })
+
+  it('keeps explicit script cwd ahead of runtime cwd', () => {
+    const script = service.create({
+      projectId: 'project-1',
+      name: 'Dev',
+      command: 'npm run dev',
+      cwd: '/tmp/project-1/apps/web',
+    })
+
+    const run = service.createRunRecord({
+      scriptId: script.id,
+      cwd: '/tmp/project-1/.worktrees/yolo-mode',
+    })
+
+    expect(run.cwd).toBe('/tmp/project-1/apps/web')
+  })
+
   it('returns active runs and null for missing runs', () => {
     const script = service.create({
       projectId: 'project-1',

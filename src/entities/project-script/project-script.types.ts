@@ -62,3 +62,7 @@ export interface UpdateProjectScriptInput {
   icon?: ProjectScriptIconId
   cwd?: string | null
 }
+
+export interface RunProjectScriptInput {
+  cwd?: string | null
+}

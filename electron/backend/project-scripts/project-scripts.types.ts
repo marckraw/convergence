@@ -68,9 +68,14 @@ export interface UpdateProjectScriptInput {
   cwd?: string | null
 }
 
+export interface RunProjectScriptInput {
+  cwd?: string | null
+}
+
 export interface CreateProjectScriptRunInput {
   scriptId: string
   status?: ProjectScriptRunStatus
+  cwd?: string | null
 }
 
 export interface FinishProjectScriptRunInput {

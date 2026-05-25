@@ -3,6 +3,7 @@ import type { ProjectScriptsRunner } from './project-scripts.runner'
 import type { ProjectScriptsService } from './project-scripts.service'
 import type {
   CreateProjectScriptInput,
+  RunProjectScriptInput,
   UpdateProjectScriptInput,
 } from './project-scripts.types'
 
@@ -41,8 +42,10 @@ export function registerProjectScriptsIpcHandlers(
     service.getRun(runId),
   )
 
-  ipcMain.handle('projectScripts:run', (_event, scriptId: string) =>
-    runner.run(scriptId),
+  ipcMain.handle(
+    'projectScripts:run',
+    (_event, scriptId: string, input?: RunProjectScriptInput) =>
+      runner.run(scriptId, input),
   )
 
   ipcMain.handle('projectScripts:stop', (_event, runId: string) =>

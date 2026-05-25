@@ -1095,6 +1095,10 @@ interface UpdateProjectScriptInputData {
   cwd?: string | null
 }
 
+interface RunProjectScriptInputData {
+  cwd?: string | null
+}
+
 type AnalyticsRangePresetData = '7d' | '30d' | '90d' | 'all'
 
 interface AnalyticsRangeData {
@@ -1273,7 +1277,10 @@ interface ElectronAPI {
     listRuns: (projectId: string) => Promise<ProjectScriptRunData[]>
     listActiveRuns: () => Promise<ProjectScriptRunData[]>
     getRun: (runId: string) => Promise<ProjectScriptRunData | null>
-    run: (scriptId: string) => Promise<ProjectScriptRunData>
+    run: (
+      scriptId: string,
+      input?: RunProjectScriptInputData,
+    ) => Promise<ProjectScriptRunData>
     stop: (runId: string) => Promise<ProjectScriptRunData>
     onRunUpdated: (callback: (run: ProjectScriptRunData) => void) => () => void
     onRunOutput: (

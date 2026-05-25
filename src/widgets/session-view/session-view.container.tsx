@@ -348,7 +348,12 @@ export const SessionView: FC<SessionViewProps> = ({ onOpenCodeReview }) => {
             className="flex items-center gap-1"
             style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
           >
-            {activeProject && <ProjectActionsMenu project={activeProject} />}
+            {activeProject && (
+              <ProjectActionsMenu
+                project={activeProject}
+                runtimeCwd={draftOpenPath}
+              />
+            )}
             <ProjectOpenMenuContainer targetPath={draftOpenPath} />
           </div>
         </div>
@@ -544,7 +549,12 @@ export const SessionView: FC<SessionViewProps> = ({ onOpenCodeReview }) => {
             className="flex items-center gap-1"
             style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
           >
-            {activeProject && <ProjectActionsMenu project={activeProject} />}
+            {activeProject && (
+              <ProjectActionsMenu
+                project={activeProject}
+                runtimeCwd={session.workingDirectory}
+              />
+            )}
             <ProjectOpenMenuContainer targetPath={sessionOpenPath} />
             <Button
               variant="ghost"
