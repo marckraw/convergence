@@ -34,6 +34,11 @@ export type {
   ProviderEffortOption,
   ProviderModelOption,
   ProviderAttachmentCapability,
+  SessionPermissionConfig,
+  SessionPermissionPreset,
+  CodexApprovalPolicy,
+  CodexSandboxMode,
+  ClaudeCodePermissionMode,
 } from './session.types'
 export { useSessionStore } from './session.model'
 export type { SessionStore } from './session.model'
@@ -41,6 +46,19 @@ export {
   getProviderDisplayLabel,
   resolveProviderSelection,
 } from './provider-selection.pure'
+export {
+  ASK_PERMISSION_CONFIG,
+  CLAUDE_CODE_PERMISSION_MODE_OPTIONS,
+  CODEX_APPROVAL_POLICY_OPTIONS,
+  CODEX_SANDBOX_OPTIONS,
+  YOLO_PERMISSION_CONFIG,
+  defaultCustomPermissionConfigForProvider,
+  getSimplePermissionPreset,
+  resolveSimplePermissionConfig,
+  withClaudeCodePermissionMode,
+  withCodexApprovalPolicy,
+  withCodexSandbox,
+} from './session-permissions.pure'
 export type {
   ResolvedProviderSelection,
   StoredProviderDefaults,

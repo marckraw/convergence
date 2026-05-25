@@ -453,6 +453,31 @@ type ReasoningEffort =
   | 'high'
   | 'max'
   | 'xhigh'
+
+type SessionPermissionPresetData = 'ask' | 'yolo' | 'custom'
+type CodexApprovalPolicyData = 'untrusted' | 'on-request' | 'never'
+type CodexSandboxModeData =
+  | 'read-only'
+  | 'workspace-write'
+  | 'danger-full-access'
+type ClaudeCodePermissionModeData =
+  | 'default'
+  | 'acceptEdits'
+  | 'auto'
+  | 'dontAsk'
+  | 'plan'
+  | 'bypassPermissions'
+
+interface SessionPermissionConfigData {
+  preset: SessionPermissionPresetData
+  codex?: {
+    approvalPolicy: CodexApprovalPolicyData
+    sandbox: CodexSandboxModeData
+  }
+  claudeCode?: {
+    permissionMode: ClaudeCodePermissionModeData
+  }
+}
 type ActivitySignal =
   | null
   | 'streaming'
@@ -805,6 +830,7 @@ interface SessionSummaryData {
   providerId: string
   model: string | null
   effort: ReasoningEffort | null
+  permissionConfig?: SessionPermissionConfigData
   name: string
   status: SessionStatus
   attention: AttentionState
@@ -829,6 +855,7 @@ interface CreateSessionInput {
   providerId: string
   model: string | null
   effort: ReasoningEffort | null
+  permissionConfig?: SessionPermissionConfigData
   name: string
   primarySurface?: 'conversation' | 'terminal'
 }

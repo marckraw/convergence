@@ -19,6 +19,7 @@ function buildSessionsTableSql(
       provider_id TEXT NOT NULL,
       model TEXT,
       effort TEXT,
+      permission_config TEXT NOT NULL DEFAULT '{"preset":"ask"}',
       continuation_token TEXT,
       name TEXT NOT NULL,
       status TEXT NOT NULL DEFAULT 'idle',
@@ -613,6 +614,12 @@ function ensureSessionColumns(database: Database.Database): void {
     database.exec('ALTER TABLE sessions ADD COLUMN effort TEXT')
   }
 
+  if (!columnNames.has('permission_config')) {
+    database.exec(
+      `ALTER TABLE sessions ADD COLUMN permission_config TEXT NOT NULL DEFAULT '{"preset":"ask"}'`,
+    )
+  }
+
   if (!columnNames.has('continuation_token')) {
     database.exec('ALTER TABLE sessions ADD COLUMN continuation_token TEXT')
   }
@@ -860,6 +867,13 @@ function ensureSessionsTableShape(database: Database.Database): void {
             ELSE 'project'
           END`
         : "'project'"
+      const permissionConfigSelect = sourceColumnNames.has('permission_config')
+        ? `CASE
+            WHEN permission_config IS NOT NULL AND permission_config != ''
+              THEN permission_config
+            ELSE '{"preset":"ask"}'
+          END`
+        : `'{"preset":"ask"}'`
       database.exec(`
         INSERT INTO sessions_next (
           id,
@@ -869,6 +883,7 @@ function ensureSessionsTableShape(database: Database.Database): void {
           provider_id,
           model,
           effort,
+          permission_config,
           continuation_token,
           name,
           status,
@@ -894,6 +909,7 @@ function ensureSessionsTableShape(database: Database.Database): void {
           provider_id,
           model,
           effort,
+          ${permissionConfigSelect},
           continuation_token,
           name,
           status,

@@ -11,6 +11,7 @@ interface ProjectContextPickerProps {
   items: ProjectContextItem[]
   selectedIds: string[]
   disabled?: boolean
+  triggerClassName?: string
   onToggleItem: (id: string) => void
 }
 
@@ -32,6 +33,7 @@ export const ProjectContextPicker: FC<ProjectContextPickerProps> = ({
   items,
   selectedIds,
   disabled = false,
+  triggerClassName,
   onToggleItem,
 }) => (
   <Popover open={open} onOpenChange={onOpenChange}>
@@ -40,7 +42,10 @@ export const ProjectContextPicker: FC<ProjectContextPickerProps> = ({
         type="button"
         size="sm"
         variant="ghost"
-        className="h-7 gap-1.5 px-2 text-xs text-muted-foreground hover:text-foreground"
+        className={cn(
+          'h-7 gap-1.5 px-2 text-xs text-muted-foreground hover:text-foreground',
+          triggerClassName,
+        )}
         aria-label="Select project context"
         disabled={disabled || items.length === 0}
       >

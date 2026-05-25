@@ -223,6 +223,46 @@ describe('CodexProvider', () => {
     spawnMock.mockReset()
   })
 
+  it('starts yolo threads without approvals or sandboxing', async () => {
+    const child = new MockChildProcess()
+    const server = createMockCodexServer(child)
+    spawnMock.mockReturnValue(child)
+
+    const provider = new CodexProvider('/usr/local/bin/codex')
+    const handle = provider.start({
+      sessionId: 'session-yolo',
+      workingDirectory: process.cwd(),
+      initialMessage: 'ship it',
+      model: 'gpt-5.4',
+      effort: 'medium',
+      continuationToken: null,
+      permissionConfig: { preset: 'yolo' },
+    })
+
+    handle.onDelta(() => {})
+    handle.onStatusChange(() => {})
+    handle.onContinuationToken(() => {})
+    handle.onAttentionChange(() => {})
+    handle.onContextWindowChange(() => {})
+    handle.onActivityChange(() => {})
+
+    await waitFor(() => {
+      expect(
+        server.requests.some((request) => request.method === 'thread/start'),
+      ).toBe(true)
+    })
+
+    expect(server.requests).toContainEqual(
+      expect.objectContaining({
+        method: 'thread/start',
+        params: expect.objectContaining({
+          approvalPolicy: 'never',
+          sandbox: 'danger-full-access',
+        }),
+      }),
+    )
+  })
+
   it('emits thinking conversation items from Codex reasoning deltas', async () => {
     const child = new MockChildProcess()
     const server = createMockCodexServer(child, { autoCompleteTurns: false })

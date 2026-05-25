@@ -73,6 +73,7 @@ import {
   type ClaudeDeferredToolHookResponse,
   type PendingClaudeDeferredToolUse,
 } from './claude-ask-user-question.pure'
+import { resolveClaudeCodePermissionMode } from '../session-permissions.pure'
 
 function now(): string {
   return new Date().toISOString()
@@ -124,7 +125,8 @@ function runClaudeOneShot(
       '-p',
       '--output-format',
       'json',
-      '--dangerously-skip-permissions',
+      '--permission-mode',
+      resolveClaudeCodePermissionMode(input.permissionConfig),
       '--model',
       input.modelId,
     ]
@@ -982,7 +984,8 @@ export class ClaudeCodeProvider implements Provider {
         '--output-format',
         'stream-json',
         '--verbose',
-        '--dangerously-skip-permissions',
+        '--permission-mode',
+        resolveClaudeCodePermissionMode(config.permissionConfig),
         '--include-partial-messages',
       ]
       if (supportsDeferredToolUse) {
@@ -1232,10 +1235,10 @@ export class ClaudeCodeProvider implements Provider {
         void startTurn(text, attachments, { skillSelections })
       },
       approve: () => {
-        // Using --dangerously-skip-permissions, no approvals needed
+        // Claude Code permission handling is controlled at process startup.
       },
       deny: () => {
-        // Using --dangerously-skip-permissions, no approvals needed
+        // Claude Code permission handling is controlled at process startup.
       },
       stop: () => {
         stopped = true

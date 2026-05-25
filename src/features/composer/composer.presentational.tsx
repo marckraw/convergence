@@ -11,15 +11,34 @@ import type {
   ProviderInfo,
   ReasoningEffort,
   ResolvedProviderSelection,
+  SessionPermissionConfig,
+  CodexApprovalPolicy,
+  CodexSandboxMode,
+  ClaudeCodePermissionMode,
+} from '@/entities/session'
+import {
+  CLAUDE_CODE_PERMISSION_MODE_OPTIONS,
+  CODEX_APPROVAL_POLICY_OPTIONS,
+  CODEX_SANDBOX_OPTIONS,
+  getSimplePermissionPreset,
 } from '@/entities/session'
 import { AttachmentsRow, type Attachment } from '@/entities/attachment'
 import type { ProjectContextItem } from '@/entities/project-context'
 import type { SkillCatalogEntry, SkillSelection } from '@/entities/skill'
 import { ModelPickerDialog } from '@/features/model-picker'
 import { Button } from '@/shared/ui/button'
+import { Popover, PopoverContent, PopoverTrigger } from '@/shared/ui/popover'
 import { Textarea } from '@/shared/ui/textarea'
 import { cn } from '@/shared/lib/cn.pure'
-import { ArrowUp, FileText, Paperclip, Repeat, X } from 'lucide-react'
+import {
+  ArrowUp,
+  FileText,
+  Paperclip,
+  Plus,
+  Repeat,
+  SlidersHorizontal,
+  X,
+} from 'lucide-react'
 import { ComposerSelect } from './composer-select.presentational'
 import { ComposerContextMentionPicker } from './composer-context-mention.presentational'
 import { ProjectContextPicker } from './project-context-picker.presentational'
@@ -35,6 +54,13 @@ interface ComposerProps {
   onProviderChange: (id: string) => void
   onModelChange: (id: string, providerId?: string) => void
   onEffortChange: (id: ReasoningEffort | '') => void
+  permissionConfig: SessionPermissionConfig
+  permissionAdvancedOpen: boolean
+  onPermissionPresetChange: (preset: 'ask' | 'yolo') => void
+  onPermissionAdvancedOpenChange: (open: boolean) => void
+  onCodexApprovalPolicyChange: (policy: CodexApprovalPolicy) => void
+  onCodexSandboxChange: (mode: CodexSandboxMode) => void
+  onClaudeCodePermissionModeChange: (mode: ClaudeCodePermissionMode) => void
   codexUsagePill?: ReactNode
   contextWindowDot?: ReactNode
   deliveryMode: MidRunInputMode
@@ -94,6 +120,13 @@ export const Composer: FC<ComposerProps> = ({
   onProviderChange,
   onModelChange,
   onEffortChange,
+  permissionConfig,
+  permissionAdvancedOpen,
+  onPermissionPresetChange,
+  onPermissionAdvancedOpenChange,
+  onCodexApprovalPolicyChange,
+  onCodexSandboxChange,
+  onClaudeCodePermissionModeChange,
   codexUsagePill,
   contextWindowDot,
   deliveryMode,
@@ -202,6 +235,30 @@ export const Composer: FC<ComposerProps> = ({
       label: effort.label,
       description: effort.description,
     })) ?? []
+  const permissionItems = [
+    {
+      id: 'ask',
+      label: 'Ask',
+      description: 'Ask before risky provider actions.',
+    },
+    {
+      id: 'yolo',
+      label: 'Yolo',
+      description: 'Give the provider full execution freedom.',
+    },
+  ]
+  const simplePermissionPreset = getSimplePermissionPreset(permissionConfig)
+  const codexConfig = permissionConfig.codex ?? {
+    approvalPolicy: 'on-request' as CodexApprovalPolicy,
+    sandbox: 'workspace-write' as CodexSandboxMode,
+  }
+  const claudeCodeConfig = permissionConfig.claudeCode ?? {
+    permissionMode: 'default' as ClaudeCodePermissionMode,
+  }
+  const canCustomizePermissions =
+    selection.providerId === 'codex' || selection.providerId === 'claude-code'
+  const resourceCount =
+    attachments.length + selectedSkills.length + selectedContextItems.length
 
   const canSend =
     !disabled &&
@@ -323,41 +380,82 @@ export const Composer: FC<ComposerProps> = ({
         </div>
         <div className="mt-2 flex items-center justify-between">
           <div className="flex min-w-0 flex-wrap items-center gap-1">
-            <Button
-              type="button"
-              size="icon"
-              variant="ghost"
-              className="h-7 w-7"
-              aria-label="Add attachment"
-              onClick={onAttachmentAdd}
-              disabled={disabled || attachmentsIngestInFlight}
-            >
-              <Paperclip className="h-3.5 w-3.5" />
-            </Button>
-            <SkillPicker
-              open={skillPickerOpen}
-              onOpenChange={onSkillPickerOpenChange}
-              query={skillQuery}
-              onQueryChange={onSkillQueryChange}
-              skills={skillOptions}
-              selectedSkills={selectedSkills}
-              activeProviderLabel={selection.providerLabel}
-              isLoading={skillCatalogLoading}
-              error={skillCatalogError}
-              disabled={disabled || !selection.provider}
-              onToggleSkill={onSkillToggle}
-              onBrowseAll={onSkillsBrowse}
-            />
-            {projectContextEnabled ? (
-              <ProjectContextPicker
-                open={contextPickerOpen}
-                onOpenChange={onContextPickerOpenChange}
-                items={projectContextItems}
-                selectedIds={selectedContextItems.map((item) => item.id)}
-                disabled={disabled || selectionDisabled}
-                onToggleItem={onContextToggle}
-              />
-            ) : null}
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  className="h-7 gap-1.5 px-2 text-xs text-muted-foreground hover:text-foreground"
+                  aria-label="Add composer resources"
+                  disabled={disabled}
+                >
+                  <Plus className="h-3.5 w-3.5" />
+                  Add
+                  {resourceCount > 0 ? (
+                    <span className="rounded-full bg-primary/15 px-1.5 py-0.5 text-[10px] text-primary">
+                      {resourceCount}
+                    </span>
+                  ) : null}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent
+                align="start"
+                className="w-56 p-1"
+                onInteractOutside={(event) => {
+                  if (skillPickerOpen || contextPickerOpen) {
+                    event.preventDefault()
+                  }
+                }}
+              >
+                <div className="px-2 py-1.5 text-xs font-medium text-muted-foreground">
+                  Resources
+                </div>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  className="h-8 w-full justify-start gap-2 px-2 text-xs text-muted-foreground hover:text-foreground"
+                  aria-label="Add attachment"
+                  onClick={onAttachmentAdd}
+                  disabled={attachmentsIngestInFlight}
+                >
+                  <Paperclip className="h-3.5 w-3.5" />
+                  Attach file
+                  {attachments.length > 0 ? (
+                    <span className="ml-auto rounded-full bg-primary/15 px-1.5 py-0.5 text-[10px] text-primary">
+                      {attachments.length}
+                    </span>
+                  ) : null}
+                </Button>
+                <SkillPicker
+                  open={skillPickerOpen}
+                  onOpenChange={onSkillPickerOpenChange}
+                  query={skillQuery}
+                  onQueryChange={onSkillQueryChange}
+                  skills={skillOptions}
+                  selectedSkills={selectedSkills}
+                  activeProviderLabel={selection.providerLabel}
+                  isLoading={skillCatalogLoading}
+                  error={skillCatalogError}
+                  disabled={!selection.provider}
+                  triggerClassName="h-8 w-full justify-start gap-2 px-2"
+                  onToggleSkill={onSkillToggle}
+                  onBrowseAll={onSkillsBrowse}
+                />
+                {projectContextEnabled ? (
+                  <ProjectContextPicker
+                    open={contextPickerOpen}
+                    onOpenChange={onContextPickerOpenChange}
+                    items={projectContextItems}
+                    selectedIds={selectedContextItems.map((item) => item.id)}
+                    disabled={selectionDisabled}
+                    triggerClassName="h-8 w-full justify-start gap-2 px-2"
+                    onToggleItem={onContextToggle}
+                  />
+                ) : null}
+              </PopoverContent>
+            </Popover>
             <ComposerSelect
               selectedId={selection.providerId}
               value={selection.providerLabel || 'Select provider'}
@@ -389,6 +487,49 @@ export const Composer: FC<ComposerProps> = ({
                 className="px-2 text-xs text-muted-foreground hover:text-foreground"
               />
             )}
+            {!selectionDisabled ? (
+              <>
+                <ComposerSelect
+                  selectedId={simplePermissionPreset}
+                  value={
+                    permissionConfig.preset === 'custom'
+                      ? 'Custom'
+                      : simplePermissionPreset === 'yolo'
+                        ? 'Yolo'
+                        : 'Ask'
+                  }
+                  items={permissionItems}
+                  onChange={(id) =>
+                    onPermissionPresetChange(id === 'yolo' ? 'yolo' : 'ask')
+                  }
+                  disabled={disabled || !selection.provider}
+                  className="px-2 text-xs text-muted-foreground hover:text-foreground"
+                />
+                {canCustomizePermissions ? (
+                  <Button
+                    type="button"
+                    size="icon"
+                    variant="ghost"
+                    className={cn(
+                      'h-7 w-7 text-muted-foreground hover:text-foreground',
+                      permissionAdvancedOpen && 'bg-secondary text-foreground',
+                    )}
+                    aria-label="Advanced permission controls"
+                    aria-pressed={permissionAdvancedOpen}
+                    onClick={() =>
+                      onPermissionAdvancedOpenChange(!permissionAdvancedOpen)
+                    }
+                    disabled={disabled || !selection.provider}
+                  >
+                    <SlidersHorizontal className="h-3.5 w-3.5" />
+                  </Button>
+                ) : selection.providerId === 'pi' ? (
+                  <span className="rounded-md border border-border px-2 py-1 text-[11px] font-medium text-muted-foreground">
+                    Provider-managed
+                  </span>
+                ) : null}
+              </>
+            ) : null}
             {codexUsagePill}
             {contextWindowDot}
             {visibleDeliveryModes.length > 1 ? (
@@ -434,6 +575,59 @@ export const Composer: FC<ComposerProps> = ({
             <ArrowUp className="h-4 w-4" />
           </Button>
         </div>
+        {permissionAdvancedOpen && canCustomizePermissions ? (
+          <div className="mt-2 flex flex-wrap items-center gap-1 border-t border-border/60 pt-2">
+            {selection.providerId === 'codex' ? (
+              <>
+                <ComposerSelect
+                  selectedId={codexConfig.approvalPolicy}
+                  value={
+                    CODEX_APPROVAL_POLICY_OPTIONS.find(
+                      (item) => item.id === codexConfig.approvalPolicy,
+                    )?.label ?? 'Approval policy'
+                  }
+                  items={CODEX_APPROVAL_POLICY_OPTIONS}
+                  onChange={(id) =>
+                    onCodexApprovalPolicyChange(id as CodexApprovalPolicy)
+                  }
+                  disabled={disabled}
+                  className="px-2 text-xs text-muted-foreground hover:text-foreground"
+                />
+                <ComposerSelect
+                  selectedId={codexConfig.sandbox}
+                  value={
+                    CODEX_SANDBOX_OPTIONS.find(
+                      (item) => item.id === codexConfig.sandbox,
+                    )?.label ?? 'Sandbox'
+                  }
+                  items={CODEX_SANDBOX_OPTIONS}
+                  onChange={(id) =>
+                    onCodexSandboxChange(id as CodexSandboxMode)
+                  }
+                  disabled={disabled}
+                  className="px-2 text-xs text-muted-foreground hover:text-foreground"
+                />
+              </>
+            ) : (
+              <ComposerSelect
+                selectedId={claudeCodeConfig.permissionMode}
+                value={
+                  CLAUDE_CODE_PERMISSION_MODE_OPTIONS.find(
+                    (item) => item.id === claudeCodeConfig.permissionMode,
+                  )?.label ?? 'Permission mode'
+                }
+                items={CLAUDE_CODE_PERMISSION_MODE_OPTIONS}
+                onChange={(id) =>
+                  onClaudeCodePermissionModeChange(
+                    id as ClaudeCodePermissionMode,
+                  )
+                }
+                disabled={disabled}
+                className="px-2 text-xs text-muted-foreground hover:text-foreground"
+              />
+            )}
+          </div>
+        ) : null}
       </div>
       <p className="mt-1.5 text-center text-[10px] text-muted-foreground">
         ⌘ + Enter to send

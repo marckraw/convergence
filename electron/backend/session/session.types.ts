@@ -6,7 +6,9 @@ import type {
   SessionContextWindow,
   ActivitySignal,
   MidRunInputMode,
+  SessionPermissionConfig,
 } from '../provider/provider.types'
+import { parseSessionPermissionConfig } from '../provider/session-permissions.pure'
 import type { SkillSelection } from '../skills/skills.types'
 
 export type {
@@ -16,6 +18,7 @@ export type {
   SessionContextWindow,
   ActivitySignal,
   MidRunInputMode,
+  SessionPermissionConfig,
 }
 
 export type ForkStrategy = 'full' | 'summary'
@@ -40,6 +43,7 @@ export interface SessionSummary {
   providerId: string
   model: string | null
   effort: ReasoningEffort | null
+  permissionConfig?: SessionPermissionConfig
   name: string
   status: SessionStatus
   attention: AttentionState
@@ -75,6 +79,7 @@ interface CreateSessionBaseInput {
   providerId: string
   model: string | null
   effort: ReasoningEffort | null
+  permissionConfig?: SessionPermissionConfig
   name: string
   parentSessionId?: string | null
   forkStrategy?: ForkStrategy | null
@@ -145,6 +150,7 @@ export function sessionSummaryFromRow(row: SessionRow): SessionSummary {
     providerId: row.provider_id,
     model: row.model,
     effort: row.effort as ReasoningEffort | null,
+    permissionConfig: parseSessionPermissionConfig(row.permission_config),
     name: row.name,
     status: row.status as SessionStatus,
     attention: row.attention as AttentionState,

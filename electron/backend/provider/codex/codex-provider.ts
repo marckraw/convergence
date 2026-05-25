@@ -67,6 +67,7 @@ import {
   noopDebugSink,
   type ProviderDebugSink,
 } from '../../provider-debug/provider-debug-sink'
+import { resolveCodexPermissionConfig } from '../session-permissions.pure'
 import type {
   ProviderDebugChannel,
   ProviderDebugEntry,
@@ -681,13 +682,24 @@ function runCodexOneShot(
   taskProgress?: TaskProgressService | null,
 ): Promise<OneShotResult> {
   return new Promise((resolve, reject) => {
-    const args = [
-      'exec',
-      '--skip-git-repo-check',
-      '--model',
-      input.modelId,
-      input.prompt,
-    ]
+    const permissionConfig = resolveCodexPermissionConfig(
+      input.permissionConfig,
+    )
+    const args = ['exec', '--skip-git-repo-check', '--model', input.modelId]
+    if (
+      permissionConfig.approvalPolicy === 'never' &&
+      permissionConfig.sandbox === 'danger-full-access'
+    ) {
+      args.push('--dangerously-bypass-approvals-and-sandbox')
+    } else {
+      args.push(
+        '--ask-for-approval',
+        permissionConfig.approvalPolicy,
+        '--sandbox',
+        permissionConfig.sandbox,
+      )
+    }
+    args.push(input.prompt)
     const child = spawn(binaryPath, args, {
       cwd: input.workingDirectory,
       stdio: ['ignore', 'pipe', 'pipe'],
@@ -1065,10 +1077,13 @@ export class CodexProvider implements Provider {
     }
 
     async function startFreshThread(activeRpc: JsonRpcClient): Promise<string> {
+      const permissionConfig = resolveCodexPermissionConfig(
+        config.permissionConfig,
+      )
       const threadResult = await activeRpc.request('thread/start', {
         cwd: config.workingDirectory,
-        approvalPolicy: 'on-request',
-        sandbox: 'workspace-write',
+        approvalPolicy: permissionConfig.approvalPolicy,
+        sandbox: permissionConfig.sandbox,
       })
 
       const discoveredThreadId = readThreadId(threadResult)
@@ -1087,11 +1102,14 @@ export class CodexProvider implements Provider {
       continuationThreadId: string,
     ): Promise<string> {
       try {
+        const permissionConfig = resolveCodexPermissionConfig(
+          config.permissionConfig,
+        )
         const threadResult = await activeRpc.request('thread/resume', {
           threadId: continuationThreadId,
           cwd: config.workingDirectory,
-          approvalPolicy: 'on-request',
-          sandbox: 'workspace-write',
+          approvalPolicy: permissionConfig.approvalPolicy,
+          sandbox: permissionConfig.sandbox,
         })
 
         const discoveredThreadId = readThreadId(threadResult)

@@ -11,6 +11,7 @@ import type {
   NeedsYouDisposition,
   SessionQueuedInput,
   SessionSummary,
+  SessionPermissionConfig,
 } from './session.types'
 import type { SkillSelection } from '@/shared/types/skill.types'
 import { isConversationalProvider } from './session.types'
@@ -63,6 +64,7 @@ interface SessionActions {
     attachmentIds?: string[],
     skillSelections?: SkillSelection[],
     contextItemIds?: string[],
+    permissionConfig?: SessionPermissionConfig,
   ) => Promise<void>
   createAndStartGlobalSession: (
     providerId: string,
@@ -72,6 +74,7 @@ interface SessionActions {
     message: string,
     attachmentIds?: string[],
     skillSelections?: SkillSelection[],
+    permissionConfig?: SessionPermissionConfig,
   ) => Promise<SessionSummary | null>
   createTerminalSession: (
     projectId: string,
@@ -433,6 +436,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     attachmentIds,
     skillSelections,
     contextItemIds,
+    permissionConfig,
   ) => {
     set({ error: null })
     try {
@@ -442,6 +446,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
         providerId,
         model,
         effort,
+        permissionConfig,
         name,
       })
       await sessionApi.start(
@@ -487,6 +492,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     message,
     attachmentIds,
     skillSelections,
+    permissionConfig,
   ) => {
     set({ error: null })
     try {
@@ -495,6 +501,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
         providerId,
         model,
         effort,
+        permissionConfig,
         name,
       })
       await sessionApi.start(

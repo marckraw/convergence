@@ -201,6 +201,7 @@ export class SessionForkService {
       providerId: args.providerId,
       model: args.modelId,
       effort: args.effort,
+      permissionConfig: args.parent.permissionConfig,
       name: args.name,
       parentSessionId: args.parent.id,
       forkStrategy: args.strategy,

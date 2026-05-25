@@ -18,6 +18,7 @@ interface SkillPickerProps {
   isLoading: boolean
   error: string | null
   disabled?: boolean
+  triggerClassName?: string
   onToggleSkill: (skill: SkillCatalogEntry) => void
   onBrowseAll: () => void
 }
@@ -86,6 +87,7 @@ export const SkillPicker: FC<SkillPickerProps> = ({
   isLoading,
   error,
   disabled = false,
+  triggerClassName,
   onToggleSkill,
   onBrowseAll,
 }) => (
@@ -95,7 +97,10 @@ export const SkillPicker: FC<SkillPickerProps> = ({
         type="button"
         size="sm"
         variant="ghost"
-        className="h-7 gap-1.5 px-2 text-xs text-muted-foreground hover:text-foreground"
+        className={cn(
+          'h-7 gap-1.5 px-2 text-xs text-muted-foreground hover:text-foreground',
+          triggerClassName,
+        )}
         aria-label="Select skills"
         disabled={disabled}
       >

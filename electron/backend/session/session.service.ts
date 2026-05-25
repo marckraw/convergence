@@ -32,6 +32,7 @@ import {
   type QueuedInputState,
   type SessionQueuedInput,
 } from './session.types'
+import { serializeSessionPermissionConfig } from '../provider/session-permissions.pure'
 import type {
   ConversationItem,
   ConversationItemDraft,
@@ -306,13 +307,14 @@ export class SessionService {
            provider_id,
            model,
            effort,
+           permission_config,
            name,
            working_directory,
            parent_session_id,
            fork_strategy,
            primary_surface
          )
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
       .run(
         id,
@@ -322,6 +324,7 @@ export class SessionService {
         input.providerId,
         input.model,
         input.effort,
+        serializeSessionPermissionConfig(input.permissionConfig),
         input.name,
         workingDirectory,
         input.parentSessionId ?? null,
@@ -1318,6 +1321,7 @@ export class SessionService {
       model: session.model,
       effort: session.effort,
       continuationToken,
+      permissionConfig: session.permissionConfig,
       initialAttachments,
     })
 
