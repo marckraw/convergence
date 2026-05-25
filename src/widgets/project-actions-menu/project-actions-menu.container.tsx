@@ -16,6 +16,7 @@ import type { ProjectActionItem } from './project-actions-menu.types'
 
 interface ProjectActionsMenuProps {
   project: Project
+  runtimeCwd?: string | null
 }
 
 const EMPTY_SCRIPTS: ProjectScript[] = []
@@ -23,6 +24,7 @@ const EMPTY_RUNS: ProjectScriptRun[] = []
 
 export const ProjectActionsMenu: FC<ProjectActionsMenuProps> = ({
   project,
+  runtimeCwd,
 }) => {
   const scripts = useProjectScriptStore(
     (state) => state.scriptsByProjectId[project.id] ?? EMPTY_SCRIPTS,
@@ -101,7 +103,9 @@ export const ProjectActionsMenu: FC<ProjectActionsMenuProps> = ({
               )
               return
             }
-            void runScript(item.script.id, project.id).then((run) => {
+            void runScript(item.script.id, project.id, {
+              cwd: runtimeCwd ?? null,
+            }).then((run) => {
               if (!run) return
               setExpandedRunIds((current) => new Set(current).add(run.id))
             })

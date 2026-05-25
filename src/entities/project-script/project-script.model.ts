@@ -5,6 +5,7 @@ import type {
   ProjectScript,
   ProjectScriptRun,
   ProjectScriptRunOutput,
+  RunProjectScriptInput,
   UpdateProjectScriptInput,
 } from './project-script.types'
 
@@ -32,6 +33,7 @@ interface ProjectScriptActions {
   runScript: (
     scriptId: string,
     projectId: string,
+    input?: RunProjectScriptInput,
   ) => Promise<ProjectScriptRun | null>
   stopRun: (runId: string) => Promise<ProjectScriptRun | null>
   subscribeToRunEvents: () => () => void
@@ -211,10 +213,10 @@ export const useProjectScriptStore = create<ProjectScriptStore>((set) => ({
     }
   },
 
-  runScript: async (scriptId, _projectId) => {
+  runScript: async (scriptId, _projectId, input) => {
     set({ error: null })
     try {
-      const run = await projectScriptApi.run(scriptId)
+      const run = await projectScriptApi.run(scriptId, input)
       set((state) => upsertRunInState(state, run))
       return run
     } catch (error) {

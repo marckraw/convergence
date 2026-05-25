@@ -4,6 +4,7 @@ import type { ProjectScriptsService } from './project-scripts.service'
 import type {
   ProjectScriptRun,
   ProjectScriptRunOutput,
+  RunProjectScriptInput,
 } from './project-scripts.types'
 
 interface ActiveProcess {
@@ -30,10 +31,11 @@ export class ProjectScriptsRunner {
     this.shell = options.shell
   }
 
-  run(scriptId: string): ProjectScriptRun {
+  run(scriptId: string, input?: RunProjectScriptInput): ProjectScriptRun {
     const run = this.service.createRunRecord({
       scriptId,
       status: 'queued',
+      cwd: input?.cwd,
     })
 
     try {

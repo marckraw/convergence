@@ -52,8 +52,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
     listActiveRuns: () => ipcRenderer.invoke('projectScripts:listActiveRuns'),
     getRun: (runId: string) =>
       ipcRenderer.invoke('projectScripts:getRun', runId),
-    run: (scriptId: string) =>
-      ipcRenderer.invoke('projectScripts:run', scriptId),
+    run: (scriptId: string, input?: unknown) =>
+      ipcRenderer.invoke('projectScripts:run', scriptId, input),
     stop: (runId: string) => ipcRenderer.invoke('projectScripts:stop', runId),
     onRunUpdated: (callback: (run: unknown) => void) => {
       const handler = (_event: unknown, run: unknown) => callback(run)

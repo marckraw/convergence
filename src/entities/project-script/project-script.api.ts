@@ -3,6 +3,7 @@ import type {
   ProjectScript,
   ProjectScriptRun,
   ProjectScriptRunOutput,
+  RunProjectScriptInput,
   UpdateProjectScriptInput,
 } from './project-script.types'
 
@@ -31,8 +32,11 @@ export const projectScriptApi = {
   getRun: (runId: string): Promise<ProjectScriptRun | null> =>
     window.electronAPI.projectScripts.getRun(runId),
 
-  run: (scriptId: string): Promise<ProjectScriptRun> =>
-    window.electronAPI.projectScripts.run(scriptId),
+  run: (
+    scriptId: string,
+    input?: RunProjectScriptInput,
+  ): Promise<ProjectScriptRun> =>
+    window.electronAPI.projectScripts.run(scriptId, input),
 
   stop: (runId: string): Promise<ProjectScriptRun> =>
     window.electronAPI.projectScripts.stop(runId),

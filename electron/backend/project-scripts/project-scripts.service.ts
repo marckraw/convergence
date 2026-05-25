@@ -141,7 +141,8 @@ export class ProjectScriptsService {
     const status = input.status ?? 'queued'
     assertProjectScriptRunStatus(status)
     const id = randomUUID()
-    const cwd = script.cwd ?? project.repository_path
+    const runtimeCwd = normalizeOptionalCwd(input.cwd, project.repository_path)
+    const cwd = script.cwd ?? runtimeCwd ?? project.repository_path
 
     this.db
       .prepare(

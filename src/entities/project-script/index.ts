@@ -13,5 +13,6 @@ export type {
   ProjectScriptRun,
   ProjectScriptRunOutput,
   ProjectScriptRunStatus,
+  RunProjectScriptInput,
   UpdateProjectScriptInput,
 } from './project-script.types'
