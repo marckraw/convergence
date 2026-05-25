@@ -7,6 +7,12 @@ import {
   useSessionStore,
   type ReasoningEffort,
   type SessionSummary,
+  type SessionPermissionConfig,
+  defaultCustomPermissionConfigForProvider,
+  resolveSimplePermissionConfig,
+  withClaudeCodePermissionMode,
+  withCodexApprovalPolicy,
+  withCodexSandbox,
 } from '@/entities/session'
 import { useAppSettingsStore } from '@/entities/app-settings'
 import { useDialogStore } from '@/entities/dialog'
@@ -149,6 +155,9 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
   const [providerId, setProviderId] = useState('')
   const [modelId, setModelId] = useState('')
   const [effortId, setEffortId] = useState<ReasoningEffort | ''>('')
+  const [permissionConfig, setPermissionConfig] =
+    useState<SessionPermissionConfig>(resolveSimplePermissionConfig('ask'))
+  const [permissionAdvancedOpen, setPermissionAdvancedOpen] = useState(false)
   const [deliveryMode, setDeliveryMode] = useState<MidRunInputMode>('normal')
   const [previewAttachment, setPreviewAttachment] = useState<Attachment | null>(
     null,
@@ -409,6 +418,9 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
       setProviderId(activeSession.providerId)
       setModelId(activeSession.model ?? '')
       setEffortId(activeSession.effort ?? '')
+      setPermissionConfig(
+        activeSession.permissionConfig ?? resolveSimplePermissionConfig('ask'),
+      )
       return
     }
 
@@ -546,6 +558,7 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
           startMessage,
           hasAttachments ? attachmentIds : undefined,
           skillSelections,
+          permissionConfig,
         )
         if (session) {
           await onGlobalSessionCreated?.(session)
@@ -563,6 +576,7 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
         hasAttachments ? attachmentIds : undefined,
         skillSelections,
         contextItemIds,
+        permissionConfig,
       )
     } else {
       createAndStartSession(
@@ -576,6 +590,7 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
         undefined,
         undefined,
         contextItemIds,
+        permissionConfig,
       )
     }
     setValue('')
@@ -603,6 +618,7 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
     projectContextEnabled,
     onGlobalSessionCreated,
     prepareNewSessionMessage,
+    permissionConfig,
   ])
 
   const handleProviderChange = (nextProviderId: string) => {
@@ -616,6 +632,26 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
     setProviderId(nextSelection.providerId)
     setModelId(nextSelection.modelId)
     setEffortId(nextSelection.effortId)
+    setPermissionAdvancedOpen(false)
+    if (permissionConfig.preset === 'custom') {
+      setPermissionConfig(
+        defaultCustomPermissionConfigForProvider(nextSelection.providerId),
+      )
+    }
+  }
+
+  const handlePermissionPresetChange = (preset: 'ask' | 'yolo') => {
+    setPermissionAdvancedOpen(false)
+    setPermissionConfig(resolveSimplePermissionConfig(preset))
+  }
+
+  const handlePermissionAdvancedOpenChange = (open: boolean) => {
+    setPermissionAdvancedOpen(open)
+    if (open && permissionConfig.preset !== 'custom') {
+      setPermissionConfig(
+        defaultCustomPermissionConfigForProvider(selection.providerId),
+      )
+    }
   }
 
   const handleSkillPickerOpenChange = useCallback(
@@ -761,6 +797,23 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
         onProviderChange={handleProviderChange}
         onModelChange={handleModelChange}
         onEffortChange={setEffortId}
+        permissionConfig={permissionConfig}
+        permissionAdvancedOpen={permissionAdvancedOpen}
+        onPermissionPresetChange={handlePermissionPresetChange}
+        onPermissionAdvancedOpenChange={handlePermissionAdvancedOpenChange}
+        onCodexApprovalPolicyChange={(approvalPolicy) =>
+          setPermissionConfig((current) =>
+            withCodexApprovalPolicy(current, approvalPolicy),
+          )
+        }
+        onCodexSandboxChange={(sandbox) =>
+          setPermissionConfig((current) => withCodexSandbox(current, sandbox))
+        }
+        onClaudeCodePermissionModeChange={(permissionMode) =>
+          setPermissionConfig((current) =>
+            withClaudeCodePermissionMode(current, permissionMode),
+          )
+        }
         codexUsagePill={
           showCodexUsagePill ? (
             <CodexUsagePillContainer

@@ -31,6 +31,31 @@ export type ReasoningEffort =
   | 'max'
   | 'xhigh'
 
+export type SessionPermissionPreset = 'ask' | 'yolo' | 'custom'
+export type CodexApprovalPolicy = 'untrusted' | 'on-request' | 'never'
+export type CodexSandboxMode =
+  | 'read-only'
+  | 'workspace-write'
+  | 'danger-full-access'
+export type ClaudeCodePermissionMode =
+  | 'default'
+  | 'acceptEdits'
+  | 'auto'
+  | 'dontAsk'
+  | 'plan'
+  | 'bypassPermissions'
+
+export interface SessionPermissionConfig {
+  preset: SessionPermissionPreset
+  codex?: {
+    approvalPolicy: CodexApprovalPolicy
+    sandbox: CodexSandboxMode
+  }
+  claudeCode?: {
+    permissionMode: ClaudeCodePermissionMode
+  }
+}
+
 export type ActivitySignal =
   | null
   | 'streaming'
@@ -96,6 +121,7 @@ export interface SessionStartConfig {
   model: string | null
   effort: ReasoningEffort | null
   continuationToken: string | null
+  permissionConfig?: SessionPermissionConfig
 }
 
 export interface ProviderEffortOption {
@@ -221,6 +247,7 @@ export interface OneShotInput {
   workingDirectory: string
   timeoutMs?: number
   requestId?: string
+  permissionConfig?: SessionPermissionConfig
 }
 
 export interface OneShotResult {

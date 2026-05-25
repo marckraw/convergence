@@ -361,6 +361,49 @@ describe('SessionService', () => {
     expect('transcript' in summary).toBe(false)
   })
 
+  it('persists session permission config and passes it to providers', async () => {
+    const starts: unknown[] = []
+    const baseProvider = createTestProvider()
+    registry.register({
+      ...baseProvider,
+      id: 'capture-provider',
+      name: 'Capture Provider',
+      start(config) {
+        starts.push(config)
+        return baseProvider.start(config)
+      },
+    })
+
+    const permissionConfig = {
+      preset: 'custom' as const,
+      codex: {
+        approvalPolicy: 'never' as const,
+        sandbox: 'danger-full-access' as const,
+      },
+    }
+    const session = service.create({
+      projectId,
+      workspaceId: null,
+      providerId: 'capture-provider',
+      model: 'test-model',
+      effort: null,
+      permissionConfig,
+      name: 'permission target',
+    })
+
+    expect(service.getSummaryById(session.id)?.permissionConfig).toEqual(
+      permissionConfig,
+    )
+
+    await service.start(session.id, { text: 'go' })
+
+    expect(starts).toEqual([
+      expect.objectContaining({
+        permissionConfig,
+      }),
+    ])
+  })
+
   it('coalesces streaming conversation patches before persisting and broadcasting', async () => {
     let emitter: ProviderSessionEmitter | null = null
 

@@ -201,6 +201,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
       providerId: string
       model: string | null
       effort: string | null
+      permissionConfig?: unknown
       name: string
     }) => ipcRenderer.invoke('session:create', input),
     getSummariesByProjectId: (projectId: string) =>

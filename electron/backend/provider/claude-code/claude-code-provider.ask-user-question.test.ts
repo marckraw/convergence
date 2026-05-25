@@ -61,6 +61,39 @@ describe('ClaudeCodeProvider AskUserQuestion bridge', () => {
     spawnMock.mockReset()
   })
 
+  it('uses Claude permission mode from session config', async () => {
+    const child = new MockChildProcess()
+    spawnMock.mockReturnValue(child)
+
+    const provider = new ClaudeCodeProvider('/usr/local/bin/claude')
+    const handle = provider.start({
+      sessionId: 'session-permissions',
+      workingDirectory: process.cwd(),
+      initialMessage: 'configure scripts',
+      initialAttachments: undefined,
+      model: null,
+      effort: null,
+      continuationToken: null,
+      permissionConfig: { preset: 'yolo' },
+    })
+
+    handle.onDelta(() => {})
+    handle.onStatusChange(() => {})
+    handle.onAttentionChange(() => {})
+    handle.onContinuationToken(() => {})
+    handle.onContextWindowChange(() => {})
+    handle.onActivityChange(() => {})
+
+    await waitFor(() => {
+      expect(spawnMock).toHaveBeenCalledTimes(1)
+    })
+
+    const args = spawnMock.mock.calls[0]?.[1] as string[]
+    expect(args).toContain('--permission-mode')
+    expect(args).toContain('bypassPermissions')
+    expect(args).not.toContain('--dangerously-skip-permissions')
+  })
+
   it('surfaces deferred AskUserQuestion and resumes with updatedInput answers', async () => {
     const deferredChild = new MockChildProcess()
     const resumedChild = new MockChildProcess()

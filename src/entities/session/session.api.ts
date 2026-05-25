@@ -13,6 +13,7 @@ import type {
   MidRunInputMode,
   NeedsYouDismissals,
   SessionContextKind,
+  SessionPermissionConfig,
 } from './session.types'
 import type { SkillSelection } from '@/shared/types/skill.types'
 
@@ -24,6 +25,7 @@ export const sessionApi = {
     providerId: string
     model: string | null
     effort: ReasoningEffort | null
+    permissionConfig?: SessionPermissionConfig
     name: string
     primarySurface?: 'conversation' | 'terminal'
   }): Promise<SessionSummary> => window.electronAPI.session.create(input),

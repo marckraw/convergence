@@ -1,6 +1,26 @@
 {
-  "currentVersion": "0.37.23",
+  "currentVersion": "0.37.27",
   "releases": [
+    {
+      "version": "0.37.27",
+      "date": null,
+      "notes": "### Patch Changes\n\n- 315145c: Show the active project or Space name in new composer titles instead of the app name."
+    },
+    {
+      "version": "0.37.26",
+      "date": null,
+      "notes": "### Patch Changes\n\n- 03496f9: feat: add global model usage tracking to analytics insights\n\n  Track AI model usage globally across all providers in the\n  analytics > insights > usage panel. Adds a new model usage\n  breakdown chart that aggregates sessions, turns, and message\n  counts by model, plus a model label per provider in the\n  existing provider usage bars.\n\n  Key additions:\n  - `ModelUsagePoint` type and `modelUsage` array in\n    `AnalyticsOverview` type and entity/API types\n  - `buildModelUsage()` aggregation function in `analytics.pure.ts`\n  - Model column included in `listSessions()` SQL query\n  - Model usage panel rendered in `usage-tab.presentational.tsx`\n  - All test fixtures updated with `modelUsage: []` placeholders\n    and assertions"
+    },
+    {
+      "version": "0.37.25",
+      "date": null,
+      "notes": "### Patch Changes\n\n- 0b45e02: Collapse the project actions menu into a single view. Clicking the actions trigger now opens the manage list directly, with inline expandable run output and an always-visible \"Add action\" row. The separate bottom log drawer has been removed."
+    },
+    {
+      "version": "0.37.24",
+      "date": null,
+      "notes": "### Patch Changes\n\n- af6b799: Fix project action dropdown clicks and keep action management inside the top-bar menu."
+    },
     {
       "version": "0.37.23",
       "date": null,

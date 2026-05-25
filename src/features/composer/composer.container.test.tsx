@@ -245,6 +245,9 @@ describe('ComposerContainer', () => {
       />,
     )
 
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Add composer resources' }),
+    )
     fireEvent.click(screen.getByRole('button', { name: 'Select skills' }))
     fireEvent.click(screen.getByRole('button', { name: /Planning/ }))
 
@@ -289,6 +292,9 @@ describe('ComposerContainer', () => {
     )
 
     fireEvent.click(
+      screen.getByRole('button', { name: 'Add composer resources' }),
+    )
+    fireEvent.click(
       screen.getByRole('button', { name: 'Select project context' }),
     )
     fireEvent.click(screen.getByRole('button', { name: /chaperone project/ }))
@@ -312,6 +318,7 @@ describe('ComposerContainer', () => {
       undefined,
       undefined,
       ['ctx-chaperone'],
+      { preset: 'ask' },
     )
   })
 
@@ -323,6 +330,10 @@ describe('ComposerContainer', () => {
           activeSessionId: null,
         }}
       />,
+    )
+
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Add composer resources' }),
     )
 
     expect(
@@ -345,6 +356,7 @@ describe('ComposerContainer', () => {
       'General chat request',
       undefined,
       undefined,
+      { preset: 'ask' },
     )
     expect(
       useSessionStore.getState().createAndStartSession,
@@ -381,6 +393,45 @@ describe('ComposerContainer', () => {
       'Context\n\nGeneral chat request',
       undefined,
       undefined,
+      { preset: 'ask' },
+    )
+  })
+
+  it('passes yolo permission config when selected for a new session', () => {
+    render(
+      <ComposerContainer
+        context={{
+          kind: 'project',
+          projectId: 'project-1',
+          workspaceId: null,
+          activeSessionId: null,
+        }}
+      />,
+    )
+
+    fireEvent.click(screen.getByRole('combobox', { name: 'Ask' }))
+    fireEvent.click(screen.getByText('Yolo'))
+
+    const textbox = screen.getByRole('textbox')
+    fireEvent.change(textbox, {
+      target: { value: 'Run the migration' },
+    })
+    fireEvent.keyDown(textbox, { key: 'Enter', metaKey: true })
+
+    expect(
+      useSessionStore.getState().createAndStartSession,
+    ).toHaveBeenCalledWith(
+      'project-1',
+      null,
+      'claude-code',
+      'claude-sonnet',
+      'medium',
+      'Run the migration',
+      'Run the migration',
+      undefined,
+      undefined,
+      undefined,
+      { preset: 'yolo' },
     )
   })
 
@@ -394,6 +445,9 @@ describe('ComposerContainer', () => {
       />,
     )
 
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Add composer resources' }),
+    )
     fireEvent.click(screen.getByRole('button', { name: 'Select skills' }))
 
     expect(useSkillStore.getState().loadGlobalCatalog).toHaveBeenCalled()

@@ -21,6 +21,31 @@ export type ReasoningEffort =
   | 'max'
   | 'xhigh'
 
+export type SessionPermissionPreset = 'ask' | 'yolo' | 'custom'
+export type CodexApprovalPolicy = 'untrusted' | 'on-request' | 'never'
+export type CodexSandboxMode =
+  | 'read-only'
+  | 'workspace-write'
+  | 'danger-full-access'
+export type ClaudeCodePermissionMode =
+  | 'default'
+  | 'acceptEdits'
+  | 'auto'
+  | 'dontAsk'
+  | 'plan'
+  | 'bypassPermissions'
+
+export interface SessionPermissionConfig {
+  preset: SessionPermissionPreset
+  codex?: {
+    approvalPolicy: CodexApprovalPolicy
+    sandbox: CodexSandboxMode
+  }
+  claudeCode?: {
+    permissionMode: ClaudeCodePermissionMode
+  }
+}
+
 export type ActivitySignal =
   | null
   | 'streaming'
@@ -288,6 +313,7 @@ export interface SessionSummary {
   providerId: string
   model: string | null
   effort: ReasoningEffort | null
+  permissionConfig?: SessionPermissionConfig
   name: string
   status: SessionStatus
   attention: AttentionState
