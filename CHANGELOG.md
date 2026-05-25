@@ -1,5 +1,11 @@
 # convergence
 
+## 0.37.29
+
+### Patch Changes
+
+- 832eb48: Run project actions from the active session or draft workspace directory when the action has no explicit cwd override.
+
 ## 0.37.28
 
 ### Patch Changes
