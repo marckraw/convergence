@@ -1,5 +1,11 @@
 # convergence
 
+## 0.37.28
+
+### Patch Changes
+
+- 94cedf0: Add composer permission modes for ask/yolo/custom provider execution, with Codex and Claude Code advanced controls, and compact low-frequency composer resources behind the Add menu.
+
 ## 0.37.27
 
 ### Patch Changes
