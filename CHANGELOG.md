@@ -1,5 +1,11 @@
 # convergence
 
+## 0.37.30
+
+### Patch Changes
+
+- 97ac899: Batch session attention request kind lookups when listing sessions to avoid per-session database queries.
+
 ## 0.37.29
 
 ### Patch Changes
