@@ -55,6 +55,32 @@ interface CodeReviewSurfaceProps {
   onClose?: () => void
 }
 
+const REVIEW_TARGET_RAIL = 'minmax(280px, 360px)'
+const REVIEW_TARGET_RAIL_COLLAPSED = '48px'
+const REVIEW_FILE_RAIL = 'minmax(260px, 320px)'
+const REVIEW_DIFF_PANE = 'minmax(0, 1fr)'
+const REVIEW_NOTES_RAIL = 'minmax(240px, 300px)'
+const REVIEW_NOTES_RAIL_COLLAPSED = '48px'
+const TARGET_RAIL_COLLAPSE_WIDTH = 1440
+const NOTES_RAIL_COLLAPSE_WIDTH = 1280
+
+function getInitialReviewRailState(): {
+  targetRailCollapsed: boolean
+  notesRailCollapsed: boolean
+} {
+  if (typeof window === 'undefined') {
+    return {
+      targetRailCollapsed: false,
+      notesRailCollapsed: false,
+    }
+  }
+
+  return {
+    targetRailCollapsed: window.innerWidth < TARGET_RAIL_COLLAPSE_WIDTH,
+    notesRailCollapsed: window.innerWidth < NOTES_RAIL_COLLAPSE_WIDTH,
+  }
+}
+
 export const CodeReviewSurface: FC<CodeReviewSurfaceProps> = ({
   routeTargetId = null,
   routeMode = 'working-tree',
@@ -119,6 +145,17 @@ export const CodeReviewSurface: FC<CodeReviewSurfaceProps> = ({
   )
   const [pendingReviewNoteSelection, setPendingReviewNoteSelection] =
     useState<ReviewNote | null>(null)
+  const [targetRailCollapsed, setTargetRailCollapsed] = useState(
+    () => getInitialReviewRailState().targetRailCollapsed,
+  )
+  const [notesRailCollapsed, setNotesRailCollapsed] = useState(
+    () => getInitialReviewRailState().notesRailCollapsed,
+  )
+  const [diffFocusActive, setDiffFocusActive] = useState(false)
+  const railsBeforeDiffFocusRef = useRef({
+    targetRailCollapsed: false,
+    notesRailCollapsed: false,
+  })
   const lastAppliedRouteFilePathRef = useRef<string | null | undefined>(
     undefined,
   )
@@ -552,6 +589,42 @@ export const CodeReviewSurface: FC<CodeReviewSurfaceProps> = ({
     if (patchInput) void loadFilePatch(patchInput, { force: true })
   }, [loadFilePatch, loadSummary, patchInput, summaryInput])
 
+  const handleToggleTargetRail = useCallback(() => {
+    setDiffFocusActive(false)
+    setTargetRailCollapsed((collapsed) => !collapsed)
+  }, [])
+
+  const handleToggleNotesRail = useCallback(() => {
+    setDiffFocusActive(false)
+    setNotesRailCollapsed((collapsed) => !collapsed)
+  }, [])
+
+  const handleToggleDiffFocus = useCallback(() => {
+    if (diffFocusActive) {
+      setTargetRailCollapsed(
+        railsBeforeDiffFocusRef.current.targetRailCollapsed,
+      )
+      setNotesRailCollapsed(railsBeforeDiffFocusRef.current.notesRailCollapsed)
+      setDiffFocusActive(false)
+      return
+    }
+
+    railsBeforeDiffFocusRef.current = {
+      targetRailCollapsed,
+      notesRailCollapsed,
+    }
+    setTargetRailCollapsed(true)
+    setNotesRailCollapsed(true)
+    setDiffFocusActive(true)
+  }, [diffFocusActive, notesRailCollapsed, targetRailCollapsed])
+
+  const gridTemplateColumns = [
+    targetRailCollapsed ? REVIEW_TARGET_RAIL_COLLAPSED : REVIEW_TARGET_RAIL,
+    REVIEW_FILE_RAIL,
+    REVIEW_DIFF_PANE,
+    notesRailCollapsed ? REVIEW_NOTES_RAIL_COLLAPSED : REVIEW_NOTES_RAIL,
+  ].join(' ')
+
   if (!activeProject) {
     return (
       <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
@@ -567,17 +640,24 @@ export const CodeReviewSurface: FC<CodeReviewSurfaceProps> = ({
         mode={selectedMode}
         fileCount={files.length}
         loading={summaryLoading || diffLoading}
+        diffFocusActive={diffFocusActive}
         onModeChange={handleModeChange}
+        onToggleDiffFocus={handleToggleDiffFocus}
         onRefresh={handleRefresh}
         onClose={onClose ?? closeReview}
       />
 
-      <div className="grid min-h-0 flex-1 grid-cols-[minmax(280px,360px)_minmax(260px,320px)_minmax(0,1fr)_minmax(240px,300px)] overflow-hidden">
+      <div
+        className="grid min-h-0 flex-1 overflow-hidden"
+        style={{ gridTemplateColumns }}
+      >
         <CodeReviewTargetRail
           targets={targetList}
           selectedTargetId={selectedTarget?.id ?? null}
           loading={targetsLoading}
           error={error}
+          collapsed={targetRailCollapsed}
+          onToggleCollapsed={handleToggleTargetRail}
           onSelectTarget={handleSelectTarget}
         />
         <CodeReviewFileRail
@@ -622,6 +702,7 @@ export const CodeReviewSurface: FC<CodeReviewSurfaceProps> = ({
           error={reviewNotesError}
           activeNoteId={activeReviewNoteId}
           staleNoteIds={staleReviewNoteIdSet}
+          collapsed={notesRailCollapsed}
           lineComposerOpen={noteComposerOpen}
           lineDraftBody={noteDraftBody}
           fileComposerOpen={fileNoteComposerOpen}
@@ -629,6 +710,7 @@ export const CodeReviewSurface: FC<CodeReviewSurfaceProps> = ({
           editingNoteId={editingNoteId}
           editingBody={editingBody}
           onNoteFilterChange={setReviewNoteFilter}
+          onToggleCollapsed={handleToggleNotesRail}
           onOpenLineComposer={() => setNoteComposerOpen(true)}
           onCancelLineComposer={() => {
             setNoteComposerOpen(false)

@@ -1,5 +1,13 @@
 import type { FC } from 'react'
-import { Eye, MessageSquarePlus, Send, X } from 'lucide-react'
+import {
+  Eye,
+  MessageSquareText,
+  MessageSquarePlus,
+  PanelRightClose,
+  PanelRightOpen,
+  Send,
+  X,
+} from 'lucide-react'
 import type { CodeReviewTarget } from '@/entities/code-review'
 import type {
   ReviewNote,
@@ -36,6 +44,7 @@ interface CodeReviewNotesRailProps {
   error: string | null
   activeNoteId: string | null
   staleNoteIds: ReadonlySet<string>
+  collapsed: boolean
   lineComposerOpen: boolean
   lineDraftBody: string
   fileComposerOpen: boolean
@@ -43,6 +52,7 @@ interface CodeReviewNotesRailProps {
   editingNoteId: string | null
   editingBody: string
   onNoteFilterChange: (filter: ReviewNoteFilter) => void
+  onToggleCollapsed: () => void
   onOpenLineComposer: () => void
   onCancelLineComposer: () => void
   onLineDraftBodyChange: (value: string) => void
@@ -85,6 +95,7 @@ export const CodeReviewNotesRail: FC<CodeReviewNotesRailProps> = ({
   error,
   activeNoteId,
   staleNoteIds,
+  collapsed,
   lineComposerOpen,
   lineDraftBody,
   fileComposerOpen,
@@ -92,6 +103,7 @@ export const CodeReviewNotesRail: FC<CodeReviewNotesRailProps> = ({
   editingNoteId,
   editingBody,
   onNoteFilterChange,
+  onToggleCollapsed,
   onOpenLineComposer,
   onCancelLineComposer,
   onLineDraftBodyChange,
@@ -117,17 +129,63 @@ export const CodeReviewNotesRail: FC<CodeReviewNotesRailProps> = ({
     sessionLinked && !!selectedFile && selectedLineCount > 0
   const canCreateFileNote = sessionLinked && !!selectedFile
 
+  if (collapsed) {
+    return (
+      <aside className="flex min-h-0 flex-col items-center border-l border-border">
+        <div className="flex h-10 w-full shrink-0 items-center justify-center border-b border-border">
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="h-7 w-7"
+            title="Expand review notes"
+            aria-label="Expand review notes"
+            onClick={onToggleCollapsed}
+          >
+            <PanelRightOpen className="h-3.5 w-3.5" />
+          </Button>
+        </div>
+        <div className="flex min-h-0 flex-1 flex-col items-center gap-2 px-1 py-2">
+          <div
+            className="relative flex h-8 w-8 items-center justify-center rounded-md border border-border bg-card"
+            title="Review notes"
+          >
+            <MessageSquareText className="h-3.5 w-3.5 text-muted-foreground" />
+            {draftCount > 0 ? (
+              <span className="absolute -top-1 -right-1 min-w-4 rounded-full bg-primary px-1 text-center text-[9px] leading-4 text-primary-foreground">
+                {draftCount}
+              </span>
+            ) : null}
+          </div>
+        </div>
+      </aside>
+    )
+  }
+
   return (
     <aside className="flex min-h-0 flex-col border-l border-border">
       <div className="flex h-10 shrink-0 items-center justify-between border-b border-border px-3">
         <span className="text-xs font-semibold uppercase text-muted-foreground">
           Review Notes
         </span>
-        {draftCount > 0 ? (
-          <span className="text-xs text-muted-foreground">
-            {draftCount} draft
-          </span>
-        ) : null}
+        <div className="flex items-center gap-2">
+          {draftCount > 0 ? (
+            <span className="text-xs text-muted-foreground">
+              {draftCount} draft
+            </span>
+          ) : null}
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="h-7 w-7"
+            title="Collapse review notes"
+            aria-label="Collapse review notes"
+            onClick={onToggleCollapsed}
+          >
+            <PanelRightClose className="h-3.5 w-3.5" />
+          </Button>
+        </div>
       </div>
       <div className="app-scrollbar min-h-0 flex-1 space-y-3 overflow-y-auto p-3">
         {!sessionLinked ? (
