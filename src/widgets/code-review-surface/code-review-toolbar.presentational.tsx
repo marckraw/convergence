@@ -1,5 +1,5 @@
 import type { FC } from 'react'
-import { FileCode2, RefreshCw, X } from 'lucide-react'
+import { FileCode2, Maximize2, Minimize2, RefreshCw, X } from 'lucide-react'
 import {
   getCodeReviewTargetSubtitle,
   getCodeReviewTargetTitle,
@@ -15,7 +15,9 @@ interface CodeReviewToolbarProps {
   mode: CodeReviewMode
   fileCount: number
   loading: boolean
+  diffFocusActive: boolean
   onModeChange: (mode: CodeReviewMode) => void
+  onToggleDiffFocus: () => void
   onRefresh: () => void
   onClose: () => void
 }
@@ -25,7 +27,9 @@ export const CodeReviewToolbar: FC<CodeReviewToolbarProps> = ({
   mode,
   fileCount,
   loading,
+  diffFocusActive,
   onModeChange,
+  onToggleDiffFocus,
   onRefresh,
   onClose,
 }) => {
@@ -70,6 +74,21 @@ export const CodeReviewToolbar: FC<CodeReviewToolbarProps> = ({
         <span className="rounded-md border border-border bg-card px-2 py-1 text-xs text-muted-foreground">
           {fileCount} files
         </span>
+        <Button
+          type="button"
+          variant={diffFocusActive ? 'secondary' : 'ghost'}
+          size="icon"
+          className="h-7 w-7"
+          title={diffFocusActive ? 'Exit diff focus' : 'Focus diff'}
+          aria-label={diffFocusActive ? 'Exit diff focus' : 'Focus diff'}
+          onClick={onToggleDiffFocus}
+        >
+          {diffFocusActive ? (
+            <Minimize2 className="h-3.5 w-3.5" />
+          ) : (
+            <Maximize2 className="h-3.5 w-3.5" />
+          )}
+        </Button>
         <Button
           type="button"
           variant="ghost"
