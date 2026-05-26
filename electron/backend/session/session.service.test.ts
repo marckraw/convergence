@@ -2,6 +2,7 @@ import { describe, expect, it, beforeEach, afterEach, vi } from 'vitest'
 import { mkdtempSync, mkdirSync, rmSync } from 'fs'
 import { join } from 'path'
 import { tmpdir } from 'os'
+import type Database from 'better-sqlite3'
 import { getDatabase, closeDatabase, resetDatabase } from '../database/database'
 import {
   CLAUDE_CODE_MID_RUN_INPUT_CAPABILITY,
@@ -234,10 +235,11 @@ describe('SessionService', () => {
   let registry: ProviderRegistry
   let tempDir: string
   let projectId: string
+  let db: Database.Database
 
   beforeEach(() => {
     vi.useFakeTimers()
-    const db = getDatabase()
+    db = getDatabase()
     registry = new ProviderRegistry()
     registry.register(createTestProvider())
 
@@ -261,6 +263,46 @@ describe('SessionService', () => {
     resetDatabase()
     rmSync(tempDir, { recursive: true, force: true })
   })
+
+  function setSessionAttention(
+    sessionId: string,
+    attention: AttentionState,
+  ): void {
+    db.prepare('UPDATE sessions SET attention = ? WHERE id = ?').run(
+      attention,
+      sessionId,
+    )
+  }
+
+  function insertAttentionRequest(
+    sessionId: string,
+    sequence: number,
+    kind: 'approval-request' | 'input-request',
+    payload: unknown,
+  ): void {
+    const timestamp = now()
+    db.prepare(
+      `INSERT INTO session_conversation_items (
+         id,
+         session_id,
+         sequence,
+         kind,
+         state,
+         payload_json,
+         created_at,
+         updated_at
+       )
+       VALUES (?, ?, ?, ?, 'complete', ?, ?, ?)`,
+    ).run(
+      `${sessionId}-${sequence}`,
+      sessionId,
+      sequence,
+      kind,
+      JSON.stringify(payload),
+      timestamp,
+      timestamp,
+    )
+  }
 
   it('creates a session', () => {
     const session = service.create({
@@ -359,6 +401,81 @@ describe('SessionService', () => {
       lastSequence: 0,
     })
     expect('transcript' in summary).toBe(false)
+  })
+
+  it('batch-resolves latest attention request kinds for session list APIs', () => {
+    const approval = service.create({
+      projectId,
+      workspaceId: null,
+      providerId: 'test-provider',
+      model: 'test-model',
+      effort: null,
+      name: 'approval target',
+    })
+    const plan = service.create({
+      projectId,
+      workspaceId: null,
+      providerId: 'test-provider',
+      model: 'test-model',
+      effort: null,
+      name: 'plan target',
+    })
+    const form = service.create({
+      contextKind: 'global',
+      providerId: 'test-provider',
+      model: 'test-model',
+      effort: null,
+      name: 'form target',
+    })
+
+    setSessionAttention(approval.id, 'needs-approval')
+    setSessionAttention(plan.id, 'needs-input')
+    setSessionAttention(form.id, 'needs-input')
+
+    insertAttentionRequest(approval.id, 1, 'approval-request', {})
+    insertAttentionRequest(plan.id, 1, 'input-request', {
+      request: { kind: 'text' },
+    })
+    insertAttentionRequest(plan.id, 2, 'input-request', {
+      request: { kind: 'plan' },
+    })
+    insertAttentionRequest(form.id, 1, 'input-request', {
+      request: { kind: 'form' },
+    })
+
+    const byProject = service.getSummariesByProjectId(projectId)
+    const fullByProject = service.getByProjectId(projectId)
+    const all = service.getAllSummaries()
+    const fullAll = service.getAll()
+    const global = service.getGlobalSummaries()
+
+    expect(
+      Object.fromEntries(
+        byProject.map((summary) => [
+          summary.id,
+          summary.attentionRequestKind ?? null,
+        ]),
+      ),
+    ).toMatchObject({
+      [approval.id]: 'approval',
+      [plan.id]: 'plan',
+    })
+    expect(
+      all.find((summary) => summary.id === form.id)?.attentionRequestKind,
+    ).toBe('form')
+    expect(
+      fullByProject.find((summary) => summary.id === plan.id)
+        ?.attentionRequestKind,
+    ).toBe('plan')
+    expect(
+      fullAll.find((summary) => summary.id === approval.id)
+        ?.attentionRequestKind,
+    ).toBe('approval')
+    expect(global.find((summary) => summary.id === form.id)).toMatchObject({
+      id: form.id,
+      attentionRequestKind: 'form',
+    })
+    expect('transcript' in byProject[0]).toBe(false)
   })
 
   it('persists session permission config and passes it to providers', async () => {
