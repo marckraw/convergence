@@ -1,5 +1,12 @@
 # convergence
 
+## 0.37.31
+
+### Patch Changes
+
+- e035aca: Allow the Code Review target and notes rails to collapse, with a diff focus mode
+  that reclaims space for reviewing code on smaller screens.
+
 ## 0.37.30
 
 ### Patch Changes
