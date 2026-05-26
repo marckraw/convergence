@@ -1,4 +1,4 @@
-import { dirname, join, posix, win32 } from 'path'
+import { dirname, posix, win32 } from 'path'
 import type { ProviderInstallInfo } from './provider.types'
 
 export interface NpmManagedProviderInstall {
@@ -39,7 +39,7 @@ export function resolveNpmManagedProviderInstall(
   const npmPath =
     platform === 'win32'
       ? win32.join(prefixDirectory, 'npm.cmd')
-      : join(prefixDirectory, 'bin', 'npm')
+      : posix.join(prefixDirectory, 'bin', 'npm')
 
   return {
     packageName,
