@@ -39,6 +39,37 @@ contextBridge.exposeInMainWorld('electronAPI', {
     listForSession: (sessionId: string) =>
       ipcRenderer.invoke('projectContext:listForSession', sessionId),
   },
+  projectScripts: {
+    list: (projectId: string) =>
+      ipcRenderer.invoke('projectScripts:list', projectId),
+    create: (input: unknown) =>
+      ipcRenderer.invoke('projectScripts:create', input),
+    update: (id: string, input: unknown) =>
+      ipcRenderer.invoke('projectScripts:update', id, input),
+    delete: (id: string) => ipcRenderer.invoke('projectScripts:delete', id),
+    listRuns: (projectId: string) =>
+      ipcRenderer.invoke('projectScripts:listRuns', projectId),
+    listActiveRuns: () => ipcRenderer.invoke('projectScripts:listActiveRuns'),
+    getRun: (runId: string) =>
+      ipcRenderer.invoke('projectScripts:getRun', runId),
+    run: (scriptId: string, input?: unknown) =>
+      ipcRenderer.invoke('projectScripts:run', scriptId, input),
+    stop: (runId: string) => ipcRenderer.invoke('projectScripts:stop', runId),
+    onRunUpdated: (callback: (run: unknown) => void) => {
+      const handler = (_event: unknown, run: unknown) => callback(run)
+      ipcRenderer.on('project-script-run:updated', handler)
+      return () => {
+        ipcRenderer.removeListener('project-script-run:updated', handler)
+      }
+    },
+    onRunOutput: (callback: (output: unknown) => void) => {
+      const handler = (_event: unknown, output: unknown) => callback(output)
+      ipcRenderer.on('project-script-run:output', handler)
+      return () => {
+        ipcRenderer.removeListener('project-script-run:output', handler)
+      }
+    },
+  },
   space: {
     list: () => ipcRenderer.invoke('space:list'),
     getById: (id: string) => ipcRenderer.invoke('space:getById', id),
@@ -84,6 +115,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
   },
   dialog: {
     selectDirectory: () => ipcRenderer.invoke('dialog:selectDirectory'),
+  },
+  projectOpen: {
+    listApps: () => ipcRenderer.invoke('projectOpen:listApps'),
+    open: (input: { appId: string; path: string }) =>
+      ipcRenderer.invoke('projectOpen:open', input),
   },
   workspace: {
     create: (input: {
@@ -165,6 +201,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
       providerId: string
       model: string | null
       effort: string | null
+      permissionConfig?: unknown
       name: string
     }) => ipcRenderer.invoke('session:create', input),
     getSummariesByProjectId: (projectId: string) =>
@@ -289,6 +326,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
         ipcRenderer.removeListener('provider:statuses-changed', handler)
       }
     },
+  },
+  providerQuota: {
+    getCodex: (forceRefresh?: boolean) =>
+      ipcRenderer.invoke('providerQuota:getCodex', forceRefresh),
   },
   mcp: {
     listByProjectId: (projectId: string) =>
@@ -450,6 +491,28 @@ contextBridge.exposeInMainWorld('electronAPI', {
     list: (sessionId: string) =>
       ipcRenderer.invoke('provider:debug:list', sessionId),
     openFolder: () => ipcRenderer.invoke('provider:debug:openFolder'),
+  },
+  localModelTunnel: {
+    getSnapshot: () => ipcRenderer.invoke('localModelTunnel:getSnapshot'),
+    start: (profileId: string) =>
+      ipcRenderer.invoke('localModelTunnel:start', profileId),
+    stop: (profileId: string) =>
+      ipcRenderer.invoke('localModelTunnel:stop', profileId),
+    restart: (profileId: string) =>
+      ipcRenderer.invoke('localModelTunnel:restart', profileId),
+    createProfile: (input: unknown) =>
+      ipcRenderer.invoke('localModelTunnel:createProfile', input),
+    updateProfile: (profileId: string, input: unknown) =>
+      ipcRenderer.invoke('localModelTunnel:updateProfile', profileId, input),
+    deleteProfile: (profileId: string) =>
+      ipcRenderer.invoke('localModelTunnel:deleteProfile', profileId),
+    onChanged: (callback: (snapshot: unknown) => void) => {
+      const handler = (_event: unknown, snapshot: unknown) => callback(snapshot)
+      ipcRenderer.on('localModelTunnel:changed', handler)
+      return () => {
+        ipcRenderer.removeListener('localModelTunnel:changed', handler)
+      }
+    },
   },
   updates: {
     getStatus: () => ipcRenderer.invoke('updates:get-status'),

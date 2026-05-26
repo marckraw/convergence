@@ -79,6 +79,11 @@ The current gaps are semantic, not structural:
 - **Needs review**: `finished`, `failed`
 - **Not in attention queue**: `none`
 
+Waiting-on-you rows may carry an `attentionRequestKind` subtype so global
+surfaces can distinguish approval, question, plan review, form input, URL
+confirmation, and legacy input requests without changing the core attention
+state machine.
+
 ### Queue actions
 
 - **Snooze**: hide a waiting-on-you item until the session updates again

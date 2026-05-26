@@ -1,6 +1,6 @@
 {
   "name": "convergence",
-  "version": "0.37.12",
+  "version": "0.37.31",
   "description": "UI-first desktop app for managing agent work across local codebases",
   "main": "out/main/index.js",
   "scripts": {
@@ -48,7 +48,9 @@
     "@radix-ui/react-tooltip": "^1.2.8",
     "@streamdown/code": "^1.1.1",
     "@streamdown/mermaid": "^1.0.2",
+    "@tanstack/react-router": "^1.170.4",
     "@tanstack/react-virtual": "^3.13.24",
+    "@tanstack/router-plugin": "^1.168.6",
     "@xterm/addon-clipboard": "^0.2.0",
     "@xterm/addon-fit": "^0.11.0",
     "@xterm/addon-unicode11": "^0.9.0",

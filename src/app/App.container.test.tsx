@@ -7,10 +7,12 @@ import {
   within,
 } from '@testing-library/react'
 import { useProjectStore } from '@/entities/project'
+import { useProjectScriptStore } from '@/entities/project-script'
 import { useWorkspaceStore } from '@/entities/workspace'
 import { useSpaceStore } from '@/entities/space'
 import { useSessionStore, type SessionSummary } from '@/entities/session'
 import { useAppSurfaceStore } from '@/entities/app-surface'
+import { useCodeReviewStore } from '@/entities/code-review'
 import { App } from './App.container'
 import { DEFAULT_PROJECT_SETTINGS } from '@/entities/project'
 
@@ -32,6 +34,13 @@ const mockProject = {
   settings: DEFAULT_PROJECT_SETTINGS,
   createdAt: '2026-01-01T00:00:00.000Z',
   updatedAt: '2026-01-01T00:00:00.000Z',
+}
+
+const otherProject = {
+  ...mockProject,
+  id: '2',
+  name: 'other-project',
+  repositoryPath: '/tmp/other-project',
 }
 
 function makeSessionSummary(
@@ -93,7 +102,21 @@ const mockElectronAPI = {
   workspace: {
     create: vi.fn(),
     getByProjectId: vi.fn().mockResolvedValue([]),
+    getAll: vi.fn().mockResolvedValue([]),
     delete: vi.fn(),
+  },
+  projectScripts: {
+    list: vi.fn().mockResolvedValue([]),
+    create: vi.fn(),
+    update: vi.fn(),
+    delete: vi.fn(),
+    listRuns: vi.fn().mockResolvedValue([]),
+    listActiveRuns: vi.fn().mockResolvedValue([]),
+    getRun: vi.fn().mockResolvedValue(null),
+    run: vi.fn(),
+    stop: vi.fn(),
+    onRunUpdated: vi.fn().mockReturnValue(() => {}),
+    onRunOutput: vi.fn().mockReturnValue(() => {}),
   },
   space: {
     list: vi.fn().mockResolvedValue([]),
@@ -145,6 +168,27 @@ const mockElectronAPI = {
     onSessionSummaryUpdate: vi.fn().mockReturnValue(() => {}),
     onSessionConversationPatched: vi.fn().mockReturnValue(() => {}),
     onSessionQueuedInputPatched: vi.fn().mockReturnValue(() => {}),
+  },
+  turns: {
+    listForSession: vi.fn().mockResolvedValue([]),
+    getFileChanges: vi.fn().mockResolvedValue([]),
+    getFileDiff: vi.fn().mockResolvedValue(''),
+    onTurnDelta: vi.fn().mockReturnValue(() => {}),
+  },
+  attachments: {
+    getForSession: vi.fn().mockResolvedValue([]),
+    getById: vi.fn().mockResolvedValue(null),
+    ingestFiles: vi.fn().mockResolvedValue({
+      attachments: [],
+      rejections: [],
+    }),
+    ingestFromPaths: vi.fn().mockResolvedValue({
+      attachments: [],
+      rejections: [],
+    }),
+    readBytes: vi.fn().mockResolvedValue(new Uint8Array()),
+    delete: vi.fn().mockResolvedValue(undefined),
+    showOpenDialog: vi.fn().mockResolvedValue([]),
   },
   appSettings: {
     get: vi.fn().mockResolvedValue({
@@ -269,6 +313,10 @@ describe('App', () => {
     mockElectronAPI.project.getActive.mockResolvedValue(null)
     mockElectronAPI.project.getAll.mockResolvedValue([])
     mockElectronAPI.workspace.getByProjectId.mockResolvedValue([])
+    mockElectronAPI.workspace.getAll.mockResolvedValue([])
+    mockElectronAPI.projectScripts.list.mockResolvedValue([])
+    mockElectronAPI.projectScripts.listRuns.mockResolvedValue([])
+    mockElectronAPI.projectScripts.listActiveRuns.mockResolvedValue([])
     mockElectronAPI.space.list.mockResolvedValue([])
     mockElectronAPI.space.listAttempts.mockResolvedValue([])
     mockElectronAPI.git.getBranches.mockResolvedValue([])
@@ -322,7 +370,21 @@ describe('App', () => {
       loading: false,
       error: null,
     })
+    useProjectScriptStore.setState({
+      scriptsByProjectId: {},
+      runsByProjectId: {},
+      globalActiveRuns: [],
+      outputByRunId: {},
+      loading: false,
+      error: null,
+    })
     useAppSurfaceStore.setState({ activeSurface: 'code' })
+    useCodeReviewStore.setState({
+      isReviewOpen: false,
+      selectedMode: 'working-tree',
+      selectedFile: null,
+      selectedTarget: null,
+    })
   })
 
   it('shows welcome message when no project', async () => {
@@ -357,7 +419,10 @@ describe('App', () => {
 
     const sidebar = getSidebarQueries()
 
-    expect(screen.getByText('Convergence Chat')).toBeInTheDocument()
+    expect(screen.queryByText('Convergence Chat')).not.toBeInTheDocument()
+    expect(
+      screen.getByText('Start a project-free agent conversation.'),
+    ).toBeInTheDocument()
     expect(sidebar.getByText('No chats yet')).toBeInTheDocument()
     expect(sidebar.getByText('Spaces')).toBeInTheDocument()
     expect(
@@ -449,6 +514,68 @@ describe('App', () => {
     expect(sidebar.queryByText('Project Needs Review')).toBeNull()
   })
 
+  it('opens a direct chat session route', async () => {
+    const globalSession = makeSessionSummary({
+      id: 'global-session-1',
+      name: 'Route Chat',
+      contextKind: 'global',
+      projectId: null,
+      workspaceId: null,
+      workingDirectory: '/tmp/convergence/global',
+    })
+    mockElectronAPI.session.getGlobalSummaries.mockResolvedValue([
+      globalSession,
+    ])
+
+    render(
+      <App
+        mainViewRoute={{ kind: 'chat-session', sessionId: 'global-session-1' }}
+      />,
+    )
+
+    await waitFor(() => {
+      expect(screen.getAllByText('Route Chat').length).toBeGreaterThan(0)
+    })
+    expect(useAppSurfaceStore.getState().activeSurface).toBe('chat')
+    expect(useSessionStore.getState().activeGlobalSessionId).toBe(
+      'global-session-1',
+    )
+  })
+
+  it('clears the active code session for a routed root draft', async () => {
+    const routeSession = makeSessionSummary({
+      id: 'session-1',
+      name: 'Existing Session',
+      projectId: mockProject.id,
+    })
+    mockElectronAPI.project.getActive.mockResolvedValue(mockProject)
+    mockElectronAPI.project.getAll.mockResolvedValue([mockProject])
+    mockElectronAPI.session.getAllSummaries.mockResolvedValue([routeSession])
+    mockElectronAPI.session.getSummariesByProjectId.mockResolvedValue([
+      routeSession,
+    ])
+    useSessionStore.setState({
+      sessions: [routeSession],
+      globalSessions: [routeSession],
+      activeSessionId: 'session-1',
+      activeProjectSessionId: 'session-1',
+      activeConversationSessionId: 'session-1',
+    })
+
+    render(
+      <App mainViewRoute={{ kind: 'new-code-session', workspaceId: null }} />,
+    )
+
+    await waitFor(() => {
+      expect(useSessionStore.getState().activeSessionId).toBeNull()
+    })
+    expect(useSessionStore.getState().draftWorkspaceId).toBeNull()
+    expect(
+      await screen.findByText('What would you like to work on?'),
+    ).toBeInTheDocument()
+    expect(screen.getByText('Starting in main repo')).toBeInTheDocument()
+  })
+
   it('shows loading state', () => {
     mockElectronAPI.project.getActive.mockReturnValue(new Promise(() => {}))
 
@@ -477,7 +604,67 @@ describe('App', () => {
     render(<App />)
 
     await waitFor(() => {
-      expect(screen.getByText('my-project')).toBeInTheDocument()
+      expect(screen.getAllByText('my-project').length).toBeGreaterThan(0)
     })
+  })
+
+  it('clears the routed session view when selecting a project root', async () => {
+    const routeSession = makeSessionSummary({
+      id: 'session-1',
+      name: 'Route Session',
+      projectId: mockProject.id,
+    })
+    const onShowCodeHome = vi.fn(async () => undefined)
+    mockElectronAPI.project.getActive.mockResolvedValue(mockProject)
+    mockElectronAPI.project.getAll.mockResolvedValue([
+      mockProject,
+      otherProject,
+    ])
+    mockElectronAPI.project.getById.mockResolvedValue(otherProject)
+    mockElectronAPI.project.setActive.mockResolvedValue(undefined)
+    mockElectronAPI.session.getAllSummaries.mockResolvedValue([routeSession])
+    mockElectronAPI.session.getSummariesByProjectId.mockImplementation(
+      async (projectId: string) =>
+        projectId === mockProject.id ? [routeSession] : [],
+    )
+
+    render(
+      <App
+        mainViewRoute={{ kind: 'code-session', sessionId: 'session-1' }}
+        onShowCodeHome={onShowCodeHome}
+      />,
+    )
+
+    fireEvent.click(
+      await screen.findByRole('combobox', { name: /my-project/i }),
+    )
+    fireEvent.click(
+      await screen.findByRole('option', { name: /other-project/i }),
+    )
+
+    await waitFor(() => {
+      expect(onShowCodeHome).toHaveBeenCalledTimes(1)
+      expect(mockElectronAPI.project.setActive).toHaveBeenCalledWith('2')
+    })
+    expect(useAppSurfaceStore.getState().activeSurface).toBe('code')
+  })
+
+  it('applies code review route search state to the review store', async () => {
+    render(
+      <App
+        mainViewRoute={{
+          kind: 'code-review',
+          targetId: 'session:session-1',
+          mode: 'base-branch',
+          filePath: 'src/app.ts',
+        }}
+      />,
+    )
+
+    await waitFor(() => {
+      expect(useCodeReviewStore.getState().isReviewOpen).toBe(true)
+    })
+    expect(useCodeReviewStore.getState().selectedMode).toBe('base-branch')
+    expect(useCodeReviewStore.getState().selectedFile).toBe('src/app.ts')
   })
 })

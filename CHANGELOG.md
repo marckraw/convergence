@@ -1,5 +1,144 @@
 # convergence
 
+## 0.37.31
+
+### Patch Changes
+
+- e035aca: Allow the Code Review target and notes rails to collapse, with a diff focus mode
+  that reclaims space for reviewing code on smaller screens.
+
+## 0.37.30
+
+### Patch Changes
+
+- 97ac899: Batch session attention request kind lookups when listing sessions to avoid per-session database queries.
+
+## 0.37.29
+
+### Patch Changes
+
+- 832eb48: Run project actions from the active session or draft workspace directory when the action has no explicit cwd override.
+
+## 0.37.28
+
+### Patch Changes
+
+- 94cedf0: Add composer permission modes for ask/yolo/custom provider execution, with Codex and Claude Code advanced controls, and compact low-frequency composer resources behind the Add menu.
+
+## 0.37.27
+
+### Patch Changes
+
+- 315145c: Show the active project or Space name in new composer titles instead of the app name.
+
+## 0.37.26
+
+### Patch Changes
+
+- 03496f9: feat: add global model usage tracking to analytics insights
+
+  Track AI model usage globally across all providers in the
+  analytics > insights > usage panel. Adds a new model usage
+  breakdown chart that aggregates sessions, turns, and message
+  counts by model, plus a model label per provider in the
+  existing provider usage bars.
+
+  Key additions:
+  - `ModelUsagePoint` type and `modelUsage` array in
+    `AnalyticsOverview` type and entity/API types
+  - `buildModelUsage()` aggregation function in `analytics.pure.ts`
+  - Model column included in `listSessions()` SQL query
+  - Model usage panel rendered in `usage-tab.presentational.tsx`
+  - All test fixtures updated with `modelUsage: []` placeholders
+    and assertions
+
+## 0.37.25
+
+### Patch Changes
+
+- 0b45e02: Collapse the project actions menu into a single view. Clicking the actions trigger now opens the manage list directly, with inline expandable run output and an always-visible "Add action" row. The separate bottom log drawer has been removed.
+
+## 0.37.24
+
+### Patch Changes
+
+- af6b799: Fix project action dropdown clicks and keep action management inside the top-bar menu.
+
+## 0.37.23
+
+### Patch Changes
+
+- fe474b8: Fix duplicate provider thinking transcript items when streaming reasoning is followed by final thinking metadata.
+
+## 0.37.22
+
+### Patch Changes
+
+- 46147c8: Add managed local model SSH tunnel profiles with a status-bar pill, quick controls, and an editable tunnel manager.
+- 4c8af85: Add project actions in the session header with icon-backed action definitions, background execution, live output drawers, and compact session details.
+
+## 0.37.21
+
+### Patch Changes
+
+- f363d91: Add a project Open menu that detects installed macOS editors and opens the active workspace or project root in Cursor, VS Code, Zed, WebStorm, or Finder.
+- 2aa9eaa: Show provider reasoning and thinking deltas in the session transcript when supported by the active model.
+
+## 0.37.20
+
+### Patch Changes
+
+- 3dc1f32: Move the session context-window indicator from conversation headers into the composer as a compact hoverable status dot.
+
+## 0.37.19
+
+### Patch Changes
+
+- a89c55d: Fix provider update detection so Pi, Codex, and Claude Code can compare the installed CLI version against the latest npm version when version output is emitted on stderr or mixed with other CLI output.
+
+## 0.37.18
+
+### Patch Changes
+
+- 32e8abc: Respect Pi model image support metadata, add safe outbound image diagnostics, and include local attachment paths so Pi can inspect files through its read tool when native image transport is unreliable.
+
+## 0.37.17
+
+### Patch Changes
+
+- 7351bee: Show Codex usage limits in Settings and add a composer quota pill for Codex-backed model selections.
+
+## 0.37.16
+
+### Patch Changes
+
+- 8b574ec: Fix starting a conversation session while a terminal-primary session is open so the main view switches to the conversation composer immediately.
+
+## 0.37.15
+
+### Patch Changes
+
+- 0d01a42: Keep project session draft and status-bar project navigation aligned with routed main views so creating a new root conversation or switching projects from the status bar no longer snaps back to the previous session.
+
+## 0.37.14
+
+### Patch Changes
+
+- 512d631: Harden structured interaction request labels, notifications, and docs.
+- 13f22de: Add structured provider interaction requests so Codex choice questions can be answered directly from the conversation transcript.
+- 0471809: Harden provider interaction request answers for mixed Codex prompts, unsupported MCP form schemas, and declining required forms.
+- 45e7d49: Handle Pi extension UI dialog requests in the session transcript.
+- a9da86d: Add Claude Code ExitPlanMode handling so deferred plans can be approved or rejected from the transcript.
+- 49682a9: Add structured Codex MCP elicitation handling for form and URL requests.
+- 45713b4: Add Claude Code AskUserQuestion handling so deferred choice prompts can be answered from the Convergence transcript.
+
+## 0.37.13
+
+### Patch Changes
+
+- a38948a: Introduce route-driven Main Views for Code Sessions, Chat Sessions, Spaces, and Code Review.
+- 4611319: Keep routed Code and Chat surface switching synchronized with active session routes and avoid duplicate Code Review route/store updates.
+
 ## 0.37.12
 
 ### Patch Changes

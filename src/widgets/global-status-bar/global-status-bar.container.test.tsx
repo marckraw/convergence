@@ -105,6 +105,14 @@ function renderBar() {
   )
 }
 
+function renderBarWithRoute(onSelectProject: (projectId: string) => void) {
+  return render(
+    <TooltipProvider>
+      <GlobalStatusBar onSelectProject={onSelectProject} />
+    </TooltipProvider>,
+  )
+}
+
 describe('GlobalStatusBar container', () => {
   beforeEach(() => {
     useSessionStore.setState({
@@ -144,7 +152,8 @@ describe('GlobalStatusBar container', () => {
           projectId: 'project-two',
           providerId: 'codex',
           status: 'running',
-          attention: 'needs-approval',
+          attention: 'needs-input',
+          attentionRequestKind: 'form',
           name: 'Approve edits',
           updatedAt: '2026-02-01T00:00:00.000Z',
         }),
@@ -168,6 +177,9 @@ describe('GlobalStatusBar container', () => {
     ).toBeInTheDocument()
     expect(
       screen.getByTestId('global-status-chip-project-two'),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByRole('button', { name: /project two.*1 form/i }),
     ).toBeInTheDocument()
     expect(screen.getByTestId('global-status-recency')).toHaveTextContent(
       'Wrapped up',
@@ -200,6 +212,36 @@ describe('GlobalStatusBar container', () => {
 
     expect(prepareForProject).toHaveBeenCalledWith('project-two')
     expect(setActiveProject).toHaveBeenCalledWith('project-two')
+  })
+
+  it('delegates project chip clicks to routed navigation when provided', () => {
+    const onSelectProject = vi.fn()
+    const setActiveProject = vi.fn().mockResolvedValue(undefined)
+    const prepareForProject = vi.fn()
+
+    useSessionStore.setState({
+      globalSessions: [
+        makeSession({
+          id: 's-1',
+          projectId: 'project-two',
+          status: 'running',
+        }),
+      ],
+      prepareForProject,
+    } as Partial<ReturnType<typeof useSessionStore.getState>>)
+    useProjectStore.setState({
+      projects,
+      activeProject: projects[0],
+      setActiveProject,
+    } as Partial<ReturnType<typeof useProjectStore.getState>>)
+
+    renderBarWithRoute(onSelectProject)
+
+    fireEvent.click(screen.getByTestId('global-status-chip-project-two'))
+
+    expect(onSelectProject).toHaveBeenCalledWith('project-two')
+    expect(prepareForProject).not.toHaveBeenCalled()
+    expect(setActiveProject).not.toHaveBeenCalled()
   })
 
   it('does not re-select the already-active project', () => {

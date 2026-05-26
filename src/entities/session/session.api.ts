@@ -1,6 +1,7 @@
 import type {
   ConversationItem,
   ConversationPatchEvent,
+  InteractionResponse,
   QueuedInputPatchEvent,
   SessionSummary,
   SessionQueuedInput,
@@ -12,6 +13,7 @@ import type {
   MidRunInputMode,
   NeedsYouDismissals,
   SessionContextKind,
+  SessionPermissionConfig,
 } from './session.types'
 import type { SkillSelection } from '@/shared/types/skill.types'
 
@@ -23,6 +25,7 @@ export const sessionApi = {
     providerId: string
     model: string | null
     effort: ReasoningEffort | null
+    permissionConfig?: SessionPermissionConfig
     name: string
     primarySurface?: 'conversation' | 'terminal'
   }): Promise<SessionSummary> => window.electronAPI.session.create(input),
@@ -70,12 +73,14 @@ export const sessionApi = {
     attachmentIds?: string[],
     skillSelections?: SkillSelection[],
     deliveryMode?: MidRunInputMode,
+    interactionResponse?: InteractionResponse,
   ): Promise<void> =>
     window.electronAPI.session.sendMessage(id, {
       text,
       attachmentIds,
       skillSelections,
       deliveryMode,
+      interactionResponse,
     }),
 
   approve: (id: string, providerApprovalId?: string): Promise<void> =>

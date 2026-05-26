@@ -7,6 +7,7 @@ export { McpServersDialogContainer } from './mcp-servers'
 export { SkillsBrowserDialogContainer } from './skills'
 export { PromptLibraryBrowserDialogContainer } from './prompt-library'
 export { ProviderStatusDialogContainer } from './provider-status'
+export { ProjectOpenMenuContainer } from './project-open-menu'
 export { WorkspaceCreateDialogContainer } from './workspace-create'
 export { SpaceCreateDialogContainer } from './space-create'
 export { SpaceSessionLinkDialogContainer } from './space-session-link'
@@ -17,6 +18,7 @@ export { ThemeToggleButton } from './theme-toggle'
 export { ComposerContainer } from './composer'
 export { AppSettingsDialogContainer } from './app-settings'
 export { TerminalPaneContainer } from './terminal-pane'
+export { LocalModelTunnelStatusContainer } from './local-model-tunnel'
 export type {
   CodeReviewDiffLine,
   ReviewNoteDiffAnnotation,

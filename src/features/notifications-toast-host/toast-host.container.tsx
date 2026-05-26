@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useCallback, useEffect, useRef } from 'react'
 import { toast } from 'sonner'
 import {
   notificationsApi,
@@ -8,7 +8,7 @@ import {
   type NotificationSeverity,
 } from '@/entities/notifications'
 import { useProjectStore } from '@/entities/project'
-import { useSessionStore } from '@/entities/session'
+import { useSessionStore, type SessionSummary } from '@/entities/session'
 import { useWorkspaceStore } from '@/entities/workspace'
 import { useAppSurfaceStore } from '@/entities/app-surface'
 import chimeSoftUrl from '@/shared/assets/sounds/chime-soft.wav'
@@ -60,12 +60,31 @@ export async function focusSessionAcrossProjects(
   useSessionStore.getState().setActiveSession(sessionId)
 }
 
-export function NotificationsToastHostContainer() {
+interface NotificationsToastHostContainerProps {
+  onFocusSession?: (session: SessionSummary) => void
+}
+
+export function NotificationsToastHostContainer({
+  onFocusSession,
+}: NotificationsToastHostContainerProps = {}) {
   const pulseSession = useNotificationsStore((s) => s.pulseSession)
   const incrementUnread = useNotificationsStore((s) => s.incrementUnread)
   const clearUnread = useNotificationsStore((s) => s.clearUnread)
+  const globalSessions = useSessionStore((s) => s.globalSessions)
   const softRef = useRef<HTMLAudioElement>(null)
   const alertRef = useRef<HTMLAudioElement>(null)
+
+  const focusSession = useCallback(
+    (sessionId: string) => {
+      const target = globalSessions.find((session) => session.id === sessionId)
+      if (target && onFocusSession) {
+        onFocusSession(target)
+        return
+      }
+      void focusSessionAcrossProjects(sessionId)
+    },
+    [globalSessions, onFocusSession],
+  )
 
   useEffect(() => {
     const unsubscribe = notificationsApi.onShowToast(
@@ -85,7 +104,7 @@ export function NotificationsToastHostContainer() {
           action: {
             label: 'Open',
             onClick: () => {
-              void focusSessionAcrossProjects(payload.event.sessionId)
+              focusSession(payload.event.sessionId)
               clearUnread()
             },
           },
@@ -94,7 +113,7 @@ export function NotificationsToastHostContainer() {
       },
     )
     return unsubscribe
-  }, [clearUnread, incrementUnread, pulseSession])
+  }, [clearUnread, focusSession, incrementUnread, pulseSession])
 
   useEffect(() => {
     const unsubscribe = notificationsApi.onPlaySound(
@@ -123,10 +142,10 @@ export function NotificationsToastHostContainer() {
 
   useEffect(() => {
     const unsubscribe = notificationsApi.onFocusSession((sessionId) => {
-      void focusSessionAcrossProjects(sessionId)
+      focusSession(sessionId)
     })
     return unsubscribe
-  }, [])
+  }, [focusSession])
 
   return (
     <>

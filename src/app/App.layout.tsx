@@ -6,6 +6,8 @@ import { GlobalStatusBar } from '@/widgets/global-status-bar'
 import { WorkspaceLayout } from '@/widgets/workspace-layout'
 import { NotificationsOnboardingContainer } from '@/features/notifications-onboarding'
 import { useAppSurfaceStore } from '@/entities/app-surface'
+import type { CodeReviewMode } from '@/entities/code-review'
+import type { SessionSummary } from '@/entities/session'
 import { cn } from '@/shared/lib/cn.pure'
 import { DevBuildRibbon } from './dev-build-ribbon.presentational'
 
@@ -14,6 +16,37 @@ interface AppShellProps {
   activeGlobalSessionId: string | null
   onSelectSession: (id: string) => void
   onSelectGlobalSession: (id: string | null) => void
+  onOpenCodeReview?: (search?: {
+    targetId?: string | null
+    mode?: CodeReviewMode
+    file?: string | null
+  }) => void
+  onCodeReviewSearchChange?: (search: {
+    targetId?: string | null
+    mode?: CodeReviewMode
+    file?: string | null
+  }) => void
+  onCloseCodeReview: () => void
+  codeReviewActive: boolean
+  codeReviewTargetId: string | null
+  codeReviewMode: CodeReviewMode
+  codeReviewFilePath: string | null
+  selectedChatSpaceId: string | null
+  draftChatSpaceId: string | null
+  onSelectChatSession: (id: string) => void
+  onSelectChatSpace?: (
+    id: string,
+    options?: {
+      draft?: boolean
+    },
+  ) => void
+  onBeginChatSpaceAttempt?: (id: string) => void
+  onCancelChatSpaceAttempt?: (id: string) => void
+  onSelectAnySession?: (session: SessionSummary) => void
+  onShowCode?: () => void | Promise<void>
+  onShowChat?: () => void
+  onSelectProjectRoot?: (projectId: string) => void | Promise<void>
+  onNewGlobalChat?: () => void
   loading: boolean
   hasProject: boolean
   showDevelopmentRibbon: boolean
@@ -29,6 +62,24 @@ export const AppShell: FC<AppShellProps> = ({
   activeGlobalSessionId,
   onSelectSession,
   onSelectGlobalSession,
+  onOpenCodeReview,
+  onCodeReviewSearchChange,
+  onCloseCodeReview,
+  codeReviewActive,
+  codeReviewTargetId,
+  codeReviewMode,
+  codeReviewFilePath,
+  selectedChatSpaceId,
+  draftChatSpaceId,
+  onSelectChatSession,
+  onSelectChatSpace,
+  onBeginChatSpaceAttempt,
+  onCancelChatSpaceAttempt,
+  onSelectAnySession,
+  onShowCode,
+  onShowChat,
+  onSelectProjectRoot,
+  onNewGlobalChat,
   loading,
   hasProject,
   showDevelopmentRibbon,
@@ -36,19 +87,28 @@ export const AppShell: FC<AppShellProps> = ({
   const [sidebarWidth, setSidebarWidth] = useState(DEFAULT_SIDEBAR)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [sidebarPeekOpen, setSidebarPeekOpen] = useState(false)
-  const [selectedChatSpaceId, setSelectedChatSpaceId] = useState<string | null>(
-    null,
-  )
-  const [draftChatSpaceId, setDraftChatSpaceId] = useState<string | null>(null)
+  const [fallbackSelectedChatSpaceId, setFallbackSelectedChatSpaceId] =
+    useState<string | null>(null)
+  const [fallbackDraftChatSpaceId, setFallbackDraftChatSpaceId] = useState<
+    string | null
+  >(null)
   const activeSurface = useAppSurfaceStore((state) => state.activeSurface)
   const setActiveSurface = useAppSurfaceStore((state) => state.setActiveSurface)
   const dragging = useRef(false)
+  const effectiveSelectedChatSpaceId =
+    onSelectChatSpace || selectedChatSpaceId
+      ? selectedChatSpaceId
+      : fallbackSelectedChatSpaceId
+  const effectiveDraftChatSpaceId =
+    onBeginChatSpaceAttempt || draftChatSpaceId
+      ? draftChatSpaceId
+      : fallbackDraftChatSpaceId
 
   const handleSelectCodeSession = useCallback(
     (id: string) => {
       setActiveSurface('code')
-      setSelectedChatSpaceId(null)
-      setDraftChatSpaceId(null)
+      setFallbackSelectedChatSpaceId(null)
+      setFallbackDraftChatSpaceId(null)
       onSelectSession(id)
     },
     [onSelectSession, setActiveSurface],
@@ -57,38 +117,62 @@ export const AppShell: FC<AppShellProps> = ({
   const handleSelectGlobalSession = useCallback(
     (id: string) => {
       setActiveSurface('chat')
-      setSelectedChatSpaceId(null)
-      setDraftChatSpaceId(null)
-      onSelectGlobalSession(id)
+      onSelectChatSession(id)
+      setFallbackSelectedChatSpaceId(null)
+      setFallbackDraftChatSpaceId(null)
     },
-    [onSelectGlobalSession, setActiveSurface],
+    [onSelectChatSession, setActiveSurface],
   )
 
   const handleNewGlobalSession = useCallback(() => {
     setActiveSurface('chat')
-    setSelectedChatSpaceId(null)
-    setDraftChatSpaceId(null)
-    onSelectGlobalSession(null)
-  }, [onSelectGlobalSession, setActiveSurface])
+    if (onNewGlobalChat) {
+      onNewGlobalChat()
+    } else {
+      onSelectGlobalSession(null)
+    }
+    setFallbackSelectedChatSpaceId(null)
+    setFallbackDraftChatSpaceId(null)
+  }, [onNewGlobalChat, onSelectGlobalSession, setActiveSurface])
 
   const handleSelectChatSpace = useCallback(
     (id: string) => {
       setActiveSurface('chat')
-      setSelectedChatSpaceId(id)
-      setDraftChatSpaceId(null)
       onSelectGlobalSession(null)
+      if (onSelectChatSpace) {
+        onSelectChatSpace(id)
+      } else {
+        setFallbackSelectedChatSpaceId(id)
+        setFallbackDraftChatSpaceId(null)
+      }
     },
-    [onSelectGlobalSession, setActiveSurface],
+    [onSelectChatSpace, onSelectGlobalSession, setActiveSurface],
   )
 
   const handleBeginChatSpaceAttempt = useCallback(
     (id: string) => {
       setActiveSurface('chat')
-      setSelectedChatSpaceId(id)
-      setDraftChatSpaceId(id)
       onSelectGlobalSession(null)
+      if (onBeginChatSpaceAttempt) {
+        onBeginChatSpaceAttempt(id)
+      } else {
+        setFallbackSelectedChatSpaceId(id)
+        setFallbackDraftChatSpaceId(id)
+      }
     },
-    [onSelectGlobalSession, setActiveSurface],
+    [onBeginChatSpaceAttempt, onSelectGlobalSession, setActiveSurface],
+  )
+
+  const handleSelectSurface = useCallback(
+    (surface: 'code' | 'chat') => {
+      setActiveSurface(surface)
+      if (surface === 'code') {
+        void onShowCode?.()
+        return
+      }
+      onShowChat?.()
+    },
+    [onShowChat, onShowCode, setActiveSurface],
   )
 
   const handleMouseDown = useCallback(() => {
@@ -181,14 +265,17 @@ export const AppShell: FC<AppShellProps> = ({
           >
             <Sidebar
               activeSurface={activeSurface}
-              onSelectSurface={setActiveSurface}
+              onSelectSurface={handleSelectSurface}
               onSelectSession={handleSelectCodeSession}
               activeSessionId={activeSessionId}
               onSelectGlobalSession={handleSelectGlobalSession}
               onNewGlobalSession={handleNewGlobalSession}
-              selectedSpaceId={selectedChatSpaceId}
+              selectedSpaceId={effectiveSelectedChatSpaceId}
               onSelectSpace={handleSelectChatSpace}
               activeGlobalSessionId={activeGlobalSessionId}
+              onOpenCodeReview={onOpenCodeReview}
+              onSelectProjectRoot={onSelectProjectRoot}
+              onSelectAnySession={onSelectAnySession}
               collapsed={sidebarCollapsed && !sidebarPeekOpen}
               peek={sidebarCollapsed && sidebarPeekOpen}
               onCollapse={handleCollapseSidebar}
@@ -212,20 +299,43 @@ export const AppShell: FC<AppShellProps> = ({
         <div className="app-main-panel flex min-w-0 flex-1 flex-col">
           {activeSurface === 'chat' ? (
             <ChatSurface
-              selectedSpaceId={selectedChatSpaceId}
-              draftSpaceId={draftChatSpaceId}
+              selectedSpaceId={effectiveSelectedChatSpaceId}
+              draftSpaceId={effectiveDraftChatSpaceId}
               onBeginSpaceAttempt={handleBeginChatSpaceAttempt}
-              onCancelSpaceAttempt={() => setDraftChatSpaceId(null)}
+              onCancelSpaceAttempt={
+                effectiveSelectedChatSpaceId
+                  ? () => {
+                      if (onCancelChatSpaceAttempt) {
+                        onCancelChatSpaceAttempt(effectiveSelectedChatSpaceId)
+                      } else {
+                        setFallbackDraftChatSpaceId(null)
+                      }
+                    }
+                  : undefined
+              }
               onSpaceDeleted={() => {
-                setSelectedChatSpaceId(null)
-                setDraftChatSpaceId(null)
+                if (onNewGlobalChat) {
+                  onNewGlobalChat()
+                } else {
+                  setFallbackSelectedChatSpaceId(null)
+                  setFallbackDraftChatSpaceId(null)
+                }
               }}
+              onOpenSession={onSelectAnySession}
             />
           ) : hasProject ? (
             <>
               <NotificationsOnboardingContainer />
               <div className="min-h-0 flex-1">
-                <WorkspaceLayout />
+                <WorkspaceLayout
+                  codeReviewActive={codeReviewActive}
+                  codeReviewTargetId={codeReviewTargetId}
+                  codeReviewMode={codeReviewMode}
+                  codeReviewFilePath={codeReviewFilePath}
+                  onOpenCodeReview={onOpenCodeReview}
+                  onCodeReviewSearchChange={onCodeReviewSearchChange}
+                  onCloseCodeReview={onCloseCodeReview}
+                />
               </div>
             </>
           ) : (
@@ -241,7 +351,7 @@ export const AppShell: FC<AppShellProps> = ({
         </div>
       </div>
 
-      <GlobalStatusBar />
+      <GlobalStatusBar onSelectProject={onSelectProjectRoot} />
     </div>
   )
 }

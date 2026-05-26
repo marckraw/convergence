@@ -1,5 +1,6 @@
-import type { FC } from 'react'
+import type { FC, ReactNode } from 'react'
 import type { ProjectActivity } from '@/entities/session'
+import { summarizeAttentionRequests } from '@/entities/session'
 import type { ProviderInfo, SessionSummary } from '@/entities/session'
 import { CheckCircle2, CircleAlert, CircleDot, CircleOff } from 'lucide-react'
 import { cn } from '@/shared/lib/cn.pure'
@@ -30,6 +31,7 @@ interface GlobalStatusBarProps {
   recency: RecencyBadge | null
   providers: ProviderInfo[]
   onSelectProject: (projectId: string) => void
+  localModelTunnelSlot?: ReactNode
 }
 
 export const GlobalStatusBar: FC<GlobalStatusBarProps> = ({
@@ -39,6 +41,7 @@ export const GlobalStatusBar: FC<GlobalStatusBarProps> = ({
   recency,
   providers,
   onSelectProject,
+  localModelTunnelSlot,
 }) => {
   const isEmpty =
     runningCount === 0 && attentionCount === 0 && byProject.length === 0
@@ -52,6 +55,7 @@ export const GlobalStatusBar: FC<GlobalStatusBarProps> = ({
 
   return (
     <div className={barClass} data-testid="global-status-bar">
+      {localModelTunnelSlot}
       {isEmpty ? (
         <div className={zoneClass}>
           <CircleOff className="h-3 w-3" />
@@ -129,7 +133,7 @@ export const GlobalStatusBar: FC<GlobalStatusBarProps> = ({
                         projectChipAttentionClass,
                     )}
                     data-testid={`global-status-chip-${project.projectId}`}
-                    aria-label={`Switch to project ${project.projectName}`}
+                    aria-label={formatProjectChipLabel(project)}
                   >
                     <span
                       className={cn(
@@ -208,4 +212,15 @@ export const GlobalStatusBar: FC<GlobalStatusBarProps> = ({
       )}
     </div>
   )
+}
+
+function formatProjectChipLabel(project: ProjectActivity): string {
+  const parts = [`Switch to project ${project.projectName}`]
+  if (project.running.length > 0) {
+    parts.push(`${project.running.length} running`)
+  }
+  if (project.needsAttention.length > 0) {
+    parts.push(summarizeAttentionRequests(project.needsAttention))
+  }
+  return parts.join(', ')
 }

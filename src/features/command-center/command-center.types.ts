@@ -1,4 +1,5 @@
 import type { AttentionState } from '@/entities/session'
+import type { SessionContextKind } from '@/entities/session'
 import type { DialogKind, DialogPayload } from '@/entities/dialog'
 
 export interface PaletteSearchFields {
@@ -35,7 +36,8 @@ export type SessionPaletteItem = {
   kind: 'session'
   id: string
   sessionId: string
-  projectId: string
+  contextKind: SessionContextKind
+  projectId: string | null
   workspaceId: string | null
   sessionName: string
   projectName: string

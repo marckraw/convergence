@@ -3,11 +3,13 @@ import type {
   SessionDelta,
   ConversationItem,
   ConversationItemDraft,
+  InteractionRequest,
 } from '../session/conversation-item.types'
 import type { SessionSummary } from '../session/session.types'
 import type { SkillSelection } from '../skills/skills.types'
 
 type MessageItem = Extract<ConversationItem, { kind: 'message' }>
+type ThinkingItem = Extract<ConversationItem, { kind: 'thinking' }>
 
 interface ProviderSessionEmitterOptions {
   providerId: string
@@ -99,6 +101,45 @@ export class ProviderSessionEmitter {
     })
   }
 
+  addThinking(input: {
+    text: string
+    state?: ThinkingItem['state']
+    timestamp?: string
+    providerItemId?: string | null
+    providerEventType?: string | null
+  }): string {
+    const timestamp = input.timestamp ?? this.now()
+    const item = this.buildBaseItem({
+      kind: 'thinking',
+      state: input.state ?? 'complete',
+      timestamp,
+      providerItemId: input.providerItemId,
+      providerEventType: input.providerEventType ?? 'thinking',
+      payload: {
+        actor: 'assistant',
+        text: input.text,
+      },
+    })
+    this.emitItem(item)
+    return item.id
+  }
+
+  patchThinking(
+    itemId: string,
+    patch: Partial<ThinkingItem> & {
+      updatedAt?: string
+    },
+  ): void {
+    this.emitDeltaFn({
+      kind: 'conversation.item.patch',
+      itemId,
+      patch: {
+        ...patch,
+        updatedAt: patch.updatedAt ?? this.now(),
+      },
+    })
+  }
+
   addToolCall(input: {
     toolName: string
     inputText: string
@@ -171,6 +212,7 @@ export class ProviderSessionEmitter {
 
   addInputRequest(input: {
     prompt: string
+    request?: InteractionRequest
     timestamp?: string
     providerItemId?: string | null
     providerEventType?: string | null
@@ -184,6 +226,7 @@ export class ProviderSessionEmitter {
       providerEventType: input.providerEventType ?? 'input-request',
       payload: {
         prompt: input.prompt,
+        ...(input.request ? { request: input.request } : {}),
       },
     })
     this.emitItem(item)

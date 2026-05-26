@@ -14,7 +14,6 @@ import { ComposerContainer } from '@/features/composer'
 import { SessionConversationSurface } from '@/widgets/session-view'
 import { AttentionIndicator } from '@/shared/ui/attention-indicator.presentational'
 import { Button } from '@/shared/ui/button'
-import { ContextWindowIndicator } from '@/shared/ui/context-window-indicator.presentational'
 import { Input } from '@/shared/ui/input'
 import { CheckSquare, Folder, MessageSquareText, Square } from 'lucide-react'
 import {
@@ -34,6 +33,7 @@ interface ChatSurfaceProps {
   onBeginSpaceAttempt?: (spaceId: string) => void
   onCancelSpaceAttempt?: () => void
   onSpaceDeleted?: (spaceId: string) => void
+  onOpenSession?: (session: SessionSummary) => void
 }
 
 const EMPTY_SPACE_SOURCES: SpaceSource[] = []
@@ -52,6 +52,7 @@ export const ChatSurface: FC<ChatSurfaceProps> = ({
   onBeginSpaceAttempt,
   onCancelSpaceAttempt,
   onSpaceDeleted,
+  onOpenSession,
 }) => {
   const sessions = useSessionStore((state) => state.globalChatSessions)
   const globalSessions = useSessionStore((state) => state.globalSessions)
@@ -90,6 +91,9 @@ export const ChatSurface: FC<ChatSurfaceProps> = ({
   )
   const approveSession = useSessionStore((state) => state.approveSession)
   const denySession = useSessionStore((state) => state.denySession)
+  const sendMessageToSession = useSessionStore(
+    (state) => state.sendMessageToSession,
+  )
   const stopSession = useSessionStore((state) => state.stopSession)
   const deleteSession = useSessionStore((state) => state.deleteSession)
   const loadGlobalSessions = useSessionStore(
@@ -224,6 +228,11 @@ export const ChatSurface: FC<ChatSurfaceProps> = ({
       const target = sessionLookup.get(sessionId)
       if (!target) return
 
+      if (onOpenSession) {
+        onOpenSession(target)
+        return
+      }
+
       await switchToSession(sessionId)
 
       if (target.contextKind === 'global') {
@@ -234,7 +243,13 @@ export const ChatSurface: FC<ChatSurfaceProps> = ({
       setActiveSurface('code')
       setActiveSession(sessionId)
     },
-    [sessionLookup, setActiveGlobalSession, setActiveSession, setActiveSurface],
+    [
+      onOpenSession,
+      sessionLookup,
+      setActiveGlobalSession,
+      setActiveSession,
+      setActiveSurface,
+    ],
   )
 
   const handleAddSources = useCallback(async () => {
@@ -412,7 +427,12 @@ export const ChatSurface: FC<ChatSurfaceProps> = ({
           style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
         />
         <div className="flex min-h-0 flex-1 flex-col items-center justify-center px-4">
-          <p className="mb-1 text-lg font-medium">Convergence</p>
+          <p
+            className="mb-1 max-w-full truncate text-lg font-medium"
+            title={draftSpace.title}
+          >
+            {draftSpace.title}
+          </p>
           <p className="mb-3 text-sm text-muted-foreground">
             What would you like to work on?
           </p>
@@ -561,7 +581,6 @@ export const ChatSurface: FC<ChatSurfaceProps> = ({
           </div>
         </div>
         <div className="flex min-h-0 flex-1 flex-col items-center justify-center px-4">
-          <p className="mb-1 text-lg font-medium">Convergence Chat</p>
           <p className="mb-5 text-sm text-muted-foreground">
             Start a project-free agent conversation.
           </p>
@@ -599,7 +618,6 @@ export const ChatSurface: FC<ChatSurfaceProps> = ({
               {activityLabel}
             </span>
           ) : null}
-          <ContextWindowIndicator contextWindow={session.contextWindow} />
         </div>
         {session.status === 'running' ? (
           <Button
@@ -621,6 +639,16 @@ export const ChatSurface: FC<ChatSurfaceProps> = ({
         composerContext={{ kind: 'global', activeSessionId: session.id }}
         onApprove={approveSession}
         onDeny={denySession}
+        onInputAnswer={(sessionId, response, displayText) => {
+          void sendMessageToSession(
+            sessionId,
+            displayText,
+            undefined,
+            undefined,
+            'answer',
+            response,
+          )
+        }}
       />
     </div>
   )

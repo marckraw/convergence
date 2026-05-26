@@ -5,6 +5,7 @@ import type { ProviderInstallInfo, ProviderStatusInfo } from './provider.types'
 import {
   buildProviderStatus,
   getKnownProviders,
+  selectProviderVersionOutput,
   type KnownProvider,
 } from './provider-status.pure'
 import { fetchNpmLatestVersion } from './npm-registry'
@@ -44,11 +45,12 @@ function getVersion(binaryPath: string): Promise<string | null> {
         timeout: 5_000,
         ...buildWindowsHiddenProcessOptions(binaryPath, process.platform),
       },
-      (error, stdout) => {
-        if (error || !stdout.trim()) {
+      (_error, stdout, stderr) => {
+        const versionOutput = selectProviderVersionOutput(stdout, stderr)
+        if (!versionOutput) {
           resolve(null)
         } else {
-          resolve(stdout.trim().split(/\r?\n/)[0] ?? null)
+          resolve(versionOutput)
         }
       },
     )
@@ -59,13 +61,19 @@ function getNodeVersion(nodePath: string | null): Promise<string | null> {
   if (!nodePath) return Promise.resolve(null)
 
   return new Promise((resolve) => {
-    execFile(nodePath, ['--version'], { timeout: 5_000 }, (error, stdout) => {
-      if (error || !stdout.trim()) {
-        resolve(null)
-      } else {
-        resolve(stdout.trim().split(/\r?\n/)[0] ?? null)
-      }
-    })
+    execFile(
+      nodePath,
+      ['--version'],
+      { timeout: 5_000 },
+      (_error, stdout, stderr) => {
+        const versionOutput = selectProviderVersionOutput(stdout, stderr)
+        if (!versionOutput) {
+          resolve(null)
+        } else {
+          resolve(versionOutput)
+        }
+      },
+    )
   })
 }
 
@@ -114,6 +122,7 @@ export interface DetectedProvider {
   id: string
   name: string
   binaryPath: string
+  version?: string | null
 }
 
 export async function inspectProviderStatuses(): Promise<ProviderStatusInfo[]> {
@@ -167,6 +176,7 @@ export async function detectProviders(): Promise<DetectedProvider[]> {
             id: provider.id,
             name: provider.name,
             binaryPath: provider.binaryPath,
+            version: provider.version,
           },
         ]
       : [],

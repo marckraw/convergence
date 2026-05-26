@@ -4,6 +4,7 @@ import type { SelectedLineRange } from '@pierre/diffs'
 import {
   countCodeReviewFilesByStatus,
   useCodeReviewStore,
+  type CodeReviewMode,
   type CodeReviewTarget,
 } from '@/entities/code-review'
 import { useAppSurfaceStore } from '@/entities/app-surface'
@@ -75,6 +76,11 @@ interface ChangedFilesPanelProps {
   onClose: () => void
   onToggleSide: () => void
   onToggleExpanded: () => void
+  onOpenCodeReview?: (search?: {
+    targetId?: string | null
+    mode?: CodeReviewMode
+    file?: string | null
+  }) => void
 }
 
 const EMPTY_REVIEW_NOTES: ReviewNote[] = []
@@ -98,6 +104,7 @@ export const ChangedFilesPanel: FC<ChangedFilesPanelProps> = ({
   onClose,
   onToggleSide,
   onToggleExpanded,
+  onOpenCodeReview,
 }) => {
   const [files, setFiles] = useState<ChangedFile[]>([])
   const [selectedFile, setSelectedFile] = useState<string | null>(null)
@@ -549,6 +556,15 @@ export const ChangedFilesPanel: FC<ChangedFilesPanelProps> = ({
     }
 
     setActiveSurface('code')
+    if (onOpenCodeReview) {
+      onOpenCodeReview({
+        targetId: target.id,
+        mode,
+        file: selectedFile,
+      })
+      return
+    }
+
     openCodeReview({
       target,
       mode,

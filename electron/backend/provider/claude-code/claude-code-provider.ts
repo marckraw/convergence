@@ -1,6 +1,9 @@
 import { spawn, type ChildProcess } from 'child_process'
 import { promises as fs } from 'fs'
-import type { SessionDelta } from '../../session/conversation-item.types'
+import type {
+  InteractionResponse,
+  SessionDelta,
+} from '../../session/conversation-item.types'
 import type {
   Provider,
   SessionStartConfig,
@@ -59,6 +62,19 @@ import {
   type ClaudeSkillTelemetrySink,
 } from './claude-skill-telemetry.service'
 import { buildWindowsHiddenProcessOptions } from '../shell-exec.pure'
+import {
+  buildClaudeAskUserQuestionHookResponse,
+  buildClaudeAskUserQuestionHookSettings,
+  buildClaudeAskUserQuestionRequest,
+  buildClaudeExitPlanModeHookResponse,
+  buildClaudeExitPlanModeRequest,
+  CLAUDE_DEFERRED_TOOL_USE_MIN_VERSION,
+  normalizeClaudeDeferredToolUse,
+  supportsClaudeDeferredToolUseVersion,
+  type ClaudeDeferredToolHookResponse,
+  type PendingClaudeDeferredToolUse,
+} from './claude-ask-user-question.pure'
+import { resolveClaudeCodePermissionMode } from '../session-permissions.pure'
 
 function now(): string {
   return new Date().toISOString()
@@ -69,7 +85,7 @@ interface ClaudeStreamEvent {
   session_id?: string
   event?: {
     type: string
-    delta?: { type: string; text?: string }
+    delta?: { type: string; text?: string; thinking?: string }
   }
   message?: {
     model?: string
@@ -81,6 +97,7 @@ interface ClaudeStreamEvent {
     content?: Array<{
       type: string
       text?: string
+      thinking?: string
       name?: string
       input?: unknown
       tool_use_id?: string
@@ -89,6 +106,8 @@ interface ClaudeStreamEvent {
   }
   is_error?: boolean
   result?: string
+  stop_reason?: string
+  deferred_tool_use?: unknown
   usage?: {
     input_tokens?: number
     cache_creation_input_tokens?: number
@@ -107,7 +126,8 @@ function runClaudeOneShot(
       '-p',
       '--output-format',
       'json',
-      '--dangerously-skip-permissions',
+      '--permission-mode',
+      resolveClaudeCodePermissionMode(input.permissionConfig),
       '--model',
       input.modelId,
     ]
@@ -195,6 +215,7 @@ export class ClaudeCodeProvider implements Provider {
     private binaryPath: string,
     private taskProgress: TaskProgressService | null = null,
     private debugSink: ProviderDebugSink = noopDebugSink,
+    private version: string | null = null,
   ) {}
 
   async describe(): Promise<ProviderDescriptor> {
@@ -209,6 +230,7 @@ export class ClaudeCodeProvider implements Provider {
     const binaryPath = this.binaryPath
     const skillsService = this.skillsService
     const debugSink = this.debugSink
+    const claudeCodeVersion = this.version
     const sessionId = config.sessionId
     const listeners = {
       delta: [] as ((delta: SessionDelta) => void)[],
@@ -246,7 +268,10 @@ export class ClaudeCodeProvider implements Provider {
     let claudeSessionId: string | null = config.continuationToken
     let assistantTextBuffer = ''
     let assistantMessageItemId: string | null = null
+    let thinkingBuffer = ''
+    let thinkingItemId: string | null = null
     let currentTurnHasAssistantText = false
+    let currentTurnHasThinkingText = false
     let currentTurn: {
       message: string
       attachments?: Attachment[]
@@ -271,6 +296,8 @@ export class ClaudeCodeProvider implements Provider {
       null
     let sawTurnOutput = false
     let stderrBuffer = ''
+    let pendingDeferredToolUse: PendingClaudeDeferredToolUse | null = null
+    let warnedUnsupportedDeferredToolUse = false
 
     function emitDelta(delta: SessionDelta): void {
       listeners.delta.forEach((cb) => cb(delta))
@@ -442,6 +469,29 @@ export class ClaudeCodeProvider implements Provider {
       }
     }
 
+    function flushThinkingBuffer(): void {
+      if (thinkingBuffer) {
+        const timestamp = now()
+        if (thinkingItemId) {
+          sessionEmitter.patchThinking(thinkingItemId, {
+            text: thinkingBuffer,
+            state: 'complete',
+            updatedAt: timestamp,
+          })
+        } else {
+          thinkingItemId = sessionEmitter.addThinking({
+            text: thinkingBuffer,
+            state: 'complete',
+            timestamp,
+          })
+        }
+        thinkingBuffer = ''
+        thinkingItemId = null
+        currentTurnHasThinkingText = true
+        sawTurnOutput = true
+      }
+    }
+
     function canRecoverContinuation(): boolean {
       return !!(
         currentTurn?.allowContinuationRecovery &&
@@ -579,9 +629,28 @@ export class ClaudeCodeProvider implements Provider {
           sawTurnOutput = true
           if (
             event.event?.type === 'content_block_delta' &&
+            event.event.delta?.type === 'thinking_delta' &&
+            typeof event.event.delta.thinking === 'string'
+          ) {
+            thinkingBuffer += event.event.delta.thinking
+            if (!thinkingItemId) {
+              thinkingItemId = sessionEmitter.addThinking({
+                text: thinkingBuffer,
+                state: 'streaming',
+                providerEventType: 'stream_event',
+              })
+            } else {
+              sessionEmitter.patchThinking(thinkingItemId, {
+                text: thinkingBuffer,
+                state: 'streaming',
+              })
+            }
+          } else if (
+            event.event?.type === 'content_block_delta' &&
             event.event.delta?.type === 'text_delta' &&
             event.event.delta?.text
           ) {
+            flushThinkingBuffer()
             assistantTextBuffer += event.event.delta.text
             if (!assistantMessageItemId) {
               assistantMessageItemId = sessionEmitter.addAssistantMessage({
@@ -603,10 +672,15 @@ export class ClaudeCodeProvider implements Provider {
           // If we already streamed text via stream_events, flush that
           // and skip text blocks in the assistant message (they're duplicates)
           const hadStreamedText = assistantTextBuffer.length > 0
+          const hadStreamedThinking =
+            currentTurnHasThinkingText || thinkingBuffer.length > 0
+          let skippedStreamedThinkingBlock = false
+          flushThinkingBuffer()
           flushAssistantBuffer()
           if (event.message?.content) {
             for (const block of event.message.content) {
               if (block.type === 'tool_use' && block.name) {
+                flushThinkingBuffer()
                 sessionEmitter.addToolCall({
                   toolName: block.name,
                   inputText:
@@ -615,6 +689,17 @@ export class ClaudeCodeProvider implements Provider {
                       : JSON.stringify(block.input, null, 2),
                   providerEventType: 'tool_use',
                 })
+              } else if (block.type === 'thinking' && block.thinking) {
+                if (hadStreamedThinking && !skippedStreamedThinkingBlock) {
+                  skippedStreamedThinkingBlock = true
+                  continue
+                }
+                sessionEmitter.addThinking({
+                  text: block.thinking,
+                  state: 'complete',
+                  providerEventType: 'thinking',
+                })
+                currentTurnHasThinkingText = true
               } else if (
                 block.type === 'text' &&
                 block.text &&
@@ -657,8 +742,51 @@ export class ClaudeCodeProvider implements Provider {
 
         case 'result':
           sawTurnOutput = true
+          flushThinkingBuffer()
           flushAssistantBuffer()
           refreshContextWindowFromLogs()
+          if (event.stop_reason === 'tool_deferred') {
+            const deferredToolUse = normalizeClaudeDeferredToolUse(
+              event.deferred_tool_use,
+            )
+            const inputRequest = deferredToolUse
+              ? (buildClaudeAskUserQuestionRequest(deferredToolUse) ??
+                buildClaudeExitPlanModeRequest(deferredToolUse))
+              : null
+
+            if (inputRequest) {
+              pendingDeferredToolUse =
+                inputRequest.kind === 'exit-plan-mode'
+                  ? {
+                      kind: 'exit-plan-mode',
+                      pending: inputRequest.pending,
+                    }
+                  : {
+                      kind: 'ask-user-question',
+                      pending: inputRequest.pending,
+                    }
+              sessionEmitter.addInputRequest({
+                prompt: inputRequest.prompt,
+                request: inputRequest.request,
+                providerItemId: inputRequest.pending.toolUseId,
+                providerEventType: 'deferred_tool_use',
+              })
+              setStatus('running')
+              setAttention('needs-input')
+              setActivity(null)
+              currentTurn = null
+              break
+            }
+
+            sessionEmitter.addNote({
+              text: 'Claude Code deferred a tool call that Convergence could not render.',
+              level: 'error',
+            })
+            setStatus('failed')
+            setAttention('failed')
+            currentTurn = null
+            break
+          }
           if (event.is_error) {
             if (shouldRecoverFromMessage(event.result)) {
               scheduleContinuationRecovery()
@@ -777,6 +905,8 @@ export class ClaudeCodeProvider implements Provider {
         userMessageItemId?: string | null
         emitUserEntry?: boolean
         allowContinuationRecovery?: boolean
+        skipPromptInput?: boolean
+        deferredToolResponse?: ClaudeDeferredToolHookResponse
       },
     ): Promise<void> {
       if (stopped || child) return
@@ -816,7 +946,10 @@ export class ClaudeCodeProvider implements Provider {
 
       assistantTextBuffer = ''
       assistantMessageItemId = null
+      thinkingBuffer = ''
+      thinkingItemId = null
       currentTurnHasAssistantText = false
+      currentTurnHasThinkingText = false
       sawTurnOutput = false
       stderrBuffer = ''
       currentTurn = {
@@ -835,6 +968,16 @@ export class ClaudeCodeProvider implements Provider {
           'Waiting for Claude turn usage. When available, Convergence will show an estimated context value because Claude headless mode does not expose exact live context telemetry yet.',
         ),
       )
+      const supportsDeferredToolUse =
+        claudeCodeVersion === null ||
+        supportsClaudeDeferredToolUseVersion(claudeCodeVersion)
+      if (!supportsDeferredToolUse && !warnedUnsupportedDeferredToolUse) {
+        warnedUnsupportedDeferredToolUse = true
+        sessionEmitter.addNote({
+          text: `Claude Code ${claudeCodeVersion} does not support deferred tool-use. AskUserQuestion and ExitPlanMode cards require Claude Code ${CLAUDE_DEFERRED_TOOL_USE_MIN_VERSION} or newer.`,
+          level: 'warning',
+        })
+      }
 
       const args = [
         '-p',
@@ -843,9 +986,13 @@ export class ClaudeCodeProvider implements Provider {
         '--output-format',
         'stream-json',
         '--verbose',
-        '--dangerously-skip-permissions',
+        '--permission-mode',
+        resolveClaudeCodePermissionMode(config.permissionConfig),
         '--include-partial-messages',
       ]
+      if (supportsDeferredToolUse) {
+        args.push('--settings', buildClaudeAskUserQuestionHookSettings())
+      }
       if (claudeSessionId) {
         args.push('--resume', claudeSessionId)
       }
@@ -862,6 +1009,13 @@ export class ClaudeCodeProvider implements Provider {
         env: {
           ...process.env,
           ...(telemetrySink?.env ?? {}),
+          ...(options?.deferredToolResponse
+            ? {
+                CONVERGENCE_CLAUDE_DEFERRED_TOOL_RESPONSE: JSON.stringify(
+                  options.deferredToolResponse,
+                ),
+              }
+            : {}),
         },
         ...buildWindowsHiddenProcessOptions(binaryPath, process.platform),
       })
@@ -930,7 +1084,9 @@ export class ClaudeCodeProvider implements Provider {
               text: skillResolution.promptText,
               parts,
             })
-            stdin.write(line + '\n')
+            if (!options?.skipPromptInput) {
+              stdin.write(line + '\n')
+            }
             if (userMessageItemId) {
               patchUserMessageSkills(
                 userMessageItemId,
@@ -969,6 +1125,7 @@ export class ClaudeCodeProvider implements Provider {
           note: `child exited with code ${code}`,
         })
         if (stopped) return
+        flushThinkingBuffer()
         flushAssistantBuffer()
         refreshContextWindowFromLogs()
         const significant = getSignificantStderr()
@@ -1046,14 +1203,45 @@ export class ClaudeCodeProvider implements Provider {
       onActivityHeartbeat: (cb) => {
         listeners.heartbeat.push(cb)
       },
-      sendMessage: (text, attachments, skillSelections) => {
+      sendMessage: (text, attachments, skillSelections, options) => {
+        if (
+          pendingDeferredToolUse &&
+          options?.deliveryMode === 'answer' &&
+          claudeSessionId
+        ) {
+          const pending = pendingDeferredToolUse
+          pendingDeferredToolUse = null
+          const interactionResponse = options.interactionResponse as
+            | InteractionResponse
+            | undefined
+          const deferredToolResponse =
+            pending.kind === 'ask-user-question'
+              ? buildClaudeAskUserQuestionHookResponse(
+                  pending.pending,
+                  interactionResponse,
+                  text,
+                )
+              : buildClaudeExitPlanModeHookResponse(
+                  pending.pending,
+                  interactionResponse,
+                  text,
+                )
+          void startTurn('', undefined, {
+            emitUserEntry: false,
+            allowContinuationRecovery: false,
+            skipPromptInput: true,
+            deferredToolResponse,
+          })
+          return
+        }
+
         void startTurn(text, attachments, { skillSelections })
       },
       approve: () => {
-        // Using --dangerously-skip-permissions, no approvals needed
+        // Claude Code permission handling is controlled at process startup.
       },
       deny: () => {
-        // Using --dangerously-skip-permissions, no approvals needed
+        // Claude Code permission handling is controlled at process startup.
       },
       stop: () => {
         stopped = true

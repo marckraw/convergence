@@ -2,7 +2,10 @@ import type {
   Attachment,
   ProviderAttachmentCapability,
 } from '../attachments/attachments.types'
-import type { SessionDelta } from '../session/conversation-item.types'
+import type {
+  InteractionResponse,
+  SessionDelta,
+} from '../session/conversation-item.types'
 import type {
   SkillActivationConfirmation,
   SkillCatalogSource,
@@ -27,6 +30,31 @@ export type ReasoningEffort =
   | 'high'
   | 'max'
   | 'xhigh'
+
+export type SessionPermissionPreset = 'ask' | 'yolo' | 'custom'
+export type CodexApprovalPolicy = 'untrusted' | 'on-request' | 'never'
+export type CodexSandboxMode =
+  | 'read-only'
+  | 'workspace-write'
+  | 'danger-full-access'
+export type ClaudeCodePermissionMode =
+  | 'default'
+  | 'acceptEdits'
+  | 'auto'
+  | 'dontAsk'
+  | 'plan'
+  | 'bypassPermissions'
+
+export interface SessionPermissionConfig {
+  preset: SessionPermissionPreset
+  codex?: {
+    approvalPolicy: CodexApprovalPolicy
+    sandbox: CodexSandboxMode
+  }
+  claudeCode?: {
+    permissionMode: ClaudeCodePermissionMode
+  }
+}
 
 export type ActivitySignal =
   | null
@@ -93,6 +121,7 @@ export interface SessionStartConfig {
   model: string | null
   effort: ReasoningEffort | null
   continuationToken: string | null
+  permissionConfig?: SessionPermissionConfig
 }
 
 export interface ProviderEffortOption {
@@ -101,11 +130,14 @@ export interface ProviderEffortOption {
   description?: string
 }
 
+export type ProviderInputModality = 'text' | 'image'
+
 export interface ProviderModelOption {
   id: string
   label: string
   defaultEffort: ReasoningEffort | null
   effortOptions: ProviderEffortOption[]
+  inputModalities?: ProviderInputModality[]
   source?: 'pi-models-json' | 'provider'
 }
 
@@ -215,6 +247,7 @@ export interface OneShotInput {
   workingDirectory: string
   timeoutMs?: number
   requestId?: string
+  permissionConfig?: SessionPermissionConfig
 }
 
 export interface OneShotResult {
@@ -240,6 +273,7 @@ export interface SessionHandle {
       deliveryMode: MidRunInputMode
       queuedInputId?: string | null
       expectedProviderTurnId?: string | null
+      interactionResponse?: InteractionResponse
     },
   ) => void
   approve: (providerApprovalId?: string) => void

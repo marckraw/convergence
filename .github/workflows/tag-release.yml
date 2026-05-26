@@ -18,6 +18,7 @@ jobs:
         uses: actions/checkout@v6
         with:
           fetch-depth: 0
+          fetch-tags: true
 
       - name: Setup Node
         uses: actions/setup-node@v6
@@ -48,9 +49,7 @@ jobs:
             echo "version_changed=true" >> "$GITHUB_OUTPUT"
           fi
 
-          git fetch --tags --force
-
-          if git rev-parse "$TAG" >/dev/null 2>&1; then
+          if git show-ref --verify --quiet "refs/tags/$TAG"; then
             echo "tag_exists=true" >> "$GITHUB_OUTPUT"
           else
             echo "tag_exists=false" >> "$GITHUB_OUTPUT"

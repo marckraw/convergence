@@ -1,6 +1,7 @@
 import { useState, useCallback } from 'react'
 import type { FC } from 'react'
 import type { ConversationItem as ConversationItemEntry } from '@/entities/session'
+import type { InteractionResponse } from '@/entities/session'
 import {
   AttachmentPreviewContainer,
   useAttachmentStore,
@@ -16,6 +17,7 @@ interface ConversationItemProps {
   injectedContextText?: string | null
   onApprove?: () => void
   onDeny?: () => void
+  onInputAnswer?: (response: InteractionResponse, displayText: string) => void
 }
 
 const EMPTY_RESOLVED_ATTACHMENTS: Record<string, Attachment> = {}
@@ -27,6 +29,7 @@ export const ConversationItem: FC<ConversationItemProps> = ({
   injectedContextText = null,
   onApprove,
   onDeny,
+  onInputAnswer,
 }) => {
   const resolvedMap = useAttachmentStore(
     (state) => state.resolved[sessionId] ?? EMPTY_RESOLVED_ATTACHMENTS,
@@ -45,6 +48,7 @@ export const ConversationItem: FC<ConversationItemProps> = ({
     injectedContextText,
     resolvedAttachmentsById: resolvedMap,
     actionableApproval: !!onApprove && !!onDeny,
+    actionableInput: !!onInputAnswer,
   })
 
   return (
@@ -53,6 +57,7 @@ export const ConversationItem: FC<ConversationItemProps> = ({
         viewModel={viewModel}
         onApprove={onApprove}
         onDeny={onDeny}
+        onInputAnswer={onInputAnswer}
         onAttachmentOpen={setPreviewAttachment}
       />
       {previewAttachment && (

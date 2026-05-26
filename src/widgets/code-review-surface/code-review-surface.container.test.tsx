@@ -141,6 +141,11 @@ import { CodeReviewSurface } from './code-review-surface.container'
 
 describe('CodeReviewSurface', () => {
   beforeEach(() => {
+    Object.defineProperty(window, 'innerWidth', {
+      configurable: true,
+      writable: true,
+      value: 1600,
+    })
     const summary = {
       base: null,
       files: [
@@ -379,7 +384,21 @@ describe('CodeReviewSurface', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Base Branch' }))
 
     expect(setSelectedMode).toHaveBeenCalledWith('base-branch')
-    expect(setSelectedFile).toHaveBeenCalledWith(null)
+    expect(setSelectedFile).toHaveBeenLastCalledWith(null)
+  })
+
+  it('emits route search changes for target, mode, and file selections', () => {
+    const onRouteSearchChange = vi.fn()
+    render(<CodeReviewSurface onRouteSearchChange={onRouteSearchChange} />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Base Branch' }))
+    expect(onRouteSearchChange).toHaveBeenCalledWith({
+      mode: 'base-branch',
+      file: null,
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: 'src/new.ts' }))
+    expect(onRouteSearchChange).toHaveBeenCalledWith({ file: 'src/new.ts' })
   })
 
   it('force refreshes the active summary and selected-file patch', () => {
@@ -401,6 +420,79 @@ describe('CodeReviewSurface', () => {
     )
   })
 
+  it('collapses and expands secondary review rails', () => {
+    render(<CodeReviewSurface />)
+
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Collapse review targets' }),
+    )
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Collapse review notes' }),
+    )
+
+    expect(
+      screen.getByRole('button', { name: 'Expand review targets' }),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByRole('button', { name: 'Expand review notes' }),
+    ).toBeInTheDocument()
+    expect(screen.queryByText('Review Targets')).toBeNull()
+    expect(screen.queryByText('Review Notes')).toBeNull()
+
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Expand review targets' }),
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Expand review notes' }))
+
+    expect(screen.getByText('Review Targets')).toBeInTheDocument()
+    expect(screen.getByText('Review Notes')).toBeInTheDocument()
+  })
+
+  it('focuses the diff by collapsing and restoring secondary rails', () => {
+    render(<CodeReviewSurface />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Focus diff' }))
+
+    expect(
+      screen.getByRole('button', { name: 'Exit diff focus' }),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByRole('button', { name: 'Expand review targets' }),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByRole('button', { name: 'Expand review notes' }),
+    ).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Exit diff focus' }))
+
+    expect(
+      screen.getByRole('button', { name: 'Focus diff' }),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByRole('button', { name: 'Collapse review targets' }),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByRole('button', { name: 'Collapse review notes' }),
+    ).toBeInTheDocument()
+  })
+
+  it('defaults secondary rails collapsed on small screens', () => {
+    Object.defineProperty(window, 'innerWidth', {
+      configurable: true,
+      writable: true,
+      value: 1200,
+    })
+
+    render(<CodeReviewSurface />)
+
+    expect(
+      screen.getByRole('button', { name: 'Expand review targets' }),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByRole('button', { name: 'Expand review notes' }),
+    ).toBeInTheDocument()
+  })
+
   it('clears file selection when the status filter changes', () => {
     codeReviewState = {
       ...codeReviewState,
@@ -416,6 +508,26 @@ describe('CodeReviewSurface', () => {
       'data-file',
       '',
     )
+  })
+
+  it('does not reapply a stale route file after filters clear selection', async () => {
+    const onRouteSearchChange = vi.fn()
+    codeReviewState = {
+      ...codeReviewState,
+      selectedFile: 'src/app.ts',
+    }
+
+    render(
+      <CodeReviewSurface
+        routeFilePath="src/app.ts"
+        onRouteSearchChange={onRouteSearchChange}
+      />,
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: 'A 1' }))
+
+    expect(setSelectedFile).toHaveBeenCalledWith(null)
+    expect(onRouteSearchChange).toHaveBeenCalledWith({ file: null })
   })
 })
 

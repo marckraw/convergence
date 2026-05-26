@@ -24,6 +24,7 @@ import type { AttachmentsService } from '../attachments/attachments.service'
 import type { SkillSelection } from '../skills/skills.types'
 import {
   sessionSummaryFromRow,
+  type AttentionRequestKind,
   type Session,
   type SessionSummary,
   type CreateSessionInput,
@@ -31,10 +32,12 @@ import {
   type QueuedInputState,
   type SessionQueuedInput,
 } from './session.types'
+import { serializeSessionPermissionConfig } from '../provider/session-permissions.pure'
 import type {
   ConversationItem,
   ConversationItemDraft,
   ConversationPatchEvent,
+  InteractionResponse,
   SessionDelta,
 } from './conversation-item.types'
 import {
@@ -51,11 +54,18 @@ type UserMessageDraft = Extract<
 >
 type UserMessageDraftInput = Omit<UserMessageDraft, 'sessionId' | 'sequence'>
 
+interface AttentionRequestRow {
+  session_id: string
+  kind: 'approval-request' | 'input-request'
+  payload_json: string
+}
+
 export interface SendMessageInput {
   text: string
   attachmentIds?: string[]
   skillSelections?: SkillSelection[]
   deliveryMode?: MidRunInputMode
+  interactionResponse?: InteractionResponse
   /**
    * Only consumed by `start`. Replaces the session's attached project context
    * items before computing the boot-injected block. Pass an empty array to
@@ -303,13 +313,14 @@ export class SessionService {
            provider_id,
            model,
            effort,
+           permission_config,
            name,
            working_directory,
            parent_session_id,
            fork_strategy,
            primary_surface
          )
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
       .run(
         id,
@@ -319,6 +330,7 @@ export class SessionService {
         input.providerId,
         input.model,
         input.effort,
+        serializeSessionPermissionConfig(input.permissionConfig),
         input.name,
         workingDirectory,
         input.parentSessionId ?? null,
@@ -336,7 +348,7 @@ export class SessionService {
       )
       .all(projectId) as SessionRow[]
 
-    return rows.map(sessionSummaryFromRow)
+    return this.buildSessionSummaries(rows)
   }
 
   getAll(): Session[] {
@@ -344,7 +356,7 @@ export class SessionService {
       .prepare('SELECT * FROM sessions ORDER BY created_at DESC')
       .all() as SessionRow[]
 
-    return rows.map(sessionSummaryFromRow)
+    return this.buildSessionSummaries(rows)
   }
 
   getSummariesByProjectId(projectId: string): SessionSummary[] {
@@ -354,7 +366,7 @@ export class SessionService {
       )
       .all(projectId) as SessionRow[]
 
-    return rows.map(sessionSummaryFromRow)
+    return this.buildSessionSummaries(rows)
   }
 
   getGlobalSummaries(): SessionSummary[] {
@@ -364,7 +376,7 @@ export class SessionService {
       )
       .all() as SessionRow[]
 
-    return rows.map(sessionSummaryFromRow)
+    return this.buildSessionSummaries(rows)
   }
 
   getAllSummaries(): SessionSummary[] {
@@ -372,18 +384,92 @@ export class SessionService {
       .prepare('SELECT * FROM sessions ORDER BY created_at DESC')
       .all() as SessionRow[]
 
-    return rows.map(sessionSummaryFromRow)
+    return this.buildSessionSummaries(rows)
   }
 
   getById(id: string): Session | null {
     const row = this.getRowById(id)
 
-    return row ? sessionSummaryFromRow(row) : null
+    return row ? this.buildSessionSummary(row) : null
   }
 
   getSummaryById(id: string): SessionSummary | null {
     const row = this.getRowById(id)
-    return row ? sessionSummaryFromRow(row) : null
+    return row ? this.buildSessionSummary(row) : null
+  }
+
+  private buildSessionSummary(row: SessionRow): SessionSummary {
+    const summary = sessionSummaryFromRow(row)
+    const attentionRequestKind = resolveAttentionRequestKind(
+      summary,
+      this.readAttentionRequestRow(summary.id),
+    )
+    return attentionRequestKind ? { ...summary, attentionRequestKind } : summary
+  }
+
+  private buildSessionSummaries(rows: SessionRow[]): SessionSummary[] {
+    const summaries = rows.map(sessionSummaryFromRow)
+    const attentionRowsBySessionId =
+      this.readLatestAttentionRequestRows(summaries)
+
+    return summaries.map((summary) => {
+      const attentionRequestKind = resolveAttentionRequestKind(
+        summary,
+        attentionRowsBySessionId.get(summary.id) ?? null,
+      )
+      return attentionRequestKind
+        ? { ...summary, attentionRequestKind }
+        : summary
+    })
+  }
+
+  private readAttentionRequestRow(
+    sessionId: string,
+  ): AttentionRequestRow | null {
+    const row = this.db
+      .prepare(
+        `SELECT kind, payload_json
+         FROM session_conversation_items
+         WHERE session_id = ?
+           AND kind IN ('approval-request', 'input-request')
+         ORDER BY sequence DESC
+         LIMIT 1`,
+      )
+      .get(sessionId) as Omit<AttentionRequestRow, 'session_id'> | undefined
+
+    return row ? { session_id: sessionId, ...row } : null
+  }
+
+  private readLatestAttentionRequestRows(
+    summaries: Array<Pick<SessionSummary, 'id' | 'attention'>>,
+  ): Map<string, AttentionRequestRow> {
+    const sessionIds = summaries
+      .filter(isAttentionRequestSummary)
+      .map((summary) => summary.id)
+
+    if (sessionIds.length === 0) return new Map()
+
+    const placeholders = sessionIds.map(() => '?').join(', ')
+    const rows = this.db
+      .prepare(
+        `SELECT session_id, kind, payload_json
+         FROM (
+           SELECT session_id,
+                  kind,
+                  payload_json,
+                  ROW_NUMBER() OVER (
+                    PARTITION BY session_id
+                    ORDER BY sequence DESC
+                  ) AS request_rank
+           FROM session_conversation_items
+           WHERE session_id IN (${placeholders})
+             AND kind IN ('approval-request', 'input-request')
+         )
+         WHERE request_rank = 1`,
+      )
+      .all(...sessionIds) as AttentionRequestRow[]
+
+    return new Map(rows.map((row) => [row.session_id, row]))
   }
 
   getConversation(id: string): ConversationItem[] {
@@ -646,6 +732,7 @@ export class SessionService {
       input.input.skillSelections,
       {
         deliveryMode,
+        interactionResponse: input.input.interactionResponse,
       },
     )
   }
@@ -1254,6 +1341,7 @@ export class SessionService {
       model: session.model,
       effort: session.effort,
       continuationToken,
+      permissionConfig: session.permissionConfig,
       initialAttachments,
     })
 
@@ -1724,6 +1812,54 @@ export class SessionService {
     void this.runNaming(session).catch(() => {
       // Naming failures are silent per spec.
     })
+  }
+}
+
+function isAttentionRequestSummary(
+  summary: Pick<SessionSummary, 'attention'>,
+): boolean {
+  return (
+    summary.attention === 'needs-approval' ||
+    summary.attention === 'needs-input'
+  )
+}
+
+function resolveAttentionRequestKind(
+  summary: Pick<SessionSummary, 'attention'>,
+  row: AttentionRequestRow | null,
+): AttentionRequestKind | null {
+  if (!isAttentionRequestSummary(summary)) {
+    return null
+  }
+
+  if (!row) {
+    return summary.attention === 'needs-approval' ? 'approval' : 'input'
+  }
+
+  if (row.kind === 'approval-request') {
+    return 'approval'
+  }
+
+  try {
+    const payload = JSON.parse(row.payload_json) as {
+      request?: { kind?: unknown }
+    }
+    switch (payload.request?.kind) {
+      case 'choice':
+        return 'question'
+      case 'plan':
+        return 'plan'
+      case 'form':
+        return 'form'
+      case 'url':
+        return 'url'
+      case 'text':
+        return 'input'
+      default:
+        return 'input'
+    }
+  } catch {
+    return 'input'
   }
 }
 

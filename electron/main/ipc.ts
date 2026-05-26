@@ -25,6 +25,7 @@ import { McpService } from '../backend/mcp/mcp.service'
 import { SkillsService } from '../backend/skills/skills.service'
 import { PromptsService } from '../backend/prompts/prompts.service'
 import { AppSettingsService } from '../backend/app-settings/app-settings.service'
+import { CodexQuotaService } from '../backend/provider-quota/codex-quota.service'
 import { OpenRouterCredentialsService } from '../backend/credentials/openrouter-credentials.service'
 import type { AnalyticsService } from '../backend/analytics/analytics.service'
 import type { AnalyticsRangePreset } from '../backend/analytics/analytics.types'
@@ -169,7 +170,14 @@ export function registerIpcHandlers(
     getRuntimeInfo: () => ProviderRuntimeInfo
     updateProvider: (providerId: string) => Promise<ProviderUpdateResult>
   },
+  providerQuota?: {
+    codex: CodexQuotaService
+  },
 ): void {
+  const quotaServices = providerQuota ?? {
+    codex: new CodexQuotaService(),
+  }
+
   // Project handlers
   ipcMain.handle('project:create', (_event, input: CreateProjectInput) => {
     const existing = projectService.getByRepositoryPath(input.repositoryPath)
@@ -827,6 +835,10 @@ export function registerIpcHandlers(
     void inspectAndBroadcastProviderStatuses()
     return result
   })
+
+  ipcMain.handle('providerQuota:getCodex', (_event, forceRefresh?: boolean) =>
+    quotaServices.codex.getQuota({ forceRefresh: forceRefresh === true }),
+  )
 
   ipcMain.handle('mcp:listByProjectId', (_event, projectId: string) =>
     mcpService.listByProjectId(projectId),

@@ -48,9 +48,10 @@ jobs:
 
       - name: Checkout release tag for manual runs
         if: github.event_name == 'workflow_dispatch'
-        run: |
-          git fetch --tags --force
-          git checkout "refs/tags/${{ steps.release.outputs.tag }}"
+        uses: actions/checkout@v6
+        with:
+          ref: refs/tags/${{ steps.release.outputs.tag }}
+          fetch-depth: 0
 
       - name: Setup Node
         uses: actions/setup-node@v6

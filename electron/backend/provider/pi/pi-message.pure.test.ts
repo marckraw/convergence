@@ -51,7 +51,10 @@ describe('buildPiPromptPayload', () => {
       text: 'describe',
       parts: [IMG_PNG],
     })
-    expect(out.message).toBe('describe')
+    expect(out.message).toContain('<attached-files>')
+    expect(out.message).toContain('1. image: photo.png (image/png)')
+    expect(out.message).toContain('path: /data/attachments/s1/a1.png')
+    expect(out.message.endsWith('describe')).toBe(true)
     expect(out.images).toEqual([
       {
         type: 'image',
@@ -77,9 +80,12 @@ describe('buildPiPromptPayload', () => {
       text: 'please review',
       parts: [TEXT_TS],
     })
-    expect(out.message).toBe(
-      '<file path="foo.ts">\nexport const x = 1\n</file>\n\nplease review',
+    expect(out.message).toContain(
+      '<file path="foo.ts">\nexport const x = 1\n</file>',
     )
+    expect(out.message).toContain('1. text: foo.ts (text/x-typescript)')
+    expect(out.message).toContain('path: /data/attachments/s1/a3.ts')
+    expect(out.message.endsWith('please review')).toBe(true)
     expect(out.images).toBeUndefined()
   })
 
@@ -89,14 +95,17 @@ describe('buildPiPromptPayload', () => {
       parts: [IMG_PNG, TEXT_TS],
     })
     expect(out.message).toContain('<file path="foo.ts">')
+    expect(out.message).toContain('1. image: photo.png (image/png)')
+    expect(out.message).toContain('2. text: foo.ts (text/x-typescript)')
     expect(out.message.endsWith('summarize')).toBe(true)
     expect(out.images).toHaveLength(1)
     expect(out.images?.[0].mimeType).toBe('image/png')
   })
 
-  it('image-only with empty text yields empty message and images', () => {
+  it('image-only with empty text yields attachment path bridge and images', () => {
     const out = buildPiPromptPayload({ text: '', parts: [IMG_PNG] })
-    expect(out.message).toBe('')
+    expect(out.message).toContain('<attached-files>')
+    expect(out.message).toContain('path: /data/attachments/s1/a1.png')
     expect(out.images).toHaveLength(1)
   })
 

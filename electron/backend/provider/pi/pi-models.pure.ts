@@ -1,5 +1,6 @@
 import type {
   ProviderEffortOption,
+  ProviderInputModality,
   ProviderModelOption,
   ReasoningEffort,
 } from '../provider.types'
@@ -10,6 +11,7 @@ export interface PiModel {
   name?: string
   provider: string
   reasoning?: boolean
+  inputModalities?: ProviderInputModality[]
 }
 
 const VENDOR_LABELS: Record<string, string> = {
@@ -46,6 +48,17 @@ function effortOptionsFor(model: PiModel): ProviderEffortOption[] {
     ladder.push('xhigh')
   }
   return buildEffortOptions(ladder)
+}
+
+function parseInputModalities(
+  raw: unknown,
+): ProviderInputModality[] | undefined {
+  if (!Array.isArray(raw)) return undefined
+  const modalities = raw.filter(
+    (item): item is ProviderInputModality =>
+      item === 'text' || item === 'image',
+  )
+  return modalities.length > 0 ? [...new Set(modalities)] : undefined
 }
 
 export function collectPiModelsJsonModelIds(raw: unknown): Set<string> {
@@ -86,8 +99,9 @@ export function mapPiModel(
 
   const name = typeof record.name === 'string' && record.name ? record.name : id
   const reasoning = record.reasoning === true
+  const inputModalities = parseInputModalities(record.input)
 
-  const model: PiModel = { id, name, provider, reasoning }
+  const model: PiModel = { id, name, provider, reasoning, inputModalities }
   const effortOptions = effortOptionsFor(model)
   const defaultEffort: ReasoningEffort | null = effortOptions.length
     ? 'medium'
@@ -98,6 +112,7 @@ export function mapPiModel(
     label: `${formatProviderLabel(provider)} · ${name}`,
     defaultEffort,
     effortOptions,
+    inputModalities,
     source: modelsJsonModelIds.has(`${provider}/${id}`)
       ? 'pi-models-json'
       : 'provider',

@@ -34,6 +34,22 @@ function encodeBase64(bytes: Uint8Array): string {
   )
 }
 
+function buildAttachmentPathBridge(parts: PiMessagePart[]): string | null {
+  if (parts.length === 0) return null
+
+  const rows = parts.map(
+    (part, index) =>
+      `${index + 1}. ${part.kind}: ${part.filename} (${part.mimeType})\n   path: ${part.storagePath}`,
+  )
+
+  return [
+    '<attached-files>',
+    'These files were attached by the user and are available on the local filesystem. If native attachment content is unavailable or insufficient, use the read tool with the path below to inspect the file.',
+    ...rows,
+    '</attached-files>',
+  ].join('\n')
+}
+
 export function buildPiPromptPayload(input: PiMessageInput): PiPromptPayload {
   const parts = input.parts ?? []
 
@@ -50,8 +66,10 @@ export function buildPiPromptPayload(input: PiMessageInput): PiPromptPayload {
     return `<file path="${p.filename}">\n${body}\n</file>`
   })
 
-  const message = [...inlinedTextBlocks, input.text]
-    .filter((s) => s.length > 0)
+  const attachmentPathBridge = buildAttachmentPathBridge(parts)
+
+  const message = [...inlinedTextBlocks, attachmentPathBridge, input.text]
+    .filter((s): s is string => typeof s === 'string' && s.length > 0)
     .join('\n\n')
 
   const payload: PiPromptPayload = { message }

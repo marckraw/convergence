@@ -19,6 +19,7 @@ function buildSessionsTableSql(
       provider_id TEXT NOT NULL,
       model TEXT,
       effort TEXT,
+      permission_config TEXT NOT NULL DEFAULT '{"preset":"ask"}',
       continuation_token TEXT,
       name TEXT NOT NULL,
       status TEXT NOT NULL DEFAULT 'idle',
@@ -236,6 +237,47 @@ const SCHEMA = `
 
   CREATE INDEX IF NOT EXISTS idx_workspace_pull_requests_project
     ON workspace_pull_requests(project_id);
+
+  CREATE TABLE IF NOT EXISTS project_scripts (
+    id TEXT PRIMARY KEY,
+    project_id TEXT NOT NULL,
+    name TEXT NOT NULL,
+    command TEXT NOT NULL,
+    icon TEXT NOT NULL DEFAULT 'play',
+    cwd TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+    FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_project_scripts_project
+    ON project_scripts(project_id, created_at DESC);
+
+  CREATE TABLE IF NOT EXISTS project_script_runs (
+    id TEXT PRIMARY KEY,
+    script_id TEXT NOT NULL,
+    project_id TEXT NOT NULL,
+    command TEXT NOT NULL,
+    cwd TEXT NOT NULL,
+    status TEXT NOT NULL CHECK (
+      status IN ('queued', 'running', 'succeeded', 'failed', 'stopped')
+    ),
+    started_at TEXT NOT NULL DEFAULT (datetime('now')),
+    ended_at TEXT,
+    exit_code INTEGER,
+    signal TEXT,
+    error_message TEXT,
+    stdout TEXT NOT NULL DEFAULT '',
+    stderr TEXT NOT NULL DEFAULT '',
+    FOREIGN KEY (script_id) REFERENCES project_scripts(id) ON DELETE CASCADE,
+    FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_project_script_runs_project_started
+    ON project_script_runs(project_id, started_at DESC);
+
+  CREATE INDEX IF NOT EXISTS idx_project_script_runs_script_started
+    ON project_script_runs(script_id, started_at DESC);
 
   CREATE TABLE IF NOT EXISTS review_notes (
     id TEXT PRIMARY KEY,
@@ -467,6 +509,16 @@ function ensureSpaceColumns(database: Database.Database): void {
   }
 }
 
+function ensureProjectScriptColumns(database: Database.Database): void {
+  const columnNames = getTableColumnNames(database, 'project_scripts')
+
+  if (!columnNames.has('icon')) {
+    database.exec(
+      "ALTER TABLE project_scripts ADD COLUMN icon TEXT NOT NULL DEFAULT 'play'",
+    )
+  }
+}
+
 function tableExists(database: Database.Database, tableName: string): boolean {
   const row = database
     .prepare(
@@ -560,6 +612,12 @@ function ensureSessionColumns(database: Database.Database): void {
 
   if (!columnNames.has('effort')) {
     database.exec('ALTER TABLE sessions ADD COLUMN effort TEXT')
+  }
+
+  if (!columnNames.has('permission_config')) {
+    database.exec(
+      `ALTER TABLE sessions ADD COLUMN permission_config TEXT NOT NULL DEFAULT '{"preset":"ask"}'`,
+    )
   }
 
   if (!columnNames.has('continuation_token')) {
@@ -809,6 +867,13 @@ function ensureSessionsTableShape(database: Database.Database): void {
             ELSE 'project'
           END`
         : "'project'"
+      const permissionConfigSelect = sourceColumnNames.has('permission_config')
+        ? `CASE
+            WHEN permission_config IS NOT NULL AND permission_config != ''
+              THEN permission_config
+            ELSE '{"preset":"ask"}'
+          END`
+        : `'{"preset":"ask"}'`
       database.exec(`
         INSERT INTO sessions_next (
           id,
@@ -818,6 +883,7 @@ function ensureSessionsTableShape(database: Database.Database): void {
           provider_id,
           model,
           effort,
+          permission_config,
           continuation_token,
           name,
           status,
@@ -843,6 +909,7 @@ function ensureSessionsTableShape(database: Database.Database): void {
           provider_id,
           model,
           effort,
+          ${permissionConfigSelect},
           continuation_token,
           name,
           status,
@@ -896,6 +963,7 @@ export function getDatabase(dbPath?: string): Database.Database {
     database.exec(SCHEMA)
     ensureSpaceTablesMigrated(database)
     ensureSpaceColumns(database)
+    ensureProjectScriptColumns(database)
     ensureWorkspaceColumns(database)
     ensureSessionColumns(database)
     ensureAttachmentsTableNoFk(database)

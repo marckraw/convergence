@@ -1,7 +1,12 @@
 import { useEffect, useRef, useState, useCallback, useMemo } from 'react'
 import type { FC, MouseEvent as ReactMouseEvent } from 'react'
 import { useProjectStore } from '@/entities/project'
-import { formatActivityLabel, useSessionStore } from '@/entities/session'
+import type { CodeReviewMode } from '@/entities/code-review'
+import {
+  formatActivityLabel,
+  useSessionStore,
+  type SessionContextWindow,
+} from '@/entities/session'
 import { useDialogStore } from '@/entities/dialog'
 import { useSpaceStore } from '@/entities/space'
 import {
@@ -10,7 +15,9 @@ import {
 } from '@/entities/pull-request'
 import { gitApi, useWorkspaceStore } from '@/entities/workspace'
 import { ComposerContainer } from '@/features/composer'
+import { ProjectOpenMenuContainer } from '@/features/project-open-menu'
 import { SessionDebugDrawerContainer } from '@/widgets/session-debug-drawer'
+import { ProjectActionsMenu } from '@/widgets/project-actions-menu'
 import { useAppSettingsStore } from '@/entities/app-settings'
 import { attachmentApi, useAttachmentStore } from '@/entities/attachment'
 import { useTerminalStore } from '@/entities/terminal'
@@ -36,7 +43,6 @@ import {
   TerminalSquare,
 } from 'lucide-react'
 import { AttentionIndicator } from '@/shared/ui/attention-indicator.presentational'
-import { ContextWindowIndicator } from '@/shared/ui/context-window-indicator.presentational'
 import { cn } from '@/shared/lib/cn.pure'
 import { ChangedFilesPanel } from './changed-files-panel.container'
 import { formatConversationTotalDuration } from './conversation-total-duration.pure'
@@ -45,6 +51,7 @@ import {
   type SpaceContextAttemptView,
 } from './space-context-panel.presentational'
 import { PullRequestPanel } from './pull-request-panel.presentational'
+import { SessionHeaderDetailRow } from './session-header-detail-row.presentational'
 import { SessionConversationSurface } from './session-conversation-surface.container'
 
 const CHANGED_FILES_MIN_WIDTH = 320
@@ -53,7 +60,15 @@ const CHANGED_FILES_COMPACT_WIDTH = 320
 const CHANGED_FILES_DEFAULT_EXPANDED_WIDTH = 720
 type ChangedFilesMode = 'docked' | 'overlay'
 
-export const SessionView: FC = () => {
+interface SessionViewProps {
+  onOpenCodeReview?: (search?: {
+    targetId?: string | null
+    mode?: CodeReviewMode
+    file?: string | null
+  }) => void
+}
+
+export const SessionView: FC<SessionViewProps> = ({ onOpenCodeReview }) => {
   const activeProject = useProjectStore((s) => s.activeProject)
   const projects = useProjectStore((s) => s.projects)
   const workspaces = useWorkspaceStore((s) => s.globalWorkspaces)
@@ -84,6 +99,7 @@ export const SessionView: FC = () => {
   const [debugDrawerOpen, setDebugDrawerOpen] = useState(false)
   const approveSession = useSessionStore((s) => s.approveSession)
   const denySession = useSessionStore((s) => s.denySession)
+  const sendMessageToSession = useSessionStore((s) => s.sendMessageToSession)
   const stopSession = useSessionStore((s) => s.stopSession)
   const hydratePaneTree = useTerminalStore((s) => s.hydratePaneTree)
   const closeAllTerminals = useTerminalStore((s) => s.closeAllForSession)
@@ -119,6 +135,9 @@ export const SessionView: FC = () => {
   const sessionWorkspace = session?.workspaceId
     ? (workspaces.find((entry) => entry.id === session.workspaceId) ?? null)
     : null
+  const sessionOpenPath = sessionWorkspace?.worktreeRemovedAt
+    ? (activeProject?.repositoryPath ?? null)
+    : (sessionWorkspace?.path ?? session?.workingDirectory ?? null)
   const sessionWorktreeRemoved = !!sessionWorkspace?.worktreeRemovedAt
   const workspacePullRequest = session?.workspaceId
     ? (pullRequestsByWorkspaceId[session.workspaceId] ?? null)
@@ -316,53 +335,76 @@ export const SessionView: FC = () => {
     const draftWorkspace = draftWorkspaceId
       ? workspaces.find((w) => w.id === draftWorkspaceId)
       : null
+    const draftOpenPath =
+      draftWorkspace?.path ?? activeProject?.repositoryPath ?? null
+    const title = activeProject?.name ?? 'Convergence'
     return (
-      <div className="flex h-full flex-col">
+      <div className="relative flex h-full flex-col overflow-hidden">
         <div
-          className="h-12 shrink-0 border-b border-border"
+          className="flex h-12 shrink-0 items-center justify-end gap-1 border-b border-border px-4"
           style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
-        />
-        <div className="flex flex-1 flex-col items-center justify-center px-4">
-          <p className="mb-1 text-lg font-medium">Convergence</p>
-          <p className="mb-3 text-sm text-muted-foreground">
-            What would you like to work on?
-          </p>
-          {activeProject && (
-            <div className="mb-5 flex items-center gap-2 rounded-full border border-border bg-muted/40 px-3 py-1 text-xs text-muted-foreground">
-              <GitBranch className="h-3 w-3" />
-              {draftWorkspace ? (
-                <>
-                  <span>
-                    Starting in worktree:{' '}
-                    <span className="font-medium text-foreground">
-                      {draftWorkspace.branchName}
+        >
+          <div
+            className="flex items-center gap-1"
+            style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
+          >
+            {activeProject && (
+              <ProjectActionsMenu
+                project={activeProject}
+                runtimeCwd={draftOpenPath}
+              />
+            )}
+            <ProjectOpenMenuContainer targetPath={draftOpenPath} />
+          </div>
+        </div>
+        <div className="flex min-h-0 flex-1">
+          <div className="flex min-w-0 flex-1 flex-col items-center justify-center px-4">
+            <p
+              className="mb-1 max-w-full truncate text-lg font-medium"
+              title={title}
+            >
+              {title}
+            </p>
+            <p className="mb-3 text-sm text-muted-foreground">
+              What would you like to work on?
+            </p>
+            {activeProject && (
+              <div className="mb-5 flex items-center gap-2 rounded-full border border-border bg-muted/40 px-3 py-1 text-xs text-muted-foreground">
+                <GitBranch className="h-3 w-3" />
+                {draftWorkspace ? (
+                  <>
+                    <span>
+                      Starting in worktree:{' '}
+                      <span className="font-medium text-foreground">
+                        {draftWorkspace.branchName}
+                      </span>
                     </span>
-                  </span>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => beginSessionDraft(null)}
-                    className="ml-1 h-auto px-2 py-0 text-xs"
-                  >
-                    Use main repo
-                  </Button>
-                </>
-              ) : (
-                <span>Starting in main repo</span>
-              )}
-            </div>
-          )}
-          {activeProject && (
-            <ComposerContainer
-              context={{
-                kind: 'project',
-                projectId: activeProject.id,
-                workspaceId: draftWorkspaceId,
-                activeSessionId: null,
-              }}
-            />
-          )}
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => beginSessionDraft(null)}
+                      className="ml-1 h-auto px-2 py-0 text-xs"
+                    >
+                      Use main repo
+                    </Button>
+                  </>
+                ) : (
+                  <span>Starting in main repo</span>
+                )}
+              </div>
+            )}
+            {activeProject && (
+              <ComposerContainer
+                context={{
+                  kind: 'project',
+                  projectId: activeProject.id,
+                  workspaceId: draftWorkspaceId,
+                  activeSessionId: null,
+                }}
+              />
+            )}
+          </div>
         </div>
       </div>
     )
@@ -384,6 +426,7 @@ export const SessionView: FC = () => {
         )
       }
       onToggleExpanded={handleToggleExpanded}
+      onOpenCodeReview={onOpenCodeReview}
     />
   )
 
@@ -398,62 +441,20 @@ export const SessionView: FC = () => {
         )}
 
       {/* Main session area */}
-      <div className="flex min-w-0 flex-1 flex-col">
+      <div className="relative flex min-w-0 flex-1 flex-col">
         {/* Header */}
         <div
           className="flex h-12 shrink-0 items-center justify-between border-b border-border px-4"
           style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
         >
           <div
-            className="flex items-center gap-2"
+            className="flex min-w-0 items-center gap-2"
             style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
           >
-            <span className="text-sm font-medium">{session.name}</span>
+            <span className="min-w-0 truncate text-sm font-medium">
+              {session.name}
+            </span>
             <AttentionIndicator attention={session.attention} />
-            {session.parentSessionId && (
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                onClick={() =>
-                  session.parentSessionId &&
-                  setActiveSession(session.parentSessionId)
-                }
-                className="h-auto rounded-full border border-border/70 px-2 py-0.5 text-[11px] text-muted-foreground"
-                title="Open parent session"
-              >
-                <GitFork className="h-3 w-3" />
-                Forked from:{' '}
-                {globalSessions.find((s) => s.id === session.parentSessionId)
-                  ?.name ?? 'parent'}
-              </Button>
-            )}
-            {session.archivedAt && (
-              <span className="flex items-center gap-1 rounded-full border border-border/70 px-2 py-0.5 text-[11px] text-muted-foreground">
-                <Archive className="h-3 w-3" />
-                Archived
-              </span>
-            )}
-            {sessionWorktreeRemoved && (
-              <span className="flex items-center gap-1 rounded-full border border-warning/30 bg-warning/10 px-2 py-0.5 text-[11px] text-warning-foreground">
-                Worktree removed
-              </span>
-            )}
-            {branchName && (
-              <span className="flex items-center gap-1 text-xs text-muted-foreground">
-                <GitBranch className="h-3 w-3" />
-                {branchName}
-              </span>
-            )}
-            {session.workspaceId && (
-              <span className="flex items-center gap-1 rounded-full border border-border/70 px-2 py-0.5 text-[11px] text-muted-foreground">
-                <GitPullRequest className="h-3 w-3" />
-                {formatPullRequestHeaderLabel(
-                  workspacePullRequest,
-                  pullRequestLoading,
-                )}
-              </span>
-            )}
             {activityLabel && (
               <span
                 className="rounded-full border border-border/70 px-2 py-0.5 text-[11px] text-muted-foreground"
@@ -462,22 +463,99 @@ export const SessionView: FC = () => {
                 {activityLabel}
               </span>
             )}
-            {totalDurationLabel && (
-              <span
-                className="flex items-center gap-1 rounded-full border border-border/70 px-2 py-0.5 text-[11px] text-muted-foreground"
-                title="Total conversation duration (sum of turn durations)"
-                data-testid="session-total-duration"
-              >
-                <Clock className="h-3 w-3" />
-                {totalDurationLabel}
+            {sessionWorktreeRemoved && (
+              <span className="flex items-center gap-1 rounded-full border border-warning/30 bg-warning/10 px-2 py-0.5 text-[11px] text-warning-foreground">
+                Worktree removed
               </span>
             )}
-            <ContextWindowIndicator contextWindow={session.contextWindow} />
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 rounded-full border border-border/70 px-2 text-[11px] text-muted-foreground"
+                >
+                  Session details
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" className="w-80 p-2">
+                <div className="grid gap-1.5 text-xs">
+                  {session.parentSessionId && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() =>
+                        session.parentSessionId &&
+                        setActiveSession(session.parentSessionId)
+                      }
+                      className="h-auto justify-start gap-2 px-2 py-1.5 text-xs"
+                    >
+                      <GitFork className="h-3.5 w-3.5" />
+                      Forked from:{' '}
+                      {globalSessions.find(
+                        (entry) => entry.id === session.parentSessionId,
+                      )?.name ?? 'parent'}
+                    </Button>
+                  )}
+                  <SessionHeaderDetailRow
+                    icon={<GitBranch className="h-3.5 w-3.5" />}
+                    label="Branch"
+                    value={branchName ?? 'Unknown'}
+                  />
+                  <SessionHeaderDetailRow
+                    icon={<GitPullRequest className="h-3.5 w-3.5" />}
+                    label="Pull request"
+                    value={
+                      session.workspaceId
+                        ? formatPullRequestHeaderLabel(
+                            workspacePullRequest,
+                            pullRequestLoading,
+                          )
+                        : 'No workspace'
+                    }
+                  />
+                  {activityLabel && (
+                    <SessionHeaderDetailRow
+                      label="Activity"
+                      value={activityLabel}
+                    />
+                  )}
+                  {totalDurationLabel && (
+                    <SessionHeaderDetailRow
+                      icon={<Clock className="h-3.5 w-3.5" />}
+                      label="Elapsed"
+                      value={totalDurationLabel}
+                      testId="session-total-duration"
+                    />
+                  )}
+                  <SessionHeaderDetailRow
+                    label="Context"
+                    value={formatSessionContextLabel(session.contextWindow)}
+                  />
+                  {session.archivedAt && (
+                    <SessionHeaderDetailRow
+                      icon={<Archive className="h-3.5 w-3.5" />}
+                      label="State"
+                      value="Archived"
+                    />
+                  )}
+                </div>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
           <div
             className="flex items-center gap-1"
             style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
           >
+            {activeProject && (
+              <ProjectActionsMenu
+                project={activeProject}
+                runtimeCwd={session.workingDirectory}
+              />
+            )}
+            <ProjectOpenMenuContainer targetPath={sessionOpenPath} />
             <Button
               variant="ghost"
               size="icon"
@@ -620,6 +698,16 @@ export const SessionView: FC = () => {
           }
           onApprove={approveSession}
           onDeny={denySession}
+          onInputAnswer={(sessionId, response, displayText) => {
+            void sendMessageToSession(
+              sessionId,
+              displayText,
+              undefined,
+              undefined,
+              'answer',
+              response,
+            )
+          }}
         />
       </div>
 
@@ -705,6 +793,14 @@ function formatPullRequestHeaderLabel(
   if (pullRequest.number)
     return `PR #${pullRequest.number} ${pullRequest.state}`
   return pullRequest.state
+}
+
+function formatSessionContextLabel(
+  contextWindow: SessionContextWindow | null,
+): string {
+  if (!contextWindow) return 'Unknown'
+  if (contextWindow.availability === 'unavailable') return contextWindow.reason
+  return `${contextWindow.remainingPercentage}% left`
 }
 
 function clampChangedFilesWidth(width: number): number {

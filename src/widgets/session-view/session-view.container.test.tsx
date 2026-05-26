@@ -4,6 +4,7 @@ import { DEFAULT_PROJECT_SETTINGS, useProjectStore } from '@/entities/project'
 import { useDialogStore } from '@/entities/dialog'
 import { useSpaceStore } from '@/entities/space'
 import { useSessionStore } from '@/entities/session'
+import { useProjectScriptStore } from '@/entities/project-script'
 import { useWorkspaceStore } from '@/entities/workspace'
 import { TooltipProvider } from '@/shared/ui/tooltip'
 import { SessionView } from './session-view.container'
@@ -161,9 +162,30 @@ describe('SessionView changed files drawer', () => {
       loading: false,
       error: null,
     })
+    useProjectScriptStore.setState({
+      scriptsByProjectId: {},
+      runsByProjectId: {},
+      globalActiveRuns: [],
+      outputByRunId: {},
+      loading: false,
+      error: null,
+    })
 
     Object.defineProperty(window, 'electronAPI', {
       value: {
+        projectScripts: {
+          list: vi.fn().mockResolvedValue([]),
+          create: vi.fn(),
+          update: vi.fn(),
+          delete: vi.fn(),
+          listRuns: vi.fn().mockResolvedValue([]),
+          listActiveRuns: vi.fn().mockResolvedValue([]),
+          getRun: vi.fn().mockResolvedValue(null),
+          run: vi.fn(),
+          stop: vi.fn(),
+          onRunUpdated: vi.fn().mockReturnValue(() => {}),
+          onRunOutput: vi.fn().mockReturnValue(() => {}),
+        },
         space: {
           list: vi.fn().mockResolvedValue([space]),
           getById: vi.fn().mockResolvedValue(space),
@@ -218,6 +240,13 @@ describe('SessionView changed files drawer', () => {
           delete: vi.fn().mockResolvedValue(undefined),
           showOpenDialog: vi.fn().mockResolvedValue([]),
         },
+        projectOpen: {
+          listApps: vi.fn().mockResolvedValue([
+            { id: 'vscode', label: 'VS Code', kind: 'editor' },
+            { id: 'finder', label: 'Finder', kind: 'file-manager' },
+          ]),
+          open: vi.fn().mockResolvedValue(undefined),
+        },
       },
       configurable: true,
       writable: true,
@@ -235,7 +264,7 @@ describe('SessionView changed files drawer', () => {
       </TooltipProvider>,
     )
 
-    expect(screen.getByText('80% left')).toBeInTheDocument()
+    expect(screen.queryByText('80% left')).not.toBeInTheDocument()
 
     fireEvent.click(screen.getByRole('button', { name: 'Changed files' }))
 
@@ -275,6 +304,116 @@ describe('SessionView changed files drawer', () => {
     expect(screen.getByTestId('session-activity-indicator')).toHaveTextContent(
       'compacting context…',
     )
+  })
+
+  it('opens the session workspace from the header menu', async () => {
+    render(
+      <TooltipProvider>
+        <SessionView />
+      </TooltipProvider>,
+    )
+
+    fireEvent.pointerDown(screen.getByRole('button', { name: 'Open project' }))
+    fireEvent.click(await screen.findByText('VS Code'))
+
+    const projectOpen = (
+      window as unknown as {
+        electronAPI: {
+          projectOpen: { open: ReturnType<typeof vi.fn> }
+        }
+      }
+    ).electronAPI.projectOpen
+
+    await waitFor(() => {
+      expect(projectOpen.open).toHaveBeenCalledWith({
+        appId: 'vscode',
+        path: '/tmp/project',
+      })
+    })
+  })
+
+  it('runs project actions from the active session working directory', async () => {
+    const script = {
+      id: 'script-1',
+      projectId: 'project-1',
+      name: 'Dev',
+      command: 'npm run dev',
+      icon: 'play' as const,
+      cwd: null,
+      createdAt: '2026-01-01T00:00:00.000Z',
+      updatedAt: '2026-01-01T00:00:00.000Z',
+    }
+    const run = {
+      id: 'run-1',
+      scriptId: script.id,
+      projectId: 'project-1',
+      command: script.command,
+      cwd: '/tmp/project/.worktrees/yolo-mode',
+      status: 'queued' as const,
+      startedAt: '2026-01-01T00:00:00.000Z',
+      endedAt: null,
+      exitCode: null,
+      signal: null,
+      errorMessage: null,
+      stdout: '',
+      stderr: '',
+    }
+    vi.mocked(window.electronAPI.projectScripts.list).mockResolvedValue([
+      script,
+    ])
+    vi.mocked(window.electronAPI.projectScripts.run).mockResolvedValue(run)
+    useSessionStore.setState((state) => ({
+      ...state,
+      sessions: state.sessions.map((session) =>
+        session.id === 'session-1'
+          ? {
+              ...session,
+              workingDirectory: '/tmp/project/.worktrees/yolo-mode',
+            }
+          : session,
+      ),
+    }))
+
+    render(
+      <TooltipProvider>
+        <SessionView />
+      </TooltipProvider>,
+    )
+
+    fireEvent.pointerDown(await screen.findByRole('button', { name: /dev/i }))
+    fireEvent.click(await screen.findByTitle('Run Dev'))
+
+    await waitFor(() => {
+      expect(window.electronAPI.projectScripts.run).toHaveBeenCalledWith(
+        'script-1',
+        { cwd: '/tmp/project/.worktrees/yolo-mode' },
+      )
+    })
+  })
+
+  it('uses the active project name as the new session composer title', () => {
+    useProjectStore.setState((state) => ({
+      ...state,
+      activeProject: state.activeProject
+        ? { ...state.activeProject, name: 'Roomfinder' }
+        : null,
+    }))
+    useSessionStore.setState((state) => ({
+      ...state,
+      sessions: [],
+      activeSessionId: null,
+      activeConversation: [],
+      activeConversationSessionId: null,
+    }))
+
+    render(
+      <TooltipProvider>
+        <SessionView />
+      </TooltipProvider>,
+    )
+
+    expect(screen.getByText('Roomfinder')).toBeInTheDocument()
+    expect(screen.queryByText('Convergence')).not.toBeInTheDocument()
   })
 
   it('does not expose actions for stale approval cards on inactive sessions', () => {

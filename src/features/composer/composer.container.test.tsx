@@ -21,6 +21,39 @@ const projectContextItem: ProjectContextItem = {
 
 describe('ComposerContainer', () => {
   beforeEach(() => {
+    ;(window as unknown as { electronAPI: unknown }).electronAPI = {
+      providerQuota: {
+        getCodex: vi.fn().mockResolvedValue({
+          providerId: 'codex',
+          status: 'available',
+          source: 'provider-api',
+          planType: 'pro',
+          windows: [
+            {
+              kind: 'five-hour',
+              label: '5 hour usage limit',
+              usedPercent: 13,
+              remainingPercent: 87,
+              windowMinutes: 300,
+              resetsAt: '2026-05-21T15:21:00.000Z',
+            },
+            {
+              kind: 'weekly',
+              label: 'Weekly usage limit',
+              usedPercent: 5,
+              remainingPercent: 95,
+              windowMinutes: 10_080,
+              resetsAt: '2026-05-26T22:00:00.000Z',
+            },
+          ],
+          credits: null,
+          limitReachedType: null,
+          lastCheckedAt: '2026-05-21T12:00:00.000Z',
+          stale: false,
+        }),
+      },
+    }
+
     const loadProviders = vi.fn()
     const createAndStartSession = vi.fn()
     const createAndStartGlobalSession = vi.fn()
@@ -212,6 +245,9 @@ describe('ComposerContainer', () => {
       />,
     )
 
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Add composer resources' }),
+    )
     fireEvent.click(screen.getByRole('button', { name: 'Select skills' }))
     fireEvent.click(screen.getByRole('button', { name: /Planning/ }))
 
@@ -256,6 +292,9 @@ describe('ComposerContainer', () => {
     )
 
     fireEvent.click(
+      screen.getByRole('button', { name: 'Add composer resources' }),
+    )
+    fireEvent.click(
       screen.getByRole('button', { name: 'Select project context' }),
     )
     fireEvent.click(screen.getByRole('button', { name: /chaperone project/ }))
@@ -279,6 +318,7 @@ describe('ComposerContainer', () => {
       undefined,
       undefined,
       ['ctx-chaperone'],
+      { preset: 'ask' },
     )
   })
 
@@ -290,6 +330,10 @@ describe('ComposerContainer', () => {
           activeSessionId: null,
         }}
       />,
+    )
+
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Add composer resources' }),
     )
 
     expect(
@@ -312,6 +356,7 @@ describe('ComposerContainer', () => {
       'General chat request',
       undefined,
       undefined,
+      { preset: 'ask' },
     )
     expect(
       useSessionStore.getState().createAndStartSession,
@@ -348,6 +393,45 @@ describe('ComposerContainer', () => {
       'Context\n\nGeneral chat request',
       undefined,
       undefined,
+      { preset: 'ask' },
+    )
+  })
+
+  it('passes yolo permission config when selected for a new session', () => {
+    render(
+      <ComposerContainer
+        context={{
+          kind: 'project',
+          projectId: 'project-1',
+          workspaceId: null,
+          activeSessionId: null,
+        }}
+      />,
+    )
+
+    fireEvent.click(screen.getByRole('combobox', { name: 'Ask' }))
+    fireEvent.click(screen.getByText('Yolo'))
+
+    const textbox = screen.getByRole('textbox')
+    fireEvent.change(textbox, {
+      target: { value: 'Run the migration' },
+    })
+    fireEvent.keyDown(textbox, { key: 'Enter', metaKey: true })
+
+    expect(
+      useSessionStore.getState().createAndStartSession,
+    ).toHaveBeenCalledWith(
+      'project-1',
+      null,
+      'claude-code',
+      'claude-sonnet',
+      'medium',
+      'Run the migration',
+      'Run the migration',
+      undefined,
+      undefined,
+      undefined,
+      { preset: 'yolo' },
     )
   })
 
@@ -361,6 +445,9 @@ describe('ComposerContainer', () => {
       />,
     )
 
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Add composer resources' }),
+    )
     fireEvent.click(screen.getByRole('button', { name: 'Select skills' }))
 
     expect(useSkillStore.getState().loadGlobalCatalog).toHaveBeenCalled()
@@ -391,6 +478,116 @@ describe('ComposerContainer', () => {
     })
 
     await waitFor(() => expect(loadProviders).toHaveBeenCalledTimes(2))
+  })
+
+  it('shows Codex usage in the composer for Codex provider selections', async () => {
+    const baseProvider = useSessionStore.getState().providers[0]
+    if (!baseProvider) throw new Error('missing base test provider')
+
+    useSessionStore.setState({
+      providers: [
+        {
+          id: 'codex',
+          name: 'Codex',
+          vendorLabel: 'OpenAI',
+          kind: 'conversation',
+          supportsContinuation: true,
+          defaultModelId: 'gpt-5.3-codex',
+          modelOptions: [
+            {
+              id: 'gpt-5.3-codex',
+              label: 'GPT-5.3 Codex',
+              defaultEffort: 'medium',
+              effortOptions: [
+                { id: 'low', label: 'Low' },
+                { id: 'medium', label: 'Medium' },
+              ],
+            },
+          ],
+          attachments: baseProvider.attachments,
+          midRunInput: baseProvider.midRunInput,
+        },
+      ],
+    })
+
+    render(
+      <ComposerContainer
+        context={{
+          kind: 'project',
+          projectId: 'project-1',
+          workspaceId: null,
+          activeSessionId: null,
+        }}
+      />,
+    )
+
+    expect(
+      await screen.findByRole('button', {
+        name: 'Codex usage 87% remaining',
+      }),
+    ).toBeInTheDocument()
+    expect(window.electronAPI.providerQuota.getCodex).toHaveBeenCalledWith(
+      false,
+    )
+  })
+
+  it('shows Codex usage in the composer for Pi OpenAI model selections', async () => {
+    const baseProvider = useSessionStore.getState().providers[0]
+    if (!baseProvider) throw new Error('missing base test provider')
+
+    useSessionStore.setState({
+      providers: [
+        {
+          id: 'pi',
+          name: 'Pi',
+          vendorLabel: 'Pi',
+          kind: 'conversation',
+          supportsContinuation: true,
+          defaultModelId: 'openai/gpt-5.3-codex',
+          modelOptions: [
+            {
+              id: 'openai/gpt-5.3-codex',
+              label: 'GPT-5.3 Codex',
+              defaultEffort: 'medium',
+              effortOptions: [
+                { id: 'low', label: 'Low' },
+                { id: 'medium', label: 'Medium' },
+              ],
+            },
+          ],
+          attachments: baseProvider.attachments,
+          midRunInput: baseProvider.midRunInput,
+        },
+      ],
+    })
+    useAppSettingsStore.setState((state) => ({
+      settings: {
+        ...state.settings,
+        defaultProviderId: 'pi',
+        defaultModelId: 'openai/gpt-5.3-codex',
+        defaultEffortId: 'medium',
+      },
+    }))
+
+    render(
+      <ComposerContainer
+        context={{
+          kind: 'project',
+          projectId: 'project-1',
+          workspaceId: null,
+          activeSessionId: null,
+        }}
+      />,
+    )
+
+    expect(
+      await screen.findByRole('button', {
+        name: 'Codex usage 87% remaining',
+      }),
+    ).toBeInTheDocument()
+    expect(window.electronAPI.providerQuota.getCodex).toHaveBeenCalledWith(
+      false,
+    )
   })
 
   it('allows follow-up while a supported provider session is running', () => {

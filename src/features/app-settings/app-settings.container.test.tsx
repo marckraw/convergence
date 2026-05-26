@@ -140,6 +140,7 @@ const EMPTY_ANALYTICS_OVERVIEW: AnalyticsOverview = {
   streaks: { current: 0, longest: 0, activeDays: [] },
   dailyActivity: [],
   providerUsage: [],
+  modelUsage: [],
   projectUsage: [],
   weekdayHourActivity: [],
   conversationBalance: [],
@@ -210,6 +211,28 @@ describe('AppSettingsDialogContainer', () => {
       provider: {
         getAll: vi.fn().mockResolvedValue(providers),
         getAllAvailable: vi.fn().mockResolvedValue(providers),
+      },
+      providerQuota: {
+        getCodex: vi.fn().mockResolvedValue({
+          providerId: 'codex',
+          status: 'available',
+          source: 'provider-api',
+          planType: 'plus',
+          windows: [
+            {
+              kind: 'five-hour',
+              label: '5 hour usage limit',
+              usedPercent: 4,
+              remainingPercent: 96,
+              windowMinutes: 300,
+              resetsAt: '2026-05-21T15:21:00.000Z',
+            },
+          ],
+          credits: null,
+          limitReachedType: null,
+          lastCheckedAt: '2026-05-21T12:00:00.000Z',
+          stale: false,
+        }),
       },
       appSettings: {
         get: vi.fn().mockResolvedValue({
@@ -488,6 +511,40 @@ describe('AppSettingsDialogContainer', () => {
         '30d',
       )
     })
+    expect(screen.getByRole('button', { name: 'Done' })).toBeInTheDocument()
+  })
+
+  it('opens provider usage and refreshes Codex quota without saving app settings', async () => {
+    primeStores({
+      defaultProviderId: 'claude-code',
+      defaultModelId: 'sonnet',
+      defaultEffortId: 'medium',
+    })
+
+    render(<AppSettingsDialogContainer trigger={<Button>Open</Button>} />)
+    fireEvent.click(screen.getByText('Open'))
+
+    expect(await screen.findByText('Settings')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: /Usage/ }))
+
+    expect(await screen.findByText('5 hour usage limit')).toBeInTheDocument()
+    expect(screen.getByText(/96%/)).toBeInTheDocument()
+    expect(window.electronAPI.providerQuota.getCodex).toHaveBeenCalledWith(
+      false,
+    )
+    expect(
+      screen.getByText(/does not expose these reset windows reliably/),
+    ).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: /Refresh/ }))
+
+    await waitFor(() => {
+      expect(window.electronAPI.providerQuota.getCodex).toHaveBeenCalledWith(
+        true,
+      )
+    })
+    expect(window.electronAPI.appSettings.set).not.toHaveBeenCalled()
     expect(screen.getByRole('button', { name: 'Done' })).toBeInTheDocument()
   })
 

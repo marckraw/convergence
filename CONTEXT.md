@@ -218,6 +218,24 @@ the Session runtime but omits repository, Workspace, branch, Pull Request,
 Changed Files, and Project Settings affordances.
 _Avoid_: ChatGPT clone, hidden Project, separate chat runtime
 
+**Main View**:
+The routed, full-window work area to the right of the sidebar and above the
+Global Status Bar. A Main View is a durable place the user can navigate to,
+return from with history, and open from Command Center.
+_Avoid_: Overlay, drawer, dialog, mode flag
+
+**Main View Route**:
+The URL-addressable navigation state that selects a Main View and its durable
+parameters, such as Session id, Space id, Code Review target, review mode, or
+selected file. Main View Routes own visibility; entity stores own data.
+_Avoid_: Store boolean, selected tab state, modal state
+
+**Modal Task**:
+A temporary interaction layered over the current Main View, such as picking a
+file, confirming destructive work, editing settings that do not need a durable
+place yet, or completing a short wizard.
+_Avoid_: Main View, route, app surface
+
 **Session Context**:
 The explicit domain discriminator that tells whether a Session belongs to a
 Project Session Context or a Global Session Context.

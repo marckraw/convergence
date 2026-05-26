@@ -12,6 +12,7 @@ import {
   BookOpenText,
   Bot,
   Cable,
+  FileCode2,
   GitBranch,
   Info,
   Library,
@@ -23,6 +24,7 @@ interface SidebarToolsMenuProps {
   activeSurface: 'code' | 'chat'
   hasActiveProject: boolean
   iconOnly?: boolean
+  onOpenCodeReview?: () => void
   onOpenDialog: (kind: DialogKind, payload?: DialogPayload) => void
 }
 
@@ -30,6 +32,7 @@ export const SidebarToolsMenu: FC<SidebarToolsMenuProps> = ({
   activeSurface,
   hasActiveProject,
   iconOnly = false,
+  onOpenCodeReview,
   onOpenDialog,
 }) => {
   const openDialog = (kind: DialogKind, payload?: DialogPayload) => {
@@ -81,6 +84,14 @@ export const SidebarToolsMenu: FC<SidebarToolsMenuProps> = ({
         >
           <Settings2 className="h-3.5 w-3.5" />
           <span>Project Settings</span>
+        </DropdownMenuItem>
+        <DropdownMenuItem
+          className="gap-2"
+          disabled={!hasActiveProject}
+          onSelect={() => onOpenCodeReview?.()}
+        >
+          <FileCode2 className="h-3.5 w-3.5" />
+          <span>Code Review</span>
         </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem

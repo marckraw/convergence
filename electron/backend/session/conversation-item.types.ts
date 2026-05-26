@@ -14,6 +14,91 @@ export type ConversationItemKind =
 
 export type ConversationItemState = 'streaming' | 'complete' | 'error'
 
+export interface InteractionChoiceOption {
+  label: string
+  description?: string
+  preview?: string
+}
+
+export interface InteractionQuestion {
+  id: string
+  question: string
+  header: string
+  options: InteractionChoiceOption[]
+  multiSelect: boolean
+}
+
+export type InteractionFormFieldType = 'string' | 'number' | 'boolean'
+
+export interface InteractionFormField {
+  id: string
+  label: string
+  description?: string
+  type: InteractionFormFieldType
+  required: boolean
+  defaultValue?: string | number | boolean
+  multiline?: boolean
+}
+
+export type InteractionRequest =
+  | {
+      kind: 'text'
+      prompt: string
+    }
+  | {
+      kind: 'choice'
+      questions: InteractionQuestion[]
+    }
+  | {
+      kind: 'plan'
+      plan: string
+      planPath?: string
+      allowedPrompts?: string[]
+    }
+  | {
+      kind: 'form'
+      title: string
+      message: string
+      fields: InteractionFormField[]
+    }
+  | {
+      kind: 'url'
+      title: string
+      message: string
+      url: string
+    }
+
+export interface InteractionChoiceResponse {
+  kind: 'choice'
+  answers: Array<{
+    questionId: string
+    values: string[]
+  }>
+}
+
+export interface InteractionPlanResponse {
+  kind: 'plan'
+  decision: 'approve' | 'reject'
+  message?: string
+}
+
+export interface InteractionFormResponse {
+  kind: 'form'
+  action: 'accept' | 'decline'
+  values: Record<string, string | number | boolean>
+}
+
+export interface InteractionUrlResponse {
+  kind: 'url'
+  action: 'accept' | 'decline'
+}
+
+export type InteractionResponse =
+  | InteractionChoiceResponse
+  | InteractionPlanResponse
+  | InteractionFormResponse
+  | InteractionUrlResponse
+
 export interface ConversationItemBase {
   id: string
   sessionId: string
@@ -62,6 +147,7 @@ export type ConversationItem =
   | (ConversationItemBase & {
       kind: 'input-request'
       prompt: string
+      request?: InteractionRequest
     })
   | (ConversationItemBase & {
       kind: 'note'

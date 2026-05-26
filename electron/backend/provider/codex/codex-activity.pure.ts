@@ -135,6 +135,22 @@ export function reduceCodexActivity(
   }
 
   if (
+    input.method === 'item/reasoning/delta' ||
+    input.method === 'item/reasoning/textDelta' ||
+    input.method === 'item/reasoning/summaryTextDelta' ||
+    input.method === 'item/reasoning/summaryPartAdded'
+  ) {
+    const activity: ActivitySignal = 'thinking'
+    if (prev.lastActivity === activity) {
+      return { state: prev, activity: 'keep' }
+    }
+    return {
+      state: { ...prev, lastActivity: activity },
+      activity,
+    }
+  }
+
+  if (
     input.method === 'item/started' &&
     isContextCompactionItem(input.params)
   ) {

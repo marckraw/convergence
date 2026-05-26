@@ -46,6 +46,7 @@ function isAppSettingsSection(value: unknown): value is AppSettingsSectionId {
     value === 'session-naming' ||
     value === 'session-forking' ||
     value === 'credentials' ||
+    value === 'usage' ||
     value === 'pi-models' ||
     value === 'notifications' ||
     value === 'updates' ||

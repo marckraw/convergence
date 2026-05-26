@@ -45,6 +45,21 @@ interface CreateProjectInput {
   name?: string
 }
 
+type ProjectOpenAppIdData = 'cursor' | 'vscode' | 'zed' | 'webstorm' | 'finder'
+
+type ProjectOpenAppKindData = 'editor' | 'file-manager'
+
+interface ProjectOpenAppData {
+  id: ProjectOpenAppIdData
+  label: string
+  kind: ProjectOpenAppKindData
+}
+
+interface ProjectOpenRequestData {
+  appId: ProjectOpenAppIdData
+  path: string
+}
+
 type SpaceStatusData =
   | 'exploring'
   | 'planned'
@@ -438,6 +453,31 @@ type ReasoningEffort =
   | 'high'
   | 'max'
   | 'xhigh'
+
+type SessionPermissionPresetData = 'ask' | 'yolo' | 'custom'
+type CodexApprovalPolicyData = 'untrusted' | 'on-request' | 'never'
+type CodexSandboxModeData =
+  | 'read-only'
+  | 'workspace-write'
+  | 'danger-full-access'
+type ClaudeCodePermissionModeData =
+  | 'default'
+  | 'acceptEdits'
+  | 'auto'
+  | 'dontAsk'
+  | 'plan'
+  | 'bypassPermissions'
+
+interface SessionPermissionConfigData {
+  preset: SessionPermissionPresetData
+  codex?: {
+    approvalPolicy: CodexApprovalPolicyData
+    sandbox: CodexSandboxModeData
+  }
+  claudeCode?: {
+    permissionMode: ClaudeCodePermissionModeData
+  }
+}
 type ActivitySignal =
   | null
   | 'streaming'
@@ -481,6 +521,8 @@ interface ProviderModelOption {
   label: string
   defaultEffort: ReasoningEffort | null
   effortOptions: ProviderEffortOption[]
+  inputModalities?: Array<'text' | 'image'>
+  source?: 'pi-models-json' | 'provider'
 }
 
 type AttachmentKind = 'image' | 'pdf' | 'text'
@@ -545,8 +587,94 @@ interface SendSessionMessageInput {
   attachmentIds?: string[]
   skillSelections?: SkillSelection[]
   deliveryMode?: MidRunInputMode
+  interactionResponse?: InteractionResponseData
   contextItemIds?: string[]
 }
+
+interface InteractionChoiceOptionData {
+  label: string
+  description?: string
+  preview?: string
+}
+
+interface InteractionQuestionData {
+  id: string
+  question: string
+  header: string
+  options: InteractionChoiceOptionData[]
+  multiSelect: boolean
+}
+
+type InteractionFormFieldTypeData = 'string' | 'number' | 'boolean'
+
+interface InteractionFormFieldData {
+  id: string
+  label: string
+  description?: string
+  type: InteractionFormFieldTypeData
+  required: boolean
+  defaultValue?: string | number | boolean
+  multiline?: boolean
+}
+
+type InteractionRequestData =
+  | {
+      kind: 'text'
+      prompt: string
+    }
+  | {
+      kind: 'choice'
+      questions: InteractionQuestionData[]
+    }
+  | {
+      kind: 'plan'
+      plan: string
+      planPath?: string
+      allowedPrompts?: string[]
+    }
+  | {
+      kind: 'form'
+      title: string
+      message: string
+      fields: InteractionFormFieldData[]
+    }
+  | {
+      kind: 'url'
+      title: string
+      message: string
+      url: string
+    }
+
+interface InteractionChoiceResponseData {
+  kind: 'choice'
+  answers: Array<{
+    questionId: string
+    values: string[]
+  }>
+}
+
+interface InteractionPlanResponseData {
+  kind: 'plan'
+  decision: 'approve' | 'reject'
+  message?: string
+}
+
+interface InteractionFormResponseData {
+  kind: 'form'
+  action: 'accept' | 'decline'
+  values: Record<string, string | number | boolean>
+}
+
+interface InteractionUrlResponseData {
+  kind: 'url'
+  action: 'accept' | 'decline'
+}
+
+type InteractionResponseData =
+  | InteractionChoiceResponseData
+  | InteractionPlanResponseData
+  | InteractionFormResponseData
+  | InteractionUrlResponseData
 
 type ConversationItemKind =
   | 'message'
@@ -607,6 +735,7 @@ type ConversationItemData =
   | (ConversationItemDataBase & {
       kind: 'input-request'
       prompt: string
+      request?: InteractionRequestData
     })
   | (ConversationItemDataBase & {
       kind: 'note'
@@ -685,6 +814,14 @@ type TurnDeltaData =
 
 type SessionContextKindData = 'project' | 'global'
 
+type AttentionRequestKindData =
+  | 'approval'
+  | 'question'
+  | 'plan'
+  | 'form'
+  | 'url'
+  | 'input'
+
 interface SessionSummaryData {
   id: string
   contextKind: SessionContextKindData
@@ -693,9 +830,11 @@ interface SessionSummaryData {
   providerId: string
   model: string | null
   effort: ReasoningEffort | null
+  permissionConfig?: SessionPermissionConfigData
   name: string
   status: SessionStatus
   attention: AttentionState
+  attentionRequestKind?: AttentionRequestKindData | null
   activity: ActivitySignal
   contextWindow: SessionContextWindow | null
   workingDirectory: string
@@ -716,6 +855,7 @@ interface CreateSessionInput {
   providerId: string
   model: string | null
   effort: ReasoningEffort | null
+  permissionConfig?: SessionPermissionConfigData
   name: string
   primarySurface?: 'conversation' | 'terminal'
 }
@@ -800,6 +940,44 @@ interface ProviderUpdateResult {
   error: string | null
 }
 
+type ProviderQuotaWindowKindData = 'five-hour' | 'weekly' | 'other'
+
+interface ProviderQuotaWindowData {
+  kind: ProviderQuotaWindowKindData
+  label: string
+  usedPercent: number
+  remainingPercent: number
+  windowMinutes: number | null
+  resetsAt: string | null
+}
+
+interface ProviderCreditsQuotaData {
+  hasCredits: boolean
+  unlimited: boolean
+  balance: string | null
+}
+
+type ProviderQuotaSnapshotData =
+  | {
+      providerId: 'codex' | 'claude-code'
+      status: 'available'
+      source: 'provider-api' | 'provider-event'
+      planType: string | null
+      windows: ProviderQuotaWindowData[]
+      credits: ProviderCreditsQuotaData | null
+      limitReachedType: string | null
+      lastCheckedAt: string
+      stale: boolean
+    }
+  | {
+      providerId: 'codex' | 'claude-code'
+      status: 'unavailable'
+      source: 'provider-api' | 'provider-event'
+      reason: string
+      lastCheckedAt: string
+      stale: boolean
+    }
+
 type FeedbackPriorityData = 'low' | 'medium' | 'high'
 
 interface FeedbackContextData {
@@ -852,6 +1030,75 @@ interface UpdateProjectContextItemInputData {
   reinjectMode?: ProjectContextReinjectModeData
 }
 
+type ProjectScriptRunStatusData =
+  | 'queued'
+  | 'running'
+  | 'succeeded'
+  | 'failed'
+  | 'stopped'
+
+type ProjectScriptIconIdData =
+  | 'play'
+  | 'check'
+  | 'build'
+  | 'test'
+  | 'wrench'
+  | 'bug'
+
+interface ProjectScriptData {
+  id: string
+  projectId: string
+  name: string
+  command: string
+  icon: ProjectScriptIconIdData
+  cwd: string | null
+  createdAt: string
+  updatedAt: string
+}
+
+interface ProjectScriptRunData {
+  id: string
+  scriptId: string
+  projectId: string
+  command: string
+  cwd: string
+  status: ProjectScriptRunStatusData
+  startedAt: string
+  endedAt: string | null
+  exitCode: number | null
+  signal: string | null
+  errorMessage: string | null
+  stdout: string
+  stderr: string
+}
+
+interface ProjectScriptRunOutputData {
+  runId: string
+  stream: 'stdout' | 'stderr'
+  text: string
+  sequence: number
+  emittedAt: string
+}
+
+interface CreateProjectScriptInputData {
+  projectId: string
+  name: string
+  command: string
+  icon?: ProjectScriptIconIdData
+  cwd?: string | null
+}
+
+interface UpdateProjectScriptInputData {
+  name?: string
+  command?: string
+  icon?: ProjectScriptIconIdData
+  cwd?: string | null
+}
+
+interface RunProjectScriptInputData {
+  cwd?: string | null
+}
+
 type AnalyticsRangePresetData = '7d' | '30d' | '90d' | 'all'
 
 interface AnalyticsRangeData {
@@ -901,6 +1148,17 @@ interface ProviderUsagePointData {
   turnsCompleted: number
   userMessages: number
   assistantMessages: number
+}
+
+interface ModelUsagePointData {
+  modelId: string
+  modelLabel: string
+  sessionsCreated: number
+  turnsCompleted: number
+  userMessages: number
+  assistantMessages: number
+  providerId: string | null
+  providerName: string
 }
 
 interface ProjectUsagePointData {
@@ -971,6 +1229,7 @@ interface AnalyticsOverviewData {
   streaks: AnalyticsStreaksData
   dailyActivity: DailyActivityPointData[]
   providerUsage: ProviderUsagePointData[]
+  modelUsage: ModelUsagePointData[]
   projectUsage: ProjectUsagePointData[]
   weekdayHourActivity: WeekdayHourActivityPointData[]
   conversationBalance: ConversationBalancePointData[]
@@ -1006,6 +1265,27 @@ interface ElectronAPI {
     delete: (id: string) => Promise<void>
     attachToSession: (sessionId: string, itemIds: string[]) => Promise<void>
     listForSession: (sessionId: string) => Promise<ProjectContextItemData[]>
+  }
+  projectScripts: {
+    list: (projectId: string) => Promise<ProjectScriptData[]>
+    create: (input: CreateProjectScriptInputData) => Promise<ProjectScriptData>
+    update: (
+      id: string,
+      input: UpdateProjectScriptInputData,
+    ) => Promise<ProjectScriptData>
+    delete: (id: string) => Promise<void>
+    listRuns: (projectId: string) => Promise<ProjectScriptRunData[]>
+    listActiveRuns: () => Promise<ProjectScriptRunData[]>
+    getRun: (runId: string) => Promise<ProjectScriptRunData | null>
+    run: (
+      scriptId: string,
+      input?: RunProjectScriptInputData,
+    ) => Promise<ProjectScriptRunData>
+    stop: (runId: string) => Promise<ProjectScriptRunData>
+    onRunUpdated: (callback: (run: ProjectScriptRunData) => void) => () => void
+    onRunOutput: (
+      callback: (output: ProjectScriptRunOutputData) => void,
+    ) => () => void
   }
   space: {
     list: () => Promise<SpaceData[]>
@@ -1055,6 +1335,10 @@ interface ElectronAPI {
   }
   dialog: {
     selectDirectory: () => Promise<string | null>
+  }
+  projectOpen?: {
+    listApps: () => Promise<ProjectOpenAppData[]>
+    open: (input: ProjectOpenRequestData) => Promise<void>
   }
   workspace: {
     create: (input: CreateWorkspaceInput) => Promise<WorkspaceData>
@@ -1184,6 +1468,9 @@ interface ElectronAPI {
       callback: (statuses: ProviderStatusInfo[]) => void,
     ) => () => void
   }
+  providerQuota: {
+    getCodex: (forceRefresh?: boolean) => Promise<ProviderQuotaSnapshotData>
+  }
   mcp: {
     listByProjectId: (projectId: string) => Promise<ProjectMcpVisibility>
     listGlobal: () => Promise<ProjectMcpVisibility>
@@ -1278,6 +1565,23 @@ interface ElectronAPI {
     subscribe: (callback: (entry: ProviderDebugEntry) => void) => () => void
     list: (sessionId: string) => Promise<ProviderDebugEntry[]>
     openFolder: () => Promise<boolean>
+  }
+  localModelTunnel: {
+    getSnapshot: () => Promise<LocalModelTunnelSnapshotData>
+    start: (profileId: string) => Promise<LocalModelTunnelSnapshotData>
+    stop: (profileId: string) => Promise<LocalModelTunnelSnapshotData>
+    restart: (profileId: string) => Promise<LocalModelTunnelSnapshotData>
+    createProfile: (
+      input: LocalModelTunnelProfileInputData,
+    ) => Promise<LocalModelTunnelSnapshotData>
+    updateProfile: (
+      profileId: string,
+      input: LocalModelTunnelProfileInputData,
+    ) => Promise<LocalModelTunnelSnapshotData>
+    deleteProfile: (profileId: string) => Promise<LocalModelTunnelSnapshotData>
+    onChanged: (
+      callback: (snapshot: LocalModelTunnelSnapshotData) => void,
+    ) => () => void
   }
   terminal: {
     create: (input: {
@@ -1465,6 +1769,62 @@ interface AppSettingsData {
   piModelVisibility: {
     additionalModelIds: string[]
   }
+}
+
+type LocalModelTunnelStateData =
+  | 'stopped'
+  | 'starting'
+  | 'running'
+  | 'external'
+  | 'failed'
+
+interface LocalModelTunnelProfileData {
+  id: string
+  name: string
+  sshTarget: string
+  autoStart: boolean
+  useCustomLocalBindHost: boolean
+  localBindHost: string
+  localPort: number
+  remoteHost: string
+  remotePort: number
+  healthCheckEnabled: boolean
+  healthCheckUrl: string
+  createdAt: string
+  updatedAt: string
+}
+
+interface LocalModelTunnelProfileInputData {
+  name?: string
+  sshTarget?: string
+  autoStart?: boolean
+  useCustomLocalBindHost?: boolean
+  localBindHost?: string
+  localPort?: number
+  remoteHost?: string
+  remotePort?: number
+  healthCheckEnabled?: boolean
+  healthCheckUrl?: string
+}
+
+interface LocalModelTunnelRuntimeStatusData {
+  profileId: string
+  state: LocalModelTunnelStateData
+  managed: boolean
+  pid: number | null
+  error: string | null
+  lastCheckedAt: string | null
+  commandPreview: string
+}
+
+interface LocalModelTunnelProfileWithStatusData {
+  profile: LocalModelTunnelProfileData
+  status: LocalModelTunnelRuntimeStatusData
+}
+
+interface LocalModelTunnelSnapshotData {
+  profiles: LocalModelTunnelProfileWithStatusData[]
+  updatedAt: string
 }
 
 interface OpenRouterCredentialStatusData {

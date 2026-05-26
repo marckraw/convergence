@@ -10,6 +10,12 @@ import { existsSync } from 'fs'
 import { join } from 'path'
 import { getDatabase } from '../backend/database/database'
 import { ProjectService } from '../backend/project/project.service'
+import { ProjectScriptsService } from '../backend/project-scripts/project-scripts.service'
+import { ProjectScriptsRunner } from '../backend/project-scripts/project-scripts.runner'
+import {
+  broadcastProjectScriptRun,
+  registerProjectScriptsIpcHandlers,
+} from '../backend/project-scripts/project-scripts.ipc'
 import { SpaceService } from '../backend/space/space.service'
 import { SpaceSynthesisService } from '../backend/space/space-synthesis.service'
 import { ProjectContextService } from '../backend/project-context/project-context.service'
@@ -37,11 +43,17 @@ import {
   registerProviderDebugIpcHandlers,
 } from '../backend/provider-debug/provider-debug.ipc'
 import { createJsonlWriter } from '../backend/provider-debug/provider-debug-jsonl'
+import { LocalModelTunnelService } from '../backend/local-model-tunnel/local-model-tunnel.service'
+import {
+  broadcastLocalModelTunnelSnapshot,
+  registerLocalModelTunnelIpcHandlers,
+} from '../backend/local-model-tunnel/local-model-tunnel.ipc'
 import { McpService } from '../backend/mcp/mcp.service'
 import { SkillsService } from '../backend/skills/skills.service'
 import { PromptsService } from '../backend/prompts/prompts.service'
 import { AppSettingsService } from '../backend/app-settings/app-settings.service'
 import { AnalyticsService } from '../backend/analytics/analytics.service'
+import { CodexQuotaService } from '../backend/provider-quota/codex-quota.service'
 import { AttachmentsService } from '../backend/attachments/attachments.service'
 import { NotificationsService } from '../backend/notifications/notifications.service'
 import { NotificationsStateService } from '../backend/notifications/notifications.state'
@@ -69,6 +81,8 @@ import { registerSessionForkIpcHandlers } from '../backend/session/fork/session-
 import { loadEnvFile } from '../backend/environment/env-file.service'
 import { hydrateProcessPathFromShell } from '../backend/environment/shell-path.service'
 import { OpenRouterCredentialsService } from '../backend/credentials/openrouter-credentials.service'
+import { ProjectOpenService } from '../backend/project-open/project-open.service'
+import { registerProjectOpenIpcHandlers } from '../backend/project-open/project-open.ipc'
 import { TerminalService } from '../backend/terminal/terminal.service'
 import {
   broadcastToRenderers,
@@ -87,6 +101,7 @@ import { shouldOpenInSystemBrowser } from './external-links.pure'
 import { resolveAutoUpdater } from './auto-updater-module.pure'
 import { getWindowAppearanceOptions } from './window-effects.pure'
 import { formatStartupFailure } from './startup-failure.pure'
+import { resolveUserDataPath } from './user-data-path.pure'
 
 function createWindow(
   onClose?: () => void,
@@ -166,6 +181,14 @@ async function startApp(): Promise<void> {
 
   let currentMainWindow: BrowserWindow | null = null
 
+  app.setPath(
+    'userData',
+    resolveUserDataPath({
+      defaultPath: app.getPath('userData'),
+      override: process.env.CONVERGENCE_USER_DATA_DIR,
+    }),
+  )
+
   const dbPath = join(app.getPath('userData'), 'convergence.db')
   const workspacesRoot = join(app.getPath('userData'), 'workspaces')
   const attachmentsRoot = join(app.getPath('userData'), 'attachments')
@@ -177,6 +200,7 @@ async function startApp(): Promise<void> {
 
   const gitService = new GitService()
   const projectService = new ProjectService(db)
+  const projectScriptsService = new ProjectScriptsService(db)
   const spaceService = new SpaceService(db, spacesRoot)
   const projectContextService = new ProjectContextService(db)
   const sessionContextInjectionService = new SessionContextInjectionService(
@@ -184,6 +208,12 @@ async function startApp(): Promise<void> {
     projectContextService,
   )
   const stateService = new StateService(db)
+  const localModelTunnelService = new LocalModelTunnelService(
+    stateService,
+    broadcastLocalModelTunnelSnapshot,
+  )
+  registerLocalModelTunnelIpcHandlers(localModelTunnelService)
+  void localModelTunnelService.startAutoStartProfiles()
   const workspaceService = new WorkspaceService(db, gitService, workspacesRoot)
   const changedFilesService = new ChangedFilesService(db, gitService)
   const pullRequestService = new PullRequestService(db, gitService)
@@ -191,6 +221,7 @@ async function startApp(): Promise<void> {
   const providerRegistry = new ProviderRegistry()
   const openRouterCredentials = new OpenRouterCredentialsService()
   const taskProgressService = new TaskProgressService(broadcastTaskProgress)
+  const codexQuotaService = new CodexQuotaService()
   const sessionService = new SessionService(
     db,
     providerRegistry,
@@ -264,7 +295,12 @@ async function startApp(): Promise<void> {
     for (const p of nextDetected) {
       if (p.id === 'claude-code') {
         providerRegistry.register(
-          new ClaudeCodeProvider(p.binaryPath, taskProgressService, debugSink),
+          new ClaudeCodeProvider(
+            p.binaryPath,
+            taskProgressService,
+            debugSink,
+            p.version,
+          ),
         )
       } else if (p.id === 'codex') {
         providerRegistry.register(
@@ -297,6 +333,11 @@ async function startApp(): Promise<void> {
   const mcpService = new McpService(projectService, detected)
   const skillsService = new SkillsService(projectService, detected)
   const promptsService = new PromptsService(db, projectService)
+  const projectScriptsRunner = new ProjectScriptsRunner({
+    service: projectScriptsService,
+    broadcast: broadcastProjectScriptRun,
+  })
+  registerProjectScriptsIpcHandlers(projectScriptsService, projectScriptsRunner)
 
   const appSettingsService = new AppSettingsService(stateService, async () =>
     Promise.all(providerRegistry.getAll().map((p) => p.describe())),
@@ -306,6 +347,8 @@ async function startApp(): Promise<void> {
     appSettings: appSettingsService,
     workingDirectory: app.getPath('userData'),
   })
+  const projectOpenService = new ProjectOpenService()
+  registerProjectOpenIpcHandlers(projectOpenService)
 
   const notificationsState = new NotificationsStateService()
   const dockBadge = new DockBadgeService({
@@ -517,6 +560,9 @@ async function startApp(): Promise<void> {
         return result
       },
     },
+    {
+      codex: codexQuotaService,
+    },
   )
 
   const terminalService = new TerminalService(
@@ -535,7 +581,9 @@ async function startApp(): Promise<void> {
   registerTerminalLayoutIpcHandlers(terminalLayoutService)
 
   app.on('before-quit', () => {
+    localModelTunnelService.stopAllManaged()
     terminalService.disposeAll()
+    projectScriptsRunner.disposeAll()
   })
 
   const runtimeIconPath = resolveRuntimeIconPath()
@@ -545,6 +593,7 @@ async function startApp(): Promise<void> {
 
   const onWindowClosed = () => {
     terminalService.disposeAll()
+    projectScriptsRunner.disposeAll()
     currentMainWindow = null
   }
 

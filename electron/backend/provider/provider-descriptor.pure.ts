@@ -75,14 +75,14 @@ export const NO_MID_RUN_INPUT_CAPABILITY: ProviderMidRunInputCapability = {
 
 export const CLAUDE_CODE_MID_RUN_INPUT_CAPABILITY: ProviderMidRunInputCapability =
   {
-    supportsAnswer: false,
+    supportsAnswer: true,
     supportsNativeFollowUp: false,
     supportsAppQueuedFollowUp: true,
     supportsSteer: false,
     supportsInterrupt: false,
     defaultRunningMode: 'follow-up',
     notes:
-      'Claude Code uses app-managed follow-up queueing until the adapter moves to a long-lived streaming input process.',
+      'Claude Code supports app-managed answers for deferred AskUserQuestion requests and app-managed follow-up queueing until the adapter moves to a long-lived streaming input process.',
   }
 
 export const CODEX_MID_RUN_INPUT_CAPABILITY: ProviderMidRunInputCapability = {

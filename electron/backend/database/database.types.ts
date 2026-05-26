@@ -20,6 +20,7 @@ export interface SessionRow {
   provider_id: string
   model: string | null
   effort: string | null
+  permission_config: string
   continuation_token: string | null
   name: string
   status: string
@@ -98,6 +99,33 @@ export interface WorkspacePullRequestRow {
   error: string | null
   created_at: string
   updated_at: string
+}
+
+export interface ProjectScriptRow {
+  id: string
+  project_id: string
+  name: string
+  command: string
+  icon: string
+  cwd: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface ProjectScriptRunRow {
+  id: string
+  script_id: string
+  project_id: string
+  command: string
+  cwd: string
+  status: string
+  started_at: string
+  ended_at: string | null
+  exit_code: number | null
+  signal: string | null
+  error_message: string | null
+  stdout: string
+  stderr: string
 }
 
 export interface ReviewNoteRow {

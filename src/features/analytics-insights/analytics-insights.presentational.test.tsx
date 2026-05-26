@@ -78,6 +78,7 @@ const overview: AnalyticsOverview = {
       assistantMessages: 13,
     },
   ],
+  modelUsage: [],
   projectUsage: [
     {
       projectId: 'project-1',
