@@ -54,6 +54,12 @@ type UserMessageDraft = Extract<
 >
 type UserMessageDraftInput = Omit<UserMessageDraft, 'sessionId' | 'sequence'>
 
+interface AttentionRequestRow {
+  session_id: string
+  kind: 'approval-request' | 'input-request'
+  payload_json: string
+}
+
 export interface SendMessageInput {
   text: string
   attachmentIds?: string[]
@@ -342,7 +348,7 @@ export class SessionService {
       )
       .all(projectId) as SessionRow[]
 
-    return rows.map((row) => this.buildSessionSummary(row))
+    return this.buildSessionSummaries(rows)
   }
 
   getAll(): Session[] {
@@ -350,7 +356,7 @@ export class SessionService {
       .prepare('SELECT * FROM sessions ORDER BY created_at DESC')
       .all() as SessionRow[]
 
-    return rows.map((row) => this.buildSessionSummary(row))
+    return this.buildSessionSummaries(rows)
   }
 
   getSummariesByProjectId(projectId: string): SessionSummary[] {
@@ -360,7 +366,7 @@ export class SessionService {
       )
       .all(projectId) as SessionRow[]
 
-    return rows.map((row) => this.buildSessionSummary(row))
+    return this.buildSessionSummaries(rows)
   }
 
   getGlobalSummaries(): SessionSummary[] {
@@ -370,7 +376,7 @@ export class SessionService {
       )
       .all() as SessionRow[]
 
-    return rows.map((row) => this.buildSessionSummary(row))
+    return this.buildSessionSummaries(rows)
   }
 
   getAllSummaries(): SessionSummary[] {
@@ -378,7 +384,7 @@ export class SessionService {
       .prepare('SELECT * FROM sessions ORDER BY created_at DESC')
       .all() as SessionRow[]
 
-    return rows.map((row) => this.buildSessionSummary(row))
+    return this.buildSessionSummaries(rows)
   }
 
   getById(id: string): Session | null {
@@ -394,20 +400,32 @@ export class SessionService {
 
   private buildSessionSummary(row: SessionRow): SessionSummary {
     const summary = sessionSummaryFromRow(row)
-    const attentionRequestKind = this.readAttentionRequestKind(summary)
+    const attentionRequestKind = resolveAttentionRequestKind(
+      summary,
+      this.readAttentionRequestRow(summary.id),
+    )
     return attentionRequestKind ? { ...summary, attentionRequestKind } : summary
   }
 
-  private readAttentionRequestKind(
-    summary: Pick<SessionSummary, 'id' | 'attention'>,
-  ): AttentionRequestKind | null {
-    if (
-      summary.attention !== 'needs-approval' &&
-      summary.attention !== 'needs-input'
-    ) {
-      return null
-    }
+  private buildSessionSummaries(rows: SessionRow[]): SessionSummary[] {
+    const summaries = rows.map(sessionSummaryFromRow)
+    const attentionRowsBySessionId =
+      this.readLatestAttentionRequestRows(summaries)
 
+    return summaries.map((summary) => {
+      const attentionRequestKind = resolveAttentionRequestKind(
+        summary,
+        attentionRowsBySessionId.get(summary.id) ?? null,
+      )
+      return attentionRequestKind
+        ? { ...summary, attentionRequestKind }
+        : summary
+    })
+  }
+
+  private readAttentionRequestRow(
+    sessionId: string,
+  ): AttentionRequestRow | null {
     const row = this.db
       .prepare(
         `SELECT kind, payload_json
@@ -417,39 +435,41 @@ export class SessionService {
          ORDER BY sequence DESC
          LIMIT 1`,
       )
-      .get(summary.id) as
-      | { kind: 'approval-request' | 'input-request'; payload_json: string }
-      | undefined
+      .get(sessionId) as Omit<AttentionRequestRow, 'session_id'> | undefined
 
-    if (!row) {
-      return summary.attention === 'needs-approval' ? 'approval' : 'input'
-    }
+    return row ? { session_id: sessionId, ...row } : null
+  }
 
-    if (row.kind === 'approval-request') {
-      return 'approval'
-    }
+  private readLatestAttentionRequestRows(
+    summaries: Array<Pick<SessionSummary, 'id' | 'attention'>>,
+  ): Map<string, AttentionRequestRow> {
+    const sessionIds = summaries
+      .filter(isAttentionRequestSummary)
+      .map((summary) => summary.id)
 
-    try {
-      const payload = JSON.parse(row.payload_json) as {
-        request?: { kind?: unknown }
-      }
-      switch (payload.request?.kind) {
-        case 'choice':
-          return 'question'
-        case 'plan':
-          return 'plan'
-        case 'form':
-          return 'form'
-        case 'url':
-          return 'url'
-        case 'text':
-          return 'input'
-        default:
-          return 'input'
-      }
-    } catch {
-      return 'input'
-    }
+    if (sessionIds.length === 0) return new Map()
+
+    const placeholders = sessionIds.map(() => '?').join(', ')
+    const rows = this.db
+      .prepare(
+        `SELECT session_id, kind, payload_json
+         FROM (
+           SELECT session_id,
+                  kind,
+                  payload_json,
+                  ROW_NUMBER() OVER (
+                    PARTITION BY session_id
+                    ORDER BY sequence DESC
+                  ) AS request_rank
+           FROM session_conversation_items
+           WHERE session_id IN (${placeholders})
+             AND kind IN ('approval-request', 'input-request')
+         )
+         WHERE request_rank = 1`,
+      )
+      .all(...sessionIds) as AttentionRequestRow[]
+
+    return new Map(rows.map((row) => [row.session_id, row]))
   }
 
   getConversation(id: string): ConversationItem[] {
@@ -1792,6 +1812,54 @@ export class SessionService {
     void this.runNaming(session).catch(() => {
       // Naming failures are silent per spec.
     })
+  }
+}
+
+function isAttentionRequestSummary(
+  summary: Pick<SessionSummary, 'attention'>,
+): boolean {
+  return (
+    summary.attention === 'needs-approval' ||
+    summary.attention === 'needs-input'
+  )
+}
+
+function resolveAttentionRequestKind(
+  summary: Pick<SessionSummary, 'attention'>,
+  row: AttentionRequestRow | null,
+): AttentionRequestKind | null {
+  if (!isAttentionRequestSummary(summary)) {
+    return null
+  }
+
+  if (!row) {
+    return summary.attention === 'needs-approval' ? 'approval' : 'input'
+  }
+
+  if (row.kind === 'approval-request') {
+    return 'approval'
+  }
+
+  try {
+    const payload = JSON.parse(row.payload_json) as {
+      request?: { kind?: unknown }
+    }
+    switch (payload.request?.kind) {
+      case 'choice':
+        return 'question'
+      case 'plan':
+        return 'plan'
+      case 'form':
+        return 'form'
+      case 'url':
+        return 'url'
+      case 'text':
+        return 'input'
+      default:
+        return 'input'
+    }
+  } catch {
+    return 'input'
   }
 }
 
