@@ -1,5 +1,11 @@
 # convergence
 
+## 0.37.32
+
+### Patch Changes
+
+- 6706b1a: Add favorite models to the model picker so frequently used models can be starred, filtered, and kept at the top of picker results.
+
 ## 0.37.31
 
 ### Patch Changes
