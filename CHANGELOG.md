@@ -1,5 +1,11 @@
 # convergence
 
+## 0.37.33
+
+### Patch Changes
+
+- 125cec3: Condense sidebar attention rows and show their details in faster hover tooltips.
+
 ## 0.37.32
 
 ### Patch Changes
