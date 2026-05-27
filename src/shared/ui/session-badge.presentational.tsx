@@ -17,7 +17,7 @@ export const SessionBadge: FC<SessionBadgeProps> = ({
   attention,
   className,
 }) => {
-  const iconClassName = cn('h-3 w-3 shrink-0', className)
+  const iconClassName = cn('size-3 shrink-0', className)
 
   switch (attention) {
     case 'needs-approval':

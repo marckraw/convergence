@@ -62,7 +62,7 @@ export const NeedsYouSection: FC<NeedsYouSectionProps> = ({
                   variant="ghost"
                   onClick={() => onSelect(session.id)}
                   aria-label={`${session.name}, ${summary}, ${projectName}`}
-                  className="h-auto min-w-0 flex-1 items-center justify-start gap-1.5 px-1.5 py-0.5 text-left text-sm leading-tight [&_svg]:size-3"
+                  className="h-auto min-w-0 flex-1 items-center justify-start gap-1.5 px-1.5 py-0.5 text-left text-xs leading-tight"
                 >
                   <span className="shrink-0">
                     <SessionBadge attention={session.attention} />
