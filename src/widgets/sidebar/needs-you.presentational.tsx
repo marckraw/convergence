@@ -36,11 +36,8 @@ export const NeedsYou: FC<NeedsYouProps> = ({
   if (totalSessions === 0) return null
 
   return (
-    <div className="px-3 pb-3">
-      <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-        Needs You ({totalSessions})
-      </p>
-      <div className="space-y-3">
+    <div className="px-3 pb-2">
+      <div className="space-y-2">
         {waitingSessions.length > 0 && (
           <NeedsYouSection
             title="Waiting on You"

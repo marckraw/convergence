@@ -33,10 +33,13 @@ export const NeedsYouSection: FC<NeedsYouSectionProps> = ({
   onArchive,
 }) => (
   <div>
-    <p className="mb-1 text-[11px] font-medium uppercase tracking-wider text-muted-foreground/80">
-      {title}
+    <p className="mb-1 flex items-center justify-between gap-2 text-[11px] font-medium uppercase tracking-wider text-muted-foreground/80">
+      <span className="truncate">{title}</span>
+      <span className="shrink-0 text-muted-foreground/60">
+        {sessions.length}
+      </span>
     </p>
-    <div className="space-y-1">
+    <div className="space-y-0.5">
       {sessions.map(({ session, projectName, summary }) => {
         const action = resolveNeedsYouAction(session)
         const showArchive = action.disposition === 'acknowledged'
@@ -48,7 +51,7 @@ export const NeedsYouSection: FC<NeedsYouSectionProps> = ({
             key={session.id}
             data-pulse={pulsing ? 'true' : undefined}
             className={cn(
-              'group flex min-w-0 items-start gap-1 rounded-md transition-colors hover:bg-accent',
+              'group flex min-w-0 items-center gap-1 rounded-md transition-colors hover:bg-accent',
               activeSessionId === session.id && 'bg-accent',
             )}
           >
@@ -58,32 +61,26 @@ export const NeedsYouSection: FC<NeedsYouSectionProps> = ({
                   type="button"
                   variant="ghost"
                   onClick={() => onSelect(session.id)}
-                  className="h-auto min-w-0 flex-1 items-start justify-start gap-2 px-2 py-1 text-left text-sm leading-tight [&_svg]:size-3.5"
+                  aria-label={`${session.name}, ${summary}, ${projectName}`}
+                  className="h-auto min-w-0 flex-1 items-center justify-start gap-1.5 px-1.5 py-0.5 text-left text-sm leading-tight [&_svg]:size-3"
                 >
-                  <span className="mt-0.25">
+                  <span className="shrink-0">
                     <SessionBadge attention={session.attention} />
                   </span>
                   <div className="min-w-0 flex-1">
                     <p className="truncate font-medium">{session.name}</p>
-                    <div className="mt-0.5 flex min-w-0 items-center gap-1 text-[11px] text-muted-foreground/85">
-                      <span className="shrink-0">{summary}</span>
-                      <span className="shrink-0 text-muted-foreground/45">
-                        •
-                      </span>
-                      <span className="truncate text-muted-foreground/70">
-                        {projectName}
-                      </span>
-                    </div>
                   </div>
                 </Button>
               </TooltipTrigger>
               <TooltipContent side="right">
                 <p>{session.name}</p>
-                <p className="text-[11px] opacity-70">{projectName}</p>
+                <p className="text-[11px] opacity-70">
+                  {summary} - {projectName}
+                </p>
               </TooltipContent>
             </Tooltip>
 
-            <div className="mt-0.5 mr-1 flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
+            <div className="mr-0.5 flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Button
@@ -91,7 +88,7 @@ export const NeedsYouSection: FC<NeedsYouSectionProps> = ({
                     variant="ghost"
                     size="icon"
                     aria-label={`${action.label} ${session.name}`}
-                    className="h-6 w-6 shrink-0"
+                    className="h-5 w-5 shrink-0"
                     onClick={(event) => {
                       event.stopPropagation()
                       void onDismiss(session.id)
@@ -117,7 +114,7 @@ export const NeedsYouSection: FC<NeedsYouSectionProps> = ({
                       variant="ghost"
                       size="icon"
                       aria-label={`Archive ${session.name}`}
-                      className="h-6 w-6 shrink-0"
+                      className="h-5 w-5 shrink-0"
                       onClick={(event) => {
                         event.stopPropagation()
                         void onArchive(session.id)
