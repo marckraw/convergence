@@ -1,6 +1,16 @@
 {
-  "currentVersion": "0.37.31",
+  "currentVersion": "0.37.33",
   "releases": [
+    {
+      "version": "0.37.33",
+      "date": null,
+      "notes": "### Patch Changes\n\n- 125cec3: Condense sidebar attention rows and show their details in faster hover tooltips."
+    },
+    {
+      "version": "0.37.32",
+      "date": null,
+      "notes": "### Patch Changes\n\n- 6706b1a: Add favorite models to the model picker so frequently used models can be starred, filtered, and kept at the top of picker results."
+    },
     {
       "version": "0.37.31",
       "date": null,
