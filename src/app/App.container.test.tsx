@@ -216,6 +216,7 @@ const mockElectronAPI = {
       updates: { backgroundCheckEnabled: true },
       debugLogging: { enabled: false },
       piModelVisibility: { additionalModelIds: [] },
+      favoriteModels: { items: [] },
     }),
     set: vi.fn().mockImplementation(async (input) => input),
     onUpdated: vi.fn().mockReturnValue(() => {}),

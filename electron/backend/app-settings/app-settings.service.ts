@@ -9,11 +9,13 @@ import { DEFAULT_UPDATE_PREFS } from '../updates/updates.defaults'
 import type { UpdatePrefs } from '../updates/updates.types'
 import {
   DEFAULT_DEBUG_LOGGING_PREFS,
+  DEFAULT_FAVORITE_MODELS_PREFS,
   DEFAULT_ONBOARDING_PREFS,
   DEFAULT_PI_MODEL_VISIBILITY_PREFS,
   type AppSettings,
   type AppSettingsInput,
   type DebugLoggingPrefs,
+  type FavoriteModelsPrefs,
   type OnboardingPrefs,
   type PiModelVisibilityPrefs,
   type ResolvedSessionDefaults,
@@ -128,6 +130,41 @@ function parsePiModelVisibilityPrefs(value: unknown): PiModelVisibilityPrefs {
   }
 }
 
+function parseFavoriteModelsPrefs(value: unknown): FavoriteModelsPrefs {
+  if (!value || typeof value !== 'object') {
+    return DEFAULT_FAVORITE_MODELS_PREFS
+  }
+  const raw = value as Partial<FavoriteModelsPrefs>
+  if (!Array.isArray(raw.items)) return DEFAULT_FAVORITE_MODELS_PREFS
+
+  const seen = new Set<string>()
+  const items = raw.items.flatMap((item) => {
+    if (!item || typeof item !== 'object') return []
+    const candidate = item as { providerId?: unknown; modelId?: unknown }
+    if (
+      typeof candidate.providerId !== 'string' ||
+      candidate.providerId.length === 0 ||
+      typeof candidate.modelId !== 'string' ||
+      candidate.modelId.length === 0
+    ) {
+      return []
+    }
+
+    const key = `${candidate.providerId}\0${candidate.modelId}`
+    if (seen.has(key)) return []
+    seen.add(key)
+
+    return [
+      {
+        providerId: candidate.providerId,
+        modelId: candidate.modelId,
+      },
+    ]
+  })
+
+  return { items }
+}
+
 function parse(raw: string | null): AppSettings {
   const empty: AppSettings = {
     defaultProviderId: null,
@@ -140,6 +177,7 @@ function parse(raw: string | null): AppSettings {
     updates: DEFAULT_UPDATE_PREFS,
     debugLogging: DEFAULT_DEBUG_LOGGING_PREFS,
     piModelVisibility: DEFAULT_PI_MODEL_VISIBILITY_PREFS,
+    favoriteModels: DEFAULT_FAVORITE_MODELS_PREFS,
   }
 
   if (!raw) return empty
@@ -168,6 +206,7 @@ function parse(raw: string | null): AppSettings {
       updates: parseUpdatePrefs(parsed.updates),
       debugLogging: parseDebugLoggingPrefs(parsed.debugLogging),
       piModelVisibility: parsePiModelVisibilityPrefs(parsed.piModelVisibility),
+      favoriteModels: parseFavoriteModelsPrefs(parsed.favoriteModels),
     }
   } catch {
     return empty
@@ -205,6 +244,10 @@ function validateAgainst(
     settings.extractionModelByProvider,
     descriptors,
   )
+  const favoriteModels = validateFavoriteModels(
+    settings.favoriteModels,
+    descriptors,
+  )
 
   const provider = descriptors.find(
     (item) => item.id === settings.defaultProviderId,
@@ -224,6 +267,7 @@ function validateAgainst(
         settings.piModelVisibility,
         descriptors,
       ),
+      favoriteModels,
     }
   }
 
@@ -245,6 +289,7 @@ function validateAgainst(
         settings.piModelVisibility,
         descriptors,
       ),
+      favoriteModels,
     }
   }
 
@@ -264,6 +309,24 @@ function validateAgainst(
     piModelVisibility: validatePiModelVisibility(
       settings.piModelVisibility,
       descriptors,
+    ),
+    favoriteModels,
+  }
+}
+
+function validateFavoriteModels(
+  prefs: FavoriteModelsPrefs,
+  descriptors: ProviderDescriptor[],
+): FavoriteModelsPrefs {
+  const modelIdsByProvider = new Map(
+    descriptors.map((descriptor) => [
+      descriptor.id,
+      new Set(descriptor.modelOptions.map((option) => option.id)),
+    ]),
+  )
+  return {
+    items: prefs.items.filter((item) =>
+      modelIdsByProvider.get(item.providerId)?.has(item.modelId),
     ),
   }
 }
@@ -449,6 +512,13 @@ export class AppSettingsService {
             parsePiModelVisibilityPrefs(input.piModelVisibility),
             descriptors,
           )
+    const favoriteModels =
+      input.favoriteModels === undefined
+        ? validateFavoriteModels(existing.favoriteModels, descriptors)
+        : validateFavoriteModels(
+            parseFavoriteModelsPrefs(input.favoriteModels),
+            descriptors,
+          )
 
     const toStore: AppSettings = {
       defaultProviderId: provider ? provider.id : null,
@@ -462,6 +532,7 @@ export class AppSettingsService {
       updates,
       debugLogging,
       piModelVisibility,
+      favoriteModels,
     }
 
     this.stateService.set(APP_SETTINGS_KEY, JSON.stringify(toStore))

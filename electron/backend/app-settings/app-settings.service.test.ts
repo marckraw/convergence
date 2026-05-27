@@ -11,6 +11,7 @@ import { DEFAULT_UPDATE_PREFS } from '../updates/updates.defaults'
 import { AppSettingsService, APP_SETTINGS_KEY } from './app-settings.service'
 import {
   DEFAULT_DEBUG_LOGGING_PREFS,
+  DEFAULT_FAVORITE_MODELS_PREFS,
   DEFAULT_ONBOARDING_PREFS,
   DEFAULT_PI_MODEL_VISIBILITY_PREFS,
 } from './app-settings.types'
@@ -160,6 +161,7 @@ describe('AppSettingsService', () => {
         updates: DEFAULT_UPDATE_PREFS,
         debugLogging: DEFAULT_DEBUG_LOGGING_PREFS,
         piModelVisibility: DEFAULT_PI_MODEL_VISIBILITY_PREFS,
+        favoriteModels: DEFAULT_FAVORITE_MODELS_PREFS,
       })
     })
 
@@ -175,6 +177,7 @@ describe('AppSettingsService', () => {
         updates: DEFAULT_UPDATE_PREFS,
         debugLogging: DEFAULT_DEBUG_LOGGING_PREFS,
         piModelVisibility: DEFAULT_PI_MODEL_VISIBILITY_PREFS,
+        favoriteModels: DEFAULT_FAVORITE_MODELS_PREFS,
       })
       const settings = await service.getAppSettings()
       expect(settings).toEqual({
@@ -188,6 +191,7 @@ describe('AppSettingsService', () => {
         updates: DEFAULT_UPDATE_PREFS,
         debugLogging: DEFAULT_DEBUG_LOGGING_PREFS,
         piModelVisibility: DEFAULT_PI_MODEL_VISIBILITY_PREFS,
+        favoriteModels: DEFAULT_FAVORITE_MODELS_PREFS,
       })
     })
 
@@ -212,6 +216,7 @@ describe('AppSettingsService', () => {
         updates: DEFAULT_UPDATE_PREFS,
         debugLogging: DEFAULT_DEBUG_LOGGING_PREFS,
         piModelVisibility: DEFAULT_PI_MODEL_VISIBILITY_PREFS,
+        favoriteModels: DEFAULT_FAVORITE_MODELS_PREFS,
       })
     })
 
@@ -236,6 +241,7 @@ describe('AppSettingsService', () => {
         updates: DEFAULT_UPDATE_PREFS,
         debugLogging: DEFAULT_DEBUG_LOGGING_PREFS,
         piModelVisibility: DEFAULT_PI_MODEL_VISIBILITY_PREFS,
+        favoriteModels: DEFAULT_FAVORITE_MODELS_PREFS,
       })
     })
 
@@ -260,6 +266,7 @@ describe('AppSettingsService', () => {
         updates: DEFAULT_UPDATE_PREFS,
         debugLogging: DEFAULT_DEBUG_LOGGING_PREFS,
         piModelVisibility: DEFAULT_PI_MODEL_VISIBILITY_PREFS,
+        favoriteModels: DEFAULT_FAVORITE_MODELS_PREFS,
       })
     })
 
@@ -277,6 +284,34 @@ describe('AppSettingsService', () => {
         updates: DEFAULT_UPDATE_PREFS,
         debugLogging: DEFAULT_DEBUG_LOGGING_PREFS,
         piModelVisibility: DEFAULT_PI_MODEL_VISIBILITY_PREFS,
+        favoriteModels: DEFAULT_FAVORITE_MODELS_PREFS,
+      })
+    })
+
+    it('hydrates, deduplicates, and validates favorite models', async () => {
+      stateService.set(
+        APP_SETTINGS_KEY,
+        JSON.stringify({
+          favoriteModels: {
+            items: [
+              { providerId: 'codex', modelId: 'gpt-5.4' },
+              { providerId: 'codex', modelId: 'gpt-5.4' },
+              { providerId: 'claude-code', modelId: 'opus' },
+              { providerId: 'ghost', modelId: 'gpt-5.4' },
+              { providerId: 'claude-code', modelId: 'ghost' },
+              { providerId: '', modelId: 'opus' },
+            ],
+          },
+        }),
+      )
+
+      const settings = await service.getAppSettings()
+
+      expect(settings.favoriteModels).toEqual({
+        items: [
+          { providerId: 'codex', modelId: 'gpt-5.4' },
+          { providerId: 'claude-code', modelId: 'opus' },
+        ],
       })
     })
   })
@@ -383,6 +418,7 @@ describe('AppSettingsService', () => {
         updates: DEFAULT_UPDATE_PREFS,
         debugLogging: DEFAULT_DEBUG_LOGGING_PREFS,
         piModelVisibility: DEFAULT_PI_MODEL_VISIBILITY_PREFS,
+        favoriteModels: DEFAULT_FAVORITE_MODELS_PREFS,
       })
     })
 
@@ -394,6 +430,45 @@ describe('AppSettingsService', () => {
       })
       expect(stored.defaultModelId).toBeNull()
       expect(stored.defaultEffortId).toBeNull()
+    })
+
+    it('persists valid favorite models and drops unavailable pairs', async () => {
+      const stored = await service.setAppSettings({
+        defaultProviderId: null,
+        defaultModelId: null,
+        defaultEffortId: null,
+        favoriteModels: {
+          items: [
+            { providerId: 'claude-code', modelId: 'opus' },
+            { providerId: 'codex', modelId: 'ghost' },
+          ],
+        },
+      })
+
+      expect(stored.favoriteModels).toEqual({
+        items: [{ providerId: 'claude-code', modelId: 'opus' }],
+      })
+    })
+
+    it('preserves existing favorite models when input omits the field', async () => {
+      await service.setAppSettings({
+        defaultProviderId: null,
+        defaultModelId: null,
+        defaultEffortId: null,
+        favoriteModels: {
+          items: [{ providerId: 'claude-code', modelId: 'opus' }],
+        },
+      })
+
+      const stored = await service.setAppSettings({
+        defaultProviderId: 'codex',
+        defaultModelId: 'gpt-5.4',
+        defaultEffortId: 'medium',
+      })
+
+      expect(stored.favoriteModels).toEqual({
+        items: [{ providerId: 'claude-code', modelId: 'opus' }],
+      })
     })
   })
 

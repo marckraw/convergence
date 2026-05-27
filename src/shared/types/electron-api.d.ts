@@ -1520,7 +1520,7 @@ interface ElectronAPI {
   }
   appSettings: {
     get: () => Promise<AppSettingsData>
-    set: (input: AppSettingsData) => Promise<AppSettingsData>
+    set: (input: AppSettingsInputData) => Promise<AppSettingsData>
     onUpdated: (callback: (settings: AppSettingsData) => void) => () => void
   }
   credentials: {
@@ -1756,6 +1756,11 @@ interface DebugLoggingPrefsData {
   enabled: boolean
 }
 
+interface FavoriteModelRefData {
+  providerId: string
+  modelId: string
+}
+
 interface AppSettingsData {
   defaultProviderId: string | null
   defaultModelId: string | null
@@ -1768,6 +1773,34 @@ interface AppSettingsData {
   debugLogging: DebugLoggingPrefsData
   piModelVisibility: {
     additionalModelIds: string[]
+  }
+  favoriteModels: {
+    items: FavoriteModelRefData[]
+  }
+}
+
+type AppSettingsInputData = Omit<
+  AppSettingsData,
+  | 'namingModelByProvider'
+  | 'extractionModelByProvider'
+  | 'notifications'
+  | 'onboarding'
+  | 'updates'
+  | 'debugLogging'
+  | 'piModelVisibility'
+  | 'favoriteModels'
+> & {
+  namingModelByProvider?: Record<string, string>
+  extractionModelByProvider?: Record<string, string>
+  notifications?: NotificationPrefsData
+  onboarding?: OnboardingPrefsData
+  updates?: UpdatePrefsData
+  debugLogging?: DebugLoggingPrefsData
+  piModelVisibility?: {
+    additionalModelIds: string[]
+  }
+  favoriteModels?: {
+    items: FavoriteModelRefData[]
   }
 }
 

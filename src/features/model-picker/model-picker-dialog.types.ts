@@ -19,6 +19,7 @@ export interface ModelPickerProviderFilter {
   name: string
   vendorLabel: string
   count: number
+  kind?: 'provider' | 'favorites'
 }
 
 export interface ModelPickerModelItem {
@@ -29,4 +30,5 @@ export interface ModelPickerModelItem {
   modelId: string
   modelLabel: string
   selected: boolean
+  favorite: boolean
 }

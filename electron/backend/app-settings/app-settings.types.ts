@@ -26,6 +26,19 @@ export const DEFAULT_PI_MODEL_VISIBILITY_PREFS: PiModelVisibilityPrefs = {
   additionalModelIds: [],
 }
 
+export interface FavoriteModelRef {
+  providerId: string
+  modelId: string
+}
+
+export interface FavoriteModelsPrefs {
+  items: FavoriteModelRef[]
+}
+
+export const DEFAULT_FAVORITE_MODELS_PREFS: FavoriteModelsPrefs = {
+  items: [],
+}
+
 export interface AppSettings {
   defaultProviderId: string | null
   defaultModelId: string | null
@@ -37,6 +50,7 @@ export interface AppSettings {
   updates: UpdatePrefs
   debugLogging: DebugLoggingPrefs
   piModelVisibility: PiModelVisibilityPrefs
+  favoriteModels: FavoriteModelsPrefs
 }
 
 export type AppSettingsInput = Omit<
@@ -48,6 +62,7 @@ export type AppSettingsInput = Omit<
   | 'updates'
   | 'debugLogging'
   | 'piModelVisibility'
+  | 'favoriteModels'
 > & {
   namingModelByProvider?: Record<string, string>
   extractionModelByProvider?: Record<string, string>
@@ -56,6 +71,7 @@ export type AppSettingsInput = Omit<
   updates?: UpdatePrefs
   debugLogging?: DebugLoggingPrefs
   piModelVisibility?: PiModelVisibilityPrefs
+  favoriteModels?: FavoriteModelsPrefs
 }
 
 export interface ResolvedSessionDefaults {

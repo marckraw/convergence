@@ -281,6 +281,7 @@ export const AppSettingsDialogContainer: FC<AppSettingsContainerProps> = ({
           additionalModelIds:
             piModelDraft ?? settings.piModelVisibility.additionalModelIds,
         },
+        favoriteModels: settings.favoriteModels,
       })
       await loadProviders()
       closeDialog()
@@ -301,6 +302,7 @@ export const AppSettingsDialogContainer: FC<AppSettingsContainerProps> = ({
     settings.updates,
     settings.debugLogging,
     settings.piModelVisibility.additionalModelIds,
+    settings.favoriteModels,
     loadProviders,
     closeDialog,
   ])

@@ -1,4 +1,5 @@
 import type { FC } from 'react'
+import { Star } from 'lucide-react'
 import { cn } from '@/shared/lib/cn.pure'
 import { Button } from '@/shared/ui/button'
 import { ProviderIcon } from '@/shared/ui/provider-icon.pure'
@@ -35,11 +36,20 @@ export const ModelPickerProviderFilterButton: FC<ProviderFilterButtonProps> = ({
     onClick={() => onSelect(id)}
   >
     {provider ? (
-      <ProviderIcon
-        providerId={provider.id}
-        vendorLabel={provider.vendorLabel}
-        name={provider.name}
-      />
+      provider.kind === 'favorites' ? (
+        <span
+          aria-hidden="true"
+          className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md border border-yellow-400/30 bg-yellow-500/12 text-yellow-700 dark:text-yellow-200"
+        >
+          <Star className="h-3.5 w-3.5 fill-current" />
+        </span>
+      ) : (
+        <ProviderIcon
+          providerId={provider.id}
+          vendorLabel={provider.vendorLabel}
+          name={provider.name}
+        />
+      )
     ) : (
       <span
         aria-hidden="true"

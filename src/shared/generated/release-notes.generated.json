@@ -1,6 +1,26 @@
 {
-  "currentVersion": "0.37.27",
+  "currentVersion": "0.37.31",
   "releases": [
+    {
+      "version": "0.37.31",
+      "date": null,
+      "notes": "### Patch Changes\n\n- e035aca: Allow the Code Review target and notes rails to collapse, with a diff focus mode\n  that reclaims space for reviewing code on smaller screens."
+    },
+    {
+      "version": "0.37.30",
+      "date": null,
+      "notes": "### Patch Changes\n\n- 97ac899: Batch session attention request kind lookups when listing sessions to avoid per-session database queries."
+    },
+    {
+      "version": "0.37.29",
+      "date": null,
+      "notes": "### Patch Changes\n\n- 832eb48: Run project actions from the active session or draft workspace directory when the action has no explicit cwd override."
+    },
+    {
+      "version": "0.37.28",
+      "date": null,
+      "notes": "### Patch Changes\n\n- 94cedf0: Add composer permission modes for ask/yolo/custom provider execution, with Codex and Claude Code advanced controls, and compact low-frequency composer resources behind the Add menu."
+    },
     {
       "version": "0.37.27",
       "date": null,
