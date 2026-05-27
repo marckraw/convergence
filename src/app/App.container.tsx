@@ -434,7 +434,7 @@ export function App({
   }
 
   return (
-    <TooltipProvider delayDuration={1500}>
+    <TooltipProvider delayDuration={200}>
       <AppShell
         activeSessionId={activeSessionId}
         activeGlobalSessionId={activeGlobalSessionId}

@@ -145,10 +145,15 @@ describe('NeedsYou', () => {
       </TooltipProvider>,
     )
 
-    expect(screen.getByText('Needs You (1)')).toBeInTheDocument()
+    expect(screen.queryByText(/^Needs You/)).not.toBeInTheDocument()
     expect(screen.getByText('Needs Review')).toBeInTheDocument()
-    expect(screen.getByText('Finished')).toBeInTheDocument()
-    expect(screen.getByText('RoomFinder')).toBeInTheDocument()
+    expect(screen.queryByText('Finished')).not.toBeInTheDocument()
+    expect(screen.queryByText('RoomFinder')).not.toBeInTheDocument()
+    expect(
+      screen.getByRole('button', {
+        name: /review roomfinder, finished, roomfinder/i,
+      }),
+    ).toBeInTheDocument()
 
     fireEvent.click(screen.getByText('Review RoomFinder').closest('button')!)
 
@@ -157,7 +162,7 @@ describe('NeedsYou', () => {
     expect(onArchive).not.toHaveBeenCalled()
   })
 
-  it('renders waiting and review sections separately', () => {
+  it('renders waiting and review sections without an extra umbrella header', () => {
     const onSelect = vi.fn()
     const onDismiss = vi.fn()
     const onArchive = vi.fn()
@@ -205,6 +210,7 @@ describe('NeedsYou', () => {
 
     expect(screen.getByText('Waiting on You')).toBeInTheDocument()
     expect(screen.getByText('Needs Review')).toBeInTheDocument()
+    expect(screen.queryByText(/^Needs You/)).not.toBeInTheDocument()
   })
 
   it('dismisses a review item without selecting the session', () => {
