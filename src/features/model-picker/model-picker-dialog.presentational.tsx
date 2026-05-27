@@ -6,7 +6,7 @@ import {
   CommandItem,
   CommandList,
 } from 'cmdk'
-import { Check, ChevronDown, Search } from 'lucide-react'
+import { Check, ChevronDown, Search, Star } from 'lucide-react'
 import { cn } from '@/shared/lib/cn.pure'
 import { Button, type ButtonProps } from '@/shared/ui/button'
 import {
@@ -41,6 +41,7 @@ interface ModelPickerDialogPresentationalProps {
   onProviderFilterChange: (providerId: string) => void
   onSelectedValueChange: (value: string) => void
   onSelect: (item: ModelPickerModelItem) => void
+  onToggleFavorite: (item: ModelPickerModelItem) => void
 }
 
 export const ModelPickerDialogPresentational: FC<
@@ -64,6 +65,7 @@ export const ModelPickerDialogPresentational: FC<
   onProviderFilterChange,
   onSelectedValueChange,
   onSelect,
+  onToggleFavorite,
 }) => (
   <Dialog open={open} onOpenChange={onOpenChange}>
     <Button
@@ -165,9 +167,43 @@ export const ModelPickerDialogPresentational: FC<
                       <span className="whitespace-normal break-words font-medium leading-snug">
                         {item.modelLabel}
                       </span>
-                      {item.selected ? (
-                        <Check className="mt-0.5 h-4 w-4 shrink-0" />
-                      ) : null}
+                      <span className="flex shrink-0 items-center gap-1">
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          aria-label={
+                            item.favorite
+                              ? `Remove ${item.modelLabel} from favorites`
+                              : `Add ${item.modelLabel} to favorites`
+                          }
+                          title={
+                            item.favorite
+                              ? 'Remove from favorites'
+                              : 'Add to favorites'
+                          }
+                          className={cn(
+                            'h-6 w-6 text-muted-foreground hover:bg-muted hover:text-foreground',
+                            item.favorite &&
+                              'text-yellow-600 hover:text-yellow-700 dark:text-yellow-300 dark:hover:text-yellow-200',
+                          )}
+                          onClick={(event) => {
+                            event.preventDefault()
+                            event.stopPropagation()
+                            onToggleFavorite(item)
+                          }}
+                        >
+                          <Star
+                            className={cn(
+                              'h-3.5 w-3.5',
+                              item.favorite && 'fill-current',
+                            )}
+                          />
+                        </Button>
+                        {item.selected ? (
+                          <Check className="h-4 w-4 shrink-0" />
+                        ) : null}
+                      </span>
                     </div>
                     <div className="break-all text-xs leading-snug text-muted-foreground">
                       {item.modelId}

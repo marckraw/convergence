@@ -1,6 +1,14 @@
 import { useMemo, useRef, useState } from 'react'
+import { useAppSettingsStore } from '@/entities/app-settings'
 import type { ProviderInfo } from '@/entities/session'
 import { ModelPickerDialogPresentational } from './model-picker-dialog.presentational'
+import {
+  createFavoriteModelKeySet,
+  createFavoriteModelOrderMap,
+  MODEL_PICKER_FAVORITES_FILTER_ID,
+  modelPickerFavoriteKey,
+  toggleFavoriteModel,
+} from './model-picker-dialog.pure'
 import type {
   ModelPickerDialogProps,
   ModelPickerModelItem,
@@ -26,10 +34,45 @@ export function ModelPickerDialog({
   const [selectedValue, setSelectedValue] = useState<string | undefined>()
   const inputRef = useRef<HTMLInputElement>(null)
   const normalizedQuery = query.trim().toLowerCase()
+  const appSettings = useAppSettingsStore((state) => state.settings)
+  const saveAppSettings = useAppSettingsStore((state) => state.save)
+  const favoriteModels = appSettings.favoriteModels?.items ?? []
+  const favoriteKeySet = useMemo(
+    () => createFavoriteModelKeySet(favoriteModels),
+    [favoriteModels],
+  )
+  const favoriteOrder = useMemo(
+    () => createFavoriteModelOrderMap(favoriteModels),
+    [favoriteModels],
+  )
+  const visibleFavoriteCount = useMemo(
+    () =>
+      providers.reduce(
+        (total, provider) =>
+          total +
+          provider.modelOptions.filter((model) =>
+            favoriteKeySet.has(modelPickerFavoriteKey(provider.id, model.id)),
+          ).length,
+        0,
+      ),
+    [favoriteKeySet, providers],
+  )
 
   const providerFilters = useMemo(
-    () =>
-      providers
+    () => [
+      ...(visibleFavoriteCount > 0
+        ? [
+            {
+              id: MODEL_PICKER_FAVORITES_FILTER_ID,
+              label: 'Favorites',
+              name: 'Favorites',
+              vendorLabel: '',
+              count: visibleFavoriteCount,
+              kind: 'favorites' as const,
+            },
+          ]
+        : []),
+      ...providers
         .filter((provider) => provider.modelOptions.length > 0)
         .map<ModelPickerProviderFilter>((provider) => ({
           id: provider.id,
@@ -37,8 +80,10 @@ export function ModelPickerDialog({
           name: provider.name,
           vendorLabel: provider.vendorLabel,
           count: provider.modelOptions.length,
+          kind: 'provider',
         })),
-    [providers],
+    ],
+    [providers, visibleFavoriteCount],
   )
 
   const modelItems = useMemo(
@@ -49,6 +94,8 @@ export function ModelPickerDialog({
         selectedModelId,
         providerFilterId,
         normalizedQuery,
+        favoriteKeySet,
+        favoriteOrder,
       ),
     [
       providers,
@@ -56,6 +103,8 @@ export function ModelPickerDialog({
       selectedModelId,
       providerFilterId,
       normalizedQuery,
+      favoriteKeySet,
+      favoriteOrder,
     ],
   )
 
@@ -104,6 +153,20 @@ export function ModelPickerDialog({
         setOpen(false)
         setQuery('')
       }}
+      onToggleFavorite={(item) => {
+        const currentSettings = useAppSettingsStore.getState().settings
+        const nextFavorites = toggleFavoriteModel(
+          currentSettings.favoriteModels?.items ?? [],
+          {
+            providerId: item.providerId,
+            modelId: item.modelId,
+          },
+        )
+        void saveAppSettings({
+          ...currentSettings,
+          favoriteModels: { items: nextFavorites },
+        })
+      }}
     />
   )
 }
@@ -114,9 +177,15 @@ function flattenModelItems(
   selectedModelId: string | null,
   providerFilterId: string,
   normalizedQuery: string,
+  favoriteKeySet: Set<string>,
+  favoriteOrder: Map<string, number>,
 ): ModelPickerModelItem[] {
-  return providers.flatMap((provider) => {
-    if (providerFilterId !== 'all' && provider.id !== providerFilterId) {
+  const items = providers.flatMap((provider) => {
+    if (
+      providerFilterId !== 'all' &&
+      providerFilterId !== MODEL_PICKER_FAVORITES_FILTER_ID &&
+      provider.id !== providerFilterId
+    ) {
       return []
     }
 
@@ -130,6 +199,12 @@ function flattenModelItems(
         return []
       }
 
+      const favoriteKey = modelPickerFavoriteKey(provider.id, model.id)
+      const favorite = favoriteKeySet.has(favoriteKey)
+      if (providerFilterId === MODEL_PICKER_FAVORITES_FILTER_ID && !favorite) {
+        return []
+      }
+
       return [
         {
           value: `${provider.id}:${model.id}`,
@@ -140,9 +215,23 @@ function flattenModelItems(
           modelLabel: model.label,
           selected:
             provider.id === selectedProviderId && model.id === selectedModelId,
+          favorite,
         },
       ]
     })
+  })
+
+  return items.sort((a, b) => {
+    const aOrder = favoriteOrder.get(
+      modelPickerFavoriteKey(a.providerId, a.modelId),
+    )
+    const bOrder = favoriteOrder.get(
+      modelPickerFavoriteKey(b.providerId, b.modelId),
+    )
+    if (aOrder !== undefined && bOrder !== undefined) return aOrder - bOrder
+    if (aOrder !== undefined) return -1
+    if (bOrder !== undefined) return 1
+    return 0
   })
 }
 

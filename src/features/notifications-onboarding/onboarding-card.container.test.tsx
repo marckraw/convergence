@@ -2,6 +2,7 @@ import { fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   DEFAULT_DEBUG_LOGGING_PREFS,
+  DEFAULT_FAVORITE_MODELS_PREFS,
   DEFAULT_NOTIFICATION_PREFS,
   DEFAULT_ONBOARDING_PREFS,
   DEFAULT_PI_MODEL_VISIBILITY_PREFS,
@@ -44,6 +45,7 @@ function primeStores(opts: {
       updates: DEFAULT_UPDATE_PREFS,
       debugLogging: DEFAULT_DEBUG_LOGGING_PREFS,
       piModelVisibility: DEFAULT_PI_MODEL_VISIBILITY_PREFS,
+      favoriteModels: DEFAULT_FAVORITE_MODELS_PREFS,
     },
     isLoaded: opts.isLoaded,
     isSaving: false,

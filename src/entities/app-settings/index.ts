@@ -2,6 +2,8 @@ export type {
   AppSettings,
   AppSettingsInput,
   DebugLoggingPrefs,
+  FavoriteModelRef,
+  FavoriteModelsPrefs,
   NotificationEventPrefs,
   NotificationPrefs,
   OnboardingPrefs,
@@ -11,6 +13,7 @@ export type {
 } from './app-settings.types'
 export {
   DEFAULT_DEBUG_LOGGING_PREFS,
+  DEFAULT_FAVORITE_MODELS_PREFS,
   DEFAULT_NOTIFICATION_PREFS,
   DEFAULT_ONBOARDING_PREFS,
   DEFAULT_PI_MODEL_VISIBILITY_PREFS,

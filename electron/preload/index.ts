@@ -397,6 +397,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
       extractionModelByProvider: Record<string, string>
       notifications?: unknown
       piModelVisibility?: unknown
+      favoriteModels?: unknown
     }) => ipcRenderer.invoke('appSettings:set', input),
     onUpdated: (callback: (settings: unknown) => void) => {
       const handler = (_event: unknown, settings: unknown) => callback(settings)
