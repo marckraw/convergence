@@ -1,5 +1,11 @@
 # convergence
 
+## 0.37.34
+
+### Patch Changes
+
+- 87068fa: Respect explicit session badge sizing inside buttons so sidebar status icons render at the intended compact size.
+
 ## 0.37.33
 
 ### Patch Changes
