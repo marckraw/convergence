@@ -1,5 +1,11 @@
 # convergence
 
+## 0.37.38
+
+### Patch Changes
+
+- 0dd1671: Refactor Codex MCP service parsing and summary helpers into pure module boundaries.
+
 ## 0.37.37
 
 ### Patch Changes
