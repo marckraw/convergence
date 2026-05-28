@@ -1,5 +1,11 @@
 # convergence
 
+## 0.37.37
+
+### Patch Changes
+
+- 364e251: Notify users when terminal tabs return to idle after running foreground work.
+
 ## 0.37.36
 
 ### Patch Changes
