@@ -10,6 +10,7 @@ import type { CodeReviewService } from '../backend/code-review/code-review.servi
 import { PullRequestService } from '../backend/pull-request/pull-request.service'
 import type { PullRequestReviewService } from '../backend/pull-request/pull-request-review.service'
 import type { ReviewNotesService } from '../backend/review-notes/review-notes.service'
+import { SessionAppService } from '../backend/app-api/session-app.service'
 import { SessionService } from '../backend/session/session.service'
 import type { TurnCaptureService } from '../backend/session/turn/turn-capture.service'
 import {
@@ -177,6 +178,7 @@ export function registerIpcHandlers(
   const quotaServices = providerQuota ?? {
     codex: new CodexQuotaService(),
   }
+  const sessionApp = new SessionAppService(sessionService, appSettingsService)
 
   // Project handlers
   ipcMain.handle('project:create', (_event, input: CreateProjectInput) => {
@@ -489,7 +491,7 @@ export function registerIpcHandlers(
     'reviewNotes:sendPacket',
     (_event, input: SendReviewNotePacketInput) =>
       reviewNotesService.sendPacket(input, (sessionId, text) =>
-        sessionService.sendMessage(sessionId, { text }),
+        sessionApp.sendSessionMessage(sessionId, { text }),
       ),
   )
 
@@ -607,34 +609,19 @@ export function registerIpcHandlers(
   )
 
   // Session handlers
-  ipcMain.handle(
-    'session:create',
-    async (_event, input: CreateSessionInput) => {
-      const defaults = await appSettingsService.resolveSessionDefaults()
-      const resolved: CreateSessionInput = defaults
-        ? {
-            ...input,
-            providerId: input.providerId || defaults.providerId,
-            model: input.model ?? defaults.modelId,
-            effort: input.effort ?? defaults.effortId,
-          }
-        : input
-      return sessionService.create(resolved)
-    },
+  ipcMain.handle('session:create', async (_event, input: CreateSessionInput) =>
+    sessionApp.createSession(input),
   )
 
   ipcMain.handle(
     'session:getSummariesByProjectId',
-    (_event, projectId: string) =>
-      sessionService.getSummariesByProjectId(projectId),
+    (_event, projectId: string) => sessionApp.listProjectSessions(projectId),
   )
 
-  ipcMain.handle('session:getAllSummaries', () =>
-    sessionService.getAllSummaries(),
-  )
+  ipcMain.handle('session:getAllSummaries', () => sessionApp.listSessions())
 
   ipcMain.handle('session:getGlobalSummaries', () =>
-    sessionService.getGlobalSummaries(),
+    sessionApp.listGlobalSessions(),
   )
 
   ipcMain.handle('session:getNeedsYouDismissals', () =>
@@ -660,36 +647,36 @@ export function registerIpcHandlers(
   })
 
   ipcMain.handle('session:getSummaryById', (_event, id: string) =>
-    sessionService.getSummaryById(id),
+    sessionApp.getSession(id),
   )
 
   ipcMain.handle('session:getConversation', (_event, id: string) =>
-    sessionService.getConversation(id),
+    sessionApp.getConversation(id),
   )
 
   ipcMain.handle('session:archive', (_event, id: string) => {
-    sessionService.archive(id)
+    sessionApp.archiveSession(id)
   })
 
   ipcMain.handle('session:unarchive', (_event, id: string) => {
-    sessionService.unarchive(id)
+    sessionApp.unarchiveSession(id)
   })
 
   ipcMain.handle('session:delete', (_event, id: string) => {
-    sessionService.delete(id)
+    sessionApp.deleteSession(id)
   })
 
   ipcMain.handle(
     'session:start',
     async (_event, id: string, input: SendSessionMessageIpcInput) => {
-      await sessionService.start(id, sendSessionMessageInputFromIpc(input))
+      await sessionApp.startSession(id, sendSessionMessageInputFromIpc(input))
     },
   )
 
   ipcMain.handle(
     'session:sendMessage',
     async (_event, id: string, input: SendSessionMessageIpcInput) => {
-      await sessionService.sendMessage(
+      await sessionApp.sendSessionMessage(
         id,
         sendSessionMessageInputFromIpc(input),
       )
@@ -697,11 +684,11 @@ export function registerIpcHandlers(
   )
 
   ipcMain.handle('session:getQueuedInputs', (_event, sessionId: string) =>
-    sessionService.getQueuedInputs(sessionId),
+    sessionApp.listQueuedInputs(sessionId),
   )
 
   ipcMain.handle('session:cancelQueuedInput', (_event, id: string) => {
-    sessionService.cancelQueuedInput(id)
+    sessionApp.cancelQueuedInput(id)
   })
 
   // Attachments handlers
@@ -755,35 +742,35 @@ export function registerIpcHandlers(
   ipcMain.handle(
     'session:approve',
     (_event, id: string, providerApprovalId?: string) => {
-      sessionService.approve(id, providerApprovalId)
+      sessionApp.approveAttentionRequest(id, providerApprovalId)
     },
   )
 
   ipcMain.handle(
     'session:deny',
     (_event, id: string, providerApprovalId?: string) => {
-      sessionService.deny(id, providerApprovalId)
+      sessionApp.denyAttentionRequest(id, providerApprovalId)
     },
   )
 
   ipcMain.handle('session:stop', (_event, id: string) => {
-    sessionService.stop(id)
+    sessionApp.stopSession(id)
   })
 
   ipcMain.handle('session:rename', (_event, id: string, name: string) => {
-    sessionService.rename(id, name)
+    sessionApp.renameSession(id, name)
   })
 
   ipcMain.handle(
     'session:regenerateName',
     async (_event, id: string, requestId?: string) =>
-      sessionService.regenerateName(id, requestId),
+      sessionApp.regenerateSessionName(id, requestId),
   )
 
   ipcMain.handle(
     'session:setPrimarySurface',
     (_event, id: string, surface: 'conversation' | 'terminal') =>
-      sessionService.setPrimarySurface(id, surface),
+      sessionApp.setSessionPrimarySurface(id, surface),
   )
 
   // Provider handlers
@@ -893,7 +880,7 @@ export function registerIpcHandlers(
   )
 
   // Session update event forwarding
-  sessionService.setSummaryUpdateListener((summary) => {
+  sessionApp.onSessionSummaryUpdate((summary) => {
     const windows = BrowserWindow.getAllWindows()
     for (const win of windows) {
       if (!win.isDestroyed()) {
@@ -902,7 +889,7 @@ export function registerIpcHandlers(
     }
   })
 
-  sessionService.setConversationPatchListener((event) => {
+  sessionApp.onConversationPatch((event) => {
     const windows = BrowserWindow.getAllWindows()
     for (const win of windows) {
       if (!win.isDestroyed()) {
@@ -911,7 +898,7 @@ export function registerIpcHandlers(
     }
   })
 
-  sessionService.setQueuedInputPatchListener((event) => {
+  sessionApp.onQueuedInputPatch((event) => {
     const windows = BrowserWindow.getAllWindows()
     for (const win of windows) {
       if (!win.isDestroyed()) {
@@ -935,7 +922,7 @@ export function registerIpcHandlers(
       turnCaptureService.getFileDiff(turnId, filePath),
   )
 
-  sessionService.setTurnDeltaListener((sessionId, delta) => {
+  sessionApp.onTurnDelta((sessionId, delta) => {
     const payload = { ...delta, sessionId }
     const windows = BrowserWindow.getAllWindows()
     for (const win of windows) {

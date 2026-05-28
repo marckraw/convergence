@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import {
+  buildEmbeddedClaudeSkillTelemetryEnv,
   extractClaudeSkillActivationEvents,
   isConcreteClaudeSkillName,
+  isClaudeSkillTelemetryDisabled,
+  shouldUseEmbeddedClaudeSkillTelemetry,
 } from './claude-skill-telemetry.pure'
 
 function attr(key: string, value: string | number | boolean) {
@@ -83,5 +86,49 @@ describe('isConcreteClaudeSkillName', () => {
   it('rejects the redacted custom_skill placeholder', () => {
     expect(isConcreteClaudeSkillName('custom_skill')).toBe(false)
     expect(isConcreteClaudeSkillName('explain-code')).toBe(true)
+  })
+})
+
+describe('embedded Claude skill telemetry environment helpers', () => {
+  it('detects disabled telemetry env flags', () => {
+    expect(
+      isClaudeSkillTelemetryDisabled({
+        CONVERGENCE_CLAUDE_SKILL_TELEMETRY: '0',
+      }),
+    ).toBe(true)
+    expect(
+      isClaudeSkillTelemetryDisabled({
+        CONVERGENCE_DISABLE_CLAUDE_SKILL_TELEMETRY: '1',
+      }),
+    ).toBe(true)
+    expect(
+      isClaudeSkillTelemetryDisabled({ CLAUDE_CODE_ENABLE_TELEMETRY: '0' }),
+    ).toBe(true)
+  })
+
+  it('uses embedded telemetry only when no external logs exporter exists', () => {
+    expect(shouldUseEmbeddedClaudeSkillTelemetry({})).toBe(true)
+    expect(
+      shouldUseEmbeddedClaudeSkillTelemetry({ OTEL_LOGS_EXPORTER: 'otlp' }),
+    ).toBe(false)
+    expect(
+      shouldUseEmbeddedClaudeSkillTelemetry({
+        OTEL_EXPORTER_OTLP_LOGS_ENDPOINT: 'https://example.com/logs',
+      }),
+    ).toBe(false)
+  })
+
+  it('builds OTLP log env while disabling metrics by default', () => {
+    expect(
+      buildEmbeddedClaudeSkillTelemetryEnv('http://127.0.0.1:1234'),
+    ).toEqual({
+      CLAUDE_CODE_ENABLE_TELEMETRY: '1',
+      OTEL_LOGS_EXPORTER: 'otlp',
+      OTEL_EXPORTER_OTLP_LOGS_PROTOCOL: 'http/json',
+      OTEL_EXPORTER_OTLP_LOGS_ENDPOINT: 'http://127.0.0.1:1234/v1/logs',
+      OTEL_LOG_TOOL_DETAILS: '1',
+      OTEL_LOGS_EXPORT_INTERVAL: '1000',
+      OTEL_METRICS_EXPORTER: 'none',
+    })
   })
 })

@@ -1,0 +1,2 @@
+export const SESSION_LIVENESS_TICK_MS = 5_000
+export const CONVERSATION_PATCH_FLUSH_MS = 50

@@ -24,7 +24,6 @@ import type { AttachmentsService } from '../attachments/attachments.service'
 import type { SkillSelection } from '../skills/skills.types'
 import {
   sessionSummaryFromRow,
-  type AttentionRequestKind,
   type Session,
   type SessionSummary,
   type CreateSessionInput,
@@ -32,7 +31,6 @@ import {
   type QueuedInputState,
   type SessionQueuedInput,
 } from './session.types'
-import { serializeSessionPermissionConfig } from '../provider/session-permissions.pure'
 import type {
   ConversationItem,
   ConversationItemDraft,
@@ -47,6 +45,17 @@ import {
 import type { TurnCaptureService } from './turn/turn-capture.service'
 import type { TurnDelta } from './turn/turn-capture.service'
 import type { SessionContextInjectionService } from './context-injection/session-context-injection.service'
+import { SessionRepository } from './session.repository'
+import {
+  CONVERSATION_PATCH_FLUSH_MS,
+  SESSION_LIVENESS_TICK_MS,
+} from './session.constants'
+import {
+  isAttentionRequestSummary,
+  queuedInputFromRow,
+  resolveAttentionRequestKind,
+  type AttentionRequestRowLike,
+} from './session.pure'
 
 type UserMessageDraft = Extract<
   ConversationItem,
@@ -54,10 +63,8 @@ type UserMessageDraft = Extract<
 >
 type UserMessageDraftInput = Omit<UserMessageDraft, 'sessionId' | 'sequence'>
 
-interface AttentionRequestRow {
+interface AttentionRequestRow extends AttentionRequestRowLike {
   session_id: string
-  kind: 'approval-request' | 'input-request'
-  payload_json: string
 }
 
 export interface SendMessageInput {
@@ -95,9 +102,6 @@ interface LivenessState {
   warned: { quiet: boolean; silent: boolean }
 }
 
-const LIVENESS_TICK_MS = 5_000
-const CONVERSATION_PATCH_FLUSH_MS = 50
-
 interface PendingConversationPatch {
   sessionId: string
   itemId: string
@@ -131,12 +135,14 @@ export class SessionService {
   private turnCapture: TurnCaptureService | null = null
   private contextInjection: SessionContextInjectionService | null = null
   private onSessionTerminated: ((sessionId: string) => void) | null = null
+  private readonly sessionRepository: SessionRepository
 
   constructor(
     private db: Database.Database,
     private providers: ProviderRegistry,
     private globalWorkingDirectory: string = process.cwd(),
   ) {
+    this.sessionRepository = new SessionRepository(db)
     this.recoverStaleRunningSessions()
     this.recoverDispatchingQueuedInputs()
   }
@@ -183,11 +189,7 @@ export class SessionService {
     }
     const session = this.getById(id)
     if (!session) throw new Error(`Session not found: ${id}`)
-    this.db
-      .prepare(
-        "UPDATE sessions SET name = ?, name_auto_generated = 1, updated_at = datetime('now') WHERE id = ?",
-      )
-      .run(trimmed, id)
+    this.sessionRepository.rename(id, trimmed)
     this.notifySessionChange(id)
     return this.getById(id)!
   }
@@ -200,11 +202,7 @@ export class SessionService {
         `Session ${id} uses the shell provider and cannot be flipped to conversation-primary without attaching a real provider`,
       )
     }
-    this.db
-      .prepare(
-        "UPDATE sessions SET primary_surface = ?, updated_at = datetime('now') WHERE id = ?",
-      )
-      .run(surface, id)
+    this.sessionRepository.setPrimarySurface(id, surface)
     this.notifySessionChange(id)
     return this.getById(id)!
   }
@@ -243,20 +241,13 @@ export class SessionService {
       requestId ? { requestId } : undefined,
     )
     if (!title) return false
-    this.db
-      .prepare(
-        "UPDATE sessions SET name = ?, name_auto_generated = 1, updated_at = datetime('now') WHERE id = ?",
-      )
-      .run(title, session.id)
+    this.sessionRepository.rename(session.id, title)
     this.notifySessionChange(session.id)
     return true
   }
 
   private hasBeenAutoNamed(id: string): boolean {
-    const row = this.db
-      .prepare('SELECT name_auto_generated FROM sessions WHERE id = ?')
-      .get(id) as { name_auto_generated: number } | undefined
-    return (row?.name_auto_generated ?? 0) === 1
+    return this.sessionRepository.isAutoNamed(id)
   }
 
   setSummaryUpdateListener(listener: (summary: SessionSummary) => void): void {
@@ -312,88 +303,47 @@ export class SessionService {
       }
     }
 
-    this.db
-      .prepare(
-        `INSERT INTO sessions (
-         id,
-           context_kind,
-           project_id,
-           workspace_id,
-           provider_id,
-           model,
-           effort,
-           permission_config,
-           name,
-           working_directory,
-           parent_session_id,
-           fork_strategy,
-           primary_surface
-         )
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      )
-      .run(
-        id,
-        input.contextKind ?? 'project',
-        projectId,
-        workspaceId,
-        input.providerId,
-        input.model,
-        input.effort,
-        serializeSessionPermissionConfig(input.permissionConfig),
-        input.name,
-        workingDirectory,
-        input.parentSessionId ?? null,
-        input.forkStrategy ?? null,
-        primarySurface,
-      )
+    this.sessionRepository.create({
+      id,
+      contextKind: input.contextKind ?? 'project',
+      projectId,
+      workspaceId,
+      providerId: input.providerId,
+      model: input.model,
+      effort: input.effort,
+      permissionConfig: input.permissionConfig,
+      name: input.name,
+      workingDirectory,
+      parentSessionId: input.parentSessionId ?? null,
+      forkStrategy: input.forkStrategy ?? null,
+      primarySurface,
+    })
 
     return this.getSummaryById(id)!
   }
 
   getByProjectId(projectId: string): Session[] {
-    const rows = this.db
-      .prepare(
-        "SELECT * FROM sessions WHERE context_kind = 'project' AND project_id = ? ORDER BY created_at DESC",
-      )
-      .all(projectId) as SessionRow[]
-
-    return this.buildSessionSummaries(rows)
+    return this.buildSessionSummaries(
+      this.sessionRepository.listByProjectId(projectId),
+    )
   }
 
   getAll(): Session[] {
-    const rows = this.db
-      .prepare('SELECT * FROM sessions ORDER BY created_at DESC')
-      .all() as SessionRow[]
-
-    return this.buildSessionSummaries(rows)
+    return this.buildSessionSummaries(this.sessionRepository.listAll())
   }
 
   getSummariesByProjectId(projectId: string): SessionSummary[] {
-    const rows = this.db
-      .prepare(
-        "SELECT * FROM sessions WHERE context_kind = 'project' AND project_id = ? ORDER BY created_at DESC",
-      )
-      .all(projectId) as SessionRow[]
-
-    return this.buildSessionSummaries(rows)
+    return this.buildSessionSummaries(
+      this.sessionRepository.listByProjectId(projectId),
+    )
   }
 
   getGlobalSummaries(): SessionSummary[] {
-    const rows = this.db
-      .prepare(
-        "SELECT * FROM sessions WHERE context_kind = 'global' ORDER BY created_at DESC",
-      )
-      .all() as SessionRow[]
-
-    return this.buildSessionSummaries(rows)
+    return this.buildSessionSummaries(this.sessionRepository.listGlobal())
   }
 
   getAllSummaries(): SessionSummary[] {
-    const rows = this.db
-      .prepare('SELECT * FROM sessions ORDER BY created_at DESC')
-      .all() as SessionRow[]
-
-    return this.buildSessionSummaries(rows)
+    return this.buildSessionSummaries(this.sessionRepository.listAll())
   }
 
   getById(id: string): Session | null {
@@ -528,7 +478,7 @@ export class SessionService {
       handle.stop()
       this.activeHandles.delete(id)
     }
-    this.db.prepare('DELETE FROM sessions WHERE id = ?').run(id)
+    this.sessionRepository.delete(id)
     if (this.attachments) {
       void this.attachments.deleteForSession(id)
     }
@@ -1272,12 +1222,7 @@ export class SessionService {
   }
 
   private updateArchiveState(id: string, archivedAt: string | null): void {
-    this.db
-      .prepare(
-        "UPDATE sessions SET archived_at = ?, updated_at = datetime('now') WHERE id = ?",
-      )
-      .run(archivedAt, id)
-
+    this.sessionRepository.setArchivedAt(id, archivedAt)
     this.notifySessionChange(id)
   }
 
@@ -1315,9 +1260,7 @@ export class SessionService {
   }
 
   private getRowById(id: string): SessionRow | undefined {
-    return this.db.prepare('SELECT * FROM sessions WHERE id = ?').get(id) as
-      | SessionRow
-      | undefined
+    return this.sessionRepository.findById(id)
   }
 
   private getContinuationToken(id: string): string | null {
@@ -1559,16 +1502,7 @@ export class SessionService {
   }
 
   private recoverStaleRunningSessions(): void {
-    const rows = this.db
-      .prepare(
-        `SELECT *
-         FROM sessions
-         WHERE status = 'running'
-           AND provider_id != 'shell'`,
-      )
-      .all() as SessionRow[]
-
-    for (const row of rows) {
+    for (const row of this.sessionRepository.listRunningNonShell()) {
       this.markStaleRunningSessionFailed(
         sessionSummaryFromRow(row),
         'Session marked failed because Convergence restarted before the provider process finished.',
@@ -1597,7 +1531,7 @@ export class SessionService {
     if (this.livenessTimer !== null) return
     this.livenessTimer = setInterval(() => {
       this.tickLiveness()
-    }, LIVENESS_TICK_MS)
+    }, SESSION_LIVENESS_TICK_MS)
     if (typeof this.livenessTimer.unref === 'function') {
       this.livenessTimer.unref()
     }
@@ -1821,78 +1755,5 @@ export class SessionService {
     void this.runNaming(session).catch(() => {
       // Naming failures are silent per spec.
     })
-  }
-}
-
-function isAttentionRequestSummary(
-  summary: Pick<SessionSummary, 'attention'>,
-): boolean {
-  return (
-    summary.attention === 'needs-approval' ||
-    summary.attention === 'needs-input'
-  )
-}
-
-function resolveAttentionRequestKind(
-  summary: Pick<SessionSummary, 'attention'>,
-  row: AttentionRequestRow | null,
-): AttentionRequestKind | null {
-  if (!isAttentionRequestSummary(summary)) {
-    return null
-  }
-
-  if (!row) {
-    return summary.attention === 'needs-approval' ? 'approval' : 'input'
-  }
-
-  if (row.kind === 'approval-request') {
-    return 'approval'
-  }
-
-  try {
-    const payload = JSON.parse(row.payload_json) as {
-      request?: { kind?: unknown }
-    }
-    switch (payload.request?.kind) {
-      case 'choice':
-        return 'question'
-      case 'plan':
-        return 'plan'
-      case 'form':
-        return 'form'
-      case 'url':
-        return 'url'
-      case 'text':
-        return 'input'
-      default:
-        return 'input'
-    }
-  } catch {
-    return 'input'
-  }
-}
-
-function parseJsonArray<T>(value: string): T[] {
-  try {
-    const parsed = JSON.parse(value) as unknown
-    return Array.isArray(parsed) ? (parsed as T[]) : []
-  } catch {
-    return []
-  }
-}
-
-function queuedInputFromRow(row: SessionQueuedInputRow): SessionQueuedInput {
-  return {
-    id: row.id,
-    sessionId: row.session_id,
-    deliveryMode: row.delivery_mode as SessionQueuedInput['deliveryMode'],
-    state: row.state as QueuedInputState,
-    text: row.text,
-    attachmentIds: parseJsonArray<string>(row.attachment_ids_json),
-    skillSelections: parseJsonArray<SkillSelection>(row.skill_selections_json),
-    providerRequestId: row.provider_request_id,
-    error: row.error,
-    createdAt: row.created_at,
-    updatedAt: row.updated_at,
   }
 }

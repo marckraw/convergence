@@ -1,3 +1,17 @@
+import type { ConversationItem } from '../conversation-item.types'
+
+export type UserMessageItem = ConversationItem & {
+  kind: 'message'
+  actor: 'user'
+  text: string
+}
+
+export type AssistantMessageItem = ConversationItem & {
+  kind: 'message'
+  actor: 'assistant'
+  text: string
+}
+
 const INPUT_CAP = 2000
 const MAX_TITLE_LENGTH = 80
 
@@ -42,4 +56,16 @@ export function sanitizeTitle(raw: string): string | null {
   if (title.length === 0) return null
   if (title.length > MAX_TITLE_LENGTH) return null
   return title
+}
+
+export function isUserMessageItem(
+  item: ConversationItem,
+): item is UserMessageItem {
+  return item.kind === 'message' && item.actor === 'user'
+}
+
+export function isAssistantMessageItem(
+  item: ConversationItem,
+): item is AssistantMessageItem {
+  return item.kind === 'message' && item.actor === 'assistant'
 }

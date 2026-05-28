@@ -3,10 +3,9 @@ import { readFile } from 'fs/promises'
 import { homedir } from 'os'
 import { join } from 'path'
 import { PiRpcClient } from './pi-rpc'
+import { PI_MODELS_PROBE_TIMEOUT_MS } from './pi-models.constants'
 import { collectPiModelsJsonModelIds } from './pi-models.pure'
 import { OpenRouterCredentialsService } from '../../credentials/openrouter-credentials.service'
-
-const PROBE_TIMEOUT_MS = 5000
 
 export async function probePiAvailableModels(
   binaryPath: string,
@@ -39,7 +38,7 @@ export async function probePiAvailableModels(
   const timeout = new Promise<never>((_, reject) => {
     timeoutHandle = setTimeout(() => {
       reject(new Error('probePiAvailableModels timed out'))
-    }, PROBE_TIMEOUT_MS)
+    }, PI_MODELS_PROBE_TIMEOUT_MS)
   })
 
   try {

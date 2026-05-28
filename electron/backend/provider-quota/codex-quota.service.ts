@@ -2,11 +2,16 @@ import { request as httpsRequest } from 'https'
 import { promises as fs } from 'fs'
 import { homedir } from 'os'
 import { join } from 'path'
-import { mapCodexUsagePayloadToQuotaSnapshot } from './codex-quota.pure'
+import {
+  CODEX_QUOTA_CACHE_TTL_MS,
+  CODEX_USAGE_URL,
+} from './codex-quota.constants'
+import {
+  buildCodexQuotaAuthError,
+  mapCodexUsagePayloadToQuotaSnapshot,
+  readRecord,
+} from './codex-quota.pure'
 import type { ProviderQuotaSnapshot } from './provider-quota.types'
-
-const CODEX_USAGE_URL = 'https://chatgpt.com/backend-api/wham/usage'
-const CACHE_TTL_MS = 60_000
 
 interface CodexAuthTokens {
   accessToken: string
@@ -19,22 +24,6 @@ interface JsonGetRequest {
 }
 
 type JsonGet = (request: JsonGetRequest) => Promise<unknown>
-
-function readRecord(value: unknown): Record<string, unknown> | null {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return null
-  return value as Record<string, unknown>
-}
-
-function authError(reason: string): ProviderQuotaSnapshot {
-  return {
-    providerId: 'codex',
-    status: 'unavailable',
-    source: 'provider-api',
-    reason,
-    lastCheckedAt: new Date().toISOString(),
-    stale: false,
-  }
-}
 
 function codexHome(): string {
   const override = process.env.CODEX_HOME?.trim()
@@ -141,7 +130,7 @@ export class CodexQuotaService {
     if (
       !options.forceRefresh &&
       this.cached &&
-      now - Date.parse(this.cached.lastCheckedAt) < CACHE_TTL_MS
+      now - Date.parse(this.cached.lastCheckedAt) < CODEX_QUOTA_CACHE_TTL_MS
     ) {
       return this.cached
     }
@@ -176,7 +165,7 @@ export class CodexQuotaService {
         err instanceof Error
           ? err.message
           : 'Codex usage limits are unavailable.'
-      this.cached = authError(message)
+      this.cached = buildCodexQuotaAuthError(message, new Date().toISOString())
       return this.cached
     }
   }

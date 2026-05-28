@@ -1,5 +1,4 @@
 import { randomUUID } from 'crypto'
-import { resolve } from 'path'
 import type Database from 'better-sqlite3'
 import type {
   ProjectRow,
@@ -12,13 +11,17 @@ import {
   type CreateProjectScriptInput,
   type CreateProjectScriptRunInput,
   type FinishProjectScriptRunInput,
-  type ProjectScriptIconId,
   type ProjectScript,
   type ProjectScriptRun,
-  type ProjectScriptRunStatus,
   type UpdateProjectScriptInput,
   parseProjectScriptIconId,
 } from './project-scripts.types'
+import {
+  assertProjectScriptRunStatus,
+  normalizeProjectScriptIcon,
+  normalizeProjectScriptOptionalCwd,
+  normalizeProjectScriptRequiredText,
+} from './project-scripts.pure'
 
 export class ProjectScriptsService {
   constructor(private db: Database.Database) {}
@@ -42,10 +45,16 @@ export class ProjectScriptsService {
     }
 
     const id = randomUUID()
-    const name = normalizeRequiredText(input.name, 'Script name')
-    const command = normalizeRequiredText(input.command, 'Script command')
-    const icon = normalizeIcon(input.icon)
-    const cwd = normalizeOptionalCwd(input.cwd, project.repository_path)
+    const name = normalizeProjectScriptRequiredText(input.name, 'Script name')
+    const command = normalizeProjectScriptRequiredText(
+      input.command,
+      'Script command',
+    )
+    const icon = normalizeProjectScriptIcon(input.icon)
+    const cwd = normalizeProjectScriptOptionalCwd(
+      input.cwd,
+      project.repository_path,
+    )
 
     this.db
       .prepare(
@@ -66,19 +75,19 @@ export class ProjectScriptsService {
     const name =
       input.name === undefined
         ? existing.name
-        : normalizeRequiredText(input.name, 'Script name')
+        : normalizeProjectScriptRequiredText(input.name, 'Script name')
     const command =
       input.command === undefined
         ? existing.command
-        : normalizeRequiredText(input.command, 'Script command')
+        : normalizeProjectScriptRequiredText(input.command, 'Script command')
     const icon =
       input.icon === undefined
         ? parseProjectScriptIconId(existing.icon)
-        : normalizeIcon(input.icon)
+        : normalizeProjectScriptIcon(input.icon)
     const cwd =
       input.cwd === undefined
         ? existing.cwd
-        : normalizeOptionalCwd(
+        : normalizeProjectScriptOptionalCwd(
             input.cwd,
             this.getProjectRow(existing.project_id)?.repository_path,
           )
@@ -141,7 +150,10 @@ export class ProjectScriptsService {
     const status = input.status ?? 'queued'
     assertProjectScriptRunStatus(status)
     const id = randomUUID()
-    const runtimeCwd = normalizeOptionalCwd(input.cwd, project.repository_path)
+    const runtimeCwd = normalizeProjectScriptOptionalCwd(
+      input.cwd,
+      project.repository_path,
+    )
     const cwd = script.cwd ?? runtimeCwd ?? project.repository_path
 
     this.db
@@ -245,41 +257,5 @@ export class ProjectScriptsService {
       .get(id) as ProjectScriptRunRow | undefined
 
     return row ?? null
-  }
-}
-
-function normalizeRequiredText(value: string, label: string): string {
-  const normalized = value.trim()
-  if (normalized.length === 0) {
-    throw new Error(`${label} is required`)
-  }
-  return normalized
-}
-
-function normalizeIcon(
-  value: ProjectScriptIconId | undefined,
-): ProjectScriptIconId {
-  return value ? parseProjectScriptIconId(value) : 'play'
-}
-
-function normalizeOptionalCwd(
-  value: string | null | undefined,
-  basePath?: string,
-): string | null {
-  const normalized = value?.trim()
-  return normalized ? resolve(basePath ?? process.cwd(), normalized) : null
-}
-
-function assertProjectScriptRunStatus(
-  value: ProjectScriptRunStatus,
-): asserts value is ProjectScriptRunStatus {
-  if (
-    value !== 'queued' &&
-    value !== 'running' &&
-    value !== 'succeeded' &&
-    value !== 'failed' &&
-    value !== 'stopped'
-  ) {
-    throw new Error(`Invalid project script run status: ${value}`)
   }
 }

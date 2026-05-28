@@ -5,9 +5,11 @@ import {
 } from '../../database/database.types'
 import {
   countAdditionsAndDeletions,
+  deriveFileChangeStatus,
   deriveTurnSummary,
   isBinaryDiff,
   isTruncatedDiff,
+  looksBinary,
   parseRenameFromDiff,
   truncateDiffIfTooLarge,
   turnFileChangeFromRow,
@@ -105,6 +107,34 @@ describe('isBinaryDiff', () => {
   it('returns false for a textual diff', () => {
     const diff = ['--- a/file.ts', '+++ b/file.ts', '@@ -1 +1 @@'].join('\n')
     expect(isBinaryDiff(diff)).toBe(false)
+  })
+})
+
+describe('looksBinary', () => {
+  it('detects null bytes in the sample', () => {
+    expect(looksBinary('abc\0def')).toBe(true)
+  })
+
+  it('returns false for text content', () => {
+    expect(looksBinary('plain text')).toBe(false)
+  })
+})
+
+describe('deriveFileChangeStatus', () => {
+  it('classifies file lifecycle changes', () => {
+    expect(deriveFileChangeStatus(false, false, '', '', false)).toBeNull()
+    expect(deriveFileChangeStatus(false, true, '', 'next', false)).toBe('added')
+    expect(deriveFileChangeStatus(true, false, 'prev', '', false)).toBe(
+      'deleted',
+    )
+    expect(deriveFileChangeStatus(true, true, 'prev', 'next', false)).toBe(
+      'modified',
+    )
+  })
+
+  it('ignores unchanged text but marks binary survivors as modified', () => {
+    expect(deriveFileChangeStatus(true, true, 'same', 'same', false)).toBeNull()
+    expect(deriveFileChangeStatus(true, true, '', '', true)).toBe('modified')
   })
 })
 

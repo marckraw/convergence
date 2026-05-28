@@ -16,8 +16,10 @@ import type {
 import type { GitService } from '../../git/git.service'
 import {
   countAdditionsAndDeletions,
+  deriveFileChangeStatus,
   deriveTurnSummary,
   isBinaryDiff,
+  looksBinary,
   truncateDiffIfTooLarge,
   turnFileChangeFromRow,
   turnFromRow,
@@ -26,7 +28,6 @@ import {
   TURN_BINARY_DIFF_MARKER,
   type Turn,
   type TurnFileChange,
-  type TurnFileChangeStatus,
 } from './turn.types'
 
 interface BaselineFile {
@@ -66,14 +67,6 @@ export interface EndTurnInput {
   summarySource: string | null
 }
 
-function looksBinary(content: string): boolean {
-  const sample = content.slice(0, 8 * 1024)
-  for (let i = 0; i < sample.length; i++) {
-    if (sample.charCodeAt(i) === 0) return true
-  }
-  return false
-}
-
 function readWorkingTreeFile(
   workingDirectory: string,
   relativePath: string,
@@ -90,20 +83,6 @@ function readWorkingTreeFile(
   } catch {
     return { existed: false, content: '', isBinary: false }
   }
-}
-
-function deriveStatus(
-  startExisted: boolean,
-  endExisted: boolean,
-  startContent: string,
-  endContent: string,
-  isBinary: boolean,
-): TurnFileChangeStatus | null {
-  if (!startExisted && !endExisted) return null
-  if (!startExisted) return 'added'
-  if (!endExisted) return 'deleted'
-  if (!isBinary && startContent === endContent) return null
-  return 'modified'
 }
 
 export class TurnCaptureService {
@@ -375,7 +354,7 @@ export class TurnCaptureService {
       const endBinary = current.isBinary
 
       const isBinary = startBinary || endBinary
-      const status = deriveStatus(
+      const status = deriveFileChangeStatus(
         startExisted,
         endExisted,
         startContent,

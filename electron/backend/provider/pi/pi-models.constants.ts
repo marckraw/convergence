@@ -1,0 +1,1 @@
+export const PI_MODELS_PROBE_TIMEOUT_MS = 5000

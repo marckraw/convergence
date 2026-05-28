@@ -8,7 +8,8 @@ import type {
 } from '../provider/provider.types'
 import { NO_MID_RUN_INPUT_CAPABILITY } from '../provider/provider-descriptor.pure'
 import { DEFAULT_UPDATE_PREFS } from '../updates/updates.defaults'
-import { AppSettingsService, APP_SETTINGS_KEY } from './app-settings.service'
+import { APP_SETTINGS_KEY } from './app-settings.constants'
+import { AppSettingsService } from './app-settings.service'
 import {
   DEFAULT_DEBUG_LOGGING_PREFS,
   DEFAULT_FAVORITE_MODELS_PREFS,

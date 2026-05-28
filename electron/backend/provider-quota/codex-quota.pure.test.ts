@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { mapCodexUsagePayloadToQuotaSnapshot } from './codex-quota.pure'
+import {
+  buildCodexQuotaAuthError,
+  mapCodexUsagePayloadToQuotaSnapshot,
+  readRecord,
+} from './codex-quota.pure'
 
 describe('mapCodexUsagePayloadToQuotaSnapshot', () => {
   it('maps Codex primary and weekly windows with credits', () => {
@@ -90,5 +94,29 @@ describe('mapCodexUsagePayloadToQuotaSnapshot', () => {
         resetsAt: '2026-05-27T21:20:00.000Z',
       },
     ])
+  })
+})
+
+describe('codex quota pure helpers', () => {
+  it('reads plain records only', () => {
+    expect(readRecord({ ok: true })).toEqual({ ok: true })
+    expect(readRecord(null)).toBeNull()
+    expect(readRecord([])).toBeNull()
+  })
+
+  it('builds auth error snapshots with caller-provided time', () => {
+    expect(
+      buildCodexQuotaAuthError(
+        'Codex auth missing.',
+        '2026-05-21T12:00:00.000Z',
+      ),
+    ).toEqual({
+      providerId: 'codex',
+      status: 'unavailable',
+      source: 'provider-api',
+      reason: 'Codex auth missing.',
+      lastCheckedAt: '2026-05-21T12:00:00.000Z',
+      stale: false,
+    })
   })
 })

@@ -7,6 +7,43 @@ export interface ClaudeSkillActivationEvent {
   sequence: number | null
 }
 
+export function isClaudeSkillTelemetryDisabled(
+  env: NodeJS.ProcessEnv,
+): boolean {
+  return (
+    env.CONVERGENCE_CLAUDE_SKILL_TELEMETRY === '0' ||
+    env.CONVERGENCE_DISABLE_CLAUDE_SKILL_TELEMETRY === '1' ||
+    env.CLAUDE_CODE_ENABLE_TELEMETRY === '0'
+  )
+}
+
+export function shouldUseEmbeddedClaudeSkillTelemetry(
+  env: NodeJS.ProcessEnv = process.env,
+): boolean {
+  if (isClaudeSkillTelemetryDisabled(env)) {
+    return false
+  }
+
+  return !env.OTEL_LOGS_EXPORTER && !env.OTEL_EXPORTER_OTLP_LOGS_ENDPOINT
+}
+
+export function buildEmbeddedClaudeSkillTelemetryEnv(
+  endpoint: string,
+  baseEnv: NodeJS.ProcessEnv = process.env,
+) {
+  return {
+    CLAUDE_CODE_ENABLE_TELEMETRY: '1',
+    OTEL_LOGS_EXPORTER: 'otlp',
+    OTEL_EXPORTER_OTLP_LOGS_PROTOCOL: 'http/json',
+    OTEL_EXPORTER_OTLP_LOGS_ENDPOINT: `${endpoint}/v1/logs`,
+    OTEL_LOG_TOOL_DETAILS: '1',
+    OTEL_LOGS_EXPORT_INTERVAL: '1000',
+    ...(!baseEnv.OTEL_METRICS_EXPORTER
+      ? { OTEL_METRICS_EXPORTER: 'none' }
+      : {}),
+  }
+}
+
 type AttributeValue = string | number | boolean
 
 function isRecord(value: unknown): value is Record<string, unknown> {

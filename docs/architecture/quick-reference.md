@@ -15,6 +15,8 @@ Later product focus:
 
 - terminal support
 - richer project structures with multiple repositories
+- remotely reachable clients, cloud control plane, and execution-host
+  boundaries as described in `docs/specs/convergence-v2-boundaries.md`
 - broader provider support if needed
 
 ## Core architectural choices

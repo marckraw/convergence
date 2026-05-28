@@ -9,3 +9,6 @@ export const INITIAL_UPDATE_STATUS: UpdateIdleStatus = {
   lastChecked: null,
   lastError: null,
 }
+
+export const DEFAULT_RELEASE_NOTES = (version: string): string =>
+  `https://github.com/marckraw/convergence/releases/tag/v${version}`

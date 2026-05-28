@@ -3,8 +3,8 @@ import { describe, expect, it } from 'vitest'
 import {
   buildEmbeddedClaudeSkillTelemetryEnv,
   shouldUseEmbeddedClaudeSkillTelemetry,
-  startClaudeSkillTelemetrySink,
-} from './claude-skill-telemetry.service'
+} from './claude-skill-telemetry.pure'
+import { startClaudeSkillTelemetrySink } from './claude-skill-telemetry.service'
 
 function attr(key: string, value: string | number) {
   return {
