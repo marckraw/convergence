@@ -11,6 +11,7 @@ import {
 } from '@/entities/session'
 import type { CodeReviewMode } from '@/entities/code-review'
 import { useNotificationsStore } from '@/entities/notifications'
+import { useTaskProgressStore } from '@/entities/task-progress'
 import {
   AppSettingsDialogContainer,
   SpaceWorkboardDialogContainer,
@@ -51,6 +52,7 @@ import {
   type ChatSidebarSpace,
 } from './global-chat-session-list.presentational'
 import { SidebarToolsMenu } from './sidebar-tools-menu.presentational'
+import { toast } from 'sonner'
 
 interface SidebarProps {
   activeSurface: AppSurface
@@ -149,9 +151,12 @@ export const Sidebar: FC<SidebarProps> = ({
   const unarchiveSpace = useSpaceStore((s) => s.unarchiveSpace)
   const unlinkSpaceAttempt = useSpaceStore((s) => s.unlinkAttempt)
   const pulsingSessionIds = useNotificationsStore((s) => s.pulsingSessionIds)
-  const [regeneratingSessionIds, setRegeneratingSessionIds] = useState<
-    ReadonlySet<string>
-  >(() => new Set())
+  const [regeneratingSessionRequests, setRegeneratingSessionRequests] =
+    useState<Record<string, string>>({})
+  const regeneratingSessionIds = useMemo(
+    () => new Set(Object.keys(regeneratingSessionRequests)),
+    [regeneratingSessionRequests],
+  )
   const [expandedWorkspaces, setExpandedWorkspaces] = useState<Set<string>>(
     () => new Set(),
   )
@@ -191,22 +196,57 @@ export const Sidebar: FC<SidebarProps> = ({
     setArchivedSpacesExpanded((current) => !current)
   }, [])
 
-  const handleRegenerateSessionName = useCallback((sessionId: string) => {
-    setRegeneratingSessionIds((prev) => {
-      if (prev.has(sessionId)) return prev
-      const next = new Set(prev)
-      next.add(sessionId)
-      return next
-    })
-    sessionApi.regenerateName(sessionId).finally(() => {
-      setRegeneratingSessionIds((prev) => {
-        if (!prev.has(sessionId)) return prev
-        const next = new Set(prev)
-        next.delete(sessionId)
-        return next
-      })
-    })
-  }, [])
+  const handleRegenerateSessionName = useCallback(
+    (sessionId: string) => {
+      if (regeneratingSessionRequests[sessionId]) return
+
+      const requestId = crypto.randomUUID()
+      const toastId = `session-name:${sessionId}`
+      setRegeneratingSessionRequests((prev) => ({
+        ...prev,
+        [sessionId]: requestId,
+      }))
+      toast.loading('Regenerating session name...', { id: toastId })
+
+      void sessionApi
+        .regenerateName(sessionId, requestId)
+        .then(({ updated }) => {
+          const progress =
+            useTaskProgressStore.getState().snapshots[requestId] ?? null
+          const outcome = progress?.settled?.outcome ?? null
+          if (outcome === 'error' || outcome === 'timeout') {
+            toast.error('Could not regenerate name', {
+              id: toastId,
+              description:
+                outcome === 'timeout'
+                  ? 'The naming request timed out.'
+                  : 'The provider returned an error.',
+            })
+            return
+          }
+          if (updated) {
+            toast.success('Session name regenerated', { id: toastId })
+            return
+          }
+          toast('No new name generated', {
+            id: toastId,
+            description: 'The provider returned no usable title.',
+          })
+        })
+        .catch(() => {
+          toast.error('Could not start name regeneration', { id: toastId })
+        })
+        .finally(() => {
+          setRegeneratingSessionRequests((prev) => {
+            if (!prev[sessionId]) return prev
+            const next = { ...prev }
+            delete next[sessionId]
+            return next
+          })
+        })
+    },
+    [regeneratingSessionRequests],
+  )
 
   const workspaceIdsKey = workspaces.map((workspace) => workspace.id).join('|')
 

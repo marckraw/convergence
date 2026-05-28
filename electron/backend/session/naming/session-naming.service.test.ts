@@ -33,6 +33,82 @@ function baseSession(overrides: Partial<SessionSummary> = {}): SessionSummary {
 }
 
 describe('SessionNamingService', () => {
+  it('passes the caller request id to the provider one-shot call', async () => {
+    const oneShot = vi.fn(async () => ({ text: 'Better Session Name' }))
+    const provider: Provider = {
+      id: 'claude-code',
+      name: 'Claude Code',
+      supportsContinuation: false,
+      describe: async () => {
+        throw new Error('should not be queried')
+      },
+      start: () => {
+        throw new Error('should not be started')
+      },
+      oneShot,
+    }
+    const providers = {
+      get: vi.fn((id: string) => (id === 'claude-code' ? provider : undefined)),
+      register: vi.fn(),
+      getAll: vi.fn(() => [provider]),
+    } as unknown as ProviderRegistry
+    const appSettings = {
+      resolveNamingModel: vi.fn(async () => 'fast'),
+    } as unknown as AppSettingsService
+
+    const service = new SessionNamingService({ providers, appSettings })
+
+    const result = await service.generateName(
+      baseSession(),
+      [
+        {
+          id: 'u1',
+          sessionId: 's1',
+          sequence: 1,
+          turnId: 't1',
+          kind: 'message',
+          actor: 'user',
+          text: 'Please explore this bug.',
+          state: 'complete',
+          createdAt: 'now',
+          updatedAt: 'now',
+          providerMeta: {
+            providerId: 'claude-code',
+            providerItemId: null,
+            providerEventType: null,
+          },
+        },
+        {
+          id: 'a1',
+          sessionId: 's1',
+          sequence: 2,
+          turnId: 't1',
+          kind: 'message',
+          actor: 'assistant',
+          text: 'I found the issue in the rename path.',
+          state: 'complete',
+          createdAt: 'now',
+          updatedAt: 'now',
+          providerMeta: {
+            providerId: 'claude-code',
+            providerItemId: null,
+            providerEventType: null,
+          },
+        },
+      ],
+      { requestId: 'rename-request-1' },
+    )
+
+    expect(result).toBe('Better Session Name')
+    expect(oneShot).toHaveBeenCalledWith(
+      expect.objectContaining({
+        modelId: 'fast',
+        requestId: 'rename-request-1',
+        workingDirectory: '/tmp',
+      }),
+    )
+  })
+
   it('returns null without calling the provider when the session uses the shell provider', async () => {
     const oneShot = vi.fn()
     const provider: Provider = {

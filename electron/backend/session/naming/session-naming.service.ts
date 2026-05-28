@@ -37,6 +37,7 @@ export class SessionNamingService {
   async generateName(
     session: SessionSummary,
     conversation: ConversationItem[],
+    options: { requestId?: string } = {},
   ): Promise<string | null> {
     if (session.providerId === 'shell') return null
     const provider = this.deps.providers.get(session.providerId)
@@ -60,16 +61,12 @@ export class SessionNamingService {
       firstAssistantResponse: assistantText,
     })
 
-    try {
-      const result = await provider.oneShot({
-        prompt,
-        modelId,
-        workingDirectory: session.workingDirectory,
-        requestId: randomUUID(),
-      })
-      return sanitizeTitle(result.text)
-    } catch {
-      return null
-    }
+    const result = await provider.oneShot({
+      prompt,
+      modelId,
+      workingDirectory: session.workingDirectory,
+      requestId: options.requestId ?? randomUUID(),
+    })
+    return sanitizeTitle(result.text)
   }
 }

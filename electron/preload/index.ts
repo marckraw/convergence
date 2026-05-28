@@ -254,8 +254,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
     stop: (id: string) => ipcRenderer.invoke('session:stop', id),
     rename: (id: string, name: string) =>
       ipcRenderer.invoke('session:rename', id, name),
-    regenerateName: (id: string) =>
-      ipcRenderer.invoke('session:regenerateName', id),
+    regenerateName: (id: string, requestId?: string) =>
+      ipcRenderer.invoke('session:regenerateName', id, requestId),
     setPrimarySurface: (id: string, surface: 'conversation' | 'terminal') =>
       ipcRenderer.invoke('session:setPrimarySurface', id, surface),
     getNeedsYouDismissals: () =>
