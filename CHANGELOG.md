@@ -1,5 +1,12 @@
 # convergence
 
+## 0.37.40
+
+### Patch Changes
+
+- 2cd6519: Extract analytics service parsing and row-shaping helpers into pure analytics utilities with focused test coverage.
+- b23c632: Refactor feedback submission internals so pure validation and error-detail parsing live behind focused pure helpers.
+
 ## 0.37.39
 
 ### Patch Changes
