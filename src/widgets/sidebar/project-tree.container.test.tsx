@@ -175,6 +175,7 @@ describe('ProjectTree', () => {
   })
 
   it('shows regenerate name for conversation sessions', async () => {
+    const onRegenerateSessionName = vi.fn()
     render(
       <TooltipProvider>
         <ProjectTree
@@ -194,7 +195,7 @@ describe('ProjectTree', () => {
           onUnarchiveSession={vi.fn()}
           onDeleteSession={vi.fn()}
           onRenameSession={vi.fn()}
-          onRegenerateSessionName={vi.fn()}
+          onRegenerateSessionName={onRegenerateSessionName}
           onDeleteWorkspace={vi.fn()}
           onOpenCreateWorkspace={vi.fn()}
         />
@@ -210,6 +211,41 @@ describe('ProjectTree', () => {
     expect(
       await screen.findByRole('menuitem', { name: /regenerate name/i }),
     ).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('menuitem', { name: /regenerate name/i }))
+
+    expect(onRegenerateSessionName).toHaveBeenCalledWith('conversation-session')
+  })
+
+  it('shows row progress while a session name is regenerating', () => {
+    render(
+      <TooltipProvider>
+        <ProjectTree
+          baseBranchName="master"
+          workspaces={[]}
+          sessions={[
+            {
+              ...baseSession,
+              id: 'conversation-session',
+              providerId: 'claude-code',
+              name: 'conversation note',
+            },
+          ]}
+          activeSessionId={null}
+          regeneratingSessionIds={new Set(['conversation-session'])}
+          onSelectSession={vi.fn()}
+          onArchiveSession={vi.fn()}
+          onUnarchiveSession={vi.fn()}
+          onDeleteSession={vi.fn()}
+          onRenameSession={vi.fn()}
+          onRegenerateSessionName={vi.fn()}
+          onDeleteWorkspace={vi.fn()}
+          onOpenCreateWorkspace={vi.fn()}
+        />
+      </TooltipProvider>,
+    )
+
+    expect(screen.getByLabelText('Regenerating name')).toBeInTheDocument()
   })
 
   it('hides regenerate name for shell sessions', async () => {

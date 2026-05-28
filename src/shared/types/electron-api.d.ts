@@ -1425,7 +1425,10 @@ interface ElectronAPI {
     deny: (id: string, providerApprovalId?: string) => Promise<void>
     stop: (id: string) => Promise<void>
     rename: (id: string, name: string) => Promise<void>
-    regenerateName: (id: string) => Promise<void>
+    regenerateName: (
+      id: string,
+      requestId?: string,
+    ) => Promise<{ updated: boolean }>
     setPrimarySurface: (
       id: string,
       surface: 'conversation' | 'terminal',

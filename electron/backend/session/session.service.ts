@@ -78,6 +78,7 @@ export interface SessionNamer {
   generateName(
     session: SessionSummary,
     conversation: ConversationItem[],
+    options?: { requestId?: string },
   ): Promise<string | null>
 }
 
@@ -208,10 +209,13 @@ export class SessionService {
     return this.getById(id)!
   }
 
-  async regenerateName(id: string): Promise<void> {
+  async regenerateName(
+    id: string,
+    requestId?: string,
+  ): Promise<{ updated: boolean }> {
     const session = this.getById(id)
     if (!session) throw new Error(`Session not found: ${id}`)
-    await this.runNaming(session)
+    return { updated: await this.runNaming(session, requestId) }
   }
 
   markShellSessionExited(id: string, exitCode: number): void {
@@ -228,19 +232,24 @@ export class SessionService {
     this.notifySessionChange(id)
   }
 
-  private async runNaming(session: SessionSummary): Promise<void> {
-    if (!this.namer) return
+  private async runNaming(
+    session: SessionSummary,
+    requestId?: string,
+  ): Promise<boolean> {
+    if (!this.namer) return false
     const title = await this.namer.generateName(
       session,
       this.getConversation(session.id),
+      requestId ? { requestId } : undefined,
     )
-    if (!title) return
+    if (!title) return false
     this.db
       .prepare(
         "UPDATE sessions SET name = ?, name_auto_generated = 1, updated_at = datetime('now') WHERE id = ?",
       )
       .run(title, session.id)
     this.notifySessionChange(session.id)
+    return true
   }
 
   private hasBeenAutoNamed(id: string): boolean {
