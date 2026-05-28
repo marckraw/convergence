@@ -1,59 +1,12 @@
 import { randomUUID } from 'crypto'
 import type Database from 'better-sqlite3'
 import type { AnalyticsProfileSnapshotRow } from '../database/database.types'
+import { snapshotFromRow } from './analytics-profile.pure'
 import type {
   AnalyticsRangePreset,
   CreateGeneratedWorkProfileSnapshotInput,
   GeneratedWorkProfileSnapshot,
-  GeneratedWorkProfileSnapshotPayload,
 } from './analytics.types'
-
-function parseRangePreset(value: string): AnalyticsRangePreset {
-  switch (value) {
-    case '7d':
-    case '30d':
-    case '90d':
-    case 'all':
-      return value
-    default:
-      throw new Error(`Invalid analytics range preset: ${value}`)
-  }
-}
-
-function parseProfilePayload(
-  row: AnalyticsProfileSnapshotRow,
-): GeneratedWorkProfileSnapshotPayload {
-  const parsed = JSON.parse(row.profile_json) as unknown
-
-  if (
-    typeof parsed !== 'object' ||
-    parsed === null ||
-    (parsed as { version?: unknown }).version !== 1 ||
-    typeof (parsed as { title?: unknown }).title !== 'string' ||
-    typeof (parsed as { summary?: unknown }).summary !== 'string' ||
-    !Array.isArray((parsed as { themes?: unknown }).themes) ||
-    !Array.isArray((parsed as { caveats?: unknown }).caveats)
-  ) {
-    throw new Error(`Invalid analytics profile snapshot payload: ${row.id}`)
-  }
-
-  return parsed as GeneratedWorkProfileSnapshotPayload
-}
-
-function snapshotFromRow(
-  row: AnalyticsProfileSnapshotRow,
-): GeneratedWorkProfileSnapshot {
-  return {
-    id: row.id,
-    rangePreset: parseRangePreset(row.range_preset),
-    rangeStartDate: row.range_start_date,
-    rangeEndDate: row.range_end_date,
-    providerId: row.provider_id,
-    model: row.model,
-    payload: parseProfilePayload(row),
-    createdAt: row.created_at,
-  }
-}
 
 export class AnalyticsProfileService {
   constructor(private readonly db: Database.Database) {}
