@@ -1,95 +1,91 @@
 import { describe, expect, it } from 'vitest'
 import { MAX_DETAIL_LENGTH } from './feedback.constants'
-import { isFeedbackPriority, readErrorDetail } from './feedback.pure'
+import { isFeedbackPriority, parseFeedbackErrorDetail } from './feedback.pure'
 
-describe('isFeedbackPriority', () => {
-  it('accepts supported feedback priorities', () => {
-    expect(isFeedbackPriority('low')).toBe(true)
-    expect(isFeedbackPriority('medium')).toBe(true)
-    expect(isFeedbackPriority('high')).toBe(true)
-  })
-
-  it('rejects unknown values', () => {
-    expect(isFeedbackPriority('urgent')).toBe(false)
-    expect(isFeedbackPriority('')).toBe(false)
-    expect(isFeedbackPriority(null)).toBe(false)
-  })
-})
-
-describe('readErrorDetail', () => {
-  it('reads known JSON detail fields', async () => {
-    await expect(
-      readErrorDetail(new Response(JSON.stringify({ error: 'bad input' }))),
-    ).resolves.toEqual({
-      message: 'bad input',
-      raw: '{"error":"bad input"}',
+describe('feedback pure helpers', () => {
+  describe('isFeedbackPriority', () => {
+    it('accepts supported priorities', () => {
+      expect(isFeedbackPriority('low')).toBe(true)
+      expect(isFeedbackPriority('medium')).toBe(true)
+      expect(isFeedbackPriority('high')).toBe(true)
     })
 
-    await expect(
-      readErrorDetail(new Response(JSON.stringify({ message: 'try again' }))),
-    ).resolves.toMatchObject({ message: 'try again' })
-
-    await expect(
-      readErrorDetail(new Response(JSON.stringify({ detail: 'too short' }))),
-    ).resolves.toMatchObject({ message: 'too short' })
+    it('rejects unsupported priorities', () => {
+      expect(isFeedbackPriority('urgent')).toBe(false)
+      expect(isFeedbackPriority('')).toBe(false)
+      expect(isFeedbackPriority(null)).toBe(false)
+    })
   })
 
-  it('joins JSON errors arrays', async () => {
-    await expect(
-      readErrorDetail(
-        new Response(
+  describe('parseFeedbackErrorDetail', () => {
+    it('returns empty detail for blank bodies', () => {
+      expect(parseFeedbackErrorDetail('   ')).toEqual({
+        message: '',
+        raw: '',
+      })
+    })
+
+    it('uses known JSON error fields', () => {
+      expect(
+        parseFeedbackErrorDetail(JSON.stringify({ error: 'too short' })),
+      ).toEqual({
+        message: 'too short',
+        raw: '{"error":"too short"}',
+      })
+
+      expect(
+        parseFeedbackErrorDetail(JSON.stringify({ message: 'try again' })),
+      ).toEqual({
+        message: 'try again',
+        raw: '{"message":"try again"}',
+      })
+
+      expect(
+        parseFeedbackErrorDetail(JSON.stringify({ detail: 'missing token' })),
+      ).toEqual({
+        message: 'missing token',
+        raw: '{"detail":"missing token"}',
+      })
+    })
+
+    it('joins validation error arrays', () => {
+      expect(
+        parseFeedbackErrorDetail(
           JSON.stringify({
-            errors: ['first issue', { message: 'second issue' }, {}],
+            errors: ['title missing', { message: 'description missing' }, {}],
           }),
         ),
-      ),
-    ).resolves.toEqual({
-      message: 'first issue; second issue',
-      raw: '{"errors":["first issue",{"message":"second issue"},{}]}',
-    })
-  })
-
-  it('falls back to compact JSON or raw text', async () => {
-    await expect(
-      readErrorDetail(
-        new Response(JSON.stringify({ code: 'invalid', field: 'title' })),
-      ),
-    ).resolves.toEqual({
-      message: '{"code":"invalid","field":"title"}',
-      raw: '{"code":"invalid","field":"title"}',
+      ).toEqual({
+        message: 'title missing; description missing',
+        raw: '{"errors":["title missing",{"message":"description missing"},{}]}',
+      })
     })
 
-    await expect(
-      readErrorDetail(new Response('Bad Request: missing field')),
-    ).resolves.toEqual({
-      message: 'Bad Request: missing field',
-      raw: 'Bad Request: missing field',
-    })
-  })
-
-  it('returns empty detail for empty bodies and unreadable responses', async () => {
-    await expect(readErrorDetail(new Response('   '))).resolves.toEqual({
-      message: '',
-      raw: '',
+    it('serializes JSON objects without known error fields', () => {
+      expect(
+        parseFeedbackErrorDetail(
+          JSON.stringify({ code: 'invalid_payload', field: 'priority' }),
+        ),
+      ).toEqual({
+        message: '{"code":"invalid_payload","field":"priority"}',
+        raw: '{"code":"invalid_payload","field":"priority"}',
+      })
     })
 
-    await expect(
-      readErrorDetail({
-        text: async () => {
-          throw new Error('read failed')
-        },
-      } as unknown as Response),
-    ).resolves.toEqual({ message: '', raw: '' })
-  })
+    it('falls back to trimmed text when the body is not JSON', () => {
+      expect(parseFeedbackErrorDetail(' Bad Request ')).toEqual({
+        message: 'Bad Request',
+        raw: 'Bad Request',
+      })
+    })
 
-  it('truncates long detail messages', async () => {
-    const detail = 'x'.repeat(MAX_DETAIL_LENGTH + 1)
+    it('truncates long details', () => {
+      const detail = 'x'.repeat(MAX_DETAIL_LENGTH + 10)
 
-    const result = await readErrorDetail(
-      new Response(JSON.stringify({ error: detail })),
-    )
-
-    expect(result.message).toHaveLength(MAX_DETAIL_LENGTH + 1)
-    expect(result.message).toBe(`${'x'.repeat(MAX_DETAIL_LENGTH)}…`)
+      expect(parseFeedbackErrorDetail(detail)).toEqual({
+        message: `${'x'.repeat(MAX_DETAIL_LENGTH)}…`,
+        raw: detail,
+      })
+    })
   })
 })

@@ -1,9 +1,13 @@
+import { DEFAULT_BASE_URL, SOURCE_APP } from './feedback.constants'
+import {
+  isFeedbackPriority,
+  parseFeedbackErrorDetail,
+  type ErrorDetail,
+} from './feedback.pure'
 import type {
   FeedbackSubmissionResult,
   SubmitFeedbackInput,
 } from './feedback.types'
-import { DEFAULT_BASE_URL, SOURCE_APP } from './feedback.constants'
-import { isFeedbackPriority, readErrorDetail } from './feedback.pure'
 
 type Fetch = typeof fetch
 
@@ -97,4 +101,15 @@ export class FeedbackService {
       acceptedAt: (this.deps.now?.() ?? new Date()).toISOString(),
     }
   }
+}
+
+async function readErrorDetail(response: Response): Promise<ErrorDetail> {
+  let body: string
+  try {
+    body = await response.text()
+  } catch {
+    return { message: '', raw: '' }
+  }
+
+  return parseFeedbackErrorDetail(body)
 }

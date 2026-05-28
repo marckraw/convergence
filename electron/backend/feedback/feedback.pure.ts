@@ -10,16 +10,7 @@ export function isFeedbackPriority(value: unknown): value is FeedbackPriority {
   return value === 'low' || value === 'medium' || value === 'high'
 }
 
-export async function readErrorDetail(
-  response: Response,
-): Promise<ErrorDetail> {
-  let body: string
-  try {
-    body = await response.text()
-  } catch {
-    return { message: '', raw: '' }
-  }
-
+export function parseFeedbackErrorDetail(body: string): ErrorDetail {
   const trimmed = body.trim()
   if (!trimmed) {
     return { message: '', raw: '' }
