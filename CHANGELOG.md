@@ -1,5 +1,15 @@
 # convergence
 
+## 0.37.39
+
+### Patch Changes
+
+- e95692d: Refactor analytics profile snapshot parsing into pure helpers so the service boundary stays focused on database orchestration.
+- ffea736: Refactor the attachment service boundary by moving deterministic helper logic into pure modules with focused coverage.
+- 0967364: Refactor code review target ranking and pull request label formatting into a pure service boundary.
+- e170c5e: Refactor feedback service helper boundaries.
+- b676983: Refactor Claude MCP service parsing helpers into pure module boundaries.
+
 ## 0.37.38
 
 ### Patch Changes
