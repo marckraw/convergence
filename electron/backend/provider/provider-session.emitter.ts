@@ -10,6 +10,12 @@ import type { SkillSelection } from '../skills/skills.types'
 
 type MessageItem = Extract<ConversationItem, { kind: 'message' }>
 type ThinkingItem = Extract<ConversationItem, { kind: 'thinking' }>
+type ThinkingItemPatch = Partial<
+  Pick<ThinkingItem, 'text' | 'state' | 'updatedAt'>
+>
+type ExactThinkingItemPatch<TPatch extends ThinkingItemPatch> = TPatch & {
+  [K in Exclude<keyof TPatch, keyof ThinkingItemPatch>]: never
+}
 
 interface ProviderSessionEmitterOptions {
   providerId: string
@@ -124,19 +130,24 @@ export class ProviderSessionEmitter {
     return item.id
   }
 
-  patchThinking(
+  patchThinking<TPatch extends ThinkingItemPatch>(
     itemId: string,
-    patch: Partial<ThinkingItem> & {
-      updatedAt?: string
-    },
+    patch: ExactThinkingItemPatch<TPatch>,
   ): void {
+    const nextPatch: ThinkingItemPatch = {
+      updatedAt: patch.updatedAt ?? this.now(),
+    }
+    if ('text' in patch) {
+      nextPatch.text = patch.text
+    }
+    if ('state' in patch) {
+      nextPatch.state = patch.state
+    }
+
     this.emitDeltaFn({
       kind: 'conversation.item.patch',
       itemId,
-      patch: {
-        ...patch,
-        updatedAt: patch.updatedAt ?? this.now(),
-      },
+      patch: nextPatch,
     })
   }
 
