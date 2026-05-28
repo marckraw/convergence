@@ -774,9 +774,11 @@ export function registerIpcHandlers(
     sessionService.rename(id, name)
   })
 
-  ipcMain.handle('session:regenerateName', async (_event, id: string) => {
-    await sessionService.regenerateName(id)
-  })
+  ipcMain.handle(
+    'session:regenerateName',
+    async (_event, id: string, requestId?: string) =>
+      sessionService.regenerateName(id, requestId),
+  )
 
   ipcMain.handle(
     'session:setPrimarySurface',

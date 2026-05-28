@@ -324,6 +324,46 @@ describe('SessionService', () => {
     expect(session.lastSequence).toBe(0)
   })
 
+  it('regenerates a session name with the caller request id', async () => {
+    const session = service.create({
+      projectId,
+      workspaceId: null,
+      providerId: 'test-provider',
+      model: 'test-model',
+      effort: null,
+      name: 'old name',
+    })
+    const generateName = vi.fn(async () => 'New Session Name')
+    service.setNamer({ generateName })
+
+    const result = await service.regenerateName(session.id, 'rename-request-1')
+
+    expect(result).toEqual({ updated: true })
+    expect(generateName).toHaveBeenCalledWith(
+      expect.objectContaining({ id: session.id }),
+      [],
+      { requestId: 'rename-request-1' },
+    )
+    expect(service.getById(session.id)?.name).toBe('New Session Name')
+  })
+
+  it('reports no update when regeneration returns no title', async () => {
+    const session = service.create({
+      projectId,
+      workspaceId: null,
+      providerId: 'test-provider',
+      model: 'test-model',
+      effort: null,
+      name: 'old name',
+    })
+    service.setNamer({ generateName: vi.fn(async () => null) })
+
+    const result = await service.regenerateName(session.id, 'rename-request-1')
+
+    expect(result).toEqual({ updated: false })
+    expect(service.getById(session.id)?.name).toBe('old name')
+  })
+
   it('creates a global session in the app-owned global working directory', () => {
     const session = service.create({
       contextKind: 'global',

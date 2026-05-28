@@ -94,8 +94,11 @@ export const sessionApi = {
   rename: (id: string, name: string): Promise<void> =>
     window.electronAPI.session.rename(id, name),
 
-  regenerateName: (id: string): Promise<void> =>
-    window.electronAPI.session.regenerateName(id),
+  regenerateName: (
+    id: string,
+    requestId?: string,
+  ): Promise<{ updated: boolean }> =>
+    window.electronAPI.session.regenerateName(id, requestId),
 
   setPrimarySurface: (
     id: string,
