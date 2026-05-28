@@ -1,5 +1,11 @@
 # convergence
 
+## 0.37.36
+
+### Patch Changes
+
+- 6e8c75f: Tighten provider thinking patch updates so only mutable thinking fields can be patched after creation.
+
 ## 0.37.35
 
 ### Patch Changes
