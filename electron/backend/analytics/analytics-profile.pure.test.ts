@@ -1,9 +1,13 @@
 import { describe, expect, it } from 'vitest'
+import type { AnalyticsProfileSnapshotRow } from '../database/database.types'
 import type { AnalyticsOverview } from './analytics.types'
 import {
   buildWorkProfilePrompt,
   parseGeneratedWorkProfilePayload,
+  parseProfilePayload,
+  snapshotFromRow,
 } from './analytics-profile.pure'
+import { parseRangePreset } from './analytics.pure'
 
 const overview: AnalyticsOverview = {
   range: { preset: '30d', startDate: '2026-04-01', endDate: '2026-04-30' },
@@ -59,6 +63,25 @@ const overview: AnalyticsOverview = {
   generatedProfile: null,
 }
 
+const profilePayload = {
+  version: 1,
+  title: 'Contextual Builder',
+  summary: 'You tend to explore before implementing.',
+  themes: [{ label: 'Planning', description: 'Frequent setup.' }],
+  caveats: ['Based on local usage.'],
+}
+
+const snapshotRow: AnalyticsProfileSnapshotRow = {
+  id: 'snapshot-1',
+  range_preset: '30d',
+  range_start_date: '2026-04-01',
+  range_end_date: '2026-04-30',
+  provider_id: 'codex',
+  model: 'gpt-5.4',
+  profile_json: JSON.stringify(profilePayload),
+  created_at: '2026-04-30T12:00:00.000Z',
+}
+
 describe('analytics profile pure helpers', () => {
   it('builds a prompt from aggregate usage data only', () => {
     const prompt = buildWorkProfilePrompt(overview)
@@ -106,5 +129,48 @@ describe('analytics profile pure helpers', () => {
     expect(() => parseGeneratedWorkProfilePayload('not json')).toThrow(
       'Generated work profile was not valid JSON',
     )
+  })
+
+  it('parses stored analytics range presets', () => {
+    expect(parseRangePreset('7d')).toBe('7d')
+    expect(parseRangePreset('30d')).toBe('30d')
+    expect(parseRangePreset('90d')).toBe('90d')
+    expect(parseRangePreset('all')).toBe('all')
+  })
+
+  it('rejects invalid stored analytics range presets', () => {
+    expect(() => parseRangePreset('yesterday')).toThrow(
+      'Invalid analytics range preset: yesterday',
+    )
+  })
+
+  it('parses a stored profile snapshot payload', () => {
+    expect(parseProfilePayload(snapshotRow)).toEqual(profilePayload)
+  })
+
+  it('rejects stored profile payloads with an invalid shape', () => {
+    expect(() =>
+      parseProfilePayload({
+        ...snapshotRow,
+        id: 'invalid',
+        profile_json: JSON.stringify({
+          version: 1,
+          title: 'Missing fields',
+        }),
+      }),
+    ).toThrow('Invalid analytics profile snapshot payload: invalid')
+  })
+
+  it('maps a stored profile snapshot row to the public snapshot shape', () => {
+    expect(snapshotFromRow(snapshotRow)).toEqual({
+      id: 'snapshot-1',
+      rangePreset: '30d',
+      rangeStartDate: '2026-04-01',
+      rangeEndDate: '2026-04-30',
+      providerId: 'codex',
+      model: 'gpt-5.4',
+      payload: profilePayload,
+      createdAt: '2026-04-30T12:00:00.000Z',
+    })
   })
 })

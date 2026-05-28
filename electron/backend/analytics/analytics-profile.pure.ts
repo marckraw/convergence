@@ -1,5 +1,8 @@
+import type { AnalyticsProfileSnapshotRow } from '../database/database.types'
+import { parseRangePreset } from './analytics.pure'
 import type {
   AnalyticsOverview,
+  GeneratedWorkProfileSnapshot,
   GeneratedWorkProfileSnapshotPayload,
 } from './analytics.types'
 
@@ -117,5 +120,40 @@ export function parseGeneratedWorkProfilePayload(
       .map((caveat) => caveat.trim())
       .filter(Boolean)
       .slice(0, 5),
+  }
+}
+
+export function parseProfilePayload(
+  row: AnalyticsProfileSnapshotRow,
+): GeneratedWorkProfileSnapshotPayload {
+  const parsed = JSON.parse(row.profile_json) as unknown
+
+  if (
+    typeof parsed !== 'object' ||
+    parsed === null ||
+    (parsed as { version?: unknown }).version !== 1 ||
+    typeof (parsed as { title?: unknown }).title !== 'string' ||
+    typeof (parsed as { summary?: unknown }).summary !== 'string' ||
+    !Array.isArray((parsed as { themes?: unknown }).themes) ||
+    !Array.isArray((parsed as { caveats?: unknown }).caveats)
+  ) {
+    throw new Error(`Invalid analytics profile snapshot payload: ${row.id}`)
+  }
+
+  return parsed as GeneratedWorkProfileSnapshotPayload
+}
+
+export function snapshotFromRow(
+  row: AnalyticsProfileSnapshotRow,
+): GeneratedWorkProfileSnapshot {
+  return {
+    id: row.id,
+    rangePreset: parseRangePreset(row.range_preset),
+    rangeStartDate: row.range_start_date,
+    rangeEndDate: row.range_end_date,
+    providerId: row.provider_id,
+    model: row.model,
+    payload: parseProfilePayload(row),
+    createdAt: row.created_at,
   }
 }
