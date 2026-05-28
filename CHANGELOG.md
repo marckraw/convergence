@@ -1,5 +1,11 @@
 # convergence
 
+## 0.37.41
+
+### Patch Changes
+
+- 2ec3164: Tighten backend service boundaries by routing session app operations through a dedicated application service, isolating session row persistence behind a repository, and moving deterministic service helpers into focused pure modules with tests.
+
 ## 0.37.40
 
 ### Patch Changes
