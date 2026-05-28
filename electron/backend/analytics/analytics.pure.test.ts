@@ -2,8 +2,14 @@ import { describe, expect, it } from 'vitest'
 import {
   buildAnalyticsOverview,
   calculateStreaks,
+  conversationItemFromRow,
   countWords,
+  kindFromRow,
+  parsePayload,
+  parseRangePreset,
+  providerNameFromId,
   resolveAnalyticsRange,
+  textFromPayload,
   toLocalDate,
 } from './analytics.pure'
 import type {
@@ -100,6 +106,95 @@ describe('analytics pure helpers', () => {
     expect(countWords('')).toBe(0)
     expect(countWords('   ')).toBe(0)
     expect(countWords('one two\nthree\tfour')).toBe(4)
+  })
+
+  it('maps provider ids to analytics display names', () => {
+    expect(providerNameFromId('claude-code')).toBe('Claude Code')
+    expect(providerNameFromId('codex')).toBe('Codex')
+    expect(providerNameFromId('pi')).toBe('Pi')
+    expect(providerNameFromId('shell')).toBe('Terminal')
+    expect(providerNameFromId('shell-provider')).toBe('Terminal')
+    expect(providerNameFromId('custom-provider')).toBe('custom-provider')
+  })
+
+  it('parses analytics range presets and rejects unknown values', () => {
+    expect(parseRangePreset('7d')).toBe('7d')
+    expect(parseRangePreset('30d')).toBe('30d')
+    expect(parseRangePreset('90d')).toBe('90d')
+    expect(parseRangePreset('all')).toBe('all')
+    expect(() => parseRangePreset('forever')).toThrow(
+      'Invalid analytics range preset: forever',
+    )
+  })
+
+  it('parses conversation item payload JSON defensively', () => {
+    expect(parsePayload({ payload_json: '{"text":"hello"}' })).toEqual({
+      text: 'hello',
+    })
+    expect(parsePayload({ payload_json: 'null' })).toEqual({})
+    expect(parsePayload({ payload_json: '"hello"' })).toEqual({})
+    expect(parsePayload({ payload_json: '{not json}' })).toEqual({})
+  })
+
+  it('normalizes conversation item kind and text fields by kind', () => {
+    expect(kindFromRow('message')).toBe('message')
+    expect(kindFromRow('thinking')).toBe('thinking')
+    expect(kindFromRow('tool-call')).toBe('tool-call')
+    expect(kindFromRow('tool-result')).toBe('tool-result')
+    expect(kindFromRow('approval-request')).toBe('approval-request')
+    expect(kindFromRow('input-request')).toBe('input-request')
+    expect(kindFromRow('unknown')).toBe('note')
+
+    expect(textFromPayload('message', { text: 'hello' })).toBe('hello')
+    expect(textFromPayload('thinking', { text: 'plan' })).toBe('plan')
+    expect(textFromPayload('note', { text: 'note' })).toBe('note')
+    expect(textFromPayload('tool-call', { inputText: 'rg analytics' })).toBe(
+      'rg analytics',
+    )
+    expect(textFromPayload('tool-result', { outputText: 'ok' })).toBe('ok')
+    expect(
+      textFromPayload('approval-request', { description: 'Allow command?' }),
+    ).toBe('Allow command?')
+    expect(textFromPayload('input-request', { prompt: 'Need input' })).toBe(
+      'Need input',
+    )
+    expect(textFromPayload('message', { text: 123 })).toBe('')
+  })
+
+  it('shapes conversation item rows for analytics aggregation', () => {
+    expect(
+      conversationItemFromRow({
+        id: 'item-1',
+        session_id: 'session-1',
+        kind: 'tool-call',
+        payload_json: JSON.stringify({
+          actor: 'assistant',
+          inputText: 'npm run typecheck',
+        }),
+        created_at: '2026-04-29T09:05:00.000Z',
+      }),
+    ).toEqual({
+      id: 'item-1',
+      sessionId: 'session-1',
+      kind: 'tool-call',
+      actor: 'assistant',
+      text: 'npm run typecheck',
+      createdAt: '2026-04-29T09:05:00.000Z',
+    })
+
+    expect(
+      conversationItemFromRow({
+        id: 'item-2',
+        session_id: 'session-1',
+        kind: 'mystery',
+        payload_json: JSON.stringify({ actor: 'system', text: 'fallback' }),
+        created_at: '2026-04-29T09:06:00.000Z',
+      }),
+    ).toMatchObject({
+      kind: 'note',
+      actor: null,
+      text: 'fallback',
+    })
   })
 
   it('resolves fixed ranges as inclusive windows ending today', () => {

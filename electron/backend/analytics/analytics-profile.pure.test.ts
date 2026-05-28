@@ -5,9 +5,9 @@ import {
   buildWorkProfilePrompt,
   parseGeneratedWorkProfilePayload,
   parseProfilePayload,
-  parseRangePreset,
   snapshotFromRow,
 } from './analytics-profile.pure'
+import { parseRangePreset } from './analytics.pure'
 
 const overview: AnalyticsOverview = {
   range: { preset: '30d', startDate: '2026-04-01', endDate: '2026-04-30' },
