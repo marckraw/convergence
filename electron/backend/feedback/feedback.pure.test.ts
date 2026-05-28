@@ -34,6 +34,13 @@ describe('feedback pure helpers', () => {
       })
 
       expect(
+        parseFeedbackErrorDetail(JSON.stringify({ message: 'try again' })),
+      ).toEqual({
+        message: 'try again',
+        raw: '{"message":"try again"}',
+      })
+
+      expect(
         parseFeedbackErrorDetail(JSON.stringify({ detail: 'missing token' })),
       ).toEqual({
         message: 'missing token',
