@@ -1,0 +1,6 @@
+export const CODEX_MCP_PROVIDER_ID = 'codex'
+export const CODEX_MCP_PROVIDER_NAME = 'Codex'
+export const CODEX_MCP_GLOBAL_SCOPE_LABEL = 'Global config'
+export const CODEX_MCP_PROJECT_SCOPE_LABEL = 'Project config'
+export const CODEX_MCP_UNKNOWN_DESCRIPTION = 'Unknown'
+export const CODEX_MCP_INSPECTION_ERROR = 'Failed to inspect Codex MCP servers'
