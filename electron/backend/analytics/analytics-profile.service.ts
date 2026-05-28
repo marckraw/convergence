@@ -7,18 +7,7 @@ import type {
   GeneratedWorkProfileSnapshot,
   GeneratedWorkProfileSnapshotPayload,
 } from './analytics.types'
-
-function parseRangePreset(value: string): AnalyticsRangePreset {
-  switch (value) {
-    case '7d':
-    case '30d':
-    case '90d':
-    case 'all':
-      return value
-    default:
-      throw new Error(`Invalid analytics range preset: ${value}`)
-  }
-}
+import { parseRangePreset } from './analytics.pure'
 
 function parseProfilePayload(
   row: AnalyticsProfileSnapshotRow,

@@ -1,4 +1,5 @@
 import type {
+  AnalyticsConversationItemKind,
   AnalyticsConversationItemInput,
   AnalyticsFileChangeInput,
   AnalyticsOverview,
@@ -43,6 +44,14 @@ const EMPTY_TOTALS: AnalyticsTotals = {
   failedSessions: 0,
 }
 
+export interface AnalyticsConversationItemRow {
+  id: string
+  session_id: string
+  kind: string
+  payload_json: string
+  created_at: string
+}
+
 interface DatedActivity {
   date: string
   timestamp: string
@@ -61,6 +70,102 @@ interface SessionLookupValue {
   projectName: string
   providerId: string
   providerName: string
+}
+
+export function providerNameFromId(providerId: string): string {
+  switch (providerId) {
+    case 'claude-code':
+      return 'Claude Code'
+    case 'codex':
+      return 'Codex'
+    case 'pi':
+      return 'Pi'
+    case 'shell':
+    case 'shell-provider':
+      return 'Terminal'
+    default:
+      return providerId
+  }
+}
+
+export function parseRangePreset(value: string): AnalyticsRangePreset {
+  switch (value) {
+    case '7d':
+    case '30d':
+    case '90d':
+    case 'all':
+      return value
+    default:
+      throw new Error(`Invalid analytics range preset: ${value}`)
+  }
+}
+
+export function parsePayload(
+  row: Pick<AnalyticsConversationItemRow, 'payload_json'>,
+): Record<string, unknown> {
+  try {
+    const parsed = JSON.parse(row.payload_json)
+    return typeof parsed === 'object' && parsed !== null
+      ? (parsed as Record<string, unknown>)
+      : {}
+  } catch {
+    return {}
+  }
+}
+
+export function kindFromRow(value: string): AnalyticsConversationItemKind {
+  switch (value) {
+    case 'message':
+    case 'thinking':
+    case 'tool-call':
+    case 'tool-result':
+    case 'approval-request':
+    case 'input-request':
+    case 'note':
+      return value
+    default:
+      return 'note'
+  }
+}
+
+export function textFromPayload(
+  kind: AnalyticsConversationItemKind,
+  payload: Record<string, unknown>,
+): string {
+  switch (kind) {
+    case 'message':
+    case 'thinking':
+    case 'note':
+      return typeof payload.text === 'string' ? payload.text : ''
+    case 'tool-call':
+      return typeof payload.inputText === 'string' ? payload.inputText : ''
+    case 'tool-result':
+      return typeof payload.outputText === 'string' ? payload.outputText : ''
+    case 'approval-request':
+      return typeof payload.description === 'string' ? payload.description : ''
+    case 'input-request':
+      return typeof payload.prompt === 'string' ? payload.prompt : ''
+  }
+}
+
+export function conversationItemFromRow(
+  row: AnalyticsConversationItemRow,
+): AnalyticsConversationItemInput {
+  const kind = kindFromRow(row.kind)
+  const payload = parsePayload(row)
+  const actor =
+    payload.actor === 'user' || payload.actor === 'assistant'
+      ? payload.actor
+      : null
+
+  return {
+    id: row.id,
+    sessionId: row.session_id,
+    kind,
+    actor,
+    text: textFromPayload(kind, payload),
+    createdAt: row.created_at,
+  }
 }
 
 function parseDateParts(date: string): {
