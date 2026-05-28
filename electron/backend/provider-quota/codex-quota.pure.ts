@@ -1,5 +1,6 @@
 import type {
   ProviderCreditsQuota,
+  ProviderQuotaSnapshot,
   ProviderQuotaAvailableSnapshot,
   ProviderQuotaWindow,
   ProviderQuotaWindowKind,
@@ -16,9 +17,23 @@ interface CodexUsageRateLimitRecord {
   secondary_window?: unknown
 }
 
-function readRecord(value: unknown): Record<string, unknown> | null {
+export function readRecord(value: unknown): Record<string, unknown> | null {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return null
   return value as Record<string, unknown>
+}
+
+export function buildCodexQuotaAuthError(
+  reason: string,
+  nowIso: string,
+): ProviderQuotaSnapshot {
+  return {
+    providerId: 'codex',
+    status: 'unavailable',
+    source: 'provider-api',
+    reason,
+    lastCheckedAt: nowIso,
+    stale: false,
+  }
 }
 
 function unwrapOptionalBox(value: unknown): unknown {

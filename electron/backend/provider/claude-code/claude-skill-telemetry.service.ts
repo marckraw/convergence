@@ -1,6 +1,8 @@
 import { createServer, type IncomingMessage, type Server } from 'http'
 import {
+  buildEmbeddedClaudeSkillTelemetryEnv,
   extractClaudeSkillActivationEvents,
+  shouldUseEmbeddedClaudeSkillTelemetry,
   type ClaudeSkillActivationEvent,
 } from './claude-skill-telemetry.pure'
 
@@ -14,41 +16,6 @@ export interface ClaudeSkillTelemetrySink {
 export interface ClaudeSkillTelemetrySinkOptions {
   env?: NodeJS.ProcessEnv
   onSkillActivated: (event: ClaudeSkillActivationEvent) => void
-}
-
-function isDisabled(env: NodeJS.ProcessEnv): boolean {
-  return (
-    env.CONVERGENCE_CLAUDE_SKILL_TELEMETRY === '0' ||
-    env.CONVERGENCE_DISABLE_CLAUDE_SKILL_TELEMETRY === '1' ||
-    env.CLAUDE_CODE_ENABLE_TELEMETRY === '0'
-  )
-}
-
-export function shouldUseEmbeddedClaudeSkillTelemetry(
-  env: NodeJS.ProcessEnv = process.env,
-): boolean {
-  if (isDisabled(env)) {
-    return false
-  }
-
-  return !env.OTEL_LOGS_EXPORTER && !env.OTEL_EXPORTER_OTLP_LOGS_ENDPOINT
-}
-
-export function buildEmbeddedClaudeSkillTelemetryEnv(
-  endpoint: string,
-  baseEnv: NodeJS.ProcessEnv = process.env,
-) {
-  return {
-    CLAUDE_CODE_ENABLE_TELEMETRY: '1',
-    OTEL_LOGS_EXPORTER: 'otlp',
-    OTEL_EXPORTER_OTLP_LOGS_PROTOCOL: 'http/json',
-    OTEL_EXPORTER_OTLP_LOGS_ENDPOINT: `${endpoint}/v1/logs`,
-    OTEL_LOG_TOOL_DETAILS: '1',
-    OTEL_LOGS_EXPORT_INTERVAL: '1000',
-    ...(!baseEnv.OTEL_METRICS_EXPORTER
-      ? { OTEL_METRICS_EXPORTER: 'none' }
-      : {}),
-  }
 }
 
 function readRequestBody(request: IncomingMessage): Promise<string> {

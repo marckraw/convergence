@@ -4,51 +4,22 @@ import type { ReviewNoteRow } from '../database/database.types'
 import { workspacePullRequestFromRow } from '../pull-request/pull-request.types'
 import { buildReviewNotePacket } from './review-note-prompt.pure'
 import {
-  parseReviewNoteMode,
-  parseReviewNoteState,
+  normalizeReviewNoteLine,
+  normalizeReviewNoteMode,
+  normalizeReviewNoteOptionalText,
+  normalizeReviewNoteRequiredText,
+  normalizeReviewNoteState,
+} from './review-notes.pure'
+import {
   reviewNoteFromRow,
   type CreateReviewNoteInput,
   type PreviewReviewNotePacketInput,
   type ReviewNote,
   type ReviewNotePacketPreview,
   type ReviewNotePacketSendResult,
-  type ReviewNoteMode,
-  type ReviewNoteState,
   type SendReviewNotePacketInput,
   type UpdateReviewNoteInput,
 } from './review-notes.types'
-
-function normalizeRequiredText(value: string, label: string): string {
-  const trimmed = value.trim()
-  if (trimmed.length === 0) {
-    throw new Error(`${label} cannot be empty`)
-  }
-  return trimmed
-}
-
-function normalizeOptionalText(
-  value: string | null | undefined,
-): string | null {
-  if (value === undefined || value === null) return null
-  const trimmed = value.trim()
-  return trimmed.length === 0 ? null : trimmed
-}
-
-function normalizeLine(value: number | null | undefined): number | null {
-  if (value === undefined || value === null) return null
-  if (!Number.isInteger(value) || value < 1) {
-    throw new Error('Review note line numbers must be positive integers')
-  }
-  return value
-}
-
-function normalizeMode(mode: ReviewNoteMode): ReviewNoteMode {
-  return parseReviewNoteMode(mode)
-}
-
-function normalizeState(state: ReviewNoteState): ReviewNoteState {
-  return parseReviewNoteState(state)
-}
 
 export class ReviewNotesService {
   constructor(private db: Database.Database) {}
@@ -78,13 +49,16 @@ export class ReviewNotesService {
     }
 
     const id = randomUUID()
-    const filePath = normalizeRequiredText(input.filePath, 'Review note file')
-    const mode = normalizeMode(input.mode)
-    const selectedDiff = normalizeRequiredText(
+    const filePath = normalizeReviewNoteRequiredText(
+      input.filePath,
+      'Review note file',
+    )
+    const mode = normalizeReviewNoteMode(input.mode)
+    const selectedDiff = normalizeReviewNoteRequiredText(
       input.selectedDiff,
       'Review note selection',
     )
-    const body = normalizeRequiredText(input.body, 'Review note body')
+    const body = normalizeReviewNoteRequiredText(input.body, 'Review note body')
 
     this.db
       .prepare(
@@ -110,11 +84,11 @@ export class ReviewNotesService {
         input.workspaceId ?? null,
         filePath,
         mode,
-        normalizeLine(input.oldStartLine),
-        normalizeLine(input.oldEndLine),
-        normalizeLine(input.newStartLine),
-        normalizeLine(input.newEndLine),
-        normalizeOptionalText(input.hunkHeader),
+        normalizeReviewNoteLine(input.oldStartLine),
+        normalizeReviewNoteLine(input.oldEndLine),
+        normalizeReviewNoteLine(input.newStartLine),
+        normalizeReviewNoteLine(input.newEndLine),
+        normalizeReviewNoteOptionalText(input.hunkHeader),
         selectedDiff,
         body,
       )
@@ -131,9 +105,11 @@ export class ReviewNotesService {
     const body =
       patch.body === undefined
         ? existing.body
-        : normalizeRequiredText(patch.body, 'Review note body')
+        : normalizeReviewNoteRequiredText(patch.body, 'Review note body')
     const state =
-      patch.state === undefined ? existing.state : normalizeState(patch.state)
+      patch.state === undefined
+        ? existing.state
+        : normalizeReviewNoteState(patch.state)
     // Keep sentAt as the first-send timestamp, even if a sent note is reopened
     // and sent again later.
     const sentAt = state === 'sent' && existing.sentAt === null ? true : false

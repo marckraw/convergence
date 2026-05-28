@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import { compareVersions, formatProgress, summarizeError } from './updates.pure'
+import {
+  compareVersions,
+  formatProgress,
+  summarizeError,
+  toNumber,
+  toShape,
+} from './updates.pure'
 
 describe('compareVersions', () => {
   it('returns 0 for equal versions', () => {
@@ -124,5 +130,21 @@ describe('summarizeError', () => {
 
   it('accepts string errors directly', () => {
     expect(summarizeError('boom')).toBe('boom')
+  })
+})
+
+describe('update event shape helpers', () => {
+  it('returns object shapes and rejects primitives', () => {
+    expect(toShape<{ version: string }>({ version: '1.2.3' })).toEqual({
+      version: '1.2.3',
+    })
+    expect(toShape('nope')).toEqual({})
+    expect(toShape(null)).toEqual({})
+  })
+
+  it('normalizes finite numbers with fallback', () => {
+    expect(toNumber(42, 0)).toBe(42)
+    expect(toNumber(Number.NaN, 7)).toBe(7)
+    expect(toNumber('42', 7)).toBe(7)
   })
 })

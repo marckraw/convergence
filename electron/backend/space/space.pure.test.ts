@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { normalizeOptionalText, normalizeRequiredText } from './space.pure'
+import {
+  normalizeOptionalText,
+  normalizeRequiredText,
+  sanitizeFilename,
+  sanitizePathSegment,
+} from './space.pure'
 import {
   spaceAttemptFromRow,
   spaceFromRow,
@@ -22,6 +27,18 @@ describe('space pure helpers', () => {
   it('normalizes optional text', () => {
     expect(normalizeOptionalText('  notes  ')).toBe('notes')
     expect(normalizeOptionalText(undefined)).toBe('')
+  })
+
+  it('sanitizes path segments', () => {
+    expect(sanitizePathSegment('My Space/../Plan')).toBe('My_Space_.._Plan')
+    expect(sanitizePathSegment('')).toBe('space')
+    expect(sanitizePathSegment('a'.repeat(250))).toHaveLength(200)
+  })
+
+  it('sanitizes filenames', () => {
+    expect(sanitizeFilename('/tmp/My File?.md')).toBe('My_File_.md')
+    expect(sanitizeFilename('')).toBe('source')
+    expect(sanitizeFilename('a'.repeat(250))).toHaveLength(200)
   })
 
   it('maps space rows and falls back unknown enum values', () => {

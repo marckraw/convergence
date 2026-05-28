@@ -7,20 +7,10 @@ import {
   type ProjectContextItem,
   type UpdateProjectContextItemInput,
 } from './project-context.types'
-
-function normalizeBody(body: string): string {
-  const trimmed = body.trim()
-  if (trimmed.length === 0) {
-    throw new Error('Project context item body cannot be empty')
-  }
-  return trimmed
-}
-
-function normalizeLabel(label: string | null | undefined): string | null {
-  if (label === undefined || label === null) return null
-  const trimmed = label.trim()
-  return trimmed.length === 0 ? null : trimmed
-}
+import {
+  normalizeProjectContextBody,
+  normalizeProjectContextLabel,
+} from './project-context.pure'
 
 export class ProjectContextService {
   constructor(private db: Database.Database) {}
@@ -45,8 +35,8 @@ export class ProjectContextService {
 
   create(input: CreateProjectContextItemInput): ProjectContextItem {
     this.assertProjectExists(input.projectId)
-    const body = normalizeBody(input.body)
-    const label = normalizeLabel(input.label)
+    const body = normalizeProjectContextBody(input.body)
+    const label = normalizeProjectContextLabel(input.label)
 
     const id = randomUUID()
     this.db
@@ -67,9 +57,13 @@ export class ProjectContextService {
     }
 
     const body =
-      patch.body === undefined ? existing.body : normalizeBody(patch.body)
+      patch.body === undefined
+        ? existing.body
+        : normalizeProjectContextBody(patch.body)
     const label =
-      patch.label === undefined ? existing.label : normalizeLabel(patch.label)
+      patch.label === undefined
+        ? existing.label
+        : normalizeProjectContextLabel(patch.label)
     const reinjectMode = patch.reinjectMode ?? existing.reinjectMode
 
     this.db

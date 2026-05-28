@@ -1,4 +1,5 @@
 import { existsSync, readFileSync } from 'fs'
+import { stripEnvFileQuotes } from './env-file.pure'
 
 export function loadEnvFile(
   filePath: string,
@@ -19,17 +20,6 @@ export function loadEnvFile(
     const rawValue = normalized.slice(equalsIndex + 1).trim()
     if (!key || env[key] !== undefined) continue
 
-    env[key] = stripQuotes(rawValue)
+    env[key] = stripEnvFileQuotes(rawValue)
   }
-}
-
-function stripQuotes(value: string): string {
-  if (
-    (value.startsWith('"') && value.endsWith('"')) ||
-    (value.startsWith("'") && value.endsWith("'"))
-  ) {
-    return value.slice(1, -1)
-  }
-
-  return value
 }

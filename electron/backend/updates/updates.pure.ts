@@ -65,6 +65,15 @@ interface MaybeErrorShape {
   message?: unknown
 }
 
+export function toShape<T>(value: unknown): Partial<T> {
+  if (value && typeof value === 'object') return value as Partial<T>
+  return {}
+}
+
+export function toNumber(value: unknown, fallback: number): number {
+  return typeof value === 'number' && Number.isFinite(value) ? value : fallback
+}
+
 export function summarizeError(err: unknown): string {
   if (!err) return 'Unknown error.'
   const shape = toErrorShape(err)

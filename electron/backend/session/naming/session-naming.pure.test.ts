@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import { buildNamingPrompt, sanitizeTitle } from './session-naming.pure'
+import {
+  buildNamingPrompt,
+  isAssistantMessageItem,
+  isUserMessageItem,
+  sanitizeTitle,
+} from './session-naming.pure'
+import type { ConversationItem } from '../conversation-item.types'
 
 describe('buildNamingPrompt', () => {
   it('includes both turns', () => {
@@ -46,5 +52,44 @@ describe('sanitizeTitle', () => {
     expect(sanitizeTitle('')).toBeNull()
     expect(sanitizeTitle('   ')).toBeNull()
     expect(sanitizeTitle('a'.repeat(200))).toBeNull()
+  })
+})
+
+describe('conversation item guards', () => {
+  it('detects user and assistant message items', () => {
+    const user: ConversationItem = {
+      id: 'item-1',
+      sessionId: 'session-1',
+      sequence: 1,
+      turnId: null,
+      kind: 'message',
+      state: 'complete',
+      actor: 'user',
+      text: 'hello',
+      createdAt: '2026-01-01T00:00:00.000Z',
+      updatedAt: '2026-01-01T00:00:00.000Z',
+      providerMeta: {
+        providerId: 'test',
+        providerItemId: null,
+        providerEventType: null,
+      },
+    }
+    const assistant = {
+      ...user,
+      id: 'item-2',
+      sequence: 2,
+      actor: 'assistant',
+    } as ConversationItem
+    const tool = {
+      ...user,
+      id: 'item-3',
+      sequence: 3,
+      actor: 'tool',
+    } as unknown as ConversationItem
+
+    expect(isUserMessageItem(user)).toBe(true)
+    expect(isUserMessageItem(assistant)).toBe(false)
+    expect(isAssistantMessageItem(assistant)).toBe(true)
+    expect(isAssistantMessageItem(tool)).toBe(false)
   })
 })

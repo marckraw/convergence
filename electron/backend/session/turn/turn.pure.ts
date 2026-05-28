@@ -72,6 +72,28 @@ export function isTruncatedDiff(diff: string): boolean {
   return diff.startsWith(TURN_DIFF_TRUNCATION_MARKER_PREFIX)
 }
 
+export function looksBinary(content: string): boolean {
+  const sample = content.slice(0, 8 * 1024)
+  for (let i = 0; i < sample.length; i++) {
+    if (sample.charCodeAt(i) === 0) return true
+  }
+  return false
+}
+
+export function deriveFileChangeStatus(
+  startExisted: boolean,
+  endExisted: boolean,
+  startContent: string,
+  endContent: string,
+  isBinary: boolean,
+): TurnFileChangeStatus | null {
+  if (!startExisted && !endExisted) return null
+  if (!startExisted) return 'added'
+  if (!endExisted) return 'deleted'
+  if (!isBinary && startContent === endContent) return null
+  return 'modified'
+}
+
 function turnStatusFromValue(value: string): TurnStatus {
   switch (value) {
     case 'running':

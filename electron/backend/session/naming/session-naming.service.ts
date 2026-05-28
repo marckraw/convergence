@@ -3,32 +3,16 @@ import type { ProviderRegistry } from '../../provider/provider-registry'
 import type { AppSettingsService } from '../../app-settings/app-settings.service'
 import type { ConversationItem } from '../conversation-item.types'
 import type { SessionSummary } from '../session.types'
-import { buildNamingPrompt, sanitizeTitle } from './session-naming.pure'
+import {
+  buildNamingPrompt,
+  isAssistantMessageItem,
+  isUserMessageItem,
+  sanitizeTitle,
+} from './session-naming.pure'
 
 export interface SessionNamingDeps {
   providers: ProviderRegistry
   appSettings: AppSettingsService
-}
-
-type UserMessageItem = ConversationItem & {
-  kind: 'message'
-  actor: 'user'
-  text: string
-}
-type AssistantMessageItem = ConversationItem & {
-  kind: 'message'
-  actor: 'assistant'
-  text: string
-}
-
-function isUserMessageItem(item: ConversationItem): item is UserMessageItem {
-  return item.kind === 'message' && item.actor === 'user'
-}
-
-function isAssistantMessageItem(
-  item: ConversationItem,
-): item is AssistantMessageItem {
-  return item.kind === 'message' && item.actor === 'assistant'
 }
 
 export class SessionNamingService {

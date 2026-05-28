@@ -24,18 +24,12 @@ import {
   type UpdateSpaceInput,
   type UpdateSpaceArtifactInput,
 } from './space.types'
-import { normalizeOptionalText, normalizeRequiredText } from './space.pure'
-
-function sanitizePathSegment(value: string): string {
-  const sanitized = value.replace(/[^a-zA-Z0-9._-]/g, '_')
-  return sanitized.length > 0 ? sanitized.slice(0, 200) : 'space'
-}
-
-function sanitizeFilename(path: string): string {
-  const name = basename(path).replace(/\s+/g, '_')
-  const sanitized = name.replace(/[^a-zA-Z0-9._-]/g, '_')
-  return sanitized.length > 0 ? sanitized.slice(0, 200) : 'source'
-}
+import {
+  normalizeOptionalText,
+  normalizeRequiredText,
+  sanitizeFilename,
+  sanitizePathSegment,
+} from './space.pure'
 
 export class SpaceService {
   constructor(

@@ -1,5 +1,8 @@
-import { INITIAL_UPDATE_STATUS } from './updates.defaults'
-import { summarizeError } from './updates.pure'
+import {
+  DEFAULT_RELEASE_NOTES,
+  INITIAL_UPDATE_STATUS,
+} from './updates.defaults'
+import { summarizeError, toNumber, toShape } from './updates.pure'
 import type {
   UpdateStatus,
   UpdateTrigger,
@@ -50,9 +53,6 @@ interface DownloadProgressShape {
   percent?: unknown
   bytesPerSecond?: unknown
 }
-
-const DEFAULT_RELEASE_NOTES = (version: string): string =>
-  `https://github.com/marckraw/convergence/releases/tag/v${version}`
 
 export class UpdatesService {
   private status: UpdateStatus = INITIAL_UPDATE_STATUS
@@ -247,13 +247,4 @@ export class UpdatesService {
     const now = this.deps.now ? this.deps.now() : new Date()
     return now.toISOString()
   }
-}
-
-function toShape<T>(value: unknown): Partial<T> {
-  if (value && typeof value === 'object') return value as Partial<T>
-  return {}
-}
-
-function toNumber(value: unknown, fallback: number): number {
-  return typeof value === 'number' && Number.isFinite(value) ? value : fallback
 }
