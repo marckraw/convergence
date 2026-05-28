@@ -9,6 +9,7 @@ import {
   useSessionStore,
   type SessionSummary,
 } from '@/entities/session'
+import { useTerminalStore, type TerminalIdleNotice } from '@/entities/terminal'
 import type { CodeReviewMode } from '@/entities/code-review'
 import { useNotificationsStore } from '@/entities/notifications'
 import { useTaskProgressStore } from '@/entities/task-progress'
@@ -30,6 +31,7 @@ import { switchToSession } from '@/features/command-center'
 import { useDialogStore } from '@/entities/dialog'
 import { NeedsYou } from './needs-you.presentational'
 import { buildNeedsYouSummary } from './needs-you.presentational'
+import { TerminalIdleSection } from './terminal-idle-section.presentational'
 import { ProjectTree } from './project-tree.container'
 import { ProjectSwitcher } from './project-switcher.presentational'
 import { Button } from '@/shared/ui/button'
@@ -151,6 +153,11 @@ export const Sidebar: FC<SidebarProps> = ({
   const unarchiveSpace = useSpaceStore((s) => s.unarchiveSpace)
   const unlinkSpaceAttempt = useSpaceStore((s) => s.unlinkAttempt)
   const pulsingSessionIds = useNotificationsStore((s) => s.pulsingSessionIds)
+  const terminalIdleNotices = useTerminalStore((s) => s.idleNotices)
+  const dismissTerminalIdleNotice = useTerminalStore(
+    (s) => s.dismissTerminalIdleNotice,
+  )
+  const focusTerminalTab = useTerminalStore((s) => s.focusTerminalTab)
   const [regeneratingSessionRequests, setRegeneratingSessionRequests] =
     useState<Record<string, string>>({})
   const regeneratingSessionIds = useMemo(
@@ -356,6 +363,32 @@ export const Sidebar: FC<SidebarProps> = ({
       return
     }
     onSelectSession(sessionId)
+  }
+
+  const handleSelectTerminalIdleNotice = async (notice: TerminalIdleNotice) => {
+    const target = sessionLookup.get(notice.sessionId)
+    if (target && onSelectAnySession) {
+      onSelectAnySession(target)
+      if (target.workspaceId) {
+        expandWorkspace(target.workspaceId)
+      }
+      focusTerminalTab(notice.sessionId, notice.terminalId)
+      dismissTerminalIdleNotice(notice.terminalId)
+      return
+    }
+
+    await switchToSession(notice.sessionId)
+    onSelectSurface(target?.contextKind === 'global' ? 'chat' : 'code')
+    if (target?.workspaceId) {
+      expandWorkspace(target.workspaceId)
+    }
+    if (target?.contextKind === 'global') {
+      onSelectGlobalSession(notice.sessionId)
+    } else {
+      onSelectSession(notice.sessionId)
+    }
+    focusTerminalTab(notice.sessionId, notice.terminalId)
+    dismissTerminalIdleNotice(notice.terminalId)
   }
 
   const sessionLookup = useMemo(() => {
@@ -914,7 +947,14 @@ export const Sidebar: FC<SidebarProps> = ({
           onArchive={archiveSession}
         />
 
-        {visibleAttentionSessions.length > 0 && (
+        <TerminalIdleSection
+          notices={terminalIdleNotices}
+          onSelect={handleSelectTerminalIdleNotice}
+          onDismiss={dismissTerminalIdleNotice}
+        />
+
+        {(visibleAttentionSessions.length > 0 ||
+          terminalIdleNotices.length > 0) && (
           <div className="mx-3 mb-3 border-t border-border/50" />
         )}
 

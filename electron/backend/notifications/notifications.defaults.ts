@@ -12,6 +12,7 @@ export const DEFAULT_NOTIFICATION_PREFS: NotificationPrefs = {
     needsInput: true,
     needsApproval: true,
     errored: true,
+    terminalIdle: true,
   },
   suppressWhenFocused: true,
 }

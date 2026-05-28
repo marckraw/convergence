@@ -13,7 +13,9 @@ export const MAX_BODY_LENGTH = 200
 export function eventSeverity(
   kind: NotificationEventKind,
 ): NotificationSeverity {
-  return kind === 'agent.finished' ? 'info' : 'critical'
+  return kind === 'agent.finished' || kind === 'terminal.idle'
+    ? 'info'
+    : 'critical'
 }
 
 function isEventEnabled(
@@ -29,6 +31,8 @@ function isEventEnabled(
       return prefs.events.needsApproval
     case 'agent.errored':
       return prefs.events.errored
+    case 'terminal.idle':
+      return prefs.events.terminalIdle
   }
 }
 
@@ -104,6 +108,7 @@ const TITLE_BY_KIND: Record<
   'agent.needs_input': formatNeedsInputTitle,
   'agent.needs_approval': (event) => `${event.sessionName} needs approval`,
   'agent.errored': (event) => `${event.sessionName} errored`,
+  'terminal.idle': () => 'Terminal is idle',
 }
 
 function truncate(value: string, max: number): string {
@@ -115,8 +120,11 @@ export function formatTitleAndBody(
   event: NotificationEvent,
 ): FormattedNotification {
   const title = TITLE_BY_KIND[event.kind](event)
-  const body = truncate(event.projectName, MAX_BODY_LENGTH)
-  return { title, body }
+  const body =
+    event.kind === 'terminal.idle'
+      ? `${event.sessionName} - ${event.terminalProcessName ?? 'command'}`
+      : event.projectName
+  return { title, body: truncate(body, MAX_BODY_LENGTH) }
 }
 
 function formatNeedsInputTitle(event: NotificationEvent): string {

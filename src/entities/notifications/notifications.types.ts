@@ -8,6 +8,7 @@ export type NotificationEventKind =
   | 'agent.needs_approval'
   | 'agent.needs_input'
   | 'agent.errored'
+  | 'terminal.idle'
 
 export type NotificationSeverity = 'info' | 'critical'
 
@@ -17,6 +18,8 @@ export interface NotificationEvent {
   sessionId: string
   sessionName: string
   projectName: string
+  terminalId?: string | null
+  terminalProcessName?: string | null
   firedAt: number
 }
 
@@ -36,6 +39,7 @@ export interface NotificationEventPrefs {
   needsInput: boolean
   needsApproval: boolean
   errored: boolean
+  terminalIdle: boolean
 }
 
 export interface NotificationPrefs {
@@ -61,6 +65,7 @@ export const DEFAULT_NOTIFICATION_PREFS: NotificationPrefs = {
     needsInput: true,
     needsApproval: true,
     errored: true,
+    terminalIdle: true,
   },
   suppressWhenFocused: true,
 }

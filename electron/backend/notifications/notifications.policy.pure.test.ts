@@ -48,8 +48,9 @@ function withPrefs(overrides: Partial<NotificationPrefs>): NotificationPrefs {
 }
 
 describe('eventSeverity', () => {
-  it('maps finished to info', () => {
+  it('maps finished and terminal idle to info', () => {
     expect(eventSeverity('agent.finished')).toBe('info')
+    expect(eventSeverity('terminal.idle')).toBe('info')
   })
 
   it.each([
@@ -239,6 +240,24 @@ describe('decideChannels — preferences masking', () => {
     ).toBeGreaterThan(0)
   })
 
+  it('terminalIdle=false disables terminal idle notifications only', () => {
+    const terminalIdleOff = withPrefs({
+      events: {
+        ...DEFAULT_NOTIFICATION_PREFS.events,
+        terminalIdle: false,
+      },
+    })
+
+    expect(
+      decideChannels(makeEvent('terminal.idle'), unfocused, terminalIdleOff)
+        .size,
+    ).toBe(0)
+    expect(
+      decideChannels(makeEvent('agent.finished'), unfocused, terminalIdleOff)
+        .size,
+    ).toBeGreaterThan(0)
+  })
+
   it.each([
     [
       'toasts',
@@ -349,6 +368,15 @@ describe('formatTitleAndBody', () => {
     expect(formatTitleAndBody(makeEvent('agent.errored'))).toEqual({
       title: 'Refactor auth errored',
       body: 'Convergence',
+    })
+    expect(
+      formatTitleAndBody({
+        ...makeEvent('terminal.idle'),
+        terminalProcessName: 'npm',
+      }),
+    ).toEqual({
+      title: 'Terminal is idle',
+      body: 'Refactor auth - npm',
     })
   })
 

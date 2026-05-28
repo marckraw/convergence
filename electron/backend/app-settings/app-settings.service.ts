@@ -81,6 +81,10 @@ function parseNotificationPrefs(value: unknown): NotificationPrefs {
         eventsRaw.errored,
         DEFAULT_NOTIFICATION_PREFS.events.errored,
       ),
+      terminalIdle: pickBoolean(
+        eventsRaw.terminalIdle,
+        DEFAULT_NOTIFICATION_PREFS.events.terminalIdle,
+      ),
     },
   }
 }

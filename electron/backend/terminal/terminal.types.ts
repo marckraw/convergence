@@ -21,6 +21,16 @@ export interface TerminalExitPayload {
   signal: number | null
 }
 
+export type TerminalActivityStatus = 'idle' | 'busy' | 'exited'
+
+export interface TerminalIdleEvent {
+  sessionId: string
+  terminalId: string
+  processName: string
+  busySince: string
+  idleAt: string
+}
+
 export interface PtyProcess {
   pid: number
   write(data: string): void

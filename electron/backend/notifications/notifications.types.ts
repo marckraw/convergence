@@ -5,6 +5,7 @@ export type NotificationEventKind =
   | 'agent.needs_approval'
   | 'agent.needs_input'
   | 'agent.errored'
+  | 'terminal.idle'
 
 export type NotificationSeverity = 'info' | 'critical'
 
@@ -15,6 +16,8 @@ export interface NotificationEvent {
   sessionName: string
   projectName: string
   attentionRequestKind?: AttentionRequestKind | null
+  terminalId?: string | null
+  terminalProcessName?: string | null
   firedAt: number
 }
 
@@ -47,6 +50,7 @@ export interface NotificationPrefs {
     needsInput: boolean
     needsApproval: boolean
     errored: boolean
+    terminalIdle: boolean
   }
   suppressWhenFocused: boolean
 }

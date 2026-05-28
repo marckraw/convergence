@@ -1610,6 +1610,7 @@ interface ElectronAPI {
       id: string,
       callback: (payload: { exitCode: number; signal: number | null }) => void,
     ) => () => void
+    onIdle: (callback: (payload: unknown) => void) => () => void
   }
   terminalLayout: {
     get: (sessionId: string) => Promise<unknown>
@@ -1694,6 +1695,7 @@ interface NotificationEventPrefsData {
   needsInput: boolean
   needsApproval: boolean
   errored: boolean
+  terminalIdle: boolean
 }
 
 interface NotificationPrefsData {
@@ -1714,6 +1716,7 @@ type NotificationEventKindData =
   | 'agent.needs_approval'
   | 'agent.needs_input'
   | 'agent.errored'
+  | 'terminal.idle'
 
 type NotificationChannelData =
   | 'inline-pulse'
@@ -1732,6 +1735,8 @@ interface NotificationEventData {
   sessionId: string
   sessionName: string
   projectName: string
+  terminalId?: string | null
+  terminalProcessName?: string | null
   firedAt: number
 }
 

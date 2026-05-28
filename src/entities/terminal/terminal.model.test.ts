@@ -15,6 +15,7 @@ vi.mock('./terminal.api', () => ({
     resize: vi.fn(),
     onData: vi.fn(),
     onExit: vi.fn(),
+    onIdle: vi.fn(),
   },
 }))
 
@@ -50,6 +51,7 @@ describe('terminal store', () => {
       dockWidthBySessionId: {},
       dockVisibleBySessionId: {},
       dockPlacementBySessionId: {},
+      idleNotices: [],
     })
     createMock.mockReset()
     disposeMock.mockReset()
@@ -287,6 +289,80 @@ describe('terminal store', () => {
       useTerminalStore.getState().markTabExited('s1', 't1', 137)
       const tab = useTerminalStore.getState().getTab('s1', 't1')
       expect(tab).toMatchObject({ status: 'exited', exitCode: 137 })
+    })
+  })
+
+  describe('terminal idle notices', () => {
+    it('ingests a valid terminal idle event and replaces the previous notice for that terminal', () => {
+      const event = {
+        sessionId: 's1',
+        terminalId: 't1',
+        processName: 'npm',
+        busySince: '2026-01-01T00:00:00.000Z',
+        idleAt: '2026-01-01T00:00:05.000Z',
+        sessionName: 'Terminal - Convergence',
+        projectName: 'Convergence',
+      }
+
+      useTerminalStore.getState().handleTerminalIdleEvent(event)
+      useTerminalStore.getState().handleTerminalIdleEvent({
+        ...event,
+        processName: 'vitest',
+      })
+
+      expect(useTerminalStore.getState().idleNotices).toMatchObject([
+        {
+          terminalId: 't1',
+          processName: 'vitest',
+          sessionName: 'Terminal - Convergence',
+        },
+      ])
+    })
+
+    it('ignores malformed terminal idle events', () => {
+      useTerminalStore.getState().handleTerminalIdleEvent({ terminalId: 't1' })
+      expect(useTerminalStore.getState().idleNotices).toEqual([])
+    })
+
+    it('dismisses a terminal idle notice', () => {
+      useTerminalStore.getState().handleTerminalIdleEvent({
+        sessionId: 's1',
+        terminalId: 't1',
+        processName: 'npm',
+        busySince: '2026-01-01T00:00:00.000Z',
+        idleAt: '2026-01-01T00:00:05.000Z',
+        sessionName: 'Terminal',
+        projectName: 'Project',
+      })
+
+      useTerminalStore.getState().dismissTerminalIdleNotice('t1')
+
+      expect(useTerminalStore.getState().idleNotices).toEqual([])
+    })
+
+    it('focuses the leaf and tab for a terminal notice and reveals the dock', async () => {
+      mockCreate('t1')
+      const { leafId } = await useTerminalStore.getState().openFirstPane({
+        sessionId: 's1',
+        ...baseArgs,
+      })
+      mockCreate('t2')
+      await useTerminalStore.getState().newTab({
+        sessionId: 's1',
+        leafId,
+        ...baseArgs,
+      })
+      useTerminalStore.getState().setDockVisible('s1', false)
+
+      const focused = useTerminalStore.getState().focusTerminalTab('s1', 't1')
+
+      expect(focused).toBe(true)
+      const tree = useTerminalStore.getState().getTree('s1') as LeafNode
+      expect(tree.activeTabId).toBe('t1')
+      expect(useTerminalStore.getState().focusedLeafBySessionId['s1']).toBe(
+        leafId,
+      )
+      expect(useTerminalStore.getState().isDockVisible('s1')).toBe(true)
     })
   })
 

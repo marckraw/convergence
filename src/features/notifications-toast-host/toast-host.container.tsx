@@ -11,11 +11,14 @@ import { useProjectStore } from '@/entities/project'
 import { useSessionStore, type SessionSummary } from '@/entities/session'
 import { useWorkspaceStore } from '@/entities/workspace'
 import { useAppSurfaceStore } from '@/entities/app-surface'
+import { useTerminalStore } from '@/entities/terminal'
 import chimeSoftUrl from '@/shared/assets/sounds/chime-soft.wav'
 import chimeAlertUrl from '@/shared/assets/sounds/chime-alert.wav'
 
 function severityFor(kind: NotificationEventKind): NotificationSeverity {
-  return kind === 'agent.finished' ? 'info' : 'critical'
+  return kind === 'agent.finished' || kind === 'terminal.idle'
+    ? 'info'
+    : 'critical'
 }
 
 // Cross-project focus: a system notification or toast click can target a
@@ -86,6 +89,19 @@ export function NotificationsToastHostContainer({
     [globalSessions, onFocusSession],
   )
 
+  const focusNotificationTarget = useCallback(
+    async (payload: NotificationDispatchPayload) => {
+      focusSession(payload.event.sessionId)
+      if (payload.event.kind === 'terminal.idle' && payload.event.terminalId) {
+        await Promise.resolve()
+        useTerminalStore
+          .getState()
+          .focusTerminalTab(payload.event.sessionId, payload.event.terminalId)
+      }
+    },
+    [focusSession],
+  )
+
   useEffect(() => {
     const unsubscribe = notificationsApi.onShowToast(
       (payload: NotificationDispatchPayload) => {
@@ -104,7 +120,7 @@ export function NotificationsToastHostContainer({
           action: {
             label: 'Open',
             onClick: () => {
-              focusSession(payload.event.sessionId)
+              void focusNotificationTarget(payload)
               clearUnread()
             },
           },
@@ -113,7 +129,7 @@ export function NotificationsToastHostContainer({
       },
     )
     return unsubscribe
-  }, [clearUnread, focusSession, incrementUnread, pulseSession])
+  }, [clearUnread, focusNotificationTarget, incrementUnread, pulseSession])
 
   useEffect(() => {
     const unsubscribe = notificationsApi.onPlaySound(

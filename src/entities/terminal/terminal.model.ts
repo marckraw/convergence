@@ -8,6 +8,8 @@ import type {
   SplitDirection,
   SplitNode,
   TerminalTab,
+  TerminalIdleNotice,
+  TerminalIdleEvent,
 } from './terminal.types'
 import type { PersistedLeaf, PersistedPaneTree } from './terminal-layout.types'
 import { serializePaneTree } from './terminal-layout.pure'
@@ -29,6 +31,7 @@ interface TerminalState {
   dockWidthBySessionId: Record<string, number>
   dockVisibleBySessionId: Record<string, boolean>
   dockPlacementBySessionId: Record<string, DockPlacement>
+  idleNotices: TerminalIdleNotice[]
 }
 
 const DEFAULT_DOCK_HEIGHT = 280
@@ -107,6 +110,9 @@ interface TerminalActions {
   setFocusedLeaf: (sessionId: string, leafId: string) => void
   resizeSplit: (sessionId: string, splitId: string, sizes: number[]) => void
   markTabExited: (sessionId: string, tabId: string, exitCode: number) => void
+  handleTerminalIdleEvent: (input: unknown) => void
+  dismissTerminalIdleNotice: (terminalId: string) => void
+  focusTerminalTab: (sessionId: string, terminalId: string) => boolean
   setDockHeight: (
     sessionId: string,
     height: number,
@@ -203,6 +209,17 @@ function findTabInTree(tree: PaneTree, tabId: string): TerminalTab | null {
   return null
 }
 
+function findLeafByTabId(tree: PaneTree, tabId: string): LeafNode | null {
+  if (tree.kind === 'leaf') {
+    return tree.tabs.some((tab) => tab.id === tabId) ? tree : null
+  }
+  for (const child of tree.children) {
+    const found = findLeafByTabId(child, tabId)
+    if (found) return found
+  }
+  return null
+}
+
 function updateTabInTree(
   tree: PaneTree,
   tabId: string,
@@ -244,6 +261,46 @@ function basename(path: string): string {
   return idx === -1 ? path : path.slice(idx + 1)
 }
 
+function readStringRecord(input: unknown): Record<string, unknown> | null {
+  return input && typeof input === 'object'
+    ? (input as Record<string, unknown>)
+    : null
+}
+
+function parseTerminalIdleEvent(input: unknown): TerminalIdleEvent | null {
+  const raw = readStringRecord(input)
+  if (!raw) return null
+  const {
+    sessionId,
+    terminalId,
+    processName,
+    busySince,
+    idleAt,
+    sessionName,
+    projectName,
+  } = raw
+  if (
+    typeof sessionId !== 'string' ||
+    typeof terminalId !== 'string' ||
+    typeof processName !== 'string' ||
+    typeof busySince !== 'string' ||
+    typeof idleAt !== 'string' ||
+    typeof sessionName !== 'string' ||
+    typeof projectName !== 'string'
+  ) {
+    return null
+  }
+  return {
+    sessionId,
+    terminalId,
+    processName,
+    busySince,
+    idleAt,
+    sessionName,
+    projectName,
+  }
+}
+
 export const useTerminalStore = create<TerminalStore>((set, get) => ({
   treesBySessionId: {},
   focusedLeafBySessionId: {},
@@ -251,6 +308,7 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
   dockWidthBySessionId: {},
   dockVisibleBySessionId: {},
   dockPlacementBySessionId: {},
+  idleNotices: [],
 
   getTree: (sessionId) => get().treesBySessionId[sessionId] ?? null,
 
@@ -339,6 +397,9 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
     const { tree: nextTree, ptyIdsToDispose } = removeTab(tree, leafId, tabId)
     set((state) => ({
       treesBySessionId: { ...state.treesBySessionId, [sessionId]: nextTree },
+      idleNotices: state.idleNotices.filter(
+        (notice) => notice.terminalId !== tabId,
+      ),
     }))
     schedulePersistSave(sessionId)
     for (const id of ptyIdsToDispose) {
@@ -360,6 +421,9 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
         ...state.focusedLeafBySessionId,
         [sessionId]: null,
       },
+      idleNotices: state.idleNotices.filter(
+        (notice) => notice.sessionId !== sessionId,
+      ),
     }))
     schedulePersistSave(sessionId)
     for (const id of ids) {
@@ -511,8 +575,60 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
             exitCode,
           })),
         },
+        idleNotices: state.idleNotices.filter(
+          (notice) => notice.terminalId !== tabId,
+        ),
       }
     })
+  },
+
+  handleTerminalIdleEvent: (input) => {
+    const event = parseTerminalIdleEvent(input)
+    if (!event) return
+    const notice: TerminalIdleNotice = {
+      ...event,
+      id: event.terminalId,
+      receivedAt: new Date().toISOString(),
+    }
+    set((state) => ({
+      idleNotices: [
+        notice,
+        ...state.idleNotices.filter(
+          (existing) => existing.terminalId !== notice.terminalId,
+        ),
+      ],
+    }))
+  },
+
+  dismissTerminalIdleNotice: (terminalId) => {
+    set((state) => ({
+      idleNotices: state.idleNotices.filter(
+        (notice) => notice.terminalId !== terminalId,
+      ),
+    }))
+  },
+
+  focusTerminalTab: (sessionId, terminalId) => {
+    const tree = get().treesBySessionId[sessionId]
+    if (!tree) return false
+    const leaf = findLeafByTabId(tree, terminalId)
+    if (!leaf) return false
+    set((state) => ({
+      treesBySessionId: {
+        ...state.treesBySessionId,
+        [sessionId]: setActiveTabPure(tree, leaf.id, terminalId),
+      },
+      focusedLeafBySessionId: {
+        ...state.focusedLeafBySessionId,
+        [sessionId]: leaf.id,
+      },
+      dockVisibleBySessionId: {
+        ...state.dockVisibleBySessionId,
+        [sessionId]: true,
+      },
+    }))
+    schedulePersistSave(sessionId)
+    return true
   },
 
   loadPersistedLayout: async (sessionId) => {

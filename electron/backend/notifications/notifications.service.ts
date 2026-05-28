@@ -58,6 +58,7 @@ export class NotificationsService {
       Session,
       'id' | 'name' | 'projectId' | 'attentionRequestKind'
     >,
+    extras: Pick<NotificationEvent, 'terminalId' | 'terminalProcessName'> = {},
   ): NotificationEvent {
     const projectName = session.projectId
       ? this.deps.getProjectName(session.projectId)
@@ -70,6 +71,8 @@ export class NotificationsService {
       sessionName: session.name,
       projectName: projectName ?? 'Convergence',
       attentionRequestKind: session.attentionRequestKind ?? null,
+      terminalId: extras.terminalId ?? null,
+      terminalProcessName: extras.terminalProcessName ?? null,
       firedAt: this.deps.now ? this.deps.now() : Date.now(),
     }
   }

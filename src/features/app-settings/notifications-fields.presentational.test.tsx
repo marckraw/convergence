@@ -43,6 +43,9 @@ describe('NotificationsFields', () => {
     ).toBeInTheDocument()
     expect(screen.getByRole('switch', { name: 'Errored' })).toBeInTheDocument()
     expect(
+      screen.getByRole('switch', { name: 'Terminal idle' }),
+    ).toBeInTheDocument()
+    expect(
       screen.getByRole('switch', { name: 'Suppress when window is focused' }),
     ).toBeInTheDocument()
   })
@@ -83,6 +86,7 @@ describe('NotificationsFields', () => {
           needsInput: true,
           needsApproval: true,
           errored: false,
+          terminalIdle: true,
         }),
       }),
     )

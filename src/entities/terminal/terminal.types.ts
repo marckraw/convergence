@@ -37,3 +37,18 @@ export interface CreateTerminalArgs {
   cols: number
   rows: number
 }
+
+export interface TerminalIdleEvent {
+  sessionId: string
+  terminalId: string
+  processName: string
+  busySince: string
+  idleAt: string
+  sessionName: string
+  projectName: string
+}
+
+export interface TerminalIdleNotice extends TerminalIdleEvent {
+  id: string
+  receivedAt: string
+}
