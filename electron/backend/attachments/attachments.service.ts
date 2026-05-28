@@ -16,100 +16,17 @@ import {
   sniffMime,
 } from './mime-sniff.pure'
 import { normalizeImageBytes } from './image-normalize.pure'
+import { DRAFT_SESSION_ID, MAX_TOTAL_BYTES } from './attachments.constants'
+import {
+  type AttachmentRow,
+  extensionFor,
+  limitFor,
+  limitLabel,
+  rowToAttachment,
+  sanitizeFilename,
+} from './attachments.pure'
 
-const MAX_IMAGE_BYTES = 10 * 1024 * 1024
-const MAX_PDF_BYTES = 20 * 1024 * 1024
-const MAX_TEXT_BYTES = 1 * 1024 * 1024
-const MAX_TOTAL_BYTES = 50 * 1024 * 1024
-
-// Sentinel session id used by the composer when no real session exists yet
-// (see `src/features/composer/composer.container.tsx` DRAFT_KEY_NEW).
-// Attachments created with this id live under `{rootDir}/__new__/` until the
-// session is created, at which point `rebindToSession` moves them into the
-// real session directory. Must match the renderer sentinel.
-export const DRAFT_SESSION_ID = '__new__'
-
-const EXTENSION_BY_MIME: Record<string, string> = {
-  'image/png': '.png',
-  'image/jpeg': '.jpg',
-  'image/gif': '.gif',
-  'image/webp': '.webp',
-  'application/pdf': '.pdf',
-  'text/plain': '.txt',
-  'text/markdown': '.md',
-  'text/csv': '.csv',
-  'application/json': '.json',
-  'text/x-typescript': '.ts',
-  'text/javascript': '.js',
-  'text/x-python': '.py',
-  'text/x-ruby': '.rb',
-  'text/x-go': '.go',
-  'text/x-rust': '.rs',
-  'text/x-java': '.java',
-  'text/x-c': '.c',
-  'text/x-c++': '.cpp',
-  'application/x-sh': '.sh',
-  'text/yaml': '.yml',
-  'text/toml': '.toml',
-  'text/xml': '.xml',
-  'text/html': '.html',
-  'text/css': '.css',
-  'text/x-sql': '.sql',
-}
-
-function sanitizeFilename(name: string): string {
-  const base = name.split(/[/\\]/).pop() ?? name
-  const trimmed = base.replace(/\s+/g, '_')
-  const sanitized = trimmed.replace(/[^a-zA-Z0-9._-]/g, '_')
-  return sanitized.length > 0 ? sanitized.slice(0, 200) : 'attachment'
-}
-
-function extensionFor(mimeType: string, filename: string): string {
-  const fromMime = EXTENSION_BY_MIME[mimeType]
-  if (fromMime) return fromMime
-  const fromName = extname(filename)
-  return fromName || ''
-}
-
-function limitFor(kind: AttachmentKind): number {
-  if (kind === 'image') return MAX_IMAGE_BYTES
-  if (kind === 'pdf') return MAX_PDF_BYTES
-  return MAX_TEXT_BYTES
-}
-
-function limitLabel(kind: AttachmentKind): string {
-  if (kind === 'image') return '10 MB'
-  if (kind === 'pdf') return '20 MB'
-  return '1 MB'
-}
-
-interface AttachmentRow {
-  id: string
-  session_id: string
-  kind: string
-  mime_type: string
-  filename: string
-  size_bytes: number
-  storage_path: string
-  thumbnail_path: string | null
-  text_preview: string | null
-  created_at: string
-}
-
-function rowToAttachment(row: AttachmentRow): Attachment {
-  return {
-    id: row.id,
-    sessionId: row.session_id,
-    kind: row.kind as AttachmentKind,
-    mimeType: row.mime_type,
-    filename: row.filename,
-    sizeBytes: row.size_bytes,
-    storagePath: row.storage_path,
-    thumbnailPath: row.thumbnail_path,
-    textPreview: row.text_preview,
-    createdAt: row.created_at,
-  }
-}
+export { DRAFT_SESSION_ID } from './attachments.constants'
 
 export class AttachmentsService {
   constructor(
