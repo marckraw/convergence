@@ -1,9 +1,18 @@
-import { describe, expect, it, beforeEach, vi, type Mock } from 'vitest'
+import {
+  describe,
+  expect,
+  it,
+  beforeEach,
+  afterEach,
+  vi,
+  type Mock,
+} from 'vitest'
 import {
   TerminalService,
   dataChannel,
   exitChannel,
   type TerminalEventEmitter,
+  type TerminalIdleObserver,
   type TerminalSessionExitObserver,
 } from './terminal.service'
 import type {
@@ -80,6 +89,7 @@ describe('TerminalService', () => {
   let created: FakePty[]
   let emit: Mock<TerminalEventEmitter>
   let onSessionLastTerminalExit: Mock<TerminalSessionExitObserver>
+  let onTerminalIdle: Mock<TerminalIdleObserver>
   let service: TerminalService
 
   beforeEach(() => {
@@ -88,6 +98,7 @@ describe('TerminalService', () => {
     created = built.created
     emit = vi.fn<TerminalEventEmitter>()
     onSessionLastTerminalExit = vi.fn<TerminalSessionExitObserver>()
+    onTerminalIdle = vi.fn<TerminalIdleObserver>()
     service = new TerminalService(factory, emit, {
       SHELL: '/bin/zsh',
     })
@@ -385,6 +396,81 @@ describe('TerminalService', () => {
         rows: 24,
       })
       expect(await svc.getForegroundProcess(id)).toBeNull()
+    })
+  })
+
+  describe('terminal idle activity observer', () => {
+    beforeEach(() => {
+      vi.useFakeTimers()
+    })
+
+    afterEach(() => {
+      service.disposeAll()
+      vi.useRealTimers()
+    })
+
+    it('emits when a busy terminal returns to shell idle', async () => {
+      let psOutput = ['  PID  PPID COMM', '  4242     1 /bin/zsh'].join('\n')
+      let now = Date.parse('2026-01-01T00:00:00.000Z')
+      service = new TerminalService(
+        factory,
+        emit,
+        { SHELL: '/bin/zsh' },
+        async () => psOutput,
+        () => now,
+        1000,
+      )
+      service.setTerminalIdleObserver(onTerminalIdle)
+
+      const { id } = service.create({
+        sessionId: 's1',
+        cwd: '/tmp',
+        cols: 80,
+        rows: 24,
+      })
+
+      psOutput = [
+        '  PID  PPID COMM',
+        '  4242     1 /bin/zsh',
+        '  5000  4242 npm',
+      ].join('\n')
+      await vi.advanceTimersByTimeAsync(1000)
+
+      now = Date.parse('2026-01-01T00:00:05.000Z')
+      psOutput = ['  PID  PPID COMM', '  4242     1 /bin/zsh'].join('\n')
+      await vi.advanceTimersByTimeAsync(1000)
+
+      expect(onTerminalIdle).toHaveBeenCalledWith({
+        sessionId: 's1',
+        terminalId: id,
+        processName: 'npm',
+        busySince: '2026-01-01T00:00:00.000Z',
+        idleAt: '2026-01-01T00:00:05.000Z',
+      })
+    })
+
+    it('does not emit for an initially idle shell', async () => {
+      const psOutput = ['  PID  PPID COMM', '  4242     1 /bin/zsh'].join('\n')
+      service = new TerminalService(
+        factory,
+        emit,
+        { SHELL: '/bin/zsh' },
+        async () => psOutput,
+        () => Date.parse('2026-01-01T00:00:00.000Z'),
+        1000,
+      )
+      service.setTerminalIdleObserver(onTerminalIdle)
+
+      service.create({
+        sessionId: 's1',
+        cwd: '/tmp',
+        cols: 80,
+        rows: 24,
+      })
+
+      await vi.advanceTimersByTimeAsync(3000)
+
+      expect(onTerminalIdle).not.toHaveBeenCalled()
     })
   })
 })

@@ -6,7 +6,7 @@ import {
   useSessionStore,
   type SessionSummary,
 } from '@/entities/session'
-import { useTerminalStore } from '@/entities/terminal'
+import { terminalApi, useTerminalStore } from '@/entities/terminal'
 import { useAppSettingsStore } from '@/entities/app-settings'
 import { useAppSurfaceStore } from '@/entities/app-surface'
 import { useCodeReviewStore, type CodeReviewMode } from '@/entities/code-review'
@@ -178,6 +178,9 @@ export function App({
   )
   const ingestTaskProgress = useTaskProgressStore((s) => s.ingest)
   const ingestProviderDebug = useProviderDebugStore((s) => s.ingest)
+  const handleTerminalIdleEvent = useTerminalStore(
+    (s) => s.handleTerminalIdleEvent,
+  )
 
   useEffect(() => {
     applyTheme(getStoredTheme())
@@ -376,6 +379,13 @@ export function App({
     handleConversationPatched,
     handleQueuedInputPatched,
   ])
+
+  useEffect(() => {
+    const unsubscribe = terminalApi.onIdle((event) => {
+      handleTerminalIdleEvent(event)
+    })
+    return unsubscribe
+  }, [handleTerminalIdleEvent])
 
   useEffect(() => {
     if (!import.meta.env.DEV) return

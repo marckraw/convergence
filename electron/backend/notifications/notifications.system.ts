@@ -32,7 +32,9 @@ const SWEEP_INTERVAL_MS = 30_000
 const MAX_AGE_MS = 60_000
 
 function severityFromKind(kind: NotificationEventKind): NotificationSeverity {
-  return kind === 'agent.finished' ? 'info' : 'critical'
+  return kind === 'agent.finished' || kind === 'terminal.idle'
+    ? 'info'
+    : 'critical'
 }
 
 function soundForSeverity(severity: NotificationSeverity): string {

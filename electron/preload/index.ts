@@ -571,6 +571,13 @@ contextBridge.exposeInMainWorld('electronAPI', {
         ipcRenderer.removeListener(channel, handler)
       }
     },
+    onIdle: (callback: (payload: unknown) => void) => {
+      const handler = (_event: unknown, payload: unknown) => callback(payload)
+      ipcRenderer.on('terminal:idle', handler)
+      return () => {
+        ipcRenderer.removeListener('terminal:idle', handler)
+      }
+    },
   },
   terminalLayout: {
     get: (sessionId: string) =>

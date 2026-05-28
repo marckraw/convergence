@@ -19,6 +19,8 @@ export type {
   SplitDirection,
   DockPlacement,
   CreateTerminalArgs,
+  TerminalIdleEvent,
+  TerminalIdleNotice,
 } from './terminal.types'
 export { findLeaf, collectAllPtyIds, makeLeaf } from './pane-tree.pure'
 export { matchShortcut } from './keymap.pure'

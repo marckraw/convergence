@@ -152,13 +152,22 @@ export const NotificationsFields: FC<NotificationsFieldsProps> = ({
               onChange={(next) => setEvent('needsApproval', next)}
             />
           </div>
-          <div className={sectionRowClass}>
+          <div className={`border-b ${sectionRowClass}`}>
             <SwitchRow
               id="notif-event-errored"
               label="Errored"
               checked={prefs.events.errored}
               disabled={masterDisabled}
               onChange={(next) => setEvent('errored', next)}
+            />
+          </div>
+          <div className={sectionRowClass}>
+            <SwitchRow
+              id="notif-event-terminal-idle"
+              label="Terminal idle"
+              checked={prefs.events.terminalIdle}
+              disabled={masterDisabled}
+              onChange={(next) => setEvent('terminalIdle', next)}
             />
           </div>
         </div>

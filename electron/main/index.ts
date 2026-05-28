@@ -573,6 +573,24 @@ async function startApp(): Promise<void> {
     ({ sessionId, exitCode }) =>
       sessionService.markShellSessionExited(sessionId, exitCode),
   )
+  terminalService.setTerminalIdleObserver((event) => {
+    const session = sessionService.getById(event.sessionId)
+    if (!session) return
+    const projectName = session.projectId
+      ? (projectService.getById(session.projectId)?.name ?? 'Unknown project')
+      : 'Convergence'
+    broadcastToRenderers('terminal:idle', {
+      ...event,
+      sessionName: session.name,
+      projectName,
+    })
+    notificationsService.fire(
+      notificationsService.buildEvent('terminal.idle', session, {
+        terminalId: event.terminalId,
+        terminalProcessName: event.processName,
+      }),
+    )
+  })
   registerTerminalIpcHandlers(terminalService)
 
   const terminalLayoutService = new TerminalLayoutService({

@@ -28,4 +28,7 @@ export const terminalApi = {
   ) {
     return window.electronAPI.terminal.onExit(id, callback)
   },
+  onIdle(callback: (payload: unknown) => void) {
+    return window.electronAPI.terminal?.onIdle?.(callback) ?? (() => undefined)
+  },
 }
