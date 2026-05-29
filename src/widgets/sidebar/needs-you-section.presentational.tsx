@@ -51,7 +51,7 @@ export const NeedsYouSection: FC<NeedsYouSectionProps> = ({
             key={session.id}
             data-pulse={pulsing ? 'true' : undefined}
             className={cn(
-              'group flex min-w-0 items-center gap-1 rounded-md transition-colors hover:bg-accent',
+              'group flex min-w-0 items-start gap-1 rounded-md transition-colors hover:bg-accent',
               activeSessionId === session.id && 'bg-accent',
             )}
           >
@@ -62,13 +62,22 @@ export const NeedsYouSection: FC<NeedsYouSectionProps> = ({
                   variant="ghost"
                   onClick={() => onSelect(session.id)}
                   aria-label={`${session.name}, ${summary}, ${projectName}`}
-                  className="h-auto min-w-0 flex-1 items-center justify-start gap-1.5 px-1.5 py-0.5 text-left text-xs leading-tight"
+                  className="h-auto min-w-0 flex-1 items-start justify-start gap-1.5 px-1.5 py-0.5 text-left text-xs leading-tight"
                 >
-                  <span className="shrink-0">
+                  <span className="mt-0.5 shrink-0">
                     <SessionBadge attention={session.attention} />
                   </span>
                   <div className="min-w-0 flex-1">
                     <p className="truncate font-medium">{session.name}</p>
+                    <div className="mt-0.5 flex min-w-0 items-center gap-1 text-[10px] text-muted-foreground/85">
+                      <span className="shrink-0">{summary}</span>
+                      <span className="shrink-0 text-muted-foreground/45">
+                        •
+                      </span>
+                      <span className="truncate text-muted-foreground/70">
+                        {projectName}
+                      </span>
+                    </div>
                   </div>
                 </Button>
               </TooltipTrigger>
