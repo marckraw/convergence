@@ -147,8 +147,8 @@ describe('NeedsYou', () => {
 
     expect(screen.queryByText(/^Needs You/)).not.toBeInTheDocument()
     expect(screen.getByText('Needs Review')).toBeInTheDocument()
-    expect(screen.queryByText('Finished')).not.toBeInTheDocument()
-    expect(screen.queryByText('RoomFinder')).not.toBeInTheDocument()
+    expect(screen.getByText('Finished')).toBeInTheDocument()
+    expect(screen.getByText('RoomFinder')).toBeInTheDocument()
     expect(
       screen.getByRole('button', {
         name: /review roomfinder, finished, roomfinder/i,
