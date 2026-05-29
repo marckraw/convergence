@@ -1,5 +1,11 @@
 # convergence
 
+## 0.37.42
+
+### Patch Changes
+
+- 555a73b: Restore the visible status and project context line on sidebar Needs Review items.
+
 ## 0.37.41
 
 ### Patch Changes
