@@ -422,6 +422,10 @@ export function registerIpcHandlers(
     workspaceService.removeWorktree(id),
   )
 
+  ipcMain.handle('workspace:syncEnvFiles', (_event, id: string) =>
+    workspaceService.syncEnvFiles(id),
+  )
+
   ipcMain.handle('workspace:delete', async (_event, id: string) => {
     await workspaceService.delete(id)
   })

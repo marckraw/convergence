@@ -4,6 +4,7 @@ import { GitBranch, Settings2 } from 'lucide-react'
 import {
   normalizeProjectSettings,
   useProjectStore,
+  type WorkspaceEnvFileCopyMode,
   type WorkspaceStartStrategy,
 } from '@/entities/project'
 import { useDialogStore } from '@/entities/dialog'
@@ -36,6 +37,9 @@ export const ProjectSettingsDialogContainer: FC<
   const [strategy, setStrategy] =
     useState<WorkspaceStartStrategy>('base-branch')
   const [baseBranchName, setBaseBranchName] = useState('')
+  const [envCopyMode, setEnvCopyMode] =
+    useState<WorkspaceEnvFileCopyMode>('copy-missing')
+  const [envPatternsText, setEnvPatternsText] = useState('')
   const [isSaving, setIsSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -51,6 +55,8 @@ export const ProjectSettingsDialogContainer: FC<
 
     setStrategy(settings.workspaceCreation.startStrategy)
     setBaseBranchName(settings.workspaceCreation.baseBranchName ?? '')
+    setEnvCopyMode(settings.workspaceEnvFiles.copyMode)
+    setEnvPatternsText(settings.workspaceEnvFiles.patterns.join(', '))
     setError(null)
   }, [open, settings])
 
@@ -87,6 +93,13 @@ export const ProjectSettingsDialogContainer: FC<
               ? baseBranchName.trim()
               : null,
         },
+        workspaceEnvFiles: {
+          copyMode: envCopyMode,
+          patterns: envPatternsText
+            .split(',')
+            .map((pattern) => pattern.trim())
+            .filter(Boolean),
+        },
       })
       closeDialog()
     } catch (nextError) {
@@ -100,6 +113,17 @@ export const ProjectSettingsDialogContainer: FC<
     }
   }
 
+  const handleEnvCopyEnabledChange = (enabled: boolean) => {
+    setEnvCopyMode((current) => {
+      if (!enabled) return 'disabled'
+      return current === 'disabled' ? 'copy-missing' : current
+    })
+  }
+
+  const handleEnvOverwriteChange = (enabled: boolean) => {
+    setEnvCopyMode(enabled ? 'overwrite' : 'copy-missing')
+  }
+
   return (
     <ProjectSettingsDialog
       open={open}
@@ -107,10 +131,16 @@ export const ProjectSettingsDialogContainer: FC<
       projectName={activeProject.name}
       strategy={strategy}
       baseBranchName={baseBranchName}
+      envCopyEnabled={envCopyMode !== 'disabled'}
+      envOverwrite={envCopyMode === 'overwrite'}
+      envPatternsText={envPatternsText}
       isSaving={isSaving}
       error={error}
       onStrategyChange={setStrategy}
       onBaseBranchNameChange={setBaseBranchName}
+      onEnvCopyEnabledChange={handleEnvCopyEnabledChange}
+      onEnvOverwriteChange={handleEnvOverwriteChange}
+      onEnvPatternsTextChange={setEnvPatternsText}
       onSave={() => void handleSave()}
       contextSection={contextSection?.(activeProject.id)}
       trigger={

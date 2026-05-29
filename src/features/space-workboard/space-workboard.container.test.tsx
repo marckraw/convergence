@@ -3,7 +3,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { useDialogStore } from '@/entities/dialog'
 import { useSpaceStore } from '@/entities/space'
 import type { Space, SpaceAttempt, SpaceArtifact } from '@/entities/space'
-import { useProjectStore } from '@/entities/project'
+import { DEFAULT_PROJECT_SETTINGS, useProjectStore } from '@/entities/project'
 import { useSessionStore } from '@/entities/session'
 import { useWorkspaceStore } from '@/entities/workspace'
 import { SpaceWorkboardDialogContainer } from './space-workboard.container'
@@ -144,6 +144,7 @@ describe('SpaceWorkboardDialogContainer', () => {
               startStrategy: 'base-branch',
               baseBranchName: null,
             },
+            workspaceEnvFiles: DEFAULT_PROJECT_SETTINGS.workspaceEnvFiles,
           },
           createdAt: '2026-01-01T00:00:00.000Z',
           updatedAt: '2026-01-01T00:00:00.000Z',

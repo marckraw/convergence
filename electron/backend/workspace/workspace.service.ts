@@ -4,6 +4,7 @@ import type Database from 'better-sqlite3'
 import type { WorkspaceRow } from '../database/database.types'
 import { GitService } from '../git/git.service'
 import { normalizeProjectSettings } from '../project/project-settings.pure'
+import { WorkspaceEnvService } from './workspace-env.service'
 import {
   workspaceFromRow,
   type Workspace,
@@ -15,6 +16,7 @@ export class WorkspaceService {
     private db: Database.Database,
     private git: GitService,
     private workspacesRoot: string,
+    private workspaceEnv: WorkspaceEnvService = new WorkspaceEnvService(),
   ) {}
 
   async create(input: CreateWorkspaceInput): Promise<Workspace> {
@@ -55,12 +57,23 @@ export class WorkspaceService {
       startPoint,
     )
 
-    this.db
-      .prepare(
-        `INSERT INTO workspaces (id, project_id, branch_name, path, type)
-         VALUES (?, ?, ?, ?, 'worktree')`,
-      )
-      .run(id, input.projectId, input.branchName, worktreePath)
+    try {
+      this.workspaceEnv.syncEnvFiles({
+        sourcePath: repoPath,
+        workspacePath: worktreePath,
+        settings: settings.workspaceEnvFiles,
+      })
+
+      this.db
+        .prepare(
+          `INSERT INTO workspaces (id, project_id, branch_name, path, type)
+           VALUES (?, ?, ?, ?, 'worktree')`,
+        )
+        .run(id, input.projectId, input.branchName, worktreePath)
+    } catch (error) {
+      await this.git.removeWorktree(repoPath, worktreePath).catch(() => {})
+      throw error
+    }
 
     const row = this.db
       .prepare('SELECT * FROM workspaces WHERE id = ?')
@@ -153,6 +166,29 @@ export class WorkspaceService {
     return workspaceFromRow(this.getRowById(id)!)
   }
 
+  syncEnvFiles(id: string): Workspace {
+    const row = this.getRowById(id)
+    if (!row) throw new Error(`Workspace not found: ${id}`)
+
+    if (row.worktree_removed_at) {
+      throw new Error(`Workspace worktree has been removed: ${id}`)
+    }
+
+    const project = this.getProject(row.project_id)
+    if (!project) {
+      throw new Error(`Project not found: ${row.project_id}`)
+    }
+
+    const settings = normalizeProjectSettings(JSON.parse(project.settings))
+    this.workspaceEnv.syncEnvFiles({
+      sourcePath: project.repository_path,
+      workspacePath: row.path,
+      settings: settings.workspaceEnvFiles,
+    })
+
+    return workspaceFromRow(row)
+  }
+
   unarchive(id: string): Workspace {
     const row = this.getRowById(id)
     if (!row) throw new Error(`Workspace not found: ${id}`)
@@ -223,9 +259,18 @@ export class WorkspaceService {
   private getProjectRepository(
     projectId: string,
   ): { repository_path: string } | null {
+    const project = this.getProject(projectId)
+    return project ? { repository_path: project.repository_path } : null
+  }
+
+  private getProject(
+    projectId: string,
+  ): { repository_path: string; settings: string } | null {
     const project = this.db
-      .prepare('SELECT repository_path FROM projects WHERE id = ?')
-      .get(projectId) as { repository_path: string } | undefined
+      .prepare('SELECT repository_path, settings FROM projects WHERE id = ?')
+      .get(projectId) as
+      | { repository_path: string; settings: string }
+      | undefined
 
     return project ?? null
   }

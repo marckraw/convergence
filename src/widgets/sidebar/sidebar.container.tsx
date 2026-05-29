@@ -125,6 +125,9 @@ export const Sidebar: FC<SidebarProps> = ({
   const removeWorkspaceWorktree = useWorkspaceStore(
     (s) => s.removeWorkspaceWorktree,
   )
+  const syncWorkspaceEnvFiles = useWorkspaceStore(
+    (s) => s.syncWorkspaceEnvFiles,
+  )
   const deleteWorkspace = useWorkspaceStore((s) => s.deleteWorkspace)
   const openDialog = useDialogStore((s) => s.open)
   const sessions = useSessionStore((s) => s.sessions)
@@ -610,6 +613,20 @@ export const Sidebar: FC<SidebarProps> = ({
     await removeWorkspaceWorktree(workspaceId, activeProject.id)
   }
 
+  const handleSyncWorkspaceEnvFiles = async (workspaceId: string) => {
+    if (!activeProject) {
+      return
+    }
+
+    await syncWorkspaceEnvFiles(workspaceId, activeProject.id)
+    const error = useWorkspaceStore.getState().error
+    if (error) {
+      toast.error(error)
+      return
+    }
+    toast.success('Workspace env files synced')
+  }
+
   const handleDeleteWorkspace = async (workspaceId: string) => {
     if (!activeProject) {
       return
@@ -1016,6 +1033,7 @@ export const Sidebar: FC<SidebarProps> = ({
                 onArchiveWorkspace={handleArchiveWorkspace}
                 onUnarchiveWorkspace={handleUnarchiveWorkspace}
                 onRemoveWorkspaceWorktree={handleRemoveWorkspaceWorktree}
+                onSyncWorkspaceEnvFiles={handleSyncWorkspaceEnvFiles}
                 onDeleteWorkspace={handleDeleteWorkspace}
                 onOpenCreateWorkspace={() => openDialog('workspace-create')}
               />

@@ -29,6 +29,7 @@ const mockElectronAPI = {
     archive: vi.fn(),
     unarchive: vi.fn(),
     removeWorktree: vi.fn(),
+    syncEnvFiles: vi.fn(),
     delete: vi.fn(),
   },
   git: {
@@ -182,6 +183,24 @@ describe('useWorkspaceStore', () => {
     expect(useWorkspaceStore.getState().workspaces).toEqual([removedWorkspace])
     expect(useWorkspaceStore.getState().globalWorkspaces).toEqual([
       removedWorkspace,
+    ])
+  })
+
+  it('syncWorkspaceEnvFiles calls API and refreshes both lists', async () => {
+    useWorkspaceStore.setState({
+      workspaces: [mockWorkspace],
+      globalWorkspaces: [mockWorkspace],
+    })
+    mockElectronAPI.workspace.syncEnvFiles.mockResolvedValue(mockWorkspace)
+    mockElectronAPI.workspace.getByProjectId.mockResolvedValue([mockWorkspace])
+    mockElectronAPI.workspace.getAll.mockResolvedValue([mockWorkspace])
+
+    await useWorkspaceStore.getState().syncWorkspaceEnvFiles('ws-1', 'proj-1')
+
+    expect(mockElectronAPI.workspace.syncEnvFiles).toHaveBeenCalledWith('ws-1')
+    expect(useWorkspaceStore.getState().workspaces).toEqual([mockWorkspace])
+    expect(useWorkspaceStore.getState().globalWorkspaces).toEqual([
+      mockWorkspace,
     ])
   })
 

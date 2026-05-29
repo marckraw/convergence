@@ -23,6 +23,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
           startStrategy: 'base-branch' | 'current-head'
           baseBranchName: string | null
         }
+        workspaceEnvFiles: {
+          copyMode: 'copy-missing' | 'overwrite' | 'disabled'
+          patterns: string[]
+        }
       },
     ) => ipcRenderer.invoke('project:updateSettings', id, settings),
   },
@@ -135,6 +139,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
     unarchive: (id: string) => ipcRenderer.invoke('workspace:unarchive', id),
     removeWorktree: (id: string) =>
       ipcRenderer.invoke('workspace:removeWorktree', id),
+    syncEnvFiles: (id: string) =>
+      ipcRenderer.invoke('workspace:syncEnvFiles', id),
     delete: (id: string) => ipcRenderer.invoke('workspace:delete', id),
   },
   pullRequest: {

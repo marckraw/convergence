@@ -24,6 +24,7 @@ import {
   MoreHorizontal,
   Pencil,
   Plus,
+  RefreshCw,
   Sparkles,
   TerminalSquare,
   Trash2,
@@ -50,6 +51,7 @@ interface ProjectTreeProps {
   onArchiveWorkspace?: (workspaceId: string) => void
   onUnarchiveWorkspace?: (workspaceId: string) => void
   onRemoveWorkspaceWorktree?: (workspaceId: string) => void
+  onSyncWorkspaceEnvFiles?: (workspaceId: string) => void
   onDeleteWorkspace: (workspaceId: string) => void
   onOpenCreateWorkspace: () => void
 }
@@ -73,6 +75,7 @@ export const ProjectTree: FC<ProjectTreeProps> = ({
   onArchiveWorkspace,
   onUnarchiveWorkspace,
   onRemoveWorkspaceWorktree,
+  onSyncWorkspaceEnvFiles,
   onDeleteWorkspace,
   onOpenCreateWorkspace,
 }) => {
@@ -262,13 +265,22 @@ export const ProjectTree: FC<ProjectTreeProps> = ({
             </DropdownMenuItem>
           )}
           {!workspace.worktreeRemovedAt ? (
-            <DropdownMenuItem
-              className="gap-2"
-              onClick={() => onRemoveWorkspaceWorktree?.(workspace.id)}
-            >
-              <Trash2 className="h-3.5 w-3.5" />
-              <span>Remove worktree from disk...</span>
-            </DropdownMenuItem>
+            <>
+              <DropdownMenuItem
+                className="gap-2"
+                onClick={() => onSyncWorkspaceEnvFiles?.(workspace.id)}
+              >
+                <RefreshCw className="h-3.5 w-3.5" />
+                <span>Sync env files</span>
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                className="gap-2"
+                onClick={() => onRemoveWorkspaceWorktree?.(workspace.id)}
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+                <span>Remove worktree from disk...</span>
+              </DropdownMenuItem>
+            </>
           ) : null}
           <DropdownMenuSeparator />
           <DropdownMenuItem

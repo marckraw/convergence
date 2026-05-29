@@ -110,6 +110,7 @@ describe('ProjectService', () => {
         startStrategy: 'current-head',
         baseBranchName: 'develop',
       },
+      workspaceEnvFiles: DEFAULT_PROJECT_SETTINGS.workspaceEnvFiles,
     })
 
     expect(updated.settings).toEqual({
@@ -117,6 +118,7 @@ describe('ProjectService', () => {
         startStrategy: 'current-head',
         baseBranchName: 'develop',
       },
+      workspaceEnvFiles: DEFAULT_PROJECT_SETTINGS.workspaceEnvFiles,
     })
   })
 })

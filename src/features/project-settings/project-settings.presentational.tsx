@@ -10,6 +10,7 @@ import {
   DialogTrigger,
 } from '@/shared/ui/dialog'
 import { Input } from '@/shared/ui/input'
+import { SwitchRow } from '@/shared/ui/switch'
 import { cn } from '@/shared/lib/cn.pure'
 import type { WorkspaceStartStrategy } from '@/entities/project'
 
@@ -19,10 +20,16 @@ interface ProjectSettingsDialogProps {
   projectName: string
   strategy: WorkspaceStartStrategy
   baseBranchName: string
+  envCopyEnabled: boolean
+  envOverwrite: boolean
+  envPatternsText: string
   isSaving: boolean
   error: string | null
   onStrategyChange: (strategy: WorkspaceStartStrategy) => void
   onBaseBranchNameChange: (value: string) => void
+  onEnvCopyEnabledChange: (enabled: boolean) => void
+  onEnvOverwriteChange: (enabled: boolean) => void
+  onEnvPatternsTextChange: (value: string) => void
   onSave: () => void
   trigger: ReactNode
   contextSection?: ReactNode
@@ -34,10 +41,16 @@ export const ProjectSettingsDialog: FC<ProjectSettingsDialogProps> = ({
   projectName,
   strategy,
   baseBranchName,
+  envCopyEnabled,
+  envOverwrite,
+  envPatternsText,
   isSaving,
   error,
   onStrategyChange,
   onBaseBranchNameChange,
+  onEnvCopyEnabledChange,
+  onEnvOverwriteChange,
+  onEnvPatternsTextChange,
   onSave,
   trigger,
   contextSection,
@@ -120,6 +133,56 @@ export const ProjectSettingsDialog: FC<ProjectSettingsDialogProps> = ({
               <code>origin/&lt;branch&gt;</code> remote-tracking ref exists,
               Convergence will use that before falling back to the local branch.
             </p>
+          </section>
+
+          <section className="space-y-3 border-t border-white/10 pt-5">
+            <div>
+              <h3 className="text-sm font-medium">Workspace env files</h3>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Copy ignored root env files from the project repo when worktrees
+                are created or manually synced.
+              </p>
+            </div>
+
+            <SwitchRow
+              id="project-copy-env-files"
+              label="Copy env files"
+              description="Copies matching root files such as .env and .env.local into worktrees."
+              checked={envCopyEnabled}
+              disabled={isSaving}
+              onChange={onEnvCopyEnabledChange}
+            />
+
+            <SwitchRow
+              id="project-overwrite-env-files"
+              label="Overwrite existing env files"
+              description="Replace matching files during manual sync and workspace creation."
+              checked={envOverwrite}
+              disabled={!envCopyEnabled || isSaving}
+              onChange={onEnvOverwriteChange}
+            />
+
+            <div className="space-y-2">
+              <label
+                htmlFor="project-env-patterns"
+                className="text-sm font-medium"
+              >
+                File patterns
+              </label>
+              <Input
+                id="project-env-patterns"
+                value={envPatternsText}
+                onChange={(event) =>
+                  onEnvPatternsTextChange(event.target.value)
+                }
+                placeholder=".env, .env.*"
+                disabled={!envCopyEnabled || isSaving}
+              />
+              <p className="text-xs text-muted-foreground">
+                Comma-separated root filenames or simple wildcard patterns.
+                Template files such as .env.example are skipped.
+              </p>
+            </div>
           </section>
 
           {error && (

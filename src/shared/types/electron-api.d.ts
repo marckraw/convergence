@@ -36,8 +36,16 @@ interface WorkspaceCreationSettings {
   baseBranchName: string | null
 }
 
+type WorkspaceEnvFileCopyMode = 'copy-missing' | 'overwrite' | 'disabled'
+
+interface WorkspaceEnvFileSettings {
+  copyMode: WorkspaceEnvFileCopyMode
+  patterns: string[]
+}
+
 interface ProjectSettings {
   workspaceCreation: WorkspaceCreationSettings
+  workspaceEnvFiles: WorkspaceEnvFileSettings
 }
 
 interface CreateProjectInput {
@@ -1347,6 +1355,7 @@ interface ElectronAPI {
     archive: (input: ArchiveWorkspaceInputData) => Promise<WorkspaceData>
     unarchive: (id: string) => Promise<WorkspaceData>
     removeWorktree: (id: string) => Promise<WorkspaceData>
+    syncEnvFiles: (id: string) => Promise<WorkspaceData>
     delete: (id: string) => Promise<void>
   }
   pullRequest: {

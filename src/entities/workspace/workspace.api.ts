@@ -27,6 +27,9 @@ export const workspaceApi = {
   removeWorktree: (id: string): Promise<Workspace> =>
     window.electronAPI.workspace.removeWorktree(id),
 
+  syncEnvFiles: (id: string): Promise<Workspace> =>
+    window.electronAPI.workspace.syncEnvFiles(id),
+
   delete: (id: string): Promise<void> =>
     window.electronAPI.workspace.delete(id),
 }
