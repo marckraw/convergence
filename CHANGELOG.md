@@ -1,5 +1,12 @@
 # convergence
 
+## 0.37.43
+
+### Patch Changes
+
+- fc3ca2b: Copy configured project env files into managed worktrees when they are created,
+  and add a manual workspace action to sync env files into existing worktrees.
+
 ## 0.37.42
 
 ### Patch Changes
