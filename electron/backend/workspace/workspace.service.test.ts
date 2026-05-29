@@ -1,5 +1,5 @@
 import { describe, expect, it, beforeEach, afterEach } from 'vitest'
-import { mkdtempSync, existsSync } from 'fs'
+import { mkdtempSync, existsSync, readFileSync, writeFileSync } from 'fs'
 import { rmSync } from 'fs'
 import { join } from 'path'
 import { tmpdir } from 'os'
@@ -70,6 +70,95 @@ describe('WorkspaceService', () => {
     expect(ws.branchName).toBe('feature-test')
     expect(ws.type).toBe('worktree')
     expect(existsSync(ws.path)).toBe(true)
+  })
+
+  it('copies root env files into a new workspace by default', async () => {
+    writeFileSync(join(repoPath, '.env'), 'ROOT_TOKEN=secret\n')
+    writeFileSync(join(repoPath, '.env.local'), 'LOCAL_TOKEN=secret\n')
+    writeFileSync(join(repoPath, '.env.example'), 'EXAMPLE=1\n')
+
+    const ws = await service.create({
+      projectId,
+      branchName: 'feature-env-files',
+    })
+
+    expect(readFileSync(join(ws.path, '.env'), 'utf8')).toBe(
+      'ROOT_TOKEN=secret\n',
+    )
+    expect(readFileSync(join(ws.path, '.env.local'), 'utf8')).toBe(
+      'LOCAL_TOKEN=secret\n',
+    )
+    expect(existsSync(join(ws.path, '.env.example'))).toBe(false)
+  })
+
+  it('does not copy env files when project env bootstrap is disabled', async () => {
+    getDatabase()
+      .prepare('UPDATE projects SET settings = ? WHERE id = ?')
+      .run(
+        JSON.stringify({
+          workspaceEnvFiles: {
+            copyMode: 'disabled',
+            patterns: ['.env', '.env.*'],
+          },
+        }),
+        projectId,
+      )
+    writeFileSync(join(repoPath, '.env'), 'ROOT_TOKEN=secret\n')
+
+    const ws = await service.create({
+      projectId,
+      branchName: 'feature-env-disabled',
+    })
+
+    expect(existsSync(join(ws.path, '.env'))).toBe(false)
+  })
+
+  it('syncs env files to an existing workspace without overwriting by default', async () => {
+    writeFileSync(join(repoPath, '.env'), 'ROOT_TOKEN=old\n')
+    const ws = await service.create({
+      projectId,
+      branchName: 'feature-env-sync',
+    })
+
+    writeFileSync(join(repoPath, '.env'), 'ROOT_TOKEN=new\n')
+    writeFileSync(join(ws.path, '.env'), 'ROOT_TOKEN=workspace\n')
+    writeFileSync(join(repoPath, '.env.local'), 'LOCAL_TOKEN=new\n')
+
+    const synced = service.syncEnvFiles(ws.id)
+
+    expect(synced.id).toBe(ws.id)
+    expect(readFileSync(join(ws.path, '.env'), 'utf8')).toBe(
+      'ROOT_TOKEN=workspace\n',
+    )
+    expect(readFileSync(join(ws.path, '.env.local'), 'utf8')).toBe(
+      'LOCAL_TOKEN=new\n',
+    )
+  })
+
+  it('overwrites env files when project env bootstrap is configured to overwrite', async () => {
+    getDatabase()
+      .prepare('UPDATE projects SET settings = ? WHERE id = ?')
+      .run(
+        JSON.stringify({
+          workspaceEnvFiles: {
+            copyMode: 'overwrite',
+            patterns: ['.env'],
+          },
+        }),
+        projectId,
+      )
+    writeFileSync(join(repoPath, '.env'), 'ROOT_TOKEN=old\n')
+    const ws = await service.create({
+      projectId,
+      branchName: 'feature-env-overwrite',
+    })
+
+    writeFileSync(join(repoPath, '.env'), 'ROOT_TOKEN=new\n')
+    writeFileSync(join(ws.path, '.env'), 'ROOT_TOKEN=workspace\n')
+
+    service.syncEnvFiles(ws.id)
+
+    expect(readFileSync(join(ws.path, '.env'), 'utf8')).toBe('ROOT_TOKEN=new\n')
   })
 
   it('creates a workspace from the base branch instead of the current HEAD', async () => {

@@ -24,6 +24,30 @@ describe('normalizeProjectSettings', () => {
         startStrategy: 'current-head',
         baseBranchName: 'main',
       },
+      workspaceEnvFiles: {
+        copyMode: 'copy-missing',
+        patterns: ['.env', '.env.*'],
+      },
+    })
+  })
+
+  it('normalizes workspace env file settings', () => {
+    expect(
+      normalizeProjectSettings({
+        workspaceEnvFiles: {
+          copyMode: 'disabled',
+          patterns: [' .env.local ', '.env.local', 'nested/.env'],
+        },
+      }),
+    ).toEqual({
+      workspaceCreation: {
+        startStrategy: 'base-branch',
+        baseBranchName: null,
+      },
+      workspaceEnvFiles: {
+        copyMode: 'disabled',
+        patterns: ['.env.local'],
+      },
     })
   })
 })

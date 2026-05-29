@@ -26,6 +26,7 @@ interface WorkspaceActions {
   ) => Promise<void>
   unarchiveWorkspace: (id: string, projectId: string) => Promise<void>
   removeWorkspaceWorktree: (id: string, projectId: string) => Promise<void>
+  syncWorkspaceEnvFiles: (id: string, projectId: string) => Promise<void>
   deleteWorkspace: (id: string, projectId: string) => Promise<void>
   clearError: () => void
 }
@@ -141,6 +142,23 @@ export const useWorkspaceStore = create<WorkspaceStore>((set) => ({
           err instanceof Error
             ? err.message
             : 'Failed to remove workspace worktree',
+      })
+    }
+  },
+
+  syncWorkspaceEnvFiles: async (id: string, projectId: string) => {
+    set({ error: null })
+    try {
+      await workspaceApi.syncEnvFiles(id)
+      const [workspaces, globalWorkspaces] = await Promise.all([
+        workspaceApi.getByProjectId(projectId),
+        workspaceApi.getAll(),
+      ])
+      set({ workspaces, globalWorkspaces })
+    } catch (err) {
+      set({
+        error:
+          err instanceof Error ? err.message : 'Failed to sync workspace envs',
       })
     }
   },

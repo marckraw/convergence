@@ -147,6 +147,7 @@ describe('useProjectStore', () => {
           startStrategy: 'current-head' as const,
           baseBranchName: 'master',
         },
+        workspaceEnvFiles: DEFAULT_PROJECT_SETTINGS.workspaceEnvFiles,
       },
     }
 
@@ -164,6 +165,7 @@ describe('useProjectStore', () => {
         startStrategy: 'current-head',
         baseBranchName: 'master',
       },
+      workspaceEnvFiles: DEFAULT_PROJECT_SETTINGS.workspaceEnvFiles,
     })
 
     expect(useProjectStore.getState().activeProject).toEqual(updatedProject)
