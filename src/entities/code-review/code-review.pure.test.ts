@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import {
   buildCodeReviewFilePatchKey,
+  buildCodeReviewFilePatchSelectionKey,
   buildCodeReviewSummaryKey,
+  buildCodeReviewSummarySelectionKey,
   buildCodeReviewTargetId,
   countCodeReviewFilesByStatus,
   getCodeReviewEmptyMessage,
@@ -39,19 +41,53 @@ const base = {
   warning: null,
 }
 
+const cacheIdentity = {
+  comparisonRef: 'origin/beta',
+  comparisonPoint: 'merge-base-1',
+  workingTreeVersionToken: 'wt-1',
+}
+
 describe('code review helpers', () => {
   it('builds stable target and cache keys', () => {
     expect(buildCodeReviewTargetId(target)).toBe('session:session-1')
-    expect(buildCodeReviewSummaryKey({ target, mode: 'working-tree' })).toBe(
-      'session:session-1:working-tree',
-    )
     expect(
-      buildCodeReviewFilePatchKey({
+      buildCodeReviewSummarySelectionKey({ target, mode: 'working-tree' }),
+    ).toBe('session:session-1:working-tree')
+    expect(
+      buildCodeReviewSummaryKey({
+        target,
+        mode: 'working-tree',
+        cacheIdentity,
+      }),
+    ).toBe('session:session-1:working-tree:origin/beta:merge-base-1:wt-1')
+    expect(
+      buildCodeReviewFilePatchSelectionKey({
         target,
         mode: 'base-branch',
         filePath: 'src/app.ts',
       }),
     ).toBe('session:session-1:base-branch:src/app.ts')
+    expect(
+      buildCodeReviewFilePatchKey({
+        target,
+        mode: 'base-branch',
+        filePath: 'src/app.ts',
+        cacheIdentity,
+      }),
+    ).toBe(
+      'session:session-1:base-branch:origin/beta:merge-base-1:wt-1:src/app.ts',
+    )
+    expect(
+      buildCodeReviewSummaryKey({
+        target,
+        mode: 'working-tree',
+        cacheIdentity: {
+          comparisonRef: null,
+          comparisonPoint: null,
+          workingTreeVersionToken: 'wt-2',
+        },
+      }),
+    ).toBe('session:session-1:working-tree:none:none:wt-2')
   })
 
   it('derives target labels for the dashboard', () => {

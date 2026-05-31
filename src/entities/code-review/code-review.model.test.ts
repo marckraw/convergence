@@ -1,6 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { codeReviewApi } from './code-review.api'
-import { buildCodeReviewSummaryKey } from './code-review.pure'
+import {
+  buildCodeReviewFilePatchKey,
+  buildCodeReviewFilePatchSelectionKey,
+  buildCodeReviewSummaryKey,
+  buildCodeReviewSummarySelectionKey,
+} from './code-review.pure'
 import { useCodeReviewStore } from './code-review.model'
 
 vi.mock('./code-review.api', () => ({
@@ -31,6 +36,18 @@ const target = {
   },
 }
 
+const workingTreeCacheIdentity = {
+  comparisonRef: null,
+  comparisonPoint: null,
+  workingTreeVersionToken: 'wt-1',
+}
+
+const baseBranchCacheIdentity = {
+  comparisonRef: 'origin/main',
+  comparisonPoint: 'merge-base-1',
+  workingTreeVersionToken: 'wt-1',
+}
+
 describe('useCodeReviewStore', () => {
   beforeEach(() => {
     useCodeReviewStore.setState({
@@ -41,7 +58,9 @@ describe('useCodeReviewStore', () => {
       selectedFile: null,
       targetsLoading: false,
       summariesByKey: {},
+      summaryKeysBySelectionKey: {},
       filePatchesByKey: {},
+      filePatchKeysBySelectionKey: {},
       loadingSummaryKeys: {},
       loadingFilePatchKeys: {},
       error: null,
@@ -81,16 +100,26 @@ describe('useCodeReviewStore', () => {
   it('loads and caches summaries by target and mode', async () => {
     vi.mocked(codeReviewApi.getSummary).mockResolvedValue({
       base: null,
+      cacheIdentity: workingTreeCacheIdentity,
       files: [{ status: 'M', file: 'src/app.ts' }],
     })
 
     const input = { target, mode: 'working-tree' as const }
     const result = await useCodeReviewStore.getState().loadSummary(input)
-    const key = buildCodeReviewSummaryKey(input)
+    const key = buildCodeReviewSummaryKey({
+      ...input,
+      cacheIdentity: workingTreeCacheIdentity,
+    })
+    const selectionKey = buildCodeReviewSummarySelectionKey(input)
 
     expect(result?.files).toEqual([{ status: 'M', file: 'src/app.ts' }])
     expect(useCodeReviewStore.getState().summariesByKey[key]).toEqual(result)
-    expect(useCodeReviewStore.getState().loadingSummaryKeys[key]).toBe(false)
+    expect(
+      useCodeReviewStore.getState().summaryKeysBySelectionKey[selectionKey],
+    ).toBe(key)
+    expect(useCodeReviewStore.getState().loadingSummaryKeys[selectionKey]).toBe(
+      false,
+    )
     expect(useCodeReviewStore.getState().error).toBeNull()
 
     await expect(
@@ -103,10 +132,15 @@ describe('useCodeReviewStore', () => {
     vi.mocked(codeReviewApi.getSummary)
       .mockResolvedValueOnce({
         base: null,
+        cacheIdentity: workingTreeCacheIdentity,
         files: [{ status: 'M', file: 'src/app.ts' }],
       })
       .mockResolvedValueOnce({
         base: null,
+        cacheIdentity: {
+          ...workingTreeCacheIdentity,
+          workingTreeVersionToken: 'wt-2',
+        },
         files: [{ status: 'A', file: 'src/new.ts' }],
       })
 
@@ -160,13 +194,19 @@ describe('useCodeReviewStore', () => {
       target,
       mode: 'base-branch',
       filePath: 'src/app.ts',
+      cacheIdentity: baseBranchCacheIdentity,
     } as const
     const result = await useCodeReviewStore.getState().loadFilePatch(input)
+    const key = buildCodeReviewFilePatchKey(input)
+    const selectionKey = buildCodeReviewFilePatchSelectionKey(input)
 
     expect(result).toBe('diff body')
+    expect(useCodeReviewStore.getState().filePatchesByKey[key]).toBe(
+      'diff body',
+    )
     expect(
-      Object.values(useCodeReviewStore.getState().filePatchesByKey),
-    ).toEqual(['diff body'])
+      useCodeReviewStore.getState().filePatchKeysBySelectionKey[selectionKey],
+    ).toBe(key)
 
     await expect(
       useCodeReviewStore.getState().loadFilePatch(input),
@@ -182,6 +222,7 @@ describe('useCodeReviewStore', () => {
       target,
       mode: 'working-tree',
       filePath: 'src/app.ts',
+      cacheIdentity: workingTreeCacheIdentity,
     } as const
     const first = useCodeReviewStore.getState().loadFilePatch(input)
     const second = useCodeReviewStore.getState().loadFilePatch(input)
@@ -204,6 +245,7 @@ describe('useCodeReviewStore', () => {
       target,
       mode: 'working-tree',
       filePath: 'src/app.ts',
+      cacheIdentity: workingTreeCacheIdentity,
     } as const
     const firstLoad = useCodeReviewStore
       .getState()
@@ -220,6 +262,34 @@ describe('useCodeReviewStore', () => {
     expect(
       Object.values(useCodeReviewStore.getState().filePatchesByKey),
     ).toEqual(['new diff'])
+  })
+
+  it('keeps the previous visible patch key while a refreshed patch loads', async () => {
+    vi.mocked(codeReviewApi.getFilePatch)
+      .mockResolvedValueOnce('old diff')
+      .mockReturnValueOnce(createDeferred<string>().promise)
+
+    const firstInput = {
+      target,
+      mode: 'working-tree',
+      filePath: 'src/app.ts',
+      cacheIdentity: workingTreeCacheIdentity,
+    } as const
+    await useCodeReviewStore.getState().loadFilePatch(firstInput)
+
+    const nextInput = {
+      ...firstInput,
+      cacheIdentity: {
+        ...workingTreeCacheIdentity,
+        workingTreeVersionToken: 'wt-2',
+      },
+    } as const
+    void useCodeReviewStore.getState().loadFilePatch(nextInput, { force: true })
+
+    const selectionKey = buildCodeReviewFilePatchSelectionKey(firstInput)
+    expect(
+      useCodeReviewStore.getState().filePatchKeysBySelectionKey[selectionKey],
+    ).toBe(buildCodeReviewFilePatchKey(firstInput))
   })
 })
 

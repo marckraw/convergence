@@ -2,7 +2,9 @@ import { create } from 'zustand'
 import { codeReviewApi } from './code-review.api'
 import {
   buildCodeReviewFilePatchKey,
+  buildCodeReviewFilePatchSelectionKey,
   buildCodeReviewSummaryKey,
+  buildCodeReviewSummarySelectionKey,
 } from './code-review.pure'
 import type {
   CodeReviewFilePatchRequest,
@@ -21,7 +23,9 @@ interface CodeReviewState {
   selectedFile: string | null
   targetsLoading: boolean
   summariesByKey: Record<string, CodeReviewSummary>
+  summaryKeysBySelectionKey: Record<string, string>
   filePatchesByKey: Record<string, string>
+  filePatchKeysBySelectionKey: Record<string, string>
   loadingSummaryKeys: Record<string, boolean>
   loadingFilePatchKeys: Record<string, boolean>
   error: string | null
@@ -73,7 +77,9 @@ export const useCodeReviewStore = create<CodeReviewStore>((set, get) => ({
   selectedFile: null,
   targetsLoading: false,
   summariesByKey: {},
+  summaryKeysBySelectionKey: {},
   filePatchesByKey: {},
+  filePatchKeysBySelectionKey: {},
   loadingSummaryKeys: {},
   loadingFilePatchKeys: {},
   error: null,
@@ -119,58 +125,111 @@ export const useCodeReviewStore = create<CodeReviewStore>((set, get) => ({
   },
 
   loadSummary: async (input, options) => {
-    const key = buildCodeReviewSummaryKey(input)
+    const selectionKey = buildCodeReviewSummarySelectionKey(input)
     if (!options?.force) {
-      const cachedSummary = get().summariesByKey[key]
+      const cachedKey = get().summaryKeysBySelectionKey[selectionKey]
+      const cachedSummary = cachedKey
+        ? get().summariesByKey[cachedKey]
+        : undefined
       if (cachedSummary) return cachedSummary
 
-      const pendingRequest = summaryRequestsByKey.get(key)
+      const pendingRequest = summaryRequestsByKey.get(selectionKey)
       if (pendingRequest) return pendingRequest
     }
 
-    const requestVersion = nextRequestVersion(summaryRequestVersionsByKey, key)
+    const requestVersion = nextRequestVersion(
+      summaryRequestVersionsByKey,
+      selectionKey,
+    )
     set((state) => ({
-      loadingSummaryKeys: { ...state.loadingSummaryKeys, [key]: true },
+      loadingSummaryKeys: {
+        ...state.loadingSummaryKeys,
+        [selectionKey]: true,
+      },
       error: null,
     }))
 
     const request = (async () => {
       try {
         const summary = await codeReviewApi.getSummary(input)
-        if (isLatestRequest(summaryRequestVersionsByKey, key, requestVersion)) {
+        const cacheKey = buildCodeReviewSummaryKey({
+          ...input,
+          cacheIdentity: summary.cacheIdentity,
+        })
+        if (
+          isLatestRequest(
+            summaryRequestVersionsByKey,
+            selectionKey,
+            requestVersion,
+          )
+        ) {
           set((state) => ({
-            summariesByKey: { ...state.summariesByKey, [key]: summary },
+            summariesByKey: { ...state.summariesByKey, [cacheKey]: summary },
+            summaryKeysBySelectionKey: {
+              ...state.summaryKeysBySelectionKey,
+              [selectionKey]: cacheKey,
+            },
           }))
         }
         return summary
       } catch (err) {
-        if (isLatestRequest(summaryRequestVersionsByKey, key, requestVersion)) {
+        if (
+          isLatestRequest(
+            summaryRequestVersionsByKey,
+            selectionKey,
+            requestVersion,
+          )
+        ) {
           set({
             error: errorMessage(err, 'Failed to load code review summary'),
           })
         }
         return null
       } finally {
-        if (isLatestRequest(summaryRequestVersionsByKey, key, requestVersion)) {
+        if (
+          isLatestRequest(
+            summaryRequestVersionsByKey,
+            selectionKey,
+            requestVersion,
+          )
+        ) {
           set((state) => ({
-            loadingSummaryKeys: { ...state.loadingSummaryKeys, [key]: false },
+            loadingSummaryKeys: {
+              ...state.loadingSummaryKeys,
+              [selectionKey]: false,
+            },
           }))
         }
-        if (isLatestRequest(summaryRequestVersionsByKey, key, requestVersion)) {
-          summaryRequestsByKey.delete(key)
+        if (
+          isLatestRequest(
+            summaryRequestVersionsByKey,
+            selectionKey,
+            requestVersion,
+          )
+        ) {
+          summaryRequestsByKey.delete(selectionKey)
         }
       }
     })()
 
-    summaryRequestsByKey.set(key, request)
+    summaryRequestsByKey.set(selectionKey, request)
     return request
   },
 
   loadFilePatch: async (input, options) => {
     const key = buildCodeReviewFilePatchKey(input)
+    const selectionKey = buildCodeReviewFilePatchSelectionKey(input)
     if (!options?.force) {
       const cachedPatch = get().filePatchesByKey[key]
-      if (cachedPatch !== undefined) return cachedPatch
+      if (cachedPatch !== undefined) {
+        set((state) => ({
+          filePatchKeysBySelectionKey: {
+            ...state.filePatchKeysBySelectionKey,
+            [selectionKey]: key,
+          },
+        }))
+        return cachedPatch
+      }
 
       const pendingRequest = filePatchRequestsByKey.get(key)
       if (pendingRequest) return pendingRequest
@@ -196,6 +255,10 @@ export const useCodeReviewStore = create<CodeReviewStore>((set, get) => ({
         ) {
           set((state) => ({
             filePatchesByKey: { ...state.filePatchesByKey, [key]: patch },
+            filePatchKeysBySelectionKey: {
+              ...state.filePatchKeysBySelectionKey,
+              [selectionKey]: key,
+            },
           }))
         }
         return patch

@@ -38,6 +38,9 @@ describe('CodeReviewService', () => {
     getCurrentBranch: ReturnType<
       typeof vi.fn<(repoPath: string) => Promise<string>>
     >
+    getWorkingTreeVersionToken: ReturnType<
+      typeof vi.fn<(repoPath: string) => Promise<string>>
+    >
   }
   let changedFiles: {
     getBaseBranchStatus: ReturnType<
@@ -45,7 +48,11 @@ describe('CodeReviewService', () => {
     >
     getBaseBranchDiff: ReturnType<
       typeof vi.fn<
-        (input: { sessionId: string; filePath: string }) => Promise<string>
+        (input: {
+          sessionId: string
+          filePath: string
+          comparisonPoint?: string | null
+        }) => Promise<string>
       >
     >
   }
@@ -70,6 +77,7 @@ describe('CodeReviewService', () => {
   beforeEach(() => {
     git = {
       getCurrentBranch: vi.fn().mockResolvedValue('main'),
+      getWorkingTreeVersionToken: vi.fn().mockResolvedValue('wt-1'),
       getStatus: vi.fn().mockResolvedValue([{ status: 'M', file: 'app.ts' }]),
       getDiff: vi.fn().mockResolvedValue('working tree diff'),
     }
@@ -81,6 +89,7 @@ describe('CodeReviewService', () => {
           source: 'remote-default',
           warning: null,
         },
+        comparisonPoint: 'merge-base-1',
         files: [{ status: 'A', file: 'feature.ts' }],
       }),
       getBaseBranchDiff: vi.fn().mockResolvedValue('base branch diff'),
@@ -210,10 +219,16 @@ describe('CodeReviewService', () => {
       service.getSummary({ target, mode: 'working-tree' }),
     ).resolves.toEqual({
       base: null,
+      cacheIdentity: {
+        comparisonRef: null,
+        comparisonPoint: null,
+        workingTreeVersionToken: 'wt-1',
+      },
       files: [{ status: 'M', file: 'app.ts' }],
     })
 
     expect(git.getStatus).toHaveBeenCalledWith('/repo')
+    expect(git.getWorkingTreeVersionToken).toHaveBeenCalledWith('/repo')
     expect(changedFiles.getBaseBranchStatus).not.toHaveBeenCalled()
   })
 
@@ -222,11 +237,17 @@ describe('CodeReviewService', () => {
       service.getSummary({ target, mode: 'base-branch' }),
     ).resolves.toMatchObject({
       base: { branchName: 'main' },
+      cacheIdentity: {
+        comparisonRef: 'origin/main',
+        comparisonPoint: 'merge-base-1',
+        workingTreeVersionToken: 'wt-1',
+      },
       files: [{ status: 'A', file: 'feature.ts' }],
     })
 
     expect(changedFiles.getBaseBranchStatus).toHaveBeenCalledWith('session-1')
     expect(git.getStatus).not.toHaveBeenCalled()
+    expect(git.getWorkingTreeVersionToken).toHaveBeenCalledWith('/repo')
   })
 
   it('loads file patches from the active mode source', async () => {
@@ -235,6 +256,11 @@ describe('CodeReviewService', () => {
         target,
         mode: 'working-tree',
         filePath: 'app.ts',
+        cacheIdentity: {
+          comparisonRef: null,
+          comparisonPoint: null,
+          workingTreeVersionToken: 'wt-1',
+        },
       }),
     ).resolves.toBe('working tree diff')
     await expect(
@@ -242,6 +268,11 @@ describe('CodeReviewService', () => {
         target,
         mode: 'base-branch',
         filePath: 'feature.ts',
+        cacheIdentity: {
+          comparisonRef: 'origin/main',
+          comparisonPoint: 'merge-base-1',
+          workingTreeVersionToken: 'wt-1',
+        },
       }),
     ).resolves.toBe('base branch diff')
 
@@ -249,6 +280,7 @@ describe('CodeReviewService', () => {
     expect(changedFiles.getBaseBranchDiff).toHaveBeenCalledWith({
       sessionId: 'session-1',
       filePath: 'feature.ts',
+      comparisonPoint: 'merge-base-1',
     })
   })
 })

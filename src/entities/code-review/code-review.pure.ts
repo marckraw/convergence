@@ -1,5 +1,6 @@
 import type {
   CodeReviewBaseBranch,
+  CodeReviewCacheIdentity,
   CodeReviewFileEntry,
   CodeReviewMode,
   CodeReviewPanelMode,
@@ -10,17 +11,39 @@ export function buildCodeReviewTargetId(target: CodeReviewTarget): string {
   return target.id
 }
 
-export function buildCodeReviewSummaryKey(input: {
+export function buildCodeReviewSummarySelectionKey(input: {
   target: CodeReviewTarget
   mode: CodeReviewMode
 }): string {
   return `${buildCodeReviewTargetId(input.target)}:${input.mode}`
 }
 
+export function buildCodeReviewSummaryKey(input: {
+  target: CodeReviewTarget
+  mode: CodeReviewMode
+  cacheIdentity: CodeReviewCacheIdentity
+}): string {
+  return [
+    buildCodeReviewSummarySelectionKey(input),
+    input.cacheIdentity.comparisonRef ?? 'none',
+    input.cacheIdentity.comparisonPoint ?? 'none',
+    input.cacheIdentity.workingTreeVersionToken,
+  ].join(':')
+}
+
+export function buildCodeReviewFilePatchSelectionKey(input: {
+  target: CodeReviewTarget
+  mode: CodeReviewMode
+  filePath: string
+}): string {
+  return `${buildCodeReviewSummarySelectionKey(input)}:${input.filePath}`
+}
+
 export function buildCodeReviewFilePatchKey(input: {
   target: CodeReviewTarget
   mode: CodeReviewMode
   filePath: string
+  cacheIdentity: CodeReviewCacheIdentity
 }): string {
   return `${buildCodeReviewSummaryKey(input)}:${input.filePath}`
 }

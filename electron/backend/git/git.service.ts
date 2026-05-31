@@ -1,4 +1,5 @@
 import { execFile } from 'child_process'
+import { createHash } from 'crypto'
 import { existsSync } from 'fs'
 import { join } from 'path'
 import { isPullRequestReviewBranchName } from '../pull-request/pull-request-reference.pure'
@@ -88,6 +89,29 @@ export class GitService {
 
   async getCurrentBranch(repoPath: string): Promise<string> {
     return exec('git', ['rev-parse', '--abbrev-ref', 'HEAD'], repoPath)
+  }
+
+  async getHeadRevision(repoPath: string): Promise<string | null> {
+    return exec('git', ['rev-parse', 'HEAD'], repoPath).catch(() => null)
+  }
+
+  async getWorkingTreeVersionToken(repoPath: string): Promise<string> {
+    const [branchName, headRevision, statusOutput] = await Promise.all([
+      this.getCurrentBranch(repoPath).catch(() => null),
+      this.getHeadRevision(repoPath),
+      exec('git', ['status', '--porcelain=v1', '-u'], repoPath).catch(() => ''),
+    ])
+
+    return createHash('sha256')
+      .update(
+        JSON.stringify({
+          branchName,
+          headRevision,
+          statusOutput,
+        }),
+      )
+      .digest('hex')
+      .slice(0, 16)
   }
 
   async getBranchOutputFacts(repoPath: string): Promise<BranchOutputFacts> {

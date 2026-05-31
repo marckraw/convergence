@@ -43,5 +43,6 @@ export interface ResolvedBaseBranch {
 
 export interface BaseBranchDiffSummary {
   base: ResolvedBaseBranch
+  comparisonPoint: string
   files: GitStatusEntry[]
 }
