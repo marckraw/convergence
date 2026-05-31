@@ -58,11 +58,19 @@ export interface CodeReviewSummaryRequest {
   mode: CodeReviewMode
 }
 
+export interface CodeReviewCacheIdentity {
+  comparisonRef: string | null
+  comparisonPoint: string | null
+  workingTreeVersionToken: string
+}
+
 export interface CodeReviewFilePatchRequest extends CodeReviewSummaryRequest {
   filePath: string
+  cacheIdentity: CodeReviewCacheIdentity
 }
 
 export interface CodeReviewSummary {
   base: CodeReviewBaseBranch | null
+  cacheIdentity: CodeReviewCacheIdentity
   files: CodeReviewFileEntry[]
 }

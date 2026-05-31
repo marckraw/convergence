@@ -1,7 +1,9 @@
 export { codeReviewApi } from './code-review.api'
 export {
   buildCodeReviewFilePatchKey,
+  buildCodeReviewFilePatchSelectionKey,
   buildCodeReviewSummaryKey,
+  buildCodeReviewSummarySelectionKey,
   buildCodeReviewTargetId,
   countCodeReviewFilesByStatus,
   getCodeReviewEmptyMessage,

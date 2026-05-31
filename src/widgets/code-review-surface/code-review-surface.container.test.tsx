@@ -3,7 +3,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { SelectedLineRange } from '@pierre/diffs'
 import {
   buildCodeReviewFilePatchKey,
+  buildCodeReviewFilePatchSelectionKey,
   buildCodeReviewSummaryKey,
+  buildCodeReviewSummarySelectionKey,
   type CodeReviewTarget,
 } from '@/entities/code-review'
 import type { ReviewNote } from '@/entities/review-note'
@@ -40,6 +42,12 @@ const target: CodeReviewTarget = {
     workingTreeStatusCounts: { M: 1, A: 1 },
     error: null,
   },
+}
+
+const cacheIdentity = {
+  comparisonRef: null,
+  comparisonPoint: null,
+  workingTreeVersionToken: 'wt-1',
 }
 
 let codeReviewState: Record<string, unknown>
@@ -148,6 +156,7 @@ describe('CodeReviewSurface', () => {
     })
     const summary = {
       base: null,
+      cacheIdentity,
       files: [
         { status: 'M', file: 'src/app.ts' },
         { status: 'A', file: 'src/new.ts' },
@@ -156,8 +165,19 @@ describe('CodeReviewSurface', () => {
     const summaryKey = buildCodeReviewSummaryKey({
       target,
       mode: 'working-tree',
+      cacheIdentity,
+    })
+    const summarySelectionKey = buildCodeReviewSummarySelectionKey({
+      target,
+      mode: 'working-tree',
     })
     const patchKey = buildCodeReviewFilePatchKey({
+      target,
+      mode: 'working-tree',
+      filePath: 'src/app.ts',
+      cacheIdentity,
+    })
+    const patchSelectionKey = buildCodeReviewFilePatchSelectionKey({
       target,
       mode: 'working-tree',
       filePath: 'src/app.ts',
@@ -206,7 +226,9 @@ describe('CodeReviewSurface', () => {
       selectedFile: 'src/app.ts',
       targetsLoading: false,
       summariesByKey: { [summaryKey]: summary },
+      summaryKeysBySelectionKey: { [summarySelectionKey]: summaryKey },
       filePatchesByKey: { [patchKey]: '@@ -1 +1 @@\n-old\n+new' },
+      filePatchKeysBySelectionKey: { [patchSelectionKey]: patchKey },
       loadingSummaryKeys: {},
       loadingFilePatchKeys: {},
       error: null,
@@ -250,6 +272,7 @@ describe('CodeReviewSurface', () => {
       target,
       mode: 'working-tree',
       filePath: 'src/app.ts',
+      cacheIdentity,
     })
     expect(loadReviewNotes).toHaveBeenCalledWith('session-1')
     expect(screen.getByTestId('changed-files-tree')).toHaveAttribute(
@@ -415,8 +438,67 @@ describe('CodeReviewSurface', () => {
         target,
         mode: 'working-tree',
         filePath: 'src/app.ts',
+        cacheIdentity,
       },
       { force: true },
+    )
+  })
+
+  it('keeps the previous selected-file diff visible while a replacement patch loads', () => {
+    const nextCacheIdentity = {
+      ...cacheIdentity,
+      workingTreeVersionToken: 'wt-2',
+    }
+    const nextSummary = {
+      base: null,
+      cacheIdentity: nextCacheIdentity,
+      files: [
+        { status: 'M', file: 'src/app.ts' },
+        { status: 'A', file: 'src/new.ts' },
+      ],
+    }
+    const summaryKey = buildCodeReviewSummaryKey({
+      target,
+      mode: 'working-tree',
+      cacheIdentity: nextCacheIdentity,
+    })
+    const summarySelectionKey = buildCodeReviewSummarySelectionKey({
+      target,
+      mode: 'working-tree',
+    })
+    const oldPatchKey = buildCodeReviewFilePatchKey({
+      target,
+      mode: 'working-tree',
+      filePath: 'src/app.ts',
+      cacheIdentity,
+    })
+    const nextPatchKey = buildCodeReviewFilePatchKey({
+      target,
+      mode: 'working-tree',
+      filePath: 'src/app.ts',
+      cacheIdentity: nextCacheIdentity,
+    })
+    const patchSelectionKey = buildCodeReviewFilePatchSelectionKey({
+      target,
+      mode: 'working-tree',
+      filePath: 'src/app.ts',
+    })
+    codeReviewState = {
+      ...codeReviewState,
+      summariesByKey: { [summaryKey]: nextSummary },
+      summaryKeysBySelectionKey: { [summarySelectionKey]: summaryKey },
+      filePatchesByKey: {
+        [oldPatchKey]: '@@ -1 +1 @@\n-old\n+previous',
+      },
+      filePatchKeysBySelectionKey: { [patchSelectionKey]: oldPatchKey },
+      loadingFilePatchKeys: { [nextPatchKey]: true },
+    }
+
+    render(<CodeReviewSurface />)
+
+    expect(screen.getByTestId('pierre-diff-viewer')).toHaveAttribute(
+      'data-diff',
+      '@@ -1 +1 @@\n-old\n+previous',
     )
   })
 

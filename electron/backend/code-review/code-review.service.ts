@@ -15,7 +15,10 @@ import type {
 import { formatPullRequestLabel, prioritizeTargets } from './code-review.pure'
 
 interface CodeReviewServiceDeps {
-  git: Pick<GitService, 'getCurrentBranch' | 'getStatus' | 'getDiff'>
+  git: Pick<
+    GitService,
+    'getCurrentBranch' | 'getStatus' | 'getDiff' | 'getWorkingTreeVersionToken'
+  >
   changedFiles: Pick<
     ChangedFilesService,
     'getBaseBranchStatus' | 'getBaseBranchDiff'
@@ -153,12 +156,32 @@ export class CodeReviewService {
       if (!input.target.sessionId) {
         throw new Error('Base branch review requires a session-backed target')
       }
-      return this.deps.changedFiles.getBaseBranchStatus(input.target.sessionId)
+      const [summary, workingTreeVersionToken] = await Promise.all([
+        this.deps.changedFiles.getBaseBranchStatus(input.target.sessionId),
+        this.deps.git.getWorkingTreeVersionToken(input.target.repositoryPath),
+      ])
+      return {
+        base: summary.base,
+        cacheIdentity: {
+          comparisonRef: summary.base.comparisonRef,
+          comparisonPoint: summary.comparisonPoint,
+          workingTreeVersionToken,
+        },
+        files: summary.files,
+      }
     }
 
-    const files = await this.deps.git.getStatus(input.target.repositoryPath)
+    const [files, workingTreeVersionToken] = await Promise.all([
+      this.deps.git.getStatus(input.target.repositoryPath),
+      this.deps.git.getWorkingTreeVersionToken(input.target.repositoryPath),
+    ])
     return {
       base: null,
+      cacheIdentity: {
+        comparisonRef: null,
+        comparisonPoint: null,
+        workingTreeVersionToken,
+      },
       files,
     }
   }
@@ -171,6 +194,7 @@ export class CodeReviewService {
       return this.deps.changedFiles.getBaseBranchDiff({
         sessionId: input.target.sessionId,
         filePath: input.filePath,
+        comparisonPoint: input.cacheIdentity.comparisonPoint,
       })
     }
 

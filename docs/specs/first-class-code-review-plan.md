@@ -132,12 +132,12 @@ Goal: remove unnecessary repeated live Git and diff-rendering work.
 - [x] Add summary-first backend APIs:
   - [x] `codeReview:getSummary`
   - [x] `codeReview:getFilePatch`
-- [ ] Cache summary and patch results by:
+- [x] Cache summary and patch results by:
   - [x] target id
   - [x] mode
-  - [ ] comparison ref / merge base
+  - [x] comparison ref / merge base
   - [x] file path
-  - [ ] short-lived working-tree version token
+  - [x] short-lived working-tree version token
 - [x] Add explicit refresh invalidation.
 - [x] Keep selected-file patch loading lazy.
 - [x] Tune Pierre diff virtualization and worker pool thresholds in the full

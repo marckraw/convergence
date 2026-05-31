@@ -66,10 +66,10 @@ export const PierreDiffViewer = <TAnnotation,>({
     )
   }
 
-  if (loading) {
+  if (loading && !diff) {
     return (
       <div className="flex h-full min-h-0 flex-col" aria-busy="true">
-        {renderDiffHeader({ file, title })}
+        {renderDiffHeader({ file, title, loading })}
         <div className="app-scrollbar min-h-0 flex-1 overflow-auto bg-background/60">
           <div className="flex h-full min-h-32 items-center justify-center gap-2 p-3 text-xs text-muted-foreground">
             <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -115,8 +115,8 @@ export const PierreDiffViewer = <TAnnotation,>({
     : null
 
   return (
-    <div className="flex h-full min-h-0 flex-col">
-      {renderDiffHeader({ file, title })}
+    <div className="flex h-full min-h-0 flex-col" aria-busy={loading}>
+      {renderDiffHeader({ file, title, loading })}
       <div className="app-scrollbar min-h-0 flex-1 overflow-auto bg-background/60">
         {diffContent ? (
           diffContent
@@ -132,15 +132,28 @@ export const PierreDiffViewer = <TAnnotation,>({
 
 export type { PierreDiffViewerProps }
 
-function renderDiffHeader({ file, title }: { file: string; title: string }) {
+function renderDiffHeader({
+  file,
+  title,
+  loading = false,
+}: {
+  file: string
+  title: string
+  loading?: boolean
+}) {
   return (
     <div className="shrink-0 border-b border-border px-3 py-2">
-      <p
-        title={file}
-        className="truncate font-mono text-[11px] text-foreground"
-      >
-        {file}
-      </p>
+      <div className="flex min-w-0 items-center gap-2">
+        <p
+          title={file}
+          className="min-w-0 flex-1 truncate font-mono text-[11px] text-foreground"
+        >
+          {file}
+        </p>
+        {loading ? (
+          <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-muted-foreground" />
+        ) : null}
+      </div>
       <p className="mt-1 text-[10px] uppercase tracking-wider text-muted-foreground">
         {title}
       </p>

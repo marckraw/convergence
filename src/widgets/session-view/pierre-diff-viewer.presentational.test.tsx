@@ -107,6 +107,20 @@ describe('PierreDiffViewer', () => {
     expect(patchDiff.props).toHaveLength(0)
   })
 
+  it('keeps rendering an existing diff while a replacement is loading', () => {
+    render(
+      <PierreDiffViewer
+        file="src/app.ts"
+        diff={'@@ -1 +1 @@\n-old\n+new'}
+        loading
+      />,
+    )
+
+    expect(screen.queryByText('Loading diff...')).toBeNull()
+    expect(screen.getByText('Pierre diff')).toBeInTheDocument()
+    expect(patchDiff.props.at(-1)?.patch).toContain('+new')
+  })
+
   it('wraps hunk-only diffs with file headers for Pierre', () => {
     render(
       <PierreDiffViewer file="src/app.ts" diff={'@@ -1 +1 @@\n-old\n+new'} />,

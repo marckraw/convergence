@@ -22,6 +22,12 @@ const target = {
   },
 }
 
+const cacheIdentity = {
+  comparisonRef: 'origin/main',
+  comparisonPoint: 'merge-base-1',
+  workingTreeVersionToken: 'wt-1',
+}
+
 describe('codeReviewApi', () => {
   let listTargets: ReturnType<typeof vi.fn>
   let getSummary: ReturnType<typeof vi.fn>
@@ -57,6 +63,7 @@ describe('codeReviewApi', () => {
   it('forwards getSummary to the preload bridge', async () => {
     const summary: CodeReviewSummary = {
       base: null,
+      cacheIdentity,
       files: [{ status: 'M', file: 'src/app.ts' }],
     }
     getSummary.mockResolvedValue(summary)
@@ -76,6 +83,7 @@ describe('codeReviewApi', () => {
         target,
         mode: 'base-branch',
         filePath: 'src/app.ts',
+        cacheIdentity,
       }),
     ).resolves.toBe('diff body')
 
@@ -83,6 +91,7 @@ describe('codeReviewApi', () => {
       target,
       mode: 'base-branch',
       filePath: 'src/app.ts',
+      cacheIdentity,
     })
   })
 })

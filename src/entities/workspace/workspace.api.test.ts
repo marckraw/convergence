@@ -35,6 +35,7 @@ describe('gitApi', () => {
         source: 'project-settings',
         warning: null,
       },
+      comparisonPoint: 'merge-base-1',
       files: [{ status: 'M', file: 'src/app.ts' }],
     }
     getBaseBranchStatus.mockResolvedValue(summary)

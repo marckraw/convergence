@@ -3,7 +3,8 @@ import type { FC } from 'react'
 import type { SelectedLineRange } from '@pierre/diffs'
 import {
   buildCodeReviewFilePatchKey,
-  buildCodeReviewSummaryKey,
+  buildCodeReviewFilePatchSelectionKey,
+  buildCodeReviewSummarySelectionKey,
   countCodeReviewFilesByStatus,
   selectCodeReviewFileAfterReload,
   useCodeReviewStore,
@@ -96,7 +97,13 @@ export const CodeReviewSurface: FC<CodeReviewSurfaceProps> = ({
   const selectedFile = useCodeReviewStore((state) => state.selectedFile)
   const targetsLoading = useCodeReviewStore((state) => state.targetsLoading)
   const summariesByKey = useCodeReviewStore((state) => state.summariesByKey)
+  const summaryKeysBySelectionKey = useCodeReviewStore(
+    (state) => state.summaryKeysBySelectionKey,
+  )
   const filePatchesByKey = useCodeReviewStore((state) => state.filePatchesByKey)
+  const filePatchKeysBySelectionKey = useCodeReviewStore(
+    (state) => state.filePatchKeysBySelectionKey,
+  )
   const loadingSummaryKeys = useCodeReviewStore(
     (state) => state.loadingSummaryKeys,
   )
@@ -200,10 +207,15 @@ export const CodeReviewSurface: FC<CodeReviewSurfaceProps> = ({
       selectedTarget ? { target: selectedTarget, mode: selectedMode } : null,
     [selectedMode, selectedTarget],
   )
-  const summaryKey = summaryInput ? buildCodeReviewSummaryKey(summaryInput) : ''
+  const summarySelectionKey = summaryInput
+    ? buildCodeReviewSummarySelectionKey(summaryInput)
+    : ''
+  const summaryKey = summarySelectionKey
+    ? (summaryKeysBySelectionKey[summarySelectionKey] ?? '')
+    : ''
   const summary = summaryKey ? (summariesByKey[summaryKey] ?? null) : null
-  const summaryLoading = summaryKey
-    ? (loadingSummaryKeys[summaryKey] ?? false)
+  const summaryLoading = summarySelectionKey
+    ? (loadingSummaryKeys[summarySelectionKey] ?? false)
     : false
   const files = summary?.files ?? []
   const statusCounts = useMemo(
@@ -241,12 +253,25 @@ export const CodeReviewSurface: FC<CodeReviewSurfaceProps> = ({
             target: selectedTarget,
             mode: selectedMode,
             filePath: selectedVisibleFile,
+            cacheIdentity: summary?.cacheIdentity,
           }
         : null,
-    [selectedMode, selectedTarget, selectedVisibleFile],
+    [selectedMode, selectedTarget, selectedVisibleFile, summary?.cacheIdentity],
   )
-  const patchKey = patchInput ? buildCodeReviewFilePatchKey(patchInput) : ''
-  const diff = patchKey ? (filePatchesByKey[patchKey] ?? '') : ''
+  const patchKey =
+    patchInput && patchInput.cacheIdentity
+      ? buildCodeReviewFilePatchKey({
+          ...patchInput,
+          cacheIdentity: patchInput.cacheIdentity,
+        })
+      : ''
+  const patchSelectionKey = patchInput
+    ? buildCodeReviewFilePatchSelectionKey(patchInput)
+    : ''
+  const activePatchKey = patchSelectionKey
+    ? (filePatchKeysBySelectionKey[patchSelectionKey] ?? patchKey)
+    : patchKey
+  const diff = activePatchKey ? (filePatchesByKey[activePatchKey] ?? '') : ''
   const diffLoading = patchKey
     ? (loadingFilePatchKeys[patchKey] ?? false)
     : false
@@ -357,8 +382,11 @@ export const CodeReviewSurface: FC<CodeReviewSurfaceProps> = ({
   }, [holdEmptySelection, selectedFile, setSelectedFile, visibleFiles])
 
   useEffect(() => {
-    if (!patchInput) return
-    void loadFilePatch(patchInput)
+    if (!patchInput?.cacheIdentity) return
+    void loadFilePatch({
+      ...patchInput,
+      cacheIdentity: patchInput.cacheIdentity,
+    })
   }, [loadFilePatch, patchInput])
 
   useEffect(() => {
@@ -586,7 +614,15 @@ export const CodeReviewSurface: FC<CodeReviewSurfaceProps> = ({
 
   const handleRefresh = useCallback(() => {
     if (summaryInput) void loadSummary(summaryInput, { force: true })
-    if (patchInput) void loadFilePatch(patchInput, { force: true })
+    if (patchInput?.cacheIdentity) {
+      void loadFilePatch(
+        {
+          ...patchInput,
+          cacheIdentity: patchInput.cacheIdentity,
+        },
+        { force: true },
+      )
+    }
   }, [loadFilePatch, loadSummary, patchInput, summaryInput])
 
   const handleToggleTargetRail = useCallback(() => {

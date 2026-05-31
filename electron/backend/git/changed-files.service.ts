@@ -45,17 +45,19 @@ export class ChangedFilesService {
 
     return {
       base,
+      comparisonPoint,
       files: mergeChangedFileLists(trackedFiles, untrackedFiles),
     }
   }
 
   async getBaseBranchDiff(input: BaseBranchDiffRequest): Promise<string> {
     const context = this.getSessionContext(input.sessionId)
-    const base = await this.resolveBaseBranch(context)
-    const comparisonPoint = await this.getComparisonPoint(
-      context.session.working_directory,
-      base,
-    )
+    const comparisonPoint =
+      input.comparisonPoint ??
+      (await this.getComparisonPoint(
+        context.session.working_directory,
+        await this.resolveBaseBranch(context),
+      ))
 
     return this.git.getDiffAgainstRef(
       context.session.working_directory,

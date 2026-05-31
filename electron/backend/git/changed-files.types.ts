@@ -19,10 +19,12 @@ export interface ChangedFileEntry {
 
 export interface BaseBranchDiffSummary {
   base: ResolvedBaseBranch
+  comparisonPoint: string
   files: ChangedFileEntry[]
 }
 
 export interface BaseBranchDiffRequest {
   sessionId: string
   filePath: string
+  comparisonPoint?: string | null
 }

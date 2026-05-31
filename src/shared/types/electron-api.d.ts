@@ -243,6 +243,7 @@ interface GitStatusEntryData {
 
 interface BaseBranchDiffSummaryData {
   base: ResolvedBaseBranchData
+  comparisonPoint: string
   files: GitStatusEntryData[]
 }
 
@@ -286,12 +287,20 @@ interface CodeReviewSummaryRequestData {
   mode: CodeReviewModeData
 }
 
+interface CodeReviewCacheIdentityData {
+  comparisonRef: string | null
+  comparisonPoint: string | null
+  workingTreeVersionToken: string
+}
+
 interface CodeReviewFilePatchRequestData extends CodeReviewSummaryRequestData {
   filePath: string
+  cacheIdentity: CodeReviewCacheIdentityData
 }
 
 interface CodeReviewSummaryData {
   base: ResolvedBaseBranchData | null
+  cacheIdentity: CodeReviewCacheIdentityData
   files: GitStatusEntryData[]
 }
 
