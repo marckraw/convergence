@@ -51,6 +51,10 @@ Default to the dialog approach for v1. Dialog keeps the change contained and
 consistent with the existing `MCP Servers` dialog pattern. The settings panel
 can graduate to a full route later without breaking callers.
 
+Main View routing follow-up: settings remains classified as a Modal Task for
+now. Promote it to a Settings Main View only when settings sections need durable
+tabs, deep links, or route restoration.
+
 ### Settings dialog content (v1)
 
 Title: `Settings`.
@@ -249,9 +253,9 @@ Run after each task per `CLAUDE.md`:
 - **Provider id churn.** If a provider id is renamed in code, the stored
   default silently becomes invalid. V1 falls back to the first provider
   without warning. Acceptable for now; revisit if it causes confusion.
-- **Dialog vs route.** The spec defaults to a dialog. If we expect multiple
-  settings sections within the next two phases, promote to a full route
-  instead to avoid rework.
+- **Dialog vs route.** The spec defaults to a dialog. Promote to a Settings Main
+  View when settings sections need durable tabs, deep links, or route
+  restoration; otherwise keep settings as a Modal Task.
 - **Where does `resolveSessionDefaults` live?** Backend (validates against
   live registry) vs pure renderer helper (fast, testable, but trusts
   renderer's provider list). This spec places it in the backend service and

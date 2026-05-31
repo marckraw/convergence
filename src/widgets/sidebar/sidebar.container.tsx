@@ -557,9 +557,8 @@ export const Sidebar: FC<SidebarProps> = ({
   )
 
   const handleOpenCodeReview = useCallback(() => {
-    onSelectSurface('code')
     onOpenCodeReview?.()
-  }, [onOpenCodeReview, onSelectSurface])
+  }, [onOpenCodeReview])
 
   const handleArchiveWorkspace = async (workspaceId: string) => {
     if (!activeProject) {

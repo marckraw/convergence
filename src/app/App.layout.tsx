@@ -10,6 +10,8 @@ import type { CodeReviewMode } from '@/entities/code-review'
 import type { SessionSummary } from '@/entities/session'
 import { cn } from '@/shared/lib/cn.pure'
 import { DevBuildRibbon } from './dev-build-ribbon.presentational'
+import { RouteFallbackView } from './route-fallback.presentational'
+import type { MainViewRouteFallback } from './routes/main-view-route-resolution.pure'
 
 interface AppShellProps {
   activeSessionId: string | null
@@ -47,6 +49,9 @@ interface AppShellProps {
   onShowChat?: () => void
   onSelectProjectRoot?: (projectId: string) => void | Promise<void>
   onNewGlobalChat?: () => void
+  routeDrivenNavigation?: boolean
+  routeFallback?: MainViewRouteFallback | null
+  onRouteFallbackAction?: () => void
   loading: boolean
   hasProject: boolean
   showDevelopmentRibbon: boolean
@@ -80,6 +85,9 @@ export const AppShell: FC<AppShellProps> = ({
   onShowChat,
   onSelectProjectRoot,
   onNewGlobalChat,
+  routeDrivenNavigation = false,
+  routeFallback,
+  onRouteFallbackAction,
   loading,
   hasProject,
   showDevelopmentRibbon,
@@ -95,6 +103,14 @@ export const AppShell: FC<AppShellProps> = ({
   const activeSurface = useAppSurfaceStore((state) => state.activeSurface)
   const setActiveSurface = useAppSurfaceStore((state) => state.setActiveSurface)
   const dragging = useRef(false)
+  const setCompatibilitySurface = useCallback(
+    (surface: 'code' | 'chat') => {
+      if (!routeDrivenNavigation) {
+        setActiveSurface(surface)
+      }
+    },
+    [routeDrivenNavigation, setActiveSurface],
+  )
   const effectiveSelectedChatSpaceId =
     onSelectChatSpace || selectedChatSpaceId
       ? selectedChatSpaceId
@@ -106,26 +122,26 @@ export const AppShell: FC<AppShellProps> = ({
 
   const handleSelectCodeSession = useCallback(
     (id: string) => {
-      setActiveSurface('code')
+      setCompatibilitySurface('code')
       setFallbackSelectedChatSpaceId(null)
       setFallbackDraftChatSpaceId(null)
       onSelectSession(id)
     },
-    [onSelectSession, setActiveSurface],
+    [onSelectSession, setCompatibilitySurface],
   )
 
   const handleSelectGlobalSession = useCallback(
     (id: string) => {
-      setActiveSurface('chat')
+      setCompatibilitySurface('chat')
       onSelectChatSession(id)
       setFallbackSelectedChatSpaceId(null)
       setFallbackDraftChatSpaceId(null)
     },
-    [onSelectChatSession, setActiveSurface],
+    [onSelectChatSession, setCompatibilitySurface],
   )
 
   const handleNewGlobalSession = useCallback(() => {
-    setActiveSurface('chat')
+    setCompatibilitySurface('chat')
     if (onNewGlobalChat) {
       onNewGlobalChat()
     } else {
@@ -133,11 +149,11 @@ export const AppShell: FC<AppShellProps> = ({
     }
     setFallbackSelectedChatSpaceId(null)
     setFallbackDraftChatSpaceId(null)
-  }, [onNewGlobalChat, onSelectGlobalSession, setActiveSurface])
+  }, [onNewGlobalChat, onSelectGlobalSession, setCompatibilitySurface])
 
   const handleSelectChatSpace = useCallback(
     (id: string) => {
-      setActiveSurface('chat')
+      setCompatibilitySurface('chat')
       onSelectGlobalSession(null)
       if (onSelectChatSpace) {
         onSelectChatSpace(id)
@@ -146,12 +162,12 @@ export const AppShell: FC<AppShellProps> = ({
         setFallbackDraftChatSpaceId(null)
       }
     },
-    [onSelectChatSpace, onSelectGlobalSession, setActiveSurface],
+    [onSelectChatSpace, onSelectGlobalSession, setCompatibilitySurface],
   )
 
   const handleBeginChatSpaceAttempt = useCallback(
     (id: string) => {
-      setActiveSurface('chat')
+      setCompatibilitySurface('chat')
       onSelectGlobalSession(null)
       if (onBeginChatSpaceAttempt) {
         onBeginChatSpaceAttempt(id)
@@ -160,19 +176,19 @@ export const AppShell: FC<AppShellProps> = ({
         setFallbackDraftChatSpaceId(id)
       }
     },
-    [onBeginChatSpaceAttempt, onSelectGlobalSession, setActiveSurface],
+    [onBeginChatSpaceAttempt, onSelectGlobalSession, setCompatibilitySurface],
   )
 
   const handleSelectSurface = useCallback(
     (surface: 'code' | 'chat') => {
-      setActiveSurface(surface)
+      setCompatibilitySurface(surface)
       if (surface === 'code') {
         void onShowCode?.()
         return
       }
       onShowChat?.()
     },
-    [onShowChat, onShowCode, setActiveSurface],
+    [onShowChat, onShowCode, setCompatibilitySurface],
   )
 
   const handleMouseDown = useCallback(() => {
@@ -297,7 +313,12 @@ export const AppShell: FC<AppShellProps> = ({
         )}
 
         <div className="app-main-panel flex min-w-0 flex-1 flex-col">
-          {activeSurface === 'chat' ? (
+          {routeFallback ? (
+            <RouteFallbackView
+              fallback={routeFallback}
+              onAction={onRouteFallbackAction ?? (() => undefined)}
+            />
+          ) : activeSurface === 'chat' ? (
             <ChatSurface
               selectedSpaceId={effectiveSelectedChatSpaceId}
               draftSpaceId={effectiveDraftChatSpaceId}

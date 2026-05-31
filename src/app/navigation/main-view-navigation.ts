@@ -11,6 +11,7 @@ export interface CodeReviewRouteSearch {
 
 export interface MainViewNavigation {
   navigateToWelcome: () => Promise<void>
+  replaceWithWelcome: () => Promise<void>
   navigateToCodeSession: (sessionId: string) => void
   navigateToNewCodeSession: (workspaceId: string | null) => void
   navigateToCodeReview: (search?: CodeReviewRouteSearch) => void
@@ -25,6 +26,10 @@ export function useMainViewNavigation(): MainViewNavigation {
 
   const navigateToWelcome = useCallback(() => {
     return navigate({ to: '/' })
+  }, [navigate])
+
+  const replaceWithWelcome = useCallback(() => {
+    return navigate({ to: '/', replace: true })
   }, [navigate])
 
   const navigateToCodeSession = useCallback(
@@ -99,6 +104,7 @@ export function useMainViewNavigation(): MainViewNavigation {
 
   return {
     navigateToWelcome,
+    replaceWithWelcome,
     navigateToCodeSession,
     navigateToNewCodeSession,
     navigateToCodeReview,

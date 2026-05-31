@@ -3,6 +3,8 @@
 ## Goal
 
 Make code review a first-class workflow inside Convergence's Code surface.
+Code Review is a Code Main View route, not an overlay or dialog-controlled
+surface.
 
 The user should be able to open a large, full-screen review experience for
 agent-made code changes, inspect changed files with a real file tree and rich
@@ -203,6 +205,11 @@ When a target has no session, the UI should make the missing route explicit:
 - save notes locally without sending
 
 Do not silently choose a session for the user.
+
+When a route contains a stale Code Review `targetId`, keep the user in the Code
+Review Main View and show a route fallback that clears the stale target through
+the shared Main View navigation action. Do not silently select an unrelated
+target.
 
 ## Architecture
 

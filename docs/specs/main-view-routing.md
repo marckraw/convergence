@@ -256,6 +256,56 @@ Likely future promotions:
 - Space Workboard or Space home
 - Project Settings
 - Prompt Library
+- Skills Browser
+- MCP Servers
+
+Current Modal Tasks:
+
+- Space create
+- Workspace create
+- Session intent
+- Session fork
+- Space/session linking
+- Pull Request review start
+- Provider status
+- Release notes
+
+Current Main View candidates that remain dialogs for now:
+
+- App Settings: keep as a Modal Task until settings sections need history,
+  restoration, or deep links.
+- Project Settings: promote when project-level configuration grows beyond the
+  current short form.
+- Space Workboard: promote with Space home if Spaces become a primary planning
+  surface.
+- Prompt Library and Skills Browser: promote when users need durable filtering,
+  detail panes, or route restoration.
+- MCP Servers: promote when server configuration becomes a repeated workspace
+  management surface.
+
+## Route Fallbacks
+
+Routes should not silently leave a stale Main View active. The app resolves the
+current route against loaded project, workspace, session, Space, and Code Review
+target catalogs.
+
+Fallback behavior:
+
+- Unknown routes replace back to `/`.
+- Missing Code Session ids show a Code route fallback with a Code-home action.
+- Missing Chat Session ids show a Chat route fallback with a Chat-home action.
+- Archived Sessions show an archived-session fallback instead of becoming the
+  active Main View.
+- Missing Projects and missing Workspaces show unavailable fallback states.
+- Removed worktrees show a removed-worktree fallback for routes that require
+  workspace files.
+- Missing or archived Spaces show a Chat fallback.
+- Stale Code Review target ids keep the user in Code Review but clear the stale
+  target via the shared navigation action.
+
+Valid hash routes are restored on remount by the TanStack Router hash history.
+Entity stores may still hydrate data and compatibility surface state after mount,
+but they must not own Main View visibility.
 
 ## Testing Strategy
 

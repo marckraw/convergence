@@ -140,6 +140,11 @@ const mockElectronAPI = {
     showSourceOpenDialog: vi.fn(),
     synthesize: vi.fn(),
   },
+  codeReview: {
+    listTargets: vi.fn().mockResolvedValue([]),
+    getSummary: vi.fn().mockResolvedValue({ base: null, files: [] }),
+    getFilePatch: vi.fn().mockResolvedValue(''),
+  },
   git: {
     getBranches: vi.fn().mockResolvedValue([]),
     getCurrentBranch: vi.fn().mockResolvedValue('main'),
@@ -327,6 +332,7 @@ describe('App', () => {
     mockElectronAPI.session.getSummariesByProjectId.mockResolvedValue([])
     mockElectronAPI.session.getNeedsYouDismissals.mockResolvedValue({})
     mockElectronAPI.session.getRecentIds.mockResolvedValue([])
+    mockElectronAPI.codeReview.listTargets.mockResolvedValue([])
     Object.defineProperty(window, 'electronAPI', {
       value: mockElectronAPI,
       writable: true,
@@ -385,6 +391,8 @@ describe('App', () => {
       selectedMode: 'working-tree',
       selectedFile: null,
       selectedTarget: null,
+      targets: [],
+      targetsLoading: false,
     })
   })
 
@@ -667,5 +675,49 @@ describe('App', () => {
     })
     expect(useCodeReviewStore.getState().selectedMode).toBe('base-branch')
     expect(useCodeReviewStore.getState().selectedFile).toBe('src/app.ts')
+  })
+
+  it('shows a route fallback for an invalid code session route', async () => {
+    render(
+      <App mainViewRoute={{ kind: 'code-session', sessionId: 'missing' }} />,
+    )
+
+    expect(await screen.findByText('Session not found')).toBeInTheDocument()
+    expect(screen.getByText(/points to a session/)).toBeInTheDocument()
+  })
+
+  it('shows a route fallback for an invalid Space route', async () => {
+    render(
+      <App
+        mainViewRoute={{
+          kind: 'chat-space',
+          spaceId: 'missing-space',
+          draftAttempt: false,
+        }}
+      />,
+    )
+
+    expect(await screen.findByText('Space not found')).toBeInTheDocument()
+  })
+
+  it('shows a route fallback for a stale Code Review target route', async () => {
+    mockElectronAPI.project.getActive.mockResolvedValue(mockProject)
+    mockElectronAPI.project.getAll.mockResolvedValue([mockProject])
+    mockElectronAPI.codeReview.listTargets.mockResolvedValue([])
+
+    render(
+      <App
+        mainViewRoute={{
+          kind: 'code-review',
+          targetId: 'missing-target',
+          mode: 'working-tree',
+          filePath: null,
+        }}
+      />,
+    )
+
+    expect(
+      await screen.findByText('Review target unavailable'),
+    ).toBeInTheDocument()
   })
 })
