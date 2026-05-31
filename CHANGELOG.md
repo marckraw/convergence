@@ -1,5 +1,12 @@
 # convergence
 
+## 0.37.44
+
+### Patch Changes
+
+- 9b53e5a: Complete the code review performance cache identity so refreshed summaries and file patches are keyed by comparison point and working tree version while preserving the previous visible diff during replacement loads.
+- 282b7dc: Harden Main View routing with shared navigation fallbacks for invalid sessions, stale Code Review targets, missing Spaces, and removed workspace state.
+
 ## 0.37.43
 
 ### Patch Changes
