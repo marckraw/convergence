@@ -30,6 +30,9 @@ coding workflows, not copy it literally.
 5. **Global first, project-aware later.** V1 is a global personal insights
    surface. Project breakdowns are shown inside that surface, but there is no
    per-project insights route yet.
+6. **Route promotion later.** Insights remains a settings/modal surface for now.
+   Promote to an Insights Main View when users need history, deep links, or
+   route restoration for project-aware analytics.
 
 ## Current Library Choice
 
@@ -421,7 +424,7 @@ Manual checks:
 - Cost analytics.
 - Token accounting.
 - Full transcript mining.
-- Per-project Insights route.
+- Per-project Insights route or Insights Main View promotion.
 - Ranking productivity or agent quality.
 - Export/share cards.
 - Notifications based on insights.

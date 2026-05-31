@@ -1,3 +1,4 @@
+import { useEffect } from 'react'
 import { createRootRoute, Outlet, useRouterState } from '@tanstack/react-router'
 import type { CodeReviewMode } from '@/entities/code-review'
 import { useSessionStore } from '@/entities/session'
@@ -7,6 +8,7 @@ import { routeMatchToMainViewRoute } from './route-state.pure'
 
 export const Route = createRootRoute({
   component: RootRoute,
+  notFoundComponent: RootNotFoundRoute,
 })
 
 function RootRoute() {
@@ -92,4 +94,14 @@ function RootRoute() {
       <Outlet />
     </>
   )
+}
+
+function RootNotFoundRoute() {
+  const { replaceWithWelcome } = useMainViewNavigation()
+
+  useEffect(() => {
+    void replaceWithWelcome()
+  }, [replaceWithWelcome])
+
+  return null
 }

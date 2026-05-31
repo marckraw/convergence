@@ -354,4 +354,17 @@ describe('app router', () => {
       'chat-1',
     )
   })
+
+  it('replaces unknown routes with the welcome route', async () => {
+    await router.navigate({ to: '/missing-route' as never })
+
+    render(<RouterProvider router={router} />)
+
+    await waitFor(() => {
+      expect(screen.getByTestId('app-shell')).toHaveAttribute(
+        'data-route-kind',
+        'home',
+      )
+    })
+  })
 })

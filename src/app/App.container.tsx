@@ -1,6 +1,7 @@
-import { useEffect } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useProjectStore } from '@/entities/project'
 import { useWorkspaceStore } from '@/entities/workspace'
+import { useSpaceStore } from '@/entities/space'
 import {
   sessionApi,
   useSessionStore,
@@ -39,6 +40,7 @@ import { UpdatesToastContainer } from '@/features/updates-toast'
 import { ProviderUpdatesToastContainer } from '@/features/provider-updates-toast'
 import { FeedbackButtonContainer } from '@/features/feedback-button'
 import { AppShell } from './App.layout'
+import { resolveMainViewRoute } from './routes/main-view-route-resolution.pure'
 
 export type MainViewRoute =
   | { kind: 'home' }
@@ -119,14 +121,21 @@ export function App({
     mainViewRoute.kind === 'chat-home' ||
     mainViewRoute.kind === 'chat-session' ||
     mainViewRoute.kind === 'chat-space'
+  const routeChatSpaceActive = mainViewRoute.kind === 'chat-space'
   const loadActiveProject = useProjectStore((s) => s.loadActiveProject)
+  const projects = useProjectStore((s) => s.projects)
   const activeProject = useProjectStore((s) => s.activeProject)
   const loading = useProjectStore((s) => s.loading)
   const projectError = useProjectStore((s) => s.error)
   const clearProjectError = useProjectStore((s) => s.clearError)
   const workspaceError = useWorkspaceStore((s) => s.error)
   const clearWorkspaceError = useWorkspaceStore((s) => s.clearError)
+  const workspaces = useWorkspaceStore((s) => s.workspaces)
+  const globalWorkspaces = useWorkspaceStore((s) => s.globalWorkspaces)
   const loadGlobalWorkspaces = useWorkspaceStore((s) => s.loadGlobalWorkspaces)
+  const spaces = useSpaceStore((s) => s.spaces)
+  const spacesLoading = useSpaceStore((s) => s.loading)
+  const loadSpaces = useSpaceStore((s) => s.loadSpaces)
   const sessionError = useSessionStore((s) => s.error)
   const clearSessionError = useSessionStore((s) => s.clearError)
   const prepareForProject = useSessionStore((s) => s.prepareForProject)
@@ -150,6 +159,8 @@ export function App({
   const loadGlobalChatSessions = useSessionStore(
     (s) => s.loadGlobalChatSessions,
   )
+  const globalSessions = useSessionStore((s) => s.globalSessions)
+  const globalChatSessions = useSessionStore((s) => s.globalChatSessions)
   const routeSessionLoaded = useSessionStore((s) =>
     routeCodeSessionId
       ? s.globalSessions.some((session) => session.id === routeCodeSessionId)
@@ -166,8 +177,11 @@ export function App({
   const loadAppSettings = useAppSettingsStore((s) => s.load)
   const loadNotificationPrefs = useNotificationsStore((s) => s.loadPrefs)
   const setActiveSurface = useAppSurfaceStore((s) => s.setActiveSurface)
+  const codeReviewTargets = useCodeReviewStore((s) => s.targets)
+  const codeReviewTargetsLoading = useCodeReviewStore((s) => s.targetsLoading)
   const openCodeReview = useCodeReviewStore((s) => s.openReview)
   const closeCodeReview = useCodeReviewStore((s) => s.closeReview)
+  const loadCodeReviewTargets = useCodeReviewStore((s) => s.loadTargets)
   const setNotificationActiveSession = useNotificationsStore(
     (s) => s.setActiveSession,
   )
@@ -180,6 +194,52 @@ export function App({
   const ingestProviderDebug = useProviderDebugStore((s) => s.ingest)
   const handleTerminalIdleEvent = useTerminalStore(
     (s) => s.handleTerminalIdleEvent,
+  )
+  const [routeSessionCatalogLoaded, setRouteSessionCatalogLoaded] =
+    useState(false)
+  const [routeWorkspaceCatalogLoaded, setRouteWorkspaceCatalogLoaded] =
+    useState(false)
+  const [routeSpacesLoaded, setRouteSpacesLoaded] = useState(false)
+  const [routeCodeReviewTargetsLoaded, setRouteCodeReviewTargetsLoaded] =
+    useState(false)
+
+  const routeResolution = useMemo(
+    () =>
+      resolveMainViewRoute({
+        route: mainViewRoute,
+        catalogLoaded:
+          routeSessionCatalogLoaded && routeWorkspaceCatalogLoaded && !loading,
+        spacesLoaded:
+          !routeChatSpaceActive || (routeSpacesLoaded && !spacesLoading),
+        codeReviewTargetsLoaded:
+          !routeCodeReviewActive ||
+          (routeCodeReviewTargetsLoaded && !codeReviewTargetsLoading),
+        projects,
+        sessions: globalSessions,
+        chatSessions: globalChatSessions,
+        workspaces: [...globalWorkspaces, ...workspaces],
+        spaces,
+        codeReviewTargets,
+      }),
+    [
+      codeReviewTargets,
+      codeReviewTargetsLoading,
+      globalChatSessions,
+      globalSessions,
+      globalWorkspaces,
+      loading,
+      mainViewRoute,
+      projects,
+      routeChatSpaceActive,
+      routeCodeReviewActive,
+      routeCodeReviewTargetsLoaded,
+      routeSessionCatalogLoaded,
+      routeSpacesLoaded,
+      routeWorkspaceCatalogLoaded,
+      spaces,
+      spacesLoading,
+      workspaces,
+    ],
   )
 
   useEffect(() => {
@@ -206,16 +266,45 @@ export function App({
   }, [loadActiveProject])
 
   useEffect(() => {
-    void loadGlobalWorkspaces()
+    setRouteWorkspaceCatalogLoaded(false)
+    void loadGlobalWorkspaces().finally(() =>
+      setRouteWorkspaceCatalogLoaded(true),
+    )
   }, [loadGlobalWorkspaces])
 
   useEffect(() => {
+    setRouteSessionCatalogLoaded(false)
     void (async () => {
       await loadGlobalSessions()
       await loadGlobalChatSessions()
       await loadRecents()
-    })()
+    })().finally(() => setRouteSessionCatalogLoaded(true))
   }, [loadGlobalSessions, loadGlobalChatSessions, loadRecents])
+
+  useEffect(() => {
+    if (!routeChatSpaceActive) return
+    setRouteSpacesLoaded(false)
+    void loadSpaces().finally(() => setRouteSpacesLoaded(true))
+  }, [loadSpaces, routeChatSpaceActive])
+
+  useEffect(() => {
+    if (!routeCodeReviewActive || !activeProject) {
+      setRouteCodeReviewTargetsLoaded(!routeCodeReviewActive || !loading)
+      return
+    }
+
+    setRouteCodeReviewTargetsLoaded(false)
+    void loadCodeReviewTargets({
+      projectId: activeProject.id,
+      sessionId: activeSessionId,
+    }).finally(() => setRouteCodeReviewTargetsLoaded(true))
+  }, [
+    activeProject,
+    activeSessionId,
+    loadCodeReviewTargets,
+    loading,
+    routeCodeReviewActive,
+  ])
 
   useEffect(() => {
     void loadAppSettings()
@@ -250,6 +339,7 @@ export function App({
     setActiveSurface('code')
     closeCodeReview()
 
+    if (routeResolution.status !== 'ready') return
     if (!routeSessionLoaded) return
     if (activeSessionId === routeCodeSessionId) return
 
@@ -257,6 +347,7 @@ export function App({
   }, [
     activeSessionId,
     routeCodeSessionId,
+    routeResolution.status,
     routeSessionLoaded,
     closeCodeReview,
     setActiveSurface,
@@ -268,6 +359,7 @@ export function App({
     closeCodeReview()
     setActiveSurface('chat')
 
+    if (routeResolution.status !== 'ready') return
     if (!routeChatSessionId) {
       if (activeGlobalSessionId !== null) {
         setActiveGlobalSession(null)
@@ -283,6 +375,7 @@ export function App({
     closeCodeReview,
     routeChatActive,
     routeChatSessionId,
+    routeResolution.status,
     routeChatSessionLoaded,
     setActiveGlobalSession,
     setActiveSurface,
@@ -313,6 +406,7 @@ export function App({
 
   useEffect(() => {
     if (!routeNewCodeSessionActive) return
+    if (routeResolution.status !== 'ready') return
 
     closeCodeReview()
     setActiveSurface('code')
@@ -322,6 +416,7 @@ export function App({
     closeCodeReview,
     routeNewCodeSessionActive,
     routeNewCodeSessionWorkspaceId,
+    routeResolution.status,
     setActiveSurface,
   ])
 
@@ -443,6 +538,35 @@ export function App({
     await activateProject(projectId)
   }
 
+  const handleRouteFallbackAction = () => {
+    if (routeResolution.status !== 'fallback') return
+
+    switch (routeResolution.fallback.action) {
+      case 'welcome':
+        setActiveSurface('code')
+        closeCodeReview()
+        if (onShowCodeHome) {
+          void onShowCodeHome()
+        }
+        return
+      case 'chat-home':
+        setActiveSurface('chat')
+        if (onNewGlobalChat) {
+          onNewGlobalChat()
+        } else {
+          setActiveGlobalSession(null)
+        }
+        return
+      case 'code-review':
+        handleOpenCodeReview({
+          targetId: null,
+          mode: 'working-tree',
+          file: null,
+        })
+        return
+    }
+  }
+
   return (
     <TooltipProvider delayDuration={200}>
       <AppShell
@@ -468,6 +592,24 @@ export function App({
         onSelectProjectRoot={handleSelectProjectRoot}
         onShowChat={onShowChat}
         onNewGlobalChat={onNewGlobalChat}
+        routeDrivenNavigation={
+          !!(
+            onSelectCodeSession ||
+            onBeginCodeSessionDraft ||
+            onOpenCodeReview ||
+            onSelectChatSession ||
+            onSelectChatSpace ||
+            onShowCode ||
+            onShowChat ||
+            onNewGlobalChat
+          )
+        }
+        routeFallback={
+          routeResolution.status === 'fallback'
+            ? routeResolution.fallback
+            : null
+        }
+        onRouteFallbackAction={handleRouteFallbackAction}
         loading={loading}
         hasProject={!!activeProject}
         showDevelopmentRibbon={import.meta.env.DEV}

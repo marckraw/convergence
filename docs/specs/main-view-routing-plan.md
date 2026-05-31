@@ -141,7 +141,7 @@ store flags, and local state mutations.
 - [x] Refactor Command Center intents to use the helper interface.
 - [x] Refactor notification click routing to use the helper interface.
 - [x] Refactor sidebar route-producing handlers to use the helper interface.
-- [ ] Remove obsolete app-surface setters from callers that only navigate.
+- [x] Remove obsolete app-surface setters from callers that only navigate.
 - [x] Tests:
   - [x] helper input maps to expected routes
   - [x] Command Center no longer sets independent surface state for routed
@@ -155,22 +155,22 @@ touching unrelated store booleans.
 
 Goal: make route-driven Main Views durable and document the next promotions.
 
-- [ ] Audit remaining dialogs and classify each as Main View candidate or Modal
+- [x] Audit remaining dialogs and classify each as Main View candidate or Modal
       Task.
-- [ ] Add route restoration behavior for startup, invalid Session ids, missing
+- [x] Add route restoration behavior for startup, invalid Session ids, missing
       Projects, archived Sessions, and removed Worktrees.
-- [ ] Add route-level not-found and empty-state handling.
-- [ ] Add user-facing fallback for stale Code Review target ids.
-- [ ] Remove obsolete `activeSurface` or narrow it to a derived compatibility
+- [x] Add route-level not-found and empty-state handling.
+- [x] Add user-facing fallback for stale Code Review target ids.
+- [x] Remove obsolete `activeSurface` or narrow it to a derived compatibility
       helper if possible.
-- [ ] Update specs that mention dialog-vs-route assumptions:
-  - [ ] `docs/specs/global-app-settings.md`
-  - [ ] `docs/specs/local-analytics-insights.md`
-  - [ ] `docs/specs/first-class-code-review.md`
-- [ ] Tests:
-  - [ ] invalid route fallbacks
-  - [ ] app restart/remount with hash route
-  - [ ] route docs stay consistent with app navigation helpers
+- [x] Update specs that mention dialog-vs-route assumptions:
+  - [x] `docs/specs/global-app-settings.md`
+  - [x] `docs/specs/local-analytics-insights.md`
+  - [x] `docs/specs/first-class-code-review.md`
+- [x] Tests:
+  - [x] invalid route fallbacks
+  - [x] app restart/remount with hash route
+  - [x] route docs stay consistent with app navigation helpers
 
 Verification: router architecture is stable enough for future Settings,
 Insights, Project Settings, and Space home promotion work.
