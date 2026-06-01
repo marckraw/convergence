@@ -34,6 +34,7 @@ function buildSessionsTableSql(
       parent_session_id TEXT,
       fork_strategy TEXT,
       primary_surface TEXT NOT NULL DEFAULT 'conversation',
+      html_mode_enabled INTEGER NOT NULL DEFAULT 0,
       created_at TEXT NOT NULL DEFAULT (datetime('now')),
       updated_at TEXT NOT NULL DEFAULT (datetime('now')),
       FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
@@ -320,6 +321,32 @@ const SCHEMA = `
   );
 
   CREATE INDEX IF NOT EXISTS idx_attachments_session ON attachments(session_id);
+
+  CREATE TABLE IF NOT EXISTS session_html_outputs (
+    id TEXT PRIMARY KEY,
+    session_id TEXT NOT NULL,
+    source_item_id TEXT,
+    output_kind TEXT NOT NULL CHECK (output_kind IN ('living', 'snapshot')),
+    status TEXT NOT NULL CHECK (status IN ('pending', 'ready', 'failed')),
+    relative_path TEXT,
+    size_bytes INTEGER NOT NULL DEFAULT 0,
+    error TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+    FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE,
+    FOREIGN KEY (source_item_id) REFERENCES session_conversation_items(id) ON DELETE SET NULL
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_session_html_outputs_session_updated
+    ON session_html_outputs(session_id, updated_at DESC);
+
+  CREATE UNIQUE INDEX IF NOT EXISTS idx_session_html_outputs_living
+    ON session_html_outputs(session_id, output_kind)
+    WHERE output_kind = 'living';
+
+  CREATE UNIQUE INDEX IF NOT EXISTS idx_session_html_outputs_snapshot_source
+    ON session_html_outputs(session_id, source_item_id, output_kind)
+    WHERE output_kind = 'snapshot' AND source_item_id IS NOT NULL;
 
   CREATE TABLE IF NOT EXISTS session_terminal_layout (
     session_id TEXT PRIMARY KEY,
@@ -673,6 +700,12 @@ function ensureSessionColumns(database: Database.Database): void {
       "ALTER TABLE sessions ADD COLUMN primary_surface TEXT NOT NULL DEFAULT 'conversation'",
     )
   }
+
+  if (!columnNames.has('html_mode_enabled')) {
+    database.exec(
+      'ALTER TABLE sessions ADD COLUMN html_mode_enabled INTEGER NOT NULL DEFAULT 0',
+    )
+  }
 }
 
 function parseLegacyTranscript(
@@ -874,6 +907,9 @@ function ensureSessionsTableShape(database: Database.Database): void {
             ELSE '{"preset":"ask"}'
           END`
         : `'{"preset":"ask"}'`
+      const htmlModeEnabledSelect = sourceColumnNames.has('html_mode_enabled')
+        ? 'html_mode_enabled'
+        : '0'
       database.exec(`
         INSERT INTO sessions_next (
           id,
@@ -898,6 +934,7 @@ function ensureSessionsTableShape(database: Database.Database): void {
           parent_session_id,
           fork_strategy,
           primary_surface,
+          html_mode_enabled,
           created_at,
           updated_at
         )
@@ -928,6 +965,7 @@ function ensureSessionsTableShape(database: Database.Database): void {
           END,
           fork_strategy,
           primary_surface,
+          ${htmlModeEnabledSelect},
           created_at,
           updated_at
         FROM sessions;

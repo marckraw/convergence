@@ -167,6 +167,8 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
   const [skillQuery, setSkillQuery] = useState('')
   const [selectedSkills, setSelectedSkills] = useState<SkillSelection[]>([])
   const [selectedContextIds, setSelectedContextIds] = useState<string[]>([])
+  const [draftHtmlModeEnabled, setDraftHtmlModeEnabled] = useState(false)
+  const [htmlModePending, setHtmlModePending] = useState(false)
   const [isDragging, setIsDragging] = useState(false)
   const [codexUsageSnapshot, setCodexUsageSnapshot] =
     useState<ProviderQuotaSnapshot | null>(null)
@@ -180,6 +182,7 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
     (s) => s.createAndStartGlobalSession,
   )
   const sendMessageToSession = useSessionStore((s) => s.sendMessageToSession)
+  const setSessionHtmlModeEnabled = useSessionStore((s) => s.setHtmlModeEnabled)
   const cancelQueuedInput = useSessionStore((s) => s.cancelQueuedInput)
   const sessions = useSessionStore((s) => s.sessions)
   const globalChatSessions = useSessionStore((s) => s.globalChatSessions)
@@ -387,6 +390,12 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
     setSkillQuery('')
     setSkillPickerOpen(false)
     setContextPickerOpen(false)
+    setHtmlModePending(false)
+  }, [contextKey, activeSessionId])
+
+  useEffect(() => {
+    if (activeSessionId) return
+    setDraftHtmlModeEnabled(false)
   }, [contextKey, activeSessionId])
 
   useEffect(() => {
@@ -490,6 +499,26 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
     activeSession.status === 'completed' ||
     activeSession.status === 'failed'
   const isComposerDisabled = midRunPolicy.disabled
+  const htmlModeEnabled = activeSession
+    ? (activeSession.htmlModeEnabled ?? false)
+    : draftHtmlModeEnabled
+
+  const handleHtmlModeToggle = useCallback(
+    (next: boolean) => {
+      if (!activeSession) {
+        setDraftHtmlModeEnabled(next)
+        return
+      }
+
+      setHtmlModePending(true)
+      void setSessionHtmlModeEnabled(activeSession.id, next)
+        .catch(() => undefined)
+        .finally(() => {
+          setHtmlModePending(false)
+        })
+    },
+    [activeSession, setSessionHtmlModeEnabled],
+  )
 
   const handleSubmit = useCallback(() => {
     const trimmed = value.trim()
@@ -505,6 +534,8 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
       projectContextEnabled && selectedContextIds.length > 0
         ? selectedContextIds
         : undefined
+    const newSessionHtmlModeEnabled =
+      !activeSession && draftHtmlModeEnabled ? true : undefined
 
     if (activeSession && canContinueActiveSession) {
       const mode = deliveryMode === 'normal' ? undefined : deliveryMode
@@ -550,48 +581,94 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
         const startMessage = prepareNewSessionMessage
           ? prepareNewSessionMessage(trimmed)
           : trimmed
-        const session = await createAndStartGlobalSession(
-          selection.providerId,
-          selection.modelId,
-          selection.effort?.id ?? null,
-          name,
-          startMessage,
-          hasAttachments ? attachmentIds : undefined,
-          skillSelections,
-          permissionConfig,
-        )
+        const session = newSessionHtmlModeEnabled
+          ? await createAndStartGlobalSession(
+              selection.providerId,
+              selection.modelId,
+              selection.effort?.id ?? null,
+              name,
+              startMessage,
+              hasAttachments ? attachmentIds : undefined,
+              skillSelections,
+              permissionConfig,
+              newSessionHtmlModeEnabled,
+            )
+          : await createAndStartGlobalSession(
+              selection.providerId,
+              selection.modelId,
+              selection.effort?.id ?? null,
+              name,
+              startMessage,
+              hasAttachments ? attachmentIds : undefined,
+              skillSelections,
+              permissionConfig,
+            )
         if (session) {
           await onGlobalSessionCreated?.(session)
         }
       })()
     } else if (hasAttachments || skillSelections) {
-      createAndStartSession(
-        context.projectId,
-        context.workspaceId,
-        selection.providerId,
-        selection.modelId,
-        selection.effort?.id ?? null,
-        name,
-        trimmed,
-        hasAttachments ? attachmentIds : undefined,
-        skillSelections,
-        contextItemIds,
-        permissionConfig,
-      )
+      if (newSessionHtmlModeEnabled) {
+        createAndStartSession(
+          context.projectId,
+          context.workspaceId,
+          selection.providerId,
+          selection.modelId,
+          selection.effort?.id ?? null,
+          name,
+          trimmed,
+          hasAttachments ? attachmentIds : undefined,
+          skillSelections,
+          contextItemIds,
+          permissionConfig,
+          newSessionHtmlModeEnabled,
+        )
+      } else {
+        createAndStartSession(
+          context.projectId,
+          context.workspaceId,
+          selection.providerId,
+          selection.modelId,
+          selection.effort?.id ?? null,
+          name,
+          trimmed,
+          hasAttachments ? attachmentIds : undefined,
+          skillSelections,
+          contextItemIds,
+          permissionConfig,
+        )
+      }
     } else {
-      createAndStartSession(
-        context.projectId,
-        context.workspaceId,
-        selection.providerId,
-        selection.modelId,
-        selection.effort?.id ?? null,
-        name,
-        trimmed,
-        undefined,
-        undefined,
-        contextItemIds,
-        permissionConfig,
-      )
+      if (newSessionHtmlModeEnabled) {
+        createAndStartSession(
+          context.projectId,
+          context.workspaceId,
+          selection.providerId,
+          selection.modelId,
+          selection.effort?.id ?? null,
+          name,
+          trimmed,
+          undefined,
+          undefined,
+          contextItemIds,
+          permissionConfig,
+          newSessionHtmlModeEnabled,
+        )
+      } else {
+        createAndStartSession(
+          context.projectId,
+          context.workspaceId,
+          selection.providerId,
+          selection.modelId,
+          selection.effort?.id ?? null,
+          name,
+          trimmed,
+          undefined,
+          undefined,
+          contextItemIds,
+          permissionConfig,
+        )
+      }
     }
     setValue('')
     setSelectedSkills([])
@@ -605,6 +682,7 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
     attachments,
     selectedSkills,
     selectedContextIds,
+    draftHtmlModeEnabled,
     capabilityResult.ok,
     activeSession,
     canContinueActiveSession,
@@ -829,6 +907,9 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
             <ContextWindowDot contextWindow={activeSession.contextWindow} />
           ) : null
         }
+        htmlModeEnabled={htmlModeEnabled}
+        htmlModeDisabled={htmlModePending || !selection.providerId}
+        onHtmlModeToggle={handleHtmlModeToggle}
         deliveryMode={deliveryMode}
         deliveryModes={midRunPolicy.availableModes}
         onDeliveryModeChange={setDeliveryMode}

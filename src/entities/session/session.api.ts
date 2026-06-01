@@ -28,6 +28,7 @@ export const sessionApi = {
     permissionConfig?: SessionPermissionConfig
     name: string
     primarySurface?: 'conversation' | 'terminal'
+    htmlModeEnabled?: boolean
   }): Promise<SessionSummary> => window.electronAPI.session.create(input),
 
   getSummariesByProjectId: (projectId: string): Promise<SessionSummary[]> =>
@@ -107,6 +108,12 @@ export const sessionApi = {
     window.electronAPI.session.setPrimarySurface(
       id,
       surface,
+    ) as Promise<SessionSummary>,
+
+  setHtmlModeEnabled: (id: string, enabled: boolean): Promise<SessionSummary> =>
+    window.electronAPI.session.setHtmlModeEnabled(
+      id,
+      enabled,
     ) as Promise<SessionSummary>,
 
   getNeedsYouDismissals: (): Promise<NeedsYouDismissals> =>

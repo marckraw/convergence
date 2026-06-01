@@ -599,6 +599,22 @@ interface AttachmentIngestFileInput {
   mimeType?: string
 }
 
+type SessionHtmlOutputKindData = 'living' | 'snapshot'
+type SessionHtmlOutputStatusData = 'pending' | 'ready' | 'failed'
+
+interface SessionHtmlOutputData {
+  id: string
+  sessionId: string
+  sourceItemId: string | null
+  kind: SessionHtmlOutputKindData
+  status: SessionHtmlOutputStatusData
+  relativePath: string | null
+  sizeBytes: number
+  error: string | null
+  createdAt: string
+  updatedAt: string
+}
+
 interface SendSessionMessageInput {
   text: string
   attachmentIds?: string[]
@@ -859,6 +875,7 @@ interface SessionSummaryData {
   parentSessionId: string | null
   forkStrategy: 'full' | 'summary' | null
   primarySurface: 'conversation' | 'terminal'
+  htmlModeEnabled?: boolean
   continuationToken: string | null
   lastSequence: number
   createdAt: string
@@ -875,6 +892,7 @@ interface CreateSessionInput {
   permissionConfig?: SessionPermissionConfigData
   name: string
   primarySurface?: 'conversation' | 'terminal'
+  htmlModeEnabled?: boolean
 }
 
 interface ProviderInfo {
@@ -1451,6 +1469,10 @@ interface ElectronAPI {
       id: string,
       surface: 'conversation' | 'terminal',
     ) => Promise<SessionSummaryData>
+    setHtmlModeEnabled: (
+      id: string,
+      enabled: boolean,
+    ) => Promise<SessionSummaryData>
     getNeedsYouDismissals: () => Promise<NeedsYouDismissals>
     setNeedsYouDismissals: (dismissals: NeedsYouDismissals) => Promise<void>
     getRecentIds: () => Promise<string[]>
@@ -1538,6 +1560,11 @@ interface ElectronAPI {
     readBytes: (id: string) => Promise<Uint8Array>
     delete: (id: string) => Promise<void>
     showOpenDialog: () => Promise<string[] | null>
+  }
+  sessionHtmlOutputs: {
+    list: (sessionId: string) => Promise<SessionHtmlOutputData[]>
+    readHtml: (id: string) => Promise<string>
+    openInBrowser: (id: string) => Promise<void>
   }
   appSettings: {
     get: () => Promise<AppSettingsData>

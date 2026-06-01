@@ -32,6 +32,7 @@ import { Textarea } from '@/shared/ui/textarea'
 import { cn } from '@/shared/lib/cn.pure'
 import {
   ArrowUp,
+  FileCode2,
   FileText,
   Paperclip,
   Plus,
@@ -63,6 +64,9 @@ interface ComposerProps {
   onClaudeCodePermissionModeChange: (mode: ClaudeCodePermissionMode) => void
   codexUsagePill?: ReactNode
   contextWindowDot?: ReactNode
+  htmlModeEnabled: boolean
+  htmlModeDisabled?: boolean
+  onHtmlModeToggle: (next: boolean) => void
   deliveryMode: MidRunInputMode
   deliveryModes: MidRunInputMode[]
   onDeliveryModeChange: (mode: MidRunInputMode) => void
@@ -129,6 +133,9 @@ export const Composer: FC<ComposerProps> = ({
   onClaudeCodePermissionModeChange,
   codexUsagePill,
   contextWindowDot,
+  htmlModeEnabled,
+  htmlModeDisabled = false,
+  onHtmlModeToggle,
   deliveryMode,
   deliveryModes,
   onDeliveryModeChange,
@@ -532,6 +539,26 @@ export const Composer: FC<ComposerProps> = ({
             ) : null}
             {codexUsagePill}
             {contextWindowDot}
+            <Button
+              type="button"
+              size="sm"
+              variant="ghost"
+              className={cn(
+                'h-7 gap-1.5 px-2 text-xs text-muted-foreground hover:text-foreground',
+                htmlModeEnabled &&
+                  'bg-primary/10 text-primary hover:bg-primary/15 hover:text-primary',
+              )}
+              aria-label={
+                htmlModeEnabled ? 'Turn HTML mode off' : 'Turn HTML mode on'
+              }
+              aria-pressed={htmlModeEnabled}
+              title={htmlModeEnabled ? 'HTML mode is on' : 'HTML mode is off'}
+              disabled={htmlModeDisabled}
+              onClick={() => onHtmlModeToggle(!htmlModeEnabled)}
+            >
+              <FileCode2 className="h-3.5 w-3.5" />
+              HTML
+            </Button>
             {visibleDeliveryModes.length > 1 ? (
               <div
                 className="flex h-7 items-center rounded-md border border-border bg-background p-0.5"

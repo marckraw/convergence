@@ -209,6 +209,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
       effort: string | null
       permissionConfig?: unknown
       name: string
+      primarySurface?: 'conversation' | 'terminal'
+      htmlModeEnabled?: boolean
     }) => ipcRenderer.invoke('session:create', input),
     getSummariesByProjectId: (projectId: string) =>
       ipcRenderer.invoke('session:getSummariesByProjectId', projectId),
@@ -264,6 +266,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.invoke('session:regenerateName', id, requestId),
     setPrimarySurface: (id: string, surface: 'conversation' | 'terminal') =>
       ipcRenderer.invoke('session:setPrimarySurface', id, surface),
+    setHtmlModeEnabled: (id: string, enabled: boolean) =>
+      ipcRenderer.invoke('session:setHtmlModeEnabled', id, enabled),
     getNeedsYouDismissals: () =>
       ipcRenderer.invoke('session:getNeedsYouDismissals'),
     setNeedsYouDismissals: (dismissals: unknown) =>
@@ -392,6 +396,14 @@ contextBridge.exposeInMainWorld('electronAPI', {
     readBytes: (id: string) => ipcRenderer.invoke('attachments:readBytes', id),
     delete: (id: string) => ipcRenderer.invoke('attachments:delete', id),
     showOpenDialog: () => ipcRenderer.invoke('attachments:showOpenDialog'),
+  },
+  sessionHtmlOutputs: {
+    list: (sessionId: string) =>
+      ipcRenderer.invoke('sessionHtmlOutputs:list', sessionId),
+    readHtml: (id: string) =>
+      ipcRenderer.invoke('sessionHtmlOutputs:readHtml', id),
+    openInBrowser: (id: string) =>
+      ipcRenderer.invoke('sessionHtmlOutputs:openInBrowser', id),
   },
   appSettings: {
     get: () => ipcRenderer.invoke('appSettings:get'),
