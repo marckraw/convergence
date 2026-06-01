@@ -1,5 +1,11 @@
 # convergence
 
+## 0.37.47
+
+### Patch Changes
+
+- cab2c20: Fix session name regeneration so naming requests preserve the session's provider permission settings and no longer fail when the provider one-shot errors.
+
 ## 0.37.46
 
 ### Patch Changes
