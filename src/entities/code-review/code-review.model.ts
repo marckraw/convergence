@@ -13,6 +13,7 @@ import type {
   CodeReviewSummary,
   CodeReviewSummaryRequest,
   CodeReviewTarget,
+  CodeReviewView,
 } from './code-review.types'
 
 interface CodeReviewState {
@@ -20,6 +21,7 @@ interface CodeReviewState {
   targets: CodeReviewTarget[]
   selectedTarget: CodeReviewTarget | null
   selectedMode: CodeReviewMode
+  selectedView: CodeReviewView
   selectedFile: string | null
   targetsLoading: boolean
   summariesByKey: Record<string, CodeReviewSummary>
@@ -35,11 +37,13 @@ interface CodeReviewActions {
   openReview: (input?: {
     target?: CodeReviewTarget | null
     mode?: CodeReviewMode
+    view?: CodeReviewView
     selectedFile?: string | null
   }) => void
   closeReview: () => void
   setSelectedTarget: (target: CodeReviewTarget | null) => void
   setSelectedMode: (mode: CodeReviewMode) => void
+  setSelectedView: (view: CodeReviewView) => void
   setSelectedFile: (filePath: string | null) => void
   loadTargets: (
     input: CodeReviewListTargetsRequest,
@@ -74,6 +78,7 @@ export const useCodeReviewStore = create<CodeReviewStore>((set, get) => ({
   targets: [],
   selectedTarget: null,
   selectedMode: 'working-tree',
+  selectedView: 'guide',
   selectedFile: null,
   targetsLoading: false,
   summariesByKey: {},
@@ -92,6 +97,7 @@ export const useCodeReviewStore = create<CodeReviewStore>((set, get) => ({
           ? (input.target ?? null)
           : state.selectedTarget,
       selectedMode: input?.mode ?? state.selectedMode,
+      selectedView: input?.view ?? state.selectedView,
       selectedFile:
         input && 'selectedFile' in input
           ? (input.selectedFile ?? null)
@@ -100,6 +106,7 @@ export const useCodeReviewStore = create<CodeReviewStore>((set, get) => ({
   closeReview: () => set({ isReviewOpen: false }),
   setSelectedTarget: (selectedTarget) => set({ selectedTarget }),
   setSelectedMode: (selectedMode) => set({ selectedMode }),
+  setSelectedView: (selectedView) => set({ selectedView }),
   setSelectedFile: (selectedFile) => set({ selectedFile }),
 
   loadTargets: async (input) => {

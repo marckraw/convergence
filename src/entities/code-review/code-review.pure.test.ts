@@ -11,6 +11,7 @@ import {
   getCodeReviewTargetSourceLabel,
   getCodeReviewTargetSubtitle,
   getCodeReviewTargetTitle,
+  isRemotePullRequestTarget,
   selectCodeReviewFileAfterReload,
 } from './code-review.pure'
 
@@ -24,7 +25,11 @@ const target = {
   sessionName: 'Implement feature',
   branchName: 'feature',
   pullRequestId: null,
+  pullRequestNumber: null,
   pullRequestLabel: null,
+  pullRequestUrl: null,
+  pullRequestBaseBranch: null,
+  pullRequestHeadBranch: null,
   source: 'session' as const,
   updatedAt: '2026-01-02T00:00:00.000Z',
   status: {
@@ -99,9 +104,30 @@ describe('code review helpers', () => {
       getCodeReviewTargetTitle({
         ...target,
         source: 'pull-request',
+        workspaceId: null,
+        pullRequestNumber: 42,
         pullRequestLabel: '#42 Feature · open',
+        pullRequestUrl: 'https://github.com/acme/app/pull/42',
+        pullRequestBaseBranch: 'main',
+        pullRequestHeadBranch: 'feature',
       }),
     ).toBe('#42 Feature · open')
+    expect(
+      isRemotePullRequestTarget({
+        ...target,
+        source: 'pull-request',
+        workspaceId: null,
+        pullRequestNumber: 42,
+      }),
+    ).toBe(true)
+    expect(
+      isRemotePullRequestTarget({
+        ...target,
+        source: 'pull-request',
+        workspaceId: 'workspace-1',
+        pullRequestNumber: 42,
+      }),
+    ).toBe(false)
     expect(getCodeReviewTargetSourceLabel('project-repository')).toBe(
       'Project Repository',
     )
@@ -125,6 +151,19 @@ describe('code review helpers', () => {
     expect(
       getCodeReviewHeaderLabel({ mode: 'turns', count: 0, base: null }),
     ).toBe('Turns')
+    expect(
+      getCodeReviewHeaderLabel({
+        mode: 'working-tree',
+        count: 4,
+        base,
+        target: {
+          ...target,
+          source: 'pull-request',
+          workspaceId: null,
+          pullRequestNumber: 42,
+        },
+      }),
+    ).toBe('Pull Request (4)')
   })
 
   it('derives empty, loading, and error copy', () => {
@@ -152,6 +191,20 @@ describe('code review helpers', () => {
         error: 'Base branch not found',
       }),
     ).toBe('Base branch not found')
+    expect(
+      getCodeReviewEmptyMessage({
+        mode: 'working-tree',
+        loading: false,
+        base,
+        error: null,
+        target: {
+          ...target,
+          source: 'pull-request',
+          workspaceId: null,
+          pullRequestNumber: 42,
+        },
+      }),
+    ).toBe('No pull request changes detected')
   })
 
   it('keeps selected files only while they still exist', () => {

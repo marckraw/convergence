@@ -39,6 +39,7 @@ describe('routeMatchToMainViewRoute', () => {
           {
             targetId: 'target-1',
             mode: 'base-branch',
+            view: 'diff',
             file: 'src/app.ts',
           },
         ),
@@ -47,6 +48,7 @@ describe('routeMatchToMainViewRoute', () => {
       kind: 'code-review',
       targetId: 'target-1',
       mode: 'base-branch',
+      view: 'diff',
       filePath: 'src/app.ts',
     })
   })

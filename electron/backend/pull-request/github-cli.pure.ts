@@ -1,6 +1,7 @@
 import type {
   GithubCliPullRequestJson,
   GithubRepositoryRef,
+  ProjectPullRequest,
   PullRequestLookupResult,
   PullRequestState,
 } from './pull-request.types'
@@ -84,6 +85,48 @@ export function parseGithubCliPullRequests(
   }
 }
 
+export function parseGithubCliOpenPullRequests(
+  stdout: string,
+  repository: GithubRepositoryRef,
+  projectId: string,
+): ProjectPullRequest[] {
+  const trimmed = stdout.trim()
+  if (!trimmed) return []
+
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(trimmed)
+  } catch {
+    return []
+  }
+
+  if (!Array.isArray(parsed)) return []
+
+  return parsed.flatMap((value): ProjectPullRequest[] => {
+    const pr = value as GithubCliPullRequestJson
+    if (typeof pr.number !== 'number') return []
+
+    return [
+      {
+        projectId,
+        provider: 'github',
+        state: mapOpenPullRequestState(pr),
+        repositoryOwner: repository.owner,
+        repositoryName: repository.name,
+        number: pr.number,
+        title: typeof pr.title === 'string' ? pr.title : null,
+        url: typeof pr.url === 'string' ? pr.url : null,
+        isDraft: pr.isDraft === true,
+        headBranch: typeof pr.headRefName === 'string' ? pr.headRefName : null,
+        baseBranch: typeof pr.baseRefName === 'string' ? pr.baseRefName : null,
+        changedFileCount:
+          typeof pr.changedFiles === 'number' ? pr.changedFiles : null,
+        updatedAt: typeof pr.updatedAt === 'string' ? pr.updatedAt : null,
+      },
+    ]
+  })
+}
+
 export function classifyGithubCliError(error: {
   code?: unknown
   message?: string
@@ -143,5 +186,13 @@ function mapGithubState(pr: GithubCliPullRequestJson): PullRequestState {
   if (state === 'OPEN') return 'open'
   if (state === 'MERGED' || pr.mergedAt) return 'merged'
   if (state === 'CLOSED') return 'closed'
+  return 'unknown'
+}
+
+function mapOpenPullRequestState(
+  pr: GithubCliPullRequestJson,
+): ProjectPullRequest['state'] {
+  if (pr.isDraft === true) return 'draft'
+  if (pr.state?.toUpperCase() === 'OPEN') return 'open'
   return 'unknown'
 }

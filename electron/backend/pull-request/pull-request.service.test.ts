@@ -123,4 +123,93 @@ describe('PullRequestService', () => {
       },
     ])
   })
+
+  it('lists open pull requests for a project through GitHub CLI', async () => {
+    const db = getDatabase()
+    db.prepare(
+      `INSERT INTO projects (id, name, repository_path, settings)
+       VALUES (?, ?, ?, ?)`,
+    ).run('project-1', 'Project', '/repo', '{}')
+
+    const git = {
+      getRemoteUrl: vi
+        .fn()
+        .mockResolvedValue('https://github.com/acme/app.git'),
+    } as unknown as GitService
+    execFileMock.mockImplementation((_file, _args, _options, callback) => {
+      callback?.(
+        null,
+        JSON.stringify([
+          {
+            number: 42,
+            title: 'Remote PR',
+            url: 'https://github.com/acme/app/pull/42',
+            state: 'OPEN',
+            isDraft: false,
+            headRefName: 'feature',
+            baseRefName: 'main',
+            changedFiles: 7,
+            updatedAt: '2026-01-05T00:00:00Z',
+          },
+        ]),
+        '',
+      )
+      return null as never
+    })
+
+    const service = new PullRequestService(db, git)
+
+    await expect(service.listOpenByProjectId('project-1')).resolves.toEqual([
+      {
+        projectId: 'project-1',
+        provider: 'github',
+        state: 'open',
+        repositoryOwner: 'acme',
+        repositoryName: 'app',
+        number: 42,
+        title: 'Remote PR',
+        url: 'https://github.com/acme/app/pull/42',
+        isDraft: false,
+        headBranch: 'feature',
+        baseBranch: 'main',
+        changedFileCount: 7,
+        updatedAt: '2026-01-05T00:00:00Z',
+      },
+    ])
+    expect(execFileMock).toHaveBeenCalledWith(
+      'gh',
+      expect.arrayContaining([
+        'pr',
+        'list',
+        '--repo',
+        'acme/app',
+        '--state',
+        'open',
+      ]),
+      expect.objectContaining({ cwd: '/repo', timeout: 15_000 }),
+      expect.any(Function),
+    )
+  })
+
+  it('keeps open pull request discovery non-fatal', async () => {
+    const db = getDatabase()
+    db.prepare(
+      `INSERT INTO projects (id, name, repository_path, settings)
+       VALUES (?, ?, ?, ?)`,
+    ).run('project-1', 'Project', '/repo', '{}')
+
+    const git = {
+      getRemoteUrl: vi
+        .fn()
+        .mockResolvedValue('https://github.com/acme/app.git'),
+    } as unknown as GitService
+    execFileMock.mockImplementation((_file, _args, _options, callback) => {
+      callback?.(new Error('gh failed'), '', 'not logged in')
+      return null as never
+    })
+
+    const service = new PullRequestService(db, git)
+
+    await expect(service.listOpenByProjectId('project-1')).resolves.toEqual([])
+  })
 })

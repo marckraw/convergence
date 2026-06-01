@@ -12,7 +12,11 @@ const target = {
   sessionName: 'Implement feature',
   branchName: 'feature',
   pullRequestId: null,
+  pullRequestNumber: null,
   pullRequestLabel: null,
+  pullRequestUrl: null,
+  pullRequestBaseBranch: null,
+  pullRequestHeadBranch: null,
   source: 'session' as const,
   updatedAt: '2026-01-02T00:00:00.000Z',
   status: {

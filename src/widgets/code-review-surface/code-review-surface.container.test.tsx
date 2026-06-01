@@ -8,6 +8,10 @@ import {
   buildCodeReviewSummarySelectionKey,
   type CodeReviewTarget,
 } from '@/entities/code-review'
+import {
+  buildCodeReviewGuideKey,
+  type CodeReviewGuide,
+} from '@/entities/code-review-guide'
 import type { ReviewNote } from '@/entities/review-note'
 
 const loadTargets = vi.fn()
@@ -15,8 +19,12 @@ const loadSummary = vi.fn()
 const loadFilePatch = vi.fn()
 const setSelectedTarget = vi.fn()
 const setSelectedMode = vi.fn()
+const setSelectedView = vi.fn()
 const setSelectedFile = vi.fn()
 const closeReview = vi.fn()
+const loadGuide = vi.fn()
+const generateGuide = vi.fn()
+const refreshGuide = vi.fn()
 const loadReviewNotes = vi.fn()
 const createNote = vi.fn()
 const updateNote = vi.fn()
@@ -34,7 +42,11 @@ const target: CodeReviewTarget = {
   sessionName: 'Feature session',
   branchName: 'feature',
   pullRequestId: null,
+  pullRequestNumber: null,
   pullRequestLabel: null,
+  pullRequestUrl: null,
+  pullRequestBaseBranch: null,
+  pullRequestHeadBranch: null,
   source: 'session',
   updatedAt: '2026-01-02T00:00:00.000Z',
   status: {
@@ -51,6 +63,7 @@ const cacheIdentity = {
 }
 
 let codeReviewState: Record<string, unknown>
+let guideState: Record<string, unknown>
 let reviewNoteState: Record<string, unknown>
 
 vi.mock('@/entities/code-review', async (importOriginal) => {
@@ -72,6 +85,16 @@ vi.mock('@/entities/project', () => ({
       },
     }),
 }))
+
+vi.mock('@/entities/code-review-guide', async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import('@/entities/code-review-guide')>()
+  return {
+    ...actual,
+    useCodeReviewGuideStore: (selector: (state: unknown) => unknown) =>
+      selector(guideState),
+  }
+})
 
 vi.mock('@/entities/session', () => ({
   useSessionStore: (selector: (state: unknown) => unknown) =>
@@ -182,13 +205,54 @@ describe('CodeReviewSurface', () => {
       mode: 'working-tree',
       filePath: 'src/app.ts',
     })
+    const guideKey = buildCodeReviewGuideKey({
+      target,
+      mode: 'working-tree',
+      cacheIdentity,
+    })
+    const guide: CodeReviewGuide = {
+      id: 'guide-1',
+      projectId: 'project-1',
+      targetId: target.id,
+      mode: 'working-tree',
+      cacheIdentity,
+      status: 'ready',
+      overview: 'Persisted guide',
+      generatedBy: 'deterministic',
+      sections: [
+        {
+          id: 'review-surface',
+          title: 'Review Surface and UI Flow',
+          summary: 'Review surface files.',
+          narrative: 'Inspect the user-facing review flow.',
+          riskLevel: 'medium',
+          riskRationale: 'Review flow changes can affect visible behavior.',
+          checklist: [],
+          files: [
+            {
+              path: 'src/app.ts',
+              status: 'M',
+              reason: 'Review the existing app change.',
+              hunkHints: [],
+            },
+          ],
+        },
+      ],
+      error: null,
+      createdAt: '2026-01-02T00:00:00.000Z',
+      updatedAt: '2026-01-02T00:00:00.000Z',
+    }
     loadTargets.mockReset().mockResolvedValue([target])
     loadSummary.mockReset().mockResolvedValue(summary)
     loadFilePatch.mockReset().mockResolvedValue('@@ -1 +1 @@\n-old\n+new')
     setSelectedTarget.mockReset()
     setSelectedMode.mockReset()
+    setSelectedView.mockReset()
     setSelectedFile.mockReset()
     closeReview.mockReset()
+    loadGuide.mockReset().mockResolvedValue(guide)
+    generateGuide.mockReset().mockResolvedValue(guide)
+    refreshGuide.mockReset().mockResolvedValue(guide)
     loadReviewNotes.mockReset().mockResolvedValue(undefined)
     createNote.mockReset().mockResolvedValue({
       id: 'note-1',
@@ -223,6 +287,7 @@ describe('CodeReviewSurface', () => {
       targets: [target],
       selectedTarget: target,
       selectedMode: 'working-tree',
+      selectedView: 'diff',
       selectedFile: 'src/app.ts',
       targetsLoading: false,
       summariesByKey: { [summaryKey]: summary },
@@ -237,8 +302,19 @@ describe('CodeReviewSurface', () => {
       loadFilePatch,
       setSelectedTarget,
       setSelectedMode,
+      setSelectedView,
       setSelectedFile,
       closeReview,
+    }
+    guideState = {
+      guidesByKey: { [guideKey]: guide },
+      loadingGuideKeys: {},
+      generatingGuideKeys: {},
+      error: null,
+      loadGuide,
+      generateGuide,
+      refreshGuide,
+      clearError: vi.fn(),
     }
     reviewNoteState = {
       notesBySessionId: {},
@@ -410,6 +486,15 @@ describe('CodeReviewSurface', () => {
     expect(setSelectedFile).toHaveBeenLastCalledWith(null)
   })
 
+  it('routes presentation view changes through the shared code review store', () => {
+    render(<CodeReviewSurface />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Guide' }))
+
+    expect(setSelectedView).toHaveBeenCalledWith('guide')
+    expect(screen.getAllByText('Opening guide...').length).toBeGreaterThan(0)
+  })
+
   it('emits route search changes for target, mode, and file selections', () => {
     const onRouteSearchChange = vi.fn()
     render(<CodeReviewSurface onRouteSearchChange={onRouteSearchChange} />)
@@ -424,10 +509,81 @@ describe('CodeReviewSurface', () => {
     expect(onRouteSearchChange).toHaveBeenCalledWith({ file: 'src/new.ts' })
   })
 
+  it('renders deterministic guide sections backed by real file patches', async () => {
+    codeReviewState = {
+      ...codeReviewState,
+      selectedView: 'guide',
+    }
+
+    render(<CodeReviewSurface routeView="guide" />)
+
+    expect(
+      screen.getAllByText('Review Surface and UI Flow').length,
+    ).toBeGreaterThan(0)
+    await waitFor(() => {
+      expect(loadFilePatch).toHaveBeenCalledWith({
+        target,
+        mode: 'working-tree',
+        filePath: 'src/app.ts',
+        cacheIdentity,
+      })
+    })
+    expect(screen.getAllByTestId('pierre-diff-viewer')[0]).toHaveAttribute(
+      'data-file',
+      'src/app.ts',
+    )
+  })
+
+  it('scrolls guide file links and updates selected file state', () => {
+    codeReviewState = {
+      ...codeReviewState,
+      selectedView: 'guide',
+    }
+
+    render(
+      <CodeReviewSurface routeView="guide" onRouteSearchChange={vi.fn()} />,
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: /src\/app\.ts/ }))
+
+    expect(setSelectedFile).toHaveBeenCalledWith('src/app.ts')
+  })
+
+  it('waits for an explicit action before generating an AI guide', async () => {
+    codeReviewState = {
+      ...codeReviewState,
+      selectedView: 'guide',
+    }
+    guideState = {
+      ...guideState,
+      guidesByKey: {},
+    }
+    loadGuide.mockResolvedValue(null)
+
+    render(<CodeReviewSurface routeView="guide" />)
+
+    await waitFor(() => {
+      expect(loadGuide).toHaveBeenCalled()
+    })
+    expect(generateGuide).not.toHaveBeenCalled()
+
+    fireEvent.click(screen.getByRole('button', { name: /Generate/ }))
+
+    expect(generateGuide).toHaveBeenCalledWith({
+      target,
+      mode: 'working-tree',
+      cacheIdentity,
+      files: [
+        { status: 'M', file: 'src/app.ts' },
+        { status: 'A', file: 'src/new.ts' },
+      ],
+    })
+  })
+
   it('force refreshes the active summary and selected-file patch', () => {
     render(<CodeReviewSurface />)
 
-    fireEvent.click(screen.getByTitle('Refresh review'))
+    fireEvent.click(screen.getByRole('button', { name: 'Refresh review data' }))
 
     expect(loadSummary).toHaveBeenCalledWith(
       { target, mode: 'working-tree' },
@@ -533,10 +689,12 @@ describe('CodeReviewSurface', () => {
   it('focuses the diff by collapsing and restoring secondary rails', () => {
     render(<CodeReviewSurface />)
 
-    fireEvent.click(screen.getByRole('button', { name: 'Focus diff' }))
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Focus review content' }),
+    )
 
     expect(
-      screen.getByRole('button', { name: 'Exit diff focus' }),
+      screen.getByRole('button', { name: 'Exit focused review layout' }),
     ).toBeInTheDocument()
     expect(
       screen.getByRole('button', { name: 'Expand review targets' }),
@@ -545,10 +703,12 @@ describe('CodeReviewSurface', () => {
       screen.getByRole('button', { name: 'Expand review notes' }),
     ).toBeInTheDocument()
 
-    fireEvent.click(screen.getByRole('button', { name: 'Exit diff focus' }))
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Exit focused review layout' }),
+    )
 
     expect(
-      screen.getByRole('button', { name: 'Focus diff' }),
+      screen.getByRole('button', { name: 'Focus review content' }),
     ).toBeInTheDocument()
     expect(
       screen.getByRole('button', { name: 'Collapse review targets' }),

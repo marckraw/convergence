@@ -6,11 +6,18 @@ import {
   buildCodeReviewFilePatchSelectionKey,
   buildCodeReviewSummarySelectionKey,
   countCodeReviewFilesByStatus,
+  isRemotePullRequestTarget,
   selectCodeReviewFileAfterReload,
   useCodeReviewStore,
   type CodeReviewMode,
   type CodeReviewTarget,
+  type CodeReviewView,
 } from '@/entities/code-review'
+import {
+  buildCodeReviewGuideKey,
+  buildDeterministicCodeReviewGuide,
+  useCodeReviewGuideStore,
+} from '@/entities/code-review-guide'
 import { useProjectStore } from '@/entities/project'
 import {
   selectReviewNotesForSession,
@@ -40,6 +47,8 @@ import {
   summarizeSelectedDiffLines,
 } from '@/widgets/session-view'
 import { CodeReviewFileRail } from './code-review-file-rail.presentational'
+import { CodeReviewGuideRail } from './code-review-guide-rail.presentational'
+import { CodeReviewGuideView } from './code-review-guide.presentational'
 import { CodeReviewNotesRail } from './code-review-notes-rail.presentational'
 import { CodeReviewTargetRail } from './code-review-target-rail.presentational'
 import { CodeReviewToolbar } from './code-review-toolbar.presentational'
@@ -47,10 +56,12 @@ import { CodeReviewToolbar } from './code-review-toolbar.presentational'
 interface CodeReviewSurfaceProps {
   routeTargetId?: string | null
   routeMode?: CodeReviewMode
+  routeView?: CodeReviewView
   routeFilePath?: string | null
   onRouteSearchChange?: (search: {
     targetId?: string | null
     mode?: CodeReviewMode
+    view?: CodeReviewView
     file?: string | null
   }) => void
   onClose?: () => void
@@ -64,6 +75,8 @@ const REVIEW_NOTES_RAIL = 'minmax(240px, 300px)'
 const REVIEW_NOTES_RAIL_COLLAPSED = '48px'
 const TARGET_RAIL_COLLAPSE_WIDTH = 1440
 const NOTES_RAIL_COLLAPSE_WIDTH = 1280
+
+const EMPTY_GUIDE = buildDeterministicCodeReviewGuide([])
 
 function getInitialReviewRailState(): {
   targetRailCollapsed: boolean
@@ -85,6 +98,7 @@ function getInitialReviewRailState(): {
 export const CodeReviewSurface: FC<CodeReviewSurfaceProps> = ({
   routeTargetId = null,
   routeMode = 'working-tree',
+  routeView = 'guide',
   routeFilePath = null,
   onRouteSearchChange,
   onClose,
@@ -94,6 +108,7 @@ export const CodeReviewSurface: FC<CodeReviewSurfaceProps> = ({
   const targets = useCodeReviewStore((state) => state.targets)
   const selectedTarget = useCodeReviewStore((state) => state.selectedTarget)
   const selectedMode = useCodeReviewStore((state) => state.selectedMode)
+  const selectedView = useCodeReviewStore((state) => state.selectedView)
   const selectedFile = useCodeReviewStore((state) => state.selectedFile)
   const targetsLoading = useCodeReviewStore((state) => state.targetsLoading)
   const summariesByKey = useCodeReviewStore((state) => state.summariesByKey)
@@ -118,8 +133,20 @@ export const CodeReviewSurface: FC<CodeReviewSurfaceProps> = ({
     (state) => state.setSelectedTarget,
   )
   const setSelectedMode = useCodeReviewStore((state) => state.setSelectedMode)
+  const setSelectedView = useCodeReviewStore((state) => state.setSelectedView)
   const setSelectedFile = useCodeReviewStore((state) => state.setSelectedFile)
   const closeReview = useCodeReviewStore((state) => state.closeReview)
+  const guidesByKey = useCodeReviewGuideStore((state) => state.guidesByKey)
+  const loadingGuideKeys = useCodeReviewGuideStore(
+    (state) => state.loadingGuideKeys,
+  )
+  const generatingGuideKeys = useCodeReviewGuideStore(
+    (state) => state.generatingGuideKeys,
+  )
+  const guideError = useCodeReviewGuideStore((state) => state.error)
+  const loadGuide = useCodeReviewGuideStore((state) => state.loadGuide)
+  const generateGuide = useCodeReviewGuideStore((state) => state.generateGuide)
+  const refreshGuide = useCodeReviewGuideStore((state) => state.refreshGuide)
   const reviewNotes = useReviewNoteStore((state) =>
     selectReviewNotesForSession(state, selectedTarget?.sessionId),
   )
@@ -159,6 +186,7 @@ export const CodeReviewSurface: FC<CodeReviewSurfaceProps> = ({
     () => getInitialReviewRailState().notesRailCollapsed,
   )
   const [diffFocusActive, setDiffFocusActive] = useState(false)
+  const [pendingView, setPendingView] = useState<CodeReviewView | null>(null)
   const railsBeforeDiffFocusRef = useRef({
     targetRailCollapsed: false,
     notesRailCollapsed: false,
@@ -166,6 +194,8 @@ export const CodeReviewSurface: FC<CodeReviewSurfaceProps> = ({
   const lastAppliedRouteFilePathRef = useRef<string | null | undefined>(
     undefined,
   )
+  const guideSectionRefs = useRef(new Map<string, HTMLElement>())
+  const guideFileRefs = useRef(new Map<string, HTMLElement>())
 
   useEffect(() => {
     if (!activeProject) return
@@ -180,6 +210,12 @@ export const CodeReviewSurface: FC<CodeReviewSurfaceProps> = ({
       setSelectedMode(routeMode)
     }
   }, [routeMode, selectedMode, setSelectedMode])
+
+  useEffect(() => {
+    if (selectedView !== routeView) {
+      setSelectedView(routeView)
+    }
+  }, [routeView, selectedView, setSelectedView])
 
   useEffect(() => {
     if (lastAppliedRouteFilePathRef.current === routeFilePath) return
@@ -201,6 +237,13 @@ export const CodeReviewSurface: FC<CodeReviewSurfaceProps> = ({
       setSelectedMode('working-tree')
     }
   }, [selectedMode, selectedTarget?.sessionId, setSelectedMode])
+
+  useEffect(() => {
+    if (!pendingView || selectedView !== pendingView) return
+
+    const timeout = window.setTimeout(() => setPendingView(null), 350)
+    return () => window.clearTimeout(timeout)
+  }, [pendingView, selectedView])
 
   const summaryInput = useMemo(
     () =>
@@ -229,6 +272,39 @@ export const CodeReviewSurface: FC<CodeReviewSurfaceProps> = ({
         : files.filter((file) => file.status === statusFilter),
     [files, statusFilter],
   )
+  const guideInput = useMemo(
+    () =>
+      selectedTarget && summary?.cacheIdentity
+        ? {
+            target: selectedTarget,
+            mode: selectedMode,
+            cacheIdentity: summary.cacheIdentity,
+          }
+        : null,
+    [selectedMode, selectedTarget, summary?.cacheIdentity],
+  )
+  const guideKey = guideInput ? buildCodeReviewGuideKey(guideInput) : ''
+  const guide = guideKey ? (guidesByKey[guideKey] ?? null) : null
+  const guideLoading = guideKey ? (loadingGuideKeys[guideKey] ?? false) : false
+  const guideGenerating = guideKey
+    ? (generatingGuideKeys[guideKey] ?? false)
+    : false
+  const fallbackGuide = useMemo(
+    () =>
+      files.length > 0 ? buildDeterministicCodeReviewGuide(files) : EMPTY_GUIDE,
+    [files],
+  )
+  const displayGuide = guide ?? fallbackGuide
+  const guideFilePaths = useMemo(
+    () =>
+      displayGuide.sections.flatMap((section) =>
+        section.files.map((file) => file.path),
+      ),
+    [displayGuide],
+  )
+  const [activeGuideSectionId, setActiveGuideSectionId] = useState<
+    string | null
+  >(null)
   const selectedVisibleFile = useMemo(
     () =>
       visibleFiles.some((file) => file.file === selectedFile)
@@ -275,8 +351,62 @@ export const CodeReviewSurface: FC<CodeReviewSurfaceProps> = ({
   const diffLoading = patchKey
     ? (loadingFilePatchKeys[patchKey] ?? false)
     : false
+  const guidePatchByFile = useMemo(() => {
+    if (!selectedTarget || !summary?.cacheIdentity)
+      return new Map<string, string>()
+
+    return new Map(
+      guideFilePaths.map((filePath) => {
+        const key = buildCodeReviewFilePatchKey({
+          target: selectedTarget,
+          mode: selectedMode,
+          filePath,
+          cacheIdentity: summary.cacheIdentity,
+        })
+        const selectionKey = buildCodeReviewFilePatchSelectionKey({
+          target: selectedTarget,
+          mode: selectedMode,
+          filePath,
+        })
+        const activeKey = filePatchKeysBySelectionKey[selectionKey] ?? key
+        return [filePath, filePatchesByKey[activeKey] ?? '']
+      }),
+    )
+  }, [
+    filePatchKeysBySelectionKey,
+    filePatchesByKey,
+    guideFilePaths,
+    selectedMode,
+    selectedTarget,
+    summary?.cacheIdentity,
+  ])
+  const guideLoadingByFile = useMemo(() => {
+    if (!selectedTarget || !summary?.cacheIdentity)
+      return new Map<string, boolean>()
+
+    return new Map(
+      guideFilePaths.map((filePath) => {
+        const key = buildCodeReviewFilePatchKey({
+          target: selectedTarget,
+          mode: selectedMode,
+          filePath,
+          cacheIdentity: summary.cacheIdentity,
+        })
+        return [filePath, loadingFilePatchKeys[key] ?? false]
+      }),
+    )
+  }, [
+    guideFilePaths,
+    loadingFilePatchKeys,
+    selectedMode,
+    selectedTarget,
+    summary?.cacheIdentity,
+  ])
   const currentReviewNoteMode =
     selectedMode === 'base-branch' ? 'base-branch' : 'working-tree'
+  const remotePullRequestSelected = selectedTarget
+    ? isRemotePullRequestTarget(selectedTarget)
+    : false
   const diffLines = useMemo(
     () => parseUnifiedDiffForReviewAnchors(diff),
     [diff],
@@ -365,6 +495,11 @@ export const CodeReviewSurface: FC<CodeReviewSurfaceProps> = ({
   }, [loadSummary, summaryInput])
 
   useEffect(() => {
+    if (selectedView !== 'guide' || !guideInput) return
+    void loadGuide(guideInput)
+  }, [guideInput, loadGuide, selectedView])
+
+  useEffect(() => {
     if (!selectedTarget?.sessionId) return
     void loadReviewNotes(selectedTarget.sessionId)
   }, [loadReviewNotes, selectedTarget?.sessionId])
@@ -383,11 +518,94 @@ export const CodeReviewSurface: FC<CodeReviewSurfaceProps> = ({
 
   useEffect(() => {
     if (!patchInput?.cacheIdentity) return
+    if (selectedView !== 'diff') return
     void loadFilePatch({
       ...patchInput,
       cacheIdentity: patchInput.cacheIdentity,
     })
-  }, [loadFilePatch, patchInput])
+  }, [loadFilePatch, patchInput, selectedView])
+
+  useEffect(() => {
+    if (selectedView !== 'guide') return
+    if (!selectedTarget || !summary?.cacheIdentity) return
+
+    for (const filePath of guideFilePaths) {
+      void loadFilePatch({
+        target: selectedTarget,
+        mode: selectedMode,
+        filePath,
+        cacheIdentity: summary.cacheIdentity,
+      })
+    }
+  }, [
+    guideFilePaths,
+    loadFilePatch,
+    selectedMode,
+    selectedTarget,
+    selectedView,
+    summary?.cacheIdentity,
+  ])
+
+  useEffect(() => {
+    if (displayGuide.sections.length === 0) {
+      setActiveGuideSectionId(null)
+      return
+    }
+    if (
+      activeGuideSectionId &&
+      displayGuide.sections.some(
+        (section) => section.id === activeGuideSectionId,
+      )
+    ) {
+      return
+    }
+    setActiveGuideSectionId(displayGuide.sections[0].id)
+  }, [activeGuideSectionId, displayGuide.sections])
+
+  useEffect(() => {
+    if (selectedView !== 'guide') return
+    if (typeof IntersectionObserver === 'undefined') return
+
+    const observedSections = displayGuide.sections
+      .map((section) => ({
+        id: section.id,
+        node: guideSectionRefs.current.get(section.id),
+      }))
+      .filter(
+        (entry): entry is { id: string; node: HTMLElement } =>
+          entry.node !== undefined,
+      )
+
+    if (observedSections.length === 0) return
+
+    const sectionIdByNode = new Map(
+      observedSections.map((section) => [section.node, section.id]),
+    )
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const activeEntry = entries
+          .filter((entry) => entry.isIntersecting)
+          .sort(
+            (a, b) => a.boundingClientRect.top - b.boundingClientRect.top,
+          )[0]
+        const sectionId = activeEntry
+          ? (sectionIdByNode.get(activeEntry.target as HTMLElement) ?? null)
+          : null
+        if (sectionId) setActiveGuideSectionId(sectionId)
+      },
+      {
+        root: null,
+        rootMargin: '-18% 0px -60% 0px',
+        threshold: 0,
+      },
+    )
+
+    for (const section of observedSections) {
+      observer.observe(section.node)
+    }
+
+    return () => observer.disconnect()
+  }, [displayGuide.sections, selectedView])
 
   useEffect(() => {
     setSelectedDiffLineIds([])
@@ -456,6 +674,17 @@ export const CodeReviewSurface: FC<CodeReviewSurfaceProps> = ({
     [onRouteSearchChange, setSelectedFile, setSelectedMode],
   )
 
+  const handleViewChange = useCallback(
+    (view: CodeReviewView) => {
+      if (view !== selectedView) {
+        setPendingView(view)
+      }
+      setSelectedView(view)
+      onRouteSearchChange?.({ view })
+    },
+    [onRouteSearchChange, selectedView, setSelectedView],
+  )
+
   const handleStatusFilterChange = useCallback(
     (nextFilter: string) => {
       setHoldEmptySelection(true)
@@ -475,6 +704,46 @@ export const CodeReviewSurface: FC<CodeReviewSurfaceProps> = ({
       }
     },
     [onRouteSearchChange, setSelectedFile, visibleFiles],
+  )
+
+  const handleSelectGuideSection = useCallback((sectionId: string) => {
+    setActiveGuideSectionId(sectionId)
+    guideSectionRefs.current
+      .get(sectionId)
+      ?.scrollIntoView({ block: 'start', inline: 'nearest' })
+  }, [])
+
+  const handleSelectGuideFile = useCallback(
+    (filePath: string) => {
+      setSelectedFile(filePath)
+      onRouteSearchChange?.({ file: filePath })
+      guideFileRefs.current
+        .get(filePath)
+        ?.scrollIntoView({ block: 'start', inline: 'nearest' })
+    },
+    [onRouteSearchChange, setSelectedFile],
+  )
+
+  const renderGuideSectionRef = useCallback(
+    (sectionId: string) => (node: HTMLElement | null) => {
+      if (node) {
+        guideSectionRefs.current.set(sectionId, node)
+        return
+      }
+      guideSectionRefs.current.delete(sectionId)
+    },
+    [],
+  )
+
+  const renderGuideFileRef = useCallback(
+    (filePath: string) => (node: HTMLElement | null) => {
+      if (node) {
+        guideFileRefs.current.set(filePath, node)
+        return
+      }
+      guideFileRefs.current.delete(filePath)
+    },
+    [],
   )
 
   const handlePierreDiffSelection = useCallback(
@@ -612,9 +881,17 @@ export const CodeReviewSurface: FC<CodeReviewSurfaceProps> = ({
     setPacketPreviewOpen(false)
   }, [selectedTarget?.sessionId, sendReviewPacket])
 
+  const handleGenerateGuide = useCallback(() => {
+    if (!guideInput || files.length === 0) return
+    void generateGuide({ ...guideInput, files })
+  }, [files, generateGuide, guideInput])
+
   const handleRefresh = useCallback(() => {
     if (summaryInput) void loadSummary(summaryInput, { force: true })
-    if (patchInput?.cacheIdentity) {
+    if (selectedView === 'guide' && guideInput) {
+      void refreshGuide({ ...guideInput, files })
+    }
+    if (selectedView === 'diff' && patchInput?.cacheIdentity) {
       void loadFilePatch(
         {
           ...patchInput,
@@ -623,7 +900,33 @@ export const CodeReviewSurface: FC<CodeReviewSurfaceProps> = ({
         { force: true },
       )
     }
-  }, [loadFilePatch, loadSummary, patchInput, summaryInput])
+    if (selectedView === 'guide' && selectedTarget && summary?.cacheIdentity) {
+      for (const filePath of guideFilePaths) {
+        void loadFilePatch(
+          {
+            target: selectedTarget,
+            mode: selectedMode,
+            filePath,
+            cacheIdentity: summary.cacheIdentity,
+          },
+          { force: true },
+        )
+      }
+    }
+  }, [
+    files,
+    guideFilePaths,
+    guideInput,
+    loadFilePatch,
+    loadSummary,
+    patchInput,
+    refreshGuide,
+    selectedMode,
+    selectedTarget,
+    selectedView,
+    summary?.cacheIdentity,
+    summaryInput,
+  ])
 
   const handleToggleTargetRail = useCallback(() => {
     setDiffFocusActive(false)
@@ -660,6 +963,16 @@ export const CodeReviewSurface: FC<CodeReviewSurfaceProps> = ({
     REVIEW_DIFF_PANE,
     notesRailCollapsed ? REVIEW_NOTES_RAIL_COLLAPSED : REVIEW_NOTES_RAIL,
   ].join(' ')
+  const activeToolbarView = pendingView ?? selectedView
+  const reviewLoadingLabel = pendingView
+    ? `Opening ${pendingView === 'guide' ? 'guide' : 'diff'}...`
+    : guideGenerating
+      ? 'Generating guide...'
+      : selectedView === 'guide' && (summaryLoading || guideLoading)
+        ? 'Loading guide...'
+        : selectedView === 'diff' && diffLoading
+          ? 'Loading diff...'
+          : null
 
   if (!activeProject) {
     return (
@@ -674,56 +987,97 @@ export const CodeReviewSurface: FC<CodeReviewSurfaceProps> = ({
       <CodeReviewToolbar
         target={selectedTarget}
         mode={selectedMode}
+        view={activeToolbarView}
         fileCount={files.length}
-        loading={summaryLoading || diffLoading}
+        loading={
+          summaryLoading || diffLoading || guideLoading || guideGenerating
+        }
+        statusLabel={reviewLoadingLabel}
         diffFocusActive={diffFocusActive}
         onModeChange={handleModeChange}
+        onViewChange={handleViewChange}
         onToggleDiffFocus={handleToggleDiffFocus}
         onRefresh={handleRefresh}
         onClose={onClose ?? closeReview}
       />
 
       <div
-        className="grid min-h-0 flex-1 overflow-hidden"
+        className="relative grid min-h-0 flex-1 overflow-hidden"
         style={{ gridTemplateColumns }}
       >
+        {reviewLoadingLabel ? (
+          <div
+            className="pointer-events-none absolute top-3 left-1/2 z-20 -translate-x-1/2 rounded-md border border-border bg-card/95 px-3 py-1.5 text-xs text-muted-foreground shadow-sm"
+            role="status"
+          >
+            {reviewLoadingLabel}
+          </div>
+        ) : null}
         <CodeReviewTargetRail
           targets={targetList}
           selectedTargetId={selectedTarget?.id ?? null}
           loading={targetsLoading}
-          error={error}
+          error={error ?? guideError}
           collapsed={targetRailCollapsed}
           onToggleCollapsed={handleToggleTargetRail}
           onSelectTarget={handleSelectTarget}
         />
-        <CodeReviewFileRail
-          files={files}
-          visibleFiles={visibleFiles}
-          selectedFile={selectedVisibleFile}
-          loading={summaryLoading}
-          noteCountsByPath={reviewNoteCountByFile}
-          statusFilter={statusFilter}
-          statusCounts={statusCounts}
-          onStatusFilterChange={handleStatusFilterChange}
-          onSelectFile={handleSelectFile}
-        />
-        <main className="min-w-0 overflow-hidden">
-          <PierreDiffViewer
-            file={selectedVisibleFile}
-            diff={diff}
-            loading={diffLoading}
-            title={
-              selectedMode === 'base-branch'
-                ? 'Base branch diff'
-                : 'Working tree diff'
-            }
-            selectedLines={selectedPierreLineRange}
-            lineAnnotations={reviewNoteAnnotationMapping.annotations}
-            renderAnnotation={renderReviewNoteAnnotation}
-            onSelectedLinesChange={handlePierreDiffSelection}
-            emptyMessage="Select a changed file to inspect its diff."
-          />
-        </main>
+        {selectedView === 'guide' ? (
+          <>
+            <CodeReviewGuideRail
+              guide={displayGuide}
+              activeSectionId={activeGuideSectionId}
+              loading={summaryLoading || guideLoading || guideGenerating}
+              generating={guideGenerating}
+              canGenerate={Boolean(guideInput && files.length > 0)}
+              onSelectSection={handleSelectGuideSection}
+              onGenerateGuide={handleGenerateGuide}
+            />
+            <CodeReviewGuideView
+              guide={displayGuide}
+              getFileDiff={(filePath) => guidePatchByFile.get(filePath) ?? ''}
+              isFileLoading={(filePath) =>
+                guideLoadingByFile.get(filePath) ?? false
+              }
+              renderSectionRef={renderGuideSectionRef}
+              renderFileRef={renderGuideFileRef}
+              onSelectFile={handleSelectGuideFile}
+            />
+          </>
+        ) : (
+          <>
+            <CodeReviewFileRail
+              files={files}
+              visibleFiles={visibleFiles}
+              selectedFile={selectedVisibleFile}
+              loading={summaryLoading}
+              noteCountsByPath={reviewNoteCountByFile}
+              statusFilter={statusFilter}
+              statusCounts={statusCounts}
+              onStatusFilterChange={handleStatusFilterChange}
+              onSelectFile={handleSelectFile}
+            />
+            <main className="min-w-0 overflow-hidden">
+              <PierreDiffViewer
+                file={selectedVisibleFile}
+                diff={diff}
+                loading={diffLoading}
+                title={
+                  remotePullRequestSelected
+                    ? 'Pull request diff'
+                    : selectedMode === 'base-branch'
+                      ? 'Base branch diff'
+                      : 'Working tree diff'
+                }
+                selectedLines={selectedPierreLineRange}
+                lineAnnotations={reviewNoteAnnotationMapping.annotations}
+                renderAnnotation={renderReviewNoteAnnotation}
+                onSelectedLinesChange={handlePierreDiffSelection}
+                emptyMessage="Select a changed file to inspect its diff."
+              />
+            </main>
+          </>
+        )}
         <CodeReviewNotesRail
           target={selectedTarget}
           selectedFile={selectedVisibleFile}

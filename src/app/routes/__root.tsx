@@ -1,6 +1,6 @@
 import { useEffect } from 'react'
 import { createRootRoute, Outlet, useRouterState } from '@tanstack/react-router'
-import type { CodeReviewMode } from '@/entities/code-review'
+import type { CodeReviewMode, CodeReviewView } from '@/entities/code-review'
 import { useSessionStore } from '@/entities/session'
 import { App } from '../App.container'
 import { useMainViewNavigation } from '../navigation'
@@ -37,6 +37,7 @@ function RootRoute() {
       ? {
           targetId: mainViewRoute.targetId,
           mode: mainViewRoute.mode,
+          view: mainViewRoute.view,
           file: mainViewRoute.filePath,
         }
       : null
@@ -51,6 +52,7 @@ function RootRoute() {
         onCodeReviewSearchChange={(nextSearch: {
           targetId?: string | null
           mode?: CodeReviewMode
+          view?: CodeReviewView
           file?: string | null
         }) =>
           navigation.navigateToCodeReview({

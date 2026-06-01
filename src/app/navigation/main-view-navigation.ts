@@ -1,11 +1,12 @@
 import { useCallback } from 'react'
 import { useNavigate } from '@tanstack/react-router'
-import type { CodeReviewMode } from '@/entities/code-review'
+import type { CodeReviewMode, CodeReviewView } from '@/entities/code-review'
 import type { SessionSummary } from '@/entities/session'
 
 export interface CodeReviewRouteSearch {
   targetId?: string | null
   mode?: CodeReviewMode
+  view?: CodeReviewView
   file?: string | null
 }
 
@@ -59,6 +60,7 @@ export function useMainViewNavigation(): MainViewNavigation {
         search: {
           targetId: search.targetId ?? null,
           mode: search.mode ?? 'working-tree',
+          view: search.view ?? 'guide',
           file: search.file ?? null,
         },
       })

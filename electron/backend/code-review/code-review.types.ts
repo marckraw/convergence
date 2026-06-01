@@ -27,7 +27,11 @@ export interface CodeReviewTarget {
   sessionName: string | null
   branchName: string | null
   pullRequestId: string | null
+  pullRequestNumber: number | null
   pullRequestLabel: string | null
+  pullRequestUrl: string | null
+  pullRequestBaseBranch: string | null
+  pullRequestHeadBranch: string | null
   source: CodeReviewTargetSource
   updatedAt: string | null
   status: CodeReviewTargetStatus

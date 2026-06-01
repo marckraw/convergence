@@ -1,9 +1,11 @@
 import type { FC } from 'react'
+import type { ReactNode } from 'react'
 import { Button } from '@/shared/ui/button'
 
 interface ModeButtonProps {
   active: boolean
   disabled?: boolean
+  icon?: ReactNode
   label: string
   onClick: () => void
 }
@@ -11,6 +13,7 @@ interface ModeButtonProps {
 export const ModeButton: FC<ModeButtonProps> = ({
   active,
   disabled = false,
+  icon,
   label,
   onClick,
 }) => (
@@ -22,6 +25,7 @@ export const ModeButton: FC<ModeButtonProps> = ({
     disabled={disabled}
     onClick={onClick}
   >
+    {icon}
     {label}
   </Button>
 )

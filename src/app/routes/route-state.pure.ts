@@ -1,4 +1,4 @@
-import type { CodeReviewMode } from '@/entities/code-review'
+import type { CodeReviewMode, CodeReviewView } from '@/entities/code-review'
 import type { MainViewRoute } from '../App.container'
 
 interface RouteMatchSnapshot {
@@ -28,6 +28,7 @@ export function routeMatchToMainViewRoute(
         kind: 'code-review',
         targetId: parseOptionalString(match.search.targetId),
         mode: parseCodeReviewMode(match.search.mode),
+        view: parseCodeReviewView(match.search.view),
         filePath: parseOptionalString(match.search.file),
       }
     case '/chat/':
@@ -59,4 +60,8 @@ function parseOptionalString(value: unknown): string | null {
 
 function parseCodeReviewMode(value: unknown): CodeReviewMode {
   return value === 'base-branch' ? 'base-branch' : 'working-tree'
+}
+
+function parseCodeReviewView(value: unknown): CodeReviewView {
+  return value === 'diff' ? 'diff' : 'guide'
 }

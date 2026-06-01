@@ -199,6 +199,14 @@ contextBridge.exposeInMainWorld('electronAPI', {
     getFilePatch: (input: unknown) =>
       ipcRenderer.invoke('codeReview:getFilePatch', input),
   },
+  codeReviewGuide: {
+    getGuide: (input: unknown) =>
+      ipcRenderer.invoke('codeReviewGuide:getGuide', input),
+    generateGuide: (input: unknown) =>
+      ipcRenderer.invoke('codeReviewGuide:generateGuide', input),
+    refreshGuide: (input: unknown) =>
+      ipcRenderer.invoke('codeReviewGuide:refreshGuide', input),
+  },
   session: {
     create: (input: {
       contextKind?: 'project' | 'global'

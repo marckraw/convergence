@@ -11,6 +11,7 @@ export {
   getCodeReviewTargetSourceLabel,
   getCodeReviewTargetSubtitle,
   getCodeReviewTargetTitle,
+  isRemotePullRequestTarget,
   selectCodeReviewFileAfterReload,
 } from './code-review.pure'
 export { useCodeReviewStore } from './code-review.model'
@@ -18,6 +19,7 @@ export type { CodeReviewStore } from './code-review.model'
 export type {
   CodeReviewBaseBranch,
   CodeReviewBaseBranchResolutionSource,
+  CodeReviewCacheIdentity,
   CodeReviewFileEntry,
   CodeReviewFilePatchRequest,
   CodeReviewListTargetsRequest,
@@ -28,4 +30,5 @@ export type {
   CodeReviewTarget,
   CodeReviewTargetSource,
   CodeReviewTargetStatus,
+  CodeReviewView,
 } from './code-review.types'

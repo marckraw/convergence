@@ -21,6 +21,7 @@ vi.mock('./App.container', async () => {
         draftAttempt?: boolean
         targetId?: string | null
         mode?: string
+        view?: string
         filePath?: string | null
       }
       onSelectCodeSession?: (sessionId: string) => void
@@ -51,6 +52,7 @@ vi.mock('./App.container', async () => {
             )}
             data-review-target-id={props.mainViewRoute?.targetId ?? ''}
             data-review-mode={props.mainViewRoute?.mode ?? ''}
+            data-review-view={props.mainViewRoute?.view ?? ''}
             data-review-file={props.mainViewRoute?.filePath ?? ''}
             data-routed-navigation={
               props.onSelectCodeSession ? 'true' : 'false'
@@ -147,6 +149,7 @@ describe('app router', () => {
       search: {
         targetId: 'session:session-1',
         mode: 'base-branch',
+        view: 'diff',
         file: 'src/app.ts',
       },
     })
@@ -166,6 +169,10 @@ describe('app router', () => {
     expect(screen.getByTestId('app-shell')).toHaveAttribute(
       'data-review-mode',
       'base-branch',
+    )
+    expect(screen.getByTestId('app-shell')).toHaveAttribute(
+      'data-review-view',
+      'diff',
     )
     expect(screen.getByTestId('app-shell')).toHaveAttribute(
       'data-review-file',
@@ -275,7 +282,12 @@ describe('app router', () => {
 
     await router.navigate({
       to: '/code/review',
-      search: { targetId: null, mode: 'working-tree', file: null },
+      search: {
+        targetId: null,
+        mode: 'working-tree',
+        view: 'guide',
+        file: null,
+      },
     })
     await waitFor(() => {
       expect(screen.getByTestId('app-shell')).toHaveAttribute(

@@ -40,6 +40,22 @@ export interface WorkspacePullRequest {
   updatedAt: string
 }
 
+export interface ProjectPullRequest {
+  projectId: string
+  provider: 'github'
+  state: Extract<PullRequestState, 'open' | 'draft' | 'unknown'>
+  repositoryOwner: string
+  repositoryName: string
+  number: number
+  title: string | null
+  url: string | null
+  isDraft: boolean
+  headBranch: string | null
+  baseBranch: string | null
+  changedFileCount: number | null
+  updatedAt: string | null
+}
+
 export interface GithubRepositoryRef {
   owner: string
   name: string
@@ -54,6 +70,8 @@ export interface GithubCliPullRequestJson {
   mergedAt?: string | null
   headRefName?: string
   baseRefName?: string
+  changedFiles?: number
+  updatedAt?: string
 }
 
 export interface GithubCliPullRequestViewJson extends GithubCliPullRequestJson {
