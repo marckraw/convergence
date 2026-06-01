@@ -1,6 +1,76 @@
 {
-  "currentVersion": "0.37.33",
+  "currentVersion": "0.37.47",
   "releases": [
+    {
+      "version": "0.37.47",
+      "date": null,
+      "notes": "### Patch Changes\n\n- cab2c20: Fix session name regeneration so naming requests preserve the session's provider permission settings and no longer fail when the provider one-shot errors."
+    },
+    {
+      "version": "0.37.46",
+      "date": null,
+      "notes": "### Patch Changes\n\n- 2fa367e: remove not needed docs anymore"
+    },
+    {
+      "version": "0.37.45",
+      "date": null,
+      "notes": "### Patch Changes\n\n- 4190494: Fix the Code surface switch so returning from Chat to Code without an active Code session opens the Code home route."
+    },
+    {
+      "version": "0.37.44",
+      "date": null,
+      "notes": "### Patch Changes\n\n- 9b53e5a: Complete the code review performance cache identity so refreshed summaries and file patches are keyed by comparison point and working tree version while preserving the previous visible diff during replacement loads.\n- 282b7dc: Harden Main View routing with shared navigation fallbacks for invalid sessions, stale Code Review targets, missing Spaces, and removed workspace state."
+    },
+    {
+      "version": "0.37.43",
+      "date": null,
+      "notes": "### Patch Changes\n\n- fc3ca2b: Copy configured project env files into managed worktrees when they are created,\n  and add a manual workspace action to sync env files into existing worktrees."
+    },
+    {
+      "version": "0.37.42",
+      "date": null,
+      "notes": "### Patch Changes\n\n- 555a73b: Restore the visible status and project context line on sidebar Needs Review items."
+    },
+    {
+      "version": "0.37.41",
+      "date": null,
+      "notes": "### Patch Changes\n\n- 2ec3164: Tighten backend service boundaries by routing session app operations through a dedicated application service, isolating session row persistence behind a repository, and moving deterministic service helpers into focused pure modules with tests."
+    },
+    {
+      "version": "0.37.40",
+      "date": null,
+      "notes": "### Patch Changes\n\n- 2cd6519: Extract analytics service parsing and row-shaping helpers into pure analytics utilities with focused test coverage.\n- b23c632: Refactor feedback submission internals so pure validation and error-detail parsing live behind focused pure helpers."
+    },
+    {
+      "version": "0.37.39",
+      "date": null,
+      "notes": "### Patch Changes\n\n- e95692d: Refactor analytics profile snapshot parsing into pure helpers so the service boundary stays focused on database orchestration.\n- ffea736: Refactor the attachment service boundary by moving deterministic helper logic into pure modules with focused coverage.\n- 0967364: Refactor code review target ranking and pull request label formatting into a pure service boundary.\n- e170c5e: Refactor feedback service helper boundaries.\n- b676983: Refactor Claude MCP service parsing helpers into pure module boundaries."
+    },
+    {
+      "version": "0.37.38",
+      "date": null,
+      "notes": "### Patch Changes\n\n- 0dd1671: Refactor Codex MCP service parsing and summary helpers into pure module boundaries."
+    },
+    {
+      "version": "0.37.37",
+      "date": null,
+      "notes": "### Patch Changes\n\n- 364e251: Notify users when terminal tabs return to idle after running foreground work."
+    },
+    {
+      "version": "0.37.36",
+      "date": null,
+      "notes": "### Patch Changes\n\n- 6e8c75f: Tighten provider thinking patch updates so only mutable thinking fields can be patched after creation."
+    },
+    {
+      "version": "0.37.35",
+      "date": null,
+      "notes": "### Patch Changes\n\n- 115ee99: Surface regenerate-name progress and failures, and keep task progress wired to the session naming request."
+    },
+    {
+      "version": "0.37.34",
+      "date": null,
+      "notes": "### Patch Changes\n\n- 87068fa: Respect explicit session badge sizing inside buttons so sidebar status icons render at the intended compact size."
+    },
     {
       "version": "0.37.33",
       "date": null,

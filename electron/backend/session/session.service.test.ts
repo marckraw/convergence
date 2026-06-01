@@ -2127,6 +2127,14 @@ describe('SessionService attachments integration', () => {
                 },
               },
             },
+            {
+              kind: 'session.patch',
+              patch: {
+                status: 'completed',
+                attention: 'finished',
+                updatedAt: now(),
+              },
+            },
           ]
 
           return {
@@ -2194,6 +2202,164 @@ describe('SessionService attachments integration', () => {
       )
       await expect(htmlOutputs.readHtml(living?.id ?? '')).resolves.toContain(
         'HTML mode',
+      )
+    })
+
+    it('generates one HTML output for the final assistant message in a completed turn', async () => {
+      vi.useRealTimers()
+      const oneShot = vi.fn(async () => ({
+        text: '<!doctype html><html><body>Final HTML</body></html>',
+      }))
+      const db = getDatabase()
+      const htmlRegistry = new ProviderRegistry()
+      htmlRegistry.register({
+        id: 'html-provider',
+        name: 'HTML Provider',
+        supportsContinuation: false,
+        describe: async () => ({
+          id: 'html-provider',
+          name: 'HTML Provider',
+          vendorLabel: 'Test',
+          kind: 'conversation',
+          supportsContinuation: false,
+          defaultModelId: 'html-model',
+          modelOptions: [],
+          attachments: TEST_ATTACHMENT_CAPABILITY,
+          midRunInput: NO_MID_RUN_INPUT_CAPABILITY,
+        }),
+        oneShot,
+        start: () => {
+          const deltas: SessionDelta[] = [
+            {
+              kind: 'conversation.item.add',
+              item: {
+                id: 'user-item',
+                kind: 'message',
+                state: 'complete',
+                turnId: null,
+                actor: 'user',
+                text: 'Explore this project.',
+                createdAt: now(),
+                updatedAt: now(),
+                providerMeta: {
+                  providerId: 'html-provider',
+                  providerItemId: null,
+                  providerEventType: 'user',
+                },
+              },
+            },
+            {
+              kind: 'conversation.item.add',
+              item: {
+                id: 'assistant-progress-item',
+                kind: 'message',
+                state: 'complete',
+                turnId: null,
+                actor: 'assistant',
+                text: 'I will inspect the project structure first.',
+                createdAt: now(),
+                updatedAt: now(),
+                providerMeta: {
+                  providerId: 'html-provider',
+                  providerItemId: null,
+                  providerEventType: 'assistant',
+                },
+              },
+            },
+            {
+              kind: 'conversation.item.add',
+              item: {
+                id: 'assistant-final-item',
+                kind: 'message',
+                state: 'complete',
+                turnId: null,
+                actor: 'assistant',
+                text: 'Here is the final project summary.',
+                createdAt: now(),
+                updatedAt: now(),
+                providerMeta: {
+                  providerId: 'html-provider',
+                  providerItemId: null,
+                  providerEventType: 'assistant',
+                },
+              },
+            },
+            {
+              kind: 'session.patch',
+              patch: {
+                status: 'completed',
+                attention: 'finished',
+                updatedAt: now(),
+              },
+            },
+          ]
+
+          return {
+            onDelta: (callback) => {
+              deltas.forEach(callback)
+            },
+            onStatusChange: () => {},
+            onAttentionChange: () => {},
+            onContextWindowChange: () => {},
+            onActivityChange: () => {},
+            onContinuationToken: () => {},
+            sendMessage: () => {},
+            approve: () => {},
+            deny: () => {},
+            stop: () => {},
+          } satisfies SessionHandle
+        },
+      })
+      service = new SessionService(
+        db,
+        htmlRegistry,
+        join(tempDir, 'global-html'),
+      )
+      const htmlOutputs = new SessionHtmlOutputService(
+        db,
+        join(tempDir, 'session-outputs'),
+      )
+      service.setHtmlOutputService(htmlOutputs)
+
+      const session = service.create({
+        projectId,
+        workspaceId: null,
+        providerId: 'html-provider',
+        model: 'html-model',
+        effort: null,
+        name: 'html convo',
+        htmlModeEnabled: true,
+      })
+
+      await service.start(session.id, { text: 'Explore this project.' })
+      let outputs = htmlOutputs.listForSession(session.id)
+      for (let attempt = 0; attempt < 20 && outputs.length < 2; attempt += 1) {
+        await new Promise((resolve) => setTimeout(resolve, 5))
+        outputs = htmlOutputs.listForSession(session.id)
+      }
+
+      expect(oneShot).toHaveBeenCalledOnce()
+      expect(outputs).toHaveLength(2)
+      expect(outputs).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            sourceItemId: 'assistant-final-item',
+            kind: 'snapshot',
+            relativePath: 'snapshots/turn-3.html',
+          }),
+          expect.objectContaining({
+            sourceItemId: 'assistant-final-item',
+            kind: 'living',
+            relativePath: 'index.html',
+          }),
+        ]),
+      )
+      expect(outputs).not.toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            sourceItemId: 'assistant-progress-item',
+          }),
+        ]),
       )
     })
   })

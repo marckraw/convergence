@@ -848,6 +848,9 @@ export class SessionService {
           this.flushPendingConversationPatchesForSession(sessionId)
         }
         this.applySessionPatch(sessionId, delta.patch)
+        if (delta.patch.status === 'completed') {
+          this.maybeGenerateHtmlOutputForCompletedTurn(sessionId)
+        }
         this.handleLifecycle(sessionId, delta.patch.status)
         this.notifySessionChange(sessionId)
         return
@@ -861,7 +864,6 @@ export class SessionService {
           op: 'add',
           item,
         })
-        this.maybeGenerateHtmlOutput(sessionId, item)
         return
       }
 
@@ -885,9 +887,21 @@ export class SessionService {
           op: 'patch',
           item,
         })
-        this.maybeGenerateHtmlOutput(sessionId, item)
       }
     }
+  }
+
+  private maybeGenerateHtmlOutputForCompletedTurn(sessionId: string): void {
+    const item = this.getConversation(sessionId)
+      .filter(
+        (entry) =>
+          entry.kind === 'message' &&
+          entry.actor === 'assistant' &&
+          entry.state === 'complete',
+      )
+      .at(-1)
+
+    if (item) this.maybeGenerateHtmlOutput(sessionId, item)
   }
 
   private maybeGenerateHtmlOutput(
