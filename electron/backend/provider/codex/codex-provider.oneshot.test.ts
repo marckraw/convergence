@@ -89,6 +89,37 @@ describe('CodexProvider.oneShot progress emission', () => {
     expect(settled.outcome).toBe('ok')
   })
 
+  it('passes supported Codex exec permission flags', async () => {
+    const child = new MockChildProcess()
+    spawnMock.mockReturnValue(child)
+
+    const provider = new CodexProvider('/bin/codex')
+
+    const promise = provider.oneShot({
+      prompt: 'hi',
+      modelId: 'gpt-5',
+      workingDirectory: '/tmp',
+      permissionConfig: {
+        preset: 'custom',
+        codex: {
+          approvalPolicy: 'on-request',
+          sandbox: 'workspace-write',
+        },
+      },
+    })
+
+    child.stdout.end()
+    child.emit('exit', 0)
+
+    await promise
+    expect(spawnMock).toHaveBeenCalledWith(
+      '/bin/codex',
+      expect.arrayContaining(['exec', '--sandbox', 'workspace-write', 'hi']),
+      expect.objectContaining({ cwd: '/tmp' }),
+    )
+    expect(spawnMock.mock.calls[0]?.[1]).not.toContain('--ask-for-approval')
+  })
+
   it('emits settled:error on non-zero exit', async () => {
     const child = new MockChildProcess()
     spawnMock.mockReturnValue(child)

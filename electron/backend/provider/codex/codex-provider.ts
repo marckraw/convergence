@@ -692,12 +692,7 @@ function runCodexOneShot(
     ) {
       args.push('--dangerously-bypass-approvals-and-sandbox')
     } else {
-      args.push(
-        '--ask-for-approval',
-        permissionConfig.approvalPolicy,
-        '--sandbox',
-        permissionConfig.sandbox,
-      )
+      args.push('--sandbox', permissionConfig.sandbox)
     }
     args.push(input.prompt)
     const child = spawn(binaryPath, args, {
