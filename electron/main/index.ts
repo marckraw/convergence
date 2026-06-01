@@ -24,6 +24,7 @@ import { WorkspaceService } from '../backend/workspace/workspace.service'
 import { GitService } from '../backend/git/git.service'
 import { ChangedFilesService } from '../backend/git/changed-files.service'
 import { CodeReviewService } from '../backend/code-review/code-review.service'
+import { CodeReviewGuideService } from '../backend/code-review-guide/code-review-guide.service'
 import { PullRequestService } from '../backend/pull-request/pull-request.service'
 import { PullRequestReviewService } from '../backend/pull-request/pull-request-review.service'
 import { ReviewNotesService } from '../backend/review-notes/review-notes.service'
@@ -342,6 +343,12 @@ async function startApp(): Promise<void> {
   const appSettingsService = new AppSettingsService(stateService, async () =>
     Promise.all(providerRegistry.getAll().map((p) => p.describe())),
   )
+  const codeReviewGuideService = new CodeReviewGuideService(db, {
+    providers: providerRegistry,
+    appSettings: appSettingsService,
+    sessions: sessionService,
+    codeReview: codeReviewService,
+  })
   const analyticsService = new AnalyticsService(db, {
     providers: providerRegistry,
     appSettings: appSettingsService,
@@ -512,6 +519,7 @@ async function startApp(): Promise<void> {
     gitService,
     changedFilesService,
     codeReviewService,
+    codeReviewGuideService,
     pullRequestService,
     pullRequestReviewService,
     reviewNotesService,

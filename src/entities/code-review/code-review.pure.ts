@@ -52,8 +52,13 @@ export function getCodeReviewHeaderLabel(input: {
   mode: CodeReviewPanelMode
   count: number
   base: CodeReviewBaseBranch | null
+  target?: CodeReviewTarget | null
 }): string {
   if (input.mode === 'turns') return 'Turns'
+
+  if (input.target && isRemotePullRequestTarget(input.target)) {
+    return `Pull Request (${input.count})`
+  }
 
   if (input.mode === 'base-branch') {
     return input.base
@@ -69,7 +74,14 @@ export function getCodeReviewEmptyMessage(input: {
   loading: boolean
   base: CodeReviewBaseBranch | null
   error: string | null
+  target?: CodeReviewTarget | null
 }): string {
+  if (input.target && isRemotePullRequestTarget(input.target)) {
+    if (input.loading) return 'Loading pull request changes...'
+    if (input.error) return input.error
+    return 'No pull request changes detected'
+  }
+
   if (input.loading) {
     return input.mode === 'base-branch'
       ? 'Loading base branch changes...'
@@ -142,4 +154,8 @@ export function getCodeReviewTargetSourceLabel(
     case 'project-repository':
       return 'Project Repository'
   }
+}
+
+export function isRemotePullRequestTarget(target: CodeReviewTarget): boolean {
+  return target.source === 'pull-request' && !target.workspaceId
 }

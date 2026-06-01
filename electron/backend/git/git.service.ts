@@ -42,6 +42,14 @@ export interface BranchOutputFacts {
   remoteUrl: string | null
 }
 
+export interface PullRequestDiffStatus {
+  comparisonRef: string
+  comparisonPoint: string
+  headRef: string
+  versionToken: string
+  files: ChangedFileEntry[]
+}
+
 export class GitService {
   private async refExists(repoPath: string, ref: string): Promise<boolean> {
     try {
@@ -281,9 +289,39 @@ export class GitService {
   async getPullRequestDiff(input: {
     repoPath: string
     baseBranch: string
-    headBranch: string
+    headBranch?: string
+    number?: number
+    comparisonPoint?: string | null
+    filePath?: string
     remoteName?: string
   }): Promise<string> {
+    if (typeof input.number === 'number') {
+      const refs = await this.resolvePullRequestDiffRefs({
+        repoPath: input.repoPath,
+        number: input.number,
+        baseBranch: input.baseBranch,
+        remoteName: input.remoteName,
+      })
+      const comparisonPoint = input.comparisonPoint ?? refs.comparisonPoint
+      return execAllowExitCodes(
+        'git',
+        [
+          'diff',
+          '--no-color',
+          '--find-renames',
+          comparisonPoint,
+          refs.headRef,
+          ...(input.filePath ? ['--', input.filePath] : []),
+        ],
+        input.repoPath,
+        [0, 1],
+      )
+    }
+
+    if (!input.headBranch) {
+      throw new Error('Pull request diff requires a head branch or PR number')
+    }
+
     const remoteName = input.remoteName ?? 'origin'
     await exec(
       'git',
@@ -302,6 +340,33 @@ export class GitService {
       input.repoPath,
       [0, 1],
     )
+  }
+
+  async getPullRequestStatus(input: {
+    repoPath: string
+    number: number
+    baseBranch: string
+    remoteName?: string
+  }): Promise<PullRequestDiffStatus> {
+    const refs = await this.resolvePullRequestDiffRefs(input)
+    const output = await execAllowExitCodes(
+      'git',
+      [
+        'diff',
+        '--name-status',
+        '--find-renames',
+        refs.comparisonPoint,
+        refs.headRef,
+        '--',
+      ],
+      input.repoPath,
+      [0, 1],
+    ).catch(() => '')
+
+    return {
+      ...refs,
+      files: parseNameStatusOutput(output),
+    }
   }
 
   async resolveComparisonRef(
@@ -528,6 +593,57 @@ export class GitService {
     if (existsSync(worktreePath)) {
       const { rm } = await import('fs/promises')
       await rm(worktreePath, { recursive: true, force: true })
+    }
+  }
+
+  private async resolvePullRequestDiffRefs(input: {
+    repoPath: string
+    number: number
+    baseBranch: string
+    remoteName?: string
+  }): Promise<Omit<PullRequestDiffStatus, 'files'>> {
+    const remoteName = input.remoteName ?? 'origin'
+    const headRef = `refs/convergence/pull-requests/${input.number}/head`
+    const comparisonRef = await this.resolveComparisonRef(
+      input.repoPath,
+      input.baseBranch,
+    )
+
+    await exec(
+      'git',
+      ['fetch', remoteName, `+refs/pull/${input.number}/head:${headRef}`],
+      input.repoPath,
+    )
+
+    const comparisonPoint = await this.getMergeBase(
+      input.repoPath,
+      comparisonRef,
+      headRef,
+    ).catch(() => comparisonRef)
+    const [headRevision, comparisonRevision] = await Promise.all([
+      exec('git', ['rev-parse', headRef], input.repoPath),
+      exec('git', ['rev-parse', comparisonPoint], input.repoPath).catch(
+        () => comparisonPoint,
+      ),
+    ])
+    const versionToken = createHash('sha256')
+      .update(
+        JSON.stringify({
+          number: input.number,
+          baseBranch: input.baseBranch,
+          comparisonRef,
+          comparisonRevision,
+          headRevision,
+        }),
+      )
+      .digest('hex')
+      .slice(0, 16)
+
+    return {
+      comparisonRef,
+      comparisonPoint,
+      headRef,
+      versionToken,
     }
   }
 }

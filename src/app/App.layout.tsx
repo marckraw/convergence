@@ -6,7 +6,7 @@ import { GlobalStatusBar } from '@/widgets/global-status-bar'
 import { WorkspaceLayout } from '@/widgets/workspace-layout'
 import { NotificationsOnboardingContainer } from '@/features/notifications-onboarding'
 import { useAppSurfaceStore } from '@/entities/app-surface'
-import type { CodeReviewMode } from '@/entities/code-review'
+import type { CodeReviewMode, CodeReviewView } from '@/entities/code-review'
 import type { SessionSummary } from '@/entities/session'
 import { cn } from '@/shared/lib/cn.pure'
 import { DevBuildRibbon } from './dev-build-ribbon.presentational'
@@ -21,17 +21,20 @@ interface AppShellProps {
   onOpenCodeReview?: (search?: {
     targetId?: string | null
     mode?: CodeReviewMode
+    view?: CodeReviewView
     file?: string | null
   }) => void
   onCodeReviewSearchChange?: (search: {
     targetId?: string | null
     mode?: CodeReviewMode
+    view?: CodeReviewView
     file?: string | null
   }) => void
   onCloseCodeReview: () => void
   codeReviewActive: boolean
   codeReviewTargetId: string | null
   codeReviewMode: CodeReviewMode
+  codeReviewView: CodeReviewView
   codeReviewFilePath: string | null
   selectedChatSpaceId: string | null
   draftChatSpaceId: string | null
@@ -73,6 +76,7 @@ export const AppShell: FC<AppShellProps> = ({
   codeReviewActive,
   codeReviewTargetId,
   codeReviewMode,
+  codeReviewView,
   codeReviewFilePath,
   selectedChatSpaceId,
   draftChatSpaceId,
@@ -352,6 +356,7 @@ export const AppShell: FC<AppShellProps> = ({
                   codeReviewActive={codeReviewActive}
                   codeReviewTargetId={codeReviewTargetId}
                   codeReviewMode={codeReviewMode}
+                  codeReviewView={codeReviewView}
                   codeReviewFilePath={codeReviewFilePath}
                   onOpenCodeReview={onOpenCodeReview}
                   onCodeReviewSearchChange={onCodeReviewSearchChange}

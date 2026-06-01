@@ -1,6 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { BaseBranchDiffSummary } from '../git/changed-files.types'
-import type { WorkspacePullRequest } from '../pull-request/pull-request.types'
+import type {
+  ProjectPullRequest,
+  WorkspacePullRequest,
+} from '../pull-request/pull-request.types'
 import type { Project } from '../project/project.types'
 import type { SessionSummary } from '../session/session.types'
 import type { Workspace } from '../workspace/workspace.types'
@@ -17,7 +20,11 @@ const target: CodeReviewTarget = {
   sessionName: 'Implement feature',
   branchName: 'feature',
   pullRequestId: null,
+  pullRequestNumber: null,
   pullRequestLabel: null,
+  pullRequestUrl: null,
+  pullRequestBaseBranch: null,
+  pullRequestHeadBranch: null,
   source: 'session',
   updatedAt: '2026-01-02T00:00:00.000Z',
   status: {
@@ -40,6 +47,32 @@ describe('CodeReviewService', () => {
     >
     getWorkingTreeVersionToken: ReturnType<
       typeof vi.fn<(repoPath: string) => Promise<string>>
+    >
+    getPullRequestStatus: ReturnType<
+      typeof vi.fn<
+        (input: {
+          repoPath: string
+          number: number
+          baseBranch: string
+        }) => Promise<{
+          comparisonRef: string
+          comparisonPoint: string
+          headRef: string
+          versionToken: string
+          files: CodeReviewSummary['files']
+        }>
+      >
+    >
+    getPullRequestDiff: ReturnType<
+      typeof vi.fn<
+        (input: {
+          repoPath: string
+          number: number
+          baseBranch: string
+          comparisonPoint?: string | null
+          filePath?: string
+        }) => Promise<string>
+      >
     >
   }
   let changedFiles: {
@@ -71,6 +104,9 @@ describe('CodeReviewService', () => {
     listByProjectId: ReturnType<
       typeof vi.fn<(projectId: string) => WorkspacePullRequest[]>
     >
+    listOpenByProjectId: ReturnType<
+      typeof vi.fn<(projectId: string) => Promise<ProjectPullRequest[]>>
+    >
   }
   let service: CodeReviewService
 
@@ -80,6 +116,14 @@ describe('CodeReviewService', () => {
       getWorkingTreeVersionToken: vi.fn().mockResolvedValue('wt-1'),
       getStatus: vi.fn().mockResolvedValue([{ status: 'M', file: 'app.ts' }]),
       getDiff: vi.fn().mockResolvedValue('working tree diff'),
+      getPullRequestStatus: vi.fn().mockResolvedValue({
+        comparisonRef: 'origin/main',
+        comparisonPoint: 'merge-base-pr-42',
+        headRef: 'refs/convergence/pull-requests/42/head',
+        versionToken: 'pr-42-token',
+        files: [{ status: 'M', file: 'remote.ts' }],
+      }),
+      getPullRequestDiff: vi.fn().mockResolvedValue('pull request diff'),
     }
     changedFiles = {
       getBaseBranchStatus: vi.fn().mockResolvedValue({
@@ -175,6 +219,25 @@ describe('CodeReviewService', () => {
             updatedAt: '2026-01-05T00:00:00.000Z',
           },
         ]),
+      listOpenByProjectId: vi
+        .fn<(projectId: string) => Promise<ProjectPullRequest[]>>()
+        .mockResolvedValue([
+          {
+            projectId: 'project-1',
+            provider: 'github',
+            state: 'open',
+            repositoryOwner: 'acme',
+            repositoryName: 'project',
+            number: 43,
+            title: 'Remote Feature',
+            url: 'https://github.com/acme/project/pull/43',
+            isDraft: false,
+            headBranch: 'remote-feature',
+            baseBranch: 'main',
+            changedFileCount: 3,
+            updatedAt: '2026-01-06T00:00:00.000Z',
+          },
+        ]),
     }
     service = new CodeReviewService({
       git,
@@ -186,7 +249,7 @@ describe('CodeReviewService', () => {
     })
   })
 
-  it('discovers project, workspace, session, and cached pull request targets', async () => {
+  it('discovers project, workspace, session, cached pull request, and remote pull request targets', async () => {
     const targets = await service.listTargets({
       projectId: 'project-1',
       sessionId: 'session-1',
@@ -197,6 +260,7 @@ describe('CodeReviewService', () => {
       'pull-request',
       'project-repository',
       'workspace',
+      'pull-request',
     ])
     expect(targets[0]).toMatchObject({
       id: 'session:session-1',
@@ -207,11 +271,46 @@ describe('CodeReviewService', () => {
       },
     })
     expect(
-      targets.find((entry) => entry.source === 'pull-request'),
+      targets.find((entry) => entry.pullRequestNumber === 42),
     ).toMatchObject({
       pullRequestLabel: '#42 Feature · open',
       sessionId: 'session-1',
     })
+    expect(
+      targets.find((entry) => entry.pullRequestNumber === 43),
+    ).toMatchObject({
+      id: 'pull-request:github:acme/project#43',
+      pullRequestLabel: '#43 Remote Feature · open',
+      sessionId: null,
+      repositoryPath: '/repo',
+      status: { workingTreeFileCount: 3 },
+    })
+  })
+
+  it('deduplicates remote pull requests that already have cached workspaces', async () => {
+    pullRequests.listOpenByProjectId.mockResolvedValue([
+      {
+        projectId: 'project-1',
+        provider: 'github',
+        state: 'open',
+        repositoryOwner: 'acme',
+        repositoryName: 'project',
+        number: 42,
+        title: 'Feature',
+        url: 'https://github.com/acme/project/pull/42',
+        isDraft: false,
+        headBranch: 'feature',
+        baseBranch: 'main',
+        changedFileCount: 2,
+        updatedAt: '2026-01-06T00:00:00.000Z',
+      },
+    ])
+
+    const targets = await service.listTargets({ projectId: 'project-1' })
+
+    expect(
+      targets.filter((entry) => entry.pullRequestNumber === 42),
+    ).toHaveLength(1)
   })
 
   it('loads working tree summary through GitService', async () => {
@@ -281,6 +380,67 @@ describe('CodeReviewService', () => {
       sessionId: 'session-1',
       filePath: 'feature.ts',
       comparisonPoint: 'merge-base-1',
+    })
+  })
+
+  it('loads summaries and file patches for remote pull request targets', async () => {
+    const pullRequestTarget: CodeReviewTarget = {
+      ...target,
+      id: 'pull-request:github:acme/project#42',
+      repositoryPath: '/repo',
+      workspaceId: null,
+      sessionId: null,
+      sessionName: null,
+      branchName: 'feature',
+      pullRequestNumber: 42,
+      pullRequestLabel: '#42 Feature · open',
+      pullRequestUrl: 'https://github.com/acme/project/pull/42',
+      pullRequestBaseBranch: 'main',
+      pullRequestHeadBranch: 'feature',
+      source: 'pull-request',
+    }
+
+    await expect(
+      service.getSummary({ target: pullRequestTarget, mode: 'working-tree' }),
+    ).resolves.toEqual({
+      base: {
+        branchName: 'main',
+        comparisonRef: 'origin/main',
+        source: 'pull-request',
+        warning: null,
+      },
+      cacheIdentity: {
+        comparisonRef: 'origin/main',
+        comparisonPoint: 'merge-base-pr-42',
+        workingTreeVersionToken: 'pr-42-token',
+      },
+      files: [{ status: 'M', file: 'remote.ts' }],
+    })
+
+    await expect(
+      service.getFilePatch({
+        target: pullRequestTarget,
+        mode: 'working-tree',
+        filePath: 'remote.ts',
+        cacheIdentity: {
+          comparisonRef: 'origin/main',
+          comparisonPoint: 'merge-base-pr-42',
+          workingTreeVersionToken: 'pr-42-token',
+        },
+      }),
+    ).resolves.toBe('pull request diff')
+
+    expect(git.getPullRequestStatus).toHaveBeenCalledWith({
+      repoPath: '/repo',
+      number: 42,
+      baseBranch: 'main',
+    })
+    expect(git.getPullRequestDiff).toHaveBeenCalledWith({
+      repoPath: '/repo',
+      number: 42,
+      baseBranch: 'main',
+      comparisonPoint: 'merge-base-pr-42',
+      filePath: 'remote.ts',
     })
   })
 })

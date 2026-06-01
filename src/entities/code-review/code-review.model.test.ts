@@ -26,7 +26,11 @@ const target = {
   sessionName: 'Implement feature',
   branchName: 'feature',
   pullRequestId: null,
+  pullRequestNumber: null,
   pullRequestLabel: null,
+  pullRequestUrl: null,
+  pullRequestBaseBranch: null,
+  pullRequestHeadBranch: null,
   source: 'session' as const,
   updatedAt: '2026-01-02T00:00:00.000Z',
   status: {
@@ -55,6 +59,7 @@ describe('useCodeReviewStore', () => {
       targets: [],
       selectedTarget: null,
       selectedMode: 'working-tree',
+      selectedView: 'guide',
       selectedFile: null,
       targetsLoading: false,
       summariesByKey: {},
@@ -70,10 +75,11 @@ describe('useCodeReviewStore', () => {
     vi.mocked(codeReviewApi.getFilePatch).mockReset()
   })
 
-  it('opens review with optional preselected target, mode, and file', () => {
+  it('opens review with optional preselected target, mode, view, and file', () => {
     useCodeReviewStore.getState().openReview({
       target,
       mode: 'base-branch',
+      view: 'diff',
       selectedFile: 'src/app.ts',
     })
 
@@ -81,18 +87,21 @@ describe('useCodeReviewStore', () => {
       isReviewOpen: true,
       selectedTarget: target,
       selectedMode: 'base-branch',
+      selectedView: 'diff',
       selectedFile: 'src/app.ts',
     })
   })
 
-  it('stores selected target, mode, and file', () => {
+  it('stores selected target, mode, view, and file', () => {
     useCodeReviewStore.getState().setSelectedTarget(target)
     useCodeReviewStore.getState().setSelectedMode('base-branch')
+    useCodeReviewStore.getState().setSelectedView('diff')
     useCodeReviewStore.getState().setSelectedFile('src/app.ts')
 
     expect(useCodeReviewStore.getState()).toMatchObject({
       selectedTarget: target,
       selectedMode: 'base-branch',
+      selectedView: 'diff',
       selectedFile: 'src/app.ts',
     })
   })

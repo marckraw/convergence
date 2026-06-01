@@ -306,6 +306,27 @@ const SCHEMA = `
   CREATE INDEX IF NOT EXISTS idx_review_notes_session_file
     ON review_notes(session_id, file_path);
 
+  CREATE TABLE IF NOT EXISTS code_review_guides (
+    id TEXT PRIMARY KEY,
+    project_id TEXT NOT NULL,
+    target_id TEXT NOT NULL,
+    mode TEXT NOT NULL CHECK (mode IN ('working-tree', 'base-branch')),
+    cache_key TEXT NOT NULL,
+    cache_identity_json TEXT NOT NULL,
+    status TEXT NOT NULL CHECK (status IN ('ready', 'failed')),
+    overview TEXT NOT NULL DEFAULT '',
+    generated_by TEXT NOT NULL CHECK (generated_by IN ('deterministic', 'agent')),
+    sections_json TEXT NOT NULL DEFAULT '[]',
+    error TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+    FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
+    UNIQUE (target_id, mode, cache_key)
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_code_review_guides_project_target
+    ON code_review_guides(project_id, target_id, mode, updated_at DESC);
+
   CREATE TABLE IF NOT EXISTS attachments (
     id TEXT PRIMARY KEY,
     session_id TEXT NOT NULL,
@@ -517,6 +538,31 @@ function ensureProjectScriptColumns(database: Database.Database): void {
       "ALTER TABLE project_scripts ADD COLUMN icon TEXT NOT NULL DEFAULT 'play'",
     )
   }
+}
+
+function ensureCodeReviewGuideTable(database: Database.Database): void {
+  database.exec(`
+    CREATE TABLE IF NOT EXISTS code_review_guides (
+      id TEXT PRIMARY KEY,
+      project_id TEXT NOT NULL,
+      target_id TEXT NOT NULL,
+      mode TEXT NOT NULL CHECK (mode IN ('working-tree', 'base-branch')),
+      cache_key TEXT NOT NULL,
+      cache_identity_json TEXT NOT NULL,
+      status TEXT NOT NULL CHECK (status IN ('ready', 'failed')),
+      overview TEXT NOT NULL DEFAULT '',
+      generated_by TEXT NOT NULL CHECK (generated_by IN ('deterministic', 'agent')),
+      sections_json TEXT NOT NULL DEFAULT '[]',
+      error TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+      FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
+      UNIQUE (target_id, mode, cache_key)
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_code_review_guides_project_target
+      ON code_review_guides(project_id, target_id, mode, updated_at DESC);
+  `)
 }
 
 function tableExists(database: Database.Database, tableName: string): boolean {
@@ -964,6 +1010,7 @@ export function getDatabase(dbPath?: string): Database.Database {
     ensureSpaceTablesMigrated(database)
     ensureSpaceColumns(database)
     ensureProjectScriptColumns(database)
+    ensureCodeReviewGuideTable(database)
     ensureWorkspaceColumns(database)
     ensureSessionColumns(database)
     ensureAttachmentsTableNoFk(database)

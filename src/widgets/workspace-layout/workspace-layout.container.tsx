@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import type { FC, ReactNode } from 'react'
-import type { CodeReviewMode } from '@/entities/code-review'
+import type { CodeReviewMode, CodeReviewView } from '@/entities/code-review'
 import { useSessionStore } from '@/entities/session'
 import { useTerminalStore } from '@/entities/terminal'
 import { CodeReviewSurface } from '@/widgets/code-review-surface'
@@ -20,15 +20,18 @@ interface WorkspaceLayoutContainerProps {
   codeReviewActive?: boolean
   codeReviewTargetId?: string | null
   codeReviewMode?: CodeReviewMode
+  codeReviewView?: CodeReviewView
   codeReviewFilePath?: string | null
   onOpenCodeReview?: (search?: {
     targetId?: string | null
     mode?: CodeReviewMode
+    view?: CodeReviewView
     file?: string | null
   }) => void
   onCodeReviewSearchChange?: (search: {
     targetId?: string | null
     mode?: CodeReviewMode
+    view?: CodeReviewView
     file?: string | null
   }) => void
   onCloseCodeReview?: () => void
@@ -38,6 +41,7 @@ export const WorkspaceLayoutContainer: FC<WorkspaceLayoutContainerProps> = ({
   codeReviewActive = false,
   codeReviewTargetId = null,
   codeReviewMode = 'working-tree',
+  codeReviewView = 'guide',
   codeReviewFilePath = null,
   onOpenCodeReview,
   onCodeReviewSearchChange,
@@ -91,6 +95,7 @@ export const WorkspaceLayoutContainer: FC<WorkspaceLayoutContainerProps> = ({
       <CodeReviewSurface
         routeTargetId={codeReviewTargetId}
         routeMode={codeReviewMode}
+        routeView={codeReviewView}
         routeFilePath={codeReviewFilePath}
         onRouteSearchChange={onCodeReviewSearchChange}
         onClose={onCloseCodeReview}

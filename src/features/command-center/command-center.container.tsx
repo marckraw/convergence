@@ -3,7 +3,7 @@ import Fuse from 'fuse.js'
 import { useProjectStore } from '@/entities/project'
 import { useWorkspaceStore } from '@/entities/workspace'
 import { useSessionStore } from '@/entities/session'
-import type { CodeReviewMode } from '@/entities/code-review'
+import type { CodeReviewMode, CodeReviewView } from '@/entities/code-review'
 import { useCommandCenterStore } from './command-center.model'
 import { buildPaletteIndex } from './command-palette-index.pure'
 import {
@@ -33,6 +33,7 @@ import type { PaletteItem } from './command-center.types'
 interface CodeReviewRouteSearch {
   targetId?: string | null
   mode?: CodeReviewMode
+  view?: CodeReviewView
   file?: string | null
 }
 

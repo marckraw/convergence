@@ -147,6 +147,22 @@ export interface ReviewNoteRow {
   updated_at: string
 }
 
+export interface CodeReviewGuideRow {
+  id: string
+  project_id: string
+  target_id: string
+  mode: string
+  cache_key: string
+  cache_identity_json: string
+  status: string
+  overview: string
+  generated_by: string
+  sections_json: string
+  error: string | null
+  created_at: string
+  updated_at: string
+}
+
 export interface SessionTurnRow {
   id: string
   session_id: string

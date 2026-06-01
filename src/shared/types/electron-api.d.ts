@@ -271,7 +271,11 @@ interface CodeReviewTargetData {
   sessionName: string | null
   branchName: string | null
   pullRequestId: string | null
+  pullRequestNumber: number | null
   pullRequestLabel: string | null
+  pullRequestUrl: string | null
+  pullRequestBaseBranch: string | null
+  pullRequestHeadBranch: string | null
   source: CodeReviewTargetSourceData
   updatedAt: string | null
   status: CodeReviewTargetStatusData
@@ -301,6 +305,53 @@ interface CodeReviewFilePatchRequestData extends CodeReviewSummaryRequestData {
 interface CodeReviewSummaryData {
   base: ResolvedBaseBranchData | null
   cacheIdentity: CodeReviewCacheIdentityData
+  files: GitStatusEntryData[]
+}
+
+type CodeReviewGuideRiskLevelData = 'low' | 'medium' | 'high'
+type CodeReviewGuideStatusData = 'ready' | 'failed'
+type CodeReviewGuideGeneratorData = 'deterministic' | 'agent'
+
+interface CodeReviewGuideFileData {
+  path: string
+  status: string
+  reason: string
+  hunkHints: string[]
+}
+
+interface CodeReviewGuideSectionData {
+  id: string
+  title: string
+  summary: string
+  narrative: string
+  riskLevel: CodeReviewGuideRiskLevelData
+  riskRationale: string
+  checklist: string[]
+  files: CodeReviewGuideFileData[]
+}
+
+interface CodeReviewGuideData {
+  id: string
+  projectId: string
+  targetId: string
+  mode: CodeReviewModeData
+  cacheIdentity: CodeReviewCacheIdentityData
+  status: CodeReviewGuideStatusData
+  overview: string
+  generatedBy: CodeReviewGuideGeneratorData
+  sections: CodeReviewGuideSectionData[]
+  error: string | null
+  createdAt: string
+  updatedAt: string
+}
+
+interface CodeReviewGuideLookupRequestData {
+  target: CodeReviewTargetData
+  mode: CodeReviewModeData
+  cacheIdentity: CodeReviewCacheIdentityData
+}
+
+interface CodeReviewGuideGenerateRequestData extends CodeReviewGuideLookupRequestData {
   files: GitStatusEntryData[]
 }
 
@@ -1418,6 +1469,17 @@ interface ElectronAPI {
       input: CodeReviewSummaryRequestData,
     ) => Promise<CodeReviewSummaryData>
     getFilePatch: (input: CodeReviewFilePatchRequestData) => Promise<string>
+  }
+  codeReviewGuide: {
+    getGuide: (
+      input: CodeReviewGuideLookupRequestData,
+    ) => Promise<CodeReviewGuideData | null>
+    generateGuide: (
+      input: CodeReviewGuideGenerateRequestData,
+    ) => Promise<CodeReviewGuideData>
+    refreshGuide: (
+      input: CodeReviewGuideGenerateRequestData,
+    ) => Promise<CodeReviewGuideData>
   }
   session: {
     create: (input: CreateSessionInput) => Promise<SessionSummaryData>

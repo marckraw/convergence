@@ -1,22 +1,41 @@
 import type { FC } from 'react'
-import { FileCode2, Maximize2, Minimize2, RefreshCw, X } from 'lucide-react'
+import {
+  FileCode2,
+  GitCompareArrows,
+  ListTree,
+  Maximize2,
+  Minimize2,
+  RefreshCw,
+  X,
+} from 'lucide-react'
 import {
   getCodeReviewTargetSubtitle,
   getCodeReviewTargetTitle,
+  isRemotePullRequestTarget,
   type CodeReviewMode,
   type CodeReviewTarget,
+  type CodeReviewView,
 } from '@/entities/code-review'
 import { Button } from '@/shared/ui/button'
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/shared/ui/tooltip'
 import { cn } from '@/shared/lib/cn.pure'
 import { ModeButton } from './mode-button.presentational'
 
 interface CodeReviewToolbarProps {
   target: CodeReviewTarget | null
   mode: CodeReviewMode
+  view: CodeReviewView
   fileCount: number
   loading: boolean
+  statusLabel: string | null
   diffFocusActive: boolean
   onModeChange: (mode: CodeReviewMode) => void
+  onViewChange: (view: CodeReviewView) => void
   onToggleDiffFocus: () => void
   onRefresh: () => void
   onClose: () => void
@@ -25,15 +44,19 @@ interface CodeReviewToolbarProps {
 export const CodeReviewToolbar: FC<CodeReviewToolbarProps> = ({
   target,
   mode,
+  view,
   fileCount,
   loading,
+  statusLabel,
   diffFocusActive,
   onModeChange,
+  onViewChange,
   onToggleDiffFocus,
   onRefresh,
   onClose,
 }) => {
   const baseBranchDisabled = !target?.sessionId
+  const remotePullRequest = target ? isRemotePullRequestTarget(target) : false
 
   return (
     <div
@@ -60,8 +83,22 @@ export const CodeReviewToolbar: FC<CodeReviewToolbarProps> = ({
       >
         <div className="flex items-center rounded-md border border-border bg-card p-0.5">
           <ModeButton
+            active={view === 'guide'}
+            icon={<ListTree className="h-3.5 w-3.5" />}
+            label="Guide"
+            onClick={() => onViewChange('guide')}
+          />
+          <ModeButton
+            active={view === 'diff'}
+            icon={<GitCompareArrows className="h-3.5 w-3.5" />}
+            label="Diff"
+            onClick={() => onViewChange('diff')}
+          />
+        </div>
+        <div className="flex items-center rounded-md border border-border bg-card p-0.5">
+          <ModeButton
             active={mode === 'working-tree'}
-            label="Working Tree"
+            label={remotePullRequest ? 'Pull Request' : 'Working Tree'}
             onClick={() => onModeChange('working-tree')}
           />
           <ModeButton
@@ -74,38 +111,67 @@ export const CodeReviewToolbar: FC<CodeReviewToolbarProps> = ({
         <span className="rounded-md border border-border bg-card px-2 py-1 text-xs text-muted-foreground">
           {fileCount} files
         </span>
-        <Button
-          type="button"
-          variant={diffFocusActive ? 'secondary' : 'ghost'}
-          size="icon"
-          className="h-7 w-7"
-          title={diffFocusActive ? 'Exit diff focus' : 'Focus diff'}
-          aria-label={diffFocusActive ? 'Exit diff focus' : 'Focus diff'}
-          onClick={onToggleDiffFocus}
-        >
-          {diffFocusActive ? (
-            <Minimize2 className="h-3.5 w-3.5" />
-          ) : (
-            <Maximize2 className="h-3.5 w-3.5" />
-          )}
-        </Button>
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          className="h-7 w-7"
-          title="Refresh review"
-          disabled={loading || !target}
-          onClick={onRefresh}
-        >
-          <RefreshCw className={cn('h-3.5 w-3.5', loading && 'animate-spin')} />
-        </Button>
+        {statusLabel ? (
+          <span className="rounded-md border border-border bg-card px-2 py-1 text-xs text-muted-foreground">
+            {statusLabel}
+          </span>
+        ) : null}
+        <TooltipProvider delayDuration={200}>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                type="button"
+                variant={diffFocusActive ? 'secondary' : 'ghost'}
+                size="icon"
+                className="h-7 w-7"
+                aria-label={
+                  diffFocusActive
+                    ? 'Exit focused review layout'
+                    : 'Focus review content'
+                }
+                onClick={onToggleDiffFocus}
+              >
+                {diffFocusActive ? (
+                  <Minimize2 className="h-3.5 w-3.5" />
+                ) : (
+                  <Maximize2 className="h-3.5 w-3.5" />
+                )}
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom">
+              {diffFocusActive
+                ? 'Restore side rails'
+                : 'Collapse side rails for more review space'}
+            </TooltipContent>
+          </Tooltip>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7"
+                aria-label="Refresh review data"
+                disabled={loading || !target}
+                onClick={onRefresh}
+              >
+                <RefreshCw
+                  className={cn('h-3.5 w-3.5', loading && 'animate-spin')}
+                />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom">
+              Refresh changed files and visible diffs
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
         <Button
           type="button"
           variant="ghost"
           size="icon"
           className="h-7 w-7"
           title="Close code review"
+          aria-label="Close code review"
           onClick={onClose}
         >
           <X className="h-3.5 w-3.5" />

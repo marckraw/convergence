@@ -16,7 +16,11 @@ const target: CodeReviewTarget = {
   sessionName: 'Feature session',
   branchName: 'feature',
   pullRequestId: null,
+  pullRequestNumber: null,
   pullRequestLabel: null,
+  pullRequestUrl: null,
+  pullRequestBaseBranch: null,
+  pullRequestHeadBranch: null,
   source: 'session',
   updatedAt: '2026-01-02T00:00:00.000Z',
   status: {

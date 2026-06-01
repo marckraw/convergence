@@ -545,7 +545,11 @@ export const ChangedFilesPanel: FC<ChangedFilesPanelProps> = ({
       sessionName: session.name,
       branchName: null,
       pullRequestId: null,
+      pullRequestNumber: null,
       pullRequestLabel: null,
+      pullRequestUrl: null,
+      pullRequestBaseBranch: null,
+      pullRequestHeadBranch: null,
       source: 'session',
       updatedAt: session.updatedAt,
       status: {

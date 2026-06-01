@@ -5,11 +5,13 @@ import type { WorkspacePullRequestRow } from '../database/database.types'
 import { GitService } from '../git/git.service'
 import {
   classifyGithubCliError,
+  parseGithubCliOpenPullRequests,
   parseGithubCliPullRequests,
   parseGithubRepositoryRef,
 } from './github-cli.pure'
 import {
   workspacePullRequestFromRow,
+  type ProjectPullRequest,
   type PullRequestLookupResult,
   type WorkspacePullRequest,
 } from './pull-request.types'
@@ -66,6 +68,41 @@ export class PullRequestService {
       .all(projectId) as WorkspacePullRequestRow[]
 
     return rows.map(workspacePullRequestFromRow)
+  }
+
+  async listOpenByProjectId(projectId: string): Promise<ProjectPullRequest[]> {
+    const project = this.db
+      .prepare('SELECT id, repository_path FROM projects WHERE id = ?')
+      .get(projectId) as { id: string; repository_path: string } | undefined
+
+    if (!project) {
+      throw new Error(`Project not found: ${projectId}`)
+    }
+
+    const remoteUrl = await this.git.getRemoteUrl(project.repository_path)
+    const repository = parseGithubRepositoryRef(remoteUrl)
+    if (!repository) return []
+
+    try {
+      const stdout = await execGh(
+        [
+          'pr',
+          'list',
+          '--repo',
+          `${repository.owner}/${repository.name}`,
+          '--state',
+          'open',
+          '--json',
+          'number,title,url,state,isDraft,headRefName,baseRefName,changedFiles,updatedAt',
+          '--limit',
+          '100',
+        ],
+        project.repository_path,
+      )
+      return parseGithubCliOpenPullRequests(stdout, repository, project.id)
+    } catch {
+      return []
+    }
   }
 
   async refreshForSession(

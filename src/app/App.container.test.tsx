@@ -389,6 +389,7 @@ describe('App', () => {
     useCodeReviewStore.setState({
       isReviewOpen: false,
       selectedMode: 'working-tree',
+      selectedView: 'guide',
       selectedFile: null,
       selectedTarget: null,
       targets: [],
@@ -682,6 +683,7 @@ describe('App', () => {
           kind: 'code-review',
           targetId: 'session:session-1',
           mode: 'base-branch',
+          view: 'diff',
           filePath: 'src/app.ts',
         }}
       />,
@@ -691,6 +693,7 @@ describe('App', () => {
       expect(useCodeReviewStore.getState().isReviewOpen).toBe(true)
     })
     expect(useCodeReviewStore.getState().selectedMode).toBe('base-branch')
+    expect(useCodeReviewStore.getState().selectedView).toBe('diff')
     expect(useCodeReviewStore.getState().selectedFile).toBe('src/app.ts')
   })
 
@@ -728,6 +731,7 @@ describe('App', () => {
           kind: 'code-review',
           targetId: 'missing-target',
           mode: 'working-tree',
+          view: 'guide',
           filePath: null,
         }}
       />,

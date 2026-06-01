@@ -2,6 +2,10 @@ import type { ChangedFilesService } from '../git/changed-files.service'
 import type { GitService } from '../git/git.service'
 import type { ProjectService } from '../project/project.service'
 import type { PullRequestService } from '../pull-request/pull-request.service'
+import type {
+  ProjectPullRequest,
+  WorkspacePullRequest,
+} from '../pull-request/pull-request.types'
 import type { SessionService } from '../session/session.service'
 import type { WorkspaceService } from '../workspace/workspace.service'
 import type {
@@ -17,7 +21,12 @@ import { formatPullRequestLabel, prioritizeTargets } from './code-review.pure'
 interface CodeReviewServiceDeps {
   git: Pick<
     GitService,
-    'getCurrentBranch' | 'getStatus' | 'getDiff' | 'getWorkingTreeVersionToken'
+    | 'getCurrentBranch'
+    | 'getStatus'
+    | 'getDiff'
+    | 'getWorkingTreeVersionToken'
+    | 'getPullRequestStatus'
+    | 'getPullRequestDiff'
   >
   changedFiles: Pick<
     ChangedFilesService,
@@ -26,7 +35,14 @@ interface CodeReviewServiceDeps {
   projects: Pick<ProjectService, 'getById'>
   workspaces: Pick<WorkspaceService, 'getByProjectId'>
   sessions: Pick<SessionService, 'getSummariesByProjectId'>
-  pullRequests: Pick<PullRequestService, 'listByProjectId'>
+  pullRequests: Pick<
+    PullRequestService,
+    'listByProjectId' | 'listOpenByProjectId'
+  >
+}
+
+type CodeReviewTargetDraft = Omit<CodeReviewTarget, 'status'> & {
+  status?: CodeReviewTargetStatus
 }
 
 export class CodeReviewService {
@@ -40,12 +56,14 @@ export class CodeReviewService {
       throw new Error(`Project not found: ${input.projectId}`)
     }
 
-    const [branchName, workspaces, sessions, pullRequests] = await Promise.all([
-      this.resolveCurrentBranch(project.repositoryPath),
-      Promise.resolve(this.deps.workspaces.getByProjectId(project.id)),
-      Promise.resolve(this.deps.sessions.getSummariesByProjectId(project.id)),
-      Promise.resolve(this.deps.pullRequests.listByProjectId(project.id)),
-    ])
+    const [branchName, workspaces, sessions, pullRequests, openPullRequests] =
+      await Promise.all([
+        this.resolveCurrentBranch(project.repositoryPath),
+        Promise.resolve(this.deps.workspaces.getByProjectId(project.id)),
+        Promise.resolve(this.deps.sessions.getSummariesByProjectId(project.id)),
+        Promise.resolve(this.deps.pullRequests.listByProjectId(project.id)),
+        this.deps.pullRequests.listOpenByProjectId(project.id),
+      ])
 
     const workspaceById = new Map(
       workspaces.map((workspace) => [workspace.id, workspace]),
@@ -58,7 +76,7 @@ export class CodeReviewService {
       sessionsByWorkspaceId.set(session.workspaceId, existing)
     }
 
-    const targets: Array<Omit<CodeReviewTarget, 'status'>> = [
+    const targets: CodeReviewTargetDraft[] = [
       {
         id: `project-repository:${project.id}`,
         projectId: project.id,
@@ -69,7 +87,11 @@ export class CodeReviewService {
         sessionName: null,
         branchName,
         pullRequestId: null,
+        pullRequestNumber: null,
         pullRequestLabel: null,
+        pullRequestUrl: null,
+        pullRequestBaseBranch: null,
+        pullRequestHeadBranch: null,
         source: 'project-repository',
         updatedAt: project.updatedAt,
       },
@@ -87,7 +109,11 @@ export class CodeReviewService {
         sessionName: null,
         branchName: workspace.branchName,
         pullRequestId: null,
+        pullRequestNumber: null,
         pullRequestLabel: null,
+        pullRequestUrl: null,
+        pullRequestBaseBranch: null,
+        pullRequestHeadBranch: null,
         source: 'workspace',
         updatedAt: workspace.createdAt,
       })
@@ -109,17 +135,24 @@ export class CodeReviewService {
         sessionName: session.name,
         branchName: workspace?.branchName ?? null,
         pullRequestId: null,
+        pullRequestNumber: null,
         pullRequestLabel: null,
+        pullRequestUrl: null,
+        pullRequestBaseBranch: null,
+        pullRequestHeadBranch: null,
         source: 'session',
         updatedAt: session.updatedAt,
       })
     }
 
+    const cachedPullRequestKeys = new Set<string>()
     for (const pullRequest of pullRequests) {
       const workspace = workspaceById.get(pullRequest.workspaceId)
       if (!workspace || workspace.archivedAt || workspace.worktreeRemovedAt) {
         continue
       }
+      const pullRequestKey = buildPullRequestKey(pullRequest)
+      if (pullRequestKey) cachedPullRequestKeys.add(pullRequestKey)
       const workspaceSessions = sessionsByWorkspaceId.get(workspace.id) ?? []
       const linkedSession = workspaceSessions.find(
         (session) => !session.archivedAt,
@@ -134,9 +167,42 @@ export class CodeReviewService {
         sessionName: linkedSession?.name ?? null,
         branchName: workspace.branchName,
         pullRequestId: pullRequest.id,
+        pullRequestNumber: pullRequest.number,
         pullRequestLabel: formatPullRequestLabel(pullRequest),
+        pullRequestUrl: pullRequest.url,
+        pullRequestBaseBranch: pullRequest.baseBranch,
+        pullRequestHeadBranch: pullRequest.headBranch,
         source: 'pull-request',
         updatedAt: pullRequest.updatedAt,
+      })
+    }
+
+    for (const pullRequest of openPullRequests) {
+      const pullRequestKey = buildPullRequestKey(pullRequest)
+      if (cachedPullRequestKeys.has(pullRequestKey)) continue
+
+      targets.push({
+        id: `pull-request:github:${pullRequest.repositoryOwner}/${pullRequest.repositoryName}#${pullRequest.number}`,
+        projectId: project.id,
+        projectName: project.name,
+        repositoryPath: project.repositoryPath,
+        workspaceId: null,
+        sessionId: null,
+        sessionName: null,
+        branchName: pullRequest.headBranch,
+        pullRequestId: null,
+        pullRequestNumber: pullRequest.number,
+        pullRequestLabel: formatPullRequestLabel(pullRequest),
+        pullRequestUrl: pullRequest.url,
+        pullRequestBaseBranch: pullRequest.baseBranch,
+        pullRequestHeadBranch: pullRequest.headBranch,
+        source: 'pull-request',
+        updatedAt: pullRequest.updatedAt,
+        status: {
+          workingTreeFileCount: pullRequest.changedFileCount ?? 0,
+          workingTreeStatusCounts: {},
+          error: null,
+        },
       })
     }
 
@@ -144,7 +210,8 @@ export class CodeReviewService {
     return Promise.all(
       rankedTargets.map(async (target) => ({
         ...target,
-        status: await this.getTargetStatus(target.repositoryPath),
+        status:
+          target.status ?? (await this.getTargetStatus(target.repositoryPath)),
       })),
     )
   }
@@ -152,6 +219,28 @@ export class CodeReviewService {
   async getSummary(
     input: CodeReviewSummaryRequest,
   ): Promise<CodeReviewSummary> {
+    if (isRemotePullRequestTarget(input.target)) {
+      const summary = await this.deps.git.getPullRequestStatus({
+        repoPath: input.target.repositoryPath,
+        number: input.target.pullRequestNumber,
+        baseBranch: input.target.pullRequestBaseBranch,
+      })
+      return {
+        base: {
+          branchName: input.target.pullRequestBaseBranch,
+          comparisonRef: summary.comparisonRef,
+          source: 'pull-request',
+          warning: null,
+        },
+        cacheIdentity: {
+          comparisonRef: summary.comparisonRef,
+          comparisonPoint: summary.comparisonPoint,
+          workingTreeVersionToken: summary.versionToken,
+        },
+        files: summary.files,
+      }
+    }
+
     if (input.mode === 'base-branch') {
       if (!input.target.sessionId) {
         throw new Error('Base branch review requires a session-backed target')
@@ -187,6 +276,16 @@ export class CodeReviewService {
   }
 
   async getFilePatch(input: CodeReviewFilePatchRequest): Promise<string> {
+    if (isRemotePullRequestTarget(input.target)) {
+      return this.deps.git.getPullRequestDiff({
+        repoPath: input.target.repositoryPath,
+        number: input.target.pullRequestNumber,
+        baseBranch: input.target.pullRequestBaseBranch,
+        comparisonPoint: input.cacheIdentity.comparisonPoint,
+        filePath: input.filePath,
+      })
+    }
+
     if (input.mode === 'base-branch') {
       if (!input.target.sessionId) {
         throw new Error('Base branch review requires a session-backed target')
@@ -236,4 +335,32 @@ export class CodeReviewService {
       }
     }
   }
+}
+
+function buildPullRequestKey(
+  pullRequest: Pick<
+    WorkspacePullRequest | ProjectPullRequest,
+    'repositoryOwner' | 'repositoryName' | 'number'
+  >,
+): string {
+  return [
+    pullRequest.repositoryOwner?.toLowerCase() ?? '',
+    pullRequest.repositoryName?.toLowerCase() ?? '',
+    pullRequest.number ?? '',
+  ].join('#')
+}
+
+function isRemotePullRequestTarget(
+  target: CodeReviewTarget,
+): target is CodeReviewTarget & {
+  pullRequestNumber: number
+  pullRequestBaseBranch: string
+} {
+  return (
+    target.source === 'pull-request' &&
+    !target.workspaceId &&
+    typeof target.pullRequestNumber === 'number' &&
+    typeof target.pullRequestBaseBranch === 'string' &&
+    target.pullRequestBaseBranch.trim().length > 0
+  )
 }

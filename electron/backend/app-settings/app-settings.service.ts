@@ -182,7 +182,10 @@ export class AppSettingsService {
     return descriptor.defaultModelId ?? null
   }
 
-  async resolveExtractionModel(providerId: string): Promise<string | null> {
+  async resolveExtractionModel(
+    providerId: string,
+    options: { preferFastDefault?: boolean } = {},
+  ): Promise<string | null> {
     const descriptors = await this.loadDescriptors()
     const descriptor = descriptors.find((item) => item.id === providerId)
     if (!descriptor) return null
@@ -194,6 +197,13 @@ export class AppSettingsService {
 
     const override = stored.extractionModelByProvider[providerId]
     if (override) return override
+
+    if (options.preferFastDefault && descriptor.fastModelId) {
+      const exists = descriptor.modelOptions.some(
+        (option) => option.id === descriptor.fastModelId,
+      )
+      if (exists) return descriptor.fastModelId
+    }
 
     return descriptor.defaultModelId ?? null
   }

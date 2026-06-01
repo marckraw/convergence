@@ -10,7 +10,11 @@ import {
 import { terminalApi, useTerminalStore } from '@/entities/terminal'
 import { useAppSettingsStore } from '@/entities/app-settings'
 import { useAppSurfaceStore } from '@/entities/app-surface'
-import { useCodeReviewStore, type CodeReviewMode } from '@/entities/code-review'
+import {
+  useCodeReviewStore,
+  type CodeReviewMode,
+  type CodeReviewView,
+} from '@/entities/code-review'
 import {
   notificationsApi,
   useNotificationsStore,
@@ -53,6 +57,7 @@ export type MainViewRoute =
       kind: 'code-review'
       targetId: string | null
       mode: CodeReviewMode
+      view: CodeReviewView
       filePath: string | null
     }
 
@@ -63,11 +68,13 @@ interface AppProps {
   onOpenCodeReview?: (search?: {
     targetId?: string | null
     mode?: CodeReviewMode
+    view?: CodeReviewView
     file?: string | null
   }) => void
   onCodeReviewSearchChange?: (search: {
     targetId?: string | null
     mode?: CodeReviewMode
+    view?: CodeReviewView
     file?: string | null
   }) => void
   onCloseCodeReview?: () => void
@@ -108,6 +115,8 @@ export function App({
     mainViewRoute.kind === 'code-review' ? mainViewRoute.mode : null
   const routeCodeReviewFilePath =
     mainViewRoute.kind === 'code-review' ? mainViewRoute.filePath : null
+  const routeCodeReviewView =
+    mainViewRoute.kind === 'code-review' ? mainViewRoute.view : null
   const routeCodeReviewTargetId =
     mainViewRoute.kind === 'code-review' ? mainViewRoute.targetId : null
   const routeCodeReviewActive = mainViewRoute.kind === 'code-review'
@@ -393,6 +402,7 @@ export function App({
       setActiveSurface('code')
       openCodeReview({
         mode: routeCodeReviewMode ?? 'working-tree',
+        view: routeCodeReviewView ?? 'guide',
         selectedFile: routeCodeReviewFilePath,
       })
       return
@@ -407,6 +417,7 @@ export function App({
     routeCodeReviewActive,
     routeCodeReviewFilePath,
     routeCodeReviewMode,
+    routeCodeReviewView,
     routeCodeSessionId,
     setActiveSurface,
   ])
@@ -534,6 +545,7 @@ export function App({
 
     openCodeReview({
       mode: search?.mode,
+      view: search?.view,
       selectedFile: search?.file,
     })
   }
@@ -568,6 +580,7 @@ export function App({
         handleOpenCodeReview({
           targetId: null,
           mode: 'working-tree',
+          view: 'guide',
           file: null,
         })
         return
@@ -587,6 +600,7 @@ export function App({
         codeReviewActive={routeCodeReviewActive}
         codeReviewTargetId={routeCodeReviewTargetId}
         codeReviewMode={routeCodeReviewMode ?? 'working-tree'}
+        codeReviewView={routeCodeReviewView ?? 'guide'}
         codeReviewFilePath={routeCodeReviewFilePath}
         selectedChatSpaceId={routeChatSpaceId}
         draftChatSpaceId={routeChatSpaceDraftAttempt ? routeChatSpaceId : null}

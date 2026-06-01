@@ -36,6 +36,7 @@ function buildDescriptors(): ProviderDescriptor[] {
       kind: 'conversation',
       supportsContinuation: true,
       defaultModelId: 'sonnet',
+      fastModelId: 'haiku',
       modelOptions: [
         {
           id: 'sonnet',
@@ -56,6 +57,16 @@ function buildDescriptors(): ProviderDescriptor[] {
             { id: 'medium', label: 'Medium' },
             { id: 'high', label: 'High' },
             { id: 'max', label: 'Max' },
+          ],
+        },
+        {
+          id: 'haiku',
+          label: 'Claude Haiku',
+          defaultEffort: 'medium',
+          effortOptions: [
+            { id: 'low', label: 'Low' },
+            { id: 'medium', label: 'Medium' },
+            { id: 'high', label: 'High' },
           ],
         },
       ],
@@ -558,6 +569,26 @@ describe('AppSettingsService', () => {
     it('falls back to the provider default model when no override is configured', async () => {
       const resolved = await service.resolveExtractionModel('claude-code')
       expect(resolved).toBe('sonnet')
+    })
+
+    it('can prefer the provider fast model when no override is configured', async () => {
+      const resolved = await service.resolveExtractionModel('claude-code', {
+        preferFastDefault: true,
+      })
+      expect(resolved).toBe('haiku')
+    })
+
+    it('keeps the configured override when fast default is preferred', async () => {
+      await service.setAppSettings({
+        defaultProviderId: null,
+        defaultModelId: null,
+        defaultEffortId: null,
+        extractionModelByProvider: { 'claude-code': 'opus' },
+      })
+      const resolved = await service.resolveExtractionModel('claude-code', {
+        preferFastDefault: true,
+      })
+      expect(resolved).toBe('opus')
     })
 
     it('returns null when the provider is unknown', async () => {

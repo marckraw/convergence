@@ -693,8 +693,8 @@ function runCodexOneShot(
       args.push('--dangerously-bypass-approvals-and-sandbox')
     } else {
       args.push(
-        '--ask-for-approval',
-        permissionConfig.approvalPolicy,
+        '-c',
+        `approval_policy="${permissionConfig.approvalPolicy}"`,
         '--sandbox',
         permissionConfig.sandbox,
       )

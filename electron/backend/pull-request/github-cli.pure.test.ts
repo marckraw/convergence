@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   classifyGithubCliError,
+  parseGithubCliOpenPullRequests,
   parseGithubCliPullRequests,
   parseGithubRepositoryRef,
 } from './github-cli.pure'
@@ -104,6 +105,77 @@ describe('parseGithubCliPullRequests', () => {
         'feature-x',
       ).state,
     ).toBe('merged')
+  })
+})
+
+describe('parseGithubCliOpenPullRequests', () => {
+  it('normalizes open project pull requests', () => {
+    expect(
+      parseGithubCliOpenPullRequests(
+        JSON.stringify([
+          {
+            number: 42,
+            title: 'Review guide mode',
+            url: 'https://github.com/acme/app/pull/42',
+            state: 'OPEN',
+            isDraft: false,
+            headRefName: 'codewalk-feature',
+            baseRefName: 'main',
+            changedFiles: 12,
+            updatedAt: '2026-01-05T00:00:00Z',
+          },
+          {
+            number: 43,
+            title: 'Draft work',
+            state: 'OPEN',
+            isDraft: true,
+          },
+        ]),
+        { owner: 'acme', name: 'app' },
+        'project-1',
+      ),
+    ).toEqual([
+      {
+        projectId: 'project-1',
+        provider: 'github',
+        state: 'open',
+        repositoryOwner: 'acme',
+        repositoryName: 'app',
+        number: 42,
+        title: 'Review guide mode',
+        url: 'https://github.com/acme/app/pull/42',
+        isDraft: false,
+        headBranch: 'codewalk-feature',
+        baseBranch: 'main',
+        changedFileCount: 12,
+        updatedAt: '2026-01-05T00:00:00Z',
+      },
+      {
+        projectId: 'project-1',
+        provider: 'github',
+        state: 'draft',
+        repositoryOwner: 'acme',
+        repositoryName: 'app',
+        number: 43,
+        title: 'Draft work',
+        url: null,
+        isDraft: true,
+        headBranch: null,
+        baseBranch: null,
+        changedFileCount: null,
+        updatedAt: null,
+      },
+    ])
+  })
+
+  it('returns an empty list for malformed gh output', () => {
+    expect(
+      parseGithubCliOpenPullRequests(
+        '{not-json',
+        { owner: 'acme', name: 'app' },
+        'project-1',
+      ),
+    ).toEqual([])
   })
 })
 
