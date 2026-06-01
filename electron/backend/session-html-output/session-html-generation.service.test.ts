@@ -118,8 +118,18 @@ function setup(provider?: Provider) {
     return output
   })
   const recordFailure = vi.fn((input: Parameters<FakeRecordFailure>[0]) => {
+    const existing = Array.from(outputsById.values()).find((output) => {
+      if (input.kind === 'living') {
+        return output.sessionId === input.sessionId && output.kind === 'living'
+      }
+      return (
+        output.sessionId === input.sessionId &&
+        output.kind === 'snapshot' &&
+        output.sourceItemId === (input.sourceItemId ?? null)
+      )
+    })
     const output = {
-      id: `failed-${input.kind}-output-${outputsById.size + 1}`,
+      id: existing?.id ?? `failed-${input.kind}-output-${outputsById.size + 1}`,
       sessionId: input.sessionId,
       sourceItemId: input.sourceItemId ?? null,
       kind: input.kind,
@@ -127,6 +137,22 @@ function setup(provider?: Provider) {
       relativePath: null,
       sizeBytes: 0,
       error: input.error,
+      createdAt: '2026-06-01T00:00:00.000Z',
+      updatedAt: '2026-06-01T00:00:00.000Z',
+    }
+    outputsById.set(output.id, output)
+    return output
+  })
+  const recordPending = vi.fn((input: Parameters<FakeRecordPending>[0]) => {
+    const output = {
+      id: `pending-${input.kind}-output-${outputsById.size + 1}`,
+      sessionId: input.sessionId,
+      sourceItemId: input.sourceItemId ?? null,
+      kind: input.kind,
+      status: 'pending' as const,
+      relativePath: input.relativePath ?? null,
+      sizeBytes: 0,
+      error: null,
       createdAt: '2026-06-01T00:00:00.000Z',
       updatedAt: '2026-06-01T00:00:00.000Z',
     }
@@ -161,12 +187,19 @@ function setup(provider?: Provider) {
 
   const service = new SessionHtmlGenerationService({
     providers,
-    outputs: { saveHtml, recordFailure, listForSession, readHtml },
+    outputs: {
+      saveHtml,
+      recordPending,
+      recordFailure,
+      listForSession,
+      readHtml,
+    },
   })
 
   return {
     service,
     saveHtml,
+    recordPending,
     recordFailure,
     listForSession,
     readHtml,
@@ -180,13 +213,18 @@ type FakeSaveHtml = NonNullable<
 type FakeRecordFailure = NonNullable<
   ConstructorParameters<typeof SessionHtmlGenerationService>[0]['outputs']
 >['recordFailure']
+type FakeRecordPending = NonNullable<
+  ConstructorParameters<typeof SessionHtmlGenerationService>[0]['outputs']
+>['recordPending']
 
 describe('SessionHtmlGenerationService', () => {
   it('runs provider oneShot and stores normalized snapshot and living HTML', async () => {
     const oneShot = vi.fn(async () => ({
       text: '```html\n<!doctype html><html><body>ok</body></html>\n```',
     }))
-    const { service, saveHtml } = setup(makeProvider({ oneShot }))
+    const { service, saveHtml, recordPending } = setup(
+      makeProvider({ oneShot }),
+    )
 
     const result = await service.generateForAssistantItem({
       session,
@@ -202,6 +240,12 @@ describe('SessionHtmlGenerationService', () => {
         workingDirectory: '/repo',
       }),
     )
+    expect(recordPending).toHaveBeenCalledWith({
+      sessionId: session.id,
+      sourceItemId: assistantItem.id,
+      kind: 'snapshot',
+      relativePath: 'snapshots/turn-2.html',
+    })
     expect(saveHtml).toHaveBeenCalledWith(
       expect.objectContaining({
         sessionId: session.id,

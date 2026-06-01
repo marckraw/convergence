@@ -16,6 +16,30 @@ function seedSession(db: Database.Database, sessionId: string): void {
   ).run(sessionId)
 }
 
+function seedConversationItem(db: Database.Database, sessionId: string): void {
+  db.prepare(
+    `INSERT INTO session_conversation_items (
+      id,
+      session_id,
+      sequence,
+      kind,
+      state,
+      payload_json,
+      created_at,
+      updated_at
+    ) VALUES (
+      'item-1',
+      ?,
+      1,
+      'message',
+      'complete',
+      '{}',
+      '2026-06-01T00:00:00.000Z',
+      '2026-06-01T00:00:00.000Z'
+    )`,
+  ).run(sessionId)
+}
+
 describe('SessionHtmlOutputService', () => {
   let rootDir: string
   let db: Database.Database
@@ -26,6 +50,7 @@ describe('SessionHtmlOutputService', () => {
     rootDir = mkdtempSync(join(tmpdir(), 'convergence-session-html-'))
     db = getDatabase()
     seedSession(db, sessionId)
+    seedConversationItem(db, sessionId)
     service = new SessionHtmlOutputService(db, rootDir)
   })
 
@@ -125,6 +150,38 @@ describe('SessionHtmlOutputService', () => {
       error: 'Provider does not support oneShot',
     })
     await expect(service.readHtml(failure.id)).rejects.toThrow(/not ready/)
+  })
+
+  it('records pending outputs and reuses the row when HTML becomes ready', async () => {
+    const pending = service.recordPending({
+      sessionId,
+      sourceItemId: 'item-1',
+      kind: 'snapshot',
+      relativePath: 'snapshots/turn-1.html',
+    })
+
+    expect(pending).toMatchObject({
+      sessionId,
+      sourceItemId: 'item-1',
+      kind: 'snapshot',
+      status: 'pending',
+      relativePath: 'snapshots/turn-1.html',
+      sizeBytes: 0,
+      error: null,
+    })
+    await expect(service.readHtml(pending.id)).rejects.toThrow(/not ready/)
+
+    const ready = await service.saveHtml({
+      sessionId,
+      sourceItemId: 'item-1',
+      kind: 'snapshot',
+      relativePath: 'snapshots/turn-1.html',
+      html: '<!doctype html><p>Ready</p>',
+    })
+
+    expect(ready.id).toBe(pending.id)
+    expect(ready.status).toBe('ready')
+    expect(await service.readHtml(ready.id)).toContain('Ready')
   })
 
   it('deletes rows and files for a session', async () => {

@@ -13,7 +13,11 @@ export interface SessionHtmlGenerationDeps {
   providers: ProviderRegistry
   outputs: Pick<
     SessionHtmlOutputService,
-    'saveHtml' | 'recordFailure' | 'listForSession' | 'readHtml'
+    | 'saveHtml'
+    | 'recordPending'
+    | 'recordFailure'
+    | 'listForSession'
+    | 'readHtml'
   >
 }
 
@@ -40,6 +44,14 @@ export class SessionHtmlGenerationService {
     }
 
     const provider = this.deps.providers.get(input.session.providerId)
+    const snapshotRelativePath = `snapshots/turn-${sourceItem.sequence}.html`
+    const pendingSnapshot = this.deps.outputs.recordPending({
+      sessionId: input.session.id,
+      sourceItemId: sourceItem.id,
+      kind: 'snapshot',
+      relativePath: snapshotRelativePath,
+    })
+
     if (!provider?.oneShot) {
       return {
         snapshot: this.deps.outputs.recordFailure({
@@ -104,7 +116,7 @@ export class SessionHtmlGenerationService {
       sessionId: input.session.id,
       sourceItemId: sourceItem.id,
       kind: 'snapshot',
-      relativePath: `snapshots/turn-${sourceItem.sequence}.html`,
+      relativePath: pendingSnapshot.relativePath ?? snapshotRelativePath,
       html: generatedHtml,
     })
     const living = await this.deps.outputs.saveHtml({

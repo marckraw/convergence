@@ -29,3 +29,10 @@ export interface RecordSessionHtmlOutputFailureInput {
   kind: SessionHtmlOutputKind
   error: string
 }
+
+export interface RecordSessionHtmlOutputPendingInput {
+  sessionId: string
+  sourceItemId?: string | null
+  kind: SessionHtmlOutputKind
+  relativePath?: string | null
+}

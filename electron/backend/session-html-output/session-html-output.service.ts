@@ -9,6 +9,7 @@ import {
   rowToSessionHtmlOutput,
 } from './session-html-output.pure'
 import type {
+  RecordSessionHtmlOutputPendingInput,
   RecordSessionHtmlOutputFailureInput,
   SaveSessionHtmlOutputInput,
   SessionHtmlOutput,
@@ -78,6 +79,58 @@ export class SessionHtmlOutputService {
 
     const output = this.getById(id)
     if (!output) throw new Error(`HTML output was not persisted: ${id}`)
+    return output
+  }
+
+  recordPending(input: RecordSessionHtmlOutputPendingInput): SessionHtmlOutput {
+    const existing = this.findExistingOutput(
+      input.sessionId,
+      input.kind,
+      input.sourceItemId ?? null,
+    )
+    const relativePath = input.relativePath
+      ? normalizeSessionHtmlRelativePath(input.relativePath)
+      : null
+    const id = existing?.id ?? randomUUID()
+    const now = new Date().toISOString()
+    const createdAt = existing?.created_at ?? now
+
+    this.db
+      .prepare(
+        `INSERT INTO session_html_outputs (
+          id,
+          session_id,
+          source_item_id,
+          output_kind,
+          status,
+          relative_path,
+          size_bytes,
+          error,
+          created_at,
+          updated_at
+        ) VALUES (?, ?, ?, ?, 'pending', ?, 0, NULL, ?, ?)
+        ON CONFLICT(id) DO UPDATE SET
+          source_item_id = excluded.source_item_id,
+          output_kind = excluded.output_kind,
+          status = excluded.status,
+          relative_path = excluded.relative_path,
+          size_bytes = excluded.size_bytes,
+          error = excluded.error,
+          updated_at = excluded.updated_at`,
+      )
+      .run(
+        id,
+        input.sessionId,
+        input.sourceItemId ?? null,
+        input.kind,
+        relativePath,
+        createdAt,
+        now,
+      )
+
+    const output = this.getById(id)
+    if (!output)
+      throw new Error(`HTML output pending row was not persisted: ${id}`)
     return output
   }
 

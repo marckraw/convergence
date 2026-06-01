@@ -104,12 +104,14 @@ export const SessionConversationSurface: FC<
   const selectedHtmlOutput = selectedHtmlOutputId
     ? (htmlOutputs.find((output) => output.id === selectedHtmlOutputId) ?? null)
     : null
+  const selectedHtmlOutputStatus = selectedHtmlOutput?.status ?? null
+  const selectedHtmlOutputUpdatedAt = selectedHtmlOutput?.updatedAt ?? null
   useEffect(() => {
-    if (!selectedHtmlOutput || selectedHtmlOutput.status !== 'ready') {
+    if (!selectedHtmlOutputId || selectedHtmlOutputStatus !== 'ready') {
       setHtmlPreview(
-        selectedHtmlOutput
+        selectedHtmlOutputId
           ? {
-              outputId: selectedHtmlOutput.id,
+              outputId: selectedHtmlOutputId,
               html: null,
               isLoading: false,
               error: null,
@@ -121,17 +123,17 @@ export const SessionConversationSurface: FC<
 
     let cancelled = false
     setHtmlPreview({
-      outputId: selectedHtmlOutput.id,
+      outputId: selectedHtmlOutputId,
       html: null,
       isLoading: true,
       error: null,
     })
     void sessionHtmlOutputApi
-      .readHtml(selectedHtmlOutput.id)
+      .readHtml(selectedHtmlOutputId)
       .then((html) => {
         if (cancelled) return
         setHtmlPreview({
-          outputId: selectedHtmlOutput.id,
+          outputId: selectedHtmlOutputId,
           html,
           isLoading: false,
           error: null,
@@ -140,7 +142,7 @@ export const SessionConversationSurface: FC<
       .catch((error: unknown) => {
         if (cancelled) return
         setHtmlPreview({
-          outputId: selectedHtmlOutput.id,
+          outputId: selectedHtmlOutputId,
           html: null,
           isLoading: false,
           error: error instanceof Error ? error.message : String(error),
@@ -150,7 +152,11 @@ export const SessionConversationSurface: FC<
     return () => {
       cancelled = true
     }
-  }, [selectedHtmlOutput])
+  }, [
+    selectedHtmlOutputId,
+    selectedHtmlOutputStatus,
+    selectedHtmlOutputUpdatedAt,
+  ])
 
   const handleUiResponseArtifactSelect = useCallback(
     (conversationItemId: string) => {

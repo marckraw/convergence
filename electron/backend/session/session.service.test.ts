@@ -2333,8 +2333,15 @@ describe('SessionService attachments integration', () => {
 
       await service.start(session.id, { text: 'Explore this project.' })
       let outputs = htmlOutputs.listForSession(session.id)
-      for (let attempt = 0; attempt < 20 && outputs.length < 2; attempt += 1) {
-        await new Promise((resolve) => setTimeout(resolve, 5))
+      for (
+        let attempt = 0;
+        attempt < 100 &&
+        !outputs.some(
+          (output) => output.kind === 'living' && output.status === 'ready',
+        );
+        attempt += 1
+      ) {
+        await new Promise((resolve) => setTimeout(resolve, 10))
         outputs = htmlOutputs.listForSession(session.id)
       }
 
