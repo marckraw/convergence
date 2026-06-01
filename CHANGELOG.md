@@ -1,5 +1,11 @@
 # convergence
 
+## 0.38.0
+
+### Minor Changes
+
+- 230af33: Add guided code review mode with AI-generated walkthrough sections, risk rationale tooltips, and remote GitHub pull request targets.
+
 ## 0.37.48
 
 ### Patch Changes
