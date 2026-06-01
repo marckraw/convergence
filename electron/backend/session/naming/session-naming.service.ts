@@ -45,12 +45,17 @@ export class SessionNamingService {
       firstAssistantResponse: assistantText,
     })
 
-    const result = await provider.oneShot({
-      prompt,
-      modelId,
-      workingDirectory: session.workingDirectory,
-      requestId: options.requestId ?? randomUUID(),
-    })
-    return sanitizeTitle(result.text)
+    try {
+      const result = await provider.oneShot({
+        prompt,
+        modelId,
+        workingDirectory: session.workingDirectory,
+        requestId: options.requestId ?? randomUUID(),
+        permissionConfig: session.permissionConfig,
+      })
+      return sanitizeTitle(result.text)
+    } catch {
+      return null
+    }
   }
 }
