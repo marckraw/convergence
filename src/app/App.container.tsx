@@ -354,6 +354,13 @@ export function App({
   ])
 
   useEffect(() => {
+    if (mainViewRoute.kind !== 'home') return
+
+    closeCodeReview()
+    setActiveSurface('code')
+  }, [closeCodeReview, mainViewRoute.kind, setActiveSurface])
+
+  useEffect(() => {
     if (!routeChatActive) return
 
     closeCodeReview()

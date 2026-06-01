@@ -658,6 +658,23 @@ describe('App', () => {
     expect(useAppSurfaceStore.getState().activeSurface).toBe('code')
   })
 
+  it('syncs the home route back to the code surface', async () => {
+    mockElectronAPI.project.getActive.mockResolvedValue(mockProject)
+    mockElectronAPI.project.getAll.mockResolvedValue([mockProject])
+    useAppSurfaceStore.setState({ activeSurface: 'chat' })
+    useCodeReviewStore.setState({ isReviewOpen: true })
+
+    render(<App mainViewRoute={{ kind: 'home' }} />)
+
+    await waitFor(() => {
+      expect(useAppSurfaceStore.getState().activeSurface).toBe('code')
+    })
+    expect(useCodeReviewStore.getState().isReviewOpen).toBe(false)
+    expect(
+      await screen.findByText('What would you like to work on?'),
+    ).toBeInTheDocument()
+  })
+
   it('applies code review route search state to the review store', async () => {
     render(
       <App
