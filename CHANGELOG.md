@@ -1,5 +1,11 @@
 # convergence
 
+## 0.37.45
+
+### Patch Changes
+
+- 4190494: Fix the Code surface switch so returning from Chat to Code without an active Code session opens the Code home route.
+
 ## 0.37.44
 
 ### Patch Changes
