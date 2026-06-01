@@ -18,6 +18,7 @@ import { Button } from '@/shared/ui/button'
 import { Markdown } from '@/shared/ui/markdown.container'
 import {
   AttachmentChip,
+  AttachmentInlinePreview,
   MissingAttachmentChip,
   type Attachment,
 } from '@/entities/attachment'
@@ -53,7 +54,14 @@ export const ConversationItemView: FC<ConversationItemViewProps> = ({
   switch (entry.kind) {
     case 'message':
       if (entry.actor === 'user') {
-        const hasAttachments = viewModel.attachments.length > 0
+        const imageAttachments = viewModel.attachments.filter(
+          (attachment) => attachment.kind === 'image',
+        )
+        const chipAttachments = viewModel.attachments.filter(
+          (attachment) => attachment.kind !== 'image',
+        )
+        const hasImageAttachments = imageAttachments.length > 0
+        const hasChipAttachments = chipAttachments.length > 0
         const hasMissing = viewModel.missingAttachmentIds.length > 0
         return (
           <ConversationItemShell copyText={viewModel.copyText}>
@@ -97,12 +105,26 @@ export const ConversationItemView: FC<ConversationItemViewProps> = ({
                   content={viewModel.displayText}
                   size="sm"
                 />
-                {(hasAttachments || hasMissing) && (
+                {hasImageAttachments && (
+                  <div
+                    className="mt-2 grid max-w-full grid-cols-1 gap-2 sm:grid-cols-[repeat(auto-fit,minmax(12rem,24rem))]"
+                    data-testid="history-image-attachments"
+                  >
+                    {imageAttachments.map((attachment) => (
+                      <AttachmentInlinePreview
+                        key={attachment.id}
+                        attachment={attachment}
+                        onOpen={onAttachmentOpen ?? (() => {})}
+                      />
+                    ))}
+                  </div>
+                )}
+                {(hasChipAttachments || hasMissing) && (
                   <div
                     className="mt-2 flex flex-wrap gap-1.5"
                     data-testid="history-attachments"
                   >
-                    {viewModel.attachments.map((attachment) => (
+                    {chipAttachments.map((attachment) => (
                       <AttachmentChip
                         key={attachment.id}
                         attachment={attachment}
