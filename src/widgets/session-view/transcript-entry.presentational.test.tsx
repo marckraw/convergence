@@ -413,7 +413,11 @@ describe('ConversationItemView', () => {
       }
     }
 
-    function makeAttachment(id: string, filename: string) {
+    function makeAttachment(
+      id: string,
+      filename: string,
+      overrides: Partial<Attachment> = {},
+    ): Attachment {
       return {
         id,
         sessionId: 'session-1',
@@ -425,24 +429,51 @@ describe('ConversationItemView', () => {
         thumbnailPath: null,
         textPreview: null,
         createdAt: '2026-04-13T10:00:00.000Z',
+        ...overrides,
       }
     }
 
-    it('renders chips for resolved attachments below the user message text', () => {
+    it('renders inline previews for image attachments below the user message text', () => {
       const onOpen = vi.fn()
+      const firstAttachment = makeAttachment('att-1', 'one.png')
+      renderConversationItemView({
+        entry: userEntry(),
+        attachments: [firstAttachment, makeAttachment('att-2', 'two.png')],
+        onAttachmentOpen: onOpen,
+      })
+
+      const previews = screen.getAllByTestId('attachment-inline-preview')
+      expect(previews).toHaveLength(2)
+      expect(screen.getByText('one.png')).toBeInTheDocument()
+      expect(screen.getByText('two.png')).toBeInTheDocument()
+
+      fireEvent.click(screen.getByRole('button', { name: /Preview one\.png/ }))
+      expect(onOpen).toHaveBeenCalledWith(firstAttachment)
+    })
+
+    it('renders chips for non-image resolved attachments below the user message text', () => {
       renderConversationItemView({
         entry: userEntry(),
         attachments: [
-          makeAttachment('att-1', 'one.png'),
-          makeAttachment('att-2', 'two.png'),
+          makeAttachment('att-1', 'brief.pdf', {
+            kind: 'pdf',
+            mimeType: 'application/pdf',
+            storagePath: '/tmp/att-1.pdf',
+          }),
+          makeAttachment('att-2', 'notes.txt', {
+            kind: 'text',
+            mimeType: 'text/plain',
+            storagePath: '/tmp/att-2.txt',
+            textPreview: 'notes',
+          }),
         ],
-        onAttachmentOpen: onOpen,
+        onAttachmentOpen: vi.fn(),
       })
 
       const chips = screen.getAllByTestId('attachment-chip')
       expect(chips).toHaveLength(2)
-      expect(screen.getByText('one.png')).toBeInTheDocument()
-      expect(screen.getByText('two.png')).toBeInTheDocument()
+      expect(screen.getByText('brief.pdf')).toBeInTheDocument()
+      expect(screen.getByText('notes.txt')).toBeInTheDocument()
     })
 
     it('renders broken-icon chips for missing attachment ids', () => {
@@ -460,7 +491,13 @@ describe('ConversationItemView', () => {
     it('renders both resolved and missing chips together', () => {
       renderConversationItemView({
         entry: userEntry(),
-        attachments: [makeAttachment('att-1', 'kept.png')],
+        attachments: [
+          makeAttachment('att-1', 'kept.pdf', {
+            kind: 'pdf',
+            mimeType: 'application/pdf',
+            storagePath: '/tmp/att-1.pdf',
+          }),
+        ],
         missingAttachmentIds: ['gone-1'],
         onAttachmentOpen: vi.fn(),
       })
@@ -479,12 +516,18 @@ describe('ConversationItemView', () => {
     it('does not render an X (remove) button on history chips', () => {
       renderConversationItemView({
         entry: userEntry(),
-        attachments: [makeAttachment('att-1', 'kept.png')],
+        attachments: [
+          makeAttachment('att-1', 'kept.pdf', {
+            kind: 'pdf',
+            mimeType: 'application/pdf',
+            storagePath: '/tmp/att-1.pdf',
+          }),
+        ],
         onAttachmentOpen: vi.fn(),
       })
 
       expect(
-        screen.queryByRole('button', { name: /Remove kept\.png/ }),
+        screen.queryByRole('button', { name: /Remove kept\.pdf/ }),
       ).toBeNull()
     })
   })
