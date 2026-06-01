@@ -1,5 +1,11 @@
 # convergence
 
+## 0.37.48
+
+### Patch Changes
+
+- c1b9897: Show image attachments as inline previews in sent messages while preserving click-to-open full previews.
+
 ## 0.37.47
 
 ### Patch Changes
