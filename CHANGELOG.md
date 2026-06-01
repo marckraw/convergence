@@ -1,5 +1,11 @@
 # convergence
 
+## 0.37.46
+
+### Patch Changes
+
+- 2fa367e: remove not needed docs anymore
+
 ## 0.37.45
 
 ### Patch Changes
