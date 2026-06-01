@@ -37,6 +37,7 @@ export type SessionAppBackend = Pick<
   | 'rename'
   | 'regenerateName'
   | 'setPrimarySurface'
+  | 'setHtmlModeEnabled'
   | 'setSummaryUpdateListener'
   | 'setConversationPatchListener'
   | 'setQueuedInputPatchListener'
@@ -143,6 +144,10 @@ export class SessionAppService {
     surface: PrimarySurface,
   ): Session {
     return this.sessions.setPrimarySurface(sessionId, surface)
+  }
+
+  setSessionHtmlModeEnabled(sessionId: string, enabled: boolean): Session {
+    return this.sessions.setHtmlModeEnabled(sessionId, enabled)
   }
 
   onSessionSummaryUpdate(listener: (summary: SessionSummary) => void): void {

@@ -325,6 +325,7 @@ export interface SessionSummary {
   parentSessionId: string | null
   forkStrategy: ForkStrategy | null
   primarySurface: PrimarySurface
+  htmlModeEnabled?: boolean
   continuationToken: string | null
   lastSequence: number
   createdAt: string

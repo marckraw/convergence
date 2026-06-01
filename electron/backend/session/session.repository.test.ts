@@ -76,8 +76,23 @@ describe('SessionRepository', () => {
       name: 'Task',
       working_directory: '/repo',
       primary_surface: 'conversation',
+      html_mode_enabled: 0,
     })
     expect(row?.permission_config).toContain('workspace-write')
+  })
+
+  it('persists html mode on create and updates it later', () => {
+    repository.create(
+      createSessionInput({
+        htmlModeEnabled: true,
+      }),
+    )
+
+    expect(repository.findById('session-1')?.html_mode_enabled).toBe(1)
+
+    repository.setHtmlModeEnabled('session-1', false)
+
+    expect(repository.findById('session-1')?.html_mode_enabled).toBe(0)
   })
 
   it('lists project and global sessions separately', () => {

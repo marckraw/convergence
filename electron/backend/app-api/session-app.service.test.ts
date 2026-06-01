@@ -52,6 +52,7 @@ function createSessionBackend(
     rename: vi.fn(),
     regenerateName: vi.fn(),
     setPrimarySurface: vi.fn(() => sessionFixture),
+    setHtmlModeEnabled: vi.fn(() => sessionFixture),
     setSummaryUpdateListener: vi.fn(),
     setConversationPatchListener: vi.fn(),
     setQueuedInputPatchListener: vi.fn(),

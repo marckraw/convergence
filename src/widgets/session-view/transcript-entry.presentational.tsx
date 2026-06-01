@@ -1,6 +1,7 @@
 import type { FC } from 'react'
 import type { InteractionResponse } from '@/entities/session'
 import type { SkillSelection } from '@/entities/skill'
+import type { SessionHtmlOutput } from '@/entities/session-html-output'
 import {
   User,
   Bot,
@@ -30,13 +31,16 @@ import { PlanRequestForm } from './plan-request-form.presentational'
 import { FormRequestForm } from './form-request-form.presentational'
 import { UrlRequestForm } from './url-request-form.presentational'
 import type { TranscriptEntryViewModel } from './transcript-entry.pure'
+import { HtmlOutputChip } from './html-output-chip.presentational'
 
 interface ConversationItemViewProps {
   viewModel: TranscriptEntryViewModel
+  htmlOutput?: SessionHtmlOutput | null
   onApprove?: () => void
   onDeny?: () => void
   onInputAnswer?: (response: InteractionResponse, displayText: string) => void
   onAttachmentOpen?: (attachment: Attachment) => void
+  onHtmlOutputOpen?: (output: SessionHtmlOutput) => void
 }
 
 const attentionPromptMarkdownClassName =
@@ -44,10 +48,12 @@ const attentionPromptMarkdownClassName =
 
 export const ConversationItemView: FC<ConversationItemViewProps> = ({
   viewModel,
+  htmlOutput = null,
   onApprove,
   onDeny,
   onInputAnswer,
   onAttachmentOpen,
+  onHtmlOutputOpen,
 }) => {
   const { item: entry } = viewModel
 
@@ -163,6 +169,12 @@ export const ConversationItemView: FC<ConversationItemViewProps> = ({
                     <Columns2 className="h-3 w-3" />
                     UI response
                   </span>
+                ) : null}
+                {htmlOutput ? (
+                  <HtmlOutputChip
+                    output={htmlOutput}
+                    onOpen={onHtmlOutputOpen}
+                  />
                 ) : null}
               </ConversationItemHeader>
               <Markdown

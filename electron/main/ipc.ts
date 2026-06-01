@@ -1,4 +1,4 @@
-import { ipcMain, dialog, BrowserWindow } from 'electron'
+import { ipcMain, dialog, BrowserWindow, shell } from 'electron'
 import { ProjectService } from '../backend/project/project.service'
 import { SpaceService } from '../backend/space/space.service'
 import type { SpaceSynthesisService } from '../backend/space/space-synthesis.service'
@@ -31,6 +31,7 @@ import { OpenRouterCredentialsService } from '../backend/credentials/openrouter-
 import type { AnalyticsService } from '../backend/analytics/analytics.service'
 import type { AnalyticsRangePreset } from '../backend/analytics/analytics.types'
 import type { AttachmentsService } from '../backend/attachments/attachments.service'
+import type { SessionHtmlOutputService } from '../backend/session-html-output/session-html-output.service'
 import type { IngestFileInput } from '../backend/attachments/attachments.types'
 import type { AppSettingsInput } from '../backend/app-settings/app-settings.types'
 import type { CreateProjectInput } from '../backend/project/project.types'
@@ -163,6 +164,7 @@ export function registerIpcHandlers(
   openRouterCredentials: OpenRouterCredentialsService,
   analyticsService: AnalyticsService,
   attachmentsService: AttachmentsService,
+  sessionHtmlOutputService: SessionHtmlOutputService,
   turnCaptureService: TurnCaptureService,
   projectContextService: ProjectContextService,
   spaceSynthesisService?: SpaceSynthesisService,
@@ -732,6 +734,25 @@ export function registerIpcHandlers(
     await attachmentsService.delete(id)
   })
 
+  // Session HTML output handlers
+  ipcMain.handle('sessionHtmlOutputs:list', (_event, sessionId: string) =>
+    sessionHtmlOutputService.listForSession(sessionId),
+  )
+
+  ipcMain.handle('sessionHtmlOutputs:readHtml', (_event, id: string) =>
+    sessionHtmlOutputService.readHtml(id),
+  )
+
+  ipcMain.handle(
+    'sessionHtmlOutputs:openInBrowser',
+    async (_event, id: string) => {
+      const error = await shell.openPath(
+        sessionHtmlOutputService.getAbsolutePath(id),
+      )
+      if (error) throw new Error(error)
+    },
+  )
+
   ipcMain.handle('attachments:showOpenDialog', async (event) => {
     const window = BrowserWindow.fromWebContents(event.sender)
     if (!window) return null
@@ -775,6 +796,12 @@ export function registerIpcHandlers(
     'session:setPrimarySurface',
     (_event, id: string, surface: 'conversation' | 'terminal') =>
       sessionApp.setSessionPrimarySurface(id, surface),
+  )
+
+  ipcMain.handle(
+    'session:setHtmlModeEnabled',
+    (_event, id: string, enabled: boolean) =>
+      sessionApp.setSessionHtmlModeEnabled(id, enabled),
   )
 
   // Provider handlers

@@ -1,8 +1,25 @@
 import { fireEvent, render, screen } from '@testing-library/react'
-import { describe, expect, it, vi } from 'vitest'
+import { waitFor } from '@testing-library/react'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ConversationItem, Session } from '@/entities/session'
+import type { SessionHtmlOutput } from '@/entities/session-html-output'
 import type { ComposerSessionContext } from '@/features/composer'
 import { SessionConversationSurface } from './session-conversation-surface.container'
+
+const { listHtmlOutputsMock, readHtmlOutputMock, openHtmlOutputMock } =
+  vi.hoisted(() => ({
+    listHtmlOutputsMock: vi.fn(async () => [] as SessionHtmlOutput[]),
+    readHtmlOutputMock: vi.fn(async () => ''),
+    openHtmlOutputMock: vi.fn(async () => undefined),
+  }))
+
+vi.mock('@/entities/session-html-output', () => ({
+  sessionHtmlOutputApi: {
+    list: listHtmlOutputsMock,
+    readHtml: readHtmlOutputMock,
+    openInBrowser: openHtmlOutputMock,
+  },
+}))
 
 vi.mock('@/features/composer', () => ({
   ComposerContainer: ({ context }: { context: ComposerSessionContext }) => (
@@ -16,22 +33,35 @@ vi.mock('./session-transcript.container', () => ({
   SessionTranscript: ({
     session,
     conversationItems,
+    htmlOutputByItemId = {},
     onUiResponseArtifactSelect,
+    onHtmlOutputSelect,
   }: {
     session: Session
     conversationItems: ConversationItem[]
+    htmlOutputByItemId?: Record<string, SessionHtmlOutput>
     onUiResponseArtifactSelect?: (conversationItemId: string) => void
+    onHtmlOutputSelect?: (output: SessionHtmlOutput) => void
   }) => (
     <div data-testid="transcript">
       {session.name}:{conversationItems.length}
       {conversationItems.map((item) => (
-        <button
-          key={item.id}
-          type="button"
-          onClick={() => onUiResponseArtifactSelect?.(item.id)}
-        >
-          select {item.id}
-        </button>
+        <div key={item.id}>
+          <button
+            type="button"
+            onClick={() => onUiResponseArtifactSelect?.(item.id)}
+          >
+            select {item.id}
+          </button>
+          {htmlOutputByItemId[item.id] ? (
+            <button
+              type="button"
+              onClick={() => onHtmlOutputSelect?.(htmlOutputByItemId[item.id])}
+            >
+              html {item.id}
+            </button>
+          ) : null}
+        </div>
       ))}
     </div>
   ),
@@ -62,6 +92,12 @@ const baseSession: Session = {
 }
 
 describe('SessionConversationSurface', () => {
+  beforeEach(() => {
+    listHtmlOutputsMock.mockResolvedValue([])
+    readHtmlOutputMock.mockResolvedValue('')
+    openHtmlOutputMock.mockResolvedValue(undefined)
+  })
+
   it('renders the reusable transcript and composer for a global session', () => {
     render(
       <SessionConversationSurface
@@ -169,6 +205,77 @@ describe('SessionConversationSurface', () => {
     fireEvent.click(screen.getByRole('button', { name: 'select message-1' }))
 
     expect(screen.getByText('First preview')).toBeInTheDocument()
+  })
+
+  it('renders selected generated HTML output in an iframe preview', async () => {
+    const snapshotOutput: SessionHtmlOutput = {
+      id: 'snapshot-output-1',
+      sessionId: 'session-1',
+      sourceItemId: 'message-1',
+      kind: 'snapshot',
+      status: 'ready',
+      relativePath: 'snapshots/turn-1.html',
+      sizeBytes: 48,
+      error: null,
+      createdAt: '2026-01-01T00:00:00.000Z',
+      updatedAt: '2026-01-01T00:00:01.000Z',
+    }
+    const livingOutput: SessionHtmlOutput = {
+      ...snapshotOutput,
+      id: 'living-output-1',
+      kind: 'living',
+      relativePath: 'index.html',
+      updatedAt: '2026-01-01T00:00:02.000Z',
+    }
+    listHtmlOutputsMock.mockResolvedValue([snapshotOutput, livingOutput])
+    readHtmlOutputMock.mockResolvedValue(
+      '<!doctype html><html><body>Generated HTML</body></html>',
+    )
+
+    render(
+      <SessionConversationSurface
+        session={{ ...baseSession, htmlModeEnabled: true }}
+        conversationItems={[
+          {
+            id: 'message-1',
+            sessionId: 'session-1',
+            sequence: 1,
+            turnId: 'turn-1',
+            kind: 'message',
+            actor: 'assistant',
+            state: 'complete',
+            text: 'Markdown answer.',
+            createdAt: '2026-01-01T00:00:00.000Z',
+            updatedAt: '2026-01-01T00:00:00.000Z',
+            providerMeta: {
+              providerId: 'codex',
+              providerItemId: null,
+              providerEventType: 'assistant',
+            },
+          },
+        ]}
+        composerContext={{ kind: 'global', activeSessionId: 'session-1' }}
+        onApprove={vi.fn()}
+        onDeny={vi.fn()}
+        onInputAnswer={vi.fn()}
+      />,
+    )
+
+    await waitFor(() =>
+      expect(
+        screen.getByRole('button', { name: 'html message-1' }),
+      ).toBeInTheDocument(),
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: 'html message-1' }))
+
+    await waitFor(() =>
+      expect(
+        screen.getByTestId('session-html-output-iframe'),
+      ).toBeInTheDocument(),
+    )
+    expect(screen.getByTestId('session-html-output-split')).toBeInTheDocument()
+    expect(readHtmlOutputMock).toHaveBeenCalledWith('living-output-1')
   })
 })
 

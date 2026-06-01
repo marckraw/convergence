@@ -21,6 +21,7 @@ export interface CreateSessionRecordInput {
   parentSessionId: string | null
   forkStrategy: CreateSessionInput['forkStrategy']
   primarySurface: PrimarySurface
+  htmlModeEnabled?: boolean
 }
 
 export class SessionRepository {
@@ -42,9 +43,10 @@ export class SessionRepository {
            working_directory,
            parent_session_id,
            fork_strategy,
-           primary_surface
+           primary_surface,
+           html_mode_enabled
          )
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
       .run(
         input.id,
@@ -60,6 +62,7 @@ export class SessionRepository {
         input.parentSessionId,
         input.forkStrategy ?? null,
         input.primarySurface,
+        input.htmlModeEnabled ? 1 : 0,
       )
   }
 
@@ -116,6 +119,14 @@ export class SessionRepository {
         "UPDATE sessions SET primary_surface = ?, updated_at = datetime('now') WHERE id = ?",
       )
       .run(surface, id)
+  }
+
+  setHtmlModeEnabled(id: string, enabled: boolean): void {
+    this.db
+      .prepare(
+        "UPDATE sessions SET html_mode_enabled = ?, updated_at = datetime('now') WHERE id = ?",
+      )
+      .run(enabled ? 1 : 0, id)
   }
 
   isAutoNamed(id: string): boolean {

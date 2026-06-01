@@ -21,6 +21,8 @@ import {
 } from '../provider/provider-descriptor.pure'
 import { deriveLiveness } from '../provider/liveness.pure'
 import type { AttachmentsService } from '../attachments/attachments.service'
+import type { SessionHtmlOutputService } from '../session-html-output/session-html-output.service'
+import { SessionHtmlGenerationService } from '../session-html-output/session-html-generation.service'
 import type { SkillSelection } from '../skills/skills.types'
 import {
   sessionSummaryFromRow,
@@ -130,6 +132,9 @@ export class SessionService {
   private onTurnDelta: ((sessionId: string, delta: TurnDelta) => void) | null =
     null
   private attachments: AttachmentsService | null = null
+  private htmlOutputs: SessionHtmlOutputService | null = null
+  private htmlGeneration: SessionHtmlGenerationService | null = null
+  private htmlGenerationInFlight = new Set<string>()
   private namer: SessionNamer | null = null
   private attentionObserver: SessionAttentionObserver | null = null
   private turnCapture: TurnCaptureService | null = null
@@ -170,6 +175,14 @@ export class SessionService {
     this.attachments = service
   }
 
+  setHtmlOutputService(service: SessionHtmlOutputService): void {
+    this.htmlOutputs = service
+    this.htmlGeneration = new SessionHtmlGenerationService({
+      providers: this.providers,
+      outputs: service,
+    })
+  }
+
   setNamer(namer: SessionNamer): void {
     this.namer = namer
   }
@@ -203,6 +216,14 @@ export class SessionService {
       )
     }
     this.sessionRepository.setPrimarySurface(id, surface)
+    this.notifySessionChange(id)
+    return this.getById(id)!
+  }
+
+  setHtmlModeEnabled(id: string, enabled: boolean): Session {
+    const session = this.getById(id)
+    if (!session) throw new Error(`Session not found: ${id}`)
+    this.sessionRepository.setHtmlModeEnabled(id, enabled)
     this.notifySessionChange(id)
     return this.getById(id)!
   }
@@ -317,6 +338,7 @@ export class SessionService {
       parentSessionId: input.parentSessionId ?? null,
       forkStrategy: input.forkStrategy ?? null,
       primarySurface,
+      htmlModeEnabled: input.htmlModeEnabled ?? false,
     })
 
     return this.getSummaryById(id)!
@@ -481,6 +503,9 @@ export class SessionService {
     this.sessionRepository.delete(id)
     if (this.attachments) {
       void this.attachments.deleteForSession(id)
+    }
+    if (this.htmlOutputs) {
+      void this.htmlOutputs.deleteForSession(id)
     }
   }
 
@@ -836,6 +861,7 @@ export class SessionService {
           op: 'add',
           item,
         })
+        this.maybeGenerateHtmlOutput(sessionId, item)
         return
       }
 
@@ -859,8 +885,36 @@ export class SessionService {
           op: 'patch',
           item,
         })
+        this.maybeGenerateHtmlOutput(sessionId, item)
       }
     }
+  }
+
+  private maybeGenerateHtmlOutput(
+    sessionId: string,
+    item: ConversationItem,
+  ): void {
+    if (!this.htmlGeneration) return
+    if (item.kind !== 'message' || item.actor !== 'assistant') return
+    if (item.state !== 'complete') return
+    if (this.htmlGenerationInFlight.has(item.id)) return
+
+    const session = this.getSummaryById(sessionId)
+    if (!session?.htmlModeEnabled) return
+
+    this.htmlGenerationInFlight.add(item.id)
+    void this.htmlGeneration
+      .generateForAssistantItem({
+        session,
+        conversation: this.getConversation(sessionId),
+        sourceItem: item,
+      })
+      .catch((error) => {
+        console.warn('Session HTML generation failed:', error)
+      })
+      .finally(() => {
+        this.htmlGenerationInFlight.delete(item.id)
+      })
   }
 
   private shouldCoalesceConversationPatch(

@@ -35,6 +35,7 @@ export interface SessionRow {
   parent_session_id: string | null
   fork_strategy: string | null
   primary_surface: string
+  html_mode_enabled: number
   created_at: string
   updated_at: string
 }
@@ -63,6 +64,19 @@ export interface SessionQueuedInputRow {
   attachment_ids_json: string
   skill_selections_json: string
   provider_request_id: string | null
+  error: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface SessionHtmlOutputRow {
+  id: string
+  session_id: string
+  source_item_id: string | null
+  output_kind: string
+  status: string
+  relative_path: string | null
+  size_bytes: number
   error: string | null
   created_at: string
   updated_at: string

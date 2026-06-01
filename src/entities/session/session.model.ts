@@ -65,6 +65,7 @@ interface SessionActions {
     skillSelections?: SkillSelection[],
     contextItemIds?: string[],
     permissionConfig?: SessionPermissionConfig,
+    htmlModeEnabled?: boolean,
   ) => Promise<void>
   createAndStartGlobalSession: (
     providerId: string,
@@ -75,6 +76,7 @@ interface SessionActions {
     attachmentIds?: string[],
     skillSelections?: SkillSelection[],
     permissionConfig?: SessionPermissionConfig,
+    htmlModeEnabled?: boolean,
   ) => Promise<SessionSummary | null>
   createTerminalSession: (
     projectId: string,
@@ -116,6 +118,7 @@ interface SessionActions {
     id: string,
     surface: 'conversation' | 'terminal',
   ) => Promise<SessionSummary>
+  setHtmlModeEnabled: (id: string, enabled: boolean) => Promise<SessionSummary>
   clearError: () => void
 }
 
@@ -437,6 +440,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     skillSelections,
     contextItemIds,
     permissionConfig,
+    htmlModeEnabled,
   ) => {
     set({ error: null })
     try {
@@ -448,6 +452,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
         effort,
         permissionConfig,
         name,
+        ...(htmlModeEnabled ? { htmlModeEnabled } : {}),
       })
       await sessionApi.start(
         session.id,
@@ -493,6 +498,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     attachmentIds,
     skillSelections,
     permissionConfig,
+    htmlModeEnabled,
   ) => {
     set({ error: null })
     try {
@@ -503,6 +509,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
         effort,
         permissionConfig,
         name,
+        ...(htmlModeEnabled ? { htmlModeEnabled } : {}),
       })
       await sessionApi.start(
         session.id,
@@ -964,6 +971,12 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     // eventually flow through handleSessionSummaryUpdate. Applying the
     // returned summary here too keeps the flip visible without waiting
     // for the round-trip.
+    get().handleSessionSummaryUpdate(updated)
+    return updated
+  },
+
+  setHtmlModeEnabled: async (id, enabled) => {
+    const updated = await sessionApi.setHtmlModeEnabled(id, enabled)
     get().handleSessionSummaryUpdate(updated)
     return updated
   },

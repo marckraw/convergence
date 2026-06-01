@@ -2,6 +2,7 @@ import { useState, useCallback } from 'react'
 import type { FC } from 'react'
 import type { ConversationItem as ConversationItemEntry } from '@/entities/session'
 import type { InteractionResponse } from '@/entities/session'
+import type { SessionHtmlOutput } from '@/entities/session-html-output'
 import {
   AttachmentPreviewContainer,
   useAttachmentStore,
@@ -15,9 +16,11 @@ interface ConversationItemProps {
   sessionId: string
   turnStartedAt?: string | null
   injectedContextText?: string | null
+  htmlOutput?: SessionHtmlOutput | null
   onApprove?: () => void
   onDeny?: () => void
   onInputAnswer?: (response: InteractionResponse, displayText: string) => void
+  onHtmlOutputOpen?: (output: SessionHtmlOutput) => void
 }
 
 const EMPTY_RESOLVED_ATTACHMENTS: Record<string, Attachment> = {}
@@ -27,9 +30,11 @@ export const ConversationItem: FC<ConversationItemProps> = ({
   sessionId,
   turnStartedAt,
   injectedContextText = null,
+  htmlOutput = null,
   onApprove,
   onDeny,
   onInputAnswer,
+  onHtmlOutputOpen,
 }) => {
   const resolvedMap = useAttachmentStore(
     (state) => state.resolved[sessionId] ?? EMPTY_RESOLVED_ATTACHMENTS,
@@ -55,10 +60,12 @@ export const ConversationItem: FC<ConversationItemProps> = ({
     <>
       <ConversationItemView
         viewModel={viewModel}
+        htmlOutput={htmlOutput}
         onApprove={onApprove}
         onDeny={onDeny}
         onInputAnswer={onInputAnswer}
         onAttachmentOpen={setPreviewAttachment}
+        onHtmlOutputOpen={onHtmlOutputOpen}
       />
       {previewAttachment && (
         <AttachmentPreviewContainer

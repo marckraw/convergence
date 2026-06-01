@@ -13,6 +13,7 @@ import type {
   InteractionResponse,
   Session,
 } from '@/entities/session'
+import type { SessionHtmlOutput } from '@/entities/session-html-output'
 import { artifactFromConversationItem } from '@/entities/ui-response-artifact'
 import { cn } from '@/shared/lib/cn.pure'
 import { ConversationItem } from './conversation-item.container'
@@ -23,7 +24,10 @@ interface SessionTranscriptProps {
   session: Session
   conversationItems: ConversationItemEntry[]
   selectedUiResponseItemId?: string | null
+  htmlOutputByItemId?: Record<string, SessionHtmlOutput>
+  selectedHtmlOutputItemId?: string | null
   onUiResponseArtifactSelect?: (conversationItemId: string) => void
+  onHtmlOutputSelect?: (output: SessionHtmlOutput) => void
   onApprove: (sessionId: string, providerApprovalId?: string) => void
   onDeny: (sessionId: string, providerApprovalId?: string) => void
   onInputAnswer: (
@@ -40,7 +44,10 @@ export const SessionTranscript: FC<SessionTranscriptProps> = ({
   session,
   conversationItems,
   selectedUiResponseItemId = null,
+  htmlOutputByItemId = {},
+  selectedHtmlOutputItemId = null,
   onUiResponseArtifactSelect,
+  onHtmlOutputSelect,
   onApprove,
   onDeny,
   onInputAnswer,
@@ -238,8 +245,15 @@ export const SessionTranscript: FC<SessionTranscriptProps> = ({
             const isActionableInput =
               entry.kind === 'input-request' && actionableInputIds.has(entry.id)
             const hasUiResponseArtifact = hasArtifact(entry)
+            const htmlOutput =
+              entry.kind === 'message' && entry.actor === 'assistant'
+                ? htmlOutputByItemId[entry.id]
+                : undefined
+            const hasHtmlOutput = htmlOutput !== undefined
             const isSelectedUiResponseArtifact =
               hasUiResponseArtifact && entry.id === selectedUiResponseItemId
+            const isSelectedHtmlOutput =
+              hasHtmlOutput && entry.id === selectedHtmlOutputItemId
 
             return (
               <div
@@ -250,13 +264,18 @@ export const SessionTranscript: FC<SessionTranscriptProps> = ({
                 data-ui-response-artifact={
                   hasUiResponseArtifact ? true : undefined
                 }
+                data-html-output={hasHtmlOutput ? true : undefined}
                 data-selected-ui-response-artifact={
                   isSelectedUiResponseArtifact ? true : undefined
+                }
+                data-selected-html-output={
+                  isSelectedHtmlOutput ? true : undefined
                 }
                 className={cn(
                   'absolute top-0 left-0 w-full rounded-md transition-colors',
                   hasUiResponseArtifact && 'cursor-pointer',
-                  isSelectedUiResponseArtifact && 'bg-muted/20',
+                  (isSelectedUiResponseArtifact || isSelectedHtmlOutput) &&
+                    'bg-muted/20',
                 )}
                 style={{
                   transform: `translateY(${virtualItem.start}px)`,
@@ -283,6 +302,7 @@ export const SessionTranscript: FC<SessionTranscriptProps> = ({
                   entry={entry}
                   sessionId={session.id}
                   injectedContextText={renderEntry.injectedContextText}
+                  htmlOutput={htmlOutput}
                   turnStartedAt={
                     entry.turnId
                       ? (turnStartedAtById.get(entry.turnId) ?? null)
@@ -330,6 +350,7 @@ export const SessionTranscript: FC<SessionTranscriptProps> = ({
                         }
                       : undefined
                   }
+                  onHtmlOutputOpen={onHtmlOutputSelect}
                 />
               </div>
             )

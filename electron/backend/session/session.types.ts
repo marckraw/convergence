@@ -55,6 +55,7 @@ export interface SessionSummary {
   parentSessionId: string | null
   forkStrategy: ForkStrategy | null
   primarySurface: PrimarySurface
+  htmlModeEnabled?: boolean
   continuationToken: string | null
   lastSequence: number
   createdAt: string
@@ -84,6 +85,7 @@ interface CreateSessionBaseInput {
   parentSessionId?: string | null
   forkStrategy?: ForkStrategy | null
   primarySurface?: PrimarySurface
+  htmlModeEnabled?: boolean
 }
 
 export type CreateSessionInput =
@@ -163,6 +165,7 @@ export function sessionSummaryFromRow(row: SessionRow): SessionSummary {
     parentSessionId: row.parent_session_id,
     forkStrategy: parseForkStrategy(row.fork_strategy),
     primarySurface: parsePrimarySurface(row.primary_surface),
+    htmlModeEnabled: row.html_mode_enabled === 1,
     continuationToken: row.continuation_token,
     lastSequence: row.last_sequence ?? 0,
     createdAt: row.created_at,

@@ -55,6 +55,7 @@ import { AppSettingsService } from '../backend/app-settings/app-settings.service
 import { AnalyticsService } from '../backend/analytics/analytics.service'
 import { CodexQuotaService } from '../backend/provider-quota/codex-quota.service'
 import { AttachmentsService } from '../backend/attachments/attachments.service'
+import { SessionHtmlOutputService } from '../backend/session-html-output/session-html-output.service'
 import { NotificationsService } from '../backend/notifications/notifications.service'
 import { NotificationsStateService } from '../backend/notifications/notifications.state'
 import { DockBadgeService } from '../backend/notifications/notifications.dock-badge'
@@ -192,6 +193,7 @@ async function startApp(): Promise<void> {
   const dbPath = join(app.getPath('userData'), 'convergence.db')
   const workspacesRoot = join(app.getPath('userData'), 'workspaces')
   const attachmentsRoot = join(app.getPath('userData'), 'attachments')
+  const sessionOutputsRoot = join(app.getPath('userData'), 'session-outputs')
   const spacesRoot = join(app.getPath('userData'), 'spaces')
   const globalSessionsRoot = join(app.getPath('userData'), 'global-sessions')
   loadEnvFile(join(app.getAppPath(), '.env'))
@@ -243,11 +245,16 @@ async function startApp(): Promise<void> {
     sessions: sessionService,
   })
   const attachmentsService = new AttachmentsService(db, attachmentsRoot)
+  const sessionHtmlOutputService = new SessionHtmlOutputService(
+    db,
+    sessionOutputsRoot,
+  )
   const feedbackService = new FeedbackService({
     appVersion: app.getVersion(),
     platform: process.platform,
   })
   sessionService.setAttachmentsService(attachmentsService)
+  sessionService.setHtmlOutputService(sessionHtmlOutputService)
   sessionService.setSessionContextInjectionService(
     sessionContextInjectionService,
   )
@@ -260,8 +267,9 @@ async function startApp(): Promise<void> {
   try {
     const liveSessionIds = sessionService.getAllSummaries().map((s) => s.id)
     await attachmentsService.sweepOrphans(liveSessionIds)
+    await sessionHtmlOutputService.sweepOrphans(liveSessionIds)
   } catch (err) {
-    console.warn('Attachment orphan sweep failed:', err)
+    console.warn('Session file orphan sweep failed:', err)
   }
 
   // Detect and register real providers
@@ -524,6 +532,7 @@ async function startApp(): Promise<void> {
     openRouterCredentials,
     analyticsService,
     attachmentsService,
+    sessionHtmlOutputService,
     turnCaptureService,
     projectContextService,
     spaceSynthesisService,

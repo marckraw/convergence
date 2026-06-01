@@ -58,6 +58,10 @@ describe('ComposerContainer', () => {
     const createAndStartSession = vi.fn()
     const createAndStartGlobalSession = vi.fn()
     const sendMessageToSession = vi.fn()
+    const setHtmlModeEnabled = vi.fn().mockResolvedValue({
+      id: 'session-1',
+      htmlModeEnabled: true,
+    })
     const cancelQueuedInput = vi.fn()
     const testMidRunInput = {
       supportsAnswer: false,
@@ -165,6 +169,7 @@ describe('ComposerContainer', () => {
       createAndStartSession,
       createAndStartGlobalSession,
       sendMessageToSession,
+      setHtmlModeEnabled,
       cancelQueuedInput,
       error: null,
     })
@@ -432,6 +437,65 @@ describe('ComposerContainer', () => {
       undefined,
       undefined,
       { preset: 'yolo' },
+    )
+  })
+
+  it('passes htmlModeEnabled when the new-session composer toggle is enabled', () => {
+    render(
+      <ComposerContainer
+        context={{
+          kind: 'project',
+          projectId: 'project-1',
+          workspaceId: null,
+          activeSessionId: null,
+        }}
+      />,
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: 'Turn HTML mode on' }))
+
+    const textbox = screen.getByRole('textbox')
+    fireEvent.change(textbox, {
+      target: { value: 'Create the architecture note' },
+    })
+    fireEvent.keyDown(textbox, { key: 'Enter', metaKey: true })
+
+    expect(
+      useSessionStore.getState().createAndStartSession,
+    ).toHaveBeenCalledWith(
+      'project-1',
+      null,
+      'claude-code',
+      'claude-sonnet',
+      'medium',
+      'Create the architecture note',
+      'Create the architecture note',
+      undefined,
+      undefined,
+      undefined,
+      { preset: 'ask' },
+      true,
+    )
+  })
+
+  it('persists html mode changes for an active session', async () => {
+    render(
+      <ComposerContainer
+        context={{
+          kind: 'project',
+          projectId: 'project-1',
+          workspaceId: null,
+          activeSessionId: 'session-1',
+        }}
+      />,
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: 'Turn HTML mode on' }))
+
+    await waitFor(() =>
+      expect(
+        useSessionStore.getState().setHtmlModeEnabled,
+      ).toHaveBeenCalledWith('session-1', true),
     )
   })
 

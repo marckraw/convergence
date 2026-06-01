@@ -21,6 +21,7 @@ import type {
 } from '../provider/provider.types'
 import type { ProviderAttachmentCapability } from '../provider/provider.types'
 import { AttachmentsService } from '../attachments/attachments.service'
+import { SessionHtmlOutputService } from '../session-html-output/session-html-output.service'
 import { ProjectContextService } from '../project-context/project-context.service'
 import { SessionContextInjectionService } from './context-injection/session-context-injection.service'
 import type {
@@ -2007,6 +2008,193 @@ describe('SessionService attachments integration', () => {
       await expect(
         service.sendMessage(session.id, { text: 'hello' }),
       ).rejects.toThrow(/shell provider/)
+    })
+  })
+
+  describe('html mode', () => {
+    it('defaults htmlModeEnabled to false and persists create-time opt in', () => {
+      const defaultSession = service.create({
+        projectId,
+        workspaceId: null,
+        providerId: 'test-provider',
+        model: 'test-model',
+        effort: null,
+        name: 'convo',
+      })
+      expect(defaultSession.htmlModeEnabled).toBe(false)
+
+      const htmlSession = service.create({
+        projectId,
+        workspaceId: null,
+        providerId: 'test-provider',
+        model: 'test-model',
+        effort: null,
+        name: 'html convo',
+        htmlModeEnabled: true,
+      })
+      expect(htmlSession.htmlModeEnabled).toBe(true)
+      expect(service.getSummaryById(htmlSession.id)?.htmlModeEnabled).toBe(true)
+    })
+
+    it('setHtmlModeEnabled flips the stored value and broadcasts the update', () => {
+      const summaries: Array<{ id: string; htmlModeEnabled: boolean }> = []
+      service.setSummaryUpdateListener((summary) => {
+        summaries.push({
+          id: summary.id,
+          htmlModeEnabled: summary.htmlModeEnabled ?? false,
+        })
+      })
+
+      const session = service.create({
+        projectId,
+        workspaceId: null,
+        providerId: 'test-provider',
+        model: 'test-model',
+        effort: null,
+        name: 'convo',
+      })
+
+      const enabled = service.setHtmlModeEnabled(session.id, true)
+      expect(enabled.htmlModeEnabled).toBe(true)
+      expect(summaries.at(-1)).toEqual({
+        id: session.id,
+        htmlModeEnabled: true,
+      })
+
+      const disabled = service.setHtmlModeEnabled(session.id, false)
+      expect(disabled.htmlModeEnabled).toBe(false)
+      expect(service.getSummaryById(session.id)?.htmlModeEnabled).toBe(false)
+    })
+
+    it('runs secondary HTML generation for completed assistant messages when enabled', async () => {
+      vi.useRealTimers()
+      const oneShot = vi.fn(async () => ({
+        text: '<!doctype html><html><body>HTML mode</body></html>',
+      }))
+      const db = getDatabase()
+      const htmlRegistry = new ProviderRegistry()
+      htmlRegistry.register({
+        id: 'html-provider',
+        name: 'HTML Provider',
+        supportsContinuation: false,
+        describe: async () => ({
+          id: 'html-provider',
+          name: 'HTML Provider',
+          vendorLabel: 'Test',
+          kind: 'conversation',
+          supportsContinuation: false,
+          defaultModelId: 'html-model',
+          modelOptions: [],
+          attachments: TEST_ATTACHMENT_CAPABILITY,
+          midRunInput: NO_MID_RUN_INPUT_CAPABILITY,
+        }),
+        oneShot,
+        start: () => {
+          const deltas: SessionDelta[] = [
+            {
+              kind: 'conversation.item.add',
+              item: {
+                id: 'user-item',
+                kind: 'message',
+                state: 'complete',
+                turnId: null,
+                actor: 'user',
+                text: 'Make this visual.',
+                createdAt: now(),
+                updatedAt: now(),
+                providerMeta: {
+                  providerId: 'html-provider',
+                  providerItemId: null,
+                  providerEventType: 'user',
+                },
+              },
+            },
+            {
+              kind: 'conversation.item.add',
+              item: {
+                id: 'assistant-item',
+                kind: 'message',
+                state: 'complete',
+                turnId: null,
+                actor: 'assistant',
+                text: 'Here is the Markdown answer.',
+                createdAt: now(),
+                updatedAt: now(),
+                providerMeta: {
+                  providerId: 'html-provider',
+                  providerItemId: null,
+                  providerEventType: 'assistant',
+                },
+              },
+            },
+          ]
+
+          return {
+            onDelta: (callback) => {
+              deltas.forEach(callback)
+            },
+            onStatusChange: () => {},
+            onAttentionChange: () => {},
+            onContextWindowChange: () => {},
+            onActivityChange: () => {},
+            onContinuationToken: () => {},
+            sendMessage: () => {},
+            approve: () => {},
+            deny: () => {},
+            stop: () => {},
+          } satisfies SessionHandle
+        },
+      })
+      service = new SessionService(
+        db,
+        htmlRegistry,
+        join(tempDir, 'global-html'),
+      )
+      const htmlOutputs = new SessionHtmlOutputService(
+        db,
+        join(tempDir, 'session-outputs'),
+      )
+      service.setHtmlOutputService(htmlOutputs)
+
+      const session = service.create({
+        projectId,
+        workspaceId: null,
+        providerId: 'html-provider',
+        model: 'html-model',
+        effort: null,
+        name: 'html convo',
+        htmlModeEnabled: true,
+      })
+
+      await service.start(session.id, { text: 'Make this visual.' })
+      let outputs = htmlOutputs.listForSession(session.id)
+      for (let attempt = 0; attempt < 20 && outputs.length < 2; attempt += 1) {
+        await new Promise((resolve) => setTimeout(resolve, 5))
+        outputs = htmlOutputs.listForSession(session.id)
+      }
+
+      expect(oneShot).toHaveBeenCalled()
+      const snapshot = outputs.find((output) => output.kind === 'snapshot')
+      const living = outputs.find((output) => output.kind === 'living')
+      expect(outputs).toHaveLength(2)
+      expect(snapshot).toMatchObject({
+        sourceItemId: 'assistant-item',
+        kind: 'snapshot',
+        status: 'ready',
+        relativePath: 'snapshots/turn-2.html',
+      })
+      expect(living).toMatchObject({
+        sourceItemId: 'assistant-item',
+        kind: 'living',
+        status: 'ready',
+        relativePath: 'index.html',
+      })
+      await expect(htmlOutputs.readHtml(snapshot?.id ?? '')).resolves.toContain(
+        'HTML mode',
+      )
+      await expect(htmlOutputs.readHtml(living?.id ?? '')).resolves.toContain(
+        'HTML mode',
+      )
     })
   })
 })
