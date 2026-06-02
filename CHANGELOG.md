@@ -1,5 +1,11 @@
 # convergence
 
+## 0.38.3
+
+### Patch Changes
+
+- 764a70b: Add keyboard-first composer injection pickers for context, skills, and prompts.
+
 ## 0.38.2
 
 ### Patch Changes
