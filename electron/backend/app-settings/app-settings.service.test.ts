@@ -82,6 +82,17 @@ function buildDescriptors(): ProviderDescriptor[] {
       defaultModelId: 'gpt-5.4',
       modelOptions: [
         {
+          id: 'gpt-5.5',
+          label: 'GPT-5.5',
+          defaultEffort: 'medium',
+          effortOptions: [
+            { id: 'minimal', label: 'Minimal' },
+            { id: 'low', label: 'Low' },
+            { id: 'medium', label: 'Medium' },
+            { id: 'high', label: 'High' },
+          ],
+        },
+        {
           id: 'gpt-5.4',
           label: 'GPT-5.4',
           defaultEffort: 'medium',
@@ -168,6 +179,7 @@ describe('AppSettingsService', () => {
         defaultEffortId: null,
         namingModelByProvider: {},
         extractionModelByProvider: {},
+        guidedReviewModelByProvider: {},
         notifications: DEFAULT_NOTIFICATION_PREFS,
         onboarding: DEFAULT_ONBOARDING_PREFS,
         updates: DEFAULT_UPDATE_PREFS,
@@ -184,6 +196,7 @@ describe('AppSettingsService', () => {
         defaultEffortId: 'high',
         namingModelByProvider: {},
         extractionModelByProvider: {},
+        guidedReviewModelByProvider: {},
         notifications: DEFAULT_NOTIFICATION_PREFS,
         onboarding: DEFAULT_ONBOARDING_PREFS,
         updates: DEFAULT_UPDATE_PREFS,
@@ -198,6 +211,7 @@ describe('AppSettingsService', () => {
         defaultEffortId: 'high',
         namingModelByProvider: {},
         extractionModelByProvider: {},
+        guidedReviewModelByProvider: {},
         notifications: DEFAULT_NOTIFICATION_PREFS,
         onboarding: DEFAULT_ONBOARDING_PREFS,
         updates: DEFAULT_UPDATE_PREFS,
@@ -223,6 +237,7 @@ describe('AppSettingsService', () => {
         defaultEffortId: null,
         namingModelByProvider: {},
         extractionModelByProvider: {},
+        guidedReviewModelByProvider: {},
         notifications: DEFAULT_NOTIFICATION_PREFS,
         onboarding: DEFAULT_ONBOARDING_PREFS,
         updates: DEFAULT_UPDATE_PREFS,
@@ -248,6 +263,7 @@ describe('AppSettingsService', () => {
         defaultEffortId: null,
         namingModelByProvider: {},
         extractionModelByProvider: {},
+        guidedReviewModelByProvider: {},
         notifications: DEFAULT_NOTIFICATION_PREFS,
         onboarding: DEFAULT_ONBOARDING_PREFS,
         updates: DEFAULT_UPDATE_PREFS,
@@ -273,6 +289,7 @@ describe('AppSettingsService', () => {
         defaultEffortId: null,
         namingModelByProvider: {},
         extractionModelByProvider: {},
+        guidedReviewModelByProvider: {},
         notifications: DEFAULT_NOTIFICATION_PREFS,
         onboarding: DEFAULT_ONBOARDING_PREFS,
         updates: DEFAULT_UPDATE_PREFS,
@@ -291,6 +308,7 @@ describe('AppSettingsService', () => {
         defaultEffortId: null,
         namingModelByProvider: {},
         extractionModelByProvider: {},
+        guidedReviewModelByProvider: {},
         notifications: DEFAULT_NOTIFICATION_PREFS,
         onboarding: DEFAULT_ONBOARDING_PREFS,
         updates: DEFAULT_UPDATE_PREFS,
@@ -425,6 +443,7 @@ describe('AppSettingsService', () => {
         defaultEffortId: null,
         namingModelByProvider: {},
         extractionModelByProvider: {},
+        guidedReviewModelByProvider: {},
         notifications: DEFAULT_NOTIFICATION_PREFS,
         onboarding: DEFAULT_ONBOARDING_PREFS,
         updates: DEFAULT_UPDATE_PREFS,
@@ -605,6 +624,39 @@ describe('AppSettingsService', () => {
       )
       const resolved = await service.resolveExtractionModel('claude-code')
       expect(resolved).toBe('sonnet')
+    })
+  })
+
+  describe('resolveGuidedReviewModel', () => {
+    it('defaults Claude Code guided review to Opus with medium effort', async () => {
+      const resolved = await service.resolveGuidedReviewModel('claude-code')
+      expect(resolved).toEqual({
+        modelId: 'opus',
+        effortId: 'medium',
+      })
+    })
+
+    it('defaults Codex guided review to GPT-5.5 with medium effort', async () => {
+      const resolved = await service.resolveGuidedReviewModel('codex')
+      expect(resolved).toEqual({
+        modelId: 'gpt-5.5',
+        effortId: 'medium',
+      })
+    })
+
+    it('returns the configured guided review override when valid', async () => {
+      await service.setAppSettings({
+        defaultProviderId: null,
+        defaultModelId: null,
+        defaultEffortId: null,
+        guidedReviewModelByProvider: { codex: 'gpt-5.4' },
+      })
+
+      const resolved = await service.resolveGuidedReviewModel('codex')
+      expect(resolved).toEqual({
+        modelId: 'gpt-5.4',
+        effortId: 'medium',
+      })
     })
   })
 

@@ -225,6 +225,7 @@ function primeStores(
       defaultEffortId: 'medium',
       namingModelByProvider: {},
       extractionModelByProvider: {},
+      guidedReviewModelByProvider: {},
     },
     isLoaded: true,
     isSaving: false,

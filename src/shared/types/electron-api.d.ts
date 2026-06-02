@@ -1866,6 +1866,7 @@ interface AppSettingsData {
   defaultEffortId: ReasoningEffort | null
   namingModelByProvider: Record<string, string>
   extractionModelByProvider: Record<string, string>
+  guidedReviewModelByProvider: Record<string, string>
   notifications: NotificationPrefsData
   onboarding: OnboardingPrefsData
   updates: UpdatePrefsData
@@ -1882,6 +1883,7 @@ type AppSettingsInputData = Omit<
   AppSettingsData,
   | 'namingModelByProvider'
   | 'extractionModelByProvider'
+  | 'guidedReviewModelByProvider'
   | 'notifications'
   | 'onboarding'
   | 'updates'
@@ -1891,6 +1893,7 @@ type AppSettingsInputData = Omit<
 > & {
   namingModelByProvider?: Record<string, string>
   extractionModelByProvider?: Record<string, string>
+  guidedReviewModelByProvider?: Record<string, string>
   notifications?: NotificationPrefsData
   onboarding?: OnboardingPrefsData
   updates?: UpdatePrefsData

@@ -413,6 +413,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
       defaultEffortId: string | null
       namingModelByProvider: Record<string, string>
       extractionModelByProvider: Record<string, string>
+      guidedReviewModelByProvider: Record<string, string>
       notifications?: unknown
       piModelVisibility?: unknown
       favoriteModels?: unknown

@@ -37,6 +37,7 @@ function primeStores(opts: {
       defaultEffortId: null,
       namingModelByProvider: {},
       extractionModelByProvider: {},
+      guidedReviewModelByProvider: {},
       notifications: DEFAULT_NOTIFICATION_PREFS,
       onboarding: {
         ...DEFAULT_ONBOARDING_PREFS,

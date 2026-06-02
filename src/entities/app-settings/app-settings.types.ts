@@ -52,6 +52,7 @@ export interface AppSettings {
   defaultEffortId: ReasoningEffort | null
   namingModelByProvider: Record<string, string>
   extractionModelByProvider: Record<string, string>
+  guidedReviewModelByProvider: Record<string, string>
   notifications: NotificationPrefs
   onboarding: OnboardingPrefs
   updates: UpdatePrefs
@@ -64,6 +65,7 @@ export type AppSettingsInput = Omit<
   AppSettings,
   | 'namingModelByProvider'
   | 'extractionModelByProvider'
+  | 'guidedReviewModelByProvider'
   | 'notifications'
   | 'onboarding'
   | 'updates'
@@ -73,6 +75,7 @@ export type AppSettingsInput = Omit<
 > & {
   namingModelByProvider?: Record<string, string>
   extractionModelByProvider?: Record<string, string>
+  guidedReviewModelByProvider?: Record<string, string>
   notifications?: NotificationPrefs
   onboarding?: OnboardingPrefs
   updates?: UpdatePrefs

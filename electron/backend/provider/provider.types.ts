@@ -244,6 +244,7 @@ export interface ProviderDescriptor {
 export interface OneShotInput {
   prompt: string
   modelId: string
+  effort?: ReasoningEffort | null
   workingDirectory: string
   timeoutMs?: number
   requestId?: string

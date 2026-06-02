@@ -24,7 +24,7 @@ import {
 
 interface CodeReviewGuideServiceDeps {
   providers: ProviderRegistry
-  appSettings: Pick<AppSettingsService, 'resolveExtractionModel'>
+  appSettings: Pick<AppSettingsService, 'resolveGuidedReviewModel'>
   sessions: Pick<SessionService, 'getSummaryById'>
   codeReview: Pick<CodeReviewService, 'getFilePatch'>
 }
@@ -108,11 +108,10 @@ export class CodeReviewGuideService {
       return this.generateDeterministicGuide(input)
     }
 
-    const modelId = await this.deps!.appSettings.resolveExtractionModel(
+    const modelDefaults = await this.deps!.appSettings.resolveGuidedReviewModel(
       providerContext.provider.id,
-      { preferFastDefault: true },
     )
-    if (!modelId) {
+    if (!modelDefaults) {
       return this.generateDeterministicGuide(input)
     }
 
@@ -127,7 +126,8 @@ export class CodeReviewGuideService {
 
     const firstRaw = await providerContext.provider.oneShot!({
       prompt,
-      modelId,
+      modelId: modelDefaults.modelId,
+      effort: modelDefaults.effortId,
       workingDirectory: providerContext.workingDirectory,
       timeoutMs: GUIDE_GENERATION_TIMEOUT_MS,
       requestId,
@@ -145,7 +145,8 @@ export class CodeReviewGuideService {
 
     const retryRaw = await providerContext.provider.oneShot!({
       prompt: prompt + CODE_REVIEW_GUIDE_RETRY_SUFFIX,
-      modelId,
+      modelId: modelDefaults.modelId,
+      effort: modelDefaults.effortId,
       workingDirectory: providerContext.workingDirectory,
       timeoutMs: GUIDE_GENERATION_TIMEOUT_MS,
       requestId,

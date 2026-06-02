@@ -74,6 +74,37 @@ describe('CodexProvider.oneShot progress emission', () => {
     expect(spawnMock.mock.calls[0][1]).not.toContain('--ask-for-approval')
   })
 
+  it('passes one-shot effort through config for Codex exec', async () => {
+    const child = new MockChildProcess()
+    spawnMock.mockReturnValue(child)
+
+    const provider = new CodexProvider('/bin/codex')
+
+    const promise = provider.oneShot({
+      prompt: 'hi',
+      modelId: 'gpt-5.5',
+      effort: 'medium',
+      workingDirectory: '/tmp',
+    })
+
+    child.stdout.end()
+    child.emit('exit', 0)
+
+    await promise
+    expect(spawnMock).toHaveBeenCalledWith(
+      '/bin/codex',
+      expect.arrayContaining([
+        '--model',
+        'gpt-5.5',
+        '-c',
+        'model_reasoning_effort="medium"',
+      ]),
+      expect.objectContaining({
+        cwd: '/tmp',
+      }),
+    )
+  })
+
   it('emits nothing when requestId is absent', async () => {
     const child = new MockChildProcess()
     spawnMock.mockReturnValue(child)
