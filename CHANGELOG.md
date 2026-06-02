@@ -1,5 +1,11 @@
 # convergence
 
+## 0.38.1
+
+### Patch Changes
+
+- de356e8: Add code review actions for checking out remote pull requests into local worktrees and starting follow-up sessions from the review surface.
+
 ## 0.38.0
 
 ### Minor Changes
