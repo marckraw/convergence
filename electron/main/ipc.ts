@@ -472,6 +472,12 @@ export function registerIpcHandlers(
     ) => pullRequestReviewService.prepareReviewSession(input),
   )
 
+  ipcMain.handle(
+    'pullRequest:materializeReviewWorkspace',
+    (_event, input: { projectId?: string | null; reference: string }) =>
+      pullRequestReviewService.materializeReviewWorkspace(input),
+  )
+
   // Review note handlers
   ipcMain.handle('reviewNotes:listBySession', (_event, sessionId: string) =>
     reviewNotesService.listBySession(sessionId),

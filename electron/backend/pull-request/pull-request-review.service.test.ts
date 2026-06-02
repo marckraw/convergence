@@ -172,6 +172,41 @@ describe('PullRequestReviewService', () => {
     })
   })
 
+  it('materializes a review workspace without starting a session', async () => {
+    const deps = makeDeps()
+    const service = new PullRequestReviewService(deps)
+
+    await expect(
+      service.materializeReviewWorkspace({
+        projectId: 'project-1',
+        reference: '123',
+      }),
+    ).resolves.toEqual({
+      workspace,
+      pullRequest: cachedPullRequest,
+      created: true,
+      refreshed: false,
+    })
+
+    expect(deps.git.fetchPullRequestHead).toHaveBeenCalledWith({
+      repoPath: '/repo',
+      number: 123,
+      localBranch: 'convergence/pr-123',
+    })
+    expect(deps.workspaces.create).toHaveBeenCalledWith({
+      projectId: 'project-1',
+      branchName: 'convergence/pr-123',
+    })
+    expect(deps.pullRequests.upsertForWorkspace).toHaveBeenCalledWith(
+      expect.objectContaining({
+        projectId: 'project-1',
+        workspaceId: 'workspace-1',
+      }),
+    )
+    expect(deps.sessions.create).not.toHaveBeenCalled()
+    expect(deps.sessions.start).not.toHaveBeenCalled()
+  })
+
   it('reuses an existing clean review workspace', async () => {
     const deps = makeDeps({ existingWorkspace: workspace })
     const service = new PullRequestReviewService(deps)
@@ -192,6 +227,31 @@ describe('PullRequestReviewService', () => {
     expect(deps.workspaces.create).not.toHaveBeenCalled()
   })
 
+  it('materializes an existing clean review workspace as a refresh', async () => {
+    const deps = makeDeps({ existingWorkspace: workspace })
+    const service = new PullRequestReviewService(deps)
+
+    await expect(
+      service.materializeReviewWorkspace({
+        projectId: 'project-1',
+        reference: '123',
+      }),
+    ).resolves.toMatchObject({
+      workspace,
+      pullRequest: cachedPullRequest,
+      created: false,
+      refreshed: true,
+    })
+
+    expect(deps.git.fetchPullRequestHead).not.toHaveBeenCalled()
+    expect(deps.git.updateWorktreeToPullRequestHead).toHaveBeenCalledWith({
+      worktreePath: workspace.path,
+      number: 123,
+    })
+    expect(deps.workspaces.create).not.toHaveBeenCalled()
+    expect(deps.sessions.create).not.toHaveBeenCalled()
+  })
+
   it('blocks dirty existing review workspaces', async () => {
     const deps = makeDeps({ existingWorkspace: workspace, dirty: true })
     const service = new PullRequestReviewService(deps)
@@ -205,6 +265,21 @@ describe('PullRequestReviewService', () => {
         effort: 'medium',
       }),
     ).rejects.toThrow('existing review Workspace has local changes')
+  })
+
+  it('blocks dirty existing review workspaces during materialization', async () => {
+    const deps = makeDeps({ existingWorkspace: workspace, dirty: true })
+    const service = new PullRequestReviewService(deps)
+
+    await expect(
+      service.materializeReviewWorkspace({
+        projectId: 'project-1',
+        reference: '123',
+      }),
+    ).rejects.toThrow('existing review Workspace has local changes')
+
+    expect(deps.git.updateWorktreeToPullRequestHead).not.toHaveBeenCalled()
+    expect(deps.sessions.create).not.toHaveBeenCalled()
   })
 
   it('requires a configured project for pull request URLs', async () => {

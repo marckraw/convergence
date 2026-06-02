@@ -26,6 +26,26 @@ Agents are not permitted to run `npm run dev` in this repo. When local UI
 testing is needed, tell the user what to verify and ask them to run
 `npm run dev` themselves.
 
+## Planning and documentation ownership
+
+Roadmap, feature planning, PRDs, product specs, implementation plans, and task
+breakdowns belong in Linear, not in this repository. When a feature needs a
+spec or phased plan, create or update a Linear project document and Linear
+issues in the `convergence` project. Do not add feature-roadmap files under
+`docs/specs/` or elsewhere in the repo unless the user explicitly asks for a
+repo-local artifact.
+
+Repo documentation is reserved for durable engineering knowledge that code
+authors and reviewers need while changing the codebase:
+
+- ADRs for important architecture decisions and tradeoffs;
+- architecture references, runbooks, and operational constraints;
+- code-facing domain documentation that should version with implementation;
+- agent instructions and issue-tracker conventions.
+
+Rule of thumb: if the content describes what to build next, track it in Linear;
+if it records a long-lived code or architecture decision, keep it in the repo.
+
 ## Prettier formatting
 
 Always accept Prettier's reformatting. `chaperone check --fix` runs Prettier
@@ -52,7 +72,7 @@ everyone on that arch — see `docs/specs/auto-updates.md` and
 
 ## Architecture and File Organization
 
-Source of truth:
+Durable repo source of truth:
 
 - `docs/specs/project-spec.md`
 - `docs/specs/phase-0-repo-bootstrap.md`

@@ -160,6 +160,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
       effort: string | null
       sessionName?: string
     }) => ipcRenderer.invoke('pullRequest:prepareReviewSession', input),
+    materializeReviewWorkspace: (input: {
+      projectId?: string | null
+      reference: string
+    }) => ipcRenderer.invoke('pullRequest:materializeReviewWorkspace', input),
   },
   reviewNotes: {
     listBySession: (sessionId: string) =>

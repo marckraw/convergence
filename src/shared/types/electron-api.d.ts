@@ -435,6 +435,13 @@ interface PullRequestReviewSessionResultData {
   session: SessionSummaryData
 }
 
+interface PullRequestReviewWorkspaceResultData {
+  workspace: WorkspaceData
+  pullRequest: WorkspacePullRequestData
+  created: boolean
+  refreshed: boolean
+}
+
 type ReviewNoteModeData = 'working-tree' | 'base-branch'
 type ReviewNoteStateData = 'draft' | 'sent' | 'resolved'
 
@@ -1433,6 +1440,10 @@ interface ElectronAPI {
     prepareReviewSession: (
       input: PreparePullRequestReviewSessionInputData,
     ) => Promise<PullRequestReviewSessionResultData>
+    materializeReviewWorkspace: (input: {
+      projectId?: string | null
+      reference: string
+    }) => Promise<PullRequestReviewWorkspaceResultData>
   }
   reviewNotes: {
     listBySession: (sessionId: string) => Promise<ReviewNoteData[]>

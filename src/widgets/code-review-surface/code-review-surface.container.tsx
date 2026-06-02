@@ -18,13 +18,19 @@ import {
   buildDeterministicCodeReviewGuide,
   useCodeReviewGuideStore,
 } from '@/entities/code-review-guide'
+import { useDialogStore } from '@/entities/dialog'
 import { useProjectStore } from '@/entities/project'
+import {
+  pullRequestReviewApi,
+  usePullRequestStore,
+} from '@/entities/pull-request'
 import {
   selectReviewNotesForSession,
   useReviewNoteStore,
   type ReviewNote,
 } from '@/entities/review-note'
 import { useSessionStore } from '@/entities/session'
+import { useWorkspaceStore } from '@/entities/workspace'
 import {
   buildFileLevelReviewNoteDiff,
   countDraftReviewNotes,
@@ -95,6 +101,46 @@ function getInitialReviewRailState(): {
   }
 }
 
+function formatPullRequestCheckoutError(err: unknown): string {
+  const message =
+    err instanceof Error ? err.message : 'Failed to check out pull request'
+  const normalized = message.toLowerCase()
+
+  if (
+    normalized.includes('existing review workspace has local changes') ||
+    normalized.includes('local changes')
+  ) {
+    return 'The existing PR worktree has local changes. Clean or archive it before refreshing this pull request.'
+  }
+
+  if (message.startsWith('GitHub CLI')) return message
+  if (message.startsWith('Pull Request #')) return message
+  return `Failed to check out pull request: ${message}`
+}
+
+function findMaterializedPullRequestTarget(input: {
+  targets: CodeReviewTarget[]
+  workspaceId: string
+  pullRequestNumber: number
+}): CodeReviewTarget | null {
+  return (
+    input.targets.find(
+      (target) =>
+        target.source === 'pull-request' &&
+        target.workspaceId === input.workspaceId,
+    ) ??
+    input.targets.find(
+      (target) =>
+        target.source === 'pull-request' &&
+        !!target.workspaceId &&
+        target.pullRequestNumber === input.pullRequestNumber,
+    ) ??
+    input.targets.find((target) => target.workspaceId === input.workspaceId) ??
+    input.targets[0] ??
+    null
+  )
+}
+
 export const CodeReviewSurface: FC<CodeReviewSurfaceProps> = ({
   routeTargetId = null,
   routeMode = 'working-tree',
@@ -105,6 +151,7 @@ export const CodeReviewSurface: FC<CodeReviewSurfaceProps> = ({
 }) => {
   const activeProject = useProjectStore((state) => state.activeProject)
   const activeSessionId = useSessionStore((state) => state.activeSessionId)
+  const openDialog = useDialogStore((state) => state.open)
   const targets = useCodeReviewStore((state) => state.targets)
   const selectedTarget = useCodeReviewStore((state) => state.selectedTarget)
   const selectedMode = useCodeReviewStore((state) => state.selectedMode)
@@ -136,6 +183,13 @@ export const CodeReviewSurface: FC<CodeReviewSurfaceProps> = ({
   const setSelectedView = useCodeReviewStore((state) => state.setSelectedView)
   const setSelectedFile = useCodeReviewStore((state) => state.setSelectedFile)
   const closeReview = useCodeReviewStore((state) => state.closeReview)
+  const loadWorkspaces = useWorkspaceStore((state) => state.loadWorkspaces)
+  const loadGlobalWorkspaces = useWorkspaceStore(
+    (state) => state.loadGlobalWorkspaces,
+  )
+  const loadPullRequestsByProjectId = usePullRequestStore(
+    (state) => state.loadByProjectId,
+  )
   const guidesByKey = useCodeReviewGuideStore((state) => state.guidesByKey)
   const loadingGuideKeys = useCodeReviewGuideStore(
     (state) => state.loadingGuideKeys,
@@ -187,6 +241,9 @@ export const CodeReviewSurface: FC<CodeReviewSurfaceProps> = ({
   )
   const [diffFocusActive, setDiffFocusActive] = useState(false)
   const [pendingView, setPendingView] = useState<CodeReviewView | null>(null)
+  const [materializingPullRequest, setMaterializingPullRequest] =
+    useState(false)
+  const [checkoutError, setCheckoutError] = useState<string | null>(null)
   const railsBeforeDiffFocusRef = useRef({
     targetRailCollapsed: false,
     notesRailCollapsed: false,
@@ -204,12 +261,6 @@ export const CodeReviewSurface: FC<CodeReviewSurfaceProps> = ({
       sessionId: activeSessionId,
     })
   }, [activeProject, activeSessionId, loadTargets])
-
-  useEffect(() => {
-    if (selectedMode !== routeMode) {
-      setSelectedMode(routeMode)
-    }
-  }, [routeMode, selectedMode, setSelectedMode])
 
   useEffect(() => {
     if (selectedView !== routeView) {
@@ -232,11 +283,31 @@ export const CodeReviewSurface: FC<CodeReviewSurfaceProps> = ({
     setSelectedTarget(nextTarget)
   }, [routeTargetId, selectedTarget?.id, setSelectedTarget, targets])
 
+  const selectedTargetSupportsBaseBranch = Boolean(selectedTarget?.sessionId)
+  const effectiveMode: CodeReviewMode =
+    selectedMode === 'base-branch' && !selectedTargetSupportsBaseBranch
+      ? 'working-tree'
+      : selectedMode
+
   useEffect(() => {
-    if (selectedMode === 'base-branch' && !selectedTarget?.sessionId) {
-      setSelectedMode('working-tree')
+    if (routeMode === 'base-branch' && !selectedTargetSupportsBaseBranch) {
+      return
     }
-  }, [selectedMode, selectedTarget?.sessionId, setSelectedMode])
+    if (selectedMode !== routeMode) {
+      setSelectedMode(routeMode)
+    }
+  }, [
+    routeMode,
+    selectedMode,
+    selectedTargetSupportsBaseBranch,
+    setSelectedMode,
+  ])
+
+  useEffect(() => {
+    if (selectedMode === effectiveMode) return
+    setSelectedMode(effectiveMode)
+    onRouteSearchChange?.({ mode: effectiveMode, file: null })
+  }, [effectiveMode, onRouteSearchChange, selectedMode, setSelectedMode])
 
   useEffect(() => {
     if (!pendingView || selectedView !== pendingView) return
@@ -247,8 +318,8 @@ export const CodeReviewSurface: FC<CodeReviewSurfaceProps> = ({
 
   const summaryInput = useMemo(
     () =>
-      selectedTarget ? { target: selectedTarget, mode: selectedMode } : null,
-    [selectedMode, selectedTarget],
+      selectedTarget ? { target: selectedTarget, mode: effectiveMode } : null,
+    [effectiveMode, selectedTarget],
   )
   const summarySelectionKey = summaryInput
     ? buildCodeReviewSummarySelectionKey(summaryInput)
@@ -277,11 +348,11 @@ export const CodeReviewSurface: FC<CodeReviewSurfaceProps> = ({
       selectedTarget && summary?.cacheIdentity
         ? {
             target: selectedTarget,
-            mode: selectedMode,
+            mode: effectiveMode,
             cacheIdentity: summary.cacheIdentity,
           }
         : null,
-    [selectedMode, selectedTarget, summary?.cacheIdentity],
+    [effectiveMode, selectedTarget, summary?.cacheIdentity],
   )
   const guideKey = guideInput ? buildCodeReviewGuideKey(guideInput) : ''
   const guide = guideKey ? (guidesByKey[guideKey] ?? null) : null
@@ -327,12 +398,17 @@ export const CodeReviewSurface: FC<CodeReviewSurfaceProps> = ({
       selectedTarget && selectedVisibleFile
         ? {
             target: selectedTarget,
-            mode: selectedMode,
+            mode: effectiveMode,
             filePath: selectedVisibleFile,
             cacheIdentity: summary?.cacheIdentity,
           }
         : null,
-    [selectedMode, selectedTarget, selectedVisibleFile, summary?.cacheIdentity],
+    [
+      effectiveMode,
+      selectedTarget,
+      selectedVisibleFile,
+      summary?.cacheIdentity,
+    ],
   )
   const patchKey =
     patchInput && patchInput.cacheIdentity
@@ -359,13 +435,13 @@ export const CodeReviewSurface: FC<CodeReviewSurfaceProps> = ({
       guideFilePaths.map((filePath) => {
         const key = buildCodeReviewFilePatchKey({
           target: selectedTarget,
-          mode: selectedMode,
+          mode: effectiveMode,
           filePath,
           cacheIdentity: summary.cacheIdentity,
         })
         const selectionKey = buildCodeReviewFilePatchSelectionKey({
           target: selectedTarget,
-          mode: selectedMode,
+          mode: effectiveMode,
           filePath,
         })
         const activeKey = filePatchKeysBySelectionKey[selectionKey] ?? key
@@ -375,8 +451,8 @@ export const CodeReviewSurface: FC<CodeReviewSurfaceProps> = ({
   }, [
     filePatchKeysBySelectionKey,
     filePatchesByKey,
+    effectiveMode,
     guideFilePaths,
-    selectedMode,
     selectedTarget,
     summary?.cacheIdentity,
   ])
@@ -388,7 +464,7 @@ export const CodeReviewSurface: FC<CodeReviewSurfaceProps> = ({
       guideFilePaths.map((filePath) => {
         const key = buildCodeReviewFilePatchKey({
           target: selectedTarget,
-          mode: selectedMode,
+          mode: effectiveMode,
           filePath,
           cacheIdentity: summary.cacheIdentity,
         })
@@ -398,15 +474,18 @@ export const CodeReviewSurface: FC<CodeReviewSurfaceProps> = ({
   }, [
     guideFilePaths,
     loadingFilePatchKeys,
-    selectedMode,
+    effectiveMode,
     selectedTarget,
     summary?.cacheIdentity,
   ])
   const currentReviewNoteMode =
-    selectedMode === 'base-branch' ? 'base-branch' : 'working-tree'
+    effectiveMode === 'base-branch' ? 'base-branch' : 'working-tree'
   const remotePullRequestSelected = selectedTarget
     ? isRemotePullRequestTarget(selectedTarget)
     : false
+  const workspaceBackedPullRequestSelected = Boolean(
+    selectedTarget?.source === 'pull-request' && selectedTarget.workspaceId,
+  )
   const diffLines = useMemo(
     () => parseUnifiedDiffForReviewAnchors(diff),
     [diff],
@@ -532,15 +611,15 @@ export const CodeReviewSurface: FC<CodeReviewSurfaceProps> = ({
     for (const filePath of guideFilePaths) {
       void loadFilePatch({
         target: selectedTarget,
-        mode: selectedMode,
+        mode: effectiveMode,
         filePath,
         cacheIdentity: summary.cacheIdentity,
       })
     }
   }, [
+    effectiveMode,
     guideFilePaths,
     loadFilePatch,
-    selectedMode,
     selectedTarget,
     selectedView,
     summary?.cacheIdentity,
@@ -614,11 +693,11 @@ export const CodeReviewSurface: FC<CodeReviewSurfaceProps> = ({
     setFileNoteComposerOpen(false)
     setFileNoteDraftBody('')
     setPacketPreviewOpen(false)
-  }, [selectedTarget?.id, selectedMode, selectedFile, diff])
+  }, [selectedTarget?.id, effectiveMode, selectedFile, diff])
 
   useEffect(() => {
     if (!pendingReviewNoteSelection) return
-    if (selectedMode !== pendingReviewNoteSelection.mode) return
+    if (effectiveMode !== pendingReviewNoteSelection.mode) return
     if (selectedVisibleFile !== pendingReviewNoteSelection.filePath) return
     if (diffLoading || diffLines.length === 0) return
 
@@ -632,8 +711,8 @@ export const CodeReviewSurface: FC<CodeReviewSurfaceProps> = ({
   }, [
     diffLines,
     diffLoading,
+    effectiveMode,
     pendingReviewNoteSelection,
-    selectedMode,
     selectedVisibleFile,
   ])
 
@@ -654,6 +733,7 @@ export const CodeReviewSurface: FC<CodeReviewSurfaceProps> = ({
 
   const handleSelectTarget = useCallback(
     (target: CodeReviewTarget) => {
+      setCheckoutError(null)
       setHoldEmptySelection(false)
       setSelectedTarget(target)
       setSelectedFile(null)
@@ -665,13 +745,22 @@ export const CodeReviewSurface: FC<CodeReviewSurfaceProps> = ({
 
   const handleModeChange = useCallback(
     (mode: CodeReviewMode) => {
+      const nextMode =
+        mode === 'base-branch' && !selectedTargetSupportsBaseBranch
+          ? 'working-tree'
+          : mode
       setHoldEmptySelection(false)
-      setSelectedMode(mode)
+      setSelectedMode(nextMode)
       setSelectedFile(null)
       setStatusFilter('all')
-      onRouteSearchChange?.({ mode, file: null })
+      onRouteSearchChange?.({ mode: nextMode, file: null })
     },
-    [onRouteSearchChange, setSelectedFile, setSelectedMode],
+    [
+      onRouteSearchChange,
+      selectedTargetSupportsBaseBranch,
+      setSelectedFile,
+      setSelectedMode,
+    ],
   )
 
   const handleViewChange = useCallback(
@@ -840,12 +929,12 @@ export const CodeReviewSurface: FC<CodeReviewSurfaceProps> = ({
       setSelectedDiffLineIds([])
       setHoldEmptySelection(false)
 
-      if (selectedMode !== note.mode) {
+      if (effectiveMode !== note.mode) {
         setSelectedMode(note.mode)
       }
       setSelectedFile(note.filePath)
     },
-    [selectedMode, setSelectedFile, setSelectedMode],
+    [effectiveMode, setSelectedFile, setSelectedMode],
   )
 
   const handleEditReviewNote = useCallback((note: ReviewNote) => {
@@ -905,7 +994,7 @@ export const CodeReviewSurface: FC<CodeReviewSurfaceProps> = ({
         void loadFilePatch(
           {
             target: selectedTarget,
-            mode: selectedMode,
+            mode: effectiveMode,
             filePath,
             cacheIdentity: summary.cacheIdentity,
           },
@@ -915,13 +1004,13 @@ export const CodeReviewSurface: FC<CodeReviewSurfaceProps> = ({
     }
   }, [
     files,
+    effectiveMode,
     guideFilePaths,
     guideInput,
     loadFilePatch,
     loadSummary,
     patchInput,
     refreshGuide,
-    selectedMode,
     selectedTarget,
     selectedView,
     summary?.cacheIdentity,
@@ -957,6 +1046,84 @@ export const CodeReviewSurface: FC<CodeReviewSurfaceProps> = ({
     setDiffFocusActive(true)
   }, [diffFocusActive, notesRailCollapsed, targetRailCollapsed])
 
+  const handleMaterializePullRequest = useCallback(async () => {
+    if (!activeProject || !selectedTarget) return
+    if (!isRemotePullRequestTarget(selectedTarget)) return
+    if (typeof selectedTarget.pullRequestNumber !== 'number') return
+    if (materializingPullRequest) return
+
+    setMaterializingPullRequest(true)
+    setCheckoutError(null)
+
+    try {
+      const result = await pullRequestReviewApi.materializeReviewWorkspace({
+        projectId: selectedTarget.projectId,
+        reference: String(selectedTarget.pullRequestNumber),
+      })
+      const nextTargets = await loadTargets({
+        projectId: selectedTarget.projectId,
+        sessionId: activeSessionId,
+      })
+      await Promise.all([
+        loadWorkspaces(selectedTarget.projectId),
+        loadGlobalWorkspaces(),
+        loadPullRequestsByProjectId(selectedTarget.projectId),
+      ])
+
+      const nextTarget = findMaterializedPullRequestTarget({
+        targets: nextTargets,
+        workspaceId: result.workspace.id,
+        pullRequestNumber: selectedTarget.pullRequestNumber,
+      })
+
+      if (nextTarget) {
+        setSelectedTarget(nextTarget)
+        onRouteSearchChange?.({
+          targetId: nextTarget.id,
+          mode: effectiveMode,
+          view: selectedView,
+          file: selectedFile,
+        })
+        if (nextTarget.workspaceId !== result.workspace.id) {
+          setCheckoutError(
+            'Checked out the PR worktree, but the matching review target was not available after reload. Refresh code review if the target list looks stale.',
+          )
+        } else if (nextTarget.source !== 'pull-request') {
+          setCheckoutError(
+            'Checked out the PR worktree, but the PR review target was not available yet. Showing the workspace target instead.',
+          )
+        }
+      } else {
+        setCheckoutError(
+          'Checked out the PR worktree, but no review targets were available after reload. Refresh code review to continue.',
+        )
+      }
+    } catch (err) {
+      setCheckoutError(formatPullRequestCheckoutError(err))
+    } finally {
+      setMaterializingPullRequest(false)
+    }
+  }, [
+    activeProject,
+    activeSessionId,
+    loadGlobalWorkspaces,
+    loadPullRequestsByProjectId,
+    loadTargets,
+    loadWorkspaces,
+    materializingPullRequest,
+    onRouteSearchChange,
+    selectedFile,
+    effectiveMode,
+    selectedTarget,
+    selectedView,
+    setSelectedTarget,
+  ])
+
+  const handleStartWorkspaceSession = useCallback(() => {
+    if (!selectedTarget?.workspaceId) return
+    openDialog('session-intent', { workspaceId: selectedTarget.workspaceId })
+  }, [openDialog, selectedTarget?.workspaceId])
+
   const gridTemplateColumns = [
     targetRailCollapsed ? REVIEW_TARGET_RAIL_COLLAPSED : REVIEW_TARGET_RAIL,
     REVIEW_FILE_RAIL,
@@ -966,13 +1133,15 @@ export const CodeReviewSurface: FC<CodeReviewSurfaceProps> = ({
   const activeToolbarView = pendingView ?? selectedView
   const reviewLoadingLabel = pendingView
     ? `Opening ${pendingView === 'guide' ? 'guide' : 'diff'}...`
-    : guideGenerating
-      ? 'Generating guide...'
-      : selectedView === 'guide' && (summaryLoading || guideLoading)
-        ? 'Loading guide...'
-        : selectedView === 'diff' && diffLoading
-          ? 'Loading diff...'
-          : null
+    : materializingPullRequest
+      ? 'Checking out PR...'
+      : guideGenerating
+        ? 'Generating guide...'
+        : selectedView === 'guide' && (summaryLoading || guideLoading)
+          ? 'Loading guide...'
+          : selectedView === 'diff' && diffLoading
+            ? 'Loading diff...'
+            : null
 
   if (!activeProject) {
     return (
@@ -986,16 +1155,25 @@ export const CodeReviewSurface: FC<CodeReviewSurfaceProps> = ({
     <div className="flex h-full flex-col bg-background">
       <CodeReviewToolbar
         target={selectedTarget}
-        mode={selectedMode}
+        mode={effectiveMode}
         view={activeToolbarView}
         fileCount={files.length}
         loading={
-          summaryLoading || diffLoading || guideLoading || guideGenerating
+          summaryLoading ||
+          diffLoading ||
+          guideLoading ||
+          guideGenerating ||
+          materializingPullRequest
         }
         statusLabel={reviewLoadingLabel}
         diffFocusActive={diffFocusActive}
+        canMaterializePullRequest={remotePullRequestSelected}
+        materializingPullRequest={materializingPullRequest}
+        canStartWorkspaceSession={workspaceBackedPullRequestSelected}
         onModeChange={handleModeChange}
         onViewChange={handleViewChange}
+        onMaterializePullRequest={() => void handleMaterializePullRequest()}
+        onStartWorkspaceSession={handleStartWorkspaceSession}
         onToggleDiffFocus={handleToggleDiffFocus}
         onRefresh={handleRefresh}
         onClose={onClose ?? closeReview}
@@ -1017,7 +1195,7 @@ export const CodeReviewSurface: FC<CodeReviewSurfaceProps> = ({
           targets={targetList}
           selectedTargetId={selectedTarget?.id ?? null}
           loading={targetsLoading}
-          error={error ?? guideError}
+          error={checkoutError ?? error ?? guideError}
           collapsed={targetRailCollapsed}
           onToggleCollapsed={handleToggleTargetRail}
           onSelectTarget={handleSelectTarget}
@@ -1065,7 +1243,7 @@ export const CodeReviewSurface: FC<CodeReviewSurfaceProps> = ({
                 title={
                   remotePullRequestSelected
                     ? 'Pull request diff'
-                    : selectedMode === 'base-branch'
+                    : effectiveMode === 'base-branch'
                       ? 'Base branch diff'
                       : 'Working tree diff'
                 }

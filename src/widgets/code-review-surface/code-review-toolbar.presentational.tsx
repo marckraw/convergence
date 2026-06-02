@@ -2,9 +2,12 @@ import type { FC } from 'react'
 import {
   FileCode2,
   GitCompareArrows,
+  GitPullRequest,
   ListTree,
+  Loader2,
   Maximize2,
   Minimize2,
+  Play,
   RefreshCw,
   X,
 } from 'lucide-react'
@@ -34,8 +37,13 @@ interface CodeReviewToolbarProps {
   loading: boolean
   statusLabel: string | null
   diffFocusActive: boolean
+  canMaterializePullRequest: boolean
+  materializingPullRequest: boolean
+  canStartWorkspaceSession: boolean
   onModeChange: (mode: CodeReviewMode) => void
   onViewChange: (view: CodeReviewView) => void
+  onMaterializePullRequest: () => void
+  onStartWorkspaceSession: () => void
   onToggleDiffFocus: () => void
   onRefresh: () => void
   onClose: () => void
@@ -49,8 +57,13 @@ export const CodeReviewToolbar: FC<CodeReviewToolbarProps> = ({
   loading,
   statusLabel,
   diffFocusActive,
+  canMaterializePullRequest,
+  materializingPullRequest,
+  canStartWorkspaceSession,
   onModeChange,
   onViewChange,
+  onMaterializePullRequest,
+  onStartWorkspaceSession,
   onToggleDiffFocus,
   onRefresh,
   onClose,
@@ -111,6 +124,37 @@ export const CodeReviewToolbar: FC<CodeReviewToolbarProps> = ({
         <span className="rounded-md border border-border bg-card px-2 py-1 text-xs text-muted-foreground">
           {fileCount} files
         </span>
+        {canMaterializePullRequest ? (
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            className="h-7 gap-1.5 px-2 text-xs"
+            disabled={materializingPullRequest}
+            aria-label="Check out PR"
+            onClick={onMaterializePullRequest}
+          >
+            {materializingPullRequest ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <GitPullRequest className="h-3.5 w-3.5" />
+            )}
+            Check out PR
+          </Button>
+        ) : null}
+        {canStartWorkspaceSession ? (
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            className="h-7 gap-1.5 px-2 text-xs"
+            aria-label="New session"
+            onClick={onStartWorkspaceSession}
+          >
+            <Play className="h-3.5 w-3.5" />
+            New session
+          </Button>
+        ) : null}
         {statusLabel ? (
           <span className="rounded-md border border-border bg-card px-2 py-1 text-xs text-muted-foreground">
             {statusLabel}

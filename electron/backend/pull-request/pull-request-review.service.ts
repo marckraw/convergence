@@ -22,9 +22,11 @@ import {
   parseGithubRepositoryRef,
 } from './github-cli.pure'
 import type {
+  MaterializePullRequestReviewWorkspaceInput,
   PreparePullRequestReviewSessionInput,
   PullRequestReviewPreview,
   PullRequestReviewSessionResult,
+  PullRequestReviewWorkspaceResult,
 } from './pull-request-review.types'
 
 interface GhExecError extends Error {
@@ -102,52 +104,15 @@ export class PullRequestReviewService {
   async prepareReviewSession(
     input: PreparePullRequestReviewSessionInput,
   ): Promise<PullRequestReviewSessionResult> {
-    const { project, repository, number } =
-      await this.resolveProjectReference(input)
-    const lookup = await this.resolveGithubPullRequest({
+    const materialized = await this.materializeReviewWorkspaceInternal(input)
+    const {
+      project,
       repository,
       number,
-      cwd: project.repositoryPath,
-    })
-
-    if (lookup.lookupStatus !== 'found') {
-      throw new Error(lookup.error ?? `Pull Request #${number} was not found.`)
-    }
-
-    const branchName = buildPullRequestReviewBranchName(number)
-    let workspace = this.deps.workspaces.getByProjectIdAndBranch(
-      project.id,
-      branchName,
-    )
-
-    if (workspace) {
-      const status = await this.deps.git.getStatus(workspace.path)
-      if (status.length > 0) {
-        throw new Error(
-          'The existing review Workspace has local changes. Clean or archive it before refreshing this Pull Request.',
-        )
-      }
-      await this.deps.git.updateWorktreeToPullRequestHead({
-        worktreePath: workspace.path,
-        number,
-      })
-    } else {
-      await this.deps.git.fetchPullRequestHead({
-        repoPath: project.repositoryPath,
-        number,
-        localBranch: branchName,
-      })
-      workspace = await this.deps.workspaces.create({
-        projectId: project.id,
-        branchName,
-      })
-    }
-
-    const cachedPullRequest = this.deps.pullRequests.upsertForWorkspace({
-      projectId: project.id,
-      workspaceId: workspace.id,
-      result: lookup,
-    })
+      lookup,
+      workspace,
+      pullRequest: cachedPullRequest,
+    } = materialized
 
     const sessionName =
       input.sessionName?.trim() ||
@@ -178,6 +143,94 @@ export class PullRequestReviewService {
       workspace,
       pullRequest: cachedPullRequest,
       session: this.deps.sessions.getSummaryById(session.id) ?? session,
+    }
+  }
+
+  async materializeReviewWorkspace(
+    input: MaterializePullRequestReviewWorkspaceInput,
+  ): Promise<PullRequestReviewWorkspaceResult> {
+    const result = await this.materializeReviewWorkspaceInternal(input)
+    return {
+      workspace: result.workspace,
+      pullRequest: result.pullRequest,
+      created: result.created,
+      refreshed: result.refreshed,
+    }
+  }
+
+  private async materializeReviewWorkspaceInternal(input: {
+    projectId?: string | null
+    reference: string
+  }): Promise<{
+    project: Project
+    repository: GithubRepositoryRef
+    number: number
+    lookup: PullRequestLookupResult
+    workspace: Awaited<ReturnType<WorkspaceService['create']>>
+    pullRequest: ReturnType<PullRequestService['upsertForWorkspace']>
+    created: boolean
+    refreshed: boolean
+  }> {
+    const { project, repository, number } =
+      await this.resolveProjectReference(input)
+    const lookup = await this.resolveGithubPullRequest({
+      repository,
+      number,
+      cwd: project.repositoryPath,
+    })
+
+    if (lookup.lookupStatus !== 'found') {
+      throw new Error(lookup.error ?? `Pull Request #${number} was not found.`)
+    }
+
+    const branchName = buildPullRequestReviewBranchName(number)
+    let workspace = this.deps.workspaces.getByProjectIdAndBranch(
+      project.id,
+      branchName,
+    )
+    let created = false
+    let refreshed = false
+
+    if (workspace) {
+      const status = await this.deps.git.getStatus(workspace.path)
+      if (status.length > 0) {
+        throw new Error(
+          'The existing review Workspace has local changes. Clean or archive it before refreshing this Pull Request.',
+        )
+      }
+      await this.deps.git.updateWorktreeToPullRequestHead({
+        worktreePath: workspace.path,
+        number,
+      })
+      refreshed = true
+    } else {
+      await this.deps.git.fetchPullRequestHead({
+        repoPath: project.repositoryPath,
+        number,
+        localBranch: branchName,
+      })
+      workspace = await this.deps.workspaces.create({
+        projectId: project.id,
+        branchName,
+      })
+      created = true
+    }
+
+    const pullRequest = this.deps.pullRequests.upsertForWorkspace({
+      projectId: project.id,
+      workspaceId: workspace.id,
+      result: lookup,
+    })
+
+    return {
+      project,
+      repository,
+      number,
+      lookup,
+      workspace,
+      pullRequest,
+      created,
+      refreshed,
     }
   }
 
