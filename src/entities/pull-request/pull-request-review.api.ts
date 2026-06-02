@@ -1,7 +1,9 @@
 import type {
+  MaterializePullRequestReviewWorkspaceInput,
   PreparePullRequestReviewSessionInput,
   PullRequestReviewPreview,
   PullRequestReviewSessionResult,
+  PullRequestReviewWorkspaceResult,
 } from './pull-request-review.types'
 
 export const pullRequestReviewApi = {
@@ -15,4 +17,9 @@ export const pullRequestReviewApi = {
     input: PreparePullRequestReviewSessionInput,
   ): Promise<PullRequestReviewSessionResult> =>
     window.electronAPI.pullRequest.prepareReviewSession(input),
+
+  materializeReviewWorkspace: (
+    input: MaterializePullRequestReviewWorkspaceInput,
+  ): Promise<PullRequestReviewWorkspaceResult> =>
+    window.electronAPI.pullRequest.materializeReviewWorkspace(input),
 }

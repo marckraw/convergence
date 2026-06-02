@@ -9,7 +9,9 @@ export type {
   WorkspacePullRequest,
 } from './pull-request.types'
 export type {
+  MaterializePullRequestReviewWorkspaceInput,
   PreparePullRequestReviewSessionInput,
   PullRequestReviewPreview,
   PullRequestReviewSessionResult,
+  PullRequestReviewWorkspaceResult,
 } from './pull-request-review.types'

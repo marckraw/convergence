@@ -31,6 +31,19 @@ const updateNote = vi.fn()
 const deleteNote = vi.fn()
 const previewPacket = vi.fn()
 const sendPacket = vi.fn()
+const {
+  loadWorkspaces,
+  loadGlobalWorkspaces,
+  loadPullRequestsByProjectId,
+  materializeReviewWorkspace,
+  openDialog,
+} = vi.hoisted(() => ({
+  loadWorkspaces: vi.fn(),
+  loadGlobalWorkspaces: vi.fn(),
+  loadPullRequestsByProjectId: vi.fn(),
+  materializeReviewWorkspace: vi.fn(),
+  openDialog: vi.fn(),
+}))
 
 const target: CodeReviewTarget = {
   id: 'session:session-1',
@@ -86,6 +99,13 @@ vi.mock('@/entities/project', () => ({
     }),
 }))
 
+vi.mock('@/entities/dialog', () => ({
+  useDialogStore: (selector: (state: unknown) => unknown) =>
+    selector({
+      open: openDialog,
+    }),
+}))
+
 vi.mock('@/entities/code-review-guide', async (importOriginal) => {
   const actual =
     await importOriginal<typeof import('@/entities/code-review-guide')>()
@@ -99,6 +119,24 @@ vi.mock('@/entities/code-review-guide', async (importOriginal) => {
 vi.mock('@/entities/session', () => ({
   useSessionStore: (selector: (state: unknown) => unknown) =>
     selector({ activeSessionId: 'session-1' }),
+}))
+
+vi.mock('@/entities/workspace', () => ({
+  useWorkspaceStore: (selector: (state: unknown) => unknown) =>
+    selector({
+      loadWorkspaces,
+      loadGlobalWorkspaces,
+    }),
+}))
+
+vi.mock('@/entities/pull-request', () => ({
+  pullRequestReviewApi: {
+    materializeReviewWorkspace,
+  },
+  usePullRequestStore: (selector: (state: unknown) => unknown) =>
+    selector({
+      loadByProjectId: loadPullRequestsByProjectId,
+    }),
 }))
 
 vi.mock('@/entities/review-note', async (importOriginal) => {
@@ -283,6 +321,45 @@ describe('CodeReviewSurface', () => {
       text: 'Packet preview',
       sentNotes: [],
     })
+    loadWorkspaces.mockReset().mockResolvedValue(undefined)
+    loadGlobalWorkspaces.mockReset().mockResolvedValue(undefined)
+    loadPullRequestsByProjectId.mockReset().mockResolvedValue(undefined)
+    materializeReviewWorkspace.mockReset().mockResolvedValue({
+      workspace: {
+        id: 'workspace-remote',
+        projectId: 'project-1',
+        branchName: 'convergence/pr-42',
+        path: '/repo/.worktrees/pr-42',
+        type: 'worktree',
+        archivedAt: null,
+        worktreeRemovedAt: null,
+        createdAt: '2026-01-02T00:00:00.000Z',
+      },
+      pullRequest: {
+        id: 'pr-cache-42',
+        projectId: 'project-1',
+        workspaceId: 'workspace-remote',
+        provider: 'github',
+        lookupStatus: 'found',
+        state: 'open',
+        repositoryOwner: 'acme',
+        repositoryName: 'app',
+        number: 42,
+        title: 'Remote PR',
+        url: 'https://github.com/acme/app/pull/42',
+        isDraft: false,
+        headBranch: 'feature/pr-42',
+        baseBranch: 'main',
+        mergedAt: null,
+        lastCheckedAt: '2026-01-02T00:00:00.000Z',
+        error: null,
+        createdAt: '2026-01-02T00:00:00.000Z',
+        updatedAt: '2026-01-02T00:00:00.000Z',
+      },
+      created: true,
+      refreshed: false,
+    })
+    openDialog.mockReset()
     codeReviewState = {
       targets: [target],
       selectedTarget: target,
@@ -486,6 +563,59 @@ describe('CodeReviewSurface', () => {
     expect(setSelectedFile).toHaveBeenLastCalledWith(null)
   })
 
+  it('normalizes stale base-branch routes for targets without sessions', async () => {
+    const remoteTarget: CodeReviewTarget = {
+      ...target,
+      id: 'pull-request:github:acme/app#42',
+      workspaceId: null,
+      sessionId: null,
+      sessionName: null,
+      pullRequestId: null,
+      pullRequestNumber: 42,
+      pullRequestLabel: '#42 Remote PR',
+      pullRequestUrl: 'https://github.com/acme/app/pull/42',
+      pullRequestBaseBranch: 'main',
+      pullRequestHeadBranch: 'feature/pr-42',
+      source: 'pull-request',
+    }
+    codeReviewState = {
+      ...codeReviewState,
+      targets: [remoteTarget],
+      selectedTarget: remoteTarget,
+      selectedMode: 'base-branch',
+      selectedFile: null,
+      summariesByKey: {},
+      summaryKeysBySelectionKey: {},
+      filePatchesByKey: {},
+      filePatchKeysBySelectionKey: {},
+    }
+    const onRouteSearchChange = vi.fn()
+
+    render(
+      <CodeReviewSurface
+        routeMode="base-branch"
+        onRouteSearchChange={onRouteSearchChange}
+      />,
+    )
+
+    await waitFor(() => {
+      expect(loadSummary).toHaveBeenCalledWith({
+        target: remoteTarget,
+        mode: 'working-tree',
+      })
+    })
+    expect(loadSummary).not.toHaveBeenCalledWith({
+      target: remoteTarget,
+      mode: 'base-branch',
+    })
+    expect(setSelectedMode).toHaveBeenCalledWith('working-tree')
+    expect(setSelectedMode).not.toHaveBeenCalledWith('base-branch')
+    expect(onRouteSearchChange).toHaveBeenCalledWith({
+      mode: 'working-tree',
+      file: null,
+    })
+  })
+
   it('routes presentation view changes through the shared code review store', () => {
     render(<CodeReviewSurface />)
 
@@ -493,6 +623,350 @@ describe('CodeReviewSurface', () => {
 
     expect(setSelectedView).toHaveBeenCalledWith('guide')
     expect(screen.getAllByText('Opening guide...').length).toBeGreaterThan(0)
+  })
+
+  it('does not show pull request checkout for local review targets', () => {
+    render(<CodeReviewSurface />)
+
+    expect(
+      screen.queryByRole('button', { name: 'Check out PR' }),
+    ).not.toBeInTheDocument()
+    expect(
+      screen.queryByRole('button', { name: 'New session' }),
+    ).not.toBeInTheDocument()
+  })
+
+  it('checks out remote pull requests and selects the materialized target', async () => {
+    const remoteTarget: CodeReviewTarget = {
+      ...target,
+      id: 'pull-request:github:acme/app#42',
+      repositoryPath: '/repo',
+      workspaceId: null,
+      sessionId: null,
+      sessionName: null,
+      branchName: 'feature/pr-42',
+      pullRequestId: null,
+      pullRequestNumber: 42,
+      pullRequestLabel: '#42 Remote PR',
+      pullRequestUrl: 'https://github.com/acme/app/pull/42',
+      pullRequestBaseBranch: 'main',
+      pullRequestHeadBranch: 'feature/pr-42',
+      source: 'pull-request',
+    }
+    const materializedTarget: CodeReviewTarget = {
+      ...remoteTarget,
+      id: 'pull-request:pr-cache-42',
+      workspaceId: 'workspace-remote',
+      pullRequestId: 'pr-cache-42',
+      repositoryPath: '/repo/.worktrees/pr-42',
+      branchName: 'convergence/pr-42',
+    }
+    loadTargets.mockResolvedValue([materializedTarget])
+    codeReviewState = {
+      ...codeReviewState,
+      targets: [remoteTarget],
+      selectedTarget: remoteTarget,
+    }
+
+    const onRouteSearchChange = vi.fn()
+    render(<CodeReviewSurface onRouteSearchChange={onRouteSearchChange} />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Check out PR' }))
+
+    await waitFor(() => {
+      expect(materializeReviewWorkspace).toHaveBeenCalledWith({
+        projectId: 'project-1',
+        reference: '42',
+      })
+    })
+    expect(loadTargets).toHaveBeenCalledWith({
+      projectId: 'project-1',
+      sessionId: 'session-1',
+    })
+    expect(loadWorkspaces).toHaveBeenCalledWith('project-1')
+    expect(loadGlobalWorkspaces).toHaveBeenCalled()
+    expect(loadPullRequestsByProjectId).toHaveBeenCalledWith('project-1')
+
+    await waitFor(() => {
+      expect(setSelectedTarget).toHaveBeenCalledWith(materializedTarget)
+    })
+    expect(onRouteSearchChange).toHaveBeenCalledWith({
+      targetId: materializedTarget.id,
+      mode: 'working-tree',
+      view: 'diff',
+      file: 'src/app.ts',
+    })
+  })
+
+  it('shows checkout loading state while materializing a pull request', async () => {
+    const remoteTarget: CodeReviewTarget = {
+      ...target,
+      id: 'pull-request:github:acme/app#42',
+      repositoryPath: '/repo',
+      workspaceId: null,
+      sessionId: null,
+      sessionName: null,
+      branchName: 'feature/pr-42',
+      pullRequestId: null,
+      pullRequestNumber: 42,
+      pullRequestLabel: '#42 Remote PR',
+      pullRequestUrl: 'https://github.com/acme/app/pull/42',
+      pullRequestBaseBranch: 'main',
+      pullRequestHeadBranch: 'feature/pr-42',
+      source: 'pull-request',
+    }
+    const materializedTarget: CodeReviewTarget = {
+      ...remoteTarget,
+      id: 'pull-request:pr-cache-42',
+      workspaceId: 'workspace-remote',
+      pullRequestId: 'pr-cache-42',
+      repositoryPath: '/repo/.worktrees/pr-42',
+      branchName: 'convergence/pr-42',
+    }
+    let resolveCheckout: (
+      value: Awaited<ReturnType<typeof materializeReviewWorkspace>>,
+    ) => void
+    const checkoutPromise = new Promise<
+      Awaited<ReturnType<typeof materializeReviewWorkspace>>
+    >((resolve) => {
+      resolveCheckout = resolve
+    })
+    materializeReviewWorkspace.mockReturnValue(checkoutPromise)
+    loadTargets.mockResolvedValue([materializedTarget])
+    codeReviewState = {
+      ...codeReviewState,
+      targets: [remoteTarget],
+      selectedTarget: remoteTarget,
+    }
+
+    render(<CodeReviewSurface />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Check out PR' }))
+
+    await waitFor(() => {
+      expect(screen.getAllByText('Checking out PR...').length).toBeGreaterThan(
+        0,
+      )
+    })
+    expect(screen.getByRole('button', { name: 'Check out PR' })).toBeDisabled()
+
+    resolveCheckout!({
+      workspace: {
+        id: 'workspace-remote',
+        projectId: 'project-1',
+        branchName: 'convergence/pr-42',
+        path: '/repo/.worktrees/pr-42',
+        type: 'worktree',
+        archivedAt: null,
+        worktreeRemovedAt: null,
+        createdAt: '2026-01-02T00:00:00.000Z',
+      },
+      pullRequest: {
+        id: 'pr-cache-42',
+        projectId: 'project-1',
+        workspaceId: 'workspace-remote',
+        provider: 'github',
+        lookupStatus: 'found',
+        state: 'open',
+        repositoryOwner: 'acme',
+        repositoryName: 'app',
+        number: 42,
+        title: 'Remote PR',
+        url: 'https://github.com/acme/app/pull/42',
+        isDraft: false,
+        headBranch: 'feature/pr-42',
+        baseBranch: 'main',
+        mergedAt: null,
+        lastCheckedAt: '2026-01-02T00:00:00.000Z',
+        error: null,
+        createdAt: '2026-01-02T00:00:00.000Z',
+        updatedAt: '2026-01-02T00:00:00.000Z',
+      },
+      created: true,
+      refreshed: false,
+    })
+
+    await waitFor(() => {
+      expect(setSelectedTarget).toHaveBeenCalledWith(materializedTarget)
+    })
+  })
+
+  it('surfaces dirty worktree checkout failures clearly', async () => {
+    const remoteTarget: CodeReviewTarget = {
+      ...target,
+      id: 'pull-request:github:acme/app#42',
+      workspaceId: null,
+      sessionId: null,
+      sessionName: null,
+      pullRequestId: null,
+      pullRequestNumber: 42,
+      pullRequestLabel: '#42 Remote PR',
+      pullRequestUrl: 'https://github.com/acme/app/pull/42',
+      pullRequestBaseBranch: 'main',
+      pullRequestHeadBranch: 'feature/pr-42',
+      source: 'pull-request',
+    }
+    materializeReviewWorkspace.mockRejectedValue(
+      new Error(
+        'The existing review Workspace has local changes. Clean or archive it before refreshing this Pull Request.',
+      ),
+    )
+    codeReviewState = {
+      ...codeReviewState,
+      targets: [remoteTarget],
+      selectedTarget: remoteTarget,
+    }
+
+    render(<CodeReviewSurface />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Check out PR' }))
+
+    expect(
+      await screen.findByText(
+        'The existing PR worktree has local changes. Clean or archive it before refreshing this pull request.',
+      ),
+    ).toBeInTheDocument()
+    expect(loadWorkspaces).not.toHaveBeenCalled()
+  })
+
+  it('surfaces GitHub CLI checkout failures in the review rail', async () => {
+    const remoteTarget: CodeReviewTarget = {
+      ...target,
+      id: 'pull-request:github:acme/app#42',
+      workspaceId: null,
+      sessionId: null,
+      sessionName: null,
+      pullRequestId: null,
+      pullRequestNumber: 42,
+      pullRequestLabel: '#42 Remote PR',
+      pullRequestUrl: 'https://github.com/acme/app/pull/42',
+      pullRequestBaseBranch: 'main',
+      pullRequestHeadBranch: 'feature/pr-42',
+      source: 'pull-request',
+    }
+    materializeReviewWorkspace.mockRejectedValue(
+      new Error('GitHub CLI is not authenticated. Run gh auth login.'),
+    )
+    codeReviewState = {
+      ...codeReviewState,
+      targets: [remoteTarget],
+      selectedTarget: remoteTarget,
+    }
+
+    render(<CodeReviewSurface />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Check out PR' }))
+
+    expect(
+      await screen.findByText(
+        'GitHub CLI is not authenticated. Run gh auth login.',
+      ),
+    ).toBeInTheDocument()
+  })
+
+  it('falls back to the materialized workspace target when the PR target is stale', async () => {
+    const remoteTarget: CodeReviewTarget = {
+      ...target,
+      id: 'pull-request:github:acme/app#42',
+      repositoryPath: '/repo',
+      workspaceId: null,
+      sessionId: null,
+      sessionName: null,
+      branchName: 'feature/pr-42',
+      pullRequestId: null,
+      pullRequestNumber: 42,
+      pullRequestLabel: '#42 Remote PR',
+      pullRequestUrl: 'https://github.com/acme/app/pull/42',
+      pullRequestBaseBranch: 'main',
+      pullRequestHeadBranch: 'feature/pr-42',
+      source: 'pull-request',
+    }
+    const workspaceTarget: CodeReviewTarget = {
+      ...remoteTarget,
+      id: 'workspace:workspace-remote',
+      source: 'workspace',
+      workspaceId: 'workspace-remote',
+      pullRequestId: null,
+      repositoryPath: '/repo/.worktrees/pr-42',
+      branchName: 'convergence/pr-42',
+    }
+    loadTargets.mockResolvedValue([workspaceTarget])
+    codeReviewState = {
+      ...codeReviewState,
+      targets: [remoteTarget],
+      selectedTarget: remoteTarget,
+    }
+
+    render(<CodeReviewSurface />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Check out PR' }))
+
+    await waitFor(() => {
+      expect(setSelectedTarget).toHaveBeenCalledWith(workspaceTarget)
+    })
+    expect(
+      await screen.findByText(
+        'Checked out the PR worktree, but the PR review target was not available yet. Showing the workspace target instead.',
+      ),
+    ).toBeInTheDocument()
+  })
+
+  it('opens the session intent dialog for workspace-backed pull requests', () => {
+    codeReviewState = {
+      ...codeReviewState,
+      selectedTarget: {
+        ...target,
+        id: 'pull-request:pr-cache-42',
+        source: 'pull-request',
+        pullRequestId: 'pr-cache-42',
+        pullRequestNumber: 42,
+        pullRequestLabel: '#42 Remote PR',
+        pullRequestUrl: 'https://github.com/acme/app/pull/42',
+        pullRequestBaseBranch: 'main',
+        pullRequestHeadBranch: 'feature/pr-42',
+        workspaceId: 'workspace-remote',
+        sessionId: null,
+        sessionName: null,
+      },
+    }
+
+    render(<CodeReviewSurface />)
+
+    expect(
+      screen.queryByRole('button', { name: 'Check out PR' }),
+    ).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'New session' }))
+
+    expect(openDialog).toHaveBeenCalledWith('session-intent', {
+      workspaceId: 'workspace-remote',
+    })
+  })
+
+  it('keeps remote-only pull requests on checkout before session actions', () => {
+    codeReviewState = {
+      ...codeReviewState,
+      selectedTarget: {
+        ...target,
+        id: 'pull-request:github:acme/app#42',
+        source: 'pull-request',
+        workspaceId: null,
+        sessionId: null,
+        sessionName: null,
+        pullRequestId: null,
+        pullRequestNumber: 42,
+        pullRequestLabel: '#42 Remote PR',
+        pullRequestUrl: 'https://github.com/acme/app/pull/42',
+        pullRequestBaseBranch: 'main',
+        pullRequestHeadBranch: 'feature/pr-42',
+      },
+    }
+
+    render(<CodeReviewSurface />)
+
+    expect(screen.getByRole('button', { name: 'Check out PR' })).toBeEnabled()
+    expect(
+      screen.queryByRole('button', { name: 'New session' }),
+    ).not.toBeInTheDocument()
   })
 
   it('emits route search changes for target, mode, and file selections', () => {

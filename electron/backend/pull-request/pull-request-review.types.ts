@@ -31,6 +31,18 @@ export interface PreparePullRequestReviewSessionInput {
   sessionName?: string
 }
 
+export interface MaterializePullRequestReviewWorkspaceInput {
+  projectId?: string | null
+  reference: string
+}
+
+export interface PullRequestReviewWorkspaceResult {
+  workspace: Workspace
+  pullRequest: WorkspacePullRequest
+  created: boolean
+  refreshed: boolean
+}
+
 export interface PullRequestReviewSessionResult {
   workspace: Workspace
   pullRequest: WorkspacePullRequest
