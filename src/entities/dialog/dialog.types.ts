@@ -18,6 +18,7 @@ export type AppSettingsDialogSection =
   | 'session-defaults'
   | 'session-naming'
   | 'session-forking'
+  | 'guided-review'
   | 'credentials'
   | 'usage'
   | 'pi-models'

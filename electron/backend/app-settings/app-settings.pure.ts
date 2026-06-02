@@ -17,6 +17,7 @@ import {
   type FavoriteModelsPrefs,
   type OnboardingPrefs,
   type PiModelVisibilityPrefs,
+  type ResolvedOneShotModelDefaults,
   type ResolvedSessionDefaults,
 } from './app-settings.types'
 
@@ -172,6 +173,7 @@ function emptyAppSettings(): AppSettings {
     defaultEffortId: null,
     namingModelByProvider: {},
     extractionModelByProvider: {},
+    guidedReviewModelByProvider: {},
     notifications: DEFAULT_NOTIFICATION_PREFS,
     onboarding: DEFAULT_ONBOARDING_PREFS,
     updates: DEFAULT_UPDATE_PREFS,
@@ -203,6 +205,9 @@ export function parseAppSettings(raw: string | null): AppSettings {
       namingModelByProvider: parseModelMap(parsed.namingModelByProvider),
       extractionModelByProvider: parseModelMap(
         parsed.extractionModelByProvider,
+      ),
+      guidedReviewModelByProvider: parseModelMap(
+        parsed.guidedReviewModelByProvider,
       ),
       notifications: parseNotificationPrefs(parsed.notifications),
       onboarding: parseOnboardingPrefs(parsed.onboarding),
@@ -247,6 +252,10 @@ export function validateAppSettings(
     settings.extractionModelByProvider,
     descriptors,
   )
+  const guidedReviewModelByProvider = validateModelMap(
+    settings.guidedReviewModelByProvider,
+    descriptors,
+  )
   const favoriteModels = validateFavoriteModels(
     settings.favoriteModels,
     descriptors,
@@ -262,6 +271,7 @@ export function validateAppSettings(
       defaultEffortId: null,
       namingModelByProvider,
       extractionModelByProvider,
+      guidedReviewModelByProvider,
       notifications: settings.notifications,
       onboarding: settings.onboarding,
       updates: settings.updates,
@@ -284,6 +294,7 @@ export function validateAppSettings(
       defaultEffortId: null,
       namingModelByProvider,
       extractionModelByProvider,
+      guidedReviewModelByProvider,
       notifications: settings.notifications,
       onboarding: settings.onboarding,
       updates: settings.updates,
@@ -305,6 +316,7 @@ export function validateAppSettings(
     defaultEffortId: effort ? effort.id : null,
     namingModelByProvider,
     extractionModelByProvider,
+    guidedReviewModelByProvider,
     notifications: settings.notifications,
     onboarding: settings.onboarding,
     updates: settings.updates,
@@ -443,4 +455,50 @@ export function resolveSessionDefaultsFromSettings(
     modelId: model.id,
     effortId: effort.id,
   }
+}
+
+export function resolveGuidedReviewModelFromSettings(
+  settings: AppSettings,
+  descriptor: ProviderDescriptor,
+): ResolvedOneShotModelDefaults | null {
+  const stored = validateAppSettings(settings, [descriptor])
+  const preferredModelId =
+    stored.guidedReviewModelByProvider[descriptor.id] ??
+    preferredGuidedReviewModelId(descriptor)
+  const model =
+    descriptor.modelOptions.find((item) => item.id === preferredModelId) ??
+    descriptor.modelOptions.find(
+      (item) => item.id === descriptor.defaultModelId,
+    ) ??
+    descriptor.modelOptions[0]
+
+  if (!model) return null
+
+  const effort =
+    model.effortOptions.find((item) => item.id === 'medium') ??
+    model.effortOptions.find((item) => item.id === model.defaultEffort) ??
+    model.effortOptions[0] ??
+    null
+
+  return {
+    modelId: model.id,
+    effortId: effort?.id ?? null,
+  }
+}
+
+export function preferredGuidedReviewModelId(
+  descriptor: ProviderDescriptor,
+): string | null {
+  const preferredByProvider: Record<string, string> = {
+    'claude-code': 'opus',
+    codex: 'gpt-5.5',
+  }
+  const preferred = preferredByProvider[descriptor.id]
+  if (
+    preferred &&
+    descriptor.modelOptions.some((option) => option.id === preferred)
+  ) {
+    return preferred
+  }
+  return descriptor.defaultModelId
 }

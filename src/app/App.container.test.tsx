@@ -202,6 +202,7 @@ const mockElectronAPI = {
       defaultEffortId: null,
       namingModelByProvider: {},
       extractionModelByProvider: {},
+      guidedReviewModelByProvider: {},
       notifications: {
         enabled: true,
         toasts: true,

@@ -25,6 +25,7 @@ import { Button } from '@/shared/ui/button'
 import { SessionDefaultsFields } from './session-defaults.presentational'
 import { NamingModelDefaultsFields } from './naming-model-defaults.presentational'
 import { ExtractionModelDefaultsFields } from './extraction-model-defaults.presentational'
+import { GuidedReviewModelDefaultsFields } from './guided-review-model-defaults.presentational'
 import { NotificationsFields } from './notifications-fields.presentational'
 import { UpdatesFields } from './updates-fields.presentational'
 import { DebugLoggingFields } from './debug-logging-fields.presentational'
@@ -44,6 +45,7 @@ interface AppSettingsDialogProps {
   selection: ResolvedProviderSelection
   namingDraft: Record<string, string>
   extractionDraft: Record<string, string>
+  guidedReviewDraft: Record<string, string>
   notificationsDraft: NotificationPrefs
   updatesDraft: UpdatePrefs
   debugLoggingDraft: DebugLoggingPrefs
@@ -60,6 +62,7 @@ interface AppSettingsDialogProps {
   onEffortChange: (id: ReasoningEffort | '') => void
   onNamingModelChange: (providerId: string, modelId: string) => void
   onExtractionModelChange: (providerId: string, modelId: string) => void
+  onGuidedReviewModelChange: (providerId: string, modelId: string) => void
   onNotificationsChange: (prefs: NotificationPrefs) => void
   onTestFireNotification: (severity: NotificationSeverity) => void
   onToggleBackgroundUpdates: (next: boolean) => void
@@ -93,6 +96,7 @@ export const AppSettingsDialog: FC<AppSettingsDialogProps> = ({
   selection,
   namingDraft,
   extractionDraft,
+  guidedReviewDraft,
   notificationsDraft,
   updatesDraft,
   debugLoggingDraft,
@@ -109,6 +113,7 @@ export const AppSettingsDialog: FC<AppSettingsDialogProps> = ({
   onEffortChange,
   onNamingModelChange,
   onExtractionModelChange,
+  onGuidedReviewModelChange,
   onNotificationsChange,
   onTestFireNotification,
   onToggleBackgroundUpdates,
@@ -150,6 +155,14 @@ export const AppSettingsDialog: FC<AppSettingsDialogProps> = ({
             title: 'Session forking',
             description:
               'Choose the model that summarises prior conversation state before a session is forked.',
+          },
+          {
+            id: 'guided-review' as const,
+            navLabel: 'Guided review',
+            navSummary: 'Review guide generation by provider',
+            title: 'Guided review',
+            description:
+              'Choose the model each provider should use when Convergence generates guided code review plans.',
           },
         ]
       : []),
@@ -255,6 +268,14 @@ export const AppSettingsDialog: FC<AppSettingsDialogProps> = ({
             providers={providers}
             extractionDraft={extractionDraft}
             onExtractionModelChange={onExtractionModelChange}
+          />
+        )
+      case 'guided-review':
+        return (
+          <GuidedReviewModelDefaultsFields
+            providers={providers}
+            guidedReviewDraft={guidedReviewDraft}
+            onGuidedReviewModelChange={onGuidedReviewModelChange}
           />
         )
       case 'credentials':

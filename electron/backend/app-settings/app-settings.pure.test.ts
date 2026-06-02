@@ -10,6 +10,7 @@ import {
   parseAppSettings,
   parseModelMap,
   parseNotificationPrefs,
+  resolveGuidedReviewModelFromSettings,
   resolveSessionDefaultsFromSettings,
   validateAppSettings,
   validatePiModelVisibility,
@@ -41,6 +42,17 @@ function buildDescriptors(): ProviderDescriptor[] {
       supportsContinuation: true,
       defaultModelId: 'sonnet',
       modelOptions: [
+        {
+          id: 'opus',
+          label: 'Claude Opus',
+          defaultEffort: 'medium',
+          effortOptions: [
+            { id: 'low', label: 'Low' },
+            { id: 'medium', label: 'Medium' },
+            { id: 'high', label: 'High' },
+            { id: 'max', label: 'Max' },
+          ],
+        },
         {
           id: 'sonnet',
           label: 'Claude Sonnet',
@@ -102,6 +114,7 @@ describe('app-settings pure helpers', () => {
       defaultEffortId: null,
       namingModelByProvider: {},
       extractionModelByProvider: {},
+      guidedReviewModelByProvider: {},
       notifications: DEFAULT_NOTIFICATION_PREFS,
       onboarding: DEFAULT_ONBOARDING_PREFS,
       updates: DEFAULT_UPDATE_PREFS,
@@ -173,6 +186,30 @@ describe('app-settings pure helpers', () => {
       providerId: 'claude-code',
       modelId: 'sonnet',
       effortId: 'high',
+    })
+  })
+
+  it('resolves guided review defaults to Opus with medium effort for Claude Code', () => {
+    const descriptor = buildDescriptors()[0]!
+    const settings = parseAppSettings(null)
+
+    expect(resolveGuidedReviewModelFromSettings(settings, descriptor)).toEqual({
+      modelId: 'opus',
+      effortId: 'medium',
+    })
+  })
+
+  it('keeps configured guided review model overrides when valid', () => {
+    const descriptor = buildDescriptors()[0]!
+    const settings = parseAppSettings(
+      JSON.stringify({
+        guidedReviewModelByProvider: { 'claude-code': 'sonnet' },
+      }),
+    )
+
+    expect(resolveGuidedReviewModelFromSettings(settings, descriptor)).toEqual({
+      modelId: 'sonnet',
+      effortId: 'medium',
     })
   })
 })

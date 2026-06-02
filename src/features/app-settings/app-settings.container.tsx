@@ -38,6 +38,7 @@ interface Draft {
 const EMPTY_DRAFT: Draft = { providerId: '', modelId: '', effortId: '' }
 const EMPTY_NAMING_DRAFT: Record<string, string> = {}
 const EMPTY_EXTRACTION_DRAFT: Record<string, string> = {}
+const EMPTY_GUIDED_REVIEW_DRAFT: Record<string, string> = {}
 const DEFAULT_SECTION: AppSettingsSectionId = 'session-defaults'
 
 function isAppSettingsSection(value: unknown): value is AppSettingsSectionId {
@@ -45,6 +46,7 @@ function isAppSettingsSection(value: unknown): value is AppSettingsSectionId {
     value === 'session-defaults' ||
     value === 'session-naming' ||
     value === 'session-forking' ||
+    value === 'guided-review' ||
     value === 'credentials' ||
     value === 'usage' ||
     value === 'pi-models' ||
@@ -75,6 +77,9 @@ export const AppSettingsDialogContainer: FC<AppSettingsContainerProps> = ({
   const [extractionDraft, setExtractionDraft] = useState<
     Record<string, string>
   >(EMPTY_EXTRACTION_DRAFT)
+  const [guidedReviewDraft, setGuidedReviewDraft] = useState<
+    Record<string, string>
+  >(EMPTY_GUIDED_REVIEW_DRAFT)
   const [notificationsDraft, setNotificationsDraft] =
     useState<NotificationPrefs | null>(null)
   const [updatesDraft, setUpdatesDraft] = useState<UpdatePrefs | null>(null)
@@ -127,6 +132,7 @@ export const AppSettingsDialogContainer: FC<AppSettingsContainerProps> = ({
     })
     setNamingDraft({ ...settings.namingModelByProvider })
     setExtractionDraft({ ...settings.extractionModelByProvider })
+    setGuidedReviewDraft({ ...settings.guidedReviewModelByProvider })
     setNotificationsDraft(settings.notifications)
     setUpdatesDraft(settings.updates)
     setDebugLoggingDraft(settings.debugLogging)
@@ -197,6 +203,16 @@ export const AppSettingsDialogContainer: FC<AppSettingsContainerProps> = ({
   const handleExtractionModelChange = useCallback(
     (providerId: string, modelId: string) => {
       setExtractionDraft((current) => ({ ...current, [providerId]: modelId }))
+    },
+    [],
+  )
+
+  const handleGuidedReviewModelChange = useCallback(
+    (providerId: string, modelId: string) => {
+      setGuidedReviewDraft((current) => ({
+        ...current,
+        [providerId]: modelId,
+      }))
     },
     [],
   )
@@ -273,6 +289,7 @@ export const AppSettingsDialogContainer: FC<AppSettingsContainerProps> = ({
         defaultEffortId: selection.effort?.id ?? null,
         namingModelByProvider: namingDraft,
         extractionModelByProvider: extractionDraft,
+        guidedReviewModelByProvider: guidedReviewDraft,
         notifications: notificationsDraft ?? settings.notifications,
         onboarding: settings.onboarding,
         updates: updatesDraft ?? settings.updates,
@@ -293,6 +310,7 @@ export const AppSettingsDialogContainer: FC<AppSettingsContainerProps> = ({
     selection,
     namingDraft,
     extractionDraft,
+    guidedReviewDraft,
     notificationsDraft,
     updatesDraft,
     debugLoggingDraft,
@@ -317,6 +335,7 @@ export const AppSettingsDialogContainer: FC<AppSettingsContainerProps> = ({
       selection={selection}
       namingDraft={namingDraft}
       extractionDraft={extractionDraft}
+      guidedReviewDraft={guidedReviewDraft}
       notificationsDraft={notificationsDraft ?? settings.notifications}
       updatesDraft={updatesDraft ?? settings.updates}
       debugLoggingDraft={debugLoggingDraft ?? settings.debugLogging}
@@ -335,6 +354,7 @@ export const AppSettingsDialogContainer: FC<AppSettingsContainerProps> = ({
       onEffortChange={handleEffortChange}
       onNamingModelChange={handleNamingModelChange}
       onExtractionModelChange={handleExtractionModelChange}
+      onGuidedReviewModelChange={handleGuidedReviewModelChange}
       onNotificationsChange={handleNotificationsChange}
       onTestFireNotification={handleTestFire}
       onToggleBackgroundUpdates={handleToggleBackgroundUpdates}

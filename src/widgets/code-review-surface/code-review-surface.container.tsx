@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { FC } from 'react'
 import type { SelectedLineRange } from '@pierre/diffs'
+import { Loader2 } from 'lucide-react'
 import {
   buildCodeReviewFilePatchKey,
   buildCodeReviewFilePatchSelectionKey,
@@ -365,7 +366,7 @@ export const CodeReviewSurface: FC<CodeReviewSurfaceProps> = ({
       files.length > 0 ? buildDeterministicCodeReviewGuide(files) : EMPTY_GUIDE,
     [files],
   )
-  const displayGuide = guide ?? fallbackGuide
+  const displayGuide = guideGenerating ? EMPTY_GUIDE : (guide ?? fallbackGuide)
   const guideFilePaths = useMemo(
     () =>
       displayGuide.sections.flatMap((section) =>
@@ -1211,16 +1212,28 @@ export const CodeReviewSurface: FC<CodeReviewSurfaceProps> = ({
               onSelectSection={handleSelectGuideSection}
               onGenerateGuide={handleGenerateGuide}
             />
-            <CodeReviewGuideView
-              guide={displayGuide}
-              getFileDiff={(filePath) => guidePatchByFile.get(filePath) ?? ''}
-              isFileLoading={(filePath) =>
-                guideLoadingByFile.get(filePath) ?? false
-              }
-              renderSectionRef={renderGuideSectionRef}
-              renderFileRef={renderGuideFileRef}
-              onSelectFile={handleSelectGuideFile}
-            />
+            {guideGenerating ? (
+              <main
+                className="flex min-w-0 items-center justify-center bg-background p-6"
+                role="status"
+              >
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Generating guide...
+                </div>
+              </main>
+            ) : (
+              <CodeReviewGuideView
+                guide={displayGuide}
+                getFileDiff={(filePath) => guidePatchByFile.get(filePath) ?? ''}
+                isFileLoading={(filePath) =>
+                  guideLoadingByFile.get(filePath) ?? false
+                }
+                renderSectionRef={renderGuideSectionRef}
+                renderFileRef={renderGuideFileRef}
+                onSelectFile={handleSelectGuideFile}
+              />
+            )}
           </>
         ) : (
           <>

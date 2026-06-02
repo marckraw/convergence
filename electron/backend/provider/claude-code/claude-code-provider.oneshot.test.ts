@@ -61,6 +61,33 @@ describe('ClaudeCodeProvider.oneShot progress emission', () => {
     expect(broadcast).not.toHaveBeenCalled()
   })
 
+  it('passes one-shot effort to Claude Code', async () => {
+    const child = new MockChildProcess()
+    spawnMock.mockReturnValue(child)
+
+    const provider = new ClaudeCodeProvider('/bin/claude')
+
+    const promise = provider.oneShot({
+      prompt: 'hello',
+      modelId: 'opus',
+      effort: 'medium',
+      workingDirectory: '/tmp',
+    })
+
+    child.stdout.write(Buffer.from('{"result":"ok"}'))
+    child.stdout.end()
+    child.emit('exit', 0)
+
+    await promise
+    expect(spawnMock).toHaveBeenCalledWith(
+      '/bin/claude',
+      expect.arrayContaining(['--model', 'opus', '--effort', 'medium']),
+      expect.objectContaining({
+        cwd: '/tmp',
+      }),
+    )
+  })
+
   it('emits started, stdout chunks, and settled:ok on success', async () => {
     const child = new MockChildProcess()
     spawnMock.mockReturnValue(child)

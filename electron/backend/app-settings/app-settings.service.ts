@@ -6,6 +6,7 @@ import {
   type AppSettings,
   type AppSettingsInput,
   type DebugLoggingPrefs,
+  type ResolvedOneShotModelDefaults,
   type ResolvedSessionDefaults,
 } from './app-settings.types'
 import { APP_SETTINGS_KEY } from './app-settings.constants'
@@ -18,6 +19,7 @@ import {
   parseOnboardingPrefs,
   parsePiModelVisibilityPrefs,
   parseUpdatePrefs,
+  resolveGuidedReviewModelFromSettings,
   resolveSessionDefaultsFromSettings,
   validateAppSettings,
   validateFavoriteModels,
@@ -107,6 +109,10 @@ export class AppSettingsService {
       input.extractionModelByProvider ?? {},
       descriptors,
     )
+    const guidedReviewModelByProvider = validateModelMap(
+      input.guidedReviewModelByProvider ?? {},
+      descriptors,
+    )
 
     const existing = parseAppSettings(this.stateService.get(APP_SETTINGS_KEY))
     const notifications =
@@ -147,6 +153,7 @@ export class AppSettingsService {
         model && input.defaultEffortId !== null ? input.defaultEffortId : null,
       namingModelByProvider,
       extractionModelByProvider,
+      guidedReviewModelByProvider,
       notifications,
       onboarding,
       updates,
@@ -206,6 +213,19 @@ export class AppSettingsService {
     }
 
     return descriptor.defaultModelId ?? null
+  }
+
+  async resolveGuidedReviewModel(
+    providerId: string,
+  ): Promise<ResolvedOneShotModelDefaults | null> {
+    const descriptors = await this.loadDescriptors()
+    const descriptor = descriptors.find((item) => item.id === providerId)
+    if (!descriptor) return null
+
+    return resolveGuidedReviewModelFromSettings(
+      parseAppSettings(this.stateService.get(APP_SETTINGS_KEY)),
+      descriptor,
+    )
   }
 
   async resolveSessionDefaults(): Promise<ResolvedSessionDefaults | null> {

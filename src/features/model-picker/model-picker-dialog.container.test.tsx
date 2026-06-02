@@ -84,6 +84,7 @@ function primeSettings(favoriteModels = DEFAULT_FAVORITE_MODELS_PREFS): void {
       defaultEffortId: null,
       namingModelByProvider: {},
       extractionModelByProvider: {},
+      guidedReviewModelByProvider: {},
       notifications: DEFAULT_NOTIFICATION_PREFS,
       onboarding: DEFAULT_ONBOARDING_PREFS,
       updates: DEFAULT_UPDATE_PREFS,

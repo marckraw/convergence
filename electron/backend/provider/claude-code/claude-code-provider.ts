@@ -130,6 +130,9 @@ function runClaudeOneShot(
       '--model',
       input.modelId,
     ]
+    if (input.effort) {
+      args.push('--effort', input.effort)
+    }
     const child = spawn(binaryPath, args, {
       cwd: input.workingDirectory,
       stdio: ['pipe', 'pipe', 'pipe'],

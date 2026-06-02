@@ -230,6 +230,12 @@ export function buildFallbackCodexDescriptor(): ProviderDescriptor {
     fastModelId: 'gpt-5.4-mini',
     modelOptions: [
       {
+        id: 'gpt-5.5',
+        label: 'GPT-5.5',
+        defaultEffort: 'medium',
+        effortOptions: buildEffortOptions(['minimal', 'low', 'medium', 'high']),
+      },
+      {
         id: 'gpt-5.4',
         label: 'GPT-5.4',
         defaultEffort: 'medium',

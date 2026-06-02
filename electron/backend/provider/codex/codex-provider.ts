@@ -699,6 +699,9 @@ function runCodexOneShot(
         permissionConfig.sandbox,
       )
     }
+    if (input.effort) {
+      args.push('-c', `model_reasoning_effort="${input.effort}"`)
+    }
     args.push(input.prompt)
     const child = spawn(binaryPath, args, {
       cwd: input.workingDirectory,

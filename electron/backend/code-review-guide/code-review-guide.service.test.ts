@@ -116,7 +116,10 @@ describe('CodeReviewGuideService', () => {
       getAll: vi.fn(() => [provider]),
     } as unknown as ProviderRegistry
     const appSettings = {
-      resolveExtractionModel: vi.fn(async () => 'sonnet'),
+      resolveGuidedReviewModel: vi.fn(async () => ({
+        modelId: 'opus',
+        effortId: 'medium',
+      })),
     } as unknown as AppSettingsService
     const sessions = {
       getSummaryById: vi.fn(() => ({
@@ -155,14 +158,14 @@ describe('CodeReviewGuideService', () => {
     expect(generated.sections[0].riskRationale).toBe(
       'Shared renderer state can affect multiple review UI flows.',
     )
-    expect(appSettings.resolveExtractionModel).toHaveBeenCalledWith(
+    expect(appSettings.resolveGuidedReviewModel).toHaveBeenCalledWith(
       'claude-code',
-      { preferFastDefault: true },
     )
     expect(codeReview.getFilePatch).toHaveBeenCalledTimes(2)
     expect(oneShot).toHaveBeenCalledWith(
       expect.objectContaining({
-        modelId: 'sonnet',
+        modelId: 'opus',
+        effort: 'medium',
         timeoutMs: 600_000,
         workingDirectory: '/repo/worktree',
         prompt: expect.stringContaining('selectedView: guide'),
