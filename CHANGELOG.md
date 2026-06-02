@@ -1,5 +1,11 @@
 # convergence
 
+## 0.38.2
+
+### Patch Changes
+
+- 9126454: Add configurable guided review model defaults with Opus and GPT-5.5 defaults and show a loading state while review guides generate.
+
 ## 0.38.1
 
 ### Patch Changes
