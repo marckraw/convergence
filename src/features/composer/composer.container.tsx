@@ -34,12 +34,14 @@ import {
   type SkillSelection,
 } from '@/entities/skill'
 import {
-  applyMentionExpansion,
-  detectMentionTrigger,
   filterContextMentions,
   useProjectContextStore,
   type ProjectContextItem,
 } from '@/entities/project-context'
+import {
+  usePromptLibraryStore,
+  type PromptLibraryEntry,
+} from '@/entities/prompt-library'
 import { Composer } from './composer.presentational'
 import {
   resolveAttachmentCapabilityForModel,
@@ -49,6 +51,13 @@ import {
   filterComposerSkills,
   filterSelectionsForProvider,
 } from './composer-skill-picker.pure'
+import {
+  detectComposerInjectionTrigger,
+  filterComposerInjectionRootItems,
+  replaceComposerInjectionRange,
+  type ComposerInjectionRootItem,
+} from './composer-injection-trigger.pure'
+import { filterComposerPrompts } from './composer-prompt-injection.pure'
 import { resolveMidRunInputPolicy } from './mid-run-input.pure'
 import { CodexUsagePillContainer } from './codex-usage-pill.container'
 import { shouldShowCodexUsagePill } from './codex-usage-pill.pure'
@@ -226,6 +235,27 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
 
   const textareaRef = useRef<HTMLTextAreaElement | null>(null)
   const [cursor, setCursor] = useState(0)
+  const [rootInjectionHighlightedIndex, setRootInjectionHighlightedIndex] =
+    useState(0)
+  const [rootInjectionDismissedRange, setRootInjectionDismissedRange] =
+    useState<{
+      start: number
+      end: number
+    } | null>(null)
+  const [skillInjectionHighlightedIndex, setSkillInjectionHighlightedIndex] =
+    useState(0)
+  const [skillInjectionDismissedRange, setSkillInjectionDismissedRange] =
+    useState<{
+      start: number
+      end: number
+    } | null>(null)
+  const [promptInjectionHighlightedIndex, setPromptInjectionHighlightedIndex] =
+    useState(0)
+  const [promptInjectionDismissedRange, setPromptInjectionDismissedRange] =
+    useState<{
+      start: number
+      end: number
+    } | null>(null)
   const [mentionHighlightedIndex, setMentionHighlightedIndex] = useState(0)
   const [mentionDismissedRange, setMentionDismissedRange] = useState<{
     start: number
@@ -233,40 +263,93 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
   } | null>(null)
   const pendingCursorRef = useRef<number | null>(null)
 
-  const mentionTrigger = useMemo(
-    () => detectMentionTrigger(value, cursor),
+  const injectionTrigger = useMemo(
+    () => detectComposerInjectionTrigger(value, cursor),
     [value, cursor],
   )
+  const rootInjectionTrigger =
+    injectionTrigger.open && injectionTrigger.kind === 'root'
+      ? injectionTrigger
+      : null
+  const rootInjectionItems = useMemo(
+    () =>
+      filterComposerInjectionRootItems({
+        query: rootInjectionTrigger?.query ?? '',
+        includeContext: projectContextEnabled,
+        includePrompt: true,
+        includeSkill: true,
+      }),
+    [projectContextEnabled, rootInjectionTrigger?.query],
+  )
+  const rootInjectionPickerOpen =
+    rootInjectionTrigger !== null &&
+    rootInjectionItems.length > 0 &&
+    !(
+      rootInjectionDismissedRange !== null &&
+      rootInjectionDismissedRange.start === rootInjectionTrigger.range.start
+    )
+  const contextInjectionTrigger =
+    injectionTrigger.open && injectionTrigger.kind === 'context'
+      ? injectionTrigger
+      : null
+  const skillInjectionTrigger =
+    injectionTrigger.open && injectionTrigger.kind === 'skill'
+      ? injectionTrigger
+      : null
+  const promptInjectionTrigger =
+    injectionTrigger.open && injectionTrigger.kind === 'prompt'
+      ? injectionTrigger
+      : null
   const mentionPickerOpen =
     projectContextEnabled &&
-    mentionTrigger.open &&
+    contextInjectionTrigger !== null &&
     projectContextItems.length > 0 &&
     !(
       mentionDismissedRange !== null &&
-      mentionDismissedRange.start === mentionTrigger.range.start
+      mentionDismissedRange.start === contextInjectionTrigger.range.start
     )
   const mentionItems = useMemo(
     () =>
       mentionPickerOpen
-        ? filterContextMentions(projectContextItems, mentionTrigger.query)
+        ? filterContextMentions(
+            projectContextItems,
+            contextInjectionTrigger?.query ?? '',
+          )
         : EMPTY_PROJECT_CONTEXT_ITEMS,
-    [mentionPickerOpen, mentionTrigger, projectContextItems],
+    [mentionPickerOpen, contextInjectionTrigger, projectContextItems],
   )
 
   useEffect(() => {
+    setRootInjectionHighlightedIndex(0)
+  }, [rootInjectionPickerOpen ? rootInjectionTrigger?.query : null])
+
+  useEffect(() => {
+    if (rootInjectionDismissedRange === null) return
+    if (!rootInjectionTrigger) {
+      setRootInjectionDismissedRange(null)
+      return
+    }
+    if (
+      rootInjectionTrigger.range.start !== rootInjectionDismissedRange.start
+    ) {
+      setRootInjectionDismissedRange(null)
+    }
+  }, [rootInjectionDismissedRange, rootInjectionTrigger])
+
+  useEffect(() => {
     setMentionHighlightedIndex(0)
-  }, [mentionPickerOpen ? mentionTrigger.query : null])
+  }, [mentionPickerOpen ? contextInjectionTrigger?.query : null])
 
   useEffect(() => {
     if (mentionDismissedRange === null) return
-    if (!mentionTrigger.open) {
+    if (!contextInjectionTrigger) {
       setMentionDismissedRange(null)
       return
     }
-    if (mentionTrigger.range.start !== mentionDismissedRange.start) {
+    if (contextInjectionTrigger.range.start !== mentionDismissedRange.start) {
       setMentionDismissedRange(null)
     }
-  }, [mentionDismissedRange, mentionTrigger])
+  }, [mentionDismissedRange, contextInjectionTrigger])
 
   useEffect(() => {
     if (!projectContextEnabled || !activeSessionId) return
@@ -289,24 +372,43 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
     setCursor(next)
   }, [value])
 
+  const handleRootInjectionSelect = useCallback(
+    (item: ComposerInjectionRootItem) => {
+      if (!rootInjectionTrigger) return
+      const result = replaceComposerInjectionRange(
+        value,
+        rootInjectionTrigger.range,
+        item.canonicalTrigger,
+      )
+      pendingCursorRef.current = result.cursor
+      setValue(result.text)
+    },
+    [rootInjectionTrigger, value],
+  )
+
+  const handleRootInjectionDismiss = useCallback(() => {
+    if (!rootInjectionTrigger) return
+    setRootInjectionDismissedRange({ ...rootInjectionTrigger.range })
+  }, [rootInjectionTrigger])
+
   const handleMentionSelect = useCallback(
     (item: ProjectContextItem) => {
-      if (!mentionTrigger.open) return
-      const result = applyMentionExpansion(
+      if (!contextInjectionTrigger) return
+      const result = replaceComposerInjectionRange(
         value,
-        mentionTrigger.range,
+        contextInjectionTrigger.range,
         item.body,
       )
       pendingCursorRef.current = result.cursor
       setValue(result.text)
     },
-    [mentionTrigger, value],
+    [contextInjectionTrigger, value],
   )
 
   const handleMentionDismiss = useCallback(() => {
-    if (!mentionTrigger.open) return
-    setMentionDismissedRange({ ...mentionTrigger.range })
-  }, [mentionTrigger])
+    if (!contextInjectionTrigger) return
+    setMentionDismissedRange({ ...contextInjectionTrigger.range })
+  }, [contextInjectionTrigger])
 
   const appSettings = useAppSettingsStore((s) => s.settings)
   const piModelVisibilityKey =
@@ -354,6 +456,23 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
   const loadGlobalSkillCatalog = useSkillStore((s) => s.loadGlobalCatalog)
   const skillCatalogLoading = useSkillStore((s) => s.isCatalogLoading)
   const skillCatalogError = useSkillStore((s) => s.catalogError)
+  const promptCatalog = usePromptLibraryStore((s) => s.catalog)
+  const loadPromptCatalog = usePromptLibraryStore((s) => s.loadCatalog)
+  const loadGlobalPromptCatalog = usePromptLibraryStore(
+    (s) => s.loadGlobalCatalog,
+  )
+  const loadPromptDetails = usePromptLibraryStore((s) => s.loadDetails)
+  const promptCatalogLoading = usePromptLibraryStore((s) => s.isCatalogLoading)
+  const promptCatalogError = usePromptLibraryStore((s) => s.catalogError)
+  const promptDetailsByPromptId = usePromptLibraryStore(
+    (s) => s.detailsByPromptId,
+  )
+  const promptDetailsErrorByPromptId = usePromptLibraryStore(
+    (s) => s.detailsErrorByPromptId,
+  )
+  const loadingDetailsPromptId = usePromptLibraryStore(
+    (s) => s.loadingDetailsPromptId,
+  )
 
   const attachments = draft?.items ?? []
   const rejections = draft?.rejections ?? []
@@ -376,6 +495,57 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
       }),
     [skillCatalog, selection.providerId, skillQuery],
   )
+  const skillInjectionItems = useMemo(
+    () =>
+      filterComposerSkills({
+        catalog: skillCatalog,
+        providerId: selection.providerId,
+        query: skillInjectionTrigger?.query ?? '',
+      }),
+    [skillCatalog, selection.providerId, skillInjectionTrigger?.query],
+  )
+  const skillInjectionPickerOpen =
+    skillInjectionTrigger !== null &&
+    !!selection.provider &&
+    !(
+      skillInjectionDismissedRange !== null &&
+      skillInjectionDismissedRange.start === skillInjectionTrigger.range.start
+    )
+  const promptInjectionItems = useMemo(
+    () =>
+      filterComposerPrompts({
+        catalog: promptCatalog,
+        query: promptInjectionTrigger?.query ?? '',
+      }),
+    [promptCatalog, promptInjectionTrigger?.query],
+  )
+  const promptInjectionPickerOpen =
+    promptInjectionTrigger !== null &&
+    !(
+      promptInjectionDismissedRange !== null &&
+      promptInjectionDismissedRange.start === promptInjectionTrigger.range.start
+    )
+  const promptInjectionError =
+    promptCatalogError ??
+    (loadingDetailsPromptId
+      ? null
+      : Object.values(promptDetailsErrorByPromptId).find(Boolean) || null)
+
+  const loadSkillsForCurrentContext = useCallback(() => {
+    if (context.kind === 'global') {
+      void loadGlobalSkillCatalog()
+      return
+    }
+    if (projectId) void loadSkillCatalog(projectId)
+  }, [context.kind, loadGlobalSkillCatalog, loadSkillCatalog, projectId])
+
+  const loadPromptsForCurrentContext = useCallback(() => {
+    if (context.kind === 'global') {
+      void loadGlobalPromptCatalog()
+      return
+    }
+    if (projectId) void loadPromptCatalog(projectId)
+  }, [context.kind, loadGlobalPromptCatalog, loadPromptCatalog, projectId])
 
   useEffect(() => {
     loadProviders()
@@ -387,7 +557,53 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
     setSkillQuery('')
     setSkillPickerOpen(false)
     setContextPickerOpen(false)
+    setSkillInjectionDismissedRange(null)
+    setPromptInjectionDismissedRange(null)
   }, [contextKey, activeSessionId])
+
+  useEffect(() => {
+    if (!skillInjectionPickerOpen) return
+    loadSkillsForCurrentContext()
+  }, [loadSkillsForCurrentContext, skillInjectionPickerOpen])
+
+  useEffect(() => {
+    if (!promptInjectionPickerOpen) return
+    loadPromptsForCurrentContext()
+  }, [loadPromptsForCurrentContext, promptInjectionPickerOpen])
+
+  useEffect(() => {
+    setSkillInjectionHighlightedIndex(0)
+  }, [skillInjectionPickerOpen ? skillInjectionTrigger?.query : null])
+
+  useEffect(() => {
+    setPromptInjectionHighlightedIndex(0)
+  }, [promptInjectionPickerOpen ? promptInjectionTrigger?.query : null])
+
+  useEffect(() => {
+    if (skillInjectionDismissedRange === null) return
+    if (!skillInjectionTrigger) {
+      setSkillInjectionDismissedRange(null)
+      return
+    }
+    if (
+      skillInjectionTrigger.range.start !== skillInjectionDismissedRange.start
+    ) {
+      setSkillInjectionDismissedRange(null)
+    }
+  }, [skillInjectionDismissedRange, skillInjectionTrigger])
+
+  useEffect(() => {
+    if (promptInjectionDismissedRange === null) return
+    if (!promptInjectionTrigger) {
+      setPromptInjectionDismissedRange(null)
+      return
+    }
+    if (
+      promptInjectionTrigger.range.start !== promptInjectionDismissedRange.start
+    ) {
+      setPromptInjectionDismissedRange(null)
+    }
+  }, [promptInjectionDismissedRange, promptInjectionTrigger])
 
   useEffect(() => {
     const availableIds = new Set(projectContextItems.map((item) => item.id))
@@ -658,13 +874,9 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
     (nextOpen: boolean) => {
       setSkillPickerOpen(nextOpen)
       if (!nextOpen) return
-      if (context.kind === 'global') {
-        void loadGlobalSkillCatalog()
-        return
-      }
-      if (projectId) void loadSkillCatalog(projectId)
+      loadSkillsForCurrentContext()
     },
-    [context.kind, loadGlobalSkillCatalog, loadSkillCatalog, projectId],
+    [loadSkillsForCurrentContext],
   )
 
   const handleSkillToggle = useCallback((skill: SkillCatalogEntry) => {
@@ -688,6 +900,65 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
       current.filter((selection) => selection.id !== skillId),
     )
   }, [])
+
+  const handleSkillInjectionSelect = useCallback(
+    (skill: SkillCatalogEntry) => {
+      if (!skillInjectionTrigger || !skill.enabled) return
+
+      setSelectedSkills((current) => {
+        const existingSelection = current.some(
+          (selection) => selection.id === skill.id,
+        )
+        if (existingSelection) return current
+        return [...current, skillSelectionFromCatalogEntry(skill)]
+      })
+
+      const result = replaceComposerInjectionRange(
+        value,
+        skillInjectionTrigger.range,
+        '',
+      )
+      pendingCursorRef.current = result.cursor
+      setValue(result.text)
+    },
+    [skillInjectionTrigger, value],
+  )
+
+  const handleSkillInjectionDismiss = useCallback(() => {
+    if (!skillInjectionTrigger) return
+    setSkillInjectionDismissedRange({ ...skillInjectionTrigger.range })
+  }, [skillInjectionTrigger])
+
+  const handlePromptInjectionSelect = useCallback(
+    async (prompt: PromptLibraryEntry) => {
+      if (!promptInjectionTrigger || !promptCatalog) return
+
+      const details =
+        promptDetailsByPromptId[prompt.id] ??
+        (await loadPromptDetails(promptCatalog.projectId, prompt))
+      if (!details) return
+
+      const result = replaceComposerInjectionRange(
+        value,
+        promptInjectionTrigger.range,
+        details.promptText,
+      )
+      pendingCursorRef.current = result.cursor
+      setValue(result.text)
+    },
+    [
+      loadPromptDetails,
+      promptCatalog,
+      promptDetailsByPromptId,
+      promptInjectionTrigger,
+      value,
+    ],
+  )
+
+  const handlePromptInjectionDismiss = useCallback(() => {
+    if (!promptInjectionTrigger) return
+    setPromptInjectionDismissedRange({ ...promptInjectionTrigger.range })
+  }, [promptInjectionTrigger])
 
   const handleContextToggle = useCallback((id: string) => {
     setSelectedContextIds((current) =>
@@ -834,6 +1105,28 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
         onDeliveryModeChange={setDeliveryMode}
         everyTurnContextCount={everyTurnContextCount}
         textareaRef={textareaRef}
+        rootInjectionPickerOpen={rootInjectionPickerOpen}
+        rootInjectionItems={rootInjectionItems}
+        rootInjectionHighlightedIndex={rootInjectionHighlightedIndex}
+        onRootInjectionSelect={handleRootInjectionSelect}
+        onRootInjectionHover={setRootInjectionHighlightedIndex}
+        onRootInjectionDismiss={handleRootInjectionDismiss}
+        skillInjectionPickerOpen={skillInjectionPickerOpen}
+        skillInjectionItems={skillInjectionItems}
+        skillInjectionHighlightedIndex={skillInjectionHighlightedIndex}
+        onSkillInjectionSelect={handleSkillInjectionSelect}
+        onSkillInjectionHover={setSkillInjectionHighlightedIndex}
+        onSkillInjectionDismiss={handleSkillInjectionDismiss}
+        promptInjectionPickerOpen={promptInjectionPickerOpen}
+        promptInjectionItems={promptInjectionItems}
+        promptInjectionHighlightedIndex={promptInjectionHighlightedIndex}
+        promptInjectionLoading={
+          promptCatalogLoading || loadingDetailsPromptId !== null
+        }
+        promptInjectionError={promptInjectionError}
+        onPromptInjectionSelect={handlePromptInjectionSelect}
+        onPromptInjectionHover={setPromptInjectionHighlightedIndex}
+        onPromptInjectionDismiss={handlePromptInjectionDismiss}
         mentionPickerOpen={mentionPickerOpen}
         mentionItems={mentionItems}
         mentionHighlightedIndex={mentionHighlightedIndex}
