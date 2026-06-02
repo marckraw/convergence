@@ -1,6 +1,26 @@
 {
-  "currentVersion": "0.37.46",
+  "currentVersion": "0.38.1",
   "releases": [
+    {
+      "version": "0.38.1",
+      "date": null,
+      "notes": "### Patch Changes\n\n- de356e8: Add code review actions for checking out remote pull requests into local worktrees and starting follow-up sessions from the review surface."
+    },
+    {
+      "version": "0.38.0",
+      "date": null,
+      "notes": "### Minor Changes\n\n- 230af33: Add guided code review mode with AI-generated walkthrough sections, risk rationale tooltips, and remote GitHub pull request targets."
+    },
+    {
+      "version": "0.37.48",
+      "date": null,
+      "notes": "### Patch Changes\n\n- c1b9897: Show image attachments as inline previews in sent messages while preserving click-to-open full previews."
+    },
+    {
+      "version": "0.37.47",
+      "date": null,
+      "notes": "### Patch Changes\n\n- cab2c20: Fix session name regeneration so naming requests preserve the session's provider permission settings and no longer fail when the provider one-shot errors."
+    },
     {
       "version": "0.37.46",
       "date": null,
