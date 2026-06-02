@@ -24,7 +24,9 @@ import {
 } from '@/entities/session'
 import { AttachmentsRow, type Attachment } from '@/entities/attachment'
 import type { ProjectContextItem } from '@/entities/project-context'
+import type { PromptLibraryEntry } from '@/entities/prompt-library'
 import type { SkillCatalogEntry, SkillSelection } from '@/entities/skill'
+import type { ComposerInjectionRootItem } from './composer-injection-trigger.pure'
 import { ModelPickerDialog } from '@/features/model-picker'
 import { Button } from '@/shared/ui/button'
 import { Popover, PopoverContent, PopoverTrigger } from '@/shared/ui/popover'
@@ -41,6 +43,9 @@ import {
 } from 'lucide-react'
 import { ComposerSelect } from './composer-select.presentational'
 import { ComposerContextMentionPicker } from './composer-context-mention.presentational'
+import { ComposerInjectionRootPicker } from './composer-injection-root-picker.presentational'
+import { ComposerPromptInjectionPicker } from './composer-prompt-injection-picker.presentational'
+import { ComposerSkillInjectionPicker } from './composer-skill-injection-picker.presentational'
 import { ProjectContextPicker } from './project-context-picker.presentational'
 import { SkillPicker } from './skill-picker.presentational'
 import { SkillSelectionChip } from './skill-selection-chip.presentational'
@@ -102,6 +107,26 @@ interface ComposerProps {
   onPaste: (e: ClipboardEvent<HTMLTextAreaElement>) => void
   everyTurnContextCount?: number
   textareaRef?: Ref<HTMLTextAreaElement>
+  rootInjectionPickerOpen?: boolean
+  rootInjectionItems?: ComposerInjectionRootItem[]
+  rootInjectionHighlightedIndex?: number
+  onRootInjectionSelect?: (item: ComposerInjectionRootItem) => void
+  onRootInjectionHover?: (index: number) => void
+  onRootInjectionDismiss?: () => void
+  skillInjectionPickerOpen?: boolean
+  skillInjectionItems?: SkillCatalogEntry[]
+  skillInjectionHighlightedIndex?: number
+  onSkillInjectionSelect?: (skill: SkillCatalogEntry) => void
+  onSkillInjectionHover?: (index: number) => void
+  onSkillInjectionDismiss?: () => void
+  promptInjectionPickerOpen?: boolean
+  promptInjectionItems?: PromptLibraryEntry[]
+  promptInjectionHighlightedIndex?: number
+  promptInjectionLoading?: boolean
+  promptInjectionError?: string | null
+  onPromptInjectionSelect?: (prompt: PromptLibraryEntry) => void
+  onPromptInjectionHover?: (index: number) => void
+  onPromptInjectionDismiss?: () => void
   mentionPickerOpen?: boolean
   mentionItems?: ProjectContextItem[]
   mentionHighlightedIndex?: number
@@ -133,7 +158,7 @@ export const Composer: FC<ComposerProps> = ({
   deliveryModes,
   onDeliveryModeChange,
   selectionDisabled = false,
-  placeholder = 'Ask anything, @tag files/folders, / for commands, :: for project context...',
+  placeholder = 'Ask anything, @tag files/folders, :: for injections...',
   disabled = false,
   attachments,
   attachmentErrorByAttachmentId,
@@ -168,6 +193,26 @@ export const Composer: FC<ComposerProps> = ({
   onPaste,
   everyTurnContextCount = 0,
   textareaRef,
+  rootInjectionPickerOpen = false,
+  rootInjectionItems = [],
+  rootInjectionHighlightedIndex = 0,
+  onRootInjectionSelect,
+  onRootInjectionHover,
+  onRootInjectionDismiss,
+  skillInjectionPickerOpen = false,
+  skillInjectionItems = [],
+  skillInjectionHighlightedIndex = 0,
+  onSkillInjectionSelect,
+  onSkillInjectionHover,
+  onSkillInjectionDismiss,
+  promptInjectionPickerOpen = false,
+  promptInjectionItems = [],
+  promptInjectionHighlightedIndex = 0,
+  promptInjectionLoading = false,
+  promptInjectionError = null,
+  onPromptInjectionSelect,
+  onPromptInjectionHover,
+  onPromptInjectionDismiss,
   mentionPickerOpen = false,
   mentionItems = [],
   mentionHighlightedIndex = 0,
@@ -177,6 +222,99 @@ export const Composer: FC<ComposerProps> = ({
   onSelectionChange,
 }) => {
   const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
+    if (rootInjectionPickerOpen && rootInjectionItems.length > 0) {
+      if (e.key === 'ArrowDown') {
+        e.preventDefault()
+        onRootInjectionHover?.(
+          (rootInjectionHighlightedIndex + 1) % rootInjectionItems.length,
+        )
+        return
+      }
+      if (e.key === 'ArrowUp') {
+        e.preventDefault()
+        onRootInjectionHover?.(
+          (rootInjectionHighlightedIndex - 1 + rootInjectionItems.length) %
+            rootInjectionItems.length,
+        )
+        return
+      }
+      if (e.key === 'Enter' && !e.metaKey && !e.ctrlKey) {
+        e.preventDefault()
+        const item = rootInjectionItems[rootInjectionHighlightedIndex]
+        if (item) onRootInjectionSelect?.(item)
+        return
+      }
+      if (e.key === 'Escape') {
+        e.preventDefault()
+        onRootInjectionDismiss?.()
+        return
+      }
+    }
+
+    if (skillInjectionPickerOpen) {
+      if (e.key === 'Escape') {
+        e.preventDefault()
+        onSkillInjectionDismiss?.()
+        return
+      }
+      if (skillInjectionItems.length > 0) {
+        if (e.key === 'ArrowDown') {
+          e.preventDefault()
+          onSkillInjectionHover?.(
+            (skillInjectionHighlightedIndex + 1) % skillInjectionItems.length,
+          )
+          return
+        }
+        if (e.key === 'ArrowUp') {
+          e.preventDefault()
+          onSkillInjectionHover?.(
+            (skillInjectionHighlightedIndex - 1 + skillInjectionItems.length) %
+              skillInjectionItems.length,
+          )
+          return
+        }
+        if (e.key === 'Enter' && !e.metaKey && !e.ctrlKey) {
+          e.preventDefault()
+          const skill = skillInjectionItems[skillInjectionHighlightedIndex]
+          if (skill) onSkillInjectionSelect?.(skill)
+          return
+        }
+      }
+    }
+
+    if (promptInjectionPickerOpen) {
+      if (e.key === 'Escape') {
+        e.preventDefault()
+        onPromptInjectionDismiss?.()
+        return
+      }
+      if (promptInjectionItems.length > 0) {
+        if (e.key === 'ArrowDown') {
+          e.preventDefault()
+          onPromptInjectionHover?.(
+            (promptInjectionHighlightedIndex + 1) % promptInjectionItems.length,
+          )
+          return
+        }
+        if (e.key === 'ArrowUp') {
+          e.preventDefault()
+          onPromptInjectionHover?.(
+            (promptInjectionHighlightedIndex -
+              1 +
+              promptInjectionItems.length) %
+              promptInjectionItems.length,
+          )
+          return
+        }
+        if (e.key === 'Enter' && !e.metaKey && !e.ctrlKey) {
+          e.preventDefault()
+          const prompt = promptInjectionItems[promptInjectionHighlightedIndex]
+          if (prompt) onPromptInjectionSelect?.(prompt)
+          return
+        }
+      }
+    }
+
     if (mentionPickerOpen && mentionItems.length > 0) {
       if (e.key === 'ArrowDown') {
         e.preventDefault()
@@ -348,6 +486,14 @@ export const Composer: FC<ComposerProps> = ({
           </div>
         ) : null}
         <div className="relative">
+          <ComposerInjectionRootPicker
+            open={rootInjectionPickerOpen}
+            items={rootInjectionItems}
+            highlightedIndex={rootInjectionHighlightedIndex}
+            onSelect={(item) => onRootInjectionSelect?.(item)}
+            onHover={(index) => onRootInjectionHover?.(index)}
+            onDismiss={() => onRootInjectionDismiss?.()}
+          />
           <ComposerContextMentionPicker
             open={projectContextEnabled && mentionPickerOpen}
             items={mentionItems}
@@ -355,6 +501,28 @@ export const Composer: FC<ComposerProps> = ({
             onSelect={(item) => onMentionSelect?.(item)}
             onHover={(index) => onMentionHover?.(index)}
             onDismiss={() => onMentionDismiss?.()}
+          />
+          <ComposerSkillInjectionPicker
+            open={skillInjectionPickerOpen}
+            items={skillInjectionItems}
+            selectedSkills={selectedSkills}
+            highlightedIndex={skillInjectionHighlightedIndex}
+            activeProviderLabel={selection.providerLabel}
+            isLoading={skillCatalogLoading}
+            error={skillCatalogError}
+            onSelect={(skill) => onSkillInjectionSelect?.(skill)}
+            onHover={(index) => onSkillInjectionHover?.(index)}
+            onDismiss={() => onSkillInjectionDismiss?.()}
+          />
+          <ComposerPromptInjectionPicker
+            open={promptInjectionPickerOpen}
+            items={promptInjectionItems}
+            highlightedIndex={promptInjectionHighlightedIndex}
+            isLoading={promptInjectionLoading}
+            error={promptInjectionError}
+            onSelect={(prompt) => onPromptInjectionSelect?.(prompt)}
+            onHover={(index) => onPromptInjectionHover?.(index)}
+            onDismiss={() => onPromptInjectionDismiss?.()}
           />
           <Textarea
             ref={textareaRef}
