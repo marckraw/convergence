@@ -1,14 +1,11 @@
 import type { FC } from 'react'
 import { SearchableSelect } from '@/shared/ui/searchable-select.container'
+import type { SearchableSelectItem } from '@/shared/ui/searchable-select.presentational'
 
 interface ComposerSelectProps {
   selectedId: string
   value: string
-  items: Array<{
-    id: string
-    label: string
-    description?: string
-  }>
+  items: SearchableSelectItem[]
   onChange: (id: string) => void
   disabled?: boolean
   className?: string

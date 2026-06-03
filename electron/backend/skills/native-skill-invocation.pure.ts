@@ -11,7 +11,10 @@ import type {
   SkillSelection,
 } from './skills.types'
 
-export type NativeSkillCommandSyntax = 'claude-slash' | 'pi-skill-slash'
+export type NativeSkillCommandSyntax =
+  | 'claude-slash'
+  | 'pi-skill-slash'
+  | 'antigravity-slash'
 
 export type NativeSkillInvocationResolution =
   | {

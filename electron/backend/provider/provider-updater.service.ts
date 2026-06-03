@@ -114,7 +114,7 @@ export async function updateProviderPackage(
   const providerPackageNames = [
     provider.packageName,
     ...(provider.legacyPackageNames ?? []),
-  ]
+  ].filter((packageName): packageName is string => !!packageName)
   const install =
     providerPackageNames
       .map((packageName) =>
@@ -160,7 +160,9 @@ export async function updateProviderPackage(
       error:
         nonNpmInstall.manager === 'homebrew'
           ? `${provider.name} was found in a Homebrew-managed location. Run ${provider.updateCommand} in a terminal for now.`
-          : `${provider.name} was found at ${binaryPath}, but it does not look like an npm global install for ${providerPackageNames.join(' or ')}.`,
+          : providerPackageNames.length > 0
+            ? `${provider.name} was found at ${binaryPath}, but it does not look like an npm global install for ${providerPackageNames.join(' or ')}.`
+            : `${provider.name} was found at ${binaryPath}, but Convergence does not know how to update this install automatically.`,
     }
   }
 
@@ -172,6 +174,17 @@ export async function updateProviderPackage(
       stdout: '',
       stderr: '',
       error: `Could not find npm for the detected install at ${install.npmPath}.`,
+    }
+  }
+
+  if (!provider.packageName) {
+    return {
+      ok: false,
+      providerId,
+      command: provider.updateCommand,
+      stdout: '',
+      stderr: '',
+      error: `${provider.name} does not have an npm package configured for updates.`,
     }
   }
 

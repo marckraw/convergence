@@ -25,6 +25,7 @@ import {
 import { ConversationItemShell } from './conversation-item-shell.presentational'
 import { ConversationItemHeader } from './conversation-item-header.presentational'
 import { ConversationItemTimestamp } from './conversation-item-timestamp.presentational'
+import { ToolVisibilityBadge } from './tool-visibility-badge.presentational'
 import { ChoiceRequestForm } from './choice-request-form.presentational'
 import { PlanRequestForm } from './plan-request-form.presentational'
 import { FormRequestForm } from './form-request-form.presentational'
@@ -206,11 +207,16 @@ export const ConversationItemView: FC<ConversationItemViewProps> = ({
               <Wrench className="h-3.5 w-3.5 text-muted-foreground" />
             </div>
             <div className="min-w-0 flex-1 pt-1">
-              <ConversationItemTimestamp
-                createdAt={entry.createdAt}
-                timing={viewModel.timing}
-                className="mb-1"
-              />
+              <div className="mb-1 flex min-w-0 flex-wrap items-center gap-1.5">
+                <ConversationItemTimestamp
+                  createdAt={entry.createdAt}
+                  timing={viewModel.timing}
+                />
+                <ToolVisibilityBadge
+                  label={viewModel.toolVisibilityLabel}
+                  title={viewModel.toolVisibilityTitle}
+                />
+              </div>
               <details className="group min-w-0 rounded-md border border-border/60 bg-muted/20">
                 <summary className="flex cursor-pointer list-none items-start gap-2 rounded-md px-2 py-1.5 pr-10 hover:bg-muted/40">
                   <ChevronRight className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform group-open:rotate-90" />
@@ -235,11 +241,16 @@ export const ConversationItemView: FC<ConversationItemViewProps> = ({
               <Terminal className="h-3.5 w-3.5 text-muted-foreground" />
             </div>
             <div className="min-w-0 flex-1 pt-1">
-              <ConversationItemTimestamp
-                createdAt={entry.createdAt}
-                timing={viewModel.timing}
-                className="mb-1"
-              />
+              <div className="mb-1 flex min-w-0 flex-wrap items-center gap-1.5">
+                <ConversationItemTimestamp
+                  createdAt={entry.createdAt}
+                  timing={viewModel.timing}
+                />
+                <ToolVisibilityBadge
+                  label={viewModel.toolVisibilityLabel}
+                  title={viewModel.toolVisibilityTitle}
+                />
+              </div>
               <details className="group min-w-0 rounded-md border border-border/60 bg-muted/20">
                 <summary className="flex cursor-pointer list-none items-start gap-2 rounded-md px-2 py-1.5 pr-10 hover:bg-muted/40">
                   <ChevronRight className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform group-open:rotate-90" />

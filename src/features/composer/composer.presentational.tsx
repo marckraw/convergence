@@ -20,6 +20,7 @@ import {
   CLAUDE_CODE_PERMISSION_MODE_OPTIONS,
   CODEX_APPROVAL_POLICY_OPTIONS,
   CODEX_SANDBOX_OPTIONS,
+  getProviderLifecycleBadge,
   getSimplePermissionPreset,
 } from '@/entities/session'
 import { AttachmentsRow, type Attachment } from '@/entities/attachment'
@@ -366,6 +367,7 @@ export const Composer: FC<ComposerProps> = ({
       provider.vendorLabel && provider.vendorLabel !== provider.name
         ? provider.name
         : undefined,
+    badge: getProviderLifecycleBadge(provider) ?? undefined,
   }))
   const effortItems =
     selection.model?.effortOptions.map((effort) => ({

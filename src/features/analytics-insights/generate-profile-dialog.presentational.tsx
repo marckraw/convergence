@@ -12,6 +12,7 @@ import {
   DialogTitle,
 } from '@/shared/ui/dialog'
 import { SearchableSelect } from '@/shared/ui/searchable-select.container'
+import type { SearchableSelectItem } from '@/shared/ui/searchable-select.presentational'
 
 interface GenerateProfileDialogProps {
   open: boolean
@@ -20,7 +21,7 @@ interface GenerateProfileDialogProps {
   modelId: string
   modelLabel: string
   providers: ProviderInfo[]
-  providerItems: Array<{ id: string; label: string; description?: string }>
+  providerItems: SearchableSelectItem[]
   isGenerating: boolean
   onOpenChange: (open: boolean) => void
   onProviderChange: (providerId: string) => void

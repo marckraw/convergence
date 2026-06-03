@@ -1,6 +1,7 @@
 import { CodexSkillsService } from './codex-skills.service'
 import { ClaudeCodeSkillsService } from './claude-code-skills.service'
 import { PiSkillsService } from './pi-skills.service'
+import { AntigravitySkillsService } from './antigravity-skills.service'
 import { buildProviderSkillErrorCatalog } from './skill-catalog.pure'
 import { readdir, readFile, stat } from 'fs/promises'
 import { basename, dirname, join, resolve } from 'path'
@@ -40,6 +41,8 @@ function toSkillProviderId(id: string): SkillProviderId | null {
       return 'claude-code'
     case 'pi':
       return 'pi'
+    case 'antigravity':
+      return 'antigravity'
     default:
       return null
   }
@@ -92,6 +95,17 @@ function providerErrorCatalog(
     })
   }
 
+  if (providerId === 'antigravity') {
+    return buildProviderSkillErrorCatalog({
+      providerId,
+      providerName: 'Antigravity CLI',
+      catalogSource: 'filesystem',
+      invocationSupport: 'native-command',
+      activationConfirmation: 'none',
+      error: message,
+    })
+  }
+
   return buildProviderSkillErrorCatalog({
     providerId,
     providerName: provider.name,
@@ -113,6 +127,9 @@ function defaultCreateAdapter(
   }
   if (provider.id === 'pi') {
     return new PiSkillsService()
+  }
+  if (provider.id === 'antigravity') {
+    return new AntigravitySkillsService()
   }
 
   return null

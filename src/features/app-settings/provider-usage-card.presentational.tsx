@@ -28,17 +28,43 @@ function sortedWindows(windows: ProviderQuotaWindow[]) {
 }
 
 function getProviderName(providerId: ProviderQuotaSnapshot['providerId']) {
-  return providerId === 'codex' ? 'Codex' : 'Claude Code'
+  if (providerId === 'codex') return 'Codex'
+  if (providerId === 'antigravity') return 'Antigravity CLI'
+  return 'Claude Code'
 }
 
 function getUsageUrl(providerId: ProviderQuotaSnapshot['providerId']) {
-  return providerId === 'codex'
-    ? 'https://chatgpt.com/codex/cloud/settings/analytics#usage'
-    : 'https://claude.ai/new#settings/usage'
+  if (providerId === 'codex') {
+    return 'https://chatgpt.com/codex/cloud/settings/analytics#usage'
+  }
+  if (providerId === 'antigravity') {
+    return 'https://www.antigravity.google/docs/plans'
+  }
+  return 'https://claude.ai/new#settings/usage'
+}
+
+function getUsageLinks(providerId: ProviderQuotaSnapshot['providerId']) {
+  if (providerId === 'antigravity') {
+    return [
+      {
+        label: 'Plans',
+        url: 'https://www.antigravity.google/docs/plans',
+      },
+      {
+        label: 'Credits',
+        url: 'https://one.google.com/ai/credits',
+      },
+    ]
+  }
+
+  return [{ label: 'Open', url: getUsageUrl(providerId) }]
 }
 
 function getSourceLabel(snapshot: ProviderQuotaSnapshot) {
-  if (snapshot.providerId === 'claude-code') {
+  if (
+    snapshot.providerId === 'claude-code' ||
+    snapshot.providerId === 'antigravity'
+  ) {
     return 'manual usage page'
   }
   return snapshot.source === 'provider-api'
@@ -47,9 +73,7 @@ function getSourceLabel(snapshot: ProviderQuotaSnapshot) {
 }
 
 export function ProviderUsageCard({ snapshot }: ProviderUsageCardProps) {
-  const openUsage = () => {
-    window.open(getUsageUrl(snapshot.providerId), '_blank')
-  }
+  const usageLinks = getUsageLinks(snapshot.providerId)
 
   return (
     <section className="space-y-3 rounded-lg border border-border/70 bg-card/25 px-4 py-4">
@@ -62,10 +86,20 @@ export function ProviderUsageCard({ snapshot }: ProviderUsageCardProps) {
             Source: {getSourceLabel(snapshot)}
           </p>
         </div>
-        <Button type="button" variant="ghost" size="sm" onClick={openUsage}>
-          <ExternalLink className="h-3.5 w-3.5" />
-          Open
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          {usageLinks.map((link) => (
+            <Button
+              key={link.url}
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => window.open(link.url, '_blank')}
+            >
+              <ExternalLink className="h-3.5 w-3.5" />
+              {link.label}
+            </Button>
+          ))}
+        </div>
       </div>
 
       {snapshot.status === 'available' ? (

@@ -80,4 +80,13 @@ describe('provider-updater.pure', () => {
       realBinaryPath: '/Users/me/.local/bin/claude',
     })
   })
+
+  it('classifies non-npm Antigravity installs as provider-managed', () => {
+    expect(
+      buildNonNpmProviderInstallInfo('/Users/me/.local/bin/agy', 'antigravity'),
+    ).toMatchObject({
+      manager: 'self',
+      realBinaryPath: '/Users/me/.local/bin/agy',
+    })
+  })
 })

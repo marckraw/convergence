@@ -241,7 +241,7 @@ export const AppSettingsDialog: FC<AppSettingsDialogProps> = ({
         return providers.length === 0 ? (
           <div className="rounded-xl border border-dashed border-border bg-card/35 px-4 py-5">
             <p className="text-sm text-muted-foreground">
-              No providers are available yet. Install Claude Code or Codex to
+              No providers are available yet. Install a provider CLI to
               configure defaults.
             </p>
           </div>

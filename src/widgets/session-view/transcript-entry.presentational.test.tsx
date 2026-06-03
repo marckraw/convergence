@@ -320,6 +320,60 @@ describe('ConversationItemView', () => {
     expect(details).not.toHaveAttribute('open')
   })
 
+  it('marks Antigravity trajectory tool cards as post-run telemetry', () => {
+    renderConversationItemView({
+      entry: {
+        id: 'tool-call-1',
+        sessionId: 'session-1',
+        sequence: 1,
+        turnId: null,
+        kind: 'tool-call',
+        state: 'complete',
+        toolName: 'list_dir',
+        inputText: '{"DirectoryPath":"."}',
+        createdAt: '2026-04-13T10:00:00.000Z',
+        updatedAt: '2026-04-13T10:00:00.000Z',
+        providerMeta: {
+          providerId: 'antigravity',
+          providerItemId: 'antigravity:2:tool-call:call-1',
+          providerEventType: 'trajectory-tool-call',
+        },
+      },
+    })
+
+    expect(screen.getByTestId('tool-visibility-badge')).toHaveTextContent(
+      'Post-run',
+    )
+    expect(screen.getByTestId('tool-visibility-badge')).toHaveAttribute(
+      'title',
+      'Recovered from the Antigravity conversation database after the turn completed.',
+    )
+  })
+
+  it('does not mark live provider tool cards as post-run telemetry', () => {
+    renderConversationItemView({
+      entry: {
+        id: 'tool-call-1',
+        sessionId: 'session-1',
+        sequence: 1,
+        turnId: null,
+        kind: 'tool-call',
+        state: 'complete',
+        toolName: 'Bash',
+        inputText: '{"command":"ls"}',
+        createdAt: '2026-04-13T10:00:00.000Z',
+        updatedAt: '2026-04-13T10:00:00.000Z',
+        providerMeta: {
+          providerId: 'codex',
+          providerItemId: 'tool-1',
+          providerEventType: 'tool-use',
+        },
+      },
+    })
+
+    expect(screen.queryByTestId('tool-visibility-badge')).toBeNull()
+  })
+
   describe('copy button', () => {
     const writeText = vi.fn<(value: string) => Promise<void>>()
 

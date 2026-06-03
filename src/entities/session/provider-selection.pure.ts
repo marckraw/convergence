@@ -15,6 +15,11 @@ export interface ResolvedProviderSelection {
   effortId: ReasoningEffort | ''
 }
 
+export interface ProviderLifecycleBadge {
+  label: string
+  title: string
+}
+
 export interface StoredProviderDefaults {
   providerId?: string | null
   modelId?: string | null
@@ -23,6 +28,18 @@ export interface StoredProviderDefaults {
 
 export function getProviderDisplayLabel(provider: ProviderInfo): string {
   return provider.vendorLabel || provider.name
+}
+
+export function getProviderLifecycleBadge(
+  provider: ProviderInfo,
+): ProviderLifecycleBadge | null {
+  if (provider.id !== 'antigravity') return null
+
+  return {
+    label: 'ALPHA',
+    title:
+      'Antigravity support is early: tool visibility is post-run and provider telemetry is limited.',
+  }
 }
 
 export function resolveProviderSelection(

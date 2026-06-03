@@ -10,8 +10,12 @@ export interface KnownProvider {
   name: string
   vendorLabel: string
   binaryName: string
-  packageName: string
+  binaryAliases?: string[]
+  packageName: string | null
   legacyPackageNames?: string[]
+  latestVersionSource?:
+    | { type: 'npm' }
+    | { type: 'github-release'; owner: string; repo: string }
   installCommand: string
   updateCommand: string
   supportsSelfUpdate: boolean
@@ -24,6 +28,7 @@ const KNOWN_PROVIDERS: KnownProvider[] = [
     vendorLabel: 'Anthropic',
     binaryName: 'claude',
     packageName: '@anthropic-ai/claude-code',
+    latestVersionSource: { type: 'npm' },
     installCommand: 'npm install -g @anthropic-ai/claude-code@latest',
     updateCommand: 'claude update',
     supportsSelfUpdate: true,
@@ -34,6 +39,7 @@ const KNOWN_PROVIDERS: KnownProvider[] = [
     vendorLabel: 'OpenAI',
     binaryName: 'codex',
     packageName: '@openai/codex',
+    latestVersionSource: { type: 'npm' },
     installCommand: 'npm install -g @openai/codex@latest',
     updateCommand: 'npm install -g @openai/codex@latest',
     supportsSelfUpdate: false,
@@ -45,9 +51,27 @@ const KNOWN_PROVIDERS: KnownProvider[] = [
     binaryName: 'pi',
     packageName: '@earendil-works/pi-coding-agent',
     legacyPackageNames: ['@mariozechner/pi-coding-agent'],
+    latestVersionSource: { type: 'npm' },
     installCommand: 'npm install -g @earendil-works/pi-coding-agent@latest',
     updateCommand: 'npm install -g @earendil-works/pi-coding-agent@latest',
     supportsSelfUpdate: false,
+  },
+  {
+    id: 'antigravity',
+    name: 'Antigravity CLI',
+    vendorLabel: 'Google',
+    binaryName: 'agy',
+    binaryAliases: ['antigravity'],
+    packageName: null,
+    latestVersionSource: {
+      type: 'github-release',
+      owner: 'google-antigravity',
+      repo: 'antigravity-cli',
+    },
+    installCommand:
+      'curl -fsSL https://antigravity.google/cli/install.sh | bash',
+    updateCommand: 'agy update',
+    supportsSelfUpdate: true,
   },
 ]
 
@@ -160,6 +184,13 @@ export function resolveProviderUpdateStrategy(
   binaryPath: string | null,
 ): { strategy: ProviderUpdateStrategy; command: string | null } {
   if (install?.manager === 'npm' && install.npmPath) {
+    if (!provider.packageName) {
+      return {
+        strategy: null,
+        command: null,
+      }
+    }
+
     if (
       install.packageName &&
       install.packageName !== provider.packageName &&

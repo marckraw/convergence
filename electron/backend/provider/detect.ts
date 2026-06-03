@@ -9,6 +9,7 @@ import {
   type KnownProvider,
 } from './provider-status.pure'
 import { fetchNpmLatestVersion } from './npm-registry'
+import { fetchGithubLatestReleaseVersion } from './github-release'
 import { isPiAuthConfigured } from './pi/pi-auth-status'
 import {
   buildNonNpmProviderInstallInfo,
@@ -75,7 +76,11 @@ async function inspectNpmInstall(
     const packageNames = [
       provider.packageName,
       ...(provider.legacyPackageNames ?? []),
-    ]
+    ].filter((packageName): packageName is string => !!packageName)
+    if (packageNames.length === 0) {
+      return buildNonNpmProviderInstallInfo(realBinaryPath, providerId)
+    }
+
     const install =
       packageNames
         .map((packageName) =>
@@ -107,6 +112,32 @@ async function inspectNpmInstall(
   }
 }
 
+async function findProviderBinary(
+  provider: KnownProvider,
+): Promise<string | null> {
+  for (const binaryName of [
+    provider.binaryName,
+    ...(provider.binaryAliases ?? []),
+  ]) {
+    const binaryPath = await which(binaryName)
+    if (binaryPath) return binaryPath
+  }
+
+  return null
+}
+
+function fetchLatestProviderVersion(provider: KnownProvider) {
+  if (provider.latestVersionSource?.type === 'github-release') {
+    return fetchGithubLatestReleaseVersion(provider.latestVersionSource)
+  }
+
+  if (provider.packageName) {
+    return fetchNpmLatestVersion(provider.packageName)
+  }
+
+  return Promise.resolve({ version: null, error: null })
+}
+
 export interface DetectedProvider {
   id: string
   name: string
@@ -117,13 +148,13 @@ export interface DetectedProvider {
 export async function inspectProviderStatuses(): Promise<ProviderStatusInfo[]> {
   const statuses = await Promise.all(
     getKnownProviders().map(async (provider) => {
-      const binaryPath = await which(provider.binaryName)
+      const binaryPath = await findProviderBinary(provider)
       const [
         { version: latestVersion, error: updateCheckError },
         version,
         install,
       ] = await Promise.all([
-        fetchNpmLatestVersion(provider.packageName),
+        fetchLatestProviderVersion(provider),
         binaryPath ? getVersion(binaryPath) : Promise.resolve(null),
         binaryPath
           ? inspectNpmInstall(binaryPath, provider, provider.id)

@@ -1,6 +1,21 @@
 {
-  "currentVersion": "0.38.1",
+  "currentVersion": "0.38.4",
   "releases": [
+    {
+      "version": "0.38.4",
+      "date": null,
+      "notes": "### Patch Changes\n\n- 11a7b77: Show the originating project name inline on idle terminal rows in the sidebar, next to the terminal name in a smaller muted font, so terminals are distinguishable at a glance without hovering."
+    },
+    {
+      "version": "0.38.3",
+      "date": null,
+      "notes": "### Patch Changes\n\n- 764a70b: Add keyboard-first composer injection pickers for context, skills, and prompts."
+    },
+    {
+      "version": "0.38.2",
+      "date": null,
+      "notes": "### Patch Changes\n\n- 9126454: Add configurable guided review model defaults with Opus and GPT-5.5 defaults and show a loading state while review guides generate."
+    },
     {
       "version": "0.38.1",
       "date": null,
