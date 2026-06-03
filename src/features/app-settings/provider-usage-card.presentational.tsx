@@ -28,17 +28,33 @@ function sortedWindows(windows: ProviderQuotaWindow[]) {
 }
 
 function getProviderName(providerId: ProviderQuotaSnapshot['providerId']) {
-  return providerId === 'codex' ? 'Codex' : 'Claude Code'
+  switch (providerId) {
+    case 'codex':
+      return 'Codex'
+    case 'claude-code':
+      return 'Claude Code'
+    case 'cursor':
+      return 'Cursor'
+  }
 }
 
-function getUsageUrl(providerId: ProviderQuotaSnapshot['providerId']) {
-  return providerId === 'codex'
-    ? 'https://chatgpt.com/codex/cloud/settings/analytics#usage'
-    : 'https://claude.ai/new#settings/usage'
+function getUsageUrl(snapshot: ProviderQuotaSnapshot) {
+  if (snapshot.status === 'unavailable' && snapshot.usageUrl) {
+    return snapshot.usageUrl
+  }
+
+  switch (snapshot.providerId) {
+    case 'codex':
+      return 'https://chatgpt.com/codex/cloud/settings/analytics#usage'
+    case 'claude-code':
+      return 'https://claude.ai/new#settings/usage'
+    case 'cursor':
+      return 'https://cursor.com/dashboard'
+  }
 }
 
 function getSourceLabel(snapshot: ProviderQuotaSnapshot) {
-  if (snapshot.providerId === 'claude-code') {
+  if (snapshot.source === 'manual') {
     return 'manual usage page'
   }
   return snapshot.source === 'provider-api'
@@ -48,7 +64,7 @@ function getSourceLabel(snapshot: ProviderQuotaSnapshot) {
 
 export function ProviderUsageCard({ snapshot }: ProviderUsageCardProps) {
   const openUsage = () => {
-    window.open(getUsageUrl(snapshot.providerId), '_blank')
+    window.open(getUsageUrl(snapshot), '_blank')
   }
 
   return (

@@ -94,7 +94,10 @@ export function buildNonNpmProviderInstallInfo(
   }
 
   return {
-    manager: providerId === 'claude-code' ? 'self' : 'unknown',
+    manager:
+      providerId === 'claude-code' || providerId === 'cursor'
+        ? 'self'
+        : 'unknown',
     realBinaryPath,
     packageName: null,
     packageDirectory: null,

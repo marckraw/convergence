@@ -86,6 +86,7 @@ function skillProviderIdFromValue(value: unknown): SkillProviderId | null {
     case 'codex':
     case 'claude-code':
     case 'pi':
+    case 'cursor':
       return value
     default:
       return null

@@ -7,6 +7,14 @@ import type {
   ProviderSkillsCapability,
   ReasoningEffort,
 } from './provider.types'
+import {
+  CURSOR_ACP_ATTACHMENT_CAPABILITY,
+  CURSOR_ACP_INTERACTION_CAPABILITY,
+  CURSOR_ACP_MID_RUN_INPUT_CAPABILITY,
+  CURSOR_ACP_SETTINGS_INFO,
+  CURSOR_ACP_SKILLS_CAPABILITY,
+  CURSOR_ACP_TELEMETRY_CAPABILITY,
+} from './cursor/cursor-acp-contract.pure'
 
 const MB = 1024 * 1024
 
@@ -113,6 +121,8 @@ export function getMidRunInputCapabilityForProviderId(
       return CODEX_MID_RUN_INPUT_CAPABILITY
     case 'pi':
       return PI_MID_RUN_INPUT_CAPABILITY
+    case 'cursor':
+      return CURSOR_ACP_MID_RUN_INPUT_CAPABILITY
     default:
       return NO_MID_RUN_INPUT_CAPABILITY
   }
@@ -298,6 +308,34 @@ export function buildFallbackPiDescriptor(): ProviderDescriptor {
     attachments: PI_ATTACHMENT_CAPABILITY,
     midRunInput: PI_MID_RUN_INPUT_CAPABILITY,
     skills: PI_SKILLS_CAPABILITY,
+  }
+}
+
+export function buildFallbackCursorDescriptor(): ProviderDescriptor {
+  return {
+    id: 'cursor',
+    name: 'Cursor',
+    vendorLabel: 'Anysphere',
+    kind: 'conversation',
+    supportsContinuation: true,
+    defaultModelId: 'default[]',
+    modelOptions: [
+      {
+        id: 'default[]',
+        label: 'Auto',
+        defaultEffort: null,
+        effortOptions: [],
+        inputModalities: ['text', 'image'],
+        source: 'provider',
+      },
+    ],
+    attachments: CURSOR_ACP_ATTACHMENT_CAPABILITY,
+    midRunInput: CURSOR_ACP_MID_RUN_INPUT_CAPABILITY,
+    interactions: CURSOR_ACP_INTERACTION_CAPABILITY,
+    skills: CURSOR_ACP_SKILLS_CAPABILITY,
+    configOptions: [],
+    telemetry: CURSOR_ACP_TELEMETRY_CAPABILITY,
+    settings: CURSOR_ACP_SETTINGS_INFO,
   }
 }
 

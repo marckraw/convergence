@@ -19,6 +19,14 @@ function codexProvider(): DetectedProvider {
   }
 }
 
+function cursorProvider(): DetectedProvider {
+  return {
+    id: 'cursor',
+    name: 'Cursor',
+    binaryPath: '/usr/local/bin/agent',
+  }
+}
+
 function catalog(skills: SkillCatalogEntry[] = []): ProviderSkillCatalog {
   return {
     providerId: 'codex',
@@ -206,6 +214,55 @@ describe('SkillsService', () => {
         activationConfirmation: 'native-event',
         skills: [],
         error: 'claude scan failed',
+      }),
+    ])
+  })
+
+  it('returns Cursor catalogs through the shared provider mapping', async () => {
+    const project = projectService.create({ repositoryPath: gitRepoPath })
+    const cursorCatalog: ProviderSkillCatalog = {
+      providerId: 'cursor',
+      providerName: 'Cursor',
+      catalogSource: 'native-rpc',
+      invocationSupport: 'native-command',
+      activationConfirmation: 'none',
+      skills: [],
+      error: null,
+    }
+    const list = vi.fn(async () => cursorCatalog)
+    const service = new SkillsService(projectService, [cursorProvider()], {
+      now: () => FIXED_NOW,
+      createAdapter: () => ({ list }),
+    })
+
+    const result = await service.listByProjectId(project.id)
+
+    expect(list).toHaveBeenCalledWith(gitRepoPath, {})
+    expect(result.providers).toEqual([cursorCatalog])
+  })
+
+  it('reports Cursor adapter failures with native RPC command metadata', async () => {
+    const project = projectService.create({ repositoryPath: gitRepoPath })
+    const service = new SkillsService(projectService, [cursorProvider()], {
+      now: () => FIXED_NOW,
+      createAdapter: () => ({
+        list: async () => {
+          throw new Error('cursor command scan failed')
+        },
+      }),
+    })
+
+    const result = await service.listByProjectId(project.id)
+
+    expect(result.providers).toEqual([
+      expect.objectContaining({
+        providerId: 'cursor',
+        providerName: 'Cursor',
+        catalogSource: 'native-rpc',
+        invocationSupport: 'native-command',
+        activationConfirmation: 'none',
+        skills: [],
+        error: 'cursor command scan failed',
       }),
     ])
   })

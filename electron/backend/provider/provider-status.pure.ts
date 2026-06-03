@@ -10,11 +10,13 @@ export interface KnownProvider {
   name: string
   vendorLabel: string
   binaryName: string
+  binaryNames?: string[]
   packageName: string
   legacyPackageNames?: string[]
   installCommand: string
   updateCommand: string
   supportsSelfUpdate: boolean
+  latestVersionSource?: 'npm' | 'none'
 }
 
 const KNOWN_PROVIDERS: KnownProvider[] = [
@@ -49,10 +51,26 @@ const KNOWN_PROVIDERS: KnownProvider[] = [
     updateCommand: 'npm install -g @earendil-works/pi-coding-agent@latest',
     supportsSelfUpdate: false,
   },
+  {
+    id: 'cursor',
+    name: 'Cursor',
+    vendorLabel: 'Anysphere',
+    binaryName: 'agent',
+    binaryNames: ['agent', 'cursor-agent'],
+    packageName: 'cursor-agent',
+    installCommand: 'curl https://cursor.com/install -fsS | bash',
+    updateCommand: 'agent update',
+    supportsSelfUpdate: true,
+    latestVersionSource: 'none',
+  },
 ]
 
 export function getKnownProviders(): KnownProvider[] {
   return KNOWN_PROVIDERS
+}
+
+export function getProviderBinaryNames(provider: KnownProvider): string[] {
+  return provider.binaryNames ?? [provider.binaryName]
 }
 
 interface SemverParts {

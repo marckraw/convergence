@@ -17,6 +17,19 @@ function createClaudeManualSnapshot(): ProviderQuotaSnapshot {
   }
 }
 
+function createCursorManualSnapshot(): ProviderQuotaSnapshot {
+  return {
+    providerId: 'cursor',
+    status: 'unavailable',
+    source: 'manual',
+    reason:
+      'Cursor ACP does not expose usage or quota counters to Convergence. Open the Cursor dashboard to inspect usage and billing.',
+    usageUrl: 'https://cursor.com/dashboard',
+    lastCheckedAt: new Date().toISOString(),
+    stale: false,
+  }
+}
+
 export function ProviderUsageContainer() {
   const [snapshots, setSnapshots] = useState<ProviderQuotaSnapshot[]>([])
   const [isLoading, setIsLoading] = useState(true)
@@ -27,6 +40,7 @@ export function ProviderUsageContainer() {
       setSnapshots([
         await providerQuotaApi.getCodex(forceRefresh),
         createClaudeManualSnapshot(),
+        createCursorManualSnapshot(),
       ])
     } catch (err) {
       const reason =
@@ -44,6 +58,9 @@ export function ProviderUsageContainer() {
         },
         {
           ...createClaudeManualSnapshot(),
+        },
+        {
+          ...createCursorManualSnapshot(),
         },
       ])
     } finally {

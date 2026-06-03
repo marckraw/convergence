@@ -172,4 +172,36 @@ describe('ModelPickerDialog', () => {
     expect(screen.queryByText('Claude Sonnet')).not.toBeInTheDocument()
     expect(screen.queryByText('Claude Opus')).not.toBeInTheDocument()
   })
+
+  it('renders optional provider model metadata', async () => {
+    render(
+      <ModelPickerDialog
+        providers={[
+          {
+            ...providers[1]!,
+            modelOptions: [
+              {
+                id: 'composer-2.5[context=300k,fast=true]',
+                label: 'Composer 2.5 Fast',
+                description: 'fast',
+                contextWindowTokens: 300_000,
+                defaultEffort: null,
+                effortOptions: [],
+              },
+            ],
+          },
+        ]}
+        selectedProviderId={null}
+        selectedModelId={null}
+        value="Select model"
+        onChange={vi.fn()}
+      />,
+    )
+
+    fireEvent.click(screen.getByRole('combobox', { name: 'Select model' }))
+
+    expect(await screen.findByText('Composer 2.5 Fast')).toBeInTheDocument()
+    expect(screen.getByText('fast')).toBeInTheDocument()
+    expect(screen.getByText('300k context')).toBeInTheDocument()
+  })
 })

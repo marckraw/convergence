@@ -41,6 +41,14 @@ const KNOWN_PROVIDER_ICONS: Array<{
     },
   },
   {
+    matches: ['cursor', 'anysphere'],
+    icon: {
+      label: 'Cu',
+      className:
+        'border-neutral-400/40 bg-neutral-500/12 text-neutral-800 dark:text-neutral-100',
+    },
+  },
+  {
     matches: ['openrouter'],
     icon: {
       label: 'OR',

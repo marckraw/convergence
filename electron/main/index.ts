@@ -34,6 +34,7 @@ import { TurnCaptureService } from '../backend/session/turn/turn-capture.service
 import { ProviderRegistry } from '../backend/provider/provider-registry'
 import { ClaudeCodeProvider } from '../backend/provider/claude-code/claude-code-provider'
 import { CodexProvider } from '../backend/provider/codex/codex-provider'
+import { CursorProvider } from '../backend/provider/cursor/cursor-provider'
 import { PiProvider } from '../backend/provider/pi/pi-provider'
 import { ShellProvider } from '../backend/provider/shell/shell-provider'
 import { detectProviders } from '../backend/provider/detect'
@@ -307,6 +308,8 @@ async function startApp(): Promise<void> {
         providerRegistry.register(
           new CodexProvider(p.binaryPath, taskProgressService, debugSink),
         )
+      } else if (p.id === 'cursor') {
+        providerRegistry.register(new CursorProvider(p.binaryPath, debugSink))
       } else if (p.id === 'pi') {
         providerRegistry.register(
           new PiProvider(p.binaryPath, taskProgressService, debugSink, (env) =>

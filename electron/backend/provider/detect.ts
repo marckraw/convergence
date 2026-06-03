@@ -4,6 +4,7 @@ import { realpathSync } from 'fs'
 import type { ProviderInstallInfo, ProviderStatusInfo } from './provider.types'
 import {
   buildProviderStatus,
+  getProviderBinaryNames,
   getKnownProviders,
   selectProviderVersionOutput,
   type KnownProvider,
@@ -107,6 +108,17 @@ async function inspectNpmInstall(
   }
 }
 
+async function findProviderBinary(
+  provider: KnownProvider,
+): Promise<string | null> {
+  for (const binaryName of getProviderBinaryNames(provider)) {
+    const binaryPath = await which(binaryName)
+    if (binaryPath) return binaryPath
+  }
+
+  return null
+}
+
 export interface DetectedProvider {
   id: string
   name: string
@@ -117,13 +129,15 @@ export interface DetectedProvider {
 export async function inspectProviderStatuses(): Promise<ProviderStatusInfo[]> {
   const statuses = await Promise.all(
     getKnownProviders().map(async (provider) => {
-      const binaryPath = await which(provider.binaryName)
+      const binaryPath = await findProviderBinary(provider)
       const [
         { version: latestVersion, error: updateCheckError },
         version,
         install,
       ] = await Promise.all([
-        fetchNpmLatestVersion(provider.packageName),
+        provider.latestVersionSource === 'none'
+          ? Promise.resolve({ version: null, error: null })
+          : fetchNpmLatestVersion(provider.packageName),
         binaryPath ? getVersion(binaryPath) : Promise.resolve(null),
         binaryPath
           ? inspectNpmInstall(binaryPath, provider, provider.id)

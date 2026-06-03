@@ -135,6 +135,8 @@ export type ProviderInputModality = 'text' | 'image'
 export interface ProviderModelOption {
   id: string
   label: string
+  description?: string
+  contextWindowTokens?: number | null
   defaultEffort: ReasoningEffort | null
   effortOptions: ProviderEffortOption[]
   inputModalities?: ProviderInputModality[]
@@ -227,6 +229,83 @@ export interface ProviderMidRunInputCapability {
   notes?: string
 }
 
+export type ProviderInteractionRequestKind =
+  | 'text'
+  | 'choice'
+  | 'plan'
+  | 'form'
+  | 'url'
+
+export type ProviderPassiveInteractionKind =
+  | 'todos'
+  | 'task'
+  | 'generated-image'
+
+export interface ProviderInteractionCapability {
+  inputRequests: ProviderInteractionRequestKind[]
+  passiveUpdates: ProviderPassiveInteractionKind[]
+  unavailable: string[]
+  notes?: string
+}
+
+export type ProviderConfigOptionSource = 'provider' | 'fallback'
+export type ProviderConfigPersistence =
+  | 'session'
+  | 'provider-managed'
+  | 'unsupported'
+
+export interface ProviderConfigSelectOption {
+  id: string
+  label: string
+  description?: string
+}
+
+export interface ProviderConfigOption {
+  id: string
+  label: string
+  description?: string
+  currentValue: string | null
+  options: ProviderConfigSelectOption[]
+  source: ProviderConfigOptionSource
+  persistence: ProviderConfigPersistence
+  method?: string
+  notes?: string
+}
+
+export type ProviderTelemetryAvailability =
+  | 'available'
+  | 'partial'
+  | 'unavailable'
+
+export interface ProviderTelemetryCapability {
+  contextWindow: {
+    availability: ProviderTelemetryAvailability
+    source: 'provider' | 'model-metadata' | 'none'
+    notes?: string
+  }
+  quota: {
+    availability: ProviderTelemetryAvailability
+    source: 'provider-api' | 'provider-event' | 'manual' | 'none'
+    usageUrl?: string
+    notes?: string
+  }
+}
+
+export interface ProviderSettingsHelpItem {
+  label: string
+  value: string
+}
+
+export interface ProviderSettingsLink {
+  label: string
+  url: string
+}
+
+export interface ProviderSettingsInfo {
+  help: ProviderSettingsHelpItem[]
+  links?: ProviderSettingsLink[]
+}
+
 export interface ProviderDescriptor {
   id: string
   name: string
@@ -238,7 +317,11 @@ export interface ProviderDescriptor {
   modelOptions: ProviderModelOption[]
   attachments: ProviderAttachmentCapability
   midRunInput: ProviderMidRunInputCapability
+  interactions?: ProviderInteractionCapability
   skills?: ProviderSkillsCapability
+  configOptions?: ProviderConfigOption[]
+  telemetry?: ProviderTelemetryCapability
+  settings?: ProviderSettingsInfo
 }
 
 export interface OneShotInput {

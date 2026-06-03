@@ -22,7 +22,7 @@ export function ProviderUsageFields({
           <p className="text-sm font-medium text-foreground">Provider usage</p>
           <p className="mt-1 text-sm text-muted-foreground">
             Live Codex quota windows, plus manual links for providers that do
-            not expose limits reliably.
+            not expose usage limits reliably.
           </p>
         </div>
         <div className="flex items-center gap-2">

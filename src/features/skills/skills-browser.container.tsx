@@ -103,7 +103,7 @@ export const SkillsBrowserDialogContainer: FC<
   }, [open, selectedSkill, selectedSkillId, selectSkill])
 
   useEffect(() => {
-    if (!open || !projectId || !selectedSkill) {
+    if (!open || !projectId || !selectedSkill || !selectedSkill.path) {
       return
     }
     if (detailsBySkillId[selectedSkill.id]) {

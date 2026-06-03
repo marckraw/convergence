@@ -543,6 +543,9 @@ describe('AppSettingsDialogContainer', () => {
     expect(
       screen.getByText(/does not expose these reset windows reliably/),
     ).toBeInTheDocument()
+    expect(
+      screen.getByText(/Cursor ACP does not expose usage or quota counters/),
+    ).toBeInTheDocument()
 
     fireEvent.click(screen.getByRole('button', { name: /Refresh/ }))
 

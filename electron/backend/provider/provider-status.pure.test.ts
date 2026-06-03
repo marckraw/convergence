@@ -4,6 +4,7 @@ import {
   buildProviderUpdateInfo,
   compareSemver,
   extractSemver,
+  getProviderBinaryNames,
   getKnownProviders,
   selectProviderVersionOutput,
 } from './provider-status.pure'
@@ -14,6 +15,7 @@ describe('provider-status.pure', () => {
       'claude-code',
       'codex',
       'pi',
+      'cursor',
     ])
   })
 
@@ -110,6 +112,7 @@ describe('provider-status.pure', () => {
     expect(extractSemver('2.1.119 (Claude Code)')).toBe('2.1.119')
     expect(extractSemver('codex-cli 0.124.0')).toBe('0.124.0')
     expect(extractSemver('0.67.6')).toBe('0.67.6')
+    expect(extractSemver('2026.06.02-8c11d9f')).toBe('2026.06.02-8c11d9f')
   })
 
   it('selects version output from stdout or stderr', () => {
@@ -224,6 +227,70 @@ describe('provider-status.pure', () => {
       legacyPackageNames: ['@mariozechner/pi-coding-agent'],
       installCommand: 'npm install -g @earendil-works/pi-coding-agent@latest',
       updateCommand: 'npm install -g @earendil-works/pi-coding-agent@latest',
+    })
+  })
+
+  it('defines Cursor as a self-managed provider with agent binary aliases', () => {
+    const provider = getKnownProviders().find((item) => item.id === 'cursor')!
+
+    expect(provider).toMatchObject({
+      name: 'Cursor',
+      vendorLabel: 'Anysphere',
+      binaryName: 'agent',
+      packageName: 'cursor-agent',
+      installCommand: 'curl https://cursor.com/install -fsS | bash',
+      updateCommand: 'agent update',
+      supportsSelfUpdate: true,
+      latestVersionSource: 'none',
+    })
+    expect(getProviderBinaryNames(provider)).toEqual(['agent', 'cursor-agent'])
+  })
+
+  it('builds Cursor status with provider self-update metadata', () => {
+    const provider = getKnownProviders().find((item) => item.id === 'cursor')!
+    const status = buildProviderStatus(
+      provider,
+      '/Users/me/.local/bin/agent',
+      '2026.06.02-8c11d9f',
+      null,
+      null,
+      {
+        manager: 'self',
+        realBinaryPath:
+          '/Users/me/.local/share/cursor-agent/versions/2026.06.02-8c11d9f/cursor-agent',
+        packageName: null,
+        packageDirectory: null,
+        prefixDirectory: null,
+        npmPath: null,
+        nodePath: null,
+        nodeVersion: null,
+        brewPrefix: null,
+        formulaName: null,
+      },
+    )
+
+    expect(status).toMatchObject({
+      id: 'cursor',
+      name: 'Cursor',
+      vendorLabel: 'Anysphere',
+      availability: 'available',
+      binaryPath: '/Users/me/.local/bin/agent',
+      install: {
+        manager: 'self',
+      },
+      version: '2026.06.02-8c11d9f',
+      update: {
+        currentVersion: '2026.06.02-8c11d9f',
+        latestVersion: null,
+        status: 'unknown',
+        packageName: 'cursor-agent',
+        installCommand: 'curl https://cursor.com/install -fsS | bash',
+        updateCommand: 'agent update',
+        manualUpdateCommand: 'agent update',
+        automaticUpdateCommand: '/Users/me/.local/bin/agent update',
+        updateCapability: 'automatic',
+        updateStrategy: 'provider-self-update',
+      },
     })
   })
 

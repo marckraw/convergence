@@ -594,6 +594,8 @@ interface ProviderEffortOption {
 interface ProviderModelOption {
   id: string
   label: string
+  description?: string
+  contextWindowTokens?: number | null
   defaultEffort: ReasoningEffort | null
   effortOptions: ProviderEffortOption[]
   inputModalities?: Array<'text' | 'image'>
@@ -639,6 +641,74 @@ interface ProviderMidRunInputCapability {
   supportsInterrupt: boolean
   defaultRunningMode: Extract<MidRunInputMode, 'follow-up' | 'steer'> | null
   notes?: string
+}
+
+type ProviderInteractionRequestKind =
+  | 'text'
+  | 'choice'
+  | 'plan'
+  | 'form'
+  | 'url'
+
+type ProviderPassiveInteractionKind = 'todos' | 'task' | 'generated-image'
+
+interface ProviderInteractionCapability {
+  inputRequests: ProviderInteractionRequestKind[]
+  passiveUpdates: ProviderPassiveInteractionKind[]
+  unavailable: string[]
+  notes?: string
+}
+
+type ProviderConfigOptionSource = 'provider' | 'fallback'
+type ProviderConfigPersistence = 'session' | 'provider-managed' | 'unsupported'
+
+interface ProviderConfigSelectOption {
+  id: string
+  label: string
+  description?: string
+}
+
+interface ProviderConfigOption {
+  id: string
+  label: string
+  description?: string
+  currentValue: string | null
+  options: ProviderConfigSelectOption[]
+  source: ProviderConfigOptionSource
+  persistence: ProviderConfigPersistence
+  method?: string
+  notes?: string
+}
+
+type ProviderTelemetryAvailability = 'available' | 'partial' | 'unavailable'
+
+interface ProviderTelemetryCapability {
+  contextWindow: {
+    availability: ProviderTelemetryAvailability
+    source: 'provider' | 'model-metadata' | 'none'
+    notes?: string
+  }
+  quota: {
+    availability: ProviderTelemetryAvailability
+    source: 'provider-api' | 'provider-event' | 'manual' | 'none'
+    usageUrl?: string
+    notes?: string
+  }
+}
+
+interface ProviderSettingsHelpItem {
+  label: string
+  value: string
+}
+
+interface ProviderSettingsLink {
+  label: string
+  url: string
+}
+
+interface ProviderSettingsInfo {
+  help: ProviderSettingsHelpItem[]
+  links?: ProviderSettingsLink[]
 }
 
 interface AttachmentIngestRejection {
@@ -946,7 +1016,11 @@ interface ProviderInfo {
   modelOptions: ProviderModelOption[]
   attachments: ProviderAttachmentCapability
   midRunInput: ProviderMidRunInputCapability
+  interactions?: ProviderInteractionCapability
   skills?: ProviderSkillsCapability
+  configOptions?: ProviderConfigOption[]
+  telemetry?: ProviderTelemetryCapability
+  settings?: ProviderSettingsInfo
 }
 
 interface ProviderStatusInfo {
@@ -1034,7 +1108,7 @@ interface ProviderCreditsQuotaData {
 
 type ProviderQuotaSnapshotData =
   | {
-      providerId: 'codex' | 'claude-code'
+      providerId: 'codex' | 'claude-code' | 'cursor'
       status: 'available'
       source: 'provider-api' | 'provider-event'
       planType: string | null
@@ -1045,10 +1119,11 @@ type ProviderQuotaSnapshotData =
       stale: boolean
     }
   | {
-      providerId: 'codex' | 'claude-code'
+      providerId: 'codex' | 'claude-code' | 'cursor'
       status: 'unavailable'
-      source: 'provider-api' | 'provider-event'
+      source: 'provider-api' | 'provider-event' | 'manual'
       reason: string
+      usageUrl?: string
       lastCheckedAt: string
       stale: boolean
     }

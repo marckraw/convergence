@@ -80,4 +80,17 @@ describe('provider-updater.pure', () => {
       realBinaryPath: '/Users/me/.local/bin/claude',
     })
   })
+
+  it('classifies non-npm Cursor installs as provider-managed', () => {
+    expect(
+      buildNonNpmProviderInstallInfo(
+        '/Users/me/.local/share/cursor-agent/versions/2026.06.02-8c11d9f/cursor-agent',
+        'cursor',
+      ),
+    ).toMatchObject({
+      manager: 'self',
+      realBinaryPath:
+        '/Users/me/.local/share/cursor-agent/versions/2026.06.02-8c11d9f/cursor-agent',
+    })
+  })
 })

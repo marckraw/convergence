@@ -213,6 +213,8 @@ function flattenModelItems(
           providerLabel,
           modelId: model.id,
           modelLabel: model.label,
+          modelDescription: model.description,
+          contextWindowTokens: model.contextWindowTokens ?? null,
           selected:
             provider.id === selectedProviderId && model.id === selectedModelId,
           favorite,

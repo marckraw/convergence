@@ -1,4 +1,4 @@
-export type ProviderQuotaProviderId = 'codex' | 'claude-code'
+export type ProviderQuotaProviderId = 'codex' | 'claude-code' | 'cursor'
 
 export type ProviderQuotaWindowKind = 'five-hour' | 'weekly' | 'other'
 
@@ -32,8 +32,9 @@ export interface ProviderQuotaAvailableSnapshot {
 export interface ProviderQuotaUnavailableSnapshot {
   providerId: ProviderQuotaProviderId
   status: 'unavailable'
-  source: 'provider-api' | 'provider-event'
+  source: 'provider-api' | 'provider-event' | 'manual'
   reason: string
+  usageUrl?: string
   lastCheckedAt: string
   stale: boolean
 }

@@ -29,6 +29,8 @@ export interface ModelPickerModelItem {
   providerLabel: string
   modelId: string
   modelLabel: string
+  modelDescription?: string
+  contextWindowTokens?: number | null
   selected: boolean
   favorite: boolean
 }

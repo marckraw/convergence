@@ -44,6 +44,16 @@ interface ModelPickerDialogPresentationalProps {
   onToggleFavorite: (item: ModelPickerModelItem) => void
 }
 
+function formatContextWindowTokens(value: number): string {
+  if (value >= 1_000_000 && value % 1_000_000 === 0) {
+    return `${value / 1_000_000}m context`
+  }
+  if (value >= 1_000 && value % 1_000 === 0) {
+    return `${value / 1_000}k context`
+  }
+  return `${new Intl.NumberFormat('en-US').format(value)} context`
+}
+
 export const ModelPickerDialogPresentational: FC<
   ModelPickerDialogPresentationalProps
 > = ({
@@ -208,6 +218,20 @@ export const ModelPickerDialogPresentational: FC<
                     <div className="break-all text-xs leading-snug text-muted-foreground">
                       {item.modelId}
                     </div>
+                    {item.modelDescription || item.contextWindowTokens ? (
+                      <div className="flex flex-wrap gap-1 text-[11px] leading-snug text-muted-foreground">
+                        {item.modelDescription ? (
+                          <span>{item.modelDescription}</span>
+                        ) : null}
+                        {item.contextWindowTokens ? (
+                          <span>
+                            {formatContextWindowTokens(
+                              item.contextWindowTokens,
+                            )}
+                          </span>
+                        ) : null}
+                      </div>
+                    ) : null}
                     <div className="text-[11px] leading-snug text-muted-foreground">
                       {item.providerLabel}
                     </div>
