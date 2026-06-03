@@ -1,5 +1,5 @@
 import Database from 'better-sqlite3'
-import { mkdtemp, rm, writeFile } from 'fs/promises'
+import { mkdtemp, rm, utimes, writeFile } from 'fs/promises'
 import { tmpdir } from 'os'
 import { join } from 'path'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -146,12 +146,24 @@ describe('AntigravityTrajectoryTelemetryService', () => {
     tempDir = await mkdtemp(join(tmpdir(), 'convergence-ag-trajectory-'))
     const oldId = '11111111-1111-4111-8111-111111111111'
     const latestId = '22222222-2222-4222-8222-222222222222'
-    await writeFile(join(tempDir, `${oldId}.db`), '')
-    await writeFile(join(tempDir, `${latestId}.db`), '')
+    const oldPath = join(tempDir, `${oldId}.db`)
+    const latestPath = join(tempDir, `${latestId}.db`)
+    await writeFile(oldPath, '')
+    await writeFile(latestPath, '')
     await writeFile(join(tempDir, 'not-a-conversation.db'), '')
+    await utimes(
+      oldPath,
+      new Date('2026-01-01T00:00:01.000Z'),
+      new Date('2026-01-01T00:00:01.000Z'),
+    )
+    await utimes(
+      latestPath,
+      new Date('2026-01-01T00:00:02.000Z'),
+      new Date('2026-01-01T00:00:02.000Z'),
+    )
 
     const service = new AntigravityTrajectoryTelemetryService(tempDir)
-    const updatedAfterMs = Date.now() - 60_000
+    const updatedAfterMs = new Date('2026-01-01T00:00:00.000Z').getTime()
 
     await expect(
       service.findLatestConversationIdUpdatedAfter(updatedAfterMs),

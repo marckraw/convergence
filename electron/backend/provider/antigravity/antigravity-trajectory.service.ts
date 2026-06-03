@@ -114,7 +114,12 @@ export class AntigravityTrajectoryTelemetryService implements AntigravityTraject
       candidates.push({ conversationId, mtimeMs: stats.mtimeMs })
     }
 
-    candidates.sort((a, b) => b.mtimeMs - a.mtimeMs)
+    candidates.sort((a, b) => {
+      const byModifiedTime = b.mtimeMs - a.mtimeMs
+      if (byModifiedTime !== 0) return byModifiedTime
+
+      return b.conversationId.localeCompare(a.conversationId)
+    })
     return candidates[0]?.conversationId ?? null
   }
 
