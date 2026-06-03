@@ -1,5 +1,6 @@
 import { CodexSkillsService } from './codex-skills.service'
 import { ClaudeCodeSkillsService } from './claude-code-skills.service'
+import { CursorSkillsService } from './cursor-skills.service'
 import { PiSkillsService } from './pi-skills.service'
 import { AntigravitySkillsService } from './antigravity-skills.service'
 import { buildProviderSkillErrorCatalog } from './skill-catalog.pure'
@@ -41,6 +42,8 @@ function toSkillProviderId(id: string): SkillProviderId | null {
       return 'claude-code'
     case 'pi':
       return 'pi'
+    case 'cursor':
+      return 'cursor'
     case 'antigravity':
       return 'antigravity'
     default:
@@ -95,6 +98,17 @@ function providerErrorCatalog(
     })
   }
 
+  if (providerId === 'cursor') {
+    return buildProviderSkillErrorCatalog({
+      providerId,
+      providerName: 'Cursor',
+      catalogSource: 'native-rpc',
+      invocationSupport: 'native-command',
+      activationConfirmation: 'none',
+      error: message,
+    })
+  }
+
   if (providerId === 'antigravity') {
     return buildProviderSkillErrorCatalog({
       providerId,
@@ -127,6 +141,9 @@ function defaultCreateAdapter(
   }
   if (provider.id === 'pi') {
     return new PiSkillsService()
+  }
+  if (provider.id === 'cursor') {
+    return new CursorSkillsService(provider.binaryPath)
   }
   if (provider.id === 'antigravity') {
     return new AntigravitySkillsService()

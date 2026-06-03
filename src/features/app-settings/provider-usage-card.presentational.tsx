@@ -28,27 +28,41 @@ function sortedWindows(windows: ProviderQuotaWindow[]) {
 }
 
 function getProviderName(providerId: ProviderQuotaSnapshot['providerId']) {
-  if (providerId === 'codex') return 'Codex'
-  if (providerId === 'antigravity') return 'Antigravity CLI'
-  return 'Claude Code'
+  switch (providerId) {
+    case 'codex':
+      return 'Codex'
+    case 'claude-code':
+      return 'Claude Code'
+    case 'cursor':
+      return 'Cursor'
+    case 'antigravity':
+      return 'Antigravity CLI'
+  }
 }
 
-function getUsageUrl(providerId: ProviderQuotaSnapshot['providerId']) {
-  if (providerId === 'codex') {
-    return 'https://chatgpt.com/codex/cloud/settings/analytics#usage'
+function getUsageUrl(snapshot: ProviderQuotaSnapshot): string {
+  if (snapshot.status === 'unavailable' && snapshot.usageUrl) {
+    return snapshot.usageUrl
   }
-  if (providerId === 'antigravity') {
-    return 'https://www.antigravity.google/docs/plans'
+
+  switch (snapshot.providerId) {
+    case 'codex':
+      return 'https://chatgpt.com/codex/cloud/settings/analytics#usage'
+    case 'claude-code':
+      return 'https://claude.ai/new#settings/usage'
+    case 'cursor':
+      return 'https://cursor.com/dashboard'
+    case 'antigravity':
+      return 'https://www.antigravity.google/docs/plans'
   }
-  return 'https://claude.ai/new#settings/usage'
 }
 
-function getUsageLinks(providerId: ProviderQuotaSnapshot['providerId']) {
-  if (providerId === 'antigravity') {
+function getUsageLinks(snapshot: ProviderQuotaSnapshot) {
+  if (snapshot.providerId === 'antigravity') {
     return [
       {
         label: 'Plans',
-        url: 'https://www.antigravity.google/docs/plans',
+        url: getUsageUrl(snapshot),
       },
       {
         label: 'Credits',
@@ -57,14 +71,11 @@ function getUsageLinks(providerId: ProviderQuotaSnapshot['providerId']) {
     ]
   }
 
-  return [{ label: 'Open', url: getUsageUrl(providerId) }]
+  return [{ label: 'Open', url: getUsageUrl(snapshot) }]
 }
 
 function getSourceLabel(snapshot: ProviderQuotaSnapshot) {
-  if (
-    snapshot.providerId === 'claude-code' ||
-    snapshot.providerId === 'antigravity'
-  ) {
+  if (snapshot.source === 'manual') {
     return 'manual usage page'
   }
   return snapshot.source === 'provider-api'
@@ -73,7 +84,7 @@ function getSourceLabel(snapshot: ProviderQuotaSnapshot) {
 }
 
 export function ProviderUsageCard({ snapshot }: ProviderUsageCardProps) {
-  const usageLinks = getUsageLinks(snapshot.providerId)
+  const usageLinks = getUsageLinks(snapshot)
 
   return (
     <section className="space-y-3 rounded-lg border border-border/70 bg-card/25 px-4 py-4">

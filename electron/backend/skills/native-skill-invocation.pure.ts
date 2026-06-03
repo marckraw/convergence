@@ -11,7 +11,11 @@ import type {
   SkillSelection,
 } from './skills.types'
 
+// Cursor ACP and Antigravity commands currently use the same text shape as
+// Claude slash commands, but keep separate syntaxes so provider-native command
+// contracts can diverge without changing call sites.
 export type NativeSkillCommandSyntax =
+  | 'plain-slash'
   | 'claude-slash'
   | 'pi-skill-slash'
   | 'antigravity-slash'

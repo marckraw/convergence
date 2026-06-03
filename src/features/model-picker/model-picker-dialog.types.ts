@@ -32,6 +32,8 @@ export interface ModelPickerModelItem {
   providerBadge?: ProviderLifecycleBadge
   modelId: string
   modelLabel: string
+  modelDescription?: string
+  contextWindowTokens?: number | null
   selected: boolean
   favorite: boolean
 }

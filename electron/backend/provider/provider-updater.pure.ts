@@ -95,7 +95,9 @@ export function buildNonNpmProviderInstallInfo(
 
   return {
     manager:
-      providerId === 'claude-code' || providerId === 'antigravity'
+      providerId === 'claude-code' ||
+      providerId === 'cursor' ||
+      providerId === 'antigravity'
         ? 'self'
         : 'unknown',
     realBinaryPath,

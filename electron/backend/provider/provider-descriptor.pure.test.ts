@@ -4,9 +4,11 @@ import {
   buildEffortOptions,
   buildFallbackAntigravityDescriptor,
   buildFallbackCodexDescriptor,
+  buildFallbackCursorDescriptor,
   buildFallbackPiDescriptor,
   CODEX_ATTACHMENT_CAPABILITY,
   CODEX_MID_RUN_INPUT_CAPABILITY,
+  getMidRunInputCapabilityForProviderId,
   NO_MID_RUN_INPUT_CAPABILITY,
   normalizeProviderDescriptor,
 } from './provider-descriptor.pure'
@@ -25,6 +27,7 @@ describe('provider-descriptor', () => {
     expect(buildClaudeDescriptor().vendorLabel).toBe('Anthropic')
     expect(buildFallbackCodexDescriptor().vendorLabel).toBe('OpenAI')
     expect(buildFallbackPiDescriptor().vendorLabel).toBe('Pi')
+    expect(buildFallbackCursorDescriptor().vendorLabel).toBe('Anysphere')
     expect(buildFallbackAntigravityDescriptor().vendorLabel).toBe('Google')
     expect(buildClaudeDescriptor().skills).toEqual({
       catalog: 'filesystem',
@@ -41,11 +44,65 @@ describe('provider-descriptor', () => {
       invocation: 'native-command',
       activationConfirmation: 'none',
     })
+    expect(buildFallbackCursorDescriptor().skills).toEqual({
+      catalog: 'native-rpc',
+      invocation: 'native-command',
+      activationConfirmation: 'none',
+    })
     expect(buildFallbackAntigravityDescriptor().skills).toEqual({
       catalog: 'filesystem',
       invocation: 'native-command',
       activationConfirmation: 'none',
     })
+  })
+
+  it('builds a conservative Cursor fallback descriptor from P0 ACP decisions', () => {
+    const descriptor = buildFallbackCursorDescriptor()
+
+    expect(descriptor).toMatchObject({
+      id: 'cursor',
+      name: 'Cursor',
+      supportsContinuation: true,
+      defaultModelId: 'default[]',
+      attachments: {
+        supportsImage: true,
+        supportsPdf: false,
+        supportsText: true,
+      },
+      midRunInput: {
+        supportsAnswer: true,
+        supportsNativeFollowUp: false,
+        supportsAppQueuedFollowUp: true,
+        supportsSteer: false,
+        supportsInterrupt: false,
+      },
+      interactions: {
+        inputRequests: ['choice', 'plan'],
+        passiveUpdates: ['todos', 'task', 'generated-image'],
+        unavailable: ['generated-image-artifact-rendering'],
+      },
+      telemetry: {
+        contextWindow: { availability: 'partial', source: 'model-metadata' },
+        quota: { availability: 'unavailable', source: 'manual' },
+      },
+    })
+    expect(descriptor.settings?.links?.[0]).toEqual({
+      label: 'Cursor dashboard',
+      url: 'https://cursor.com/dashboard',
+    })
+    expect(descriptor.modelOptions).toEqual([
+      {
+        id: 'default[]',
+        label: 'Auto',
+        defaultEffort: null,
+        effortOptions: [],
+        inputModalities: ['text', 'image'],
+        source: 'provider',
+      },
+    ])
+    expect(getMidRunInputCapabilityForProviderId('cursor')).toEqual(
+      descriptor.midRunInput,
+    )
   })
 
   it('exposes pi-compatible effort options on the pi fallback descriptor', () => {

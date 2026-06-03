@@ -33,12 +33,7 @@ function skill(
   return {
     id,
     providerId,
-    providerName:
-      providerId === 'pi'
-        ? 'Pi Agent'
-        : providerId === 'antigravity'
-          ? 'Antigravity CLI'
-          : 'Claude Code',
+    providerName: providerName(providerId),
     name,
     path,
     scope,
@@ -60,17 +55,28 @@ function catalog(
 ): ProviderSkillCatalog {
   return {
     providerId,
-    providerName:
-      providerId === 'pi'
-        ? 'Pi Agent'
-        : providerId === 'antigravity'
-          ? 'Antigravity CLI'
-          : 'Claude Code',
+    providerName: providerName(providerId),
     catalogSource: 'filesystem',
     invocationSupport: 'native-command',
-    activationConfirmation: providerId === 'pi' ? 'none' : 'native-event',
+    activationConfirmation:
+      providerId === 'claude-code' ? 'native-event' : 'none',
     skills,
     error: null,
+  }
+}
+
+function providerName(providerId: SkillProviderId): string {
+  switch (providerId) {
+    case 'codex':
+      return 'Codex'
+    case 'claude-code':
+      return 'Claude Code'
+    case 'pi':
+      return 'Pi Agent'
+    case 'cursor':
+      return 'Cursor'
+    case 'antigravity':
+      return 'Antigravity CLI'
   }
 }
 
@@ -149,6 +155,36 @@ describe('resolveNativeSkillInvocation', () => {
         {
           id: entry.id,
           argumentText: 'extract',
+          status: 'selected',
+        },
+      ],
+    })
+  })
+
+  it('formats Cursor commands as plain ACP slash commands', () => {
+    const entry = skill({ name: 'review' }, 'cursor')
+    const selected = {
+      ...selection(entry),
+      argumentText: 'current branch',
+    }
+
+    const result = resolveNativeSkillInvocation({
+      providerId: 'cursor',
+      providerName: 'Cursor',
+      catalog: catalog([entry], 'cursor'),
+      selections: [selected],
+      syntax: 'plain-slash',
+      text: 'Focus on regressions.',
+    })
+
+    expect(result).toMatchObject({
+      ok: true,
+      commandText: '/review current branch',
+      promptText: '/review current branch\n\nFocus on regressions.',
+      skillSelections: [
+        {
+          id: entry.id,
+          argumentText: 'current branch',
           status: 'selected',
         },
       ],

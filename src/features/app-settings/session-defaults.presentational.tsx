@@ -8,6 +8,7 @@ import { getProviderLifecycleBadge } from '@/entities/session'
 import { ModelPickerDialog } from '@/features/model-picker'
 import { SessionStartSelect } from '@/features/session-start'
 import { SettingsControlField } from './settings-control-field.presentational'
+import { ProviderSettingsMetadata } from './provider-settings-metadata.presentational'
 
 interface SessionDefaultsFieldsProps {
   providers: ProviderInfo[]
@@ -81,6 +82,8 @@ export const SessionDefaultsFields: FC<SessionDefaultsFieldsProps> = ({
           />
         </SettingsControlField>
       )}
+
+      <ProviderSettingsMetadata provider={selection.provider} />
     </div>
   )
 }

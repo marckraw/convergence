@@ -4,6 +4,7 @@ import { realpathSync } from 'fs'
 import type { ProviderInstallInfo, ProviderStatusInfo } from './provider.types'
 import {
   buildProviderStatus,
+  getProviderBinaryNames,
   getKnownProviders,
   selectProviderVersionOutput,
   type KnownProvider,
@@ -115,10 +116,7 @@ async function inspectNpmInstall(
 async function findProviderBinary(
   provider: KnownProvider,
 ): Promise<string | null> {
-  for (const binaryName of [
-    provider.binaryName,
-    ...(provider.binaryAliases ?? []),
-  ]) {
+  for (const binaryName of getProviderBinaryNames(provider)) {
     const binaryPath = await which(binaryName)
     if (binaryPath) return binaryPath
   }

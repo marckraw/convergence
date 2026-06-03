@@ -172,6 +172,8 @@ export function getNativeSkillInvocationText(
       return `/${skill.name}`
     case 'pi':
       return `/skill:${skill.name}`
+    case 'cursor':
+      return `/${skill.name}`
     default:
       return null
   }

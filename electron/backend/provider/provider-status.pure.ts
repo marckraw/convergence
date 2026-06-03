@@ -57,6 +57,17 @@ const KNOWN_PROVIDERS: KnownProvider[] = [
     supportsSelfUpdate: false,
   },
   {
+    id: 'cursor',
+    name: 'Cursor',
+    vendorLabel: 'Anysphere',
+    binaryName: 'cursor-agent',
+    binaryAliases: ['agent'],
+    packageName: null,
+    installCommand: 'curl https://cursor.com/install -fsS | bash',
+    updateCommand: 'agent update',
+    supportsSelfUpdate: true,
+  },
+  {
     id: 'antigravity',
     name: 'Antigravity CLI',
     vendorLabel: 'Google',
@@ -77,6 +88,10 @@ const KNOWN_PROVIDERS: KnownProvider[] = [
 
 export function getKnownProviders(): KnownProvider[] {
   return KNOWN_PROVIDERS
+}
+
+export function getProviderBinaryNames(provider: KnownProvider): string[] {
+  return [provider.binaryName, ...(provider.binaryAliases ?? [])]
 }
 
 interface SemverParts {
