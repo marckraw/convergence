@@ -27,6 +27,11 @@ export type CodeReviewTargetSource =
   | 'project-repository'
   | 'pull-request'
 
+export type CodeReviewTargetFilterSource =
+  | 'session'
+  | 'workspace'
+  | 'pull-request'
+
 export interface CodeReviewTargetStatus {
   workingTreeFileCount: number
   workingTreeStatusCounts: Record<string, number>
