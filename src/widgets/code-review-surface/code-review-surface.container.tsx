@@ -55,6 +55,10 @@ import {
 } from '@/widgets/session-view'
 import { CodeReviewFileRail } from './code-review-file-rail.presentational'
 import { CodeReviewGuideRail } from './code-review-guide-rail.presentational'
+import {
+  buildCodeReviewGuideFileAnchorKey,
+  selectActiveCodeReviewGuideSection,
+} from './code-review-guide-scroll.pure'
 import { CodeReviewGuideView } from './code-review-guide.presentational'
 import { CodeReviewNotesRail } from './code-review-notes-rail.presentational'
 import { CodeReviewTargetRail } from './code-review-target-rail.presentational'
@@ -254,6 +258,7 @@ export const CodeReviewSurface: FC<CodeReviewSurfaceProps> = ({
   )
   const guideSectionRefs = useRef(new Map<string, HTMLElement>())
   const guideFileRefs = useRef(new Map<string, HTMLElement>())
+  const guideScrollRootRef = useRef<HTMLElement | null>(null)
 
   useEffect(() => {
     if (!activeProject) return
@@ -479,6 +484,47 @@ export const CodeReviewSurface: FC<CodeReviewSurfaceProps> = ({
     selectedTarget,
     summary?.cacheIdentity,
   ])
+  const updateActiveGuideSectionFromScroll = useCallback(() => {
+    if (selectedView !== 'guide') return
+
+    const root = guideScrollRootRef.current
+    if (!root) return
+
+    const rootRect = root.getBoundingClientRect()
+    const sections = displayGuide.sections
+      .map((section) => {
+        const node = guideSectionRefs.current.get(section.id)
+        if (!node) return null
+
+        const rect = node.getBoundingClientRect()
+        return {
+          id: section.id,
+          top: rect.top,
+          bottom: rect.bottom,
+        }
+      })
+      .filter(
+        (
+          section,
+        ): section is {
+          id: string
+          top: number
+          bottom: number
+        } => section !== null,
+      )
+
+    const nextSectionId = selectActiveCodeReviewGuideSection({
+      sections,
+      viewportTop: rootRect.top,
+      viewportBottom: rootRect.bottom,
+      activationOffset: 96,
+    })
+    if (!nextSectionId) return
+
+    setActiveGuideSectionId((current) =>
+      current === nextSectionId ? current : nextSectionId,
+    )
+  }, [displayGuide.sections, selectedView])
   const currentReviewNoteMode =
     effectiveMode === 'base-branch' ? 'base-branch' : 'working-tree'
   const remotePullRequestSelected = selectedTarget
@@ -644,48 +690,31 @@ export const CodeReviewSurface: FC<CodeReviewSurfaceProps> = ({
 
   useEffect(() => {
     if (selectedView !== 'guide') return
-    if (typeof IntersectionObserver === 'undefined') return
 
-    const observedSections = displayGuide.sections
-      .map((section) => ({
-        id: section.id,
-        node: guideSectionRefs.current.get(section.id),
-      }))
-      .filter(
-        (entry): entry is { id: string; node: HTMLElement } =>
-          entry.node !== undefined,
-      )
+    const root = guideScrollRootRef.current
+    if (!root) return
 
-    if (observedSections.length === 0) return
-
-    const sectionIdByNode = new Map(
-      observedSections.map((section) => [section.node, section.id]),
-    )
-    const observer = new IntersectionObserver(
-      (entries) => {
-        const activeEntry = entries
-          .filter((entry) => entry.isIntersecting)
-          .sort(
-            (a, b) => a.boundingClientRect.top - b.boundingClientRect.top,
-          )[0]
-        const sectionId = activeEntry
-          ? (sectionIdByNode.get(activeEntry.target as HTMLElement) ?? null)
-          : null
-        if (sectionId) setActiveGuideSectionId(sectionId)
-      },
-      {
-        root: null,
-        rootMargin: '-18% 0px -60% 0px',
-        threshold: 0,
-      },
-    )
-
-    for (const section of observedSections) {
-      observer.observe(section.node)
+    let timeout: number | null = null
+    const scheduleActiveSectionUpdate = () => {
+      if (timeout !== null) return
+      timeout = window.setTimeout(() => {
+        timeout = null
+        updateActiveGuideSectionFromScroll()
+      }, 0)
     }
 
-    return () => observer.disconnect()
-  }, [displayGuide.sections, selectedView])
+    scheduleActiveSectionUpdate()
+    root.addEventListener('scroll', scheduleActiveSectionUpdate, {
+      passive: true,
+    })
+    window.addEventListener('resize', scheduleActiveSectionUpdate)
+
+    return () => {
+      if (timeout !== null) window.clearTimeout(timeout)
+      root.removeEventListener('scroll', scheduleActiveSectionUpdate)
+      window.removeEventListener('resize', scheduleActiveSectionUpdate)
+    }
+  }, [selectedView, updateActiveGuideSectionFromScroll])
 
   useEffect(() => {
     setSelectedDiffLineIds([])
@@ -804,15 +833,20 @@ export const CodeReviewSurface: FC<CodeReviewSurfaceProps> = ({
   }, [])
 
   const handleSelectGuideFile = useCallback(
-    (filePath: string) => {
+    (sectionId: string, filePath: string) => {
+      setActiveGuideSectionId(sectionId)
       setSelectedFile(filePath)
       onRouteSearchChange?.({ file: filePath })
       guideFileRefs.current
-        .get(filePath)
+        .get(buildCodeReviewGuideFileAnchorKey({ sectionId, filePath }))
         ?.scrollIntoView({ block: 'start', inline: 'nearest' })
     },
     [onRouteSearchChange, setSelectedFile],
   )
+
+  const renderGuideScrollRootRef = useCallback((node: HTMLElement | null) => {
+    guideScrollRootRef.current = node
+  }, [])
 
   const renderGuideSectionRef = useCallback(
     (sectionId: string) => (node: HTMLElement | null) => {
@@ -826,12 +860,13 @@ export const CodeReviewSurface: FC<CodeReviewSurfaceProps> = ({
   )
 
   const renderGuideFileRef = useCallback(
-    (filePath: string) => (node: HTMLElement | null) => {
+    (sectionId: string, filePath: string) => (node: HTMLElement | null) => {
+      const key = buildCodeReviewGuideFileAnchorKey({ sectionId, filePath })
       if (node) {
-        guideFileRefs.current.set(filePath, node)
+        guideFileRefs.current.set(key, node)
         return
       }
-      guideFileRefs.current.delete(filePath)
+      guideFileRefs.current.delete(key)
     },
     [],
   )
@@ -1206,9 +1241,11 @@ export const CodeReviewSurface: FC<CodeReviewSurfaceProps> = ({
             <CodeReviewGuideRail
               guide={displayGuide}
               activeSectionId={activeGuideSectionId}
-              loading={summaryLoading || guideLoading || guideGenerating}
+              loading={summaryLoading || guideLoading}
               generating={guideGenerating}
               canGenerate={Boolean(guideInput && files.length > 0)}
+              hasPersistedGuide={Boolean(guide)}
+              error={guideError}
               onSelectSection={handleSelectGuideSection}
               onGenerateGuide={handleGenerateGuide}
             />
@@ -1217,18 +1254,23 @@ export const CodeReviewSurface: FC<CodeReviewSurfaceProps> = ({
                 className="flex min-w-0 items-center justify-center bg-background p-6"
                 role="status"
               >
-                <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  Generating guide...
+                <div className="flex flex-col items-center gap-2 text-center text-sm text-muted-foreground">
+                  <Loader2 className="h-5 w-5 animate-spin" />
+                  <span>Generating AI guide...</span>
+                  <span className="max-w-sm text-xs">
+                    Building walkthrough chapters from the current review diff.
+                  </span>
                 </div>
               </main>
             ) : (
               <CodeReviewGuideView
                 guide={displayGuide}
+                activeSectionId={activeGuideSectionId}
                 getFileDiff={(filePath) => guidePatchByFile.get(filePath) ?? ''}
                 isFileLoading={(filePath) =>
                   guideLoadingByFile.get(filePath) ?? false
                 }
+                renderScrollRootRef={renderGuideScrollRootRef}
                 renderSectionRef={renderGuideSectionRef}
                 renderFileRef={renderGuideFileRef}
                 onSelectFile={handleSelectGuideFile}

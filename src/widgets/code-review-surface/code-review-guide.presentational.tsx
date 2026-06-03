@@ -5,22 +5,30 @@ import type {
 } from '@/entities/code-review-guide'
 import { Button } from '@/shared/ui/button'
 import { Markdown } from '@/shared/ui/markdown.container'
+import { cn } from '@/shared/lib/cn.pure'
 import { CodeReviewGuideFileDiff } from './code-review-guide-file-diff.presentational'
 import { CodeReviewRiskBadge } from './code-review-risk-badge.presentational'
 
 interface CodeReviewGuideViewProps {
   guide: CodeReviewGuideContent
+  activeSectionId: string | null
   getFileDiff: (filePath: string) => string
   isFileLoading: (filePath: string) => boolean
+  renderScrollRootRef: (node: HTMLElement | null) => void
   renderSectionRef: (sectionId: string) => (node: HTMLElement | null) => void
-  renderFileRef: (filePath: string) => (node: HTMLElement | null) => void
-  onSelectFile: (filePath: string) => void
+  renderFileRef: (
+    sectionId: string,
+    filePath: string,
+  ) => (node: HTMLElement | null) => void
+  onSelectFile: (sectionId: string, filePath: string) => void
 }
 
 export const CodeReviewGuideView: FC<CodeReviewGuideViewProps> = ({
   guide,
+  activeSectionId,
   getFileDiff,
   isFileLoading,
+  renderScrollRootRef,
   renderSectionRef,
   renderFileRef,
   onSelectFile,
@@ -34,70 +42,87 @@ export const CodeReviewGuideView: FC<CodeReviewGuideViewProps> = ({
   }
 
   return (
-    <main className="app-scrollbar h-full min-w-0 overflow-y-auto bg-background">
+    <main
+      ref={renderScrollRootRef}
+      className="app-scrollbar h-full min-w-0 overflow-y-auto bg-background"
+    >
       <div className="mx-auto flex min-h-full max-w-[1440px] flex-col">
-        {guide.sections.map((section, index) => (
-          <section
-            key={section.id}
-            ref={renderSectionRef(section.id)}
-            className="grid min-h-full min-w-0 scroll-mt-0 grid-cols-[minmax(260px,360px)_minmax(0,1fr)] gap-5 border-b border-border px-5 py-5"
-          >
-            <div className="sticky top-0 self-start bg-background py-1">
-              <div className="flex min-w-0 items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <p className="text-[11px] font-medium text-muted-foreground">
-                    {String(index + 1).padStart(2, '0')} /{' '}
-                    {String(guide.sections.length).padStart(2, '0')}
-                  </p>
-                  <h2 className="mt-3 text-2xl leading-8 font-semibold">
-                    {section.title}
-                  </h2>
-                  <Markdown
-                    content={section.summary}
-                    size="sm"
-                    className="mt-3 text-sm leading-6 text-muted-foreground [&_p]:my-0 [&_p]:text-sm [&_p]:leading-6"
-                  />
+        {guide.sections.map((section, index) => {
+          const active = activeSectionId === section.id
+
+          return (
+            <section
+              key={section.id}
+              ref={renderSectionRef(section.id)}
+              aria-current={active ? 'step' : undefined}
+              className={cn(
+                'grid min-h-full min-w-0 scroll-mt-0 grid-cols-[minmax(260px,360px)_minmax(0,1fr)] gap-5 border-b border-border px-5 py-5 transition-colors',
+                active ? 'bg-accent/20' : 'bg-background',
+              )}
+            >
+              <div
+                className={cn(
+                  'sticky top-0 z-10 self-start border-l-2 bg-background/95 py-4 pr-2 pl-4 backdrop-blur',
+                  active ? 'border-primary' : 'border-transparent',
+                )}
+              >
+                <div className="flex min-w-0 items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-[11px] font-medium text-muted-foreground">
+                      {String(index + 1).padStart(2, '0')} /{' '}
+                      {String(guide.sections.length).padStart(2, '0')}
+                    </p>
+                    <h2 className="mt-3 text-2xl leading-8 font-semibold">
+                      {section.title}
+                    </h2>
+                    <Markdown
+                      content={section.summary}
+                      size="sm"
+                      className="mt-3 text-sm leading-6 text-muted-foreground [&_p]:my-0 [&_p]:text-sm [&_p]:leading-6"
+                    />
+                  </div>
+                  <CodeReviewRiskBadge section={section} />
                 </div>
-                <CodeReviewRiskBadge section={section} />
+                <Markdown
+                  content={section.narrative}
+                  size="sm"
+                  className="mt-5 text-sm leading-6 text-foreground [&_p]:my-0 [&_p]:text-sm [&_p]:leading-6"
+                />
+                <div className="app-scrollbar mt-5 flex max-h-72 flex-col gap-1.5 overflow-y-auto pr-1">
+                  {section.files.map((file) => (
+                    <Button
+                      key={file.path}
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="h-8 w-full justify-between gap-2 px-2 font-mono text-[11px]"
+                      title={file.path}
+                      onClick={() => onSelectFile(section.id, file.path)}
+                    >
+                      <span className="min-w-0 truncate">{file.path}</span>
+                      <span className="shrink-0 text-muted-foreground">
+                        {file.status}
+                      </span>
+                    </Button>
+                  ))}
+                </div>
+                {renderChecklist(section)}
               </div>
-              <Markdown
-                content={section.narrative}
-                size="sm"
-                className="mt-5 text-sm leading-6 text-foreground [&_p]:my-0 [&_p]:text-sm [&_p]:leading-6"
-              />
-              <div className="mt-5 flex flex-col gap-1.5">
+              <div className="flex min-w-0 flex-col gap-4 pb-5">
                 {section.files.map((file) => (
-                  <Button
+                  <CodeReviewGuideFileDiff
                     key={file.path}
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    className="h-8 w-full justify-between gap-2 px-2 font-mono text-[11px]"
-                    title={file.path}
-                    onClick={() => onSelectFile(file.path)}
-                  >
-                    <span className="min-w-0 truncate">{file.path}</span>
-                    <span className="shrink-0 text-muted-foreground">
-                      {file.status}
-                    </span>
-                  </Button>
+                    sectionId={section.id}
+                    file={file}
+                    diff={getFileDiff(file.path)}
+                    loading={isFileLoading(file.path)}
+                    renderRef={renderFileRef(section.id, file.path)}
+                  />
                 ))}
               </div>
-              {renderChecklist(section)}
-            </div>
-            <div className="flex min-w-0 flex-col gap-4 pb-5">
-              {section.files.map((file) => (
-                <CodeReviewGuideFileDiff
-                  key={file.path}
-                  file={file}
-                  diff={getFileDiff(file.path)}
-                  loading={isFileLoading(file.path)}
-                  renderRef={renderFileRef(file.path)}
-                />
-              ))}
-            </div>
-          </section>
-        ))}
+            </section>
+          )
+        })}
       </div>
     </main>
   )
