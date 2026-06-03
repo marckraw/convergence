@@ -6,12 +6,16 @@ import {
   buildCodeReviewFilePatchKey,
   buildCodeReviewFilePatchSelectionKey,
   buildCodeReviewSummarySelectionKey,
+  CODE_REVIEW_TARGET_FILTER_SOURCES,
   countCodeReviewFilesByStatus,
+  countCodeReviewTargetsByFilterSource,
+  filterCodeReviewTargetsBySource,
   isRemotePullRequestTarget,
   selectCodeReviewFileAfterReload,
   useCodeReviewStore,
   type CodeReviewMode,
   type CodeReviewTarget,
+  type CodeReviewTargetFilterSource,
   type CodeReviewView,
 } from '@/entities/code-review'
 import {
@@ -218,6 +222,9 @@ export const CodeReviewSurface: FC<CodeReviewSurfaceProps> = ({
   const previewReviewPacket = useReviewNoteStore((state) => state.previewPacket)
   const sendReviewPacket = useReviewNoteStore((state) => state.sendPacket)
   const [statusFilter, setStatusFilter] = useState('all')
+  const [targetSourceFilters, setTargetSourceFilters] = useState<
+    CodeReviewTargetFilterSource[]
+  >(() => [...CODE_REVIEW_TARGET_FILTER_SOURCES])
   const [holdEmptySelection, setHoldEmptySelection] = useState(false)
   const [selectedDiffLineIds, setSelectedDiffLineIds] = useState<string[]>([])
   const [noteComposerOpen, setNoteComposerOpen] = useState(false)
@@ -255,6 +262,29 @@ export const CodeReviewSurface: FC<CodeReviewSurfaceProps> = ({
   const guideSectionRefs = useRef(new Map<string, HTMLElement>())
   const guideFileRefs = useRef(new Map<string, HTMLElement>())
 
+  const sortedTargets = useMemo(
+    () =>
+      [...targets].sort((a, b) => {
+        const changedDelta =
+          b.status.workingTreeFileCount - a.status.workingTreeFileCount
+        if (changedDelta !== 0) return changedDelta
+        return (b.updatedAt ?? '').localeCompare(a.updatedAt ?? '')
+      }),
+    [targets],
+  )
+  const targetSourceCounts = useMemo(
+    () => countCodeReviewTargetsByFilterSource(sortedTargets),
+    [sortedTargets],
+  )
+  const targetList = useMemo(
+    () =>
+      filterCodeReviewTargetsBySource({
+        targets: sortedTargets,
+        sources: targetSourceFilters,
+      }),
+    [sortedTargets, targetSourceFilters],
+  )
+
   useEffect(() => {
     if (!activeProject) return
     void loadTargets({
@@ -279,10 +309,42 @@ export const CodeReviewSurface: FC<CodeReviewSurfaceProps> = ({
     if (!routeTargetId) return
     if (selectedTarget?.id === routeTargetId) return
 
-    const nextTarget = targets.find((target) => target.id === routeTargetId)
+    const nextTarget = targetList.find((target) => target.id === routeTargetId)
     if (!nextTarget) return
     setSelectedTarget(nextTarget)
-  }, [routeTargetId, selectedTarget?.id, setSelectedTarget, targets])
+  }, [routeTargetId, selectedTarget?.id, setSelectedTarget, targetList])
+
+  useEffect(() => {
+    if (targetsLoading) return
+    if (
+      selectedTarget &&
+      targetList.some((target) => target.id === selectedTarget.id)
+    ) {
+      return
+    }
+
+    const nextTarget =
+      (routeTargetId
+        ? targetList.find((target) => target.id === routeTargetId)
+        : null) ??
+      targetList[0] ??
+      null
+
+    if (selectedTarget?.id === nextTarget?.id) return
+
+    setHoldEmptySelection(false)
+    setSelectedTarget(nextTarget)
+    setSelectedFile(null)
+    onRouteSearchChange?.({ targetId: nextTarget?.id ?? null, file: null })
+  }, [
+    onRouteSearchChange,
+    routeTargetId,
+    selectedTarget,
+    setSelectedFile,
+    setSelectedTarget,
+    targetList,
+    targetsLoading,
+  ])
 
   const selectedTargetSupportsBaseBranch = Boolean(selectedTarget?.sessionId)
   const effectiveMode: CodeReviewMode =
@@ -383,16 +445,6 @@ export const CodeReviewSurface: FC<CodeReviewSurfaceProps> = ({
         ? selectedFile
         : null,
     [selectedFile, visibleFiles],
-  )
-  const targetList = useMemo(
-    () =>
-      [...targets].sort((a, b) => {
-        const changedDelta =
-          b.status.workingTreeFileCount - a.status.workingTreeFileCount
-        if (changedDelta !== 0) return changedDelta
-        return (b.updatedAt ?? '').localeCompare(a.updatedAt ?? '')
-      }),
-    [targets],
   )
   const patchInput = useMemo(
     () =>
@@ -742,6 +794,23 @@ export const CodeReviewSurface: FC<CodeReviewSurfaceProps> = ({
       onRouteSearchChange?.({ targetId: target.id, file: null })
     },
     [onRouteSearchChange, setSelectedFile, setSelectedTarget],
+  )
+
+  const handleToggleTargetSourceFilter = useCallback(
+    (source: CodeReviewTargetFilterSource) => {
+      setTargetSourceFilters((current) => {
+        if (current.includes(source)) {
+          return current.length === 1
+            ? current
+            : current.filter((item) => item !== source)
+        }
+
+        return CODE_REVIEW_TARGET_FILTER_SOURCES.filter(
+          (item) => item === source || current.includes(item),
+        )
+      })
+    },
+    [],
   )
 
   const handleModeChange = useCallback(
@@ -1198,7 +1267,11 @@ export const CodeReviewSurface: FC<CodeReviewSurfaceProps> = ({
           loading={targetsLoading}
           error={checkoutError ?? error ?? guideError}
           collapsed={targetRailCollapsed}
+          sourceFilters={targetSourceFilters}
+          sourceCounts={targetSourceCounts}
+          totalTargetCount={sortedTargets.length}
           onToggleCollapsed={handleToggleTargetRail}
+          onToggleSourceFilter={handleToggleTargetSourceFilter}
           onSelectTarget={handleSelectTarget}
         />
         {selectedView === 'guide' ? (

@@ -5,9 +5,12 @@ import {
   buildCodeReviewSummaryKey,
   buildCodeReviewSummarySelectionKey,
   buildCodeReviewTargetId,
+  countCodeReviewTargetsByFilterSource,
   countCodeReviewFilesByStatus,
+  filterCodeReviewTargetsBySource,
   getCodeReviewEmptyMessage,
   getCodeReviewHeaderLabel,
+  getCodeReviewTargetFilterSource,
   getCodeReviewTargetSourceLabel,
   getCodeReviewTargetSubtitle,
   getCodeReviewTargetTitle,
@@ -232,5 +235,63 @@ describe('code review helpers', () => {
         { status: 'A', file: 'c.ts' },
       ]),
     ).toEqual({ M: 2, A: 1 })
+  })
+
+  it('filters targets by user-facing source buckets', () => {
+    const sessionTarget = target
+    const workspaceTarget = {
+      ...target,
+      id: 'workspace:workspace-1',
+      source: 'workspace' as const,
+      sessionId: null,
+      sessionName: null,
+    }
+    const projectRepositoryTarget = {
+      ...target,
+      id: 'project-repository:project-1',
+      source: 'project-repository' as const,
+      workspaceId: null,
+      sessionId: null,
+      sessionName: null,
+    }
+    const pullRequestTarget = {
+      ...target,
+      id: 'pull-request:pr-1',
+      source: 'pull-request' as const,
+      pullRequestNumber: 42,
+      pullRequestLabel: '#42 Feature · open',
+    }
+
+    const targets = [
+      sessionTarget,
+      workspaceTarget,
+      projectRepositoryTarget,
+      pullRequestTarget,
+    ]
+
+    expect(getCodeReviewTargetFilterSource(projectRepositoryTarget)).toBe(
+      'workspace',
+    )
+    expect(countCodeReviewTargetsByFilterSource(targets)).toEqual({
+      session: 1,
+      workspace: 2,
+      'pull-request': 1,
+    })
+    expect(
+      filterCodeReviewTargetsBySource({
+        targets,
+        sources: ['workspace', 'pull-request'],
+      }).map((item) => item.id),
+    ).toEqual([
+      'workspace:workspace-1',
+      'project-repository:project-1',
+      'pull-request:pr-1',
+    ])
+    expect(
+      filterCodeReviewTargetsBySource({
+        targets,
+        sources: ['pull-request'],
+      }).map((item) => item.id),
+    ).toEqual(['pull-request:pr-1'])
   })
 })
