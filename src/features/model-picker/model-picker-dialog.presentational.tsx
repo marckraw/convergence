@@ -208,8 +208,16 @@ export const ModelPickerDialogPresentational: FC<
                     <div className="break-all text-xs leading-snug text-muted-foreground">
                       {item.modelId}
                     </div>
-                    <div className="text-[11px] leading-snug text-muted-foreground">
-                      {item.providerLabel}
+                    <div className="flex min-w-0 items-center gap-1.5 text-[11px] leading-snug text-muted-foreground">
+                      <span className="truncate">{item.providerLabel}</span>
+                      {item.providerBadge ? (
+                        <span
+                          title={item.providerBadge.title}
+                          className="shrink-0 rounded border border-amber-400/35 bg-amber-500/12 px-1 py-0.5 text-[9px] font-semibold uppercase leading-none text-amber-700 dark:text-amber-200"
+                        >
+                          {item.providerBadge.label}
+                        </span>
+                      ) : null}
                     </div>
                   </div>
                 </CommandItem>

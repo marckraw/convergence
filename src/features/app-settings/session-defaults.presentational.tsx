@@ -4,6 +4,7 @@ import type {
   ReasoningEffort,
   ResolvedProviderSelection,
 } from '@/entities/session'
+import { getProviderLifecycleBadge } from '@/entities/session'
 import { ModelPickerDialog } from '@/features/model-picker'
 import { SessionStartSelect } from '@/features/session-start'
 import { SettingsControlField } from './settings-control-field.presentational'
@@ -30,6 +31,7 @@ export const SessionDefaultsFields: FC<SessionDefaultsFieldsProps> = ({
       provider.vendorLabel && provider.vendorLabel !== provider.name
         ? provider.name
         : undefined,
+    badge: getProviderLifecycleBadge(provider) ?? undefined,
   }))
   const effortItems =
     selection.model?.effortOptions.map((effort) => ({

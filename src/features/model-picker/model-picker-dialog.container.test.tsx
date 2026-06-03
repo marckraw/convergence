@@ -76,6 +76,25 @@ const providers: ProviderInfo[] = [
   },
 ]
 
+const antigravityProvider: ProviderInfo = {
+  id: 'antigravity',
+  name: 'Antigravity CLI',
+  vendorLabel: 'Google',
+  kind: 'conversation',
+  supportsContinuation: true,
+  defaultModelId: 'gemini-3.5-flash',
+  modelOptions: [
+    {
+      id: 'gemini-3.5-flash',
+      label: 'Gemini 3.5 Flash',
+      defaultEffort: 'none',
+      effortOptions: [{ id: 'none', label: 'Default' }],
+    },
+  ],
+  attachments: TEST_ATTACHMENTS,
+  midRunInput: TEST_MID_RUN_INPUT,
+}
+
 function primeSettings(favoriteModels = DEFAULT_FAVORITE_MODELS_PREFS): void {
   useAppSettingsStore.setState({
     settings: {
@@ -171,5 +190,26 @@ describe('ModelPickerDialog', () => {
     expect(screen.getByText('GPT-5.4')).toBeInTheDocument()
     expect(screen.queryByText('Claude Sonnet')).not.toBeInTheDocument()
     expect(screen.queryByText('Claude Opus')).not.toBeInTheDocument()
+  })
+
+  it('marks Antigravity provider filters and model rows as alpha', async () => {
+    render(
+      <ModelPickerDialog
+        providers={[...providers, antigravityProvider]}
+        selectedProviderId="antigravity"
+        selectedModelId="gemini-3.5-flash"
+        value="Gemini 3.5 Flash"
+        onChange={vi.fn()}
+      />,
+    )
+
+    fireEvent.click(screen.getByRole('combobox', { name: 'Gemini 3.5 Flash' }))
+
+    await waitFor(() => {
+      expect(
+        screen.getAllByText('Gemini 3.5 Flash').length,
+      ).toBeGreaterThanOrEqual(2)
+    })
+    expect(screen.getAllByText('ALPHA').length).toBeGreaterThanOrEqual(2)
   })
 })

@@ -24,6 +24,8 @@ export function SearchableSelect({
   const inputRef = useRef<HTMLInputElement>(null)
   const normalizedQuery = query.trim().toLowerCase()
   const isDisabled = disabled || (items.length === 0 && !action)
+  const selectedBadge =
+    items.find((item) => item.id === selectedId)?.badge ?? undefined
 
   const filteredItems = useMemo(() => {
     if (!normalizedQuery) {
@@ -31,7 +33,7 @@ export function SearchableSelect({
     }
 
     return items.filter((item) =>
-      [item.label, item.description]
+      [item.label, item.description, item.badge?.label]
         .filter(Boolean)
         .some((entry) => entry!.toLowerCase().includes(normalizedQuery)),
     )
@@ -58,6 +60,7 @@ export function SearchableSelect({
       contentClassName={contentClassName}
       icon={icon}
       action={action}
+      selectedBadge={selectedBadge}
       inputRef={inputRef}
       onOpenChange={(nextOpen) => {
         setOpen(nextOpen)

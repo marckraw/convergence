@@ -5,6 +5,7 @@ import type {
   ReasoningEffort,
   ResolvedProviderSelection,
 } from '@/entities/session'
+import { getProviderLifecycleBadge } from '@/entities/session'
 import type { PullRequestReviewPreview } from '@/entities/pull-request'
 import { ModelPickerDialog } from '@/features/model-picker'
 import { SessionStartSelect } from '@/features/session-start'
@@ -69,6 +70,7 @@ export const PullRequestReviewStartDialog: FC<
       provider.vendorLabel && provider.vendorLabel !== provider.name
         ? provider.name
         : undefined,
+    badge: getProviderLifecycleBadge(provider) ?? undefined,
   }))
   const effortItems =
     selection.model?.effortOptions.map((effort) => ({

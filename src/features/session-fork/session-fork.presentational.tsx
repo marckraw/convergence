@@ -19,6 +19,7 @@ import type {
   ResolvedProviderSelection,
   WorkspaceMode,
 } from '@/entities/session'
+import { getProviderLifecycleBadge } from '@/entities/session'
 import { ModelPickerDialog } from '@/features/model-picker'
 import { SessionStartSelect } from '@/features/session-start'
 import type { PreviewState } from './session-fork.types'
@@ -96,6 +97,7 @@ export const SessionForkDialog: FC<SessionForkDialogProps> = ({
       provider.vendorLabel && provider.vendorLabel !== provider.name
         ? provider.name
         : undefined,
+    badge: getProviderLifecycleBadge(provider) ?? undefined,
   }))
   const effortItems =
     selection.model?.effortOptions.map((effort) => ({

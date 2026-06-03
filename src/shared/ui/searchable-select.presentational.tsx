@@ -15,6 +15,10 @@ export interface SearchableSelectItem {
   id: string
   label: string
   description?: string
+  badge?: {
+    label: string
+    title?: string
+  }
 }
 
 export interface SearchableSelectAction {
@@ -54,6 +58,7 @@ interface SearchableSelectPresentationalProps {
   contentClassName?: string
   icon?: ReactNode
   action?: SearchableSelectAction
+  selectedBadge?: SearchableSelectItem['badge']
   inputRef: RefObject<HTMLInputElement | null>
   onOpenChange: (open: boolean) => void
   onQueryChange: (query: string) => void
@@ -76,6 +81,7 @@ export function SearchableSelectPresentational({
   contentClassName,
   icon,
   action,
+  selectedBadge,
   inputRef,
   onOpenChange,
   onQueryChange,
@@ -98,6 +104,14 @@ export function SearchableSelectPresentational({
           <span className="flex min-w-0 items-center gap-2">
             {icon}
             <span className="truncate">{value}</span>
+            {selectedBadge ? (
+              <span
+                title={selectedBadge.title}
+                className="shrink-0 rounded border border-amber-400/35 bg-amber-500/12 px-1 py-0.5 text-[9px] font-semibold uppercase leading-none text-amber-700 dark:text-amber-200"
+              >
+                {selectedBadge.label}
+              </span>
+            ) : null}
           </span>
           <ChevronDown className="h-3 w-3 shrink-0" />
         </Button>
@@ -148,7 +162,17 @@ export function SearchableSelectPresentational({
                   className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-2 text-sm aria-selected:bg-accent aria-selected:text-accent-foreground"
                 >
                   <div className="flex min-w-0 flex-1 flex-col">
-                    <span className="truncate font-medium">{item.label}</span>
+                    <span className="flex min-w-0 items-center gap-2">
+                      <span className="truncate font-medium">{item.label}</span>
+                      {item.badge ? (
+                        <span
+                          title={item.badge.title}
+                          className="shrink-0 rounded border border-amber-400/35 bg-amber-500/12 px-1 py-0.5 text-[9px] font-semibold uppercase leading-none text-amber-700 dark:text-amber-200"
+                        >
+                          {item.badge.label}
+                        </span>
+                      ) : null}
+                    </span>
                     {item.description ? (
                       <span className="truncate text-[11px] text-muted-foreground">
                         {item.description}
