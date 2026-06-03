@@ -150,6 +150,26 @@ describe('AntigravityProvider', () => {
     )
   })
 
+  it('does not add a default print timeout for interactive turns', async () => {
+    const child = new MockChildProcess()
+    spawnMock.mockReturnValue(child)
+    const settings = new MockSettingsService()
+    const provider = new AntigravityProvider(
+      '/usr/local/bin/agy',
+      null,
+      undefined,
+      settings,
+    )
+    collectDeltas(provider)
+
+    await waitFor(() => expect(spawnMock).toHaveBeenCalled())
+    expect(spawnMock.mock.calls[0]?.[1]).not.toContain('--print-timeout')
+
+    child.stdout.write('done')
+    child.stdout.end()
+    child.emit('exit', 0)
+  })
+
   it('emits only the resumed print delta as the assistant response', async () => {
     const child = new MockChildProcess()
     spawnMock.mockReturnValue(child)

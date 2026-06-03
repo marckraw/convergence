@@ -133,6 +133,105 @@ describe('AntigravitySettingsService', () => {
     expect(events).toEqual(['first-start', 'first-end', 'second-start'])
   })
 
+  it('reclaims a dead-owner lock and restores its temporary settings before running', async () => {
+    const original = '{\n  "model": "User model"\n}\n'
+    const temporary = JSON.stringify(
+      {
+        model: 'Convergence injected model',
+        statusLine: {
+          type: 'command',
+          command: '/tmp/deleted-status-line.sh',
+        },
+      },
+      null,
+      2,
+    )
+    await mkdir(lockPath)
+    await writeFile(
+      join(lockPath, 'state.json'),
+      `${JSON.stringify(
+        {
+          version: 1,
+          ownerPid: -1,
+          createdAtMs: Date.now(),
+          settingsPath,
+          original: {
+            existed: true,
+            raw: original,
+          },
+          temporaryRaw: `${temporary}\n`,
+        },
+        null,
+        2,
+      )}\n`,
+      'utf8',
+    )
+    await writeFile(settingsPath, `${temporary}\n`, 'utf8')
+
+    const service = new AntigravitySettingsService({
+      settingsPath,
+      lockPath,
+      lockRetryDelayMs: 5,
+      lockTimeoutMs: 100,
+    })
+
+    await service.withTemporarySettings(
+      { modelLabel: 'Gemini 3.5 Flash' },
+      async () => {
+        const raw = await readFile(settingsPath, 'utf8')
+        expect(JSON.parse(raw)).toEqual({ model: 'Gemini 3.5 Flash' })
+      },
+    )
+
+    expect(await readFile(settingsPath, 'utf8')).toBe(original)
+    expect(await exists(lockPath)).toBe(false)
+  })
+
+  it('does not overwrite user-edited settings when reclaiming a stale lock', async () => {
+    const original = '{\n  "model": "Original"\n}\n'
+    const temporary = '{\n  "model": "Convergence temporary"\n}\n'
+    const userEdited = '{\n  "model": "User edited after crash"\n}\n'
+    await mkdir(lockPath)
+    await writeFile(
+      join(lockPath, 'state.json'),
+      `${JSON.stringify(
+        {
+          version: 1,
+          ownerPid: -1,
+          createdAtMs: Date.now(),
+          settingsPath,
+          original: {
+            existed: true,
+            raw: original,
+          },
+          temporaryRaw: temporary,
+        },
+        null,
+        2,
+      )}\n`,
+      'utf8',
+    )
+    await writeFile(settingsPath, userEdited, 'utf8')
+
+    const service = new AntigravitySettingsService({
+      settingsPath,
+      lockPath,
+      lockRetryDelayMs: 5,
+      lockTimeoutMs: 100,
+    })
+
+    await service.withTemporarySettings(
+      { modelLabel: 'Gemini 3.5 Flash' },
+      async () => {
+        const raw = await readFile(settingsPath, 'utf8')
+        expect(JSON.parse(raw)).toEqual({ model: 'Gemini 3.5 Flash' })
+      },
+    )
+
+    expect(await readFile(settingsPath, 'utf8')).toBe(userEdited)
+    expect(await exists(lockPath)).toBe(false)
+  })
+
   it('times out when the settings lock remains held', async () => {
     await mkdir(lockPath)
     const service = new AntigravitySettingsService({

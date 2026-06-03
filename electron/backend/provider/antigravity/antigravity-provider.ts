@@ -297,21 +297,23 @@ function runAntigravityPrint(
         }, 750)
       : null
 
-    const timeoutMs = input.timeoutMs ?? 5 * 60 * 1000
-    const timeout = setTimeout(() => {
-      if (settled) return
-      settled = true
-      if (statusPollTimer) clearInterval(statusPollTimer)
-      child.kill('SIGTERM')
-      progress?.settled('timeout')
-      reject(new Error('antigravity print timed out'))
-    }, timeoutMs + 5_000)
+    const timeout =
+      input.timeoutMs && input.timeoutMs > 0
+        ? setTimeout(() => {
+            if (settled) return
+            settled = true
+            if (statusPollTimer) clearInterval(statusPollTimer)
+            child.kill('SIGTERM')
+            progress?.settled('timeout')
+            reject(new Error('antigravity print timed out'))
+          }, input.timeoutMs + 5_000)
+        : null
 
     function settleWithError(error: Error): void {
       if (settled) return
       settled = true
       if (statusPollTimer) clearInterval(statusPollTimer)
-      clearTimeout(timeout)
+      if (timeout) clearTimeout(timeout)
       progress?.settled('error')
       reject(error)
     }
@@ -320,7 +322,7 @@ function runAntigravityPrint(
       if (settled) return
       settled = true
       if (statusPollTimer) clearInterval(statusPollTimer)
-      clearTimeout(timeout)
+      if (timeout) clearTimeout(timeout)
       progress?.settled('ok')
       resolve({ stdout, stderr })
     }

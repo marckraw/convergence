@@ -1,6 +1,6 @@
 import { homedir } from 'os'
 import { dirname, join } from 'path'
-import { mkdir, readFile, rm, writeFile } from 'fs/promises'
+import { mkdir, readFile, rm, stat, writeFile } from 'fs/promises'
 
 export interface AntigravityTemporarySettingsPatch {
   modelLabel?: string | null
@@ -12,6 +12,8 @@ export interface AntigravitySettingsServiceOptions {
   lockPath?: string
   lockTimeoutMs?: number
   lockRetryDelayMs?: number
+  staleLockMs?: number
+  orphanLockMs?: number
 }
 
 interface OriginalSettings {
@@ -20,8 +22,23 @@ interface OriginalSettings {
   parsed: Record<string, unknown>
 }
 
-const DEFAULT_LOCK_TIMEOUT_MS = 10_000
+interface SettingsLockState {
+  version: 1
+  ownerPid: number
+  createdAtMs: number
+  settingsPath: string
+  original?: {
+    existed: boolean
+    raw: string | null
+  }
+  temporaryRaw?: string
+}
+
+const SETTINGS_LOCK_STATE_FILE = 'state.json'
+const DEFAULT_LOCK_TIMEOUT_MS = 12 * 60 * 60 * 1000
 const DEFAULT_LOCK_RETRY_DELAY_MS = 25
+const DEFAULT_STALE_LOCK_MS = 12 * 60 * 60 * 1000
+const DEFAULT_ORPHAN_LOCK_MS = 30_000
 
 export function getDefaultAntigravitySettingsPath(): string {
   return join(homedir(), '.gemini', 'antigravity-cli', 'settings.json')
@@ -102,9 +119,13 @@ function applyTemporaryPatch(
   return next
 }
 
+function serializeSettings(settings: Record<string, unknown>): string {
+  return `${JSON.stringify(settings, null, 2)}\n`
+}
+
 async function restoreOriginalSettings(
   settingsPath: string,
-  original: OriginalSettings,
+  original: Pick<OriginalSettings, 'existed' | 'raw'>,
 ): Promise<void> {
   if (original.existed) {
     await mkdir(dirname(settingsPath), { recursive: true })
@@ -115,10 +136,124 @@ async function restoreOriginalSettings(
   await rm(settingsPath, { force: true })
 }
 
+function settingsLockStatePath(lockPath: string): string {
+  return join(lockPath, SETTINGS_LOCK_STATE_FILE)
+}
+
+async function readSettingsLockState(
+  lockPath: string,
+): Promise<SettingsLockState | null> {
+  try {
+    const raw = await readFile(settingsLockStatePath(lockPath), 'utf8')
+    const parsed = JSON.parse(raw) as unknown
+    if (!parsed || typeof parsed !== 'object') return null
+
+    const candidate = parsed as Partial<SettingsLockState>
+    if (
+      candidate.version !== 1 ||
+      typeof candidate.ownerPid !== 'number' ||
+      typeof candidate.createdAtMs !== 'number' ||
+      typeof candidate.settingsPath !== 'string'
+    ) {
+      return null
+    }
+
+    return candidate as SettingsLockState
+  } catch (error) {
+    if (isMissingFileError(error)) return null
+    return null
+  }
+}
+
+async function writeSettingsLockState(
+  lockPath: string,
+  state: SettingsLockState,
+): Promise<void> {
+  await writeFile(
+    settingsLockStatePath(lockPath),
+    `${JSON.stringify(state, null, 2)}\n`,
+    'utf8',
+  )
+}
+
+function isProcessAlive(pid: number): boolean {
+  if (!Number.isInteger(pid) || pid <= 0) return false
+
+  try {
+    process.kill(pid, 0)
+    return true
+  } catch (error) {
+    return (
+      !!error &&
+      typeof error === 'object' &&
+      (error as { code?: unknown }).code === 'EPERM'
+    )
+  }
+}
+
+async function readOptionalSettingsRaw(
+  settingsPath: string,
+): Promise<string | null> {
+  try {
+    return await readFile(settingsPath, 'utf8')
+  } catch (error) {
+    if (isMissingFileError(error)) return null
+    throw error
+  }
+}
+
+async function recoverSettingsFromStaleLock(input: {
+  lockPath: string
+  settingsPath: string
+  staleLockMs: number
+  orphanLockMs: number
+}): Promise<boolean> {
+  let lockStats: Awaited<ReturnType<typeof stat>>
+  try {
+    lockStats = await stat(input.lockPath)
+  } catch (error) {
+    if (isMissingFileError(error)) return true
+    throw error
+  }
+
+  const now = Date.now()
+  const state = await readSettingsLockState(input.lockPath)
+  const lockAgeMs = now - (state?.createdAtMs ?? lockStats.mtimeMs)
+  const ownerIsAlive =
+    state && state.ownerPid !== process.pid
+      ? isProcessAlive(state.ownerPid)
+      : state?.ownerPid === process.pid
+
+  if (state && ownerIsAlive && lockAgeMs < input.staleLockMs) {
+    return false
+  }
+
+  if (!state && now - lockStats.mtimeMs < input.orphanLockMs) {
+    return false
+  }
+
+  if (
+    state?.settingsPath === input.settingsPath &&
+    state.original &&
+    typeof state.temporaryRaw === 'string'
+  ) {
+    const currentRaw = await readOptionalSettingsRaw(input.settingsPath)
+    if (currentRaw === state.temporaryRaw) {
+      await restoreOriginalSettings(input.settingsPath, state.original)
+    }
+  }
+
+  await rm(input.lockPath, { recursive: true, force: true })
+  return true
+}
+
 async function acquireSettingsLock(input: {
   lockPath: string
+  settingsPath: string
   timeoutMs: number
   retryDelayMs: number
+  staleLockMs: number
+  orphanLockMs: number
 }): Promise<() => Promise<void>> {
   await mkdir(dirname(input.lockPath), { recursive: true })
   const startedAt = Date.now()
@@ -126,6 +261,12 @@ async function acquireSettingsLock(input: {
   while (true) {
     try {
       await mkdir(input.lockPath)
+      await writeSettingsLockState(input.lockPath, {
+        version: 1,
+        ownerPid: process.pid,
+        createdAtMs: Date.now(),
+        settingsPath: input.settingsPath,
+      })
       return async () => {
         await rm(input.lockPath, { recursive: true, force: true })
       }
@@ -135,6 +276,14 @@ async function acquireSettingsLock(input: {
         typeof error === 'object' &&
         (error as { code?: unknown }).code === 'EEXIST'
       if (!isBusy) throw error
+
+      const recovered = await recoverSettingsFromStaleLock({
+        lockPath: input.lockPath,
+        settingsPath: input.settingsPath,
+        staleLockMs: input.staleLockMs,
+        orphanLockMs: input.orphanLockMs,
+      })
+      if (recovered) continue
 
       if (Date.now() - startedAt >= input.timeoutMs) {
         throw new Error(
@@ -153,6 +302,8 @@ export class AntigravitySettingsService {
   private readonly lockPath: string
   private readonly lockTimeoutMs: number
   private readonly lockRetryDelayMs: number
+  private readonly staleLockMs: number
+  private readonly orphanLockMs: number
 
   constructor(options: AntigravitySettingsServiceOptions = {}) {
     this.settingsPath =
@@ -161,6 +312,8 @@ export class AntigravitySettingsService {
     this.lockTimeoutMs = options.lockTimeoutMs ?? DEFAULT_LOCK_TIMEOUT_MS
     this.lockRetryDelayMs =
       options.lockRetryDelayMs ?? DEFAULT_LOCK_RETRY_DELAY_MS
+    this.staleLockMs = options.staleLockMs ?? DEFAULT_STALE_LOCK_MS
+    this.orphanLockMs = options.orphanLockMs ?? DEFAULT_ORPHAN_LOCK_MS
   }
 
   async withTemporarySettings<T>(
@@ -169,20 +322,32 @@ export class AntigravitySettingsService {
   ): Promise<T> {
     const release = await acquireSettingsLock({
       lockPath: this.lockPath,
+      settingsPath: this.settingsPath,
       timeoutMs: this.lockTimeoutMs,
       retryDelayMs: this.lockRetryDelayMs,
+      staleLockMs: this.staleLockMs,
+      orphanLockMs: this.orphanLockMs,
     })
 
     try {
       const original = await readOriginalSettings(this.settingsPath)
       const next = applyTemporaryPatch(original.parsed, patch)
+      const temporaryRaw = serializeSettings(next)
+
+      await writeSettingsLockState(this.lockPath, {
+        version: 1,
+        ownerPid: process.pid,
+        createdAtMs: Date.now(),
+        settingsPath: this.settingsPath,
+        original: {
+          existed: original.existed,
+          raw: original.raw,
+        },
+        temporaryRaw,
+      })
 
       await mkdir(dirname(this.settingsPath), { recursive: true })
-      await writeFile(
-        this.settingsPath,
-        `${JSON.stringify(next, null, 2)}\n`,
-        'utf8',
-      )
+      await writeFile(this.settingsPath, temporaryRaw, 'utf8')
 
       try {
         return await operation()
