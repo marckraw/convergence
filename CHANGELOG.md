@@ -1,5 +1,11 @@
 # convergence
 
+## 0.39.1
+
+### Patch Changes
+
+- 98ae96c: Add Cursor CLI ACP as a first-class provider with session streaming, approvals, model and mode metadata, native command catalog integration, settings and quota polish, and parity hardening.
+
 ## 0.39.0
 
 ### Minor Changes
