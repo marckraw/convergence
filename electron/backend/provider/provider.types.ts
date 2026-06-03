@@ -118,6 +118,7 @@ export interface SessionStartConfig {
   initialMessage: string
   initialAttachments?: Attachment[]
   initialSkillSelections?: SkillSelection[]
+  previousAssistantTexts?: string[]
   model: string | null
   effort: ReasoningEffort | null
   continuationToken: string | null
@@ -192,7 +193,7 @@ export interface ProviderUpdateInfo {
   currentVersion: string | null
   latestVersion: string | null
   status: ProviderUpdateStatus
-  packageName: string
+  packageName: string | null
   installCommand: string
   updateCommand: string
   manualUpdateCommand: string

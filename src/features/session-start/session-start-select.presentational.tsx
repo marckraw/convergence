@@ -1,14 +1,11 @@
 import type { FC } from 'react'
 import { SearchableSelect } from '@/shared/ui/searchable-select.container'
+import type { SearchableSelectItem } from '@/shared/ui/searchable-select.presentational'
 
 interface SessionStartSelectProps {
   selectedId: string
   value: string
-  items: Array<{
-    id: string
-    label: string
-    description?: string
-  }>
+  items: SearchableSelectItem[]
   onChange: (id: string) => void
 }
 

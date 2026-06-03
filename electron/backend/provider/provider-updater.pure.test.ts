@@ -93,4 +93,13 @@ describe('provider-updater.pure', () => {
         '/Users/me/.local/share/cursor-agent/versions/2026.06.02-8c11d9f/cursor-agent',
     })
   })
+
+  it('classifies non-npm Antigravity installs as provider-managed', () => {
+    expect(
+      buildNonNpmProviderInstallInfo('/Users/me/.local/bin/agy', 'antigravity'),
+    ).toMatchObject({
+      manager: 'self',
+      realBinaryPath: '/Users/me/.local/bin/agy',
+    })
+  })
 })

@@ -27,6 +27,14 @@ function cursorProvider(): DetectedProvider {
   }
 }
 
+function antigravityProvider(): DetectedProvider {
+  return {
+    id: 'antigravity',
+    name: 'Antigravity CLI',
+    binaryPath: '/usr/local/bin/agy',
+  }
+}
+
 function catalog(skills: SkillCatalogEntry[] = []): ProviderSkillCatalog {
   return {
     providerId: 'codex',
@@ -263,6 +271,32 @@ describe('SkillsService', () => {
         activationConfirmation: 'none',
         skills: [],
         error: 'cursor command scan failed',
+      }),
+    ])
+  })
+
+  it('reports Antigravity adapter failures with filesystem catalog metadata', async () => {
+    const project = projectService.create({ repositoryPath: gitRepoPath })
+    const service = new SkillsService(projectService, [antigravityProvider()], {
+      now: () => FIXED_NOW,
+      createAdapter: () => ({
+        list: async () => {
+          throw new Error('antigravity scan failed')
+        },
+      }),
+    })
+
+    const result = await service.listByProjectId(project.id)
+
+    expect(result.providers).toEqual([
+      expect.objectContaining({
+        providerId: 'antigravity',
+        providerName: 'Antigravity CLI',
+        catalogSource: 'filesystem',
+        invocationSupport: 'native-command',
+        activationConfirmation: 'none',
+        skills: [],
+        error: 'antigravity scan failed',
       }),
     ])
   })

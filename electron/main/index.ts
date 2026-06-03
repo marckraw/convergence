@@ -36,6 +36,7 @@ import { ClaudeCodeProvider } from '../backend/provider/claude-code/claude-code-
 import { CodexProvider } from '../backend/provider/codex/codex-provider'
 import { CursorProvider } from '../backend/provider/cursor/cursor-provider'
 import { PiProvider } from '../backend/provider/pi/pi-provider'
+import { AntigravityProvider } from '../backend/provider/antigravity/antigravity-provider'
 import { ShellProvider } from '../backend/provider/shell/shell-provider'
 import { detectProviders } from '../backend/provider/detect'
 import { updateProviderPackage } from '../backend/provider/provider-updater.service'
@@ -315,6 +316,10 @@ async function startApp(): Promise<void> {
           new PiProvider(p.binaryPath, taskProgressService, debugSink, (env) =>
             openRouterCredentials.withOpenRouterEnv(env),
           ),
+        )
+      } else if (p.id === 'antigravity') {
+        providerRegistry.register(
+          new AntigravityProvider(p.binaryPath, taskProgressService, debugSink),
         )
       }
     }

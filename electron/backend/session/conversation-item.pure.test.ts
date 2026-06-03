@@ -167,9 +167,9 @@ describe('conversation-item migration', () => {
       text: 'Use the planning skill.',
       skillSelections: [
         {
-          id: 'codex:global:planning',
-          providerId: 'codex',
-          providerName: 'Codex',
+          id: 'antigravity:global:planning',
+          providerId: 'antigravity',
+          providerName: 'Antigravity CLI',
           name: 'planning',
           displayName: 'Planning',
           path: '/skills/planning/SKILL.md',
@@ -182,7 +182,7 @@ describe('conversation-item migration', () => {
       createdAt: '2026-01-01T00:00:00.000Z',
       updatedAt: '2026-01-01T00:00:00.000Z',
       providerMeta: {
-        providerId: 'codex',
+        providerId: 'antigravity',
         providerItemId: null,
         providerEventType: 'user',
       },
@@ -199,7 +199,7 @@ describe('conversation-item migration', () => {
       payload_json: row.payloadJson,
       provider_item_id: row.providerItemId,
       provider_event_type: row.providerEventType,
-      provider_id: 'codex',
+      provider_id: 'antigravity',
       created_at: row.createdAt,
       updated_at: row.updatedAt,
     })

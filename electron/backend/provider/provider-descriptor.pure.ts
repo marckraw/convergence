@@ -7,6 +7,7 @@ import type {
   ProviderSkillsCapability,
   ReasoningEffort,
 } from './provider.types'
+import { buildFallbackAntigravityModelOptions } from './antigravity/antigravity-models.pure'
 import {
   CURSOR_ACP_ATTACHMENT_CAPABILITY,
   CURSOR_ACP_INTERACTION_CAPABILITY,
@@ -48,6 +49,16 @@ const PI_ATTACHMENT_CAPABILITY: ProviderAttachmentCapability = {
   maxTotalBytes: 50 * MB,
 }
 
+const ANTIGRAVITY_ATTACHMENT_CAPABILITY: ProviderAttachmentCapability = {
+  supportsImage: false,
+  supportsPdf: false,
+  supportsText: true,
+  maxImageBytes: 0,
+  maxPdfBytes: 0,
+  maxTextBytes: 1 * MB,
+  maxTotalBytes: 1 * MB,
+}
+
 const CLAUDE_CODE_SKILLS_CAPABILITY: ProviderSkillsCapability = {
   catalog: 'filesystem',
   invocation: 'native-command',
@@ -61,6 +72,12 @@ const CODEX_SKILLS_CAPABILITY: ProviderSkillsCapability = {
 }
 
 const PI_SKILLS_CAPABILITY: ProviderSkillsCapability = {
+  catalog: 'filesystem',
+  invocation: 'native-command',
+  activationConfirmation: 'none',
+}
+
+const ANTIGRAVITY_SKILLS_CAPABILITY: ProviderSkillsCapability = {
   catalog: 'filesystem',
   invocation: 'native-command',
   activationConfirmation: 'none',
@@ -111,6 +128,17 @@ const PI_MID_RUN_INPUT_CAPABILITY: ProviderMidRunInputCapability = {
   defaultRunningMode: 'follow-up',
 }
 
+const ANTIGRAVITY_MID_RUN_INPUT_CAPABILITY: ProviderMidRunInputCapability = {
+  supportsAnswer: false,
+  supportsNativeFollowUp: false,
+  supportsAppQueuedFollowUp: true,
+  supportsSteer: false,
+  supportsInterrupt: false,
+  defaultRunningMode: 'follow-up',
+  notes:
+    'Antigravity CLI print mode does not expose live tool streams or native mid-run input. Convergence can queue follow-up text for the next serialized print-mode turn.',
+}
+
 export function getMidRunInputCapabilityForProviderId(
   providerId: string,
 ): ProviderMidRunInputCapability {
@@ -123,6 +151,8 @@ export function getMidRunInputCapabilityForProviderId(
       return PI_MID_RUN_INPUT_CAPABILITY
     case 'cursor':
       return CURSOR_ACP_MID_RUN_INPUT_CAPABILITY
+    case 'antigravity':
+      return ANTIGRAVITY_MID_RUN_INPUT_CAPABILITY
     default:
       return NO_MID_RUN_INPUT_CAPABILITY
   }
@@ -336,6 +366,22 @@ export function buildFallbackCursorDescriptor(): ProviderDescriptor {
     configOptions: [],
     telemetry: CURSOR_ACP_TELEMETRY_CAPABILITY,
     settings: CURSOR_ACP_SETTINGS_INFO,
+  }
+}
+
+export function buildFallbackAntigravityDescriptor(): ProviderDescriptor {
+  return {
+    id: 'antigravity',
+    name: 'Antigravity CLI',
+    vendorLabel: 'Google',
+    kind: 'conversation',
+    supportsContinuation: true,
+    defaultModelId: 'gemini-3.5-flash',
+    fastModelId: 'gemini-3.5-flash',
+    modelOptions: buildFallbackAntigravityModelOptions(),
+    attachments: ANTIGRAVITY_ATTACHMENT_CAPABILITY,
+    midRunInput: ANTIGRAVITY_MID_RUN_INPUT_CAPABILITY,
+    skills: ANTIGRAVITY_SKILLS_CAPABILITY,
   }
 }
 

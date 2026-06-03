@@ -31,6 +31,19 @@ function createCursorManualSnapshot(): ProviderQuotaSnapshot {
   }
 }
 
+function createAntigravityManualSnapshot(): ProviderQuotaSnapshot {
+  return {
+    providerId: 'antigravity',
+    status: 'unavailable',
+    source: 'manual',
+    reason:
+      'Antigravity CLI exposes quota through its interactive /usage and /quota panels, but does not expose a machine-readable quota endpoint to Convergence yet. Run `agy` and use /usage or /quota for live limits.',
+    usageUrl: 'https://www.antigravity.google/docs/plans',
+    lastCheckedAt: new Date().toISOString(),
+    stale: false,
+  }
+}
+
 export function ProviderUsageContainer() {
   const [snapshots, setSnapshots] = useState<ProviderQuotaSnapshot[]>([])
   const [isLoading, setIsLoading] = useState(true)
@@ -42,6 +55,7 @@ export function ProviderUsageContainer() {
         await providerQuotaApi.getCodex(forceRefresh),
         createClaudeManualSnapshot(),
         createCursorManualSnapshot(),
+        createAntigravityManualSnapshot(),
       ])
     } catch (err) {
       const reason =
@@ -62,6 +76,9 @@ export function ProviderUsageContainer() {
         },
         {
           ...createCursorManualSnapshot(),
+        },
+        {
+          ...createAntigravityManualSnapshot(),
         },
       ])
     } finally {

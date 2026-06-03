@@ -189,5 +189,11 @@ describe('filterSkillCatalog', () => {
         providerId: 'cursor',
       }),
     ).toBe('/review')
+    expect(
+      getNativeSkillInvocationText({
+        ...codexSkill,
+        providerId: 'antigravity',
+      }),
+    ).toBe('/review')
   })
 })

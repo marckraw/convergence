@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   buildClaudeDescriptor,
   buildEffortOptions,
+  buildFallbackAntigravityDescriptor,
   buildFallbackCodexDescriptor,
   buildFallbackCursorDescriptor,
   buildFallbackPiDescriptor,
@@ -27,6 +28,7 @@ describe('provider-descriptor', () => {
     expect(buildFallbackCodexDescriptor().vendorLabel).toBe('OpenAI')
     expect(buildFallbackPiDescriptor().vendorLabel).toBe('Pi')
     expect(buildFallbackCursorDescriptor().vendorLabel).toBe('Anysphere')
+    expect(buildFallbackAntigravityDescriptor().vendorLabel).toBe('Google')
     expect(buildClaudeDescriptor().skills).toEqual({
       catalog: 'filesystem',
       invocation: 'native-command',
@@ -44,6 +46,11 @@ describe('provider-descriptor', () => {
     })
     expect(buildFallbackCursorDescriptor().skills).toEqual({
       catalog: 'native-rpc',
+      invocation: 'native-command',
+      activationConfirmation: 'none',
+    })
+    expect(buildFallbackAntigravityDescriptor().skills).toEqual({
+      catalog: 'filesystem',
       invocation: 'native-command',
       activationConfirmation: 'none',
     })
@@ -110,6 +117,37 @@ describe('provider-descriptor', () => {
       'medium',
       'high',
       'xhigh',
+    ])
+  })
+
+  it('exposes Antigravity official models as model + effort options', () => {
+    const descriptor = buildFallbackAntigravityDescriptor()
+
+    expect(descriptor).toMatchObject({
+      id: 'antigravity',
+      name: 'Antigravity CLI',
+      defaultModelId: 'gemini-3.5-flash',
+      fastModelId: 'gemini-3.5-flash',
+      attachments: {
+        supportsImage: false,
+        supportsPdf: false,
+        supportsText: true,
+      },
+      midRunInput: {
+        supportsAnswer: false,
+        supportsNativeFollowUp: false,
+        supportsAppQueuedFollowUp: true,
+        supportsSteer: false,
+        supportsInterrupt: false,
+      },
+    })
+    expect(descriptor.modelOptions.map((option) => option.id)).toEqual([
+      'gemini-3.1-pro',
+      'gemini-3.5-flash',
+      'gemini-3-flash',
+      'claude-sonnet-4.6-thinking',
+      'claude-opus-4.6-thinking',
+      'gpt-oss-120b',
     ])
   })
 

@@ -1,6 +1,7 @@
 import { useMemo, useRef, useState } from 'react'
 import { useAppSettingsStore } from '@/entities/app-settings'
 import type { ProviderInfo } from '@/entities/session'
+import { getProviderLifecycleBadge } from '@/entities/session'
 import { ModelPickerDialogPresentational } from './model-picker-dialog.presentational'
 import {
   createFavoriteModelKeySet,
@@ -81,6 +82,7 @@ export function ModelPickerDialog({
           vendorLabel: provider.vendorLabel,
           count: provider.modelOptions.length,
           kind: 'provider',
+          badge: getProviderLifecycleBadge(provider) ?? undefined,
         })),
     ],
     [providers, visibleFavoriteCount],
@@ -190,6 +192,7 @@ function flattenModelItems(
     }
 
     const providerLabel = provider.vendorLabel || provider.name
+    const providerBadge = getProviderLifecycleBadge(provider) ?? undefined
 
     return provider.modelOptions.flatMap((model) => {
       if (
@@ -211,6 +214,7 @@ function flattenModelItems(
           providerId: provider.id,
           providerName: provider.name,
           providerLabel,
+          providerBadge,
           modelId: model.id,
           modelLabel: model.label,
           modelDescription: model.description,

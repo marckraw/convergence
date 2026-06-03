@@ -1,4 +1,8 @@
-export type ProviderQuotaProviderId = 'codex' | 'claude-code' | 'cursor'
+export type ProviderQuotaProviderId =
+  | 'codex'
+  | 'claude-code'
+  | 'cursor'
+  | 'antigravity'
 
 export type ProviderQuotaWindowKind = 'five-hour' | 'weekly' | 'other'
 

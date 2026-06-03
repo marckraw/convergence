@@ -4,8 +4,15 @@ import type {
   CodeReviewFileEntry,
   CodeReviewMode,
   CodeReviewPanelMode,
+  CodeReviewTargetFilterSource,
   CodeReviewTarget,
 } from './code-review.types'
+
+export const CODE_REVIEW_TARGET_FILTER_SOURCES = [
+  'session',
+  'workspace',
+  'pull-request',
+] as const satisfies CodeReviewTargetFilterSource[]
 
 export function buildCodeReviewTargetId(target: CodeReviewTarget): string {
   return target.id
@@ -154,6 +161,69 @@ export function getCodeReviewTargetSourceLabel(
     case 'project-repository':
       return 'Project Repository'
   }
+}
+
+export function getCodeReviewTargetFilterSource(
+  target: CodeReviewTarget,
+): CodeReviewTargetFilterSource {
+  return target.source === 'project-repository' ? 'workspace' : target.source
+}
+
+export function filterCodeReviewTargetsBySource(input: {
+  targets: CodeReviewTarget[]
+  sources: readonly CodeReviewTargetFilterSource[]
+}): CodeReviewTarget[] {
+  const sourceSet = new Set(input.sources)
+  return input.targets.filter((target) =>
+    sourceSet.has(getCodeReviewTargetFilterSource(target)),
+  )
+}
+
+export function filterCodeReviewTargetsByQuery(input: {
+  targets: CodeReviewTarget[]
+  query: string
+}): CodeReviewTarget[] {
+  const query = input.query.trim().toLowerCase()
+  if (!query) return input.targets
+
+  return input.targets.filter((target) =>
+    buildCodeReviewTargetSearchText(target).includes(query),
+  )
+}
+
+function buildCodeReviewTargetSearchText(target: CodeReviewTarget): string {
+  return [
+    getCodeReviewTargetTitle(target),
+    getCodeReviewTargetSubtitle(target),
+    target.id,
+    target.projectName,
+    target.sessionName,
+    target.branchName,
+    target.pullRequestNumber ? `#${target.pullRequestNumber}` : null,
+    target.pullRequestLabel,
+    target.pullRequestHeadBranch,
+    target.pullRequestBaseBranch,
+  ]
+    .filter(Boolean)
+    .join(' ')
+    .toLowerCase()
+}
+
+export function countCodeReviewTargetsByFilterSource(
+  targets: CodeReviewTarget[],
+): Record<CodeReviewTargetFilterSource, number> {
+  return targets.reduce<Record<CodeReviewTargetFilterSource, number>>(
+    (counts, target) => {
+      const source = getCodeReviewTargetFilterSource(target)
+      counts[source] += 1
+      return counts
+    },
+    {
+      session: 0,
+      workspace: 0,
+      'pull-request': 0,
+    },
+  )
 }
 
 export function isRemotePullRequestTarget(target: CodeReviewTarget): boolean {

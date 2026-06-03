@@ -36,6 +36,8 @@ export interface TranscriptEntryViewModel {
   attachments: Attachment[]
   missingAttachmentIds: string[]
   toolPreview: string | null
+  toolVisibilityLabel: string | null
+  toolVisibilityTitle: string | null
   actionableApproval: boolean
   actionableInput: boolean
   uiResponseArtifactTitle: string | null
@@ -78,6 +80,8 @@ export function buildTranscriptEntryViewModel({
     attachments,
     missingAttachmentIds,
     toolPreview: getToolPreviewForItem(item),
+    toolVisibilityLabel: getToolVisibilityLabel(item),
+    toolVisibilityTitle: getToolVisibilityTitle(item),
     actionableApproval: item.kind === 'approval-request' && actionableApproval,
     actionableInput: item.kind === 'input-request' && actionableInput,
     uiResponseArtifactTitle: getUiResponseArtifactTitle(item),
@@ -264,6 +268,28 @@ function getToolPreviewForItem(item: ConversationItem): string | null {
     return getToolPreview(item.outputText)
   }
   return null
+}
+
+function isAntigravityReconstructedToolItem(item: ConversationItem): boolean {
+  if (item.kind !== 'tool-call' && item.kind !== 'tool-result') {
+    return false
+  }
+
+  return (
+    item.providerMeta.providerId === 'antigravity' &&
+    (item.providerMeta.providerEventType === 'trajectory-tool-call' ||
+      item.providerMeta.providerEventType === 'trajectory-tool-result')
+  )
+}
+
+function getToolVisibilityLabel(item: ConversationItem): string | null {
+  return isAntigravityReconstructedToolItem(item) ? 'Post-run' : null
+}
+
+function getToolVisibilityTitle(item: ConversationItem): string | null {
+  return isAntigravityReconstructedToolItem(item)
+    ? 'Recovered from the Antigravity conversation database after the turn completed.'
+    : null
 }
 
 function resolveItemAttachments(

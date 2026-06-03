@@ -17,7 +17,7 @@ export interface ProviderCreditsQuota {
 
 export type ProviderQuotaSnapshot =
   | {
-      providerId: 'codex' | 'claude-code' | 'cursor'
+      providerId: 'codex' | 'claude-code' | 'cursor' | 'antigravity'
       status: 'available'
       source: 'provider-api' | 'provider-event'
       planType: string | null
@@ -28,7 +28,7 @@ export type ProviderQuotaSnapshot =
       stale: boolean
     }
   | {
-      providerId: 'codex' | 'claude-code' | 'cursor'
+      providerId: 'codex' | 'claude-code' | 'cursor' | 'antigravity'
       status: 'unavailable'
       source: 'provider-api' | 'provider-event' | 'manual'
       reason: string

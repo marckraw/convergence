@@ -1,4 +1,5 @@
 import type { ProviderInfo } from '@/entities/session'
+import type { ProviderLifecycleBadge } from '@/entities/session'
 import type { ButtonProps } from '@/shared/ui/button'
 
 export interface ModelPickerDialogProps {
@@ -20,6 +21,7 @@ export interface ModelPickerProviderFilter {
   vendorLabel: string
   count: number
   kind?: 'provider' | 'favorites'
+  badge?: ProviderLifecycleBadge
 }
 
 export interface ModelPickerModelItem {
@@ -27,6 +29,7 @@ export interface ModelPickerModelItem {
   providerId: string
   providerName: string
   providerLabel: string
+  providerBadge?: ProviderLifecycleBadge
   modelId: string
   modelLabel: string
   modelDescription?: string

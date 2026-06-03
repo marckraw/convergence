@@ -10,13 +10,15 @@ export interface KnownProvider {
   name: string
   vendorLabel: string
   binaryName: string
-  binaryNames?: string[]
-  packageName: string
+  binaryAliases?: string[]
+  packageName: string | null
   legacyPackageNames?: string[]
+  latestVersionSource?:
+    | { type: 'npm' }
+    | { type: 'github-release'; owner: string; repo: string }
   installCommand: string
   updateCommand: string
   supportsSelfUpdate: boolean
-  latestVersionSource?: 'npm' | 'none'
 }
 
 const KNOWN_PROVIDERS: KnownProvider[] = [
@@ -26,6 +28,7 @@ const KNOWN_PROVIDERS: KnownProvider[] = [
     vendorLabel: 'Anthropic',
     binaryName: 'claude',
     packageName: '@anthropic-ai/claude-code',
+    latestVersionSource: { type: 'npm' },
     installCommand: 'npm install -g @anthropic-ai/claude-code@latest',
     updateCommand: 'claude update',
     supportsSelfUpdate: true,
@@ -36,6 +39,7 @@ const KNOWN_PROVIDERS: KnownProvider[] = [
     vendorLabel: 'OpenAI',
     binaryName: 'codex',
     packageName: '@openai/codex',
+    latestVersionSource: { type: 'npm' },
     installCommand: 'npm install -g @openai/codex@latest',
     updateCommand: 'npm install -g @openai/codex@latest',
     supportsSelfUpdate: false,
@@ -47,6 +51,7 @@ const KNOWN_PROVIDERS: KnownProvider[] = [
     binaryName: 'pi',
     packageName: '@earendil-works/pi-coding-agent',
     legacyPackageNames: ['@mariozechner/pi-coding-agent'],
+    latestVersionSource: { type: 'npm' },
     installCommand: 'npm install -g @earendil-works/pi-coding-agent@latest',
     updateCommand: 'npm install -g @earendil-works/pi-coding-agent@latest',
     supportsSelfUpdate: false,
@@ -55,13 +60,29 @@ const KNOWN_PROVIDERS: KnownProvider[] = [
     id: 'cursor',
     name: 'Cursor',
     vendorLabel: 'Anysphere',
-    binaryName: 'agent',
-    binaryNames: ['cursor-agent', 'agent'],
-    packageName: 'cursor-agent',
+    binaryName: 'cursor-agent',
+    binaryAliases: ['agent'],
+    packageName: null,
     installCommand: 'curl https://cursor.com/install -fsS | bash',
     updateCommand: 'agent update',
     supportsSelfUpdate: true,
-    latestVersionSource: 'none',
+  },
+  {
+    id: 'antigravity',
+    name: 'Antigravity CLI',
+    vendorLabel: 'Google',
+    binaryName: 'agy',
+    binaryAliases: ['antigravity'],
+    packageName: null,
+    latestVersionSource: {
+      type: 'github-release',
+      owner: 'google-antigravity',
+      repo: 'antigravity-cli',
+    },
+    installCommand:
+      'curl -fsSL https://antigravity.google/cli/install.sh | bash',
+    updateCommand: 'agy update',
+    supportsSelfUpdate: true,
   },
 ]
 
@@ -70,7 +91,7 @@ export function getKnownProviders(): KnownProvider[] {
 }
 
 export function getProviderBinaryNames(provider: KnownProvider): string[] {
-  return provider.binaryNames ?? [provider.binaryName]
+  return [provider.binaryName, ...(provider.binaryAliases ?? [])]
 }
 
 interface SemverParts {
@@ -178,6 +199,13 @@ export function resolveProviderUpdateStrategy(
   binaryPath: string | null,
 ): { strategy: ProviderUpdateStrategy; command: string | null } {
   if (install?.manager === 'npm' && install.npmPath) {
+    if (!provider.packageName) {
+      return {
+        strategy: null,
+        command: null,
+      }
+    }
+
     if (
       install.packageName &&
       install.packageName !== provider.packageName &&

@@ -1,4 +1,9 @@
-export type SkillProviderId = 'codex' | 'claude-code' | 'pi' | 'cursor'
+export type SkillProviderId =
+  | 'codex'
+  | 'claude-code'
+  | 'pi'
+  | 'cursor'
+  | 'antigravity'
 
 export type SkillCatalogSource =
   | 'native-rpc'

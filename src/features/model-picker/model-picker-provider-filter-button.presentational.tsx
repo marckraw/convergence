@@ -58,7 +58,17 @@ export const ModelPickerProviderFilterButton: FC<ProviderFilterButtonProps> = ({
         *
       </span>
     )}
-    <span className="min-w-0 flex-1 truncate">{label}</span>
+    <span className="flex min-w-0 flex-1 items-center gap-1.5">
+      <span className="min-w-0 truncate">{label}</span>
+      {provider?.badge ? (
+        <span
+          title={provider.badge.title}
+          className="shrink-0 rounded border border-amber-400/35 bg-amber-500/12 px-1 py-0.5 text-[9px] font-semibold uppercase leading-none text-amber-700 dark:text-amber-200"
+        >
+          {provider.badge.label}
+        </span>
+      ) : null}
+    </span>
     <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
       {count}
     </span>

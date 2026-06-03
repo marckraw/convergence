@@ -16,6 +16,7 @@ describe('provider-status.pure', () => {
       'codex',
       'pi',
       'cursor',
+      'antigravity',
     ])
   })
 
@@ -236,12 +237,12 @@ describe('provider-status.pure', () => {
     expect(provider).toMatchObject({
       name: 'Cursor',
       vendorLabel: 'Anysphere',
-      binaryName: 'agent',
-      packageName: 'cursor-agent',
+      binaryName: 'cursor-agent',
+      binaryAliases: ['agent'],
+      packageName: null,
       installCommand: 'curl https://cursor.com/install -fsS | bash',
       updateCommand: 'agent update',
       supportsSelfUpdate: true,
-      latestVersionSource: 'none',
     })
     expect(getProviderBinaryNames(provider)).toEqual(['cursor-agent', 'agent'])
   })
@@ -283,7 +284,7 @@ describe('provider-status.pure', () => {
         currentVersion: '2026.06.02-8c11d9f',
         latestVersion: null,
         status: 'unknown',
-        packageName: 'cursor-agent',
+        packageName: null,
         installCommand: 'curl https://cursor.com/install -fsS | bash',
         updateCommand: 'agent update',
         manualUpdateCommand: 'agent update',
@@ -291,6 +292,53 @@ describe('provider-status.pure', () => {
         updateCapability: 'automatic',
         updateStrategy: 'provider-self-update',
       },
+    })
+  })
+
+  it('models Antigravity as a self-updating non-npm provider', () => {
+    const provider = getKnownProviders().find(
+      (item) => item.id === 'antigravity',
+    )!
+
+    expect(provider).toMatchObject({
+      name: 'Antigravity CLI',
+      vendorLabel: 'Google',
+      binaryName: 'agy',
+      binaryAliases: ['antigravity'],
+      packageName: null,
+      installCommand:
+        'curl -fsSL https://antigravity.google/cli/install.sh | bash',
+      updateCommand: 'agy update',
+      supportsSelfUpdate: true,
+    })
+
+    const status = buildProviderStatus(
+      provider,
+      '/Users/me/.local/bin/agy',
+      '1.0.4',
+      '1.0.4',
+      null,
+      {
+        manager: 'self',
+        realBinaryPath: '/Users/me/.local/bin/agy',
+        packageName: null,
+        packageDirectory: null,
+        prefixDirectory: null,
+        npmPath: null,
+        nodePath: null,
+        nodeVersion: null,
+        brewPrefix: null,
+        formulaName: null,
+      },
+    )
+
+    expect(status.update).toMatchObject({
+      currentVersion: '1.0.4',
+      latestVersion: '1.0.4',
+      packageName: null,
+      updateCapability: 'automatic',
+      updateStrategy: 'provider-self-update',
+      automaticUpdateCommand: '/Users/me/.local/bin/agy update',
     })
   })
 

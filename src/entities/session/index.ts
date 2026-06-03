@@ -44,6 +44,7 @@ export { useSessionStore } from './session.model'
 export type { SessionStore } from './session.model'
 export {
   getProviderDisplayLabel,
+  getProviderLifecycleBadge,
   resolveProviderSelection,
 } from './provider-selection.pure'
 export {
@@ -60,6 +61,7 @@ export {
   withCodexSandbox,
 } from './session-permissions.pure'
 export type {
+  ProviderLifecycleBadge,
   ResolvedProviderSelection,
   StoredProviderDefaults,
 } from './provider-selection.pure'

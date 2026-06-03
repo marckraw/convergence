@@ -80,6 +80,8 @@ export function providerNameFromId(providerId: string): string {
       return 'Codex'
     case 'pi':
       return 'Pi'
+    case 'antigravity':
+      return 'Antigravity CLI'
     case 'shell':
     case 'shell-provider':
       return 'Terminal'

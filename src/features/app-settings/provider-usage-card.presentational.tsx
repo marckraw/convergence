@@ -35,10 +35,12 @@ function getProviderName(providerId: ProviderQuotaSnapshot['providerId']) {
       return 'Claude Code'
     case 'cursor':
       return 'Cursor'
+    case 'antigravity':
+      return 'Antigravity CLI'
   }
 }
 
-function getUsageUrl(snapshot: ProviderQuotaSnapshot) {
+function getUsageUrl(snapshot: ProviderQuotaSnapshot): string {
   if (snapshot.status === 'unavailable' && snapshot.usageUrl) {
     return snapshot.usageUrl
   }
@@ -50,7 +52,26 @@ function getUsageUrl(snapshot: ProviderQuotaSnapshot) {
       return 'https://claude.ai/new#settings/usage'
     case 'cursor':
       return 'https://cursor.com/dashboard'
+    case 'antigravity':
+      return 'https://www.antigravity.google/docs/plans'
   }
+}
+
+function getUsageLinks(snapshot: ProviderQuotaSnapshot) {
+  if (snapshot.providerId === 'antigravity') {
+    return [
+      {
+        label: 'Plans',
+        url: getUsageUrl(snapshot),
+      },
+      {
+        label: 'Credits',
+        url: 'https://one.google.com/ai/credits',
+      },
+    ]
+  }
+
+  return [{ label: 'Open', url: getUsageUrl(snapshot) }]
 }
 
 function getSourceLabel(snapshot: ProviderQuotaSnapshot) {
@@ -63,9 +84,7 @@ function getSourceLabel(snapshot: ProviderQuotaSnapshot) {
 }
 
 export function ProviderUsageCard({ snapshot }: ProviderUsageCardProps) {
-  const openUsage = () => {
-    window.open(getUsageUrl(snapshot), '_blank')
-  }
+  const usageLinks = getUsageLinks(snapshot)
 
   return (
     <section className="space-y-3 rounded-lg border border-border/70 bg-card/25 px-4 py-4">
@@ -78,10 +97,20 @@ export function ProviderUsageCard({ snapshot }: ProviderUsageCardProps) {
             Source: {getSourceLabel(snapshot)}
           </p>
         </div>
-        <Button type="button" variant="ghost" size="sm" onClick={openUsage}>
-          <ExternalLink className="h-3.5 w-3.5" />
-          Open
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          {usageLinks.map((link) => (
+            <Button
+              key={link.url}
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => window.open(link.url, '_blank')}
+            >
+              <ExternalLink className="h-3.5 w-3.5" />
+              {link.label}
+            </Button>
+          ))}
+        </div>
       </div>
 
       {snapshot.status === 'available' ? (

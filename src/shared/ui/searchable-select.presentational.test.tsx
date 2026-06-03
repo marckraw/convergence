@@ -54,4 +54,38 @@ describe('SearchableSelect', () => {
 
     expect(onCreate).toHaveBeenCalledTimes(1)
   })
+
+  it('renders a selected item badge and allows searching by badge text', async () => {
+    render(
+      <SearchableSelect
+        selectedId="google"
+        value="Google"
+        items={[
+          {
+            id: 'google',
+            label: 'Google',
+            description: 'Antigravity CLI',
+            badge: {
+              label: 'ALPHA',
+              title: 'Early provider support',
+            },
+          },
+          { id: 'openai', label: 'OpenAI' },
+        ]}
+        onChange={vi.fn()}
+        searchPlaceholder="Search providers..."
+      />,
+    )
+
+    expect(screen.getByRole('combobox', { name: /google/i })).toHaveTextContent(
+      'ALPHA',
+    )
+
+    fireEvent.click(screen.getByRole('combobox', { name: /google/i }))
+    const input = await screen.findByPlaceholderText('Search providers...')
+    fireEvent.change(input, { target: { value: 'alpha' } })
+
+    expect(screen.getAllByText('Google').length).toBeGreaterThanOrEqual(2)
+    expect(screen.queryByText('OpenAI')).not.toBeInTheDocument()
+  })
 })

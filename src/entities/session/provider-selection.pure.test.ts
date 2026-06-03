@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   getProviderDisplayLabel,
+  getProviderLifecycleBadge,
   resolveProviderSelection,
 } from './provider-selection.pure'
 import type { ProviderAttachmentCapability } from './session.types'
@@ -85,6 +86,22 @@ const providers = [
 describe('resolveProviderSelection', () => {
   it('uses the vendor label for provider display text', () => {
     expect(getProviderDisplayLabel(providers[0]!)).toBe('Anthropic')
+  })
+
+  it('marks Antigravity as alpha for provider selectors', () => {
+    const antigravity = {
+      ...providers[0]!,
+      id: 'antigravity',
+      name: 'Antigravity CLI',
+      vendorLabel: 'Google',
+    }
+
+    expect(getProviderLifecycleBadge(antigravity)).toEqual({
+      label: 'ALPHA',
+      title:
+        'Antigravity support is early: tool visibility is post-run and provider telemetry is limited.',
+    })
+    expect(getProviderLifecycleBadge(providers[0]!)).toBeNull()
   })
 
   it('falls back to the first provider and its defaults', () => {

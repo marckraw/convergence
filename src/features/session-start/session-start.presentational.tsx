@@ -4,6 +4,7 @@ import type {
   ReasoningEffort,
   ResolvedProviderSelection,
 } from '@/entities/session'
+import { getProviderLifecycleBadge } from '@/entities/session'
 import type { ProjectContextItem } from '@/entities/project-context'
 import { ModelPickerDialog } from '@/features/model-picker'
 import { Button } from '@/shared/ui/button'
@@ -50,6 +51,7 @@ export const SessionStartForm: FC<SessionStartFormProps> = ({
       provider.vendorLabel && provider.vendorLabel !== provider.name
         ? provider.name
         : undefined,
+    badge: getProviderLifecycleBadge(provider) ?? undefined,
   }))
   const effortItems =
     selection.model?.effortOptions.map((effort) => ({

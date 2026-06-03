@@ -1070,7 +1070,7 @@ interface ProviderUpdateInfo {
   currentVersion: string | null
   latestVersion: string | null
   status: ProviderUpdateStatus
-  packageName: string
+  packageName: string | null
   installCommand: string
   updateCommand: string
   manualUpdateCommand: string
@@ -1108,7 +1108,7 @@ interface ProviderCreditsQuotaData {
 
 type ProviderQuotaSnapshotData =
   | {
-      providerId: 'codex' | 'claude-code' | 'cursor'
+      providerId: 'codex' | 'claude-code' | 'cursor' | 'antigravity'
       status: 'available'
       source: 'provider-api' | 'provider-event'
       planType: string | null
@@ -1119,7 +1119,7 @@ type ProviderQuotaSnapshotData =
       stale: boolean
     }
   | {
-      providerId: 'codex' | 'claude-code' | 'cursor'
+      providerId: 'codex' | 'claude-code' | 'cursor' | 'antigravity'
       status: 'unavailable'
       source: 'provider-api' | 'provider-event' | 'manual'
       reason: string

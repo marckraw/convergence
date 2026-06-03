@@ -4,6 +4,7 @@ import type {
   AnalyticsRangePreset,
 } from '@/entities/analytics'
 import type { ProviderInfo } from '@/entities/session'
+import { getProviderLifecycleBadge } from '@/entities/session'
 import { Button } from '@/shared/ui/button'
 import { cn } from '@/shared/lib/cn.pure'
 import { GenerateProfileDialog } from './generate-profile-dialog.presentational'
@@ -68,6 +69,7 @@ export function AnalyticsInsights({
       provider.vendorLabel && provider.vendorLabel !== provider.name
         ? provider.name
         : undefined,
+    badge: getProviderLifecycleBadge(provider) ?? undefined,
   }))
   return (
     <div className="space-y-5">

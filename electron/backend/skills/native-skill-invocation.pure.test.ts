@@ -75,6 +75,8 @@ function providerName(providerId: SkillProviderId): string {
       return 'Pi Agent'
     case 'cursor':
       return 'Cursor'
+    case 'antigravity':
+      return 'Antigravity CLI'
   }
 }
 
@@ -186,6 +188,25 @@ describe('resolveNativeSkillInvocation', () => {
           status: 'selected',
         },
       ],
+    })
+  })
+
+  it('formats Antigravity skills as slash commands', () => {
+    const entry = skill({ name: 'review-ui' }, 'antigravity')
+
+    const result = resolveNativeSkillInvocation({
+      providerId: 'antigravity',
+      providerName: 'Antigravity CLI',
+      catalog: catalog([entry], 'antigravity'),
+      selections: [selection(entry)],
+      syntax: 'antigravity-slash',
+      text: 'Review the screen.',
+    })
+
+    expect(result).toMatchObject({
+      ok: true,
+      commandText: '/review-ui',
+      promptText: '/review-ui\n\nReview the screen.',
     })
   })
 
