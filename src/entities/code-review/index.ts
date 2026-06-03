@@ -8,6 +8,7 @@ export {
   CODE_REVIEW_TARGET_FILTER_SOURCES,
   countCodeReviewFilesByStatus,
   countCodeReviewTargetsByFilterSource,
+  filterCodeReviewTargetsByQuery,
   filterCodeReviewTargetsBySource,
   getCodeReviewEmptyMessage,
   getCodeReviewHeaderLabel,

@@ -513,6 +513,75 @@ describe('CodeReviewSurface', () => {
     ).toBeDisabled()
   })
 
+  it('searches review targets by label and pull request number', async () => {
+    const workspaceTarget: CodeReviewTarget = {
+      ...target,
+      id: 'workspace:workspace-1',
+      source: 'workspace',
+      sessionId: null,
+      sessionName: null,
+      branchName: 'workspace-feature',
+      status: {
+        workingTreeFileCount: 1,
+        workingTreeStatusCounts: { M: 1 },
+        error: null,
+      },
+    }
+    const pullRequestTarget: CodeReviewTarget = {
+      ...target,
+      id: 'pull-request:pr-42',
+      source: 'pull-request',
+      workspaceId: null,
+      sessionId: null,
+      sessionName: null,
+      branchName: 'feature/pr-42',
+      pullRequestId: null,
+      pullRequestNumber: 42,
+      pullRequestLabel: '#42 Remote PR · open',
+      pullRequestUrl: 'https://github.com/acme/app/pull/42',
+      pullRequestBaseBranch: 'main',
+      pullRequestHeadBranch: 'feature/pr-42',
+      status: {
+        workingTreeFileCount: 3,
+        workingTreeStatusCounts: {},
+        error: null,
+      },
+    }
+    codeReviewState = {
+      ...codeReviewState,
+      targets: [target, workspaceTarget, pullRequestTarget],
+      selectedTarget: target,
+    }
+
+    render(<CodeReviewSurface />)
+
+    fireEvent.change(screen.getByLabelText('Search review targets'), {
+      target: { value: '#42' },
+    })
+
+    expect(
+      screen.queryByRole('button', { name: /Feature session Session/ }),
+    ).toBeNull()
+    expect(
+      screen.queryByRole('button', { name: /workspace-feature/ }),
+    ).toBeNull()
+    expect(
+      screen.getByRole('button', { name: /#42 Remote PR/ }),
+    ).toBeInTheDocument()
+
+    await waitFor(() => {
+      expect(setSelectedTarget).toHaveBeenCalledWith(pullRequestTarget)
+    })
+
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Clear review target search' }),
+    )
+
+    expect(
+      screen.getByRole('button', { name: /workspace-feature/ }),
+    ).toBeInTheDocument()
+  })
+
   it('selects files and enables note preparation after a diff selection', () => {
     render(<CodeReviewSurface />)
 

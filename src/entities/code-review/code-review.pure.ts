@@ -179,6 +179,36 @@ export function filterCodeReviewTargetsBySource(input: {
   )
 }
 
+export function filterCodeReviewTargetsByQuery(input: {
+  targets: CodeReviewTarget[]
+  query: string
+}): CodeReviewTarget[] {
+  const query = input.query.trim().toLowerCase()
+  if (!query) return input.targets
+
+  return input.targets.filter((target) =>
+    buildCodeReviewTargetSearchText(target).includes(query),
+  )
+}
+
+function buildCodeReviewTargetSearchText(target: CodeReviewTarget): string {
+  return [
+    getCodeReviewTargetTitle(target),
+    getCodeReviewTargetSubtitle(target),
+    target.id,
+    target.projectName,
+    target.sessionName,
+    target.branchName,
+    target.pullRequestNumber ? `#${target.pullRequestNumber}` : null,
+    target.pullRequestLabel,
+    target.pullRequestHeadBranch,
+    target.pullRequestBaseBranch,
+  ]
+    .filter(Boolean)
+    .join(' ')
+    .toLowerCase()
+}
+
 export function countCodeReviewTargetsByFilterSource(
   targets: CodeReviewTarget[],
 ): Record<CodeReviewTargetFilterSource, number> {

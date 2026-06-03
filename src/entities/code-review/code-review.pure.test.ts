@@ -7,6 +7,7 @@ import {
   buildCodeReviewTargetId,
   countCodeReviewTargetsByFilterSource,
   countCodeReviewFilesByStatus,
+  filterCodeReviewTargetsByQuery,
   filterCodeReviewTargetsBySource,
   getCodeReviewEmptyMessage,
   getCodeReviewHeaderLabel,
@@ -253,6 +254,7 @@ describe('code review helpers', () => {
       workspaceId: null,
       sessionId: null,
       sessionName: null,
+      branchName: null,
     }
     const pullRequestTarget = {
       ...target,
@@ -291,6 +293,22 @@ describe('code review helpers', () => {
       filterCodeReviewTargetsBySource({
         targets,
         sources: ['pull-request'],
+      }).map((item) => item.id),
+    ).toEqual(['pull-request:pr-1'])
+    expect(
+      filterCodeReviewTargetsByQuery({
+        targets,
+        query: 'feature',
+      }).map((item) => item.id),
+    ).toEqual([
+      'session:session-1',
+      'workspace:workspace-1',
+      'pull-request:pr-1',
+    ])
+    expect(
+      filterCodeReviewTargetsByQuery({
+        targets,
+        query: '#42',
       }).map((item) => item.id),
     ).toEqual(['pull-request:pr-1'])
   })

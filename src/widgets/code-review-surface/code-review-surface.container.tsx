@@ -9,6 +9,7 @@ import {
   CODE_REVIEW_TARGET_FILTER_SOURCES,
   countCodeReviewFilesByStatus,
   countCodeReviewTargetsByFilterSource,
+  filterCodeReviewTargetsByQuery,
   filterCodeReviewTargetsBySource,
   isRemotePullRequestTarget,
   selectCodeReviewFileAfterReload,
@@ -225,6 +226,7 @@ export const CodeReviewSurface: FC<CodeReviewSurfaceProps> = ({
   const [targetSourceFilters, setTargetSourceFilters] = useState<
     CodeReviewTargetFilterSource[]
   >(() => [...CODE_REVIEW_TARGET_FILTER_SOURCES])
+  const [targetSearchQuery, setTargetSearchQuery] = useState('')
   const [holdEmptySelection, setHoldEmptySelection] = useState(false)
   const [selectedDiffLineIds, setSelectedDiffLineIds] = useState<string[]>([])
   const [noteComposerOpen, setNoteComposerOpen] = useState(false)
@@ -276,14 +278,17 @@ export const CodeReviewSurface: FC<CodeReviewSurfaceProps> = ({
     () => countCodeReviewTargetsByFilterSource(sortedTargets),
     [sortedTargets],
   )
-  const targetList = useMemo(
-    () =>
-      filterCodeReviewTargetsBySource({
-        targets: sortedTargets,
-        sources: targetSourceFilters,
-      }),
-    [sortedTargets, targetSourceFilters],
-  )
+  const targetList = useMemo(() => {
+    const sourceFilteredTargets = filterCodeReviewTargetsBySource({
+      targets: sortedTargets,
+      sources: targetSourceFilters,
+    })
+
+    return filterCodeReviewTargetsByQuery({
+      targets: sourceFilteredTargets,
+      query: targetSearchQuery,
+    })
+  }, [sortedTargets, targetSearchQuery, targetSourceFilters])
 
   useEffect(() => {
     if (!activeProject) return
@@ -1270,8 +1275,10 @@ export const CodeReviewSurface: FC<CodeReviewSurfaceProps> = ({
           sourceFilters={targetSourceFilters}
           sourceCounts={targetSourceCounts}
           totalTargetCount={sortedTargets.length}
+          searchQuery={targetSearchQuery}
           onToggleCollapsed={handleToggleTargetRail}
           onToggleSourceFilter={handleToggleTargetSourceFilter}
+          onSearchQueryChange={setTargetSearchQuery}
           onSelectTarget={handleSelectTarget}
         />
         {selectedView === 'guide' ? (

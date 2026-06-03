@@ -2,4 +2,4 @@
 'convergence': patch
 ---
 
-Add review target source filters for sessions, workspaces, and pull requests.
+Add review target source filters and search for sessions, workspaces, and pull requests.

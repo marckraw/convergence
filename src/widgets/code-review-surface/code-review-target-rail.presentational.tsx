@@ -7,6 +7,8 @@ import {
   Loader2,
   PanelLeftClose,
   PanelLeftOpen,
+  Search,
+  X,
 } from 'lucide-react'
 import {
   getCodeReviewTargetSubtitle,
@@ -15,6 +17,7 @@ import {
   type CodeReviewTargetFilterSource,
 } from '@/entities/code-review'
 import { Button } from '@/shared/ui/button'
+import { Input } from '@/shared/ui/input'
 import { cn } from '@/shared/lib/cn.pure'
 
 interface CodeReviewTargetRailProps {
@@ -26,8 +29,10 @@ interface CodeReviewTargetRailProps {
   sourceFilters: readonly CodeReviewTargetFilterSource[]
   sourceCounts: Record<CodeReviewTargetFilterSource, number>
   totalTargetCount: number
+  searchQuery: string
   onToggleCollapsed: () => void
   onToggleSourceFilter: (source: CodeReviewTargetFilterSource) => void
+  onSearchQueryChange: (query: string) => void
   onSelectTarget: (target: CodeReviewTarget) => void
 }
 
@@ -73,8 +78,10 @@ export const CodeReviewTargetRail: FC<CodeReviewTargetRailProps> = ({
   sourceFilters,
   sourceCounts,
   totalTargetCount,
+  searchQuery,
   onToggleCollapsed,
   onToggleSourceFilter,
+  onSearchQueryChange,
   onSelectTarget,
 }) => {
   const selectedTarget = targets.find(
@@ -151,6 +158,32 @@ export const CodeReviewTargetRail: FC<CodeReviewTargetRailProps> = ({
           >
             <PanelLeftClose className="h-3.5 w-3.5" />
           </Button>
+        </div>
+      </div>
+
+      <div className="border-b border-border px-2 py-2">
+        <div className="relative">
+          <Search className="pointer-events-none absolute top-1/2 left-2.5 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            value={searchQuery}
+            placeholder="Search review targets"
+            aria-label="Search review targets"
+            className="h-8 pr-8 pl-8 text-xs"
+            onChange={(event) => onSearchQueryChange(event.target.value)}
+          />
+          {searchQuery ? (
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="absolute top-1/2 right-1 h-6 w-6 -translate-y-1/2"
+              aria-label="Clear review target search"
+              title="Clear search"
+              onClick={() => onSearchQueryChange('')}
+            >
+              <X className="h-3 w-3" />
+            </Button>
+          ) : null}
         </div>
       </div>
 
