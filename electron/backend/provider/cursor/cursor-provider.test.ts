@@ -67,6 +67,7 @@ function createMockCursorAcp(
   const requests: Array<{ method: string; params?: Record<string, unknown> }> =
     []
   const responses: Array<{ id: string | number; result?: unknown }> = []
+  let heldPromptId: string | number | null = null
   let buffer = ''
 
   function send(message: unknown): void {
@@ -146,6 +147,7 @@ function createMockCursorAcp(
             break
           case 'session/prompt':
             if (options.holdPrompt) {
+              heldPromptId = message.id
               break
             }
             send({
@@ -184,6 +186,13 @@ function createMockCursorAcp(
     requests,
     responses,
     send,
+    resolveHeldPrompt(result: unknown): void {
+      if (heldPromptId === null) {
+        throw new Error('No held Cursor prompt request')
+      }
+      respond(heldPromptId, result)
+      heldPromptId = null
+    },
   }
 }
 
@@ -193,6 +202,7 @@ function startProvider(
     skillsCatalog?: ProviderSkillCatalog
     debugSink?: ProviderDebugSink
     holdPrompt?: boolean
+    requestTimeoutMs?: number
   },
 ) {
   const child = new MockChildProcess()
@@ -201,10 +211,26 @@ function startProvider(
     holdPrompt: options?.holdPrompt,
   })
   const provider = options?.skillsCatalog
-    ? new CursorProvider('agent', options.debugSink ?? noopDebugSink, {
-        list: vi.fn(async () => options.skillsCatalog as ProviderSkillCatalog),
-      })
-    : new CursorProvider('agent', options?.debugSink ?? noopDebugSink)
+    ? new CursorProvider(
+        'agent',
+        options.debugSink ?? noopDebugSink,
+        {
+          list: vi.fn(
+            async () => options.skillsCatalog as ProviderSkillCatalog,
+          ),
+        },
+        {
+          requestTimeoutMs: options.requestTimeoutMs,
+        },
+      )
+    : new CursorProvider(
+        'agent',
+        options?.debugSink ?? noopDebugSink,
+        undefined,
+        {
+          requestTimeoutMs: options?.requestTimeoutMs,
+        },
+      )
   const handle = provider.start({
     sessionId: 'session-1',
     workingDirectory: '/repo',
@@ -350,6 +376,56 @@ describe('CursorProvider', () => {
         state: 'complete',
       },
     })
+  })
+
+  it('does not fail long-running prompts while Cursor continues streaming', async () => {
+    const { deltas, server, statuses, attentions } = startProvider(undefined, {
+      holdPrompt: true,
+      requestTimeoutMs: 25,
+    })
+
+    await waitFor(() => {
+      expect(server.requests.map((request) => request.method)).toContain(
+        'session/prompt',
+      )
+    })
+
+    server.send({
+      jsonrpc: '2.0',
+      method: 'session/update',
+      params: {
+        sessionId: 'cursor-session-1',
+        update: {
+          sessionUpdate: 'agent_message_chunk',
+          content: { type: 'text', text: 'still ' },
+        },
+      },
+    })
+    server.send({
+      jsonrpc: '2.0',
+      method: 'session/update',
+      params: {
+        sessionId: 'cursor-session-1',
+        update: {
+          sessionUpdate: 'agent_message_chunk',
+          content: { type: 'text', text: 'working' },
+        },
+      },
+    })
+
+    await new Promise((resolve) => setTimeout(resolve, 60))
+
+    expect(statuses).not.toContain('failed')
+    expect(attentions).not.toContain('failed')
+    expect(statuses.at(-1)).toBe('running')
+
+    server.resolveHeldPrompt({ stopReason: 'end_turn' })
+
+    await waitFor(() => {
+      expect(statuses).toContain('completed')
+      expect(attentions).toContain('finished')
+    })
+    expect(JSON.stringify(deltas)).toContain('still working')
   })
 
   it('applies selected model config to the active Cursor ACP session', async () => {

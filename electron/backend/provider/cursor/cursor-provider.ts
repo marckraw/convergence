@@ -90,6 +90,10 @@ interface CursorSkillCatalogAdapter {
   ): Promise<ProviderSkillCatalog>
 }
 
+interface CursorProviderOptions {
+  requestTimeoutMs?: number
+}
+
 function findPendingApproval(
   pendingApprovals: Map<CursorAcpJsonRpcId, PendingCursorApproval>,
   providerApprovalId: string | undefined,
@@ -332,10 +336,14 @@ function runCursorAcpOneShot(
         })
       }
 
-      const promptResult = await activeRpc.request('session/prompt', {
-        sessionId: cursorSessionId,
-        prompt: buildCursorAcpPrompt({ text: input.prompt }),
-      })
+      const promptResult = await activeRpc.request(
+        'session/prompt',
+        {
+          sessionId: cursorSessionId,
+          prompt: buildCursorAcpPrompt({ text: input.prompt }),
+        },
+        { timeoutMs: 0 },
+      )
       const resultText = readCursorAcpUpdateText(promptResult)
       if (!assistantText && resultText) assistantText = resultText
 
@@ -356,6 +364,7 @@ export class CursorProvider implements Provider {
     private skillsService: CursorSkillCatalogAdapter = new CursorSkillsService(
       binaryPath,
     ),
+    private options: CursorProviderOptions = {},
   ) {}
 
   describe(): Promise<ProviderDescriptor> {
@@ -376,6 +385,7 @@ export class CursorProvider implements Provider {
     const binaryPath = this.binaryPath
     const debugSink = this.debugSink
     const thisProviderSkillsService = this.skillsService
+    const providerOptions = this.options
     const listeners = {
       delta: [] as ((delta: SessionDelta) => void)[],
       status: [] as ((status: SessionStatus) => void)[],
@@ -903,13 +913,17 @@ export class CursorProvider implements Provider {
 
       try {
         const parts = await loadCursorParts(attachments)
-        const result = (await activeRpc.request('session/prompt', {
-          sessionId: activeSessionId,
-          prompt: buildCursorAcpPrompt({
-            text: skillResolution.promptText,
-            parts,
-          }),
-        })) as { stopReason?: unknown } | null
+        const result = (await activeRpc.request(
+          'session/prompt',
+          {
+            sessionId: activeSessionId,
+            prompt: buildCursorAcpPrompt({
+              text: skillResolution.promptText,
+              parts,
+            }),
+          },
+          { timeoutMs: 0 },
+        )) as { stopReason?: unknown } | null
 
         patchUserMessageSkills(
           userMessageItemId,
@@ -1081,6 +1095,7 @@ export class CursorProvider implements Provider {
       }
 
       rpc = new CursorAcpJsonRpcClient(child.stdin, child.stdout, {
+        requestTimeoutMs: providerOptions.requestTimeoutMs,
         onDebug: recordTransportDebug,
       })
       rpc.onNotification((method, params) => {

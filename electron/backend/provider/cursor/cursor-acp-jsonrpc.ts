@@ -77,6 +77,10 @@ export interface CursorAcpJsonRpcClientOptions {
   onDebug?: CursorAcpTransportDebugHandler
 }
 
+export interface CursorAcpJsonRpcRequestOptions {
+  timeoutMs?: number
+}
+
 export class CursorAcpJsonRpcError extends Error {
   constructor(
     message: string,
@@ -134,7 +138,11 @@ export class CursorAcpJsonRpcClient {
     stdout.on('error', this.handleStreamError)
   }
 
-  request(method: string, params?: unknown): Promise<unknown> {
+  request(
+    method: string,
+    params?: unknown,
+    options: CursorAcpJsonRpcRequestOptions = {},
+  ): Promise<unknown> {
     const id = this.nextId++
     const msg: CursorAcpJsonRpcRequest = {
       jsonrpc: '2.0',
@@ -144,16 +152,17 @@ export class CursorAcpJsonRpcClient {
     }
 
     return new Promise((resolve, reject) => {
+      const requestTimeoutMs = options.timeoutMs ?? this.requestTimeoutMs
       const timeout =
-        this.requestTimeoutMs > 0
+        requestTimeoutMs > 0
           ? setTimeout(() => {
               this.pending.delete(id)
               reject(
                 new Error(
-                  `Timed out waiting for Cursor ACP ${method} after ${this.requestTimeoutMs}ms`,
+                  `Timed out waiting for Cursor ACP ${method} after ${requestTimeoutMs}ms`,
                 ),
               )
-            }, this.requestTimeoutMs)
+            }, requestTimeoutMs)
           : null
 
       this.pending.set(id, { method, resolve, reject, timeout })

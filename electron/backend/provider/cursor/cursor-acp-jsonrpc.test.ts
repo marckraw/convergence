@@ -173,4 +173,30 @@ describe('CursorAcpJsonRpcClient', () => {
     destroyedClient.destroy()
     await expect(pending).rejects.toThrow('Cursor ACP client destroyed')
   })
+
+  it('allows disabling timeout for a long-running request', async () => {
+    vi.useFakeTimers()
+    try {
+      const { stdin, stdout } = createMockStreams()
+      const client = new CursorAcpJsonRpcClient(stdin, stdout, {
+        requestTimeoutMs: 25,
+      })
+
+      const resultPromise = client.request(
+        'session/prompt',
+        { sessionId: 's1' },
+        { timeoutMs: 0 },
+      )
+
+      await vi.advanceTimersByTimeAsync(250)
+      stdout.push(
+        '{"jsonrpc":"2.0","id":1,"result":{"stopReason":"end_turn"}}\n',
+      )
+
+      await expect(resultPromise).resolves.toEqual({ stopReason: 'end_turn' })
+      client.destroy()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
 })
