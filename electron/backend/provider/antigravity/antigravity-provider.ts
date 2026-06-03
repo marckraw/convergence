@@ -610,6 +610,35 @@ export class AntigravityProvider implements Provider {
       }
     }
 
+    async function recoverTrajectoryConversationId(
+      updatedAfterMs: number,
+    ): Promise<void> {
+      if (continuationToken) return
+
+      try {
+        const conversationId =
+          await trajectoryTelemetry.findLatestConversationIdUpdatedAfter(
+            updatedAfterMs,
+          )
+        if (!conversationId) return
+
+        setContinuationToken(conversationId)
+        recordDebug('event', {
+          direction: 'in',
+          method: 'trajectory-conversation-fallback',
+          payload: { conversationId },
+        })
+      } catch (error) {
+        recordDebug('event', {
+          direction: 'in',
+          method: 'trajectory-conversation-fallback',
+          payload: {
+            error: error instanceof Error ? error.message : String(error),
+          },
+        })
+      }
+    }
+
     async function resolveSelectedSkills(
       text: string,
       selections: SkillSelection[] | undefined,
@@ -715,6 +744,7 @@ export class AntigravityProvider implements Provider {
 
       let capture: AntigravityStatusLineCapture | null = null
       try {
+        const turnStartedAt = Date.now() - 1_000
         const trajectoryBaseline = await getTrajectoryBaseline()
         const modelLabel = resolveSelectedModelLabel({
           modelId: config.model,
@@ -768,6 +798,7 @@ export class AntigravityProvider implements Provider {
           skillResolution.skillSelections,
           'sent',
         )
+        await recoverTrajectoryConversationId(turnStartedAt)
         await importTrajectoryTelemetry(trajectoryBaseline)
         const deltaText = extractAntigravityPrintDelta({
           stdout: result.stdout,

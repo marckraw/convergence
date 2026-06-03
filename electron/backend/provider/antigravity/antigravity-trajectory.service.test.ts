@@ -1,5 +1,5 @@
 import Database from 'better-sqlite3'
-import { mkdtemp, rm } from 'fs/promises'
+import { mkdtemp, rm, writeFile } from 'fs/promises'
 import { tmpdir } from 'os'
 import { join } from 'path'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -140,6 +140,22 @@ describe('AntigravityTrajectoryTelemetryService', () => {
         stepIndex: 1,
       }),
     ])
+  })
+
+  it('finds the latest conversation database updated after a timestamp', async () => {
+    tempDir = await mkdtemp(join(tmpdir(), 'convergence-ag-trajectory-'))
+    const oldId = '11111111-1111-4111-8111-111111111111'
+    const latestId = '22222222-2222-4222-8222-222222222222'
+    await writeFile(join(tempDir, `${oldId}.db`), '')
+    await writeFile(join(tempDir, `${latestId}.db`), '')
+    await writeFile(join(tempDir, 'not-a-conversation.db'), '')
+
+    const service = new AntigravityTrajectoryTelemetryService(tempDir)
+    const updatedAfterMs = Date.now() - 60_000
+
+    await expect(
+      service.findLatestConversationIdUpdatedAfter(updatedAfterMs),
+    ).resolves.toBe(latestId)
   })
 
   it('returns empty telemetry for missing or invalid conversation ids', async () => {

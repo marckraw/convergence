@@ -45,8 +45,12 @@ class MockSettingsService {
 
 class MockTrajectoryTelemetry implements AntigravityTrajectoryTelemetry {
   maxStepIndex: number | null = null
+  fallbackConversationId: string | null = null
   events: AntigravityTrajectoryToolEvent[] = []
   getMaxStepIndex = vi.fn(async () => this.maxStepIndex)
+  findLatestConversationIdUpdatedAfter = vi.fn(
+    async () => this.fallbackConversationId,
+  )
   readToolEvents = vi.fn(async () => this.events)
 }
 
@@ -322,5 +326,71 @@ describe('AntigravityProvider', () => {
     })
 
     expect(telemetry.readToolEvents).toHaveBeenCalledWith('conv-123', null)
+  })
+
+  it('falls back to the newest Antigravity conversation db when status-line is silent', async () => {
+    const child = new MockChildProcess()
+    spawnMock.mockReturnValue(child)
+    const settings = new MockSettingsService()
+    const telemetry = new MockTrajectoryTelemetry()
+    telemetry.fallbackConversationId = '11111111-1111-4111-8111-111111111111'
+    telemetry.events = [
+      {
+        kind: 'tool-call',
+        stepIndex: 2,
+        toolCallId: 'call-1',
+        toolName: 'view_file',
+        inputText: '{"AbsolutePath":"README.md"}',
+        providerItemId: 'antigravity:2:tool-call:call-1',
+      },
+      {
+        kind: 'tool-result',
+        stepIndex: 3,
+        toolCallId: 'call-1',
+        toolName: 'view_file',
+        outputText: '# Project',
+        providerItemId: 'antigravity:3:tool-result:call-1',
+      },
+    ]
+    const provider = new AntigravityProvider(
+      '/usr/local/bin/agy',
+      null,
+      undefined,
+      settings,
+      telemetry,
+    )
+    const { deltas } = collectDeltas(provider)
+
+    await waitFor(() =>
+      expect(settings.patches[0]?.statusLineCommand).toBeTruthy(),
+    )
+    child.stdout.write('done')
+    child.stdout.end()
+    child.emit('exit', 0)
+
+    await waitFor(() => {
+      expect(
+        deltas.some(
+          (delta) =>
+            delta.kind === 'session.patch' &&
+            delta.patch.continuationToken ===
+              '11111111-1111-4111-8111-111111111111',
+        ),
+      ).toBe(true)
+      expect(
+        deltas.some(
+          (delta) =>
+            delta.kind === 'conversation.item.add' &&
+            delta.item.kind === 'tool-call' &&
+            delta.item.toolName === 'view_file',
+        ),
+      ).toBe(true)
+    })
+
+    expect(telemetry.findLatestConversationIdUpdatedAfter).toHaveBeenCalled()
+    expect(telemetry.readToolEvents).toHaveBeenCalledWith(
+      '11111111-1111-4111-8111-111111111111',
+      null,
+    )
   })
 })

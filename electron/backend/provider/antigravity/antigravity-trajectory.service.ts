@@ -1,7 +1,7 @@
 import Database from 'better-sqlite3'
-import { access } from 'fs/promises'
+import { access, readdir, stat } from 'fs/promises'
 import { homedir } from 'os'
-import { join } from 'path'
+import { basename, join } from 'path'
 import {
   extractAntigravityTrajectoryToolEvents,
   type AntigravityTrajectoryStepRow,
@@ -10,6 +10,9 @@ import {
 
 export interface AntigravityTrajectoryTelemetry {
   getMaxStepIndex(conversationId: string): Promise<number | null>
+  findLatestConversationIdUpdatedAfter(
+    updatedAfterMs: number,
+  ): Promise<string | null>
   readToolEvents(
     conversationId: string,
     afterStepIndex: number | null,
@@ -36,6 +39,14 @@ function conversationDbPath(
 ): string | null {
   if (!CONVERSATION_ID_PATTERN.test(conversationId)) return null
   return join(conversationsDir, `${conversationId}.db`)
+}
+
+function conversationIdFromDbFilename(path: string): string | null {
+  const filename = basename(path)
+  if (!filename.endsWith('.db')) return null
+
+  const conversationId = filename.slice(0, -'.db'.length)
+  return CONVERSATION_ID_PATTERN.test(conversationId) ? conversationId : null
 }
 
 async function pathExists(path: string): Promise<boolean> {
@@ -72,6 +83,39 @@ export class AntigravityTrajectoryTelemetryService implements AntigravityTraject
     } finally {
       db.close()
     }
+  }
+
+  async findLatestConversationIdUpdatedAfter(
+    updatedAfterMs: number,
+  ): Promise<string | null> {
+    let entries: string[]
+    try {
+      entries = await readdir(this.conversationsDir)
+    } catch (error) {
+      if (
+        error &&
+        typeof error === 'object' &&
+        (error as { code?: unknown }).code === 'ENOENT'
+      ) {
+        return null
+      }
+      throw error
+    }
+
+    const candidates: Array<{ conversationId: string; mtimeMs: number }> = []
+    for (const entry of entries) {
+      const conversationId = conversationIdFromDbFilename(entry)
+      if (!conversationId) continue
+
+      const dbPath = join(this.conversationsDir, entry)
+      const stats = await stat(dbPath)
+      if (!stats.isFile()) continue
+      if (stats.mtimeMs < updatedAfterMs) continue
+      candidates.push({ conversationId, mtimeMs: stats.mtimeMs })
+    }
+
+    candidates.sort((a, b) => b.mtimeMs - a.mtimeMs)
+    return candidates[0]?.conversationId ?? null
   }
 
   async readToolEvents(
