@@ -852,7 +852,28 @@ export class CursorProvider implements Provider {
       await readyPromise
       const activeRpc = rpc
       const activeSessionId = cursorSessionId
-      if (!activeRpc || !activeSessionId || stopped) return
+      if (!activeRpc || !activeSessionId || stopped) {
+        if (!stopped) {
+          sessionEmitter.addUserMessage({
+            text,
+            attachmentIds: attachments?.length
+              ? attachments.map((attachment) => attachment.id)
+              : undefined,
+            deliveryMode:
+              deliveryMode === 'follow-up' || deliveryMode === 'steer'
+                ? deliveryMode
+                : undefined,
+          })
+          sessionEmitter.addNote({
+            text: 'Cursor is no longer connected, so this message was not sent.',
+            level: 'error',
+          })
+          setStatus('failed')
+          setAttention('failed')
+          setActivity(null)
+        }
+        return
+      }
 
       const skillResolution = await resolveSelectedSkills(text, skillSelections)
       if (stopped) return

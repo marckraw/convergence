@@ -243,7 +243,7 @@ describe('provider-status.pure', () => {
       supportsSelfUpdate: true,
       latestVersionSource: 'none',
     })
-    expect(getProviderBinaryNames(provider)).toEqual(['agent', 'cursor-agent'])
+    expect(getProviderBinaryNames(provider)).toEqual(['cursor-agent', 'agent'])
   })
 
   it('builds Cursor status with provider self-update metadata', () => {

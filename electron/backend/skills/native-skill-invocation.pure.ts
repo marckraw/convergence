@@ -12,9 +12,10 @@ import type {
 } from './skills.types'
 
 export type NativeSkillCommandSyntax =
-  | 'plain-slash'
-  | 'claude-slash'
-  | 'pi-skill-slash'
+  // Cursor ACP commands currently use the same text shape as Claude slash
+  // commands, but keep a separate syntax so provider-native command contracts
+  // can diverge without changing call sites.
+  'plain-slash' | 'claude-slash' | 'pi-skill-slash'
 
 export type NativeSkillInvocationResolution =
   | {

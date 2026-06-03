@@ -1031,6 +1031,38 @@ describe('CursorProvider', () => {
     })
   })
 
+  it('keeps failed follow-up attempts visible after Cursor disconnects', async () => {
+    const { child, server, handle, deltas, statuses, attentions } =
+      startProvider(undefined, {
+        holdPrompt: true,
+      })
+
+    await waitFor(() => {
+      expect(server.requests.map((request) => request.method)).toContain(
+        'session/prompt',
+      )
+    })
+
+    child.emit('exit', 1, null)
+
+    await waitFor(() => {
+      expect(statuses).toContain('failed')
+      expect(attentions.at(-1)).toBe('failed')
+    })
+
+    handle.sendMessage('are you still there?', undefined, undefined, {
+      deliveryMode: 'follow-up',
+    })
+
+    await waitFor(() => {
+      const rendered = JSON.stringify(deltas)
+      expect(rendered).toContain('are you still there?')
+      expect(rendered).toContain(
+        'Cursor is no longer connected, so this message was not sent.',
+      )
+    })
+  })
+
   it('stops an active Cursor ACP request and cancels pending provider requests', async () => {
     const { child, server, handle, statuses, attentions } = startProvider(
       undefined,

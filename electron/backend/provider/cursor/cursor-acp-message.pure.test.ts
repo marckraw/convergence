@@ -119,6 +119,21 @@ describe('cursor ACP message helpers', () => {
       outputText: 'Done',
       state: 'complete',
     })
+
+    expect(
+      buildCursorAcpToolView({
+        update: {
+          sessionUpdate: 'tool_call_update',
+          toolCallId: 'tool-1',
+          status: 'cancelled',
+        },
+      }),
+    ).toMatchObject({
+      toolCallId: 'tool-1',
+      status: 'cancelled',
+      outputText: 'Status: cancelled',
+      state: 'error',
+    })
   })
 
   it('builds permission responses using the conservative P0 option mapping', () => {

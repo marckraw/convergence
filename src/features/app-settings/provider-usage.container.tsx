@@ -9,9 +9,10 @@ function createClaudeManualSnapshot(): ProviderQuotaSnapshot {
   return {
     providerId: 'claude-code',
     status: 'unavailable',
-    source: 'provider-event',
+    source: 'manual',
     reason:
       'Claude Code does not expose these reset windows reliably to Convergence. Open Claude settings to check usage limits manually.',
+    usageUrl: 'https://claude.ai/new#settings/usage',
     lastCheckedAt: new Date().toISOString(),
     stale: false,
   }

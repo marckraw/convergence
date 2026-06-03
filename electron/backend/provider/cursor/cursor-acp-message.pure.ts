@@ -223,7 +223,10 @@ export function buildCursorAcpToolView(params: unknown): CursorAcpToolView {
     status,
     inputText,
     outputText,
-    state: status === 'failed' || status === 'error' ? 'error' : 'complete',
+    state:
+      status === 'failed' || status === 'error' || status === 'cancelled'
+        ? 'error'
+        : 'complete',
   }
 }
 

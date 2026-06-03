@@ -56,7 +56,7 @@ const KNOWN_PROVIDERS: KnownProvider[] = [
     name: 'Cursor',
     vendorLabel: 'Anysphere',
     binaryName: 'agent',
-    binaryNames: ['agent', 'cursor-agent'],
+    binaryNames: ['cursor-agent', 'agent'],
     packageName: 'cursor-agent',
     installCommand: 'curl https://cursor.com/install -fsS | bash',
     updateCommand: 'agent update',
