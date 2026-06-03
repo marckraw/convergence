@@ -31,6 +31,7 @@ describe('TerminalIdleSection', () => {
     )
 
     expect(screen.getByText('Terminals Idle')).toBeInTheDocument()
+    expect(screen.getByText('Convergence')).toBeInTheDocument()
     fireEvent.click(screen.getByText('Terminal - Convergence'))
 
     expect(onSelect).toHaveBeenCalledWith(notice)

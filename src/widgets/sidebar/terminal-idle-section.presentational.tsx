@@ -41,8 +41,13 @@ export const TerminalIdleSection: FC<TerminalIdleSectionProps> = ({
                   className="h-auto min-w-0 flex-1 items-center justify-start gap-1.5 px-1.5 py-0.5 text-left text-xs leading-tight"
                 >
                   <TerminalSquare className="h-3 w-3 shrink-0 text-muted-foreground" />
-                  <span className="min-w-0 flex-1 truncate font-medium">
-                    {notice.sessionName}
+                  <span className="flex min-w-0 flex-1 items-baseline gap-1.5">
+                    <span className="min-w-0 shrink truncate font-medium">
+                      {notice.sessionName}
+                    </span>
+                    <span className="min-w-0 shrink truncate text-[10px] leading-tight text-muted-foreground/60">
+                      {notice.projectName}
+                    </span>
                   </span>
                   <span className="max-w-[5rem] shrink truncate text-muted-foreground">
                     {notice.processName}
