@@ -21,7 +21,7 @@ export const DebugLoggingFields: FC<DebugLoggingFieldsProps> = ({
       <SwitchRow
         id="debug-logging-enabled"
         label="Capture provider debug logs"
-        description="Records every event from Codex, Pi, and Claude into JSONL files for diagnosis. Files live alongside the app data and are not uploaded anywhere."
+        description="Records every provider event Convergence can observe into JSONL files for diagnosis. Files live alongside the app data and are not uploaded anywhere."
         checked={prefs.enabled}
         disabled={isSaving}
         onChange={onToggleEnabled}

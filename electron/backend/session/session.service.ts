@@ -1290,6 +1290,7 @@ export class SessionService {
       workingDirectory: session.workingDirectory,
       initialMessage,
       initialSkillSelections,
+      previousAssistantTexts: this.getPreviousAssistantMessageTexts(session.id),
       model: session.model,
       effort: session.effort,
       continuationToken,
@@ -1304,6 +1305,17 @@ export class SessionService {
     handle.onActivityHeartbeat?.(() => {
       this.bumpLiveness(session.id)
     })
+  }
+
+  private getPreviousAssistantMessageTexts(sessionId: string): string[] {
+    return this.getConversation(sessionId)
+      .filter(
+        (item): item is Extract<ConversationItem, { kind: 'message' }> =>
+          item.kind === 'message' &&
+          item.actor === 'assistant' &&
+          item.text.trim().length > 0,
+      )
+      .map((item) => item.text)
   }
 
   private handleLifecycle(

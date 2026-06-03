@@ -33,7 +33,12 @@ function skill(
   return {
     id,
     providerId,
-    providerName: providerId === 'pi' ? 'Pi Agent' : 'Claude Code',
+    providerName:
+      providerId === 'pi'
+        ? 'Pi Agent'
+        : providerId === 'antigravity'
+          ? 'Antigravity CLI'
+          : 'Claude Code',
     name,
     path,
     scope,
@@ -55,7 +60,12 @@ function catalog(
 ): ProviderSkillCatalog {
   return {
     providerId,
-    providerName: providerId === 'pi' ? 'Pi Agent' : 'Claude Code',
+    providerName:
+      providerId === 'pi'
+        ? 'Pi Agent'
+        : providerId === 'antigravity'
+          ? 'Antigravity CLI'
+          : 'Claude Code',
     catalogSource: 'filesystem',
     invocationSupport: 'native-command',
     activationConfirmation: providerId === 'pi' ? 'none' : 'native-event',
@@ -142,6 +152,25 @@ describe('resolveNativeSkillInvocation', () => {
           status: 'selected',
         },
       ],
+    })
+  })
+
+  it('formats Antigravity skills as slash commands', () => {
+    const entry = skill({ name: 'review-ui' }, 'antigravity')
+
+    const result = resolveNativeSkillInvocation({
+      providerId: 'antigravity',
+      providerName: 'Antigravity CLI',
+      catalog: catalog([entry], 'antigravity'),
+      selections: [selection(entry)],
+      syntax: 'antigravity-slash',
+      text: 'Review the screen.',
+    })
+
+    expect(result).toMatchObject({
+      ok: true,
+      commandText: '/review-ui',
+      promptText: '/review-ui\n\nReview the screen.',
     })
   })
 

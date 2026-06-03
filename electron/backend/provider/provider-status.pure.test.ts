@@ -14,6 +14,7 @@ describe('provider-status.pure', () => {
       'claude-code',
       'codex',
       'pi',
+      'antigravity',
     ])
   })
 
@@ -224,6 +225,53 @@ describe('provider-status.pure', () => {
       legacyPackageNames: ['@mariozechner/pi-coding-agent'],
       installCommand: 'npm install -g @earendil-works/pi-coding-agent@latest',
       updateCommand: 'npm install -g @earendil-works/pi-coding-agent@latest',
+    })
+  })
+
+  it('models Antigravity as a self-updating non-npm provider', () => {
+    const provider = getKnownProviders().find(
+      (item) => item.id === 'antigravity',
+    )!
+
+    expect(provider).toMatchObject({
+      name: 'Antigravity CLI',
+      vendorLabel: 'Google',
+      binaryName: 'agy',
+      binaryAliases: ['antigravity'],
+      packageName: null,
+      installCommand:
+        'curl -fsSL https://antigravity.google/cli/install.sh | bash',
+      updateCommand: 'agy update',
+      supportsSelfUpdate: true,
+    })
+
+    const status = buildProviderStatus(
+      provider,
+      '/Users/me/.local/bin/agy',
+      '1.0.4',
+      '1.0.4',
+      null,
+      {
+        manager: 'self',
+        realBinaryPath: '/Users/me/.local/bin/agy',
+        packageName: null,
+        packageDirectory: null,
+        prefixDirectory: null,
+        npmPath: null,
+        nodePath: null,
+        nodeVersion: null,
+        brewPrefix: null,
+        formulaName: null,
+      },
+    )
+
+    expect(status.update).toMatchObject({
+      currentVersion: '1.0.4',
+      latestVersion: '1.0.4',
+      packageName: null,
+      updateCapability: 'automatic',
+      updateStrategy: 'provider-self-update',
+      automaticUpdateCommand: '/Users/me/.local/bin/agy update',
     })
   })
 

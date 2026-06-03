@@ -48,6 +48,14 @@ const KNOWN_PROVIDER_ICONS: Array<{
         'border-violet-400/30 bg-violet-500/12 text-violet-700 dark:text-violet-200',
     },
   },
+  {
+    matches: ['google', 'gemini', 'antigravity'],
+    icon: {
+      label: 'G',
+      className:
+        'border-blue-400/30 bg-blue-500/12 text-blue-700 dark:text-blue-200',
+    },
+  },
 ]
 
 export function ProviderIcon({

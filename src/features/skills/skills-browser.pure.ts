@@ -168,6 +168,7 @@ export function getNativeSkillInvocationText(
     case 'codex':
       return `$${skill.name}`
     case 'claude-code':
+    case 'antigravity':
       return `/${skill.name}`
     case 'pi':
       return `/skill:${skill.name}`

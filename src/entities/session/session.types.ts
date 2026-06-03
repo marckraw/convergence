@@ -428,7 +428,7 @@ export interface ProviderUpdateInfo {
   currentVersion: string | null
   latestVersion: string | null
   status: ProviderUpdateStatus
-  packageName: string
+  packageName: string | null
   installCommand: string
   updateCommand: string
   manualUpdateCommand: string

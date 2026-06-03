@@ -183,5 +183,11 @@ describe('filterSkillCatalog', () => {
         providerId: 'claude-code',
       }),
     ).toBe('/review')
+    expect(
+      getNativeSkillInvocationText({
+        ...codexSkill,
+        providerId: 'antigravity',
+      }),
+    ).toBe('/review')
   })
 })

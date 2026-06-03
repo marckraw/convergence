@@ -251,4 +251,43 @@ describe('buildTranscriptEntryViewModel', () => {
     expect(model.toolPreview).toHaveLength(120)
     expect(model.toolPreview?.endsWith('...')).toBe(true)
   })
+
+  it('labels Antigravity trajectory tool cards as post-run telemetry', () => {
+    const item: ConversationItem = {
+      ...base,
+      kind: 'tool-call',
+      toolName: 'list_dir',
+      inputText: '{"DirectoryPath":"."}',
+      providerMeta: {
+        providerId: 'antigravity',
+        providerItemId: 'antigravity:2:tool-call:call-1',
+        providerEventType: 'trajectory-tool-call',
+      },
+    }
+
+    expect(buildTranscriptEntryViewModel({ item })).toMatchObject({
+      toolVisibilityLabel: 'Post-run',
+      toolVisibilityTitle:
+        'Recovered from the Antigravity conversation database after the turn completed.',
+    })
+  })
+
+  it('does not label live provider tool cards as post-run telemetry', () => {
+    const item: ConversationItem = {
+      ...base,
+      kind: 'tool-call',
+      toolName: 'Bash',
+      inputText: '{"command":"ls"}',
+      providerMeta: {
+        providerId: 'codex',
+        providerItemId: 'tool-1',
+        providerEventType: 'tool-use',
+      },
+    }
+
+    expect(buildTranscriptEntryViewModel({ item })).toMatchObject({
+      toolVisibilityLabel: null,
+      toolVisibilityTitle: null,
+    })
+  })
 })
