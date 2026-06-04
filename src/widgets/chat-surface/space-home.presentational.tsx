@@ -29,7 +29,7 @@ import {
   SELECT_EMPTY_VALUE,
   fromSelectValue,
   toSelectValue,
-} from '@/shared/ui/select.pure'
+} from '@/shared/lib/select-value.pure'
 import { SessionBadge } from '@/shared/ui/session-badge.presentational'
 import { cn } from '@/shared/lib/cn.pure'
 import {

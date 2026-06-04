@@ -3,7 +3,7 @@ import {
   SELECT_EMPTY_VALUE,
   fromSelectValue,
   toSelectValue,
-} from './select.pure'
+} from './select-value.pure'
 
 describe('select value helpers', () => {
   it('maps empty strings to and from the sentinel value', () => {
