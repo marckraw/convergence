@@ -1,5 +1,11 @@
 # convergence
 
+## 0.40.1
+
+### Patch Changes
+
+- d9ddb72: Replace native dropdown wrappers with the shared shadcn Select component across Prompt Library, Skills, and Space flows.
+
 ## 0.40.0
 
 ### Minor Changes
