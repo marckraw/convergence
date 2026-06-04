@@ -287,6 +287,12 @@ export const ProviderCredentialsContainer: FC = () => {
                   : 'Save Cursor key'}
               </Button>
             </div>
+            <p className="text-xs text-muted-foreground">
+              Use the Cursor Admin API key from Dashboard &gt; Settings &gt;
+              Cursor Admin API Keys. Those keys start with key_. User API Keys
+              from the Cloud Agent/API page start with crsr_ and do not work for
+              usage data.
+            </p>
           </div>
 
           <div className="space-y-2">

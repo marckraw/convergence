@@ -1,4 +1,8 @@
 import { request as httpsRequest } from 'https'
+import {
+  describeCursorAdminApiAuthFailure,
+  validateCursorAdminApiKey,
+} from '../credentials/cursor-credentials.pure'
 import { CursorCredentialsService } from '../credentials/cursor-credentials.service'
 import {
   CURSOR_QUOTA_CACHE_TTL_MS,
@@ -43,11 +47,7 @@ function postJson(request: JsonPostRequest): Promise<unknown> {
           const responseBody = Buffer.concat(chunks).toString('utf8')
           if (status < 200 || status >= 300) {
             if (status === 401 || status === 403) {
-              reject(
-                new Error(
-                  'Cursor Admin API auth failed. Check CURSOR_ADMIN_API_KEY.',
-                ),
-              )
+              reject(new Error(describeCursorAdminApiAuthFailure()))
               return
             }
             reject(
@@ -101,6 +101,10 @@ export class CursorQuotaService {
         throw new Error(
           'Cursor does not expose individual usage through ACP, CLI, or a public API. Save a Cursor Admin API key in Provider credentials to show official team spend data, or open the Cursor dashboard for individual usage.',
         )
+      }
+      const validationError = validateCursorAdminApiKey(apiKey)
+      if (validationError) {
+        throw new Error(validationError)
       }
 
       const payload = await this.jsonPost({

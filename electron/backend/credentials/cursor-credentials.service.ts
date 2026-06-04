@@ -1,4 +1,5 @@
 import { execFile } from 'child_process'
+import { validateCursorAdminApiKey } from './cursor-credentials.pure'
 
 export interface CursorCredentialStatus {
   providerId: 'cursor'
@@ -163,8 +164,9 @@ export class CursorCredentialsService {
     }
 
     const apiKey = input.apiKey.trim()
-    if (!apiKey) {
-      throw new Error('Cursor Admin API key cannot be empty.')
+    const validationError = validateCursorAdminApiKey(apiKey)
+    if (validationError) {
+      throw new Error(validationError)
     }
 
     const email = input.email.trim()
