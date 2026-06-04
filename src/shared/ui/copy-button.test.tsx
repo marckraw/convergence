@@ -39,6 +39,14 @@ describe('CopyButton', () => {
     )
   })
 
+  it('renders a labeled button variant', async () => {
+    render(
+      <CopyButton text="hello" variant="button" label="Copy for composer" />,
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Copy for composer' }))
+    await waitFor(() => expect(writeText).toHaveBeenCalledWith('hello'))
+  })
+
   it('does not bubble click events to parent handlers', () => {
     const onParentClick = vi.fn()
     render(

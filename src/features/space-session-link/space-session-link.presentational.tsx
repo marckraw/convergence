@@ -15,6 +15,7 @@ import {
   DialogTitle,
 } from '@/shared/ui/dialog'
 import { Input } from '@/shared/ui/input'
+import { NativeSelect } from '@/shared/ui/native-select'
 
 export interface LinkedSpaceView {
   attempt: SpaceAttempt
@@ -127,8 +128,8 @@ export const SpaceSessionLinkDialog: FC<SpaceSessionLinkDialogProps> = ({
               Attach to existing
             </div>
             <div className="grid gap-2 sm:grid-cols-[1fr_160px_auto]">
-              <select
-                className="h-9 min-w-0 rounded-md border border-input bg-background px-3 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+              <NativeSelect
+                className="min-w-0"
                 value={selectedSpaceId}
                 onChange={(event) => onSelectedSpaceChange(event.target.value)}
                 disabled={linkableSpaces.length === 0 || isLinking}
@@ -144,9 +145,8 @@ export const SpaceSessionLinkDialog: FC<SpaceSessionLinkDialogProps> = ({
                     {space.title}
                   </option>
                 ))}
-              </select>
-              <select
-                className="h-9 rounded-md border border-input bg-background px-3 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+              </NativeSelect>
+              <NativeSelect
                 value={selectedRole}
                 onChange={(event) =>
                   onSelectedRoleChange(event.target.value as SpaceAttemptRole)
@@ -159,7 +159,7 @@ export const SpaceSessionLinkDialog: FC<SpaceSessionLinkDialogProps> = ({
                     {spaceAttemptRoleLabels[role]}
                   </option>
                 ))}
-              </select>
+              </NativeSelect>
               <Button
                 type="button"
                 onClick={onAttachToSpace}

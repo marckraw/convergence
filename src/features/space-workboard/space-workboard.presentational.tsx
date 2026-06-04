@@ -44,6 +44,7 @@ import {
   DialogTrigger,
 } from '@/shared/ui/dialog'
 import { Input } from '@/shared/ui/input'
+import { NativeSelect } from '@/shared/ui/native-select'
 import { Textarea } from '@/shared/ui/textarea'
 import { cn } from '@/shared/lib/cn.pure'
 import {
@@ -341,8 +342,8 @@ export const SpaceWorkboardDialog: FC<SpaceWorkboardProps> = ({
                     <span className="text-xs font-medium uppercase text-muted-foreground">
                       Status
                     </span>
-                    <select
-                      className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                    <NativeSelect
+                      className="w-full"
                       value={selectedDraft.status}
                       onChange={(event) =>
                         onDraftChange({
@@ -356,15 +357,15 @@ export const SpaceWorkboardDialog: FC<SpaceWorkboardProps> = ({
                           {spaceStatusLabels[status]}
                         </option>
                       ))}
-                    </select>
+                    </NativeSelect>
                   </label>
 
                   <label className="space-y-2">
                     <span className="text-xs font-medium uppercase text-muted-foreground">
                       Attention
                     </span>
-                    <select
-                      className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                    <NativeSelect
+                      className="w-full"
                       value={selectedDraft.attention}
                       onChange={(event) =>
                         onDraftChange({
@@ -378,7 +379,7 @@ export const SpaceWorkboardDialog: FC<SpaceWorkboardProps> = ({
                           {spaceAttentionLabels[attention]}
                         </option>
                       ))}
-                    </select>
+                    </NativeSelect>
                   </label>
                 </div>
 
@@ -601,8 +602,8 @@ export const SpaceWorkboardDialog: FC<SpaceWorkboardProps> = ({
                                 <span className="text-[11px] font-medium uppercase text-muted-foreground">
                                   Kind
                                 </span>
-                                <select
-                                  className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                                <NativeSelect
+                                  className="w-full"
                                   value={artifactDraft.kind}
                                   onChange={(event) =>
                                     onArtifactDraftChange({
@@ -618,7 +619,7 @@ export const SpaceWorkboardDialog: FC<SpaceWorkboardProps> = ({
                                       {spaceArtifactKindLabels[kind]}
                                     </option>
                                   ))}
-                                </select>
+                                </NativeSelect>
                               </label>
 
                               <label className="space-y-1.5">
@@ -642,8 +643,8 @@ export const SpaceWorkboardDialog: FC<SpaceWorkboardProps> = ({
                                 <span className="text-[11px] font-medium uppercase text-muted-foreground">
                                   Status
                                 </span>
-                                <select
-                                  className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                                <NativeSelect
+                                  className="w-full"
                                   value={artifactDraft.status}
                                   onChange={(event) =>
                                     onArtifactDraftChange({
@@ -659,15 +660,15 @@ export const SpaceWorkboardDialog: FC<SpaceWorkboardProps> = ({
                                       {spaceArtifactStatusLabels[status]}
                                     </option>
                                   ))}
-                                </select>
+                                </NativeSelect>
                               </label>
 
                               <label className="space-y-1.5">
                                 <span className="text-[11px] font-medium uppercase text-muted-foreground">
                                   Source
                                 </span>
-                                <select
-                                  className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                                <NativeSelect
+                                  className="w-full"
                                   value={artifactDraft.sourceSessionId}
                                   onChange={(event) =>
                                     onArtifactDraftChange({
@@ -686,7 +687,7 @@ export const SpaceWorkboardDialog: FC<SpaceWorkboardProps> = ({
                                       {view.sessionName}
                                     </option>
                                   ))}
-                                </select>
+                                </NativeSelect>
                               </label>
 
                               <label className="space-y-1.5 md:col-span-2">
@@ -953,8 +954,8 @@ function renderAttemptRow(input: {
         </div>
 
         <div className="flex shrink-0 items-center gap-2">
-          <select
-            className="h-8 rounded-md border border-input bg-background px-2 text-xs shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+          <NativeSelect
+            selectSize="sm"
             value={attempt.role}
             onChange={(event) =>
               onAttemptRoleChange(
@@ -969,7 +970,7 @@ function renderAttemptRow(input: {
                 {spaceAttemptRoleLabels[role]}
               </option>
             ))}
-          </select>
+          </NativeSelect>
           <Button
             type="button"
             variant="outline"
@@ -1037,8 +1038,9 @@ function renderArtifactRow(input: {
           <span className="text-[11px] font-medium uppercase text-muted-foreground">
             Kind
           </span>
-          <select
-            className="h-8 w-full rounded-md border border-input bg-background px-2 text-xs shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+          <NativeSelect
+            selectSize="sm"
+            className="w-full"
             value={artifact.kind}
             onChange={(event) =>
               onArtifactKindChange(
@@ -1053,7 +1055,7 @@ function renderArtifactRow(input: {
                 {spaceArtifactKindLabels[kind]}
               </option>
             ))}
-          </select>
+          </NativeSelect>
         </label>
 
         <label className="space-y-1.5">
@@ -1076,8 +1078,9 @@ function renderArtifactRow(input: {
           <span className="text-[11px] font-medium uppercase text-muted-foreground">
             Status
           </span>
-          <select
-            className="h-8 w-full rounded-md border border-input bg-background px-2 text-xs shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+          <NativeSelect
+            selectSize="sm"
+            className="w-full"
             value={artifact.status}
             onChange={(event) =>
               onArtifactStatusChange(
@@ -1092,7 +1095,7 @@ function renderArtifactRow(input: {
                 {spaceArtifactStatusLabels[status]}
               </option>
             ))}
-          </select>
+          </NativeSelect>
         </label>
 
         <div className="flex items-end">
@@ -1150,8 +1153,8 @@ function renderArtifactRow(input: {
           <span className="text-[11px] font-medium uppercase text-muted-foreground">
             Source
           </span>
-          <select
-            className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+          <NativeSelect
+            className="w-full"
             value={artifact.sourceSessionId ?? ''}
             onChange={(event) =>
               onArtifactSourceSessionChange(artifact.id, event.target.value)
@@ -1167,7 +1170,7 @@ function renderArtifactRow(input: {
                 {view.sessionName}
               </option>
             ))}
-          </select>
+          </NativeSelect>
         </label>
       </div>
 
