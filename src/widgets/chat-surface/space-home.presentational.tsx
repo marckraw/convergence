@@ -18,6 +18,7 @@ import {
 } from '@/entities/space'
 import { Button } from '@/shared/ui/button'
 import { Input } from '@/shared/ui/input'
+import { NativeSelect } from '@/shared/ui/native-select'
 import { SessionBadge } from '@/shared/ui/session-badge.presentational'
 import { cn } from '@/shared/lib/cn.pure'
 import {
@@ -423,7 +424,7 @@ export const SpaceHome: FC<SpaceHomeProps> = ({
                     <span className="text-xs font-medium text-muted-foreground">
                       Kind
                     </span>
-                    <select
+                    <NativeSelect
                       value={artifactDraft.kind}
                       onChange={(event) =>
                         onArtifactDraftChange({
@@ -431,7 +432,7 @@ export const SpaceHome: FC<SpaceHomeProps> = ({
                           kind: event.target.value as SpaceArtifactKind,
                         })
                       }
-                      className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                      className="w-full"
                       aria-label="Artifact kind"
                     >
                       {spaceArtifactKindOptions.map((kind) => (
@@ -439,7 +440,7 @@ export const SpaceHome: FC<SpaceHomeProps> = ({
                           {spaceArtifactKindLabels[kind]}
                         </option>
                       ))}
-                    </select>
+                    </NativeSelect>
                   </label>
                   <label className="space-y-1 text-sm md:col-span-2">
                     <span className="text-xs font-medium text-muted-foreground">
@@ -461,7 +462,7 @@ export const SpaceHome: FC<SpaceHomeProps> = ({
                     <span className="text-xs font-medium text-muted-foreground">
                       Status
                     </span>
-                    <select
+                    <NativeSelect
                       value={artifactDraft.status}
                       onChange={(event) =>
                         onArtifactDraftChange({
@@ -469,7 +470,7 @@ export const SpaceHome: FC<SpaceHomeProps> = ({
                           status: event.target.value as SpaceArtifactStatus,
                         })
                       }
-                      className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                      className="w-full"
                       aria-label="Artifact status"
                     >
                       {spaceArtifactStatusOptions.map((status) => (
@@ -477,13 +478,13 @@ export const SpaceHome: FC<SpaceHomeProps> = ({
                           {spaceArtifactStatusLabels[status]}
                         </option>
                       ))}
-                    </select>
+                    </NativeSelect>
                   </label>
                   <label className="space-y-1 text-sm">
                     <span className="text-xs font-medium text-muted-foreground">
                       Source attempt
                     </span>
-                    <select
+                    <NativeSelect
                       value={artifactDraft.sourceSessionId}
                       onChange={(event) =>
                         onArtifactDraftChange({
@@ -491,7 +492,7 @@ export const SpaceHome: FC<SpaceHomeProps> = ({
                           sourceSessionId: event.target.value,
                         })
                       }
-                      className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                      className="w-full"
                       aria-label="Artifact source attempt"
                     >
                       <option value="">None</option>
@@ -500,7 +501,7 @@ export const SpaceHome: FC<SpaceHomeProps> = ({
                           {session?.name ?? attempt.sessionId}
                         </option>
                       ))}
-                    </select>
+                    </NativeSelect>
                   </label>
                 </div>
 

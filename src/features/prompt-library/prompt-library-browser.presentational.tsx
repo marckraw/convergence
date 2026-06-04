@@ -1,7 +1,6 @@
 import type { FC, ReactNode } from 'react'
 import {
   BookOpenText,
-  Copy,
   FileText,
   Library,
   Loader2,
@@ -31,6 +30,7 @@ import {
   DialogTrigger,
 } from '@/shared/ui/dialog'
 import { Input } from '@/shared/ui/input'
+import { NativeSelect } from '@/shared/ui/native-select'
 import { Markdown } from '@/shared/ui/markdown.container'
 import { Textarea } from '@/shared/ui/textarea'
 import { cn } from '@/shared/lib/cn.pure'
@@ -102,13 +102,14 @@ function renderSelectControl({
   return (
     <label className="min-w-0 flex-1 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
       <span>{label}</span>
-      <select
+      <NativeSelect
+        selectSize="sm"
         value={value}
         onChange={(event) => onChange(event.currentTarget.value)}
-        className="mt-1 h-8 w-full rounded-md border border-border bg-background px-2 text-xs font-normal normal-case tracking-normal text-foreground shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+        className="mt-1 normal-case tracking-normal"
       >
         {children}
-      </select>
+      </NativeSelect>
     </label>
   )
 }
@@ -261,13 +262,6 @@ function renderDetailsPane({
             <Trash2 className="h-3.5 w-3.5" />
             Delete
           </Button>
-          <CopyButton text={selectedPrompt.path} label="Copy prompt path" />
-          {selectedDetails ? (
-            <CopyButton
-              text={selectedDetails.promptText}
-              label="Copy prompt text"
-            />
-          ) : null}
         </div>
       </div>
 
@@ -434,7 +428,7 @@ function renderPromptForm({
         <div className="grid gap-3 sm:grid-cols-2">
           <label className="text-xs font-medium text-muted-foreground">
             Scope
-            <select
+            <NativeSelect
               value={draft.scope}
               onChange={(event) =>
                 onChange({
@@ -442,15 +436,15 @@ function renderPromptForm({
                 })
               }
               disabled={draft.mode === 'edit'}
-              className="mt-1 h-9 w-full rounded-md border border-border bg-background px-2 text-sm font-normal text-foreground shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-60"
+              className="mt-1"
             >
               <option value="project">Project</option>
               <option value="global">Global</option>
-            </select>
+            </NativeSelect>
           </label>
           <label className="text-xs font-medium text-muted-foreground">
             File Kind
-            <select
+            <NativeSelect
               value={draft.kind}
               onChange={(event) =>
                 onChange({
@@ -458,11 +452,11 @@ function renderPromptForm({
                 })
               }
               disabled={draft.mode === 'edit'}
-              className="mt-1 h-9 w-full rounded-md border border-border bg-background px-2 text-sm font-normal text-foreground shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-60"
+              className="mt-1"
             >
               <option value="markdown">Markdown</option>
               <option value="text">Text</option>
-            </select>
+            </NativeSelect>
           </label>
         </div>
 
@@ -714,22 +708,10 @@ export const PromptLibraryBrowserDialog: FC<
             />
             Refresh
           </Button>
-          {selectedDetails ? (
-            <CopyButton
-              text={selectedDetails.promptText}
-              label="Copy prompt text"
-            />
-          ) : null}
           {selectedPrompt?.path ? (
             <div className="mr-auto hidden min-w-0 items-center gap-2 text-xs text-muted-foreground sm:flex">
               <Library className="h-3.5 w-3.5 shrink-0" />
               <span className="truncate">{selectedPrompt.path}</span>
-            </div>
-          ) : null}
-          {selectedDetails ? (
-            <div className="hidden items-center gap-1.5 text-xs text-muted-foreground sm:flex">
-              <Copy className="h-3.5 w-3.5" />
-              Manual copy for composer paste
             </div>
           ) : null}
         </DialogFooter>

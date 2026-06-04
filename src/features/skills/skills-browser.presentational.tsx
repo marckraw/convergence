@@ -21,6 +21,7 @@ import {
   DialogTrigger,
 } from '@/shared/ui/dialog'
 import { Input } from '@/shared/ui/input'
+import { NativeSelect } from '@/shared/ui/native-select'
 import { Markdown } from '@/shared/ui/markdown.container'
 import { cn } from '@/shared/lib/cn.pure'
 import {
@@ -138,13 +139,14 @@ function renderSelectControl({
   return (
     <label className="min-w-0 flex-1 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
       <span>{label}</span>
-      <select
+      <NativeSelect
+        selectSize="sm"
         value={value}
         onChange={(event) => onChange(event.currentTarget.value)}
-        className="mt-1 h-8 w-full rounded-md border border-border bg-background px-2 text-xs font-normal normal-case tracking-normal text-foreground shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+        className="mt-1 normal-case tracking-normal"
       >
         {children}
-      </select>
+      </NativeSelect>
     </label>
   )
 }
