@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import { appSettingsApi } from './app-settings.api'
 import {
+  DEFAULT_COMMAND_CENTER_SHORTCUT,
   DEFAULT_DEBUG_LOGGING_PREFS,
   DEFAULT_FAVORITE_MODELS_PREFS,
   DEFAULT_NOTIFICATION_PREFS,
@@ -18,6 +19,7 @@ const EMPTY: AppSettings = {
   namingModelByProvider: {},
   extractionModelByProvider: {},
   guidedReviewModelByProvider: {},
+  commandCenterShortcut: DEFAULT_COMMAND_CENTER_SHORTCUT,
   notifications: DEFAULT_NOTIFICATION_PREFS,
   onboarding: DEFAULT_ONBOARDING_PREFS,
   updates: DEFAULT_UPDATE_PREFS,

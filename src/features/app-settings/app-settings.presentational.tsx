@@ -1,6 +1,9 @@
 import type { FC, ReactNode } from 'react'
 import type { AppSettingsDialogSection } from '@/entities/dialog'
-import type { DebugLoggingPrefs } from '@/entities/app-settings'
+import type {
+  CommandCenterShortcutPrefs,
+  DebugLoggingPrefs,
+} from '@/entities/app-settings'
 import type {
   ProviderInfo,
   ReasoningEffort,
@@ -33,6 +36,7 @@ import { PiModelVisibilityContainer } from './pi-model-visibility.container'
 import { ProviderCredentialsContainer } from './provider-credentials.container'
 import { ProviderUsageContainer } from './provider-usage.container'
 import { AnalyticsInsightsContainer } from '../analytics-insights'
+import { ShortcutsFields } from './shortcuts-fields.presentational'
 
 export type AppSettingsSectionId = AppSettingsDialogSection
 
@@ -73,6 +77,12 @@ interface AppSettingsDialogProps {
   onToggleDebugLogging: (next: boolean) => void
   onTogglePiModel: (modelId: string, next: boolean) => void
   onOpenDebugLogFolder: () => void
+  commandCenterShortcutDraft: CommandCenterShortcutPrefs
+  commandCenterShortcutLabel: string
+  shortcutsConflict: string | null
+  isRecordingShortcut: boolean
+  onStartRecordShortcut: () => void
+  onRestoreCommandCenterShortcut: () => void
   onSectionChange: (section: AppSettingsSectionId) => void
   onSave: () => void
   onCancel: () => void
@@ -124,6 +134,12 @@ export const AppSettingsDialog: FC<AppSettingsDialogProps> = ({
   onToggleDebugLogging,
   onTogglePiModel,
   onOpenDebugLogFolder,
+  commandCenterShortcutDraft,
+  commandCenterShortcutLabel,
+  shortcutsConflict,
+  isRecordingShortcut,
+  onStartRecordShortcut,
+  onRestoreCommandCenterShortcut,
   onSectionChange,
   onSave,
   onCancel,
@@ -217,6 +233,14 @@ export const AppSettingsDialog: FC<AppSettingsDialogProps> = ({
       title: 'Insights',
       description:
         'Review local-only analytics about your conversations, sessions, projects, and agent activity.',
+    },
+    {
+      id: 'shortcuts',
+      navLabel: 'Shortcuts',
+      navSummary: 'Command Center keyboard shortcut',
+      title: 'Shortcuts',
+      description:
+        'Customize global keyboard shortcuts. Other terminal and navigation shortcuts stay fixed for now.',
     },
     {
       id: 'debug-logging',
@@ -318,6 +342,18 @@ export const AppSettingsDialog: FC<AppSettingsDialogProps> = ({
         )
       case 'insights':
         return <AnalyticsInsightsContainer />
+      case 'shortcuts':
+        return (
+          <ShortcutsFields
+            commandCenterShortcut={commandCenterShortcutDraft}
+            commandCenterLabel={commandCenterShortcutLabel}
+            conflictError={shortcutsConflict}
+            isRecording={isRecordingShortcut}
+            isSaving={isSaving}
+            onStartRecord={onStartRecordShortcut}
+            onRestoreDefault={onRestoreCommandCenterShortcut}
+          />
+        )
       case 'debug-logging':
         return (
           <DebugLoggingFields

@@ -19,7 +19,12 @@ import {
   type PiModelVisibilityPrefs,
   type ResolvedOneShotModelDefaults,
   type ResolvedSessionDefaults,
+  DEFAULT_COMMAND_CENTER_SHORTCUT,
 } from './app-settings.types'
+import {
+  parseCommandCenterShortcut,
+  validateCommandCenterShortcut,
+} from '../../../src/shared/lib/keyboard-shortcut.pure'
 
 export function parseModelMap(value: unknown): Record<string, string> {
   if (!value || typeof value !== 'object') return {}
@@ -166,6 +171,8 @@ export function parseFavoriteModelsPrefs(value: unknown): FavoriteModelsPrefs {
   return { items }
 }
 
+export { parseCommandCenterShortcut, validateCommandCenterShortcut }
+
 function emptyAppSettings(): AppSettings {
   return {
     defaultProviderId: null,
@@ -174,6 +181,7 @@ function emptyAppSettings(): AppSettings {
     namingModelByProvider: {},
     extractionModelByProvider: {},
     guidedReviewModelByProvider: {},
+    commandCenterShortcut: DEFAULT_COMMAND_CENTER_SHORTCUT,
     notifications: DEFAULT_NOTIFICATION_PREFS,
     onboarding: DEFAULT_ONBOARDING_PREFS,
     updates: DEFAULT_UPDATE_PREFS,
@@ -208,6 +216,9 @@ export function parseAppSettings(raw: string | null): AppSettings {
       ),
       guidedReviewModelByProvider: parseModelMap(
         parsed.guidedReviewModelByProvider,
+      ),
+      commandCenterShortcut: parseCommandCenterShortcut(
+        parsed.commandCenterShortcut,
       ),
       notifications: parseNotificationPrefs(parsed.notifications),
       onboarding: parseOnboardingPrefs(parsed.onboarding),
@@ -260,6 +271,9 @@ export function validateAppSettings(
     settings.favoriteModels,
     descriptors,
   )
+  const commandCenterShortcut =
+    validateCommandCenterShortcut(settings.commandCenterShortcut) ??
+    DEFAULT_COMMAND_CENTER_SHORTCUT
 
   const provider = descriptors.find(
     (item) => item.id === settings.defaultProviderId,
@@ -272,6 +286,7 @@ export function validateAppSettings(
       namingModelByProvider,
       extractionModelByProvider,
       guidedReviewModelByProvider,
+      commandCenterShortcut,
       notifications: settings.notifications,
       onboarding: settings.onboarding,
       updates: settings.updates,
@@ -295,6 +310,7 @@ export function validateAppSettings(
       namingModelByProvider,
       extractionModelByProvider,
       guidedReviewModelByProvider,
+      commandCenterShortcut,
       notifications: settings.notifications,
       onboarding: settings.onboarding,
       updates: settings.updates,
@@ -317,6 +333,7 @@ export function validateAppSettings(
     namingModelByProvider,
     extractionModelByProvider,
     guidedReviewModelByProvider,
+    commandCenterShortcut,
     notifications: settings.notifications,
     onboarding: settings.onboarding,
     updates: settings.updates,

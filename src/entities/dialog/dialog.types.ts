@@ -25,6 +25,7 @@ export type AppSettingsDialogSection =
   | 'notifications'
   | 'updates'
   | 'insights'
+  | 'shortcuts'
   | 'debug-logging'
 
 export type DialogPayload =

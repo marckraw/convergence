@@ -4,6 +4,7 @@ import { useProjectStore } from '@/entities/project'
 import { useWorkspaceStore } from '@/entities/workspace'
 import { useSessionStore } from '@/entities/session'
 import type { CodeReviewMode, CodeReviewView } from '@/entities/code-review'
+import { useAppSettingsStore } from '@/entities/app-settings'
 import { useCommandCenterStore } from './command-center.model'
 import { buildPaletteIndex } from './command-palette-index.pure'
 import {
@@ -11,7 +12,10 @@ import {
   rankForQuery,
   PALETTE_FUSE_OPTIONS,
 } from './command-palette-ranking.pure'
-import { matchPaletteShortcut } from './command-palette-trigger.pure'
+import {
+  detectShortcutPlatform,
+  matchKeyboardShortcut,
+} from './command-palette-trigger.pure'
 import {
   activateProject,
   beginSessionDraft,
@@ -35,11 +39,6 @@ interface CodeReviewRouteSearch {
   mode?: CodeReviewMode
   view?: CodeReviewView
   file?: string | null
-}
-
-function detectPlatform(): 'mac' | 'other' {
-  if (typeof navigator === 'undefined') return 'other'
-  return navigator.platform.toLowerCase().includes('mac') ? 'mac' : 'other'
 }
 
 interface CommandCenterContainerProps {
@@ -71,18 +70,24 @@ export function CommandCenterContainer({
   const recentSessionIds = useSessionStore((s) => s.recentSessionIds)
   const dismissals = useSessionStore((s) => s.needsYouDismissals)
   const activeSessionId = useSessionStore((s) => s.activeSessionId)
+  const commandCenterShortcut = useAppSettingsStore(
+    (s) => s.settings.commandCenterShortcut,
+  )
 
   useEffect(() => {
-    const platform = detectPlatform()
+    const platform =
+      typeof navigator === 'undefined'
+        ? detectShortcutPlatform()
+        : detectShortcutPlatform(navigator.platform)
     const handler = (event: KeyboardEvent) => {
-      if (!matchPaletteShortcut(event, platform)) return
+      if (!matchKeyboardShortcut(event, platform, commandCenterShortcut)) return
       event.preventDefault()
       event.stopPropagation()
       toggle()
     }
     window.addEventListener('keydown', handler, true)
     return () => window.removeEventListener('keydown', handler, true)
-  }, [toggle])
+  }, [toggle, commandCenterShortcut])
 
   const items = useMemo(() => {
     if (!isOpen) return []

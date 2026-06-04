@@ -14,6 +14,7 @@
   },
   "include": [
     "electron/**/*",
+    "src/shared/lib/keyboard-shortcut.pure.ts",
     "electron.vite.config.ts",
     "vitest.config.ts",
     "vitest.pure.config.ts",
