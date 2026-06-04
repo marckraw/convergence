@@ -41,4 +41,25 @@ describe('McpService', () => {
     })
     expect(result.providers[0]?.globalServers).toEqual(expect.any(Array))
   })
+
+  it('includes antigravity in the global MCP snapshot when detected', async () => {
+    const service = new McpService(projectService, [
+      {
+        id: 'antigravity',
+        name: 'Antigravity CLI',
+        binaryPath: '/usr/local/bin/agy',
+      },
+    ])
+
+    const result = await service.listGlobal()
+
+    expect(result.providers).toEqual([
+      expect.objectContaining({
+        providerId: 'antigravity',
+        providerName: 'Antigravity CLI',
+        error: null,
+        note: expect.stringContaining('/mcp list'),
+      }),
+    ])
+  })
 })

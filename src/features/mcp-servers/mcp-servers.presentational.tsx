@@ -78,7 +78,7 @@ function renderStatusBadge(status: McpServerStatus, label: string) {
   )
 }
 
-function renderPiHelp() {
+function renderProviderHelp(ariaLabel: string, content: ReactNode) {
   return (
     <TooltipProvider>
       <Tooltip>
@@ -87,22 +87,47 @@ function renderPiHelp() {
             type="button"
             variant="ghost"
             size="icon"
-            aria-label="Pi MCP setup instructions"
+            aria-label={ariaLabel}
             className="h-6 w-6 text-muted-foreground"
           >
             <CircleHelp className="h-3.5 w-3.5" />
           </Button>
         </TooltipTrigger>
         <TooltipContent className="max-w-[280px] space-y-1.5 text-xs leading-relaxed">
-          <p>Pi MCP requires the pi-mcp-adapter extension.</p>
-          <p className="font-mono text-[11px]">pi install npm:pi-mcp-adapter</p>
-          <p>
-            Then restart Pi and use /mcp, /mcp setup, or /mcp-auth
-            &lt;server&gt; inside Pi.
-          </p>
+          {content}
         </TooltipContent>
       </Tooltip>
     </TooltipProvider>
+  )
+}
+
+function renderPiHelp() {
+  return renderProviderHelp(
+    'Pi MCP setup instructions',
+    <>
+      <p>Pi MCP requires the pi-mcp-adapter extension.</p>
+      <p className="font-mono text-[11px]">pi install npm:pi-mcp-adapter</p>
+      <p>
+        Then restart Pi and use /mcp, /mcp setup, or /mcp-auth &lt;server&gt;
+        inside Pi.
+      </p>
+    </>,
+  )
+}
+
+function renderAntigravityHelp() {
+  return renderProviderHelp(
+    'Antigravity MCP setup instructions',
+    <>
+      <p>
+        Antigravity stores MCP servers in ~/.gemini/config/mcp_config.json and
+        project .agents/mcp_config.json.
+      </p>
+      <p>
+        Run /mcp list inside agy for live connection and auth state. Convergence
+        shows configured servers from disk.
+      </p>
+    </>,
   )
 }
 
@@ -155,6 +180,9 @@ function renderProviderSection(provider: ProviderMcpVisibility) {
             <div className="flex items-center gap-1.5">
               <p className="text-sm font-semibold">{provider.providerName}</p>
               {provider.providerId === 'pi' ? renderPiHelp() : null}
+              {provider.providerId === 'antigravity'
+                ? renderAntigravityHelp()
+                : null}
             </div>
             <p className="text-xs text-muted-foreground">
               {totalCount} configured server{totalCount === 1 ? '' : 's'}

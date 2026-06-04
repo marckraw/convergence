@@ -1,5 +1,7 @@
+import { AntigravityMcpService } from './antigravity-mcp.service'
 import { ClaudeMcpService } from './claude-mcp.service'
 import { CodexMcpService } from './codex-mcp.service'
+import { CursorMcpService } from './cursor-mcp.service'
 import { PiMcpService } from './pi-mcp.service'
 import { homedir } from 'os'
 import type { ProjectService } from '../project/project.service'
@@ -34,6 +36,12 @@ export class McpService {
             )
           case 'pi':
             return new PiMcpService().list(project.repositoryPath)
+          case 'cursor':
+            return new CursorMcpService(provider.binaryPath).list(
+              project.repositoryPath,
+            )
+          case 'antigravity':
+            return new AntigravityMcpService().list(project.repositoryPath)
           default:
             return null
         }
@@ -67,6 +75,14 @@ export class McpService {
           }
           case 'pi':
             return new PiMcpService().list()
+          case 'cursor': {
+            const visibility = await new CursorMcpService(
+              provider.binaryPath,
+            ).list(homedir())
+            return { ...visibility, projectServers: [] }
+          }
+          case 'antigravity':
+            return new AntigravityMcpService().list()
           default:
             return null
         }
