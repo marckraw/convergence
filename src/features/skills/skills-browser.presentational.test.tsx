@@ -1,4 +1,5 @@
 import { fireEvent, render, screen } from '@testing-library/react'
+import { selectOption } from '@/shared/testing/select-option'
 import { describe, expect, it, vi } from 'vitest'
 import { Button } from '@/shared/ui/button'
 import { SkillsBrowserDialog } from './skills-browser.presentational'
@@ -176,9 +177,7 @@ describe('SkillsBrowserDialog', () => {
     const onOpenMcpServers = vi.fn()
     renderDialog({ onFiltersChange, onOpenMcpServers })
 
-    fireEvent.change(screen.getByLabelText(/Dependency/i), {
-      target: { value: 'declared' },
-    })
+    selectOption(/Dependency/i, 'Declared')
     fireEvent.click(screen.getByRole('button', { name: /MCP Servers/i }))
 
     expect(onFiltersChange).toHaveBeenCalledWith({

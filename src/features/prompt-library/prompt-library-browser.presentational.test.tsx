@@ -121,12 +121,10 @@ describe('PromptLibraryBrowserDialog', () => {
     fireEvent.change(screen.getByPlaceholderText('Search prompts'), {
       target: { value: 'review' },
     })
-    fireEvent.change(screen.getByLabelText(/Scope/i), {
-      target: { value: 'project' },
-    })
-    fireEvent.change(screen.getByLabelText(/Tag/i), {
-      target: { value: 'github' },
-    })
+    fireEvent.click(screen.getByRole('combobox', { name: 'Scope' }))
+    fireEvent.click(screen.getByRole('option', { name: 'Project' }))
+    fireEvent.click(screen.getByRole('combobox', { name: 'Tag' }))
+    fireEvent.click(screen.getByRole('option', { name: 'github' }))
 
     expect(onFiltersChange).toHaveBeenCalledWith({ query: 'review' })
     expect(onFiltersChange).toHaveBeenCalledWith({ scope: 'project' })

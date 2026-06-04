@@ -21,7 +21,13 @@ import {
   DialogTrigger,
 } from '@/shared/ui/dialog'
 import { Input } from '@/shared/ui/input'
-import { NativeSelect } from '@/shared/ui/native-select'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/shared/ui/select'
 import { Markdown } from '@/shared/ui/markdown.container'
 import { cn } from '@/shared/lib/cn.pure'
 import {
@@ -129,24 +135,32 @@ function renderSelectControl({
   label,
   value,
   onChange,
-  children,
+  options,
 }: {
   label: string
   value: string
   onChange: (value: string) => void
-  children: ReactNode
+  options: { value: string; label: string }[]
 }) {
   return (
     <label className="min-w-0 flex-1 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
       <span>{label}</span>
-      <NativeSelect
-        selectSize="sm"
-        value={value}
-        onChange={(event) => onChange(event.currentTarget.value)}
-        className="mt-1 normal-case tracking-normal"
-      >
-        {children}
-      </NativeSelect>
+      <Select value={value} onValueChange={onChange}>
+        <SelectTrigger
+          size="sm"
+          aria-label={label}
+          className="mt-1 w-full normal-case tracking-normal"
+        >
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          {options.map((option) => (
+            <SelectItem key={option.value} value={option.value}>
+              {option.label}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
     </label>
   )
 }
@@ -617,32 +631,26 @@ export const SkillsBrowserDialog: FC<SkillsBrowserDialogProps> = ({
                     onFiltersChange({
                       providerId: value as SkillProviderId | 'all',
                     }),
-                  children: (
-                    <>
-                      <option value="all">All providers</option>
-                      {providerOptions.map((provider) => (
-                        <option key={provider.id} value={provider.id}>
-                          {provider.label}
-                        </option>
-                      ))}
-                    </>
-                  ),
+                  options: [
+                    { value: 'all', label: 'All providers' },
+                    ...providerOptions.map((provider) => ({
+                      value: provider.id,
+                      label: provider.label,
+                    })),
+                  ],
                 })}
                 {renderSelectControl({
                   label: 'Scope',
                   value: filters.scope,
                   onChange: (value) =>
                     onFiltersChange({ scope: value as SkillScope | 'all' }),
-                  children: (
-                    <>
-                      <option value="all">All scopes</option>
-                      {scopeOptions.map((scope) => (
-                        <option key={scope} value={scope}>
-                          {SCOPE_LABELS[scope]}
-                        </option>
-                      ))}
-                    </>
-                  ),
+                  options: [
+                    { value: 'all', label: 'All scopes' },
+                    ...scopeOptions.map((scope) => ({
+                      value: scope,
+                      label: SCOPE_LABELS[scope],
+                    })),
+                  ],
                 })}
                 {renderSelectControl({
                   label: 'Enabled',
@@ -651,13 +659,11 @@ export const SkillsBrowserDialog: FC<SkillsBrowserDialogProps> = ({
                     onFiltersChange({
                       enabled: value as SkillBrowserFilters['enabled'],
                     }),
-                  children: (
-                    <>
-                      <option value="all">All states</option>
-                      <option value="enabled">Enabled</option>
-                      <option value="disabled">Disabled</option>
-                    </>
-                  ),
+                  options: [
+                    { value: 'all', label: 'All states' },
+                    { value: 'enabled', label: 'Enabled' },
+                    { value: 'disabled', label: 'Disabled' },
+                  ],
                 })}
                 {renderSelectControl({
                   label: 'Warnings',
@@ -666,12 +672,10 @@ export const SkillsBrowserDialog: FC<SkillsBrowserDialogProps> = ({
                     onFiltersChange({
                       warnings: value as SkillBrowserFilters['warnings'],
                     }),
-                  children: (
-                    <>
-                      <option value="all">All skills</option>
-                      <option value="warnings">Warnings</option>
-                    </>
-                  ),
+                  options: [
+                    { value: 'all', label: 'All skills' },
+                    { value: 'warnings', label: 'Warnings' },
+                  ],
                 })}
                 {renderSelectControl({
                   label: 'Dependency',
@@ -681,18 +685,15 @@ export const SkillsBrowserDialog: FC<SkillsBrowserDialogProps> = ({
                       dependencyState:
                         value as SkillBrowserFilters['dependencyState'],
                     }),
-                  children: (
-                    <>
-                      <option value="all">All readiness</option>
-                      {Object.entries(DEPENDENCY_STATE_LABELS).map(
-                        ([state, label]) => (
-                          <option key={state} value={state}>
-                            {label}
-                          </option>
-                        ),
-                      )}
-                    </>
-                  ),
+                  options: [
+                    { value: 'all', label: 'All readiness' },
+                    ...Object.entries(DEPENDENCY_STATE_LABELS).map(
+                      ([state, label]) => ({
+                        value: state,
+                        label,
+                      }),
+                    ),
+                  ],
                 })}
               </div>
             </div>

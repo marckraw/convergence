@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { selectOption } from '@/shared/testing/select-option'
 import { useDialogStore } from '@/entities/dialog'
 import { useSpaceStore } from '@/entities/space'
 import type { Space, SpaceAttempt, SpaceArtifact } from '@/entities/space'
@@ -235,12 +236,8 @@ describe('SpaceWorkboardDialogContainer', () => {
     fireEvent.change(screen.getByDisplayValue('Agent-native work tracking'), {
       target: { value: 'Spaces V1' },
     })
-    fireEvent.change(screen.getByDisplayValue('Exploring'), {
-      target: { value: 'implementing' },
-    })
-    fireEvent.change(screen.getByDisplayValue('No attention'), {
-      target: { value: 'blocked' },
-    })
+    selectOption('Status', 'Implementing')
+    selectOption('Attention', 'Blocked')
     fireEvent.change(
       screen.getByPlaceholderText(
         /stable notes, decisions, constraints, and next action/i,
@@ -308,9 +305,7 @@ describe('SpaceWorkboardDialogContainer', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /spaces/i }))
     await screen.findByDisplayValue('Public PR')
-    fireEvent.change(screen.getByLabelText(/status for public pr/i), {
-      target: { value: 'ready' },
-    })
+    selectOption(/status for public pr/i, 'Ready')
     fireEvent.click(
       screen.getByRole('button', { name: /remove artifact public pr/i }),
     )

@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { selectOption } from '@/shared/testing/select-option'
 import { useDialogStore } from '@/entities/dialog'
 import { useSpaceStore } from '@/entities/space'
 import type { Space, SpaceAttempt } from '@/entities/space'
@@ -140,12 +141,9 @@ describe('SpaceSessionLinkDialogContainer', () => {
   it('attaches the current session to an existing Space with a role', async () => {
     render(<SpaceSessionLinkDialogContainer />)
 
-    fireEvent.change(await screen.findByLabelText(/existing space/i), {
-      target: { value: 'i1' },
-    })
-    fireEvent.change(screen.getByLabelText(/attempt role/i), {
-      target: { value: 'review' },
-    })
+    await screen.findByRole('combobox', { name: /existing space/i })
+    selectOption(/existing space/i, 'Agent-native work tracking')
+    selectOption(/attempt role/i, 'Review')
     fireEvent.click(screen.getByRole('button', { name: /^attach$/i }))
 
     await waitFor(() => {
