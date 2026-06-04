@@ -44,7 +44,18 @@ import {
   DialogTrigger,
 } from '@/shared/ui/dialog'
 import { Input } from '@/shared/ui/input'
-import { NativeSelect } from '@/shared/ui/native-select'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/shared/ui/select'
+import {
+  SELECT_EMPTY_VALUE,
+  fromSelectValue,
+  toSelectValue,
+} from '@/shared/ui/select.pure'
 import { Textarea } from '@/shared/ui/textarea'
 import { cn } from '@/shared/lib/cn.pure'
 import {
@@ -342,44 +353,52 @@ export const SpaceWorkboardDialog: FC<SpaceWorkboardProps> = ({
                     <span className="text-xs font-medium uppercase text-muted-foreground">
                       Status
                     </span>
-                    <NativeSelect
-                      className="w-full"
+                    <Select
                       value={selectedDraft.status}
-                      onChange={(event) =>
+                      onValueChange={(status) =>
                         onDraftChange({
                           ...selectedDraft,
-                          status: event.target.value as SpaceStatus,
+                          status: status as SpaceStatus,
                         })
                       }
                     >
-                      {spaceStatusOptions.map((status) => (
-                        <option key={status} value={status}>
-                          {spaceStatusLabels[status]}
-                        </option>
-                      ))}
-                    </NativeSelect>
+                      <SelectTrigger className="w-full" aria-label="Status">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {spaceStatusOptions.map((status) => (
+                          <SelectItem key={status} value={status}>
+                            {spaceStatusLabels[status]}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </label>
 
                   <label className="space-y-2">
                     <span className="text-xs font-medium uppercase text-muted-foreground">
                       Attention
                     </span>
-                    <NativeSelect
-                      className="w-full"
+                    <Select
                       value={selectedDraft.attention}
-                      onChange={(event) =>
+                      onValueChange={(attention) =>
                         onDraftChange({
                           ...selectedDraft,
-                          attention: event.target.value as SpaceAttention,
+                          attention: attention as SpaceAttention,
                         })
                       }
                     >
-                      {spaceAttentionOptions.map((attention) => (
-                        <option key={attention} value={attention}>
-                          {spaceAttentionLabels[attention]}
-                        </option>
-                      ))}
-                    </NativeSelect>
+                      <SelectTrigger className="w-full" aria-label="Attention">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {spaceAttentionOptions.map((attention) => (
+                          <SelectItem key={attention} value={attention}>
+                            {spaceAttentionLabels[attention]}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </label>
                 </div>
 
@@ -602,24 +621,29 @@ export const SpaceWorkboardDialog: FC<SpaceWorkboardProps> = ({
                                 <span className="text-[11px] font-medium uppercase text-muted-foreground">
                                   Kind
                                 </span>
-                                <NativeSelect
-                                  className="w-full"
+                                <Select
                                   value={artifactDraft.kind}
-                                  onChange={(event) =>
+                                  onValueChange={(kind) =>
                                     onArtifactDraftChange({
                                       ...artifactDraft,
-                                      kind: event.target
-                                        .value as SpaceArtifactKind,
+                                      kind: kind as SpaceArtifactKind,
                                     })
                                   }
-                                  aria-label="New Artifact kind"
                                 >
-                                  {spaceArtifactKindOptions.map((kind) => (
-                                    <option key={kind} value={kind}>
-                                      {spaceArtifactKindLabels[kind]}
-                                    </option>
-                                  ))}
-                                </NativeSelect>
+                                  <SelectTrigger
+                                    className="w-full"
+                                    aria-label="New Artifact kind"
+                                  >
+                                    <SelectValue />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    {spaceArtifactKindOptions.map((kind) => (
+                                      <SelectItem key={kind} value={kind}>
+                                        {spaceArtifactKindLabels[kind]}
+                                      </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
                               </label>
 
                               <label className="space-y-1.5">
@@ -643,51 +667,69 @@ export const SpaceWorkboardDialog: FC<SpaceWorkboardProps> = ({
                                 <span className="text-[11px] font-medium uppercase text-muted-foreground">
                                   Status
                                 </span>
-                                <NativeSelect
-                                  className="w-full"
+                                <Select
                                   value={artifactDraft.status}
-                                  onChange={(event) =>
+                                  onValueChange={(status) =>
                                     onArtifactDraftChange({
                                       ...artifactDraft,
-                                      status: event.target
-                                        .value as SpaceArtifactStatus,
+                                      status: status as SpaceArtifactStatus,
                                     })
                                   }
-                                  aria-label="New Artifact status"
                                 >
-                                  {spaceArtifactStatusOptions.map((status) => (
-                                    <option key={status} value={status}>
-                                      {spaceArtifactStatusLabels[status]}
-                                    </option>
-                                  ))}
-                                </NativeSelect>
+                                  <SelectTrigger
+                                    className="w-full"
+                                    aria-label="New Artifact status"
+                                  >
+                                    <SelectValue />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    {spaceArtifactStatusOptions.map(
+                                      (status) => (
+                                        <SelectItem key={status} value={status}>
+                                          {spaceArtifactStatusLabels[status]}
+                                        </SelectItem>
+                                      ),
+                                    )}
+                                  </SelectContent>
+                                </Select>
                               </label>
 
                               <label className="space-y-1.5">
                                 <span className="text-[11px] font-medium uppercase text-muted-foreground">
                                   Source
                                 </span>
-                                <NativeSelect
-                                  className="w-full"
-                                  value={artifactDraft.sourceSessionId}
-                                  onChange={(event) =>
+                                <Select
+                                  value={toSelectValue(
+                                    artifactDraft.sourceSessionId,
+                                  )}
+                                  onValueChange={(sourceSessionId) =>
                                     onArtifactDraftChange({
                                       ...artifactDraft,
-                                      sourceSessionId: event.target.value,
+                                      sourceSessionId:
+                                        fromSelectValue(sourceSessionId),
                                     })
                                   }
-                                  aria-label="New Artifact source session"
                                 >
-                                  <option value="">No source Attempt</option>
-                                  {selectedAttempts.map((view) => (
-                                    <option
-                                      key={view.attempt.sessionId}
-                                      value={view.attempt.sessionId}
-                                    >
-                                      {view.sessionName}
-                                    </option>
-                                  ))}
-                                </NativeSelect>
+                                  <SelectTrigger
+                                    className="w-full"
+                                    aria-label="New Artifact source session"
+                                  >
+                                    <SelectValue placeholder="No source Attempt" />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value={SELECT_EMPTY_VALUE}>
+                                      No source Attempt
+                                    </SelectItem>
+                                    {selectedAttempts.map((view) => (
+                                      <SelectItem
+                                        key={view.attempt.sessionId}
+                                        value={view.attempt.sessionId}
+                                      >
+                                        {view.sessionName}
+                                      </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
                               </label>
 
                               <label className="space-y-1.5 md:col-span-2">
@@ -954,23 +996,26 @@ function renderAttemptRow(input: {
         </div>
 
         <div className="flex shrink-0 items-center gap-2">
-          <NativeSelect
-            selectSize="sm"
+          <Select
             value={attempt.role}
-            onChange={(event) =>
-              onAttemptRoleChange(
-                attempt.id,
-                event.target.value as SpaceAttemptRole,
-              )
+            onValueChange={(role) =>
+              onAttemptRoleChange(attempt.id, role as SpaceAttemptRole)
             }
-            aria-label={`Role for ${view.sessionName}`}
           >
-            {spaceAttemptRoleOptions.map((role) => (
-              <option key={role} value={role}>
-                {spaceAttemptRoleLabels[role]}
-              </option>
-            ))}
-          </NativeSelect>
+            <SelectTrigger
+              size="sm"
+              aria-label={`Role for ${view.sessionName}`}
+            >
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {spaceAttemptRoleOptions.map((role) => (
+                <SelectItem key={role} value={role}>
+                  {spaceAttemptRoleLabels[role]}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
           <Button
             type="button"
             variant="outline"
@@ -1038,24 +1083,27 @@ function renderArtifactRow(input: {
           <span className="text-[11px] font-medium uppercase text-muted-foreground">
             Kind
           </span>
-          <NativeSelect
-            selectSize="sm"
-            className="w-full"
+          <Select
             value={artifact.kind}
-            onChange={(event) =>
-              onArtifactKindChange(
-                artifact.id,
-                event.target.value as SpaceArtifactKind,
-              )
+            onValueChange={(kind) =>
+              onArtifactKindChange(artifact.id, kind as SpaceArtifactKind)
             }
-            aria-label={`Kind for ${artifact.label}`}
           >
-            {spaceArtifactKindOptions.map((kind) => (
-              <option key={kind} value={kind}>
-                {spaceArtifactKindLabels[kind]}
-              </option>
-            ))}
-          </NativeSelect>
+            <SelectTrigger
+              size="sm"
+              className="w-full"
+              aria-label={`Kind for ${artifact.label}`}
+            >
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {spaceArtifactKindOptions.map((kind) => (
+                <SelectItem key={kind} value={kind}>
+                  {spaceArtifactKindLabels[kind]}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </label>
 
         <label className="space-y-1.5">
@@ -1078,24 +1126,27 @@ function renderArtifactRow(input: {
           <span className="text-[11px] font-medium uppercase text-muted-foreground">
             Status
           </span>
-          <NativeSelect
-            selectSize="sm"
-            className="w-full"
+          <Select
             value={artifact.status}
-            onChange={(event) =>
-              onArtifactStatusChange(
-                artifact.id,
-                event.target.value as SpaceArtifactStatus,
-              )
+            onValueChange={(status) =>
+              onArtifactStatusChange(artifact.id, status as SpaceArtifactStatus)
             }
-            aria-label={`Status for ${artifact.label}`}
           >
-            {spaceArtifactStatusOptions.map((status) => (
-              <option key={status} value={status}>
-                {spaceArtifactStatusLabels[status]}
-              </option>
-            ))}
-          </NativeSelect>
+            <SelectTrigger
+              size="sm"
+              className="w-full"
+              aria-label={`Status for ${artifact.label}`}
+            >
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {spaceArtifactStatusOptions.map((status) => (
+                <SelectItem key={status} value={status}>
+                  {spaceArtifactStatusLabels[status]}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </label>
 
         <div className="flex items-end">
@@ -1153,24 +1204,35 @@ function renderArtifactRow(input: {
           <span className="text-[11px] font-medium uppercase text-muted-foreground">
             Source
           </span>
-          <NativeSelect
-            className="w-full"
-            value={artifact.sourceSessionId ?? ''}
-            onChange={(event) =>
-              onArtifactSourceSessionChange(artifact.id, event.target.value)
+          <Select
+            value={toSelectValue(artifact.sourceSessionId ?? '')}
+            onValueChange={(sourceSessionId) =>
+              onArtifactSourceSessionChange(
+                artifact.id,
+                fromSelectValue(sourceSessionId),
+              )
             }
-            aria-label={`Source for ${artifact.label}`}
           >
-            <option value="">No source Attempt</option>
-            {attempts.map((view) => (
-              <option
-                key={view.attempt.sessionId}
-                value={view.attempt.sessionId}
-              >
-                {view.sessionName}
-              </option>
-            ))}
-          </NativeSelect>
+            <SelectTrigger
+              className="w-full"
+              aria-label={`Source for ${artifact.label}`}
+            >
+              <SelectValue placeholder="No source Attempt" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={SELECT_EMPTY_VALUE}>
+                No source Attempt
+              </SelectItem>
+              {attempts.map((view) => (
+                <SelectItem
+                  key={view.attempt.sessionId}
+                  value={view.attempt.sessionId}
+                >
+                  {view.sessionName}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </label>
       </div>
 

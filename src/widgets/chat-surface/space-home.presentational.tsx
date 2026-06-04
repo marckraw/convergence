@@ -18,7 +18,18 @@ import {
 } from '@/entities/space'
 import { Button } from '@/shared/ui/button'
 import { Input } from '@/shared/ui/input'
-import { NativeSelect } from '@/shared/ui/native-select'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/shared/ui/select'
+import {
+  SELECT_EMPTY_VALUE,
+  fromSelectValue,
+  toSelectValue,
+} from '@/shared/ui/select.pure'
 import { SessionBadge } from '@/shared/ui/session-badge.presentational'
 import { cn } from '@/shared/lib/cn.pure'
 import {
@@ -424,23 +435,29 @@ export const SpaceHome: FC<SpaceHomeProps> = ({
                     <span className="text-xs font-medium text-muted-foreground">
                       Kind
                     </span>
-                    <NativeSelect
+                    <Select
                       value={artifactDraft.kind}
-                      onChange={(event) =>
+                      onValueChange={(kind) =>
                         onArtifactDraftChange({
                           ...artifactDraft,
-                          kind: event.target.value as SpaceArtifactKind,
+                          kind: kind as SpaceArtifactKind,
                         })
                       }
-                      className="w-full"
-                      aria-label="Artifact kind"
                     >
-                      {spaceArtifactKindOptions.map((kind) => (
-                        <option key={kind} value={kind}>
-                          {spaceArtifactKindLabels[kind]}
-                        </option>
-                      ))}
-                    </NativeSelect>
+                      <SelectTrigger
+                        className="w-full"
+                        aria-label="Artifact kind"
+                      >
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {spaceArtifactKindOptions.map((kind) => (
+                          <SelectItem key={kind} value={kind}>
+                            {spaceArtifactKindLabels[kind]}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </label>
                   <label className="space-y-1 text-sm md:col-span-2">
                     <span className="text-xs font-medium text-muted-foreground">
@@ -462,46 +479,61 @@ export const SpaceHome: FC<SpaceHomeProps> = ({
                     <span className="text-xs font-medium text-muted-foreground">
                       Status
                     </span>
-                    <NativeSelect
+                    <Select
                       value={artifactDraft.status}
-                      onChange={(event) =>
+                      onValueChange={(status) =>
                         onArtifactDraftChange({
                           ...artifactDraft,
-                          status: event.target.value as SpaceArtifactStatus,
+                          status: status as SpaceArtifactStatus,
                         })
                       }
-                      className="w-full"
-                      aria-label="Artifact status"
                     >
-                      {spaceArtifactStatusOptions.map((status) => (
-                        <option key={status} value={status}>
-                          {spaceArtifactStatusLabels[status]}
-                        </option>
-                      ))}
-                    </NativeSelect>
+                      <SelectTrigger
+                        className="w-full"
+                        aria-label="Artifact status"
+                      >
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {spaceArtifactStatusOptions.map((status) => (
+                          <SelectItem key={status} value={status}>
+                            {spaceArtifactStatusLabels[status]}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </label>
                   <label className="space-y-1 text-sm">
                     <span className="text-xs font-medium text-muted-foreground">
                       Source attempt
                     </span>
-                    <NativeSelect
-                      value={artifactDraft.sourceSessionId}
-                      onChange={(event) =>
+                    <Select
+                      value={toSelectValue(artifactDraft.sourceSessionId)}
+                      onValueChange={(sourceSessionId) =>
                         onArtifactDraftChange({
                           ...artifactDraft,
-                          sourceSessionId: event.target.value,
+                          sourceSessionId: fromSelectValue(sourceSessionId),
                         })
                       }
-                      className="w-full"
-                      aria-label="Artifact source attempt"
                     >
-                      <option value="">None</option>
-                      {sourceAttemptOptions.map(({ attempt, session }) => (
-                        <option key={attempt.id} value={attempt.sessionId}>
-                          {session?.name ?? attempt.sessionId}
-                        </option>
-                      ))}
-                    </NativeSelect>
+                      <SelectTrigger
+                        className="w-full"
+                        aria-label="Artifact source attempt"
+                      >
+                        <SelectValue placeholder="None" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value={SELECT_EMPTY_VALUE}>None</SelectItem>
+                        {sourceAttemptOptions.map(({ attempt, session }) => (
+                          <SelectItem
+                            key={attempt.id}
+                            value={attempt.sessionId}
+                          >
+                            {session?.name ?? attempt.sessionId}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </label>
                 </div>
 

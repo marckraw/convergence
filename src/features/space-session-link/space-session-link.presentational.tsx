@@ -15,7 +15,18 @@ import {
   DialogTitle,
 } from '@/shared/ui/dialog'
 import { Input } from '@/shared/ui/input'
-import { NativeSelect } from '@/shared/ui/native-select'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/shared/ui/select'
+import {
+  SELECT_EMPTY_VALUE,
+  fromSelectValue,
+  toSelectValue,
+} from '@/shared/ui/select.pure'
 
 export interface LinkedSpaceView {
   attempt: SpaceAttempt
@@ -128,38 +139,56 @@ export const SpaceSessionLinkDialog: FC<SpaceSessionLinkDialogProps> = ({
               Attach to existing
             </div>
             <div className="grid gap-2 sm:grid-cols-[1fr_160px_auto]">
-              <NativeSelect
-                className="min-w-0"
-                value={selectedSpaceId}
-                onChange={(event) => onSelectedSpaceChange(event.target.value)}
+              <Select
+                value={toSelectValue(selectedSpaceId)}
+                onValueChange={(spaceId) =>
+                  onSelectedSpaceChange(fromSelectValue(spaceId))
+                }
                 disabled={linkableSpaces.length === 0 || isLinking}
-                aria-label="Existing Space"
               >
-                <option value="">
-                  {linkableSpaces.length === 0
-                    ? 'No linkable Spaces'
-                    : 'Select Space'}
-                </option>
-                {linkableSpaces.map((space) => (
-                  <option key={space.id} value={space.id}>
-                    {space.title}
-                  </option>
-                ))}
-              </NativeSelect>
-              <NativeSelect
+                <SelectTrigger
+                  className="min-w-0 w-full"
+                  aria-label="Existing Space"
+                >
+                  <SelectValue
+                    placeholder={
+                      linkableSpaces.length === 0
+                        ? 'No linkable Spaces'
+                        : 'Select Space'
+                    }
+                  />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={SELECT_EMPTY_VALUE} disabled>
+                    {linkableSpaces.length === 0
+                      ? 'No linkable Spaces'
+                      : 'Select Space'}
+                  </SelectItem>
+                  {linkableSpaces.map((space) => (
+                    <SelectItem key={space.id} value={space.id}>
+                      {space.title}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Select
                 value={selectedRole}
-                onChange={(event) =>
-                  onSelectedRoleChange(event.target.value as SpaceAttemptRole)
+                onValueChange={(role) =>
+                  onSelectedRoleChange(role as SpaceAttemptRole)
                 }
                 disabled={isLinking}
-                aria-label="Attempt role"
               >
-                {spaceAttemptRoleOptions.map((role) => (
-                  <option key={role} value={role}>
-                    {spaceAttemptRoleLabels[role]}
-                  </option>
-                ))}
-              </NativeSelect>
+                <SelectTrigger aria-label="Attempt role">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {spaceAttemptRoleOptions.map((role) => (
+                    <SelectItem key={role} value={role}>
+                      {spaceAttemptRoleLabels[role]}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
               <Button
                 type="button"
                 onClick={onAttachToSpace}

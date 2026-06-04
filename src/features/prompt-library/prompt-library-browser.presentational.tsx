@@ -30,7 +30,13 @@ import {
   DialogTrigger,
 } from '@/shared/ui/dialog'
 import { Input } from '@/shared/ui/input'
-import { NativeSelect } from '@/shared/ui/native-select'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/shared/ui/select'
 import { Markdown } from '@/shared/ui/markdown.container'
 import { Textarea } from '@/shared/ui/textarea'
 import { cn } from '@/shared/lib/cn.pure'
@@ -92,24 +98,32 @@ function renderSelectControl({
   label,
   value,
   onChange,
-  children,
+  options,
 }: {
   label: string
   value: string
   onChange: (value: string) => void
-  children: ReactNode
+  options: { value: string; label: string }[]
 }) {
   return (
     <label className="min-w-0 flex-1 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
       <span>{label}</span>
-      <NativeSelect
-        selectSize="sm"
-        value={value}
-        onChange={(event) => onChange(event.currentTarget.value)}
-        className="mt-1 normal-case tracking-normal"
-      >
-        {children}
-      </NativeSelect>
+      <Select value={value} onValueChange={onChange}>
+        <SelectTrigger
+          size="sm"
+          aria-label={label}
+          className="mt-1 w-full normal-case tracking-normal"
+        >
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          {options.map((option) => (
+            <SelectItem key={option.value} value={option.value}>
+              {option.label}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
     </label>
   )
 }
@@ -428,35 +442,41 @@ function renderPromptForm({
         <div className="grid gap-3 sm:grid-cols-2">
           <label className="text-xs font-medium text-muted-foreground">
             Scope
-            <NativeSelect
+            <Select
               value={draft.scope}
-              onChange={(event) =>
-                onChange({
-                  scope: event.currentTarget.value as PromptLibraryScope,
-                })
+              onValueChange={(scope) =>
+                onChange({ scope: scope as PromptLibraryScope })
               }
               disabled={draft.mode === 'edit'}
-              className="mt-1"
             >
-              <option value="project">Project</option>
-              <option value="global">Global</option>
-            </NativeSelect>
+              <SelectTrigger className="mt-1 w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="project">Project</SelectItem>
+                <SelectItem value="global">Global</SelectItem>
+              </SelectContent>
+            </Select>
           </label>
           <label className="text-xs font-medium text-muted-foreground">
             File Kind
-            <NativeSelect
+            <Select
               value={draft.kind}
-              onChange={(event) =>
+              onValueChange={(kind) =>
                 onChange({
-                  kind: event.currentTarget.value as PromptLibraryEntry['kind'],
+                  kind: kind as PromptLibraryEntry['kind'],
                 })
               }
               disabled={draft.mode === 'edit'}
-              className="mt-1"
             >
-              <option value="markdown">Markdown</option>
-              <option value="text">Text</option>
-            </NativeSelect>
+              <SelectTrigger className="mt-1 w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="markdown">Markdown</SelectItem>
+                <SelectItem value="text">Text</SelectItem>
+              </SelectContent>
+            </Select>
           </label>
         </div>
 
@@ -592,13 +612,11 @@ export const PromptLibraryBrowserDialog: FC<
                     onFiltersChange({
                       scope: value as PromptLibraryBrowserFilters['scope'],
                     }),
-                  children: (
-                    <>
-                      <option value="all">All scopes</option>
-                      <option value="project">Project</option>
-                      <option value="global">Global</option>
-                    </>
-                  ),
+                  options: [
+                    { value: 'all', label: 'All scopes' },
+                    { value: 'project', label: 'Project' },
+                    { value: 'global', label: 'Global' },
+                  ],
                 })}
                 {renderSelectControl({
                   label: 'Kind',
@@ -607,28 +625,20 @@ export const PromptLibraryBrowserDialog: FC<
                     onFiltersChange({
                       kind: value as PromptLibraryBrowserFilters['kind'],
                     }),
-                  children: (
-                    <>
-                      <option value="all">All files</option>
-                      <option value="markdown">Markdown</option>
-                      <option value="text">Text</option>
-                    </>
-                  ),
+                  options: [
+                    { value: 'all', label: 'All files' },
+                    { value: 'markdown', label: 'Markdown' },
+                    { value: 'text', label: 'Text' },
+                  ],
                 })}
                 {renderSelectControl({
                   label: 'Tag',
                   value: filters.tag,
                   onChange: (value) => onFiltersChange({ tag: value }),
-                  children: (
-                    <>
-                      <option value="all">All tags</option>
-                      {tagOptions.map((tag) => (
-                        <option key={tag} value={tag}>
-                          {tag}
-                        </option>
-                      ))}
-                    </>
-                  ),
+                  options: [
+                    { value: 'all', label: 'All tags' },
+                    ...tagOptions.map((tag) => ({ value: tag, label: tag })),
+                  ],
                 })}
               </div>
             </div>

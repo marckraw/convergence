@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { fireEvent, render, screen } from '@testing-library/react'
+import { selectOption } from '@/shared/testing/select-option'
 import type { Space, SpaceAttempt, SpaceArtifact } from '@/entities/space'
 import { SpaceWorkboardDialog } from './space-workboard.presentational'
 import type {
@@ -163,12 +164,8 @@ describe('SpaceWorkboardDialog', () => {
     fireEvent.change(screen.getByDisplayValue(space.title), {
       target: { value: 'Spaces V1' },
     })
-    fireEvent.change(screen.getByDisplayValue('Exploring'), {
-      target: { value: 'implementing' },
-    })
-    fireEvent.change(screen.getByDisplayValue('Needs decision'), {
-      target: { value: 'blocked' },
-    })
+    selectOption('Status', 'Implementing')
+    selectOption('Attention', 'Blocked')
     fireEvent.change(
       screen.getByDisplayValue('Start with a lightweight workboard.'),
       {
@@ -213,9 +210,7 @@ describe('SpaceWorkboardDialog', () => {
     expect(screen.getByText('convergence')).toBeInTheDocument()
     expect(screen.getByText('feat/spaces')).toBeInTheDocument()
 
-    fireEvent.change(screen.getByLabelText(/role for implement workboard/i), {
-      target: { value: 'review' },
-    })
+    selectOption(/role for implement workboard/i, 'Review')
     fireEvent.click(screen.getByRole('button', { name: /^primary$/i }))
     fireEvent.click(
       screen.getByRole('button', { name: /detach implement workboard/i }),
@@ -266,15 +261,9 @@ describe('SpaceWorkboardDialog', () => {
     ).toBeInTheDocument()
     expect(screen.getByText('Source: Implement workboard')).toBeInTheDocument()
 
-    fireEvent.change(screen.getByLabelText(/kind for public pr/i), {
-      target: { value: 'documentation' },
-    })
-    fireEvent.change(screen.getByLabelText(/status for public pr/i), {
-      target: { value: 'ready' },
-    })
-    fireEvent.change(screen.getByLabelText(/source for public pr/i), {
-      target: { value: '' },
-    })
+    selectOption(/kind for public pr/i, 'Documentation')
+    selectOption(/status for public pr/i, 'Ready')
+    selectOption(/source for public pr/i, 'No source Attempt')
     fireEvent.blur(screen.getByLabelText(/label for public pr/i), {
       target: { value: 'Implementation PR' },
     })

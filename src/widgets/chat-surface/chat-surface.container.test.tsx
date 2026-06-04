@@ -1,4 +1,5 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { selectOption } from '@/shared/testing/select-option'
 import { describe, expect, it, vi, beforeEach } from 'vitest'
 import type {
   ConversationItem,
@@ -480,12 +481,8 @@ describe('ChatSurface', () => {
     fireEvent.change(screen.getByLabelText('Artifact value or path'), {
       target: { value: 'Use manual promotion first.' },
     })
-    fireEvent.change(screen.getByLabelText('Artifact kind'), {
-      target: { value: 'spec' },
-    })
-    fireEvent.change(screen.getByLabelText('Artifact source attempt'), {
-      target: { value: 'global-session-1' },
-    })
+    selectOption('Artifact kind', 'Spec')
+    selectOption('Artifact source attempt', 'Planning chat')
     fireEvent.click(screen.getByRole('button', { name: /^add artifact$/i }))
 
     expect(addArtifact).toHaveBeenCalledWith({
