@@ -1,5 +1,11 @@
 # convergence
 
+## 0.39.2
+
+### Patch Changes
+
+- b21109e: Trim Prompt Library copy actions to section-level path and prompt text buttons, and add a shared NativeSelect control with consistent chevron spacing across dropdowns.
+
 ## 0.39.1
 
 ### Patch Changes
