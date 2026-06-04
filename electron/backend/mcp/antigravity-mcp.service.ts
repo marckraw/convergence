@@ -1,53 +1,23 @@
 import { readFile } from 'fs/promises'
 import { homedir } from 'os'
-import { dirname, join, resolve } from 'path'
+import { resolve } from 'path'
 import {
-  ANTIGRAVITY_MCP_GLOBAL_SCOPE_LABEL,
   ANTIGRAVITY_MCP_INSPECTION_ERROR,
-  ANTIGRAVITY_MCP_LEGACY_GLOBAL_SCOPE_LABEL,
   ANTIGRAVITY_MCP_NOTE,
-  ANTIGRAVITY_MCP_PROJECT_SCOPE_LABEL,
   ANTIGRAVITY_MCP_PROVIDER_ID,
   ANTIGRAVITY_MCP_PROVIDER_NAME,
 } from './antigravity-mcp.constants'
 import {
-  extractMcpServerRecords,
+  buildAntigravityGlobalConfigSources,
+  collectAncestorAntigravityMcpConfigSources,
   groupAntigravitySummaries,
-  type AntigravityMcpServerWithSource,
+  mergeAntigravityConfiguredServers,
 } from './antigravity-mcp.pure'
-import type { McpServerScope, ProviderMcpVisibility } from './mcp.types'
+import { parseJsonConfigObject } from './mcp-config.pure'
+import type { ProviderMcpVisibility } from './mcp.types'
 
 interface AntigravityMcpServiceOptions {
   homeDir?: string
-}
-
-interface AntigravityMcpConfigSource {
-  path: string
-  scope: McpServerScope
-  scopeLabel: string
-}
-
-function collectAncestorMcpConfigSources(
-  projectPath: string,
-): AntigravityMcpConfigSource[] {
-  const sources: AntigravityMcpConfigSource[] = []
-  let current = resolve(projectPath)
-
-  for (;;) {
-    sources.push({
-      path: join(current, '.agents', 'mcp_config.json'),
-      scope: 'project',
-      scopeLabel: ANTIGRAVITY_MCP_PROJECT_SCOPE_LABEL,
-    })
-
-    const parent = dirname(current)
-    if (parent === current) {
-      break
-    }
-    current = parent
-  }
-
-  return sources.reverse()
 }
 
 export class AntigravityMcpService {
@@ -57,29 +27,11 @@ export class AntigravityMcpService {
     this.homeDir = resolve(options.homeDir ?? homedir())
   }
 
-  private getGlobalConfigSources(): AntigravityMcpConfigSource[] {
-    return [
-      {
-        path: join(this.homeDir, '.gemini', 'settings.json'),
-        scope: 'global',
-        scopeLabel: ANTIGRAVITY_MCP_LEGACY_GLOBAL_SCOPE_LABEL,
-      },
-      {
-        path: join(this.homeDir, '.gemini', 'config', 'mcp_config.json'),
-        scope: 'global',
-        scopeLabel: ANTIGRAVITY_MCP_GLOBAL_SCOPE_LABEL,
-      },
-    ]
-  }
-
   private async readConfig(
     path: string,
   ): Promise<Record<string, unknown> | null> {
     try {
-      const parsed = JSON.parse(await readFile(path, 'utf-8')) as unknown
-      return parsed && typeof parsed === 'object' && !Array.isArray(parsed)
-        ? (parsed as Record<string, unknown>)
-        : null
+      return parseJsonConfigObject(await readFile(path, 'utf-8'))
     } catch {
       return null
     }
@@ -87,31 +39,22 @@ export class AntigravityMcpService {
 
   private async listConfiguredServers(
     projectPath: string | null,
-  ): Promise<AntigravityMcpServerWithSource[]> {
-    const byName = new Map<string, AntigravityMcpServerWithSource>()
+  ): Promise<ReturnType<typeof mergeAntigravityConfiguredServers>> {
     const sources = [
-      ...this.getGlobalConfigSources(),
-      ...(projectPath ? collectAncestorMcpConfigSources(projectPath) : []),
+      ...buildAntigravityGlobalConfigSources(this.homeDir),
+      ...(projectPath
+        ? collectAncestorAntigravityMcpConfigSources(projectPath)
+        : []),
     ]
 
-    for (const source of sources) {
-      const config = await this.readConfig(source.path)
-      if (!config) {
-        continue
-      }
+    const entries = await Promise.all(
+      sources.map(async (source) => ({
+        source,
+        config: await this.readConfig(source.path),
+      })),
+    )
 
-      const records = extractMcpServerRecords(config)
-      for (const [name, record] of Object.entries(records)) {
-        byName.set(name, {
-          name,
-          record,
-          scope: source.scope,
-          scopeLabel: source.scopeLabel,
-        })
-      }
-    }
-
-    return Array.from(byName.values())
+    return mergeAntigravityConfiguredServers(entries)
   }
 
   async list(projectPath?: string): Promise<ProviderMcpVisibility> {

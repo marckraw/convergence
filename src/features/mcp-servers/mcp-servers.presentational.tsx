@@ -30,6 +30,7 @@ import {
   RefreshCw,
   ServerCog,
 } from 'lucide-react'
+import { getMcpStatusBadgeClassName } from './mcp-servers.pure'
 
 interface McpServersDialogProps {
   open: boolean
@@ -60,18 +61,9 @@ function renderStatusIcon(status: McpServerStatus) {
 }
 
 function renderStatusBadge(status: McpServerStatus, label: string) {
-  const className =
-    status === 'ready'
-      ? 'border-emerald-500/20 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300'
-      : status === 'needs-auth'
-        ? 'border-warning/20 bg-warning/10 text-warning-foreground'
-        : status === 'failed'
-          ? 'border-destructive/20 bg-destructive/10 text-destructive'
-          : 'border-border/70 bg-muted/50 text-muted-foreground'
-
   return (
     <span
-      className={`rounded-full border px-2 py-0.5 text-[10px] font-medium tracking-wide uppercase ${className}`}
+      className={`rounded-full border px-2 py-0.5 text-[10px] font-medium tracking-wide uppercase ${getMcpStatusBadgeClassName(status)}`}
     >
       {label}
     </span>

@@ -1,10 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import {
-  extractMcpServerRecords,
   groupAntigravitySummaries,
+  mergeAntigravityConfiguredServers,
   normalizeAntigravityTransportType,
   toAntigravitySummary,
 } from './antigravity-mcp.pure'
+import { extractMcpServerRecords } from './mcp-config.pure'
 
 describe('antigravity-mcp.pure', () => {
   it('extracts mcpServers from antigravity config files', () => {
@@ -64,6 +65,43 @@ describe('antigravity-mcp.pure', () => {
       description: '/Applications/Pencil.app/mcp --app desktop',
       enabled: true,
     })
+  })
+
+  it('merges configured servers with later sources overriding names', () => {
+    const servers = mergeAntigravityConfiguredServers([
+      {
+        source: {
+          path: '/home/user/.gemini/config/mcp_config.json',
+          scope: 'global',
+          scopeLabel: 'Global config',
+        },
+        config: {
+          mcpServers: {
+            shared: { serverUrl: 'https://global.example.com/mcp' },
+          },
+        },
+      },
+      {
+        source: {
+          path: '/project/.agents/mcp_config.json',
+          scope: 'project',
+          scopeLabel: 'Project config',
+        },
+        config: {
+          mcpServers: {
+            shared: { command: 'node', args: ['project-server.js'] },
+          },
+        },
+      },
+    ])
+
+    expect(servers).toEqual([
+      expect.objectContaining({
+        name: 'shared',
+        scope: 'project',
+        record: { command: 'node', args: ['project-server.js'] },
+      }),
+    ])
   })
 
   it('groups summaries by scope', () => {

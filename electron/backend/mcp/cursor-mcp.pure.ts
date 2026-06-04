@@ -5,6 +5,10 @@ import {
   CURSOR_MCP_PROVIDER_NAME,
   CURSOR_MCP_UNKNOWN_DESCRIPTION,
 } from './cursor-mcp.constants'
+import {
+  buildMcpConfigScopeSets,
+  extractMcpServerRecords,
+} from './mcp-config.pure'
 import type {
   McpServerScope,
   McpServerStatus,
@@ -32,27 +36,21 @@ export interface CursorMcpConfigScopes {
   projectRecords: Record<string, CursorMcpServerRecord>
 }
 
-export function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value)
-}
+export function buildCursorConfigScopes(
+  globalConfig: Record<string, unknown> | null,
+  projectConfig: Record<string, unknown> | null,
+): CursorMcpConfigScopes {
+  const globalRecords =
+    extractMcpServerRecords<CursorMcpServerRecord>(globalConfig)
+  const projectRecords =
+    extractMcpServerRecords<CursorMcpServerRecord>(projectConfig)
+  const scopeSets = buildMcpConfigScopeSets(globalRecords, projectRecords)
 
-export function extractMcpServerRecords(
-  value: unknown,
-): Record<string, CursorMcpServerRecord> {
-  if (!isRecord(value)) {
-    return {}
+  return {
+    ...scopeSets,
+    globalRecords,
+    projectRecords,
   }
-
-  const rawServers = value.mcpServers ?? value['mcp-servers']
-  if (!isRecord(rawServers)) {
-    return {}
-  }
-
-  return Object.fromEntries(
-    Object.entries(rawServers).filter(
-      (entry): entry is [string, CursorMcpServerRecord] => isRecord(entry[1]),
-    ),
-  )
 }
 
 export function parseCursorListEntries(stdout: string): CursorListEntry[] {

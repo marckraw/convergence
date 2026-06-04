@@ -7,13 +7,16 @@ import {
   CURSOR_MCP_PROVIDER_NAME,
 } from './cursor-mcp.constants'
 import {
-  extractMcpServerRecords,
+  buildCursorConfigScopes,
   mergeCursorSummaries,
   parseCursorListEntries,
-  type CursorMcpConfigScopes,
 } from './cursor-mcp.pure'
+import {
+  parseJsonConfigObject,
+  partitionMcpSummariesByScope,
+} from './mcp-config.pure'
 import { execFileRunner, type CommandRunner } from './command-runner'
-import type { McpServerSummary, ProviderMcpVisibility } from './mcp.types'
+import type { ProviderMcpVisibility } from './mcp.types'
 
 interface CursorMcpServiceOptions {
   homeDir?: string
@@ -23,42 +26,9 @@ async function readJsonObject(
   path: string,
 ): Promise<Record<string, unknown> | null> {
   try {
-    const raw = await fs.readFile(path, 'utf8')
-    const parsed = JSON.parse(raw) as unknown
-    return parsed && typeof parsed === 'object' && !Array.isArray(parsed)
-      ? (parsed as Record<string, unknown>)
-      : null
+    return parseJsonConfigObject(await fs.readFile(path, 'utf8'))
   } catch {
     return null
-  }
-}
-
-async function loadCursorConfigScopes(
-  projectPath: string,
-  homeDir: string,
-): Promise<CursorMcpConfigScopes> {
-  const globalRecords = extractMcpServerRecords(
-    await readJsonObject(join(homeDir, '.cursor', 'mcp.json')),
-  )
-  const projectRecords = extractMcpServerRecords(
-    await readJsonObject(join(projectPath, '.cursor', 'mcp.json')),
-  )
-
-  return {
-    globalServerNames: new Set(Object.keys(globalRecords)),
-    projectServerNames: new Set(Object.keys(projectRecords)),
-    globalRecords,
-    projectRecords,
-  }
-}
-
-function partitionSummaries(summaries: McpServerSummary[]): {
-  globalServers: McpServerSummary[]
-  projectServers: McpServerSummary[]
-} {
-  return {
-    globalServers: summaries.filter((server) => server.scope === 'global'),
-    projectServers: summaries.filter((server) => server.scope === 'project'),
   }
 }
 
@@ -77,14 +47,18 @@ export class CursorMcpService {
     try {
       const [listResult, scopes] = await Promise.all([
         this.runner(this.binaryPath, ['mcp', 'list'], { cwd: projectPath }),
-        loadCursorConfigScopes(projectPath, this.homeDir),
+        buildCursorConfigScopes(
+          await readJsonObject(join(this.homeDir, '.cursor', 'mcp.json')),
+          await readJsonObject(join(projectPath, '.cursor', 'mcp.json')),
+        ),
       ])
 
       const summaries = mergeCursorSummaries(
         parseCursorListEntries(listResult.stdout),
         scopes,
       )
-      const { globalServers, projectServers } = partitionSummaries(summaries)
+      const { globalServers, projectServers } =
+        partitionMcpSummariesByScope(summaries)
 
       return {
         providerId: CURSOR_MCP_PROVIDER_ID,

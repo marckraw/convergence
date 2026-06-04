@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  buildCursorConfigScopes,
   buildCursorSummary,
   mapCursorStatus,
   mergeCursorSummaries,
@@ -8,6 +9,28 @@ import {
 } from './cursor-mcp.pure'
 
 describe('cursor-mcp.pure', () => {
+  it('builds cursor config scopes from parsed config objects', () => {
+    expect(
+      buildCursorConfigScopes(
+        {
+          mcpServers: {
+            linear: { command: 'npx' },
+          },
+        },
+        {
+          mcpServers: {
+            docs: { url: 'http://127.0.0.1:3845/mcp' },
+          },
+        },
+      ),
+    ).toMatchObject({
+      globalServerNames: new Set(['linear']),
+      projectServerNames: new Set(['docs']),
+      globalRecords: { linear: { command: 'npx' } },
+      projectRecords: { docs: { url: 'http://127.0.0.1:3845/mcp' } },
+    })
+  })
+
   it('parses agent mcp list lines', () => {
     expect(
       parseCursorListEntries(`custom-gc-mcp-server: not loaded (needs approval)

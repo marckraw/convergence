@@ -1,8 +1,16 @@
+import { dirname, join, resolve } from 'path'
 import {
+  ANTIGRAVITY_MCP_GLOBAL_SCOPE_LABEL,
+  ANTIGRAVITY_MCP_LEGACY_GLOBAL_SCOPE_LABEL,
+  ANTIGRAVITY_MCP_PROJECT_SCOPE_LABEL,
   ANTIGRAVITY_MCP_PROVIDER_ID,
   ANTIGRAVITY_MCP_PROVIDER_NAME,
   ANTIGRAVITY_MCP_UNKNOWN_DESCRIPTION,
 } from './antigravity-mcp.constants'
+import {
+  extractMcpServerRecords,
+  type McpConfigPathSource,
+} from './mcp-config.pure'
 import type {
   McpServerScope,
   McpServerSummary,
@@ -27,28 +35,73 @@ export interface AntigravityMcpServerWithSource {
   scopeLabel: string
 }
 
-export function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value)
+export type AntigravityMcpConfigSource = McpConfigPathSource
+
+export function buildAntigravityGlobalConfigSources(
+  homeDir: string,
+): AntigravityMcpConfigSource[] {
+  return [
+    {
+      path: join(homeDir, '.gemini', 'settings.json'),
+      scope: 'global',
+      scopeLabel: ANTIGRAVITY_MCP_LEGACY_GLOBAL_SCOPE_LABEL,
+    },
+    {
+      path: join(homeDir, '.gemini', 'config', 'mcp_config.json'),
+      scope: 'global',
+      scopeLabel: ANTIGRAVITY_MCP_GLOBAL_SCOPE_LABEL,
+    },
+  ]
 }
 
-export function extractMcpServerRecords(
-  value: unknown,
-): Record<string, AntigravityMcpServerRecord> {
-  if (!isRecord(value)) {
-    return {}
+export function collectAncestorAntigravityMcpConfigSources(
+  projectPath: string,
+): AntigravityMcpConfigSource[] {
+  const sources: AntigravityMcpConfigSource[] = []
+  let current = resolve(projectPath)
+
+  for (;;) {
+    sources.push({
+      path: join(current, '.agents', 'mcp_config.json'),
+      scope: 'project',
+      scopeLabel: ANTIGRAVITY_MCP_PROJECT_SCOPE_LABEL,
+    })
+
+    const parent = dirname(current)
+    if (parent === current) {
+      break
+    }
+    current = parent
   }
 
-  const rawServers = value.mcpServers ?? value['mcp-servers']
-  if (!isRecord(rawServers)) {
-    return {}
+  return sources.reverse()
+}
+
+export function mergeAntigravityConfiguredServers(
+  entries: Array<{
+    source: AntigravityMcpConfigSource
+    config: Record<string, unknown> | null
+  }>,
+): AntigravityMcpServerWithSource[] {
+  const byName = new Map<string, AntigravityMcpServerWithSource>()
+
+  for (const { source, config } of entries) {
+    if (!config) {
+      continue
+    }
+
+    const records = extractMcpServerRecords<AntigravityMcpServerRecord>(config)
+    for (const [name, record] of Object.entries(records)) {
+      byName.set(name, {
+        name,
+        record,
+        scope: source.scope,
+        scopeLabel: source.scopeLabel,
+      })
+    }
   }
 
-  return Object.fromEntries(
-    Object.entries(rawServers).filter(
-      (entry): entry is [string, AntigravityMcpServerRecord] =>
-        isRecord(entry[1]),
-    ),
-  )
+  return Array.from(byName.values())
 }
 
 export function normalizeAntigravityTransportType(
