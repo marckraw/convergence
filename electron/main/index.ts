@@ -84,10 +84,8 @@ import { registerSessionForkIpcHandlers } from '../backend/session/fork/session-
 import { loadEnvFile } from '../backend/environment/env-file.service'
 import { hydrateProcessPathFromShell } from '../backend/environment/shell-path.service'
 import { OpenRouterCredentialsService } from '../backend/credentials/openrouter-credentials.service'
-import { CursorCredentialsService } from '../backend/credentials/cursor-credentials.service'
 import { ProjectOpenService } from '../backend/project-open/project-open.service'
 import { registerProjectOpenIpcHandlers } from '../backend/project-open/project-open.ipc'
-import { CursorQuotaService } from '../backend/provider-quota/cursor-quota.service'
 import { TerminalService } from '../backend/terminal/terminal.service'
 import {
   broadcastToRenderers,
@@ -225,10 +223,8 @@ async function startApp(): Promise<void> {
   const reviewNotesService = new ReviewNotesService(db)
   const providerRegistry = new ProviderRegistry()
   const openRouterCredentials = new OpenRouterCredentialsService()
-  const cursorCredentials = new CursorCredentialsService()
   const taskProgressService = new TaskProgressService(broadcastTaskProgress)
   const codexQuotaService = new CodexQuotaService()
-  const cursorQuotaService = new CursorQuotaService(cursorCredentials)
   const sessionService = new SessionService(
     db,
     providerRegistry,
@@ -542,7 +538,6 @@ async function startApp(): Promise<void> {
     promptsService,
     appSettingsService,
     openRouterCredentials,
-    cursorCredentials,
     analyticsService,
     attachmentsService,
     turnCaptureService,
@@ -583,7 +578,6 @@ async function startApp(): Promise<void> {
     },
     {
       codex: codexQuotaService,
-      cursor: cursorQuotaService,
     },
   )
 

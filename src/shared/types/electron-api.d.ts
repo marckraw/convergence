@@ -1115,7 +1115,6 @@ type ProviderQuotaSnapshotData =
       windows: ProviderQuotaWindowData[]
       credits: ProviderCreditsQuotaData | null
       limitReachedType: string | null
-      details?: string[]
       lastCheckedAt: string
       stale: boolean
     }
@@ -1640,7 +1639,6 @@ interface ElectronAPI {
   }
   providerQuota: {
     getCodex: (forceRefresh?: boolean) => Promise<ProviderQuotaSnapshotData>
-    getCursor: (forceRefresh?: boolean) => Promise<ProviderQuotaSnapshotData>
   }
   mcp: {
     listByProjectId: (projectId: string) => Promise<ProjectMcpVisibility>
@@ -1699,14 +1697,6 @@ interface ElectronAPI {
       getStatus: () => Promise<OpenRouterCredentialStatusData>
       setToken: (token: string) => Promise<OpenRouterCredentialStatusData>
       deleteToken: () => Promise<OpenRouterCredentialStatusData>
-    }
-    cursor: {
-      getStatus: () => Promise<CursorCredentialStatusData>
-      setCredentials: (
-        apiKey: string,
-        email: string,
-      ) => Promise<CursorCredentialStatusData>
-      deleteCredentials: () => Promise<CursorCredentialStatusData>
     }
   }
   analytics: {
@@ -2054,18 +2044,6 @@ interface OpenRouterCredentialStatusData {
   storage: 'keychain' | null
   account: string | null
   service: string | null
-  error: string | null
-}
-
-interface CursorCredentialStatusData {
-  providerId: 'cursor'
-  configured: boolean
-  source: 'environment' | 'keychain' | null
-  storage: 'keychain' | null
-  account: string | null
-  service: string | null
-  email: string | null
-  emailSource: 'environment' | 'keychain' | null
   error: string | null
 }
 

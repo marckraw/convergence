@@ -21,9 +21,8 @@ export function ProviderUsageFields({
         <div>
           <p className="text-sm font-medium text-foreground">Provider usage</p>
           <p className="mt-1 text-sm text-muted-foreground">
-            Live Codex quota windows, optional Cursor team spend for team admins
-            through the Admin API, plus manual links for providers and personal
-            plans that do not expose usage limits reliably.
+            Live Codex quota windows, plus manual links for providers that do
+            not expose usage limits reliably.
           </p>
         </div>
         <div className="flex items-center gap-2">

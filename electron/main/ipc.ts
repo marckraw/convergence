@@ -28,9 +28,7 @@ import { SkillsService } from '../backend/skills/skills.service'
 import { PromptsService } from '../backend/prompts/prompts.service'
 import { AppSettingsService } from '../backend/app-settings/app-settings.service'
 import { CodexQuotaService } from '../backend/provider-quota/codex-quota.service'
-import { CursorQuotaService } from '../backend/provider-quota/cursor-quota.service'
 import { OpenRouterCredentialsService } from '../backend/credentials/openrouter-credentials.service'
-import { CursorCredentialsService } from '../backend/credentials/cursor-credentials.service'
 import type { AnalyticsService } from '../backend/analytics/analytics.service'
 import type { AnalyticsRangePreset } from '../backend/analytics/analytics.types'
 import type { AttachmentsService } from '../backend/attachments/attachments.service'
@@ -169,7 +167,6 @@ export function registerIpcHandlers(
   promptsService: PromptsService,
   appSettingsService: AppSettingsService,
   openRouterCredentials: OpenRouterCredentialsService,
-  cursorCredentials: CursorCredentialsService,
   analyticsService: AnalyticsService,
   attachmentsService: AttachmentsService,
   turnCaptureService: TurnCaptureService,
@@ -182,12 +179,10 @@ export function registerIpcHandlers(
   },
   providerQuota?: {
     codex: CodexQuotaService
-    cursor: CursorQuotaService
   },
 ): void {
   const quotaServices = providerQuota ?? {
     codex: new CodexQuotaService(),
-    cursor: new CursorQuotaService(),
   }
   const sessionApp = new SessionAppService(sessionService, appSettingsService)
 
@@ -625,27 +620,6 @@ export function registerIpcHandlers(
     openRouterCredentials.deleteToken(),
   )
 
-  ipcMain.handle('credentials:cursor:getStatus', () =>
-    cursorCredentials.getStatus(),
-  )
-
-  ipcMain.handle(
-    'credentials:cursor:setCredentials',
-    (_event, input: { apiKey?: unknown; email?: unknown }) => {
-      if (!input || typeof input.apiKey !== 'string') {
-        throw new Error('Cursor Admin API key is required.')
-      }
-      return cursorCredentials.setCredentials({
-        apiKey: input.apiKey,
-        email: typeof input.email === 'string' ? input.email : '',
-      })
-    },
-  )
-
-  ipcMain.handle('credentials:cursor:deleteCredentials', () =>
-    cursorCredentials.deleteCredentials(),
-  )
-
   // Analytics handlers
   ipcMain.handle('analytics:getOverview', (_event, rangePreset: string) =>
     analyticsService.getOverview(rangePreset),
@@ -887,10 +861,6 @@ export function registerIpcHandlers(
 
   ipcMain.handle('providerQuota:getCodex', (_event, forceRefresh?: boolean) =>
     quotaServices.codex.getQuota({ forceRefresh: forceRefresh === true }),
-  )
-
-  ipcMain.handle('providerQuota:getCursor', (_event, forceRefresh?: boolean) =>
-    quotaServices.cursor.getQuota({ forceRefresh: forceRefresh === true }),
   )
 
   ipcMain.handle('mcp:listByProjectId', (_event, projectId: string) =>
