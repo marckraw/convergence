@@ -24,6 +24,7 @@ export type ProviderQuotaSnapshot =
       windows: ProviderQuotaWindow[]
       credits: ProviderCreditsQuota | null
       limitReachedType: string | null
+      details?: string[]
       lastCheckedAt: string
       stale: boolean
     }

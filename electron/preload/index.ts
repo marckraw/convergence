@@ -348,6 +348,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   providerQuota: {
     getCodex: (forceRefresh?: boolean) =>
       ipcRenderer.invoke('providerQuota:getCodex', forceRefresh),
+    getCursor: (forceRefresh?: boolean) =>
+      ipcRenderer.invoke('providerQuota:getCursor', forceRefresh),
   },
   mcp: {
     listByProjectId: (projectId: string) =>
@@ -433,6 +435,16 @@ contextBridge.exposeInMainWorld('electronAPI', {
         ipcRenderer.invoke('credentials:openrouter:setToken', { token }),
       deleteToken: () =>
         ipcRenderer.invoke('credentials:openrouter:deleteToken'),
+    },
+    cursor: {
+      getStatus: () => ipcRenderer.invoke('credentials:cursor:getStatus'),
+      setCredentials: (apiKey: string, email: string) =>
+        ipcRenderer.invoke('credentials:cursor:setCredentials', {
+          apiKey,
+          email,
+        }),
+      deleteCredentials: () =>
+        ipcRenderer.invoke('credentials:cursor:deleteCredentials'),
     },
   },
   analytics: {

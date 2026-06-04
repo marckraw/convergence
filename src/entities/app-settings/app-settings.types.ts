@@ -93,3 +93,15 @@ export interface OpenRouterCredentialStatus {
   service: string | null
   error: string | null
 }
+
+export interface CursorCredentialStatus {
+  providerId: 'cursor'
+  configured: boolean
+  source: 'environment' | 'keychain' | null
+  storage: 'keychain' | null
+  account: string | null
+  service: string | null
+  email: string | null
+  emailSource: 'environment' | 'keychain' | null
+  error: string | null
+}

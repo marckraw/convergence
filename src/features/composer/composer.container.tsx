@@ -61,6 +61,7 @@ import { filterComposerPrompts } from './composer-prompt-injection.pure'
 import { resolveMidRunInputPolicy } from './mid-run-input.pure'
 import { CodexUsagePillContainer } from './codex-usage-pill.container'
 import { shouldShowCodexUsagePill } from './codex-usage-pill.pure'
+import { CursorUsagePillContainer } from './cursor-usage-pill.container'
 import { ContextWindowDot } from './context-window-dot.container'
 import { Button } from '@/shared/ui/button'
 import { X } from 'lucide-react'
@@ -180,6 +181,9 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
   const [codexUsageSnapshot, setCodexUsageSnapshot] =
     useState<ProviderQuotaSnapshot | null>(null)
   const [codexUsageLoading, setCodexUsageLoading] = useState(false)
+  const [cursorUsageSnapshot, setCursorUsageSnapshot] =
+    useState<ProviderQuotaSnapshot | null>(null)
+  const [cursorUsageLoading, setCursorUsageLoading] = useState(false)
   const dragDepth = useRef(0)
   const providers = useSessionStore((s) => s.providers)
   const openDialog = useDialogStore((s) => s.open)
@@ -433,6 +437,7 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
     activeSession ? undefined : storedDefaults,
   )
   const showCodexUsagePill = shouldShowCodexUsagePill(selection)
+  const showCursorUsagePill = selection.providerId === 'cursor'
   const midRunPolicy = useMemo(
     () =>
       resolveMidRunInputPolicy({
@@ -690,6 +695,44 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
     }, 120_000)
     return () => window.clearInterval(intervalId)
   }, [loadCodexUsage, showCodexUsagePill])
+
+  const loadCursorUsage = useCallback(
+    async (forceRefresh = false) => {
+      if (!showCursorUsagePill) return
+      setCursorUsageLoading(true)
+      try {
+        setCursorUsageSnapshot(await providerQuotaApi.getCursor(forceRefresh))
+      } catch (err) {
+        setCursorUsageSnapshot({
+          providerId: 'cursor',
+          status: 'unavailable',
+          source: 'provider-api',
+          reason:
+            err instanceof Error ? err.message : 'Cursor usage is unavailable.',
+          usageUrl: 'https://cursor.com/dashboard',
+          lastCheckedAt: new Date().toISOString(),
+          stale: false,
+        })
+      } finally {
+        setCursorUsageLoading(false)
+      }
+    },
+    [showCursorUsagePill],
+  )
+
+  useEffect(() => {
+    if (!showCursorUsagePill) {
+      setCursorUsageSnapshot(null)
+      setCursorUsageLoading(false)
+      return undefined
+    }
+
+    void loadCursorUsage(false)
+    const intervalId = window.setInterval(() => {
+      void loadCursorUsage(false)
+    }, 120_000)
+    return () => window.clearInterval(intervalId)
+  }, [loadCursorUsage, showCursorUsagePill])
 
   useEffect(() => {
     if (rejections.length > 0) {
@@ -1091,6 +1134,13 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
               snapshot={codexUsageSnapshot}
               isLoading={codexUsageLoading}
               onRefresh={() => void loadCodexUsage(true)}
+              onOpenSettings={handleCodexUsageSettingsOpen}
+            />
+          ) : showCursorUsagePill ? (
+            <CursorUsagePillContainer
+              snapshot={cursorUsageSnapshot}
+              isLoading={cursorUsageLoading}
+              onRefresh={() => void loadCursorUsage(true)}
               onOpenSettings={handleCodexUsageSettingsOpen}
             />
           ) : null

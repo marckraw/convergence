@@ -1,6 +1,7 @@
 import type {
   AppSettings,
   AppSettingsInput,
+  CursorCredentialStatus,
   OpenRouterCredentialStatus,
 } from './app-settings.types'
 
@@ -23,4 +24,18 @@ export const openRouterCredentialsApi = {
 
   deleteToken: (): Promise<OpenRouterCredentialStatus> =>
     window.electronAPI.credentials.openRouter.deleteToken(),
+}
+
+export const cursorCredentialsApi = {
+  getStatus: (): Promise<CursorCredentialStatus> =>
+    window.electronAPI.credentials.cursor.getStatus(),
+
+  setCredentials: (
+    apiKey: string,
+    email: string,
+  ): Promise<CursorCredentialStatus> =>
+    window.electronAPI.credentials.cursor.setCredentials(apiKey, email),
+
+  deleteCredentials: (): Promise<CursorCredentialStatus> =>
+    window.electronAPI.credentials.cursor.deleteCredentials(),
 }

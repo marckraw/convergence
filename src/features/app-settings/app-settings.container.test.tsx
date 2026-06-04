@@ -236,6 +236,16 @@ describe('AppSettingsDialogContainer', () => {
           lastCheckedAt: '2026-05-21T12:00:00.000Z',
           stale: false,
         }),
+        getCursor: vi.fn().mockResolvedValue({
+          providerId: 'cursor',
+          status: 'unavailable',
+          source: 'provider-api',
+          reason:
+            'Cursor does not expose individual usage through ACP, CLI, or a public API.',
+          usageUrl: 'https://cursor.com/dashboard',
+          lastCheckedAt: '2026-05-21T12:00:00.000Z',
+          stale: false,
+        }),
       },
       appSettings: {
         get: vi.fn().mockResolvedValue({
@@ -273,6 +283,41 @@ describe('AppSettingsDialogContainer', () => {
             storage: null,
             account: null,
             service: null,
+            error: null,
+          }),
+        },
+        cursor: {
+          getStatus: vi.fn().mockResolvedValue({
+            providerId: 'cursor',
+            configured: false,
+            source: null,
+            storage: null,
+            account: null,
+            service: null,
+            email: null,
+            emailSource: null,
+            error: null,
+          }),
+          setCredentials: vi.fn().mockResolvedValue({
+            providerId: 'cursor',
+            configured: true,
+            source: 'keychain',
+            storage: 'keychain',
+            account: 'default',
+            service: 'convergence.cursor.admin-api-key',
+            email: 'developer@example.com',
+            emailSource: 'keychain',
+            error: null,
+          }),
+          deleteCredentials: vi.fn().mockResolvedValue({
+            providerId: 'cursor',
+            configured: false,
+            source: null,
+            storage: null,
+            account: null,
+            service: null,
+            email: null,
+            emailSource: null,
             error: null,
           }),
         },
@@ -544,13 +589,16 @@ describe('AppSettingsDialogContainer', () => {
       screen.getByText(/does not expose these reset windows reliably/),
     ).toBeInTheDocument()
     expect(
-      screen.getByText(/Cursor ACP does not expose usage or quota counters/),
+      screen.getByText(/does not expose individual usage through ACP/),
     ).toBeInTheDocument()
 
     fireEvent.click(screen.getByRole('button', { name: /Refresh/ }))
 
     await waitFor(() => {
       expect(window.electronAPI.providerQuota.getCodex).toHaveBeenCalledWith(
+        true,
+      )
+      expect(window.electronAPI.providerQuota.getCursor).toHaveBeenCalledWith(
         true,
       )
     })
@@ -593,10 +641,10 @@ describe('AppSettingsDialogContainer', () => {
     fireEvent.click(screen.getByRole('button', { name: /Credentials/ }))
     expect(await screen.findByText('Provider credentials')).toBeInTheDocument()
 
-    fireEvent.change(screen.getByLabelText('API key'), {
+    fireEvent.change(screen.getByLabelText('OpenRouter API key'), {
       target: { value: 'sk-or-test' },
     })
-    fireEvent.click(screen.getByRole('button', { name: 'Save key' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Save OpenRouter key' }))
 
     await waitFor(() => {
       expect(
@@ -606,6 +654,40 @@ describe('AppSettingsDialogContainer', () => {
     expect(window.electronAPI.appSettings.set).not.toHaveBeenCalled()
     expect(await screen.findByText('OpenRouter API key saved.')).toBeVisible()
     expect(screen.getByRole('button', { name: 'Done' })).toBeInTheDocument()
+  })
+
+  it('saves Cursor Admin API credentials from the Credentials section without saving app settings', async () => {
+    primeStores({
+      defaultProviderId: 'cursor',
+      defaultModelId: 'auto',
+      defaultEffortId: 'medium',
+    })
+
+    render(<AppSettingsDialogContainer trigger={<Button>Open</Button>} />)
+    fireEvent.click(screen.getByText('Open'))
+
+    expect(await screen.findByText('Settings')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: /Credentials/ }))
+    expect(await screen.findByText('Provider credentials')).toBeInTheDocument()
+
+    fireEvent.change(screen.getByLabelText('Cursor Admin API key'), {
+      target: { value: 'key_cursor_test' },
+    })
+    fireEvent.change(screen.getByLabelText('Cursor usage email'), {
+      target: { value: 'developer@example.com' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Save Cursor key' }))
+
+    await waitFor(() => {
+      expect(
+        window.electronAPI.credentials.cursor.setCredentials,
+      ).toHaveBeenCalledWith('key_cursor_test', 'developer@example.com')
+    })
+    expect(window.electronAPI.appSettings.set).not.toHaveBeenCalled()
+    expect(
+      await screen.findByText('Cursor Admin API credentials saved.'),
+    ).toBeVisible()
   })
 
   it('toggling the auto-update switch persists the new updates prefs on save', async () => {

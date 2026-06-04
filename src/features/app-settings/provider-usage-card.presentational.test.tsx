@@ -23,4 +23,29 @@ describe('ProviderUsageCard', () => {
       screen.queryByText('Source: provider runtime event'),
     ).not.toBeInTheDocument()
   })
+
+  it('renders provider quota details when available', () => {
+    const snapshot: ProviderQuotaSnapshot = {
+      providerId: 'cursor',
+      status: 'available',
+      source: 'provider-api',
+      planType: 'member',
+      windows: [],
+      credits: null,
+      limitReachedType: null,
+      details: [
+        'User: developer@example.com',
+        'Source: official Cursor Admin API team spend endpoint',
+      ],
+      lastCheckedAt: '2026-06-03T12:00:00.000Z',
+      stale: false,
+    }
+
+    render(<ProviderUsageCard snapshot={snapshot} />)
+
+    expect(screen.getByText('User: developer@example.com')).toBeInTheDocument()
+    expect(
+      screen.getByText('Source: official Cursor Admin API team spend endpoint'),
+    ).toBeInTheDocument()
+  })
 })

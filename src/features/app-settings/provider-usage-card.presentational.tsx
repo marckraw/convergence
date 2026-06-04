@@ -126,6 +126,16 @@ export function ProviderUsageCard({ snapshot }: ProviderUsageCardProps) {
             ) : null}
           </div>
 
+          {snapshot.details && snapshot.details.length > 0 ? (
+            <div className="rounded-lg border border-border/70 bg-card/35 px-4 py-3">
+              <div className="space-y-1 text-sm text-muted-foreground">
+                {snapshot.details.map((detail) => (
+                  <p key={detail}>{detail}</p>
+                ))}
+              </div>
+            </div>
+          ) : null}
+
           {sortedWindows(snapshot.windows).length > 0 ? (
             <div className="space-y-2">
               {sortedWindows(snapshot.windows).map((window) => (
