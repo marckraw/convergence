@@ -1,5 +1,11 @@
 # convergence
 
+## 0.40.0
+
+### Minor Changes
+
+- 7cb3685: Add MCP Servers visibility for Cursor CLI and Antigravity, including live Cursor agent status and Antigravity config discovery from Gemini and project `.agents` files.
+
 ## 0.39.2
 
 ### Patch Changes
