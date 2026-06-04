@@ -55,6 +55,7 @@ describe('mapCursorTeamSpendPayloadToQuotaSnapshot', () => {
       'Hard limit: $100.00',
       'Fast premium requests: 1,250',
       'Source: official Cursor Admin API team spend endpoint',
+      'Availability: Cursor team admins only; personal Pro accounts do not expose this usage endpoint.',
     ])
   })
 

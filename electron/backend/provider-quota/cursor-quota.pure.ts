@@ -190,6 +190,7 @@ export function mapCursorTeamSpendPayloadToQuotaSnapshot(
         ? 'Fast premium requests: not reported'
         : `Fast premium requests: ${member.fastPremiumRequests.toLocaleString()}`,
       'Source: official Cursor Admin API team spend endpoint',
+      'Availability: Cursor team admins only; personal Pro accounts do not expose this usage endpoint.',
     ],
     lastCheckedAt: nowIso,
     stale: false,

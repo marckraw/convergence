@@ -25,6 +25,7 @@ describe('cursor credential helpers', () => {
     expect(message).toBe(describeCursorUserApiKeyMismatch())
     expect(message).toContain('Cloud Agent/API page')
     expect(message).toContain('Dashboard > Settings > Cursor Admin API Keys')
+    expect(message).toContain('Personal Pro accounts')
     expect(message).toContain('key_')
   })
 
@@ -34,7 +35,7 @@ describe('cursor credential helpers', () => {
 
   it('explains auth failures without pointing users to the wrong key type', () => {
     expect(describeCursorAdminApiAuthFailure()).toContain(
-      'User API Keys from the Cloud Agent/API page start with crsr_',
+      'Personal Pro accounts and User API Keys from the Cloud Agent/API page',
     )
   })
 })

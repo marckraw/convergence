@@ -99,7 +99,7 @@ export class CursorQuotaService {
       const { apiKey, email } = await this.credentials.resolveCredentials()
       if (!apiKey) {
         throw new Error(
-          'Cursor does not expose individual usage through ACP, CLI, or a public API. Save a Cursor Admin API key in Provider credentials to show official team spend data, or open the Cursor dashboard for individual usage.',
+          'Cursor does not expose personal Pro usage through ACP, CLI, or a public API. Cursor team admins can save an Admin API key in Provider credentials to show official team spend data. Personal Pro users need to open the Cursor dashboard for usage.',
         )
       }
       const validationError = validateCursorAdminApiKey(apiKey)

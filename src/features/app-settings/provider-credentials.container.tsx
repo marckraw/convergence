@@ -288,10 +288,10 @@ export const ProviderCredentialsContainer: FC = () => {
               </Button>
             </div>
             <p className="text-xs text-muted-foreground">
-              Use the Cursor Admin API key from Dashboard &gt; Settings &gt;
-              Cursor Admin API Keys. Those keys start with key_. User API Keys
-              from the Cloud Agent/API page start with crsr_ and do not work for
-              usage data.
+              Cursor usage is only machine-readable for Cursor teams. Team
+              admins can create a key from Dashboard &gt; Settings &gt; Cursor
+              Admin API Keys; those keys start with key_. Personal Pro accounts
+              and crsr_ User API Keys do not expose usage data to Convergence.
             </p>
           </div>
 

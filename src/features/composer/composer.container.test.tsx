@@ -56,7 +56,7 @@ describe('ComposerContainer', () => {
           status: 'unavailable',
           source: 'provider-api',
           reason:
-            'Cursor does not expose individual usage through ACP, CLI, or a public API.',
+            'Cursor does not expose personal Pro usage through ACP, CLI, or a public API.',
           usageUrl: 'https://cursor.com/dashboard',
           lastCheckedAt: '2026-05-21T12:00:00.000Z',
           stale: false,

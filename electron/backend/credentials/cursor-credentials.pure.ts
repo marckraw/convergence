@@ -6,7 +6,7 @@ export function isCursorUserApiKey(value: string): boolean {
 }
 
 export function describeCursorAdminApiKeySource(): string {
-  return `Use the Cursor Admin API key from Dashboard > Settings > Cursor Admin API Keys. Those keys start with ${CURSOR_ADMIN_API_KEY_PREFIX}. User API Keys from the Cloud Agent/API page start with ${CURSOR_USER_API_KEY_PREFIX} and do not work for usage data.`
+  return `Cursor usage is only machine-readable for Cursor teams through the Admin API. Team admins can create a Cursor Admin API key from Dashboard > Settings > Cursor Admin API Keys. Those keys start with ${CURSOR_ADMIN_API_KEY_PREFIX}. Personal Pro accounts and User API Keys from the Cloud Agent/API page (${CURSOR_USER_API_KEY_PREFIX}...) do not expose usage data to Convergence.`
 }
 
 export function describeCursorUserApiKeyMismatch(): string {

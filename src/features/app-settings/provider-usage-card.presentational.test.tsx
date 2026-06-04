@@ -36,6 +36,7 @@ describe('ProviderUsageCard', () => {
       details: [
         'User: developer@example.com',
         'Source: official Cursor Admin API team spend endpoint',
+        'Availability: Cursor team admins only; personal Pro accounts do not expose this usage endpoint.',
       ],
       lastCheckedAt: '2026-06-03T12:00:00.000Z',
       stale: false,
@@ -46,6 +47,11 @@ describe('ProviderUsageCard', () => {
     expect(screen.getByText('User: developer@example.com')).toBeInTheDocument()
     expect(
       screen.getByText('Source: official Cursor Admin API team spend endpoint'),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByText(
+        'Availability: Cursor team admins only; personal Pro accounts do not expose this usage endpoint.',
+      ),
     ).toBeInTheDocument()
   })
 })
