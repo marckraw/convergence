@@ -13,8 +13,8 @@ import {
   PALETTE_FUSE_OPTIONS,
 } from './command-palette-ranking.pure'
 import {
+  detectShortcutPlatform,
   matchKeyboardShortcut,
-  type Platform,
 } from './command-palette-trigger.pure'
 import {
   activateProject,
@@ -39,11 +39,6 @@ interface CodeReviewRouteSearch {
   mode?: CodeReviewMode
   view?: CodeReviewView
   file?: string | null
-}
-
-function detectPlatform(): Platform {
-  if (typeof navigator === 'undefined') return 'other'
-  return navigator.platform.toLowerCase().includes('mac') ? 'mac' : 'other'
 }
 
 interface CommandCenterContainerProps {
@@ -80,7 +75,10 @@ export function CommandCenterContainer({
   )
 
   useEffect(() => {
-    const platform = detectPlatform()
+    const platform =
+      typeof navigator === 'undefined'
+        ? detectShortcutPlatform()
+        : detectShortcutPlatform(navigator.platform)
     const handler = (event: KeyboardEvent) => {
       if (!matchKeyboardShortcut(event, platform, commandCenterShortcut)) return
       event.preventDefault()

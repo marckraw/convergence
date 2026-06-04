@@ -79,7 +79,42 @@ const RESERVED_SHORTCUTS: ReservedShortcut[] = [
 ]
 
 function normalizeBindingKey(key: string): string {
-  return key.length === 1 ? key.toLowerCase() : key.toLowerCase()
+  return key.toLowerCase()
+}
+
+export function hasPrimaryModifier(event: KeyEventLike): boolean {
+  return event.metaKey || event.ctrlKey
+}
+
+export function shortcutPlatformFromOs(osPlatform: string | null): Platform {
+  return osPlatform === 'darwin' ? 'mac' : 'other'
+}
+
+export function detectShortcutPlatform(navigatorPlatform?: string): Platform {
+  if (!navigatorPlatform) return 'other'
+  return navigatorPlatform.toLowerCase().includes('mac') ? 'mac' : 'other'
+}
+
+export type ShortcutRecordingResult =
+  | { kind: 'cancel' }
+  | { kind: 'ignore' }
+  | { kind: 'invalid-key' }
+  | { kind: 'conflict'; message: string }
+  | { kind: 'captured'; binding: KeyboardShortcutBinding }
+
+export function resolveShortcutRecording(
+  event: KeyEventLike,
+): ShortcutRecordingResult {
+  if (event.key === 'Escape') return { kind: 'cancel' }
+  if (!hasPrimaryModifier(event)) return { kind: 'ignore' }
+
+  const captured = bindingFromKeyEvent(event)
+  if (!captured) return { kind: 'invalid-key' }
+
+  const conflict = findShortcutConflict(captured)
+  if (conflict) return { kind: 'conflict', message: conflict }
+
+  return { kind: 'captured', binding: captured }
 }
 
 function bindingsEqual(

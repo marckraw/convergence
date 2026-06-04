@@ -2,11 +2,15 @@ import { describe, expect, it } from 'vitest'
 import {
   bindingFromKeyEvent,
   DEFAULT_COMMAND_CENTER_SHORTCUT,
+  detectShortcutPlatform,
   findShortcutConflict,
   formatShortcutLabel,
+  hasPrimaryModifier,
   matchKeyboardShortcut,
   matchPaletteShortcut,
   parseCommandCenterShortcut,
+  resolveShortcutRecording,
+  shortcutPlatformFromOs,
   validateCommandCenterShortcut,
   type KeyEventLike,
 } from './keyboard-shortcut.pure'
@@ -131,6 +135,56 @@ describe('findShortcutConflict', () => {
     expect(
       findShortcutConflict({ key: 'p', shiftKey: false, altKey: false }),
     ).toBeNull()
+  })
+})
+
+describe('shortcutPlatformFromOs', () => {
+  it('maps darwin to mac', () => {
+    expect(shortcutPlatformFromOs('darwin')).toBe('mac')
+  })
+
+  it('maps other os strings to other', () => {
+    expect(shortcutPlatformFromOs('win32')).toBe('other')
+    expect(shortcutPlatformFromOs(null)).toBe('other')
+  })
+})
+
+describe('detectShortcutPlatform', () => {
+  it('detects mac from navigator platform strings', () => {
+    expect(detectShortcutPlatform('MacIntel')).toBe('mac')
+  })
+})
+
+describe('resolveShortcutRecording', () => {
+  it('cancels on Escape', () => {
+    expect(resolveShortcutRecording(ev('Escape'))).toEqual({ kind: 'cancel' })
+  })
+
+  it('ignores keys without a primary modifier', () => {
+    expect(resolveShortcutRecording(ev('p'))).toEqual({ kind: 'ignore' })
+  })
+
+  it('captures a valid shortcut', () => {
+    expect(resolveShortcutRecording(ev('p', { metaKey: true }))).toEqual({
+      kind: 'captured',
+      binding: { key: 'p', shiftKey: false, altKey: false },
+    })
+  })
+
+  it('reports conflicts for reserved bindings', () => {
+    const result = resolveShortcutRecording(ev('t', { metaKey: true }))
+    expect(result.kind).toBe('conflict')
+    if (result.kind === 'conflict') {
+      expect(result.message).toContain('Terminal new tab')
+    }
+  })
+})
+
+describe('hasPrimaryModifier', () => {
+  it('is true when meta or ctrl is pressed', () => {
+    expect(hasPrimaryModifier(ev('p', { metaKey: true }))).toBe(true)
+    expect(hasPrimaryModifier(ev('p', { ctrlKey: true }))).toBe(true)
+    expect(hasPrimaryModifier(ev('p'))).toBe(false)
   })
 })
 

@@ -19,9 +19,10 @@ import {
   type DebugLoggingPrefs,
 } from '@/entities/app-settings'
 import {
-  bindingFromKeyEvent,
   findShortcutConflict,
   formatShortcutLabel,
+  resolveShortcutRecording,
+  shortcutPlatformFromOs,
 } from '@/shared/lib/keyboard-shortcut.pure'
 import { providerDebugApi } from '@/entities/provider-debug'
 import { useDialogStore } from '@/entities/dialog'
@@ -63,10 +64,6 @@ function isAppSettingsSection(value: unknown): value is AppSettingsSectionId {
     value === 'shortcuts' ||
     value === 'debug-logging'
   )
-}
-
-function shortcutPlatform(platform: string | null): 'mac' | 'other' {
-  return platform === 'darwin' ? 'mac' : 'other'
 }
 
 export const AppSettingsDialogContainer: FC<AppSettingsContainerProps> = ({
@@ -306,21 +303,20 @@ export const AppSettingsDialogContainer: FC<AppSettingsContainerProps> = ({
     if (!isRecordingShortcut) return
 
     const handler = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
+      const result = resolveShortcutRecording(event)
+      if (result.kind === 'ignore') return
+
+      if (result.kind === 'cancel') {
         event.preventDefault()
         event.stopPropagation()
         setIsRecordingShortcut(false)
         return
       }
 
-      const primary = event.metaKey || event.ctrlKey
-      if (!primary) return
-
       event.preventDefault()
       event.stopPropagation()
 
-      const captured = bindingFromKeyEvent(event)
-      if (!captured) {
+      if (result.kind === 'invalid-key') {
         setShortcutsConflict(
           'Use a single letter or number key with the primary modifier.',
         )
@@ -328,14 +324,13 @@ export const AppSettingsDialogContainer: FC<AppSettingsContainerProps> = ({
         return
       }
 
-      const conflict = findShortcutConflict(captured)
-      if (conflict) {
-        setShortcutsConflict(conflict)
+      if (result.kind === 'conflict') {
+        setShortcutsConflict(result.message)
         setIsRecordingShortcut(false)
         return
       }
 
-      setShortcutsDraft(captured)
+      setShortcutsDraft(result.binding)
       setShortcutsConflict(null)
       setIsRecordingShortcut(false)
     }
@@ -358,7 +353,7 @@ export const AppSettingsDialogContainer: FC<AppSettingsContainerProps> = ({
     shortcutsDraft ?? settings.commandCenterShortcut
   const commandCenterShortcutLabel = formatShortcutLabel(
     commandCenterShortcutDraft,
-    shortcutPlatform(platform),
+    shortcutPlatformFromOs(platform),
   )
 
   const handleSave = useCallback(async () => {

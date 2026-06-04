@@ -13,7 +13,6 @@ import {
   DEFAULT_ONBOARDING_PREFS,
   DEFAULT_PI_MODEL_VISIBILITY_PREFS,
   type AppSettings,
-  type CommandCenterShortcutPrefs,
   type DebugLoggingPrefs,
   type FavoriteModelsPrefs,
   type OnboardingPrefs,
@@ -22,6 +21,10 @@ import {
   type ResolvedSessionDefaults,
   DEFAULT_COMMAND_CENTER_SHORTCUT,
 } from './app-settings.types'
+import {
+  parseCommandCenterShortcut,
+  validateCommandCenterShortcut,
+} from '../../../src/shared/lib/keyboard-shortcut.pure'
 
 export function parseModelMap(value: unknown): Record<string, string> {
   if (!value || typeof value !== 'object') return {}
@@ -168,37 +171,7 @@ export function parseFavoriteModelsPrefs(value: unknown): FavoriteModelsPrefs {
   return { items }
 }
 
-const ALLOWED_SHORTCUT_KEY_PATTERN = /^[a-z0-9]$/
-
-export function parseCommandCenterShortcut(
-  value: unknown,
-): CommandCenterShortcutPrefs {
-  if (!value || typeof value !== 'object') {
-    return DEFAULT_COMMAND_CENTER_SHORTCUT
-  }
-  const raw = value as Partial<CommandCenterShortcutPrefs>
-  const key =
-    typeof raw.key === 'string' && raw.key.length > 0
-      ? raw.key.toLowerCase()
-      : DEFAULT_COMMAND_CENTER_SHORTCUT.key
-  return {
-    key,
-    shiftKey: raw.shiftKey === true,
-    altKey: raw.altKey === true,
-  }
-}
-
-export function validateCommandCenterShortcut(
-  binding: CommandCenterShortcutPrefs,
-): CommandCenterShortcutPrefs | null {
-  const key = binding.key.toLowerCase()
-  if (!ALLOWED_SHORTCUT_KEY_PATTERN.test(key)) return null
-  return {
-    key,
-    shiftKey: binding.shiftKey,
-    altKey: binding.altKey,
-  }
-}
+export { parseCommandCenterShortcut, validateCommandCenterShortcut }
 
 function emptyAppSettings(): AppSettings {
   return {
