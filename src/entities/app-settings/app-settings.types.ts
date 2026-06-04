@@ -4,6 +4,12 @@ import type {
 } from '../notifications'
 import type { ReasoningEffort } from '../session'
 import type { UpdatePrefs } from '../updates'
+import type { KeyboardShortcutBinding } from '@/shared/lib/keyboard-shortcut.pure'
+import { DEFAULT_COMMAND_CENTER_SHORTCUT } from '@/shared/lib/keyboard-shortcut.pure'
+
+export type CommandCenterShortcutPrefs = KeyboardShortcutBinding
+
+export { DEFAULT_COMMAND_CENTER_SHORTCUT }
 
 export type { NotificationEventPrefs, NotificationPrefs, UpdatePrefs }
 export { DEFAULT_NOTIFICATION_PREFS } from '../notifications'
@@ -53,6 +59,7 @@ export interface AppSettings {
   namingModelByProvider: Record<string, string>
   extractionModelByProvider: Record<string, string>
   guidedReviewModelByProvider: Record<string, string>
+  commandCenterShortcut: CommandCenterShortcutPrefs
   notifications: NotificationPrefs
   onboarding: OnboardingPrefs
   updates: UpdatePrefs
@@ -66,6 +73,7 @@ export type AppSettingsInput = Omit<
   | 'namingModelByProvider'
   | 'extractionModelByProvider'
   | 'guidedReviewModelByProvider'
+  | 'commandCenterShortcut'
   | 'notifications'
   | 'onboarding'
   | 'updates'
@@ -76,6 +84,7 @@ export type AppSettingsInput = Omit<
   namingModelByProvider?: Record<string, string>
   extractionModelByProvider?: Record<string, string>
   guidedReviewModelByProvider?: Record<string, string>
+  commandCenterShortcut?: CommandCenterShortcutPrefs
   notifications?: NotificationPrefs
   onboarding?: OnboardingPrefs
   updates?: UpdatePrefs

@@ -104,6 +104,7 @@ function primeSettings(favoriteModels = DEFAULT_FAVORITE_MODELS_PREFS): void {
       namingModelByProvider: {},
       extractionModelByProvider: {},
       guidedReviewModelByProvider: {},
+      commandCenterShortcut: { key: 'k', shiftKey: false, altKey: false },
       notifications: DEFAULT_NOTIFICATION_PREFS,
       onboarding: DEFAULT_ONBOARDING_PREFS,
       updates: DEFAULT_UPDATE_PREFS,

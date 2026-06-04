@@ -1,6 +1,7 @@
 export type {
   AppSettings,
   AppSettingsInput,
+  CommandCenterShortcutPrefs,
   DebugLoggingPrefs,
   FavoriteModelRef,
   FavoriteModelsPrefs,
@@ -12,6 +13,7 @@ export type {
   UpdatePrefs,
 } from './app-settings.types'
 export {
+  DEFAULT_COMMAND_CENTER_SHORTCUT,
   DEFAULT_DEBUG_LOGGING_PREFS,
   DEFAULT_FAVORITE_MODELS_PREFS,
   DEFAULT_NOTIFICATION_PREFS,

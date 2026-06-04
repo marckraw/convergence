@@ -226,6 +226,7 @@ function primeStores(
       namingModelByProvider: {},
       extractionModelByProvider: {},
       guidedReviewModelByProvider: {},
+      commandCenterShortcut: { key: 'k', shiftKey: false, altKey: false },
     },
     isLoaded: true,
     isSaving: false,

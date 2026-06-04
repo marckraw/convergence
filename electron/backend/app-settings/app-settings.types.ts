@@ -39,6 +39,18 @@ export const DEFAULT_FAVORITE_MODELS_PREFS: FavoriteModelsPrefs = {
   items: [],
 }
 
+export interface CommandCenterShortcutPrefs {
+  key: string
+  shiftKey: boolean
+  altKey: boolean
+}
+
+export const DEFAULT_COMMAND_CENTER_SHORTCUT: CommandCenterShortcutPrefs = {
+  key: 'k',
+  shiftKey: false,
+  altKey: false,
+}
+
 export interface AppSettings {
   defaultProviderId: string | null
   defaultModelId: string | null
@@ -46,6 +58,7 @@ export interface AppSettings {
   namingModelByProvider: Record<string, string>
   extractionModelByProvider: Record<string, string>
   guidedReviewModelByProvider: Record<string, string>
+  commandCenterShortcut: CommandCenterShortcutPrefs
   notifications: NotificationPrefs
   onboarding: OnboardingPrefs
   updates: UpdatePrefs
@@ -59,6 +72,7 @@ export type AppSettingsInput = Omit<
   | 'namingModelByProvider'
   | 'extractionModelByProvider'
   | 'guidedReviewModelByProvider'
+  | 'commandCenterShortcut'
   | 'notifications'
   | 'onboarding'
   | 'updates'
@@ -69,6 +83,7 @@ export type AppSettingsInput = Omit<
   namingModelByProvider?: Record<string, string>
   extractionModelByProvider?: Record<string, string>
   guidedReviewModelByProvider?: Record<string, string>
+  commandCenterShortcut?: CommandCenterShortcutPrefs
   notifications?: NotificationPrefs
   onboarding?: OnboardingPrefs
   updates?: UpdatePrefs

@@ -13,12 +13,14 @@ import {
   DEFAULT_ONBOARDING_PREFS,
   DEFAULT_PI_MODEL_VISIBILITY_PREFS,
   type AppSettings,
+  type CommandCenterShortcutPrefs,
   type DebugLoggingPrefs,
   type FavoriteModelsPrefs,
   type OnboardingPrefs,
   type PiModelVisibilityPrefs,
   type ResolvedOneShotModelDefaults,
   type ResolvedSessionDefaults,
+  DEFAULT_COMMAND_CENTER_SHORTCUT,
 } from './app-settings.types'
 
 export function parseModelMap(value: unknown): Record<string, string> {
@@ -166,6 +168,38 @@ export function parseFavoriteModelsPrefs(value: unknown): FavoriteModelsPrefs {
   return { items }
 }
 
+const ALLOWED_SHORTCUT_KEY_PATTERN = /^[a-z0-9]$/
+
+export function parseCommandCenterShortcut(
+  value: unknown,
+): CommandCenterShortcutPrefs {
+  if (!value || typeof value !== 'object') {
+    return DEFAULT_COMMAND_CENTER_SHORTCUT
+  }
+  const raw = value as Partial<CommandCenterShortcutPrefs>
+  const key =
+    typeof raw.key === 'string' && raw.key.length > 0
+      ? raw.key.toLowerCase()
+      : DEFAULT_COMMAND_CENTER_SHORTCUT.key
+  return {
+    key,
+    shiftKey: raw.shiftKey === true,
+    altKey: raw.altKey === true,
+  }
+}
+
+export function validateCommandCenterShortcut(
+  binding: CommandCenterShortcutPrefs,
+): CommandCenterShortcutPrefs | null {
+  const key = binding.key.toLowerCase()
+  if (!ALLOWED_SHORTCUT_KEY_PATTERN.test(key)) return null
+  return {
+    key,
+    shiftKey: binding.shiftKey,
+    altKey: binding.altKey,
+  }
+}
+
 function emptyAppSettings(): AppSettings {
   return {
     defaultProviderId: null,
@@ -174,6 +208,7 @@ function emptyAppSettings(): AppSettings {
     namingModelByProvider: {},
     extractionModelByProvider: {},
     guidedReviewModelByProvider: {},
+    commandCenterShortcut: DEFAULT_COMMAND_CENTER_SHORTCUT,
     notifications: DEFAULT_NOTIFICATION_PREFS,
     onboarding: DEFAULT_ONBOARDING_PREFS,
     updates: DEFAULT_UPDATE_PREFS,
@@ -208,6 +243,9 @@ export function parseAppSettings(raw: string | null): AppSettings {
       ),
       guidedReviewModelByProvider: parseModelMap(
         parsed.guidedReviewModelByProvider,
+      ),
+      commandCenterShortcut: parseCommandCenterShortcut(
+        parsed.commandCenterShortcut,
       ),
       notifications: parseNotificationPrefs(parsed.notifications),
       onboarding: parseOnboardingPrefs(parsed.onboarding),
@@ -260,6 +298,9 @@ export function validateAppSettings(
     settings.favoriteModels,
     descriptors,
   )
+  const commandCenterShortcut =
+    validateCommandCenterShortcut(settings.commandCenterShortcut) ??
+    DEFAULT_COMMAND_CENTER_SHORTCUT
 
   const provider = descriptors.find(
     (item) => item.id === settings.defaultProviderId,
@@ -272,6 +313,7 @@ export function validateAppSettings(
       namingModelByProvider,
       extractionModelByProvider,
       guidedReviewModelByProvider,
+      commandCenterShortcut,
       notifications: settings.notifications,
       onboarding: settings.onboarding,
       updates: settings.updates,
@@ -295,6 +337,7 @@ export function validateAppSettings(
       namingModelByProvider,
       extractionModelByProvider,
       guidedReviewModelByProvider,
+      commandCenterShortcut,
       notifications: settings.notifications,
       onboarding: settings.onboarding,
       updates: settings.updates,
@@ -317,6 +360,7 @@ export function validateAppSettings(
     namingModelByProvider,
     extractionModelByProvider,
     guidedReviewModelByProvider,
+    commandCenterShortcut,
     notifications: settings.notifications,
     onboarding: settings.onboarding,
     updates: settings.updates,

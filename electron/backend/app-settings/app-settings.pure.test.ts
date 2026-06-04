@@ -115,6 +115,7 @@ describe('app-settings pure helpers', () => {
       namingModelByProvider: {},
       extractionModelByProvider: {},
       guidedReviewModelByProvider: {},
+      commandCenterShortcut: { key: 'k', shiftKey: false, altKey: false },
       notifications: DEFAULT_NOTIFICATION_PREFS,
       onboarding: DEFAULT_ONBOARDING_PREFS,
       updates: DEFAULT_UPDATE_PREFS,
@@ -122,6 +123,21 @@ describe('app-settings pure helpers', () => {
       piModelVisibility: DEFAULT_PI_MODEL_VISIBILITY_PREFS,
       favoriteModels: DEFAULT_FAVORITE_MODELS_PREFS,
     })
+  })
+
+  it('parses command center shortcut prefs with defaults', () => {
+    expect(parseAppSettings(null).commandCenterShortcut).toEqual({
+      key: 'k',
+      shiftKey: false,
+      altKey: false,
+    })
+    expect(
+      parseAppSettings(
+        JSON.stringify({
+          commandCenterShortcut: { key: 'P', shiftKey: true, altKey: false },
+        }),
+      ).commandCenterShortcut,
+    ).toEqual({ key: 'p', shiftKey: true, altKey: false })
   })
 
   it('hydrates notification prefs per field', () => {

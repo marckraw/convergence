@@ -13,9 +13,16 @@ import {
   type NotificationSeverity,
 } from '@/entities/notifications'
 import {
+  DEFAULT_COMMAND_CENTER_SHORTCUT,
   useAppSettingsStore,
+  type CommandCenterShortcutPrefs,
   type DebugLoggingPrefs,
 } from '@/entities/app-settings'
+import {
+  bindingFromKeyEvent,
+  findShortcutConflict,
+  formatShortcutLabel,
+} from '@/shared/lib/keyboard-shortcut.pure'
 import { providerDebugApi } from '@/entities/provider-debug'
 import { useDialogStore } from '@/entities/dialog'
 import { useUpdatesStore, type UpdatePrefs } from '@/entities/updates'
@@ -53,8 +60,13 @@ function isAppSettingsSection(value: unknown): value is AppSettingsSectionId {
     value === 'notifications' ||
     value === 'updates' ||
     value === 'insights' ||
+    value === 'shortcuts' ||
     value === 'debug-logging'
   )
+}
+
+function shortcutPlatform(platform: string | null): 'mac' | 'other' {
+  return platform === 'darwin' ? 'mac' : 'other'
 }
 
 export const AppSettingsDialogContainer: FC<AppSettingsContainerProps> = ({
@@ -86,6 +98,12 @@ export const AppSettingsDialogContainer: FC<AppSettingsContainerProps> = ({
   const [debugLoggingDraft, setDebugLoggingDraft] =
     useState<DebugLoggingPrefs | null>(null)
   const [piModelDraft, setPiModelDraft] = useState<string[] | null>(null)
+  const [shortcutsDraft, setShortcutsDraft] =
+    useState<CommandCenterShortcutPrefs | null>(null)
+  const [shortcutsConflict, setShortcutsConflict] = useState<string | null>(
+    null,
+  )
+  const [isRecordingShortcut, setIsRecordingShortcut] = useState(false)
   const [allProviders, setAllProviders] = useState<ProviderInfo[]>([])
   const [activeSection, setActiveSection] =
     useState<AppSettingsSectionId>(DEFAULT_SECTION)
@@ -137,6 +155,9 @@ export const AppSettingsDialogContainer: FC<AppSettingsContainerProps> = ({
     setUpdatesDraft(settings.updates)
     setDebugLoggingDraft(settings.debugLogging)
     setPiModelDraft(settings.piModelVisibility.additionalModelIds)
+    setShortcutsDraft(settings.commandCenterShortcut)
+    setShortcutsConflict(null)
+    setIsRecordingShortcut(false)
     clearError()
   }, [open, payload, settings, clearError])
 
@@ -271,6 +292,58 @@ export const AppSettingsDialogContainer: FC<AppSettingsContainerProps> = ({
     void providerDebugApi.openFolder()
   }, [])
 
+  const handleStartRecordShortcut = useCallback(() => {
+    setShortcutsConflict(null)
+    setIsRecordingShortcut(true)
+  }, [])
+
+  const handleRestoreCommandCenterShortcut = useCallback(() => {
+    setShortcutsDraft(DEFAULT_COMMAND_CENTER_SHORTCUT)
+    setShortcutsConflict(null)
+  }, [])
+
+  useEffect(() => {
+    if (!isRecordingShortcut) return
+
+    const handler = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        event.preventDefault()
+        event.stopPropagation()
+        setIsRecordingShortcut(false)
+        return
+      }
+
+      const primary = event.metaKey || event.ctrlKey
+      if (!primary) return
+
+      event.preventDefault()
+      event.stopPropagation()
+
+      const captured = bindingFromKeyEvent(event)
+      if (!captured) {
+        setShortcutsConflict(
+          'Use a single letter or number key with the primary modifier.',
+        )
+        setIsRecordingShortcut(false)
+        return
+      }
+
+      const conflict = findShortcutConflict(captured)
+      if (conflict) {
+        setShortcutsConflict(conflict)
+        setIsRecordingShortcut(false)
+        return
+      }
+
+      setShortcutsDraft(captured)
+      setShortcutsConflict(null)
+      setIsRecordingShortcut(false)
+    }
+
+    window.addEventListener('keydown', handler, true)
+    return () => window.removeEventListener('keydown', handler, true)
+  }, [isRecordingShortcut])
+
   const platform = useMemo<string | null>(() => {
     const datasetPlatform = document.documentElement.dataset.platform
     if (datasetPlatform) return datasetPlatform
@@ -281,7 +354,23 @@ export const AppSettingsDialogContainer: FC<AppSettingsContainerProps> = ({
     closeDialog()
   }, [closeDialog])
 
+  const commandCenterShortcutDraft =
+    shortcutsDraft ?? settings.commandCenterShortcut
+  const commandCenterShortcutLabel = formatShortcutLabel(
+    commandCenterShortcutDraft,
+    shortcutPlatform(platform),
+  )
+
   const handleSave = useCallback(async () => {
+    if (shortcutsConflict) return
+
+    const shortcutToSave = shortcutsDraft ?? settings.commandCenterShortcut
+    const conflict = findShortcutConflict(shortcutToSave)
+    if (conflict) {
+      setShortcutsConflict(conflict)
+      return
+    }
+
     try {
       await saveSettings({
         defaultProviderId: selection.providerId || null,
@@ -290,6 +379,7 @@ export const AppSettingsDialogContainer: FC<AppSettingsContainerProps> = ({
         namingModelByProvider: namingDraft,
         extractionModelByProvider: extractionDraft,
         guidedReviewModelByProvider: guidedReviewDraft,
+        commandCenterShortcut: shortcutToSave,
         notifications: notificationsDraft ?? settings.notifications,
         onboarding: settings.onboarding,
         updates: updatesDraft ?? settings.updates,
@@ -311,6 +401,9 @@ export const AppSettingsDialogContainer: FC<AppSettingsContainerProps> = ({
     namingDraft,
     extractionDraft,
     guidedReviewDraft,
+    shortcutsDraft,
+    shortcutsConflict,
+    settings.commandCenterShortcut,
     notificationsDraft,
     updatesDraft,
     debugLoggingDraft,
@@ -365,6 +458,12 @@ export const AppSettingsDialogContainer: FC<AppSettingsContainerProps> = ({
       onToggleDebugLogging={handleToggleDebugLogging}
       onTogglePiModel={handleTogglePiModel}
       onOpenDebugLogFolder={handleOpenDebugLogFolder}
+      commandCenterShortcutDraft={commandCenterShortcutDraft}
+      commandCenterShortcutLabel={commandCenterShortcutLabel}
+      shortcutsConflict={shortcutsConflict}
+      isRecordingShortcut={isRecordingShortcut}
+      onStartRecordShortcut={handleStartRecordShortcut}
+      onRestoreCommandCenterShortcut={handleRestoreCommandCenterShortcut}
       onSectionChange={setActiveSection}
       onSave={handleSave}
       onCancel={handleCancel}

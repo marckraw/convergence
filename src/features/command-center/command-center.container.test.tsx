@@ -7,6 +7,10 @@ import type { Workspace } from '@/entities/workspace'
 import { useSessionStore } from '@/entities/session'
 import type { Session } from '@/entities/session'
 import { useCommandCenterStore } from './command-center.model'
+import {
+  DEFAULT_COMMAND_CENTER_SHORTCUT,
+  useAppSettingsStore,
+} from '@/entities/app-settings'
 
 vi.mock('./intents', () => ({
   switchToSession: vi.fn<(sessionId: string) => Promise<void>>(
@@ -114,6 +118,15 @@ const chatSession = makeGlobalChatSession('chat-1', 'summarize roadmap')
 
 describe('CommandCenterContainer', () => {
   beforeEach(() => {
+    useAppSettingsStore.setState((state) => ({
+      ...state,
+      isLoaded: true,
+      settings: {
+        ...state.settings,
+        commandCenterShortcut: DEFAULT_COMMAND_CENTER_SHORTCUT,
+      },
+    }))
+
     vi.mocked(intents.switchToSession).mockClear()
     vi.mocked(intents.activateProject).mockClear()
     vi.mocked(intents.openDialog).mockClear()
@@ -256,6 +269,26 @@ describe('CommandCenterContainer', () => {
     expect(onSelectChatSession).toHaveBeenCalledWith('chat-1')
     expect(onSelectCodeSession).not.toHaveBeenCalled()
     expect(intents.switchToSession).not.toHaveBeenCalled()
+  })
+
+  it('opens with a custom shortcut from app settings', () => {
+    useAppSettingsStore.setState((state) => ({
+      ...state,
+      settings: {
+        ...state.settings,
+        commandCenterShortcut: { key: 'p', shiftKey: false, altKey: false },
+      },
+    }))
+
+    render(<CommandCenterContainer />)
+
+    act(() => {
+      window.dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'p', metaKey: true }),
+      )
+    })
+
+    expect(useCommandCenterStore.getState().isOpen).toBe(true)
   })
 
   it('Cmd+K keydown toggles the palette open and closed', () => {

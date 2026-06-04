@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { useSessionStore, type ProviderInfo } from '@/entities/session'
 import {
@@ -185,6 +185,7 @@ function primeStores(stored: {
       namingModelByProvider: {},
       extractionModelByProvider: {},
       guidedReviewModelByProvider: {},
+      commandCenterShortcut: { key: 'k', shiftKey: false, altKey: false },
       notifications: DEFAULT_NOTIFICATION_PREFS,
       onboarding: DEFAULT_ONBOARDING_PREFS,
       updates: DEFAULT_UPDATE_PREFS,
@@ -309,6 +310,7 @@ describe('AppSettingsDialogContainer', () => {
         namingModelByProvider: {},
         extractionModelByProvider: {},
         guidedReviewModelByProvider: {},
+        commandCenterShortcut: { key: 'k', shiftKey: false, altKey: false },
         notifications: DEFAULT_NOTIFICATION_PREFS,
         onboarding: DEFAULT_ONBOARDING_PREFS,
         updates: DEFAULT_UPDATE_PREFS,
@@ -382,6 +384,7 @@ describe('AppSettingsDialogContainer', () => {
         namingModelByProvider: {},
         extractionModelByProvider: {},
         guidedReviewModelByProvider: {},
+        commandCenterShortcut: { key: 'k', shiftKey: false, altKey: false },
         notifications: DEFAULT_NOTIFICATION_PREFS,
         onboarding: DEFAULT_ONBOARDING_PREFS,
         updates: DEFAULT_UPDATE_PREFS,
@@ -659,6 +662,75 @@ describe('AppSettingsDialogContainer', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Check now' }))
     await waitFor(() => expect(updatesCheck).toHaveBeenCalledTimes(1))
+  })
+
+  it('saves a custom Command Center shortcut from Shortcuts settings', async () => {
+    primeStores({
+      defaultProviderId: 'claude-code',
+      defaultModelId: 'sonnet',
+      defaultEffortId: 'medium',
+    })
+
+    render(<AppSettingsDialogContainer trigger={<Button>Open</Button>} />)
+    fireEvent.click(screen.getByText('Open'))
+    expect(await screen.findByText('Settings')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: /Shortcuts/ }))
+    fireEvent.click(screen.getByRole('button', { name: 'Record shortcut' }))
+
+    act(() => {
+      window.dispatchEvent(
+        new KeyboardEvent('keydown', {
+          key: 'p',
+          metaKey: true,
+          bubbles: true,
+        }),
+      )
+    })
+
+    expect(await screen.findByText('⌘P')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+
+    await waitFor(() => {
+      expect(window.electronAPI.appSettings.set).toHaveBeenCalledWith(
+        expect.objectContaining({
+          commandCenterShortcut: { key: 'p', shiftKey: false, altKey: false },
+        }),
+      )
+    })
+  })
+
+  it('blocks saving a Command Center shortcut that conflicts with terminal bindings', async () => {
+    primeStores({
+      defaultProviderId: 'claude-code',
+      defaultModelId: 'sonnet',
+      defaultEffortId: 'medium',
+    })
+
+    render(<AppSettingsDialogContainer trigger={<Button>Open</Button>} />)
+    fireEvent.click(screen.getByText('Open'))
+    expect(await screen.findByText('Settings')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: /Shortcuts/ }))
+    fireEvent.click(screen.getByRole('button', { name: 'Record shortcut' }))
+
+    act(() => {
+      window.dispatchEvent(
+        new KeyboardEvent('keydown', {
+          key: 't',
+          metaKey: true,
+          bubbles: true,
+        }),
+      )
+    })
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Terminal new tab',
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+    expect(window.electronAPI.appSettings.set).not.toHaveBeenCalled()
   })
 
   it('Cancel closes without dispatching save', async () => {

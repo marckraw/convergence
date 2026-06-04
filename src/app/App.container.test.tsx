@@ -203,6 +203,7 @@ const mockElectronAPI = {
       namingModelByProvider: {},
       extractionModelByProvider: {},
       guidedReviewModelByProvider: {},
+      commandCenterShortcut: { key: 'k', shiftKey: false, altKey: false },
       notifications: {
         enabled: true,
         toasts: true,

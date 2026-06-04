@@ -13,6 +13,7 @@ import { APP_SETTINGS_KEY } from './app-settings.constants'
 import {
   filterPiDescriptor,
   parseAppSettings,
+  parseCommandCenterShortcut,
   parseDebugLoggingPrefs,
   parseFavoriteModelsPrefs,
   parseNotificationPrefs,
@@ -22,6 +23,7 @@ import {
   resolveGuidedReviewModelFromSettings,
   resolveSessionDefaultsFromSettings,
   validateAppSettings,
+  validateCommandCenterShortcut,
   validateFavoriteModels,
   validateModelMap,
   validatePiModelVisibility,
@@ -145,6 +147,21 @@ export class AppSettingsService {
             parseFavoriteModelsPrefs(input.favoriteModels),
             descriptors,
           )
+    const commandCenterShortcut =
+      input.commandCenterShortcut === undefined
+        ? existing.commandCenterShortcut
+        : (() => {
+            const parsed = parseCommandCenterShortcut(
+              input.commandCenterShortcut,
+            )
+            const validated = validateCommandCenterShortcut(parsed)
+            if (!validated) {
+              throw new Error(
+                'Command Center shortcut must use a single letter or number key.',
+              )
+            }
+            return validated
+          })()
 
     const toStore: AppSettings = {
       defaultProviderId: provider ? provider.id : null,
@@ -154,6 +171,7 @@ export class AppSettingsService {
       namingModelByProvider,
       extractionModelByProvider,
       guidedReviewModelByProvider,
+      commandCenterShortcut,
       notifications,
       onboarding,
       updates,

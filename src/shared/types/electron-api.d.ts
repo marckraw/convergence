@@ -1935,6 +1935,12 @@ interface FavoriteModelRefData {
   modelId: string
 }
 
+interface CommandCenterShortcutPrefsData {
+  key: string
+  shiftKey: boolean
+  altKey: boolean
+}
+
 interface AppSettingsData {
   defaultProviderId: string | null
   defaultModelId: string | null
@@ -1942,6 +1948,7 @@ interface AppSettingsData {
   namingModelByProvider: Record<string, string>
   extractionModelByProvider: Record<string, string>
   guidedReviewModelByProvider: Record<string, string>
+  commandCenterShortcut: CommandCenterShortcutPrefsData
   notifications: NotificationPrefsData
   onboarding: OnboardingPrefsData
   updates: UpdatePrefsData
@@ -1959,6 +1966,7 @@ type AppSettingsInputData = Omit<
   | 'namingModelByProvider'
   | 'extractionModelByProvider'
   | 'guidedReviewModelByProvider'
+  | 'commandCenterShortcut'
   | 'notifications'
   | 'onboarding'
   | 'updates'
@@ -1969,6 +1977,7 @@ type AppSettingsInputData = Omit<
   namingModelByProvider?: Record<string, string>
   extractionModelByProvider?: Record<string, string>
   guidedReviewModelByProvider?: Record<string, string>
+  commandCenterShortcut?: CommandCenterShortcutPrefsData
   notifications?: NotificationPrefsData
   onboarding?: OnboardingPrefsData
   updates?: UpdatePrefsData
