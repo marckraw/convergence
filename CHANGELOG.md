@@ -1,5 +1,11 @@
 # convergence
 
+## 0.40.8
+
+### Patch Changes
+
+- b7b1a54: Keep Pierre's virtualized diff root as the scroll container so long guide diffs render beyond the initial viewport without disabling virtualization.
+
 ## 0.40.7
 
 ### Patch Changes
