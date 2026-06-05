@@ -1,5 +1,11 @@
 # convergence
 
+## 0.40.6
+
+### Patch Changes
+
+- 05694e9: Fix guide-mode code review diffs so long files render completely instead of appearing cut off after the first virtualized chunk.
+
 ## 0.40.5
 
 ### Patch Changes
