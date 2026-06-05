@@ -137,19 +137,20 @@ describe('PierreDiffViewer', () => {
     )
   })
 
-  it('hides the built-in file header when showFileHeader is false', () => {
+  it('renders guide metadata in the shared file header', () => {
     render(
       <PierreDiffViewer
         file="src/app.ts"
         diff={'@@ -1 +1 @@\n-old\n+new'}
+        status="added"
         subtitle="Defines the daemon contract."
-        showFileHeader={false}
+        subtitleVariant="description"
       />,
     )
 
     expect(screen.getByText('Pierre diff')).toBeInTheDocument()
-    expect(screen.queryByText('Defines the daemon contract.')).toBeNull()
-    expect(screen.queryByText('src/app.ts')).toBeNull()
+    expect(screen.getByText('added')).toBeInTheDocument()
+    expect(screen.getByText('Defines the daemon contract.')).toBeInTheDocument()
   })
 
   it('folds rich context by default and expands it from header controls', () => {

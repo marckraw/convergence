@@ -38,7 +38,6 @@ interface PierreDiffViewerProps<TAnnotation = undefined> {
   subtitle?: string
   subtitleVariant?: DiffFileHeaderSubtitleVariant
   status?: string
-  showFileHeader?: boolean
   selectedLines?: SelectedLineRange | null
   lineAnnotations?: DiffLineAnnotation<TAnnotation>[]
   renderAnnotation?: (annotation: DiffLineAnnotation<TAnnotation>) => ReactNode
@@ -60,7 +59,6 @@ export const PierreDiffViewerView = <TAnnotation,>({
   subtitle,
   subtitleVariant = 'label',
   status,
-  showFileHeader = true,
   selectedLines = null,
   lineAnnotations = [],
   renderAnnotation,
@@ -132,7 +130,6 @@ export const PierreDiffViewerView = <TAnnotation,>({
           subtitleVariant,
           status,
           loading,
-          showFileHeader,
         })}
         <div className="app-scrollbar min-h-0 flex-1 overflow-auto bg-background/60">
           <div className="flex h-full min-h-32 items-center justify-center gap-2 p-3 text-xs text-muted-foreground">
@@ -198,7 +195,6 @@ export const PierreDiffViewerView = <TAnnotation,>({
         subtitleVariant,
         status,
         loading,
-        showFileHeader,
         contextControls,
       })}
       <div className="app-scrollbar min-h-0 flex-1 overflow-auto bg-background/60">
@@ -222,7 +218,6 @@ function renderDiffFileHeader({
   subtitleVariant,
   status,
   loading = false,
-  showFileHeader = true,
   contextControls = null,
 }: {
   path: string
@@ -230,19 +225,8 @@ function renderDiffFileHeader({
   subtitleVariant: DiffFileHeaderSubtitleVariant
   status?: string
   loading?: boolean
-  showFileHeader?: boolean
   contextControls?: ReactNode
 }) {
-  if (!showFileHeader) {
-    if (!contextControls) return null
-
-    return (
-      <div className="flex shrink-0 justify-end border-b border-border px-3 py-1">
-        {contextControls}
-      </div>
-    )
-  }
-
   return (
     <DiffFileHeader
       path={path}
