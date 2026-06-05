@@ -47,7 +47,6 @@ export const GuidedReviewModelDefaultsFields: FC<
         <SettingsControlField
           key={provider.id}
           title={provider.vendorLabel || provider.name}
-          description="Model used to generate guided code review plans. Guided review runs with medium effort when the selected model supports it."
         >
           <ModelPickerDialog
             providers={[provider]}
