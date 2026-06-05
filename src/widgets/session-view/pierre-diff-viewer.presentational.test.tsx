@@ -236,6 +236,32 @@ describe('PierreDiffViewer', () => {
     expect(patchDiff.props.at(-1)?.disableWorkerPool).toBe(true)
   })
 
+  it('renders inline full-content diffs without context folding or Pierre Virtualizer', () => {
+    const diff = [
+      '@@ -1,320 +1,320 @@',
+      ...Array.from({ length: 160 }, (_, index) => ` context before ${index}`),
+      '-old',
+      '+new',
+      ...Array.from({ length: 158 }, (_, index) => ` context after ${index}`),
+    ].join('\n')
+
+    render(
+      <PierreDiffViewer
+        file="src/generated.ts"
+        diff={diff}
+        scrollMode="inline"
+        contextStrategy="full"
+      />,
+    )
+
+    expect(screen.queryByTestId('pierre-virtualizer')).toBeNull()
+    expect(
+      screen.queryByLabelText('Show more context above changes'),
+    ).toBeNull()
+    expect(patchDiff.props.at(-1)?.patch).toContain(' context before 0')
+    expect(patchDiff.props.at(-1)?.patch).toContain(' context after 157')
+  })
+
   it('enables worker-pool highlighting for very large diffs when workers exist', () => {
     vi.stubGlobal('Worker', vi.fn())
 

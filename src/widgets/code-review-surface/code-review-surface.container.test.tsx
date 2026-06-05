@@ -200,11 +200,15 @@ vi.mock('@/widgets/session-view', async (importOriginal) => {
       diff,
       lineAnnotations,
       onSelectedLinesChange,
+      scrollMode,
+      contextStrategy,
     }: {
       file: string | null
       diff: string
       lineAnnotations?: unknown[]
       onSelectedLinesChange?: (range: SelectedLineRange | null) => void
+      scrollMode?: 'contained' | 'inline'
+      contextStrategy?: 'fold' | 'full'
     }) => (
       <button
         type="button"
@@ -212,6 +216,8 @@ vi.mock('@/widgets/session-view', async (importOriginal) => {
         data-file={file ?? ''}
         data-diff={diff}
         data-annotation-count={lineAnnotations?.length ?? 0}
+        data-scroll-mode={scrollMode ?? 'contained'}
+        data-context-strategy={contextStrategy ?? 'fold'}
         onClick={() =>
           onSelectedLinesChange?.({
             start: 1,
@@ -1158,6 +1164,14 @@ describe('CodeReviewSurface', () => {
     expect(screen.getAllByTestId('pierre-diff-viewer')[0]).toHaveAttribute(
       'data-file',
       'src/app.ts',
+    )
+    expect(screen.getAllByTestId('pierre-diff-viewer')[0]).toHaveAttribute(
+      'data-scroll-mode',
+      'inline',
+    )
+    expect(screen.getAllByTestId('pierre-diff-viewer')[0]).toHaveAttribute(
+      'data-context-strategy',
+      'full',
     )
   })
 
