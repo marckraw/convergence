@@ -1224,7 +1224,7 @@ describe('CodeReviewSurface', () => {
       />,
     )
 
-    fireEvent.click(screen.getAllByTitle('src/app.ts')[1])
+    fireEvent.click(screen.getAllByRole('button', { name: /src\/app\.ts/ })[1])
 
     expect(setSelectedFile).toHaveBeenCalledWith('src/app.ts')
     expect(onRouteSearchChange).toHaveBeenCalledWith({ file: 'src/app.ts' })
