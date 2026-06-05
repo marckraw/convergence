@@ -1,5 +1,12 @@
 # convergence
 
+## 0.40.7
+
+### Patch Changes
+
+- 2e5d72b: Extract a shared `DiffFileHeader` for code review diffs so guide mode shows one file header with the AI reason as the subtitle instead of duplicating the path.
+- b09e2af: Add a collapsible guided review section rail so narrow review layouts can keep the walkthrough content focused while section movement happens by scrolling.
+
 ## 0.40.6
 
 ### Patch Changes
