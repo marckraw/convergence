@@ -6,6 +6,8 @@ import { isPullRequestReviewBranchName } from '../pull-request/pull-request-refe
 import { parseNameStatusOutput } from './base-branch-diff.pure'
 import type { ChangedFileEntry } from './changed-files.types'
 
+const EXPANDABLE_DIFF_CONTEXT_LINES = 80
+
 function exec(command: string, args: string[], cwd: string): Promise<string> {
   return new Promise((resolve, reject) => {
     execFile(command, args, { cwd }, (error, stdout, stderr) => {
@@ -308,6 +310,7 @@ export class GitService {
         [
           'diff',
           '--no-color',
+          `--unified=${EXPANDABLE_DIFF_CONTEXT_LINES}`,
           '--find-renames',
           comparisonPoint,
           refs.headRef,
@@ -336,7 +339,12 @@ export class GitService {
 
     return execAllowExitCodes(
       'git',
-      ['diff', '--no-color', `${baseRef}...${input.headBranch}`],
+      [
+        'diff',
+        '--no-color',
+        `--unified=${EXPANDABLE_DIFF_CONTEXT_LINES}`,
+        `${baseRef}...${input.headBranch}`,
+      ],
       input.repoPath,
       [0, 1],
     )
@@ -441,7 +449,13 @@ export class GitService {
     baseRef: string,
     filePath?: string,
   ): Promise<string> {
-    const args = ['diff', '--no-color', '--find-renames', baseRef]
+    const args = [
+      'diff',
+      '--no-color',
+      `--unified=${EXPANDABLE_DIFF_CONTEXT_LINES}`,
+      '--find-renames',
+      baseRef,
+    ]
     if (filePath) args.push('--', filePath)
 
     const tracked = await exec('git', args, repoPath).catch(() => '')
@@ -462,7 +476,15 @@ export class GitService {
 
     const syntheticUntracked = await execAllowExitCodes(
       'git',
-      ['diff', '--no-index', '--no-color', '--', '/dev/null', absoluteFilePath],
+      [
+        'diff',
+        '--no-index',
+        '--no-color',
+        `--unified=${EXPANDABLE_DIFF_CONTEXT_LINES}`,
+        '--',
+        '/dev/null',
+        absoluteFilePath,
+      ],
       repoPath,
       [0, 1],
     ).catch(() => '')
@@ -498,7 +520,15 @@ export class GitService {
   ): Promise<string> {
     return execAllowExitCodes(
       'git',
-      ['diff', '--no-index', '--no-color', '--', leftPath, rightPath],
+      [
+        'diff',
+        '--no-index',
+        '--no-color',
+        `--unified=${EXPANDABLE_DIFF_CONTEXT_LINES}`,
+        '--',
+        leftPath,
+        rightPath,
+      ],
       cwd,
       [0, 1],
     )
@@ -528,7 +558,11 @@ export class GitService {
 
   async getDiff(repoPath: string, filePath?: string): Promise<string> {
     try {
-      const args = ['diff', '--no-color']
+      const args = [
+        'diff',
+        '--no-color',
+        `--unified=${EXPANDABLE_DIFF_CONTEXT_LINES}`,
+      ]
       if (filePath) args.push('--', filePath)
       const staged = await exec(
         'git',
@@ -563,6 +597,7 @@ export class GitService {
           'diff',
           '--no-index',
           '--no-color',
+          `--unified=${EXPANDABLE_DIFF_CONTEXT_LINES}`,
           '--',
           '/dev/null',
           absoluteFilePath,

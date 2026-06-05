@@ -1,7 +1,7 @@
 export { SessionView } from './session-view.container'
 export { SessionConversationSurface } from './session-conversation-surface.container'
 export { ChangedFilesTree } from './changed-files-tree.container'
-export { PierreDiffViewer } from './pierre-diff-viewer.presentational'
+export { PierreDiffViewer } from './pierre-diff-viewer.container'
 export { ReviewNoteDiffAnnotation } from './review-note-diff-annotation.presentational'
 export {
   parseUnifiedDiffForReviewAnchors,

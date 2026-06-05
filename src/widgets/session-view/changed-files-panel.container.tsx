@@ -43,7 +43,7 @@ import {
   parseUnifiedDiffForReviewAnchors,
   summarizeSelectedDiffLines,
 } from './diff-lines.pure'
-import { PierreDiffViewer } from './pierre-diff-viewer.presentational'
+import { PierreDiffViewer } from './pierre-diff-viewer.container'
 import {
   mapDiffLineIdsToPierreSelection,
   mapPierreSelectionToDiffLineIds,
