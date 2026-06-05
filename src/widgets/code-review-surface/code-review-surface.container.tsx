@@ -87,6 +87,8 @@ interface CodeReviewSurfaceProps {
 const REVIEW_TARGET_RAIL = 'minmax(280px, 360px)'
 const REVIEW_TARGET_RAIL_COLLAPSED = '48px'
 const REVIEW_FILE_RAIL = 'minmax(260px, 320px)'
+const REVIEW_GUIDE_RAIL = 'minmax(260px, 320px)'
+const REVIEW_GUIDE_RAIL_COLLAPSED = '48px'
 const REVIEW_DIFF_PANE = 'minmax(0, 1fr)'
 const REVIEW_NOTES_RAIL = 'minmax(240px, 300px)'
 const REVIEW_NOTES_RAIL_COLLAPSED = '48px'
@@ -112,17 +114,20 @@ const EMPTY_GUIDE = buildDeterministicCodeReviewGuide([])
 
 function getInitialReviewRailState(): {
   targetRailCollapsed: boolean
+  guideRailCollapsed: boolean
   notesRailCollapsed: boolean
 } {
   if (typeof window === 'undefined') {
     return {
       targetRailCollapsed: false,
+      guideRailCollapsed: false,
       notesRailCollapsed: false,
     }
   }
 
   return {
     targetRailCollapsed: window.innerWidth < TARGET_RAIL_COLLAPSE_WIDTH,
+    guideRailCollapsed: false,
     notesRailCollapsed: window.innerWidth < NOTES_RAIL_COLLAPSE_WIDTH,
   }
 }
@@ -272,6 +277,9 @@ export const CodeReviewSurface: FC<CodeReviewSurfaceProps> = ({
   const [targetRailCollapsed, setTargetRailCollapsed] = useState(
     () => getInitialReviewRailState().targetRailCollapsed,
   )
+  const [guideRailCollapsed, setGuideRailCollapsed] = useState(
+    () => getInitialReviewRailState().guideRailCollapsed,
+  )
   const [notesRailCollapsed, setNotesRailCollapsed] = useState(
     () => getInitialReviewRailState().notesRailCollapsed,
   )
@@ -282,6 +290,7 @@ export const CodeReviewSurface: FC<CodeReviewSurfaceProps> = ({
   const [checkoutError, setCheckoutError] = useState<string | null>(null)
   const railsBeforeDiffFocusRef = useRef({
     targetRailCollapsed: false,
+    guideRailCollapsed: false,
     notesRailCollapsed: false,
   })
   const lastAppliedRouteFilePathRef = useRef<string | null | undefined>(
@@ -1154,6 +1163,11 @@ export const CodeReviewSurface: FC<CodeReviewSurfaceProps> = ({
     setTargetRailCollapsed((collapsed) => !collapsed)
   }, [])
 
+  const handleToggleGuideRail = useCallback(() => {
+    setDiffFocusActive(false)
+    setGuideRailCollapsed((collapsed) => !collapsed)
+  }, [])
+
   const handleToggleNotesRail = useCallback(() => {
     setDiffFocusActive(false)
     setNotesRailCollapsed((collapsed) => !collapsed)
@@ -1164,6 +1178,7 @@ export const CodeReviewSurface: FC<CodeReviewSurfaceProps> = ({
       setTargetRailCollapsed(
         railsBeforeDiffFocusRef.current.targetRailCollapsed,
       )
+      setGuideRailCollapsed(railsBeforeDiffFocusRef.current.guideRailCollapsed)
       setNotesRailCollapsed(railsBeforeDiffFocusRef.current.notesRailCollapsed)
       setDiffFocusActive(false)
       return
@@ -1171,12 +1186,19 @@ export const CodeReviewSurface: FC<CodeReviewSurfaceProps> = ({
 
     railsBeforeDiffFocusRef.current = {
       targetRailCollapsed,
+      guideRailCollapsed,
       notesRailCollapsed,
     }
     setTargetRailCollapsed(true)
+    setGuideRailCollapsed(true)
     setNotesRailCollapsed(true)
     setDiffFocusActive(true)
-  }, [diffFocusActive, notesRailCollapsed, targetRailCollapsed])
+  }, [
+    diffFocusActive,
+    guideRailCollapsed,
+    notesRailCollapsed,
+    targetRailCollapsed,
+  ])
 
   const handleMaterializePullRequest = useCallback(async () => {
     if (!activeProject || !selectedTarget) return
@@ -1258,7 +1280,11 @@ export const CodeReviewSurface: FC<CodeReviewSurfaceProps> = ({
 
   const gridTemplateColumns = [
     targetRailCollapsed ? REVIEW_TARGET_RAIL_COLLAPSED : REVIEW_TARGET_RAIL,
-    REVIEW_FILE_RAIL,
+    selectedView === 'guide' && guideRailCollapsed
+      ? REVIEW_GUIDE_RAIL_COLLAPSED
+      : selectedView === 'guide'
+        ? REVIEW_GUIDE_RAIL
+        : REVIEW_FILE_RAIL,
     REVIEW_DIFF_PANE,
     notesRailCollapsed ? REVIEW_NOTES_RAIL_COLLAPSED : REVIEW_NOTES_RAIL,
   ].join(' ')
@@ -1354,6 +1380,8 @@ export const CodeReviewSurface: FC<CodeReviewSurfaceProps> = ({
               canGenerate={Boolean(guideInput && files.length > 0)}
               hasPersistedGuide={Boolean(guide)}
               error={guideError}
+              collapsed={guideRailCollapsed}
+              onToggleCollapsed={handleToggleGuideRail}
               onSelectSection={handleSelectGuideSection}
               onGenerateGuide={handleGenerateGuide}
             />

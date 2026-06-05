@@ -1,5 +1,12 @@
 import type { FC } from 'react'
-import { AlertCircle, Loader2, Sparkles } from 'lucide-react'
+import {
+  AlertCircle,
+  ListTree,
+  Loader2,
+  PanelLeftClose,
+  PanelLeftOpen,
+  Sparkles,
+} from 'lucide-react'
 import type { CodeReviewGuideContent } from '@/entities/code-review-guide'
 import { Button } from '@/shared/ui/button'
 import { cn } from '@/shared/lib/cn.pure'
@@ -13,6 +20,8 @@ interface CodeReviewGuideRailProps {
   canGenerate: boolean
   hasPersistedGuide: boolean
   error: string | null
+  collapsed: boolean
+  onToggleCollapsed: () => void
   onSelectSection: (sectionId: string) => void
   onGenerateGuide: () => void
 }
@@ -26,6 +35,8 @@ export const CodeReviewGuideRail: FC<CodeReviewGuideRailProps> = ({
   canGenerate,
   hasPersistedGuide,
   error,
+  collapsed,
+  onToggleCollapsed,
   onSelectSection,
   onGenerateGuide,
 }) => {
@@ -38,15 +49,67 @@ export const CodeReviewGuideRail: FC<CodeReviewGuideRailProps> = ({
     error,
   })
 
+  if (collapsed) {
+    return (
+      <aside className="flex min-h-0 flex-col items-center border-r border-border">
+        <div className="flex h-10 w-full shrink-0 items-center justify-center border-b border-border">
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="h-7 w-7"
+            title="Expand guide sections"
+            aria-label="Expand guide sections"
+            onClick={onToggleCollapsed}
+          >
+            <PanelLeftOpen className="h-3.5 w-3.5" />
+          </Button>
+        </div>
+        <div className="flex min-h-0 flex-1 flex-col items-center gap-2 px-1 py-2">
+          <div
+            className="flex h-8 w-8 items-center justify-center rounded-md border border-border bg-card"
+            title={status.detail}
+          >
+            {status.icon === 'error' ? (
+              <AlertCircle className="h-3.5 w-3.5 text-destructive" />
+            ) : null}
+            {status.icon === 'loading' ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
+            ) : null}
+            {status.icon === 'none' ? (
+              <ListTree className="h-3.5 w-3.5 text-muted-foreground" />
+            ) : null}
+          </div>
+          <span className="rounded-md border border-border px-1.5 py-0.5 text-[10px] text-muted-foreground">
+            {guide.sections.length}
+          </span>
+        </div>
+      </aside>
+    )
+  }
+
   return (
     <aside className="flex min-h-0 flex-col border-r border-border">
       <div className="flex h-10 shrink-0 items-center justify-between border-b border-border px-3">
         <span className="text-xs font-semibold uppercase text-muted-foreground">
           Guide
         </span>
-        <span className="text-xs text-muted-foreground">
-          {guide.sections.length}
-        </span>
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-muted-foreground">
+            {guide.sections.length}
+          </span>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="h-7 w-7"
+            title="Collapse guide sections"
+            aria-label="Collapse guide sections"
+            onClick={onToggleCollapsed}
+          >
+            <PanelLeftClose className="h-3.5 w-3.5" />
+          </Button>
+        </div>
       </div>
       <div className="border-b border-border px-3 py-2">
         <div className="flex items-start justify-between gap-2">
