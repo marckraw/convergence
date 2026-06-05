@@ -210,6 +210,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.invoke('codeReviewGuide:generateGuide', input),
     refreshGuide: (input: unknown) =>
       ipcRenderer.invoke('codeReviewGuide:refreshGuide', input),
+    testRemoteDaemonConnection: () =>
+      ipcRenderer.invoke('codeReviewGuide:testRemoteDaemonConnection'),
   },
   session: {
     create: (input: {
@@ -414,6 +416,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
       namingModelByProvider: Record<string, string>
       extractionModelByProvider: Record<string, string>
       guidedReviewModelByProvider: Record<string, string>
+      guidedReviewBackend?: 'local' | 'remote'
+      guidedReviewRemoteBaseUrl?: string | null
       notifications?: unknown
       piModelVisibility?: unknown
       favoriteModels?: unknown
@@ -433,6 +437,16 @@ contextBridge.exposeInMainWorld('electronAPI', {
         ipcRenderer.invoke('credentials:openrouter:setToken', { token }),
       deleteToken: () =>
         ipcRenderer.invoke('credentials:openrouter:deleteToken'),
+    },
+    guidedReviewDaemon: {
+      getStatus: () =>
+        ipcRenderer.invoke('credentials:guidedReviewDaemon:getStatus'),
+      setToken: (token: string) =>
+        ipcRenderer.invoke('credentials:guidedReviewDaemon:setToken', {
+          token,
+        }),
+      deleteToken: () =>
+        ipcRenderer.invoke('credentials:guidedReviewDaemon:deleteToken'),
     },
   },
   analytics: {

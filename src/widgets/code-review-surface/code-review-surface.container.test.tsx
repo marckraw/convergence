@@ -78,6 +78,7 @@ const cacheIdentity = {
 let codeReviewState: Record<string, unknown>
 let guideState: Record<string, unknown>
 let reviewNoteState: Record<string, unknown>
+let appSettingsState: Record<string, unknown>
 
 function buildTestGuide(
   sections: CodeReviewGuide['sections'],
@@ -136,6 +137,11 @@ vi.mock('@/entities/code-review-guide', async (importOriginal) => {
       selector(guideState),
   }
 })
+
+vi.mock('@/entities/app-settings', () => ({
+  useAppSettingsStore: (selector: (state: unknown) => unknown) =>
+    selector(appSettingsState),
+}))
 
 vi.mock('@/entities/session', () => ({
   useSessionStore: (selector: (state: unknown) => unknown) =>
@@ -414,6 +420,12 @@ describe('CodeReviewSurface', () => {
       previewPacket,
       sendPacket,
       clearError: vi.fn(),
+    }
+    appSettingsState = {
+      settings: {
+        guidedReviewBackend: 'local',
+        guidedReviewRemoteBaseUrl: null,
+      },
     }
   })
 
@@ -776,6 +788,93 @@ describe('CodeReviewSurface', () => {
 
     expect(setSelectedView).toHaveBeenCalledWith('guide')
     expect(screen.getAllByText('Opening guide...').length).toBeGreaterThan(0)
+  })
+
+  it('shows local generation backend while generating a local guide', () => {
+    const guideKey = buildCodeReviewGuideKey({
+      target,
+      mode: 'working-tree',
+      cacheIdentity,
+    })
+    codeReviewState = {
+      ...codeReviewState,
+      selectedView: 'guide',
+    }
+    guideState = {
+      ...guideState,
+      generatingGuideKeys: { [guideKey]: true },
+    }
+
+    render(<CodeReviewSurface />)
+
+    expect(
+      screen.getAllByText('Generating locally in Convergence...').length,
+    ).toBeGreaterThan(0)
+  })
+
+  it('shows remote daemon URL while generating a remote pull request guide', () => {
+    const remoteTarget: CodeReviewTarget = {
+      ...target,
+      id: 'pull-request:github:acme/app#42',
+      workspaceId: null,
+      sessionId: null,
+      sessionName: null,
+      pullRequestId: null,
+      pullRequestNumber: 42,
+      pullRequestLabel: '#42 Remote PR',
+      pullRequestUrl: 'https://github.com/acme/app/pull/42',
+      pullRequestBaseBranch: 'main',
+      pullRequestHeadBranch: 'feature/pr-42',
+      source: 'pull-request',
+    }
+    const remoteSummaryKey = buildCodeReviewSummaryKey({
+      target: remoteTarget,
+      mode: 'working-tree',
+      cacheIdentity,
+    })
+    const remoteSummarySelectionKey = buildCodeReviewSummarySelectionKey({
+      target: remoteTarget,
+      mode: 'working-tree',
+    })
+    const remoteGuideKey = buildCodeReviewGuideKey({
+      target: remoteTarget,
+      mode: 'working-tree',
+      cacheIdentity,
+    })
+    codeReviewState = {
+      ...codeReviewState,
+      targets: [remoteTarget],
+      selectedTarget: remoteTarget,
+      selectedView: 'guide',
+      summariesByKey: {
+        [remoteSummaryKey]: {
+          base: null,
+          cacheIdentity,
+          files: [{ status: 'M', file: 'src/app.ts' }],
+        },
+      },
+      summaryKeysBySelectionKey: {
+        [remoteSummarySelectionKey]: remoteSummaryKey,
+      },
+    }
+    guideState = {
+      ...guideState,
+      generatingGuideKeys: { [remoteGuideKey]: true },
+    }
+    appSettingsState = {
+      settings: {
+        guidedReviewBackend: 'remote',
+        guidedReviewRemoteBaseUrl: 'https://daemon.example.com',
+      },
+    }
+
+    render(<CodeReviewSurface />)
+
+    expect(
+      screen.getAllByText(
+        'Generating with remote daemon: https://daemon.example.com',
+      ).length,
+    ).toBeGreaterThan(0)
   })
 
   it('does not show pull request checkout for local review targets', () => {

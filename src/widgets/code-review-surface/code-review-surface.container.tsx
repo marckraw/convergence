@@ -24,6 +24,7 @@ import {
   buildDeterministicCodeReviewGuide,
   useCodeReviewGuideStore,
 } from '@/entities/code-review-guide'
+import { useAppSettingsStore } from '@/entities/app-settings'
 import { useDialogStore } from '@/entities/dialog'
 import { useProjectStore } from '@/entities/project'
 import {
@@ -91,6 +92,21 @@ const REVIEW_NOTES_RAIL = 'minmax(240px, 300px)'
 const REVIEW_NOTES_RAIL_COLLAPSED = '48px'
 const TARGET_RAIL_COLLAPSE_WIDTH = 1440
 const NOTES_RAIL_COLLAPSE_WIDTH = 1280
+
+function formatGuideGenerationStatusLabel(input: {
+  backend: 'local' | 'remote'
+  remoteBaseUrl: string | null
+  remoteTargetSelected: boolean
+}): string {
+  if (input.backend === 'remote' && input.remoteTargetSelected) {
+    const baseUrl = input.remoteBaseUrl?.trim()
+    return baseUrl
+      ? `Generating with remote daemon: ${baseUrl}`
+      : 'Generating with remote daemon...'
+  }
+
+  return 'Generating locally in Convergence...'
+}
 
 const EMPTY_GUIDE = buildDeterministicCodeReviewGuide([])
 
@@ -211,6 +227,12 @@ export const CodeReviewSurface: FC<CodeReviewSurfaceProps> = ({
   const loadGuide = useCodeReviewGuideStore((state) => state.loadGuide)
   const generateGuide = useCodeReviewGuideStore((state) => state.generateGuide)
   const refreshGuide = useCodeReviewGuideStore((state) => state.refreshGuide)
+  const guidedReviewBackend = useAppSettingsStore(
+    (state) => state.settings.guidedReviewBackend,
+  )
+  const guidedReviewRemoteBaseUrl = useAppSettingsStore(
+    (state) => state.settings.guidedReviewRemoteBaseUrl,
+  )
   const reviewNotes = useReviewNoteStore((state) =>
     selectReviewNotesForSession(state, selectedTarget?.sessionId),
   )
@@ -1246,7 +1268,11 @@ export const CodeReviewSurface: FC<CodeReviewSurfaceProps> = ({
     : materializingPullRequest
       ? 'Checking out PR...'
       : guideGenerating
-        ? 'Generating guide...'
+        ? formatGuideGenerationStatusLabel({
+            backend: guidedReviewBackend,
+            remoteBaseUrl: guidedReviewRemoteBaseUrl,
+            remoteTargetSelected: remotePullRequestSelected,
+          })
         : selectedView === 'guide' && (summaryLoading || guideLoading)
           ? 'Loading guide...'
           : selectedView === 'diff' && diffLoading
@@ -1295,8 +1321,9 @@ export const CodeReviewSurface: FC<CodeReviewSurfaceProps> = ({
       >
         {reviewLoadingLabel ? (
           <div
-            className="pointer-events-none absolute top-3 left-1/2 z-20 -translate-x-1/2 rounded-md border border-border bg-card/95 px-3 py-1.5 text-xs text-muted-foreground shadow-sm"
+            className="pointer-events-none absolute top-3 left-1/2 z-20 max-w-[min(720px,calc(100%-2rem))] -translate-x-1/2 truncate rounded-md border border-border bg-card/95 px-3 py-1.5 text-xs text-muted-foreground shadow-sm"
             role="status"
+            title={reviewLoadingLabel}
           >
             {reviewLoadingLabel}
           </div>
@@ -1323,6 +1350,7 @@ export const CodeReviewSurface: FC<CodeReviewSurfaceProps> = ({
               activeSectionId={activeGuideSectionId}
               loading={summaryLoading || guideLoading}
               generating={guideGenerating}
+              generationStatusLabel={reviewLoadingLabel}
               canGenerate={Boolean(guideInput && files.length > 0)}
               hasPersistedGuide={Boolean(guide)}
               error={guideError}
@@ -1337,8 +1365,12 @@ export const CodeReviewSurface: FC<CodeReviewSurfaceProps> = ({
                 <div className="flex flex-col items-center gap-2 text-center text-sm text-muted-foreground">
                   <Loader2 className="h-5 w-5 animate-spin" />
                   <span>Generating AI guide...</span>
-                  <span className="max-w-sm text-xs">
-                    Building walkthrough chapters from the current review diff.
+                  <span
+                    className="max-w-[min(720px,calc(100vw-4rem))] truncate text-xs"
+                    title={reviewLoadingLabel ?? undefined}
+                  >
+                    {reviewLoadingLabel ??
+                      'Building walkthrough chapters from the current review diff.'}
                   </span>
                 </div>
               </main>

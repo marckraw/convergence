@@ -3,6 +3,7 @@ import type { AppSettingsDialogSection } from '@/entities/dialog'
 import type {
   CommandCenterShortcutPrefs,
   DebugLoggingPrefs,
+  GuidedReviewBackend,
 } from '@/entities/app-settings'
 import type {
   ProviderInfo,
@@ -30,7 +31,7 @@ import { SettingsSubsection } from './settings-subsection.presentational'
 import { SessionDefaultsFields } from './session-defaults.presentational'
 import { NamingModelDefaultsFields } from './naming-model-defaults.presentational'
 import { ExtractionModelDefaultsFields } from './extraction-model-defaults.presentational'
-import { GuidedReviewModelDefaultsFields } from './guided-review-model-defaults.presentational'
+import { GuidedReviewSettingsContainer } from './guided-review-settings.container'
 import { NotificationsFields } from './notifications-fields.presentational'
 import { UpdatesFields } from './updates-fields.presentational'
 import { DebugLoggingFields } from './debug-logging-fields.presentational'
@@ -52,6 +53,9 @@ interface AppSettingsDialogProps {
   namingDraft: Record<string, string>
   extractionDraft: Record<string, string>
   guidedReviewDraft: Record<string, string>
+  guidedReviewBackend: GuidedReviewBackend
+  guidedReviewRemoteBaseUrlDraft: string
+  guidedReviewRemoteBaseUrlError: string | null
   notificationsDraft: NotificationPrefs
   updatesDraft: UpdatePrefs
   debugLoggingDraft: DebugLoggingPrefs
@@ -61,6 +65,7 @@ interface AppSettingsDialogProps {
   updatesIsDev: boolean
   platform: string | null
   isSaving: boolean
+  isSaveBlocked: boolean
   error: string | null
   activeSection: AppSettingsSectionId
   onProviderChange: (id: string) => void
@@ -69,6 +74,8 @@ interface AppSettingsDialogProps {
   onNamingModelChange: (providerId: string, modelId: string) => void
   onExtractionModelChange: (providerId: string, modelId: string) => void
   onGuidedReviewModelChange: (providerId: string, modelId: string) => void
+  onGuidedReviewBackendChange: (backend: GuidedReviewBackend) => void
+  onGuidedReviewRemoteBaseUrlChange: (value: string) => void
   onNotificationsChange: (prefs: NotificationPrefs) => void
   onTestFireNotification: (severity: NotificationSeverity) => void
   onToggleBackgroundUpdates: (next: boolean) => void
@@ -109,6 +116,9 @@ export const AppSettingsDialog: FC<AppSettingsDialogProps> = ({
   namingDraft,
   extractionDraft,
   guidedReviewDraft,
+  guidedReviewBackend,
+  guidedReviewRemoteBaseUrlDraft,
+  guidedReviewRemoteBaseUrlError,
   notificationsDraft,
   updatesDraft,
   debugLoggingDraft,
@@ -118,6 +128,7 @@ export const AppSettingsDialog: FC<AppSettingsDialogProps> = ({
   updatesIsDev,
   platform,
   isSaving,
+  isSaveBlocked,
   error,
   activeSection,
   onProviderChange,
@@ -126,6 +137,8 @@ export const AppSettingsDialog: FC<AppSettingsDialogProps> = ({
   onNamingModelChange,
   onExtractionModelChange,
   onGuidedReviewModelChange,
+  onGuidedReviewBackendChange,
+  onGuidedReviewRemoteBaseUrlChange,
   onNotificationsChange,
   onTestFireNotification,
   onToggleBackgroundUpdates,
@@ -282,12 +295,17 @@ export const AppSettingsDialog: FC<AppSettingsDialogProps> = ({
             <SettingsSubsection
               withDivider
               title="Guided review"
-              description="Model each provider uses to generate guided code review plans. Runs with medium effort when the selected model supports it."
+              description="Choose where guided review generation runs and which model each provider uses to generate review plans."
             >
-              <GuidedReviewModelDefaultsFields
+              <GuidedReviewSettingsContainer
                 providers={providers}
                 guidedReviewDraft={guidedReviewDraft}
+                backend={guidedReviewBackend}
+                remoteBaseUrlDraft={guidedReviewRemoteBaseUrlDraft}
+                remoteBaseUrlError={guidedReviewRemoteBaseUrlError}
                 onGuidedReviewModelChange={onGuidedReviewModelChange}
+                onBackendChange={onGuidedReviewBackendChange}
+                onRemoteBaseUrlChange={onGuidedReviewRemoteBaseUrlChange}
               />
             </SettingsSubsection>
           </div>
@@ -492,7 +510,7 @@ export const AppSettingsDialog: FC<AppSettingsDialogProps> = ({
                   type="button"
                   size="sm"
                   onClick={onSave}
-                  disabled={providers.length === 0 || isSaving}
+                  disabled={providers.length === 0 || isSaving || isSaveBlocked}
                 >
                   Save
                 </Button>

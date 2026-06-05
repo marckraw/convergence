@@ -54,3 +54,52 @@ export interface CodeReviewGuideLookupRequest {
 export interface CodeReviewGuideGenerateRequest extends CodeReviewGuideLookupRequest {
   files: CodeReviewFileEntry[]
 }
+
+export type RemoteCodeReviewDaemonConnectionState =
+  | 'connected'
+  | 'missing-base-url'
+  | 'invalid-base-url'
+  | 'missing-token'
+  | 'auth-failed'
+  | 'unreachable'
+  | 'invalid-response'
+  | 'daemon-error'
+
+export interface RemoteCodeReviewDaemonHealth {
+  status: 'ok'
+  version: string
+  apiVersion: string
+  uptime: number
+  activeSessions: number
+  providers: Record<string, boolean>
+}
+
+export interface RemoteCodeReviewDaemonMeta {
+  name: string
+  version: string
+  apiVersion: string
+  deployment: {
+    mode: string
+    sharedAcrossTeams: boolean
+  }
+  providers: unknown[]
+  git: {
+    githubAuthenticated: boolean
+  }
+  runtime: {
+    activeSessions: number
+    maxConcurrentAgents: number
+    uptimeSeconds: number
+    host: string
+    port: number
+  }
+}
+
+export interface RemoteCodeReviewDaemonConnectionResult {
+  ok: boolean
+  state: RemoteCodeReviewDaemonConnectionState
+  baseUrl: string | null
+  message: string
+  health: RemoteCodeReviewDaemonHealth | null
+  meta: RemoteCodeReviewDaemonMeta | null
+}

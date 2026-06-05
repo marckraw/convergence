@@ -8,6 +8,7 @@ import { GitService } from '../backend/git/git.service'
 import { ChangedFilesService } from '../backend/git/changed-files.service'
 import type { CodeReviewService } from '../backend/code-review/code-review.service'
 import type { CodeReviewGuideService } from '../backend/code-review-guide/code-review-guide.service'
+import type { RemoteCodeReviewGuideDaemonClient } from '../backend/code-review-guide/remote-daemon-guide.service'
 import { PullRequestService } from '../backend/pull-request/pull-request.service'
 import type { PullRequestReviewService } from '../backend/pull-request/pull-request-review.service'
 import type { ReviewNotesService } from '../backend/review-notes/review-notes.service'
@@ -28,6 +29,7 @@ import { SkillsService } from '../backend/skills/skills.service'
 import { PromptsService } from '../backend/prompts/prompts.service'
 import { AppSettingsService } from '../backend/app-settings/app-settings.service'
 import { CodexQuotaService } from '../backend/provider-quota/codex-quota.service'
+import { GuidedReviewDaemonCredentialsService } from '../backend/credentials/guided-review-daemon-credentials.service'
 import { OpenRouterCredentialsService } from '../backend/credentials/openrouter-credentials.service'
 import type { AnalyticsService } from '../backend/analytics/analytics.service'
 import type { AnalyticsRangePreset } from '../backend/analytics/analytics.types'
@@ -157,6 +159,7 @@ export function registerIpcHandlers(
   changedFilesService: ChangedFilesService,
   codeReviewService: CodeReviewService,
   codeReviewGuideService: CodeReviewGuideService,
+  remoteCodeReviewGuideDaemonClient: RemoteCodeReviewGuideDaemonClient,
   pullRequestService: PullRequestService,
   pullRequestReviewService: PullRequestReviewService,
   reviewNotesService: ReviewNotesService,
@@ -166,6 +169,7 @@ export function registerIpcHandlers(
   skillsService: SkillsService,
   promptsService: PromptsService,
   appSettingsService: AppSettingsService,
+  guidedReviewDaemonCredentials: GuidedReviewDaemonCredentialsService,
   openRouterCredentials: OpenRouterCredentialsService,
   analyticsService: AnalyticsService,
   attachmentsService: AttachmentsService,
@@ -584,6 +588,10 @@ export function registerIpcHandlers(
       codeReviewGuideService.refreshGuide(input),
   )
 
+  ipcMain.handle('codeReviewGuide:testRemoteDaemonConnection', () =>
+    remoteCodeReviewGuideDaemonClient.testConnection(),
+  )
+
   // App settings handlers
   ipcMain.handle('appSettings:get', () => appSettingsService.getAppSettings())
 
@@ -618,6 +626,24 @@ export function registerIpcHandlers(
 
   ipcMain.handle('credentials:openrouter:deleteToken', () =>
     openRouterCredentials.deleteToken(),
+  )
+
+  ipcMain.handle('credentials:guidedReviewDaemon:getStatus', () =>
+    guidedReviewDaemonCredentials.getStatus(),
+  )
+
+  ipcMain.handle(
+    'credentials:guidedReviewDaemon:setToken',
+    (_event, input: { token?: unknown }) => {
+      if (!input || typeof input.token !== 'string') {
+        throw new Error('Daemon API token is required.')
+      }
+      return guidedReviewDaemonCredentials.setToken({ token: input.token })
+    },
+  )
+
+  ipcMain.handle('credentials:guidedReviewDaemon:deleteToken', () =>
+    guidedReviewDaemonCredentials.deleteToken(),
   )
 
   // Analytics handlers

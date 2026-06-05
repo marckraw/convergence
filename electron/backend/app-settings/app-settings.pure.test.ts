@@ -18,6 +18,7 @@ import {
 import {
   DEFAULT_DEBUG_LOGGING_PREFS,
   DEFAULT_FAVORITE_MODELS_PREFS,
+  DEFAULT_GUIDED_REVIEW_BACKEND,
   DEFAULT_ONBOARDING_PREFS,
   DEFAULT_PI_MODEL_VISIBILITY_PREFS,
 } from './app-settings.types'
@@ -116,6 +117,8 @@ describe('app-settings pure helpers', () => {
       extractionModelByProvider: {},
       guidedReviewModelByProvider: {},
       commandCenterShortcut: { key: 'k', shiftKey: false, altKey: false },
+      guidedReviewBackend: DEFAULT_GUIDED_REVIEW_BACKEND,
+      guidedReviewRemoteBaseUrl: null,
       notifications: DEFAULT_NOTIFICATION_PREFS,
       onboarding: DEFAULT_ONBOARDING_PREFS,
       updates: DEFAULT_UPDATE_PREFS,
@@ -138,6 +141,20 @@ describe('app-settings pure helpers', () => {
         }),
       ).commandCenterShortcut,
     ).toEqual({ key: 'p', shiftKey: true, altKey: false })
+  })
+
+  it('parses guided review remote daemon settings when the URL is valid', () => {
+    expect(
+      parseAppSettings(
+        JSON.stringify({
+          guidedReviewBackend: 'remote',
+          guidedReviewRemoteBaseUrl: ' https://daemon.example.com/ ',
+        }),
+      ),
+    ).toMatchObject({
+      guidedReviewBackend: 'remote',
+      guidedReviewRemoteBaseUrl: 'https://daemon.example.com',
+    })
   })
 
   it('hydrates notification prefs per field', () => {

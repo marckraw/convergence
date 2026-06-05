@@ -355,6 +355,55 @@ interface CodeReviewGuideGenerateRequestData extends CodeReviewGuideLookupReques
   files: GitStatusEntryData[]
 }
 
+type RemoteCodeReviewDaemonConnectionStateData =
+  | 'connected'
+  | 'missing-base-url'
+  | 'invalid-base-url'
+  | 'missing-token'
+  | 'auth-failed'
+  | 'unreachable'
+  | 'invalid-response'
+  | 'daemon-error'
+
+interface RemoteCodeReviewDaemonHealthData {
+  status: 'ok'
+  version: string
+  apiVersion: string
+  uptime: number
+  activeSessions: number
+  providers: Record<string, boolean>
+}
+
+interface RemoteCodeReviewDaemonMetaData {
+  name: string
+  version: string
+  apiVersion: string
+  deployment: {
+    mode: string
+    sharedAcrossTeams: boolean
+  }
+  providers: unknown[]
+  git: {
+    githubAuthenticated: boolean
+  }
+  runtime: {
+    activeSessions: number
+    maxConcurrentAgents: number
+    uptimeSeconds: number
+    host: string
+    port: number
+  }
+}
+
+interface RemoteCodeReviewDaemonConnectionResultData {
+  ok: boolean
+  state: RemoteCodeReviewDaemonConnectionStateData
+  baseUrl: string | null
+  message: string
+  health: RemoteCodeReviewDaemonHealthData | null
+  meta: RemoteCodeReviewDaemonMetaData | null
+}
+
 interface WorkspaceData {
   id: string
   projectId: string
@@ -1566,6 +1615,7 @@ interface ElectronAPI {
     refreshGuide: (
       input: CodeReviewGuideGenerateRequestData,
     ) => Promise<CodeReviewGuideData>
+    testRemoteDaemonConnection: () => Promise<RemoteCodeReviewDaemonConnectionResultData>
   }
   session: {
     create: (input: CreateSessionInput) => Promise<SessionSummaryData>
@@ -1697,6 +1747,13 @@ interface ElectronAPI {
       getStatus: () => Promise<OpenRouterCredentialStatusData>
       setToken: (token: string) => Promise<OpenRouterCredentialStatusData>
       deleteToken: () => Promise<OpenRouterCredentialStatusData>
+    }
+    guidedReviewDaemon: {
+      getStatus: () => Promise<GuidedReviewDaemonCredentialStatusData>
+      setToken: (
+        token: string,
+      ) => Promise<GuidedReviewDaemonCredentialStatusData>
+      deleteToken: () => Promise<GuidedReviewDaemonCredentialStatusData>
     }
   }
   analytics: {
@@ -1949,6 +2006,8 @@ interface AppSettingsData {
   extractionModelByProvider: Record<string, string>
   guidedReviewModelByProvider: Record<string, string>
   commandCenterShortcut: CommandCenterShortcutPrefsData
+  guidedReviewBackend: 'local' | 'remote'
+  guidedReviewRemoteBaseUrl: string | null
   notifications: NotificationPrefsData
   onboarding: OnboardingPrefsData
   updates: UpdatePrefsData
@@ -1967,6 +2026,8 @@ type AppSettingsInputData = Omit<
   | 'extractionModelByProvider'
   | 'guidedReviewModelByProvider'
   | 'commandCenterShortcut'
+  | 'guidedReviewBackend'
+  | 'guidedReviewRemoteBaseUrl'
   | 'notifications'
   | 'onboarding'
   | 'updates'
@@ -1978,6 +2039,8 @@ type AppSettingsInputData = Omit<
   extractionModelByProvider?: Record<string, string>
   guidedReviewModelByProvider?: Record<string, string>
   commandCenterShortcut?: CommandCenterShortcutPrefsData
+  guidedReviewBackend?: 'local' | 'remote'
+  guidedReviewRemoteBaseUrl?: string | null
   notifications?: NotificationPrefsData
   onboarding?: OnboardingPrefsData
   updates?: UpdatePrefsData
@@ -2048,6 +2111,16 @@ interface LocalModelTunnelSnapshotData {
 
 interface OpenRouterCredentialStatusData {
   providerId: 'openrouter'
+  configured: boolean
+  source: 'environment' | 'keychain' | null
+  storage: 'keychain' | null
+  account: string | null
+  service: string | null
+  error: string | null
+}
+
+interface GuidedReviewDaemonCredentialStatusData {
+  providerId: 'guided-review-daemon'
   configured: boolean
   source: 'environment' | 'keychain' | null
   storage: 'keychain' | null
