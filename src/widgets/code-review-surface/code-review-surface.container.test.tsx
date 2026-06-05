@@ -1161,6 +1161,35 @@ describe('CodeReviewSurface', () => {
     )
   })
 
+  it('collapses guide section items while keeping the scroll guide visible', () => {
+    codeReviewState = {
+      ...codeReviewState,
+      selectedView: 'guide',
+    }
+
+    render(<CodeReviewSurface routeView="guide" />)
+
+    expect(screen.getAllByText('Review Surface and UI Flow')).toHaveLength(2)
+
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Collapse guide sections' }),
+    )
+
+    expect(
+      screen.getByRole('button', { name: 'Expand guide sections' }),
+    ).toBeInTheDocument()
+    expect(screen.getAllByText('Review Surface and UI Flow')).toHaveLength(1)
+
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Expand guide sections' }),
+    )
+
+    expect(
+      screen.getByRole('button', { name: 'Collapse guide sections' }),
+    ).toBeInTheDocument()
+    expect(screen.getAllByText('Review Surface and UI Flow')).toHaveLength(2)
+  })
+
   it('scrolls guide file links within their section and updates selected file state', () => {
     const guideKey = buildCodeReviewGuideKey({
       target,
