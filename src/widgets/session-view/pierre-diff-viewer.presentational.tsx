@@ -22,6 +22,10 @@ import {
   DEFAULT_DIFF_CONTEXT_LINES,
   foldUnifiedDiffContext,
 } from './diff-context.pure'
+import {
+  DiffFileHeader,
+  type DiffFileHeaderSubtitleVariant,
+} from './diff-file-header.presentational'
 import { planPierreDiffPerformance } from './pierre-diff-performance.pure'
 
 interface PierreDiffViewerProps<TAnnotation = undefined> {
@@ -29,7 +33,11 @@ interface PierreDiffViewerProps<TAnnotation = undefined> {
   diff: string
   loading?: boolean
   emptyMessage?: string
+  /** @deprecated Prefer `subtitle` with `subtitleVariant="label"`. */
   title?: string
+  subtitle?: string
+  subtitleVariant?: DiffFileHeaderSubtitleVariant
+  status?: string
   scrollMode?: 'contained' | 'inline'
   contextStrategy?: 'fold' | 'full'
   selectedLines?: SelectedLineRange | null
@@ -50,6 +58,9 @@ export const PierreDiffViewerView = <TAnnotation,>({
   loading = false,
   emptyMessage = 'Select a changed file to inspect its working tree diff.',
   title = 'Current workspace diff',
+  subtitle,
+  subtitleVariant = 'label',
+  status,
   scrollMode = 'contained',
   contextStrategy = 'fold',
   selectedLines = null,
@@ -116,10 +127,18 @@ export const PierreDiffViewerView = <TAnnotation,>({
     )
   }
 
+  const resolvedSubtitle = subtitle ?? title
+
   if (loading && !diff) {
     return (
       <div className="flex h-full min-h-0 flex-col" aria-busy="true">
-        {renderDiffHeader({ file, title, loading })}
+        {renderDiffFileHeader({
+          path: file,
+          subtitle: resolvedSubtitle,
+          subtitleVariant,
+          status,
+          loading,
+        })}
         <div className="app-scrollbar min-h-0 flex-1 overflow-auto bg-background/60">
           <div className="flex h-full min-h-32 items-center justify-center gap-2 p-3 text-xs text-muted-foreground">
             <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -165,26 +184,30 @@ export const PierreDiffViewerView = <TAnnotation,>({
     : null
   const contained = scrollMode === 'contained'
 
+  const contextControls = shouldShowContextControls
+    ? renderDiffContextControls({
+        canExpandBefore: foldedContext?.canExpandBefore ?? false,
+        canExpandAfter: foldedContext?.canExpandAfter ?? false,
+        expandedFromDefault,
+        onExpandBefore: onExpandContextBefore,
+        onExpandAfter: onExpandContextAfter,
+        onExpandBoth: onExpandContextBoth,
+        onReset: onResetContext,
+      })
+    : null
+
   return (
     <div
       className={contained ? 'flex h-full min-h-0 flex-col' : 'flex flex-col'}
       aria-busy={loading}
     >
-      {renderDiffHeader({
-        file,
-        title,
+      {renderDiffFileHeader({
+        path: file,
+        subtitle: resolvedSubtitle,
+        subtitleVariant,
+        status,
         loading,
-        contextControls: shouldShowContextControls
-          ? renderDiffContextControls({
-              canExpandBefore: foldedContext?.canExpandBefore ?? false,
-              canExpandAfter: foldedContext?.canExpandAfter ?? false,
-              expandedFromDefault,
-              onExpandBefore: onExpandContextBefore,
-              onExpandAfter: onExpandContextAfter,
-              onExpandBoth: onExpandContextBoth,
-              onReset: onResetContext,
-            })
-          : null,
+        contextControls,
       })}
       <div
         className={
@@ -207,35 +230,30 @@ export const PierreDiffViewerView = <TAnnotation,>({
 
 export type { PierreDiffViewerProps }
 
-function renderDiffHeader({
-  file,
-  title,
+function renderDiffFileHeader({
+  path,
+  subtitle,
+  subtitleVariant,
+  status,
   loading = false,
   contextControls = null,
 }: {
-  file: string
-  title: string
+  path: string
+  subtitle?: string
+  subtitleVariant: DiffFileHeaderSubtitleVariant
+  status?: string
   loading?: boolean
   contextControls?: ReactNode
 }) {
   return (
-    <div className="shrink-0 border-b border-border px-3 py-2">
-      <div className="flex min-w-0 items-center gap-2">
-        <p
-          title={file}
-          className="min-w-0 flex-1 truncate font-mono text-[11px] text-foreground"
-        >
-          {file}
-        </p>
-        {loading ? (
-          <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-muted-foreground" />
-        ) : null}
-        {contextControls}
-      </div>
-      <p className="mt-1 text-[10px] uppercase tracking-wider text-muted-foreground">
-        {title}
-      </p>
-    </div>
+    <DiffFileHeader
+      path={path}
+      subtitle={subtitle}
+      subtitleVariant={subtitleVariant}
+      status={status}
+      loading={loading}
+      actions={contextControls}
+    />
   )
 }
 
