@@ -80,6 +80,27 @@ let guideState: Record<string, unknown>
 let reviewNoteState: Record<string, unknown>
 let appSettingsState: Record<string, unknown>
 
+function buildTestGuide(
+  sections: CodeReviewGuide['sections'],
+  overrides: Partial<CodeReviewGuide> = {},
+): CodeReviewGuide {
+  return {
+    id: 'guide-1',
+    projectId: 'project-1',
+    targetId: target.id,
+    mode: 'working-tree',
+    cacheIdentity,
+    status: 'ready',
+    overview: 'Persisted guide',
+    generatedBy: 'deterministic',
+    sections,
+    error: null,
+    createdAt: '2026-01-02T00:00:00.000Z',
+    updatedAt: '2026-01-02T00:00:00.000Z',
+    ...overrides,
+  }
+}
+
 vi.mock('@/entities/code-review', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/entities/code-review')>()
   return {
@@ -216,6 +237,7 @@ import { CodeReviewSurface } from './code-review-surface.container'
 
 describe('CodeReviewSurface', () => {
   beforeEach(() => {
+    Element.prototype.scrollIntoView = function scrollIntoView() {}
     Object.defineProperty(window, 'innerWidth', {
       configurable: true,
       writable: true,
@@ -254,38 +276,25 @@ describe('CodeReviewSurface', () => {
       mode: 'working-tree',
       cacheIdentity,
     })
-    const guide: CodeReviewGuide = {
-      id: 'guide-1',
-      projectId: 'project-1',
-      targetId: target.id,
-      mode: 'working-tree',
-      cacheIdentity,
-      status: 'ready',
-      overview: 'Persisted guide',
-      generatedBy: 'deterministic',
-      sections: [
-        {
-          id: 'review-surface',
-          title: 'Review Surface and UI Flow',
-          summary: 'Review surface files.',
-          narrative: 'Inspect the user-facing review flow.',
-          riskLevel: 'medium',
-          riskRationale: 'Review flow changes can affect visible behavior.',
-          checklist: [],
-          files: [
-            {
-              path: 'src/app.ts',
-              status: 'M',
-              reason: 'Review the existing app change.',
-              hunkHints: [],
-            },
-          ],
-        },
-      ],
-      error: null,
-      createdAt: '2026-01-02T00:00:00.000Z',
-      updatedAt: '2026-01-02T00:00:00.000Z',
-    }
+    const guide = buildTestGuide([
+      {
+        id: 'review-surface',
+        title: 'Review Surface and UI Flow',
+        summary: 'Review surface files.',
+        narrative: 'Inspect the user-facing review flow.',
+        riskLevel: 'medium',
+        riskRationale: 'Review flow changes can affect visible behavior.',
+        checklist: [],
+        files: [
+          {
+            path: 'src/app.ts',
+            status: 'M',
+            reason: 'Review the existing app change.',
+            hunkHints: [],
+          },
+        ],
+      },
+    ])
     loadTargets.mockReset().mockResolvedValue([target])
     loadSummary.mockReset().mockResolvedValue(summary)
     loadFilePatch.mockReset().mockResolvedValue('@@ -1 +1 @@\n-old\n+new')
@@ -1251,19 +1260,105 @@ describe('CodeReviewSurface', () => {
     )
   })
 
-  it('scrolls guide file links and updates selected file state', () => {
+  it('scrolls guide file links within their section and updates selected file state', () => {
+    const guideKey = buildCodeReviewGuideKey({
+      target,
+      mode: 'working-tree',
+      cacheIdentity,
+    })
+    const duplicatePathGuide = buildTestGuide([
+      {
+        id: 'first-pass',
+        title: 'First Pass',
+        summary: 'First pass summary.',
+        narrative: 'Review the first pass.',
+        riskLevel: 'medium',
+        riskRationale: 'Visible flow changes.',
+        checklist: [],
+        files: [
+          {
+            path: 'src/app.ts',
+            status: 'M',
+            reason: 'First section reason.',
+            hunkHints: [],
+          },
+        ],
+      },
+      {
+        id: 'follow-up',
+        title: 'Follow-up',
+        summary: 'Follow-up summary.',
+        narrative: 'Review the follow-up.',
+        riskLevel: 'low',
+        riskRationale: 'Small follow-up.',
+        checklist: [],
+        files: [
+          {
+            path: 'src/app.ts',
+            status: 'M',
+            reason: 'Second section reason.',
+            hunkHints: [],
+          },
+        ],
+      },
+    ])
+    const scrolledTargets: Element[] = []
+    Element.prototype.scrollIntoView = function scrollIntoView() {
+      scrolledTargets.push(this)
+    }
     codeReviewState = {
       ...codeReviewState,
       selectedView: 'guide',
     }
+    guideState = {
+      ...guideState,
+      guidesByKey: { [guideKey]: duplicatePathGuide },
+    }
+    const onRouteSearchChange = vi.fn()
 
     render(
-      <CodeReviewSurface routeView="guide" onRouteSearchChange={vi.fn()} />,
+      <CodeReviewSurface
+        routeView="guide"
+        onRouteSearchChange={onRouteSearchChange}
+      />,
     )
 
-    fireEvent.click(screen.getByRole('button', { name: /src\/app\.ts/ }))
+    fireEvent.click(screen.getAllByTitle('src/app.ts')[1])
 
     expect(setSelectedFile).toHaveBeenCalledWith('src/app.ts')
+    expect(onRouteSearchChange).toHaveBeenCalledWith({ file: 'src/app.ts' })
+    expect(scrolledTargets[0]).toHaveAttribute(
+      'data-guide-section-id',
+      'follow-up',
+    )
+  })
+
+  it('shows failed guide generation state with a retry action', () => {
+    codeReviewState = {
+      ...codeReviewState,
+      selectedView: 'guide',
+    }
+    guideState = {
+      ...guideState,
+      error: 'Guide generation timed out',
+    }
+
+    render(<CodeReviewSurface routeView="guide" />)
+
+    expect(screen.getByText('Guide failed')).toBeInTheDocument()
+    expect(screen.getAllByText('Guide generation timed out').length).toBe(2)
+
+    fireEvent.click(screen.getByRole('button', { name: /Retry/ }))
+
+    expect(generateGuide).toHaveBeenCalledWith({
+      target,
+      mode: 'working-tree',
+      cacheIdentity,
+      files: [
+        { status: 'M', file: 'src/app.ts' },
+        { status: 'A', file: 'src/new.ts' },
+      ],
+    })
   })
 
   it('waits for an explicit action before generating an AI guide', async () => {

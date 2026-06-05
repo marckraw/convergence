@@ -35,7 +35,6 @@ export const ExtractionModelDefaultsFields: FC<
         <SettingsControlField
           key={provider.id}
           title={provider.vendorLabel || provider.name}
-          description="Model used to summarise conversations when forking a session."
         >
           <ModelPickerDialog
             providers={[provider]}

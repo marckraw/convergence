@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ReactNode } from 'react'
 import type { DiffLineAnnotation, SelectedLineRange } from '@pierre/diffs'
 import { buildLargePierreDiffFixture } from './pierre-diff-performance.pure'
-import { PierreDiffViewer } from './pierre-diff-viewer.presentational'
+import { PierreDiffViewer } from './pierre-diff-viewer.container'
 
 const patchDiff = vi.hoisted(() => ({
   props: [] as Array<{
@@ -135,6 +135,41 @@ describe('PierreDiffViewer', () => {
         '@@ -1 +1 @@\n-old\n+new',
       ].join('\n'),
     )
+  })
+
+  it('folds rich context by default and expands it from header controls', () => {
+    render(
+      <PierreDiffViewer
+        file="src/app.ts"
+        diff={[
+          '@@ -1,10 +1,10 @@',
+          ' one',
+          ' two',
+          ' three',
+          ' four',
+          '-old',
+          '+new',
+          ' six',
+          ' seven',
+          ' eight',
+          ' nine',
+        ].join('\n')}
+      />,
+    )
+
+    expect(patchDiff.props.at(-1)?.patch).not.toContain(' one')
+    expect(patchDiff.props.at(-1)?.patch).not.toContain(' nine')
+
+    fireEvent.click(screen.getByLabelText('Show more context above changes'))
+    expect(patchDiff.props.at(-1)?.patch).toContain(' one')
+    expect(patchDiff.props.at(-1)?.patch).not.toContain(' nine')
+
+    fireEvent.click(screen.getByLabelText('Show more context below changes'))
+    expect(patchDiff.props.at(-1)?.patch).toContain(' nine')
+
+    fireEvent.click(screen.getByLabelText('Reset visible diff context'))
+    expect(patchDiff.props.at(-1)?.patch).not.toContain(' one')
+    expect(patchDiff.props.at(-1)?.patch).not.toContain(' nine')
   })
 
   it('forwards Pierre line selections', () => {

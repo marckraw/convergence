@@ -89,7 +89,7 @@ vi.mock('./changed-files-tree.container', () => {
   }
 })
 
-vi.mock('./pierre-diff-viewer.presentational', () => ({
+vi.mock('./pierre-diff-viewer.container', () => ({
   PierreDiffViewer: ({
     file,
     diff,

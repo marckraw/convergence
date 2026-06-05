@@ -3,7 +3,7 @@ import type { FC } from 'react'
 import { turnsApi } from '@/entities/turn'
 import type { Turn, TurnFileChange } from '@/entities/turn'
 import { TurnCard } from './turn-card.presentational'
-import { PierreDiffViewer } from './pierre-diff-viewer.presentational'
+import { PierreDiffViewer } from './pierre-diff-viewer.container'
 
 interface TurnListProps {
   sessionId: string

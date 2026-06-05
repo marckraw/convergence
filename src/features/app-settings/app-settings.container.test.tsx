@@ -668,7 +668,6 @@ describe('AppSettingsDialogContainer', () => {
     fireEvent.click(screen.getByText('Open'))
 
     expect(await screen.findByText('Settings')).toBeInTheDocument()
-    fireEvent.click(screen.getByRole('button', { name: /Guided review/ }))
 
     expect(await screen.findByText('Generation backend')).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'Remote daemon' }))
@@ -727,7 +726,7 @@ describe('AppSettingsDialogContainer', () => {
     fireEvent.click(screen.getByText('Open'))
 
     expect(await screen.findByText('Settings')).toBeInTheDocument()
-    fireEvent.click(screen.getByRole('button', { name: /Guided review/ }))
+    expect(await screen.findByText('Generation backend')).toBeInTheDocument()
 
     fireEvent.click(screen.getByRole('button', { name: 'Test connection' }))
 
@@ -746,7 +745,7 @@ describe('AppSettingsDialogContainer', () => {
     fireEvent.click(screen.getByText('Open'))
 
     expect(await screen.findByText('Settings')).toBeInTheDocument()
-    fireEvent.click(screen.getByRole('button', { name: /Guided review/ }))
+    expect(await screen.findByText('Generation backend')).toBeInTheDocument()
 
     fireEvent.click(screen.getByRole('button', { name: 'Remote daemon' }))
     fireEvent.change(screen.getByLabelText('Base URL'), {

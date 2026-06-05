@@ -26,6 +26,8 @@ import {
 } from '@/shared/ui/dialog'
 import { cn } from '@/shared/lib/cn.pure'
 import { Button } from '@/shared/ui/button'
+import { TooltipProvider } from '@/shared/ui/tooltip'
+import { SettingsSubsection } from './settings-subsection.presentational'
 import { SessionDefaultsFields } from './session-defaults.presentational'
 import { NamingModelDefaultsFields } from './naming-model-defaults.presentational'
 import { ExtractionModelDefaultsFields } from './extraction-model-defaults.presentational'
@@ -162,39 +164,11 @@ export const AppSettingsDialog: FC<AppSettingsDialogProps> = ({
     {
       id: 'session-defaults',
       navLabel: 'Session defaults',
-      navSummary: 'Provider, model, and reasoning effort',
+      navSummary: 'Provider and per-task model defaults',
       title: 'Session defaults',
       description:
-        'Choose the provider stack Convergence should prefill whenever you start a new session.',
+        'The default provider and the models Convergence uses for new sessions, naming, forking, and guided review.',
     },
-    ...(providers.length > 0
-      ? [
-          {
-            id: 'session-naming' as const,
-            navLabel: 'Session naming',
-            navSummary: 'Auto-generated titles by provider',
-            title: 'Session naming',
-            description:
-              'Pick the lightweight model each provider should use when Convergence generates session names.',
-          },
-          {
-            id: 'session-forking' as const,
-            navLabel: 'Session forking',
-            navSummary: 'Summaries used while forking',
-            title: 'Session forking',
-            description:
-              'Choose the model that summarises prior conversation state before a session is forked.',
-          },
-          {
-            id: 'guided-review' as const,
-            navLabel: 'Guided review',
-            navSummary: 'Backend, daemon URL, and models',
-            title: 'Guided review',
-            description:
-              'Choose where guided review generation runs and which model each provider should use for review plans.',
-          },
-        ]
-      : []),
     {
       id: 'credentials',
       navLabel: 'Credentials',
@@ -283,42 +257,58 @@ export const AppSettingsDialog: FC<AppSettingsDialogProps> = ({
             </p>
           </div>
         ) : (
-          <SessionDefaultsFields
-            providers={providers}
-            selection={selection}
-            onProviderChange={onProviderChange}
-            onModelChange={onModelChange}
-            onEffortChange={onEffortChange}
-          />
-        )
-      case 'session-naming':
-        return (
-          <NamingModelDefaultsFields
-            providers={providers}
-            namingDraft={namingDraft}
-            onNamingModelChange={onNamingModelChange}
-          />
-        )
-      case 'session-forking':
-        return (
-          <ExtractionModelDefaultsFields
-            providers={providers}
-            extractionDraft={extractionDraft}
-            onExtractionModelChange={onExtractionModelChange}
-          />
-        )
-      case 'guided-review':
-        return (
-          <GuidedReviewSettingsContainer
-            providers={providers}
-            guidedReviewDraft={guidedReviewDraft}
-            backend={guidedReviewBackend}
-            remoteBaseUrlDraft={guidedReviewRemoteBaseUrlDraft}
-            remoteBaseUrlError={guidedReviewRemoteBaseUrlError}
-            onGuidedReviewModelChange={onGuidedReviewModelChange}
-            onBackendChange={onGuidedReviewBackendChange}
-            onRemoteBaseUrlChange={onGuidedReviewRemoteBaseUrlChange}
-          />
+          <div className="space-y-6">
+            <SettingsSubsection
+              title="New session"
+              description="Provider, model, and reasoning effort prefilled whenever you start a new session."
+            >
+              <SessionDefaultsFields
+                providers={providers}
+                selection={selection}
+                onProviderChange={onProviderChange}
+                onModelChange={onModelChange}
+                onEffortChange={onEffortChange}
+              />
+            </SettingsSubsection>
+            <SettingsSubsection
+              withDivider
+              title="Session naming"
+              description="Lightweight model each provider uses to auto-generate session names."
+            >
+              <NamingModelDefaultsFields
+                providers={providers}
+                namingDraft={namingDraft}
+                onNamingModelChange={onNamingModelChange}
+              />
+            </SettingsSubsection>
+            <SettingsSubsection
+              withDivider
+              title="Session forking"
+              description="Model that summarises prior conversation state before a session is forked."
+            >
+              <ExtractionModelDefaultsFields
+                providers={providers}
+                extractionDraft={extractionDraft}
+                onExtractionModelChange={onExtractionModelChange}
+              />
+            </SettingsSubsection>
+            <SettingsSubsection
+              withDivider
+              title="Guided review"
+              description="Choose where guided review generation runs and which model each provider uses to generate review plans."
+            >
+              <GuidedReviewSettingsContainer
+                providers={providers}
+                guidedReviewDraft={guidedReviewDraft}
+                backend={guidedReviewBackend}
+                remoteBaseUrlDraft={guidedReviewRemoteBaseUrlDraft}
+                remoteBaseUrlError={guidedReviewRemoteBaseUrlError}
+                onGuidedReviewModelChange={onGuidedReviewModelChange}
+                onBackendChange={onGuidedReviewBackendChange}
+                onRemoteBaseUrlChange={onGuidedReviewRemoteBaseUrlChange}
+              />
+            </SettingsSubsection>
+          </div>
         )
       case 'credentials':
         return <ProviderCredentialsContainer />
@@ -384,135 +374,150 @@ export const AppSettingsDialog: FC<AppSettingsDialogProps> = ({
     }
   }
 
+  const showsSectionTitle =
+    currentSection.title.trim().toLowerCase() !==
+    currentSection.navLabel.trim().toLowerCase()
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogTrigger asChild>{trigger}</DialogTrigger>
       <DialogContent className="h-[min(92vh,960px)] w-[min(1280px,calc(100vw-2rem))] max-h-[min(92vh,960px)] p-0">
-        <DialogHeader className="border-b border-border/70 px-6 py-5 pr-14">
-          <DialogTitle>Settings</DialogTitle>
-          <DialogDescription>
-            App-wide defaults used every time you start a new session.
-          </DialogDescription>
-        </DialogHeader>
+        <TooltipProvider delayDuration={150}>
+          <DialogHeader className="border-b border-border/70 px-6 py-5 pr-14">
+            <DialogTitle>Settings</DialogTitle>
+            <DialogDescription>
+              App-wide defaults used every time you start a new session.
+            </DialogDescription>
+          </DialogHeader>
 
-        <div className="flex min-h-0 flex-1 flex-col sm:flex-row">
-          <aside className="shrink-0 border-b border-border/70 bg-card/30 sm:w-64 sm:border-r sm:border-b-0">
-            <nav
-              aria-label="Settings sections"
-              className="app-scrollbar flex gap-2 overflow-x-auto px-3 py-3 sm:h-full sm:flex-col sm:overflow-y-auto sm:overflow-x-hidden"
-            >
-              {sections.map((section) => {
-                const isActive = currentSection.id === section.id
+          <div className="flex min-h-0 flex-1 flex-col sm:flex-row">
+            <aside className="shrink-0 border-b border-border/70 bg-card/30 sm:w-64 sm:border-r sm:border-b-0">
+              <nav
+                aria-label="Settings sections"
+                className="app-scrollbar flex gap-2 overflow-x-auto px-3 py-3 sm:h-full sm:flex-col sm:overflow-y-auto sm:overflow-x-hidden"
+              >
+                {sections.map((section) => {
+                  const isActive = currentSection.id === section.id
 
-                return (
-                  <Button
-                    key={section.id}
-                    type="button"
-                    variant={isActive ? 'secondary' : 'ghost'}
-                    size="sm"
-                    aria-current={isActive ? 'page' : undefined}
-                    className={cn(
-                      'h-auto min-w-48 items-start justify-start rounded-xl px-3 py-3 text-left sm:min-w-0',
-                      isActive && 'ring-1 ring-ring',
-                    )}
-                    onClick={() => onSectionChange(section.id)}
-                  >
-                    <span className="flex flex-col gap-1">
-                      <span className="text-sm font-medium">
-                        {section.navLabel}
+                  return (
+                    <Button
+                      key={section.id}
+                      type="button"
+                      variant={isActive ? 'secondary' : 'ghost'}
+                      size="sm"
+                      aria-current={isActive ? 'page' : undefined}
+                      className={cn(
+                        'h-auto min-w-48 items-start justify-start rounded-xl px-3 py-3 text-left sm:min-w-0',
+                        isActive && 'ring-1 ring-ring',
+                      )}
+                      onClick={() => onSectionChange(section.id)}
+                    >
+                      <span className="flex flex-col gap-1">
+                        <span className="text-sm font-medium">
+                          {section.navLabel}
+                        </span>
+                        <span className="whitespace-normal text-[11px] leading-relaxed text-muted-foreground">
+                          {section.navSummary}
+                        </span>
                       </span>
-                      <span className="whitespace-normal text-[11px] leading-relaxed text-muted-foreground">
-                        {section.navSummary}
-                      </span>
-                    </span>
-                  </Button>
-                )
-              })}
-            </nav>
-          </aside>
+                    </Button>
+                  )
+                })}
+              </nav>
+            </aside>
 
-          <div className="min-h-0 flex-1">
-            <div
-              data-testid="app-settings-scroll-region"
-              className={cn(
-                'app-scrollbar min-h-0 h-full overflow-y-auto py-5',
-                currentSection.id === 'insights' ? 'px-5 lg:px-8' : 'px-6',
-              )}
-            >
+            <div className="min-h-0 flex-1">
               <div
+                data-testid="app-settings-scroll-region"
                 className={cn(
-                  'mx-auto space-y-5',
-                  currentSection.id === 'insights' ? 'max-w-6xl' : 'max-w-2xl',
+                  'app-scrollbar min-h-0 h-full overflow-y-auto py-5',
+                  currentSection.id === 'insights' ? 'px-5 lg:px-8' : 'px-6',
                 )}
               >
-                <section className="space-y-2">
-                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-                    {currentSection.navLabel}
-                  </p>
-                  <div>
-                    <h3 className="text-lg font-semibold">
-                      {currentSection.title}
-                    </h3>
-                    <p className="mt-1 max-w-xl text-sm leading-relaxed text-muted-foreground">
-                      {currentSection.description}
+                <div
+                  className={cn(
+                    'mx-auto space-y-5',
+                    currentSection.id === 'insights'
+                      ? 'max-w-6xl'
+                      : 'max-w-2xl',
+                  )}
+                >
+                  <section className="space-y-2">
+                    <p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                      {currentSection.navLabel}
                     </p>
-                  </div>
-                </section>
+                    <div>
+                      {showsSectionTitle ? (
+                        <h3 className="text-lg font-semibold">
+                          {currentSection.title}
+                        </h3>
+                      ) : null}
+                      <p
+                        className={cn(
+                          'max-w-xl text-sm leading-relaxed text-muted-foreground',
+                          showsSectionTitle && 'mt-1',
+                        )}
+                      >
+                        {currentSection.description}
+                      </p>
+                    </div>
+                  </section>
 
-                {renderCurrentSection()}
+                  {renderCurrentSection()}
 
-                {error && (
-                  <p
-                    className="rounded-xl border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive"
-                    role="alert"
-                  >
-                    {error}
-                  </p>
-                )}
+                  {error && (
+                    <p
+                      className="rounded-xl border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive"
+                      role="alert"
+                    >
+                      {error}
+                    </p>
+                  )}
+                </div>
               </div>
             </div>
           </div>
-        </div>
 
-        <div className="flex shrink-0 flex-col-reverse gap-2 border-t border-border/70 px-6 py-4 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            {currentSection.id === 'session-defaults' ? (
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                onClick={onRestoreDefaults}
-                disabled={providers.length === 0 || isSaving}
-              >
-                Restore defaults
-              </Button>
-            ) : null}
-          </div>
+          <div className="flex shrink-0 flex-col-reverse gap-2 border-t border-border/70 px-6 py-4 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              {currentSection.id === 'session-defaults' ? (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={onRestoreDefaults}
+                  disabled={providers.length === 0 || isSaving}
+                >
+                  Restore defaults
+                </Button>
+              ) : null}
+            </div>
 
-          <div className="flex items-center justify-end gap-2">
-            <DialogClose asChild>
-              <Button
-                type="button"
-                variant={usesIndependentSave ? 'default' : 'outline'}
-                size="sm"
-                onClick={onCancel}
-                disabled={isSaving}
-              >
-                {usesIndependentSave ? 'Done' : 'Cancel'}
-              </Button>
-            </DialogClose>
-            {usesIndependentSave ? null : (
-              <Button
-                type="button"
-                size="sm"
-                onClick={onSave}
-                disabled={providers.length === 0 || isSaving || isSaveBlocked}
-              >
-                Save
-              </Button>
-            )}
+            <div className="flex items-center justify-end gap-2">
+              <DialogClose asChild>
+                <Button
+                  type="button"
+                  variant={usesIndependentSave ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={onCancel}
+                  disabled={isSaving}
+                >
+                  {usesIndependentSave ? 'Done' : 'Cancel'}
+                </Button>
+              </DialogClose>
+              {usesIndependentSave ? null : (
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={onSave}
+                  disabled={providers.length === 0 || isSaving || isSaveBlocked}
+                >
+                  Save
+                </Button>
+              )}
+            </div>
           </div>
-        </div>
+        </TooltipProvider>
       </DialogContent>
     </Dialog>
   )

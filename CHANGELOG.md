@@ -1,5 +1,18 @@
 # convergence
 
+## 0.40.4
+
+### Patch Changes
+
+- dc34b75: Add expandable diff context controls and capture richer Git diff context so reviewers can reveal more unchanged lines above or below changes.
+- b372c23: Polish code review guide navigation with section-aware file jumps, active section handoff, and clearer guide generation states.
+
+## 0.40.3
+
+### Patch Changes
+
+- 10b2e30: Condense the Settings dialog: each control now sits on a single line with its description moved into a hover tooltip, and section headers drop the redundant title when it matches the uppercase eyebrow. The four model-default sections (new session, naming, forking, guided review) are merged under one "Session defaults" item as labelled sub-sections.
+
 ## 0.40.2
 
 ### Patch Changes
