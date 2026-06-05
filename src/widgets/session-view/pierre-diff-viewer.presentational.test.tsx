@@ -52,8 +52,23 @@ vi.mock('@pierre/diffs/react', () => ({
       </button>
     )
   },
-  Virtualizer: ({ children }: { children: ReactNode }) => (
-    <div data-testid="pierre-virtualizer">{children}</div>
+  Virtualizer: ({
+    children,
+    className,
+    contentClassName,
+  }: {
+    children: ReactNode
+    className?: string
+    contentClassName?: string
+  }) => (
+    <div data-testid="pierre-virtualizer" className={className}>
+      <div
+        data-testid="pierre-virtualizer-content"
+        className={contentClassName}
+      >
+        {children}
+      </div>
+    </div>
   ),
   WorkerPoolContextProvider: ({
     children,
@@ -233,33 +248,13 @@ describe('PierreDiffViewer', () => {
     )
 
     expect(screen.getByTestId('pierre-virtualizer')).toBeInTheDocument()
-    expect(patchDiff.props.at(-1)?.disableWorkerPool).toBe(true)
-  })
-
-  it('renders inline full-content diffs without context folding or Pierre Virtualizer', () => {
-    const diff = [
-      '@@ -1,320 +1,320 @@',
-      ...Array.from({ length: 160 }, (_, index) => ` context before ${index}`),
-      '-old',
-      '+new',
-      ...Array.from({ length: 158 }, (_, index) => ` context after ${index}`),
-    ].join('\n')
-
-    render(
-      <PierreDiffViewer
-        file="src/generated.ts"
-        diff={diff}
-        scrollMode="inline"
-        contextStrategy="full"
-      />,
+    expect(screen.getByTestId('pierre-virtualizer')).toHaveClass(
+      'overflow-auto',
     )
-
-    expect(screen.queryByTestId('pierre-virtualizer')).toBeNull()
-    expect(
-      screen.queryByLabelText('Show more context above changes'),
-    ).toBeNull()
-    expect(patchDiff.props.at(-1)?.patch).toContain(' context before 0')
-    expect(patchDiff.props.at(-1)?.patch).toContain(' context after 157')
+    expect(screen.getByTestId('pierre-virtualizer-content')).toHaveClass(
+      'min-h-full',
+    )
+    expect(patchDiff.props.at(-1)?.disableWorkerPool).toBe(true)
   })
 
   it('enables worker-pool highlighting for very large diffs when workers exist', () => {

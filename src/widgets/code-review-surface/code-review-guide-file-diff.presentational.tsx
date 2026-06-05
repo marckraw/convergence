@@ -34,15 +34,13 @@ export const CodeReviewGuideFileDiff: FC<CodeReviewGuideFileDiffProps> = ({
         {file.reason}
       </p>
     </div>
-    <div className="min-h-0">
+    <div className="h-[560px] min-h-0">
       <PierreDiffViewer
         file={file.path}
         diff={diff}
         loading={loading}
         title="Guide section diff"
         emptyMessage="Loading file diff..."
-        scrollMode="inline"
-        contextStrategy="full"
       />
     </div>
   </article>
