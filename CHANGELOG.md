@@ -1,5 +1,11 @@
 # convergence
 
+## 0.40.3
+
+### Patch Changes
+
+- 10b2e30: Condense the Settings dialog: each control now sits on a single line with its description moved into a hover tooltip, and section headers drop the redundant title when it matches the uppercase eyebrow. The four model-default sections (new session, naming, forking, guided review) are merged under one "Session defaults" item as labelled sub-sections.
+
 ## 0.40.2
 
 ### Patch Changes
