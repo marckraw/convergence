@@ -204,6 +204,8 @@ const mockElectronAPI = {
       extractionModelByProvider: {},
       guidedReviewModelByProvider: {},
       commandCenterShortcut: { key: 'k', shiftKey: false, altKey: false },
+      guidedReviewBackend: 'local',
+      guidedReviewRemoteBaseUrl: null,
       notifications: {
         enabled: true,
         toasts: true,

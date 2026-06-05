@@ -17,4 +17,8 @@ export type {
   CodeReviewGuideRiskLevel,
   CodeReviewGuideSection,
   CodeReviewGuideStatus,
+  RemoteCodeReviewDaemonConnectionResult,
+  RemoteCodeReviewDaemonConnectionState,
+  RemoteCodeReviewDaemonHealth,
+  RemoteCodeReviewDaemonMeta,
 } from './code-review-guide.types'

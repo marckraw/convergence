@@ -7,6 +7,11 @@ import type { ProviderRegistry } from '../provider/provider-registry'
 import type { Provider } from '../provider/provider.types'
 import type { SessionService } from '../session/session.service'
 import {
+  mapProviderIdToRemoteDaemonProviderId,
+  resolveRemoteCodeReviewGuideTarget,
+} from './remote-daemon-guide.pure'
+import type { RemoteCodeReviewGuideDaemonClient } from './remote-daemon-guide.service'
+import {
   buildCodeReviewGuideCacheKey,
   buildCodeReviewGuidePrompt,
   CODE_REVIEW_GUIDE_RETRY_SUFFIX,
@@ -24,9 +29,16 @@ import {
 
 interface CodeReviewGuideServiceDeps {
   providers: ProviderRegistry
-  appSettings: Pick<AppSettingsService, 'resolveGuidedReviewModel'>
+  appSettings: Pick<
+    AppSettingsService,
+    'getAppSettings' | 'resolveGuidedReviewModel'
+  >
   sessions: Pick<SessionService, 'getSummaryById'>
   codeReview: Pick<CodeReviewService, 'getFilePatch'>
+  remoteDaemon?: Pick<
+    RemoteCodeReviewGuideDaemonClient,
+    'generateGuide' | 'resolveGenerationModel'
+  >
 }
 
 const GUIDE_GENERATION_TIMEOUT_MS = 600_000
@@ -71,16 +83,38 @@ export class CodeReviewGuideService {
   async generateGuide(
     input: CodeReviewGuideGenerateRequest,
   ): Promise<CodeReviewGuide> {
-    if (this.deps) {
-      return this.generateAgentGuide(input)
-    }
-    return this.generateDeterministicGuide(input)
+    return this.generateGuideWithOptions(input, { forceRemote: false })
   }
 
   async refreshGuide(
     input: CodeReviewGuideGenerateRequest,
   ): Promise<CodeReviewGuide> {
-    return this.generateGuide(input)
+    return this.generateGuideWithOptions(input, { forceRemote: true })
+  }
+
+  private async generateGuideWithOptions(
+    input: CodeReviewGuideGenerateRequest,
+    options: { forceRemote: boolean },
+  ): Promise<CodeReviewGuide> {
+    if (this.deps) {
+      const settings = await this.deps.appSettings.getAppSettings()
+      const remoteTarget = resolveRemoteCodeReviewGuideTarget(input.target)
+      if (settings.guidedReviewBackend === 'remote') {
+        if (remoteTarget.ok) {
+          return this.generateRemoteGuide(input, remoteTarget, options)
+        }
+
+        if (remoteTarget.reason !== 'not-remote-pull-request') {
+          return this.failGeneration(
+            input,
+            remoteTargetFailureMessage(remoteTarget.reason),
+          )
+        }
+      }
+
+      return this.generateAgentGuide(input)
+    }
+    return this.generateDeterministicGuide(input)
   }
 
   private generateDeterministicGuide(
@@ -171,6 +205,84 @@ export class CodeReviewGuideService {
       error: message,
     })
     throw new CodeReviewGuideGenerationError(message, retryResult.error)
+  }
+
+  private async generateRemoteGuide(
+    input: CodeReviewGuideGenerateRequest,
+    remoteTarget: {
+      repository: string
+      pullRequestNumber: number
+    },
+    options: { forceRemote: boolean },
+  ): Promise<CodeReviewGuide> {
+    const remoteDaemon = this.deps!.remoteDaemon
+    if (!remoteDaemon) {
+      return this.failGeneration(
+        input,
+        'Remote guide generation is enabled, but the daemon client is not available.',
+      )
+    }
+
+    const providerContext = this.selectProvider(input)
+    if (!providerContext) {
+      return this.failGeneration(
+        input,
+        'Remote guide generation requires a configured provider.',
+      )
+    }
+
+    const remoteProviderId = mapProviderIdToRemoteDaemonProviderId(
+      providerContext.provider.id,
+    )
+    if (!remoteProviderId) {
+      return this.failGeneration(
+        input,
+        `Provider ${providerContext.provider.id} is not supported by the remote daemon.`,
+      )
+    }
+
+    const modelDefaults = await this.deps!.appSettings.resolveGuidedReviewModel(
+      providerContext.provider.id,
+    )
+    if (!modelDefaults) {
+      return this.failGeneration(
+        input,
+        `No guided review model is configured for provider ${providerContext.provider.id}.`,
+      )
+    }
+
+    try {
+      const model = await remoteDaemon.resolveGenerationModel({
+        provider: remoteProviderId,
+        preferredModel: modelDefaults.modelId,
+      })
+      const remoteResult = await remoteDaemon.generateGuide({
+        repository: remoteTarget.repository,
+        pullRequestNumber: remoteTarget.pullRequestNumber,
+        provider: remoteProviderId,
+        model,
+        effort: modelDefaults.effortId,
+        force: options.forceRemote,
+      })
+      const draft = normalizeCodeReviewGuideDraft({
+        draft: remoteResult.guideDraft,
+        files: input.files,
+      })
+
+      return this.upsertGuide(input, {
+        status: remoteResult.guide.status,
+        overview: draft.overview,
+        generatedBy: draft.generatedBy,
+        sectionsJson: JSON.stringify(draft.sections),
+        error: remoteResult.guide.error,
+      })
+    } catch (error) {
+      return this.failGeneration(
+        input,
+        `Remote guide generation failed: ${formatGenerationError(error)}`,
+        error,
+      )
+    }
   }
 
   private selectProvider(input: CodeReviewGuideGenerateRequest): {
@@ -296,5 +408,45 @@ export class CodeReviewGuideService {
       throw new Error('Failed to persist code review guide')
     }
     return stored
+  }
+
+  private failGeneration(
+    input: CodeReviewGuideGenerateRequest,
+    message: string,
+    cause?: unknown,
+  ): never {
+    this.upsertGuide(input, {
+      status: 'failed',
+      overview: '',
+      generatedBy: 'agent',
+      sectionsJson: '[]',
+      error: message,
+    })
+    throw new CodeReviewGuideGenerationError(message, cause)
+  }
+}
+
+function formatGenerationError(error: unknown): string {
+  if (error instanceof Error && error.message.trim().length > 0) {
+    return error.message.trim()
+  }
+  return 'Unknown error'
+}
+
+function remoteTargetFailureMessage(
+  reason: Exclude<
+    ReturnType<typeof resolveRemoteCodeReviewGuideTarget>,
+    { ok: true }
+  >['reason'],
+): string {
+  switch (reason) {
+    case 'missing-pull-request-number':
+      return 'Remote guide generation requires a pull request number.'
+    case 'missing-pull-request-url':
+      return 'Remote guide generation requires a GitHub pull request URL.'
+    case 'unsupported-pull-request-url':
+      return 'Remote guide generation only supports github.com pull request URLs.'
+    case 'not-remote-pull-request':
+      return 'Remote guide generation requires a remote pull request target.'
   }
 }

@@ -13,6 +13,7 @@ import { AppSettingsService } from './app-settings.service'
 import {
   DEFAULT_DEBUG_LOGGING_PREFS,
   DEFAULT_FAVORITE_MODELS_PREFS,
+  DEFAULT_GUIDED_REVIEW_BACKEND,
   DEFAULT_ONBOARDING_PREFS,
   DEFAULT_PI_MODEL_VISIBILITY_PREFS,
 } from './app-settings.types'
@@ -181,6 +182,8 @@ describe('AppSettingsService', () => {
         extractionModelByProvider: {},
         guidedReviewModelByProvider: {},
         commandCenterShortcut: { key: 'k', shiftKey: false, altKey: false },
+        guidedReviewBackend: DEFAULT_GUIDED_REVIEW_BACKEND,
+        guidedReviewRemoteBaseUrl: null,
         notifications: DEFAULT_NOTIFICATION_PREFS,
         onboarding: DEFAULT_ONBOARDING_PREFS,
         updates: DEFAULT_UPDATE_PREFS,
@@ -199,6 +202,8 @@ describe('AppSettingsService', () => {
         extractionModelByProvider: {},
         guidedReviewModelByProvider: {},
         commandCenterShortcut: { key: 'k', shiftKey: false, altKey: false },
+        guidedReviewBackend: 'remote',
+        guidedReviewRemoteBaseUrl: 'https://daemon.example.com',
         notifications: DEFAULT_NOTIFICATION_PREFS,
         onboarding: DEFAULT_ONBOARDING_PREFS,
         updates: DEFAULT_UPDATE_PREFS,
@@ -215,6 +220,8 @@ describe('AppSettingsService', () => {
         extractionModelByProvider: {},
         guidedReviewModelByProvider: {},
         commandCenterShortcut: { key: 'k', shiftKey: false, altKey: false },
+        guidedReviewBackend: 'remote',
+        guidedReviewRemoteBaseUrl: 'https://daemon.example.com',
         notifications: DEFAULT_NOTIFICATION_PREFS,
         onboarding: DEFAULT_ONBOARDING_PREFS,
         updates: DEFAULT_UPDATE_PREFS,
@@ -242,6 +249,8 @@ describe('AppSettingsService', () => {
         extractionModelByProvider: {},
         guidedReviewModelByProvider: {},
         commandCenterShortcut: { key: 'k', shiftKey: false, altKey: false },
+        guidedReviewBackend: DEFAULT_GUIDED_REVIEW_BACKEND,
+        guidedReviewRemoteBaseUrl: null,
         notifications: DEFAULT_NOTIFICATION_PREFS,
         onboarding: DEFAULT_ONBOARDING_PREFS,
         updates: DEFAULT_UPDATE_PREFS,
@@ -269,6 +278,8 @@ describe('AppSettingsService', () => {
         extractionModelByProvider: {},
         guidedReviewModelByProvider: {},
         commandCenterShortcut: { key: 'k', shiftKey: false, altKey: false },
+        guidedReviewBackend: DEFAULT_GUIDED_REVIEW_BACKEND,
+        guidedReviewRemoteBaseUrl: null,
         notifications: DEFAULT_NOTIFICATION_PREFS,
         onboarding: DEFAULT_ONBOARDING_PREFS,
         updates: DEFAULT_UPDATE_PREFS,
@@ -296,6 +307,8 @@ describe('AppSettingsService', () => {
         extractionModelByProvider: {},
         guidedReviewModelByProvider: {},
         commandCenterShortcut: { key: 'k', shiftKey: false, altKey: false },
+        guidedReviewBackend: DEFAULT_GUIDED_REVIEW_BACKEND,
+        guidedReviewRemoteBaseUrl: null,
         notifications: DEFAULT_NOTIFICATION_PREFS,
         onboarding: DEFAULT_ONBOARDING_PREFS,
         updates: DEFAULT_UPDATE_PREFS,
@@ -316,6 +329,8 @@ describe('AppSettingsService', () => {
         extractionModelByProvider: {},
         guidedReviewModelByProvider: {},
         commandCenterShortcut: { key: 'k', shiftKey: false, altKey: false },
+        guidedReviewBackend: DEFAULT_GUIDED_REVIEW_BACKEND,
+        guidedReviewRemoteBaseUrl: null,
         notifications: DEFAULT_NOTIFICATION_PREFS,
         onboarding: DEFAULT_ONBOARDING_PREFS,
         updates: DEFAULT_UPDATE_PREFS,
@@ -433,6 +448,45 @@ describe('AppSettingsService', () => {
       ).rejects.toThrow(/Unknown effort id/)
     })
 
+    it('requires a daemon base URL when guided review backend is remote', async () => {
+      await expect(
+        service.setAppSettings({
+          defaultProviderId: null,
+          defaultModelId: null,
+          defaultEffortId: null,
+          guidedReviewBackend: 'remote',
+          guidedReviewRemoteBaseUrl: null,
+        }),
+      ).rejects.toThrow(/requires a daemon base URL/)
+    })
+
+    it('rejects non-http daemon base URLs', async () => {
+      await expect(
+        service.setAppSettings({
+          defaultProviderId: null,
+          defaultModelId: null,
+          defaultEffortId: null,
+          guidedReviewBackend: 'remote',
+          guidedReviewRemoteBaseUrl: 'file:///tmp/daemon',
+        }),
+      ).rejects.toThrow(/must be an HTTP\(S\) URL/)
+    })
+
+    it('normalizes valid daemon base URLs', async () => {
+      const stored = await service.setAppSettings({
+        defaultProviderId: null,
+        defaultModelId: null,
+        defaultEffortId: null,
+        guidedReviewBackend: 'remote',
+        guidedReviewRemoteBaseUrl: ' https://daemon.example.com/ ',
+      })
+
+      expect(stored.guidedReviewBackend).toBe('remote')
+      expect(stored.guidedReviewRemoteBaseUrl).toBe(
+        'https://daemon.example.com',
+      )
+    })
+
     it('allows clearing settings back to null', async () => {
       await service.setAppSettings({
         defaultProviderId: 'claude-code',
@@ -452,6 +506,8 @@ describe('AppSettingsService', () => {
         extractionModelByProvider: {},
         guidedReviewModelByProvider: {},
         commandCenterShortcut: { key: 'k', shiftKey: false, altKey: false },
+        guidedReviewBackend: DEFAULT_GUIDED_REVIEW_BACKEND,
+        guidedReviewRemoteBaseUrl: null,
         notifications: DEFAULT_NOTIFICATION_PREFS,
         onboarding: DEFAULT_ONBOARDING_PREFS,
         updates: DEFAULT_UPDATE_PREFS,

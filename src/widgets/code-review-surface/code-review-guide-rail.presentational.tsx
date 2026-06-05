@@ -9,6 +9,7 @@ interface CodeReviewGuideRailProps {
   activeSectionId: string | null
   loading: boolean
   generating: boolean
+  generationStatusLabel: string | null
   canGenerate: boolean
   hasPersistedGuide: boolean
   error: string | null
@@ -21,6 +22,7 @@ export const CodeReviewGuideRail: FC<CodeReviewGuideRailProps> = ({
   activeSectionId,
   loading,
   generating,
+  generationStatusLabel,
   canGenerate,
   hasPersistedGuide,
   error,
@@ -31,6 +33,7 @@ export const CodeReviewGuideRail: FC<CodeReviewGuideRailProps> = ({
     guide,
     loading,
     generating,
+    generationStatusLabel,
     hasPersistedGuide,
     error,
   })
@@ -143,6 +146,7 @@ function getGuideRailStatus(input: {
   guide: CodeReviewGuideContent
   loading: boolean
   generating: boolean
+  generationStatusLabel: string | null
   hasPersistedGuide: boolean
   error: string | null
 }): {
@@ -163,7 +167,7 @@ function getGuideRailStatus(input: {
   if (input.generating) {
     return {
       label: 'Generating AI guide',
-      detail: 'Building walkthrough chapters',
+      detail: input.generationStatusLabel ?? 'Building walkthrough chapters',
       icon: 'loading',
       tone: 'text-muted-foreground',
     }

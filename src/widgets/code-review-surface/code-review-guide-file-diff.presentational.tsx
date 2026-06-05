@@ -23,7 +23,7 @@ export const CodeReviewGuideFileDiff: FC<CodeReviewGuideFileDiffProps> = ({
     data-guide-file-path={file.path}
     className="min-w-0 scroll-mt-5 border border-border bg-card"
   >
-    <div className="h-[560px] min-h-0">
+    <div className="min-h-0">
       <PierreDiffViewer
         file={file.path}
         diff={diff}
@@ -32,6 +32,8 @@ export const CodeReviewGuideFileDiff: FC<CodeReviewGuideFileDiffProps> = ({
         subtitle={file.reason}
         subtitleVariant="description"
         emptyMessage="Loading file diff..."
+        scrollMode="inline"
+        contextStrategy="full"
       />
     </div>
   </article>

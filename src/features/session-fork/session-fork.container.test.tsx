@@ -227,6 +227,8 @@ function primeStores(
       extractionModelByProvider: {},
       guidedReviewModelByProvider: {},
       commandCenterShortcut: { key: 'k', shiftKey: false, altKey: false },
+      guidedReviewBackend: 'local',
+      guidedReviewRemoteBaseUrl: null,
     },
     isLoaded: true,
     isSaving: false,

@@ -17,6 +17,7 @@ import {
   useAppSettingsStore,
   type CommandCenterShortcutPrefs,
   type DebugLoggingPrefs,
+  type GuidedReviewBackend,
 } from '@/entities/app-settings'
 import {
   findShortcutConflict,
@@ -32,6 +33,7 @@ import {
   AppSettingsDialog,
   type AppSettingsSectionId,
 } from './app-settings.presentational'
+import { getGuidedReviewRemoteBaseUrlError } from './guided-review-settings.pure'
 
 interface AppSettingsContainerProps {
   trigger: ReactNode
@@ -48,6 +50,7 @@ const EMPTY_NAMING_DRAFT: Record<string, string> = {}
 const EMPTY_EXTRACTION_DRAFT: Record<string, string> = {}
 const EMPTY_GUIDED_REVIEW_DRAFT: Record<string, string> = {}
 const DEFAULT_SECTION: AppSettingsSectionId = 'session-defaults'
+const DEFAULT_GUIDED_REVIEW_BACKEND: GuidedReviewBackend = 'local'
 
 function isAppSettingsSection(value: unknown): value is AppSettingsSectionId {
   return (
@@ -89,6 +92,10 @@ export const AppSettingsDialogContainer: FC<AppSettingsContainerProps> = ({
   const [guidedReviewDraft, setGuidedReviewDraft] = useState<
     Record<string, string>
   >(EMPTY_GUIDED_REVIEW_DRAFT)
+  const [guidedReviewBackendDraft, setGuidedReviewBackendDraft] =
+    useState<GuidedReviewBackend>(DEFAULT_GUIDED_REVIEW_BACKEND)
+  const [guidedReviewRemoteBaseUrlDraft, setGuidedReviewRemoteBaseUrlDraft] =
+    useState('')
   const [notificationsDraft, setNotificationsDraft] =
     useState<NotificationPrefs | null>(null)
   const [updatesDraft, setUpdatesDraft] = useState<UpdatePrefs | null>(null)
@@ -148,6 +155,8 @@ export const AppSettingsDialogContainer: FC<AppSettingsContainerProps> = ({
     setNamingDraft({ ...settings.namingModelByProvider })
     setExtractionDraft({ ...settings.extractionModelByProvider })
     setGuidedReviewDraft({ ...settings.guidedReviewModelByProvider })
+    setGuidedReviewBackendDraft(settings.guidedReviewBackend)
+    setGuidedReviewRemoteBaseUrlDraft(settings.guidedReviewRemoteBaseUrl ?? '')
     setNotificationsDraft(settings.notifications)
     setUpdatesDraft(settings.updates)
     setDebugLoggingDraft(settings.debugLogging)
@@ -234,6 +243,17 @@ export const AppSettingsDialogContainer: FC<AppSettingsContainerProps> = ({
     },
     [],
   )
+
+  const handleGuidedReviewBackendChange = useCallback(
+    (backend: GuidedReviewBackend) => {
+      setGuidedReviewBackendDraft(backend)
+    },
+    [],
+  )
+
+  const handleGuidedReviewRemoteBaseUrlChange = useCallback((value: string) => {
+    setGuidedReviewRemoteBaseUrlDraft(value)
+  }, [])
 
   const handleRestoreDefaults = useCallback(() => {
     const fallback = resolveProviderSelection(providers, null, null, null)
@@ -345,6 +365,15 @@ export const AppSettingsDialogContainer: FC<AppSettingsContainerProps> = ({
     return systemApi.getInfo()?.platform ?? null
   }, [])
 
+  const guidedReviewRemoteBaseUrlError = useMemo(
+    () =>
+      getGuidedReviewRemoteBaseUrlError(
+        guidedReviewBackendDraft,
+        guidedReviewRemoteBaseUrlDraft,
+      ),
+    [guidedReviewBackendDraft, guidedReviewRemoteBaseUrlDraft],
+  )
+
   const handleCancel = useCallback(() => {
     closeDialog()
   }, [closeDialog])
@@ -358,6 +387,7 @@ export const AppSettingsDialogContainer: FC<AppSettingsContainerProps> = ({
 
   const handleSave = useCallback(async () => {
     if (shortcutsConflict) return
+    if (guidedReviewRemoteBaseUrlError) return
 
     const shortcutToSave = shortcutsDraft ?? settings.commandCenterShortcut
     const conflict = findShortcutConflict(shortcutToSave)
@@ -375,6 +405,11 @@ export const AppSettingsDialogContainer: FC<AppSettingsContainerProps> = ({
         extractionModelByProvider: extractionDraft,
         guidedReviewModelByProvider: guidedReviewDraft,
         commandCenterShortcut: shortcutToSave,
+        guidedReviewBackend: guidedReviewBackendDraft,
+        guidedReviewRemoteBaseUrl:
+          guidedReviewRemoteBaseUrlDraft.trim().length > 0
+            ? guidedReviewRemoteBaseUrlDraft.trim()
+            : null,
         notifications: notificationsDraft ?? settings.notifications,
         onboarding: settings.onboarding,
         updates: updatesDraft ?? settings.updates,
@@ -399,6 +434,9 @@ export const AppSettingsDialogContainer: FC<AppSettingsContainerProps> = ({
     shortcutsDraft,
     shortcutsConflict,
     settings.commandCenterShortcut,
+    guidedReviewBackendDraft,
+    guidedReviewRemoteBaseUrlDraft,
+    guidedReviewRemoteBaseUrlError,
     notificationsDraft,
     updatesDraft,
     debugLoggingDraft,
@@ -424,6 +462,9 @@ export const AppSettingsDialogContainer: FC<AppSettingsContainerProps> = ({
       namingDraft={namingDraft}
       extractionDraft={extractionDraft}
       guidedReviewDraft={guidedReviewDraft}
+      guidedReviewBackend={guidedReviewBackendDraft}
+      guidedReviewRemoteBaseUrlDraft={guidedReviewRemoteBaseUrlDraft}
+      guidedReviewRemoteBaseUrlError={guidedReviewRemoteBaseUrlError}
       notificationsDraft={notificationsDraft ?? settings.notifications}
       updatesDraft={updatesDraft ?? settings.updates}
       debugLoggingDraft={debugLoggingDraft ?? settings.debugLogging}
@@ -435,6 +476,7 @@ export const AppSettingsDialogContainer: FC<AppSettingsContainerProps> = ({
       updatesIsDev={updatesIsDev}
       platform={platform}
       isSaving={isSaving}
+      isSaveBlocked={!!guidedReviewRemoteBaseUrlError}
       error={error}
       activeSection={activeSection}
       onProviderChange={handleProviderChange}
@@ -443,6 +485,8 @@ export const AppSettingsDialogContainer: FC<AppSettingsContainerProps> = ({
       onNamingModelChange={handleNamingModelChange}
       onExtractionModelChange={handleExtractionModelChange}
       onGuidedReviewModelChange={handleGuidedReviewModelChange}
+      onGuidedReviewBackendChange={handleGuidedReviewBackendChange}
+      onGuidedReviewRemoteBaseUrlChange={handleGuidedReviewRemoteBaseUrlChange}
       onNotificationsChange={handleNotificationsChange}
       onTestFireNotification={handleTestFire}
       onToggleBackgroundUpdates={handleToggleBackgroundUpdates}
