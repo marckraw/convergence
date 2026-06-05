@@ -43,7 +43,6 @@ export const NamingModelDefaultsFields: FC<NamingModelDefaultsFieldsProps> = ({
         <SettingsControlField
           key={provider.id}
           title={provider.vendorLabel || provider.name}
-          description="Model used to auto-generate session names for this provider."
         >
           <ModelPickerDialog
             providers={[provider]}

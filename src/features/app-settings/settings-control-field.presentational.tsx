@@ -1,9 +1,12 @@
 import type { FC, ReactNode } from 'react'
+import { Info } from 'lucide-react'
 import { cn } from '@/shared/lib/cn.pure'
+import { Button } from '@/shared/ui/button'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/shared/ui/tooltip'
 
 interface SettingsControlFieldProps {
   title: string
-  description: string
+  description?: string
   children: ReactNode
   className?: string
 }
@@ -16,17 +19,31 @@ export const SettingsControlField: FC<SettingsControlFieldProps> = ({
 }) => (
   <div
     className={cn(
-      'grid gap-3 rounded-xl border border-border/70 bg-card/45 p-4',
-      'md:grid-cols-[minmax(0,1fr)_17rem] md:items-start',
+      'flex items-center justify-between gap-4 rounded-xl border border-border/70 bg-card/45 px-4 py-2.5',
       className,
     )}
   >
-    <div className="space-y-1">
-      <p className="text-sm font-medium text-foreground">{title}</p>
-      <p className="text-xs leading-relaxed text-muted-foreground">
-        {description}
-      </p>
+    <div className="flex min-w-0 items-center gap-1.5">
+      <p className="truncate text-sm font-medium text-foreground">{title}</p>
+      {description ? (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              aria-label={`About ${title}`}
+              className="size-5 shrink-0 rounded-full text-muted-foreground/60 hover:text-foreground"
+            >
+              <Info className="size-3.5" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="top" className="max-w-xs leading-relaxed">
+            {description}
+          </TooltipContent>
+        </Tooltip>
+      ) : null}
     </div>
-    <div className="min-w-0 md:w-[17rem] md:justify-self-end">{children}</div>
+    <div className="min-w-0 shrink-0">{children}</div>
   </div>
 )
