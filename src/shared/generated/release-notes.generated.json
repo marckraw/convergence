@@ -1,6 +1,26 @@
 {
-  "currentVersion": "0.38.4",
+  "currentVersion": "0.39.2",
   "releases": [
+    {
+      "version": "0.39.2",
+      "date": null,
+      "notes": "### Patch Changes\n\n- b21109e: Trim Prompt Library copy actions to section-level path and prompt text buttons, and add a shared NativeSelect control with consistent chevron spacing across dropdowns."
+    },
+    {
+      "version": "0.39.1",
+      "date": null,
+      "notes": "### Patch Changes\n\n- 98ae96c: Add Cursor CLI ACP as a first-class provider with session streaming, approvals, model and mode metadata, native command catalog integration, settings and quota polish, and parity hardening."
+    },
+    {
+      "version": "0.39.0",
+      "date": null,
+      "notes": "### Minor Changes\n\n- 08e9c3b: Add Antigravity CLI as a Google provider with Gemini model presets, native skill invocation, continuation support, settings guidance, and post-run tool timeline recovery from Antigravity conversation data, including a fallback for print turns where status-line telemetry does not expose the conversation id. Google/Antigravity selectors are marked Alpha while telemetry visibility remains limited. Antigravity interactive turns no longer have a hard 5-minute Convergence watchdog, and temporary settings injection now queues concurrent turns and recovers stale Convergence locks after crashes without overwriting user-edited settings."
+    },
+    {
+      "version": "0.38.5",
+      "date": null,
+      "notes": "### Patch Changes\n\n- 1da3fb2: Add review target source filters and search for sessions, workspaces, and pull requests."
+    },
     {
       "version": "0.38.4",
       "date": null,

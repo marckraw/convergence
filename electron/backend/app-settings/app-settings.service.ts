@@ -12,6 +12,7 @@ import {
 import { APP_SETTINGS_KEY } from './app-settings.constants'
 import {
   filterPiDescriptor,
+  normalizeGuidedReviewRemoteBaseUrl,
   parseAppSettings,
   parseCommandCenterShortcut,
   parseDebugLoggingPrefs,
@@ -117,6 +118,23 @@ export class AppSettingsService {
     )
 
     const existing = parseAppSettings(this.stateService.get(APP_SETTINGS_KEY))
+    const guidedReviewBackend =
+      input.guidedReviewBackend ?? existing.guidedReviewBackend
+    const guidedReviewRemoteBaseUrl =
+      input.guidedReviewRemoteBaseUrl === undefined
+        ? existing.guidedReviewRemoteBaseUrl
+        : normalizeGuidedReviewRemoteBaseUrl(input.guidedReviewRemoteBaseUrl)
+    if (
+      input.guidedReviewRemoteBaseUrl !== undefined &&
+      input.guidedReviewRemoteBaseUrl !== null &&
+      !guidedReviewRemoteBaseUrl
+    ) {
+      throw new Error('Remote daemon base URL must be an HTTP(S) URL.')
+    }
+    if (guidedReviewBackend === 'remote' && !guidedReviewRemoteBaseUrl) {
+      throw new Error('Remote guided review requires a daemon base URL.')
+    }
+
     const notifications =
       input.notifications === undefined
         ? existing.notifications
@@ -172,6 +190,8 @@ export class AppSettingsService {
       extractionModelByProvider,
       guidedReviewModelByProvider,
       commandCenterShortcut,
+      guidedReviewBackend,
+      guidedReviewRemoteBaseUrl,
       notifications,
       onboarding,
       updates,

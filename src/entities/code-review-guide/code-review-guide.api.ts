@@ -2,6 +2,7 @@ import type {
   CodeReviewGuide,
   CodeReviewGuideGenerateRequest,
   CodeReviewGuideLookupRequest,
+  RemoteCodeReviewDaemonConnectionResult,
 } from './code-review-guide.types'
 
 export const codeReviewGuideApi = {
@@ -19,4 +20,8 @@ export const codeReviewGuideApi = {
     input: CodeReviewGuideGenerateRequest,
   ): Promise<CodeReviewGuide> =>
     window.electronAPI.codeReviewGuide.refreshGuide(input),
+
+  testRemoteDaemonConnection:
+    (): Promise<RemoteCodeReviewDaemonConnectionResult> =>
+      window.electronAPI.codeReviewGuide.testRemoteDaemonConnection(),
 }

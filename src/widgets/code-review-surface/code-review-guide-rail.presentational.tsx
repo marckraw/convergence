@@ -9,6 +9,7 @@ interface CodeReviewGuideRailProps {
   activeSectionId: string | null
   loading: boolean
   generating: boolean
+  generationStatusLabel: string | null
   canGenerate: boolean
   onSelectSection: (sectionId: string) => void
   onGenerateGuide: () => void
@@ -19,6 +20,7 @@ export const CodeReviewGuideRail: FC<CodeReviewGuideRailProps> = ({
   activeSectionId,
   loading,
   generating,
+  generationStatusLabel,
   canGenerate,
   onSelectSection,
   onGenerateGuide,
@@ -39,8 +41,17 @@ export const CodeReviewGuideRail: FC<CodeReviewGuideRailProps> = ({
             {guide.generatedBy === 'agent' ? 'AI guide' : 'Draft guide'}
           </p>
           {generating || loading ? (
-            <p className="mt-1 truncate text-xs text-muted-foreground">
-              {generating ? 'Generating...' : 'Loading diffs...'}
+            <p
+              className="mt-1 truncate text-xs text-muted-foreground"
+              title={
+                generating
+                  ? (generationStatusLabel ?? 'Generating...')
+                  : 'Loading diffs...'
+              }
+            >
+              {generating
+                ? (generationStatusLabel ?? 'Generating...')
+                : 'Loading diffs...'}
             </p>
           ) : null}
         </div>

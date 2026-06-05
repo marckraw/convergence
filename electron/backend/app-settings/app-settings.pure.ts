@@ -10,11 +10,13 @@ import type { UpdatePrefs } from '../updates/updates.types'
 import {
   DEFAULT_DEBUG_LOGGING_PREFS,
   DEFAULT_FAVORITE_MODELS_PREFS,
+  DEFAULT_GUIDED_REVIEW_BACKEND,
   DEFAULT_ONBOARDING_PREFS,
   DEFAULT_PI_MODEL_VISIBILITY_PREFS,
   type AppSettings,
   type DebugLoggingPrefs,
   type FavoriteModelsPrefs,
+  type GuidedReviewBackend,
   type OnboardingPrefs,
   type PiModelVisibilityPrefs,
   type ResolvedOneShotModelDefaults,
@@ -173,6 +175,28 @@ export function parseFavoriteModelsPrefs(value: unknown): FavoriteModelsPrefs {
 
 export { parseCommandCenterShortcut, validateCommandCenterShortcut }
 
+export function parseGuidedReviewBackend(value: unknown): GuidedReviewBackend {
+  return value === 'remote' ? 'remote' : DEFAULT_GUIDED_REVIEW_BACKEND
+}
+
+export function normalizeGuidedReviewRemoteBaseUrl(
+  value: unknown,
+): string | null {
+  if (typeof value !== 'string') return null
+  const trimmed = value.trim()
+  if (!trimmed) return null
+
+  try {
+    const parsed = new URL(trimmed)
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+      return null
+    }
+    return parsed.href.replace(/\/+$/, '')
+  } catch {
+    return null
+  }
+}
+
 function emptyAppSettings(): AppSettings {
   return {
     defaultProviderId: null,
@@ -182,6 +206,8 @@ function emptyAppSettings(): AppSettings {
     extractionModelByProvider: {},
     guidedReviewModelByProvider: {},
     commandCenterShortcut: DEFAULT_COMMAND_CENTER_SHORTCUT,
+    guidedReviewBackend: DEFAULT_GUIDED_REVIEW_BACKEND,
+    guidedReviewRemoteBaseUrl: null,
     notifications: DEFAULT_NOTIFICATION_PREFS,
     onboarding: DEFAULT_ONBOARDING_PREFS,
     updates: DEFAULT_UPDATE_PREFS,
@@ -219,6 +245,10 @@ export function parseAppSettings(raw: string | null): AppSettings {
       ),
       commandCenterShortcut: parseCommandCenterShortcut(
         parsed.commandCenterShortcut,
+      ),
+      guidedReviewBackend: parseGuidedReviewBackend(parsed.guidedReviewBackend),
+      guidedReviewRemoteBaseUrl: normalizeGuidedReviewRemoteBaseUrl(
+        parsed.guidedReviewRemoteBaseUrl,
       ),
       notifications: parseNotificationPrefs(parsed.notifications),
       onboarding: parseOnboardingPrefs(parsed.onboarding),
@@ -287,6 +317,8 @@ export function validateAppSettings(
       extractionModelByProvider,
       guidedReviewModelByProvider,
       commandCenterShortcut,
+      guidedReviewBackend: settings.guidedReviewBackend,
+      guidedReviewRemoteBaseUrl: settings.guidedReviewRemoteBaseUrl,
       notifications: settings.notifications,
       onboarding: settings.onboarding,
       updates: settings.updates,
@@ -311,6 +343,8 @@ export function validateAppSettings(
       extractionModelByProvider,
       guidedReviewModelByProvider,
       commandCenterShortcut,
+      guidedReviewBackend: settings.guidedReviewBackend,
+      guidedReviewRemoteBaseUrl: settings.guidedReviewRemoteBaseUrl,
       notifications: settings.notifications,
       onboarding: settings.onboarding,
       updates: settings.updates,
@@ -334,6 +368,8 @@ export function validateAppSettings(
     extractionModelByProvider,
     guidedReviewModelByProvider,
     commandCenterShortcut,
+    guidedReviewBackend: settings.guidedReviewBackend,
+    guidedReviewRemoteBaseUrl: settings.guidedReviewRemoteBaseUrl,
     notifications: settings.notifications,
     onboarding: settings.onboarding,
     updates: settings.updates,

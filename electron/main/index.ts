@@ -25,6 +25,7 @@ import { GitService } from '../backend/git/git.service'
 import { ChangedFilesService } from '../backend/git/changed-files.service'
 import { CodeReviewService } from '../backend/code-review/code-review.service'
 import { CodeReviewGuideService } from '../backend/code-review-guide/code-review-guide.service'
+import { RemoteCodeReviewGuideDaemonClient } from '../backend/code-review-guide/remote-daemon-guide.service'
 import { PullRequestService } from '../backend/pull-request/pull-request.service'
 import { PullRequestReviewService } from '../backend/pull-request/pull-request-review.service'
 import { ReviewNotesService } from '../backend/review-notes/review-notes.service'
@@ -83,6 +84,7 @@ import { SessionForkService } from '../backend/session/fork/session-fork.service
 import { registerSessionForkIpcHandlers } from '../backend/session/fork/session-fork.ipc'
 import { loadEnvFile } from '../backend/environment/env-file.service'
 import { hydrateProcessPathFromShell } from '../backend/environment/shell-path.service'
+import { GuidedReviewDaemonCredentialsService } from '../backend/credentials/guided-review-daemon-credentials.service'
 import { OpenRouterCredentialsService } from '../backend/credentials/openrouter-credentials.service'
 import { ProjectOpenService } from '../backend/project-open/project-open.service'
 import { registerProjectOpenIpcHandlers } from '../backend/project-open/project-open.ipc'
@@ -222,6 +224,8 @@ async function startApp(): Promise<void> {
   const pullRequestService = new PullRequestService(db, gitService)
   const reviewNotesService = new ReviewNotesService(db)
   const providerRegistry = new ProviderRegistry()
+  const guidedReviewDaemonCredentials =
+    new GuidedReviewDaemonCredentialsService()
   const openRouterCredentials = new OpenRouterCredentialsService()
   const taskProgressService = new TaskProgressService(broadcastTaskProgress)
   const codexQuotaService = new CodexQuotaService()
@@ -351,11 +355,17 @@ async function startApp(): Promise<void> {
   const appSettingsService = new AppSettingsService(stateService, async () =>
     Promise.all(providerRegistry.getAll().map((p) => p.describe())),
   )
+  const remoteCodeReviewGuideDaemonClient =
+    new RemoteCodeReviewGuideDaemonClient({
+      appSettings: appSettingsService,
+      credentials: guidedReviewDaemonCredentials,
+    })
   const codeReviewGuideService = new CodeReviewGuideService(db, {
     providers: providerRegistry,
     appSettings: appSettingsService,
     sessions: sessionService,
     codeReview: codeReviewService,
+    remoteDaemon: remoteCodeReviewGuideDaemonClient,
   })
   const analyticsService = new AnalyticsService(db, {
     providers: providerRegistry,
@@ -528,6 +538,7 @@ async function startApp(): Promise<void> {
     changedFilesService,
     codeReviewService,
     codeReviewGuideService,
+    remoteCodeReviewGuideDaemonClient,
     pullRequestService,
     pullRequestReviewService,
     reviewNotesService,
@@ -537,6 +548,7 @@ async function startApp(): Promise<void> {
     skillsService,
     promptsService,
     appSettingsService,
+    guidedReviewDaemonCredentials,
     openRouterCredentials,
     analyticsService,
     attachmentsService,

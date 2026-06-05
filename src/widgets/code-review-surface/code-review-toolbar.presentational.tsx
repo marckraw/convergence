@@ -156,7 +156,10 @@ export const CodeReviewToolbar: FC<CodeReviewToolbarProps> = ({
           </Button>
         ) : null}
         {statusLabel ? (
-          <span className="rounded-md border border-border bg-card px-2 py-1 text-xs text-muted-foreground">
+          <span
+            className="max-w-[280px] truncate rounded-md border border-border bg-card px-2 py-1 text-xs text-muted-foreground"
+            title={statusLabel}
+          >
             {statusLabel}
           </span>
         ) : null}

@@ -1,6 +1,7 @@
 import type {
   AppSettings,
   AppSettingsInput,
+  GuidedReviewDaemonCredentialStatus,
   OpenRouterCredentialStatus,
 } from './app-settings.types'
 
@@ -23,4 +24,15 @@ export const openRouterCredentialsApi = {
 
   deleteToken: (): Promise<OpenRouterCredentialStatus> =>
     window.electronAPI.credentials.openRouter.deleteToken(),
+}
+
+export const guidedReviewDaemonCredentialsApi = {
+  getStatus: (): Promise<GuidedReviewDaemonCredentialStatus> =>
+    window.electronAPI.credentials.guidedReviewDaemon.getStatus(),
+
+  setToken: (token: string): Promise<GuidedReviewDaemonCredentialStatus> =>
+    window.electronAPI.credentials.guidedReviewDaemon.setToken(token),
+
+  deleteToken: (): Promise<GuidedReviewDaemonCredentialStatus> =>
+    window.electronAPI.credentials.guidedReviewDaemon.deleteToken(),
 }

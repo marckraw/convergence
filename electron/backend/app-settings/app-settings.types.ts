@@ -51,6 +51,10 @@ export const DEFAULT_COMMAND_CENTER_SHORTCUT: CommandCenterShortcutPrefs = {
   altKey: false,
 }
 
+export type GuidedReviewBackend = 'local' | 'remote'
+
+export const DEFAULT_GUIDED_REVIEW_BACKEND: GuidedReviewBackend = 'local'
+
 export interface AppSettings {
   defaultProviderId: string | null
   defaultModelId: string | null
@@ -59,6 +63,8 @@ export interface AppSettings {
   extractionModelByProvider: Record<string, string>
   guidedReviewModelByProvider: Record<string, string>
   commandCenterShortcut: CommandCenterShortcutPrefs
+  guidedReviewBackend: GuidedReviewBackend
+  guidedReviewRemoteBaseUrl: string | null
   notifications: NotificationPrefs
   onboarding: OnboardingPrefs
   updates: UpdatePrefs
@@ -73,6 +79,8 @@ export type AppSettingsInput = Omit<
   | 'extractionModelByProvider'
   | 'guidedReviewModelByProvider'
   | 'commandCenterShortcut'
+  | 'guidedReviewBackend'
+  | 'guidedReviewRemoteBaseUrl'
   | 'notifications'
   | 'onboarding'
   | 'updates'
@@ -84,6 +92,8 @@ export type AppSettingsInput = Omit<
   extractionModelByProvider?: Record<string, string>
   guidedReviewModelByProvider?: Record<string, string>
   commandCenterShortcut?: CommandCenterShortcutPrefs
+  guidedReviewBackend?: GuidedReviewBackend
+  guidedReviewRemoteBaseUrl?: string | null
   notifications?: NotificationPrefs
   onboarding?: OnboardingPrefs
   updates?: UpdatePrefs

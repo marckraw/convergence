@@ -6,11 +6,13 @@ describe('codeReviewGuideApi', () => {
   let getGuide: ReturnType<typeof vi.fn>
   let generateGuide: ReturnType<typeof vi.fn>
   let refreshGuide: ReturnType<typeof vi.fn>
+  let testRemoteDaemonConnection: ReturnType<typeof vi.fn>
 
   beforeEach(() => {
     getGuide = vi.fn()
     generateGuide = vi.fn()
     refreshGuide = vi.fn()
+    testRemoteDaemonConnection = vi.fn()
 
     Object.defineProperty(window, 'electronAPI', {
       value: {
@@ -18,6 +20,7 @@ describe('codeReviewGuideApi', () => {
           getGuide,
           generateGuide,
           refreshGuide,
+          testRemoteDaemonConnection,
         },
       },
       configurable: true,
@@ -27,9 +30,18 @@ describe('codeReviewGuideApi', () => {
   it('forwards guide calls to the preload bridge', async () => {
     const input = makeLookup()
     const guide = makeGuide()
+    const connection = {
+      ok: true,
+      state: 'connected' as const,
+      baseUrl: 'https://daemon.example.com',
+      message: 'Connected to agents-daemon.',
+      health: null,
+      meta: null,
+    }
     getGuide.mockResolvedValue(guide)
     generateGuide.mockResolvedValue(guide)
     refreshGuide.mockResolvedValue(guide)
+    testRemoteDaemonConnection.mockResolvedValue(connection)
 
     await expect(codeReviewGuideApi.getGuide(input)).resolves.toEqual(guide)
     await expect(
@@ -38,10 +50,14 @@ describe('codeReviewGuideApi', () => {
     await expect(
       codeReviewGuideApi.refreshGuide({ ...input, files: [] }),
     ).resolves.toEqual(guide)
+    await expect(
+      codeReviewGuideApi.testRemoteDaemonConnection(),
+    ).resolves.toEqual(connection)
 
     expect(getGuide).toHaveBeenCalledWith(input)
     expect(generateGuide).toHaveBeenCalledWith({ ...input, files: [] })
     expect(refreshGuide).toHaveBeenCalledWith({ ...input, files: [] })
+    expect(testRemoteDaemonConnection).toHaveBeenCalledWith()
   })
 })
 
