@@ -30,6 +30,8 @@ interface PierreDiffViewerProps<TAnnotation = undefined> {
   loading?: boolean
   emptyMessage?: string
   title?: string
+  scrollMode?: 'contained' | 'inline'
+  contextStrategy?: 'fold' | 'full'
   selectedLines?: SelectedLineRange | null
   lineAnnotations?: DiffLineAnnotation<TAnnotation>[]
   renderAnnotation?: (annotation: DiffLineAnnotation<TAnnotation>) => ReactNode
@@ -48,6 +50,8 @@ export const PierreDiffViewerView = <TAnnotation,>({
   loading = false,
   emptyMessage = 'Select a changed file to inspect its working tree diff.',
   title = 'Current workspace diff',
+  scrollMode = 'contained',
+  contextStrategy = 'fold',
   selectedLines = null,
   lineAnnotations = [],
   renderAnnotation,
@@ -63,28 +67,32 @@ export const PierreDiffViewerView = <TAnnotation,>({
     () => (file ? buildPierrePatch({ file, diff }) : null),
     [diff, file],
   )
+  const shouldFoldContext = contextStrategy === 'fold'
   const foldedContext = useMemo(
     () =>
-      rawPatch
+      rawPatch && shouldFoldContext
         ? foldUnifiedDiffContext(rawPatch, {
             before: contextBefore,
             after: contextAfter,
           })
         : null,
-    [contextAfter, contextBefore, rawPatch],
+    [contextAfter, contextBefore, rawPatch, shouldFoldContext],
   )
   const patch = foldedContext?.patch ?? rawPatch
   const expandedFromDefault =
     contextBefore !== DEFAULT_DIFF_CONTEXT_LINES ||
     contextAfter !== DEFAULT_DIFF_CONTEXT_LINES
   const shouldShowContextControls =
-    !!foldedContext && (foldedContext.totalHidden > 0 || expandedFromDefault)
+    shouldFoldContext &&
+    !!foldedContext &&
+    (foldedContext.totalHidden > 0 || expandedFromDefault)
   const performancePlan = useMemo(
     () => planPierreDiffPerformance(patch ?? diff),
     [diff, patch],
   )
   const canUseWorkerPool =
     performancePlan.useWorkerPool && canUsePierreDiffWorkerPool()
+  const canVirtualize = scrollMode === 'contained' && performancePlan.virtualize
   const workerPoolOptions = useMemo(
     () => ({
       poolSize: getPierreDiffWorkerPoolSize(),
@@ -151,13 +159,17 @@ export const PierreDiffViewerView = <TAnnotation,>({
     )
   const diffContent = patchDiff
     ? renderPierreDiffPerformanceShell({
-        virtualize: performancePlan.virtualize,
+        virtualize: canVirtualize,
         children: diffNode,
       })
     : null
+  const contained = scrollMode === 'contained'
 
   return (
-    <div className="flex h-full min-h-0 flex-col" aria-busy={loading}>
+    <div
+      className={contained ? 'flex h-full min-h-0 flex-col' : 'flex flex-col'}
+      aria-busy={loading}
+    >
       {renderDiffHeader({
         file,
         title,
@@ -174,7 +186,13 @@ export const PierreDiffViewerView = <TAnnotation,>({
             })
           : null,
       })}
-      <div className="app-scrollbar min-h-0 flex-1 overflow-auto bg-background/60">
+      <div
+        className={
+          contained
+            ? 'app-scrollbar min-h-0 flex-1 overflow-auto bg-background/60'
+            : 'bg-background/60'
+        }
+      >
         {diffContent ? (
           diffContent
         ) : (
