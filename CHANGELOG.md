@@ -1,5 +1,11 @@
 # convergence
 
+## 0.40.11
+
+### Patch Changes
+
+- 1e81a0b: Improve conversation image attachment previews so multiple images can share a responsive row before wrapping.
+
 ## 0.40.10
 
 ### Patch Changes
