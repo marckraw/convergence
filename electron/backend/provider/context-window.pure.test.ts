@@ -76,9 +76,34 @@ describe('context-window.pure', () => {
       availability: 'available',
       source: 'estimated',
       usedTokens: 10000,
-      windowTokens: 200000,
-      usedPercentage: 5,
-      remainingPercentage: 95,
+      windowTokens: 1_000_000,
+      usedPercentage: 1,
+      remainingPercentage: 99,
+    })
+  })
+
+  it('estimates current 1M-capable claude model context windows', () => {
+    expect(
+      deriveClaudeEstimatedContextWindow(
+        {
+          message: {
+            model: 'claude-fable-5',
+            usage: {
+              input_tokens: 1200,
+              cache_creation_input_tokens: 300,
+              cache_read_input_tokens: 8500,
+            },
+          },
+        },
+        'sonnet',
+      ),
+    ).toEqual({
+      availability: 'available',
+      source: 'estimated',
+      usedTokens: 10000,
+      windowTokens: 1_000_000,
+      usedPercentage: 1,
+      remainingPercentage: 99,
     })
   })
 

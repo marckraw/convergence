@@ -146,6 +146,33 @@ describe('remote daemon guide pure helpers', () => {
     })
   })
 
+  it('prefers current Claude daemon models when the local default is unavailable', () => {
+    expect(
+      resolveRemoteDaemonGenerationModel({
+        meta: {
+          providers: [
+            {
+              id: 'claude',
+              available: true,
+              authenticated: true,
+              models: [
+                { slug: 'claude-opus-4-8', label: 'Claude Opus 4.8' },
+                { slug: 'claude-fable-5', label: 'Claude Fable 5' },
+                { slug: 'claude-sonnet-4-6', label: 'Claude Sonnet 4.6' },
+              ],
+            },
+          ],
+        },
+        provider: 'claude',
+        preferredModel: 'claude-opus-4-6',
+      }),
+    ).toEqual({
+      ok: true,
+      model: 'claude-fable-5',
+      changed: true,
+    })
+  })
+
   it('rejects unavailable daemon providers before generation', () => {
     expect(
       resolveRemoteDaemonGenerationModel({

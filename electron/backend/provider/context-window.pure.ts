@@ -48,8 +48,20 @@ function deriveClaudeModelContextWindow(
     return null
   }
 
-  // Claude Code standard models use the 200k context tier unless an explicit
-  // long-context beta is enabled, which Convergence does not manage in v1.
+  if (
+    normalized.includes('[1m]') ||
+    normalized.includes('fable') ||
+    normalized.includes('mythos') ||
+    normalized.includes('claude-opus-4-8') ||
+    normalized.includes('claude-opus-4-7') ||
+    normalized.includes('claude-opus-4-6') ||
+    normalized.includes('claude-sonnet-4-6')
+  ) {
+    return 1_000_000
+  }
+
+  // Older Claude Code standard models use the 200k context tier unless an
+  // explicit 1M suffix or current 1M-capable model is selected.
   if (
     normalized.includes('sonnet') ||
     normalized.includes('opus') ||
