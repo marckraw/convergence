@@ -164,6 +164,7 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
   const [providerId, setProviderId] = useState('')
   const [modelId, setModelId] = useState('')
   const [effortId, setEffortId] = useState<ReasoningEffort | ''>('')
+  const [codexFastMode, setCodexFastMode] = useState(true)
   const [permissionConfig, setPermissionConfig] =
     useState<SessionPermissionConfig>(resolveSimplePermissionConfig('ask'))
   const [permissionAdvancedOpen, setPermissionAdvancedOpen] = useState(false)
@@ -433,6 +434,12 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
     activeSession ? undefined : storedDefaults,
   )
   const showCodexUsagePill = shouldShowCodexUsagePill(selection)
+  const serviceTier =
+    selection.providerId === 'codex'
+      ? codexFastMode
+        ? 'fast'
+        : 'default'
+      : null
   const midRunPolicy = useMemo(
     () =>
       resolveMidRunInputPolicy({
@@ -634,6 +641,7 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
       setProviderId(activeSession.providerId)
       setModelId(activeSession.model ?? '')
       setEffortId(activeSession.effort ?? '')
+      setCodexFastMode(activeSession.serviceTier !== 'default')
       setPermissionConfig(
         activeSession.permissionConfig ?? resolveSimplePermissionConfig('ask'),
       )
@@ -775,6 +783,7 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
           hasAttachments ? attachmentIds : undefined,
           skillSelections,
           permissionConfig,
+          serviceTier,
         )
         if (session) {
           await onGlobalSessionCreated?.(session)
@@ -793,6 +802,7 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
         skillSelections,
         contextItemIds,
         permissionConfig,
+        serviceTier,
       )
     } else {
       createAndStartSession(
@@ -807,6 +817,7 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
         undefined,
         contextItemIds,
         permissionConfig,
+        serviceTier,
       )
     }
     setValue('')
@@ -835,6 +846,7 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
     onGlobalSessionCreated,
     prepareNewSessionMessage,
     permissionConfig,
+    serviceTier,
   ])
 
   const handleProviderChange = (nextProviderId: string) => {
@@ -848,6 +860,7 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
     setProviderId(nextSelection.providerId)
     setModelId(nextSelection.modelId)
     setEffortId(nextSelection.effortId)
+    setCodexFastMode(nextSelection.providerId === 'codex')
     setPermissionAdvancedOpen(false)
     if (permissionConfig.preset === 'custom') {
       setPermissionConfig(
@@ -1068,6 +1081,8 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
         onProviderChange={handleProviderChange}
         onModelChange={handleModelChange}
         onEffortChange={setEffortId}
+        codexFastMode={codexFastMode}
+        onCodexFastModeChange={setCodexFastMode}
         permissionConfig={permissionConfig}
         permissionAdvancedOpen={permissionAdvancedOpen}
         onPermissionPresetChange={handlePermissionPresetChange}

@@ -15,6 +15,7 @@ export interface CreateSessionRecordInput {
   providerId: string
   model: string | null
   effort: CreateSessionInput['effort']
+  serviceTier?: CreateSessionInput['serviceTier']
   permissionConfig: CreateSessionInput['permissionConfig']
   name: string
   workingDirectory: string
@@ -37,6 +38,7 @@ export class SessionRepository {
            provider_id,
            model,
            effort,
+           service_tier,
            permission_config,
            name,
            working_directory,
@@ -44,7 +46,7 @@ export class SessionRepository {
            fork_strategy,
            primary_surface
          )
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
       .run(
         input.id,
@@ -54,6 +56,7 @@ export class SessionRepository {
         input.providerId,
         input.model,
         input.effort,
+        input.serviceTier ?? null,
         serializeSessionPermissionConfig(input.permissionConfig),
         input.name,
         input.workingDirectory,

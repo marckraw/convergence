@@ -235,6 +235,7 @@ describe('CodexProvider', () => {
       initialMessage: 'ship it',
       model: 'gpt-5.4',
       effort: 'medium',
+      serviceTier: 'fast',
       continuationToken: null,
       permissionConfig: { preset: 'yolo' },
     })
@@ -258,6 +259,22 @@ describe('CodexProvider', () => {
         params: expect.objectContaining({
           approvalPolicy: 'never',
           sandbox: 'danger-full-access',
+          serviceTier: 'fast',
+        }),
+      }),
+    )
+
+    await waitFor(() => {
+      expect(
+        server.requests.some((request) => request.method === 'turn/start'),
+      ).toBe(true)
+    })
+
+    expect(server.requests).toContainEqual(
+      expect.objectContaining({
+        method: 'turn/start',
+        params: expect.objectContaining({
+          serviceTier: 'fast',
         }),
       }),
     )

@@ -121,6 +121,7 @@ export interface SessionStartConfig {
   previousAssistantTexts?: string[]
   model: string | null
   effort: ReasoningEffort | null
+  serviceTier?: string | null
   continuationToken: string | null
   permissionConfig?: SessionPermissionConfig
 }
@@ -329,6 +330,7 @@ export interface OneShotInput {
   prompt: string
   modelId: string
   effort?: ReasoningEffort | null
+  serviceTier?: string | null
   workingDirectory: string
   timeoutMs?: number
   requestId?: string

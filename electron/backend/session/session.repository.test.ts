@@ -54,6 +54,7 @@ describe('SessionRepository', () => {
   it('creates and finds a session row', () => {
     repository.create(
       createSessionInput({
+        serviceTier: 'fast',
         permissionConfig: {
           preset: 'custom',
           codex: {
@@ -73,6 +74,7 @@ describe('SessionRepository', () => {
       provider_id: 'codex',
       model: 'gpt-5',
       effort: 'medium',
+      service_tier: 'fast',
       name: 'Task',
       working_directory: '/repo',
       primary_surface: 'conversation',

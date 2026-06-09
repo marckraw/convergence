@@ -105,6 +105,32 @@ describe('CodexProvider.oneShot progress emission', () => {
     )
   })
 
+  it('passes one-shot service tier through config for Codex exec', async () => {
+    const child = new MockChildProcess()
+    spawnMock.mockReturnValue(child)
+
+    const provider = new CodexProvider('/bin/codex')
+
+    const promise = provider.oneShot({
+      prompt: 'hi',
+      modelId: 'gpt-5.5',
+      serviceTier: 'fast',
+      workingDirectory: '/tmp',
+    })
+
+    child.stdout.end()
+    child.emit('exit', 0)
+
+    await promise
+    expect(spawnMock).toHaveBeenCalledWith(
+      '/bin/codex',
+      expect.arrayContaining(['-c', 'service_tier="fast"']),
+      expect.objectContaining({
+        cwd: '/tmp',
+      }),
+    )
+  })
+
   it('emits nothing when requestId is absent', async () => {
     const child = new MockChildProcess()
     spawnMock.mockReturnValue(child)

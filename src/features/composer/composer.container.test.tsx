@@ -19,6 +19,45 @@ const projectContextItem: ProjectContextItem = {
   updatedAt: '2026-01-01T00:00:00.000Z',
 }
 
+const codexProvider = {
+  id: 'codex',
+  name: 'Codex',
+  vendorLabel: 'OpenAI',
+  kind: 'conversation' as const,
+  supportsContinuation: true,
+  defaultModelId: 'gpt-5.5',
+  fastModelId: 'gpt-5.4-mini',
+  modelOptions: [
+    {
+      id: 'gpt-5.5',
+      label: 'GPT-5.5',
+      defaultEffort: 'medium' as const,
+      effortOptions: [
+        { id: 'minimal' as const, label: 'Minimal' },
+        { id: 'medium' as const, label: 'Medium' },
+        { id: 'high' as const, label: 'High' },
+      ],
+    },
+  ],
+  attachments: {
+    supportsImage: true,
+    supportsPdf: false,
+    supportsText: true,
+    maxImageBytes: 10 * 1024 * 1024,
+    maxPdfBytes: 0,
+    maxTextBytes: 1024 * 1024,
+    maxTotalBytes: 50 * 1024 * 1024,
+  },
+  midRunInput: {
+    supportsAnswer: true,
+    supportsNativeFollowUp: false,
+    supportsAppQueuedFollowUp: true,
+    supportsSteer: true,
+    supportsInterrupt: true,
+    defaultRunningMode: 'follow-up' as const,
+  },
+}
+
 describe('ComposerContainer', () => {
   beforeEach(() => {
     ;(window as unknown as { electronAPI: unknown }).electronAPI = {
@@ -319,6 +358,7 @@ describe('ComposerContainer', () => {
       undefined,
       ['ctx-chaperone'],
       { preset: 'ask' },
+      null,
     )
   })
 
@@ -357,6 +397,7 @@ describe('ComposerContainer', () => {
       undefined,
       undefined,
       { preset: 'ask' },
+      null,
     )
     expect(
       useSessionStore.getState().createAndStartSession,
@@ -394,6 +435,90 @@ describe('ComposerContainer', () => {
       undefined,
       undefined,
       { preset: 'ask' },
+      null,
+    )
+  })
+
+  it('starts new Codex sessions in fast mode by default', () => {
+    useSessionStore.setState({ providers: [codexProvider] })
+
+    render(
+      <ComposerContainer
+        context={{
+          kind: 'project',
+          projectId: 'project-1',
+          workspaceId: null,
+          activeSessionId: null,
+        }}
+      />,
+    )
+
+    expect(screen.getByRole('switch', { name: 'Fast mode' })).toHaveAttribute(
+      'aria-checked',
+      'true',
+    )
+
+    const textbox = screen.getByRole('textbox')
+    fireEvent.change(textbox, {
+      target: { value: 'Use Codex fast' },
+    })
+    fireEvent.keyDown(textbox, { key: 'Enter', metaKey: true })
+
+    expect(
+      useSessionStore.getState().createAndStartSession,
+    ).toHaveBeenCalledWith(
+      'project-1',
+      null,
+      'codex',
+      'gpt-5.5',
+      'medium',
+      'Use Codex fast',
+      'Use Codex fast',
+      undefined,
+      undefined,
+      undefined,
+      { preset: 'ask' },
+      'fast',
+    )
+  })
+
+  it('can turn off fast mode for a new Codex session', () => {
+    useSessionStore.setState({ providers: [codexProvider] })
+
+    render(
+      <ComposerContainer
+        context={{
+          kind: 'project',
+          projectId: 'project-1',
+          workspaceId: null,
+          activeSessionId: null,
+        }}
+      />,
+    )
+
+    fireEvent.click(screen.getByRole('switch', { name: 'Fast mode' }))
+
+    const textbox = screen.getByRole('textbox')
+    fireEvent.change(textbox, {
+      target: { value: 'Use Codex default tier' },
+    })
+    fireEvent.keyDown(textbox, { key: 'Enter', metaKey: true })
+
+    expect(
+      useSessionStore.getState().createAndStartSession,
+    ).toHaveBeenCalledWith(
+      'project-1',
+      null,
+      'codex',
+      'gpt-5.5',
+      'medium',
+      'Use Codex default tier',
+      'Use Codex default tier',
+      undefined,
+      undefined,
+      undefined,
+      { preset: 'ask' },
+      'default',
     )
   })
 
@@ -432,6 +557,7 @@ describe('ComposerContainer', () => {
       undefined,
       undefined,
       { preset: 'yolo' },
+      null,
     )
   })
 

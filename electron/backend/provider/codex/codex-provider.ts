@@ -702,6 +702,9 @@ function runCodexOneShot(
     if (input.effort) {
       args.push('-c', `model_reasoning_effort="${input.effort}"`)
     }
+    if (input.serviceTier) {
+      args.push('-c', `service_tier="${input.serviceTier}"`)
+    }
     args.push(input.prompt)
     const child = spawn(binaryPath, args, {
       cwd: input.workingDirectory,
@@ -1087,6 +1090,7 @@ export class CodexProvider implements Provider {
         cwd: config.workingDirectory,
         approvalPolicy: permissionConfig.approvalPolicy,
         sandbox: permissionConfig.sandbox,
+        ...(config.serviceTier ? { serviceTier: config.serviceTier } : {}),
       })
 
       const discoveredThreadId = readThreadId(threadResult)
@@ -1113,6 +1117,7 @@ export class CodexProvider implements Provider {
           cwd: config.workingDirectory,
           approvalPolicy: permissionConfig.approvalPolicy,
           sandbox: permissionConfig.sandbox,
+          ...(config.serviceTier ? { serviceTier: config.serviceTier } : {}),
         })
 
         const discoveredThreadId = readThreadId(threadResult)
@@ -1171,6 +1176,7 @@ export class CodexProvider implements Provider {
           threadId: currentThreadId,
           model: config.model,
           effort: config.effort,
+          ...(config.serviceTier ? { serviceTier: config.serviceTier } : {}),
           input,
         })
         const providerTurnId = readProviderTurnId(turnResult)
@@ -1195,6 +1201,7 @@ export class CodexProvider implements Provider {
           threadId: recoveredThreadId,
           model: config.model,
           effort: config.effort,
+          ...(config.serviceTier ? { serviceTier: config.serviceTier } : {}),
           input,
         })
         const providerTurnId = readProviderTurnId(turnResult)

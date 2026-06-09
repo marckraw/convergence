@@ -41,6 +41,7 @@ import {
   Repeat,
   SlidersHorizontal,
   X,
+  Zap,
 } from 'lucide-react'
 import { ComposerSelect } from './composer-select.presentational'
 import { ComposerContextMentionPicker } from './composer-context-mention.presentational'
@@ -60,6 +61,8 @@ interface ComposerProps {
   onProviderChange: (id: string) => void
   onModelChange: (id: string, providerId?: string) => void
   onEffortChange: (id: ReasoningEffort | '') => void
+  codexFastMode: boolean
+  onCodexFastModeChange: (enabled: boolean) => void
   permissionConfig: SessionPermissionConfig
   permissionAdvancedOpen: boolean
   onPermissionPresetChange: (preset: 'ask' | 'yolo') => void
@@ -146,6 +149,8 @@ export const Composer: FC<ComposerProps> = ({
   onProviderChange,
   onModelChange,
   onEffortChange,
+  codexFastMode,
+  onCodexFastModeChange,
   permissionConfig,
   permissionAdvancedOpen,
   onPermissionPresetChange,
@@ -657,6 +662,30 @@ export const Composer: FC<ComposerProps> = ({
                 className="px-2 text-xs text-muted-foreground hover:text-foreground"
               />
             )}
+            {selection.providerId === 'codex' ? (
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                role="switch"
+                aria-checked={codexFastMode}
+                aria-label="Fast mode"
+                title={
+                  codexFastMode
+                    ? 'Fast mode is on'
+                    : 'Fast mode is off; Codex will use the default service tier.'
+                }
+                onClick={() => onCodexFastModeChange(!codexFastMode)}
+                disabled={disabled || selectionDisabled}
+                className={cn(
+                  'h-7 gap-1.5 px-2 text-xs text-muted-foreground hover:text-foreground',
+                  codexFastMode && 'bg-secondary text-foreground',
+                )}
+              >
+                <Zap className="h-3.5 w-3.5" />
+                Fast
+              </Button>
+            ) : null}
             {!selectionDisabled ? (
               <>
                 <ComposerSelect

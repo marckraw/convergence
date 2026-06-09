@@ -221,6 +221,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
       providerId: string
       model: string | null
       effort: string | null
+      serviceTier?: string | null
       permissionConfig?: unknown
       name: string
     }) => ipcRenderer.invoke('session:create', input),

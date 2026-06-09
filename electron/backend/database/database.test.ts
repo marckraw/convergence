@@ -43,6 +43,7 @@ describe('database', () => {
     const columnNames = sessionColumns.map((column) => column.name)
     expect(columnNames).not.toContain('transcript')
     expect(columnNames).toContain('context_kind')
+    expect(columnNames).toContain('service_tier')
     expect(columnNames).toContain('primary_surface')
     expect(
       sessionColumns.find((column) => column.name === 'project_id')?.notnull,
