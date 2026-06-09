@@ -25,6 +25,7 @@ export const sessionApi = {
     providerId: string
     model: string | null
     effort: ReasoningEffort | null
+    serviceTier?: string | null
     permissionConfig?: SessionPermissionConfig
     name: string
     primarySurface?: 'conversation' | 'terminal'

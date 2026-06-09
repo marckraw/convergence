@@ -19,6 +19,7 @@ function buildSessionsTableSql(
       provider_id TEXT NOT NULL,
       model TEXT,
       effort TEXT,
+      service_tier TEXT,
       permission_config TEXT NOT NULL DEFAULT '{"preset":"ask"}',
       continuation_token TEXT,
       name TEXT NOT NULL,
@@ -660,6 +661,10 @@ function ensureSessionColumns(database: Database.Database): void {
     database.exec('ALTER TABLE sessions ADD COLUMN effort TEXT')
   }
 
+  if (!columnNames.has('service_tier')) {
+    database.exec('ALTER TABLE sessions ADD COLUMN service_tier TEXT')
+  }
+
   if (!columnNames.has('permission_config')) {
     database.exec(
       `ALTER TABLE sessions ADD COLUMN permission_config TEXT NOT NULL DEFAULT '{"preset":"ask"}'`,
@@ -929,6 +934,7 @@ function ensureSessionsTableShape(database: Database.Database): void {
           provider_id,
           model,
           effort,
+          service_tier,
           permission_config,
           continuation_token,
           name,
@@ -955,6 +961,7 @@ function ensureSessionsTableShape(database: Database.Database): void {
           provider_id,
           model,
           effort,
+          ${sourceColumnNames.has('service_tier') ? 'service_tier' : 'NULL'},
           ${permissionConfigSelect},
           continuation_token,
           name,

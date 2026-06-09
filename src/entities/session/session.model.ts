@@ -65,6 +65,7 @@ interface SessionActions {
     skillSelections?: SkillSelection[],
     contextItemIds?: string[],
     permissionConfig?: SessionPermissionConfig,
+    serviceTier?: string | null,
   ) => Promise<void>
   createAndStartGlobalSession: (
     providerId: string,
@@ -75,6 +76,7 @@ interface SessionActions {
     attachmentIds?: string[],
     skillSelections?: SkillSelection[],
     permissionConfig?: SessionPermissionConfig,
+    serviceTier?: string | null,
   ) => Promise<SessionSummary | null>
   createTerminalSession: (
     projectId: string,
@@ -437,6 +439,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     skillSelections,
     contextItemIds,
     permissionConfig,
+    serviceTier,
   ) => {
     set({ error: null })
     try {
@@ -446,6 +449,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
         providerId,
         model,
         effort,
+        serviceTier,
         permissionConfig,
         name,
       })
@@ -493,6 +497,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     attachmentIds,
     skillSelections,
     permissionConfig,
+    serviceTier,
   ) => {
     set({ error: null })
     try {
@@ -501,6 +506,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
         providerId,
         model,
         effort,
+        serviceTier,
         permissionConfig,
         name,
       })

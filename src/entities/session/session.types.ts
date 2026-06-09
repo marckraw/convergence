@@ -315,6 +315,7 @@ export interface SessionSummary {
   providerId: string
   model: string | null
   effort: ReasoningEffort | null
+  serviceTier?: string | null
   permissionConfig?: SessionPermissionConfig
   name: string
   status: SessionStatus

@@ -43,6 +43,7 @@ export interface SessionSummary {
   providerId: string
   model: string | null
   effort: ReasoningEffort | null
+  serviceTier?: string | null
   permissionConfig?: SessionPermissionConfig
   name: string
   status: SessionStatus
@@ -79,6 +80,7 @@ interface CreateSessionBaseInput {
   providerId: string
   model: string | null
   effort: ReasoningEffort | null
+  serviceTier?: string | null
   permissionConfig?: SessionPermissionConfig
   name: string
   parentSessionId?: string | null
@@ -150,6 +152,7 @@ export function sessionSummaryFromRow(row: SessionRow): SessionSummary {
     providerId: row.provider_id,
     model: row.model,
     effort: row.effort as ReasoningEffort | null,
+    serviceTier: row.service_tier ?? null,
     permissionConfig: parseSessionPermissionConfig(row.permission_config),
     name: row.name,
     status: row.status as SessionStatus,

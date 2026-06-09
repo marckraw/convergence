@@ -1024,6 +1024,7 @@ interface SessionSummaryData {
   providerId: string
   model: string | null
   effort: ReasoningEffort | null
+  serviceTier?: string | null
   permissionConfig?: SessionPermissionConfigData
   name: string
   status: SessionStatus
@@ -1049,6 +1050,7 @@ interface CreateSessionInput {
   providerId: string
   model: string | null
   effort: ReasoningEffort | null
+  serviceTier?: string | null
   permissionConfig?: SessionPermissionConfigData
   name: string
   primarySurface?: 'conversation' | 'terminal'
