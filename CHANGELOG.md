@@ -1,5 +1,11 @@
 # convergence
 
+## 0.40.10
+
+### Patch Changes
+
+- d8f7089: Update the Claude Code provider model catalog with Fable 5, Opus 4.8, and current Claude Code model aliases.
+
 ## 0.40.9
 
 ### Patch Changes
