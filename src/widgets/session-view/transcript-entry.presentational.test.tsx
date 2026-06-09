@@ -497,12 +497,50 @@ describe('ConversationItemView', () => {
       })
 
       const previews = screen.getAllByTestId('attachment-inline-preview')
+      const grid = screen.getByTestId('history-image-attachments')
       expect(previews).toHaveLength(2)
+      expect(grid).toHaveClass(
+        'grid-cols-[repeat(auto-fit,minmax(min(100%,14rem),1fr))]',
+      )
+      expect(grid).toHaveClass('sm:max-w-[36rem]')
       expect(screen.getByText('one.png')).toBeInTheDocument()
       expect(screen.getByText('two.png')).toBeInTheDocument()
 
       fireEvent.click(screen.getByRole('button', { name: /Preview one\.png/ }))
       expect(onOpen).toHaveBeenCalledWith(firstAttachment)
+    })
+
+    it('keeps a single image attachment at the familiar preview width', () => {
+      renderConversationItemView({
+        entry: userEntry(),
+        attachments: [makeAttachment('att-1', 'one.png')],
+        onAttachmentOpen: vi.fn(),
+      })
+
+      const grid = screen.getByTestId('history-image-attachments')
+      expect(screen.getAllByTestId('attachment-inline-preview')).toHaveLength(1)
+      expect(grid).toHaveClass('grid-cols-1')
+      expect(grid).toHaveClass('sm:max-w-md')
+    })
+
+    it('caps image attachment rows at three columns before wrapping', () => {
+      renderConversationItemView({
+        entry: userEntry(),
+        attachments: [
+          makeAttachment('att-1', 'one.png'),
+          makeAttachment('att-2', 'two.png'),
+          makeAttachment('att-3', 'three.png'),
+          makeAttachment('att-4', 'four.png'),
+        ],
+        onAttachmentOpen: vi.fn(),
+      })
+
+      const grid = screen.getByTestId('history-image-attachments')
+      expect(screen.getAllByTestId('attachment-inline-preview')).toHaveLength(4)
+      expect(grid).toHaveClass(
+        'grid-cols-[repeat(auto-fit,minmax(min(100%,14rem),1fr))]',
+      )
+      expect(grid).toHaveClass('sm:max-w-[55rem]')
     })
 
     it('renders chips for non-image resolved attachments below the user message text', () => {

@@ -22,6 +22,7 @@ import {
   MissingAttachmentChip,
   type Attachment,
 } from '@/entities/attachment'
+import { cn } from '@/shared/lib/cn.pure'
 import { ConversationItemShell } from './conversation-item-shell.presentational'
 import { ConversationItemHeader } from './conversation-item-header.presentational'
 import { ConversationItemTimestamp } from './conversation-item-timestamp.presentational'
@@ -42,6 +43,17 @@ interface ConversationItemViewProps {
 
 const attentionPromptMarkdownClassName =
   'mt-1 max-w-full text-muted-foreground [overflow-wrap:anywhere] [&_*]:max-w-full [&_*]:[overflow-wrap:anywhere] [&_code]:whitespace-pre-wrap'
+
+function getHistoryImageAttachmentsClassName(count: number): string {
+  return cn(
+    'mt-2 grid max-w-full gap-2',
+    count === 1
+      ? 'grid-cols-1 sm:max-w-md'
+      : 'grid-cols-[repeat(auto-fit,minmax(min(100%,14rem),1fr))]',
+    count === 2 && 'sm:max-w-[36rem]',
+    count >= 3 && 'sm:max-w-[55rem]',
+  )
+}
 
 export const ConversationItemView: FC<ConversationItemViewProps> = ({
   viewModel,
@@ -108,7 +120,9 @@ export const ConversationItemView: FC<ConversationItemViewProps> = ({
                 />
                 {hasImageAttachments && (
                   <div
-                    className="mt-2 grid max-w-full grid-cols-1 gap-2 sm:grid-cols-[repeat(auto-fit,minmax(12rem,24rem))]"
+                    className={getHistoryImageAttachmentsClassName(
+                      imageAttachments.length,
+                    )}
                     data-testid="history-image-attachments"
                   >
                     {imageAttachments.map((attachment) => (
