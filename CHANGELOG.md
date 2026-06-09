@@ -1,5 +1,11 @@
 # convergence
 
+## 0.40.9
+
+### Patch Changes
+
+- 5c62e2d: Add a Codex fast mode toggle to the composer and persist the selected service tier for new sessions.
+
 ## 0.40.8
 
 ### Patch Changes
