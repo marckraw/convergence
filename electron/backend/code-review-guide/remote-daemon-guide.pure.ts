@@ -340,7 +340,17 @@ function preferredRemoteProviderModel(
   const orderedPreferences: Partial<
     Record<RemoteCodeReviewDaemonProviderId, string[]>
   > = {
-    claude: ['opus', 'claude-opus-4-6', 'sonnet', 'claude-sonnet-4-6'],
+    claude: [
+      'fable',
+      'claude-fable-5',
+      'best',
+      'opus',
+      'claude-opus-4-8',
+      'claude-opus-4-7',
+      'claude-opus-4-6',
+      'sonnet',
+      'claude-sonnet-4-6',
+    ],
     codex: ['gpt-5.4', 'gpt-5.3-codex', 'gpt-5.3-codex-spark', 'o3'],
   }
 

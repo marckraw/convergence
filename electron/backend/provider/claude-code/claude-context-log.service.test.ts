@@ -43,9 +43,9 @@ describe('claude-context-log.service', () => {
       availability: 'available',
       source: 'estimated',
       usedTokens: 10000,
-      windowTokens: 200000,
-      usedPercentage: 5,
-      remainingPercentage: 95,
+      windowTokens: 1_000_000,
+      usedPercentage: 1,
+      remainingPercentage: 99,
     })
   })
 })

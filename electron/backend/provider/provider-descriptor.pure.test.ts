@@ -56,6 +56,47 @@ describe('provider-descriptor', () => {
     })
   })
 
+  it('exposes current Claude Code aliases and pinned Anthropic model IDs', () => {
+    const descriptor = buildClaudeDescriptor()
+
+    expect(descriptor.defaultModelId).toBe('sonnet')
+    expect(descriptor.fastModelId).toBe('haiku')
+    expect(descriptor.modelOptions.map((option) => option.id)).toEqual([
+      'best',
+      'fable',
+      'sonnet',
+      'opus',
+      'haiku',
+      'claude-fable-5',
+      'claude-opus-4-8',
+      'claude-sonnet-4-6',
+      'claude-opus-4-7',
+      'claude-opus-4-6',
+      'claude-haiku-4-5',
+    ])
+    expect(
+      descriptor.modelOptions.find((option) => option.id === 'fable'),
+    ).toMatchObject({
+      label: 'Claude Fable 5',
+      contextWindowTokens: 1_000_000,
+      defaultEffort: 'high',
+      effortOptions: [
+        { id: 'low', label: 'Low' },
+        { id: 'medium', label: 'Medium' },
+        { id: 'high', label: 'High' },
+        { id: 'xhigh', label: 'Very High' },
+        { id: 'max', label: 'Max' },
+      ],
+    })
+    expect(
+      descriptor.modelOptions.find((option) => option.id === 'claude-opus-4-8'),
+    ).toMatchObject({
+      label: 'Claude Opus 4.8',
+      contextWindowTokens: 1_000_000,
+      defaultEffort: 'high',
+    })
+  })
+
   it('builds a conservative Cursor fallback descriptor from P0 ACP decisions', () => {
     const descriptor = buildFallbackCursorDescriptor()
 
