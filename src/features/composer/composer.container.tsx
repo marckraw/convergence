@@ -164,7 +164,7 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
   const [providerId, setProviderId] = useState('')
   const [modelId, setModelId] = useState('')
   const [effortId, setEffortId] = useState<ReasoningEffort | ''>('')
-  const [codexFastMode, setCodexFastMode] = useState(true)
+  const [codexFastMode, setCodexFastMode] = useState(false)
   const [permissionConfig, setPermissionConfig] =
     useState<SessionPermissionConfig>(resolveSimplePermissionConfig('ask'))
   const [permissionAdvancedOpen, setPermissionAdvancedOpen] = useState(false)
@@ -641,7 +641,7 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
       setProviderId(activeSession.providerId)
       setModelId(activeSession.model ?? '')
       setEffortId(activeSession.effort ?? '')
-      setCodexFastMode(activeSession.serviceTier !== 'default')
+      setCodexFastMode(activeSession.serviceTier === 'fast')
       setPermissionConfig(
         activeSession.permissionConfig ?? resolveSimplePermissionConfig('ask'),
       )
@@ -860,7 +860,7 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
     setProviderId(nextSelection.providerId)
     setModelId(nextSelection.modelId)
     setEffortId(nextSelection.effortId)
-    setCodexFastMode(nextSelection.providerId === 'codex')
+    setCodexFastMode(false)
     setPermissionAdvancedOpen(false)
     if (permissionConfig.preset === 'custom') {
       setPermissionConfig(
