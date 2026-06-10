@@ -439,7 +439,7 @@ describe('ComposerContainer', () => {
     )
   })
 
-  it('starts new Codex sessions in fast mode by default', () => {
+  it('starts new Codex sessions with fast mode off by default', () => {
     useSessionStore.setState({ providers: [codexProvider] })
 
     render(
@@ -455,48 +455,8 @@ describe('ComposerContainer', () => {
 
     expect(screen.getByRole('switch', { name: 'Fast mode' })).toHaveAttribute(
       'aria-checked',
-      'true',
+      'false',
     )
-
-    const textbox = screen.getByRole('textbox')
-    fireEvent.change(textbox, {
-      target: { value: 'Use Codex fast' },
-    })
-    fireEvent.keyDown(textbox, { key: 'Enter', metaKey: true })
-
-    expect(
-      useSessionStore.getState().createAndStartSession,
-    ).toHaveBeenCalledWith(
-      'project-1',
-      null,
-      'codex',
-      'gpt-5.5',
-      'medium',
-      'Use Codex fast',
-      'Use Codex fast',
-      undefined,
-      undefined,
-      undefined,
-      { preset: 'ask' },
-      'fast',
-    )
-  })
-
-  it('can turn off fast mode for a new Codex session', () => {
-    useSessionStore.setState({ providers: [codexProvider] })
-
-    render(
-      <ComposerContainer
-        context={{
-          kind: 'project',
-          projectId: 'project-1',
-          workspaceId: null,
-          activeSessionId: null,
-        }}
-      />,
-    )
-
-    fireEvent.click(screen.getByRole('switch', { name: 'Fast mode' }))
 
     const textbox = screen.getByRole('textbox')
     fireEvent.change(textbox, {
@@ -519,6 +479,46 @@ describe('ComposerContainer', () => {
       undefined,
       { preset: 'ask' },
       'default',
+    )
+  })
+
+  it('can turn on fast mode for a new Codex session', () => {
+    useSessionStore.setState({ providers: [codexProvider] })
+
+    render(
+      <ComposerContainer
+        context={{
+          kind: 'project',
+          projectId: 'project-1',
+          workspaceId: null,
+          activeSessionId: null,
+        }}
+      />,
+    )
+
+    fireEvent.click(screen.getByRole('switch', { name: 'Fast mode' }))
+
+    const textbox = screen.getByRole('textbox')
+    fireEvent.change(textbox, {
+      target: { value: 'Use Codex fast' },
+    })
+    fireEvent.keyDown(textbox, { key: 'Enter', metaKey: true })
+
+    expect(
+      useSessionStore.getState().createAndStartSession,
+    ).toHaveBeenCalledWith(
+      'project-1',
+      null,
+      'codex',
+      'gpt-5.5',
+      'medium',
+      'Use Codex fast',
+      'Use Codex fast',
+      undefined,
+      undefined,
+      undefined,
+      { preset: 'ask' },
+      'fast',
     )
   })
 
