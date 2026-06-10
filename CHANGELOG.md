@@ -1,5 +1,11 @@
 # convergence
 
+## 0.40.12
+
+### Patch Changes
+
+- 1d11d7a: Codex fast mode is now off by default for new sessions and when switching to the Codex provider, since the fast service tier costs 1.5x a normal request. It remains a manual opt-in via the Fast toggle in the composer.
+
 ## 0.40.11
 
 ### Patch Changes
