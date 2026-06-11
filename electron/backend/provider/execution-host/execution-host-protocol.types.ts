@@ -30,10 +30,25 @@ export const EXECUTION_HOST_PROTOCOL_VERSION = 1
  * ProviderExecutionHost.start. `config.initialAttachments` carry host-local
  * storage paths; byte transfer happens before start (MAR-1415).
  */
+/**
+ * Optional workspace materialization source. When present, the host clones
+ * the repository (cached bare clone), creates a per-session worktree on
+ * `branchName` (generated when omitted) starting from `ref` (repository
+ * default branch when omitted), and runs the session there —
+ * `config.workingDirectory` is ignored. Repository access uses the host's
+ * own credentials (e.g. the daemon's configured GitHub token).
+ */
+export interface ExecutionHostWorkspaceSource {
+  repository: string
+  ref?: string | null
+  branchName?: string | null
+}
+
 export interface ExecutionHostStartRequest {
   protocolVersion: typeof EXECUTION_HOST_PROTOCOL_VERSION
   providerId: string
   config: SessionStartConfig
+  workspace?: ExecutionHostWorkspaceSource
 }
 
 export interface ExecutionHostSendMessageOptions {

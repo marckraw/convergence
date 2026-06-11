@@ -125,7 +125,11 @@ export function decodeExecutionHostStartRequest(
   const parsed = parseEnvelopeBase(raw)
   if (!parsed.ok) return parsed
 
-  const candidate = parsed.value as { providerId?: unknown; config?: unknown }
+  const candidate = parsed.value as {
+    providerId?: unknown
+    config?: unknown
+    workspace?: unknown
+  }
   if (
     typeof candidate.providerId !== 'string' ||
     !isRecord(candidate.config) ||
@@ -135,6 +139,15 @@ export function decodeExecutionHostStartRequest(
   ) {
     return { ok: false, reason: 'invalid-envelope' }
   }
+  if (candidate.workspace !== undefined) {
+    if (
+      !isRecord(candidate.workspace) ||
+      typeof candidate.workspace.repository !== 'string' ||
+      candidate.workspace.repository.length === 0
+    ) {
+      return { ok: false, reason: 'invalid-payload' }
+    }
+  }
 
   return {
     ok: true,
@@ -143,6 +156,12 @@ export function decodeExecutionHostStartRequest(
       providerId: candidate.providerId,
       config:
         candidate.config as unknown as ExecutionHostStartRequest['config'],
+      ...(candidate.workspace !== undefined
+        ? {
+            workspace:
+              candidate.workspace as unknown as ExecutionHostStartRequest['workspace'],
+          }
+        : {}),
     },
   }
 }

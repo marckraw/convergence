@@ -195,6 +195,50 @@ describe('execution host start request codec', () => {
     expect(decoded).toEqual({ ok: true, value: request })
   })
 
+  it('round-trips a start request with a workspace source', () => {
+    const request: ExecutionHostStartRequest = {
+      protocolVersion: EXECUTION_HOST_PROTOCOL_VERSION,
+      providerId: 'claude-code',
+      config: {
+        sessionId: 'session-1',
+        workingDirectory: '',
+        initialMessage: 'hello',
+        model: null,
+        effort: null,
+        continuationToken: null,
+      },
+      workspace: {
+        repository: 'https://github.com/example/repo.git',
+        ref: 'main',
+        branchName: 'agent/session-1',
+      },
+    }
+    const decoded = decodeExecutionHostStartRequest(
+      encodeExecutionHostStartRequest(request),
+    )
+    expect(decoded).toEqual({ ok: true, value: request })
+  })
+
+  it('rejects start requests with an invalid workspace source', () => {
+    const raw = JSON.stringify({
+      protocolVersion: EXECUTION_HOST_PROTOCOL_VERSION,
+      providerId: 'claude-code',
+      config: {
+        sessionId: 'session-1',
+        workingDirectory: '',
+        initialMessage: 'hello',
+        model: null,
+        effort: null,
+        continuationToken: null,
+      },
+      workspace: { repository: '' },
+    })
+    expect(decodeExecutionHostStartRequest(raw)).toEqual({
+      ok: false,
+      reason: 'invalid-payload',
+    })
+  })
+
   it('rejects start requests with incomplete config', () => {
     const raw = JSON.stringify({
       protocolVersion: EXECUTION_HOST_PROTOCOL_VERSION,

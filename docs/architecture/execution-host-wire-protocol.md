@@ -49,6 +49,20 @@ SessionHandle listeners:
 | `activity`           | `onActivityChange`      |
 | `heartbeat`          | `onActivityHeartbeat`   |
 
+## Workspace materialization
+
+A start request may carry an optional `workspace` source —
+`{ repository, ref?, branchName? }` — instead of relying on
+`config.workingDirectory`. The host then materializes the workspace
+itself: a cached bare clone of the repository plus a per-session git
+worktree on `branchName` (generated when omitted) starting from `ref`
+(repository default branch when omitted). `config.workingDirectory` is
+ignored when a workspace source is present, teardown removes the worktree
+while the clone cache is reused, and the snapshot reports
+`workspace: { repository, branchName, baseRef }`. Repository access uses
+the host's own credentials (the daemon's configured GitHub token); hosts
+without materialization support reject workspace requests with `400`.
+
 ## Session snapshot
 
 `GET /v0/execution/sessions/:sessionId` returns the host's current view of
