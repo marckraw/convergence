@@ -29,6 +29,7 @@ import { SkillsService } from '../backend/skills/skills.service'
 import { PromptsService } from '../backend/prompts/prompts.service'
 import { AppSettingsService } from '../backend/app-settings/app-settings.service'
 import { CodexQuotaService } from '../backend/provider-quota/codex-quota.service'
+import { ClaudeQuotaService } from '../backend/provider-quota/claude-quota.service'
 import { GuidedReviewDaemonCredentialsService } from '../backend/credentials/guided-review-daemon-credentials.service'
 import { OpenRouterCredentialsService } from '../backend/credentials/openrouter-credentials.service'
 import type { AnalyticsService } from '../backend/analytics/analytics.service'
@@ -183,10 +184,12 @@ export function registerIpcHandlers(
   },
   providerQuota?: {
     codex: CodexQuotaService
+    claude: ClaudeQuotaService
   },
 ): void {
   const quotaServices = providerQuota ?? {
     codex: new CodexQuotaService(),
+    claude: new ClaudeQuotaService(),
   }
   const sessionApp = new SessionAppService(sessionService, appSettingsService)
 
@@ -887,6 +890,10 @@ export function registerIpcHandlers(
 
   ipcMain.handle('providerQuota:getCodex', (_event, forceRefresh?: boolean) =>
     quotaServices.codex.getQuota({ forceRefresh: forceRefresh === true }),
+  )
+
+  ipcMain.handle('providerQuota:getClaude', (_event, forceRefresh?: boolean) =>
+    quotaServices.claude.getQuota({ forceRefresh: forceRefresh === true }),
   )
 
   ipcMain.handle('mcp:listByProjectId', (_event, projectId: string) =>

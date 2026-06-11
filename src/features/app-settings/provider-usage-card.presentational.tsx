@@ -78,6 +78,9 @@ function getSourceLabel(snapshot: ProviderQuotaSnapshot) {
   if (snapshot.source === 'manual') {
     return 'manual usage page'
   }
+  if (snapshot.source === 'local-usage-log') {
+    return 'local usage log'
+  }
   return snapshot.source === 'provider-api'
     ? 'cloud usage endpoint'
     : 'provider runtime event'

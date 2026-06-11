@@ -351,6 +351,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   providerQuota: {
     getCodex: (forceRefresh?: boolean) =>
       ipcRenderer.invoke('providerQuota:getCodex', forceRefresh),
+    getClaude: (forceRefresh?: boolean) =>
+      ipcRenderer.invoke('providerQuota:getClaude', forceRefresh),
   },
   mcp: {
     listByProjectId: (projectId: string) =>

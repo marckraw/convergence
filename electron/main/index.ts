@@ -58,6 +58,7 @@ import { PromptsService } from '../backend/prompts/prompts.service'
 import { AppSettingsService } from '../backend/app-settings/app-settings.service'
 import { AnalyticsService } from '../backend/analytics/analytics.service'
 import { CodexQuotaService } from '../backend/provider-quota/codex-quota.service'
+import { ClaudeQuotaService } from '../backend/provider-quota/claude-quota.service'
 import { AttachmentsService } from '../backend/attachments/attachments.service'
 import { NotificationsService } from '../backend/notifications/notifications.service'
 import { NotificationsStateService } from '../backend/notifications/notifications.state'
@@ -230,6 +231,7 @@ async function startApp(): Promise<void> {
   const openRouterCredentials = new OpenRouterCredentialsService()
   const taskProgressService = new TaskProgressService(broadcastTaskProgress)
   const codexQuotaService = new CodexQuotaService()
+  const claudeQuotaService = new ClaudeQuotaService()
   const sessionService = new SessionService(
     db,
     providerRegistry,
@@ -591,6 +593,7 @@ async function startApp(): Promise<void> {
     },
     {
       codex: codexQuotaService,
+      claude: claudeQuotaService,
     },
   )
 

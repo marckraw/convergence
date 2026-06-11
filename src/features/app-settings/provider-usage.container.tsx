@@ -5,19 +5,6 @@ import {
 } from '@/entities/provider-quota'
 import { ProviderUsageFields } from './provider-usage.presentational'
 
-function createClaudeManualSnapshot(): ProviderQuotaSnapshot {
-  return {
-    providerId: 'claude-code',
-    status: 'unavailable',
-    source: 'manual',
-    reason:
-      'Claude Code does not expose these reset windows reliably to Convergence. Open Claude settings to check usage limits manually.',
-    usageUrl: 'https://claude.ai/new#settings/usage',
-    lastCheckedAt: new Date().toISOString(),
-    stale: false,
-  }
-}
-
 function createCursorManualSnapshot(): ProviderQuotaSnapshot {
   return {
     providerId: 'cursor',
@@ -53,7 +40,7 @@ export function ProviderUsageContainer() {
     try {
       setSnapshots([
         await providerQuotaApi.getCodex(forceRefresh),
-        createClaudeManualSnapshot(),
+        await providerQuotaApi.getClaude(forceRefresh),
         createCursorManualSnapshot(),
         createAntigravityManualSnapshot(),
       ])
@@ -72,7 +59,13 @@ export function ProviderUsageContainer() {
           stale: false,
         },
         {
-          ...createClaudeManualSnapshot(),
+          providerId: 'claude-code',
+          status: 'unavailable',
+          source: 'local-usage-log',
+          reason,
+          usageUrl: 'https://claude.ai/new#settings/usage',
+          lastCheckedAt: new Date().toISOString(),
+          stale: false,
         },
         {
           ...createCursorManualSnapshot(),
