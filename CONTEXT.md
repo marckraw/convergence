@@ -294,6 +294,18 @@ _Avoid_: Model, agent
 A non-conversational Provider that runs Terminal Sessions.
 _Avoid_: Terminal provider, shell session
 
+**Provider Execution Host**:
+The module that owns where and how Providers actually run, exposing provider discovery, Session start, and one-shot execution behind one interface so callers never touch process mechanics.
+_Avoid_: Provider, provider runtime, backend, daemon
+
+**Local Execution Host**:
+The Provider Execution Host adapter that runs Providers inside the desktop app process environment, wrapping the in-process provider registry.
+_Avoid_: Provider registry, local provider
+
+**Remote Execution Host**:
+A Provider Execution Host adapter that runs Providers on a remote machine such as a VPS daemon, speaking a wire protocol while presenting the same interface as the Local Execution Host.
+_Avoid_: Remote Companion Gateway, agents-daemon endpoint, remote provider
+
 **Model**:
 A provider-specific AI model option selected for a Session or provider-powered operation.
 _Avoid_: Provider, backend
