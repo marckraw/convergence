@@ -1,5 +1,11 @@
 # convergence
 
+## 0.40.13
+
+### Patch Changes
+
+- 07ed1b4: Add local model runtime monitoring and distinguish local Ollama from SSH tunnel endpoints.
+
 ## 0.40.12
 
 ### Patch Changes
