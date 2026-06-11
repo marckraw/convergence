@@ -1,6 +1,76 @@
 {
-  "currentVersion": "0.39.2",
+  "currentVersion": "0.40.13",
   "releases": [
+    {
+      "version": "0.40.13",
+      "date": null,
+      "notes": "### Patch Changes\n\n- 07ed1b4: Add local model runtime monitoring and distinguish local Ollama from SSH tunnel endpoints."
+    },
+    {
+      "version": "0.40.12",
+      "date": null,
+      "notes": "### Patch Changes\n\n- 1d11d7a: Codex fast mode is now off by default for new sessions and when switching to the Codex provider, since the fast service tier costs 1.5x a normal request. It remains a manual opt-in via the Fast toggle in the composer."
+    },
+    {
+      "version": "0.40.11",
+      "date": null,
+      "notes": "### Patch Changes\n\n- 1e81a0b: Improve conversation image attachment previews so multiple images can share a responsive row before wrapping."
+    },
+    {
+      "version": "0.40.10",
+      "date": null,
+      "notes": "### Patch Changes\n\n- d8f7089: Update the Claude Code provider model catalog with Fable 5, Opus 4.8, and current Claude Code model aliases."
+    },
+    {
+      "version": "0.40.9",
+      "date": null,
+      "notes": "### Patch Changes\n\n- 5c62e2d: Add a Codex fast mode toggle to the composer and persist the selected service tier for new sessions."
+    },
+    {
+      "version": "0.40.8",
+      "date": null,
+      "notes": "### Patch Changes\n\n- b7b1a54: Keep Pierre's virtualized diff root as the scroll container so long guide diffs render beyond the initial viewport without disabling virtualization."
+    },
+    {
+      "version": "0.40.7",
+      "date": null,
+      "notes": "### Patch Changes\n\n- 2e5d72b: Extract a shared `DiffFileHeader` for code review diffs so guide mode shows one file header with the AI reason as the subtitle instead of duplicating the path.\n- b09e2af: Add a collapsible guided review section rail so narrow review layouts can keep the walkthrough content focused while section movement happens by scrolling."
+    },
+    {
+      "version": "0.40.6",
+      "date": null,
+      "notes": "### Patch Changes\n\n- 05694e9: Fix guide-mode code review diffs so long files render completely instead of appearing cut off after the first virtualized chunk."
+    },
+    {
+      "version": "0.40.5",
+      "date": null,
+      "notes": "### Patch Changes\n\n- f49cff3: Add remote agents-daemon support for guided review generation, including app settings for the daemon URL and API token, remote model resolution, local persistence of returned guides, and visible local/remote generation status labels."
+    },
+    {
+      "version": "0.40.4",
+      "date": null,
+      "notes": "### Patch Changes\n\n- dc34b75: Add expandable diff context controls and capture richer Git diff context so reviewers can reveal more unchanged lines above or below changes.\n- b372c23: Polish code review guide navigation with section-aware file jumps, active section handoff, and clearer guide generation states."
+    },
+    {
+      "version": "0.40.3",
+      "date": null,
+      "notes": "### Patch Changes\n\n- 10b2e30: Condense the Settings dialog: each control now sits on a single line with its description moved into a hover tooltip, and section headers drop the redundant title when it matches the uppercase eyebrow. The four model-default sections (new session, naming, forking, guided review) are merged under one \"Session defaults\" item as labelled sub-sections."
+    },
+    {
+      "version": "0.40.2",
+      "date": null,
+      "notes": "### Patch Changes\n\n- 536817a: Add Settings → Shortcuts so users can customize the Command Center keyboard shortcut. `Cmd+K` / `Ctrl+K` remains the default, bindings persist in app settings, and conflicting terminal or dock shortcuts are rejected with inline feedback."
+    },
+    {
+      "version": "0.40.1",
+      "date": null,
+      "notes": "### Patch Changes\n\n- d9ddb72: Replace native dropdown wrappers with the shared shadcn Select component across Prompt Library, Skills, and Space flows."
+    },
+    {
+      "version": "0.40.0",
+      "date": null,
+      "notes": "### Minor Changes\n\n- 7cb3685: Add MCP Servers visibility for Cursor CLI and Antigravity, including live Cursor agent status and Antigravity config discovery from Gemini and project `.agents` files."
+    },
     {
       "version": "0.39.2",
       "date": null,

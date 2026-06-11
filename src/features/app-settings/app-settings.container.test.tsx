@@ -240,6 +240,40 @@ describe('AppSettingsDialogContainer', () => {
           lastCheckedAt: '2026-05-21T12:00:00.000Z',
           stale: false,
         }),
+        getClaude: vi.fn().mockResolvedValue({
+          providerId: 'claude-code',
+          status: 'available',
+          source: 'local-usage-log',
+          planType: null,
+          windows: [
+            {
+              kind: 'five-hour',
+              label: 'Current 5-hour Claude usage',
+              usedPercent: 60,
+              remainingPercent: 40,
+              windowMinutes: 300,
+              resetsAt: '2026-06-11T16:00:00.000Z',
+              displayMode: 'observed-usage',
+              valueLabel: '18.1M tokens, $38.82',
+              resetLabel: 'Ends',
+            },
+            {
+              kind: 'weekly',
+              label: "This week's Claude usage",
+              usedPercent: 63,
+              remainingPercent: 37,
+              windowMinutes: 10_080,
+              resetsAt: '2026-06-14T00:00:00.000Z',
+              displayMode: 'observed-usage',
+              valueLabel: '191.2M tokens, $285.73',
+              resetLabel: 'Ends',
+            },
+          ],
+          credits: null,
+          limitReachedType: null,
+          lastCheckedAt: '2026-06-11T14:00:00.000Z',
+          stale: false,
+        }),
       },
       appSettings: {
         get: vi.fn().mockResolvedValue({
@@ -570,7 +604,7 @@ describe('AppSettingsDialogContainer', () => {
     expect(screen.getByRole('button', { name: 'Done' })).toBeInTheDocument()
   })
 
-  it('opens provider usage and refreshes Codex quota without saving app settings', async () => {
+  it('opens provider usage and refreshes provider quota without saving app settings', async () => {
     primeStores({
       defaultProviderId: 'claude-code',
       defaultModelId: 'sonnet',
@@ -589,9 +623,11 @@ describe('AppSettingsDialogContainer', () => {
     expect(window.electronAPI.providerQuota.getCodex).toHaveBeenCalledWith(
       false,
     )
-    expect(
-      screen.getByText(/does not expose these reset windows reliably/),
-    ).toBeInTheDocument()
+    expect(window.electronAPI.providerQuota.getClaude).toHaveBeenCalledWith(
+      false,
+    )
+    expect(screen.getByText('Current 5-hour Claude usage')).toBeInTheDocument()
+    expect(screen.getByText('18.1M tokens, $38.82')).toBeInTheDocument()
     expect(
       screen.getByText(/Cursor ACP does not expose usage or quota counters/),
     ).toBeInTheDocument()
@@ -600,6 +636,9 @@ describe('AppSettingsDialogContainer', () => {
 
     await waitFor(() => {
       expect(window.electronAPI.providerQuota.getCodex).toHaveBeenCalledWith(
+        true,
+      )
+      expect(window.electronAPI.providerQuota.getClaude).toHaveBeenCalledWith(
         true,
       )
     })

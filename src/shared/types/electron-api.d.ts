@@ -1141,6 +1141,11 @@ interface ProviderUpdateResult {
 }
 
 type ProviderQuotaWindowKindData = 'five-hour' | 'weekly' | 'other'
+type ProviderQuotaWindowDisplayModeData = 'remaining-quota' | 'observed-usage'
+type ProviderQuotaSourceData =
+  | 'provider-api'
+  | 'provider-event'
+  | 'local-usage-log'
 
 interface ProviderQuotaWindowData {
   kind: ProviderQuotaWindowKindData
@@ -1149,6 +1154,9 @@ interface ProviderQuotaWindowData {
   remainingPercent: number
   windowMinutes: number | null
   resetsAt: string | null
+  displayMode?: ProviderQuotaWindowDisplayModeData
+  valueLabel?: string
+  resetLabel?: string
 }
 
 interface ProviderCreditsQuotaData {
@@ -1161,7 +1169,7 @@ type ProviderQuotaSnapshotData =
   | {
       providerId: 'codex' | 'claude-code' | 'cursor' | 'antigravity'
       status: 'available'
-      source: 'provider-api' | 'provider-event'
+      source: ProviderQuotaSourceData
       planType: string | null
       windows: ProviderQuotaWindowData[]
       credits: ProviderCreditsQuotaData | null
@@ -1172,7 +1180,7 @@ type ProviderQuotaSnapshotData =
   | {
       providerId: 'codex' | 'claude-code' | 'cursor' | 'antigravity'
       status: 'unavailable'
-      source: 'provider-api' | 'provider-event' | 'manual'
+      source: ProviderQuotaSourceData | 'manual'
       reason: string
       usageUrl?: string
       lastCheckedAt: string
@@ -1691,6 +1699,7 @@ interface ElectronAPI {
   }
   providerQuota: {
     getCodex: (forceRefresh?: boolean) => Promise<ProviderQuotaSnapshotData>
+    getClaude: (forceRefresh?: boolean) => Promise<ProviderQuotaSnapshotData>
   }
   mcp: {
     listByProjectId: (projectId: string) => Promise<ProjectMcpVisibility>

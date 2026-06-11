@@ -1,0 +1,1 @@
+export const CLAUDE_QUOTA_CACHE_TTL_MS = 60_000
