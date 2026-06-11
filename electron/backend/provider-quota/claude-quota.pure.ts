@@ -8,6 +8,29 @@ import { readRecord } from './codex-quota.pure'
 const WEEK_MINUTES = 10_080
 const FIVE_HOUR_MINUTES = 300
 
+export function resolveCcusageNativePackageName(
+  platform: NodeJS.Platform,
+  arch: string,
+): string | null {
+  if (platform === 'darwin') {
+    if (arch === 'arm64') return '@ccusage/ccusage-darwin-arm64'
+    if (arch === 'x64') return '@ccusage/ccusage-darwin-x64'
+  }
+  if (platform === 'linux') {
+    if (arch === 'arm64') return '@ccusage/ccusage-linux-arm64'
+    if (arch === 'x64') return '@ccusage/ccusage-linux-x64'
+  }
+  if (platform === 'win32') {
+    if (arch === 'arm64') return '@ccusage/ccusage-win32-arm64'
+    if (arch === 'x64') return '@ccusage/ccusage-win32-x64'
+  }
+  return null
+}
+
+export function resolveCcusageNativeBinaryPath(platform: NodeJS.Platform) {
+  return platform === 'win32' ? 'bin/ccusage.exe' : 'bin/ccusage'
+}
+
 function readNumber(value: unknown): number | null {
   if (typeof value === 'number' && Number.isFinite(value)) return value
   if (typeof value !== 'string') return null

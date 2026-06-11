@@ -4,6 +4,8 @@ import { CLAUDE_QUOTA_CACHE_TTL_MS } from './claude-quota.constants'
 import {
   buildClaudeQuotaUnavailableSnapshot,
   mapClaudeUsagePayloadsToQuotaSnapshot,
+  resolveCcusageNativeBinaryPath,
+  resolveCcusageNativePackageName,
 } from './claude-quota.pure'
 import type { ProviderQuotaSnapshot } from './provider-quota.types'
 
@@ -11,35 +13,18 @@ type CcusageRunner = (args: string[]) => Promise<unknown>
 
 const requireFromHere = createRequire(import.meta.url)
 
-function ccusageNativePackageName(
-  platform = process.platform,
-  arch = process.arch,
-): string | null {
-  if (platform === 'darwin') {
-    if (arch === 'arm64') return '@ccusage/ccusage-darwin-arm64'
-    if (arch === 'x64') return '@ccusage/ccusage-darwin-x64'
-  }
-  if (platform === 'linux') {
-    if (arch === 'arm64') return '@ccusage/ccusage-linux-arm64'
-    if (arch === 'x64') return '@ccusage/ccusage-linux-x64'
-  }
-  if (platform === 'win32') {
-    if (arch === 'arm64') return '@ccusage/ccusage-win32-arm64'
-    if (arch === 'x64') return '@ccusage/ccusage-win32-x64'
-  }
-  return null
-}
-
 function resolveCcusageBinary(): string {
-  const packageName = ccusageNativePackageName()
+  const packageName = resolveCcusageNativePackageName(
+    process.platform,
+    process.arch,
+  )
   if (!packageName) {
     throw new Error(
       `ccusage is not available for ${process.platform}-${process.arch}.`,
     )
   }
 
-  const binaryPath =
-    process.platform === 'win32' ? 'bin/ccusage.exe' : 'bin/ccusage'
+  const binaryPath = resolveCcusageNativeBinaryPath(process.platform)
   try {
     return requireFromHere.resolve(`${packageName}/${binaryPath}`)
   } catch {

@@ -2,7 +2,42 @@ import { describe, expect, it } from 'vitest'
 import {
   buildClaudeQuotaUnavailableSnapshot,
   mapClaudeUsagePayloadsToQuotaSnapshot,
+  resolveCcusageNativeBinaryPath,
+  resolveCcusageNativePackageName,
 } from './claude-quota.pure'
+
+describe('ccusage native package resolution', () => {
+  it('maps supported platform and architecture pairs', () => {
+    expect(resolveCcusageNativePackageName('darwin', 'arm64')).toBe(
+      '@ccusage/ccusage-darwin-arm64',
+    )
+    expect(resolveCcusageNativePackageName('darwin', 'x64')).toBe(
+      '@ccusage/ccusage-darwin-x64',
+    )
+    expect(resolveCcusageNativePackageName('linux', 'arm64')).toBe(
+      '@ccusage/ccusage-linux-arm64',
+    )
+    expect(resolveCcusageNativePackageName('linux', 'x64')).toBe(
+      '@ccusage/ccusage-linux-x64',
+    )
+    expect(resolveCcusageNativePackageName('win32', 'arm64')).toBe(
+      '@ccusage/ccusage-win32-arm64',
+    )
+    expect(resolveCcusageNativePackageName('win32', 'x64')).toBe(
+      '@ccusage/ccusage-win32-x64',
+    )
+  })
+
+  it('returns null for unsupported ccusage native targets', () => {
+    expect(resolveCcusageNativePackageName('freebsd', 'x64')).toBeNull()
+    expect(resolveCcusageNativePackageName('darwin', 'ia32')).toBeNull()
+  })
+
+  it('uses the Windows executable path only on Windows', () => {
+    expect(resolveCcusageNativeBinaryPath('win32')).toBe('bin/ccusage.exe')
+    expect(resolveCcusageNativeBinaryPath('darwin')).toBe('bin/ccusage')
+  })
+})
 
 describe('mapClaudeUsagePayloadsToQuotaSnapshot', () => {
   it('maps current weekly usage and active 5-hour block from ccusage JSON', () => {
