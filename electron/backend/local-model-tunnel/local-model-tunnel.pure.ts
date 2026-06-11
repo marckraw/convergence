@@ -1,5 +1,6 @@
 import type {
   LocalModelTunnelCommand,
+  LocalModelTunnelConnectionKind,
   LocalModelTunnelProfile,
   LocalModelTunnelProfileInput,
 } from './local-model-tunnel.types'
@@ -15,8 +16,10 @@ export function buildDefaultLocalModelTunnelProfile(
 ): LocalModelTunnelProfile {
   return {
     id: 'local-model-tunnel',
-    name: 'Local model tunnel',
+    name: 'Local Ollama',
+    connectionKind: 'local-runtime',
     sshTarget: 'my-gpu-host',
+    allowExternal: false,
     autoStart: false,
     useCustomLocalBindHost: false,
     localBindHost: DEFAULT_LOCAL_BIND_HOST,
@@ -39,7 +42,10 @@ export function normalizeLocalModelTunnelProfile(
   return {
     id: pickNonEmptyString(raw.id, fallback.id),
     name: pickNonEmptyString(raw.name, fallback.name),
+    connectionKind: pickConnectionKind(raw.connectionKind, 'ssh-tunnel'),
     sshTarget: pickSafeSshValue(raw.sshTarget, fallback.sshTarget),
+    allowExternal:
+      typeof raw.allowExternal === 'boolean' ? raw.allowExternal : false,
     autoStart: typeof raw.autoStart === 'boolean' ? raw.autoStart : false,
     useCustomLocalBindHost:
       typeof raw.useCustomLocalBindHost === 'boolean'
@@ -91,10 +97,19 @@ export function applyLocalModelTunnelProfileInput(
       typeof input.name === 'string' && input.name.trim()
         ? input.name.trim()
         : profile.name,
+    connectionKind:
+      input.connectionKind === 'local-runtime' ||
+      input.connectionKind === 'ssh-tunnel'
+        ? input.connectionKind
+        : profile.connectionKind,
     sshTarget:
       typeof input.sshTarget === 'string'
         ? pickSafeSshValue(input.sshTarget, profile.sshTarget)
         : profile.sshTarget,
+    allowExternal:
+      typeof input.allowExternal === 'boolean'
+        ? input.allowExternal
+        : profile.allowExternal,
     autoStart:
       typeof input.autoStart === 'boolean'
         ? input.autoStart
@@ -167,6 +182,13 @@ export function getEffectiveLocalBindHost(
   return profile.useCustomLocalBindHost
     ? profile.localBindHost
     : DEFAULT_LOCAL_BIND_HOST
+}
+
+function pickConnectionKind(
+  value: unknown,
+  fallback: LocalModelTunnelConnectionKind,
+): LocalModelTunnelConnectionKind {
+  return value === 'local-runtime' || value === 'ssh-tunnel' ? value : fallback
 }
 
 function pickNonEmptyString(value: unknown, fallback: string): string {

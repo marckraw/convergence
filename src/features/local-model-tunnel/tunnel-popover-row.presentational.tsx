@@ -1,6 +1,8 @@
 import type { FC } from 'react'
 import {
+  formatLocalModelTunnelConnectionLabel,
   formatLocalModelTunnelEndpoint,
+  formatLocalModelTunnelStatusDetail,
   type LocalModelTunnelProfileWithStatus,
 } from '@/entities/local-model-tunnel'
 import { StatusDot } from './status-dot.presentational'
@@ -32,6 +34,10 @@ export const TunnelPopoverRow: FC<TunnelPopoverRowProps> = ({
       <p className="mt-1 truncate text-xs text-muted-foreground">
         {formatLocalModelTunnelEndpoint(item)}
       </p>
+      <p className="mt-0.5 truncate text-[11px] text-muted-foreground/85">
+        {formatLocalModelTunnelConnectionLabel(item)} ·{' '}
+        {formatLocalModelTunnelStatusDetail(item)}
+      </p>
       {item.status.error ? (
         <p className="mt-1 line-clamp-2 text-xs text-destructive">
           {item.status.error}
@@ -41,6 +47,7 @@ export const TunnelPopoverRow: FC<TunnelPopoverRowProps> = ({
     <div className="flex items-center gap-1">
       <TunnelActionButtons
         state={item.status.state}
+        connectionKind={item.profile.connectionKind}
         managed={item.status.managed}
         isMutating={isMutating}
         onStart={onStart}

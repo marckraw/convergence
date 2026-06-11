@@ -14,6 +14,7 @@ import {
 } from './local-model-tunnel.pure'
 import type {
   LocalModelTunnelEventEmitter,
+  LocalModelTunnelHealthStatus,
   LocalModelTunnelProfile,
   LocalModelTunnelProfileInput,
   LocalModelTunnelRuntimeStatus,
@@ -26,6 +27,7 @@ const STARTUP_PROBE_ATTEMPTS = 12
 const STARTUP_PROBE_DELAY_MS = 250
 const PROBE_TIMEOUT_MS = 800
 const STOP_WAIT_TIMEOUT_MS = 1000
+const MONITOR_INTERVAL_MS = 15_000
 
 interface ManagedProcess {
   child: ChildProcess
@@ -35,9 +37,14 @@ interface ManagedProcess {
   resolveExit: () => void
 }
 
+interface ProbeResult extends LocalModelTunnelHealthStatus {
+  available: boolean
+}
+
 export class LocalModelTunnelService {
   private readonly processes = new Map<string, ManagedProcess>()
   private readonly statuses = new Map<string, LocalModelTunnelRuntimeStatus>()
+  private monitorTimer: NodeJS.Timeout | null = null
 
   constructor(
     private readonly state: StateService,
@@ -50,12 +57,17 @@ export class LocalModelTunnelService {
   ) {}
 
   async getSnapshot(): Promise<LocalModelTunnelSnapshot> {
-    await this.refreshExternalStatuses()
+    await this.refreshMonitoredStatuses()
     return this.buildSnapshot()
   }
 
   async start(profileId: string): Promise<LocalModelTunnelSnapshot> {
     const profile = this.requireProfile(profileId)
+    if (profile.connectionKind === 'local-runtime') {
+      await this.refreshProfileStatus(profile)
+      return this.broadcast()
+    }
+
     const existing = this.processes.get(profile.id)
     if (existing) {
       this.setStatus(profile, {
@@ -67,13 +79,26 @@ export class LocalModelTunnelService {
       return this.broadcast()
     }
 
-    if (await this.isEndpointAvailable(profile)) {
-      this.setStatus(profile, {
-        state: 'external',
-        managed: false,
-        pid: null,
-        error: null,
-      })
+    const initialProbe = await this.probeEndpoint(profile)
+    if (initialProbe.available) {
+      if (profile.allowExternal) {
+        this.setStatus(profile, {
+          state: 'external',
+          managed: false,
+          pid: null,
+          error: null,
+          health: initialProbe,
+        })
+      } else {
+        this.setStatus(profile, {
+          state: 'failed',
+          managed: false,
+          pid: null,
+          error:
+            'The local endpoint is already responding. Use another local port, stop the local runtime, or enable externally managed endpoints for this SSH tunnel.',
+          health: initialProbe,
+        })
+      }
       return this.broadcast()
     }
 
@@ -267,7 +292,8 @@ export class LocalModelTunnelService {
     for (let attempt = 0; attempt < STARTUP_PROBE_ATTEMPTS; attempt += 1) {
       await delay(STARTUP_PROBE_DELAY_MS)
       if (this.processes.get(profile.id) !== managed || managed.stopping) return
-      if (await this.isEndpointAvailable(profile)) {
+      const probe = await this.probeEndpoint(profile)
+      if (probe.available) {
         if (this.processes.get(profile.id) !== managed || managed.stopping) {
           return
         }
@@ -276,6 +302,7 @@ export class LocalModelTunnelService {
           managed: true,
           pid: managed.child.pid ?? null,
           error: null,
+          health: probe,
         })
         void this.broadcast()
         return
@@ -295,38 +322,83 @@ export class LocalModelTunnelService {
       managed: false,
       pid: null,
       error: 'Tunnel started, but the local endpoint did not become available.',
+      health: await this.probeEndpoint(profile),
     })
     void this.broadcast()
   }
 
-  private async refreshExternalStatuses(): Promise<void> {
+  private async refreshMonitoredStatuses(): Promise<void> {
     await Promise.all(
-      this.getProfiles().map(async (profile) => {
-        if (this.processes.has(profile.id)) return
-        const current = this.getStatus(profile)
-        const available = await this.isEndpointAvailable(profile)
-        if (available) {
-          this.setStatus(profile, {
-            state: 'external',
-            managed: false,
-            pid: null,
-            error: null,
-          })
-        } else if (current.state === 'external') {
-          this.setStatus(profile, {
-            state: 'stopped',
-            managed: false,
-            pid: null,
-            error: null,
-          })
-        }
-      }),
+      this.getProfiles().map((profile) => this.refreshProfileStatus(profile)),
     )
   }
 
-  private async isEndpointAvailable(
+  private async refreshProfileStatus(
     profile: LocalModelTunnelProfile,
-  ): Promise<boolean> {
+  ): Promise<void> {
+    const current = this.getStatus(profile)
+    const managed = this.processes.get(profile.id)
+    if (managed && current.state === 'starting') return
+
+    const probe = await this.probeEndpoint(profile)
+    if (managed) {
+      this.setStatus(profile, {
+        state: probe.available ? 'running' : 'failed',
+        managed: true,
+        pid: managed.child.pid ?? null,
+        error: probe.available
+          ? null
+          : (probe.error ?? 'Local endpoint health check failed.'),
+        health: probe,
+      })
+      return
+    }
+
+    if (profile.connectionKind === 'local-runtime') {
+      this.setStatus(profile, {
+        state: probe.available ? 'running' : 'stopped',
+        managed: false,
+        pid: null,
+        error: null,
+        health: probe,
+      })
+      return
+    }
+
+    if (probe.available && profile.allowExternal) {
+      this.setStatus(profile, {
+        state: 'external',
+        managed: false,
+        pid: null,
+        error: null,
+        health: probe,
+      })
+      return
+    }
+
+    if (current.state === 'external') {
+      this.setStatus(profile, {
+        state: 'stopped',
+        managed: false,
+        pid: null,
+        error: null,
+        health: probe,
+      })
+      return
+    }
+
+    this.setStatus(profile, {
+      state: current.state === 'starting' ? 'stopped' : current.state,
+      managed: false,
+      pid: null,
+      error: current.error,
+      health: probe,
+    })
+  }
+
+  private async probeEndpoint(
+    profile: LocalModelTunnelProfile,
+  ): Promise<ProbeResult> {
     if (profile.healthCheckEnabled && profile.healthCheckUrl) {
       return probeHealthUrl(profile.healthCheckUrl)
     }
@@ -394,6 +466,7 @@ export class LocalModelTunnelService {
       pid: null,
       error: null,
       lastCheckedAt: null,
+      health: unknownHealth(),
       commandPreview: buildLocalModelTunnelCommand(profile).preview,
     }
   }
@@ -405,13 +478,29 @@ export class LocalModelTunnelService {
       'profileId' | 'commandPreview' | 'lastCheckedAt'
     >,
   ): void {
+    const checkedAt = patch.health?.checkedAt ?? new Date().toISOString()
     this.statuses.set(profile.id, {
       ...this.getStatus(profile),
       ...patch,
       profileId: profile.id,
-      lastCheckedAt: new Date().toISOString(),
+      lastCheckedAt: checkedAt,
       commandPreview: buildLocalModelTunnelCommand(profile).preview,
     })
+  }
+
+  startMonitoring(intervalMs = MONITOR_INTERVAL_MS): void {
+    if (this.monitorTimer) return
+    this.monitorTimer = setInterval(() => {
+      void this.refreshMonitoredStatuses().then(() => this.broadcast())
+    }, intervalMs)
+    this.monitorTimer.unref?.()
+    void this.refreshMonitoredStatuses().then(() => this.broadcast())
+  }
+
+  stopMonitoring(): void {
+    if (!this.monitorTimer) return
+    clearInterval(this.monitorTimer)
+    this.monitorTimer = null
   }
 }
 
@@ -423,13 +512,24 @@ function probeTcp(
   host: string,
   port: number,
   timeoutMs: number,
-): Promise<boolean> {
+): Promise<ProbeResult> {
   return new Promise((resolve) => {
+    const startedAt = Date.now()
     const socket = connect({ host, port })
     const finish = (available: boolean) => {
+      const checkedAt = new Date().toISOString()
       socket.removeAllListeners()
       socket.destroy()
-      resolve(available)
+      resolve({
+        available,
+        state: available ? 'healthy' : 'unhealthy',
+        probeKind: 'tcp',
+        checkedAt,
+        latencyMs: Date.now() - startedAt,
+        statusCode: null,
+        modelCount: null,
+        error: available ? null : `TCP connection to ${host}:${port} failed.`,
+      })
     }
     socket.setTimeout(timeoutMs)
     socket.once('connect', () => finish(true))
@@ -438,13 +538,17 @@ function probeTcp(
   })
 }
 
-function probeHealthUrl(url: string): Promise<boolean> {
+function probeHealthUrl(url: string): Promise<ProbeResult> {
   return new Promise((resolve) => {
+    const startedAt = Date.now()
     let parsed: URL
     try {
       parsed = new URL(url)
     } catch {
-      resolve(false)
+      resolve({
+        ...unhealthyHealth('Invalid health URL.'),
+        available: false,
+      })
       return
     }
 
@@ -453,15 +557,74 @@ function probeHealthUrl(url: string): Promise<boolean> {
       parsed,
       { method: 'GET', timeout: PROBE_TIMEOUT_MS },
       (res) => {
-        res.resume()
-        resolve((res.statusCode ?? 500) < 500)
+        const chunks: Buffer[] = []
+        let bytes = 0
+        res.on('data', (chunk: Buffer) => {
+          bytes += chunk.length
+          if (bytes <= 64_000) chunks.push(chunk)
+        })
+        res.on('end', () => {
+          const statusCode = res.statusCode ?? 500
+          const available = statusCode < 500
+          resolve({
+            available,
+            state: available ? 'healthy' : 'unhealthy',
+            probeKind: 'http',
+            checkedAt: new Date().toISOString(),
+            latencyMs: Date.now() - startedAt,
+            statusCode,
+            modelCount: extractOllamaModelCount(Buffer.concat(chunks)),
+            error: available ? null : `Health URL returned HTTP ${statusCode}.`,
+          })
+        })
       },
     )
     req.once('timeout', () => {
       req.destroy()
-      resolve(false)
+      resolve({
+        ...unhealthyHealth('Health URL request timed out.'),
+        available: false,
+      })
     })
-    req.once('error', () => resolve(false))
+    req.once('error', (error) =>
+      resolve({
+        ...unhealthyHealth(error.message),
+        available: false,
+      }),
+    )
     req.end()
   })
+}
+
+function unknownHealth(): LocalModelTunnelHealthStatus {
+  return {
+    state: 'unknown',
+    probeKind: null,
+    checkedAt: null,
+    latencyMs: null,
+    statusCode: null,
+    modelCount: null,
+    error: null,
+  }
+}
+
+function unhealthyHealth(error: string): LocalModelTunnelHealthStatus {
+  return {
+    state: 'unhealthy',
+    probeKind: 'http',
+    checkedAt: new Date().toISOString(),
+    latencyMs: null,
+    statusCode: null,
+    modelCount: null,
+    error,
+  }
+}
+
+function extractOllamaModelCount(buffer: Buffer): number | null {
+  try {
+    const parsed = JSON.parse(buffer.toString()) as { models?: unknown }
+    return Array.isArray(parsed.models) ? parsed.models.length : null
+  } catch {
+    return null
+  }
 }

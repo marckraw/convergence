@@ -5,10 +5,28 @@ export type LocalModelTunnelState =
   | 'external'
   | 'failed'
 
+export type LocalModelTunnelConnectionKind = 'local-runtime' | 'ssh-tunnel'
+
+export type LocalModelTunnelProbeKind = 'http' | 'tcp'
+
+export type LocalModelTunnelHealthState = 'unknown' | 'healthy' | 'unhealthy'
+
+export interface LocalModelTunnelHealthStatus {
+  state: LocalModelTunnelHealthState
+  probeKind: LocalModelTunnelProbeKind | null
+  checkedAt: string | null
+  latencyMs: number | null
+  statusCode: number | null
+  modelCount: number | null
+  error: string | null
+}
+
 export interface LocalModelTunnelProfile {
   id: string
   name: string
+  connectionKind: LocalModelTunnelConnectionKind
   sshTarget: string
+  allowExternal: boolean
   autoStart: boolean
   useCustomLocalBindHost: boolean
   localBindHost: string
@@ -23,7 +41,9 @@ export interface LocalModelTunnelProfile {
 
 export interface LocalModelTunnelProfileInput {
   name?: string
+  connectionKind?: LocalModelTunnelConnectionKind
   sshTarget?: string
+  allowExternal?: boolean
   autoStart?: boolean
   useCustomLocalBindHost?: boolean
   localBindHost?: string
@@ -41,6 +61,7 @@ export interface LocalModelTunnelRuntimeStatus {
   pid: number | null
   error: string | null
   lastCheckedAt: string | null
+  health: LocalModelTunnelHealthStatus
   commandPreview: string
 }
 

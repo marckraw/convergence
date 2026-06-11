@@ -1,10 +1,14 @@
 import type { FC } from 'react'
-import type { LocalModelTunnelState } from '@/entities/local-model-tunnel'
+import type {
+  LocalModelTunnelConnectionKind,
+  LocalModelTunnelState,
+} from '@/entities/local-model-tunnel'
 import { Button } from '@/shared/ui/button'
 import { Play, RefreshCw, RotateCcw, Square } from 'lucide-react'
 
 interface TunnelActionButtonsProps {
   state: LocalModelTunnelState
+  connectionKind: LocalModelTunnelConnectionKind
   managed: boolean
   isMutating: boolean
   onStart: () => void
@@ -15,6 +19,7 @@ interface TunnelActionButtonsProps {
 
 export const TunnelActionButtons: FC<TunnelActionButtonsProps> = ({
   state,
+  connectionKind,
   managed,
   isMutating,
   onStart,
@@ -22,6 +27,21 @@ export const TunnelActionButtons: FC<TunnelActionButtonsProps> = ({
   onRestart,
   onManage,
 }) => {
+  if (connectionKind === 'local-runtime') {
+    return (
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        disabled={isMutating}
+        onClick={onStart}
+      >
+        <RefreshCw className="h-3.5 w-3.5" />
+        Refresh
+      </Button>
+    )
+  }
+
   if (state === 'running' && managed) {
     return (
       <>

@@ -219,6 +219,7 @@ async function startApp(): Promise<void> {
   )
   registerLocalModelTunnelIpcHandlers(localModelTunnelService)
   void localModelTunnelService.startAutoStartProfiles()
+  localModelTunnelService.startMonitoring()
   const workspaceService = new WorkspaceService(db, gitService, workspacesRoot)
   const changedFilesService = new ChangedFilesService(db, gitService)
   const pullRequestService = new PullRequestService(db, gitService)
@@ -627,6 +628,7 @@ async function startApp(): Promise<void> {
   registerTerminalLayoutIpcHandlers(terminalLayoutService)
 
   app.on('before-quit', () => {
+    localModelTunnelService.stopMonitoring()
     localModelTunnelService.stopAllManaged()
     terminalService.disposeAll()
     projectScriptsRunner.disposeAll()
