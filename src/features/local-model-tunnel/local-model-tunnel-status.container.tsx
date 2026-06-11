@@ -27,7 +27,9 @@ import { TunnelProfileEditor } from './tunnel-profile-editor.presentational'
 
 const NEW_PROFILE_INPUT: LocalModelTunnelProfileInput = {
   name: 'New tunnel',
+  connectionKind: 'ssh-tunnel',
   sshTarget: 'my-gpu-host',
+  allowExternal: false,
   autoStart: false,
   useCustomLocalBindHost: false,
   localBindHost: '127.0.0.1',
@@ -288,7 +290,9 @@ function profileToInput(
 ): LocalModelTunnelProfileInput {
   return {
     name: profile.name,
+    connectionKind: profile.connectionKind,
     sshTarget: profile.sshTarget,
+    allowExternal: profile.allowExternal,
     autoStart: profile.autoStart,
     useCustomLocalBindHost: profile.useCustomLocalBindHost,
     localBindHost: profile.localBindHost,

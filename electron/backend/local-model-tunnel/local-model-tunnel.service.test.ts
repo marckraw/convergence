@@ -65,6 +65,8 @@ function createProfile(
   return {
     ...buildDefaultLocalModelTunnelProfile('2026-01-01T00:00:00.000Z'),
     id: 'profile-1',
+    connectionKind: 'ssh-tunnel',
+    allowExternal: false,
     healthCheckEnabled: true,
     healthCheckUrl: 'http://127.0.0.1:1/not-available',
     ...overrides,
@@ -141,6 +143,7 @@ describe('LocalModelTunnelService', () => {
       return socket
     })
     const profile = createProfile({
+      allowExternal: true,
       healthCheckEnabled: false,
       healthCheckUrl: '',
       localPort: 23456,
@@ -152,5 +155,51 @@ describe('LocalModelTunnelService', () => {
     expect(spawnTunnel).not.toHaveBeenCalled()
     expect(snapshot.profiles[0]?.status.state).toBe('external')
     expect(snapshot.profiles[0]?.status.managed).toBe(false)
+  })
+
+  it('does not confuse a local runtime with a remote ssh tunnel', async () => {
+    connectMock.mockImplementation(() => {
+      const socket = new MockSocket()
+      queueMicrotask(() => socket.emit('connect'))
+      return socket
+    })
+    const profile = createProfile({
+      allowExternal: false,
+      healthCheckEnabled: false,
+      healthCheckUrl: '',
+      localPort: 11434,
+    })
+    const { service, spawnTunnel } = createService([profile])
+
+    const snapshot = await service.start(profile.id)
+
+    expect(spawnTunnel).not.toHaveBeenCalled()
+    expect(snapshot.profiles[0]?.status.state).toBe('failed')
+    expect(snapshot.profiles[0]?.status.error).toContain(
+      'local endpoint is already responding',
+    )
+    expect(snapshot.profiles[0]?.status.health.state).toBe('healthy')
+  })
+
+  it('monitors local runtimes without spawning ssh', async () => {
+    connectMock.mockImplementation(() => {
+      const socket = new MockSocket()
+      queueMicrotask(() => socket.emit('connect'))
+      return socket
+    })
+    const profile = createProfile({
+      connectionKind: 'local-runtime',
+      healthCheckEnabled: false,
+      healthCheckUrl: '',
+      localPort: 11434,
+    })
+    const { service, spawnTunnel } = createService([profile])
+
+    const snapshot = await service.start(profile.id)
+
+    expect(spawnTunnel).not.toHaveBeenCalled()
+    expect(snapshot.profiles[0]?.status.state).toBe('running')
+    expect(snapshot.profiles[0]?.status.managed).toBe(false)
+    expect(snapshot.profiles[0]?.status.health.state).toBe('healthy')
   })
 })

@@ -1,11 +1,21 @@
 import type { ChangeEvent, FC } from 'react'
 import {
+  formatLocalModelTunnelConnectionLabel,
   formatLocalModelTunnelEndpoint,
+  formatLocalModelTunnelStatusDetail,
+  type LocalModelTunnelConnectionKind,
   type LocalModelTunnelProfileInput,
   type LocalModelTunnelProfileWithStatus,
 } from '@/entities/local-model-tunnel'
 import { Button } from '@/shared/ui/button'
 import { Input } from '@/shared/ui/input'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/shared/ui/select'
 import { SwitchRow } from '@/shared/ui/switch'
 import { Trash2 } from 'lucide-react'
 import { StatusDot } from './status-dot.presentational'
@@ -36,8 +46,17 @@ export const TunnelProfileEditor: FC<TunnelProfileEditorProps> = ({
   onSave,
   onDelete,
 }) => {
+  const connectionKind = draft.connectionKind ?? item.profile.connectionKind
+  const isSshTunnel = connectionKind === 'ssh-tunnel'
   const patchDraft = (patch: LocalModelTunnelProfileInput) =>
     onDraftChange({ ...draft, ...patch })
+  const updateConnectionKind = (next: string) => {
+    patchDraft({
+      connectionKind: next as LocalModelTunnelConnectionKind,
+      autoStart: next === 'ssh-tunnel' ? draft.autoStart : false,
+      allowExternal: next === 'ssh-tunnel' ? draft.allowExternal : false,
+    })
+  }
   const updateString =
     (key: keyof LocalModelTunnelProfileInput) =>
     (event: ChangeEvent<HTMLInputElement>) => {
@@ -66,6 +85,10 @@ export const TunnelProfileEditor: FC<TunnelProfileEditorProps> = ({
         <p className="text-xs text-muted-foreground">
           {formatLocalModelTunnelEndpoint(item)}
         </p>
+        <p className="text-xs text-muted-foreground/85">
+          {formatLocalModelTunnelConnectionLabel(item)} ·{' '}
+          {formatLocalModelTunnelStatusDetail(item)}
+        </p>
       </section>
 
       <section className="space-y-3">
@@ -77,26 +100,44 @@ export const TunnelProfileEditor: FC<TunnelProfileEditorProps> = ({
             </span>
             <Input value={draft.name ?? ''} onChange={updateString('name')} />
           </label>
-          <label className="space-y-1.5">
+          <div className="space-y-1.5">
             <span className="text-xs font-medium text-muted-foreground">
-              SSH target
+              Runtime
             </span>
-            <Input
-              value={draft.sshTarget ?? ''}
-              onChange={updateString('sshTarget')}
-            />
-          </label>
+            <Select value={connectionKind} onValueChange={updateConnectionKind}>
+              <SelectTrigger className="w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="local-runtime">This Mac</SelectItem>
+                <SelectItem value="ssh-tunnel">SSH tunnel</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
         </div>
-        <SwitchRow
-          id="local-model-tunnel-autostart"
-          label="Start when Convergence opens"
-          checked={!!draft.autoStart}
-          onChange={(next) => patchDraft({ autoStart: next })}
-        />
+        {isSshTunnel ? (
+          <>
+            <label className="space-y-1.5">
+              <span className="text-xs font-medium text-muted-foreground">
+                SSH target
+              </span>
+              <Input
+                value={draft.sshTarget ?? ''}
+                onChange={updateString('sshTarget')}
+              />
+            </label>
+            <SwitchRow
+              id="local-model-tunnel-autostart"
+              label="Start when Convergence opens"
+              checked={!!draft.autoStart}
+              onChange={(next) => patchDraft({ autoStart: next })}
+            />
+          </>
+        ) : null}
       </section>
 
       <section className="space-y-3">
-        {renderSectionLabel('Forwarding')}
+        {renderSectionLabel(isSshTunnel ? 'Forwarding' : 'Endpoint')}
         <SwitchRow
           id="local-model-tunnel-custom-bind"
           label="Use custom local bind IP"
@@ -127,28 +168,41 @@ export const TunnelProfileEditor: FC<TunnelProfileEditorProps> = ({
               onChange={updatePort('localPort')}
             />
           </label>
-          <label className="space-y-1.5">
-            <span className="text-xs font-medium text-muted-foreground">
-              Remote IP or hostname
-            </span>
-            <Input
-              value={draft.remoteHost ?? ''}
-              onChange={updateString('remoteHost')}
-            />
-          </label>
-          <label className="space-y-1.5">
-            <span className="text-xs font-medium text-muted-foreground">
-              Remote port
-            </span>
-            <Input
-              type="number"
-              min={1}
-              max={65535}
-              value={draft.remotePort ?? 11434}
-              onChange={updatePort('remotePort')}
-            />
-          </label>
+          {isSshTunnel ? (
+            <>
+              <label className="space-y-1.5">
+                <span className="text-xs font-medium text-muted-foreground">
+                  Remote IP or hostname
+                </span>
+                <Input
+                  value={draft.remoteHost ?? ''}
+                  onChange={updateString('remoteHost')}
+                />
+              </label>
+              <label className="space-y-1.5">
+                <span className="text-xs font-medium text-muted-foreground">
+                  Remote port
+                </span>
+                <Input
+                  type="number"
+                  min={1}
+                  max={65535}
+                  value={draft.remotePort ?? 11434}
+                  onChange={updatePort('remotePort')}
+                />
+              </label>
+            </>
+          ) : null}
         </div>
+        {isSshTunnel ? (
+          <SwitchRow
+            id="local-model-tunnel-external"
+            label="Accept externally managed endpoint"
+            description="Use only when another SSH tunnel owns the local port."
+            checked={!!draft.allowExternal}
+            onChange={(next) => patchDraft({ allowExternal: next })}
+          />
+        ) : null}
       </section>
 
       <section className="space-y-3">
@@ -171,12 +225,14 @@ export const TunnelProfileEditor: FC<TunnelProfileEditorProps> = ({
         </label>
       </section>
 
-      <section className="space-y-3">
-        {renderSectionLabel('Command preview')}
-        <code className="block overflow-x-auto rounded-lg border border-border/60 bg-muted/30 px-3 py-2 text-xs text-foreground/85">
-          {item.status.commandPreview}
-        </code>
-      </section>
+      {isSshTunnel ? (
+        <section className="space-y-3">
+          {renderSectionLabel('Command preview')}
+          <code className="block overflow-x-auto rounded-lg border border-border/60 bg-muted/30 px-3 py-2 text-xs text-foreground/85">
+            {item.status.commandPreview}
+          </code>
+        </section>
+      ) : null}
 
       {item.status.error ? (
         <p className="rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
@@ -193,6 +249,7 @@ export const TunnelProfileEditor: FC<TunnelProfileEditorProps> = ({
         <div className="flex flex-wrap items-center gap-2">
           <TunnelActionButtons
             state={item.status.state}
+            connectionKind={item.profile.connectionKind}
             managed={item.status.managed}
             isMutating={isMutating}
             onStart={onStart}
