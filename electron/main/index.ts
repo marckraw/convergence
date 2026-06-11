@@ -33,6 +33,7 @@ import { SessionService } from '../backend/session/session.service'
 import { SessionContextInjectionService } from '../backend/session/context-injection/session-context-injection.service'
 import { TurnCaptureService } from '../backend/session/turn/turn-capture.service'
 import { ProviderRegistry } from '../backend/provider/provider-registry'
+import { LocalExecutionHost } from '../backend/provider/execution-host/local-execution-host'
 import { ClaudeCodeProvider } from '../backend/provider/claude-code/claude-code-provider'
 import { CodexProvider } from '../backend/provider/codex/codex-provider'
 import { CursorProvider } from '../backend/provider/cursor/cursor-provider'
@@ -232,9 +233,10 @@ async function startApp(): Promise<void> {
   const taskProgressService = new TaskProgressService(broadcastTaskProgress)
   const codexQuotaService = new CodexQuotaService()
   const claudeQuotaService = new ClaudeQuotaService()
+  const executionHost = new LocalExecutionHost(providerRegistry)
   const sessionService = new SessionService(
     db,
-    providerRegistry,
+    executionHost,
     globalSessionsRoot,
   )
   const codeReviewService = new CodeReviewService({
