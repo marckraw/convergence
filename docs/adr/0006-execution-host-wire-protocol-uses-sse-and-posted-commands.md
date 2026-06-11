@@ -1,0 +1,11 @@
+# Execution Host Wire Protocol Uses SSE Events And Posted Commands
+
+Remote Provider Execution Hosts (MAR-1411) need a wire form of the SessionHandle interaction: four client-to-host commands (send message, approve, deny, stop) and a stream of host-to-client events (delta, status, attention, continuation token, context window, activity, heartbeat). Convergence will carry commands as individual HTTP POST requests and events as a Server-Sent Events stream, both over the same authenticated HTTP surface the remote guided-review daemon already uses.
+
+WebSocket was the considered alternative and is rejected for v1. Node's built-in WebSocket client follows the browser API and cannot send an Authorization header, so Bearer auth — the daemon's existing auth model — would need a token in the URL or a custom handshake; the `ws` package would add a dependency to close that gap. SSE plus POST reuses the daemon's HTTP auth, error-kind discrimination, and health/meta discovery unchanged, and SSE's `Last-Event-ID` mechanism gives stream resumption for free. The traffic shape also fits: events are the hot path and SSE handles one-directional streaming well; commands are infrequent and do not need a persistent duplex channel.
+
+The protocol is versioned and transport-agnostic at the encoding layer. Every envelope carries `protocolVersion`; event envelopes carry a per-session sequence number that increases by exactly one, and clients resume by replaying from the last sequence they processed. The encode and decode functions live in `electron/backend/provider/execution-host/execution-host-protocol.pure.ts` and contain no transport I/O, so a later move to WebSocket (or anything else) changes only the transport adapter, not the message shapes. The Remote Session Event Stream for the Companion Gateway (MAR-1306) should reuse this event envelope encoding rather than inventing a second one.
+
+Command ordering across separate POSTs is the client's responsibility: the Remote Execution Host adapter serializes command requests per Session and awaits each response before sending the next, preserving the ordering callers get from the in-process SessionHandle today.
+
+See `docs/architecture/execution-host-wire-protocol.md` for the full protocol reference.
