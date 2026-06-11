@@ -26,6 +26,7 @@ request, `/health` for liveness, `/v0/meta` for capability discovery
 | POST   | `/v0/execution/sessions`                     | `ExecutionHostStartRequest` → `201` with `{ protocolVersion, sessionId }` |
 | POST   | `/v0/execution/sessions/:sessionId/commands` | `ExecutionHostCommandEnvelope` → `202`                                    |
 | GET    | `/v0/execution/sessions/:sessionId/events`   | SSE stream of `ExecutionHostEventEnvelope`                                |
+| GET    | `/v0/execution/sessions/:sessionId`          | Session snapshot (see below)                                              |
 | DELETE | `/v0/execution/sessions/:sessionId`          | stop + teardown → `204`                                                   |
 
 `stop` exists both as a command kind (graceful, mirrors `SessionHandle.stop`)
@@ -47,6 +48,17 @@ SessionHandle listeners:
 | `context-window`     | `onContextWindowChange` |
 | `activity`           | `onActivityChange`      |
 | `heartbeat`          | `onActivityHeartbeat`   |
+
+## Session snapshot
+
+`GET /v0/execution/sessions/:sessionId` returns the host's current view of
+the Session without consuming the stream: `{ protocolVersion, sessionId,
+providerId, status, attention, activity, continuationToken, contextWindow,
+conversation, lastSeq }`, where `conversation` is the ordered list of
+conversation items derived by applying the delta log, and `lastSeq` is the
+seq of the latest envelope. Polling consumers (for example
+repo-command-center) read this instead of holding an SSE connection;
+streaming clients use it to seed state before subscribing from `lastSeq`.
 
 ## Reconnect and resume
 
