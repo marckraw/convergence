@@ -1,5 +1,11 @@
 # convergence
 
+## 0.40.14
+
+### Patch Changes
+
+- f60503d: Show Claude Code weekly and current 5-hour local usage from ccusage in Settings usage.
+
 ## 0.40.13
 
 ### Patch Changes
