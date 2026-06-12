@@ -1,5 +1,11 @@
 # convergence
 
+## 0.40.15
+
+### Patch Changes
+
+- 1d88286: Extract the Provider Execution Host seam (interface, local adapter, contract tests) and define the versioned wire protocol for future remote provider execution. Internal refactor with no behavior change.
+
 ## 0.40.14
 
 ### Patch Changes
