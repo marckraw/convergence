@@ -41,6 +41,7 @@ function primeStores(opts: {
       commandCenterShortcut: { key: 'k', shiftKey: false, altKey: false },
       guidedReviewBackend: 'local',
       guidedReviewRemoteBaseUrl: null,
+      executionHostRemoteBaseUrl: null,
       notifications: DEFAULT_NOTIFICATION_PREFS,
       onboarding: {
         ...DEFAULT_ONBOARDING_PREFS,

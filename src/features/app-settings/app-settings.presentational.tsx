@@ -32,6 +32,7 @@ import { SessionDefaultsFields } from './session-defaults.presentational'
 import { NamingModelDefaultsFields } from './naming-model-defaults.presentational'
 import { ExtractionModelDefaultsFields } from './extraction-model-defaults.presentational'
 import { GuidedReviewSettingsContainer } from './guided-review-settings.container'
+import { ExecutionHostSettingsContainer } from './execution-host-settings.container'
 import { NotificationsFields } from './notifications-fields.presentational'
 import { UpdatesFields } from './updates-fields.presentational'
 import { DebugLoggingFields } from './debug-logging-fields.presentational'
@@ -56,6 +57,8 @@ interface AppSettingsDialogProps {
   guidedReviewBackend: GuidedReviewBackend
   guidedReviewRemoteBaseUrlDraft: string
   guidedReviewRemoteBaseUrlError: string | null
+  executionHostRemoteBaseUrlDraft: string
+  executionHostRemoteBaseUrlError: string | null
   notificationsDraft: NotificationPrefs
   updatesDraft: UpdatePrefs
   debugLoggingDraft: DebugLoggingPrefs
@@ -76,6 +79,7 @@ interface AppSettingsDialogProps {
   onGuidedReviewModelChange: (providerId: string, modelId: string) => void
   onGuidedReviewBackendChange: (backend: GuidedReviewBackend) => void
   onGuidedReviewRemoteBaseUrlChange: (value: string) => void
+  onExecutionHostRemoteBaseUrlChange: (value: string) => void
   onNotificationsChange: (prefs: NotificationPrefs) => void
   onTestFireNotification: (severity: NotificationSeverity) => void
   onToggleBackgroundUpdates: (next: boolean) => void
@@ -119,6 +123,8 @@ export const AppSettingsDialog: FC<AppSettingsDialogProps> = ({
   guidedReviewBackend,
   guidedReviewRemoteBaseUrlDraft,
   guidedReviewRemoteBaseUrlError,
+  executionHostRemoteBaseUrlDraft,
+  executionHostRemoteBaseUrlError,
   notificationsDraft,
   updatesDraft,
   debugLoggingDraft,
@@ -139,6 +145,7 @@ export const AppSettingsDialog: FC<AppSettingsDialogProps> = ({
   onGuidedReviewModelChange,
   onGuidedReviewBackendChange,
   onGuidedReviewRemoteBaseUrlChange,
+  onExecutionHostRemoteBaseUrlChange,
   onNotificationsChange,
   onTestFireNotification,
   onToggleBackgroundUpdates,
@@ -306,6 +313,17 @@ export const AppSettingsDialog: FC<AppSettingsDialogProps> = ({
                 onGuidedReviewModelChange={onGuidedReviewModelChange}
                 onBackendChange={onGuidedReviewBackendChange}
                 onRemoteBaseUrlChange={onGuidedReviewRemoteBaseUrlChange}
+              />
+            </SettingsSubsection>
+            <SettingsSubsection
+              withDivider
+              title="Remote execution host"
+              description="Agents daemon that can run provider sessions remotely. Configure the endpoint here; choosing where sessions run comes per session."
+            >
+              <ExecutionHostSettingsContainer
+                remoteBaseUrlDraft={executionHostRemoteBaseUrlDraft}
+                remoteBaseUrlError={executionHostRemoteBaseUrlError}
+                onRemoteBaseUrlChange={onExecutionHostRemoteBaseUrlChange}
               />
             </SettingsSubsection>
           </div>

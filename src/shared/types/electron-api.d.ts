@@ -1766,6 +1766,16 @@ interface ElectronAPI {
       ) => Promise<GuidedReviewDaemonCredentialStatusData>
       deleteToken: () => Promise<GuidedReviewDaemonCredentialStatusData>
     }
+    executionHostDaemon: {
+      getStatus: () => Promise<ExecutionHostDaemonCredentialStatusData>
+      setToken: (
+        token: string,
+      ) => Promise<ExecutionHostDaemonCredentialStatusData>
+      deleteToken: () => Promise<ExecutionHostDaemonCredentialStatusData>
+    }
+  }
+  executionHost: {
+    testRemoteConnection: () => Promise<RemoteExecutionHostConnectionResultData>
   }
   analytics: {
     getOverview: (
@@ -2019,6 +2029,7 @@ interface AppSettingsData {
   commandCenterShortcut: CommandCenterShortcutPrefsData
   guidedReviewBackend: 'local' | 'remote'
   guidedReviewRemoteBaseUrl: string | null
+  executionHostRemoteBaseUrl: string | null
   notifications: NotificationPrefsData
   onboarding: OnboardingPrefsData
   updates: UpdatePrefsData
@@ -2039,6 +2050,7 @@ type AppSettingsInputData = Omit<
   | 'commandCenterShortcut'
   | 'guidedReviewBackend'
   | 'guidedReviewRemoteBaseUrl'
+  | 'executionHostRemoteBaseUrl'
   | 'notifications'
   | 'onboarding'
   | 'updates'
@@ -2052,6 +2064,7 @@ type AppSettingsInputData = Omit<
   commandCenterShortcut?: CommandCenterShortcutPrefsData
   guidedReviewBackend?: 'local' | 'remote'
   guidedReviewRemoteBaseUrl?: string | null
+  executionHostRemoteBaseUrl?: string | null
   notifications?: NotificationPrefsData
   onboarding?: OnboardingPrefsData
   updates?: UpdatePrefsData
@@ -2159,6 +2172,39 @@ interface GuidedReviewDaemonCredentialStatusData {
   account: string | null
   service: string | null
   error: string | null
+}
+
+interface ExecutionHostDaemonCredentialStatusData {
+  providerId: 'execution-host-daemon'
+  configured: boolean
+  source: 'environment' | 'keychain' | null
+  storage: 'keychain' | null
+  account: string | null
+  service: string | null
+  error: string | null
+}
+
+interface RemoteExecutionHostConnectionResultData {
+  ok: boolean
+  state:
+    | 'connected'
+    | 'missing-base-url'
+    | 'invalid-base-url'
+    | 'missing-token'
+    | 'unreachable'
+    | 'auth-failed'
+    | 'invalid-response'
+    | 'daemon-error'
+  baseUrl: string | null
+  message: string
+  providers: Array<{
+    providerId: string
+    name: string
+    available: boolean
+    authenticated: boolean
+    supportsContinuation: boolean
+    models: Array<{ id: string; label: string }>
+  }> | null
 }
 
 declare global {

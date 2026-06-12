@@ -65,6 +65,7 @@ export interface AppSettings {
   commandCenterShortcut: CommandCenterShortcutPrefs
   guidedReviewBackend: GuidedReviewBackend
   guidedReviewRemoteBaseUrl: string | null
+  executionHostRemoteBaseUrl: string | null
   notifications: NotificationPrefs
   onboarding: OnboardingPrefs
   updates: UpdatePrefs
@@ -81,6 +82,7 @@ export type AppSettingsInput = Omit<
   | 'commandCenterShortcut'
   | 'guidedReviewBackend'
   | 'guidedReviewRemoteBaseUrl'
+  | 'executionHostRemoteBaseUrl'
   | 'notifications'
   | 'onboarding'
   | 'updates'
@@ -94,6 +96,7 @@ export type AppSettingsInput = Omit<
   commandCenterShortcut?: CommandCenterShortcutPrefs
   guidedReviewBackend?: GuidedReviewBackend
   guidedReviewRemoteBaseUrl?: string | null
+  executionHostRemoteBaseUrl?: string | null
   notifications?: NotificationPrefs
   onboarding?: OnboardingPrefs
   updates?: UpdatePrefs

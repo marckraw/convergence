@@ -23,6 +23,7 @@ const EMPTY: AppSettings = {
   commandCenterShortcut: DEFAULT_COMMAND_CENTER_SHORTCUT,
   guidedReviewBackend: DEFAULT_GUIDED_REVIEW_BACKEND,
   guidedReviewRemoteBaseUrl: null,
+  executionHostRemoteBaseUrl: null,
   notifications: DEFAULT_NOTIFICATION_PREFS,
   onboarding: DEFAULT_ONBOARDING_PREFS,
   updates: DEFAULT_UPDATE_PREFS,

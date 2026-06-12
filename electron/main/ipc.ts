@@ -31,6 +31,12 @@ import { AppSettingsService } from '../backend/app-settings/app-settings.service
 import { CodexQuotaService } from '../backend/provider-quota/codex-quota.service'
 import { ClaudeQuotaService } from '../backend/provider-quota/claude-quota.service'
 import { GuidedReviewDaemonCredentialsService } from '../backend/credentials/guided-review-daemon-credentials.service'
+import type { ExecutionHostDaemonCredentialsService } from '../backend/credentials/execution-host-daemon-credentials.service'
+import type { RemoteExecutionHost } from '../backend/provider/execution-host/remote-execution-host'
+import {
+  testRemoteExecutionHostConnection,
+  type AppSettingsRemoteExecutionHostConnectionResolver,
+} from '../backend/provider/execution-host/remote-execution-host-connection'
 import { OpenRouterCredentialsService } from '../backend/credentials/openrouter-credentials.service'
 import type { AnalyticsService } from '../backend/analytics/analytics.service'
 import type { AnalyticsRangePreset } from '../backend/analytics/analytics.types'
@@ -185,6 +191,11 @@ export function registerIpcHandlers(
   providerQuota?: {
     codex: CodexQuotaService
     claude: ClaudeQuotaService
+  },
+  executionHostRemote?: {
+    credentials: ExecutionHostDaemonCredentialsService
+    host: RemoteExecutionHost
+    resolver: AppSettingsRemoteExecutionHostConnectionResolver
   },
 ): void {
   const quotaServices = providerQuota ?? {
@@ -648,6 +659,33 @@ export function registerIpcHandlers(
   ipcMain.handle('credentials:guidedReviewDaemon:deleteToken', () =>
     guidedReviewDaemonCredentials.deleteToken(),
   )
+
+  if (executionHostRemote) {
+    ipcMain.handle('credentials:executionHostDaemon:getStatus', () =>
+      executionHostRemote.credentials.getStatus(),
+    )
+
+    ipcMain.handle(
+      'credentials:executionHostDaemon:setToken',
+      (_event, input: { token?: unknown }) => {
+        if (!input || typeof input.token !== 'string') {
+          throw new Error('Daemon API token is required.')
+        }
+        return executionHostRemote.credentials.setToken({ token: input.token })
+      },
+    )
+
+    ipcMain.handle('credentials:executionHostDaemon:deleteToken', () =>
+      executionHostRemote.credentials.deleteToken(),
+    )
+
+    ipcMain.handle('executionHost:testRemoteConnection', () =>
+      testRemoteExecutionHostConnection({
+        resolver: executionHostRemote.resolver,
+        host: executionHostRemote.host,
+      }),
+    )
+  }
 
   // Analytics handlers
   ipcMain.handle('analytics:getOverview', (_event, rangePreset: string) =>
