@@ -1,4 +1,5 @@
 import { execFile } from 'child_process'
+import { chmodSync, statSync } from 'fs'
 import { createRequire } from 'module'
 import { CLAUDE_QUOTA_CACHE_TTL_MS } from './claude-quota.constants'
 import {
@@ -12,6 +13,38 @@ import type { ProviderQuotaSnapshot } from './provider-quota.types'
 type CcusageRunner = (args: string[]) => Promise<unknown>
 
 const requireFromHere = createRequire(import.meta.url)
+
+interface CcusageBinaryExecutableDeps {
+  chmod: (path: string, mode: number) => void
+  platform: NodeJS.Platform
+  stat: (path: string) => { mode: number }
+}
+
+const defaultExecutableDeps: CcusageBinaryExecutableDeps = {
+  chmod: chmodSync,
+  platform: process.platform,
+  stat: statSync,
+}
+
+export function ensureCcusageBinaryExecutable(
+  binaryPath: string,
+  deps: CcusageBinaryExecutableDeps = defaultExecutableDeps,
+): void {
+  if (deps.platform === 'win32' || binaryPath === 'ccusage') return
+
+  try {
+    if ((deps.stat(binaryPath).mode & 0o111) !== 0) return
+    deps.chmod(binaryPath, 0o755)
+  } catch (err) {
+    const message =
+      err instanceof Error
+        ? err.message
+        : 'Unable to prepare ccusage native binary.'
+    throw new Error(`ccusage native binary is not executable: ${message}`, {
+      cause: err,
+    })
+  }
+}
 
 function resolveCcusageBinary(): string {
   const packageName = resolveCcusageNativePackageName(
@@ -34,8 +67,17 @@ function resolveCcusageBinary(): string {
 
 function runCcusage(args: string[]): Promise<unknown> {
   return new Promise((resolve, reject) => {
+    let binaryPath: string
+    try {
+      binaryPath = resolveCcusageBinary()
+      ensureCcusageBinaryExecutable(binaryPath)
+    } catch (error) {
+      reject(error)
+      return
+    }
+
     execFile(
-      resolveCcusageBinary(),
+      binaryPath,
       args,
       { maxBuffer: 20 * 1024 * 1024 },
       (error, stdout, stderr) => {
