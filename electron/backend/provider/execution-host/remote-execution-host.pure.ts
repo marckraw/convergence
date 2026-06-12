@@ -214,6 +214,36 @@ export function createSseParser(): { feed: (chunk: string) => SseEvent[] } {
   }
 }
 
+/**
+ * Renders a remote failure for the conversation note: the underlying
+ * message, the HTTP status when one exists, and an actionable hint derived
+ * from the error kind so users can self-diagnose without daemon log access.
+ */
+export function describeRemoteExecutionHostFailure(error: unknown): string {
+  const base = error instanceof Error ? error.message : String(error)
+  if (!(error instanceof RemoteExecutionHostError)) return base
+  const status = error.status ? ` (HTTP ${error.status})` : ''
+  const hint = remoteFailureHint(error.kind)
+  return `${base}${status}${hint ? ` ${hint}` : ''}`
+}
+
+function remoteFailureHint(
+  kind: RemoteExecutionHostError['kind'],
+): string | null {
+  switch (kind) {
+    case 'configuration':
+      return 'Configure the daemon in Settings under Remote execution host.'
+    case 'auth':
+      return 'The daemon rejected the API token; update it in Settings under Remote execution host.'
+    case 'network':
+      return 'The daemon is unreachable; verify it with Test connection in Settings under Remote execution host.'
+    case 'malformed':
+      return 'The daemon sent an unexpected response; it may need an update.'
+    case 'http':
+      return null
+  }
+}
+
 const RECONNECT_BASE_DELAY_MS = 1000
 const RECONNECT_MAX_DELAY_MS = 30_000
 

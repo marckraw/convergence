@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { EXECUTION_HOST_PROTOCOL_VERSION } from './execution-host-protocol.types'
 import {
   buildRemoteExecutionHostStartRequest,
+  describeRemoteExecutionHostFailure,
   capabilitiesForRemoteProvider,
   createSseParser,
   descriptorForRemoteProvider,
@@ -213,5 +214,35 @@ describe('remoteExecutionHostReconnectDelayMs', () => {
     expect(remoteExecutionHostReconnectDelayMs(2)).toBe(2000)
     expect(remoteExecutionHostReconnectDelayMs(3)).toBe(4000)
     expect(remoteExecutionHostReconnectDelayMs(10)).toBe(30_000)
+  })
+})
+
+describe('describeRemoteExecutionHostFailure', () => {
+  it('appends the HTTP status and an actionable hint by error kind', () => {
+    expect(
+      describeRemoteExecutionHostFailure(
+        new RemoteExecutionHostError('Invalid API token', 'auth', 401),
+      ),
+    ).toBe(
+      'Invalid API token (HTTP 401) The daemon rejected the API token; update it in Settings under Remote execution host.',
+    )
+    expect(
+      describeRemoteExecutionHostFailure(
+        new RemoteExecutionHostError('ECONNREFUSED', 'network'),
+      ),
+    ).toContain('Test connection in Settings')
+  })
+
+  it('passes through plain errors and http errors without hints', () => {
+    expect(describeRemoteExecutionHostFailure(new Error('boom'))).toBe('boom')
+    expect(
+      describeRemoteExecutionHostFailure(
+        new RemoteExecutionHostError(
+          'Workspace materialization failed: repo not found',
+          'http',
+          400,
+        ),
+      ),
+    ).toBe('Workspace materialization failed: repo not found (HTTP 400)')
   })
 })

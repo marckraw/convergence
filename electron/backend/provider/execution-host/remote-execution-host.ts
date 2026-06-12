@@ -33,6 +33,7 @@ import type {
 } from './execution-host.types'
 import {
   buildRemoteExecutionHostStartRequest,
+  describeRemoteExecutionHostFailure,
   capabilitiesForRemoteProvider,
   createSseParser,
   descriptorForRemoteProvider,
@@ -388,7 +389,9 @@ class RemoteSessionRun {
         parseRemoteExecutionHostStartResponse(response)
       }
     } catch (error) {
-      this.failSession(`Remote session failed to start: ${errorMessage(error)}`)
+      this.failSession(
+        `Remote session failed to start: ${describeRemoteExecutionHostFailure(error)}`,
+      )
       return
     }
 
@@ -416,7 +419,7 @@ class RemoteSessionRun {
         attempt += 1
         if (attempt >= policy.maxAttempts) {
           this.failSession(
-            `Remote session event stream is unavailable: ${errorMessage(error)}`,
+            `Remote session event stream is unavailable: ${describeRemoteExecutionHostFailure(error)}`,
           )
           return
         }
@@ -544,7 +547,7 @@ class RemoteSessionRun {
       // the user can retry, but keep the session alive — the remote run may
       // still be healthy.
       this.emitter.addNote({
-        text: `Remote session command was not delivered: ${errorMessage(error)}`,
+        text: `Remote session command was not delivered: ${describeRemoteExecutionHostFailure(error)}`,
         level: 'error',
       })
       this.emitter.patchSession({ attention: 'failed' })
