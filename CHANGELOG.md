@@ -1,5 +1,12 @@
 # convergence
 
+## 0.40.22
+
+### Patch Changes
+
+- e9eb31a: Remote sessions now tolerate roughly 2.5 minutes of daemon/gateway outage before the event stream is declared lost (previously ~30 seconds), pairing with the daemon's new SSE keepalives so idle sessions waiting on approvals survive reverse-proxy timeouts.
+- 625f70f: Remote sessions are now visibly remote: a cloud "Remote" chip in the session header, an "Execution host: Remote daemon" row in Session details, and a cloud icon on remote sessions in the sidebar tree.
+
 ## 0.40.21
 
 ### Patch Changes
