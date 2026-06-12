@@ -1,4 +1,5 @@
 import type {
+  RemoteSessionWorkspaceResult,
   AppSettings,
   AppSettingsInput,
   ExecutionHostDaemonCredentialStatus,
@@ -53,4 +54,9 @@ export const executionHostDaemonCredentialsApi = {
 export const executionHostApi = {
   testRemoteConnection: (): Promise<RemoteExecutionHostConnectionResult> =>
     window.electronAPI.executionHost.testRemoteConnection(),
+
+  getSessionWorkspace: (
+    sessionId: string,
+  ): Promise<RemoteSessionWorkspaceResult> =>
+    window.electronAPI.executionHost.getSessionWorkspace(sessionId),
 }

@@ -18,7 +18,11 @@ import { ComposerContainer } from '@/features/composer'
 import { ProjectOpenMenuContainer } from '@/features/project-open-menu'
 import { SessionDebugDrawerContainer } from '@/widgets/session-debug-drawer'
 import { ProjectActionsMenu } from '@/widgets/project-actions-menu'
-import { useAppSettingsStore } from '@/entities/app-settings'
+import {
+  executionHostApi,
+  useAppSettingsStore,
+  type RemoteSessionWorkspaceResult,
+} from '@/entities/app-settings'
 import { attachmentApi, useAttachmentStore } from '@/entities/attachment'
 import { useTerminalStore } from '@/entities/terminal'
 import { Button } from '@/shared/ui/button'
@@ -54,6 +58,12 @@ import {
 import { PullRequestPanel } from './pull-request-panel.presentational'
 import { SessionHeaderDetailRow } from './session-header-detail-row.presentational'
 import { SessionConversationSurface } from './session-conversation-surface.container'
+
+function formatRemoteRepositoryLabel(repository: string): string {
+  return repository
+    .replace(/^https:\/\/github\.com\//, '')
+    .replace(/\.git$/, '')
+}
 
 const CHANGED_FILES_MIN_WIDTH = 320
 const CHANGED_FILES_MAX_WIDTH = 960
@@ -128,11 +138,29 @@ export const SessionView: FC<SessionViewProps> = ({ onOpenCodeReview }) => {
     CHANGED_FILES_COMPACT_WIDTH,
   )
   const [branchName, setBranchName] = useState<string | null>(null)
+  const [remoteWorkspace, setRemoteWorkspace] =
+    useState<RemoteSessionWorkspaceResult | null>(null)
   const changedFilesDraggingRef = useRef(false)
   const sessionRootRef = useRef<HTMLDivElement>(null)
   const changedFilesExpanded = changedFilesMode === 'overlay'
 
   const session = sessions.find((s) => s.id === activeSessionId) ?? null
+  const remoteSessionId =
+    session?.executionHost === 'remote' ? session.id : null
+
+  useEffect(() => {
+    setRemoteWorkspace(null)
+    if (!remoteSessionId) return
+    let cancelled = false
+    void executionHostApi
+      .getSessionWorkspace(remoteSessionId)
+      .then((result) => {
+        if (!cancelled) setRemoteWorkspace(result)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [remoteSessionId])
   const sessionWorkspace = session?.workspaceId
     ? (workspaces.find((entry) => entry.id === session.workspaceId) ?? null)
     : null
@@ -511,11 +539,42 @@ export const SessionView: FC<SessionViewProps> = ({ onOpenCodeReview }) => {
                     </Button>
                   )}
                   {session.executionHost === 'remote' && (
-                    <SessionHeaderDetailRow
-                      icon={<Cloud className="h-3.5 w-3.5" />}
-                      label="Execution host"
-                      value="Remote daemon"
-                    />
+                    <>
+                      <SessionHeaderDetailRow
+                        icon={<Cloud className="h-3.5 w-3.5" />}
+                        label="Execution host"
+                        value="Remote daemon"
+                      />
+                      {remoteWorkspace?.ok &&
+                        remoteWorkspace.info.workspace && (
+                          <>
+                            <SessionHeaderDetailRow
+                              label="Remote repository"
+                              value={formatRemoteRepositoryLabel(
+                                remoteWorkspace.info.workspace.repository,
+                              )}
+                            />
+                            <SessionHeaderDetailRow
+                              icon={<GitBranch className="h-3.5 w-3.5" />}
+                              label="Remote branch"
+                              value={remoteWorkspace.info.workspace.branchName}
+                            />
+                          </>
+                        )}
+                      {remoteWorkspace?.ok && remoteWorkspace.info.prUrl && (
+                        <SessionHeaderDetailRow
+                          icon={<GitPullRequest className="h-3.5 w-3.5" />}
+                          label="Remote pull request"
+                          value={remoteWorkspace.info.prUrl}
+                        />
+                      )}
+                      {remoteWorkspace && !remoteWorkspace.ok && (
+                        <SessionHeaderDetailRow
+                          label="Remote workspace"
+                          value={remoteWorkspace.message}
+                        />
+                      )}
+                    </>
                   )}
                   <SessionHeaderDetailRow
                     icon={<GitBranch className="h-3.5 w-3.5" />}

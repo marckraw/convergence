@@ -162,3 +162,17 @@ export interface RemoteExecutionHostConnectionResult {
   message: string
   providers: RemoteExecutionHostProviderSummary[] | null
 }
+
+export type RemoteSessionWorkspaceResult =
+  | {
+      ok: true
+      info: {
+        workspace: {
+          repository: string
+          branchName: string
+          baseRef: string | null
+        } | null
+        prUrl: string | null
+      }
+    }
+  | { ok: false; message: string }

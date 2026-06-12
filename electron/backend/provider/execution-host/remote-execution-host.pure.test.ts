@@ -8,6 +8,7 @@ import {
   descriptorForRemoteProvider,
   parseRemoteExecutionHostMeta,
   parseRemoteExecutionHostStartResponse,
+  parseRemoteSessionWorkspaceInfo,
   remoteExecutionHostReconnectDelayMs,
 } from './remote-execution-host.pure'
 import { RemoteExecutionHostError } from './remote-execution-host.types'
@@ -244,5 +245,38 @@ describe('describeRemoteExecutionHostFailure', () => {
         ),
       ),
     ).toBe('Workspace materialization failed: repo not found (HTTP 400)')
+  })
+})
+
+describe('parseRemoteSessionWorkspaceInfo', () => {
+  it('extracts the workspace and pull request from a snapshot', () => {
+    expect(
+      parseRemoteSessionWorkspaceInfo({
+        sessionId: 's-1',
+        workspace: {
+          repository: 'https://github.com/acme/repo.git',
+          branchName: 'agent/12345678',
+          baseRef: 'main',
+        },
+        prUrl: 'https://github.com/acme/repo/pull/7',
+      }),
+    ).toEqual({
+      workspace: {
+        repository: 'https://github.com/acme/repo.git',
+        branchName: 'agent/12345678',
+        baseRef: 'main',
+      },
+      prUrl: 'https://github.com/acme/repo/pull/7',
+    })
+  })
+
+  it('handles snapshots without workspace or pull request', () => {
+    expect(parseRemoteSessionWorkspaceInfo({ sessionId: 's-1' })).toEqual({
+      workspace: null,
+      prUrl: null,
+    })
+    expect(() => parseRemoteSessionWorkspaceInfo('nope')).toThrow(
+      RemoteExecutionHostError,
+    )
   })
 })

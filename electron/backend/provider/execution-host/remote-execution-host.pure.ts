@@ -215,6 +215,50 @@ export function createSseParser(): { feed: (chunk: string) => SseEvent[] } {
 }
 
 /**
+ * The workspace slice of the daemon's session snapshot: where a remote
+ * session actually runs and the pull request the daemon opened for it.
+ */
+export interface RemoteSessionWorkspaceInfo {
+  workspace: {
+    repository: string
+    branchName: string
+    baseRef: string | null
+  } | null
+  prUrl: string | null
+}
+
+/**
+ * Parses the workspace slice out of a daemon session snapshot. Throws
+ * RemoteExecutionHostError('malformed') when the snapshot is not an object.
+ */
+export function parseRemoteSessionWorkspaceInfo(
+  value: unknown,
+): RemoteSessionWorkspaceInfo {
+  if (!isRecord(value)) {
+    throw new RemoteExecutionHostError(
+      'Remote daemon returned a malformed session snapshot.',
+      'malformed',
+    )
+  }
+
+  const workspace = isRecord(value.workspace) ? value.workspace : null
+  return {
+    workspace:
+      workspace &&
+      typeof workspace.repository === 'string' &&
+      typeof workspace.branchName === 'string'
+        ? {
+            repository: workspace.repository,
+            branchName: workspace.branchName,
+            baseRef:
+              typeof workspace.baseRef === 'string' ? workspace.baseRef : null,
+          }
+        : null,
+    prUrl: typeof value.prUrl === 'string' ? value.prUrl : null,
+  }
+}
+
+/**
  * Renders a remote failure for the conversation note: the underlying
  * message, the HTTP status when one exists, and an actionable hint derived
  * from the error kind so users can self-diagnose without daemon log access.
