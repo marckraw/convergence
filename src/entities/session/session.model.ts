@@ -11,6 +11,7 @@ import type {
   NeedsYouDisposition,
   SessionQueuedInput,
   SessionSummary,
+  SessionExecutionHostId,
   SessionPermissionConfig,
 } from './session.types'
 import type { SkillSelection } from '@/shared/types/skill.types'
@@ -66,6 +67,7 @@ interface SessionActions {
     contextItemIds?: string[],
     permissionConfig?: SessionPermissionConfig,
     serviceTier?: string | null,
+    executionHost?: SessionExecutionHostId,
   ) => Promise<void>
   createAndStartGlobalSession: (
     providerId: string,
@@ -440,6 +442,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     contextItemIds,
     permissionConfig,
     serviceTier,
+    executionHost,
   ) => {
     set({ error: null })
     try {
@@ -452,6 +455,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
         serviceTier,
         permissionConfig,
         name,
+        executionHost,
       })
       await sessionApi.start(
         session.id,

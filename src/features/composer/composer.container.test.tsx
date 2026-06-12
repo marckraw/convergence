@@ -359,6 +359,68 @@ describe('ComposerContainer', () => {
       ['ctx-chaperone'],
       { preset: 'ask' },
       null,
+      undefined,
+    )
+  })
+
+  it('hides the remote host toggle when no remote execution host is configured', () => {
+    render(
+      <ComposerContainer
+        context={{
+          kind: 'project',
+          projectId: 'project-1',
+          workspaceId: null,
+          activeSessionId: null,
+        }}
+      />,
+    )
+
+    expect(
+      screen.queryByRole('switch', { name: 'Run on remote host' }),
+    ).not.toBeInTheDocument()
+  })
+
+  it('starts the session on the remote host when the toggle is on', () => {
+    useAppSettingsStore.setState((state) => ({
+      settings: {
+        ...state.settings,
+        executionHostRemoteBaseUrl: 'https://daemon.example.com',
+      },
+    }))
+
+    render(
+      <ComposerContainer
+        context={{
+          kind: 'project',
+          projectId: 'project-1',
+          workspaceId: null,
+          activeSessionId: null,
+        }}
+      />,
+    )
+
+    fireEvent.click(screen.getByRole('switch', { name: 'Run on remote host' }))
+
+    const textbox = screen.getByRole('textbox')
+    fireEvent.change(textbox, { target: { value: 'Run remotely' } })
+    fireEvent.keyDown(textbox, { key: 'Enter', metaKey: true })
+
+    expect(
+      useSessionStore.getState().createAndStartSession,
+    ).toHaveBeenCalledWith(
+      'project-1',
+      null,
+      'claude-code',
+      'claude-sonnet',
+      'medium',
+      'Run remotely',
+      'Run remotely',
+      undefined,
+      undefined,
+      undefined,
+      { preset: 'ask' },
+      null,
+      'remote',
     )
   })
 
@@ -479,6 +541,7 @@ describe('ComposerContainer', () => {
       undefined,
       { preset: 'ask' },
       'default',
+      undefined,
     )
   })
 
@@ -519,6 +582,7 @@ describe('ComposerContainer', () => {
       undefined,
       { preset: 'ask' },
       'fast',
+      undefined,
     )
   })
 
@@ -558,6 +622,7 @@ describe('ComposerContainer', () => {
       undefined,
       { preset: 'yolo' },
       null,
+      undefined,
     )
   })
 

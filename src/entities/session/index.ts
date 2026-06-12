@@ -29,6 +29,7 @@ export type {
   SessionQueuedInput,
   SessionContextWindow,
   SessionContextKind,
+  SessionExecutionHostId,
   ActivitySignal,
   ReasoningEffort,
   ProviderEffortOption,
