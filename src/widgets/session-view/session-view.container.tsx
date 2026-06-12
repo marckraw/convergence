@@ -32,6 +32,7 @@ import {
   Archive,
   ArrowLeftRight,
   Clock,
+  Cloud,
   GitFork,
   Link2,
   MoreVertical,
@@ -455,6 +456,16 @@ export const SessionView: FC<SessionViewProps> = ({ onOpenCodeReview }) => {
               {session.name}
             </span>
             <AttentionIndicator attention={session.attention} />
+            {session.executionHost === 'remote' && (
+              <span
+                className="flex items-center gap-1 rounded-full border border-sky-500/30 bg-sky-500/10 px-2 py-0.5 text-[11px] text-sky-600 dark:text-sky-300"
+                title="This session runs on the remote execution host"
+                data-testid="session-remote-indicator"
+              >
+                <Cloud className="h-3 w-3" />
+                Remote
+              </span>
+            )}
             {activityLabel && (
               <span
                 className="rounded-full border border-border/70 px-2 py-0.5 text-[11px] text-muted-foreground"
@@ -498,6 +509,13 @@ export const SessionView: FC<SessionViewProps> = ({ onOpenCodeReview }) => {
                         (entry) => entry.id === session.parentSessionId,
                       )?.name ?? 'parent'}
                     </Button>
+                  )}
+                  {session.executionHost === 'remote' && (
+                    <SessionHeaderDetailRow
+                      icon={<Cloud className="h-3.5 w-3.5" />}
+                      label="Execution host"
+                      value="Remote daemon"
+                    />
                   )}
                   <SessionHeaderDetailRow
                     icon={<GitBranch className="h-3.5 w-3.5" />}
