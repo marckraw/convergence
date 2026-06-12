@@ -1,5 +1,11 @@
 # convergence
 
+## 0.40.20
+
+### Patch Changes
+
+- 22b6b4a: Add a "Remote" toggle to the composer for new project sessions: when a remote execution host is configured and the selected provider has a daemon counterpart, the session can be started on the remote daemon instead of this machine. This completes the user-facing path for remote session execution.
+
 ## 0.40.19
 
 ### Patch Changes
