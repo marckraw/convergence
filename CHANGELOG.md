@@ -1,5 +1,11 @@
 # convergence
 
+## 0.40.18
+
+### Patch Changes
+
+- f591d84: Sessions can now target an execution host: a new per-session `executionHost` field ('local' default) routes session starts, capability checks, and continuation handling to either the in-process LocalExecutionHost or the remote agents daemon. Remote sessions translate the provider id to the daemon's namespace and send a workspace source derived from the repository's origin remote so the daemon can clone it. Backend only — the session creation UI toggle lands next.
+
 ## 0.40.17
 
 ### Patch Changes
