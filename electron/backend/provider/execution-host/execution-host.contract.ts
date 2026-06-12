@@ -3,11 +3,21 @@ import type { ProviderExecutionHost } from './execution-host.types'
 
 export interface ExecutionHostContractContext {
   host: ProviderExecutionHost
-  /** A conversational provider with continuation and one-shot support. */
+  /**
+   * A conversational provider with continuation support. Also one-shot
+   * capable unless `hostSupportsOneShot` is false.
+   */
   fullProviderId: string
   /** A provider without one-shot support. */
   noOneShotProviderId: string
   unknownProviderId: string
+  /**
+   * Whether the adapter can run one-shot executions at all. Defaults to
+   * true. Adapters without one-shot transport (the remote host until a wire
+   * endpoint exists) must advertise `supportsOneShot: false` for every
+   * provider and reject one-shot calls with the canonical unsupported error.
+   */
+  hostSupportsOneShot?: boolean
 }
 
 /**
@@ -40,7 +50,7 @@ export function describeProviderExecutionHostContract(
       const ctx = setup()
       expect(ctx.host.capabilitiesFor(ctx.fullProviderId)).toMatchObject({
         supportsContinuation: true,
-        supportsOneShot: true,
+        supportsOneShot: ctx.hostSupportsOneShot !== false,
       })
       expect(ctx.host.capabilitiesFor(ctx.noOneShotProviderId)).toMatchObject({
         supportsOneShot: false,
@@ -91,6 +101,18 @@ export function describeProviderExecutionHostContract(
 
     it('runs a one-shot execution on a capable provider', async () => {
       const ctx = setup()
+      if (ctx.hostSupportsOneShot === false) {
+        await expect(
+          ctx.host.oneShot(ctx.fullProviderId, {
+            prompt: 'ping',
+            modelId: 'test-model',
+            workingDirectory: '/tmp',
+          }),
+        ).rejects.toThrow(
+          `Provider ${ctx.fullProviderId} does not support one-shot execution`,
+        )
+        return
+      }
       const result = await ctx.host.oneShot(ctx.fullProviderId, {
         prompt: 'ping',
         modelId: 'test-model',
