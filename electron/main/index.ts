@@ -379,6 +379,8 @@ async function startApp(): Promise<void> {
     })
   const remoteExecutionHost = new RemoteExecutionHost({
     connection: remoteExecutionHostConnectionResolver,
+    onEventSeq: (sessionId, seq) =>
+      sessionService.recordRemoteEventSeq(sessionId, seq),
   })
   // Prime the remote provider cache when a daemon is configured; failures
   // are expected when it is not and surface later via the connection test.

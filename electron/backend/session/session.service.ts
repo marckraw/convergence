@@ -185,6 +185,7 @@ export class SessionService {
 
   setRemoteExecutionHost(host: ProviderExecutionHost): void {
     this.remoteExecutionHost = host
+    this.resumeRunningRemoteSessions()
   }
 
   /**
@@ -1087,6 +1088,14 @@ export class SessionService {
     const row = this.getRowById(sessionId)
     if (!row) return null
 
+    // Resumed remote streams can replay events that were already applied
+    // before a restart; item ids are globally unique, so an existing id
+    // means this add was persisted previously.
+    const existing = this.db
+      .prepare('SELECT 1 FROM session_conversation_items WHERE id = ?')
+      .get(itemDraft.id)
+    if (existing) return null
+
     const latest = this.db
       .prepare(
         `SELECT turn_id
@@ -1614,12 +1623,73 @@ export class SessionService {
 
   private recoverStaleRunningSessions(): void {
     for (const row of this.sessionRepository.listRunningNonShell()) {
+      const session = sessionSummaryFromRow(row)
+      // Remote runs outlive the app process; they are reattached once the
+      // remote execution host is wired via setRemoteExecutionHost.
+      if (session.executionHost === 'remote') continue
       this.markStaleRunningSessionFailed(
-        sessionSummaryFromRow(row),
+        session,
         'Session marked failed because Convergence restarted before the provider process finished.',
         false,
       )
     }
+  }
+
+  /**
+   * Reattaches to remote sessions that were still running when the app shut
+   * down. Their runs live on the daemon, so instead of failing them like
+   * stale local sessions we resume the event stream after the last
+   * persisted sequence; events emitted while the app was closed replay.
+   */
+  private resumeRunningRemoteSessions(): void {
+    for (const row of this.sessionRepository.listRunningNonShell()) {
+      const session = sessionSummaryFromRow(row)
+      if (session.executionHost !== 'remote') continue
+      if (this.activeHandles.has(session.id)) continue
+      try {
+        const execution = this.resolveExecution(session)
+        if (!execution.host.attach) {
+          throw new Error('Execution host does not support reattaching')
+        }
+        const handle = execution.host.attach(
+          execution.providerId,
+          {
+            sessionId: session.id,
+            workingDirectory: session.workingDirectory,
+            initialMessage: '',
+            model: session.model,
+            effort: session.effort,
+            serviceTier: session.serviceTier ?? null,
+            continuationToken: session.continuationToken,
+            permissionConfig: session.permissionConfig,
+          },
+          this.sessionRepository.getExecutionHostLastSeq(session.id),
+        )
+        this.activeHandles.set(session.id, handle)
+        handle.onDelta((delta: SessionDelta) => {
+          this.applyDelta(session.id, delta)
+        })
+        handle.onActivityHeartbeat?.(() => {
+          this.bumpLiveness(session.id)
+        })
+      } catch (err) {
+        this.markStaleRunningSessionFailed(
+          session,
+          `Could not reattach to the remote session after restart: ${
+            err instanceof Error ? err.message : String(err)
+          }`,
+          false,
+        )
+      }
+    }
+  }
+
+  /**
+   * Persists the last processed remote event sequence so a restarted app
+   * can resume the stream without replaying already-applied events.
+   */
+  recordRemoteEventSeq(sessionId: string, seq: number): void {
+    this.sessionRepository.setExecutionHostLastSeq(sessionId, seq)
   }
 
   private bumpLiveness(sessionId: string): void {

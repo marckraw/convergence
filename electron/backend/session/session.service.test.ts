@@ -3033,6 +3033,138 @@ describe('SessionService — liveness clock', () => {
       )
     })
 
+    it('reattaches running remote sessions after a restart instead of failing them', async () => {
+      const session = service.create({
+        projectId,
+        workspaceId: null,
+        providerId: 'claude-code',
+        model: 'sonnet',
+        effort: null,
+        name: 'remote survivor',
+        executionHost: 'remote',
+      })
+      service['applyDelta'](session.id, {
+        kind: 'session.patch',
+        patch: { status: 'running', updatedAt: now() },
+      })
+      service.recordRemoteEventSeq(session.id, 7)
+
+      const restartRegistry = new ProviderRegistry()
+      restartRegistry.register(createTestProvider())
+      const restartedService = new SessionService(
+        getDatabase(),
+        new LocalExecutionHost(restartRegistry),
+      )
+
+      // Unlike stale local sessions, the remote session is not failed by the
+      // constructor; it waits for the remote host.
+      expect(restartedService.getSummaryById(session.id)?.status).toBe(
+        'running',
+      )
+
+      const attachCalls: Array<{
+        providerId: string
+        sessionId: string
+        afterSeq: number
+      }> = []
+      const { host } = createFakeRemoteHost()
+      const attachableHost = {
+        ...host,
+        attach: (
+          providerId: string,
+          config: { sessionId: string },
+          afterSeq: number,
+        ) => {
+          attachCalls.push({
+            providerId,
+            sessionId: config.sessionId,
+            afterSeq,
+          })
+          return host.start(providerId, config)
+        },
+      }
+      restartedService.setRemoteWorkspaceSourceResolver(() => ({
+        repository: 'git@github.com:acme/repo.git',
+      }))
+      restartedService.setRemoteExecutionHost(attachableHost)
+
+      expect(attachCalls).toEqual([
+        { providerId: 'claude', sessionId: session.id, afterSeq: 7 },
+      ])
+      expect(restartedService.getSummaryById(session.id)?.status).toBe(
+        'running',
+      )
+    })
+
+    it('fails remote sessions on restart when reattach is impossible', () => {
+      const session = service.create({
+        projectId,
+        workspaceId: null,
+        providerId: 'test-provider',
+        model: 'test-model',
+        effort: null,
+        name: 'unmappable remote survivor',
+        executionHost: 'remote',
+      })
+      service['applyDelta'](session.id, {
+        kind: 'session.patch',
+        patch: { status: 'running', updatedAt: now() },
+      })
+
+      const restartRegistry = new ProviderRegistry()
+      restartRegistry.register(createTestProvider())
+      const restartedService = new SessionService(
+        getDatabase(),
+        new LocalExecutionHost(restartRegistry),
+      )
+      const { host } = createFakeRemoteHost()
+      restartedService.setRemoteExecutionHost({
+        ...host,
+        attach: () => {
+          throw new Error('unreachable')
+        },
+      })
+
+      expect(restartedService.getSummaryById(session.id)?.status).toBe('failed')
+    })
+
+    it('ignores replayed conversation items with already-persisted ids', () => {
+      const session = service.create({
+        projectId,
+        workspaceId: null,
+        providerId: 'claude-code',
+        model: 'sonnet',
+        effort: null,
+        name: 'replay dedupe',
+        executionHost: 'remote',
+      })
+      const item = {
+        id: 'replayed-item-1',
+        turnId: null,
+        kind: 'message' as const,
+        actor: 'assistant' as const,
+        text: 'hello from the daemon',
+        state: 'complete' as const,
+        createdAt: now(),
+        updatedAt: now(),
+        providerMeta: {
+          providerId: 'claude',
+          providerItemId: null,
+          providerEventType: 'assistant',
+        },
+      }
+      service['applyDelta'](session.id, {
+        kind: 'conversation.item.add',
+        item,
+      })
+      service['applyDelta'](session.id, {
+        kind: 'conversation.item.add',
+        item,
+      })
+
+      expect(service.getConversation(session.id)).toHaveLength(1)
+    })
+
     it('rejects remote starts without a clonable repository', async () => {
       const { host } = createFakeRemoteHost()
       service.setRemoteExecutionHost(host)

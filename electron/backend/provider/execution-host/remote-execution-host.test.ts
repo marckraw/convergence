@@ -444,6 +444,66 @@ describe('RemoteExecutionHost', () => {
     handle.stop()
   })
 
+  it('attaches to a running session without posting a start request', async () => {
+    const statuses: SessionStatus[] = []
+    const handle = host.attach('claude', startConfig('s-1'), 3)
+    handle.onStatusChange((status) => statuses.push(status))
+
+    await waitUntil(
+      () => stub.eventStreamLastEventIds.length === 1,
+      'attach stream to open',
+    )
+    expect(stub.startRequests).toHaveLength(0)
+    expect(stub.eventStreamLastEventIds[0]).toBe('3')
+
+    stub.emit(envelope(4, { kind: 'status', status: 'running' }))
+    await waitUntil(() => statuses.length === 1, 'resumed event')
+    expect(statuses).toEqual(['running'])
+
+    handle.sendMessage('still there?')
+    await waitUntil(
+      () => stub.commandEnvelopes.length === 1,
+      'command after attach',
+    )
+    expect(stub.commandEnvelopes[0]).toMatchObject({
+      command: { kind: 'send-message', text: 'still there?' },
+    })
+
+    handle.stop()
+  })
+
+  it('reports processed event sequences through onEventSeq', async () => {
+    const seqs: Array<[string, number]> = []
+    const seqHost = new RemoteExecutionHost({
+      connection: {
+        resolveConnection: async () => ({
+          baseUrl: 'http://daemon.test',
+          token: 'test-token',
+        }),
+      },
+      fetch: stub.fetchFn,
+      reconnect: { maxAttempts: 2, wait: async () => {} },
+      onEventSeq: (sessionId, seq) => seqs.push([sessionId, seq]),
+    })
+    await seqHost.refreshProviders()
+
+    const handle = seqHost.start('claude', startConfig('s-1'))
+    await waitUntil(
+      () => stub.eventStreamLastEventIds.length === 1,
+      'stream to open',
+    )
+    stub.emit(envelope(1, { kind: 'status', status: 'running' }))
+    stub.emit(envelope(2, { kind: 'heartbeat' }))
+
+    await waitUntil(() => seqs.length === 2, 'sequence callbacks')
+    expect(seqs).toEqual([
+      ['s-1', 1],
+      ['s-1', 2],
+    ])
+
+    handle.stop()
+  })
+
   it('throws synchronously for unknown providers on start', () => {
     expect(() => host.start('missing', startConfig('s-x'))).toThrow(
       'Provider not found: missing',

@@ -36,6 +36,7 @@ function buildSessionsTableSql(
       fork_strategy TEXT,
       primary_surface TEXT NOT NULL DEFAULT 'conversation',
       execution_host TEXT NOT NULL DEFAULT 'local',
+      execution_host_last_seq INTEGER NOT NULL DEFAULT 0,
       created_at TEXT NOT NULL DEFAULT (datetime('now')),
       updated_at TEXT NOT NULL DEFAULT (datetime('now')),
       FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
@@ -729,6 +730,12 @@ function ensureSessionColumns(database: Database.Database): void {
   if (!columnNames.has('execution_host')) {
     database.exec(
       "ALTER TABLE sessions ADD COLUMN execution_host TEXT NOT NULL DEFAULT 'local'",
+    )
+  }
+
+  if (!columnNames.has('execution_host_last_seq')) {
+    database.exec(
+      'ALTER TABLE sessions ADD COLUMN execution_host_last_seq INTEGER NOT NULL DEFAULT 0',
     )
   }
 }

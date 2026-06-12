@@ -71,4 +71,17 @@ export interface ProviderExecutionHost {
    * support.
    */
   oneShot(providerId: string, input: OneShotInput): Promise<OneShotResult>
+
+  /**
+   * Reattach to a run that is already executing on this host, resuming the
+   * event stream after `afterSeq`. Only hosts whose runs outlive the app
+   * process implement this; the Local Execution Host does not. Follows the
+   * same invariants as `start`: synchronous, throws the canonical error for
+   * unknown Providers, and surfaces post-attach failures through the handle.
+   */
+  attach?(
+    providerId: string,
+    config: SessionStartConfig,
+    afterSeq: number,
+  ): SessionHandle
 }
