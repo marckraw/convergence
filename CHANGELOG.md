@@ -1,5 +1,11 @@
 # convergence
 
+## 0.40.16
+
+### Patch Changes
+
+- 9a32b1d: Add the RemoteExecutionHost adapter: runs Providers on an agents-daemon over the execution host wire protocol (POST start, SSE events with sequence-resumed reconnects, posted command envelopes), passing the same contract suite as the local adapter. Not yet wired into session flows.
+
 ## 0.40.15
 
 ### Patch Changes
