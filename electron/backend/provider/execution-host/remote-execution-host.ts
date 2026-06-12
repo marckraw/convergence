@@ -49,7 +49,13 @@ import {
 
 type FetchFn = typeof fetch
 
-const DEFAULT_MAX_RECONNECT_ATTEMPTS = 5
+/**
+ * With the exponential backoff capped at 30s this tolerates roughly 2.5
+ * minutes of gateway outage before the session is failed locally. The
+ * remote run typically survives such blips, so giving up early turns a
+ * recoverable disconnect into a dead session.
+ */
+const DEFAULT_MAX_RECONNECT_ATTEMPTS = 10
 
 export interface RemoteExecutionHostDeps {
   connection: RemoteExecutionHostConnectionResolver
