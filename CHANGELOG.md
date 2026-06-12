@@ -1,5 +1,11 @@
 # convergence
 
+## 0.40.23
+
+### Patch Changes
+
+- 499a3ce: Remote sessions now survive app restarts: running remote sessions are no longer marked failed on launch — Convergence reattaches to the daemon's event stream and resumes after the last processed event, replaying anything that happened while the app was closed.
+
 ## 0.40.22
 
 ### Patch Changes
