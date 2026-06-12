@@ -39,6 +39,8 @@ import {
   descriptorForRemoteProvider,
   parseRemoteExecutionHostMeta,
   parseRemoteExecutionHostStartResponse,
+  parseRemoteSessionWorkspaceInfo,
+  type RemoteSessionWorkspaceInfo,
   remoteExecutionHostReconnectDelayMs,
 } from './remote-execution-host.pure'
 import {
@@ -172,6 +174,23 @@ export class RemoteExecutionHost implements ProviderExecutionHost {
   /** @internal Shared by RemoteSessionRun. */
   notifyEventSeq(sessionId: string, seq: number): void {
     this.deps.onEventSeq?.(sessionId, seq)
+  }
+
+  /**
+   * Fetches the workspace slice of the daemon's session snapshot: the
+   * repository and branch the session runs in and the pull request the
+   * daemon opened, when any. Throws RemoteExecutionHostError.
+   */
+  async fetchSessionWorkspaceInfo(
+    sessionId: string,
+  ): Promise<RemoteSessionWorkspaceInfo> {
+    const connection = await this.resolveConnection()
+    const snapshot = await this.requestJson(
+      connection,
+      `/v0/execution/sessions/${encodeURIComponent(sessionId)}`,
+      { method: 'GET' },
+    )
+    return parseRemoteSessionWorkspaceInfo(snapshot)
   }
 
   async oneShot(

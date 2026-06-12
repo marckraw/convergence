@@ -37,6 +37,7 @@ import {
   testRemoteExecutionHostConnection,
   type AppSettingsRemoteExecutionHostConnectionResolver,
 } from '../backend/provider/execution-host/remote-execution-host-connection'
+import { describeRemoteExecutionHostFailure } from '../backend/provider/execution-host/remote-execution-host.pure'
 import { OpenRouterCredentialsService } from '../backend/credentials/openrouter-credentials.service'
 import type { AnalyticsService } from '../backend/analytics/analytics.service'
 import type { AnalyticsRangePreset } from '../backend/analytics/analytics.types'
@@ -684,6 +685,25 @@ export function registerIpcHandlers(
         resolver: executionHostRemote.resolver,
         host: executionHostRemote.host,
       }),
+    )
+
+    ipcMain.handle(
+      'executionHost:getSessionWorkspace',
+      async (_event, sessionId: string) => {
+        try {
+          return {
+            ok: true as const,
+            info: await executionHostRemote.host.fetchSessionWorkspaceInfo(
+              sessionId,
+            ),
+          }
+        } catch (error) {
+          return {
+            ok: false as const,
+            message: describeRemoteExecutionHostFailure(error),
+          }
+        }
+      },
     )
   }
 

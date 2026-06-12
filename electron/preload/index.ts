@@ -465,6 +465,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   executionHost: {
     testRemoteConnection: () =>
       ipcRenderer.invoke('executionHost:testRemoteConnection'),
+    getSessionWorkspace: (sessionId: string) =>
+      ipcRenderer.invoke('executionHost:getSessionWorkspace', sessionId),
   },
   analytics: {
     getOverview: (rangePreset: '7d' | '30d' | '90d' | 'all') =>

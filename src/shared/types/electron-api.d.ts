@@ -1778,6 +1778,9 @@ interface ElectronAPI {
   }
   executionHost: {
     testRemoteConnection: () => Promise<RemoteExecutionHostConnectionResultData>
+    getSessionWorkspace: (
+      sessionId: string,
+    ) => Promise<RemoteSessionWorkspaceResultData>
   }
   analytics: {
     getOverview: (
@@ -2185,6 +2188,20 @@ interface ExecutionHostDaemonCredentialStatusData {
   service: string | null
   error: string | null
 }
+
+type RemoteSessionWorkspaceResultData =
+  | {
+      ok: true
+      info: {
+        workspace: {
+          repository: string
+          branchName: string
+          baseRef: string | null
+        } | null
+        prUrl: string | null
+      }
+    }
+  | { ok: false; message: string }
 
 interface RemoteExecutionHostConnectionResultData {
   ok: boolean
