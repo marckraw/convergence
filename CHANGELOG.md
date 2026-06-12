@@ -1,5 +1,11 @@
 # convergence
 
+## 0.40.19
+
+### Patch Changes
+
+- 5043df6: Fix Claude Code usage loading in packaged apps by preparing the bundled ccusage native binary before spawning it.
+
 ## 0.40.18
 
 ### Patch Changes
