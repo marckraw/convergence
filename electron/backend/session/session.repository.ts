@@ -143,4 +143,21 @@ export class SessionRepository {
   delete(id: string): void {
     this.db.prepare('DELETE FROM sessions WHERE id = ?').run(id)
   }
+
+  getExecutionHostLastSeq(id: string): number {
+    const row = this.db
+      .prepare('SELECT execution_host_last_seq FROM sessions WHERE id = ?')
+      .get(id) as { execution_host_last_seq: number } | undefined
+    return row?.execution_host_last_seq ?? 0
+  }
+
+  setExecutionHostLastSeq(id: string, seq: number): void {
+    this.db
+      .prepare(
+        `UPDATE sessions
+         SET execution_host_last_seq = ?
+         WHERE id = ? AND execution_host_last_seq < ?`,
+      )
+      .run(seq, id, seq)
+  }
 }

@@ -65,6 +65,11 @@ export interface RemoteExecutionHostDeps {
     delayMs?: (attempt: number) => number
     wait?: (ms: number) => Promise<void>
   }
+  /**
+   * Called after each processed event envelope with its sequence number.
+   * Callers persist this to resume the stream after an app restart.
+   */
+  onEventSeq?: (sessionId: string, seq: number) => void
 }
 
 /**
@@ -143,6 +148,29 @@ export class RemoteExecutionHost implements ProviderExecutionHost {
     })
     session.begin()
     return session.handle()
+  }
+
+  attach(
+    providerId: string,
+    config: SessionStartConfig,
+    afterSeq: number,
+  ): SessionHandle {
+    // No capability check: reattach happens at app boot before the provider
+    // cache is primed, and the provider was already validated when the
+    // session originally started. Failures surface through the handle.
+    const session = new RemoteSessionRun({
+      providerId,
+      config,
+      host: this,
+      resume: { afterSeq },
+    })
+    session.begin()
+    return session.handle()
+  }
+
+  /** @internal Shared by RemoteSessionRun. */
+  notifyEventSeq(sessionId: string, seq: number): void {
+    this.deps.onEventSeq?.(sessionId, seq)
   }
 
   async oneShot(
@@ -271,6 +299,8 @@ interface RemoteSessionRunParams {
   providerId: string
   config: SessionStartConfig
   host: RemoteExecutionHost
+  /** Present when reattaching to an already-running remote session. */
+  resume?: { afterSeq: number }
 }
 
 /**
@@ -304,6 +334,7 @@ class RemoteSessionRun {
   private lastSeq = 0
 
   constructor(private readonly params: RemoteSessionRunParams) {
+    this.lastSeq = params.resume?.afterSeq ?? 0
     this.emitter = new ProviderSessionEmitter({
       providerId: params.providerId,
       emitDelta: (delta) => this.notifyDelta(delta),
@@ -340,20 +371,22 @@ class RemoteSessionRun {
   private async run(): Promise<void> {
     try {
       this.connection = await this.params.host.resolveConnection()
-      const response = await this.params.host.requestJson(
-        this.connection,
-        '/v0/execution/sessions',
-        {
-          method: 'POST',
-          body: encodeExecutionHostStartRequest(
-            buildRemoteExecutionHostStartRequest(
-              this.params.providerId,
-              this.params.config,
+      if (!this.params.resume) {
+        const response = await this.params.host.requestJson(
+          this.connection,
+          '/v0/execution/sessions',
+          {
+            method: 'POST',
+            body: encodeExecutionHostStartRequest(
+              buildRemoteExecutionHostStartRequest(
+                this.params.providerId,
+                this.params.config,
+              ),
             ),
-          ),
-        },
-      )
-      parseRemoteExecutionHostStartResponse(response)
+          },
+        )
+        parseRemoteExecutionHostStartResponse(response)
+      }
     } catch (error) {
       this.failSession(`Remote session failed to start: ${errorMessage(error)}`)
       return
@@ -438,6 +471,7 @@ class RemoteSessionRun {
     if (envelope.seq <= this.lastSeq) return
     this.lastSeq = envelope.seq
     this.dispatchEvent(envelope.event)
+    this.params.host.notifyEventSeq(this.params.config.sessionId, envelope.seq)
   }
 
   private dispatchEvent(event: ExecutionHostEvent): void {

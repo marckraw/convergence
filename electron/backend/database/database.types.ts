@@ -37,6 +37,7 @@ export interface SessionRow {
   fork_strategy: string | null
   primary_surface: string
   execution_host: string
+  execution_host_last_seq: number
   created_at: string
   updated_at: string
 }
