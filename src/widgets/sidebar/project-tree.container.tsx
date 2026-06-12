@@ -19,6 +19,7 @@ import { cn } from '@/shared/lib/cn.pure'
 import {
   Archive,
   ChevronRight,
+  Cloud,
   GitBranch,
   Loader2,
   MoreHorizontal,
@@ -362,6 +363,12 @@ export const ProjectTree: FC<ProjectTreeProps> = ({
                   <SessionBadge attention={session.attention} />
                 )}
                 <span className="truncate">{session.name}</span>
+                {session.executionHost === 'remote' && (
+                  <Cloud
+                    className="h-3 w-3 shrink-0 text-sky-500/80"
+                    aria-label="Runs on remote execution host"
+                  />
+                )}
                 {isRegeneratingName && (
                   <Loader2
                     className="ml-auto h-3 w-3 shrink-0 animate-spin text-muted-foreground"
