@@ -179,6 +179,11 @@ export function parseGuidedReviewBackend(value: unknown): GuidedReviewBackend {
   return value === 'remote' ? 'remote' : DEFAULT_GUIDED_REVIEW_BACKEND
 }
 
+/**
+ * Normalizes a remote daemon base URL setting: trims, requires HTTP(S), and
+ * strips trailing slashes. Shared by the guided review and execution host
+ * remote endpoints.
+ */
 export function normalizeGuidedReviewRemoteBaseUrl(
   value: unknown,
 ): string | null {
@@ -208,6 +213,7 @@ function emptyAppSettings(): AppSettings {
     commandCenterShortcut: DEFAULT_COMMAND_CENTER_SHORTCUT,
     guidedReviewBackend: DEFAULT_GUIDED_REVIEW_BACKEND,
     guidedReviewRemoteBaseUrl: null,
+    executionHostRemoteBaseUrl: null,
     notifications: DEFAULT_NOTIFICATION_PREFS,
     onboarding: DEFAULT_ONBOARDING_PREFS,
     updates: DEFAULT_UPDATE_PREFS,
@@ -249,6 +255,9 @@ export function parseAppSettings(raw: string | null): AppSettings {
       guidedReviewBackend: parseGuidedReviewBackend(parsed.guidedReviewBackend),
       guidedReviewRemoteBaseUrl: normalizeGuidedReviewRemoteBaseUrl(
         parsed.guidedReviewRemoteBaseUrl,
+      ),
+      executionHostRemoteBaseUrl: normalizeGuidedReviewRemoteBaseUrl(
+        parsed.executionHostRemoteBaseUrl,
       ),
       notifications: parseNotificationPrefs(parsed.notifications),
       onboarding: parseOnboardingPrefs(parsed.onboarding),
@@ -319,6 +328,7 @@ export function validateAppSettings(
       commandCenterShortcut,
       guidedReviewBackend: settings.guidedReviewBackend,
       guidedReviewRemoteBaseUrl: settings.guidedReviewRemoteBaseUrl,
+      executionHostRemoteBaseUrl: settings.executionHostRemoteBaseUrl,
       notifications: settings.notifications,
       onboarding: settings.onboarding,
       updates: settings.updates,
@@ -345,6 +355,7 @@ export function validateAppSettings(
       commandCenterShortcut,
       guidedReviewBackend: settings.guidedReviewBackend,
       guidedReviewRemoteBaseUrl: settings.guidedReviewRemoteBaseUrl,
+      executionHostRemoteBaseUrl: settings.executionHostRemoteBaseUrl,
       notifications: settings.notifications,
       onboarding: settings.onboarding,
       updates: settings.updates,
@@ -370,6 +381,7 @@ export function validateAppSettings(
     commandCenterShortcut,
     guidedReviewBackend: settings.guidedReviewBackend,
     guidedReviewRemoteBaseUrl: settings.guidedReviewRemoteBaseUrl,
+    executionHostRemoteBaseUrl: settings.executionHostRemoteBaseUrl,
     notifications: settings.notifications,
     onboarding: settings.onboarding,
     updates: settings.updates,

@@ -34,6 +34,7 @@ import {
   type AppSettingsSectionId,
 } from './app-settings.presentational'
 import { getGuidedReviewRemoteBaseUrlError } from './guided-review-settings.pure'
+import { getExecutionHostRemoteBaseUrlError } from './execution-host-settings.pure'
 
 interface AppSettingsContainerProps {
   trigger: ReactNode
@@ -96,6 +97,8 @@ export const AppSettingsDialogContainer: FC<AppSettingsContainerProps> = ({
     useState<GuidedReviewBackend>(DEFAULT_GUIDED_REVIEW_BACKEND)
   const [guidedReviewRemoteBaseUrlDraft, setGuidedReviewRemoteBaseUrlDraft] =
     useState('')
+  const [executionHostRemoteBaseUrlDraft, setExecutionHostRemoteBaseUrlDraft] =
+    useState('')
   const [notificationsDraft, setNotificationsDraft] =
     useState<NotificationPrefs | null>(null)
   const [updatesDraft, setUpdatesDraft] = useState<UpdatePrefs | null>(null)
@@ -157,6 +160,9 @@ export const AppSettingsDialogContainer: FC<AppSettingsContainerProps> = ({
     setGuidedReviewDraft({ ...settings.guidedReviewModelByProvider })
     setGuidedReviewBackendDraft(settings.guidedReviewBackend)
     setGuidedReviewRemoteBaseUrlDraft(settings.guidedReviewRemoteBaseUrl ?? '')
+    setExecutionHostRemoteBaseUrlDraft(
+      settings.executionHostRemoteBaseUrl ?? '',
+    )
     setNotificationsDraft(settings.notifications)
     setUpdatesDraft(settings.updates)
     setDebugLoggingDraft(settings.debugLogging)
@@ -254,6 +260,13 @@ export const AppSettingsDialogContainer: FC<AppSettingsContainerProps> = ({
   const handleGuidedReviewRemoteBaseUrlChange = useCallback((value: string) => {
     setGuidedReviewRemoteBaseUrlDraft(value)
   }, [])
+
+  const handleExecutionHostRemoteBaseUrlChange = useCallback(
+    (value: string) => {
+      setExecutionHostRemoteBaseUrlDraft(value)
+    },
+    [],
+  )
 
   const handleRestoreDefaults = useCallback(() => {
     const fallback = resolveProviderSelection(providers, null, null, null)
@@ -374,6 +387,11 @@ export const AppSettingsDialogContainer: FC<AppSettingsContainerProps> = ({
     [guidedReviewBackendDraft, guidedReviewRemoteBaseUrlDraft],
   )
 
+  const executionHostRemoteBaseUrlError = useMemo(
+    () => getExecutionHostRemoteBaseUrlError(executionHostRemoteBaseUrlDraft),
+    [executionHostRemoteBaseUrlDraft],
+  )
+
   const handleCancel = useCallback(() => {
     closeDialog()
   }, [closeDialog])
@@ -388,6 +406,7 @@ export const AppSettingsDialogContainer: FC<AppSettingsContainerProps> = ({
   const handleSave = useCallback(async () => {
     if (shortcutsConflict) return
     if (guidedReviewRemoteBaseUrlError) return
+    if (executionHostRemoteBaseUrlError) return
 
     const shortcutToSave = shortcutsDraft ?? settings.commandCenterShortcut
     const conflict = findShortcutConflict(shortcutToSave)
@@ -409,6 +428,10 @@ export const AppSettingsDialogContainer: FC<AppSettingsContainerProps> = ({
         guidedReviewRemoteBaseUrl:
           guidedReviewRemoteBaseUrlDraft.trim().length > 0
             ? guidedReviewRemoteBaseUrlDraft.trim()
+            : null,
+        executionHostRemoteBaseUrl:
+          executionHostRemoteBaseUrlDraft.trim().length > 0
+            ? executionHostRemoteBaseUrlDraft.trim()
             : null,
         notifications: notificationsDraft ?? settings.notifications,
         onboarding: settings.onboarding,
@@ -437,6 +460,8 @@ export const AppSettingsDialogContainer: FC<AppSettingsContainerProps> = ({
     guidedReviewBackendDraft,
     guidedReviewRemoteBaseUrlDraft,
     guidedReviewRemoteBaseUrlError,
+    executionHostRemoteBaseUrlDraft,
+    executionHostRemoteBaseUrlError,
     notificationsDraft,
     updatesDraft,
     debugLoggingDraft,
@@ -465,6 +490,8 @@ export const AppSettingsDialogContainer: FC<AppSettingsContainerProps> = ({
       guidedReviewBackend={guidedReviewBackendDraft}
       guidedReviewRemoteBaseUrlDraft={guidedReviewRemoteBaseUrlDraft}
       guidedReviewRemoteBaseUrlError={guidedReviewRemoteBaseUrlError}
+      executionHostRemoteBaseUrlDraft={executionHostRemoteBaseUrlDraft}
+      executionHostRemoteBaseUrlError={executionHostRemoteBaseUrlError}
       notificationsDraft={notificationsDraft ?? settings.notifications}
       updatesDraft={updatesDraft ?? settings.updates}
       debugLoggingDraft={debugLoggingDraft ?? settings.debugLogging}
@@ -487,6 +514,9 @@ export const AppSettingsDialogContainer: FC<AppSettingsContainerProps> = ({
       onGuidedReviewModelChange={handleGuidedReviewModelChange}
       onGuidedReviewBackendChange={handleGuidedReviewBackendChange}
       onGuidedReviewRemoteBaseUrlChange={handleGuidedReviewRemoteBaseUrlChange}
+      onExecutionHostRemoteBaseUrlChange={
+        handleExecutionHostRemoteBaseUrlChange
+      }
       onNotificationsChange={handleNotificationsChange}
       onTestFireNotification={handleTestFire}
       onToggleBackgroundUpdates={handleToggleBackgroundUpdates}

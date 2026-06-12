@@ -1,8 +1,10 @@
 import type {
   AppSettings,
   AppSettingsInput,
+  ExecutionHostDaemonCredentialStatus,
   GuidedReviewDaemonCredentialStatus,
   OpenRouterCredentialStatus,
+  RemoteExecutionHostConnectionResult,
 } from './app-settings.types'
 
 export const appSettingsApi = {
@@ -35,4 +37,20 @@ export const guidedReviewDaemonCredentialsApi = {
 
   deleteToken: (): Promise<GuidedReviewDaemonCredentialStatus> =>
     window.electronAPI.credentials.guidedReviewDaemon.deleteToken(),
+}
+
+export const executionHostDaemonCredentialsApi = {
+  getStatus: (): Promise<ExecutionHostDaemonCredentialStatus> =>
+    window.electronAPI.credentials.executionHostDaemon.getStatus(),
+
+  setToken: (token: string): Promise<ExecutionHostDaemonCredentialStatus> =>
+    window.electronAPI.credentials.executionHostDaemon.setToken(token),
+
+  deleteToken: (): Promise<ExecutionHostDaemonCredentialStatus> =>
+    window.electronAPI.credentials.executionHostDaemon.deleteToken(),
+}
+
+export const executionHostApi = {
+  testRemoteConnection: (): Promise<RemoteExecutionHostConnectionResult> =>
+    window.electronAPI.executionHost.testRemoteConnection(),
 }

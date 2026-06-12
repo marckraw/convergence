@@ -87,6 +87,9 @@ import { registerSessionForkIpcHandlers } from '../backend/session/fork/session-
 import { loadEnvFile } from '../backend/environment/env-file.service'
 import { hydrateProcessPathFromShell } from '../backend/environment/shell-path.service'
 import { GuidedReviewDaemonCredentialsService } from '../backend/credentials/guided-review-daemon-credentials.service'
+import { ExecutionHostDaemonCredentialsService } from '../backend/credentials/execution-host-daemon-credentials.service'
+import { RemoteExecutionHost } from '../backend/provider/execution-host/remote-execution-host'
+import { AppSettingsRemoteExecutionHostConnectionResolver } from '../backend/provider/execution-host/remote-execution-host-connection'
 import { OpenRouterCredentialsService } from '../backend/credentials/openrouter-credentials.service'
 import { ProjectOpenService } from '../backend/project-open/project-open.service'
 import { registerProjectOpenIpcHandlers } from '../backend/project-open/project-open.ipc'
@@ -365,6 +368,19 @@ async function startApp(): Promise<void> {
       appSettings: appSettingsService,
       credentials: guidedReviewDaemonCredentials,
     })
+  const executionHostDaemonCredentials =
+    new ExecutionHostDaemonCredentialsService()
+  const remoteExecutionHostConnectionResolver =
+    new AppSettingsRemoteExecutionHostConnectionResolver({
+      appSettings: appSettingsService,
+      credentials: executionHostDaemonCredentials,
+    })
+  const remoteExecutionHost = new RemoteExecutionHost({
+    connection: remoteExecutionHostConnectionResolver,
+  })
+  // Prime the remote provider cache when a daemon is configured; failures
+  // are expected when it is not and surface later via the connection test.
+  void remoteExecutionHost.refreshProviders().catch(() => {})
   const codeReviewGuideService = new CodeReviewGuideService(db, {
     providers: providerRegistry,
     appSettings: appSettingsService,
@@ -596,6 +612,11 @@ async function startApp(): Promise<void> {
     {
       codex: codexQuotaService,
       claude: claudeQuotaService,
+    },
+    {
+      credentials: executionHostDaemonCredentials,
+      host: remoteExecutionHost,
+      resolver: remoteExecutionHostConnectionResolver,
     },
   )
 

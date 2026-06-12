@@ -3,6 +3,7 @@ export type {
   AppSettingsInput,
   CommandCenterShortcutPrefs,
   DebugLoggingPrefs,
+  ExecutionHostDaemonCredentialStatus,
   FavoriteModelRef,
   FavoriteModelsPrefs,
   GuidedReviewBackend,
@@ -12,6 +13,9 @@ export type {
   OnboardingPrefs,
   OpenRouterCredentialStatus,
   PiModelVisibilityPrefs,
+  RemoteExecutionHostConnectionResult,
+  RemoteExecutionHostConnectionState,
+  RemoteExecutionHostProviderSummary,
   UpdatePrefs,
 } from './app-settings.types'
 export {
@@ -26,6 +30,8 @@ export {
 } from './app-settings.types'
 export {
   appSettingsApi,
+  executionHostApi,
+  executionHostDaemonCredentialsApi,
   guidedReviewDaemonCredentialsApi,
   openRouterCredentialsApi,
 } from './app-settings.api'

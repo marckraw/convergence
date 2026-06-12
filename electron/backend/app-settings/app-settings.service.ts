@@ -135,6 +135,18 @@ export class AppSettingsService {
       throw new Error('Remote guided review requires a daemon base URL.')
     }
 
+    const executionHostRemoteBaseUrl =
+      input.executionHostRemoteBaseUrl === undefined
+        ? existing.executionHostRemoteBaseUrl
+        : normalizeGuidedReviewRemoteBaseUrl(input.executionHostRemoteBaseUrl)
+    if (
+      input.executionHostRemoteBaseUrl !== undefined &&
+      input.executionHostRemoteBaseUrl !== null &&
+      !executionHostRemoteBaseUrl
+    ) {
+      throw new Error('Remote execution host base URL must be an HTTP(S) URL.')
+    }
+
     const notifications =
       input.notifications === undefined
         ? existing.notifications
@@ -192,6 +204,7 @@ export class AppSettingsService {
       commandCenterShortcut,
       guidedReviewBackend,
       guidedReviewRemoteBaseUrl,
+      executionHostRemoteBaseUrl,
       notifications,
       onboarding,
       updates,

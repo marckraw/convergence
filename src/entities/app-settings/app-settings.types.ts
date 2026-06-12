@@ -66,6 +66,7 @@ export interface AppSettings {
   commandCenterShortcut: CommandCenterShortcutPrefs
   guidedReviewBackend: GuidedReviewBackend
   guidedReviewRemoteBaseUrl: string | null
+  executionHostRemoteBaseUrl: string | null
   notifications: NotificationPrefs
   onboarding: OnboardingPrefs
   updates: UpdatePrefs
@@ -82,6 +83,7 @@ export type AppSettingsInput = Omit<
   | 'commandCenterShortcut'
   | 'guidedReviewBackend'
   | 'guidedReviewRemoteBaseUrl'
+  | 'executionHostRemoteBaseUrl'
   | 'notifications'
   | 'onboarding'
   | 'updates'
@@ -95,6 +97,7 @@ export type AppSettingsInput = Omit<
   commandCenterShortcut?: CommandCenterShortcutPrefs
   guidedReviewBackend?: GuidedReviewBackend
   guidedReviewRemoteBaseUrl?: string | null
+  executionHostRemoteBaseUrl?: string | null
   notifications?: NotificationPrefs
   onboarding?: OnboardingPrefs
   updates?: UpdatePrefs
@@ -121,4 +124,41 @@ export interface GuidedReviewDaemonCredentialStatus {
   account: string | null
   service: string | null
   error: string | null
+}
+
+export interface ExecutionHostDaemonCredentialStatus {
+  providerId: 'execution-host-daemon'
+  configured: boolean
+  source: 'environment' | 'keychain' | null
+  storage: 'keychain' | null
+  account: string | null
+  service: string | null
+  error: string | null
+}
+
+export type RemoteExecutionHostConnectionState =
+  | 'connected'
+  | 'missing-base-url'
+  | 'invalid-base-url'
+  | 'missing-token'
+  | 'unreachable'
+  | 'auth-failed'
+  | 'invalid-response'
+  | 'daemon-error'
+
+export interface RemoteExecutionHostProviderSummary {
+  providerId: string
+  name: string
+  available: boolean
+  authenticated: boolean
+  supportsContinuation: boolean
+  models: { id: string; label: string }[]
+}
+
+export interface RemoteExecutionHostConnectionResult {
+  ok: boolean
+  state: RemoteExecutionHostConnectionState
+  baseUrl: string | null
+  message: string
+  providers: RemoteExecutionHostProviderSummary[] | null
 }

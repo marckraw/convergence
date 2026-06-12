@@ -451,6 +451,20 @@ contextBridge.exposeInMainWorld('electronAPI', {
       deleteToken: () =>
         ipcRenderer.invoke('credentials:guidedReviewDaemon:deleteToken'),
     },
+    executionHostDaemon: {
+      getStatus: () =>
+        ipcRenderer.invoke('credentials:executionHostDaemon:getStatus'),
+      setToken: (token: string) =>
+        ipcRenderer.invoke('credentials:executionHostDaemon:setToken', {
+          token,
+        }),
+      deleteToken: () =>
+        ipcRenderer.invoke('credentials:executionHostDaemon:deleteToken'),
+    },
+  },
+  executionHost: {
+    testRemoteConnection: () =>
+      ipcRenderer.invoke('executionHost:testRemoteConnection'),
   },
   analytics: {
     getOverview: (rangePreset: '7d' | '30d' | '90d' | 'all') =>
