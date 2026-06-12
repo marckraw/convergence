@@ -6,7 +6,7 @@ import type {
   SessionQueuedInputRow,
   SessionRow,
 } from '../database/database.types'
-import type { ProviderRegistry } from '../provider/provider-registry'
+import type { ProviderExecutionHost } from '../provider/execution-host/execution-host.types'
 import type {
   Attachment,
   MidRunInputMode,
@@ -139,7 +139,7 @@ export class SessionService {
 
   constructor(
     private db: Database.Database,
-    private providers: ProviderRegistry,
+    private executionHost: ProviderExecutionHost,
     private globalWorkingDirectory: string = process.cwd(),
   ) {
     this.sessionRepository = new SessionRepository(db)
@@ -596,8 +596,10 @@ export class SessionService {
       return
     }
 
-    const provider = this.providers.get(session.providerId)
-    if (!provider) throw new Error(`Provider not found: ${session.providerId}`)
+    const capabilities = this.executionHost.capabilitiesFor(session.providerId)
+    if (!capabilities) {
+      throw new Error(`Provider not found: ${session.providerId}`)
+    }
 
     const continuationToken = this.getContinuationToken(id)
     if (
@@ -616,7 +618,7 @@ export class SessionService {
       )
     }
 
-    if (provider.supportsContinuation && continuationToken) {
+    if (capabilities.supportsContinuation && continuationToken) {
       const augmentedText = this.prepareUserTurnText(session, input.text)
       this.startHandle(
         session,
@@ -629,7 +631,7 @@ export class SessionService {
       return
     }
 
-    if (provider.supportsContinuation) {
+    if (capabilities.supportsContinuation) {
       throw new Error(
         `Session cannot be resumed: missing continuation state. Start a new session.`,
       )
@@ -1276,8 +1278,9 @@ export class SessionService {
     initialAttachmentIds?: string[],
     initialSkillSelections?: SkillSelection[],
   ): void {
-    const provider = this.providers.get(session.providerId)
-    if (!provider) throw new Error(`Provider not found: ${session.providerId}`)
+    if (!this.executionHost.capabilitiesFor(session.providerId)) {
+      throw new Error(`Provider not found: ${session.providerId}`)
+    }
 
     if (initialAttachmentIds && initialAttachmentIds.length > 0) {
       this.pendingUserAttachmentIds.set(session.id, initialAttachmentIds)
@@ -1286,7 +1289,7 @@ export class SessionService {
       this.pendingUserSkillSelections.set(session.id, initialSkillSelections)
     }
 
-    const handle = provider.start({
+    const handle = this.executionHost.start(session.providerId, {
       sessionId: session.id,
       workingDirectory: session.workingDirectory,
       initialMessage,
@@ -1333,7 +1336,8 @@ export class SessionService {
       const summary = this.getSummaryById(sessionId)
       if (
         summary &&
-        !this.providers.get(summary.providerId)?.supportsContinuation
+        !this.executionHost.capabilitiesFor(summary.providerId)
+          ?.supportsContinuation
       ) {
         this.activeHandles.delete(sessionId)
         this.onSessionTerminated?.(sessionId)
@@ -1433,9 +1437,11 @@ export class SessionService {
         return
       }
 
-      const provider = this.providers.get(session.providerId)
+      const capabilities = this.executionHost.capabilitiesFor(
+        session.providerId,
+      )
       const continuationToken = this.getContinuationToken(sessionId)
-      if (!provider || !provider.supportsContinuation || !continuationToken) {
+      if (!capabilities?.supportsContinuation || !continuationToken) {
         throw new Error('Session is no longer resumable')
       }
 

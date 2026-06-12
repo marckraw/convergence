@@ -9,6 +9,7 @@ import {
   NO_MID_RUN_INPUT_CAPABILITY,
 } from '../provider/provider-descriptor.pure'
 import { ProviderRegistry } from '../provider/provider-registry'
+import { LocalExecutionHost } from '../provider/execution-host/local-execution-host'
 import { ProviderSessionEmitter } from '../provider/provider-session.emitter'
 import type {
   ActivitySignal,
@@ -249,7 +250,11 @@ describe('SessionService', () => {
     mkdirSync(repoPath)
     mkdirSync(join(repoPath, '.git'))
 
-    service = new SessionService(db, registry, globalSessionsRoot)
+    service = new SessionService(
+      db,
+      new LocalExecutionHost(registry),
+      globalSessionsRoot,
+    )
 
     projectId = 'test-project'
     db.prepare(
@@ -859,7 +864,10 @@ describe('SessionService', () => {
     }
 
     registry.register(provider)
-    const streamingService = new SessionService(db, registry)
+    const streamingService = new SessionService(
+      db,
+      new LocalExecutionHost(registry),
+    )
 
     const session = streamingService.create({
       projectId,
@@ -1286,7 +1294,10 @@ describe('SessionService', () => {
 
     registry.register(provider)
 
-    const continuationService = new SessionService(db, registry)
+    const continuationService = new SessionService(
+      db,
+      new LocalExecutionHost(registry),
+    )
     const session = continuationService.create({
       projectId,
       workspaceId: null,
@@ -1361,7 +1372,10 @@ describe('SessionService', () => {
     }
 
     registry.register(provider)
-    const queueService = new SessionService(db, registry)
+    const queueService = new SessionService(
+      db,
+      new LocalExecutionHost(registry),
+    )
     const session = queueService.create({
       projectId,
       workspaceId: null,
@@ -1498,7 +1512,10 @@ describe('SessionService', () => {
 
     const registry = new ProviderRegistry()
     registry.register(createTestProvider())
-    const restartedService = new SessionService(db, registry)
+    const restartedService = new SessionService(
+      db,
+      new LocalExecutionHost(registry),
+    )
 
     expect(restartedService.getQueuedInputs(session.id)).toMatchObject([
       {
@@ -1552,7 +1569,10 @@ describe('SessionService', () => {
 
     const registry = new ProviderRegistry()
     registry.register(createTestProvider())
-    const restartedService = new SessionService(db, registry)
+    const restartedService = new SessionService(
+      db,
+      new LocalExecutionHost(registry),
+    )
 
     const updated = restartedService.getById(session.id)!
     expect(updated.status).toBe('failed')
@@ -1653,7 +1673,10 @@ describe('SessionService', () => {
     const registry = new ProviderRegistry()
     registry.register(createContinuableProvider())
 
-    const firstService = new SessionService(db, registry)
+    const firstService = new SessionService(
+      db,
+      new LocalExecutionHost(registry),
+    )
     const session = firstService.create({
       projectId,
       workspaceId: null,
@@ -1668,7 +1691,10 @@ describe('SessionService', () => {
 
     const rehydratedRegistry = new ProviderRegistry()
     rehydratedRegistry.register(createContinuableProvider())
-    const restartedService = new SessionService(db, rehydratedRegistry)
+    const restartedService = new SessionService(
+      db,
+      new LocalExecutionHost(rehydratedRegistry),
+    )
 
     await expect(
       restartedService.sendMessage(session.id, {
@@ -1790,7 +1816,7 @@ describe('SessionService attachments integration', () => {
     attachmentsRoot = join(tempDir, 'attachments')
     mkdirSync(attachmentsRoot)
 
-    service = new SessionService(db, registry)
+    service = new SessionService(db, new LocalExecutionHost(registry))
     attachments = new AttachmentsService(db, attachmentsRoot)
     service.setAttachmentsService(attachments)
 
@@ -2150,7 +2176,7 @@ describe('SessionService — turn capture wiring', () => {
     const { TurnCaptureService } = await import('./turn/turn-capture.service')
     capture = new TurnCaptureService(new GitService(), db, { debounceMs: 0 })
 
-    service = new SessionService(db, registry)
+    service = new SessionService(db, new LocalExecutionHost(registry))
     service.setTurnCaptureService(capture)
   })
 
@@ -2287,7 +2313,7 @@ describe('SessionService project-context boot injection', () => {
     const registry = new ProviderRegistry()
     registry.register(createTestProvider())
 
-    service = new SessionService(db, registry)
+    service = new SessionService(db, new LocalExecutionHost(registry))
     projectContext = new ProjectContextService(db)
     service.setSessionContextInjectionService(
       new SessionContextInjectionService(db, projectContext),
@@ -2459,7 +2485,7 @@ describe('SessionService project-context every-turn re-injection', () => {
     const registry = new ProviderRegistry()
     registry.register(createTestProvider())
 
-    service = new SessionService(db, registry)
+    service = new SessionService(db, new LocalExecutionHost(registry))
     projectContext = new ProjectContextService(db)
     service.setSessionContextInjectionService(
       new SessionContextInjectionService(db, projectContext),
@@ -2624,7 +2650,7 @@ describe('SessionContextInjectionService', () => {
   beforeEach(() => {
     const db = getDatabase()
     const registry = new ProviderRegistry()
-    service = new SessionService(db, registry)
+    service = new SessionService(db, new LocalExecutionHost(registry))
     projectContext = new ProjectContextService(db)
     contextInjection = new SessionContextInjectionService(db, projectContext)
 
@@ -2755,7 +2781,7 @@ describe('SessionService — liveness clock', () => {
 
     const registry = new ProviderRegistry()
     registry.register(createTestProvider())
-    service = new SessionService(db, registry)
+    service = new SessionService(db, new LocalExecutionHost(registry))
   })
 
   afterEach(() => {
