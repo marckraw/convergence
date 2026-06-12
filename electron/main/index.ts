@@ -91,6 +91,7 @@ import { ExecutionHostDaemonCredentialsService } from '../backend/credentials/ex
 import { RemoteExecutionHost } from '../backend/provider/execution-host/remote-execution-host'
 import { AppSettingsRemoteExecutionHostConnectionResolver } from '../backend/provider/execution-host/remote-execution-host-connection'
 import { readGitOriginUrl } from '../backend/git/git-origin'
+import { normalizeGitHubRemoteUrl } from '../backend/git/git-origin.pure'
 import { OpenRouterCredentialsService } from '../backend/credentials/openrouter-credentials.service'
 import { ProjectOpenService } from '../backend/project-open/project-open.service'
 import { registerProjectOpenIpcHandlers } from '../backend/project-open/project-open.ipc'
@@ -384,7 +385,8 @@ async function startApp(): Promise<void> {
   void remoteExecutionHost.refreshProviders().catch(() => {})
   sessionService.setRemoteExecutionHost(remoteExecutionHost)
   sessionService.setRemoteWorkspaceSourceResolver((workingDirectory) => {
-    const repository = readGitOriginUrl(workingDirectory)
+    const origin = readGitOriginUrl(workingDirectory)
+    const repository = origin ? normalizeGitHubRemoteUrl(origin) : null
     return repository ? { repository } : null
   })
   const codeReviewGuideService = new CodeReviewGuideService(db, {
