@@ -7,6 +7,7 @@ import type {
   SessionRow,
 } from '../database/database.types'
 import type { ProviderExecutionHost } from '../provider/execution-host/execution-host.types'
+import { remoteProviderIdForLocalProvider } from '../provider/execution-host/remote-execution-host.pure'
 import type {
   Attachment,
   MidRunInputMode,
@@ -135,6 +136,10 @@ export class SessionService {
   private turnCapture: TurnCaptureService | null = null
   private contextInjection: SessionContextInjectionService | null = null
   private onSessionTerminated: ((sessionId: string) => void) | null = null
+  private remoteExecutionHost: ProviderExecutionHost | null = null
+  private remoteWorkspaceSourceResolver:
+    | ((workingDirectory: string) => { repository: string } | null)
+    | null = null
   private readonly sessionRepository: SessionRepository
 
   constructor(
@@ -176,6 +181,84 @@ export class SessionService {
 
   setAttentionObserver(observer: SessionAttentionObserver): void {
     this.attentionObserver = observer
+  }
+
+  setRemoteExecutionHost(host: ProviderExecutionHost): void {
+    this.remoteExecutionHost = host
+  }
+
+  /**
+   * Supplies the workspace materialization source for remote sessions: given
+   * the session's local working directory, return the repository the remote
+   * host should clone (or null when the directory has no usable remote).
+   */
+  setRemoteWorkspaceSourceResolver(
+    resolver: (workingDirectory: string) => { repository: string } | null,
+  ): void {
+    this.remoteWorkspaceSourceResolver = resolver
+  }
+
+  /**
+   * Picks the execution host and host-side provider id for a session.
+   * Sessions always store the local provider id; remote execution translates
+   * it to the daemon's provider namespace at this boundary.
+   */
+  private resolveExecution(
+    session: Pick<SessionSummary, 'executionHost' | 'providerId'>,
+  ): { host: ProviderExecutionHost; providerId: string } {
+    if (session.executionHost !== 'remote') {
+      return { host: this.executionHost, providerId: session.providerId }
+    }
+
+    if (!this.remoteExecutionHost) {
+      throw new Error('Remote execution host is not configured')
+    }
+    const remoteProviderId = remoteProviderIdForLocalProvider(
+      session.providerId,
+    )
+    if (!remoteProviderId) {
+      throw new Error(
+        `Provider ${session.providerId} is not supported on the remote execution host`,
+      )
+    }
+    return { host: this.remoteExecutionHost, providerId: remoteProviderId }
+  }
+
+  /**
+   * Whether the session's host advertises continuation for its provider.
+   * Never throws — lifecycle handling calls this for sessions whose remote
+   * configuration may have gone away.
+   */
+  private continuationSupportedFor(
+    session: Pick<SessionSummary, 'executionHost' | 'providerId'>,
+  ): boolean {
+    try {
+      const execution = this.resolveExecution(session)
+      return (
+        execution.host.capabilitiesFor(execution.providerId)
+          ?.supportsContinuation ?? false
+      )
+    } catch {
+      return false
+    }
+  }
+
+  /**
+   * Workspace source a remote session start must carry: the local working
+   * directory does not exist on the remote host, so the daemon clones the
+   * session repository instead.
+   */
+  private requireRemoteWorkspace(
+    session: Pick<SessionSummary, 'workingDirectory'>,
+  ): { repository: string } {
+    const workspace =
+      this.remoteWorkspaceSourceResolver?.(session.workingDirectory) ?? null
+    if (!workspace) {
+      throw new Error(
+        'Remote sessions require a repository with an origin remote the daemon can clone',
+      )
+    }
+    return workspace
   }
 
   setSessionTerminatedListener(listener: (sessionId: string) => void): void {
@@ -303,11 +386,19 @@ export class SessionService {
       }
     }
 
+    // Global sessions run in the shared local scratch directory; there is no
+    // repository for a remote host to materialize, so they stay local.
+    const executionHost =
+      input.contextKind === 'global'
+        ? 'local'
+        : (input.executionHost ?? 'local')
+
     this.sessionRepository.create({
       id,
       contextKind: input.contextKind ?? 'project',
       projectId,
       workspaceId,
+      executionHost,
       providerId: input.providerId,
       model: input.model,
       effort: input.effort,
@@ -596,7 +687,8 @@ export class SessionService {
       return
     }
 
-    const capabilities = this.executionHost.capabilitiesFor(session.providerId)
+    const execution = this.resolveExecution(session)
+    const capabilities = execution.host.capabilitiesFor(execution.providerId)
     if (!capabilities) {
       throw new Error(`Provider not found: ${session.providerId}`)
     }
@@ -1278,9 +1370,14 @@ export class SessionService {
     initialAttachmentIds?: string[],
     initialSkillSelections?: SkillSelection[],
   ): void {
-    if (!this.executionHost.capabilitiesFor(session.providerId)) {
+    const execution = this.resolveExecution(session)
+    if (!execution.host.capabilitiesFor(execution.providerId)) {
       throw new Error(`Provider not found: ${session.providerId}`)
     }
+    const workspace =
+      session.executionHost === 'remote'
+        ? this.requireRemoteWorkspace(session)
+        : null
 
     if (initialAttachmentIds && initialAttachmentIds.length > 0) {
       this.pendingUserAttachmentIds.set(session.id, initialAttachmentIds)
@@ -1289,7 +1386,7 @@ export class SessionService {
       this.pendingUserSkillSelections.set(session.id, initialSkillSelections)
     }
 
-    const handle = this.executionHost.start(session.providerId, {
+    const handle = execution.host.start(execution.providerId, {
       sessionId: session.id,
       workingDirectory: session.workingDirectory,
       initialMessage,
@@ -1301,6 +1398,7 @@ export class SessionService {
       continuationToken,
       permissionConfig: session.permissionConfig,
       initialAttachments,
+      ...(workspace ? { workspace } : {}),
     })
 
     this.activeHandles.set(session.id, handle)
@@ -1334,11 +1432,7 @@ export class SessionService {
       this.closeActiveTurn(sessionId, 'errored')
     } else if (status === 'completed') {
       const summary = this.getSummaryById(sessionId)
-      if (
-        summary &&
-        !this.executionHost.capabilitiesFor(summary.providerId)
-          ?.supportsContinuation
-      ) {
+      if (summary && !this.continuationSupportedFor(summary)) {
         this.activeHandles.delete(sessionId)
         this.onSessionTerminated?.(sessionId)
       }
@@ -1437,11 +1531,8 @@ export class SessionService {
         return
       }
 
-      const capabilities = this.executionHost.capabilitiesFor(
-        session.providerId,
-      )
       const continuationToken = this.getContinuationToken(sessionId)
-      if (!capabilities?.supportsContinuation || !continuationToken) {
+      if (!this.continuationSupportedFor(session) || !continuationToken) {
         throw new Error('Session is no longer resumable')
       }
 

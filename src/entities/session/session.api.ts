@@ -29,6 +29,7 @@ export const sessionApi = {
     permissionConfig?: SessionPermissionConfig
     name: string
     primarySurface?: 'conversation' | 'terminal'
+    executionHost?: 'local' | 'remote'
   }): Promise<SessionSummary> => window.electronAPI.session.create(input),
 
   getSummariesByProjectId: (projectId: string): Promise<SessionSummary[]> =>

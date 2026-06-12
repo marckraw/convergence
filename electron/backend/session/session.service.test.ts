@@ -2896,4 +2896,161 @@ describe('SessionService — liveness clock', () => {
 
     expect(() => service.triggerLivenessTickForTest()).not.toThrow()
   })
+
+  describe('remote execution host routing', () => {
+    function createFakeRemoteHost() {
+      const startCalls: Array<{ providerId: string; config: unknown }> = []
+      const handle: SessionHandle = {
+        onDelta: () => {},
+        onStatusChange: () => {},
+        onAttentionChange: () => {},
+        onContinuationToken: () => {},
+        onContextWindowChange: () => {},
+        onActivityChange: () => {},
+        sendMessage: () => {},
+        approve: () => {},
+        deny: () => {},
+        stop: () => {},
+      }
+      const capabilities = {
+        providerId: 'claude',
+        name: 'Claude Code',
+        supportsContinuation: true,
+        supportsOneShot: false,
+      }
+      const host = {
+        capabilities: () => [capabilities],
+        capabilitiesFor: (providerId: string) =>
+          providerId === 'claude' ? capabilities : null,
+        describe: async () => [],
+        start: (providerId: string, config: unknown) => {
+          startCalls.push({ providerId, config })
+          return handle
+        },
+        oneShot: async () => {
+          throw new Error('one-shot is not supported')
+        },
+      }
+      return { host, startCalls }
+    }
+
+    it('stores the execution host on create and defaults to local', () => {
+      const local = service.create({
+        projectId,
+        workspaceId: null,
+        providerId: 'test-provider',
+        model: 'test-model',
+        effort: null,
+        name: 'local session',
+      })
+      expect(local.executionHost).toBe('local')
+
+      const remote = service.create({
+        projectId,
+        workspaceId: null,
+        providerId: 'claude-code',
+        model: 'sonnet',
+        effort: null,
+        name: 'remote session',
+        executionHost: 'remote',
+      })
+      expect(remote.executionHost).toBe('remote')
+      expect(service.getSummaryById(remote.id)?.executionHost).toBe('remote')
+    })
+
+    it('forces global sessions onto the local host', () => {
+      const session = service.create({
+        contextKind: 'global',
+        providerId: 'claude-code',
+        model: 'sonnet',
+        effort: null,
+        name: 'global session',
+        executionHost: 'remote',
+      })
+      expect(session.executionHost).toBe('local')
+    })
+
+    it('routes remote starts to the remote host with the daemon provider id and workspace source', async () => {
+      const { host, startCalls } = createFakeRemoteHost()
+      service.setRemoteExecutionHost(host)
+      service.setRemoteWorkspaceSourceResolver(() => ({
+        repository: 'git@github.com:acme/repo.git',
+      }))
+
+      const session = service.create({
+        projectId,
+        workspaceId: null,
+        providerId: 'claude-code',
+        model: 'sonnet',
+        effort: null,
+        name: 'remote run',
+        executionHost: 'remote',
+      })
+      await service.start(session.id, { text: 'hello' })
+
+      expect(startCalls).toHaveLength(1)
+      expect(startCalls[0]).toMatchObject({
+        providerId: 'claude',
+        config: {
+          sessionId: session.id,
+          initialMessage: 'hello',
+          workspace: { repository: 'git@github.com:acme/repo.git' },
+        },
+      })
+    })
+
+    it('rejects remote sessions when the remote host is not configured', async () => {
+      const session = service.create({
+        projectId,
+        workspaceId: null,
+        providerId: 'claude-code',
+        model: 'sonnet',
+        effort: null,
+        name: 'unconfigured remote',
+        executionHost: 'remote',
+      })
+      await expect(
+        service.sendMessage(session.id, { text: 'hello' }),
+      ).rejects.toThrow('Remote execution host is not configured')
+    })
+
+    it('rejects remote sessions whose provider has no remote counterpart', async () => {
+      const { host } = createFakeRemoteHost()
+      service.setRemoteExecutionHost(host)
+      const session = service.create({
+        projectId,
+        workspaceId: null,
+        providerId: 'test-provider',
+        model: 'test-model',
+        effort: null,
+        name: 'unsupported remote provider',
+        executionHost: 'remote',
+      })
+      await expect(
+        service.sendMessage(session.id, { text: 'hello' }),
+      ).rejects.toThrow(
+        'Provider test-provider is not supported on the remote execution host',
+      )
+    })
+
+    it('rejects remote starts without a clonable repository', async () => {
+      const { host } = createFakeRemoteHost()
+      service.setRemoteExecutionHost(host)
+      service.setRemoteWorkspaceSourceResolver(() => null)
+      const session = service.create({
+        projectId,
+        workspaceId: null,
+        providerId: 'claude-code',
+        model: 'sonnet',
+        effort: null,
+        name: 'remote without origin',
+        executionHost: 'remote',
+      })
+      await expect(
+        service.start(session.id, { text: 'hello' }),
+      ).rejects.toThrow(
+        'Remote sessions require a repository with an origin remote',
+      )
+    })
+  })
 })

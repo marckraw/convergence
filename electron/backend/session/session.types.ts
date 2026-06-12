@@ -25,6 +25,12 @@ export type ForkStrategy = 'full' | 'summary'
 
 export type PrimarySurface = 'conversation' | 'terminal'
 
+/**
+ * Where the session's Provider runs: inside the app process or on the
+ * configured remote agents daemon.
+ */
+export type SessionExecutionHostId = 'local' | 'remote'
+
 export type SessionContextKind = 'project' | 'global'
 
 export type AttentionRequestKind =
@@ -56,6 +62,7 @@ export interface SessionSummary {
   parentSessionId: string | null
   forkStrategy: ForkStrategy | null
   primarySurface: PrimarySurface
+  executionHost: SessionExecutionHostId
   continuationToken: string | null
   lastSequence: number
   createdAt: string
@@ -74,6 +81,13 @@ function parsePrimarySurface(value: string | null | undefined): PrimarySurface {
   return 'conversation'
 }
 
+function parseExecutionHost(
+  value: string | null | undefined,
+): SessionExecutionHostId {
+  if (value === 'remote') return 'remote'
+  return 'local'
+}
+
 interface CreateSessionBaseInput {
   projectId: string
   workspaceId: string | null
@@ -86,6 +100,7 @@ interface CreateSessionBaseInput {
   parentSessionId?: string | null
   forkStrategy?: ForkStrategy | null
   primarySurface?: PrimarySurface
+  executionHost?: SessionExecutionHostId
 }
 
 export type CreateSessionInput =
@@ -166,6 +181,7 @@ export function sessionSummaryFromRow(row: SessionRow): SessionSummary {
     parentSessionId: row.parent_session_id,
     forkStrategy: parseForkStrategy(row.fork_strategy),
     primarySurface: parsePrimarySurface(row.primary_surface),
+    executionHost: parseExecutionHost(row.execution_host),
     continuationToken: row.continuation_token,
     lastSequence: row.last_sequence ?? 0,
     createdAt: row.created_at,

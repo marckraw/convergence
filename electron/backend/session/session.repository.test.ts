@@ -32,6 +32,7 @@ function createSessionInput(
     parentSessionId: null,
     forkStrategy: null,
     primarySurface: 'conversation',
+    executionHost: 'local',
     ...overrides,
   }
 }

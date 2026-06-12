@@ -124,6 +124,29 @@ export function buildRemoteExecutionHostStartRequest(
     protocolVersion: EXECUTION_HOST_PROTOCOL_VERSION,
     providerId,
     config,
+    ...(config.workspace ? { workspace: config.workspace } : {}),
+  }
+}
+
+/**
+ * Maps a local provider registry id to the provider id the remote daemon
+ * advertises, or null when the provider has no remote counterpart. The two
+ * registries grew separate namespaces (`claude-code` locally, `claude` on the
+ * daemon); sessions always store the local id and translate at the host
+ * boundary.
+ */
+export function remoteProviderIdForLocalProvider(
+  localProviderId: string,
+): string | null {
+  switch (localProviderId) {
+    case 'claude-code':
+      return 'claude'
+    case 'codex':
+      return 'codex'
+    case 'cursor':
+      return 'cursor'
+    default:
+      return null
   }
 }
 

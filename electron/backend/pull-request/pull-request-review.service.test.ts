@@ -56,6 +56,7 @@ const session: SessionSummary = {
   parentSessionId: null,
   forkStrategy: null,
   primarySurface: 'conversation',
+  executionHost: 'local',
   continuationToken: null,
   lastSequence: 0,
   createdAt: '2026-01-01T00:00:00.000Z',

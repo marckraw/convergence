@@ -5,6 +5,7 @@ import type {
   CreateSessionInput,
   PrimarySurface,
   SessionContextKind,
+  SessionExecutionHostId,
 } from './session.types'
 
 export interface CreateSessionRecordInput {
@@ -22,6 +23,7 @@ export interface CreateSessionRecordInput {
   parentSessionId: string | null
   forkStrategy: CreateSessionInput['forkStrategy']
   primarySurface: PrimarySurface
+  executionHost: SessionExecutionHostId
 }
 
 export class SessionRepository {
@@ -44,9 +46,10 @@ export class SessionRepository {
            working_directory,
            parent_session_id,
            fork_strategy,
-           primary_surface
+           primary_surface,
+           execution_host
          )
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
       .run(
         input.id,
@@ -63,6 +66,7 @@ export class SessionRepository {
         input.parentSessionId,
         input.forkStrategy ?? null,
         input.primarySurface,
+        input.executionHost,
       )
   }
 
