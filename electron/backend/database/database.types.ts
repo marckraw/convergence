@@ -36,6 +36,7 @@ export interface SessionRow {
   parent_session_id: string | null
   fork_strategy: string | null
   primary_surface: string
+  execution_host: string
   created_at: string
   updated_at: string
 }

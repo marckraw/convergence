@@ -90,6 +90,7 @@ import { GuidedReviewDaemonCredentialsService } from '../backend/credentials/gui
 import { ExecutionHostDaemonCredentialsService } from '../backend/credentials/execution-host-daemon-credentials.service'
 import { RemoteExecutionHost } from '../backend/provider/execution-host/remote-execution-host'
 import { AppSettingsRemoteExecutionHostConnectionResolver } from '../backend/provider/execution-host/remote-execution-host-connection'
+import { readGitOriginUrl } from '../backend/git/git-origin'
 import { OpenRouterCredentialsService } from '../backend/credentials/openrouter-credentials.service'
 import { ProjectOpenService } from '../backend/project-open/project-open.service'
 import { registerProjectOpenIpcHandlers } from '../backend/project-open/project-open.ipc'
@@ -381,6 +382,11 @@ async function startApp(): Promise<void> {
   // Prime the remote provider cache when a daemon is configured; failures
   // are expected when it is not and surface later via the connection test.
   void remoteExecutionHost.refreshProviders().catch(() => {})
+  sessionService.setRemoteExecutionHost(remoteExecutionHost)
+  sessionService.setRemoteWorkspaceSourceResolver((workingDirectory) => {
+    const repository = readGitOriginUrl(workingDirectory)
+    return repository ? { repository } : null
+  })
   const codeReviewGuideService = new CodeReviewGuideService(db, {
     providers: providerRegistry,
     appSettings: appSettingsService,

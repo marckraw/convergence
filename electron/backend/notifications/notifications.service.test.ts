@@ -34,6 +34,7 @@ function makeSession(overrides: Partial<Session> = {}): Session {
     parentSessionId: null,
     forkStrategy: null,
     primarySurface: 'conversation' as const,
+    executionHost: 'local' as const,
     continuationToken: null,
     lastSequence: 0,
     createdAt: '2026-04-21T00:00:00.000Z',

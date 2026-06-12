@@ -23,6 +23,7 @@ const sessionFixture: Session = {
   parentSessionId: null,
   forkStrategy: null,
   primarySurface: 'conversation',
+  executionHost: 'local',
   continuationToken: null,
   lastSequence: 0,
   createdAt: '2026-05-28T00:00:00.000Z',

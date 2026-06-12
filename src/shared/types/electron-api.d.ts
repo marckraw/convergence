@@ -1037,6 +1037,7 @@ interface SessionSummaryData {
   parentSessionId: string | null
   forkStrategy: 'full' | 'summary' | null
   primarySurface: 'conversation' | 'terminal'
+  executionHost?: 'local' | 'remote'
   continuationToken: string | null
   lastSequence: number
   createdAt: string
@@ -1054,6 +1055,7 @@ interface CreateSessionInput {
   permissionConfig?: SessionPermissionConfigData
   name: string
   primarySurface?: 'conversation' | 'terminal'
+  executionHost?: 'local' | 'remote'
 }
 
 interface ProviderInfo {

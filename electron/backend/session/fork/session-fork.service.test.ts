@@ -36,6 +36,7 @@ function makeParent(overrides: Partial<SessionSummary> = {}): SessionSummary {
     parentSessionId: null,
     forkStrategy: null,
     primarySurface: 'conversation',
+    executionHost: 'local',
     continuationToken: null,
     lastSequence: 3,
     createdAt: 'now',

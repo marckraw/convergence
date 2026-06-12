@@ -82,6 +82,8 @@ export type ForkStrategy = 'full' | 'summary'
 
 export type PrimarySurface = 'conversation' | 'terminal'
 
+export type SessionExecutionHostId = 'local' | 'remote'
+
 export type SessionContextKind = 'project' | 'global'
 
 export type AttentionRequestKind =
@@ -328,6 +330,7 @@ export interface SessionSummary {
   parentSessionId: string | null
   forkStrategy: ForkStrategy | null
   primarySurface: PrimarySurface
+  executionHost?: SessionExecutionHostId
   continuationToken: string | null
   lastSequence: number
   createdAt: string

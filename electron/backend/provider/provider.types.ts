@@ -124,6 +124,16 @@ export interface SessionStartConfig {
   serviceTier?: string | null
   continuationToken: string | null
   permissionConfig?: SessionPermissionConfig
+  /**
+   * Workspace materialization source for hosts that cannot use
+   * `workingDirectory` (a remote host clones this repository and runs the
+   * session in a per-session worktree). Local execution ignores it.
+   */
+  workspace?: {
+    repository: string
+    ref?: string | null
+    branchName?: string | null
+  }
 }
 
 export interface ProviderEffortOption {
