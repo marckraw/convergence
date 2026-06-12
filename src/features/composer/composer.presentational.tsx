@@ -35,6 +35,7 @@ import { Textarea } from '@/shared/ui/textarea'
 import { cn } from '@/shared/lib/cn.pure'
 import {
   ArrowUp,
+  Cloud,
   FileText,
   Paperclip,
   Plus,
@@ -63,6 +64,9 @@ interface ComposerProps {
   onEffortChange: (id: ReasoningEffort | '') => void
   codexFastMode: boolean
   onCodexFastModeChange: (enabled: boolean) => void
+  remoteHostAvailable: boolean
+  runOnRemoteHost: boolean
+  onRunOnRemoteHostChange: (enabled: boolean) => void
   permissionConfig: SessionPermissionConfig
   permissionAdvancedOpen: boolean
   onPermissionPresetChange: (preset: 'ask' | 'yolo') => void
@@ -151,6 +155,9 @@ export const Composer: FC<ComposerProps> = ({
   onEffortChange,
   codexFastMode,
   onCodexFastModeChange,
+  remoteHostAvailable,
+  runOnRemoteHost,
+  onRunOnRemoteHostChange,
   permissionConfig,
   permissionAdvancedOpen,
   onPermissionPresetChange,
@@ -684,6 +691,30 @@ export const Composer: FC<ComposerProps> = ({
               >
                 <Zap className="h-3.5 w-3.5" />
                 Fast
+              </Button>
+            ) : null}
+            {remoteHostAvailable ? (
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                role="switch"
+                aria-checked={runOnRemoteHost}
+                aria-label="Run on remote host"
+                title={
+                  runOnRemoteHost
+                    ? 'This session will run on the remote execution host.'
+                    : 'Run this session on the remote execution host instead of this machine.'
+                }
+                onClick={() => onRunOnRemoteHostChange(!runOnRemoteHost)}
+                disabled={disabled || selectionDisabled}
+                className={cn(
+                  'h-7 gap-1.5 px-2 text-xs text-muted-foreground hover:text-foreground',
+                  runOnRemoteHost && 'bg-secondary text-foreground',
+                )}
+              >
+                <Cloud className="h-3.5 w-3.5" />
+                Remote
               </Button>
             ) : null}
             {!selectionDisabled ? (

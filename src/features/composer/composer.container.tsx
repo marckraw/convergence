@@ -59,6 +59,7 @@ import {
 } from './composer-injection-trigger.pure'
 import { filterComposerPrompts } from './composer-prompt-injection.pure'
 import { resolveMidRunInputPolicy } from './mid-run-input.pure'
+import { isRemoteHostEligible } from './remote-host-toggle.pure'
 import { CodexUsagePillContainer } from './codex-usage-pill.container'
 import { shouldShowCodexUsagePill } from './codex-usage-pill.pure'
 import { ContextWindowDot } from './context-window-dot.container'
@@ -165,6 +166,7 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
   const [modelId, setModelId] = useState('')
   const [effortId, setEffortId] = useState<ReasoningEffort | ''>('')
   const [codexFastMode, setCodexFastMode] = useState(false)
+  const [runOnRemoteHost, setRunOnRemoteHost] = useState(false)
   const [permissionConfig, setPermissionConfig] =
     useState<SessionPermissionConfig>(resolveSimplePermissionConfig('ask'))
   const [permissionAdvancedOpen, setPermissionAdvancedOpen] = useState(false)
@@ -434,6 +436,14 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
     activeSession ? undefined : storedDefaults,
   )
   const showCodexUsagePill = shouldShowCodexUsagePill(selection)
+  const remoteHostEligible =
+    !activeSession &&
+    isRemoteHostEligible({
+      remoteBaseUrl: appSettings.executionHostRemoteBaseUrl,
+      providerId: selection.providerId,
+      contextKind: context.kind,
+    })
+  const effectiveRunOnRemoteHost = runOnRemoteHost && remoteHostEligible
   const serviceTier =
     selection.providerId === 'codex'
       ? codexFastMode
@@ -803,6 +813,7 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
         contextItemIds,
         permissionConfig,
         serviceTier,
+        effectiveRunOnRemoteHost ? 'remote' : undefined,
       )
     } else {
       createAndStartSession(
@@ -818,6 +829,7 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
         contextItemIds,
         permissionConfig,
         serviceTier,
+        effectiveRunOnRemoteHost ? 'remote' : undefined,
       )
     }
     setValue('')
@@ -847,6 +859,7 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
     prepareNewSessionMessage,
     permissionConfig,
     serviceTier,
+    effectiveRunOnRemoteHost,
   ])
 
   const handleProviderChange = (nextProviderId: string) => {
@@ -1083,6 +1096,9 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
         onEffortChange={setEffortId}
         codexFastMode={codexFastMode}
         onCodexFastModeChange={setCodexFastMode}
+        remoteHostAvailable={remoteHostEligible}
+        runOnRemoteHost={effectiveRunOnRemoteHost}
+        onRunOnRemoteHostChange={setRunOnRemoteHost}
         permissionConfig={permissionConfig}
         permissionAdvancedOpen={permissionAdvancedOpen}
         onPermissionPresetChange={handlePermissionPresetChange}
