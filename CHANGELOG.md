@@ -1,5 +1,11 @@
 # convergence
 
+## 0.40.25
+
+### Patch Changes
+
+- 19e23c9: Session details for remote sessions now show where the run actually lives: the repository and branch the daemon materialized, and the pull request it opened when auto-PR fires.
+
 ## 0.40.24
 
 ### Patch Changes
