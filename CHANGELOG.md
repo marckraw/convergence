@@ -1,5 +1,11 @@
 # convergence
 
+## 0.40.26
+
+### Patch Changes
+
+- cdca4e0: Fix Claude Code usage loading in packaged apps by resolving bundled ccusage binaries from app.asar.unpacked.
+
 ## 0.40.25
 
 ### Patch Changes
