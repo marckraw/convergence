@@ -5,6 +5,7 @@ import { parseAssistantUiResponse } from '@/entities/ui-response-artifact'
 interface ConversationItemTimingOptions {
   locale?: string | string[]
   timeZone?: string
+  now?: string | Date
 }
 
 export interface ConversationItemTiming {
@@ -184,6 +185,29 @@ export function formatConversationItemTimestamp(
     return value
   }
 
+  const time = formatConversationItemTime(date, options)
+  const dayDiff = getCalendarDayDiff(date, options)
+
+  if (dayDiff === 0) {
+    return `Today, ${time}`
+  }
+
+  if (dayDiff === 1) {
+    return `Yesterday, ${time}`
+  }
+
+  return new Intl.DateTimeFormat(options.locale, {
+    dateStyle: 'medium',
+    timeStyle: 'medium',
+    hour12: false,
+    ...(options.timeZone ? { timeZone: options.timeZone } : {}),
+  }).format(date)
+}
+
+function formatConversationItemTime(
+  date: Date,
+  options: ConversationItemTimingOptions,
+): string {
   return new Intl.DateTimeFormat(options.locale, {
     hour: '2-digit',
     minute: '2-digit',
@@ -191,6 +215,48 @@ export function formatConversationItemTimestamp(
     hour12: false,
     ...(options.timeZone ? { timeZone: options.timeZone } : {}),
   }).format(date)
+}
+
+function getCalendarDayDiff(
+  date: Date,
+  options: ConversationItemTimingOptions,
+): number | null {
+  const now =
+    options.now instanceof Date
+      ? options.now
+      : new Date(options.now ?? Date.now())
+  if (Number.isNaN(now.getTime())) {
+    return null
+  }
+
+  const targetDay = getCalendarDaySerial(date, options)
+  const currentDay = getCalendarDaySerial(now, options)
+  if (targetDay === null || currentDay === null) {
+    return null
+  }
+
+  return currentDay - targetDay
+}
+
+function getCalendarDaySerial(
+  date: Date,
+  options: ConversationItemTimingOptions,
+): number | null {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    ...(options.timeZone ? { timeZone: options.timeZone } : {}),
+  }).formatToParts(date)
+  const year = Number(parts.find((part) => part.type === 'year')?.value)
+  const month = Number(parts.find((part) => part.type === 'month')?.value)
+  const day = Number(parts.find((part) => part.type === 'day')?.value)
+
+  if (!year || !month || !day) {
+    return null
+  }
+
+  return Math.floor(Date.UTC(year, month - 1, day) / 86_400_000)
 }
 
 export function formatConversationItemAbsoluteTimestamp(
