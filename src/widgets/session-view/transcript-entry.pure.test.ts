@@ -111,8 +111,23 @@ describe('conversation item timing', () => {
       formatConversationItemTimestamp('2026-04-22T10:05:06.000Z', {
         locale: 'en-GB',
         timeZone: 'UTC',
+        now: '2026-04-22T12:00:00.000Z',
       }),
-    ).toBe('10:05:06')
+    ).toBe('Today, 10:05:06')
+    expect(
+      formatConversationItemTimestamp('2026-04-21T10:05:06.000Z', {
+        locale: 'en-GB',
+        timeZone: 'UTC',
+        now: '2026-04-22T12:00:00.000Z',
+      }),
+    ).toBe('Yesterday, 10:05:06')
+    expect(
+      formatConversationItemTimestamp('2026-04-20T10:05:06.000Z', {
+        locale: 'en-GB',
+        timeZone: 'UTC',
+        now: '2026-04-22T12:00:00.000Z',
+      }),
+    ).toBe('20 Apr 2026, 10:05:06')
   })
 
   it('formats absolute timestamps for tooltips', () => {
@@ -145,9 +160,10 @@ describe('conversation item timing', () => {
       getConversationItemTiming(item, '2026-04-22T00:00:00.000Z', {
         locale: 'en-GB',
         timeZone: 'UTC',
+        now: '2026-04-22T12:00:00.000Z',
       }),
     ).toMatchObject({
-      startedAtLabel: '00:00:03',
+      startedAtLabel: 'Today, 00:00:03',
       turnElapsedLabel: '+3s',
       activeDurationLabel: '5s',
     })
