@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   buildClaudeQuotaUnavailableSnapshot,
   mapClaudeUsagePayloadsToQuotaSnapshot,
+  resolveAsarUnpackedPath,
   resolveCcusageNativeBinaryPath,
   resolveCcusageNativePackageName,
 } from './claude-quota.pure'
@@ -36,6 +37,31 @@ describe('ccusage native package resolution', () => {
   it('uses the Windows executable path only on Windows', () => {
     expect(resolveCcusageNativeBinaryPath('win32')).toBe('bin/ccusage.exe')
     expect(resolveCcusageNativeBinaryPath('darwin')).toBe('bin/ccusage')
+  })
+
+  it('maps packaged asar paths to the unpacked filesystem location', () => {
+    expect(
+      resolveAsarUnpackedPath(
+        '/Applications/Convergence.app/Contents/Resources/app.asar/node_modules/@ccusage/ccusage-darwin-arm64/bin/ccusage',
+      ),
+    ).toBe(
+      '/Applications/Convergence.app/Contents/Resources/app.asar.unpacked/node_modules/@ccusage/ccusage-darwin-arm64/bin/ccusage',
+    )
+    expect(
+      resolveAsarUnpackedPath(
+        'C:\\Program Files\\Convergence\\resources\\app.asar\\node_modules\\@ccusage\\ccusage-win32-x64\\bin\\ccusage.exe',
+      ),
+    ).toBe(
+      'C:\\Program Files\\Convergence\\resources\\app.asar.unpacked\\node_modules\\@ccusage\\ccusage-win32-x64\\bin\\ccusage.exe',
+    )
+  })
+
+  it('leaves non-asar paths unchanged', () => {
+    expect(
+      resolveAsarUnpackedPath(
+        '/repo/node_modules/@ccusage/ccusage-darwin-arm64/bin/ccusage',
+      ),
+    ).toBe('/repo/node_modules/@ccusage/ccusage-darwin-arm64/bin/ccusage')
   })
 })
 

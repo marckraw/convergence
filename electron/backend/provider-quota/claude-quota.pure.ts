@@ -31,6 +31,10 @@ export function resolveCcusageNativeBinaryPath(platform: NodeJS.Platform) {
   return platform === 'win32' ? 'bin/ccusage.exe' : 'bin/ccusage'
 }
 
+export function resolveAsarUnpackedPath(path: string): string {
+  return path.replace(/([/\\])app\.asar([/\\])/, '$1app.asar.unpacked$2')
+}
+
 function readNumber(value: unknown): number | null {
   if (typeof value === 'number' && Number.isFinite(value)) return value
   if (typeof value !== 'string') return null

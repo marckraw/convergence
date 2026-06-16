@@ -5,6 +5,7 @@ import { CLAUDE_QUOTA_CACHE_TTL_MS } from './claude-quota.constants'
 import {
   buildClaudeQuotaUnavailableSnapshot,
   mapClaudeUsagePayloadsToQuotaSnapshot,
+  resolveAsarUnpackedPath,
   resolveCcusageNativeBinaryPath,
   resolveCcusageNativePackageName,
 } from './claude-quota.pure'
@@ -59,7 +60,9 @@ function resolveCcusageBinary(): string {
 
   const binaryPath = resolveCcusageNativeBinaryPath(process.platform)
   try {
-    return requireFromHere.resolve(`${packageName}/${binaryPath}`)
+    return resolveAsarUnpackedPath(
+      requireFromHere.resolve(`${packageName}/${binaryPath}`),
+    )
   } catch {
     return 'ccusage'
   }
