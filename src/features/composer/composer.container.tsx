@@ -62,6 +62,8 @@ import { resolveMidRunInputPolicy } from './mid-run-input.pure'
 import { isRemoteHostEligible } from './remote-host-toggle.pure'
 import { CodexUsagePillContainer } from './codex-usage-pill.container'
 import { shouldShowCodexUsagePill } from './codex-usage-pill.pure'
+import { ClaudeUsagePillContainer } from './claude-usage-pill.container'
+import { shouldShowClaudeUsagePill } from './claude-usage-pill.pure'
 import { ContextWindowDot } from './context-window-dot.container'
 import { Button } from '@/shared/ui/button'
 import { X } from 'lucide-react'
@@ -183,6 +185,9 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
   const [codexUsageSnapshot, setCodexUsageSnapshot] =
     useState<ProviderQuotaSnapshot | null>(null)
   const [codexUsageLoading, setCodexUsageLoading] = useState(false)
+  const [claudeUsageSnapshot, setClaudeUsageSnapshot] =
+    useState<ProviderQuotaSnapshot | null>(null)
+  const [claudeUsageLoading, setClaudeUsageLoading] = useState(false)
   const dragDepth = useRef(0)
   const providers = useSessionStore((s) => s.providers)
   const openDialog = useDialogStore((s) => s.open)
@@ -436,6 +441,7 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
     activeSession ? undefined : storedDefaults,
   )
   const showCodexUsagePill = shouldShowCodexUsagePill(selection)
+  const showClaudeUsagePill = shouldShowClaudeUsagePill(selection)
   const remoteHostEligible =
     !activeSession &&
     isRemoteHostEligible({
@@ -695,6 +701,31 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
     [showCodexUsagePill],
   )
 
+  const loadClaudeUsage = useCallback(
+    async (forceRefresh = false) => {
+      if (!showClaudeUsagePill) return
+      setClaudeUsageLoading(true)
+      try {
+        setClaudeUsageSnapshot(await providerQuotaApi.getClaude(forceRefresh))
+      } catch (err) {
+        setClaudeUsageSnapshot({
+          providerId: 'claude-code',
+          status: 'unavailable',
+          source: 'local-usage-log',
+          reason:
+            err instanceof Error
+              ? err.message
+              : 'Claude Code usage is unavailable.',
+          lastCheckedAt: new Date().toISOString(),
+          stale: false,
+        })
+      } finally {
+        setClaudeUsageLoading(false)
+      }
+    },
+    [showClaudeUsagePill],
+  )
+
   useEffect(() => {
     if (!showCodexUsagePill) {
       setCodexUsageSnapshot(null)
@@ -708,6 +739,20 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
     }, 120_000)
     return () => window.clearInterval(intervalId)
   }, [loadCodexUsage, showCodexUsagePill])
+
+  useEffect(() => {
+    if (!showClaudeUsagePill) {
+      setClaudeUsageSnapshot(null)
+      setClaudeUsageLoading(false)
+      return undefined
+    }
+
+    void loadClaudeUsage(false)
+    const intervalId = window.setInterval(() => {
+      void loadClaudeUsage(false)
+    }, 120_000)
+    return () => window.clearInterval(intervalId)
+  }, [loadClaudeUsage, showClaudeUsagePill])
 
   useEffect(() => {
     if (rejections.length > 0) {
@@ -1079,7 +1124,7 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
     openDialog('skills-browser')
   }, [openDialog])
 
-  const handleCodexUsageSettingsOpen = useCallback(() => {
+  const handleProviderUsageSettingsOpen = useCallback(() => {
     openDialog('app-settings', { appSettingsSection: 'usage' })
   }, [openDialog])
 
@@ -1116,13 +1161,20 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
             withClaudeCodePermissionMode(current, permissionMode),
           )
         }
-        codexUsagePill={
+        usagePill={
           showCodexUsagePill ? (
             <CodexUsagePillContainer
               snapshot={codexUsageSnapshot}
               isLoading={codexUsageLoading}
               onRefresh={() => void loadCodexUsage(true)}
-              onOpenSettings={handleCodexUsageSettingsOpen}
+              onOpenSettings={handleProviderUsageSettingsOpen}
+            />
+          ) : showClaudeUsagePill ? (
+            <ClaudeUsagePillContainer
+              snapshot={claudeUsageSnapshot}
+              isLoading={claudeUsageLoading}
+              onRefresh={() => void loadClaudeUsage(true)}
+              onOpenSettings={handleProviderUsageSettingsOpen}
             />
           ) : null
         }
