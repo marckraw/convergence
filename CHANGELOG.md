@@ -1,5 +1,12 @@
 # convergence
 
+## 0.40.27
+
+### Patch Changes
+
+- 4fc5a75: Add a Claude Code usage pill to the composer using local ccusage data.
+- 18f270e: Show Today, Yesterday, or a full date in transcript message timestamps.
+
 ## 0.40.26
 
 ### Patch Changes
