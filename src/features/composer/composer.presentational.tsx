@@ -74,7 +74,7 @@ interface ComposerProps {
   onCodexApprovalPolicyChange: (policy: CodexApprovalPolicy) => void
   onCodexSandboxChange: (mode: CodexSandboxMode) => void
   onClaudeCodePermissionModeChange: (mode: ClaudeCodePermissionMode) => void
-  codexUsagePill?: ReactNode
+  usagePill?: ReactNode
   contextWindowDot?: ReactNode
   deliveryMode: MidRunInputMode
   deliveryModes: MidRunInputMode[]
@@ -165,7 +165,7 @@ export const Composer: FC<ComposerProps> = ({
   onCodexApprovalPolicyChange,
   onCodexSandboxChange,
   onClaudeCodePermissionModeChange,
-  codexUsagePill,
+  usagePill,
   contextWindowDot,
   deliveryMode,
   deliveryModes,
@@ -760,7 +760,7 @@ export const Composer: FC<ComposerProps> = ({
                 ) : null}
               </>
             ) : null}
-            {codexUsagePill}
+            {usagePill}
             {contextWindowDot}
             {visibleDeliveryModes.length > 1 ? (
               <div
