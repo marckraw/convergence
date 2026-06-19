@@ -1,6 +1,76 @@
 {
-  "currentVersion": "0.40.13",
+  "currentVersion": "0.40.27",
   "releases": [
+    {
+      "version": "0.40.27",
+      "date": null,
+      "notes": "### Patch Changes\n\n- 4fc5a75: Add a Claude Code usage pill to the composer using local ccusage data.\n- 18f270e: Show Today, Yesterday, or a full date in transcript message timestamps."
+    },
+    {
+      "version": "0.40.26",
+      "date": null,
+      "notes": "### Patch Changes\n\n- cdca4e0: Fix Claude Code usage loading in packaged apps by resolving bundled ccusage binaries from app.asar.unpacked."
+    },
+    {
+      "version": "0.40.25",
+      "date": null,
+      "notes": "### Patch Changes\n\n- 19e23c9: Session details for remote sessions now show where the run actually lives: the repository and branch the daemon materialized, and the pull request it opened when auto-PR fires."
+    },
+    {
+      "version": "0.40.24",
+      "date": null,
+      "notes": "### Patch Changes\n\n- 35b3eab: Remote session failure notes are now actionable: they include the HTTP status and a hint matched to the failure kind (auth problems point at the token in Settings, unreachable daemons point at Test connection, configuration gaps point at the Remote execution host section)."
+    },
+    {
+      "version": "0.40.23",
+      "date": null,
+      "notes": "### Patch Changes\n\n- 499a3ce: Remote sessions now survive app restarts: running remote sessions are no longer marked failed on launch — Convergence reattaches to the daemon's event stream and resumes after the last processed event, replaying anything that happened while the app was closed."
+    },
+    {
+      "version": "0.40.22",
+      "date": null,
+      "notes": "### Patch Changes\n\n- e9eb31a: Remote sessions now tolerate roughly 2.5 minutes of daemon/gateway outage before the event stream is declared lost (previously ~30 seconds), pairing with the daemon's new SSE keepalives so idle sessions waiting on approvals survive reverse-proxy timeouts.\n- 625f70f: Remote sessions are now visibly remote: a cloud \"Remote\" chip in the session header, an \"Execution host: Remote daemon\" row in Session details, and a cloud icon on remote sessions in the sidebar tree."
+    },
+    {
+      "version": "0.40.21",
+      "date": null,
+      "notes": "### Patch Changes\n\n- 4f13c6d: Fix remote session starts for repositories with SSH origin remotes: the workspace source sent to the remote execution host now normalizes git@github.com and ssh:// GitHub remotes to the https form the daemon clones with. Non-GitHub origins fail upfront with the clear \"requires a repository the daemon can clone\" error instead of a daemon-side failure."
+    },
+    {
+      "version": "0.40.20",
+      "date": null,
+      "notes": "### Patch Changes\n\n- 22b6b4a: Add a \"Remote\" toggle to the composer for new project sessions: when a remote execution host is configured and the selected provider has a daemon counterpart, the session can be started on the remote daemon instead of this machine. This completes the user-facing path for remote session execution."
+    },
+    {
+      "version": "0.40.19",
+      "date": null,
+      "notes": "### Patch Changes\n\n- 5043df6: Fix Claude Code usage loading in packaged apps by preparing the bundled ccusage native binary before spawning it."
+    },
+    {
+      "version": "0.40.18",
+      "date": null,
+      "notes": "### Patch Changes\n\n- f591d84: Sessions can now target an execution host: a new per-session `executionHost` field ('local' default) routes session starts, capability checks, and continuation handling to either the in-process LocalExecutionHost or the remote agents daemon. Remote sessions translate the provider id to the daemon's namespace and send a workspace source derived from the repository's origin remote so the daemon can clone it. Backend only — the session creation UI toggle lands next."
+    },
+    {
+      "version": "0.40.17",
+      "date": null,
+      "notes": "### Patch Changes\n\n- 2a72027: Add Remote execution host settings: daemon base URL in App Settings, API token in Keychain, and a connection test that reports configuration, reachability, auth, and the daemon's provider listing. The RemoteExecutionHost is now constructed at startup from these settings; session host selection comes next."
+    },
+    {
+      "version": "0.40.16",
+      "date": null,
+      "notes": "### Patch Changes\n\n- 9a32b1d: Add the RemoteExecutionHost adapter: runs Providers on an agents-daemon over the execution host wire protocol (POST start, SSE events with sequence-resumed reconnects, posted command envelopes), passing the same contract suite as the local adapter. Not yet wired into session flows."
+    },
+    {
+      "version": "0.40.15",
+      "date": null,
+      "notes": "### Patch Changes\n\n- 1d88286: Extract the Provider Execution Host seam (interface, local adapter, contract tests) and define the versioned wire protocol for future remote provider execution. Internal refactor with no behavior change."
+    },
+    {
+      "version": "0.40.14",
+      "date": null,
+      "notes": "### Patch Changes\n\n- f60503d: Show Claude Code weekly and current 5-hour local usage from ccusage in Settings usage."
+    },
     {
       "version": "0.40.13",
       "date": null,
