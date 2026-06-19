@@ -4,6 +4,7 @@ import {
   formatLocalModelTunnelEndpoint,
   formatLocalModelTunnelStatusDetail,
   selectLocalModelTunnelAggregate,
+  selectPreferredLocalModelTunnelProfileId,
 } from './local-model-tunnel.selectors.pure'
 import type { LocalModelTunnelProfileWithStatus } from './local-model-tunnel.types'
 
@@ -25,6 +26,7 @@ const item = (
     remotePort: 11434,
     healthCheckEnabled: true,
     healthCheckUrl: 'http://127.0.0.1:11434/api/tags',
+    routeCandidates: [],
     createdAt: '2026-01-01T00:00:00.000Z',
     updatedAt: '2026-01-01T00:00:00.000Z',
   },
@@ -42,8 +44,14 @@ const item = (
       latencyMs: null,
       statusCode: null,
       modelCount: null,
+      modelNames: null,
+      isOllama: null,
+      failureKind: null,
       error: null,
     },
+    activeRouteId: null,
+    activeRouteLabel: null,
+    diagnostics: [],
     commandPreview: 'ssh ...',
   },
 })
@@ -76,9 +84,67 @@ describe('local model tunnel selectors', () => {
     })
   })
 
+  it('prefers the active profile when opening the manager', () => {
+    expect(
+      selectPreferredLocalModelTunnelProfileId([
+        item('stopped', 'Old little monster'),
+        item('running', 'little monster PGX'),
+      ]),
+    ).toBe('little monster PGX')
+  })
+
   it('formats endpoint summaries through the ssh target', () => {
     expect(formatLocalModelTunnelEndpoint(item('running'))).toBe(
       '127.0.0.1:11434 -> little-monster:127.0.0.1:11434',
+    )
+  })
+
+  it('formats endpoint summaries and labels for auto route profiles', () => {
+    const base = item('running')
+    const auto = {
+      ...base,
+      profile: {
+        ...base.profile,
+        localPort: 11436,
+        routeCandidates: [
+          {
+            id: 'lan',
+            label: 'Connected via LAN',
+            sshTarget: 'little-monster',
+            useCustomLocalBindHost: false,
+            localBindHost: '127.0.0.1',
+            localPort: 11436,
+            remoteHost: '127.0.0.1',
+            remotePort: 11434,
+            healthCheckUrl: 'http://127.0.0.1:11436/api/tags',
+            connectTimeoutSeconds: 5,
+          },
+          {
+            id: 'tailscale',
+            label: 'Connected via Tailscale',
+            sshTarget: 'little-monster-ts',
+            useCustomLocalBindHost: false,
+            localBindHost: '127.0.0.1',
+            localPort: 11436,
+            remoteHost: '127.0.0.1',
+            remotePort: 11434,
+            healthCheckUrl: 'http://127.0.0.1:11436/api/tags',
+            connectTimeoutSeconds: 8,
+          },
+        ],
+      },
+      status: {
+        ...base.status,
+        activeRouteId: 'lan',
+        activeRouteLabel: 'Connected via LAN',
+      },
+    }
+
+    expect(formatLocalModelTunnelEndpoint(auto)).toBe(
+      '127.0.0.1:11436 -> auto routes: little-monster, little-monster-ts',
+    )
+    expect(formatLocalModelTunnelConnectionLabel(auto)).toBe(
+      'Connected via LAN',
     )
   })
 

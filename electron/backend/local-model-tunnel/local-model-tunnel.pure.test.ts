@@ -3,8 +3,10 @@ import {
   applyLocalModelTunnelProfileInput,
   buildDefaultLocalModelTunnelProfile,
   buildLocalModelTunnelCommand,
+  getLocalModelTunnelRoutes,
   parseLocalModelTunnelProfiles,
 } from './local-model-tunnel.pure'
+import type { LocalModelTunnelProfile } from './local-model-tunnel.types'
 
 describe('local model tunnel pure helpers', () => {
   it('builds the managed ssh tunnel command', () => {
@@ -46,6 +48,27 @@ describe('local model tunnel pure helpers', () => {
     expect(parseLocalModelTunnelProfiles(null)).toHaveLength(1)
     expect(parseLocalModelTunnelProfiles('not json')).toHaveLength(1)
     expect(parseLocalModelTunnelProfiles('[]')).toHaveLength(1)
+  })
+
+  it('does not seed user-specific tunnel profiles for fresh state', () => {
+    const profiles = parseLocalModelTunnelProfiles(null)
+
+    expect(profiles).toHaveLength(1)
+    expect(profiles[0]?.name).toBe('Local Ollama')
+    expect(profiles[0]?.sshTarget).toBe('my-gpu-host')
+    expect(profiles[0]?.autoStart).toBe(false)
+  })
+
+  it('builds commands for user-configured route candidates', () => {
+    const profile = createAutoRouteProfile()
+    const [lan, tailscale] = getLocalModelTunnelRoutes(profile)
+
+    expect(buildLocalModelTunnelCommand(profile, lan).preview).toBe(
+      'ssh -N -T -o BatchMode=yes -o ExitOnForwardFailure=yes -o ServerAliveInterval=30 -o ServerAliveCountMax=2 -o ConnectTimeout=5 -L 127.0.0.1:11436:127.0.0.1:11434 -- little-monster',
+    )
+    expect(buildLocalModelTunnelCommand(profile, tailscale).preview).toBe(
+      'ssh -N -T -o BatchMode=yes -o ExitOnForwardFailure=yes -o ServerAliveInterval=30 -o ServerAliveCountMax=2 -o ConnectTimeout=8 -L 127.0.0.1:11436:127.0.0.1:11434 -- little-monster-ts',
+    )
   })
 
   it('treats legacy stored profiles as ssh tunnels', () => {
@@ -112,3 +135,45 @@ describe('local model tunnel pure helpers', () => {
     expect(next.remoteHost).toBe('127.0.0.1')
   })
 })
+
+function createAutoRouteProfile(): LocalModelTunnelProfile {
+  return {
+    ...buildDefaultLocalModelTunnelProfile('2026-01-01T00:00:00.000Z'),
+    id: 'user-configured-pgx',
+    name: 'little monster PGX',
+    connectionKind: 'ssh-tunnel',
+    sshTarget: 'little-monster',
+    allowExternal: true,
+    autoStart: true,
+    localPort: 11436,
+    remoteHost: '127.0.0.1',
+    remotePort: 11434,
+    healthCheckUrl: 'http://127.0.0.1:11436/api/tags',
+    routeCandidates: [
+      {
+        id: 'lan',
+        label: 'Connected via LAN',
+        sshTarget: 'little-monster',
+        useCustomLocalBindHost: false,
+        localBindHost: '127.0.0.1',
+        localPort: 11436,
+        remoteHost: '127.0.0.1',
+        remotePort: 11434,
+        healthCheckUrl: 'http://127.0.0.1:11436/api/tags',
+        connectTimeoutSeconds: 5,
+      },
+      {
+        id: 'tailscale',
+        label: 'Connected via Tailscale',
+        sshTarget: 'little-monster-ts',
+        useCustomLocalBindHost: false,
+        localBindHost: '127.0.0.1',
+        localPort: 11436,
+        remoteHost: '127.0.0.1',
+        remotePort: 11434,
+        healthCheckUrl: 'http://127.0.0.1:11436/api/tags',
+        connectTimeoutSeconds: 8,
+      },
+    ],
+  }
+}
