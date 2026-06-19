@@ -1,5 +1,11 @@
 # convergence
 
+## 0.40.28
+
+### Patch Changes
+
+- 6724cf6: Improve local model tunnel management with editable SSH route candidates, route-aware health diagnostics, and clearer handling for externally managed Ollama endpoints.
+
 ## 0.40.27
 
 ### Patch Changes
