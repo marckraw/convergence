@@ -15,7 +15,9 @@ interface LocalModelTunnelStore {
   start: (profileId: string) => Promise<void>
   stop: (profileId: string) => Promise<void>
   restart: (profileId: string) => Promise<void>
-  createProfile: (input: LocalModelTunnelProfileInput) => Promise<void>
+  createProfile: (
+    input: LocalModelTunnelProfileInput,
+  ) => Promise<LocalModelTunnelSnapshot | null>
   updateProfile: (
     profileId: string,
     input: LocalModelTunnelProfileInput,
@@ -29,9 +31,11 @@ async function runSnapshotMutation(
     patch: Partial<Pick<LocalModelTunnelStore, 'snapshot' | 'error'>>,
   ) => void,
   action: () => Promise<LocalModelTunnelSnapshot>,
-): Promise<void> {
+): Promise<LocalModelTunnelSnapshot | null> {
   try {
-    set({ snapshot: await action(), error: null })
+    const snapshot = await action()
+    set({ snapshot, error: null })
+    return snapshot
   } catch (error) {
     set({
       error:
@@ -39,6 +43,7 @@ async function runSnapshotMutation(
           ? error.message
           : 'Local model tunnel operation failed',
     })
+    return null
   }
 }
 
@@ -89,10 +94,11 @@ export const useLocalModelTunnelStore = create<LocalModelTunnelStore>(
 
     createProfile: async (input) => {
       set({ isMutatingProfileId: 'new' })
-      await runSnapshotMutation(set, () =>
+      const snapshot = await runSnapshotMutation(set, () =>
         localModelTunnelApi.createProfile(input),
       )
       set({ isMutatingProfileId: null })
+      return snapshot
     },
 
     updateProfile: async (profileId, input) => {

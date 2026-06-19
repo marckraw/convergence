@@ -67,6 +67,20 @@ export function selectLocalModelTunnelAggregate(
   }
 }
 
+export function selectPreferredLocalModelTunnelProfileId(
+  profiles: LocalModelTunnelProfileWithStatus[],
+): string | null {
+  return (
+    profiles
+      .map((item, index) => ({
+        id: item.profile.id,
+        index,
+        weight: getPreferredProfileWeight(item),
+      }))
+      .sort((a, b) => b.weight - a.weight || a.index - b.index)[0]?.id ?? null
+  )
+}
+
 export function formatLocalModelTunnelEndpoint(
   item: LocalModelTunnelProfileWithStatus,
 ): string {
@@ -76,14 +90,27 @@ export function formatLocalModelTunnelEndpoint(
   if (item.profile.connectionKind === 'local-runtime') {
     return `${localHost}:${item.profile.localPort} on this Mac`
   }
+  if (item.profile.routeCandidates.length > 0) {
+    const targets = item.profile.routeCandidates
+      .map((route) => route.sshTarget)
+      .join(', ')
+    return `${localHost}:${item.profile.localPort} -> auto routes: ${targets}`
+  }
   return `${localHost}:${item.profile.localPort} -> ${item.profile.sshTarget}:${item.profile.remoteHost}:${item.profile.remotePort}`
 }
 
 export function formatLocalModelTunnelConnectionLabel(
   item: LocalModelTunnelProfileWithStatus,
 ): string {
-  return item.profile.connectionKind === 'local-runtime'
-    ? 'This Mac'
+  if (item.profile.connectionKind === 'local-runtime') return 'This Mac'
+  if (
+    item.status.activeRouteLabel &&
+    (item.status.state === 'running' || item.status.state === 'external')
+  ) {
+    return item.status.activeRouteLabel
+  }
+  return item.profile.routeCandidates.length > 0
+    ? 'Auto SSH tunnel'
     : 'SSH tunnel'
 }
 
@@ -100,6 +127,13 @@ export function formatLocalModelTunnelStatusDetail(
   }
 
   const parts = [formatStateDetail(item.status.state)]
+  if (
+    item.status.activeRouteLabel &&
+    item.status.state !== 'running' &&
+    item.status.state !== 'external'
+  ) {
+    parts.push(item.status.activeRouteLabel)
+  }
   if (item.status.health.modelCount !== null) {
     parts.push(`${item.status.health.modelCount} models`)
   }
@@ -133,4 +167,15 @@ function formatStateDetail(state: LocalModelTunnelState): string {
     case 'stopped':
       return 'stopped'
   }
+}
+
+function getPreferredProfileWeight(
+  item: LocalModelTunnelProfileWithStatus,
+): number {
+  if (item.status.state === 'running') return 50
+  if (item.status.state === 'external') return 45
+  if (item.status.state === 'starting') return 40
+  if (item.status.state === 'failed') return 30
+  if (item.profile.autoStart) return 20
+  return 0
 }

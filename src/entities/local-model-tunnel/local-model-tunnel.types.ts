@@ -11,6 +11,16 @@ export type LocalModelTunnelProbeKind = 'http' | 'tcp'
 
 export type LocalModelTunnelHealthState = 'unknown' | 'healthy' | 'unhealthy'
 
+export type LocalModelTunnelHealthFailureKind =
+  | 'invalid-url'
+  | 'timeout'
+  | 'connection-refused'
+  | 'connection-reset'
+  | 'network-error'
+  | 'non-200'
+  | 'invalid-json'
+  | 'not-ollama-json'
+
 export interface LocalModelTunnelHealthStatus {
   state: LocalModelTunnelHealthState
   probeKind: LocalModelTunnelProbeKind | null
@@ -18,7 +28,23 @@ export interface LocalModelTunnelHealthStatus {
   latencyMs: number | null
   statusCode: number | null
   modelCount: number | null
+  modelNames: string[] | null
+  isOllama: boolean | null
+  failureKind: LocalModelTunnelHealthFailureKind | null
   error: string | null
+}
+
+export interface LocalModelTunnelRouteCandidate {
+  id: string
+  label: string
+  sshTarget: string
+  useCustomLocalBindHost: boolean
+  localBindHost: string
+  localPort: number
+  remoteHost: string
+  remotePort: number
+  healthCheckUrl: string
+  connectTimeoutSeconds: number | null
 }
 
 export interface LocalModelTunnelProfile {
@@ -35,6 +61,7 @@ export interface LocalModelTunnelProfile {
   remotePort: number
   healthCheckEnabled: boolean
   healthCheckUrl: string
+  routeCandidates: LocalModelTunnelRouteCandidate[]
   createdAt: string
   updatedAt: string
 }
@@ -52,6 +79,12 @@ export interface LocalModelTunnelProfileInput {
   remotePort?: number
   healthCheckEnabled?: boolean
   healthCheckUrl?: string
+  routeCandidates?: LocalModelTunnelRouteCandidate[]
+}
+
+export interface LocalModelTunnelDiagnostic {
+  label: string
+  value: string
 }
 
 export interface LocalModelTunnelRuntimeStatus {
@@ -62,6 +95,9 @@ export interface LocalModelTunnelRuntimeStatus {
   error: string | null
   lastCheckedAt: string | null
   health: LocalModelTunnelHealthStatus
+  activeRouteId: string | null
+  activeRouteLabel: string | null
+  diagnostics: LocalModelTunnelDiagnostic[]
   commandPreview: string
 }
 

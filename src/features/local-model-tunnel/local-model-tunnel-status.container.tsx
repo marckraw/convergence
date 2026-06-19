@@ -4,6 +4,7 @@ import {
   formatLocalModelTunnelEndpoint,
   localModelTunnelApi,
   selectLocalModelTunnelAggregate,
+  selectPreferredLocalModelTunnelProfileId,
   useLocalModelTunnelStore,
   type LocalModelTunnelProfile,
   type LocalModelTunnelProfileInput,
@@ -73,11 +74,20 @@ export const LocalModelTunnelStatusContainer: FC = () => {
     () => selectLocalModelTunnelAggregate(snapshot),
     [snapshot],
   )
+  const preferredProfileId = useMemo(
+    () => selectPreferredLocalModelTunnelProfileId(profiles),
+    [profiles],
+  )
 
   useEffect(() => {
-    if (selectedProfileId) return
-    setSelectedProfileId(profiles[0]?.profile.id ?? null)
-  }, [profiles, selectedProfileId])
+    if (
+      selectedProfileId &&
+      profiles.some((item) => item.profile.id === selectedProfileId)
+    ) {
+      return
+    }
+    setSelectedProfileId(preferredProfileId)
+  }, [profiles, preferredProfileId, selectedProfileId])
 
   const selected = profiles.find(
     (item) => item.profile.id === selectedProfileId,
@@ -98,13 +108,18 @@ export const LocalModelTunnelStatusContainer: FC = () => {
   if (!aggregate.visible && !isLoading) return null
 
   const handleOpenManage = (profileId?: string) => {
-    if (profileId) setSelectedProfileId(profileId)
+    setSelectedProfileId(profileId ?? preferredProfileId)
     clearError()
     setManageOpen(true)
   }
 
   const handleAddProfile = async () => {
-    await createProfile(NEW_PROFILE_INPUT)
+    const existingIds = new Set(profiles.map((item) => item.profile.id))
+    const nextSnapshot = await createProfile(NEW_PROFILE_INPUT)
+    const created = nextSnapshot?.profiles.find(
+      (item) => !existingIds.has(item.profile.id),
+    )
+    if (created) setSelectedProfileId(created.profile.id)
   }
 
   const handleSaveProfile = async () => {
@@ -301,5 +316,6 @@ function profileToInput(
     remotePort: profile.remotePort,
     healthCheckEnabled: profile.healthCheckEnabled,
     healthCheckUrl: profile.healthCheckUrl,
+    routeCandidates: profile.routeCandidates,
   }
 }

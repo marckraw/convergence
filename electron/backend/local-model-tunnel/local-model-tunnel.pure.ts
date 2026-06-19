@@ -3,6 +3,7 @@ import type {
   LocalModelTunnelConnectionKind,
   LocalModelTunnelProfile,
   LocalModelTunnelProfileInput,
+  LocalModelTunnelRouteCandidate,
 } from './local-model-tunnel.types'
 
 export const LOCAL_MODEL_TUNNEL_PROFILES_KEY = 'local_model_tunnel_profiles_v1'
@@ -28,6 +29,7 @@ export function buildDefaultLocalModelTunnelProfile(
     remotePort: DEFAULT_PORT,
     healthCheckEnabled: true,
     healthCheckUrl: `http://${DEFAULT_LOCAL_BIND_HOST}:${DEFAULT_PORT}/api/tags`,
+    routeCandidates: [],
     createdAt: now,
     updatedAt: now,
   }
@@ -61,6 +63,7 @@ export function normalizeLocalModelTunnelProfile(
         : fallback.healthCheckEnabled,
     healthCheckUrl:
       typeof raw.healthCheckUrl === 'string' ? raw.healthCheckUrl.trim() : '',
+    routeCandidates: normalizeRouteCandidates(raw.routeCandidates, fallback),
     createdAt: pickNonEmptyString(raw.createdAt, fallback.createdAt),
     updatedAt: pickNonEmptyString(raw.updatedAt, fallback.updatedAt),
   }
@@ -136,6 +139,9 @@ export function applyLocalModelTunnelProfileInput(
       typeof input.healthCheckUrl === 'string'
         ? input.healthCheckUrl.trim()
         : profile.healthCheckUrl,
+    routeCandidates: Array.isArray(input.routeCandidates)
+      ? normalizeRouteCandidates(input.routeCandidates, profile)
+      : profile.routeCandidates,
     updatedAt: now,
   }
 
@@ -149,9 +155,10 @@ export function applyLocalModelTunnelProfileInput(
 
 export function buildLocalModelTunnelCommand(
   profile: LocalModelTunnelProfile,
+  route = getDefaultLocalModelTunnelRoute(profile),
 ): LocalModelTunnelCommand {
-  const localBindHost = getEffectiveLocalBindHost(profile)
-  const forward = `${localBindHost}:${profile.localPort}:${profile.remoteHost}:${profile.remotePort}`
+  const localBindHost = getEffectiveRouteLocalBindHost(route)
+  const forward = `${localBindHost}:${route.localPort}:${route.remoteHost}:${route.remotePort}`
   const args = [
     '-N',
     '-T',
@@ -163,10 +170,11 @@ export function buildLocalModelTunnelCommand(
     'ServerAliveInterval=30',
     '-o',
     'ServerAliveCountMax=2',
+    ...buildConnectTimeoutArgs(route),
     '-L',
     forward,
     '--',
-    profile.sshTarget,
+    route.sshTarget,
   ]
 
   return {
@@ -176,11 +184,40 @@ export function buildLocalModelTunnelCommand(
   }
 }
 
+export function getLocalModelTunnelRoutes(
+  profile: LocalModelTunnelProfile,
+): LocalModelTunnelRouteCandidate[] {
+  return profile.routeCandidates.length > 0
+    ? profile.routeCandidates
+    : [getSingleLocalModelTunnelRoute(profile)]
+}
+
+export function getDefaultLocalModelTunnelRoute(
+  profile: LocalModelTunnelProfile,
+): LocalModelTunnelRouteCandidate {
+  return getLocalModelTunnelRoutes(profile)[0]!
+}
+
+export function getRouteEffectiveHealthCheckUrl(
+  profile: LocalModelTunnelProfile,
+  route: LocalModelTunnelRouteCandidate,
+): string {
+  return route.healthCheckUrl || profile.healthCheckUrl
+}
+
 export function getEffectiveLocalBindHost(
   profile: LocalModelTunnelProfile,
 ): string {
   return profile.useCustomLocalBindHost
     ? profile.localBindHost
+    : DEFAULT_LOCAL_BIND_HOST
+}
+
+export function getEffectiveRouteLocalBindHost(
+  route: LocalModelTunnelRouteCandidate,
+): string {
+  return route.useCustomLocalBindHost
+    ? route.localBindHost
     : DEFAULT_LOCAL_BIND_HOST
 }
 
@@ -205,4 +242,77 @@ function normalizePort(value: unknown, fallback: number): number {
   const port = Math.floor(value)
   if (port < 1 || port > 65535) return fallback
   return port
+}
+
+function getSingleLocalModelTunnelRoute(
+  profile: LocalModelTunnelProfile,
+): LocalModelTunnelRouteCandidate {
+  return {
+    id: 'primary',
+    label: 'SSH tunnel',
+    sshTarget: profile.sshTarget,
+    useCustomLocalBindHost: profile.useCustomLocalBindHost,
+    localBindHost: profile.localBindHost,
+    localPort: profile.localPort,
+    remoteHost: profile.remoteHost,
+    remotePort: profile.remotePort,
+    healthCheckUrl: profile.healthCheckUrl,
+    connectTimeoutSeconds: null,
+  }
+}
+
+function normalizeRouteCandidates(
+  value: unknown,
+  fallback: LocalModelTunnelProfile,
+): LocalModelTunnelRouteCandidate[] {
+  if (!Array.isArray(value)) return []
+  return value
+    .map((route, index) => normalizeRouteCandidate(route, fallback, index))
+    .filter((route): route is LocalModelTunnelRouteCandidate => route !== null)
+}
+
+function normalizeRouteCandidate(
+  value: unknown,
+  fallback: LocalModelTunnelProfile,
+  index: number,
+): LocalModelTunnelRouteCandidate | null {
+  if (!value || typeof value !== 'object') return null
+  const raw = value as Partial<LocalModelTunnelRouteCandidate>
+  const id = pickNonEmptyString(raw.id, `route-${index + 1}`)
+  return {
+    id,
+    label: pickNonEmptyString(raw.label, `Route ${index + 1}`),
+    sshTarget: pickSafeSshValue(raw.sshTarget, fallback.sshTarget),
+    useCustomLocalBindHost:
+      typeof raw.useCustomLocalBindHost === 'boolean'
+        ? raw.useCustomLocalBindHost
+        : fallback.useCustomLocalBindHost,
+    localBindHost: pickSafeSshValue(raw.localBindHost, fallback.localBindHost),
+    localPort: normalizePort(raw.localPort, fallback.localPort),
+    remoteHost: pickSafeSshValue(raw.remoteHost, fallback.remoteHost),
+    remotePort: normalizePort(raw.remotePort, fallback.remotePort),
+    healthCheckUrl:
+      typeof raw.healthCheckUrl === 'string'
+        ? raw.healthCheckUrl.trim()
+        : fallback.healthCheckUrl,
+    connectTimeoutSeconds: normalizeConnectTimeoutSeconds(
+      raw.connectTimeoutSeconds,
+    ),
+  }
+}
+
+function normalizeConnectTimeoutSeconds(value: unknown): number | null {
+  if (value === null) return null
+  if (typeof value !== 'number' || !Number.isFinite(value)) return null
+  const seconds = Math.floor(value)
+  if (seconds < 1 || seconds > 120) return null
+  return seconds
+}
+
+function buildConnectTimeoutArgs(
+  route: LocalModelTunnelRouteCandidate,
+): string[] {
+  return route.connectTimeoutSeconds === null
+    ? []
+    : ['-o', `ConnectTimeout=${route.connectTimeoutSeconds}`]
 }

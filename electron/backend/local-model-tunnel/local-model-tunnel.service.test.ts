@@ -1,7 +1,7 @@
 import { EventEmitter } from 'events'
 import { PassThrough } from 'stream'
 import type { ChildProcess } from 'child_process'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { StateService } from '../state/state.service'
 import {
   buildDefaultLocalModelTunnelProfile,
@@ -10,10 +10,17 @@ import {
 import { LocalModelTunnelService } from './local-model-tunnel.service'
 import type { LocalModelTunnelProfile } from './local-model-tunnel.types'
 
-const { connectMock } = vi.hoisted(() => ({ connectMock: vi.fn() }))
+const { connectMock, httpRequestMock } = vi.hoisted(() => ({
+  connectMock: vi.fn(),
+  httpRequestMock: vi.fn(),
+}))
 
 vi.mock('net', () => ({
   connect: connectMock,
+}))
+
+vi.mock('http', () => ({
+  request: httpRequestMock,
 }))
 
 class MemoryState {
@@ -59,6 +66,58 @@ class MockSocket extends EventEmitter {
   destroy = vi.fn()
 }
 
+class MockHttpRequest extends EventEmitter {
+  end = vi.fn()
+  destroy = vi.fn()
+}
+
+function mockTcpFailure() {
+  connectMock.mockImplementation(() => {
+    const socket = new MockSocket()
+    queueMicrotask(() => socket.emit('error', new Error('not listening')))
+    return socket
+  })
+}
+
+function mockHttpFailure() {
+  httpRequestMock.mockImplementation(() => {
+    const request = new MockHttpRequest()
+    request.end.mockImplementation(() => {
+      queueMicrotask(() => {
+        const error = new Error('connect ECONNREFUSED') as NodeJS.ErrnoException
+        error.code = 'ECONNREFUSED'
+        request.emit('error', error)
+      })
+    })
+    return request
+  })
+}
+
+function mockOllamaTagsResponse(models: string[]) {
+  httpRequestMock.mockImplementation((_url, _options, callback) => {
+    const request = new MockHttpRequest()
+    const response = new EventEmitter() as EventEmitter & {
+      statusCode: number
+    }
+    response.statusCode = 200
+    request.end.mockImplementation(() => {
+      queueMicrotask(() => {
+        callback(response)
+        response.emit(
+          'data',
+          Buffer.from(
+            JSON.stringify({
+              models: models.map((name) => ({ name, model: name })),
+            }),
+          ),
+        )
+        response.emit('end')
+      })
+    })
+    return request
+  })
+}
+
 function createProfile(
   overrides: Partial<LocalModelTunnelProfile> = {},
 ): LocalModelTunnelProfile {
@@ -92,8 +151,18 @@ function createService(profiles: LocalModelTunnelProfile[]) {
   return { children, emit, service, spawnTunnel, state }
 }
 
+function wait(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+beforeEach(() => {
+  mockTcpFailure()
+  mockHttpFailure()
+})
+
 afterEach(() => {
   connectMock.mockReset()
+  httpRequestMock.mockReset()
   vi.restoreAllMocks()
 })
 
@@ -176,9 +245,117 @@ describe('LocalModelTunnelService', () => {
     expect(spawnTunnel).not.toHaveBeenCalled()
     expect(snapshot.profiles[0]?.status.state).toBe('failed')
     expect(snapshot.profiles[0]?.status.error).toContain(
-      'local endpoint is already responding',
+      'Local port 11434 is already in use by another runtime',
     )
     expect(snapshot.profiles[0]?.status.health.state).toBe('healthy')
+  })
+
+  it('marks an allowed already-running Ollama endpoint as external', async () => {
+    mockOllamaTagsResponse(['pgx-devstral-small-2-64k'])
+    const profile = createProfile({
+      allowExternal: true,
+      localPort: 11436,
+      healthCheckUrl: 'http://127.0.0.1:11436/api/tags',
+    })
+    const { service, spawnTunnel } = createService([profile])
+
+    const snapshot = await service.start(profile.id)
+
+    expect(spawnTunnel).not.toHaveBeenCalled()
+    expect(snapshot.profiles[0]?.status.state).toBe('external')
+    expect(snapshot.profiles[0]?.status.activeRouteLabel).toBe(
+      'Endpoint already available',
+    )
+    expect(snapshot.profiles[0]?.status.health.isOllama).toBe(true)
+  })
+
+  it('does not accept an externally managed endpoint unless the profile allows it', async () => {
+    mockOllamaTagsResponse(['pgx-devstral-small-2-64k'])
+    const profile = createProfile({
+      allowExternal: false,
+      localPort: 11436,
+      healthCheckUrl: 'http://127.0.0.1:11436/api/tags',
+    })
+    const { service, spawnTunnel } = createService([profile])
+
+    const snapshot = await service.start(profile.id)
+
+    expect(spawnTunnel).not.toHaveBeenCalled()
+    expect(snapshot.profiles[0]?.status.state).toBe('failed')
+    expect(snapshot.profiles[0]?.status.error).toContain(
+      'Local port 11436 is already in use by another runtime',
+    )
+    expect(snapshot.profiles[0]?.status.health.isOllama).toBe(true)
+  })
+
+  it('falls back from the LAN route to the Tailscale route', async () => {
+    const profile = createProfile({
+      healthCheckEnabled: false,
+      healthCheckUrl: '',
+      localPort: 11436,
+      routeCandidates: [
+        {
+          id: 'lan',
+          label: 'Connected via LAN',
+          sshTarget: 'little-monster',
+          useCustomLocalBindHost: false,
+          localBindHost: '127.0.0.1',
+          localPort: 11436,
+          remoteHost: '127.0.0.1',
+          remotePort: 11434,
+          healthCheckUrl: 'http://127.0.0.1:11436/api/tags',
+          connectTimeoutSeconds: 5,
+        },
+        {
+          id: 'tailscale',
+          label: 'Connected via Tailscale',
+          sshTarget: 'little-monster-ts',
+          useCustomLocalBindHost: false,
+          localBindHost: '127.0.0.1',
+          localPort: 11436,
+          remoteHost: '127.0.0.1',
+          remotePort: 11434,
+          healthCheckUrl: 'http://127.0.0.1:11436/api/tags',
+          connectTimeoutSeconds: 8,
+        },
+      ],
+    })
+    const { children, service, spawnTunnel } = createService([profile])
+    spawnTunnel.mockImplementation(() => {
+      const child = new MockChildProcess(1000 + children.length, false)
+      children.push(child)
+      if (children.length === 1) {
+        queueMicrotask(() => {
+          child.stderr.write('ssh: connect to host little-monster timed out')
+          child.emit('exit', 255, null)
+        })
+      }
+      return child as unknown as ChildProcess
+    })
+    connectMock.mockImplementation(() => {
+      const socket = new MockSocket()
+      queueMicrotask(() => {
+        if (children.length >= 2) {
+          socket.emit('connect')
+        } else {
+          socket.emit('error', new Error('not listening'))
+        }
+      })
+      return socket
+    })
+
+    await service.start(profile.id)
+    await wait(700)
+    const snapshot = await service.getSnapshot()
+
+    expect(spawnTunnel).toHaveBeenCalledTimes(2)
+    expect(snapshot.profiles[0]?.status.state).toBe('running')
+    expect(snapshot.profiles[0]?.status.activeRouteLabel).toBe(
+      'Connected via Tailscale',
+    )
+    expect(snapshot.profiles[0]?.status.commandPreview).toContain(
+      '-- little-monster-ts',
+    )
   })
 
   it('monitors local runtimes without spawning ssh', async () => {
