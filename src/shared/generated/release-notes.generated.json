@@ -1,6 +1,11 @@
 {
-  "currentVersion": "0.40.27",
+  "currentVersion": "0.40.28",
   "releases": [
+    {
+      "version": "0.40.28",
+      "date": null,
+      "notes": "### Patch Changes\n\n- 6724cf6: Improve local model tunnel management with editable SSH route candidates, route-aware health diagnostics, and clearer handling for externally managed Ollama endpoints."
+    },
     {
       "version": "0.40.27",
       "date": null,
