@@ -17,4 +17,10 @@ export const skillApi = {
 
   readDetails: (input: SkillDetailsRequest): Promise<SkillDetails> =>
     window.electronAPI.skills.readDetails(input),
+
+  reveal: (input: SkillDetailsRequest): Promise<void> =>
+    window.electronAPI.skills.reveal(input),
+
+  openPath: (input: SkillDetailsRequest): Promise<void> =>
+    window.electronAPI.skills.openPath(input),
 }

@@ -363,4 +363,34 @@ describe('SkillsService', () => {
       }),
     ).rejects.toThrow('Skill not found in provider catalog')
   })
+
+  it('resolves a catalog-backed path for reveal/open actions', async () => {
+    const project = projectService.create({ repositoryPath: gitRepoPath })
+    const skillDir = join(tempDir, 'skills', 'skill-a')
+    mkdirSync(skillDir, { recursive: true })
+    writeFileSync(join(skillDir, 'SKILL.md'), '# Skill A\n')
+    const entry = catalogEntry(join(skillDir, 'SKILL.md'))
+    const service = new SkillsService(projectService, [codexProvider()], {
+      now: () => FIXED_NOW,
+      createAdapter: () => ({ list: async () => catalog([entry]) }),
+    })
+
+    await expect(
+      service.resolveSkillPath({
+        projectId: project.id,
+        providerId: 'codex',
+        skillId: entry.id,
+        path: entry.path ?? '',
+      }),
+    ).resolves.toBe(entry.path)
+
+    await expect(
+      service.resolveSkillPath({
+        projectId: project.id,
+        providerId: 'codex',
+        skillId: entry.id,
+        path: join(tempDir, 'not-cataloged', 'SKILL.md'),
+      }),
+    ).rejects.toThrow('Skill not found in provider catalog')
+  })
 })

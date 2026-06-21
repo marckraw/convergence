@@ -12,6 +12,7 @@ import type { DetectedProvider } from '../provider/detect'
 import type {
   ProjectSkillCatalog,
   ProviderSkillCatalog,
+  SkillCatalogEntry,
   SkillCatalogOptions,
   SkillDetails,
   SkillDetailsRequest,
@@ -306,7 +307,14 @@ export class SkillsService {
     }
   }
 
-  async readDetails(input: SkillDetailsRequest): Promise<SkillDetails> {
+  /**
+   * Resolves a skill action request to a validated, catalog-known absolute
+   * path. Guards reveal/open/details actions against arbitrary filesystem
+   * access by requiring the path to match a discovered skill.
+   */
+  private async findSkill(
+    input: SkillDetailsRequest,
+  ): Promise<{ entry: SkillCatalogEntry; skillPath: string }> {
     const catalog = await this.listByProjectId(input.projectId)
     const requestedPath = resolve(input.path)
     const entry = catalog.providers
@@ -323,7 +331,18 @@ export class SkillsService {
       throw new Error('Skill not found in provider catalog')
     }
 
-    const skillPath = resolve(entry.path)
+    return { entry, skillPath: resolve(entry.path) }
+  }
+
+  /** Returns the validated SKILL.md path for reveal/open actions. */
+  async resolveSkillPath(input: SkillDetailsRequest): Promise<string> {
+    const { skillPath } = await this.findSkill(input)
+    return skillPath
+  }
+
+  async readDetails(input: SkillDetailsRequest): Promise<SkillDetails> {
+    const { entry, skillPath } = await this.findSkill(input)
+
     if (basename(skillPath).toLowerCase() !== 'skill.md') {
       throw new Error('Skill details can only read SKILL.md files')
     }

@@ -1714,6 +1714,8 @@ interface ElectronAPI {
     ) => Promise<ProjectSkillCatalog>
     listGlobal: (options?: SkillCatalogOptions) => Promise<ProjectSkillCatalog>
     readDetails: (input: SkillDetailsRequest) => Promise<SkillDetails>
+    reveal: (input: SkillDetailsRequest) => Promise<void>
+    openPath: (input: SkillDetailsRequest) => Promise<void>
   }
   prompts: {
     listByProjectId: (

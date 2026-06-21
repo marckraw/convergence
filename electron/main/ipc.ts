@@ -1,4 +1,4 @@
-import { ipcMain, dialog, BrowserWindow } from 'electron'
+import { ipcMain, dialog, BrowserWindow, shell } from 'electron'
 import { ProjectService } from '../backend/project/project.service'
 import { SpaceService } from '../backend/space/space.service'
 import type { SpaceSynthesisService } from '../backend/space/space-synthesis.service'
@@ -972,6 +972,25 @@ export function registerIpcHandlers(
 
   ipcMain.handle('skills:readDetails', (_event, input: SkillDetailsRequest) =>
     skillsService.readDetails(input),
+  )
+
+  ipcMain.handle(
+    'skills:reveal',
+    async (_event, input: SkillDetailsRequest) => {
+      const path = await skillsService.resolveSkillPath(input)
+      shell.showItemInFolder(path)
+    },
+  )
+
+  ipcMain.handle(
+    'skills:openPath',
+    async (_event, input: SkillDetailsRequest) => {
+      const path = await skillsService.resolveSkillPath(input)
+      const error = await shell.openPath(path)
+      if (error) {
+        throw new Error(error)
+      }
+    },
   )
 
   ipcMain.handle(

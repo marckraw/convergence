@@ -366,6 +366,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.invoke('skills:listGlobal', options),
     readDetails: (input: unknown) =>
       ipcRenderer.invoke('skills:readDetails', input),
+    reveal: (input: unknown) => ipcRenderer.invoke('skills:reveal', input),
+    openPath: (input: unknown) => ipcRenderer.invoke('skills:openPath', input),
   },
   prompts: {
     listByProjectId: (projectId: string, options?: { forceReload?: boolean }) =>
