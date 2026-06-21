@@ -1,16 +1,21 @@
 import type { FC, ReactNode } from 'react'
+import {
+  BookOpen,
+  LayoutDashboard,
+  LayoutGrid,
+  Library,
+  List as ListIcon,
+  Loader2,
+  RefreshCw,
+  Search,
+} from 'lucide-react'
 import type {
   ProjectSkillCatalog,
   SkillCatalogEntry,
   SkillDetails,
-  SkillDependency,
-  SkillDependencyState,
   SkillProviderId,
-  SkillScope,
-  SkillWarning,
 } from '@/entities/skill'
 import { Button } from '@/shared/ui/button'
-import { CopyButton } from '@/shared/ui/copy-button'
 import {
   Dialog,
   DialogContent,
@@ -28,28 +33,21 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/shared/ui/select'
-import { Markdown } from '@/shared/ui/markdown.container'
 import { cn } from '@/shared/lib/cn.pure'
-import {
-  AlertTriangle,
-  BookOpen,
-  CheckCircle2,
-  FileText,
-  Library,
-  Link2,
-  Loader2,
-  RefreshCw,
-  Search,
-  XCircle,
-} from 'lucide-react'
 import type {
   SkillBrowserFilters,
   SkillBrowserProviderGroup,
+  SkillGridGroup,
+  SkillGroupBy,
 } from './skills-browser.pure'
-import {
-  getNativeSkillInvocationText,
-  hasMcpDependencies,
-} from './skills-browser.pure'
+import { DEPENDENCY_STATE_LABELS, SKILL_ORIGINS } from './skills-browser.styles'
+import type { SkillsOverview } from './skills-overview.pure'
+import { SkillsOverviewView } from './skills-overview.presentational'
+import { SkillsGrid } from './skills-grid.presentational'
+import { SkillsListPane } from './skills-list.presentational'
+import { SkillDetailPane } from './skills-detail.presentational'
+
+export type SkillsViewMode = 'overview' | 'grid' | 'list'
 
 interface SkillsBrowserDialogProps {
   open: boolean
@@ -57,691 +55,413 @@ interface SkillsBrowserDialogProps {
   trigger: ReactNode
   projectName: string | null
   catalog: ProjectSkillCatalog | null
+  viewMode: SkillsViewMode
+  groupBy: SkillGroupBy
   groups: SkillBrowserProviderGroup[]
+  gridGroups: SkillGridGroup[]
+  overview: SkillsOverview
   selectedSkill: SkillCatalogEntry | null
   selectedDetails: SkillDetails | null
   isCatalogLoading: boolean
   catalogError: string | null
   isDetailsLoading: boolean
   detailsError: string | null
+  isDetailOpen: boolean
   filters: SkillBrowserFilters
   providerOptions: Array<{ id: SkillProviderId; label: string }>
-  scopeOptions: SkillScope[]
   totalSkillCount: number
   filteredSkillCount: number
+  onViewModeChange: (mode: SkillsViewMode) => void
+  onGroupByChange: (groupBy: SkillGroupBy) => void
   onFiltersChange: (patch: Partial<SkillBrowserFilters>) => void
+  onJumpToGrid: (patch: Partial<SkillBrowserFilters>) => void
   onSelectSkill: (skillId: string) => void
+  onCloseDetail: () => void
   onRefresh: () => void
   onOpenMcpServers: () => void
+  onRevealSkill: () => void
+  onOpenSkillFile: () => void
 }
 
-const SCOPE_LABELS: Record<SkillScope, string> = {
-  product: 'Product',
-  system: 'System',
-  global: 'Global',
-  user: 'User',
-  project: 'Project',
-  plugin: 'Plugin',
-  admin: 'Admin',
-  team: 'Team',
-  settings: 'Settings',
-  unknown: 'Unknown',
+const VIEW_MODES: Array<{
+  id: SkillsViewMode
+  label: string
+  icon: typeof LayoutGrid
+}> = [
+  { id: 'overview', label: 'Overview', icon: LayoutDashboard },
+  { id: 'grid', label: 'Grid', icon: LayoutGrid },
+  { id: 'list', label: 'List', icon: ListIcon },
+]
+
+const GROUP_BY_OPTIONS: Array<{ value: SkillGroupBy; label: string }> = [
+  { value: 'provider', label: 'Provider' },
+  { value: 'scope', label: 'Scope' },
+  { value: 'readiness', label: 'Readiness' },
+  { value: 'none', label: 'None' },
+]
+
+function renderViewSwitcher(
+  value: SkillsViewMode,
+  onChange: (mode: SkillsViewMode) => void,
+) {
+  return (
+    <div className="inline-flex items-center gap-1 rounded-lg border border-border/70 bg-muted/20 p-0.5">
+      {VIEW_MODES.map((mode) => {
+        const Icon = mode.icon
+        const active = mode.id === value
+        return (
+          <Button
+            key={mode.id}
+            type="button"
+            variant="ghost"
+            onClick={() => onChange(mode.id)}
+            aria-pressed={active}
+            className={cn(
+              'h-auto gap-1.5 rounded-md px-2.5 py-1 text-xs font-medium',
+              active
+                ? 'bg-background text-foreground shadow-sm hover:bg-background'
+                : 'text-muted-foreground hover:text-foreground',
+            )}
+          >
+            <Icon className="h-3.5 w-3.5" />
+            {mode.label}
+          </Button>
+        )
+      })}
+    </div>
+  )
 }
 
-const DEPENDENCY_STATE_LABELS: Record<SkillDependencyState, string> = {
-  declared: 'Declared',
-  available: 'Available',
-  'needs-auth': 'Needs auth',
-  'needs-install': 'Needs install',
-  unknown: 'Unknown',
-}
-
-const DEPENDENCY_STATE_CLASSES: Record<SkillDependencyState, string> = {
-  declared: 'border-border/70 bg-muted/30 text-muted-foreground',
-  available: 'border-emerald-500/20 bg-emerald-500/10 text-emerald-300',
-  'needs-auth': 'border-warning/20 bg-warning/10 text-warning-foreground',
-  'needs-install': 'border-sky-500/20 bg-sky-500/10 text-sky-200',
-  unknown: 'border-border/70 bg-muted/30 text-muted-foreground',
-}
-
-const CATALOG_SOURCE_LABELS: Record<
-  ProjectSkillCatalog['providers'][number]['catalogSource'],
-  string
-> = {
-  'native-rpc': 'Native RPC',
-  'native-cli': 'Native CLI',
-  filesystem: 'Filesystem',
-  unsupported: 'Unsupported',
-}
-
-const INVOCATION_SUPPORT_LABELS: Record<
-  ProjectSkillCatalog['providers'][number]['invocationSupport'],
-  string
-> = {
-  'structured-input': 'Structured input',
-  'native-command': 'Native command',
-  unsupported: 'Unsupported',
-}
-
-const ACTIVATION_CONFIRMATION_LABELS: Record<
-  ProjectSkillCatalog['providers'][number]['activationConfirmation'],
-  string
-> = {
-  'native-event': 'Native event',
-  none: 'None',
-}
-
-function renderSelectControl({
+function renderFilterSelect({
   label,
   value,
   onChange,
   options,
+  className,
 }: {
   label: string
   value: string
   onChange: (value: string) => void
-  options: { value: string; label: string }[]
+  options: Array<{ value: string; label: string }>
+  className?: string
 }) {
   return (
-    <label className="min-w-0 flex-1 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-      <span>{label}</span>
-      <Select value={value} onValueChange={onChange}>
-        <SelectTrigger
-          size="sm"
-          aria-label={label}
-          className="mt-1 w-full normal-case tracking-normal"
-        >
-          <SelectValue />
-        </SelectTrigger>
-        <SelectContent>
-          {options.map((option) => (
-            <SelectItem key={option.value} value={option.value}>
-              {option.label}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-    </label>
+    <Select value={value} onValueChange={onChange}>
+      <SelectTrigger
+        size="sm"
+        aria-label={label}
+        className={cn('w-[150px] normal-case tracking-normal', className)}
+      >
+        <SelectValue />
+      </SelectTrigger>
+      <SelectContent>
+        {options.map((option) => (
+          <SelectItem key={option.value} value={option.value}>
+            {option.label}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
   )
 }
 
-function renderStatusBadge(skill: SkillCatalogEntry) {
-  if (skill.enabled) {
-    return (
-      <span className="inline-flex items-center gap-1 rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-emerald-300">
-        <CheckCircle2 className="h-3 w-3" />
-        Enabled
-      </span>
-    )
-  }
-
-  return (
-    <span className="inline-flex items-center gap-1 rounded-full border border-border/70 bg-muted/50 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-      <XCircle className="h-3 w-3" />
-      Disabled
-    </span>
-  )
-}
-
-function renderWarningBadge(count: number) {
-  if (count === 0) {
-    return null
-  }
-
-  return (
-    <span className="inline-flex items-center gap-1 rounded-full border border-warning/20 bg-warning/10 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-warning-foreground">
-      <AlertTriangle className="h-3 w-3" />
-      {count}
-    </span>
-  )
-}
-
-function renderDependencyList(dependencies: SkillDependency[]) {
-  if (dependencies.length === 0) {
-    return <p className="text-xs text-muted-foreground">No dependencies.</p>
-  }
-
-  return (
-    <div className="space-y-1.5">
-      {dependencies.map((dependency, index) => (
-        <div
-          key={`${dependency.kind}-${dependency.name}-${index}`}
-          className="flex min-w-0 items-center justify-between gap-3 rounded-md border border-border/70 bg-muted/20 px-2 py-1.5 text-xs"
-        >
-          <span className="min-w-0 truncate text-muted-foreground">
-            <span className="font-medium text-foreground">
-              {dependency.kind}
-            </span>
-            : {dependency.name}
-          </span>
-          <span
-            className={cn(
-              'shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide',
-              DEPENDENCY_STATE_CLASSES[dependency.state],
-            )}
-          >
-            {DEPENDENCY_STATE_LABELS[dependency.state]}
-          </span>
-        </div>
-      ))}
-    </div>
-  )
-}
-
-function renderWarningList(warnings: SkillWarning[]) {
-  if (warnings.length === 0) {
-    return <p className="text-xs text-muted-foreground">No warnings.</p>
-  }
-
-  return (
-    <div className="space-y-1.5">
-      {warnings.map((warning) => (
-        <div
-          key={`${warning.code}-${warning.message}`}
-          className="rounded-md border border-warning/20 bg-warning/10 px-2 py-1.5 text-xs text-warning-foreground"
-        >
-          <span className="font-medium">{warning.code}:</span> {warning.message}
-        </div>
-      ))}
-    </div>
-  )
-}
-
-function renderSkillRow(
-  skill: SkillCatalogEntry,
-  selectedSkillId: string | null,
-  onSelectSkill: (skillId: string) => void,
-) {
-  const selected = skill.id === selectedSkillId
-  const duplicate = skill.warnings.some(
-    (warning) => warning.code === 'duplicate-name',
-  )
-
-  return (
-    <Button
-      key={skill.id}
-      type="button"
-      variant="ghost"
-      onClick={() => onSelectSkill(skill.id)}
-      className={cn(
-        'h-auto w-full justify-start rounded-lg border border-transparent px-3 py-2 text-left',
-        selected
-          ? 'border-primary/30 bg-primary/10 text-foreground'
-          : 'hover:border-border/70 hover:bg-muted/40',
-      )}
-    >
-      <span className="min-w-0 flex-1">
-        <span className="flex min-w-0 items-center gap-2">
-          <span className="truncate text-sm font-medium">
-            {skill.displayName}
-          </span>
-          {duplicate ? (
-            <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-warning-foreground" />
-          ) : null}
-        </span>
-        <span className="mt-1 line-clamp-2 block whitespace-normal text-xs font-normal leading-5 text-muted-foreground">
-          {skill.shortDescription || skill.description || 'No description.'}
-        </span>
-        <span className="mt-2 flex flex-wrap items-center gap-1.5">
-          <span className="rounded-full border border-border/70 bg-muted/40 px-2 py-0.5 text-[10px] uppercase tracking-wide text-muted-foreground">
-            {skill.sourceLabel}
-          </span>
-          {!skill.enabled ? (
-            <span className="rounded-full border border-border/70 bg-muted/40 px-2 py-0.5 text-[10px] uppercase tracking-wide text-muted-foreground">
-              Disabled
-            </span>
-          ) : null}
-          {renderWarningBadge(skill.warnings.length)}
-        </span>
-      </span>
-    </Button>
-  )
-}
-
-function renderProviderGroup(
-  group: SkillBrowserProviderGroup,
-  selectedSkillId: string | null,
-  onSelectSkill: (skillId: string) => void,
-) {
-  return (
-    <section key={group.providerId} className="border-t border-border/60 pt-3">
-      <div className="mb-2 flex items-center justify-between gap-2">
-        <div className="min-w-0">
-          <p className="truncate text-sm font-semibold">{group.providerName}</p>
-          <p className="text-xs text-muted-foreground">
-            {group.skills.length} skill{group.skills.length === 1 ? '' : 's'}
-          </p>
-        </div>
-        <span className="rounded-full border border-border/70 bg-muted/30 px-2 py-0.5 text-[10px] uppercase tracking-wide text-muted-foreground">
-          {group.catalogSource.replace('-', ' ')}
-        </span>
-      </div>
-
-      {group.error ? (
-        <div className="mb-2 rounded-lg border border-destructive/20 bg-destructive/10 px-3 py-2 text-sm text-destructive">
-          {group.error}
-        </div>
-      ) : null}
-
-      {group.skills.length > 0 ? (
-        <div className="space-y-2">
-          {group.skills.map((skill) =>
-            renderSkillRow(skill, selectedSkillId, onSelectSkill),
-          )}
-        </div>
-      ) : group.error ? null : (
-        <p className="text-sm text-muted-foreground">
-          No skills matched these filters.
-        </p>
-      )}
-    </section>
-  )
-}
-
-function renderDetailsPane({
-  projectName,
-  catalog,
-  selectedSkill,
-  selectedDetails,
-  isDetailsLoading,
-  detailsError,
-  onOpenMcpServers,
-}: Pick<
-  SkillsBrowserDialogProps,
-  | 'projectName'
-  | 'catalog'
-  | 'selectedSkill'
-  | 'selectedDetails'
-  | 'isDetailsLoading'
-  | 'detailsError'
-  | 'onOpenMcpServers'
->) {
-  if (!projectName) {
-    return (
-      <div className="flex h-full items-center justify-center px-6 text-center text-sm text-muted-foreground">
-        Open a project to inspect skills.
-      </div>
-    )
-  }
-
-  if (!selectedSkill) {
-    return (
-      <div className="flex h-full items-center justify-center px-6 text-center text-sm text-muted-foreground">
-        No skill selected.
-      </div>
-    )
-  }
-
-  const selectedProvider =
-    catalog?.providers.find(
-      (provider) => provider.providerId === selectedSkill.providerId,
-    ) ?? null
-  const nativeInvocation = getNativeSkillInvocationText(selectedSkill)
-  const selectedSkillHasMcpDependencies = hasMcpDependencies(selectedSkill)
-
-  return (
-    <div className="app-scrollbar h-full min-h-0 overflow-y-auto px-6 py-5">
-      <div className="mb-4 flex min-w-0 items-start justify-between gap-4">
-        <div className="min-w-0">
-          <div className="mb-2 flex flex-wrap items-center gap-2">
-            <span className="rounded-full border border-border/70 bg-muted/30 px-2 py-0.5 text-[10px] uppercase tracking-wide text-muted-foreground">
-              {selectedSkill.providerName}
-            </span>
-            <span className="rounded-full border border-border/70 bg-muted/30 px-2 py-0.5 text-[10px] uppercase tracking-wide text-muted-foreground">
-              {SCOPE_LABELS[selectedSkill.scope]}
-            </span>
-            {renderStatusBadge(selectedSkill)}
-            {renderWarningBadge(selectedSkill.warnings.length)}
-          </div>
-          <h3 className="truncate text-lg font-semibold">
-            {selectedSkill.displayName}
-          </h3>
-          <p className="mt-1 text-sm text-muted-foreground">
-            {selectedSkill.description || 'No description.'}
-          </p>
-        </div>
-        <div className="flex shrink-0 items-center gap-1.5">
-          <CopyButton text={selectedSkill.name} label="Copy skill name" />
-          {selectedSkill.path ? (
-            <CopyButton text={selectedSkill.path} label="Copy SKILL.md path" />
-          ) : null}
-          {nativeInvocation ? (
-            <CopyButton
-              text={nativeInvocation}
-              label="Copy native invocation"
-            />
-          ) : null}
-        </div>
-      </div>
-
-      <div className="space-y-4">
-        {selectedProvider ? (
-          <section className="rounded-lg border border-border/70 bg-muted/10 p-3">
-            <p className="mb-2 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-              Provider
-            </p>
-            <div className="grid gap-2 text-xs text-muted-foreground sm:grid-cols-3">
-              <span>
-                Catalog:{' '}
-                <span className="text-foreground">
-                  {CATALOG_SOURCE_LABELS[selectedProvider.catalogSource]}
-                </span>
-              </span>
-              <span>
-                Invocation:{' '}
-                <span className="text-foreground">
-                  {
-                    INVOCATION_SUPPORT_LABELS[
-                      selectedProvider.invocationSupport
-                    ]
-                  }
-                </span>
-              </span>
-              <span>
-                Confirmation:{' '}
-                <span className="text-foreground">
-                  {
-                    ACTIVATION_CONFIRMATION_LABELS[
-                      selectedProvider.activationConfirmation
-                    ]
-                  }
-                </span>
-              </span>
-            </div>
-            {nativeInvocation ? (
-              <div className="mt-3 flex min-w-0 items-center gap-2 rounded-md border border-border/70 bg-background/60 px-2 py-1.5">
-                <span className="shrink-0 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-                  Native
-                </span>
-                <code className="min-w-0 flex-1 truncate text-xs text-foreground">
-                  {nativeInvocation}
-                </code>
-                <CopyButton
-                  text={nativeInvocation}
-                  label="Copy native invocation"
-                />
-              </div>
-            ) : null}
-          </section>
-        ) : null}
-
-        <section className="rounded-lg border border-border/70 bg-muted/10 p-3">
-          <div className="mb-1 flex items-center justify-between gap-2">
-            <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-              Path
-            </p>
-            {selectedSkill.path ? (
-              <CopyButton
-                text={selectedSkill.path}
-                label="Copy SKILL.md path"
-              />
-            ) : null}
-          </div>
-          <p
-            className="break-all font-mono text-xs text-muted-foreground"
-            title={selectedSkill.path ?? undefined}
-          >
-            {selectedSkill.path ?? 'No path reported.'}
-          </p>
-        </section>
-
-        <section className="rounded-lg border border-border/70 bg-muted/10 p-3">
-          <div className="mb-2 flex items-center justify-between gap-2">
-            <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-              Dependencies
-            </p>
-            {selectedSkillHasMcpDependencies ? (
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="h-7 gap-1.5 px-2 text-xs"
-                onClick={onOpenMcpServers}
-              >
-                <Link2 className="h-3.5 w-3.5" />
-                MCP Servers
-              </Button>
-            ) : null}
-          </div>
-          {renderDependencyList(selectedSkill.dependencies)}
-        </section>
-
-        <section className="rounded-lg border border-border/70 bg-muted/10 p-3">
-          <p className="mb-2 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-            Warnings
-          </p>
-          {renderWarningList(selectedSkill.warnings)}
-        </section>
-
-        {isDetailsLoading ? (
-          <div className="flex items-center gap-2 rounded-lg border border-border/70 bg-muted/10 px-3 py-2 text-sm text-muted-foreground">
-            <Loader2 className="h-4 w-4 animate-spin" />
-            Loading skill details...
-          </div>
-        ) : null}
-
-        {detailsError ? (
-          <div className="rounded-lg border border-destructive/20 bg-destructive/10 px-3 py-2 text-sm text-destructive">
-            {detailsError}
-          </div>
-        ) : null}
-
-        {selectedDetails ? (
-          <>
-            <section className="rounded-lg border border-border/70 bg-muted/10 p-3">
-              <p className="mb-2 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-                Resources
-              </p>
-              {selectedDetails.resources.length > 0 ? (
-                <div className="flex flex-wrap gap-1.5">
-                  {selectedDetails.resources.map((resource) => (
-                    <span
-                      key={`${resource.kind}-${resource.relativePath}`}
-                      className="rounded-full border border-border/70 bg-muted/30 px-2 py-0.5 text-[11px] text-muted-foreground"
-                    >
-                      {resource.kind}: {resource.relativePath}
-                    </span>
-                  ))}
-                </div>
-              ) : (
-                <p className="text-xs text-muted-foreground">
-                  No resource folders.
-                </p>
-              )}
-            </section>
-
-            <section className="rounded-lg border border-border/70 bg-background/60 p-4">
-              <div className="mb-3 flex items-center gap-2 border-b border-border/60 pb-3">
-                <FileText className="h-4 w-4 text-muted-foreground" />
-                <p className="text-sm font-medium">SKILL.md</p>
-                <span className="ml-auto text-xs text-muted-foreground">
-                  {selectedDetails.sizeBytes} bytes
-                </span>
-              </div>
-              <Markdown content={selectedDetails.markdown} size="sm" />
-            </section>
-          </>
-        ) : null}
-      </div>
-    </div>
-  )
-}
-
-export const SkillsBrowserDialog: FC<SkillsBrowserDialogProps> = ({
-  open,
-  onOpenChange,
-  trigger,
-  projectName,
-  catalog,
-  groups,
-  selectedSkill,
-  selectedDetails,
-  isCatalogLoading,
-  catalogError,
-  isDetailsLoading,
-  detailsError,
+function renderFilterToolbar({
+  viewMode,
+  groupBy,
   filters,
   providerOptions,
-  scopeOptions,
-  totalSkillCount,
-  filteredSkillCount,
+  onGroupByChange,
   onFiltersChange,
-  onSelectSkill,
-  onRefresh,
-  onOpenMcpServers,
-}) => {
-  const selectedSkillId = selectedSkill?.id ?? null
+}: Pick<
+  SkillsBrowserDialogProps,
+  | 'viewMode'
+  | 'groupBy'
+  | 'filters'
+  | 'providerOptions'
+  | 'onGroupByChange'
+  | 'onFiltersChange'
+>) {
+  return (
+    <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-border/70 px-6 py-3">
+      <div className="relative min-w-[200px] flex-1">
+        <Search className="pointer-events-none absolute top-2.5 left-2.5 h-4 w-4 text-muted-foreground" />
+        <Input
+          value={filters.query}
+          onChange={(event) =>
+            onFiltersChange({ query: event.currentTarget.value })
+          }
+          placeholder="Search skills"
+          className="pl-8"
+        />
+      </div>
+
+      {renderFilterSelect({
+        label: 'Origin',
+        value: filters.origin,
+        onChange: (value) =>
+          onFiltersChange({ origin: value as SkillBrowserFilters['origin'] }),
+        options: [
+          { value: 'all', label: 'All origins' },
+          ...SKILL_ORIGINS.map((origin) => ({
+            value: origin.id,
+            label: origin.label,
+          })),
+        ],
+      })}
+      {renderFilterSelect({
+        label: 'Provider',
+        value: filters.providerId,
+        onChange: (value) =>
+          onFiltersChange({ providerId: value as SkillProviderId | 'all' }),
+        options: [
+          { value: 'all', label: 'All providers' },
+          ...providerOptions.map((provider) => ({
+            value: provider.id,
+            label: provider.label,
+          })),
+        ],
+      })}
+      {renderFilterSelect({
+        label: 'Status',
+        value: filters.enabled,
+        onChange: (value) =>
+          onFiltersChange({ enabled: value as SkillBrowserFilters['enabled'] }),
+        options: [
+          { value: 'all', label: 'All states' },
+          { value: 'enabled', label: 'Enabled' },
+          { value: 'disabled', label: 'Disabled' },
+        ],
+      })}
+      {renderFilterSelect({
+        label: 'Warnings',
+        value: filters.warnings,
+        onChange: (value) =>
+          onFiltersChange({
+            warnings: value as SkillBrowserFilters['warnings'],
+          }),
+        options: [
+          { value: 'all', label: 'All skills' },
+          { value: 'warnings', label: 'With warnings' },
+          { value: 'duplicate-name', label: 'Duplicate name' },
+          {
+            value: 'unsupported-path-invocation',
+            label: 'Unsupported invocation',
+          },
+          { value: 'missing-description', label: 'Missing description' },
+          { value: 'invalid-frontmatter', label: 'Invalid frontmatter' },
+        ],
+      })}
+      {renderFilterSelect({
+        label: 'Dependency',
+        value: filters.dependencyState,
+        onChange: (value) =>
+          onFiltersChange({
+            dependencyState: value as SkillBrowserFilters['dependencyState'],
+          }),
+        options: [
+          { value: 'all', label: 'All readiness' },
+          ...Object.entries(DEPENDENCY_STATE_LABELS).map(([state, label]) => ({
+            value: state,
+            label,
+          })),
+        ],
+      })}
+
+      {viewMode === 'grid' ? (
+        <div className="ml-auto flex items-center gap-1.5">
+          <span className="text-[11px] uppercase tracking-wide text-muted-foreground">
+            Group by
+          </span>
+          {renderFilterSelect({
+            label: 'Group by',
+            value: groupBy,
+            onChange: (value) => onGroupByChange(value as SkillGroupBy),
+            options: GROUP_BY_OPTIONS,
+            className: 'w-[130px]',
+          })}
+        </div>
+      ) : null}
+    </div>
+  )
+}
+
+function renderCatalogPlaceholder({
+  projectName,
+  catalog,
+  catalogError,
+  isCatalogLoading,
+}: Pick<
+  SkillsBrowserDialogProps,
+  'projectName' | 'catalog' | 'catalogError' | 'isCatalogLoading'
+>): ReactNode | null {
   const hasCatalog = Boolean(catalog)
+  if (!projectName) {
+    return (
+      <p className="text-sm text-muted-foreground">
+        Open a project to browse skills.
+      </p>
+    )
+  }
+  if (catalogError && !hasCatalog) {
+    return (
+      <div className="rounded-lg border border-destructive/20 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+        {catalogError}
+      </div>
+    )
+  }
+  if (isCatalogLoading && !hasCatalog) {
+    return (
+      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+        <Loader2 className="h-4 w-4 animate-spin" />
+        Loading skills...
+      </div>
+    )
+  }
+  if (hasCatalog && catalog?.providers.length === 0) {
+    return (
+      <p className="text-sm text-muted-foreground">
+        No skill-capable providers are currently available.
+      </p>
+    )
+  }
+  return null
+}
+
+export const SkillsBrowserDialog: FC<SkillsBrowserDialogProps> = (props) => {
+  const {
+    open,
+    onOpenChange,
+    trigger,
+    projectName,
+    catalog,
+    viewMode,
+    groups,
+    gridGroups,
+    groupBy,
+    overview,
+    selectedSkill,
+    selectedDetails,
+    isCatalogLoading,
+    catalogError,
+    isDetailsLoading,
+    detailsError,
+    isDetailOpen,
+    totalSkillCount,
+    filteredSkillCount,
+    onViewModeChange,
+    onSelectSkill,
+    onCloseDetail,
+    onJumpToGrid,
+    onRefresh,
+    onOpenMcpServers,
+    onRevealSkill,
+    onOpenSkillFile,
+  } = props
+
+  const selectedSkillId = selectedSkill?.id ?? null
+  const placeholder = renderCatalogPlaceholder({
+    projectName,
+    catalog,
+    catalogError,
+    isCatalogLoading,
+  })
+
+  const showToolbar = viewMode !== 'overview' && !placeholder
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogTrigger asChild>{trigger}</DialogTrigger>
-      <DialogContent className="w-[min(1180px,calc(100vw-2rem))] max-h-[min(86vh,820px)] p-0">
-        <DialogHeader className="border-b border-border/70 px-6 py-5">
-          <div className="flex items-center gap-2">
-            <Library className="h-5 w-5 text-muted-foreground" />
-            <DialogTitle>Skills</DialogTitle>
+      <DialogContent className="h-[min(90vh,960px)] max-h-[min(90vh,960px)] w-[min(1400px,calc(100vw-3rem))] p-0">
+        <DialogHeader className="border-b border-border/70 px-6 py-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="min-w-0">
+              <div className="flex items-center gap-2">
+                <Library className="h-5 w-5 text-muted-foreground" />
+                <DialogTitle>Skills</DialogTitle>
+              </div>
+              <DialogDescription className="mt-1">
+                {projectName
+                  ? `${filteredSkillCount}/${totalSkillCount} skills in ${projectName}.`
+                  : 'Select a project to browse provider skills.'}
+              </DialogDescription>
+            </div>
+            {renderViewSwitcher(viewMode, onViewModeChange)}
           </div>
-          <DialogDescription>
-            {projectName
-              ? `${filteredSkillCount}/${totalSkillCount} skills in ${projectName}.`
-              : 'Select a project to browse provider skills.'}
-          </DialogDescription>
         </DialogHeader>
 
-        <div className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-[390px_minmax(0,1fr)] lg:grid-rows-[minmax(0,1fr)]">
-          <div className="flex min-h-0 flex-col border-b border-border/70 lg:border-r lg:border-b-0">
-            <div className="shrink-0 border-b border-border/70 p-4">
-              <div className="relative">
-                <Search className="pointer-events-none absolute top-2.5 left-2.5 h-4 w-4 text-muted-foreground" />
-                <Input
-                  value={filters.query}
-                  onChange={(event) =>
-                    onFiltersChange({ query: event.currentTarget.value })
-                  }
-                  placeholder="Search skills"
-                  className="pl-8"
+        {showToolbar ? renderFilterToolbar(props) : null}
+
+        <div className="relative min-h-0 flex-1">
+          {placeholder ? (
+            <div className="p-6">{placeholder}</div>
+          ) : viewMode === 'overview' ? (
+            <div className="app-scrollbar h-full min-h-0 overflow-y-auto px-6 py-5">
+              <SkillsOverviewView
+                overview={overview}
+                onJumpToGrid={onJumpToGrid}
+              />
+            </div>
+          ) : viewMode === 'grid' ? (
+            <>
+              <div className="app-scrollbar h-full min-h-0 overflow-y-auto px-6 py-5">
+                <SkillsGrid
+                  groups={gridGroups}
+                  selectedSkillId={selectedSkillId}
+                  onSelectSkill={onSelectSkill}
+                  showGroupHeaders={groupBy !== 'none'}
                 />
               </div>
-              <div className="mt-3 grid grid-cols-2 gap-2">
-                {renderSelectControl({
-                  label: 'Provider',
-                  value: filters.providerId,
-                  onChange: (value) =>
-                    onFiltersChange({
-                      providerId: value as SkillProviderId | 'all',
-                    }),
-                  options: [
-                    { value: 'all', label: 'All providers' },
-                    ...providerOptions.map((provider) => ({
-                      value: provider.id,
-                      label: provider.label,
-                    })),
-                  ],
-                })}
-                {renderSelectControl({
-                  label: 'Scope',
-                  value: filters.scope,
-                  onChange: (value) =>
-                    onFiltersChange({ scope: value as SkillScope | 'all' }),
-                  options: [
-                    { value: 'all', label: 'All scopes' },
-                    ...scopeOptions.map((scope) => ({
-                      value: scope,
-                      label: SCOPE_LABELS[scope],
-                    })),
-                  ],
-                })}
-                {renderSelectControl({
-                  label: 'Enabled',
-                  value: filters.enabled,
-                  onChange: (value) =>
-                    onFiltersChange({
-                      enabled: value as SkillBrowserFilters['enabled'],
-                    }),
-                  options: [
-                    { value: 'all', label: 'All states' },
-                    { value: 'enabled', label: 'Enabled' },
-                    { value: 'disabled', label: 'Disabled' },
-                  ],
-                })}
-                {renderSelectControl({
-                  label: 'Warnings',
-                  value: filters.warnings,
-                  onChange: (value) =>
-                    onFiltersChange({
-                      warnings: value as SkillBrowserFilters['warnings'],
-                    }),
-                  options: [
-                    { value: 'all', label: 'All skills' },
-                    { value: 'warnings', label: 'Warnings' },
-                  ],
-                })}
-                {renderSelectControl({
-                  label: 'Dependency',
-                  value: filters.dependencyState,
-                  onChange: (value) =>
-                    onFiltersChange({
-                      dependencyState:
-                        value as SkillBrowserFilters['dependencyState'],
-                    }),
-                  options: [
-                    { value: 'all', label: 'All readiness' },
-                    ...Object.entries(DEPENDENCY_STATE_LABELS).map(
-                      ([state, label]) => ({
-                        value: state,
-                        label,
-                      }),
-                    ),
-                  ],
-                })}
+              {isDetailOpen && selectedSkill ? (
+                <>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    aria-label="Close details"
+                    className="absolute inset-0 z-10 h-auto w-auto rounded-none bg-black/30 p-0 hover:bg-black/30"
+                    onClick={onCloseDetail}
+                  />
+                  <div className="absolute inset-y-0 right-0 z-20 flex w-[min(620px,85%)] flex-col border-l border-border/70 bg-background shadow-2xl">
+                    <SkillDetailPane
+                      projectName={projectName}
+                      catalog={catalog}
+                      selectedSkill={selectedSkill}
+                      selectedDetails={selectedDetails}
+                      isDetailsLoading={isDetailsLoading}
+                      detailsError={detailsError}
+                      onOpenMcpServers={onOpenMcpServers}
+                      onReveal={onRevealSkill}
+                      onOpenFile={onOpenSkillFile}
+                      onClose={onCloseDetail}
+                    />
+                  </div>
+                </>
+              ) : null}
+            </>
+          ) : (
+            <div className="grid h-full min-h-0 grid-cols-1 lg:grid-cols-[380px_minmax(0,1fr)]">
+              <div className="app-scrollbar h-full min-h-0 overflow-y-auto border-b border-border/70 p-4 lg:border-r lg:border-b-0">
+                <SkillsListPane
+                  groups={groups}
+                  selectedSkillId={selectedSkillId}
+                  onSelectSkill={onSelectSkill}
+                />
               </div>
+              <SkillDetailPane
+                projectName={projectName}
+                catalog={catalog}
+                selectedSkill={selectedSkill}
+                selectedDetails={selectedDetails}
+                isDetailsLoading={isDetailsLoading}
+                detailsError={detailsError}
+                onOpenMcpServers={onOpenMcpServers}
+                onReveal={onRevealSkill}
+                onOpenFile={onOpenSkillFile}
+              />
             </div>
-
-            <div className="app-scrollbar h-[min(52vh,520px)] overflow-y-auto p-4 lg:h-auto lg:min-h-0 lg:flex-1">
-              {!projectName ? (
-                <p className="text-sm text-muted-foreground">
-                  Open a project to browse skills.
-                </p>
-              ) : catalogError && !hasCatalog ? (
-                <div className="rounded-lg border border-destructive/20 bg-destructive/10 px-3 py-2 text-sm text-destructive">
-                  {catalogError}
-                </div>
-              ) : isCatalogLoading && !hasCatalog ? (
-                <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  Loading skills...
-                </div>
-              ) : hasCatalog && catalog?.providers.length === 0 ? (
-                <p className="text-sm text-muted-foreground">
-                  No skill-capable providers are currently available.
-                </p>
-              ) : groups.length > 0 ? (
-                <div className="space-y-4">
-                  {groups.map((group) =>
-                    renderProviderGroup(group, selectedSkillId, onSelectSkill),
-                  )}
-                </div>
-              ) : (
-                <p className="text-sm text-muted-foreground">
-                  No skills matched these filters.
-                </p>
-              )}
-            </div>
-          </div>
-
-          {renderDetailsPane({
-            projectName,
-            catalog,
-            selectedSkill,
-            selectedDetails,
-            isDetailsLoading,
-            detailsError,
-            onOpenMcpServers,
-          })}
+          )}
         </div>
 
-        <DialogFooter className="border-t border-border/70 px-6 py-4">
+        <DialogFooter className="items-center border-t border-border/70 px-6 py-3">
           <Button
             type="button"
             variant="outline"

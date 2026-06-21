@@ -8,14 +8,17 @@ import type {
   SkillCatalogEntry,
   SkillDetails,
 } from '@/entities/skill'
-import type {
-  SkillBrowserFilters,
-  SkillBrowserProviderGroup,
+import {
+  groupSkillsForGrid,
+  type SkillBrowserFilters,
+  type SkillBrowserProviderGroup,
 } from './skills-browser.pure'
+import { buildSkillsOverview } from './skills-overview.pure'
 
 const filters: SkillBrowserFilters = {
   query: '',
   providerId: 'all',
+  origin: 'all',
   scope: 'all',
   enabled: 'all',
   warnings: 'all',
@@ -98,22 +101,32 @@ function renderDialog(
     trigger: <Button type="button">Open</Button>,
     projectName: 'convergence',
     catalog,
+    viewMode: 'list',
+    groupBy: 'provider',
     groups,
+    gridGroups: groupSkillsForGrid(groups, 'provider'),
+    overview: buildSkillsOverview(catalog),
     selectedSkill: skill,
     selectedDetails: details,
     isCatalogLoading: false,
     catalogError: null,
     isDetailsLoading: false,
     detailsError: null,
+    isDetailOpen: false,
     filters,
     providerOptions: [{ id: 'codex', label: 'Codex' }],
-    scopeOptions: ['user'],
     totalSkillCount: 1,
     filteredSkillCount: 1,
+    onViewModeChange: vi.fn(),
+    onGroupByChange: vi.fn(),
     onFiltersChange: vi.fn(),
+    onJumpToGrid: vi.fn(),
     onSelectSkill: vi.fn(),
+    onCloseDetail: vi.fn(),
     onRefresh: vi.fn(),
     onOpenMcpServers: vi.fn(),
+    onRevealSkill: vi.fn(),
+    onOpenSkillFile: vi.fn(),
     ...overrides,
   }
 
@@ -184,5 +197,50 @@ describe('SkillsBrowserDialog', () => {
       dependencyState: 'declared',
     })
     expect(onOpenMcpServers).toHaveBeenCalledTimes(1)
+  })
+
+  it('switches view modes via the view switcher', () => {
+    const onViewModeChange = vi.fn()
+    renderDialog({ onViewModeChange })
+
+    fireEvent.click(screen.getByRole('button', { name: /Grid/i }))
+    expect(onViewModeChange).toHaveBeenCalledWith('grid')
+  })
+
+  it('hides the filter toolbar and shows the dashboard in overview mode', () => {
+    renderDialog({ viewMode: 'overview' })
+
+    expect(screen.queryByPlaceholderText('Search skills')).toBeNull()
+    expect(screen.getByText('By origin')).toBeInTheDocument()
+    expect(screen.getByText('By provider')).toBeInTheDocument()
+    expect(screen.getByText('Total skills')).toBeInTheDocument()
+  })
+
+  it('drills from a Needs-attention card into a precise warning filter', () => {
+    const onJumpToGrid = vi.fn()
+    renderDialog({ viewMode: 'overview', onJumpToGrid })
+
+    fireEvent.click(screen.getByRole('button', { name: /Duplicate names/i }))
+    expect(onJumpToGrid).toHaveBeenCalledWith({ warnings: 'duplicate-name' })
+  })
+
+  it('emits reveal and open actions from the detail pane', () => {
+    const onRevealSkill = vi.fn()
+    const onOpenSkillFile = vi.fn()
+    renderDialog({ onRevealSkill, onOpenSkillFile })
+
+    fireEvent.click(screen.getByRole('button', { name: 'Reveal in Finder' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Open SKILL.md' }))
+
+    expect(onRevealSkill).toHaveBeenCalledTimes(1)
+    expect(onOpenSkillFile).toHaveBeenCalledTimes(1)
+  })
+
+  it('opens a card detail slide-over in grid mode', () => {
+    const onSelectSkill = vi.fn()
+    renderDialog({ viewMode: 'grid', isDetailOpen: false, onSelectSkill })
+
+    fireEvent.click(screen.getByRole('button', { name: /Review/i }))
+    expect(onSelectSkill).toHaveBeenCalledWith('skill-1')
   })
 })
