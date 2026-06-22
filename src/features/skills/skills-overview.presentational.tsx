@@ -116,7 +116,7 @@ export const SkillsOverviewView: FC<SkillsOverviewViewProps> = ({
                 type="button"
                 variant="ghost"
                 onClick={() => onJumpToGrid({ origin: bucket.origin })}
-                className="flex h-auto items-stretch justify-start gap-3 whitespace-normal rounded-xl border border-border/70 bg-muted/10 p-3 text-left hover:border-border hover:bg-muted/30"
+                className="flex h-auto items-stretch justify-start gap-3 whitespace-normal rounded-xl border border-border/70 bg-muted/10 p-3 text-left transition-[transform,background-color,border-color] hover:border-border hover:bg-muted/30 active:scale-[0.96]"
               >
                 <span
                   className={cn('w-1 shrink-0 rounded-full', meta.accentClass)}
@@ -153,7 +153,7 @@ export const SkillsOverviewView: FC<SkillsOverviewViewProps> = ({
               type="button"
               variant="ghost"
               onClick={() => onJumpToGrid({ providerId: bucket.providerId })}
-              className="flex h-auto items-center justify-between gap-2 whitespace-normal rounded-lg border border-border/70 bg-muted/10 px-3 py-2.5 text-left hover:border-border hover:bg-muted/30"
+              className="flex h-auto items-center justify-between gap-2 whitespace-normal rounded-lg border border-border/70 bg-muted/10 px-3 py-2.5 text-left transition-[transform,background-color,border-color] hover:border-border hover:bg-muted/30 active:scale-[0.96]"
             >
               <span className="min-w-0">
                 <span className="block truncate text-sm font-medium">
@@ -190,7 +190,7 @@ export const SkillsOverviewView: FC<SkillsOverviewViewProps> = ({
                 type="button"
                 variant="ghost"
                 onClick={() => onJumpToGrid(item.patch)}
-                className="flex h-auto w-full items-center justify-between gap-3 whitespace-normal rounded-lg border border-border/70 bg-muted/10 px-3 py-2.5 text-left hover:border-border hover:bg-muted/30"
+                className="flex h-auto w-full items-center justify-between gap-3 whitespace-normal rounded-lg border border-border/70 bg-muted/10 px-3 py-2.5 text-left transition-[transform,background-color,border-color] hover:border-border hover:bg-muted/30 active:scale-[0.96]"
               >
                 <span className="flex items-center gap-2 text-sm">
                   <span className="inline-flex h-6 min-w-6 items-center justify-center rounded-full border border-warning/30 bg-warning/10 px-1.5 text-xs font-semibold tabular-nums text-warning-foreground">

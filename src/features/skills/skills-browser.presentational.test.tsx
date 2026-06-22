@@ -2,6 +2,7 @@ import { fireEvent, render, screen } from '@testing-library/react'
 import { selectOption } from '@/shared/testing/select-option'
 import { describe, expect, it, vi } from 'vitest'
 import { Button } from '@/shared/ui/button'
+import { TooltipProvider } from '@/shared/ui/tooltip'
 import { SkillsBrowserDialog } from './skills-browser.presentational'
 import type {
   ProjectSkillCatalog,
@@ -109,6 +110,7 @@ function renderDialog(
     selectedSkill: skill,
     selectedDetails: details,
     isCatalogLoading: false,
+    loadingProviderNames: [],
     catalogError: null,
     isDetailsLoading: false,
     detailsError: null,
@@ -127,12 +129,24 @@ function renderDialog(
     onOpenMcpServers: vi.fn(),
     onRevealSkill: vi.fn(),
     onOpenSkillFile: vi.fn(),
+    isRevealing: false,
+    isOpeningFile: false,
+    editorApps: [
+      { id: 'cursor', label: 'Cursor', kind: 'editor' },
+      { id: 'finder', label: 'Finder', kind: 'file-manager' },
+    ],
+    editorAppsLoading: false,
+    onOpenInEditor: vi.fn(),
     ...overrides,
   }
 
   return {
     props,
-    ...render(<SkillsBrowserDialog {...props} />),
+    ...render(
+      <TooltipProvider>
+        <SkillsBrowserDialog {...props} />
+      </TooltipProvider>,
+    ),
   }
 }
 
@@ -236,11 +250,44 @@ describe('SkillsBrowserDialog', () => {
     expect(onOpenSkillFile).toHaveBeenCalledTimes(1)
   })
 
+  it('disables the reveal action while it is in flight', () => {
+    renderDialog({ isRevealing: true })
+    expect(
+      screen.getByRole('button', { name: 'Reveal in Finder' }),
+    ).toBeDisabled()
+  })
+
+  it('renders the open-in-editor menu trigger', () => {
+    renderDialog()
+    expect(
+      screen.getByRole('button', { name: 'Open in editor' }),
+    ).toBeInTheDocument()
+  })
+
+  it('shows which providers are still streaming in', () => {
+    renderDialog({ loadingProviderNames: ['Codex'] })
+    expect(screen.getByText(/Loading Codex/)).toBeInTheDocument()
+  })
+
   it('opens a card detail slide-over in grid mode', () => {
     const onSelectSkill = vi.fn()
     renderDialog({ viewMode: 'grid', isDetailOpen: false, onSelectSkill })
 
     fireEvent.click(screen.getByRole('button', { name: /Review/i }))
     expect(onSelectSkill).toHaveBeenCalledWith('skill-1')
+  })
+
+  it('renders the detail slide-over and closes it from the scrim', () => {
+    const onCloseDetail = vi.fn()
+    renderDialog({ viewMode: 'grid', isDetailOpen: true, onCloseDetail })
+
+    // The detail pane (only present in the slide-over here) exposes the editor menu.
+    expect(
+      screen.getByRole('button', { name: 'Open in editor' }),
+    ).toBeInTheDocument()
+
+    const closers = screen.getAllByRole('button', { name: 'Close details' })
+    fireEvent.click(closers[0])
+    expect(onCloseDetail).toHaveBeenCalled()
   })
 })

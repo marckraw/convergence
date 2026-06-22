@@ -9,6 +9,11 @@ import {
   type SkillCatalogEntry,
   type SkillProviderId,
 } from '@/entities/skill'
+import {
+  projectOpenApi,
+  type ProjectOpenApp,
+  type ProjectOpenAppId,
+} from '@/entities/project-open'
 import { Button } from '@/shared/ui/button'
 import {
   filterSkillCatalog,
@@ -52,6 +57,7 @@ export const SkillsBrowserDialogContainer: FC<
   const closeDialog = useDialogStore((s) => s.close)
   const catalog = useSkillStore((s) => s.catalog)
   const isCatalogLoading = useSkillStore((s) => s.isCatalogLoading)
+  const loadingProviders = useSkillStore((s) => s.loadingProviders)
   const catalogError = useSkillStore((s) => s.catalogError)
   const selectedSkillId = useSkillStore((s) => s.selectedSkillId)
   const detailsBySkillId = useSkillStore((s) => s.detailsBySkillId)
@@ -65,6 +71,10 @@ export const SkillsBrowserDialogContainer: FC<
   const [viewMode, setViewMode] = useState<SkillsViewMode>(DEFAULT_VIEW_MODE)
   const [groupBy, setGroupBy] = useState<SkillGroupBy>(DEFAULT_GROUP_BY)
   const [isDetailOpen, setIsDetailOpen] = useState(false)
+  const [isRevealing, setIsRevealing] = useState(false)
+  const [isOpeningFile, setIsOpeningFile] = useState(false)
+  const [editorApps, setEditorApps] = useState<ProjectOpenApp[]>([])
+  const [editorAppsLoading, setEditorAppsLoading] = useState(false)
 
   const handleOpenChange = useCallback(
     (next: boolean) => {
@@ -90,6 +100,36 @@ export const SkillsBrowserDialogContainer: FC<
       void load()
     }
   }, [open, load])
+
+  // Detect installed editors (Cursor / VS Code / Zed / WebStorm / Finder) once
+  // the dialog opens, mirroring the session header's "Open" menu.
+  useEffect(() => {
+    if (!open) {
+      return
+    }
+    let cancelled = false
+    setEditorAppsLoading(true)
+    projectOpenApi
+      .listApps()
+      .then((apps) => {
+        if (!cancelled) {
+          setEditorApps(apps)
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setEditorApps([])
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setEditorAppsLoading(false)
+        }
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [open])
 
   useEffect(() => {
     resetSkills()
@@ -225,25 +265,53 @@ export const SkillsBrowserDialogContainer: FC<
     [projectId],
   )
 
-  const handleRevealSkill = useCallback(() => {
+  const handleRevealSkill = useCallback(async () => {
     if (!selectedSkill) {
       return
     }
     const request = buildSkillRequest(selectedSkill)
-    if (request) {
-      void skillApi.reveal(request)
+    if (!request) {
+      return
+    }
+    setIsRevealing(true)
+    try {
+      await skillApi.reveal(request)
+    } catch {
+      // Surfacing a failure here is best-effort; the spinner just resets.
+    } finally {
+      setIsRevealing(false)
     }
   }, [selectedSkill, buildSkillRequest])
 
-  const handleOpenSkillFile = useCallback(() => {
+  const handleOpenSkillFile = useCallback(async () => {
     if (!selectedSkill) {
       return
     }
     const request = buildSkillRequest(selectedSkill)
-    if (request) {
-      void skillApi.openPath(request)
+    if (!request) {
+      return
+    }
+    setIsOpeningFile(true)
+    try {
+      await skillApi.openPath(request)
+    } catch {
+      // Best-effort; reset the spinner regardless of outcome.
+    } finally {
+      setIsOpeningFile(false)
     }
   }, [selectedSkill, buildSkillRequest])
+
+  const handleOpenInEditor = useCallback(
+    (appId: ProjectOpenAppId) => {
+      if (!selectedSkill?.path) {
+        return
+      }
+      // Open the skill's folder (SKILL.md + resources), not just the file.
+      const folder = selectedSkill.path.replace(/[/\\][^/\\]*$/, '')
+      void projectOpenApi.open({ appId, path: folder || selectedSkill.path })
+    },
+    [selectedSkill],
+  )
 
   const handleOpenMcpServers = useCallback(() => {
     openDialog('mcp-servers')
@@ -265,6 +333,9 @@ export const SkillsBrowserDialogContainer: FC<
         selectedSkill ? (detailsBySkillId[selectedSkill.id] ?? null) : null
       }
       isCatalogLoading={isCatalogLoading}
+      loadingProviderNames={loadingProviders.map(
+        (provider) => provider.providerName,
+      )}
       catalogError={catalogError}
       isDetailsLoading={
         selectedSkill ? loadingDetailsSkillId === selectedSkill.id : false
@@ -287,6 +358,11 @@ export const SkillsBrowserDialogContainer: FC<
       onOpenMcpServers={handleOpenMcpServers}
       onRevealSkill={handleRevealSkill}
       onOpenSkillFile={handleOpenSkillFile}
+      isRevealing={isRevealing}
+      isOpeningFile={isOpeningFile}
+      editorApps={editorApps}
+      editorAppsLoading={editorAppsLoading}
+      onOpenInEditor={handleOpenInEditor}
       trigger={
         trigger ?? (
           <Button

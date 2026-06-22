@@ -43,7 +43,7 @@ function renderSkillRow(
             <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-warning-foreground" />
           ) : null}
         </span>
-        <span className="mt-1 line-clamp-2 block whitespace-normal text-xs font-normal leading-5 text-muted-foreground">
+        <span className="mt-1 line-clamp-2 block whitespace-normal text-xs font-normal leading-5 text-pretty text-muted-foreground">
           {skill.shortDescription || skill.description || 'No description.'}
         </span>
         <span className="mt-2 flex flex-wrap items-center gap-1.5">
@@ -85,7 +85,7 @@ export const SkillsListPane: FC<SkillsListPaneProps> = ({
               <p className="truncate text-sm font-semibold">
                 {group.providerName}
               </p>
-              <p className="text-xs text-muted-foreground">
+              <p className="text-xs tabular-nums text-muted-foreground">
                 {group.skills.length} skill
                 {group.skills.length === 1 ? '' : 's'}
               </p>

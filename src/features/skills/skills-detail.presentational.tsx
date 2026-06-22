@@ -1,7 +1,10 @@
-import type { FC } from 'react'
+import type { FC, ReactNode } from 'react'
 import {
+  ChevronDown,
+  Code2,
   ExternalLink,
   FileText,
+  Folder,
   FolderOpen,
   Link2,
   Loader2,
@@ -14,8 +17,16 @@ import type {
   SkillDetails,
   SkillWarning,
 } from '@/entities/skill'
+import type { ProjectOpenApp, ProjectOpenAppId } from '@/entities/project-open'
 import { Button } from '@/shared/ui/button'
 import { CopyButton } from '@/shared/ui/copy-button'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/shared/ui/dropdown-menu'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/shared/ui/tooltip'
 import { Markdown } from '@/shared/ui/markdown.container'
 import { cn } from '@/shared/lib/cn.pure'
 import {
@@ -47,8 +58,28 @@ interface SkillDetailPaneProps {
   onReveal?: () => void
   /** Open the SKILL.md in the default editor. */
   onOpenFile?: () => void
+  /** True while the reveal IPC call is in flight (shows a spinner). */
+  isRevealing?: boolean
+  /** True while the open-file IPC call is in flight (shows a spinner). */
+  isOpeningFile?: boolean
+  /** Installed editors for the "Open in editor" menu. */
+  editorApps?: ProjectOpenApp[]
+  editorAppsLoading?: boolean
+  onOpenInEditor?: (appId: ProjectOpenAppId) => void
   /** When provided, renders as a dismissable slide-over (grid/overview). */
   onClose?: () => void
+}
+
+/** Wraps an action in a hover tooltip so each icon's purpose is legible. */
+function withTooltip(label: string, node: ReactNode) {
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <span className="inline-flex">{node}</span>
+      </TooltipTrigger>
+      <TooltipContent>{label}</TooltipContent>
+    </Tooltip>
+  )
 }
 
 function renderDependencyList(dependencies: SkillDependency[]) {
@@ -112,6 +143,11 @@ export const SkillDetailPane: FC<SkillDetailPaneProps> = ({
   onOpenMcpServers,
   onReveal,
   onOpenFile,
+  isRevealing,
+  isOpeningFile,
+  editorApps,
+  editorAppsLoading,
+  onOpenInEditor,
   onClose,
 }) => {
   if (!projectName) {
@@ -149,62 +185,137 @@ export const SkillDetailPane: FC<SkillDetailPaneProps> = ({
             {renderStatusBadge(selectedSkill.enabled)}
             {renderWarningBadge(selectedSkill.warnings.length)}
           </div>
-          <h3 className="truncate text-lg font-semibold">
+          <h3 className="text-lg font-semibold break-words text-balance">
             {selectedSkill.displayName}
           </h3>
-          <p className="mt-1 text-sm text-muted-foreground">
+          <p className="mt-1 text-sm text-pretty text-muted-foreground">
             {selectedSkill.description || 'No description.'}
           </p>
         </div>
         <div className="flex shrink-0 items-center gap-1.5">
-          <CopyButton text={selectedSkill.name} label="Copy skill name" />
-          {selectedSkill.path ? (
-            <CopyButton text={selectedSkill.path} label="Copy SKILL.md path" />
-          ) : null}
-          {nativeInvocation ? (
-            <CopyButton
-              text={nativeInvocation}
-              label="Copy native invocation"
-            />
-          ) : null}
-          {selectedSkill.path && onReveal ? (
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              className="h-7 w-7"
-              onClick={onReveal}
-              aria-label="Reveal in Finder"
-              title="Reveal in Finder"
-            >
-              <FolderOpen className="h-4 w-4" />
-            </Button>
-          ) : null}
-          {selectedSkill.path && onOpenFile ? (
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              className="h-7 w-7"
-              onClick={onOpenFile}
-              aria-label="Open SKILL.md"
-              title="Open SKILL.md"
-            >
-              <ExternalLink className="h-4 w-4" />
-            </Button>
-          ) : null}
-          {onClose ? (
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              className="h-7 w-7"
-              onClick={onClose}
-              aria-label="Close details"
-            >
-              <X className="h-4 w-4" />
-            </Button>
-          ) : null}
+          {withTooltip(
+            'Copy skill name',
+            <CopyButton text={selectedSkill.name} label="Copy skill name" />,
+          )}
+          {selectedSkill.path
+            ? withTooltip(
+                'Copy SKILL.md path',
+                <CopyButton
+                  text={selectedSkill.path}
+                  label="Copy SKILL.md path"
+                />,
+              )
+            : null}
+          {nativeInvocation
+            ? withTooltip(
+                'Copy native invocation',
+                <CopyButton
+                  text={nativeInvocation}
+                  label="Copy native invocation"
+                />,
+              )
+            : null}
+          {selectedSkill.path && onReveal
+            ? withTooltip(
+                'Reveal in Finder',
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="h-7 w-7"
+                  onClick={onReveal}
+                  disabled={isRevealing}
+                  aria-label="Reveal in Finder"
+                >
+                  {isRevealing ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <FolderOpen className="h-4 w-4" />
+                  )}
+                </Button>,
+              )
+            : null}
+          {selectedSkill.path && onOpenInEditor
+            ? withTooltip(
+                'Open the skill folder in an editor',
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 gap-1 px-2 text-xs"
+                      aria-label="Open in editor"
+                    >
+                      <Code2 className="h-3.5 w-3.5" />
+                      Open
+                      <ChevronDown className="h-3 w-3" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="min-w-40">
+                    {editorAppsLoading ? (
+                      <DropdownMenuItem disabled>
+                        Detecting apps...
+                      </DropdownMenuItem>
+                    ) : (editorApps?.length ?? 0) === 0 ? (
+                      <DropdownMenuItem disabled>
+                        No editors found
+                      </DropdownMenuItem>
+                    ) : (
+                      editorApps?.map((app) => {
+                        const Icon =
+                          app.kind === 'file-manager' ? Folder : Code2
+                        return (
+                          <DropdownMenuItem
+                            key={app.id}
+                            onClick={() => onOpenInEditor(app.id)}
+                            className="gap-2"
+                          >
+                            <Icon className="h-3.5 w-3.5" />
+                            {app.label}
+                          </DropdownMenuItem>
+                        )
+                      })
+                    )}
+                  </DropdownMenuContent>
+                </DropdownMenu>,
+              )
+            : null}
+          {selectedSkill.path && onOpenFile
+            ? withTooltip(
+                'Open SKILL.md',
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="h-7 w-7"
+                  onClick={onOpenFile}
+                  disabled={isOpeningFile}
+                  aria-label="Open SKILL.md"
+                >
+                  {isOpeningFile ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <ExternalLink className="h-4 w-4" />
+                  )}
+                </Button>,
+              )
+            : null}
+          {onClose
+            ? withTooltip(
+                'Close',
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="h-7 w-7"
+                  onClick={onClose}
+                  aria-label="Close details"
+                >
+                  <X className="h-4 w-4" />
+                </Button>,
+              )
+            : null}
         </div>
       </div>
 
@@ -348,7 +459,7 @@ export const SkillDetailPane: FC<SkillDetailPaneProps> = ({
               <div className="mb-3 flex items-center gap-2 border-b border-border/60 pb-3">
                 <FileText className="h-4 w-4 text-muted-foreground" />
                 <p className="text-sm font-medium">SKILL.md</p>
-                <span className="ml-auto text-xs text-muted-foreground">
+                <span className="ml-auto text-xs tabular-nums text-muted-foreground">
                   {selectedDetails.sizeBytes} bytes
                 </span>
               </div>

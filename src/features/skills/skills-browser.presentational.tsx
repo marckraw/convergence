@@ -1,4 +1,5 @@
 import type { FC, ReactNode } from 'react'
+import { AnimatePresence, motion } from 'motion/react'
 import {
   BookOpen,
   LayoutDashboard,
@@ -15,6 +16,7 @@ import type {
   SkillDetails,
   SkillProviderId,
 } from '@/entities/skill'
+import type { ProjectOpenApp, ProjectOpenAppId } from '@/entities/project-open'
 import { Button } from '@/shared/ui/button'
 import {
   Dialog,
@@ -49,6 +51,9 @@ import { SkillDetailPane } from './skills-detail.presentational'
 
 export type SkillsViewMode = 'overview' | 'grid' | 'list'
 
+// Animated scrim that stays a real (accessible) Button rather than a bare div.
+const MotionButton = motion.create(Button)
+
 interface SkillsBrowserDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
@@ -63,6 +68,7 @@ interface SkillsBrowserDialogProps {
   selectedSkill: SkillCatalogEntry | null
   selectedDetails: SkillDetails | null
   isCatalogLoading: boolean
+  loadingProviderNames: string[]
   catalogError: string | null
   isDetailsLoading: boolean
   detailsError: string | null
@@ -81,6 +87,11 @@ interface SkillsBrowserDialogProps {
   onOpenMcpServers: () => void
   onRevealSkill: () => void
   onOpenSkillFile: () => void
+  isRevealing: boolean
+  isOpeningFile: boolean
+  editorApps: ProjectOpenApp[]
+  editorAppsLoading: boolean
+  onOpenInEditor: (appId: ProjectOpenAppId) => void
 }
 
 const VIEW_MODES: Array<{
@@ -317,7 +328,7 @@ function renderCatalogPlaceholder({
       </div>
     )
   }
-  if (hasCatalog && catalog?.providers.length === 0) {
+  if (hasCatalog && catalog?.providers.length === 0 && !isCatalogLoading) {
     return (
       <p className="text-sm text-muted-foreground">
         No skill-capable providers are currently available.
@@ -346,6 +357,7 @@ export const SkillsBrowserDialog: FC<SkillsBrowserDialogProps> = (props) => {
     isDetailsLoading,
     detailsError,
     isDetailOpen,
+    loadingProviderNames,
     totalSkillCount,
     filteredSkillCount,
     onViewModeChange,
@@ -356,6 +368,11 @@ export const SkillsBrowserDialog: FC<SkillsBrowserDialogProps> = (props) => {
     onOpenMcpServers,
     onRevealSkill,
     onOpenSkillFile,
+    isRevealing,
+    isOpeningFile,
+    editorApps,
+    editorAppsLoading,
+    onOpenInEditor,
   } = props
 
   const selectedSkillId = selectedSkill?.id ?? null
@@ -380,10 +397,24 @@ export const SkillsBrowserDialog: FC<SkillsBrowserDialogProps> = (props) => {
                 <DialogTitle>Skills</DialogTitle>
               </div>
               <DialogDescription className="mt-1">
-                {projectName
-                  ? `${filteredSkillCount}/${totalSkillCount} skills in ${projectName}.`
-                  : 'Select a project to browse provider skills.'}
+                {projectName ? (
+                  <>
+                    <span className="tabular-nums">{filteredSkillCount}</span>/
+                    <span className="tabular-nums">{totalSkillCount}</span>{' '}
+                    skills in {projectName}.
+                  </>
+                ) : (
+                  'Select a project to browse provider skills.'
+                )}
               </DialogDescription>
+              {loadingProviderNames.length > 0 ? (
+                <div className="mt-1 flex items-center gap-1.5 text-xs text-muted-foreground">
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                  <span className="truncate">
+                    Loading {loadingProviderNames.join(', ')}…
+                  </span>
+                </div>
+              ) : null}
             </div>
             {renderViewSwitcher(viewMode, onViewModeChange)}
           </div>
@@ -411,31 +442,54 @@ export const SkillsBrowserDialog: FC<SkillsBrowserDialogProps> = (props) => {
                   showGroupHeaders={groupBy !== 'none'}
                 />
               </div>
-              {isDetailOpen && selectedSkill ? (
-                <>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    aria-label="Close details"
-                    className="absolute inset-0 z-10 h-auto w-auto rounded-none bg-black/30 p-0 hover:bg-black/30"
-                    onClick={onCloseDetail}
-                  />
-                  <div className="absolute inset-y-0 right-0 z-20 flex w-[min(620px,85%)] flex-col border-l border-border/70 bg-background shadow-2xl">
-                    <SkillDetailPane
-                      projectName={projectName}
-                      catalog={catalog}
-                      selectedSkill={selectedSkill}
-                      selectedDetails={selectedDetails}
-                      isDetailsLoading={isDetailsLoading}
-                      detailsError={detailsError}
-                      onOpenMcpServers={onOpenMcpServers}
-                      onReveal={onRevealSkill}
-                      onOpenFile={onOpenSkillFile}
-                      onClose={onCloseDetail}
-                    />
-                  </div>
-                </>
-              ) : null}
+              <AnimatePresence>
+                {isDetailOpen && selectedSkill
+                  ? [
+                      <MotionButton
+                        key="scrim"
+                        type="button"
+                        variant="ghost"
+                        aria-label="Close details"
+                        className="absolute inset-0 z-10 h-auto w-auto rounded-none bg-black/30 p-0 hover:bg-black/30"
+                        onClick={onCloseDetail}
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        transition={{ duration: 0.2 }}
+                      />,
+                      <motion.div
+                        key="panel"
+                        className="absolute inset-y-0 right-0 z-20 flex w-[min(620px,85%)] flex-col border-l border-border/70 bg-background shadow-2xl"
+                        initial={{ x: '100%' }}
+                        animate={{ x: 0 }}
+                        exit={{ x: '100%' }}
+                        transition={{
+                          type: 'spring',
+                          duration: 0.3,
+                          bounce: 0,
+                        }}
+                      >
+                        <SkillDetailPane
+                          projectName={projectName}
+                          catalog={catalog}
+                          selectedSkill={selectedSkill}
+                          selectedDetails={selectedDetails}
+                          isDetailsLoading={isDetailsLoading}
+                          detailsError={detailsError}
+                          onOpenMcpServers={onOpenMcpServers}
+                          onReveal={onRevealSkill}
+                          onOpenFile={onOpenSkillFile}
+                          isRevealing={isRevealing}
+                          isOpeningFile={isOpeningFile}
+                          editorApps={editorApps}
+                          editorAppsLoading={editorAppsLoading}
+                          onOpenInEditor={onOpenInEditor}
+                          onClose={onCloseDetail}
+                        />
+                      </motion.div>,
+                    ]
+                  : null}
+              </AnimatePresence>
             </>
           ) : (
             <div className="grid h-full min-h-0 grid-cols-1 lg:grid-cols-[380px_minmax(0,1fr)]">
@@ -456,6 +510,11 @@ export const SkillsBrowserDialog: FC<SkillsBrowserDialogProps> = (props) => {
                 onOpenMcpServers={onOpenMcpServers}
                 onReveal={onRevealSkill}
                 onOpenFile={onOpenSkillFile}
+                isRevealing={isRevealing}
+                isOpeningFile={isOpeningFile}
+                editorApps={editorApps}
+                editorAppsLoading={editorAppsLoading}
+                onOpenInEditor={onOpenInEditor}
               />
             </div>
           )}

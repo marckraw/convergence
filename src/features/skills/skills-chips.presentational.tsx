@@ -65,7 +65,7 @@ export function renderWarningBadge(
     <span
       className={cn(
         PILL,
-        'border-warning/20 bg-warning/10 text-warning-foreground',
+        'border-warning/20 bg-warning/10 text-warning-foreground tabular-nums',
         className,
       )}
     >
