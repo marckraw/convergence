@@ -5,15 +5,24 @@ import type {
   SkillDependencyState,
   SkillProviderId,
   SkillScope,
+  SkillWarningCode,
 } from '@/entities/skill'
+import {
+  SCOPE_LABELS,
+  type SkillOrigin,
+  scopeOrigin,
+} from './skills-browser.styles'
 
 export type SkillEnabledFilter = 'all' | 'enabled' | 'disabled'
-export type SkillWarningFilter = 'all' | 'warnings'
+/** 'all' = no filter, 'warnings' = any warning, or a specific warning code. */
+export type SkillWarningFilter = 'all' | 'warnings' | SkillWarningCode
 export type SkillDependencyStateFilter = 'all' | SkillDependencyState
+export type SkillOriginFilter = 'all' | SkillOrigin
 
 export interface SkillBrowserFilters {
   query: string
   providerId: SkillProviderId | 'all'
+  origin: SkillOriginFilter
   scope: SkillScope | 'all'
   enabled: SkillEnabledFilter
   warnings: SkillWarningFilter
@@ -76,6 +85,9 @@ function matchesFilters(
   ) {
     return false
   }
+  if (filters.origin !== 'all' && scopeOrigin(skill.scope) !== filters.origin) {
+    return false
+  }
   if (filters.scope !== 'all' && skill.scope !== filters.scope) {
     return false
   }
@@ -85,8 +97,14 @@ function matchesFilters(
   if (filters.enabled === 'disabled' && skill.enabled) {
     return false
   }
-  if (filters.warnings === 'warnings' && skill.warnings.length === 0) {
-    return false
+  if (filters.warnings === 'warnings') {
+    if (skill.warnings.length === 0) {
+      return false
+    }
+  } else if (filters.warnings !== 'all') {
+    if (!skill.warnings.some((warning) => warning.code === filters.warnings)) {
+      return false
+    }
   }
   if (
     filters.dependencyState !== 'all' &&
@@ -155,6 +173,112 @@ export function firstSkillInGroups(
 
 export function hasMcpDependencies(skill: SkillCatalogEntry): boolean {
   return skill.dependencies.some((dependency) => dependency.kind === 'mcp')
+}
+
+export function flattenGroups(
+  groups: SkillBrowserProviderGroup[],
+): SkillCatalogEntry[] {
+  return groups.flatMap((group) => group.skills)
+}
+
+export type SkillReadiness = 'ready' | 'needs-install' | 'needs-auth'
+
+/**
+ * Collapses a skill's dependency states into a single readiness signal.
+ * Auth gating wins over install gating because it blocks usage outright.
+ */
+export function skillReadiness(skill: SkillCatalogEntry): SkillReadiness {
+  if (
+    skill.dependencies.some((dependency) => dependency.state === 'needs-auth')
+  ) {
+    return 'needs-auth'
+  }
+  if (
+    skill.dependencies.some(
+      (dependency) => dependency.state === 'needs-install',
+    )
+  ) {
+    return 'needs-install'
+  }
+  return 'ready'
+}
+
+const READINESS_LABELS: Record<SkillReadiness, string> = {
+  ready: 'Ready',
+  'needs-install': 'Needs install',
+  'needs-auth': 'Needs auth',
+}
+
+const READINESS_ORDER: SkillReadiness[] = [
+  'needs-auth',
+  'needs-install',
+  'ready',
+]
+
+export type SkillGroupBy = 'provider' | 'scope' | 'readiness' | 'none'
+
+export interface SkillGridGroup {
+  key: string
+  label: string
+  skills: SkillCatalogEntry[]
+}
+
+/**
+ * Reshapes the already-filtered provider groups for the grid view. The grid
+ * can stay grouped by provider (the catalog's natural shape) or regroup the
+ * flattened skills by scope, dependency readiness, or not at all.
+ */
+export function groupSkillsForGrid(
+  groups: SkillBrowserProviderGroup[],
+  groupBy: SkillGroupBy,
+): SkillGridGroup[] {
+  if (groupBy === 'provider') {
+    return groups
+      .filter((group) => group.skills.length > 0)
+      .map((group) => ({
+        key: group.providerId,
+        label: group.providerName,
+        skills: group.skills,
+      }))
+  }
+
+  const skills = flattenGroups(groups)
+  if (skills.length === 0) {
+    return []
+  }
+
+  if (groupBy === 'none') {
+    return [{ key: 'all', label: 'All skills', skills }]
+  }
+
+  if (groupBy === 'scope') {
+    const buckets = new Map<SkillScope, SkillCatalogEntry[]>()
+    for (const skill of skills) {
+      const bucket = buckets.get(skill.scope) ?? []
+      bucket.push(skill)
+      buckets.set(skill.scope, bucket)
+    }
+    return Array.from(buckets, ([scope, bucketSkills]) => ({
+      key: scope,
+      label: SCOPE_LABELS[scope],
+      skills: bucketSkills,
+    })).sort((a, b) => b.skills.length - a.skills.length)
+  }
+
+  const buckets = new Map<SkillReadiness, SkillCatalogEntry[]>()
+  for (const skill of skills) {
+    const readiness = skillReadiness(skill)
+    const bucket = buckets.get(readiness) ?? []
+    bucket.push(skill)
+    buckets.set(readiness, bucket)
+  }
+  return READINESS_ORDER.filter((readiness) => buckets.has(readiness)).map(
+    (readiness) => ({
+      key: readiness,
+      label: READINESS_LABELS[readiness],
+      skills: buckets.get(readiness) ?? [],
+    }),
+  )
 }
 
 export function getNativeSkillInvocationText(

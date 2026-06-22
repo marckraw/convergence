@@ -12,10 +12,12 @@ import type { DetectedProvider } from '../provider/detect'
 import type {
   ProjectSkillCatalog,
   ProviderSkillCatalog,
+  SkillCatalogEntry,
   SkillCatalogOptions,
   SkillDetails,
   SkillDetailsRequest,
   SkillProviderId,
+  SkillProviderListing,
   SkillResourceKind,
   SkillResourceSummary,
 } from './skills.types'
@@ -236,6 +238,13 @@ export class SkillsService {
   private createAdapter: (
     provider: DetectedProvider,
   ) => SkillProviderCatalogAdapter | null
+  // Adapters are memoized so stateful adapters (e.g. the Codex scan cache)
+  // survive across calls instead of being rebuilt — and re-paying cold starts —
+  // on every dialog open.
+  private adapterByProviderId = new Map<
+    string,
+    SkillProviderCatalogAdapter | null
+  >()
 
   constructor(
     private projectService: ProjectService,
@@ -244,6 +253,71 @@ export class SkillsService {
   ) {
     this.now = options.now ?? (() => new Date())
     this.createAdapter = options.createAdapter ?? defaultCreateAdapter
+  }
+
+  private getAdapter(
+    provider: DetectedProvider,
+  ): SkillProviderCatalogAdapter | null {
+    if (!this.adapterByProviderId.has(provider.id)) {
+      this.adapterByProviderId.set(provider.id, this.createAdapter(provider))
+    }
+    return this.adapterByProviderId.get(provider.id) ?? null
+  }
+
+  /**
+   * Lightweight list of skill-capable providers without scanning any skills.
+   * The renderer uses this to fan out one listProvider call per provider so the
+   * dialog can render fast providers immediately instead of blocking on the
+   * slowest one (typically Codex).
+   */
+  listProviderIds(projectId: string): SkillProviderListing {
+    const project = this.projectService.getById(projectId)
+    if (!project) {
+      throw new Error(`Project not found: ${projectId}`)
+    }
+
+    const providers = this.detectedProviders.flatMap((provider) => {
+      const providerId = toSkillProviderId(provider.id)
+      if (!providerId || !this.getAdapter(provider)) {
+        return []
+      }
+      return [{ providerId, providerName: provider.name }]
+    })
+
+    return {
+      projectId: project.id,
+      projectName: project.name,
+      providers,
+    }
+  }
+
+  /** Scans a single provider, mirroring listByProjectId's per-provider path. */
+  async listProvider(
+    projectId: string,
+    providerId: SkillProviderId,
+    options: SkillCatalogOptions = {},
+  ): Promise<ProviderSkillCatalog | null> {
+    const project = this.projectService.getById(projectId)
+    if (!project) {
+      throw new Error(`Project not found: ${projectId}`)
+    }
+
+    const provider = this.detectedProviders.find(
+      (candidate) => toSkillProviderId(candidate.id) === providerId,
+    )
+    if (!provider) {
+      return null
+    }
+
+    try {
+      const adapter = this.getAdapter(provider)
+      if (!adapter) {
+        return null
+      }
+      return await adapter.list(project.repositoryPath, options)
+    } catch (error) {
+      return providerErrorCatalog(provider, error)
+    }
   }
 
   async listByProjectId(
@@ -258,7 +332,7 @@ export class SkillsService {
     const providers = await Promise.all(
       this.detectedProviders.map(async (provider) => {
         try {
-          const adapter = this.createAdapter(provider)
+          const adapter = this.getAdapter(provider)
           if (!adapter) {
             return null
           }
@@ -285,7 +359,7 @@ export class SkillsService {
     const providers = await Promise.all(
       this.detectedProviders.map(async (provider) => {
         try {
-          const adapter = this.createAdapter(provider)
+          const adapter = this.getAdapter(provider)
           if (!adapter) {
             return null
           }
@@ -306,7 +380,14 @@ export class SkillsService {
     }
   }
 
-  async readDetails(input: SkillDetailsRequest): Promise<SkillDetails> {
+  /**
+   * Resolves a skill action request to a validated, catalog-known absolute
+   * path. Guards reveal/open/details actions against arbitrary filesystem
+   * access by requiring the path to match a discovered skill.
+   */
+  private async findSkill(
+    input: SkillDetailsRequest,
+  ): Promise<{ entry: SkillCatalogEntry; skillPath: string }> {
     const catalog = await this.listByProjectId(input.projectId)
     const requestedPath = resolve(input.path)
     const entry = catalog.providers
@@ -323,7 +404,18 @@ export class SkillsService {
       throw new Error('Skill not found in provider catalog')
     }
 
-    const skillPath = resolve(entry.path)
+    return { entry, skillPath: resolve(entry.path) }
+  }
+
+  /** Returns the validated SKILL.md path for reveal/open actions. */
+  async resolveSkillPath(input: SkillDetailsRequest): Promise<string> {
+    const { skillPath } = await this.findSkill(input)
+    return skillPath
+  }
+
+  async readDetails(input: SkillDetailsRequest): Promise<SkillDetails> {
+    const { entry, skillPath } = await this.findSkill(input)
+
     if (basename(skillPath).toLowerCase() !== 'skill.md') {
       throw new Error('Skill details can only read SKILL.md files')
     }

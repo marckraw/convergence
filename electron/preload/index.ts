@@ -364,8 +364,18 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.invoke('skills:listByProjectId', projectId, options),
     listGlobal: (options?: { forceReload?: boolean }) =>
       ipcRenderer.invoke('skills:listGlobal', options),
+    listProviderIds: (projectId: string) =>
+      ipcRenderer.invoke('skills:listProviderIds', projectId),
+    listProvider: (
+      projectId: string,
+      providerId: string,
+      options?: { forceReload?: boolean },
+    ) =>
+      ipcRenderer.invoke('skills:listProvider', projectId, providerId, options),
     readDetails: (input: unknown) =>
       ipcRenderer.invoke('skills:readDetails', input),
+    reveal: (input: unknown) => ipcRenderer.invoke('skills:reveal', input),
+    openPath: (input: unknown) => ipcRenderer.invoke('skills:openPath', input),
   },
   prompts: {
     listByProjectId: (projectId: string, options?: { forceReload?: boolean }) =>

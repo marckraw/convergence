@@ -146,6 +146,38 @@ describe('SkillsService', () => {
     })
   })
 
+  it('lists skill provider identities without scanning', () => {
+    const project = projectService.create({ repositoryPath: gitRepoPath })
+    const list = vi.fn(async () => catalog())
+    const service = new SkillsService(projectService, [codexProvider()], {
+      now: () => FIXED_NOW,
+      createAdapter: () => ({ list }),
+    })
+
+    expect(service.listProviderIds(project.id)).toEqual({
+      projectId: project.id,
+      projectName: project.name,
+      providers: [{ providerId: 'codex', providerName: 'Codex' }],
+    })
+    expect(list).not.toHaveBeenCalled()
+  })
+
+  it('scans a single provider on demand', async () => {
+    const project = projectService.create({ repositoryPath: gitRepoPath })
+    const list = vi.fn(async () => catalog())
+    const service = new SkillsService(projectService, [codexProvider()], {
+      now: () => FIXED_NOW,
+      createAdapter: () => ({ list }),
+    })
+
+    await expect(
+      service.listProvider(project.id, 'codex', { forceReload: true }),
+    ).resolves.toEqual(catalog())
+    expect(list).toHaveBeenCalledWith(gitRepoPath, { forceReload: true })
+
+    await expect(service.listProvider(project.id, 'pi')).resolves.toBeNull()
+  })
+
   it('returns a global catalog without requiring a project', async () => {
     const list = vi.fn(async () => catalog())
     const service = new SkillsService(projectService, [codexProvider()], {
@@ -356,6 +388,36 @@ describe('SkillsService', () => {
 
     await expect(
       service.readDetails({
+        projectId: project.id,
+        providerId: 'codex',
+        skillId: entry.id,
+        path: join(tempDir, 'not-cataloged', 'SKILL.md'),
+      }),
+    ).rejects.toThrow('Skill not found in provider catalog')
+  })
+
+  it('resolves a catalog-backed path for reveal/open actions', async () => {
+    const project = projectService.create({ repositoryPath: gitRepoPath })
+    const skillDir = join(tempDir, 'skills', 'skill-a')
+    mkdirSync(skillDir, { recursive: true })
+    writeFileSync(join(skillDir, 'SKILL.md'), '# Skill A\n')
+    const entry = catalogEntry(join(skillDir, 'SKILL.md'))
+    const service = new SkillsService(projectService, [codexProvider()], {
+      now: () => FIXED_NOW,
+      createAdapter: () => ({ list: async () => catalog([entry]) }),
+    })
+
+    await expect(
+      service.resolveSkillPath({
+        projectId: project.id,
+        providerId: 'codex',
+        skillId: entry.id,
+        path: entry.path ?? '',
+      }),
+    ).resolves.toBe(entry.path)
+
+    await expect(
+      service.resolveSkillPath({
         projectId: project.id,
         providerId: 'codex',
         skillId: entry.id,

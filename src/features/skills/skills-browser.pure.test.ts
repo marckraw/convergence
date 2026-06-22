@@ -3,8 +3,11 @@ import {
   findSkillInGroups,
   filterSkillCatalog,
   firstSkillInGroups,
+  flattenGroups,
   getNativeSkillInvocationText,
+  groupSkillsForGrid,
   hasMcpDependencies,
+  skillReadiness,
   type SkillBrowserFilters,
 } from './skills-browser.pure'
 import type { ProjectSkillCatalog, SkillCatalogEntry } from '@/entities/skill'
@@ -12,6 +15,7 @@ import type { ProjectSkillCatalog, SkillCatalogEntry } from '@/entities/skill'
 const baseFilters: SkillBrowserFilters = {
   query: '',
   providerId: 'all',
+  origin: 'all',
   scope: 'all',
   enabled: 'all',
   warnings: 'all',
@@ -119,6 +123,52 @@ describe('filterSkillCatalog', () => {
     ).toEqual(['ship-it'])
   })
 
+  it('filters by a specific warning code', () => {
+    expect(
+      filterSkillCatalog(catalog(), {
+        ...baseFilters,
+        warnings: 'disabled',
+      })[0].skills.map((entry) => entry.name),
+    ).toEqual(['ship-it'])
+
+    expect(
+      filterSkillCatalog(catalog(), {
+        ...baseFilters,
+        warnings: 'duplicate-name',
+      }).flatMap((group) => group.skills),
+    ).toEqual([])
+
+    expect(
+      filterSkillCatalog(catalog(), {
+        ...baseFilters,
+        warnings: 'warnings',
+      })[0].skills.map((entry) => entry.name),
+    ).toEqual(['ship-it'])
+  })
+
+  it('filters by origin bucket across scopes', () => {
+    expect(
+      filterSkillCatalog(catalog(), {
+        ...baseFilters,
+        origin: 'project',
+      })[0].skills.map((entry) => entry.name),
+    ).toEqual(['ship-it'])
+
+    expect(
+      filterSkillCatalog(catalog(), {
+        ...baseFilters,
+        origin: 'global',
+      })[0].skills.map((entry) => entry.name),
+    ).toEqual(['review'])
+
+    expect(
+      filterSkillCatalog(catalog(), {
+        ...baseFilters,
+        origin: 'plugin',
+      }).flatMap((group) => group.skills),
+    ).toEqual([])
+  })
+
   it('matches and filters by dependency metadata', () => {
     expect(
       filterSkillCatalog(catalog(), {
@@ -162,6 +212,53 @@ describe('filterSkillCatalog', () => {
 
     expect(firstSkillInGroups(groups)?.name).toBe('review')
     expect(firstSkillInGroups([])).toBeNull()
+  })
+
+  it('flattens, groups, and derives readiness for the grid view', () => {
+    const groups = filterSkillCatalog(catalog(), baseFilters)
+
+    expect(flattenGroups(groups).map((entry) => entry.name)).toEqual([
+      'review',
+      'ship-it',
+    ])
+
+    expect(skillReadiness(skill('a'))).toBe('ready')
+    expect(
+      skillReadiness(
+        skill('b', {
+          dependencies: [{ kind: 'mcp', name: 'x', state: 'needs-install' }],
+        }),
+      ),
+    ).toBe('needs-install')
+    expect(
+      skillReadiness(
+        skill('c', {
+          dependencies: [
+            { kind: 'mcp', name: 'x', state: 'needs-install' },
+            { kind: 'mcp', name: 'y', state: 'needs-auth' },
+          ],
+        }),
+      ),
+    ).toBe('needs-auth')
+
+    const byProvider = groupSkillsForGrid(groups, 'provider')
+    expect(byProvider.map((group) => group.key)).toEqual(['codex'])
+
+    const byScope = groupSkillsForGrid(groups, 'scope')
+    expect(byScope.map((group) => group.label).sort()).toEqual([
+      'Project',
+      'User',
+    ])
+
+    const byReadiness = groupSkillsForGrid(groups, 'readiness')
+    expect(byReadiness.map((group) => group.key)).toEqual([
+      'needs-auth',
+      'ready',
+    ])
+
+    const flat = groupSkillsForGrid(groups, 'none')
+    expect(flat).toHaveLength(1)
+    expect(flat[0].skills).toHaveLength(2)
   })
 
   it('derives dependency and native invocation helpers', () => {

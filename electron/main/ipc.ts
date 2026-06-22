@@ -1,4 +1,4 @@
-import { ipcMain, dialog, BrowserWindow } from 'electron'
+import { ipcMain, dialog, BrowserWindow, shell } from 'electron'
 import { ProjectService } from '../backend/project/project.service'
 import { SpaceService } from '../backend/space/space.service'
 import type { SpaceSynthesisService } from '../backend/space/space-synthesis.service'
@@ -79,6 +79,7 @@ import type { ProjectSettings } from '../backend/project/project-settings.pure'
 import type {
   SkillCatalogOptions,
   SkillDetailsRequest,
+  SkillProviderId,
 } from '../backend/skills/skills.types'
 import type {
   CreatePromptLibraryInput,
@@ -970,8 +971,41 @@ export function registerIpcHandlers(
     skillsService.listGlobal(options),
   )
 
+  ipcMain.handle('skills:listProviderIds', (_event, projectId: string) =>
+    skillsService.listProviderIds(projectId),
+  )
+
+  ipcMain.handle(
+    'skills:listProvider',
+    (
+      _event,
+      projectId: string,
+      providerId: SkillProviderId,
+      options?: SkillCatalogOptions,
+    ) => skillsService.listProvider(projectId, providerId, options),
+  )
+
   ipcMain.handle('skills:readDetails', (_event, input: SkillDetailsRequest) =>
     skillsService.readDetails(input),
+  )
+
+  ipcMain.handle(
+    'skills:reveal',
+    async (_event, input: SkillDetailsRequest) => {
+      const path = await skillsService.resolveSkillPath(input)
+      shell.showItemInFolder(path)
+    },
+  )
+
+  ipcMain.handle(
+    'skills:openPath',
+    async (_event, input: SkillDetailsRequest) => {
+      const path = await skillsService.resolveSkillPath(input)
+      const error = await shell.openPath(path)
+      if (error) {
+        throw new Error(error)
+      }
+    },
   )
 
   ipcMain.handle(

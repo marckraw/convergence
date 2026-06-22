@@ -4,27 +4,43 @@ import { Library } from 'lucide-react'
 import { useDialogStore } from '@/entities/dialog'
 import { useProjectStore } from '@/entities/project'
 import {
+  skillApi,
   useSkillStore,
+  type SkillCatalogEntry,
   type SkillProviderId,
-  type SkillScope,
 } from '@/entities/skill'
+import {
+  projectOpenApi,
+  type ProjectOpenApp,
+  type ProjectOpenAppId,
+} from '@/entities/project-open'
 import { Button } from '@/shared/ui/button'
 import {
   filterSkillCatalog,
   findSkillInGroups,
   firstSkillInGroups,
+  groupSkillsForGrid,
   type SkillBrowserFilters,
+  type SkillGroupBy,
 } from './skills-browser.pure'
-import { SkillsBrowserDialog } from './skills-browser.presentational'
+import { buildSkillsOverview } from './skills-overview.pure'
+import {
+  SkillsBrowserDialog,
+  type SkillsViewMode,
+} from './skills-browser.presentational'
 
 const DEFAULT_FILTERS: SkillBrowserFilters = {
   query: '',
   providerId: 'all',
+  origin: 'all',
   scope: 'all',
   enabled: 'all',
   warnings: 'all',
   dependencyState: 'all',
 }
+
+const DEFAULT_VIEW_MODE: SkillsViewMode = 'overview'
+const DEFAULT_GROUP_BY: SkillGroupBy = 'provider'
 
 interface SkillsBrowserDialogContainerProps {
   trigger?: ReactNode
@@ -41,6 +57,7 @@ export const SkillsBrowserDialogContainer: FC<
   const closeDialog = useDialogStore((s) => s.close)
   const catalog = useSkillStore((s) => s.catalog)
   const isCatalogLoading = useSkillStore((s) => s.isCatalogLoading)
+  const loadingProviders = useSkillStore((s) => s.loadingProviders)
   const catalogError = useSkillStore((s) => s.catalogError)
   const selectedSkillId = useSkillStore((s) => s.selectedSkillId)
   const detailsBySkillId = useSkillStore((s) => s.detailsBySkillId)
@@ -51,6 +68,13 @@ export const SkillsBrowserDialogContainer: FC<
   const loadDetails = useSkillStore((s) => s.loadDetails)
   const resetSkills = useSkillStore((s) => s.reset)
   const [filters, setFilters] = useState<SkillBrowserFilters>(DEFAULT_FILTERS)
+  const [viewMode, setViewMode] = useState<SkillsViewMode>(DEFAULT_VIEW_MODE)
+  const [groupBy, setGroupBy] = useState<SkillGroupBy>(DEFAULT_GROUP_BY)
+  const [isDetailOpen, setIsDetailOpen] = useState(false)
+  const [isRevealing, setIsRevealing] = useState(false)
+  const [isOpeningFile, setIsOpeningFile] = useState(false)
+  const [editorApps, setEditorApps] = useState<ProjectOpenApp[]>([])
+  const [editorAppsLoading, setEditorAppsLoading] = useState(false)
 
   const handleOpenChange = useCallback(
     (next: boolean) => {
@@ -77,9 +101,42 @@ export const SkillsBrowserDialogContainer: FC<
     }
   }, [open, load])
 
+  // Detect installed editors (Cursor / VS Code / Zed / WebStorm / Finder) once
+  // the dialog opens, mirroring the session header's "Open" menu.
+  useEffect(() => {
+    if (!open) {
+      return
+    }
+    let cancelled = false
+    setEditorAppsLoading(true)
+    projectOpenApi
+      .listApps()
+      .then((apps) => {
+        if (!cancelled) {
+          setEditorApps(apps)
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setEditorApps([])
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setEditorAppsLoading(false)
+        }
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [open])
+
   useEffect(() => {
     resetSkills()
     setFilters(DEFAULT_FILTERS)
+    setViewMode(DEFAULT_VIEW_MODE)
+    setGroupBy(DEFAULT_GROUP_BY)
+    setIsDetailOpen(false)
     if (useDialogStore.getState().openDialog === 'skills-browser') {
       closeDialog()
     }
@@ -89,6 +146,11 @@ export const SkillsBrowserDialogContainer: FC<
     () => filterSkillCatalog(catalog, filters),
     [catalog, filters],
   )
+  const gridGroups = useMemo(
+    () => groupSkillsForGrid(groups, groupBy),
+    [groups, groupBy],
+  )
+  const overview = useMemo(() => buildSkillsOverview(catalog), [catalog])
   const selectedSkill =
     findSkillInGroups(groups, selectedSkillId) ?? firstSkillInGroups(groups)
 
@@ -135,16 +197,6 @@ export const SkillsBrowserDialogContainer: FC<
     return Array.from(providers, ([id, label]) => ({ id, label }))
   }, [catalog])
 
-  const scopeOptions = useMemo(() => {
-    const scopes = new Set<SkillScope>()
-    for (const provider of catalog?.providers ?? []) {
-      for (const skill of provider.skills) {
-        scopes.add(skill.scope)
-      }
-    }
-    return Array.from(scopes).sort()
-  }, [catalog])
-
   const totalSkillCount = useMemo(
     () =>
       catalog?.providers.reduce(
@@ -165,6 +217,102 @@ export const SkillsBrowserDialogContainer: FC<
     [],
   )
 
+  const handleViewModeChange = useCallback((mode: SkillsViewMode) => {
+    // Overview is the clean landscape: leaving it back to the dashboard clears
+    // any filter a previous drill-in applied.
+    if (mode === 'overview') {
+      setFilters(DEFAULT_FILTERS)
+    }
+    setViewMode(mode)
+    setIsDetailOpen(false)
+  }, [])
+
+  const handleJumpToGrid = useCallback(
+    (patch: Partial<SkillBrowserFilters>) => {
+      // Each dashboard drill-in is a single fresh filter, not an accumulation on
+      // top of whatever the previous card selected.
+      setFilters({ ...DEFAULT_FILTERS, ...patch })
+      setViewMode('grid')
+      setIsDetailOpen(false)
+    },
+    [],
+  )
+
+  const handleSelectSkill = useCallback(
+    (skillId: string) => {
+      selectSkill(skillId)
+      if (viewMode !== 'list') {
+        setIsDetailOpen(true)
+      }
+    },
+    [selectSkill, viewMode],
+  )
+
+  const handleCloseDetail = useCallback(() => {
+    setIsDetailOpen(false)
+  }, [])
+
+  const buildSkillRequest = useCallback(
+    (skill: SkillCatalogEntry) =>
+      projectId && skill.path
+        ? {
+            projectId,
+            providerId: skill.providerId,
+            skillId: skill.id,
+            path: skill.path,
+          }
+        : null,
+    [projectId],
+  )
+
+  const handleRevealSkill = useCallback(async () => {
+    if (!selectedSkill) {
+      return
+    }
+    const request = buildSkillRequest(selectedSkill)
+    if (!request) {
+      return
+    }
+    setIsRevealing(true)
+    try {
+      await skillApi.reveal(request)
+    } catch {
+      // Surfacing a failure here is best-effort; the spinner just resets.
+    } finally {
+      setIsRevealing(false)
+    }
+  }, [selectedSkill, buildSkillRequest])
+
+  const handleOpenSkillFile = useCallback(async () => {
+    if (!selectedSkill) {
+      return
+    }
+    const request = buildSkillRequest(selectedSkill)
+    if (!request) {
+      return
+    }
+    setIsOpeningFile(true)
+    try {
+      await skillApi.openPath(request)
+    } catch {
+      // Best-effort; reset the spinner regardless of outcome.
+    } finally {
+      setIsOpeningFile(false)
+    }
+  }, [selectedSkill, buildSkillRequest])
+
+  const handleOpenInEditor = useCallback(
+    (appId: ProjectOpenAppId) => {
+      if (!selectedSkill?.path) {
+        return
+      }
+      // Open the skill's folder (SKILL.md + resources), not just the file.
+      const folder = selectedSkill.path.replace(/[/\\][^/\\]*$/, '')
+      void projectOpenApi.open({ appId, path: folder || selectedSkill.path })
+    },
+    [selectedSkill],
+  )
+
   const handleOpenMcpServers = useCallback(() => {
     openDialog('mcp-servers')
   }, [openDialog])
@@ -175,12 +323,19 @@ export const SkillsBrowserDialogContainer: FC<
       onOpenChange={handleOpenChange}
       projectName={projectName}
       catalog={catalog}
+      viewMode={viewMode}
+      groupBy={groupBy}
       groups={groups}
+      gridGroups={gridGroups}
+      overview={overview}
       selectedSkill={selectedSkill}
       selectedDetails={
         selectedSkill ? (detailsBySkillId[selectedSkill.id] ?? null) : null
       }
       isCatalogLoading={isCatalogLoading}
+      loadingProviderNames={loadingProviders.map(
+        (provider) => provider.providerName,
+      )}
       catalogError={catalogError}
       isDetailsLoading={
         selectedSkill ? loadingDetailsSkillId === selectedSkill.id : false
@@ -188,15 +343,26 @@ export const SkillsBrowserDialogContainer: FC<
       detailsError={
         selectedSkill ? detailsErrorBySkillId[selectedSkill.id] || null : null
       }
+      isDetailOpen={isDetailOpen}
       filters={filters}
       providerOptions={providerOptions}
-      scopeOptions={scopeOptions}
       totalSkillCount={totalSkillCount}
       filteredSkillCount={filteredSkillCount}
+      onViewModeChange={handleViewModeChange}
+      onGroupByChange={setGroupBy}
       onFiltersChange={handleFiltersChange}
-      onSelectSkill={selectSkill}
+      onJumpToGrid={handleJumpToGrid}
+      onSelectSkill={handleSelectSkill}
+      onCloseDetail={handleCloseDetail}
       onRefresh={() => void load(true)}
       onOpenMcpServers={handleOpenMcpServers}
+      onRevealSkill={handleRevealSkill}
+      onOpenSkillFile={handleOpenSkillFile}
+      isRevealing={isRevealing}
+      isOpeningFile={isOpeningFile}
+      editorApps={editorApps}
+      editorAppsLoading={editorAppsLoading}
+      onOpenInEditor={handleOpenInEditor}
       trigger={
         trigger ?? (
           <Button
