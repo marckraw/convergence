@@ -96,6 +96,17 @@ export interface ProjectSkillCatalog {
   refreshedAt: string
 }
 
+export interface SkillProviderDescriptor {
+  providerId: SkillProviderId
+  providerName: string
+}
+
+export interface SkillProviderListing {
+  projectId: string
+  projectName: string
+  providers: SkillProviderDescriptor[]
+}
+
 export interface SkillCatalogOptions {
   forceReload?: boolean
 }

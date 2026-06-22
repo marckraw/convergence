@@ -79,6 +79,7 @@ import type { ProjectSettings } from '../backend/project/project-settings.pure'
 import type {
   SkillCatalogOptions,
   SkillDetailsRequest,
+  SkillProviderId,
 } from '../backend/skills/skills.types'
 import type {
   CreatePromptLibraryInput,
@@ -968,6 +969,20 @@ export function registerIpcHandlers(
 
   ipcMain.handle('skills:listGlobal', (_event, options?: SkillCatalogOptions) =>
     skillsService.listGlobal(options),
+  )
+
+  ipcMain.handle('skills:listProviderIds', (_event, projectId: string) =>
+    skillsService.listProviderIds(projectId),
+  )
+
+  ipcMain.handle(
+    'skills:listProvider',
+    (
+      _event,
+      projectId: string,
+      providerId: SkillProviderId,
+      options?: SkillCatalogOptions,
+    ) => skillsService.listProvider(projectId, providerId, options),
   )
 
   ipcMain.handle('skills:readDetails', (_event, input: SkillDetailsRequest) =>

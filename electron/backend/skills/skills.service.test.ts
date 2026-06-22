@@ -146,6 +146,38 @@ describe('SkillsService', () => {
     })
   })
 
+  it('lists skill provider identities without scanning', () => {
+    const project = projectService.create({ repositoryPath: gitRepoPath })
+    const list = vi.fn(async () => catalog())
+    const service = new SkillsService(projectService, [codexProvider()], {
+      now: () => FIXED_NOW,
+      createAdapter: () => ({ list }),
+    })
+
+    expect(service.listProviderIds(project.id)).toEqual({
+      projectId: project.id,
+      projectName: project.name,
+      providers: [{ providerId: 'codex', providerName: 'Codex' }],
+    })
+    expect(list).not.toHaveBeenCalled()
+  })
+
+  it('scans a single provider on demand', async () => {
+    const project = projectService.create({ repositoryPath: gitRepoPath })
+    const list = vi.fn(async () => catalog())
+    const service = new SkillsService(projectService, [codexProvider()], {
+      now: () => FIXED_NOW,
+      createAdapter: () => ({ list }),
+    })
+
+    await expect(
+      service.listProvider(project.id, 'codex', { forceReload: true }),
+    ).resolves.toEqual(catalog())
+    expect(list).toHaveBeenCalledWith(gitRepoPath, { forceReload: true })
+
+    await expect(service.listProvider(project.id, 'pi')).resolves.toBeNull()
+  })
+
   it('returns a global catalog without requiring a project', async () => {
     const list = vi.fn(async () => catalog())
     const service = new SkillsService(projectService, [codexProvider()], {

@@ -11,12 +11,15 @@ import type {
 } from './prompt-library.types'
 import type {
   ProjectSkillCatalog,
+  ProviderSkillCatalog,
   SkillActivationConfirmation,
   SkillCatalogOptions,
   SkillCatalogSource,
   SkillDetails,
   SkillDetailsRequest,
   SkillInvocationSupport,
+  SkillProviderId,
+  SkillProviderListing,
   SkillSelection,
 } from './skill.types'
 
@@ -1713,6 +1716,12 @@ interface ElectronAPI {
       options?: SkillCatalogOptions,
     ) => Promise<ProjectSkillCatalog>
     listGlobal: (options?: SkillCatalogOptions) => Promise<ProjectSkillCatalog>
+    listProviderIds: (projectId: string) => Promise<SkillProviderListing>
+    listProvider: (
+      projectId: string,
+      providerId: SkillProviderId,
+      options?: SkillCatalogOptions,
+    ) => Promise<ProviderSkillCatalog | null>
     readDetails: (input: SkillDetailsRequest) => Promise<SkillDetails>
     reveal: (input: SkillDetailsRequest) => Promise<void>
     openPath: (input: SkillDetailsRequest) => Promise<void>
