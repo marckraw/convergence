@@ -3,6 +3,7 @@ import { homedir } from 'os'
 import { dirname, join, resolve } from 'path'
 import {
   collectProjectAncestorSkillRoots,
+  fingerprintFilesystemSkillRoots,
   isPathInside,
   readSettingsSkillEntries,
   scanFilesystemSkillCatalog,
@@ -130,10 +131,9 @@ export class PiSkillsService {
     this.homeDir = resolve(options.homeDir ?? homedir())
   }
 
-  async list(
+  private async resolveRoots(
     projectPath: string,
-    _options: SkillCatalogOptions = {},
-  ): Promise<ProviderSkillCatalog> {
+  ): Promise<FilesystemSkillRoot[]> {
     const resolvedProjectPath = resolve(projectPath)
     const [piRoots, agentsRoots, packageRoots, settingsRoots] =
       await Promise.all([
@@ -152,7 +152,7 @@ export class PiSkillsService {
         discoverNodePackageSkillRoots(resolvedProjectPath),
         collectSettingsRoots(resolvedProjectPath, this.homeDir),
       ])
-    const roots = uniqueSkillRoots([
+    return uniqueSkillRoots([
       {
         rootPath: join(this.homeDir, '.pi', 'agent', 'skills'),
         rawScope: 'global',
@@ -168,14 +168,23 @@ export class PiSkillsService {
       ...packageRoots,
       ...settingsRoots,
     ])
+  }
 
+  async list(
+    projectPath: string,
+    _options: SkillCatalogOptions = {},
+  ): Promise<ProviderSkillCatalog> {
     return scanFilesystemSkillCatalog({
       providerId: 'pi',
       providerName: 'Pi Agent',
       invocationSupport: 'native-command',
       activationConfirmation: 'none',
-      roots,
+      roots: await this.resolveRoots(projectPath),
       pathInvocation: 'name-only',
     })
+  }
+
+  async fingerprint(projectPath: string): Promise<string> {
+    return fingerprintFilesystemSkillRoots(await this.resolveRoots(projectPath))
   }
 }

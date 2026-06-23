@@ -3,6 +3,7 @@ import { homedir } from 'os'
 import { join, resolve } from 'path'
 import {
   collectProjectAncestorSkillRoots,
+  fingerprintFilesystemSkillRoots,
   scanFilesystemSkillCatalog,
   uniqueSkillRoots,
   type FilesystemSkillRoot,
@@ -37,10 +38,9 @@ export class AntigravitySkillsService {
     this.homeDir = resolve(options.homeDir ?? homedir())
   }
 
-  async list(
+  private async resolveRoots(
     projectPath: string,
-    _options: SkillCatalogOptions = {},
-  ): Promise<ProviderSkillCatalog> {
+  ): Promise<FilesystemSkillRoot[]> {
     const resolvedProjectPath = resolve(projectPath)
     const [agentsRoots, agentRoots, configPlugins, cliPlugins] =
       await Promise.all([
@@ -63,7 +63,7 @@ export class AntigravitySkillsService {
           join(this.homeDir, '.gemini', 'antigravity-cli', 'plugins'),
         ),
       ])
-    const roots = uniqueSkillRoots([
+    return uniqueSkillRoots([
       {
         rootPath: join(this.homeDir, '.gemini', 'config', 'skills'),
         rawScope: 'global',
@@ -79,14 +79,23 @@ export class AntigravitySkillsService {
       ...configPlugins,
       ...cliPlugins,
     ])
+  }
 
+  async list(
+    projectPath: string,
+    _options: SkillCatalogOptions = {},
+  ): Promise<ProviderSkillCatalog> {
     return scanFilesystemSkillCatalog({
       providerId: 'antigravity',
       providerName: 'Antigravity CLI',
       invocationSupport: 'native-command',
       activationConfirmation: 'none',
-      roots,
+      roots: await this.resolveRoots(projectPath),
       pathInvocation: 'name-only',
     })
+  }
+
+  async fingerprint(projectPath: string): Promise<string> {
+    return fingerprintFilesystemSkillRoots(await this.resolveRoots(projectPath))
   }
 }

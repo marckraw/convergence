@@ -3,6 +3,8 @@ import { ClaudeCodeSkillsService } from './claude-code-skills.service'
 import { CursorSkillsService } from './cursor-skills.service'
 import { PiSkillsService } from './pi-skills.service'
 import { AntigravitySkillsService } from './antigravity-skills.service'
+import { CachingSkillAdapter } from './caching-skill-adapter'
+import type { SkillCatalogRepository } from './skill-catalog-cache.repository'
 import { buildProviderSkillErrorCatalog } from './skill-catalog.pure'
 import { readdir, readFile, stat } from 'fs/promises'
 import { basename, dirname, join, resolve } from 'path'
@@ -34,7 +36,17 @@ export interface SkillsServiceOptions {
   createAdapter?: (
     provider: DetectedProvider,
   ) => SkillProviderCatalogAdapter | null
+  /**
+   * SQLite-backed catalog cache. When provided, each provider adapter is
+   * wrapped in a {@link CachingSkillAdapter} so scans persist across opens and
+   * restarts. Omitted in unit tests, which then exercise adapters uncached.
+   */
+  cacheRepository?: SkillCatalogRepository
+  /** TTL for RPC providers (Codex, Cursor) without a content fingerprint. */
+  cacheTtlMs?: number
 }
+
+const DEFAULT_CACHE_TTL_MS = 5 * 60_000
 
 function toSkillProviderId(id: string): SkillProviderId | null {
   switch (id) {
@@ -238,6 +250,8 @@ export class SkillsService {
   private createAdapter: (
     provider: DetectedProvider,
   ) => SkillProviderCatalogAdapter | null
+  private cacheRepository: SkillCatalogRepository | null
+  private cacheTtlMs: number
   // Adapters are memoized so stateful adapters (e.g. the Codex scan cache)
   // survive across calls instead of being rebuilt — and re-paying cold starts —
   // on every dialog open.
@@ -253,15 +267,34 @@ export class SkillsService {
   ) {
     this.now = options.now ?? (() => new Date())
     this.createAdapter = options.createAdapter ?? defaultCreateAdapter
+    this.cacheRepository = options.cacheRepository ?? null
+    this.cacheTtlMs = options.cacheTtlMs ?? DEFAULT_CACHE_TTL_MS
   }
 
   private getAdapter(
     provider: DetectedProvider,
   ): SkillProviderCatalogAdapter | null {
     if (!this.adapterByProviderId.has(provider.id)) {
-      this.adapterByProviderId.set(provider.id, this.createAdapter(provider))
+      this.adapterByProviderId.set(provider.id, this.buildAdapter(provider))
     }
     return this.adapterByProviderId.get(provider.id) ?? null
+  }
+
+  // Wraps the raw provider adapter in the persisted cache decorator when a
+  // repository is configured. The decorator handles fingerprint (filesystem)
+  // vs TTL (RPC) freshness internally.
+  private buildAdapter(
+    provider: DetectedProvider,
+  ): SkillProviderCatalogAdapter | null {
+    const inner = this.createAdapter(provider)
+    const providerId = toSkillProviderId(provider.id)
+    if (!inner || !providerId || !this.cacheRepository) {
+      return inner
+    }
+    return new CachingSkillAdapter(inner, this.cacheRepository, providerId, {
+      ttlMs: this.cacheTtlMs,
+      now: () => this.now().getTime(),
+    })
   }
 
   /**

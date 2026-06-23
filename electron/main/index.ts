@@ -55,6 +55,7 @@ import {
 } from '../backend/local-model-tunnel/local-model-tunnel.ipc'
 import { McpService } from '../backend/mcp/mcp.service'
 import { SkillsService } from '../backend/skills/skills.service'
+import { SkillCatalogRepository } from '../backend/skills/skill-catalog-cache.repository'
 import { PromptsService } from '../backend/prompts/prompts.service'
 import { AppSettingsService } from '../backend/app-settings/app-settings.service'
 import { AnalyticsService } from '../backend/analytics/analytics.service'
@@ -354,7 +355,9 @@ async function startApp(): Promise<void> {
   )
 
   const mcpService = new McpService(projectService, detected)
-  const skillsService = new SkillsService(projectService, detected)
+  const skillsService = new SkillsService(projectService, detected, {
+    cacheRepository: new SkillCatalogRepository(db),
+  })
   const promptsService = new PromptsService(db, projectService)
   const projectScriptsRunner = new ProjectScriptsRunner({
     service: projectScriptsService,

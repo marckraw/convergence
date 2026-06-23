@@ -3,6 +3,7 @@ import { homedir } from 'os'
 import { dirname, join, resolve } from 'path'
 import {
   collectProjectAncestorSkillRoots,
+  fingerprintFilesystemSkillRoots,
   scanFilesystemSkillCatalog,
   uniqueSkillRoots,
   type FilesystemSkillRoot,
@@ -159,10 +160,9 @@ export class ClaudeCodeSkillsService {
     this.homeDir = resolve(options.homeDir ?? homedir())
   }
 
-  async list(
+  private async resolveRoots(
     projectPath: string,
-    _options: SkillCatalogOptions = {},
-  ): Promise<ProviderSkillCatalog> {
+  ): Promise<FilesystemSkillRoot[]> {
     const [projectRoots, pluginRoots] = await Promise.all([
       collectProjectAncestorSkillRoots(
         projectPath,
@@ -172,7 +172,7 @@ export class ClaudeCodeSkillsService {
       ),
       collectClaudePluginRoots(projectPath, this.homeDir),
     ])
-    const roots = uniqueSkillRoots([
+    return uniqueSkillRoots([
       {
         rootPath: join(this.homeDir, '.claude', 'skills'),
         rawScope: 'user',
@@ -181,14 +181,23 @@ export class ClaudeCodeSkillsService {
       ...projectRoots,
       ...pluginRoots,
     ])
+  }
 
+  async list(
+    projectPath: string,
+    _options: SkillCatalogOptions = {},
+  ): Promise<ProviderSkillCatalog> {
     return scanFilesystemSkillCatalog({
       providerId: 'claude-code',
       providerName: 'Claude Code',
       invocationSupport: 'native-command',
       activationConfirmation: 'native-event',
-      roots,
+      roots: await this.resolveRoots(projectPath),
       pathInvocation: 'name-only',
     })
+  }
+
+  async fingerprint(projectPath: string): Promise<string> {
+    return fingerprintFilesystemSkillRoots(await this.resolveRoots(projectPath))
   }
 }

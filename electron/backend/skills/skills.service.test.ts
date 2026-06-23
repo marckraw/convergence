@@ -5,6 +5,7 @@ import { homedir, tmpdir } from 'os'
 import { getDatabase, closeDatabase, resetDatabase } from '../database/database'
 import { ProjectService } from '../project/project.service'
 import { SkillsService } from './skills.service'
+import { SkillCatalogRepository } from './skill-catalog-cache.repository'
 import { buildSkillCatalogId } from './skill-catalog.pure'
 import type { DetectedProvider } from '../provider/detect'
 import type { ProviderSkillCatalog, SkillCatalogEntry } from './skills.types'
@@ -424,5 +425,39 @@ describe('SkillsService', () => {
         path: join(tempDir, 'not-cataloged', 'SKILL.md'),
       }),
     ).rejects.toThrow('Skill not found in provider catalog')
+  })
+
+  describe('with a persisted cache repository', () => {
+    it('serves a cached provider catalog instead of re-scanning', async () => {
+      const project = projectService.create({ repositoryPath: gitRepoPath })
+      const list = vi.fn(async () => catalog())
+      const service = new SkillsService(projectService, [codexProvider()], {
+        now: () => FIXED_NOW,
+        createAdapter: () => ({ list }),
+        cacheRepository: new SkillCatalogRepository(getDatabase()),
+      })
+
+      await service.listProvider(project.id, 'codex')
+      await service.listProvider(project.id, 'codex')
+
+      // Second open is served from cache within the TTL.
+      expect(list).toHaveBeenCalledTimes(1)
+    })
+
+    it('re-scans and refreshes the cache on forceReload', async () => {
+      const project = projectService.create({ repositoryPath: gitRepoPath })
+      const list = vi.fn(async () => catalog())
+      const service = new SkillsService(projectService, [codexProvider()], {
+        now: () => FIXED_NOW,
+        createAdapter: () => ({ list }),
+        cacheRepository: new SkillCatalogRepository(getDatabase()),
+      })
+
+      await service.listProvider(project.id, 'codex')
+      await service.listProvider(project.id, 'codex', { forceReload: true })
+
+      expect(list).toHaveBeenCalledTimes(2)
+      expect(list).toHaveBeenLastCalledWith(gitRepoPath, { forceReload: true })
+    })
   })
 })
