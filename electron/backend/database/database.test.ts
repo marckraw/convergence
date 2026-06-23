@@ -36,6 +36,7 @@ describe('database', () => {
     expect(tableNames).toContain('project_context_items')
     expect(tableNames).toContain('session_context_attachments')
     expect(tableNames).toContain('analytics_profile_snapshots')
+    expect(tableNames).toContain('skill_catalog_cache')
 
     const sessionColumns = db
       .prepare("PRAGMA table_info('sessions')")

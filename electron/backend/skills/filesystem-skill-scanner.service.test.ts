@@ -4,8 +4,10 @@ import { join, resolve } from 'path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import {
   collectProjectAncestorSkillRoots,
+  fingerprintFilesystemSkillRoots,
   readSettingsSkillEntries,
   scanFilesystemSkillCatalog,
+  type FilesystemSkillRoot,
 } from './filesystem-skill-scanner.service'
 
 describe('collectProjectAncestorSkillRoots', () => {
@@ -253,6 +255,86 @@ describe('scanFilesystemSkillCatalog', () => {
         ]),
       )
     }
+  })
+})
+
+describe('fingerprintFilesystemSkillRoots', () => {
+  let tempDir: string
+
+  beforeEach(() => {
+    tempDir = mkdtempSync(join(tmpdir(), 'convergence-fs-fingerprint-'))
+  })
+
+  afterEach(() => {
+    rmSync(tempDir, { recursive: true, force: true })
+  })
+
+  function writeSkill(name: string, body: string): void {
+    const skillDir = join(tempDir, 'skills', name)
+    mkdirSync(skillDir, { recursive: true })
+    writeFileSync(
+      join(skillDir, 'SKILL.md'),
+      ['---', `name: ${name}`, `description: ${body}`, '---'].join('\n'),
+    )
+  }
+
+  function skillRoots(): FilesystemSkillRoot[] {
+    return [
+      {
+        rootPath: join(tempDir, 'skills'),
+        rawScope: 'user',
+        kind: 'skills-dir',
+      },
+    ]
+  }
+
+  it('is stable across calls when nothing changes', async () => {
+    writeSkill('review', 'Reviews code.')
+
+    const first = await fingerprintFilesystemSkillRoots(skillRoots())
+    const second = await fingerprintFilesystemSkillRoots(skillRoots())
+
+    expect(first).toBe(second)
+  })
+
+  it('changes when a skill is added', async () => {
+    writeSkill('review', 'Reviews code.')
+    const before = await fingerprintFilesystemSkillRoots(skillRoots())
+
+    writeSkill('plan', 'Plans work.')
+    const after = await fingerprintFilesystemSkillRoots(skillRoots())
+
+    expect(after).not.toBe(before)
+  })
+
+  it('changes when a skill is removed', async () => {
+    writeSkill('review', 'Reviews code.')
+    writeSkill('plan', 'Plans work.')
+    const before = await fingerprintFilesystemSkillRoots(skillRoots())
+
+    rmSync(join(tempDir, 'skills', 'plan'), { recursive: true, force: true })
+    const after = await fingerprintFilesystemSkillRoots(skillRoots())
+
+    expect(after).not.toBe(before)
+  })
+
+  it('changes when a SKILL.md is edited', async () => {
+    writeSkill('review', 'Reviews code.')
+    const before = await fingerprintFilesystemSkillRoots(skillRoots())
+
+    // Different length so the fingerprint differs on size even if mtime is
+    // unchanged at sub-millisecond resolution.
+    writeSkill('review', 'Reviews code changes thoroughly and carefully.')
+    const after = await fingerprintFilesystemSkillRoots(skillRoots())
+
+    expect(after).not.toBe(before)
+  })
+
+  it('returns a stable hash for roots with no skills', async () => {
+    // No skills written — discovery finds nothing.
+    expect(await fingerprintFilesystemSkillRoots(skillRoots())).toBe(
+      await fingerprintFilesystemSkillRoots(skillRoots()),
+    )
   })
 })
 

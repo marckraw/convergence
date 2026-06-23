@@ -412,6 +412,19 @@ const SCHEMA = `
 
   CREATE INDEX IF NOT EXISTS idx_analytics_profile_snapshots_range_created
     ON analytics_profile_snapshots(range_preset, created_at DESC);
+
+  CREATE TABLE IF NOT EXISTS skill_catalog_cache (
+    cache_key TEXT PRIMARY KEY,
+    provider_id TEXT NOT NULL,
+    scan_root TEXT NOT NULL,
+    catalog_json TEXT NOT NULL,
+    fingerprint TEXT,
+    expires_at TEXT,
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_skill_catalog_cache_provider
+    ON skill_catalog_cache(provider_id);
 `
 
 function ensureAttachmentsTableNoFk(database: Database.Database): void {

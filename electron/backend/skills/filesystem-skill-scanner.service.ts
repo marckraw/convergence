@@ -1,3 +1,4 @@
+import { createHash } from 'crypto'
 import { readdir, readFile, stat } from 'fs/promises'
 import { basename, dirname, isAbsolute, join, relative, resolve } from 'path'
 import {
@@ -446,6 +447,41 @@ export async function scanFilesystemSkillCatalog(
     skills,
     error: null,
   }
+}
+
+/**
+ * Computes a cheap content fingerprint for a set of skill roots without reading
+ * or parsing any SKILL.md bodies. It walks the same roots `scanFilesystemSkillCatalog`
+ * would, then stats each discovered SKILL.md for `(path, mtime, size)`. Adding,
+ * removing, or editing a skill changes the discovered set or a file stat, so the
+ * fingerprint changes — letting the cache layer skip a full rescan while still
+ * detecting new skills on the next open. The walk + stat is far cheaper than the
+ * read + frontmatter parse that the full scan performs.
+ */
+export async function fingerprintFilesystemSkillRoots(
+  roots: FilesystemSkillRoot[],
+): Promise<string> {
+  const discovered = (
+    await Promise.all(uniqueSkillRoots(roots).map(discoverSkillFilesInRoot))
+  ).flat()
+  const uniquePaths = Array.from(
+    new Set(discovered.map((skillFile) => resolve(skillFile.path))),
+  ).sort()
+
+  const parts = await Promise.all(
+    uniquePaths.map(async (path) => {
+      try {
+        const info = await stat(path)
+        return `${path} ${info.mtimeMs} ${info.size}`
+      } catch {
+        // Vanished between discovery and stat — record absence so the next
+        // fingerprint (with the file gone from discovery) still differs.
+        return `${path} missing`
+      }
+    }),
+  )
+
+  return createHash('sha1').update(parts.join('\n')).digest('hex')
 }
 
 export function readSettingsSkillEntries(settings: unknown): string[] {
