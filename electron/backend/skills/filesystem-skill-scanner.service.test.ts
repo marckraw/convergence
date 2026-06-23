@@ -3,9 +3,79 @@ import { tmpdir } from 'os'
 import { join, resolve } from 'path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import {
+  collectProjectAncestorSkillRoots,
   readSettingsSkillEntries,
   scanFilesystemSkillCatalog,
 } from './filesystem-skill-scanner.service'
+
+describe('collectProjectAncestorSkillRoots', () => {
+  let tempDir: string
+
+  beforeEach(() => {
+    tempDir = mkdtempSync(join(tmpdir(), 'convergence-ancestor-roots-'))
+  })
+
+  afterEach(() => {
+    rmSync(tempDir, { recursive: true, force: true })
+  })
+
+  it('stops at the git repository root and never climbs above it', async () => {
+    const repoRoot = join(tempDir, 'repo')
+    mkdirSync(join(repoRoot, '.git'), { recursive: true })
+    const project = join(repoRoot, 'packages', 'app')
+    mkdirSync(project, { recursive: true })
+
+    const roots = await collectProjectAncestorSkillRoots(
+      project,
+      '.agents/skills',
+      'project',
+      tmpdir(),
+    )
+    const paths = roots.map((root) => root.rootPath)
+
+    // Working dir up to and including the repo root...
+    expect(paths).toContain(resolve(join(project, '.agents/skills')))
+    expect(paths).toContain(
+      resolve(join(repoRoot, 'packages', '.agents/skills')),
+    )
+    expect(paths).toContain(resolve(join(repoRoot, '.agents/skills')))
+    // ...but nothing above the repo root.
+    expect(paths).not.toContain(resolve(join(tempDir, '.agents/skills')))
+    expect(roots.every((root) => root.rawScope === 'project')).toBe(true)
+  })
+
+  it('returns only the project root when it is itself the repo root', async () => {
+    const repoRoot = join(tempDir, 'solo-repo')
+    mkdirSync(join(repoRoot, '.git'), { recursive: true })
+
+    const roots = await collectProjectAncestorSkillRoots(
+      repoRoot,
+      '.claude/skills',
+      'project',
+      tmpdir(),
+    )
+
+    expect(roots.map((root) => root.rootPath)).toEqual([
+      resolve(join(repoRoot, '.claude/skills')),
+    ])
+  })
+
+  it('falls back to a home-capped walk when there is no git repo', async () => {
+    // No .git anywhere; home is the hard ceiling so global skills are excluded.
+    const home = '/Users/dev'
+    const roots = await collectProjectAncestorSkillRoots(
+      '/Users/dev/work/repo',
+      '.agents/skills',
+      'project',
+      home,
+    )
+    const paths = roots.map((root) => root.rootPath)
+
+    expect(paths).toContain(resolve('/Users/dev/work/repo/.agents/skills'))
+    expect(paths).toContain(resolve('/Users/dev/work/.agents/skills'))
+    expect(paths).not.toContain(resolve('/Users/dev/.agents/skills'))
+  })
+})
 
 describe('scanFilesystemSkillCatalog', () => {
   let tempDir: string

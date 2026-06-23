@@ -352,6 +352,61 @@ export function uniqueSkillRoots(
   })
 }
 
+async function isGitRepositoryRoot(dir: string): Promise<boolean> {
+  try {
+    // `.git` is a directory in a normal clone and a file in worktrees/submodules.
+    await stat(join(dir, '.git'))
+    return true
+  } catch {
+    return false
+  }
+}
+
+/**
+ * Collects `relativeRoot` skill directories from the working directory up to —
+ * and including — the git repository root, then STOPS. This mirrors how the
+ * provider CLIs resolve project skills (Codex: "scans `.agents/skills` in every
+ * directory from your current working directory up to the repository root";
+ * Claude Code: the project root only). Skills above the repo root belong to a
+ * different project and must never be tagged project-local.
+ *
+ * The home directory is a hard ceiling (home and above are global, never
+ * project). When no `.git` is found before reaching home, we fall back to the
+ * home-capped walk — Convergence projects are git repositories in practice, so
+ * the repo-root cap is what governs the real cases.
+ */
+export async function collectProjectAncestorSkillRoots(
+  startPath: string,
+  relativeRoot: string,
+  rawScope: string,
+  homeDir: string,
+): Promise<FilesystemSkillRoot[]> {
+  const home = resolve(homeDir)
+  const roots: FilesystemSkillRoot[] = []
+  let current = resolve(startPath)
+
+  for (;;) {
+    if (current === home) {
+      break
+    }
+    roots.push({
+      rootPath: join(current, relativeRoot),
+      rawScope,
+      kind: 'skills-dir',
+    })
+    if (await isGitRepositoryRoot(current)) {
+      break
+    }
+    const parent = dirname(current)
+    if (parent === current) {
+      break
+    }
+    current = parent
+  }
+
+  return roots
+}
+
 export async function scanFilesystemSkillCatalog(
   input: FilesystemSkillCatalogInput,
 ): Promise<ProviderSkillCatalog> {

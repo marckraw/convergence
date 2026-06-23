@@ -2,6 +2,7 @@ import { readdir, readFile } from 'fs/promises'
 import { homedir } from 'os'
 import { dirname, join, resolve } from 'path'
 import {
+  collectProjectAncestorSkillRoots,
   isPathInside,
   readSettingsSkillEntries,
   scanFilesystemSkillCatalog,
@@ -12,31 +13,6 @@ import type { ProviderSkillCatalog, SkillCatalogOptions } from './skills.types'
 
 export interface PiSkillsServiceOptions {
   homeDir?: string
-}
-
-function collectAncestorSkillRoots(
-  projectPath: string,
-  relativeRoot: string,
-  rawScope: string,
-): FilesystemSkillRoot[] {
-  const roots: FilesystemSkillRoot[] = []
-  let current = resolve(projectPath)
-
-  for (;;) {
-    roots.push({
-      rootPath: join(current, relativeRoot),
-      rawScope,
-      kind: 'skills-dir',
-    })
-
-    const parent = dirname(current)
-    if (parent === current) {
-      break
-    }
-    current = parent
-  }
-
-  return roots
 }
 
 function resolveConfiguredSkillPath(
@@ -159,6 +135,23 @@ export class PiSkillsService {
     _options: SkillCatalogOptions = {},
   ): Promise<ProviderSkillCatalog> {
     const resolvedProjectPath = resolve(projectPath)
+    const [piRoots, agentsRoots, packageRoots, settingsRoots] =
+      await Promise.all([
+        collectProjectAncestorSkillRoots(
+          resolvedProjectPath,
+          '.pi/skills',
+          'project',
+          this.homeDir,
+        ),
+        collectProjectAncestorSkillRoots(
+          resolvedProjectPath,
+          '.agents/skills',
+          'project',
+          this.homeDir,
+        ),
+        discoverNodePackageSkillRoots(resolvedProjectPath),
+        collectSettingsRoots(resolvedProjectPath, this.homeDir),
+      ])
     const roots = uniqueSkillRoots([
       {
         rootPath: join(this.homeDir, '.pi', 'agent', 'skills'),
@@ -170,18 +163,10 @@ export class PiSkillsService {
         rawScope: 'global',
         kind: 'skills-dir',
       },
-      ...collectAncestorSkillRoots(
-        resolvedProjectPath,
-        '.pi/skills',
-        'project',
-      ),
-      ...collectAncestorSkillRoots(
-        resolvedProjectPath,
-        '.agents/skills',
-        'project',
-      ),
-      ...(await discoverNodePackageSkillRoots(resolvedProjectPath)),
-      ...(await collectSettingsRoots(resolvedProjectPath, this.homeDir)),
+      ...piRoots,
+      ...agentsRoots,
+      ...packageRoots,
+      ...settingsRoots,
     ])
 
     return scanFilesystemSkillCatalog({
