@@ -1,5 +1,14 @@
 # convergence
 
+## 0.41.1
+
+### Patch Changes
+
+- f5e5090: Polish the Skills dialog. The detail header is now a single full-width column (description spans the whole panel), with the chips hard-left and the action cluster hugging the right edge on one bottom-aligned row; the three copy icons collapse into a single **Copy ▾** menu (name / SKILL.md path / invocation). The dialog and detail slide-over are larger on big screens while still clamping to the viewport on small ones. Selection behaviour is tighter: the **Overview** clears the selection (so the footer path no longer lingers there), Grid and List preserve it, and returning to **Grid** with a skill selected re-opens its detail slide-over.
+- fa62826: Make project skill discovery faithfully match the provider CLIs. The per-provider "project" scope walk previously climbed every ancestor up to the filesystem root, so skills in `~/.agents/skills` (and similar) were tagged project-local just because the home directory is an ancestor of the repo — most visibly, Antigravity claimed every `~/.agents/skills` skill as a project skill.
+
+  A shared `collectProjectAncestorSkillRoots` helper now resolves project skills from the working directory **up to and including the git repository root, then stops** — mirroring how the CLIs scope project skills (Codex scans up to the repository root; Claude Code uses the project root). The home directory is a hard ceiling. So the **Project** bucket reflects only skills inside the repository, and home-level skills surface as **Global** via each provider's fixed global roots.
+
 ## 0.41.0
 
 ### Minor Changes
