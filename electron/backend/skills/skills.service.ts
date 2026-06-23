@@ -1,6 +1,6 @@
 import { CodexSkillsService } from './codex-skills.service'
 import { ClaudeCodeSkillsService } from './claude-code-skills.service'
-import { CursorSkillsService } from './cursor-skills.service'
+import { CursorFilesystemSkillsService } from './cursor-filesystem-skills.service'
 import { PiSkillsService } from './pi-skills.service'
 import { AntigravitySkillsService } from './antigravity-skills.service'
 import { buildProviderSkillErrorCatalog } from './skill-catalog.pure'
@@ -145,7 +145,7 @@ function defaultCreateAdapter(
     return new PiSkillsService()
   }
   if (provider.id === 'cursor') {
-    return new CursorSkillsService(provider.binaryPath)
+    return new CursorFilesystemSkillsService()
   }
   if (provider.id === 'antigravity') {
     return new AntigravitySkillsService()
