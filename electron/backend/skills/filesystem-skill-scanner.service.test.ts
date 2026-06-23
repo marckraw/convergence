@@ -9,36 +9,71 @@ import {
 } from './filesystem-skill-scanner.service'
 
 describe('collectProjectAncestorSkillRoots', () => {
-  it('walks ancestors but stops before the home directory', () => {
-    const home = '/Users/dev'
-    const project = '/Users/dev/work/repo'
+  let tempDir: string
 
-    const roots = collectProjectAncestorSkillRoots(
+  beforeEach(() => {
+    tempDir = mkdtempSync(join(tmpdir(), 'convergence-ancestor-roots-'))
+  })
+
+  afterEach(() => {
+    rmSync(tempDir, { recursive: true, force: true })
+  })
+
+  it('stops at the git repository root and never climbs above it', async () => {
+    const repoRoot = join(tempDir, 'repo')
+    mkdirSync(join(repoRoot, '.git'), { recursive: true })
+    const project = join(repoRoot, 'packages', 'app')
+    mkdirSync(project, { recursive: true })
+
+    const roots = await collectProjectAncestorSkillRoots(
       project,
+      '.agents/skills',
+      'project',
+      tmpdir(),
+    )
+    const paths = roots.map((root) => root.rootPath)
+
+    // Working dir up to and including the repo root...
+    expect(paths).toContain(resolve(join(project, '.agents/skills')))
+    expect(paths).toContain(
+      resolve(join(repoRoot, 'packages', '.agents/skills')),
+    )
+    expect(paths).toContain(resolve(join(repoRoot, '.agents/skills')))
+    // ...but nothing above the repo root.
+    expect(paths).not.toContain(resolve(join(tempDir, '.agents/skills')))
+    expect(roots.every((root) => root.rawScope === 'project')).toBe(true)
+  })
+
+  it('returns only the project root when it is itself the repo root', async () => {
+    const repoRoot = join(tempDir, 'solo-repo')
+    mkdirSync(join(repoRoot, '.git'), { recursive: true })
+
+    const roots = await collectProjectAncestorSkillRoots(
+      repoRoot,
+      '.claude/skills',
+      'project',
+      tmpdir(),
+    )
+
+    expect(roots.map((root) => root.rootPath)).toEqual([
+      resolve(join(repoRoot, '.claude/skills')),
+    ])
+  })
+
+  it('falls back to a home-capped walk when there is no git repo', async () => {
+    // No .git anywhere; home is the hard ceiling so global skills are excluded.
+    const home = '/Users/dev'
+    const roots = await collectProjectAncestorSkillRoots(
+      '/Users/dev/work/repo',
       '.agents/skills',
       'project',
       home,
     )
     const paths = roots.map((root) => root.rootPath)
 
-    // Ancestors below home are project-scoped...
     expect(paths).toContain(resolve('/Users/dev/work/repo/.agents/skills'))
     expect(paths).toContain(resolve('/Users/dev/work/.agents/skills'))
-    // ...but the home dir (and above) are NOT — that's where the mislabel was.
     expect(paths).not.toContain(resolve('/Users/dev/.agents/skills'))
-    expect(paths).not.toContain(resolve('/.agents/skills'))
-    expect(roots.every((root) => root.rawScope === 'project')).toBe(true)
-  })
-
-  it('stops immediately when the project is the home directory', () => {
-    expect(
-      collectProjectAncestorSkillRoots(
-        '/Users/dev',
-        '.agents/skills',
-        'project',
-        '/Users/dev',
-      ),
-    ).toEqual([])
   })
 })
 

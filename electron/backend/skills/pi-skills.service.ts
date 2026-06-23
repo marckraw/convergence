@@ -135,6 +135,23 @@ export class PiSkillsService {
     _options: SkillCatalogOptions = {},
   ): Promise<ProviderSkillCatalog> {
     const resolvedProjectPath = resolve(projectPath)
+    const [piRoots, agentsRoots, packageRoots, settingsRoots] =
+      await Promise.all([
+        collectProjectAncestorSkillRoots(
+          resolvedProjectPath,
+          '.pi/skills',
+          'project',
+          this.homeDir,
+        ),
+        collectProjectAncestorSkillRoots(
+          resolvedProjectPath,
+          '.agents/skills',
+          'project',
+          this.homeDir,
+        ),
+        discoverNodePackageSkillRoots(resolvedProjectPath),
+        collectSettingsRoots(resolvedProjectPath, this.homeDir),
+      ])
     const roots = uniqueSkillRoots([
       {
         rootPath: join(this.homeDir, '.pi', 'agent', 'skills'),
@@ -146,20 +163,10 @@ export class PiSkillsService {
         rawScope: 'global',
         kind: 'skills-dir',
       },
-      ...collectProjectAncestorSkillRoots(
-        resolvedProjectPath,
-        '.pi/skills',
-        'project',
-        this.homeDir,
-      ),
-      ...collectProjectAncestorSkillRoots(
-        resolvedProjectPath,
-        '.agents/skills',
-        'project',
-        this.homeDir,
-      ),
-      ...(await discoverNodePackageSkillRoots(resolvedProjectPath)),
-      ...(await collectSettingsRoots(resolvedProjectPath, this.homeDir)),
+      ...piRoots,
+      ...agentsRoots,
+      ...packageRoots,
+      ...settingsRoots,
     ])
 
     return scanFilesystemSkillCatalog({

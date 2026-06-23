@@ -2,6 +2,6 @@
 'convergence': patch
 ---
 
-Fix the Skills dialog mislabelling home-directory skills as "project" skills. The per-provider "project" scope walk climbed every ancestor up to the filesystem root, so anything in `~/.agents/skills` (and similar) was tagged project-local simply because the home directory is an ancestor of the repo — most visibly, Antigravity claimed every `~/.agents/skills` skill as a project skill.
+Make project skill discovery faithfully match the provider CLIs. The per-provider "project" scope walk previously climbed every ancestor up to the filesystem root, so skills in `~/.agents/skills` (and similar) were tagged project-local just because the home directory is an ancestor of the repo — most visibly, Antigravity claimed every `~/.agents/skills` skill as a project skill.
 
-The ancestor walk now stops at the home directory (shared `collectProjectAncestorSkillRoots` helper). Home-level skills are still discovered via each provider's fixed global roots and shown as **Global**; the **Project** bucket now reflects only skills committed in the repository.
+A shared `collectProjectAncestorSkillRoots` helper now resolves project skills from the working directory **up to and including the git repository root, then stops** — mirroring how the CLIs scope project skills (Codex scans up to the repository root; Claude Code uses the project root). The home directory is a hard ceiling. So the **Project** bucket reflects only skills inside the repository, and home-level skills surface as **Global** via each provider's fixed global roots.

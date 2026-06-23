@@ -42,6 +42,27 @@ export class AntigravitySkillsService {
     _options: SkillCatalogOptions = {},
   ): Promise<ProviderSkillCatalog> {
     const resolvedProjectPath = resolve(projectPath)
+    const [agentsRoots, agentRoots, configPlugins, cliPlugins] =
+      await Promise.all([
+        collectProjectAncestorSkillRoots(
+          resolvedProjectPath,
+          '.agents/skills',
+          'project',
+          this.homeDir,
+        ),
+        collectProjectAncestorSkillRoots(
+          resolvedProjectPath,
+          '.agent/skills',
+          'project',
+          this.homeDir,
+        ),
+        collectPluginSkillRoots(
+          join(this.homeDir, '.gemini', 'config', 'plugins'),
+        ),
+        collectPluginSkillRoots(
+          join(this.homeDir, '.gemini', 'antigravity-cli', 'plugins'),
+        ),
+      ])
     const roots = uniqueSkillRoots([
       {
         rootPath: join(this.homeDir, '.gemini', 'config', 'skills'),
@@ -53,24 +74,10 @@ export class AntigravitySkillsService {
         rawScope: 'global',
         kind: 'skills-dir',
       },
-      ...collectProjectAncestorSkillRoots(
-        resolvedProjectPath,
-        '.agents/skills',
-        'project',
-        this.homeDir,
-      ),
-      ...collectProjectAncestorSkillRoots(
-        resolvedProjectPath,
-        '.agent/skills',
-        'project',
-        this.homeDir,
-      ),
-      ...(await collectPluginSkillRoots(
-        join(this.homeDir, '.gemini', 'config', 'plugins'),
-      )),
-      ...(await collectPluginSkillRoots(
-        join(this.homeDir, '.gemini', 'antigravity-cli', 'plugins'),
-      )),
+      ...agentsRoots,
+      ...agentRoots,
+      ...configPlugins,
+      ...cliPlugins,
     ])
 
     return scanFilesystemSkillCatalog({

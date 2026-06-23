@@ -163,19 +163,23 @@ export class ClaudeCodeSkillsService {
     projectPath: string,
     _options: SkillCatalogOptions = {},
   ): Promise<ProviderSkillCatalog> {
+    const [projectRoots, pluginRoots] = await Promise.all([
+      collectProjectAncestorSkillRoots(
+        projectPath,
+        '.claude/skills',
+        'project',
+        this.homeDir,
+      ),
+      collectClaudePluginRoots(projectPath, this.homeDir),
+    ])
     const roots = uniqueSkillRoots([
       {
         rootPath: join(this.homeDir, '.claude', 'skills'),
         rawScope: 'user',
         kind: 'skills-dir',
       },
-      ...collectProjectAncestorSkillRoots(
-        projectPath,
-        '.claude/skills',
-        'project',
-        this.homeDir,
-      ),
-      ...(await collectClaudePluginRoots(projectPath, this.homeDir)),
+      ...projectRoots,
+      ...pluginRoots,
     ])
 
     return scanFilesystemSkillCatalog({
