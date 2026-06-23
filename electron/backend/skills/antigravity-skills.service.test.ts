@@ -45,6 +45,11 @@ describe('AntigravitySkillsService', () => {
     writeSkill(join(projectPath, '.agents', 'skills'), 'workspace', 'workspace')
     writeSkill(join(projectPath, '.agent', 'skills'), 'legacy', 'legacy')
     writeSkill(
+      join(projectPath, '.gemini', 'skills'),
+      'gemini-skill',
+      'gemini-skill',
+    )
+    writeSkill(
       join(homeDir, '.gemini', 'config', 'plugins', 'plugin-a', 'skills'),
       'plugin-config',
       'plugin-config',
@@ -75,6 +80,7 @@ describe('AntigravitySkillsService', () => {
       error: null,
     })
     expect(catalog.skills.map((skill) => skill.name).sort()).toEqual([
+      'gemini-skill',
       'global-cli',
       'global-config',
       'legacy',

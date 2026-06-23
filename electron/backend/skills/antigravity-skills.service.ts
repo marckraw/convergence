@@ -42,7 +42,7 @@ export class AntigravitySkillsService {
     _options: SkillCatalogOptions = {},
   ): Promise<ProviderSkillCatalog> {
     const resolvedProjectPath = resolve(projectPath)
-    const [agentsRoots, agentRoots, configPlugins, cliPlugins] =
+    const [agentsRoots, agentRoots, geminiRoots, configPlugins, cliPlugins] =
       await Promise.all([
         collectProjectAncestorSkillRoots(
           resolvedProjectPath,
@@ -53,6 +53,14 @@ export class AntigravitySkillsService {
         collectProjectAncestorSkillRoots(
           resolvedProjectPath,
           '.agent/skills',
+          'project',
+          this.homeDir,
+        ),
+        // Gemini CLI's native workspace skills dir; `.agents/skills` is its
+        // alias, so a project may use either.
+        collectProjectAncestorSkillRoots(
+          resolvedProjectPath,
+          '.gemini/skills',
           'project',
           this.homeDir,
         ),
@@ -76,6 +84,7 @@ export class AntigravitySkillsService {
       },
       ...agentsRoots,
       ...agentRoots,
+      ...geminiRoots,
       ...configPlugins,
       ...cliPlugins,
     ])
