@@ -388,7 +388,7 @@ export const SkillsBrowserDialog: FC<SkillsBrowserDialogProps> = (props) => {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogTrigger asChild>{trigger}</DialogTrigger>
-      <DialogContent className="h-[min(90vh,960px)] max-h-[min(90vh,960px)] w-[min(1400px,calc(100vw-3rem))] p-0">
+      <DialogContent className="h-[min(92vh,1120px)] max-h-[min(92vh,1120px)] w-[min(1680px,calc(100vw-3rem))] p-0">
         <DialogHeader className="border-b border-border/70 px-6 py-4">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="min-w-0">
@@ -459,7 +459,7 @@ export const SkillsBrowserDialog: FC<SkillsBrowserDialogProps> = (props) => {
                       />,
                       <motion.div
                         key="panel"
-                        className="absolute inset-y-0 right-0 z-20 flex w-[min(620px,85%)] flex-col border-l border-border/70 bg-background shadow-2xl"
+                        className="absolute inset-y-0 right-0 z-20 flex w-[min(760px,88%)] flex-col border-l border-border/70 bg-background shadow-2xl"
                         initial={{ x: '100%' }}
                         animate={{ x: 0 }}
                         exit={{ x: '100%' }}

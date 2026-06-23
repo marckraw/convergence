@@ -151,18 +151,14 @@ export const SkillsBrowserDialogContainer: FC<
     [groups, groupBy],
   )
   const overview = useMemo(() => buildSkillsOverview(catalog), [catalog])
+  const activeSkill = findSkillInGroups(groups, selectedSkillId)
+  // List always shows a detail pane, so fall back to the first skill there.
+  // Grid and overview reflect only an explicit selection (no auto-pick), so the
+  // footer path and grid highlight stay empty until the user actually picks one.
   const selectedSkill =
-    findSkillInGroups(groups, selectedSkillId) ?? firstSkillInGroups(groups)
-
-  useEffect(() => {
-    if (!open) {
-      return
-    }
-
-    if (selectedSkill?.id !== selectedSkillId) {
-      selectSkill(selectedSkill?.id ?? null)
-    }
-  }, [open, selectedSkill, selectedSkillId, selectSkill])
+    viewMode === 'list'
+      ? (activeSkill ?? firstSkillInGroups(groups))
+      : activeSkill
 
   useEffect(() => {
     if (!open || !projectId || !selectedSkill || !selectedSkill.path) {
@@ -217,15 +213,24 @@ export const SkillsBrowserDialogContainer: FC<
     [],
   )
 
-  const handleViewModeChange = useCallback((mode: SkillsViewMode) => {
-    // Overview is the clean landscape: leaving it back to the dashboard clears
-    // any filter a previous drill-in applied.
-    if (mode === 'overview') {
-      setFilters(DEFAULT_FILTERS)
-    }
-    setViewMode(mode)
-    setIsDetailOpen(false)
-  }, [])
+  const handleViewModeChange = useCallback(
+    (mode: SkillsViewMode) => {
+      if (mode === 'overview') {
+        // Overview is the clean landscape: drop the drill-in filter, the current
+        // selection, and any open detail panel (so the footer path clears too).
+        setFilters(DEFAULT_FILTERS)
+        selectSkill(null)
+        setIsDetailOpen(false)
+        setViewMode('overview')
+        return
+      }
+      setViewMode(mode)
+      // Returning to grid with a skill still selected re-opens its slide-over;
+      // list always shows the detail in its right pane regardless.
+      setIsDetailOpen(mode === 'grid' && selectedSkillId !== null)
+    },
+    [selectSkill, selectedSkillId],
+  )
 
   const handleJumpToGrid = useCallback(
     (patch: Partial<SkillBrowserFilters>) => {
