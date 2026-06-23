@@ -3,9 +3,44 @@ import { tmpdir } from 'os'
 import { join, resolve } from 'path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import {
+  collectProjectAncestorSkillRoots,
   readSettingsSkillEntries,
   scanFilesystemSkillCatalog,
 } from './filesystem-skill-scanner.service'
+
+describe('collectProjectAncestorSkillRoots', () => {
+  it('walks ancestors but stops before the home directory', () => {
+    const home = '/Users/dev'
+    const project = '/Users/dev/work/repo'
+
+    const roots = collectProjectAncestorSkillRoots(
+      project,
+      '.agents/skills',
+      'project',
+      home,
+    )
+    const paths = roots.map((root) => root.rootPath)
+
+    // Ancestors below home are project-scoped...
+    expect(paths).toContain(resolve('/Users/dev/work/repo/.agents/skills'))
+    expect(paths).toContain(resolve('/Users/dev/work/.agents/skills'))
+    // ...but the home dir (and above) are NOT — that's where the mislabel was.
+    expect(paths).not.toContain(resolve('/Users/dev/.agents/skills'))
+    expect(paths).not.toContain(resolve('/.agents/skills'))
+    expect(roots.every((root) => root.rawScope === 'project')).toBe(true)
+  })
+
+  it('stops immediately when the project is the home directory', () => {
+    expect(
+      collectProjectAncestorSkillRoots(
+        '/Users/dev',
+        '.agents/skills',
+        'project',
+        '/Users/dev',
+      ),
+    ).toEqual([])
+  })
+})
 
 describe('scanFilesystemSkillCatalog', () => {
   let tempDir: string

@@ -1,7 +1,8 @@
 import { readdir } from 'fs/promises'
 import { homedir } from 'os'
-import { dirname, join, resolve } from 'path'
+import { join, resolve } from 'path'
 import {
+  collectProjectAncestorSkillRoots,
   scanFilesystemSkillCatalog,
   uniqueSkillRoots,
   type FilesystemSkillRoot,
@@ -10,29 +11,6 @@ import type { ProviderSkillCatalog, SkillCatalogOptions } from './skills.types'
 
 export interface AntigravitySkillsServiceOptions {
   homeDir?: string
-}
-
-function collectAncestorSkillRoots(
-  projectPath: string,
-  relativeRoot: string,
-  rawScope: string,
-): FilesystemSkillRoot[] {
-  const roots: FilesystemSkillRoot[] = []
-  let current = resolve(projectPath)
-
-  for (;;) {
-    roots.push({
-      rootPath: join(current, relativeRoot),
-      rawScope,
-      kind: 'skills-dir',
-    })
-
-    const parent = dirname(current)
-    if (parent === current) break
-    current = parent
-  }
-
-  return roots
 }
 
 async function collectPluginSkillRoots(
@@ -75,15 +53,17 @@ export class AntigravitySkillsService {
         rawScope: 'global',
         kind: 'skills-dir',
       },
-      ...collectAncestorSkillRoots(
+      ...collectProjectAncestorSkillRoots(
         resolvedProjectPath,
         '.agents/skills',
         'project',
+        this.homeDir,
       ),
-      ...collectAncestorSkillRoots(
+      ...collectProjectAncestorSkillRoots(
         resolvedProjectPath,
         '.agent/skills',
         'project',
+        this.homeDir,
       ),
       ...(await collectPluginSkillRoots(
         join(this.homeDir, '.gemini', 'config', 'plugins'),

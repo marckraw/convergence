@@ -352,6 +352,45 @@ export function uniqueSkillRoots(
   })
 }
 
+/**
+ * Walks from the project directory upward, yielding a `relativeRoot` skill
+ * directory at each ancestor — but STOPS at (and excludes) the home directory.
+ *
+ * Home and above are global, not project. Without this cap the walk tags
+ * `~/.agents/skills` (and friends) as "project" purely because the home dir is
+ * an ancestor of the repo, mislabelling a user's global skills as project-local
+ * (e.g. Antigravity claiming every `~/.agents/skills` skill as a project skill).
+ * Home-level skills are still discovered via each provider's fixed global roots.
+ */
+export function collectProjectAncestorSkillRoots(
+  projectPath: string,
+  relativeRoot: string,
+  rawScope: string,
+  homeDir: string,
+): FilesystemSkillRoot[] {
+  const home = resolve(homeDir)
+  const roots: FilesystemSkillRoot[] = []
+  let current = resolve(projectPath)
+
+  for (;;) {
+    if (current === home) {
+      break
+    }
+    roots.push({
+      rootPath: join(current, relativeRoot),
+      rawScope,
+      kind: 'skills-dir',
+    })
+    const parent = dirname(current)
+    if (parent === current) {
+      break
+    }
+    current = parent
+  }
+
+  return roots
+}
+
 export async function scanFilesystemSkillCatalog(
   input: FilesystemSkillCatalogInput,
 ): Promise<ProviderSkillCatalog> {

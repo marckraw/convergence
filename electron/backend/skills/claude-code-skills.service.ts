@@ -2,6 +2,7 @@ import { readdir, readFile } from 'fs/promises'
 import { homedir } from 'os'
 import { dirname, join, resolve } from 'path'
 import {
+  collectProjectAncestorSkillRoots,
   scanFilesystemSkillCatalog,
   uniqueSkillRoots,
   type FilesystemSkillRoot,
@@ -26,18 +27,6 @@ function collectAncestorPaths(projectPath: string): string[] {
     current = parent
   }
   return paths
-}
-
-function collectAncestorSkillRoots(
-  projectPath: string,
-  relativeRoot: string,
-  rawScope: string,
-): FilesystemSkillRoot[] {
-  return collectAncestorPaths(projectPath).map((path) => ({
-    rootPath: join(path, relativeRoot),
-    rawScope,
-    kind: 'skills-dir',
-  }))
 }
 
 interface InstalledPluginRecord {
@@ -180,7 +169,12 @@ export class ClaudeCodeSkillsService {
         rawScope: 'user',
         kind: 'skills-dir',
       },
-      ...collectAncestorSkillRoots(projectPath, '.claude/skills', 'project'),
+      ...collectProjectAncestorSkillRoots(
+        projectPath,
+        '.claude/skills',
+        'project',
+        this.homeDir,
+      ),
       ...(await collectClaudePluginRoots(projectPath, this.homeDir)),
     ])
 

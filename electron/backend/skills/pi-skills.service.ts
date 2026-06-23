@@ -2,6 +2,7 @@ import { readdir, readFile } from 'fs/promises'
 import { homedir } from 'os'
 import { dirname, join, resolve } from 'path'
 import {
+  collectProjectAncestorSkillRoots,
   isPathInside,
   readSettingsSkillEntries,
   scanFilesystemSkillCatalog,
@@ -12,31 +13,6 @@ import type { ProviderSkillCatalog, SkillCatalogOptions } from './skills.types'
 
 export interface PiSkillsServiceOptions {
   homeDir?: string
-}
-
-function collectAncestorSkillRoots(
-  projectPath: string,
-  relativeRoot: string,
-  rawScope: string,
-): FilesystemSkillRoot[] {
-  const roots: FilesystemSkillRoot[] = []
-  let current = resolve(projectPath)
-
-  for (;;) {
-    roots.push({
-      rootPath: join(current, relativeRoot),
-      rawScope,
-      kind: 'skills-dir',
-    })
-
-    const parent = dirname(current)
-    if (parent === current) {
-      break
-    }
-    current = parent
-  }
-
-  return roots
 }
 
 function resolveConfiguredSkillPath(
@@ -170,15 +146,17 @@ export class PiSkillsService {
         rawScope: 'global',
         kind: 'skills-dir',
       },
-      ...collectAncestorSkillRoots(
+      ...collectProjectAncestorSkillRoots(
         resolvedProjectPath,
         '.pi/skills',
         'project',
+        this.homeDir,
       ),
-      ...collectAncestorSkillRoots(
+      ...collectProjectAncestorSkillRoots(
         resolvedProjectPath,
         '.agents/skills',
         'project',
+        this.homeDir,
       ),
       ...(await discoverNodePackageSkillRoots(resolvedProjectPath)),
       ...(await collectSettingsRoots(resolvedProjectPath, this.homeDir)),
