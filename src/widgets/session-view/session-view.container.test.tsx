@@ -232,13 +232,12 @@ describe('SessionView changed files drawer', () => {
             attachments: [],
             rejections: [],
           }),
-          ingestFromPaths: vi.fn().mockResolvedValue({
+          ingestFromOpenDialog: vi.fn().mockResolvedValue({
             attachments: [],
             rejections: [],
           }),
           readBytes: vi.fn().mockResolvedValue(new Uint8Array()),
           delete: vi.fn().mockResolvedValue(undefined),
-          showOpenDialog: vi.fn().mockResolvedValue([]),
         },
         projectOpen: {
           listApps: vi.fn().mockResolvedValue([

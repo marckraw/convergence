@@ -411,14 +411,13 @@ contextBridge.exposeInMainWorld('electronAPI', {
         mimeType?: string
       }>,
     ) => ipcRenderer.invoke('attachments:ingestFiles', sessionId, files),
-    ingestFromPaths: (sessionId: string, paths: string[]) =>
-      ipcRenderer.invoke('attachments:ingestFromPaths', sessionId, paths),
+    ingestFromOpenDialog: (sessionId: string) =>
+      ipcRenderer.invoke('attachments:ingestFromOpenDialog', sessionId),
     getForSession: (sessionId: string) =>
       ipcRenderer.invoke('attachments:getForSession', sessionId),
     getById: (id: string) => ipcRenderer.invoke('attachments:getById', id),
     readBytes: (id: string) => ipcRenderer.invoke('attachments:readBytes', id),
     delete: (id: string) => ipcRenderer.invoke('attachments:delete', id),
-    showOpenDialog: () => ipcRenderer.invoke('attachments:showOpenDialog'),
   },
   appSettings: {
     get: () => ipcRenderer.invoke('appSettings:get'),

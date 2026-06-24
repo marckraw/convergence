@@ -91,7 +91,7 @@ export class AttachmentsService {
       )
   }
 
-  async ingestFromPaths(
+  async ingestTrustedFilePaths(
     sessionId: string,
     paths: string[],
   ): Promise<IngestResult> {

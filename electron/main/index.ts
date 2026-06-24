@@ -110,7 +110,7 @@ import { createNodePtyFactory } from '../backend/terminal/pty-factory'
 import { FeedbackService } from '../backend/feedback/feedback.service'
 import { registerFeedbackIpcHandlers } from '../backend/feedback/feedback.ipc'
 import { registerIpcHandlers } from './ipc'
-import { shouldOpenInSystemBrowser } from './external-links.pure'
+import { getExternalNavigationAction } from './external-links.pure'
 import { resolveAutoUpdater } from './auto-updater-module.pure'
 import { getWindowAppearanceOptions } from './window-effects.pure'
 import { formatStartupFailure } from './startup-failure.pure'
@@ -154,27 +154,30 @@ function createWindow(
   }
 
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
-    if (
-      shouldOpenInSystemBrowser({
-        currentUrl: mainWindow.webContents.getURL(),
-        targetUrl: url,
-      })
-    ) {
+    const action = getExternalNavigationAction({
+      currentUrl: mainWindow.webContents.getURL(),
+      targetUrl: url,
+    })
+
+    if (action === 'open-external') {
       void shell.openExternal(url)
       return { action: 'deny' }
     }
 
-    return { action: 'allow' }
+    return { action }
   })
 
   mainWindow.webContents.on('will-navigate', (event, url) => {
-    if (
-      shouldOpenInSystemBrowser({
-        currentUrl: mainWindow.webContents.getURL(),
-        targetUrl: url,
-      })
-    ) {
+    const action = getExternalNavigationAction({
+      currentUrl: mainWindow.webContents.getURL(),
+      targetUrl: url,
+    })
+
+    if (action !== 'allow') {
       event.preventDefault()
+    }
+
+    if (action === 'open-external') {
       void shell.openExternal(url)
     }
   })

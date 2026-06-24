@@ -21,7 +21,6 @@ import {
   type ProviderQuotaSnapshot,
 } from '@/entities/provider-quota'
 import {
-  attachmentApi,
   useAttachmentStore,
   AttachmentPreviewContainer,
   type Attachment,
@@ -470,7 +469,7 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
   const draftKey = activeSessionId ?? `${contextKey}:${DRAFT_KEY_NEW}`
   const draft = useAttachmentStore((s) => s.drafts[draftKey])
   const ingestFiles = useAttachmentStore((s) => s.ingestFiles)
-  const ingestFromPaths = useAttachmentStore((s) => s.ingestFromPaths)
+  const ingestFromOpenDialog = useAttachmentStore((s) => s.ingestFromOpenDialog)
   const removeDraft = useAttachmentStore((s) => s.removeDraft)
   const clearDraft = useAttachmentStore((s) => s.clearDraft)
   const clearRejections = useAttachmentStore((s) => s.clearRejections)
@@ -1057,10 +1056,8 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
   }
 
   const handleAttachmentAdd = useCallback(async () => {
-    const paths = await attachmentApi.showOpenDialog()
-    if (!paths || paths.length === 0) return
-    await ingestFromPaths(draftKey, paths)
-  }, [draftKey, ingestFromPaths])
+    await ingestFromOpenDialog(draftKey)
+  }, [draftKey, ingestFromOpenDialog])
 
   const ingestFilesFromFileList = useCallback(
     async (files: File[]) => {

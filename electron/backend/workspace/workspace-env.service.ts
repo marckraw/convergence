@@ -1,4 +1,12 @@
-import { copyFileSync, existsSync, lstatSync, readdirSync } from 'fs'
+import { randomUUID } from 'crypto'
+import {
+  copyFileSync,
+  existsSync,
+  lstatSync,
+  readdirSync,
+  renameSync,
+  unlinkSync,
+} from 'fs'
 import { join } from 'path'
 import type { WorkspaceEnvFileSettings } from '../project/project-settings.pure'
 import { matchesWorkspaceEnvFilePattern } from './workspace-env.pure'
@@ -9,6 +17,22 @@ export interface WorkspaceEnvSyncResult {
 }
 
 export class WorkspaceEnvService {
+  private copyEnvFile(sourceFile: string, targetFile: string): void {
+    const temporaryFile = `${targetFile}.${randomUUID()}.tmp`
+
+    try {
+      copyFileSync(sourceFile, temporaryFile)
+      renameSync(temporaryFile, targetFile)
+    } catch (error) {
+      try {
+        unlinkSync(temporaryFile)
+      } catch {
+        // Best-effort cleanup for a failed temporary copy.
+      }
+      throw error
+    }
+  }
+
   syncEnvFiles(input: {
     sourcePath: string
     workspacePath: string
@@ -34,15 +58,21 @@ export class WorkspaceEnvService {
       }
 
       const targetFile = join(input.workspacePath, fileName)
-      if (
-        input.settings.copyMode === 'copy-missing' &&
-        existsSync(targetFile)
-      ) {
+      const targetExists = existsSync(targetFile)
+      if (input.settings.copyMode === 'copy-missing' && targetExists) {
         skipped += 1
         continue
       }
 
-      copyFileSync(sourceFile, targetFile)
+      if (targetExists) {
+        const target = lstatSync(targetFile)
+        if (target.isSymbolicLink() || !target.isFile()) {
+          skipped += 1
+          continue
+        }
+      }
+
+      this.copyEnvFile(sourceFile, targetFile)
       copied += 1
     }
 
