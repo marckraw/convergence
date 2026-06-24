@@ -1,5 +1,11 @@
 # convergence
 
+## 0.42.1
+
+### Patch Changes
+
+- 7e9c2f2: Harden Electron navigation, Git diff/fetch inputs, workspace env sync, and attachment ingestion against local file disclosure and option injection paths.
+
 ## 0.42.0
 
 ### Minor Changes
