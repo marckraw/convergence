@@ -1,12 +1,73 @@
 import { execFile } from 'child_process'
 import { createHash } from 'crypto'
-import { existsSync } from 'fs'
-import { join } from 'path'
+import { existsSync, realpathSync } from 'fs'
+import { isAbsolute, relative, resolve } from 'path'
 import { isPullRequestReviewBranchName } from '../pull-request/pull-request-reference.pure'
 import { parseNameStatusOutput } from './base-branch-diff.pure'
 import type { ChangedFileEntry } from './changed-files.types'
 
 const EXPANDABLE_DIFF_CONTEXT_LINES = 80
+
+function isContainedPath(parentPath: string, candidatePath: string): boolean {
+  const relativePath = relative(parentPath, candidatePath)
+  return (
+    relativePath === '' ||
+    (!relativePath.startsWith('..') && !isAbsolute(relativePath))
+  )
+}
+
+function resolveRepoFilePath(
+  repoPath: string,
+  filePath: string,
+): { relativePath: string; absolutePath: string } {
+  if (filePath.includes('\0')) {
+    throw new Error('Refusing to diff unsafe repository path')
+  }
+
+  const pathSegments = filePath.split(/[\\/]+/)
+  if (isAbsolute(filePath) || pathSegments.includes('..')) {
+    throw new Error(`Refusing to diff unsafe repository path: ${filePath}`)
+  }
+
+  const repoRoot = realpathSync(repoPath)
+  const absolutePath = resolve(repoRoot, filePath)
+  if (!isContainedPath(repoRoot, absolutePath)) {
+    throw new Error(`Refusing to diff path outside repository: ${filePath}`)
+  }
+
+  if (existsSync(absolutePath)) {
+    const canonicalTarget = realpathSync(absolutePath)
+    if (!isContainedPath(repoRoot, canonicalTarget)) {
+      throw new Error(`Refusing to diff path outside repository: ${filePath}`)
+    }
+  }
+
+  return {
+    relativePath: relative(repoRoot, absolutePath),
+    absolutePath,
+  }
+}
+
+async function validateBranchName(
+  repoPath: string,
+  branchName: string,
+): Promise<string> {
+  const trimmedBranchName = branchName.trim()
+  if (!trimmedBranchName) {
+    throw new Error('Base branch not found: empty branch name')
+  }
+
+  if (trimmedBranchName.startsWith('-') || trimmedBranchName.includes('\0')) {
+    throw new Error(`Refusing unsafe branch name: ${trimmedBranchName}`)
+  }
+
+  await exec(
+    'git',
+    ['check-ref-format', '--branch', trimmedBranchName],
+    repoPath,
+  )
+  return trimmedBranchName
+}
 
 function exec(command: string, args: string[], cwd: string): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -201,8 +262,11 @@ export class GitService {
     repoPath: string,
     preferredBaseBranchName: string | null,
   ): Promise<string> {
-    const baseBranchName =
-      preferredBaseBranchName?.trim() || (await this.getDefaultBranch(repoPath))
+    const baseBranchName = await validateBranchName(
+      repoPath,
+      preferredBaseBranchName?.trim() ||
+        (await this.getDefaultBranch(repoPath)),
+    )
 
     const hasOrigin = await exec('git', ['remote'], repoPath)
       .then((output) => output.split('\n').includes('origin'))
@@ -326,16 +390,19 @@ export class GitService {
     }
 
     const remoteName = input.remoteName ?? 'origin'
-    await exec(
-      'git',
-      ['fetch', remoteName, input.baseBranch],
+    const baseBranch = await validateBranchName(
       input.repoPath,
-    ).catch(() => {})
+      input.baseBranch,
+    )
 
-    const remoteBase = `${remoteName}/${input.baseBranch}`
+    await exec('git', ['fetch', remoteName, baseBranch], input.repoPath).catch(
+      () => {},
+    )
+
+    const remoteBase = `${remoteName}/${baseBranch}`
     const baseRef = (await this.refExists(input.repoPath, remoteBase))
       ? remoteBase
-      : input.baseBranch
+      : baseBranch
 
     return execAllowExitCodes(
       'git',
@@ -381,10 +448,7 @@ export class GitService {
     repoPath: string,
     branchName: string,
   ): Promise<string> {
-    const trimmedBranchName = branchName.trim()
-    if (!trimmedBranchName) {
-      throw new Error('Base branch not found: empty branch name')
-    }
+    const trimmedBranchName = await validateBranchName(repoPath, branchName)
 
     const hasOrigin = await exec('git', ['remote'], repoPath)
       .then((output) => output.split('\n').includes('origin'))
@@ -449,6 +513,9 @@ export class GitService {
     baseRef: string,
     filePath?: string,
   ): Promise<string> {
+    const repoFilePath = filePath
+      ? resolveRepoFilePath(repoPath, filePath)
+      : null
     const args = [
       'diff',
       '--no-color',
@@ -456,20 +523,20 @@ export class GitService {
       '--find-renames',
       baseRef,
     ]
-    if (filePath) args.push('--', filePath)
+    if (repoFilePath) args.push('--', repoFilePath.relativePath)
 
     const tracked = await exec('git', args, repoPath).catch(() => '')
 
-    if (!filePath) {
+    if (!repoFilePath) {
       return tracked
     }
 
     const untracked = await this.getUntrackedFiles(repoPath)
-    if (!untracked.includes(filePath)) {
+    if (!untracked.includes(repoFilePath.relativePath)) {
       return tracked
     }
 
-    const absoluteFilePath = join(repoPath, filePath)
+    const absoluteFilePath = repoFilePath.absolutePath
     if (!existsSync(absoluteFilePath)) {
       return tracked
     }
@@ -557,26 +624,30 @@ export class GitService {
   }
 
   async getDiff(repoPath: string, filePath?: string): Promise<string> {
+    const repoFilePath = filePath
+      ? resolveRepoFilePath(repoPath, filePath)
+      : null
+
     try {
       const args = [
         'diff',
         '--no-color',
         `--unified=${EXPANDABLE_DIFF_CONTEXT_LINES}`,
       ]
-      if (filePath) args.push('--', filePath)
+      if (repoFilePath) args.push('--', repoFilePath.relativePath)
       const staged = await exec(
         'git',
         [...args.slice(0, 1), '--cached', ...args.slice(1)],
         repoPath,
       ).catch(() => '')
       const unstaged = await exec('git', args, repoPath).catch(() => '')
-      if (!filePath) {
+      if (!repoFilePath) {
         return [staged, unstaged].filter(Boolean).join('\n')
       }
 
       const tracked = await exec(
         'git',
-        ['ls-files', '--error-unmatch', '--', filePath],
+        ['ls-files', '--error-unmatch', '--', repoFilePath.relativePath],
         repoPath,
       )
         .then(() => true)
@@ -586,7 +657,7 @@ export class GitService {
         return [staged, unstaged].filter(Boolean).join('\n')
       }
 
-      const absoluteFilePath = join(repoPath, filePath)
+      const absoluteFilePath = repoFilePath.absolutePath
       if (!existsSync(absoluteFilePath)) {
         return [staged, unstaged].filter(Boolean).join('\n')
       }

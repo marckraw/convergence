@@ -1751,15 +1751,13 @@ interface ElectronAPI {
       sessionId: string,
       files: AttachmentIngestFileInput[],
     ) => Promise<AttachmentIngestResult>
-    ingestFromPaths: (
+    ingestFromOpenDialog: (
       sessionId: string,
-      paths: string[],
-    ) => Promise<AttachmentIngestResult>
+    ) => Promise<AttachmentIngestResult | null>
     getForSession: (sessionId: string) => Promise<AttachmentData[]>
     getById: (id: string) => Promise<AttachmentData | null>
     readBytes: (id: string) => Promise<Uint8Array>
     delete: (id: string) => Promise<void>
-    showOpenDialog: () => Promise<string[] | null>
   }
   appSettings: {
     get: () => Promise<AppSettingsData>

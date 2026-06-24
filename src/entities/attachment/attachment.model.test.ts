@@ -1,13 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const ingestFiles = vi.fn()
-const ingestFromPaths = vi.fn()
+const ingestFromOpenDialog = vi.fn()
 const deleteAttachment = vi.fn()
 
 vi.mock('./attachment.api', () => ({
   attachmentApi: {
     ingestFiles: (...args: unknown[]) => ingestFiles(...args),
-    ingestFromPaths: (...args: unknown[]) => ingestFromPaths(...args),
+    ingestFromOpenDialog: (...args: unknown[]) => ingestFromOpenDialog(...args),
     delete: (...args: unknown[]) => deleteAttachment(...args),
   },
 }))
@@ -33,7 +33,7 @@ function makeAttachment(id: string, filename = 'x.png'): Attachment {
 describe('useAttachmentStore', () => {
   beforeEach(() => {
     ingestFiles.mockReset()
-    ingestFromPaths.mockReset()
+    ingestFromOpenDialog.mockReset()
     deleteAttachment.mockReset()
     useAttachmentStore.setState({ drafts: {}, resolved: {} })
   })
@@ -73,6 +73,32 @@ describe('useAttachmentStore', () => {
     expect(draft.rejections).toEqual([
       { filename: 'bad.bin', reason: 'Unsupported' },
     ])
+  })
+
+  it('stores attachments selected through the trusted open dialog', async () => {
+    const att = makeAttachment('dialog-a1')
+    ingestFromOpenDialog.mockResolvedValue({
+      attachments: [att],
+      rejections: [],
+    })
+
+    await useAttachmentStore.getState().ingestFromOpenDialog('s1')
+
+    const draft = useAttachmentStore.getState().getDraft('s1')
+    expect(draft.items).toEqual([att])
+    expect(draft.ingestInFlight).toBe(false)
+    expect(ingestFromOpenDialog).toHaveBeenCalledWith('s1')
+  })
+
+  it('clears ingest state when the open dialog is cancelled', async () => {
+    ingestFromOpenDialog.mockResolvedValue(null)
+
+    await useAttachmentStore.getState().ingestFromOpenDialog('s1')
+
+    const draft = useAttachmentStore.getState().getDraft('s1')
+    expect(draft.items).toEqual([])
+    expect(draft.rejections).toEqual([])
+    expect(draft.ingestInFlight).toBe(false)
   })
 
   it('keeps drafts isolated per session', async () => {

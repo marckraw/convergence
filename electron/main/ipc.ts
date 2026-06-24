@@ -827,9 +827,19 @@ export function registerIpcHandlers(
   )
 
   ipcMain.handle(
-    'attachments:ingestFromPaths',
-    async (_event, sessionId: string, paths: string[]) => {
-      return attachmentsService.ingestFromPaths(sessionId, paths)
+    'attachments:ingestFromOpenDialog',
+    async (event, sessionId: string) => {
+      const window = BrowserWindow.fromWebContents(event.sender)
+      if (!window) return null
+      const result = await dialog.showOpenDialog(window, {
+        properties: ['openFile', 'multiSelections'],
+        title: 'Select attachments',
+      })
+      if (result.canceled || result.filePaths.length === 0) return null
+      return attachmentsService.ingestTrustedFilePaths(
+        sessionId,
+        result.filePaths,
+      )
     },
   )
 
@@ -848,17 +858,6 @@ export function registerIpcHandlers(
 
   ipcMain.handle('attachments:delete', async (_event, id: string) => {
     await attachmentsService.delete(id)
-  })
-
-  ipcMain.handle('attachments:showOpenDialog', async (event) => {
-    const window = BrowserWindow.fromWebContents(event.sender)
-    if (!window) return null
-    const result = await dialog.showOpenDialog(window, {
-      properties: ['openFile', 'multiSelections'],
-      title: 'Select attachments',
-    })
-    if (result.canceled || result.filePaths.length === 0) return null
-    return result.filePaths
   })
 
   ipcMain.handle(

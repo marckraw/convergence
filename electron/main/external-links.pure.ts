@@ -3,16 +3,22 @@ interface ExternalNavigationInput {
   targetUrl: string
 }
 
+export type ExternalNavigationAction = 'allow' | 'open-external' | 'deny'
+
 function isHttpUrl(value: URL): boolean {
   return value.protocol === 'http:' || value.protocol === 'https:'
 }
 
-export function shouldOpenInSystemBrowser({
+function isAllowedExternalProtocol(value: URL): boolean {
+  return isHttpUrl(value) || value.protocol === 'mailto:'
+}
+
+export function getExternalNavigationAction({
   currentUrl,
   targetUrl,
-}: ExternalNavigationInput): boolean {
+}: ExternalNavigationInput): ExternalNavigationAction {
   if (!currentUrl) {
-    return false
+    return 'deny'
   }
 
   let target: URL
@@ -20,11 +26,15 @@ export function shouldOpenInSystemBrowser({
   try {
     target = new URL(targetUrl)
   } catch {
-    return false
+    return 'deny'
+  }
+
+  if (!isAllowedExternalProtocol(target)) {
+    return 'deny'
   }
 
   if (!isHttpUrl(target)) {
-    return false
+    return 'open-external'
   }
 
   let current: URL
@@ -32,12 +42,18 @@ export function shouldOpenInSystemBrowser({
   try {
     current = new URL(currentUrl)
   } catch {
-    return true
+    return 'open-external'
   }
 
   if (current.protocol === 'file:') {
-    return true
+    return 'open-external'
   }
 
-  return current.origin !== target.origin
+  return current.origin === target.origin ? 'allow' : 'open-external'
+}
+
+export function shouldOpenInSystemBrowser(
+  input: ExternalNavigationInput,
+): boolean {
+  return getExternalNavigationAction(input) === 'open-external'
 }

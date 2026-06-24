@@ -22,7 +22,7 @@ interface AttachmentActions {
     sessionId: string,
     files: AttachmentIngestFileInput[],
   ) => Promise<void>
-  ingestFromPaths: (sessionId: string, paths: string[]) => Promise<void>
+  ingestFromOpenDialog: (sessionId: string) => Promise<void>
   removeDraft: (sessionId: string, attachmentId: string) => Promise<void>
   clearDraft: (sessionId: string) => void
   clearRejections: (sessionId: string) => void
@@ -134,12 +134,22 @@ export const useAttachmentStore = create<AttachmentStore>((set, get) => ({
     }
   },
 
-  ingestFromPaths: async (sessionId, paths) => {
+  ingestFromOpenDialog: async (sessionId) => {
     set((state) =>
       withDraft(state, sessionId, (d) => ({ ...d, ingestInFlight: true })),
     )
     try {
-      const result = await attachmentApi.ingestFromPaths(sessionId, paths)
+      const result = await attachmentApi.ingestFromOpenDialog(sessionId)
+      if (!result) {
+        set((state) =>
+          withDraft(state, sessionId, (d) => ({
+            ...d,
+            ingestInFlight: false,
+          })),
+        )
+        return
+      }
+
       set((state) => {
         const withDraftUpdate = withDraft(state, sessionId, (d) => ({
           items: [...d.items, ...result.attachments],

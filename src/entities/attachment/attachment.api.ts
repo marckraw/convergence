@@ -11,11 +11,10 @@ export const attachmentApi = {
   ): Promise<AttachmentIngestResult> =>
     window.electronAPI.attachments.ingestFiles(sessionId, files),
 
-  ingestFromPaths: (
+  ingestFromOpenDialog: (
     sessionId: string,
-    paths: string[],
-  ): Promise<AttachmentIngestResult> =>
-    window.electronAPI.attachments.ingestFromPaths(sessionId, paths),
+  ): Promise<AttachmentIngestResult | null> =>
+    window.electronAPI.attachments.ingestFromOpenDialog(sessionId),
 
   getForSession: (sessionId: string): Promise<Attachment[]> =>
     window.electronAPI.attachments.getForSession(sessionId),
@@ -28,7 +27,4 @@ export const attachmentApi = {
 
   delete: (id: string): Promise<void> =>
     window.electronAPI.attachments.delete(id),
-
-  showOpenDialog: (): Promise<string[] | null> =>
-    window.electronAPI.attachments.showOpenDialog(),
 }

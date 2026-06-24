@@ -1,5 +1,11 @@
 import { describe, expect, it, beforeEach, afterEach } from 'vitest'
-import { mkdtempSync, existsSync, writeFileSync } from 'fs'
+import {
+  chmodSync,
+  existsSync,
+  mkdtempSync,
+  symlinkSync,
+  writeFileSync,
+} from 'fs'
 import { rmSync } from 'fs'
 import { join } from 'path'
 import { tmpdir } from 'os'
@@ -11,6 +17,30 @@ function gitInit(dir: string): void {
   execFileSync('git', ['config', 'user.email', 'test@test.com'], { cwd: dir })
   execFileSync('git', ['config', 'user.name', 'Test'], { cwd: dir })
   execFileSync('git', ['commit', '--allow-empty', '-m', 'init'], { cwd: dir })
+}
+
+function addOriginWithUploadPackMarker(
+  repoPath: string,
+  tempDir: string,
+): { branchName: string; markerPath: string } {
+  const remotePath = join(tempDir, `remote-${Date.now()}.git`)
+  execFileSync('git', ['init', '--bare', remotePath])
+  execFileSync('git', ['remote', 'add', 'origin', remotePath], {
+    cwd: repoPath,
+  })
+
+  const markerPath = join(tempDir, `upload-pack-marker-${Date.now()}`)
+  const helperPath = join(tempDir, `upload-pack-helper-${Date.now()}.js`)
+  writeFileSync(
+    helperPath,
+    `#!/usr/bin/env node\nrequire('fs').writeFileSync(${JSON.stringify(markerPath)}, 'executed')\nprocess.exit(1)\n`,
+  )
+  chmodSync(helperPath, 0o755)
+
+  return {
+    branchName: `--upload-pack=${helperPath}`,
+    markerPath,
+  }
 }
 
 describe('GitService', () => {
@@ -217,6 +247,68 @@ describe('GitService', () => {
       expect(diff).toContain('new-file.txt')
       expect(diff).toContain('/dev/null')
       expect(diff).toContain('+new file')
+    })
+
+    it('rejects traversing file paths before they can disclose outside files', async () => {
+      writeFileSync(join(tempDir, 'outside-secret.txt'), 'SECRET_TOKEN=1\n')
+
+      await expect(
+        service.getDiff(repoPath, '../outside-secret.txt'),
+      ).rejects.toThrow(/unsafe repository path/)
+    })
+
+    it('rejects symlinked untracked files that resolve outside the repo', async () => {
+      writeFileSync(join(tempDir, 'outside-secret.txt'), 'SECRET_TOKEN=1\n')
+      symlinkSync(
+        join(tempDir, 'outside-secret.txt'),
+        join(repoPath, 'link.txt'),
+      )
+
+      await expect(service.getDiff(repoPath, 'link.txt')).rejects.toThrow(
+        /outside repository/,
+      )
+    })
+  })
+
+  describe('base branch validation', () => {
+    it('rejects leading-dash start branches before git fetch can run helpers', async () => {
+      const { branchName, markerPath } = addOriginWithUploadPackMarker(
+        repoPath,
+        tempDir,
+      )
+
+      await expect(
+        service.resolveBaseBranchStartPoint(repoPath, branchName),
+      ).rejects.toThrow(/unsafe branch name/)
+      expect(existsSync(markerPath)).toBe(false)
+    })
+
+    it('rejects pull request diff base branches before git fetch can run helpers', async () => {
+      const { branchName, markerPath } = addOriginWithUploadPackMarker(
+        repoPath,
+        tempDir,
+      )
+
+      await expect(
+        service.getPullRequestDiff({
+          repoPath,
+          baseBranch: branchName,
+          headBranch: 'HEAD',
+        }),
+      ).rejects.toThrow(/unsafe branch name/)
+      expect(existsSync(markerPath)).toBe(false)
+    })
+
+    it('rejects comparison base branches before git fetch can run helpers', async () => {
+      const { branchName, markerPath } = addOriginWithUploadPackMarker(
+        repoPath,
+        tempDir,
+      )
+
+      await expect(
+        service.resolveComparisonRef(repoPath, branchName),
+      ).rejects.toThrow(/unsafe branch name/)
+      expect(existsSync(markerPath)).toBe(false)
     })
   })
 })
