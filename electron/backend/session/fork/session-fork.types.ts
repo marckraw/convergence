@@ -31,6 +31,17 @@ export interface ForkSummary {
   next_steps: string[]
 }
 
+/**
+ * The model used to compact the parent transcript into the summary seed.
+ * Optional at the IPC boundary; when omitted the parent provider's configured
+ * extraction model is used.
+ */
+export interface ForkSummarizeWith {
+  providerId: string
+  modelId: string
+  effort: ReasoningEffort | null
+}
+
 export interface ForkCommonInput {
   parentSessionId: string
   name: string

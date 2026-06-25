@@ -82,6 +82,7 @@ export type {
   ForkDecision,
   ForkKeyFact,
   ForkSummary,
+  ForkSummarizeWith,
   ForkCommonInput,
   ForkFullInput,
   ForkSummaryInput,

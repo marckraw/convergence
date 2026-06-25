@@ -35,6 +35,12 @@ export interface ForkSummary {
   next_steps: string[]
 }
 
+export interface ForkSummarizeWith {
+  providerId: string
+  modelId: string
+  effort: ReasoningEffort | null
+}
+
 export interface ForkCommonInput {
   parentSessionId: string
   name: string

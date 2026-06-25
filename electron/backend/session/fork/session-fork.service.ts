@@ -15,6 +15,7 @@ import {
 } from './session-fork.pure'
 import type {
   ForkFullInput,
+  ForkSummarizeWith,
   ForkSummary,
   ForkSummaryInput,
   WorkspaceMode,
@@ -70,27 +71,30 @@ export class SessionForkService {
   async previewSummary(
     parentId: string,
     requestId?: string,
+    summarizeWith?: ForkSummarizeWith,
   ): Promise<ForkSummary> {
     const parent = this.deps.sessions.getSummaryById(parentId)
     if (!parent) throw new Error(`Parent session not found: ${parentId}`)
     assertForkableParent(parent)
     const conversation = this.deps.sessions.getConversation(parentId)
 
-    const provider = this.deps.providers.get(parent.providerId)
+    const providerId = summarizeWith?.providerId ?? parent.providerId
+    const provider = this.deps.providers.get(providerId)
     if (!provider || !provider.oneShot) {
       throw new SessionForkExtractionError(
-        `Provider ${parent.providerId} does not support one-shot extraction`,
+        `Provider ${providerId} does not support one-shot extraction`,
       )
     }
 
-    const modelId = await this.deps.appSettings.resolveExtractionModel(
-      parent.providerId,
-    )
+    const modelId =
+      summarizeWith?.modelId ??
+      (await this.deps.appSettings.resolveExtractionModel(providerId))
     if (!modelId) {
       throw new SessionForkExtractionError(
-        `No extraction model available for provider ${parent.providerId}`,
+        `No extraction model available for provider ${providerId}`,
       )
     }
+    const effort = summarizeWith?.effort ?? null
 
     const serialized = serializeConversationItems(conversation)
     const basePrompt = buildExtractionPrompt(serialized)
@@ -98,6 +102,7 @@ export class SessionForkService {
     const firstRaw = await provider.oneShot({
       prompt: basePrompt,
       modelId,
+      effort,
       workingDirectory: parent.workingDirectory,
       timeoutMs: SUMMARY_EXTRACTION_TIMEOUT_MS,
       requestId,
@@ -110,6 +115,7 @@ export class SessionForkService {
     const retryRaw = await provider.oneShot({
       prompt: basePrompt + RETRY_SUFFIX,
       modelId,
+      effort,
       workingDirectory: parent.workingDirectory,
       timeoutMs: SUMMARY_EXTRACTION_TIMEOUT_MS,
       requestId,

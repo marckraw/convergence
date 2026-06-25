@@ -25,6 +25,7 @@ import {
   type AttachmentDraftController,
 } from '@/entities/attachment'
 import { ForkComposer } from './fork-composer.presentational'
+import { ModelSelectorRow } from './model-selector-row.presentational'
 import type { PreviewState } from './session-fork.types'
 import type { ForkProgressLabel, SeedSizeWarning } from './session-fork.pure'
 
@@ -38,6 +39,7 @@ interface SessionForkDialogProps {
   summaryDisabledReason: string | null
   providers: ProviderInfo[]
   selection: ResolvedProviderSelection
+  summarizerSelection: ResolvedProviderSelection
   sizeWarning: SeedSizeWarning | null
   workspaceMode: WorkspaceMode
   workspaceBranchName: string
@@ -56,6 +58,9 @@ interface SessionForkDialogProps {
   onProviderChange: (id: string) => void
   onModelChange: (id: string, providerId?: string) => void
   onEffortChange: (id: ReasoningEffort | '') => void
+  onSummarizerProviderChange: (id: string) => void
+  onSummarizerModelChange: (id: string, providerId?: string) => void
+  onSummarizerEffortChange: (id: ReasoningEffort | '') => void
   onWorkspaceModeChange: (mode: WorkspaceMode) => void
   onWorkspaceBranchNameChange: (value: string) => void
   onAdditionalInstructionChange: (value: string) => void
@@ -77,6 +82,7 @@ export const SessionForkDialog: FC<SessionForkDialogProps> = ({
   summaryDisabledReason,
   providers,
   selection,
+  summarizerSelection,
   sizeWarning,
   workspaceMode,
   workspaceBranchName,
@@ -95,6 +101,9 @@ export const SessionForkDialog: FC<SessionForkDialogProps> = ({
   onProviderChange,
   onModelChange,
   onEffortChange,
+  onSummarizerProviderChange,
+  onSummarizerModelChange,
+  onSummarizerEffortChange,
   onWorkspaceModeChange,
   onWorkspaceBranchNameChange,
   onAdditionalInstructionChange,
@@ -293,6 +302,18 @@ export const SessionForkDialog: FC<SessionForkDialogProps> = ({
                     {preview.status === 'error' ? 'Retry' : 'Regenerate'}
                   </Button>
                 )}
+              </div>
+              <div className="space-y-1">
+                <p className="text-xs text-muted-foreground">Summarize with</p>
+                <div className="flex flex-wrap items-center gap-1">
+                  <ModelSelectorRow
+                    providers={providers}
+                    selection={summarizerSelection}
+                    onProviderChange={onSummarizerProviderChange}
+                    onModelChange={onSummarizerModelChange}
+                    onEffortChange={onSummarizerEffortChange}
+                  />
+                </div>
               </div>
               {preview.status === 'idle' && (
                 <div className="space-y-2" data-testid="fork-preview-idle">

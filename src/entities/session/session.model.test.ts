@@ -727,6 +727,7 @@ describe('useSessionStore', () => {
       expect(mockElectronAPI.session.forkPreviewSummary).toHaveBeenCalledWith(
         'parent-id',
         undefined,
+        undefined,
       )
       expect(summary.topic).toBe('Auth refactor')
     })

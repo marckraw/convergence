@@ -67,6 +67,11 @@ export const SessionForkDialogContainer: FC = () => {
   const [providerId, setProviderId] = useState('')
   const [modelId, setModelId] = useState('')
   const [effortId, setEffortId] = useState<ReasoningEffort | ''>('')
+  const [summarizerProviderId, setSummarizerProviderId] = useState('')
+  const [summarizerModelId, setSummarizerModelId] = useState('')
+  const [summarizerEffortId, setSummarizerEffortId] = useState<
+    ReasoningEffort | ''
+  >('')
   const [workspaceMode, setWorkspaceMode] = useState<WorkspaceMode>('reuse')
   const [workspaceBranchName, setWorkspaceBranchName] = useState('')
   const [additionalInstruction, setAdditionalInstruction] = useState('')
@@ -103,6 +108,24 @@ export const SessionForkDialogContainer: FC = () => {
         storedDefaults,
       ),
     [providers, providerId, modelId, effortId, storedDefaults],
+  )
+
+  const summarizerSelection = useMemo(
+    () =>
+      resolveProviderSelection(
+        providers,
+        summarizerProviderId || null,
+        summarizerModelId || null,
+        summarizerEffortId || null,
+        storedDefaults,
+      ),
+    [
+      providers,
+      summarizerProviderId,
+      summarizerModelId,
+      summarizerEffortId,
+      storedDefaults,
+    ],
   )
 
   const attachmentCapability = useMemo(
@@ -174,6 +197,9 @@ export const SessionForkDialogContainer: FC = () => {
     setProviderId(parent.providerId)
     setModelId(parent.model ?? '')
     setEffortId((parent.effort as ReasoningEffort | null) ?? '')
+    setSummarizerProviderId(parent.providerId)
+    setSummarizerModelId(parent.model ?? '')
+    setSummarizerEffortId((parent.effort as ReasoningEffort | null) ?? '')
     setWorkspaceMode('reuse')
     setWorkspaceBranchName('')
     setAdditionalInstruction('')
@@ -190,7 +216,11 @@ export const SessionForkDialogContainer: FC = () => {
     setPreviewRequestId(requestId)
     setPreview({ status: 'loading' })
     try {
-      const summary = await previewFork(parent.id, requestId)
+      const summary = await previewFork(parent.id, requestId, {
+        providerId: summarizerSelection.providerId,
+        modelId: summarizerSelection.modelId,
+        effort: summarizerSelection.effort?.id ?? null,
+      })
       const md = renderSeedMarkdown({
         summary,
         parentName: parent.name,
@@ -206,7 +236,7 @@ export const SessionForkDialogContainer: FC = () => {
           err instanceof Error ? err.message : 'Failed to extract summary',
       })
     }
-  }, [parent, previewFork, additionalInstruction])
+  }, [parent, previewFork, additionalInstruction, summarizerSelection])
 
   useEffect(() => {
     if (
@@ -269,6 +299,38 @@ export const SessionForkDialogContainer: FC = () => {
       setEffortId(next.effortId)
     },
     [providers, providerId, storedDefaults],
+  )
+
+  const handleSummarizerProviderChange = useCallback(
+    (nextProviderId: string) => {
+      const next = resolveProviderSelection(
+        providers,
+        nextProviderId,
+        null,
+        null,
+        storedDefaults,
+      )
+      setSummarizerProviderId(next.providerId)
+      setSummarizerModelId(next.modelId)
+      setSummarizerEffortId(next.effortId)
+    },
+    [providers, storedDefaults],
+  )
+
+  const handleSummarizerModelChange = useCallback(
+    (nextModelId: string, nextProviderId?: string) => {
+      const next = resolveProviderSelection(
+        providers,
+        nextProviderId ?? (summarizerProviderId || null),
+        nextModelId,
+        null,
+        storedDefaults,
+      )
+      setSummarizerProviderId(next.providerId)
+      setSummarizerModelId(next.modelId)
+      setSummarizerEffortId(next.effortId)
+    },
+    [providers, summarizerProviderId, storedDefaults],
   )
 
   const handleOpenChange = useCallback(
@@ -345,6 +407,7 @@ export const SessionForkDialogContainer: FC = () => {
       summaryDisabledReason={summaryDisabledReason}
       providers={providers}
       selection={selection}
+      summarizerSelection={summarizerSelection}
       sizeWarning={sizeWarning}
       workspaceMode={workspaceMode}
       workspaceBranchName={workspaceBranchName}
@@ -363,6 +426,9 @@ export const SessionForkDialogContainer: FC = () => {
       onProviderChange={handleProviderChange}
       onModelChange={handleModelChange}
       onEffortChange={setEffortId}
+      onSummarizerProviderChange={handleSummarizerProviderChange}
+      onSummarizerModelChange={handleSummarizerModelChange}
+      onSummarizerEffortChange={setSummarizerEffortId}
       onWorkspaceModeChange={setWorkspaceMode}
       onWorkspaceBranchNameChange={setWorkspaceBranchName}
       onAdditionalInstructionChange={setAdditionalInstruction}

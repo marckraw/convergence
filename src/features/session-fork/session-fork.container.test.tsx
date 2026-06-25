@@ -362,7 +362,15 @@ describe('SessionForkDialogContainer', () => {
     )
 
     await waitFor(() => {
-      expect(previewFork).toHaveBeenCalledWith('parent-1', expect.any(String))
+      expect(previewFork).toHaveBeenCalledWith(
+        'parent-1',
+        expect.any(String),
+        expect.objectContaining({
+          providerId: 'claude-code',
+          modelId: 'sonnet',
+          effort: 'medium',
+        }),
+      )
     })
 
     const textarea = (await screen.findByDisplayValue(
@@ -599,7 +607,11 @@ describe('SessionForkDialogContainer', () => {
       )
 
       await waitFor(() => {
-        expect(previewFork).toHaveBeenCalledWith('parent-1', 'req-progress')
+        expect(previewFork).toHaveBeenCalledWith(
+          'parent-1',
+          'req-progress',
+          expect.any(Object),
+        )
       })
 
       act(() => {

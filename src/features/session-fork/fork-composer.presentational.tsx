@@ -5,17 +5,15 @@ import {
   type Attachment,
   type AttachmentDraftController,
 } from '@/entities/attachment'
-import {
-  getProviderLifecycleBadge,
-  type ProviderInfo,
-  type ReasoningEffort,
-  type ResolvedProviderSelection,
+import type {
+  ProviderInfo,
+  ReasoningEffort,
+  ResolvedProviderSelection,
 } from '@/entities/session'
-import { ModelPickerDialog } from '@/features/model-picker'
-import { SessionStartSelect } from '@/features/session-start'
 import { Button } from '@/shared/ui/button'
 import { Textarea } from '@/shared/ui/textarea'
 import { cn } from '@/shared/lib/cn.pure'
+import { ModelSelectorRow } from './model-selector-row.presentational'
 
 interface ForkComposerProps {
   textareaId?: string
@@ -62,22 +60,6 @@ export const ForkComposer: FC<ForkComposerProps> = ({
     openFileDialog,
     removeOne,
   } = attachmentDraft
-
-  const providerItems = providers.map((provider) => ({
-    id: provider.id,
-    label: provider.vendorLabel || provider.name,
-    description:
-      provider.vendorLabel && provider.vendorLabel !== provider.name
-        ? provider.name
-        : undefined,
-    badge: getProviderLifecycleBadge(provider) ?? undefined,
-  }))
-  const effortItems =
-    selection.model?.effortOptions.map((effort) => ({
-      id: effort.id,
-      label: effort.label,
-      description: effort.description,
-    })) ?? []
 
   const handleInput = (e: FormEvent<HTMLTextAreaElement>) => {
     const target = e.currentTarget
@@ -132,28 +114,13 @@ export const ForkComposer: FC<ForkComposerProps> = ({
             </span>
           ) : null}
         </Button>
-        <SessionStartSelect
-          selectedId={selection.providerId}
-          value={selection.providerLabel || 'Select provider'}
-          items={providerItems}
-          onChange={onProviderChange}
-        />
-        <ModelPickerDialog
+        <ModelSelectorRow
           providers={providers}
-          selectedProviderId={selection.providerId}
-          selectedModelId={selection.modelId}
-          value={selection.model?.label ?? 'Select model'}
-          onChange={(providerId, modelId) => onModelChange(modelId, providerId)}
-          triggerClassName="px-2 text-xs"
+          selection={selection}
+          onProviderChange={onProviderChange}
+          onModelChange={onModelChange}
+          onEffortChange={onEffortChange}
         />
-        {effortItems.length > 0 && (
-          <SessionStartSelect
-            selectedId={selection.effortId}
-            value={selection.effort?.label ?? 'Select effort'}
-            items={effortItems}
-            onChange={(id) => onEffortChange(id as ReasoningEffort)}
-          />
-        )}
       </div>
     </div>
   )

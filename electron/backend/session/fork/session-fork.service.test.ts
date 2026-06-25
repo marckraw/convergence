@@ -298,6 +298,30 @@ describe('SessionForkService', () => {
       expect(h.oneShot).toHaveBeenCalledTimes(1)
     })
 
+    it('extracts with the provided summarize-with model and effort', async () => {
+      const h = setup()
+      await h.service.previewSummary('parent-1', undefined, {
+        providerId: 'claude-code',
+        modelId: 'sonnet',
+        effort: 'high',
+      })
+      expect(h.oneShot).toHaveBeenCalledWith(
+        expect.objectContaining({ modelId: 'sonnet', effort: 'high' }),
+      )
+      expect(h.appSettings.resolveExtractionModel).not.toHaveBeenCalled()
+    })
+
+    it('falls back to the configured extraction model when summarizeWith is omitted', async () => {
+      const h = setup()
+      await h.service.previewSummary('parent-1')
+      expect(h.appSettings.resolveExtractionModel).toHaveBeenCalledWith(
+        'claude-code',
+      )
+      expect(h.oneShot).toHaveBeenCalledWith(
+        expect.objectContaining({ modelId: 'sonnet', effort: null }),
+      )
+    })
+
     it('merges regex-extracted artifacts with LLM output', async () => {
       const h = setup()
       const summary = await h.service.previewSummary('parent-1')
