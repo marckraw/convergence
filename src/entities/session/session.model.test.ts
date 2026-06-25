@@ -727,6 +727,7 @@ describe('useSessionStore', () => {
       expect(mockElectronAPI.session.forkPreviewSummary).toHaveBeenCalledWith(
         'parent-id',
         undefined,
+        undefined,
       )
       expect(summary.topic).toBe('Auth refactor')
     })
@@ -755,6 +756,7 @@ describe('useSessionStore', () => {
         workspaceMode: 'reuse',
         workspaceBranchName: null,
         additionalInstruction: null,
+        seedAttachmentIds: [],
       })
 
       expect(result.id).toBe('child-1')
@@ -780,6 +782,7 @@ describe('useSessionStore', () => {
         workspaceMode: 'reuse',
         workspaceBranchName: null,
         additionalInstruction: null,
+        seedAttachmentIds: [],
       })
 
       const state = useSessionStore.getState()
@@ -802,6 +805,7 @@ describe('useSessionStore', () => {
         workspaceMode: 'reuse',
         workspaceBranchName: null,
         additionalInstruction: null,
+        seedAttachmentIds: [],
         seedMarkdown: '# seed',
       })
 
@@ -827,6 +831,7 @@ describe('useSessionStore', () => {
           workspaceMode: 'reuse',
           workspaceBranchName: null,
           additionalInstruction: null,
+          seedAttachmentIds: [],
           seedMarkdown: '# seed',
         }),
       ).rejects.toThrow('nope')

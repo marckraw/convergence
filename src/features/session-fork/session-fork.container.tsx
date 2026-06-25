@@ -13,6 +13,12 @@ import {
 import { useAppSettingsStore } from '@/entities/app-settings'
 import { useDialogStore } from '@/entities/dialog'
 import { useTaskProgress } from '@/entities/task-progress'
+import {
+  useAttachmentDraft,
+  resolveAttachmentCapabilityForModel,
+  validateAttachmentsAgainstCapability,
+  type Attachment,
+} from '@/entities/attachment'
 import { SessionForkDialog } from './session-fork.presentational'
 import {
   computeSeedSizeWarning,
@@ -61,6 +67,11 @@ export const SessionForkDialogContainer: FC = () => {
   const [providerId, setProviderId] = useState('')
   const [modelId, setModelId] = useState('')
   const [effortId, setEffortId] = useState<ReasoningEffort | ''>('')
+  const [summarizerProviderId, setSummarizerProviderId] = useState('')
+  const [summarizerModelId, setSummarizerModelId] = useState('')
+  const [summarizerEffortId, setSummarizerEffortId] = useState<
+    ReasoningEffort | ''
+  >('')
   const [workspaceMode, setWorkspaceMode] = useState<WorkspaceMode>('reuse')
   const [workspaceBranchName, setWorkspaceBranchName] = useState('')
   const [additionalInstruction, setAdditionalInstruction] = useState('')
@@ -70,6 +81,13 @@ export const SessionForkDialogContainer: FC = () => {
   const [previewRequestId, setPreviewRequestId] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState<string | null>(null)
+  const [previewAttachment, setPreviewAttachment] = useState<Attachment | null>(
+    null,
+  )
+
+  const attachmentDraft = useAttachmentDraft(
+    `fork:${parentSessionId ?? 'pending'}`,
+  )
 
   const progressView = useTaskProgress(previewRequestId)
   const progressLabel =
@@ -90,6 +108,41 @@ export const SessionForkDialogContainer: FC = () => {
         storedDefaults,
       ),
     [providers, providerId, modelId, effortId, storedDefaults],
+  )
+
+  const summarizerSelection = useMemo(
+    () =>
+      resolveProviderSelection(
+        providers,
+        summarizerProviderId || null,
+        summarizerModelId || null,
+        summarizerEffortId || null,
+        storedDefaults,
+      ),
+    [
+      providers,
+      summarizerProviderId,
+      summarizerModelId,
+      summarizerEffortId,
+      storedDefaults,
+    ],
+  )
+
+  const attachmentCapability = useMemo(
+    () =>
+      resolveAttachmentCapabilityForModel(
+        selection.provider?.attachments,
+        selection.model,
+      ),
+    [selection.provider, selection.model],
+  )
+  const capabilityResult = useMemo(
+    () =>
+      validateAttachmentsAgainstCapability(
+        attachmentDraft.attachments,
+        attachmentCapability,
+      ),
+    [attachmentDraft.attachments, attachmentCapability],
   )
 
   const transcriptLength = parentConversation.length
@@ -144,6 +197,9 @@ export const SessionForkDialogContainer: FC = () => {
     setProviderId(parent.providerId)
     setModelId(parent.model ?? '')
     setEffortId((parent.effort as ReasoningEffort | null) ?? '')
+    setSummarizerProviderId(parent.providerId)
+    setSummarizerModelId(parent.model ?? '')
+    setSummarizerEffortId((parent.effort as ReasoningEffort | null) ?? '')
     setWorkspaceMode('reuse')
     setWorkspaceBranchName('')
     setAdditionalInstruction('')
@@ -160,7 +216,11 @@ export const SessionForkDialogContainer: FC = () => {
     setPreviewRequestId(requestId)
     setPreview({ status: 'loading' })
     try {
-      const summary = await previewFork(parent.id, requestId)
+      const summary = await previewFork(parent.id, requestId, {
+        providerId: summarizerSelection.providerId,
+        modelId: summarizerSelection.modelId,
+        effort: summarizerSelection.effort?.id ?? null,
+      })
       const md = renderSeedMarkdown({
         summary,
         parentName: parent.name,
@@ -176,13 +236,7 @@ export const SessionForkDialogContainer: FC = () => {
           err instanceof Error ? err.message : 'Failed to extract summary',
       })
     }
-  }, [parent, previewFork, additionalInstruction])
-
-  useEffect(() => {
-    if (open && strategy === 'summary' && parent && preview.status === 'idle') {
-      void runPreview()
-    }
-  }, [open, strategy, parent, preview.status, runPreview])
+  }, [parent, previewFork, additionalInstruction, summarizerSelection])
 
   useEffect(() => {
     if (
@@ -247,6 +301,38 @@ export const SessionForkDialogContainer: FC = () => {
     [providers, providerId, storedDefaults],
   )
 
+  const handleSummarizerProviderChange = useCallback(
+    (nextProviderId: string) => {
+      const next = resolveProviderSelection(
+        providers,
+        nextProviderId,
+        null,
+        null,
+        storedDefaults,
+      )
+      setSummarizerProviderId(next.providerId)
+      setSummarizerModelId(next.modelId)
+      setSummarizerEffortId(next.effortId)
+    },
+    [providers, storedDefaults],
+  )
+
+  const handleSummarizerModelChange = useCallback(
+    (nextModelId: string, nextProviderId?: string) => {
+      const next = resolveProviderSelection(
+        providers,
+        nextProviderId ?? (summarizerProviderId || null),
+        nextModelId,
+        null,
+        storedDefaults,
+      )
+      setSummarizerProviderId(next.providerId)
+      setSummarizerModelId(next.modelId)
+      setSummarizerEffortId(next.effortId)
+    },
+    [providers, summarizerProviderId, storedDefaults],
+  )
+
   const handleOpenChange = useCallback(
     (next: boolean) => {
       if (!next) closeDialog()
@@ -272,6 +358,7 @@ export const SessionForkDialogContainer: FC = () => {
       workspaceBranchName:
         workspaceMode === 'fork' ? workspaceBranchName.trim() : null,
       additionalInstruction: additionalInstruction.trim() || null,
+      seedAttachmentIds: attachmentDraft.attachments.map((a) => a.id),
     }
     try {
       if (strategy === 'full') {
@@ -283,6 +370,7 @@ export const SessionForkDialogContainer: FC = () => {
           seedMarkdown,
         })
       }
+      attachmentDraft.clearDraft()
       closeDialog()
     } catch (err) {
       setSubmitError(
@@ -302,6 +390,7 @@ export const SessionForkDialogContainer: FC = () => {
     forkFull,
     forkSummary,
     seedMarkdown,
+    attachmentDraft,
     closeDialog,
   ])
 
@@ -318,6 +407,7 @@ export const SessionForkDialogContainer: FC = () => {
       summaryDisabledReason={summaryDisabledReason}
       providers={providers}
       selection={selection}
+      summarizerSelection={summarizerSelection}
       sizeWarning={sizeWarning}
       workspaceMode={workspaceMode}
       workspaceBranchName={workspaceBranchName}
@@ -325,6 +415,10 @@ export const SessionForkDialogContainer: FC = () => {
       seedMarkdown={seedMarkdown}
       preview={preview}
       progressLabel={progressLabel}
+      attachmentDraft={attachmentDraft}
+      previewAttachment={previewAttachment}
+      attachmentErrorByAttachmentId={capabilityResult.errorByAttachmentId}
+      attachmentsValid={capabilityResult.ok}
       isSubmitting={isSubmitting}
       submitError={submitError}
       onNameChange={setName}
@@ -332,6 +426,9 @@ export const SessionForkDialogContainer: FC = () => {
       onProviderChange={handleProviderChange}
       onModelChange={handleModelChange}
       onEffortChange={setEffortId}
+      onSummarizerProviderChange={handleSummarizerProviderChange}
+      onSummarizerModelChange={handleSummarizerModelChange}
+      onSummarizerEffortChange={setSummarizerEffortId}
       onWorkspaceModeChange={setWorkspaceMode}
       onWorkspaceBranchNameChange={setWorkspaceBranchName}
       onAdditionalInstructionChange={setAdditionalInstruction}
@@ -339,7 +436,9 @@ export const SessionForkDialogContainer: FC = () => {
         setSeedEdited(true)
         setSeedMarkdown(value)
       }}
-      onRetryPreview={() => void runPreview()}
+      onGenerateSummary={() => void runPreview()}
+      onAttachmentOpen={setPreviewAttachment}
+      onPreviewClose={() => setPreviewAttachment(null)}
       onConfirm={() => void handleConfirm()}
       onCancel={handleCancel}
     />

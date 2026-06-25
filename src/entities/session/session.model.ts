@@ -20,6 +20,7 @@ import { sessionApi, providerApi } from './session.api'
 import { sessionForkApi } from './session-fork.api'
 import type {
   ForkFullInput,
+  ForkSummarizeWith,
   ForkSummary,
   ForkSummaryInput,
 } from './session-fork.types'
@@ -113,6 +114,7 @@ interface SessionActions {
   previewFork: (
     parentSessionId: string,
     requestId?: string,
+    summarizeWith?: ForkSummarizeWith,
   ) => Promise<ForkSummary>
   forkFull: (input: ForkFullInput) => Promise<SessionSummary>
   forkSummary: (input: ForkSummaryInput) => Promise<SessionSummary>
@@ -919,8 +921,11 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     }))
   },
 
-  previewFork: (parentSessionId: string, requestId?: string) =>
-    sessionForkApi.previewSummary(parentSessionId, requestId),
+  previewFork: (
+    parentSessionId: string,
+    requestId?: string,
+    summarizeWith?: ForkSummarizeWith,
+  ) => sessionForkApi.previewSummary(parentSessionId, requestId, summarizeWith),
 
   forkFull: async (input: ForkFullInput) => {
     const session = await sessionForkApi.forkFull(input)

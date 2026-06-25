@@ -1682,6 +1682,7 @@ interface ElectronAPI {
     forkPreviewSummary: (
       parentId: string,
       requestId?: string,
+      summarizeWith?: unknown,
     ) => Promise<unknown>
     forkFull: (input: unknown) => Promise<SessionSummaryData>
     forkSummary: (input: unknown) => Promise<SessionSummaryData>

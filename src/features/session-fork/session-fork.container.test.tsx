@@ -12,6 +12,7 @@ import {
 import { useAppSettingsStore } from '@/entities/app-settings'
 import { useDialogStore } from '@/entities/dialog'
 import { useTaskProgressStore } from '@/entities/task-progress'
+import { useAttachmentStore, type Attachment } from '@/entities/attachment'
 import { SessionForkDialogContainer } from './session-fork.container'
 
 const TEST_ATTACHMENTS = {
@@ -246,6 +247,7 @@ describe('SessionForkDialogContainer', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     useTaskProgressStore.getState().reset()
+    useAttachmentStore.setState({ drafts: {}, resolved: {} })
     ;(window as unknown as { electronAPI: unknown }).electronAPI = {
       session: {
         getSummaryById: vi.fn().mockResolvedValue(parentSession),
@@ -286,10 +288,51 @@ describe('SessionForkDialogContainer', () => {
     expect(call.strategy).toBe('full')
     expect(call.parentSessionId).toBe('parent-1')
     expect(call.workspaceMode).toBe('reuse')
+    expect(call.seedAttachmentIds).toEqual([])
     expect(previewFork).not.toHaveBeenCalled()
   })
 
-  it('switching to summary runs preview and populates the seed buffer', async () => {
+  it('forwards seed attachment ids from the fork draft on confirm', async () => {
+    const forkFull = vi
+      .fn()
+      .mockResolvedValue({ ...parentSession, id: 'child-1' })
+    primeStores({ forkFull })
+    const image: Attachment = {
+      id: 'att-img',
+      sessionId: 'fork:parent-1',
+      kind: 'image',
+      mimeType: 'image/png',
+      filename: 'shot.png',
+      sizeBytes: 1024,
+      storagePath: '/tmp/shot.png',
+      thumbnailPath: null,
+      textPreview: null,
+      createdAt: '2026-01-01T00:00:00.000Z',
+    }
+    useAttachmentStore.setState({
+      drafts: {
+        'fork:parent-1': {
+          items: [image],
+          rejections: [],
+          ingestInFlight: false,
+        },
+      },
+    })
+
+    render(<SessionForkDialogContainer />)
+
+    expect(await screen.findByText('Fork session')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: /^Create fork$/i }))
+
+    await waitFor(() => {
+      expect(forkFull).toHaveBeenCalledTimes(1)
+    })
+    const call = forkFull.mock.calls[0]![0] as ForkFullInput
+    expect(call.seedAttachmentIds).toEqual(['att-img'])
+  })
+
+  it('selecting summary does not run preview until Generate summary is pressed', async () => {
     const previewFork = vi.fn().mockResolvedValue(sampleSummary)
     primeStores({ previewFork })
 
@@ -299,8 +342,35 @@ describe('SessionForkDialogContainer', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /Structured summary/i }))
 
+    expect(
+      await screen.findByRole('button', { name: /Generate summary/i }),
+    ).toBeInTheDocument()
+    expect(previewFork).not.toHaveBeenCalled()
+  })
+
+  it('Generate summary runs preview and populates the seed buffer', async () => {
+    const previewFork = vi.fn().mockResolvedValue(sampleSummary)
+    primeStores({ previewFork })
+
+    render(<SessionForkDialogContainer />)
+
+    expect(await screen.findByText('Fork session')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: /Structured summary/i }))
+    fireEvent.click(
+      await screen.findByRole('button', { name: /Generate summary/i }),
+    )
+
     await waitFor(() => {
-      expect(previewFork).toHaveBeenCalledWith('parent-1', expect.any(String))
+      expect(previewFork).toHaveBeenCalledWith(
+        'parent-1',
+        expect.any(String),
+        expect.objectContaining({
+          providerId: 'claude-code',
+          modelId: 'sonnet',
+          effort: 'medium',
+        }),
+      )
     })
 
     const textarea = (await screen.findByDisplayValue(
@@ -318,6 +388,9 @@ describe('SessionForkDialogContainer', () => {
 
     fireEvent.click(
       await screen.findByRole('button', { name: /Structured summary/i }),
+    )
+    fireEvent.click(
+      await screen.findByRole('button', { name: /Generate summary/i }),
     )
 
     const textarea = (await screen.findByDisplayValue(
@@ -351,6 +424,9 @@ describe('SessionForkDialogContainer', () => {
     fireEvent.click(
       await screen.findByRole('button', { name: /Structured summary/i }),
     )
+    fireEvent.click(
+      await screen.findByRole('button', { name: /Generate summary/i }),
+    )
 
     await screen.findByDisplayValue(/Shipping the fork dialog/)
 
@@ -374,6 +450,9 @@ describe('SessionForkDialogContainer', () => {
 
     fireEvent.click(
       await screen.findByRole('button', { name: /Structured summary/i }),
+    )
+    fireEvent.click(
+      await screen.findByRole('button', { name: /Generate summary/i }),
     )
 
     expect(await screen.findByText('LLM offline')).toBeInTheDocument()
@@ -523,9 +602,16 @@ describe('SessionForkDialogContainer', () => {
         expect(summaryButton).toBeEnabled()
       })
       fireEvent.click(summaryButton)
+      fireEvent.click(
+        await screen.findByRole('button', { name: /Generate summary/i }),
+      )
 
       await waitFor(() => {
-        expect(previewFork).toHaveBeenCalledWith('parent-1', 'req-progress')
+        expect(previewFork).toHaveBeenCalledWith(
+          'parent-1',
+          'req-progress',
+          expect.any(Object),
+        )
       })
 
       act(() => {
@@ -580,6 +666,9 @@ describe('SessionForkDialogContainer', () => {
         expect(summaryButton).toBeEnabled()
       })
       fireEvent.click(summaryButton)
+      fireEvent.click(
+        await screen.findByRole('button', { name: /Generate summary/i }),
+      )
 
       await waitFor(() => {
         expect(previewFork).toHaveBeenCalled()
@@ -617,6 +706,9 @@ describe('SessionForkDialogContainer', () => {
 
     fireEvent.click(
       await screen.findByRole('button', { name: /Structured summary/i }),
+    )
+    fireEvent.click(
+      await screen.findByRole('button', { name: /Generate summary/i }),
     )
 
     const textarea = (await screen.findByDisplayValue(

@@ -311,8 +311,17 @@ contextBridge.exposeInMainWorld('electronAPI', {
         ipcRenderer.removeListener('session:queuedInputPatched', handler)
       }
     },
-    forkPreviewSummary: (parentId: string, requestId?: string) =>
-      ipcRenderer.invoke('session:fork:previewSummary', parentId, requestId),
+    forkPreviewSummary: (
+      parentId: string,
+      requestId?: string,
+      summarizeWith?: unknown,
+    ) =>
+      ipcRenderer.invoke(
+        'session:fork:previewSummary',
+        parentId,
+        requestId,
+        summarizeWith,
+      ),
     forkFull: (input: unknown) =>
       ipcRenderer.invoke('session:fork:full', input),
     forkSummary: (input: unknown) =>

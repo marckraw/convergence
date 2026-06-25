@@ -1,8 +1,8 @@
-import type { Attachment } from '@/entities/attachment'
 import type {
   ProviderAttachmentCapability,
   ProviderModelOption,
 } from '@/entities/session'
+import type { Attachment } from './attachment.types'
 
 export interface AttachmentCapabilityError {
   attachmentId: string
