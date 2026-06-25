@@ -17,6 +17,7 @@ import {
 import { useAppSettingsStore } from '@/entities/app-settings'
 import { useDialogStore } from '@/entities/dialog'
 import {
+  findProviderQuotaSnapshot,
   providerQuotaApi,
   type ProviderQuotaSnapshot,
 } from '@/entities/provider-quota'
@@ -682,17 +683,14 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
       if (!showCodexUsagePill) return
       setCodexUsageLoading(true)
       try {
-        setCodexUsageSnapshot(await providerQuotaApi.getCodex(forceRefresh))
-      } catch (err) {
-        setCodexUsageSnapshot({
-          providerId: 'codex',
-          status: 'unavailable',
-          source: 'provider-api',
-          reason:
-            err instanceof Error ? err.message : 'Codex usage is unavailable.',
-          lastCheckedAt: new Date().toISOString(),
-          stale: false,
-        })
+        setCodexUsageSnapshot(
+          findProviderQuotaSnapshot(
+            await providerQuotaApi.list(forceRefresh),
+            'codex',
+          ),
+        )
+      } catch {
+        setCodexUsageSnapshot(null)
       } finally {
         setCodexUsageLoading(false)
       }
@@ -705,19 +703,14 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
       if (!showClaudeUsagePill) return
       setClaudeUsageLoading(true)
       try {
-        setClaudeUsageSnapshot(await providerQuotaApi.getClaude(forceRefresh))
-      } catch (err) {
-        setClaudeUsageSnapshot({
-          providerId: 'claude-code',
-          status: 'unavailable',
-          source: 'local-usage-log',
-          reason:
-            err instanceof Error
-              ? err.message
-              : 'Claude Code usage is unavailable.',
-          lastCheckedAt: new Date().toISOString(),
-          stale: false,
-        })
+        setClaudeUsageSnapshot(
+          findProviderQuotaSnapshot(
+            await providerQuotaApi.list(forceRefresh),
+            'claude-code',
+          ),
+        )
+      } catch {
+        setClaudeUsageSnapshot(null)
       } finally {
         setClaudeUsageLoading(false)
       }

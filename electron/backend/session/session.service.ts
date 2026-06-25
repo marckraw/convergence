@@ -3,7 +3,6 @@ import { mkdirSync } from 'fs'
 import type Database from 'better-sqlite3'
 import type {
   ConversationItemRow,
-  SessionQueuedInputRow,
   SessionRow,
 } from '../database/database.types'
 import type { ProviderExecutionHost } from '../provider/execution-host/execution-host.types'
@@ -20,7 +19,6 @@ import {
   getMidRunInputCapabilityForProviderId,
   supportsMidRunInputMode,
 } from '../provider/provider-descriptor.pure'
-import { deriveLiveness } from '../provider/liveness.pure'
 import type { AttachmentsService } from '../attachments/attachments.service'
 import type { SkillSelection } from '../skills/skills.types'
 import {
@@ -29,7 +27,6 @@ import {
   type SessionSummary,
   type CreateSessionInput,
   type QueuedInputPatchEvent,
-  type QueuedInputState,
   type SessionQueuedInput,
 } from './session.types'
 import type {
@@ -47,16 +44,17 @@ import type { TurnCaptureService } from './turn/turn-capture.service'
 import type { TurnDelta } from './turn/turn-capture.service'
 import type { SessionContextInjectionService } from './context-injection/session-context-injection.service'
 import { SessionRepository } from './session.repository'
-import {
-  CONVERSATION_PATCH_FLUSH_MS,
-  SESSION_LIVENESS_TICK_MS,
-} from './session.constants'
+import { CONVERSATION_PATCH_FLUSH_MS } from './session.constants'
 import {
   isAttentionRequestSummary,
-  queuedInputFromRow,
   resolveAttentionRequestKind,
   type AttentionRequestRowLike,
 } from './session.pure'
+import { SessionQueuedInputService } from './session-queued-input.service'
+import {
+  SessionLivenessService,
+  type SessionLivenessNoteKind,
+} from './session-liveness.service'
 
 type UserMessageDraft = Extract<
   ConversationItem,
@@ -98,11 +96,6 @@ export interface SessionAttentionObserver {
   ): void
 }
 
-interface LivenessState {
-  lastEventAt: number
-  warned: { quiet: boolean; silent: boolean }
-}
-
 interface PendingConversationPatch {
   sessionId: string
   itemId: string
@@ -112,8 +105,6 @@ interface PendingConversationPatch {
 export class SessionService {
   private activeHandles = new Map<string, SessionHandle>()
   private activeTurnIds = new Map<string, string>()
-  private livenessState = new Map<string, LivenessState>()
-  private livenessTimer: ReturnType<typeof setInterval> | null = null
   private pendingConversationPatches = new Map<
     string,
     PendingConversationPatch
@@ -126,8 +117,6 @@ export class SessionService {
   private onConversationPatch:
     | ((event: ConversationPatchEvent) => void)
     | null = null
-  private onQueuedInputPatch: ((event: QueuedInputPatchEvent) => void) | null =
-    null
   private onTurnDelta: ((sessionId: string, delta: TurnDelta) => void) | null =
     null
   private attachments: AttachmentsService | null = null
@@ -141,6 +130,8 @@ export class SessionService {
     | ((workingDirectory: string) => { repository: string } | null)
     | null = null
   private readonly sessionRepository: SessionRepository
+  private readonly queuedInputs: SessionQueuedInputService
+  private readonly liveness: SessionLivenessService
 
   constructor(
     private db: Database.Database,
@@ -148,8 +139,14 @@ export class SessionService {
     private globalWorkingDirectory: string = process.cwd(),
   ) {
     this.sessionRepository = new SessionRepository(db)
+    this.queuedInputs = new SessionQueuedInputService(db)
+    this.liveness = new SessionLivenessService({
+      isOpen: () => this.db.open,
+      getSummary: (sessionId) => this.getSummaryById(sessionId),
+      emitNote: (sessionId, kind) => this.emitLivenessNote(sessionId, kind),
+    })
     this.recoverStaleRunningSessions()
-    this.recoverDispatchingQueuedInputs()
+    this.queuedInputs.recoverDispatching()
   }
 
   setTurnCaptureService(service: TurnCaptureService): void {
@@ -347,7 +344,7 @@ export class SessionService {
   setQueuedInputPatchListener(
     listener: (event: QueuedInputPatchEvent) => void,
   ): void {
-    this.onQueuedInputPatch = listener
+    this.queuedInputs.setPatchListener(listener)
   }
 
   create(input: CreateSessionInput): Session {
@@ -541,27 +538,11 @@ export class SessionService {
   }
 
   getQueuedInputs(sessionId: string): SessionQueuedInput[] {
-    const rows = this.db
-      .prepare(
-        `SELECT *
-         FROM session_queued_inputs
-         WHERE session_id = ?
-           AND state IN ('queued', 'dispatching', 'failed')
-         ORDER BY created_at ASC`,
-      )
-      .all(sessionId) as SessionQueuedInputRow[]
-
-    return rows.map(queuedInputFromRow)
+    return this.queuedInputs.list(sessionId)
   }
 
   cancelQueuedInput(id: string): void {
-    const row = this.getQueuedInputRowById(id)
-    if (!row) throw new Error(`Queued input not found: ${id}`)
-    if (row.state !== 'queued') {
-      throw new Error(`Queued input cannot be cancelled from ${row.state}`)
-    }
-
-    this.patchQueuedInput(id, 'cancelled')
+    this.queuedInputs.cancel(id)
   }
 
   delete(id: string): void {
@@ -701,7 +682,7 @@ export class SessionService {
       getMidRunInputCapabilityForProviderId(session.providerId)
         .supportsAppQueuedFollowUp
     ) {
-      this.queueInput(session.id, input, 'follow-up')
+      this.queuedInputs.enqueue(session.id, input, 'follow-up')
       return
     }
 
@@ -761,7 +742,7 @@ export class SessionService {
 
     if (deliveryMode === 'follow-up' && session.status === 'running') {
       if (!capability.supportsNativeFollowUp) {
-        this.queueInput(session.id, input.input, 'follow-up')
+        this.queuedInputs.enqueue(session.id, input.input, 'follow-up')
         return
       }
     }
@@ -904,12 +885,12 @@ export class SessionService {
     }
     handle.stop()
     this.activeHandles.delete(id)
-    this.livenessState.delete(id)
+    this.liveness.clear(id)
     this.onSessionTerminated?.(id)
   }
 
   private applyDelta(sessionId: string, delta: SessionDelta): void {
-    this.bumpLiveness(sessionId)
+    this.liveness.bump(sessionId)
     switch (delta.kind) {
       case 'session.patch':
         if (
@@ -1415,7 +1396,7 @@ export class SessionService {
       this.applyDelta(session.id, delta)
     })
     handle.onActivityHeartbeat?.(() => {
-      this.bumpLiveness(session.id)
+      this.liveness.bump(session.id)
     })
   }
 
@@ -1436,7 +1417,7 @@ export class SessionService {
   ): void {
     if (status === 'failed') {
       this.activeHandles.delete(sessionId)
-      this.livenessState.delete(sessionId)
+      this.liveness.clear(sessionId)
       this.onSessionTerminated?.(sessionId)
       this.closeActiveTurn(sessionId, 'errored')
     } else if (status === 'completed') {
@@ -1445,81 +1426,17 @@ export class SessionService {
         this.activeHandles.delete(sessionId)
         this.onSessionTerminated?.(sessionId)
       }
-      this.livenessState.delete(sessionId)
+      this.liveness.clear(sessionId)
       this.closeActiveTurn(sessionId, 'completed')
       this.dispatchNextQueuedInput(sessionId)
     }
   }
 
-  private queueInput(
-    sessionId: string,
-    input: SendMessageInput,
-    deliveryMode: Extract<MidRunInputMode, 'follow-up' | 'steer' | 'interrupt'>,
-  ): SessionQueuedInput {
-    const timestamp = new Date().toISOString()
-    const item: SessionQueuedInput = {
-      id: randomUUID(),
-      sessionId,
-      deliveryMode,
-      state: 'queued',
-      text: input.text,
-      attachmentIds: input.attachmentIds ?? [],
-      skillSelections: input.skillSelections ?? [],
-      providerRequestId: null,
-      error: null,
-      createdAt: timestamp,
-      updatedAt: timestamp,
-    }
-
-    this.db
-      .prepare(
-        `INSERT INTO session_queued_inputs (
-           id,
-           session_id,
-           delivery_mode,
-           state,
-           text,
-           attachment_ids_json,
-           skill_selections_json,
-           provider_request_id,
-           error,
-           created_at,
-           updated_at
-         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      )
-      .run(
-        item.id,
-        item.sessionId,
-        item.deliveryMode,
-        item.state,
-        item.text,
-        JSON.stringify(item.attachmentIds),
-        JSON.stringify(item.skillSelections),
-        item.providerRequestId,
-        item.error,
-        item.createdAt,
-        item.updatedAt,
-      )
-
-    this.notifyQueuedInputChange(sessionId, 'add', item)
-    return item
-  }
-
   private dispatchNextQueuedInput(sessionId: string): void {
-    const row = this.db
-      .prepare(
-        `SELECT *
-         FROM session_queued_inputs
-         WHERE session_id = ? AND state = 'queued'
-         ORDER BY created_at ASC
-         LIMIT 1`,
-      )
-      .get(sessionId) as SessionQueuedInputRow | undefined
+    const item = this.queuedInputs.nextQueued(sessionId)
+    if (!item) return
 
-    if (!row) return
-
-    const item = queuedInputFromRow(row)
-    this.patchQueuedInput(item.id, 'dispatching')
+    this.queuedInputs.patch(item.id, 'dispatching')
 
     try {
       const session = this.getById(sessionId)
@@ -1536,7 +1453,7 @@ export class SessionService {
           deliveryMode: 'normal',
           queuedInputId: item.id,
         })
-        this.patchQueuedInput(item.id, 'sent')
+        this.queuedInputs.patch(item.id, 'sent')
         return
       }
 
@@ -1553,71 +1470,13 @@ export class SessionService {
         item.attachmentIds,
         item.skillSelections,
       )
-      this.patchQueuedInput(item.id, 'sent')
+      this.queuedInputs.patch(item.id, 'sent')
     } catch (err) {
-      this.patchQueuedInput(
+      this.queuedInputs.patch(
         item.id,
         'failed',
         err instanceof Error ? err.message : String(err),
       )
-    }
-  }
-
-  private patchQueuedInput(
-    id: string,
-    state: QueuedInputState,
-    error: string | null = null,
-  ): SessionQueuedInput | null {
-    const updatedAt = new Date().toISOString()
-    this.db
-      .prepare(
-        `UPDATE session_queued_inputs
-         SET state = ?, error = ?, updated_at = ?
-         WHERE id = ?`,
-      )
-      .run(state, error, updatedAt, id)
-
-    const row = this.getQueuedInputRowById(id)
-    if (!row) return null
-    const item = queuedInputFromRow(row)
-    this.notifyQueuedInputChange(item.sessionId, 'patch', item)
-    return item
-  }
-
-  private getQueuedInputRowById(id: string): SessionQueuedInputRow | undefined {
-    return this.db
-      .prepare('SELECT * FROM session_queued_inputs WHERE id = ?')
-      .get(id) as SessionQueuedInputRow | undefined
-  }
-
-  private notifyQueuedInputChange(
-    sessionId: string,
-    op: 'add' | 'patch',
-    item: SessionQueuedInput,
-  ): void {
-    this.onQueuedInputPatch?.({ sessionId, op, item })
-  }
-
-  private recoverDispatchingQueuedInputs(): void {
-    const rows = this.db
-      .prepare(
-        `SELECT *
-         FROM session_queued_inputs
-         WHERE state = 'dispatching'`,
-      )
-      .all() as SessionQueuedInputRow[]
-
-    const timestamp = new Date().toISOString()
-    const stmt = this.db.prepare(
-      `UPDATE session_queued_inputs
-       SET state = 'failed',
-           error = 'App restarted before this input was accepted.',
-           updated_at = ?
-       WHERE id = ?`,
-    )
-
-    for (const row of rows) {
-      stmt.run(timestamp, row.id)
     }
   }
 
@@ -1670,7 +1529,7 @@ export class SessionService {
           this.applyDelta(session.id, delta)
         })
         handle.onActivityHeartbeat?.(() => {
-          this.bumpLiveness(session.id)
+          this.liveness.bump(session.id)
         })
       } catch (err) {
         this.markStaleRunningSessionFailed(
@@ -1692,79 +1551,15 @@ export class SessionService {
     this.sessionRepository.setExecutionHostLastSeq(sessionId, seq)
   }
 
-  private bumpLiveness(sessionId: string): void {
-    const now = Date.now()
-    const existing = this.livenessState.get(sessionId)
-    if (existing) {
-      existing.lastEventAt = now
-      existing.warned.quiet = false
-      existing.warned.silent = false
-    } else {
-      this.livenessState.set(sessionId, {
-        lastEventAt: now,
-        warned: { quiet: false, silent: false },
-      })
-    }
-    this.ensureLivenessTimer()
-  }
-
-  private ensureLivenessTimer(): void {
-    if (this.livenessTimer !== null) return
-    this.livenessTimer = setInterval(() => {
-      this.tickLiveness()
-    }, SESSION_LIVENESS_TICK_MS)
-    if (typeof this.livenessTimer.unref === 'function') {
-      this.livenessTimer.unref()
-    }
-  }
-
-  private stopLivenessTimer(): void {
-    if (this.livenessTimer !== null) {
-      clearInterval(this.livenessTimer)
-      this.livenessTimer = null
-    }
-  }
-
   /** @internal exposed for tests; do not call from production code. */
   triggerLivenessTickForTest(): void {
-    this.tickLiveness()
+    this.liveness.triggerTickForTest()
   }
 
-  private tickLiveness(): void {
-    if (!this.db.open) {
-      this.livenessState.clear()
-      this.stopLivenessTimer()
-      return
-    }
-    if (this.livenessState.size === 0) {
-      this.stopLivenessTimer()
-      return
-    }
-    const now = Date.now()
-    for (const [sessionId, state] of this.livenessState) {
-      const summary = this.getSummaryById(sessionId)
-      if (!summary || summary.status !== 'running') {
-        this.livenessState.delete(sessionId)
-        continue
-      }
-      const signal = deriveLiveness({
-        lastEventAt: state.lastEventAt,
-        now,
-      })
-      if (signal.kind === 'silent' && !state.warned.silent) {
-        state.warned.silent = true
-        this.emitLivenessNote(sessionId, 'silent')
-      } else if (signal.kind === 'quiet' && !state.warned.quiet) {
-        state.warned.quiet = true
-        this.emitLivenessNote(sessionId, 'quiet')
-      }
-    }
-    if (this.livenessState.size === 0) {
-      this.stopLivenessTimer()
-    }
-  }
-
-  private emitLivenessNote(sessionId: string, kind: 'quiet' | 'silent'): void {
+  private emitLivenessNote(
+    sessionId: string,
+    kind: SessionLivenessNoteKind,
+  ): void {
     const session = this.getById(sessionId)
     if (!session) return
     const text =
@@ -1824,9 +1619,9 @@ export class SessionService {
       activity: null,
       updatedAt: timestamp,
     })
-    this.failPendingQueuedInputsForSession(session.id, reason)
+    this.queuedInputs.failPendingForSession(session.id, reason)
     this.activeHandles.delete(session.id)
-    this.livenessState.delete(session.id)
+    this.liveness.clear(session.id)
     this.onSessionTerminated?.(session.id)
     this.closeActiveTurn(session.id, 'errored')
 
@@ -1844,24 +1639,6 @@ export class SessionService {
     }
 
     return this.getById(session.id) ?? session
-  }
-
-  private failPendingQueuedInputsForSession(
-    sessionId: string,
-    reason: string,
-  ): void {
-    const rows = this.db
-      .prepare(
-        `SELECT id
-         FROM session_queued_inputs
-         WHERE session_id = ?
-           AND state IN ('queued', 'dispatching')`,
-      )
-      .all(sessionId) as Array<{ id: string }>
-
-    for (const row of rows) {
-      this.patchQueuedInput(row.id, 'failed', reason)
-    }
   }
 
   private closeActiveTurn(

@@ -1,3 +1,9 @@
+export type ProviderQuotaProviderId =
+  | 'codex'
+  | 'claude-code'
+  | 'cursor'
+  | 'antigravity'
+
 export type ProviderQuotaWindowKind = 'five-hour' | 'weekly' | 'other'
 export type ProviderQuotaWindowDisplayMode =
   | 'remaining-quota'
@@ -27,7 +33,7 @@ export interface ProviderCreditsQuota {
 
 export type ProviderQuotaSnapshot =
   | {
-      providerId: 'codex' | 'claude-code' | 'cursor' | 'antigravity'
+      providerId: ProviderQuotaProviderId
       status: 'available'
       source: ProviderQuotaSource
       planType: string | null
@@ -38,7 +44,7 @@ export type ProviderQuotaSnapshot =
       stale: boolean
     }
   | {
-      providerId: 'codex' | 'claude-code' | 'cursor' | 'antigravity'
+      providerId: ProviderQuotaProviderId
       status: 'unavailable'
       source: ProviderQuotaSource | 'manual'
       reason: string
