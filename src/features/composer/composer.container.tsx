@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import type { FC, ClipboardEvent, DragEvent } from 'react'
+import type { FC } from 'react'
 import {
   type MidRunInputMode,
   resolveProviderSelection,
@@ -21,10 +21,9 @@ import {
   type ProviderQuotaSnapshot,
 } from '@/entities/provider-quota'
 import {
-  useAttachmentStore,
   AttachmentPreviewContainer,
+  useAttachmentDraft,
   type Attachment,
-  type AttachmentIngestFileInput,
 } from '@/entities/attachment'
 import {
   skillSelectionFromCatalogEntry,
@@ -119,40 +118,6 @@ function getQueuedInputPreview(input: SessionQueuedInput): string {
   return 'Empty input'
 }
 
-function collectFilesFromDataTransfer(
-  dataTransfer: DataTransfer | null,
-): File[] {
-  if (!dataTransfer) return []
-  if (dataTransfer.files && dataTransfer.files.length > 0) {
-    return Array.from(dataTransfer.files)
-  }
-  const items = dataTransfer.items
-  if (!items) return []
-  const files: File[] = []
-  for (const item of Array.from(items)) {
-    if (item.kind === 'file') {
-      const file = item.getAsFile()
-      if (file) files.push(file)
-    }
-  }
-  return files
-}
-
-async function filesToIngestInputs(
-  files: File[],
-): Promise<AttachmentIngestFileInput[]> {
-  const inputs: AttachmentIngestFileInput[] = []
-  for (const file of files) {
-    const buffer = await file.arrayBuffer()
-    inputs.push({
-      name: file.name || 'pasted-file',
-      bytes: new Uint8Array(buffer),
-      mimeType: file.type || undefined,
-    })
-  }
-  return inputs
-}
-
 export const ComposerContainer: FC<ComposerContainerProps> = ({
   context,
   onGlobalSessionCreated,
@@ -180,14 +145,12 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
   const [skillQuery, setSkillQuery] = useState('')
   const [selectedSkills, setSelectedSkills] = useState<SkillSelection[]>([])
   const [selectedContextIds, setSelectedContextIds] = useState<string[]>([])
-  const [isDragging, setIsDragging] = useState(false)
   const [codexUsageSnapshot, setCodexUsageSnapshot] =
     useState<ProviderQuotaSnapshot | null>(null)
   const [codexUsageLoading, setCodexUsageLoading] = useState(false)
   const [claudeUsageSnapshot, setClaudeUsageSnapshot] =
     useState<ProviderQuotaSnapshot | null>(null)
   const [claudeUsageLoading, setClaudeUsageLoading] = useState(false)
-  const dragDepth = useRef(0)
   const providers = useSessionStore((s) => s.providers)
   const openDialog = useDialogStore((s) => s.open)
   const loadProviders = useSessionStore((s) => s.loadProviders)
@@ -467,12 +430,23 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
   const availableDeliveryModesKey = midRunPolicy.availableModes.join('|')
 
   const draftKey = activeSessionId ?? `${contextKey}:${DRAFT_KEY_NEW}`
-  const draft = useAttachmentStore((s) => s.drafts[draftKey])
-  const ingestFiles = useAttachmentStore((s) => s.ingestFiles)
-  const ingestFromOpenDialog = useAttachmentStore((s) => s.ingestFromOpenDialog)
-  const removeDraft = useAttachmentStore((s) => s.removeDraft)
-  const clearDraft = useAttachmentStore((s) => s.clearDraft)
-  const clearRejections = useAttachmentStore((s) => s.clearRejections)
+  const attachmentDraft = useAttachmentDraft(draftKey)
+  const {
+    attachments,
+    rejections,
+    ingestInFlight,
+    isDragging,
+    onPaste: handlePaste,
+    openFileDialog: handleAttachmentAdd,
+    removeOne: handleAttachmentRemove,
+    clearDraft,
+  } = attachmentDraft
+  const {
+    onDragEnter: handleDragEnter,
+    onDragLeave: handleDragLeave,
+    onDragOver: handleDragOver,
+    onDrop: handleDrop,
+  } = attachmentDraft.dragHandlers
   const skillCatalog = useSkillStore((s) => s.catalog)
   const loadSkillCatalog = useSkillStore((s) => s.loadCatalog)
   const loadGlobalSkillCatalog = useSkillStore((s) => s.loadGlobalCatalog)
@@ -495,10 +469,6 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
   const loadingDetailsPromptId = usePromptLibraryStore(
     (s) => s.loadingDetailsPromptId,
   )
-
-  const attachments = draft?.items ?? []
-  const rejections = draft?.rejections ?? []
-  const ingestInFlight = draft?.ingestInFlight ?? false
 
   const capability = resolveAttachmentCapabilityForModel(
     selection.provider?.attachments,
@@ -753,16 +723,6 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
     return () => window.clearInterval(intervalId)
   }, [loadClaudeUsage, showClaudeUsagePill])
 
-  useEffect(() => {
-    if (rejections.length > 0) {
-      const handle = window.setTimeout(() => {
-        clearRejections(draftKey)
-      }, 6000)
-      return () => window.clearTimeout(handle)
-    }
-    return undefined
-  }, [rejections, draftKey, clearRejections])
-
   const isSessionDone =
     !activeSession ||
     activeSession.status === 'completed' ||
@@ -816,7 +776,7 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
       }
       setValue('')
       setSelectedSkills([])
-      clearDraft(draftKey)
+      clearDraft()
       return
     }
 
@@ -879,7 +839,7 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
     setValue('')
     setSelectedSkills([])
     setSelectedContextIds([])
-    clearDraft(draftKey)
+    clearDraft()
   }, [
     value,
     selection.providerId,
@@ -1054,67 +1014,6 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
     setModelId(nextSelection.modelId)
     setEffortId(nextSelection.effortId)
   }
-
-  const handleAttachmentAdd = useCallback(async () => {
-    await ingestFromOpenDialog(draftKey)
-  }, [draftKey, ingestFromOpenDialog])
-
-  const ingestFilesFromFileList = useCallback(
-    async (files: File[]) => {
-      const inputs = await filesToIngestInputs(files)
-      if (inputs.length === 0) return
-      await ingestFiles(draftKey, inputs)
-    },
-    [draftKey, ingestFiles],
-  )
-
-  const handlePaste = useCallback(
-    (e: ClipboardEvent<HTMLTextAreaElement>) => {
-      const files = collectFilesFromDataTransfer(e.clipboardData)
-      if (files.length === 0) return
-      e.preventDefault()
-      void ingestFilesFromFileList(files)
-    },
-    [ingestFilesFromFileList],
-  )
-
-  const handleDragEnter = useCallback((e: DragEvent<HTMLDivElement>) => {
-    e.preventDefault()
-    e.stopPropagation()
-    dragDepth.current += 1
-    setIsDragging(true)
-  }, [])
-
-  const handleDragLeave = useCallback((e: DragEvent<HTMLDivElement>) => {
-    e.preventDefault()
-    e.stopPropagation()
-    dragDepth.current = Math.max(0, dragDepth.current - 1)
-    if (dragDepth.current === 0) setIsDragging(false)
-  }, [])
-
-  const handleDragOver = useCallback((e: DragEvent<HTMLDivElement>) => {
-    e.preventDefault()
-    e.stopPropagation()
-  }, [])
-
-  const handleDrop = useCallback(
-    (e: DragEvent<HTMLDivElement>) => {
-      e.preventDefault()
-      e.stopPropagation()
-      dragDepth.current = 0
-      setIsDragging(false)
-      const files = collectFilesFromDataTransfer(e.dataTransfer)
-      if (files.length > 0) void ingestFilesFromFileList(files)
-    },
-    [ingestFilesFromFileList],
-  )
-
-  const handleAttachmentRemove = useCallback(
-    (attachmentId: string) => {
-      void removeDraft(draftKey, attachmentId)
-    },
-    [draftKey, removeDraft],
-  )
 
   const handleSkillsBrowse = useCallback(() => {
     setSkillPickerOpen(false)
