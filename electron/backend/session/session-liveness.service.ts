@@ -16,6 +16,12 @@ interface SessionLivenessServiceDeps {
   now?: () => number
 }
 
+/**
+ * Lifecycle and state service for session liveness warnings.
+ *
+ * SessionService bumps and clears activity; this collaborator owns timer state
+ * and quiet/silent note emission for running sessions.
+ */
 export class SessionLivenessService {
   private readonly state = new Map<string, LivenessState>()
   private readonly now: () => number

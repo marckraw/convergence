@@ -8,6 +8,12 @@ export interface ProviderQuotaRequestOptions {
   forceRefresh?: boolean
 }
 
+/**
+ * Strategy boundary for provider-specific quota retrieval.
+ *
+ * Each provider exposes the same snapshot contract so callers do not need
+ * provider-specific branches for Codex, Claude Code, or manual fallbacks.
+ */
 export interface ProviderQuotaSnapshotSource {
   readonly providerId: ProviderQuotaProviderId
   readonly fallbackSource: ProviderQuotaUnavailableSnapshot['source']
@@ -27,6 +33,12 @@ function errorReason(error: unknown): string {
     : 'Provider usage limits are unavailable.'
 }
 
+/**
+ * Facade for provider quota reads.
+ *
+ * Callers ask for one quota snapshot list while individual providers remain
+ * isolated behind ProviderQuotaSnapshotSource strategies.
+ */
 export class ProviderQuotaService {
   private readonly now: () => Date
 

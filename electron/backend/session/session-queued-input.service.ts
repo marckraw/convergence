@@ -26,6 +26,13 @@ interface SessionQueuedInputServiceDeps {
   now?: () => string
 }
 
+/**
+ * Extracted service boundary for queued mid-run input persistence.
+ *
+ * SessionService delegates queue storage and patch events here so session
+ * orchestration does not own SQL details for follow-up, steer, or interrupt
+ * inputs.
+ */
 export class SessionQueuedInputService {
   private readonly idFactory: () => string
   private readonly now: () => string

@@ -102,6 +102,13 @@ interface PendingConversationPatch {
   patch: Partial<ConversationItem>
 }
 
+/**
+ * Facade and orchestrator for session use cases.
+ *
+ * Keeps the public session API in one place while delegating focused concerns
+ * such as queued input persistence, liveness, repository storage, turn capture,
+ * and context injection to collaborators.
+ */
 export class SessionService {
   private activeHandles = new Map<string, SessionHandle>()
   private activeTurnIds = new Map<string, string>()

@@ -164,6 +164,15 @@ Electron main-process and backend code should follow the same split discipline t
 - isolate Claude Code and Codex adapters in dedicated provider modules
 - keep project copy logic in dedicated services, not mixed into session runtime code
 
+### Design pattern annotations
+
+When intentionally applying a named architecture or design pattern, add a
+short JSDoc comment at the pattern boundary: public class, interface, factory,
+or composition function. The comment should name the pattern, describe the
+domain role, and state why the boundary exists. Do not add pattern labels to
+incidental code or inside method bodies; use them only where they reduce future
+ambiguity.
+
 ### Product constraints for current phases
 
 - Convergence is UI-first

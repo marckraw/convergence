@@ -85,6 +85,12 @@ export function createManualQuotaSource(
   }
 }
 
+/**
+ * Factory and composition root for the default quota strategies.
+ *
+ * Keeps provider registration order and manual quota fallbacks in one place so
+ * ProviderQuotaService can stay focused on orchestration.
+ */
 export function createDefaultProviderQuotaSources({
   codex,
   claude,
