@@ -19,9 +19,12 @@ import type {
   ResolvedProviderSelection,
   WorkspaceMode,
 } from '@/entities/session'
-import { getProviderLifecycleBadge } from '@/entities/session'
-import { ModelPickerDialog } from '@/features/model-picker'
-import { SessionStartSelect } from '@/features/session-start'
+import {
+  AttachmentPreviewContainer,
+  type Attachment,
+  type AttachmentDraftController,
+} from '@/entities/attachment'
+import { ForkComposer } from './fork-composer.presentational'
 import type { PreviewState } from './session-fork.types'
 import type { ForkProgressLabel, SeedSizeWarning } from './session-fork.pure'
 
@@ -42,6 +45,8 @@ interface SessionForkDialogProps {
   seedMarkdown: string
   preview: PreviewState
   progressLabel: ForkProgressLabel | null
+  attachmentDraft: AttachmentDraftController
+  previewAttachment: Attachment | null
   isSubmitting: boolean
   submitError: string | null
   onNameChange: (value: string) => void
@@ -54,6 +59,8 @@ interface SessionForkDialogProps {
   onAdditionalInstructionChange: (value: string) => void
   onSeedMarkdownChange: (value: string) => void
   onGenerateSummary: () => void
+  onAttachmentOpen: (attachment: Attachment) => void
+  onPreviewClose: () => void
   onConfirm: () => void
   onCancel: () => void
 }
@@ -75,6 +82,8 @@ export const SessionForkDialog: FC<SessionForkDialogProps> = ({
   seedMarkdown,
   preview,
   progressLabel,
+  attachmentDraft,
+  previewAttachment,
   isSubmitting,
   submitError,
   onNameChange,
@@ -87,25 +96,11 @@ export const SessionForkDialog: FC<SessionForkDialogProps> = ({
   onAdditionalInstructionChange,
   onSeedMarkdownChange,
   onGenerateSummary,
+  onAttachmentOpen,
+  onPreviewClose,
   onConfirm,
   onCancel,
 }) => {
-  const providerItems = providers.map((provider) => ({
-    id: provider.id,
-    label: provider.vendorLabel || provider.name,
-    description:
-      provider.vendorLabel && provider.vendorLabel !== provider.name
-        ? provider.name
-        : undefined,
-    badge: getProviderLifecycleBadge(provider) ?? undefined,
-  }))
-  const effortItems =
-    selection.model?.effortOptions.map((effort) => ({
-      id: effort.id,
-      label: effort.label,
-      description: effort.description,
-    })) ?? []
-
   const canConfirm =
     !isSubmitting &&
     name.trim().length > 0 &&
@@ -210,33 +205,22 @@ export const SessionForkDialog: FC<SessionForkDialogProps> = ({
           </section>
 
           <section className="space-y-2">
-            <h3 className="text-sm font-medium">Provider</h3>
-            <div className="flex flex-wrap gap-2">
-              <SessionStartSelect
-                selectedId={selection.providerId}
-                value={selection.providerLabel || 'Select provider'}
-                items={providerItems}
-                onChange={onProviderChange}
-              />
-              <ModelPickerDialog
-                providers={providers}
-                selectedProviderId={selection.providerId}
-                selectedModelId={selection.modelId}
-                value={selection.model?.label ?? 'Select model'}
-                onChange={(providerId, modelId) =>
-                  onModelChange(modelId, providerId)
-                }
-                triggerClassName="px-2 text-xs"
-              />
-              {effortItems.length > 0 && (
-                <SessionStartSelect
-                  selectedId={selection.effortId}
-                  value={selection.effort?.label ?? 'Select effort'}
-                  items={effortItems}
-                  onChange={(id) => onEffortChange(id as ReasoningEffort)}
-                />
-              )}
-            </div>
+            <label htmlFor="fork-instruction" className="text-sm font-medium">
+              Additional instruction (optional)
+            </label>
+            <ForkComposer
+              textareaId="fork-instruction"
+              value={additionalInstruction}
+              onChange={onAdditionalInstructionChange}
+              disabled={isSubmitting}
+              attachmentDraft={attachmentDraft}
+              onAttachmentOpen={onAttachmentOpen}
+              providers={providers}
+              selection={selection}
+              onProviderChange={onProviderChange}
+              onModelChange={onModelChange}
+              onEffortChange={onEffortChange}
+            />
           </section>
 
           <section className="space-y-2">
@@ -367,21 +351,6 @@ export const SessionForkDialog: FC<SessionForkDialogProps> = ({
             </section>
           )}
 
-          <section className="space-y-2">
-            <label htmlFor="fork-instruction" className="text-sm font-medium">
-              Additional instruction (optional)
-            </label>
-            <Input
-              id="fork-instruction"
-              value={additionalInstruction}
-              onChange={(event) =>
-                onAdditionalInstructionChange(event.target.value)
-              }
-              placeholder="What should the fork focus on?"
-              disabled={isSubmitting}
-            />
-          </section>
-
           {submitError && (
             <p className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
               {submitError}
@@ -402,6 +371,10 @@ export const SessionForkDialog: FC<SessionForkDialogProps> = ({
             {isSubmitting ? 'Forking…' : 'Create fork'}
           </Button>
         </DialogFooter>
+        <AttachmentPreviewContainer
+          attachment={previewAttachment}
+          onClose={onPreviewClose}
+        />
       </DialogContent>
     </Dialog>
   )

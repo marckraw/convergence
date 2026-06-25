@@ -13,6 +13,7 @@ import {
 import { useAppSettingsStore } from '@/entities/app-settings'
 import { useDialogStore } from '@/entities/dialog'
 import { useTaskProgress } from '@/entities/task-progress'
+import { useAttachmentDraft, type Attachment } from '@/entities/attachment'
 import { SessionForkDialog } from './session-fork.presentational'
 import {
   computeSeedSizeWarning,
@@ -70,6 +71,13 @@ export const SessionForkDialogContainer: FC = () => {
   const [previewRequestId, setPreviewRequestId] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState<string | null>(null)
+  const [previewAttachment, setPreviewAttachment] = useState<Attachment | null>(
+    null,
+  )
+
+  const attachmentDraft = useAttachmentDraft(
+    `fork:${parentSessionId ?? 'pending'}`,
+  )
 
   const progressView = useTaskProgress(previewRequestId)
   const progressLabel =
@@ -319,6 +327,8 @@ export const SessionForkDialogContainer: FC = () => {
       seedMarkdown={seedMarkdown}
       preview={preview}
       progressLabel={progressLabel}
+      attachmentDraft={attachmentDraft}
+      previewAttachment={previewAttachment}
       isSubmitting={isSubmitting}
       submitError={submitError}
       onNameChange={setName}
@@ -334,6 +344,8 @@ export const SessionForkDialogContainer: FC = () => {
         setSeedMarkdown(value)
       }}
       onGenerateSummary={() => void runPreview()}
+      onAttachmentOpen={setPreviewAttachment}
+      onPreviewClose={() => setPreviewAttachment(null)}
       onConfirm={() => void handleConfirm()}
       onCancel={handleCancel}
     />
