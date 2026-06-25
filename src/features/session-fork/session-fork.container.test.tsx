@@ -289,7 +289,7 @@ describe('SessionForkDialogContainer', () => {
     expect(previewFork).not.toHaveBeenCalled()
   })
 
-  it('switching to summary runs preview and populates the seed buffer', async () => {
+  it('selecting summary does not run preview until Generate summary is pressed', async () => {
     const previewFork = vi.fn().mockResolvedValue(sampleSummary)
     primeStores({ previewFork })
 
@@ -298,6 +298,25 @@ describe('SessionForkDialogContainer', () => {
     expect(await screen.findByText('Fork session')).toBeInTheDocument()
 
     fireEvent.click(screen.getByRole('button', { name: /Structured summary/i }))
+
+    expect(
+      await screen.findByRole('button', { name: /Generate summary/i }),
+    ).toBeInTheDocument()
+    expect(previewFork).not.toHaveBeenCalled()
+  })
+
+  it('Generate summary runs preview and populates the seed buffer', async () => {
+    const previewFork = vi.fn().mockResolvedValue(sampleSummary)
+    primeStores({ previewFork })
+
+    render(<SessionForkDialogContainer />)
+
+    expect(await screen.findByText('Fork session')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: /Structured summary/i }))
+    fireEvent.click(
+      await screen.findByRole('button', { name: /Generate summary/i }),
+    )
 
     await waitFor(() => {
       expect(previewFork).toHaveBeenCalledWith('parent-1', expect.any(String))
@@ -318,6 +337,9 @@ describe('SessionForkDialogContainer', () => {
 
     fireEvent.click(
       await screen.findByRole('button', { name: /Structured summary/i }),
+    )
+    fireEvent.click(
+      await screen.findByRole('button', { name: /Generate summary/i }),
     )
 
     const textarea = (await screen.findByDisplayValue(
@@ -351,6 +373,9 @@ describe('SessionForkDialogContainer', () => {
     fireEvent.click(
       await screen.findByRole('button', { name: /Structured summary/i }),
     )
+    fireEvent.click(
+      await screen.findByRole('button', { name: /Generate summary/i }),
+    )
 
     await screen.findByDisplayValue(/Shipping the fork dialog/)
 
@@ -374,6 +399,9 @@ describe('SessionForkDialogContainer', () => {
 
     fireEvent.click(
       await screen.findByRole('button', { name: /Structured summary/i }),
+    )
+    fireEvent.click(
+      await screen.findByRole('button', { name: /Generate summary/i }),
     )
 
     expect(await screen.findByText('LLM offline')).toBeInTheDocument()
@@ -523,6 +551,9 @@ describe('SessionForkDialogContainer', () => {
         expect(summaryButton).toBeEnabled()
       })
       fireEvent.click(summaryButton)
+      fireEvent.click(
+        await screen.findByRole('button', { name: /Generate summary/i }),
+      )
 
       await waitFor(() => {
         expect(previewFork).toHaveBeenCalledWith('parent-1', 'req-progress')
@@ -580,6 +611,9 @@ describe('SessionForkDialogContainer', () => {
         expect(summaryButton).toBeEnabled()
       })
       fireEvent.click(summaryButton)
+      fireEvent.click(
+        await screen.findByRole('button', { name: /Generate summary/i }),
+      )
 
       await waitFor(() => {
         expect(previewFork).toHaveBeenCalled()
@@ -617,6 +651,9 @@ describe('SessionForkDialogContainer', () => {
 
     fireEvent.click(
       await screen.findByRole('button', { name: /Structured summary/i }),
+    )
+    fireEvent.click(
+      await screen.findByRole('button', { name: /Generate summary/i }),
     )
 
     const textarea = (await screen.findByDisplayValue(

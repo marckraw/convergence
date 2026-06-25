@@ -179,12 +179,6 @@ export const SessionForkDialogContainer: FC = () => {
   }, [parent, previewFork, additionalInstruction])
 
   useEffect(() => {
-    if (open && strategy === 'summary' && parent && preview.status === 'idle') {
-      void runPreview()
-    }
-  }, [open, strategy, parent, preview.status, runPreview])
-
-  useEffect(() => {
     if (
       !open ||
       strategy !== 'summary' ||
@@ -339,7 +333,7 @@ export const SessionForkDialogContainer: FC = () => {
         setSeedEdited(true)
         setSeedMarkdown(value)
       }}
-      onRetryPreview={() => void runPreview()}
+      onGenerateSummary={() => void runPreview()}
       onConfirm={() => void handleConfirm()}
       onCancel={handleCancel}
     />

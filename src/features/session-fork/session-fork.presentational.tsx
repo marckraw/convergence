@@ -1,5 +1,5 @@
 import type { FC } from 'react'
-import { GitFork, RefreshCw } from 'lucide-react'
+import { GitFork, RefreshCw, Sparkles } from 'lucide-react'
 import { Button } from '@/shared/ui/button'
 import {
   Dialog,
@@ -53,7 +53,7 @@ interface SessionForkDialogProps {
   onWorkspaceBranchNameChange: (value: string) => void
   onAdditionalInstructionChange: (value: string) => void
   onSeedMarkdownChange: (value: string) => void
-  onRetryPreview: () => void
+  onGenerateSummary: () => void
   onConfirm: () => void
   onCancel: () => void
 }
@@ -86,7 +86,7 @@ export const SessionForkDialog: FC<SessionForkDialogProps> = ({
   onWorkspaceBranchNameChange,
   onAdditionalInstructionChange,
   onSeedMarkdownChange,
-  onRetryPreview,
+  onGenerateSummary,
   onConfirm,
   onCancel,
 }) => {
@@ -291,18 +291,37 @@ export const SessionForkDialog: FC<SessionForkDialogProps> = ({
             <section className="space-y-2">
               <div className="flex items-center justify-between">
                 <h3 className="text-sm font-medium">Summary preview</h3>
-                {preview.status === 'error' && (
+                {(preview.status === 'ready' || preview.status === 'error') && (
                   <Button
                     type="button"
                     variant="ghost"
                     size="sm"
-                    onClick={onRetryPreview}
+                    onClick={onGenerateSummary}
+                    disabled={isSubmitting}
                   >
                     <RefreshCw className="h-3.5 w-3.5" />
-                    Retry
+                    {preview.status === 'error' ? 'Retry' : 'Regenerate'}
                   </Button>
                 )}
               </div>
+              {preview.status === 'idle' && (
+                <div className="space-y-2" data-testid="fork-preview-idle">
+                  <p className="text-xs text-muted-foreground">
+                    Summarise the parent transcript into a structured seed.
+                    Nothing runs until you generate it.
+                  </p>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="sm"
+                    onClick={onGenerateSummary}
+                    disabled={isSubmitting}
+                  >
+                    <Sparkles className="h-3.5 w-3.5" />
+                    Generate summary
+                  </Button>
+                </div>
+              )}
               {preview.status === 'loading' && (
                 <div className="space-y-1" data-testid="fork-preview-progress">
                   <p className="text-xs text-muted-foreground">
