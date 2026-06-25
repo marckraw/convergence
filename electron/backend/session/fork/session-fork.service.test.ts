@@ -420,6 +420,25 @@ describe('SessionForkService', () => {
       })
       expect(h.oneShot).not.toHaveBeenCalled()
     })
+
+    it('defaults to no attachments when seedAttachmentIds is omitted', async () => {
+      const h = setup()
+      await h.service.forkFull({
+        strategy: 'full',
+        parentSessionId: 'parent-1',
+        name: 'fork',
+        providerId: 'claude-code',
+        modelId: 'sonnet',
+        effort: null,
+        workspaceMode: 'reuse',
+        workspaceBranchName: null,
+        additionalInstruction: null,
+      })
+      expect(h.startSession).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({ attachmentIds: [] }),
+      )
+    })
   })
 
   describe('forkSummary', () => {
@@ -444,6 +463,27 @@ describe('SessionForkService', () => {
       )
       expect(h.createSession).toHaveBeenCalledWith(
         expect.objectContaining({ forkStrategy: 'summary' }),
+      )
+    })
+
+    it('forwards seed attachment ids to session.start for rebinding', async () => {
+      const h = setup()
+      await h.service.forkSummary({
+        strategy: 'summary',
+        parentSessionId: 'parent-1',
+        name: 'fork',
+        providerId: 'claude-code',
+        modelId: 'sonnet',
+        effort: 'medium',
+        workspaceMode: 'reuse',
+        workspaceBranchName: null,
+        additionalInstruction: null,
+        seedMarkdown: 'SEED',
+        seedAttachmentIds: ['att-1', 'att-2'],
+      })
+      expect(h.startSession).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({ attachmentIds: ['att-1', 'att-2'] }),
       )
     })
 

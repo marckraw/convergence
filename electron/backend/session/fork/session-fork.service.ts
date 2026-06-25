@@ -151,6 +151,7 @@ export class SessionForkService {
       workspaceBranchName: input.workspaceBranchName,
       strategy: 'full',
       seed,
+      seedAttachmentIds: input.seedAttachmentIds ?? [],
     })
   }
 
@@ -174,6 +175,7 @@ export class SessionForkService {
         input.seedMarkdown,
         input.additionalInstruction,
       ),
+      seedAttachmentIds: input.seedAttachmentIds ?? [],
     })
   }
 
@@ -187,6 +189,7 @@ export class SessionForkService {
     workspaceBranchName: string | null
     strategy: 'full' | 'summary'
     seed: string
+    seedAttachmentIds: string[]
   }): Promise<Session> {
     const workspaceId = await this.resolveChildWorkspace(
       args.parent,
@@ -209,7 +212,10 @@ export class SessionForkService {
       primarySurface: args.parent.primarySurface,
     })
 
-    await this.deps.sessions.start(child.id, { text: args.seed })
+    await this.deps.sessions.start(child.id, {
+      text: args.seed,
+      attachmentIds: args.seedAttachmentIds,
+    })
     return this.deps.sessions.getSummaryById(child.id) ?? child
   }
 

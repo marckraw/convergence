@@ -24,6 +24,7 @@ interface ForkComposerProps {
   placeholder?: string
   disabled?: boolean
   attachmentDraft: AttachmentDraftController
+  attachmentErrorByAttachmentId?: Record<string, string>
   onAttachmentOpen: (attachment: Attachment) => void
   providers: ProviderInfo[]
   selection: ResolvedProviderSelection
@@ -44,6 +45,7 @@ export const ForkComposer: FC<ForkComposerProps> = ({
   placeholder = 'What should the fork focus on? Paste or drop images to seed it.',
   disabled = false,
   attachmentDraft,
+  attachmentErrorByAttachmentId,
   onAttachmentOpen,
   providers,
   selection,
@@ -97,6 +99,7 @@ export const ForkComposer: FC<ForkComposerProps> = ({
     >
       <AttachmentsRow
         attachments={attachments}
+        errorByAttachmentId={attachmentErrorByAttachmentId}
         onOpen={onAttachmentOpen}
         onRemove={removeOne}
       />

@@ -755,6 +755,7 @@ describe('useSessionStore', () => {
         workspaceMode: 'reuse',
         workspaceBranchName: null,
         additionalInstruction: null,
+        seedAttachmentIds: [],
       })
 
       expect(result.id).toBe('child-1')
@@ -780,6 +781,7 @@ describe('useSessionStore', () => {
         workspaceMode: 'reuse',
         workspaceBranchName: null,
         additionalInstruction: null,
+        seedAttachmentIds: [],
       })
 
       const state = useSessionStore.getState()
@@ -802,6 +804,7 @@ describe('useSessionStore', () => {
         workspaceMode: 'reuse',
         workspaceBranchName: null,
         additionalInstruction: null,
+        seedAttachmentIds: [],
         seedMarkdown: '# seed',
       })
 
@@ -827,6 +830,7 @@ describe('useSessionStore', () => {
           workspaceMode: 'reuse',
           workspaceBranchName: null,
           additionalInstruction: null,
+          seedAttachmentIds: [],
           seedMarkdown: '# seed',
         }),
       ).rejects.toThrow('nope')

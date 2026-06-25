@@ -40,6 +40,11 @@ export interface ForkCommonInput {
   workspaceMode: WorkspaceMode
   workspaceBranchName: string | null
   additionalInstruction: string | null
+  /**
+   * Attachment ids ingested against the fork draft, rebound to the child
+   * session at start. Optional at the IPC boundary; defaults to none.
+   */
+  seedAttachmentIds?: string[]
 }
 
 export interface ForkFullInput extends ForkCommonInput {

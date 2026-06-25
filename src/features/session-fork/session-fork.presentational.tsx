@@ -47,6 +47,8 @@ interface SessionForkDialogProps {
   progressLabel: ForkProgressLabel | null
   attachmentDraft: AttachmentDraftController
   previewAttachment: Attachment | null
+  attachmentErrorByAttachmentId: Record<string, string>
+  attachmentsValid: boolean
   isSubmitting: boolean
   submitError: string | null
   onNameChange: (value: string) => void
@@ -84,6 +86,8 @@ export const SessionForkDialog: FC<SessionForkDialogProps> = ({
   progressLabel,
   attachmentDraft,
   previewAttachment,
+  attachmentErrorByAttachmentId,
+  attachmentsValid,
   isSubmitting,
   submitError,
   onNameChange,
@@ -103,6 +107,7 @@ export const SessionForkDialog: FC<SessionForkDialogProps> = ({
 }) => {
   const canConfirm =
     !isSubmitting &&
+    attachmentsValid &&
     name.trim().length > 0 &&
     selection.providerId.length > 0 &&
     selection.modelId.length > 0 &&
@@ -214,6 +219,7 @@ export const SessionForkDialog: FC<SessionForkDialogProps> = ({
               onChange={onAdditionalInstructionChange}
               disabled={isSubmitting}
               attachmentDraft={attachmentDraft}
+              attachmentErrorByAttachmentId={attachmentErrorByAttachmentId}
               onAttachmentOpen={onAttachmentOpen}
               providers={providers}
               selection={selection}

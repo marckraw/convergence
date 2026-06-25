@@ -23,6 +23,8 @@ import {
 import {
   AttachmentPreviewContainer,
   useAttachmentDraft,
+  resolveAttachmentCapabilityForModel,
+  validateAttachmentsAgainstCapability,
   type Attachment,
 } from '@/entities/attachment'
 import {
@@ -41,10 +43,6 @@ import {
   type PromptLibraryEntry,
 } from '@/entities/prompt-library'
 import { Composer } from './composer.presentational'
-import {
-  resolveAttachmentCapabilityForModel,
-  validateAttachmentsAgainstCapability,
-} from './attachment-capability.pure'
 import {
   filterComposerSkills,
   filterSelectionsForProvider,

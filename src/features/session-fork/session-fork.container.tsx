@@ -13,7 +13,12 @@ import {
 import { useAppSettingsStore } from '@/entities/app-settings'
 import { useDialogStore } from '@/entities/dialog'
 import { useTaskProgress } from '@/entities/task-progress'
-import { useAttachmentDraft, type Attachment } from '@/entities/attachment'
+import {
+  useAttachmentDraft,
+  resolveAttachmentCapabilityForModel,
+  validateAttachmentsAgainstCapability,
+  type Attachment,
+} from '@/entities/attachment'
 import { SessionForkDialog } from './session-fork.presentational'
 import {
   computeSeedSizeWarning,
@@ -98,6 +103,23 @@ export const SessionForkDialogContainer: FC = () => {
         storedDefaults,
       ),
     [providers, providerId, modelId, effortId, storedDefaults],
+  )
+
+  const attachmentCapability = useMemo(
+    () =>
+      resolveAttachmentCapabilityForModel(
+        selection.provider?.attachments,
+        selection.model,
+      ),
+    [selection.provider, selection.model],
+  )
+  const capabilityResult = useMemo(
+    () =>
+      validateAttachmentsAgainstCapability(
+        attachmentDraft.attachments,
+        attachmentCapability,
+      ),
+    [attachmentDraft.attachments, attachmentCapability],
   )
 
   const transcriptLength = parentConversation.length
@@ -274,6 +296,7 @@ export const SessionForkDialogContainer: FC = () => {
       workspaceBranchName:
         workspaceMode === 'fork' ? workspaceBranchName.trim() : null,
       additionalInstruction: additionalInstruction.trim() || null,
+      seedAttachmentIds: attachmentDraft.attachments.map((a) => a.id),
     }
     try {
       if (strategy === 'full') {
@@ -285,6 +308,7 @@ export const SessionForkDialogContainer: FC = () => {
           seedMarkdown,
         })
       }
+      attachmentDraft.clearDraft()
       closeDialog()
     } catch (err) {
       setSubmitError(
@@ -304,6 +328,7 @@ export const SessionForkDialogContainer: FC = () => {
     forkFull,
     forkSummary,
     seedMarkdown,
+    attachmentDraft,
     closeDialog,
   ])
 
@@ -329,6 +354,8 @@ export const SessionForkDialogContainer: FC = () => {
       progressLabel={progressLabel}
       attachmentDraft={attachmentDraft}
       previewAttachment={previewAttachment}
+      attachmentErrorByAttachmentId={capabilityResult.errorByAttachmentId}
+      attachmentsValid={capabilityResult.ok}
       isSubmitting={isSubmitting}
       submitError={submitError}
       onNameChange={setName}

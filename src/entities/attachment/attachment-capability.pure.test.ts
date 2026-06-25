@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import type { Attachment } from '@/entities/attachment'
 import type { ProviderAttachmentCapability } from '@/entities/session'
+import type { Attachment } from './attachment.types'
 import {
   resolveAttachmentCapabilityForModel,
   validateAttachmentsAgainstCapability,

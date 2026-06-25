@@ -13,6 +13,14 @@ export type {
   AttachmentDraftController,
   AttachmentDragHandlers,
 } from './use-attachment-draft'
+export {
+  resolveAttachmentCapabilityForModel,
+  validateAttachmentsAgainstCapability,
+} from './attachment-capability.pure'
+export type {
+  AttachmentCapabilityError,
+  AttachmentCapabilityResult,
+} from './attachment-capability.pure'
 export { AttachmentChip } from './attachment-chip.presentational'
 export { AttachmentInlinePreview } from './attachment-inline-preview.presentational'
 export { AttachmentsRow } from './attachments-row.presentational'

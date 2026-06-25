@@ -44,6 +44,7 @@ export interface ForkCommonInput {
   workspaceMode: WorkspaceMode
   workspaceBranchName: string | null
   additionalInstruction: string | null
+  seedAttachmentIds: string[]
 }
 
 export interface ForkFullInput extends ForkCommonInput {
