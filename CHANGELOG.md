@@ -1,5 +1,11 @@
 # convergence
 
+## 0.43.1
+
+### Patch Changes
+
+- a4f2f55: Refactor provider quota and session runtime boundaries by routing quota reads through a unified provider source facade, migrating usage UI to the unified snapshot API, and extracting queued input and liveness responsibilities out of `SessionService`.
+
 ## 0.43.0
 
 ### Minor Changes
