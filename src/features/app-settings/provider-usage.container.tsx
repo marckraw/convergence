@@ -5,32 +5,6 @@ import {
 } from '@/entities/provider-quota'
 import { ProviderUsageFields } from './provider-usage.presentational'
 
-function createCursorManualSnapshot(): ProviderQuotaSnapshot {
-  return {
-    providerId: 'cursor',
-    status: 'unavailable',
-    source: 'manual',
-    reason:
-      'Cursor ACP does not expose usage or quota counters to Convergence. Open the Cursor dashboard to inspect usage and billing.',
-    usageUrl: 'https://cursor.com/dashboard',
-    lastCheckedAt: new Date().toISOString(),
-    stale: false,
-  }
-}
-
-function createAntigravityManualSnapshot(): ProviderQuotaSnapshot {
-  return {
-    providerId: 'antigravity',
-    status: 'unavailable',
-    source: 'manual',
-    reason:
-      'Antigravity CLI exposes quota through its interactive /usage and /quota panels, but does not expose a machine-readable quota endpoint to Convergence yet. Run `agy` and use /usage or /quota for live limits.',
-    usageUrl: 'https://www.antigravity.google/docs/plans',
-    lastCheckedAt: new Date().toISOString(),
-    stale: false,
-  }
-}
-
 export function ProviderUsageContainer() {
   const [snapshots, setSnapshots] = useState<ProviderQuotaSnapshot[]>([])
   const [isLoading, setIsLoading] = useState(true)
@@ -38,42 +12,9 @@ export function ProviderUsageContainer() {
   const load = useCallback(async (forceRefresh = false) => {
     setIsLoading(true)
     try {
-      setSnapshots([
-        await providerQuotaApi.getCodex(forceRefresh),
-        await providerQuotaApi.getClaude(forceRefresh),
-        createCursorManualSnapshot(),
-        createAntigravityManualSnapshot(),
-      ])
-    } catch (err) {
-      const reason =
-        err instanceof Error
-          ? err.message
-          : 'Provider usage limits are unavailable.'
-      setSnapshots([
-        {
-          providerId: 'codex',
-          status: 'unavailable',
-          source: 'provider-api',
-          reason,
-          lastCheckedAt: new Date().toISOString(),
-          stale: false,
-        },
-        {
-          providerId: 'claude-code',
-          status: 'unavailable',
-          source: 'local-usage-log',
-          reason,
-          usageUrl: 'https://claude.ai/new#settings/usage',
-          lastCheckedAt: new Date().toISOString(),
-          stale: false,
-        },
-        {
-          ...createCursorManualSnapshot(),
-        },
-        {
-          ...createAntigravityManualSnapshot(),
-        },
-      ])
+      setSnapshots(await providerQuotaApi.list(forceRefresh))
+    } catch {
+      setSnapshots([])
     } finally {
       setIsLoading(false)
     }

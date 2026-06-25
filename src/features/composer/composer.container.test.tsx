@@ -62,68 +62,70 @@ describe('ComposerContainer', () => {
   beforeEach(() => {
     ;(window as unknown as { electronAPI: unknown }).electronAPI = {
       providerQuota: {
-        getCodex: vi.fn().mockResolvedValue({
-          providerId: 'codex',
-          status: 'available',
-          source: 'provider-api',
-          planType: 'pro',
-          windows: [
-            {
-              kind: 'five-hour',
-              label: '5 hour usage limit',
-              usedPercent: 13,
-              remainingPercent: 87,
-              windowMinutes: 300,
-              resetsAt: '2026-05-21T15:21:00.000Z',
-            },
-            {
-              kind: 'weekly',
-              label: 'Weekly usage limit',
-              usedPercent: 5,
-              remainingPercent: 95,
-              windowMinutes: 10_080,
-              resetsAt: '2026-05-26T22:00:00.000Z',
-            },
-          ],
-          credits: null,
-          limitReachedType: null,
-          lastCheckedAt: '2026-05-21T12:00:00.000Z',
-          stale: false,
-        }),
-        getClaude: vi.fn().mockResolvedValue({
-          providerId: 'claude-code',
-          status: 'available',
-          source: 'local-usage-log',
-          planType: null,
-          windows: [
-            {
-              kind: 'five-hour',
-              label: 'Current 5-hour Claude usage',
-              usedPercent: 22,
-              remainingPercent: 78,
-              windowMinutes: 300,
-              resetsAt: '2026-06-17T19:00:00.000Z',
-              displayMode: 'observed-usage',
-              valueLabel: '9.4M tokens, $6.81',
-              resetLabel: 'Ends',
-            },
-            {
-              kind: 'weekly',
-              label: "This week's Claude usage",
-              usedPercent: 42,
-              remainingPercent: 58,
-              windowMinutes: 10_080,
-              resetsAt: '2026-06-21T00:00:00.000Z',
-              displayMode: 'observed-usage',
-              valueLabel: '371.9M tokens, $370.55',
-              resetLabel: 'Ends',
-            },
-          ],
-          credits: null,
-          limitReachedType: null,
-          lastCheckedAt: '2026-06-17T15:03:00.000Z',
-          stale: false,
-        }),
+        list: vi.fn().mockResolvedValue([
+          {
+            providerId: 'codex',
+            status: 'available',
+            source: 'provider-api',
+            planType: 'pro',
+            windows: [
+              {
+                kind: 'five-hour',
+                label: '5 hour usage limit',
+                usedPercent: 13,
+                remainingPercent: 87,
+                windowMinutes: 300,
+                resetsAt: '2026-05-21T15:21:00.000Z',
+              },
+              {
+                kind: 'weekly',
+                label: 'Weekly usage limit',
+                usedPercent: 5,
+                remainingPercent: 95,
+                windowMinutes: 10_080,
+                resetsAt: '2026-05-26T22:00:00.000Z',
+              },
+            ],
+            credits: null,
+            limitReachedType: null,
+            lastCheckedAt: '2026-05-21T12:00:00.000Z',
+            stale: false,
+          },
+          {
+            providerId: 'claude-code',
+            status: 'available',
+            source: 'local-usage-log',
+            planType: null,
+            windows: [
+              {
+                kind: 'five-hour',
+                label: 'Current 5-hour Claude usage',
+                usedPercent: 22,
+                remainingPercent: 78,
+                windowMinutes: 300,
+                resetsAt: '2026-06-17T19:00:00.000Z',
+                displayMode: 'observed-usage',
+                valueLabel: '9.4M tokens, $6.81',
+                resetLabel: 'Ends',
+              },
+              {
+                kind: 'weekly',
+                label: "This week's Claude usage",
+                usedPercent: 42,
+                remainingPercent: 58,
+                windowMinutes: 10_080,
+                resetsAt: '2026-06-21T00:00:00.000Z',
+                displayMode: 'observed-usage',
+                valueLabel: '371.9M tokens, $370.55',
+                resetLabel: 'Ends',
+              },
+            ],
+            credits: null,
+            limitReachedType: null,
+            lastCheckedAt: '2026-06-17T15:03:00.000Z',
+            stale: false,
+          },
+        ]),
       },
     }
 
@@ -751,9 +753,7 @@ describe('ComposerContainer', () => {
         name: 'Codex usage 87% remaining',
       }),
     ).toBeInTheDocument()
-    expect(window.electronAPI.providerQuota.getCodex).toHaveBeenCalledWith(
-      false,
-    )
+    expect(window.electronAPI.providerQuota.list).toHaveBeenCalledWith(false)
   })
 
   it('shows Codex usage in the composer for Pi OpenAI model selections', async () => {
@@ -810,9 +810,7 @@ describe('ComposerContainer', () => {
         name: 'Codex usage 87% remaining',
       }),
     ).toBeInTheDocument()
-    expect(window.electronAPI.providerQuota.getCodex).toHaveBeenCalledWith(
-      false,
-    )
+    expect(window.electronAPI.providerQuota.list).toHaveBeenCalledWith(false)
   })
 
   it('shows Claude Code usage in the composer for Claude Code selections', async () => {
@@ -840,9 +838,7 @@ describe('ComposerContainer', () => {
       name: 'Claude Code usage 9.4M',
     })
     expect(pill).toBeInTheDocument()
-    expect(window.electronAPI.providerQuota.getClaude).toHaveBeenCalledWith(
-      false,
-    )
+    expect(window.electronAPI.providerQuota.list).toHaveBeenCalledWith(false)
 
     fireEvent.pointerEnter(pill)
 

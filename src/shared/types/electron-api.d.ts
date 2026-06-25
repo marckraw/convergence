@@ -1704,8 +1704,7 @@ interface ElectronAPI {
     ) => () => void
   }
   providerQuota: {
-    getCodex: (forceRefresh?: boolean) => Promise<ProviderQuotaSnapshotData>
-    getClaude: (forceRefresh?: boolean) => Promise<ProviderQuotaSnapshotData>
+    list: (forceRefresh?: boolean) => Promise<ProviderQuotaSnapshotData[]>
   }
   mcp: {
     listByProjectId: (projectId: string) => Promise<ProjectMcpVisibility>

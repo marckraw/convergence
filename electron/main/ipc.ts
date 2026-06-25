@@ -30,6 +30,8 @@ import { PromptsService } from '../backend/prompts/prompts.service'
 import { AppSettingsService } from '../backend/app-settings/app-settings.service'
 import { CodexQuotaService } from '../backend/provider-quota/codex-quota.service'
 import { ClaudeQuotaService } from '../backend/provider-quota/claude-quota.service'
+import { ProviderQuotaService } from '../backend/provider-quota/provider-quota.service'
+import { createDefaultProviderQuotaSources } from '../backend/provider-quota/provider-quota.sources'
 import { GuidedReviewDaemonCredentialsService } from '../backend/credentials/guided-review-daemon-credentials.service'
 import type { ExecutionHostDaemonCredentialsService } from '../backend/credentials/execution-host-daemon-credentials.service'
 import type { RemoteExecutionHost } from '../backend/provider/execution-host/remote-execution-host'
@@ -191,8 +193,8 @@ export function registerIpcHandlers(
     updateProvider: (providerId: string) => Promise<ProviderUpdateResult>
   },
   providerQuota?: {
-    codex: CodexQuotaService
-    claude: ClaudeQuotaService
+    codex: Pick<CodexQuotaService, 'getQuota'>
+    claude: Pick<ClaudeQuotaService, 'getQuota'>
   },
   executionHostRemote?: {
     credentials: ExecutionHostDaemonCredentialsService
@@ -204,6 +206,9 @@ export function registerIpcHandlers(
     codex: new CodexQuotaService(),
     claude: new ClaudeQuotaService(),
   }
+  const providerQuotaService = new ProviderQuotaService(
+    createDefaultProviderQuotaSources(quotaServices),
+  )
   const sessionApp = new SessionAppService(sessionService, appSettingsService)
 
   // Project handlers
@@ -946,12 +951,8 @@ export function registerIpcHandlers(
     return result
   })
 
-  ipcMain.handle('providerQuota:getCodex', (_event, forceRefresh?: boolean) =>
-    quotaServices.codex.getQuota({ forceRefresh: forceRefresh === true }),
-  )
-
-  ipcMain.handle('providerQuota:getClaude', (_event, forceRefresh?: boolean) =>
-    quotaServices.claude.getQuota({ forceRefresh: forceRefresh === true }),
+  ipcMain.handle('providerQuota:list', (_event, forceRefresh?: boolean) =>
+    providerQuotaService.list({ forceRefresh: forceRefresh === true }),
   )
 
   ipcMain.handle('mcp:listByProjectId', (_event, projectId: string) =>
