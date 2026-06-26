@@ -46,7 +46,10 @@ import type { AnalyticsRangePreset } from '../backend/analytics/analytics.types'
 import type { AttachmentsService } from '../backend/attachments/attachments.service'
 import type { IngestFileInput } from '../backend/attachments/attachments.types'
 import type { AppSettingsInput } from '../backend/app-settings/app-settings.types'
-import type { CreateProjectInput } from '../backend/project/project.types'
+import type {
+  CloneProjectInput,
+  CreateProjectInput,
+} from '../backend/project/project.types'
 import type {
   CreateSpaceInput,
   CreateSpaceArtifactInput,
@@ -215,6 +218,19 @@ export function registerIpcHandlers(
   ipcMain.handle('project:create', (_event, input: CreateProjectInput) => {
     const existing = projectService.getByRepositoryPath(input.repositoryPath)
     const project = projectService.create(input)
+    if (!existing) {
+      stateService.set(ACTIVE_PROJECT_KEY, project.id)
+    }
+    return project
+  })
+
+  ipcMain.handle('project:clone', async (_event, input: CloneProjectInput) => {
+    const repositoryPath = await gitService.cloneRepository(input)
+    const existing = projectService.getByRepositoryPath(repositoryPath)
+    const project = projectService.create({
+      repositoryPath,
+      name: input.name,
+    })
     if (!existing) {
       stateService.set(ACTIVE_PROJECT_KEY, project.id)
     }
@@ -421,6 +437,18 @@ export function registerIpcHandlers(
     const result = await dialog.showOpenDialog(window, {
       properties: ['openDirectory'],
       title: 'Select a Git Repository',
+    })
+    if (result.canceled || result.filePaths.length === 0) return null
+    return result.filePaths[0]
+  })
+
+  ipcMain.handle('dialog:selectCloneParentDirectory', async (event) => {
+    const window = BrowserWindow.fromWebContents(event.sender)
+    if (!window) return null
+    const result = await dialog.showOpenDialog(window, {
+      properties: ['openDirectory', 'createDirectory'],
+      title: 'Select Clone Destination',
+      buttonLabel: 'Use Folder',
     })
     if (result.canceled || result.filePaths.length === 0) return null
     return result.filePaths[0]

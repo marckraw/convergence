@@ -14,6 +14,7 @@ const mockProject = {
 const mockElectronAPI = {
   project: {
     create: vi.fn(),
+    clone: vi.fn(),
     getAll: vi.fn(),
     getById: vi.fn(),
     delete: vi.fn(),
@@ -23,6 +24,7 @@ const mockElectronAPI = {
   },
   dialog: {
     selectDirectory: vi.fn(),
+    selectCloneParentDirectory: vi.fn(),
   },
 }
 
@@ -131,6 +133,45 @@ describe('useProjectStore', () => {
     await useProjectStore.getState().createProject()
 
     expect(useProjectStore.getState().error).toBe('Not a git repository')
+  })
+
+  it('cloneProject clones and activates the project', async () => {
+    mockElectronAPI.project.clone.mockResolvedValue(mockProject)
+    mockElectronAPI.project.getAll.mockResolvedValue([mockProject])
+
+    const result = await useProjectStore.getState().cloneProject({
+      remoteUrl: 'https://github.com/example/test-repo.git',
+      parentDirectory: '/tmp',
+      directoryName: 'test-repo',
+    })
+
+    expect(result).toEqual(mockProject)
+    expect(mockElectronAPI.project.clone).toHaveBeenCalledWith({
+      remoteUrl: 'https://github.com/example/test-repo.git',
+      parentDirectory: '/tmp',
+      directoryName: 'test-repo',
+    })
+    expect(useProjectStore.getState().activeProject).toEqual(mockProject)
+    expect(useProjectStore.getState().projects).toEqual([mockProject])
+    expect(useProjectStore.getState().loading).toBe(false)
+  })
+
+  it('cloneProject sets error on failure', async () => {
+    mockElectronAPI.project.clone.mockRejectedValue(
+      new Error('Clone destination already exists'),
+    )
+
+    const result = await useProjectStore.getState().cloneProject({
+      remoteUrl: 'https://github.com/example/test-repo.git',
+      parentDirectory: '/tmp',
+      directoryName: 'test-repo',
+    })
+
+    expect(result).toBeNull()
+    expect(useProjectStore.getState().error).toBe(
+      'Clone destination already exists',
+    )
+    expect(useProjectStore.getState().loading).toBe(false)
   })
 
   it('clearError resets error to null', () => {

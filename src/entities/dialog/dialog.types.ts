@@ -3,6 +3,7 @@ export type DialogKind =
   | 'space-create'
   | 'space-session-link'
   | 'space-workboard'
+  | 'project-create'
   | 'project-settings'
   | 'providers'
   | 'pull-request-review-start'

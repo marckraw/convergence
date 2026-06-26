@@ -56,6 +56,13 @@ interface CreateProjectInput {
   name?: string
 }
 
+interface CloneProjectInput {
+  remoteUrl: string
+  parentDirectory: string
+  directoryName?: string
+  name?: string
+}
+
 type ProjectOpenAppIdData = 'cursor' | 'vscode' | 'zed' | 'webstorm' | 'finder'
 
 type ProjectOpenAppKindData = 'editor' | 'file-manager'
@@ -1457,6 +1464,7 @@ interface ElectronAPI {
   }
   project: {
     create: (input: CreateProjectInput) => Promise<ProjectData>
+    clone: (input: CloneProjectInput) => Promise<ProjectData>
     getAll: () => Promise<ProjectData[]>
     getById: (id: string) => Promise<ProjectData | null>
     delete: (id: string) => Promise<void>
@@ -1549,6 +1557,7 @@ interface ElectronAPI {
   }
   dialog: {
     selectDirectory: () => Promise<string | null>
+    selectCloneParentDirectory: () => Promise<string | null>
   }
   projectOpen?: {
     listApps: () => Promise<ProjectOpenAppData[]>

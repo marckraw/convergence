@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import type { Project } from './project.types'
+import type { CloneProjectInput, Project } from './project.types'
 import { projectApi, dialogApi } from './project.api'
 import type { ProjectSettings } from './project-settings.pure'
 
@@ -13,7 +13,8 @@ interface ProjectState {
 interface ProjectActions {
   loadProjects: () => Promise<void>
   loadActiveProject: () => Promise<void>
-  createProject: () => Promise<void>
+  createProject: () => Promise<Project | null>
+  cloneProject: (input: CloneProjectInput) => Promise<Project | null>
   deleteProject: (id: string) => Promise<void>
   setActiveProject: (id: string) => Promise<void>
   updateProjectSettings: (
@@ -54,7 +55,7 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
     set({ error: null })
     try {
       const path = await dialogApi.selectDirectory()
-      if (!path) return
+      if (!path) return null
 
       const { activeProject, projects: currentProjects } = get()
       const project = await projectApi.create({ repositoryPath: path })
@@ -67,10 +68,28 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
         activeProject: alreadyKnown && activeProject ? activeProject : project,
         projects,
       })
+      return project
     } catch (err) {
       set({
         error: err instanceof Error ? err.message : 'Failed to create project',
       })
+      return null
+    }
+  },
+
+  cloneProject: async (input: CloneProjectInput) => {
+    set({ loading: true, error: null })
+    try {
+      const project = await projectApi.clone(input)
+      const projects = await projectApi.getAll()
+      set({ activeProject: project, projects, loading: false })
+      return project
+    } catch (err) {
+      set({
+        loading: false,
+        error: err instanceof Error ? err.message : 'Failed to clone project',
+      })
+      return null
     }
   },
 

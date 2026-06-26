@@ -91,6 +91,7 @@ const mockElectronAPI = {
   },
   project: {
     create: vi.fn(),
+    clone: vi.fn(),
     getAll: vi.fn(),
     getById: vi.fn(),
     delete: vi.fn(),
@@ -98,7 +99,7 @@ const mockElectronAPI = {
     setActive: vi.fn(),
     updateSettings: vi.fn(),
   },
-  dialog: { selectDirectory: vi.fn() },
+  dialog: { selectDirectory: vi.fn(), selectCloneParentDirectory: vi.fn() },
   workspace: {
     create: vi.fn(),
     getByProjectId: vi.fn().mockResolvedValue([]),

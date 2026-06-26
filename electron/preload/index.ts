@@ -11,6 +11,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
   project: {
     create: (input: { repositoryPath: string; name?: string }) =>
       ipcRenderer.invoke('project:create', input),
+    clone: (input: {
+      remoteUrl: string
+      parentDirectory: string
+      directoryName?: string
+      name?: string
+    }) => ipcRenderer.invoke('project:clone', input),
     getAll: () => ipcRenderer.invoke('project:getAll'),
     getById: (id: string) => ipcRenderer.invoke('project:getById', id),
     delete: (id: string) => ipcRenderer.invoke('project:delete', id),
@@ -119,6 +125,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   },
   dialog: {
     selectDirectory: () => ipcRenderer.invoke('dialog:selectDirectory'),
+    selectCloneParentDirectory: () =>
+      ipcRenderer.invoke('dialog:selectCloneParentDirectory'),
   },
   projectOpen: {
     listApps: () => ipcRenderer.invoke('projectOpen:listApps'),

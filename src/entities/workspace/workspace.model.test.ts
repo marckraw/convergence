@@ -15,13 +15,14 @@ const mockWorkspace = {
 const mockElectronAPI = {
   project: {
     create: vi.fn(),
+    clone: vi.fn(),
     getAll: vi.fn(),
     getById: vi.fn(),
     delete: vi.fn(),
     getActive: vi.fn(),
     setActive: vi.fn(),
   },
-  dialog: { selectDirectory: vi.fn() },
+  dialog: { selectDirectory: vi.fn(), selectCloneParentDirectory: vi.fn() },
   workspace: {
     create: vi.fn(),
     getByProjectId: vi.fn(),

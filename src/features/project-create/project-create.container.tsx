@@ -1,5 +1,5 @@
 import type { FC } from 'react'
-import { useProjectStore } from '@/entities/project'
+import { useDialogStore } from '@/entities/dialog'
 import { ProjectCreateButton } from './project-create.presentational'
 
 interface ProjectCreateProps {
@@ -11,11 +11,11 @@ export const ProjectCreate: FC<ProjectCreateProps> = ({
   variant = 'default',
   size = 'default',
 }) => {
-  const createProject = useProjectStore((s) => s.createProject)
+  const openDialog = useDialogStore((s) => s.open)
 
   return (
     <ProjectCreateButton
-      onClick={createProject}
+      onClick={() => openDialog('project-create')}
       variant={variant}
       size={size}
     />
