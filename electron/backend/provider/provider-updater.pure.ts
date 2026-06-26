@@ -145,8 +145,54 @@ export function resolveHomebrewProviderInstall(
   return null
 }
 
-export function buildNpmProviderUpdateArgs(packageName: string): string[] {
-  return ['install', '-g', `${packageName}@latest`]
+export function buildNpmProviderUpdateArgs(
+  packageName: string,
+  prefixDirectory?: string | null,
+): string[] {
+  const args = ['install', '-g', `${packageName}@latest`]
+  if (prefixDirectory) {
+    args.push('--prefix', prefixDirectory)
+  }
+  return args
+}
+
+export function buildNpmProviderUninstallArgs(
+  packageName: string,
+  prefixDirectory?: string | null,
+): string[] {
+  const args = ['uninstall', '-g', packageName]
+  if (prefixDirectory) {
+    args.push('--prefix', prefixDirectory)
+  }
+  return args
+}
+
+/**
+ * Expands a PATH value into the ordered absolute paths an executable might
+ * live at. Used to locate `npm` when it is not co-located with the provider's
+ * global package prefix — the common case when a user has configured a custom
+ * npm prefix (`npm config set prefix ~/.npm-global`), which keeps global
+ * packages separate from the Node install that owns `npm`/`node`.
+ */
+export function buildBinaryPathCandidates(
+  binary: string,
+  pathValue: string,
+  platform: NodeJS.Platform = process.platform,
+): string[] {
+  const isWindows = platform === 'win32'
+  const pathModule = isWindows ? win32 : posix
+  const pathDelimiter = isWindows ? ';' : ':'
+  const binaryNames = isWindows
+    ? [`${binary}.cmd`, `${binary}.exe`, binary]
+    : [binary]
+
+  return pathValue
+    .split(pathDelimiter)
+    .map((entry) => entry.trim())
+    .filter((entry) => entry.length > 0)
+    .flatMap((directory) =>
+      binaryNames.map((name) => pathModule.join(directory, name)),
+    )
 }
 
 export function getProviderBinaryDirectory(binaryPath: string): string {

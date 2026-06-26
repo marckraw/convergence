@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import {
+  buildBinaryPathCandidates,
   buildNonNpmProviderInstallInfo,
+  buildNpmProviderUninstallArgs,
   buildNpmProviderUpdateArgs,
   resolveHomebrewProviderInstall,
   resolveNpmManagedProviderInstall,
@@ -54,6 +56,68 @@ describe('provider-updater.pure', () => {
       'install',
       '-g',
       '@openai/codex@latest',
+    ])
+  })
+
+  it('pins the npm update to the owning prefix when one is provided', () => {
+    expect(
+      buildNpmProviderUpdateArgs('@openai/codex', '/Users/me/.npm-global'),
+    ).toEqual([
+      'install',
+      '-g',
+      '@openai/codex@latest',
+      '--prefix',
+      '/Users/me/.npm-global',
+    ])
+  })
+
+  it('builds npm uninstall arguments with and without a prefix', () => {
+    expect(buildNpmProviderUninstallArgs('@openai/codex-cli')).toEqual([
+      'uninstall',
+      '-g',
+      '@openai/codex-cli',
+    ])
+    expect(
+      buildNpmProviderUninstallArgs(
+        '@openai/codex-cli',
+        '/Users/me/.npm-global',
+      ),
+    ).toEqual([
+      'uninstall',
+      '-g',
+      '@openai/codex-cli',
+      '--prefix',
+      '/Users/me/.npm-global',
+    ])
+  })
+
+  it('expands a PATH value into npm binary candidates (posix)', () => {
+    expect(
+      buildBinaryPathCandidates(
+        'npm',
+        '/Users/me/.npm-global/bin:/Users/me/.fnm/node-versions/v24.14.1/installation/bin: ',
+        'darwin',
+      ),
+    ).toEqual([
+      '/Users/me/.npm-global/bin/npm',
+      '/Users/me/.fnm/node-versions/v24.14.1/installation/bin/npm',
+    ])
+  })
+
+  it('expands a PATH value into npm binary candidates (win32)', () => {
+    expect(
+      buildBinaryPathCandidates(
+        'npm',
+        'C:\\Users\\me\\AppData\\Roaming\\npm;C:\\Program Files\\nodejs',
+        'win32',
+      ),
+    ).toEqual([
+      'C:\\Users\\me\\AppData\\Roaming\\npm\\npm.cmd',
+      'C:\\Users\\me\\AppData\\Roaming\\npm\\npm.exe',
+      'C:\\Users\\me\\AppData\\Roaming\\npm\\npm',
+      'C:\\Program Files\\nodejs\\npm.cmd',
+      'C:\\Program Files\\nodejs\\npm.exe',
+      'C:\\Program Files\\nodejs\\npm',
     ])
   })
 

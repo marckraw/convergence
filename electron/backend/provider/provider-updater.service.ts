@@ -1,14 +1,51 @@
 import { execFile } from 'child_process'
 import { existsSync, realpathSync } from 'fs'
-import { delimiter } from 'path'
+import { delimiter, join } from 'path'
 import type { ProviderUpdateResult } from './provider.types'
 import { getKnownProviders } from './provider-status.pure'
 import {
+  buildBinaryPathCandidates,
   buildNonNpmProviderInstallInfo,
+  buildNpmProviderUninstallArgs,
   buildNpmProviderUpdateArgs,
   getProviderBinaryDirectory,
   resolveNpmManagedProviderInstall,
 } from './provider-updater.pure'
+
+/**
+ * Resolves a runnable `npm` binary for an npm-managed provider install.
+ *
+ * npm is not always co-located with the provider's global package prefix: when
+ * a user sets a custom npm prefix (e.g. `npm config set prefix ~/.npm-global`),
+ * global packages land in that prefix while `npm`/`node` stay with the Node
+ * install. We therefore prefer the prefix-local `npm`, then fall back to the
+ * first `npm` on the (shell-hydrated) PATH.
+ */
+function resolveNpmBinaryPath(
+  preferredNpmPath: string,
+  prefixDirectory: string,
+  providerBinaryDirectory: string,
+): string | null {
+  if (existsSync(preferredNpmPath)) {
+    return preferredNpmPath
+  }
+
+  const searchPath = [
+    providerBinaryDirectory,
+    join(prefixDirectory, 'bin'),
+    process.env.PATH,
+  ]
+    .filter(Boolean)
+    .join(delimiter)
+
+  for (const candidate of buildBinaryPathCandidates('npm', searchPath)) {
+    if (existsSync(candidate)) {
+      return candidate
+    }
+  }
+
+  return null
+}
 
 function execNpmUpdate(
   npmPath: string,
@@ -166,17 +203,6 @@ export async function updateProviderPackage(
     }
   }
 
-  if (!existsSync(install.npmPath)) {
-    return {
-      ok: false,
-      providerId,
-      command: provider.updateCommand,
-      stdout: '',
-      stderr: '',
-      error: `Could not find npm for the detected install at ${install.npmPath}.`,
-    }
-  }
-
   if (!provider.packageName) {
     return {
       ok: false,
@@ -188,31 +214,52 @@ export async function updateProviderPackage(
     }
   }
 
-  const args = buildNpmProviderUpdateArgs(provider.packageName)
+  const npmBinaryPath = resolveNpmBinaryPath(
+    install.npmPath,
+    install.prefixDirectory,
+    getProviderBinaryDirectory(binaryPath),
+  )
+  if (!npmBinaryPath) {
+    return {
+      ok: false,
+      providerId,
+      command: provider.updateCommand,
+      stdout: '',
+      stderr: '',
+      error: `Could not find npm to update ${provider.name}. Convergence looked for npm at ${install.npmPath} and on your PATH. Install Node (which bundles npm) and make sure it is on your PATH, then try again.`,
+    }
+  }
+
+  // Always target the prefix that owns the existing install so the update lands
+  // where the binary already lives, even when the resolved npm's default prefix
+  // differs (custom npm prefix setups).
+  const args = buildNpmProviderUpdateArgs(
+    provider.packageName,
+    install.prefixDirectory,
+  )
   const isLegacyInstall =
     install.packageName !== provider.packageName &&
     provider.legacyPackageNames?.includes(install.packageName) === true
-  const uninstallLegacyArgs = ['uninstall', '-g', install.packageName]
+  const uninstallLegacyArgs = buildNpmProviderUninstallArgs(
+    install.packageName,
+    install.prefixDirectory,
+  )
+  const npmPathPrefix = [
+    getProviderBinaryDirectory(npmBinaryPath),
+    getProviderBinaryDirectory(binaryPath),
+  ].join(delimiter)
   const command = isLegacyInstall
     ? [
-        [install.npmPath, ...uninstallLegacyArgs].join(' '),
-        [install.npmPath, ...args].join(' '),
+        [npmBinaryPath, ...uninstallLegacyArgs].join(' '),
+        [npmBinaryPath, ...args].join(' '),
       ].join(' && ')
-    : [install.npmPath, ...args].join(' ')
+    : [npmBinaryPath, ...args].join(' ')
 
   try {
     if (isLegacyInstall) {
-      await execNpmUpdate(
-        install.npmPath,
-        uninstallLegacyArgs,
-        getProviderBinaryDirectory(binaryPath),
-      )
+      await execNpmUpdate(npmBinaryPath, uninstallLegacyArgs, npmPathPrefix)
     }
-    const output = await execNpmUpdate(
-      install.npmPath,
-      args,
-      getProviderBinaryDirectory(binaryPath),
-    )
+    const output = await execNpmUpdate(npmBinaryPath, args, npmPathPrefix)
     return {
       ok: true,
       providerId,
