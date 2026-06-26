@@ -18,6 +18,7 @@ import {
   SpaceWorkboardDialogContainer,
   McpServersDialogContainer,
   ProjectContextSettings,
+  ProjectCreateDialogContainer,
   ProjectSettingsDialogContainer,
   PromptLibraryBrowserDialogContainer,
   ProviderStatusDialogContainer,
@@ -110,7 +111,6 @@ export const Sidebar: FC<SidebarProps> = ({
 }) => {
   const projects = useProjectStore((s) => s.projects)
   const activeProject = useProjectStore((s) => s.activeProject)
-  const createProject = useProjectStore((s) => s.createProject)
   const setActiveProject = useProjectStore((s) => s.setActiveProject)
   const workspaces = useWorkspaceStore((s) => s.workspaces)
   const pullRequestsByWorkspaceId = usePullRequestStore((s) => s.byWorkspaceId)
@@ -130,6 +130,10 @@ export const Sidebar: FC<SidebarProps> = ({
   )
   const deleteWorkspace = useWorkspaceStore((s) => s.deleteWorkspace)
   const openDialog = useDialogStore((s) => s.open)
+  const openProjectDialog = useCallback(
+    () => openDialog('project-create'),
+    [openDialog],
+  )
   const sessions = useSessionStore((s) => s.sessions)
   const globalSessions = useSessionStore((s) => s.globalSessions)
   const globalChatSessions = useSessionStore((s) => s.globalChatSessions)
@@ -687,6 +691,7 @@ export const Sidebar: FC<SidebarProps> = ({
       <SkillsBrowserDialogContainer trigger={hiddenDialogTrigger()} />
       <PromptLibraryBrowserDialogContainer trigger={hiddenDialogTrigger()} />
       <ReleaseNotesDialogContainer trigger={hiddenDialogTrigger()} />
+      <ProjectCreateDialogContainer />
     </>
   )
 
@@ -809,7 +814,7 @@ export const Sidebar: FC<SidebarProps> = ({
               activeSurface === 'chat' ? 'New chat' : 'Open a project'
             }
             onClick={
-              activeSurface === 'chat' ? onNewGlobalSession : createProject
+              activeSurface === 'chat' ? onNewGlobalSession : openProjectDialog
             }
           >
             <Plus className="h-4 w-4" />
@@ -1004,7 +1009,7 @@ export const Sidebar: FC<SidebarProps> = ({
                 projects={projects}
                 activeProjectId={activeProject?.id ?? null}
                 onSelectProject={handleSelectProject}
-                onCreateProject={createProject}
+                onCreateProject={openProjectDialog}
               />
             )}
 
@@ -1052,7 +1057,7 @@ export const Sidebar: FC<SidebarProps> = ({
           <Button
             variant="outline"
             size="sm"
-            onClick={createProject}
+            onClick={openProjectDialog}
             className="w-full"
           >
             <Plus className="h-4 w-4" />

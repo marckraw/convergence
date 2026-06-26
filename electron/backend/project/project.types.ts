@@ -18,6 +18,13 @@ export interface CreateProjectInput {
   name?: string
 }
 
+export interface CloneProjectInput {
+  remoteUrl: string
+  parentDirectory: string
+  directoryName?: string
+  name?: string
+}
+
 export function projectFromRow(row: ProjectRow): Project {
   return {
     id: row.id,

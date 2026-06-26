@@ -8,3 +8,10 @@ export interface Project {
   createdAt: string
   updatedAt: string
 }
+
+export interface CloneProjectInput {
+  remoteUrl: string
+  parentDirectory: string
+  directoryName?: string
+  name?: string
+}

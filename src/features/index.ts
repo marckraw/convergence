@@ -1,4 +1,4 @@
-export { ProjectCreate } from './project-create'
+export { ProjectCreate, ProjectCreateDialogContainer } from './project-create'
 export { PullRequestReviewStartDialogContainer } from './pull-request-review-start'
 export { ProjectSettingsDialogContainer } from './project-settings'
 export { ProjectContextSettings } from './project-context-settings'

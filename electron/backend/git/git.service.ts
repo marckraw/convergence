@@ -1,9 +1,14 @@
 import { execFile } from 'child_process'
 import { createHash } from 'crypto'
-import { existsSync, realpathSync } from 'fs'
+import { existsSync, realpathSync, statSync } from 'fs'
 import { isAbsolute, relative, resolve } from 'path'
 import { isPullRequestReviewBranchName } from '../pull-request/pull-request-reference.pure'
 import { parseNameStatusOutput } from './base-branch-diff.pure'
+import {
+  deriveDefaultCloneDirectoryName,
+  normalizeCloneRemoteUrl,
+  resolveCloneDestination,
+} from './git-clone.pure'
 import type { ChangedFileEntry } from './changed-files.types'
 
 const EXPANDABLE_DIFF_CONTEXT_LINES = 80
@@ -307,6 +312,39 @@ export class GitService {
     }
 
     await exec('git', args, repoPath)
+  }
+
+  async cloneRepository(input: {
+    remoteUrl: string
+    parentDirectory: string
+    directoryName?: string
+  }): Promise<string> {
+    const remoteUrl = normalizeCloneRemoteUrl(input.remoteUrl)
+    const parentDirectory = resolve(input.parentDirectory)
+
+    if (!existsSync(parentDirectory)) {
+      throw new Error(`Clone destination does not exist: ${parentDirectory}`)
+    }
+    if (!statSync(parentDirectory).isDirectory()) {
+      throw new Error(
+        `Clone destination is not a directory: ${parentDirectory}`,
+      )
+    }
+
+    const destinationPath = resolveCloneDestination(
+      parentDirectory,
+      input.directoryName ?? deriveDefaultCloneDirectoryName(remoteUrl),
+    )
+    if (existsSync(destinationPath)) {
+      throw new Error(`Clone destination already exists: ${destinationPath}`)
+    }
+
+    await exec(
+      'git',
+      ['clone', '--', remoteUrl, destinationPath],
+      parentDirectory,
+    )
+    return destinationPath
   }
 
   async fetchPullRequestHead(input: {

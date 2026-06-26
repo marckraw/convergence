@@ -1,4 +1,4 @@
-import type { Project } from './project.types'
+import type { CloneProjectInput, Project } from './project.types'
 import type { ProjectSettings } from './project-settings.pure'
 
 export const projectApi = {
@@ -6,6 +6,9 @@ export const projectApi = {
     repositoryPath: string
     name?: string
   }): Promise<Project> => window.electronAPI.project.create(input),
+
+  clone: (input: CloneProjectInput): Promise<Project> =>
+    window.electronAPI.project.clone(input),
 
   getAll: (): Promise<Project[]> => window.electronAPI.project.getAll(),
 
@@ -27,4 +30,7 @@ export const projectApi = {
 export const dialogApi = {
   selectDirectory: (): Promise<string | null> =>
     window.electronAPI.dialog.selectDirectory(),
+
+  selectCloneParentDirectory: (): Promise<string | null> =>
+    window.electronAPI.dialog.selectCloneParentDirectory(),
 }
