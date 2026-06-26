@@ -1,5 +1,11 @@
 # convergence
 
+## 0.44.0
+
+### Minor Changes
+
+- 7a39d76: Add a project clone flow to Open a project so users can enter a Git URL, choose a destination folder, and register the cloned repository without leaving the app.
+
 ## 0.43.1
 
 ### Patch Changes
