@@ -87,7 +87,7 @@ describe('context-window.pure', () => {
       deriveClaudeEstimatedContextWindow(
         {
           message: {
-            model: 'claude-fable-5',
+            model: 'claude-sonnet-5',
             usage: {
               input_tokens: 1200,
               cache_creation_input_tokens: 300,

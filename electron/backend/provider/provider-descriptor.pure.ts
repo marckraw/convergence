@@ -276,6 +276,13 @@ export function buildClaudeDescriptor(): ProviderDescriptor {
         ]),
       },
       {
+        id: 'claude-sonnet-5',
+        label: 'Claude Sonnet 5',
+        contextWindowTokens: 1_000_000,
+        defaultEffort: 'medium',
+        effortOptions: buildEffortOptions(['low', 'medium', 'high', 'max']),
+      },
+      {
         id: 'claude-opus-4-8',
         label: 'Claude Opus 4.8',
         contextWindowTokens: 1_000_000,

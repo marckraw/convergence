@@ -344,6 +344,7 @@ function preferredRemoteProviderModel(
       'fable',
       'claude-fable-5',
       'best',
+      'claude-sonnet-5',
       'opus',
       'claude-opus-4-8',
       'claude-opus-4-7',

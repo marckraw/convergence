@@ -158,6 +158,7 @@ describe('remote daemon guide pure helpers', () => {
               models: [
                 { slug: 'claude-opus-4-8', label: 'Claude Opus 4.8' },
                 { slug: 'claude-fable-5', label: 'Claude Fable 5' },
+                { slug: 'claude-sonnet-5', label: 'Claude Sonnet 5' },
                 { slug: 'claude-sonnet-4-6', label: 'Claude Sonnet 4.6' },
               ],
             },
