@@ -1,5 +1,11 @@
 # convergence
 
+## 0.44.2
+
+### Patch Changes
+
+- b05db1c: Add Claude Sonnet 5 to the Claude Code model catalog.
+
 ## 0.44.1
 
 ### Patch Changes
