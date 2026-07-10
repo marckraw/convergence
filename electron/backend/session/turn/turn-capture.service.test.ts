@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mkdtempSync, rmSync, writeFileSync, unlinkSync } from 'fs'
 import { tmpdir } from 'os'
 import { join } from 'path'
@@ -303,6 +303,40 @@ describe('TurnCaptureService', () => {
 
     expect(emitCount).toBe(1)
     expect(debounced.listFileChanges(turnId)).toHaveLength(1)
+  })
+
+  it('releases a baseline when turn completion races baseline capture', async () => {
+    const sessionId = randomUUID()
+    const turnId = randomUUID()
+    seedSessionRow(db, sessionId, repoPath)
+
+    let resolveRepositoryCheck!: (isRepository: boolean) => void
+    vi.spyOn(git, 'isGitRepository').mockReturnValueOnce(
+      new Promise<boolean>((resolve) => {
+        resolveRepositoryCheck = resolve
+      }),
+    )
+
+    const start = service.startTurn({
+      sessionId,
+      turnId,
+      workingDirectory: repoPath,
+    })
+    service.endTurn({
+      sessionId,
+      turnId,
+      status: 'completed',
+      summarySource: null,
+    })
+    const flush = service.flushPendingEnd(sessionId)
+
+    resolveRepositoryCheck(true)
+    await Promise.all([start, flush])
+
+    const internalState = service as unknown as {
+      baselines: Map<string, unknown>
+    }
+    expect(internalState.baselines.size).toBe(0)
   })
 
   it('emits turn.add on start and turn.fileChanges.add on end when files changed', async () => {

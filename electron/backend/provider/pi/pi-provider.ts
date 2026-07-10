@@ -1230,11 +1230,11 @@ export class PiProvider implements Provider {
       }
 
       child.on('exit', (code) => {
+        if (stopped) return
         recordDebug('lifecycle', {
           direction: 'in',
           note: `child exited with code ${code}`,
         })
-        if (stopped) return
         flushThinking()
         flushText()
         applyActivity({ kind: 'close' })
@@ -1269,11 +1269,11 @@ export class PiProvider implements Provider {
       })
 
       child.on('error', (err) => {
+        if (stopped) return
         recordDebug('lifecycle', {
           direction: 'in',
           note: `child error: ${err.message}`,
         })
-        if (stopped) return
         patchUserMessageSkills(
           userMessageItemId,
           skillResolution.skillSelections,
@@ -1313,13 +1313,39 @@ export class PiProvider implements Provider {
       )
     }
 
-    setTimeout(
+    const startTimer = setTimeout(
       () =>
         void spawnPi(config.initialMessage, config.initialAttachments, {
           skillSelections: config.initialSkillSelections,
         }),
       10,
     )
+
+    function disposeRuntime(): void {
+      if (stopped) return
+      stopped = true
+      clearTimeout(startTimer)
+      rpc?.destroy()
+      rpc = null
+      pendingToolCallArgs.clear()
+      pendingExtensionUiRequests.clear()
+      currentTurn = null
+      pendingRecoveryTurn = null
+      textBuffer = ''
+      thinkingBuffer = ''
+
+      if (child) {
+        const pending = child
+        pending.kill('SIGTERM')
+        const killTimer = setTimeout(() => {
+          if (pending.exitCode === null && pending.signalCode === null) {
+            pending.kill('SIGKILL')
+          }
+        }, 3000)
+        killTimer.unref?.()
+        child = null
+      }
+    }
 
     const handle: SessionHandle = {
       onDelta: (cb) => {
@@ -1391,27 +1417,17 @@ export class PiProvider implements Provider {
       deny: () => {
         // Pi has no built-in approval flow in v1 (extension_ui_request is auto-cancelled).
       },
+      dispose: disposeRuntime,
       stop: () => {
-        stopped = true
+        if (stopped) return
         if (rpc) {
           try {
             rpc.send({ type: 'abort' })
           } catch {
             // Ignore — process may already be gone
           }
-          rpc.destroy()
-          rpc = null
         }
-        if (child) {
-          child.kill('SIGTERM')
-          const pending = child
-          setTimeout(() => {
-            if (pending && !pending.killed) {
-              pending.kill('SIGKILL')
-            }
-          }, 3000)
-          child = null
-        }
+        disposeRuntime()
         setStatus('failed')
         setAttention('failed')
       },

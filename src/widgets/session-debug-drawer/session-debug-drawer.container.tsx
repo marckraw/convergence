@@ -3,6 +3,7 @@ import type { FC } from 'react'
 import {
   providerDebugApi,
   useProviderDebugStore,
+  type ProviderDebugEntry,
 } from '@/entities/provider-debug'
 import { SessionDebugDrawer } from './session-debug-drawer.presentational'
 
@@ -12,23 +13,34 @@ interface SessionDebugDrawerContainerProps {
   onOpenChange: (next: boolean) => void
 }
 
+const EMPTY_DEBUG_ENTRIES: ProviderDebugEntry[] = []
+
 export const SessionDebugDrawerContainer: FC<
   SessionDebugDrawerContainerProps
 > = ({ sessionId, open, onOpenChange }) => {
-  const entries = useProviderDebugStore((s) => s.bySession[sessionId] ?? [])
+  const entries = useProviderDebugStore(
+    (s) => s.bySession[sessionId] ?? EMPTY_DEBUG_ENTRIES,
+  )
   const hydrate = useProviderDebugStore((s) => s.hydrate)
+  const ingest = useProviderDebugStore((s) => s.ingest)
+  const drop = useProviderDebugStore((s) => s.drop)
 
   useEffect(() => {
     if (!open) return
     let cancelled = false
+    const unsubscribe = providerDebugApi.subscribe(sessionId, (entry) => {
+      if (entry.sessionId === sessionId) ingest(entry)
+    })
     void providerDebugApi.list(sessionId).then((existing) => {
       if (cancelled) return
       hydrate(sessionId, existing)
     })
     return () => {
       cancelled = true
+      unsubscribe()
+      drop(sessionId)
     }
-  }, [open, sessionId, hydrate])
+  }, [drop, hydrate, ingest, open, sessionId])
 
   const handleCopyAll = useCallback(() => {
     const payload = entries

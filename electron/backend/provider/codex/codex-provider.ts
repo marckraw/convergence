@@ -1828,11 +1828,11 @@ export class CodexProvider implements Provider {
       }
 
       child.on('exit', (code) => {
+        if (stopped) return
         recordDebug('lifecycle', {
           direction: 'in',
           note: `child exited with code ${code}`,
         })
-        if (stopped) return
         flushAssistantBuffer()
         activeProviderTurnId = null
         applyActivity({ kind: 'close' })
@@ -1850,11 +1850,11 @@ export class CodexProvider implements Provider {
       })
 
       child.on('error', (err) => {
+        if (stopped) return
         recordDebug('lifecycle', {
           direction: 'in',
           note: `child error: ${err.message}`,
         })
-        if (stopped) return
         activeProviderTurnId = null
         sessionEmitter.addNote({
           text: `Process error: ${err.message}`,
@@ -1873,13 +1873,39 @@ export class CodexProvider implements Provider {
     }
 
     // Spawn after a tick so listeners can be attached
-    setTimeout(() => {
+    const startTimer = setTimeout(() => {
       spawnServer(
         config.initialMessage,
         config.initialAttachments,
         config.initialSkillSelections,
       )
     }, 10)
+
+    function disposeRuntime(): void {
+      if (stopped) return
+      stopped = true
+      clearTimeout(startTimer)
+      rpc?.destroy()
+      rpc = null
+      pendingApprovals.clear()
+      pendingUserInputs.clear()
+      flushedThinkingByProviderItemId.clear()
+      assistantTextBuffer = ''
+      thinkingBuffer = ''
+      activeProviderTurnId = null
+
+      if (child) {
+        const pending = child
+        pending.kill('SIGTERM')
+        const killTimer = setTimeout(() => {
+          if (pending.exitCode === null && pending.signalCode === null) {
+            pending.kill('SIGKILL')
+          }
+        }, 3000)
+        killTimer.unref?.()
+        child = null
+      }
+    }
 
     const handle: SessionHandle = {
       onDelta: (cb) => {
@@ -2017,19 +2043,10 @@ export class CodexProvider implements Provider {
           setAttention('none')
         }
       },
+      dispose: disposeRuntime,
       stop: () => {
-        stopped = true
-        rpc?.destroy()
-        rpc = null
-        if (child) {
-          child.kill('SIGTERM')
-          setTimeout(() => {
-            if (child && !child.killed) {
-              child.kill('SIGKILL')
-            }
-          }, 3000)
-          child = null
-        }
+        if (stopped) return
+        disposeRuntime()
         setStatus('failed')
         setAttention('failed')
       },

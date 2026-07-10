@@ -558,11 +558,13 @@ contextBridge.exposeInMainWorld('electronAPI', {
     },
   },
   providerDebug: {
-    subscribe: (callback: (entry: unknown) => void) => {
+    subscribe: (sessionId: string, callback: (entry: unknown) => void) => {
       const handler = (_event: unknown, payload: unknown) => callback(payload)
+      ipcRenderer.send('provider:debug:subscribe', sessionId)
       ipcRenderer.on('provider:debug:event', handler)
       return () => {
         ipcRenderer.removeListener('provider:debug:event', handler)
+        ipcRenderer.send('provider:debug:unsubscribe', sessionId)
       }
     },
     list: (sessionId: string) =>

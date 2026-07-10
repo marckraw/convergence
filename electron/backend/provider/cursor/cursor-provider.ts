@@ -1165,6 +1165,32 @@ export class CursorProvider implements Provider {
       spawnCursor()
     }, 10)
 
+    function disposeRuntime(): void {
+      if (stopped) return
+      stopped = true
+      resolveReady?.()
+      clearTimeout(startTimer)
+      pendingApprovals.clear()
+      pendingInteractions.clear()
+      toolCallItems.clear()
+      rpc?.destroy()
+      rpc = null
+      assistantTextBuffer = ''
+      thinkingBuffer = ''
+
+      if (child && !child.killed) {
+        const pending = child
+        pending.kill('SIGTERM')
+        const killTimer = setTimeout(() => {
+          if (pending.exitCode === null && pending.signalCode === null) {
+            pending.kill('SIGKILL')
+          }
+        }, 3000)
+        killTimer.unref?.()
+      }
+      child = null
+    }
+
     return {
       onDelta: (callback) => {
         listeners.delta.push(callback)
@@ -1236,10 +1262,9 @@ export class CursorProvider implements Provider {
         pendingApprovals.delete(id)
         if (pendingApprovals.size === 0) setAttention('none')
       },
+      dispose: disposeRuntime,
       stop: () => {
-        stopped = true
-        resolveReady?.()
-        clearTimeout(startTimer)
+        if (stopped) return
         for (const [id, approval] of pendingApprovals.entries()) {
           rpc?.respond(id, approval.cancelResult)
         }
@@ -1250,19 +1275,7 @@ export class CursorProvider implements Provider {
         pendingInteractions.clear()
         flushThinkingBuffer()
         flushAssistantBuffer()
-        rpc?.destroy()
-        rpc = null
-        if (child && !child.killed) {
-          const pending = child
-          pending.kill('SIGTERM')
-          const killTimer = setTimeout(() => {
-            if (!pending.killed) {
-              pending.kill('SIGKILL')
-            }
-          }, 3000)
-          killTimer.unref?.()
-        }
-        child = null
+        disposeRuntime()
         setStatus('failed')
         setAttention('failed')
         setActivity(null)
