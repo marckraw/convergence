@@ -1,5 +1,11 @@
 # convergence
 
+## 0.44.4
+
+### Patch Changes
+
+- 51553d8: Reduce long-running memory and CPU use by disposing completed provider runtimes, cleaning turn snapshots, and only streaming bounded provider debug data while its drawer is open.
+
 ## 0.44.3
 
 ### Patch Changes
