@@ -80,8 +80,21 @@ function buildDescriptors(): ProviderDescriptor[] {
       vendorLabel: 'OpenAI',
       kind: 'conversation',
       supportsContinuation: true,
-      defaultModelId: 'gpt-5.4',
+      defaultModelId: 'gpt-5.6',
       modelOptions: [
+        {
+          id: 'gpt-5.6',
+          label: 'GPT-5.6 Sol',
+          defaultEffort: 'medium',
+          effortOptions: [
+            { id: 'none', label: 'None' },
+            { id: 'low', label: 'Low' },
+            { id: 'medium', label: 'Medium' },
+            { id: 'high', label: 'High' },
+            { id: 'xhigh', label: 'Very High' },
+            { id: 'max', label: 'Max' },
+          ],
+        },
         {
           id: 'gpt-5.5',
           label: 'GPT-5.5',
@@ -708,10 +721,10 @@ describe('AppSettingsService', () => {
       })
     })
 
-    it('defaults Codex guided review to GPT-5.5 with medium effort', async () => {
+    it('defaults Codex guided review to GPT-5.6 with medium effort', async () => {
       const resolved = await service.resolveGuidedReviewModel('codex')
       expect(resolved).toEqual({
-        modelId: 'gpt-5.5',
+        modelId: 'gpt-5.6',
         effortId: 'medium',
       })
     })

@@ -169,6 +169,41 @@ describe('provider-descriptor', () => {
     ])
   })
 
+  it('exposes current GPT-5.6 Codex fallback models first', () => {
+    const descriptor = buildFallbackCodexDescriptor()
+
+    expect(descriptor.defaultModelId).toBe('gpt-5.6')
+    expect(descriptor.fastModelId).toBe('gpt-5.6-luna')
+    expect(descriptor.modelOptions.map((option) => option.id)).toEqual([
+      'gpt-5.6',
+      'gpt-5.6-terra',
+      'gpt-5.6-luna',
+      'gpt-5.5',
+      'gpt-5.4',
+      'gpt-5.4-mini',
+      'gpt-5.4-nano',
+      'gpt-5.3-codex',
+      'gpt-5.3-codex-spark',
+      'gpt-5.2',
+    ])
+    expect(
+      descriptor.modelOptions.find((option) => option.id === 'gpt-5.6'),
+    ).toMatchObject({
+      label: 'GPT-5.6 Sol',
+      contextWindowTokens: 1_050_000,
+      defaultEffort: 'medium',
+      effortOptions: [
+        { id: 'none', label: 'None' },
+        { id: 'low', label: 'Low' },
+        { id: 'medium', label: 'Medium' },
+        { id: 'high', label: 'High' },
+        { id: 'xhigh', label: 'Very High' },
+        { id: 'max', label: 'Max' },
+      ],
+      inputModalities: ['text', 'image'],
+    })
+  })
+
   it('exposes Antigravity official models as model + effort options', () => {
     const descriptor = buildFallbackAntigravityDescriptor()
 
