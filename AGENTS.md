@@ -184,3 +184,9 @@ ambiguity.
 ### Migration behavior for agents
 
 When adding new code, prefer landing the final intended architecture directly instead of creating throwaway legacy folders. If a shortcut would make the next phase harder, do not take it.
+
+## Repo-local skills
+
+When updating built-in provider model catalogs for Codex/OpenAI or Claude
+Code/Anthropic, use the repo-local skill at
+`.codex/skills/update-convergence-provider-models/SKILL.md`.

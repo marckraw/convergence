@@ -198,3 +198,9 @@ Linear does not currently have the canonical triage label set configured for thi
 ### Domain docs
 
 This repo uses a single-context documentation layout rooted at `docs/specs/`, `docs/architecture/`, and `docs/adr/`. See `docs/agents/domain.md`.
+
+### Provider model catalogs
+
+When updating built-in provider model catalogs for Codex/OpenAI or Claude
+Code/Anthropic, use the repo-local skill at
+`.codex/skills/update-convergence-provider-models/SKILL.md`.

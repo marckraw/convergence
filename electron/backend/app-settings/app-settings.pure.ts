@@ -556,7 +556,7 @@ export function preferredGuidedReviewModelId(
 ): string | null {
   const preferredByProvider: Record<string, string> = {
     'claude-code': 'opus',
-    codex: 'gpt-5.5',
+    codex: 'gpt-5.6',
   }
   const preferred = preferredByProvider[descriptor.id]
   if (
