@@ -385,6 +385,7 @@ class RemoteSessionRun {
       deny: (providerApprovalId) =>
         this.enqueueCommand({ kind: 'deny', providerApprovalId }),
       stop: () => this.stop(),
+      dispose: () => this.dispose(),
     }
   }
 
@@ -580,6 +581,13 @@ class RemoteSessionRun {
     if (this.started) {
       void this.postCommand({ kind: 'stop' })
     }
+    this.abort.abort()
+  }
+
+  private dispose(): void {
+    if (this.stopped) return
+    this.stopped = true
+    this.pendingCommands.length = 0
     this.abort.abort()
   }
 

@@ -57,6 +57,35 @@ describe('ProviderDebugService', () => {
     expect(service.list('s1')).toEqual([])
   })
 
+  it('evicts the least recently recorded session ring at the session cap', () => {
+    const service = new ProviderDebugService({
+      broadcast: vi.fn(),
+      maxSessionRings: 2,
+    })
+    service.record(makeEntry('s1', 1))
+    service.record(makeEntry('s2', 1))
+    service.record(makeEntry('s1', 2))
+    service.record(makeEntry('s3', 1))
+
+    expect(service.list('s1')).toHaveLength(2)
+    expect(service.list('s2')).toEqual([])
+    expect(service.list('s3')).toHaveLength(1)
+  })
+
+  it('does not retain oversized provider payloads', () => {
+    const service = new ProviderDebugService({ broadcast: vi.fn() })
+    service.record(
+      makeEntry('s1', 1, {
+        payload: { output: 'x'.repeat(64 * 1024) },
+      }),
+    )
+
+    expect(service.list('s1')[0]?.payload).toEqual({
+      truncated: true,
+      bytes: expect.any(Number),
+    })
+  })
+
   it('writes JSONL only when logging is enabled', () => {
     const writes: Array<{ sessionId: string; line: string }> = []
     const jsonl = {

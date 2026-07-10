@@ -672,6 +672,7 @@ async function startApp(): Promise<void> {
   app.on('before-quit', () => {
     localModelTunnelService.stopMonitoring()
     localModelTunnelService.stopAllManaged()
+    sessionService.disposeAll()
     terminalService.disposeAll()
     projectScriptsRunner.disposeAll()
   })

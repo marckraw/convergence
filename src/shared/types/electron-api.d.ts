@@ -1832,7 +1832,10 @@ interface ElectronAPI {
     subscribe: (callback: (event: TaskProgressEvent) => void) => () => void
   }
   providerDebug: {
-    subscribe: (callback: (entry: ProviderDebugEntry) => void) => () => void
+    subscribe: (
+      sessionId: string,
+      callback: (entry: ProviderDebugEntry) => void,
+    ) => () => void
     list: (sessionId: string) => Promise<ProviderDebugEntry[]>
     openFolder: () => Promise<boolean>
   }

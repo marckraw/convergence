@@ -45,6 +45,7 @@ function noopHandle(): SessionHandle {
     approve: () => {},
     deny: () => {},
     stop: () => {},
+    dispose: () => {},
   }
 }
 

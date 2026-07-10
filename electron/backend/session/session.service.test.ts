@@ -1326,6 +1326,93 @@ describe('SessionService', () => {
     )
   })
 
+  it('releases a completed continuation handle and resumes from its token', async () => {
+    const db = getDatabase()
+    const registry = new ProviderRegistry()
+    const disposeFirst = vi.fn()
+    let firstDeltaListener: ((delta: SessionDelta) => void) | null = null
+
+    const makeHandle = (isFirst: boolean): SessionHandle =>
+      ({
+        onDelta: (listener: (delta: SessionDelta) => void) => {
+          if (isFirst) firstDeltaListener = listener
+        },
+        onStatusChange: () => {},
+        onAttentionChange: () => {},
+        onContextWindowChange: () => {},
+        onActivityChange: () => {},
+        onContinuationToken: () => {},
+        sendMessage: vi.fn(),
+        approve: () => {},
+        deny: () => {},
+        stop: () => {},
+        dispose: isFirst ? disposeFirst : vi.fn(),
+      }) as SessionHandle
+
+    const start = vi
+      .fn()
+      .mockImplementationOnce(() => makeHandle(true))
+      .mockImplementationOnce(() => makeHandle(false))
+    registry.register({
+      id: 'continuable',
+      name: 'Continuable Provider',
+      supportsContinuation: true,
+      describe: async () => ({
+        id: 'continuable',
+        name: 'Continuable Provider',
+        vendorLabel: 'Test',
+        kind: 'conversation',
+        supportsContinuation: true,
+        defaultModelId: 'continuable-model',
+        modelOptions: [
+          {
+            id: 'continuable-model',
+            label: 'Continuable Model',
+            defaultEffort: null,
+            effortOptions: [],
+          },
+        ],
+        attachments: TEST_ATTACHMENT_CAPABILITY,
+        midRunInput: NO_MID_RUN_INPUT_CAPABILITY,
+      }),
+      start,
+    })
+
+    const continuationService = new SessionService(
+      db,
+      new LocalExecutionHost(registry),
+    )
+    const session = continuationService.create({
+      projectId,
+      workspaceId: null,
+      providerId: 'continuable',
+      model: 'continuable-model',
+      effort: null,
+      name: 'continuation release test',
+    })
+
+    await continuationService.start(session.id, { text: 'Start here' })
+    if (!firstDeltaListener) {
+      throw new Error('delta listener was not registered')
+    }
+    const emitDelta = firstDeltaListener as (delta: SessionDelta) => void
+    emitDelta({
+      kind: 'session.patch',
+      patch: { continuationToken: 'resume-token-1' },
+    })
+    emitDelta({ kind: 'session.patch', patch: { status: 'completed' } })
+
+    expect(disposeFirst).toHaveBeenCalledTimes(1)
+
+    await continuationService.sendMessage(session.id, { text: 'Follow up' })
+
+    expect(start).toHaveBeenCalledTimes(2)
+    expect(start.mock.calls[1]?.[0]).toMatchObject({
+      initialMessage: 'Follow up',
+      continuationToken: 'resume-token-1',
+    })
+  })
+
   it('queues app-managed follow-up input while a provider is running', async () => {
     const db = getDatabase()
     const registry = new ProviderRegistry()

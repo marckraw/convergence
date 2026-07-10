@@ -848,11 +848,28 @@ export class AntigravityProvider implements Provider {
       }
     }
 
-    setTimeout(() => {
+    const startTimer = setTimeout(() => {
       void startTurn(config.initialMessage, config.initialAttachments, {
         skillSelections: config.initialSkillSelections,
       })
     }, 10)
+
+    function disposeRuntime(): void {
+      if (stopped) return
+      stopped = true
+      clearTimeout(startTimer)
+      if (activeChild) {
+        const pending = activeChild
+        pending.kill('SIGTERM')
+        const killTimer = setTimeout(() => {
+          if (pending.exitCode === null && pending.signalCode === null) {
+            pending.kill('SIGKILL')
+          }
+        }, 3000)
+        killTimer.unref?.()
+        activeChild = null
+      }
+    }
 
     const handle: SessionHandle = {
       onDelta: (cb) => {
@@ -901,18 +918,10 @@ export class AntigravityProvider implements Provider {
           level: 'warning',
         })
       },
+      dispose: disposeRuntime,
       stop: () => {
-        stopped = true
-        if (activeChild) {
-          activeChild.kill('SIGTERM')
-          const pending = activeChild
-          setTimeout(() => {
-            if (pending && !pending.killed) {
-              pending.kill('SIGKILL')
-            }
-          }, 3000)
-          activeChild = null
-        }
+        if (stopped) return
+        disposeRuntime()
         setActivity(null)
         setStatus('failed')
         setAttention('failed')

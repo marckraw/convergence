@@ -557,7 +557,7 @@ export class SessionService {
     const handle = this.activeHandles.get(id)
     if (handle) {
       handle.stop()
-      this.activeHandles.delete(id)
+      this.releaseHandle(id)
     }
     this.sessionRepository.delete(id)
     if (this.attachments) {
@@ -891,9 +891,13 @@ export class SessionService {
       throw new Error(`Session not active: ${id}`)
     }
     handle.stop()
-    this.activeHandles.delete(id)
-    this.liveness.clear(id)
-    this.onSessionTerminated?.(id)
+    this.releaseHandle(id)
+  }
+
+  disposeAll(): void {
+    for (const sessionId of Array.from(this.activeHandles.keys())) {
+      this.releaseHandle(sessionId)
+    }
   }
 
   private applyDelta(sessionId: string, delta: SessionDelta): void {
@@ -1423,20 +1427,36 @@ export class SessionService {
     status: SessionStatus | undefined,
   ): void {
     if (status === 'failed') {
-      this.activeHandles.delete(sessionId)
-      this.liveness.clear(sessionId)
-      this.onSessionTerminated?.(sessionId)
+      this.releaseHandle(sessionId)
       this.closeActiveTurn(sessionId, 'errored')
     } else if (status === 'completed') {
       const summary = this.getSummaryById(sessionId)
-      if (summary && !this.continuationSupportedFor(summary)) {
-        this.activeHandles.delete(sessionId)
-        this.onSessionTerminated?.(sessionId)
+      if (
+        summary &&
+        (!this.continuationSupportedFor(summary) || summary.continuationToken)
+      ) {
+        this.releaseHandle(sessionId)
       }
       this.liveness.clear(sessionId)
       this.closeActiveTurn(sessionId, 'completed')
       this.dispatchNextQueuedInput(sessionId)
     }
+  }
+
+  private releaseHandle(sessionId: string): void {
+    const handle = this.activeHandles.get(sessionId)
+    if (!handle) return
+
+    this.activeHandles.delete(sessionId)
+    try {
+      handle.dispose?.()
+    } catch {
+      // Resource cleanup is best-effort; the handle is no longer addressable.
+    }
+    this.liveness.clear(sessionId)
+    this.pendingUserAttachmentIds.delete(sessionId)
+    this.pendingUserSkillSelections.delete(sessionId)
+    this.onSessionTerminated?.(sessionId)
   }
 
   private dispatchNextQueuedInput(sessionId: string): void {
@@ -1627,9 +1647,7 @@ export class SessionService {
       updatedAt: timestamp,
     })
     this.queuedInputs.failPendingForSession(session.id, reason)
-    this.activeHandles.delete(session.id)
-    this.liveness.clear(session.id)
-    this.onSessionTerminated?.(session.id)
+    this.releaseHandle(session.id)
     this.closeActiveTurn(session.id, 'errored')
 
     if (notify) {

@@ -87,6 +87,7 @@ function readWorkingTreeFile(
 
 export class TurnCaptureService {
   private baselines = new Map<string, TurnBaseline>()
+  private inFlightStarts = new Map<string, Promise<void>>()
   private pendingEnds = new Map<
     string,
     { input: EndTurnInput; timer: NodeJS.Timeout }
@@ -107,7 +108,18 @@ export class TurnCaptureService {
     this.emitDelta = fn
   }
 
-  async startTurn(input: StartTurnInput): Promise<void> {
+  startTurn(input: StartTurnInput): Promise<void> {
+    const operation = this.captureTurnStart(input)
+    const tracked = operation.finally(() => {
+      if (this.inFlightStarts.get(input.turnId) === tracked) {
+        this.inFlightStarts.delete(input.turnId)
+      }
+    })
+    this.inFlightStarts.set(input.turnId, tracked)
+    return tracked
+  }
+
+  private async captureTurnStart(input: StartTurnInput): Promise<void> {
     const nextSequence = this.getNextSequence(input.sessionId)
     const startedAt = new Date().toISOString()
 
@@ -136,7 +148,7 @@ export class TurnCaptureService {
       ? await this.captureBaselineFiles(input.workingDirectory)
       : new Map<string, BaselineFile>()
 
-    this.baselines.set(input.sessionId, {
+    this.baselines.set(input.turnId, {
       turnId: input.turnId,
       sessionId: input.sessionId,
       workingDirectory: input.workingDirectory,
@@ -265,7 +277,16 @@ export class TurnCaptureService {
   }
 
   private async finalizeEnd(input: EndTurnInput): Promise<void> {
-    const baseline = this.baselines.get(input.sessionId)
+    const start = this.inFlightStarts.get(input.turnId)
+    if (start) {
+      try {
+        await start
+      } catch {
+        // The turn row can still be finalized when baseline capture failed.
+      }
+    }
+
+    const baseline = this.baselines.get(input.turnId)
     const endedAt = new Date().toISOString()
     const summary = deriveTurnSummary(input.summarySource)
 
@@ -303,7 +324,7 @@ export class TurnCaptureService {
     })
     tx(changes)
 
-    this.baselines.delete(input.sessionId)
+    this.baselines.delete(input.turnId)
 
     if (changes.length > 0) {
       this.emitDelta(input.sessionId, {

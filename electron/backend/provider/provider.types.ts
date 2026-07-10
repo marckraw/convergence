@@ -376,6 +376,8 @@ export interface SessionHandle {
   approve: (providerApprovalId?: string) => void
   deny: (providerApprovalId?: string) => void
   stop: () => void
+  /** Releases local resources without changing the persisted session state. */
+  dispose?: () => void
 }
 
 export interface Provider {

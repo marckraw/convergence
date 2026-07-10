@@ -1120,11 +1120,11 @@ export class ClaudeCodeProvider implements Provider {
       }
 
       child.on('exit', (code) => {
+        if (stopped) return
         recordDebug('lifecycle', {
           direction: 'in',
           note: `child exited with code ${code}`,
         })
-        if (stopped) return
         flushThinkingBuffer()
         flushAssistantBuffer()
         refreshContextWindowFromLogs()
@@ -1154,11 +1154,11 @@ export class ClaudeCodeProvider implements Provider {
       })
 
       child.on('error', (err) => {
+        if (stopped) return
         recordDebug('lifecycle', {
           direction: 'in',
           note: `child error: ${err.message}`,
         })
-        if (stopped) return
         sessionEmitter.addNote({
           text: `Process error: ${err.message}`,
           level: 'error',
@@ -1172,11 +1172,41 @@ export class ClaudeCodeProvider implements Provider {
     }
 
     // Spawn after a tick so listeners can be attached
-    setTimeout(() => {
+    const startTimer = setTimeout(() => {
       void startTurn(config.initialMessage, config.initialAttachments, {
         skillSelections: config.initialSkillSelections,
       })
     }, 10)
+
+    function disposeRuntime(): void {
+      if (stopped) return
+      stopped = true
+      clearTimeout(startTimer)
+      disposeTelemetrySink()
+      if (clearSkillInvocationTargetTimer) {
+        clearTimeout(clearSkillInvocationTargetTimer)
+        clearSkillInvocationTargetTimer = null
+      }
+      latestSkillInvocationTarget = null
+      currentTurn = null
+      pendingRecoveryTurn = null
+      pendingDeferredToolUse = null
+      assistantTextBuffer = ''
+      thinkingBuffer = ''
+      stderrBuffer = ''
+
+      if (child) {
+        const pending = child
+        pending.kill('SIGTERM')
+        const killTimer = setTimeout(() => {
+          if (pending.exitCode === null && pending.signalCode === null) {
+            pending.kill('SIGKILL')
+          }
+        }, 3000)
+        killTimer.unref?.()
+        child = null
+      }
+    }
 
     const handle: SessionHandle = {
       onDelta: (cb) => {
@@ -1243,22 +1273,10 @@ export class ClaudeCodeProvider implements Provider {
       deny: () => {
         // Claude Code permission handling is controlled at process startup.
       },
+      dispose: disposeRuntime,
       stop: () => {
-        stopped = true
-        disposeTelemetrySink()
-        if (clearSkillInvocationTargetTimer) {
-          clearTimeout(clearSkillInvocationTargetTimer)
-          clearSkillInvocationTargetTimer = null
-        }
-        if (child) {
-          child.kill('SIGTERM')
-          setTimeout(() => {
-            if (child && !child.killed) {
-              child.kill('SIGKILL')
-            }
-          }, 3000)
-          child = null
-        }
+        if (stopped) return
+        disposeRuntime()
         setStatus('failed')
         setAttention('failed')
       },
