@@ -1,5 +1,11 @@
 # convergence
 
+## 0.44.3
+
+### Patch Changes
+
+- 0ebaf80: Update the Codex provider fallback catalog to GPT-5.6 models and add a repo-local skill for future provider model refreshes.
+
 ## 0.44.2
 
 ### Patch Changes
