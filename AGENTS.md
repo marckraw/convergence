@@ -1,5 +1,9 @@
 # Agent Instructions
 
+Cross-repository question or stuck? Read the canonical
+[agent ecosystem FAQ](https://github.com/ef-global/agents-daemon/blob/master/docs/ecosystem-faq.md)
+first.
+
 ## Post-task requirement
 
 Agents must use the Node version from `.nvmrc` for all repo commands that
