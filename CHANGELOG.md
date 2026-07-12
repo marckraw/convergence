@@ -1,5 +1,11 @@
 # convergence
 
+## 0.45.0
+
+### Minor Changes
+
+- c63e54e: Render custom app deep links in agent messages and open them with their registered desktop applications.
+
 ## 0.44.4
 
 ### Patch Changes
