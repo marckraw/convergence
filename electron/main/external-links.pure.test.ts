@@ -41,11 +41,15 @@ describe('shouldOpenInSystemBrowser', () => {
     ).toBe(false)
   })
 
-  it('returns true for allowed non-http external protocols', () => {
+  it.each([
+    ['mailto:test@example.com'],
+    ['message://%3Cexample-message-id%3E'],
+    ['todoist://task?id=123'],
+  ])('returns true for external app link %s', (targetUrl) => {
     expect(
       shouldOpenInSystemBrowser({
         currentUrl: 'file:///Applications/Convergence.app/index.html',
-        targetUrl: 'mailto:test@example.com',
+        targetUrl,
       }),
     ).toBe(true)
   })
@@ -88,11 +92,15 @@ describe('getExternalNavigationAction', () => {
     ).toBe('allow')
   })
 
-  it('opens mailto links externally', () => {
+  it.each([
+    ['mailto:test@example.com'],
+    ['message://%3Cexample-message-id%3E'],
+    ['todoist://task?id=123'],
+  ])('opens external app link %s externally', (targetUrl) => {
     expect(
       getExternalNavigationAction({
         currentUrl: 'http://127.0.0.1:5173/',
-        targetUrl: 'mailto:test@example.com',
+        targetUrl,
       }),
     ).toBe('open-external')
   })
@@ -100,7 +108,9 @@ describe('getExternalNavigationAction', () => {
   it.each([
     ['file:///tmp/evil.html'],
     ['javascript:alert(1)'],
-    ['convergence-test://payload'],
+    ['data:text/html,<h1>unsafe</h1>'],
+    ['blob:https://example.com/id'],
+    ['devtools://devtools/bundled/inspector.html'],
     ['not a url'],
   ])('denies unsafe or malformed target %s', (targetUrl) => {
     expect(

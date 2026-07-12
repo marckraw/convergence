@@ -56,6 +56,28 @@ describe('MarkdownPresentational', () => {
     expect(container.querySelector('del')?.textContent).toBe('obsolete')
   })
 
+  it.each([
+    ['Open in Mail', 'message://%3Cexample-message-id%3E'],
+    ['Open in Todoist', 'todoist://task?id=123'],
+  ])('renders custom app deep link %s as clickable', (label, href) => {
+    render(<MarkdownPresentational content={`[${label}](${href})`} />)
+
+    expect(screen.getByRole('link', { name: label })).toHaveAttribute(
+      'href',
+      href,
+    )
+  })
+
+  it.each([
+    ['javascript:alert(1)'],
+    ['data:text/html,unsafe'],
+    ['file:///tmp/unsafe'],
+  ])('does not make unsafe URL %s clickable', (href) => {
+    render(<MarkdownPresentational content={`[Unsafe](${href})`} />)
+
+    expect(screen.queryByRole('link', { name: 'Unsafe' })).toBeNull()
+  })
+
   it('does not crash when given a mermaid fenced block', () => {
     const content = ['```mermaid', 'flowchart TD', '  A --> B', '```'].join(
       '\n',

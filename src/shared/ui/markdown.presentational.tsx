@@ -1,5 +1,5 @@
 import { memo, useMemo, type FC, type Ref } from 'react'
-import { Streamdown, type Components } from 'streamdown'
+import { defaultRehypePlugins, Streamdown, type Components } from 'streamdown'
 import { mermaid as mermaidPlugin } from '@streamdown/mermaid'
 import { code as codePlugin } from '@streamdown/code'
 import { cn } from '@/shared/lib/cn.pure'
@@ -7,6 +7,89 @@ import { cn } from '@/shared/lib/cn.pure'
 const SHIKI_THEME: ['github-light', 'github-dark'] = [
   'github-light',
   'github-dark',
+]
+
+const DEEP_LINK_PLACEHOLDER_PREFIX =
+  'https://convergence.invalid/__external-deep-link__?url='
+const UNSAFE_DEEP_LINK_PROTOCOLS = new Set([
+  'about:',
+  'blob:',
+  'data:',
+  'devtools:',
+  'file:',
+  'javascript:',
+  'view-source:',
+])
+
+interface MarkdownNode {
+  type?: string
+  tagName?: string
+  properties?: Record<string, unknown>
+  children?: MarkdownNode[]
+}
+
+function visitMarkdownLinks(
+  node: MarkdownNode,
+  transform: (href: string) => string,
+): void {
+  if (node.type === 'element' && node.tagName === 'a' && node.properties) {
+    const href = node.properties.href
+    if (typeof href === 'string') {
+      node.properties.href = transform(href)
+    }
+  }
+
+  node.children?.forEach((child) => visitMarkdownLinks(child, transform))
+}
+
+function protectCustomDeepLink(href: string): string {
+  let url: URL
+
+  try {
+    url = new URL(href)
+  } catch {
+    return href
+  }
+
+  if (
+    url.protocol === 'http:' ||
+    url.protocol === 'https:' ||
+    UNSAFE_DEEP_LINK_PROTOCOLS.has(url.protocol)
+  ) {
+    return href
+  }
+
+  return `${DEEP_LINK_PLACEHOLDER_PREFIX}${encodeURIComponent(href)}`
+}
+
+function restoreCustomDeepLink(href: string): string {
+  if (!href.startsWith(DEEP_LINK_PLACEHOLDER_PREFIX)) {
+    return href
+  }
+
+  try {
+    return decodeURIComponent(href.slice(DEEP_LINK_PLACEHOLDER_PREFIX.length))
+  } catch {
+    return href
+  }
+}
+
+function rehypeProtectCustomDeepLinks() {
+  return (tree: MarkdownNode) => visitMarkdownLinks(tree, protectCustomDeepLink)
+}
+
+function rehypeRestoreCustomDeepLinks() {
+  return (tree: MarkdownNode) => visitMarkdownLinks(tree, restoreCustomDeepLink)
+}
+
+// Streamdown sanitizes links before rendering. Temporarily wrapping safe custom
+// schemes lets them pass through that sanitizer while retaining its defaults.
+const REHYPE_PLUGINS_WITH_DEEP_LINKS = [
+  defaultRehypePlugins.raw,
+  rehypeProtectCustomDeepLinks,
+  defaultRehypePlugins.sanitize,
+  defaultRehypePlugins.harden,
+  rehypeRestoreCustomDeepLinks,
 ]
 
 export type MermaidTheme = 'default' | 'dark'
@@ -195,6 +278,7 @@ export const MarkdownPresentational: FC<MarkdownProps> = memo(
         <Streamdown
           components={components}
           plugins={STREAMDOWN_PLUGINS}
+          rehypePlugins={REHYPE_PLUGINS_WITH_DEEP_LINKS}
           mermaid={mermaidOptions}
           shikiTheme={SHIKI_THEME}
           isAnimating={isStreaming}
