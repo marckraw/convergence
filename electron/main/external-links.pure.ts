@@ -9,8 +9,18 @@ function isHttpUrl(value: URL): boolean {
   return value.protocol === 'http:' || value.protocol === 'https:'
 }
 
+const UNSAFE_EXTERNAL_PROTOCOLS = new Set([
+  'about:',
+  'blob:',
+  'data:',
+  'devtools:',
+  'file:',
+  'javascript:',
+  'view-source:',
+])
+
 function isAllowedExternalProtocol(value: URL): boolean {
-  return isHttpUrl(value) || value.protocol === 'mailto:'
+  return !UNSAFE_EXTERNAL_PROTOCOLS.has(value.protocol)
 }
 
 export function getExternalNavigationAction({
