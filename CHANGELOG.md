@@ -1,5 +1,11 @@
 # convergence
 
+## 0.45.1
+
+### Patch Changes
+
+- aac61f1: Add manual context compaction from the session context popover for Codex, Pi, Claude Code, and Cursor, with capability guards for unsupported and remote sessions.
+
 ## 0.45.0
 
 ### Minor Changes
