@@ -1,11 +1,20 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import type { SessionContextWindow } from '@/entities/session'
+import type {
+  ProviderInfo,
+  SessionContextWindow,
+  SessionSummary,
+} from '@/entities/session'
 import { Button } from '@/shared/ui/button'
 import { Popover, PopoverContent, PopoverTrigger } from '@/shared/ui/popover'
 import { cn } from '@/shared/lib/cn.pure'
+import { resolveContextCompactionAction } from './context-compaction.pure'
 
 interface ContextWindowDotProps {
   contextWindow: SessionContextWindow | null | undefined
+  session: SessionSummary
+  provider: ProviderInfo | null | undefined
+  onCompact: () => Promise<void>
+  hasPendingQueuedInput?: boolean
 }
 
 type ContextWindowTone = 'green' | 'amber' | 'red' | 'muted'
@@ -52,10 +61,24 @@ function getAriaLabel(
   return `Context window ${contextWindow.remainingPercentage}% remaining`
 }
 
-export function ContextWindowDot({ contextWindow }: ContextWindowDotProps) {
+export function ContextWindowDot({
+  contextWindow,
+  session,
+  provider,
+  onCompact,
+  hasPendingQueuedInput = false,
+}: ContextWindowDotProps) {
   const [open, setOpen] = useState(false)
+  const [isCompacting, setIsCompacting] = useState(false)
+  const [actionMessage, setActionMessage] = useState<{
+    tone: 'success' | 'error'
+    text: string
+  } | null>(null)
   const closeTimerRef = useRef<number | null>(null)
   const tone = getContextTone(contextWindow)
+  const compaction = resolveContextCompactionAction(session, provider, {
+    hasPendingQueuedInput,
+  })
 
   const clearCloseTimer = useCallback(() => {
     if (closeTimerRef.current === null) return
@@ -77,6 +100,24 @@ export function ContextWindowDot({ contextWindow }: ContextWindowDotProps) {
   }, [clearCloseTimer])
 
   useEffect(() => clearCloseTimer, [clearCloseTimer])
+  useEffect(() => setActionMessage(null), [session.id])
+
+  const compact = useCallback(async () => {
+    clearCloseTimer()
+    setActionMessage(null)
+    setIsCompacting(true)
+    try {
+      await onCompact()
+      setActionMessage({ tone: 'success', text: 'Context compacted.' })
+    } catch (error) {
+      setActionMessage({
+        tone: 'error',
+        text: error instanceof Error ? error.message : 'Compaction failed.',
+      })
+    } finally {
+      setIsCompacting(false)
+    }
+  }, [clearCloseTimer, onCompact])
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -169,6 +210,49 @@ export function ContextWindowDot({ contextWindow }: ContextWindowDotProps) {
             </div>
           </div>
         )}
+
+        {compaction.visible ? (
+          <div className="space-y-2 border-t border-border/70 pt-3">
+            <Button
+              type="button"
+              size="sm"
+              className="w-full"
+              disabled={!compaction.enabled || isCompacting}
+              onClick={(event) => {
+                event.preventDefault()
+                event.stopPropagation()
+                void compact()
+              }}
+            >
+              {isCompacting || session.activity === 'compacting'
+                ? 'Compacting context…'
+                : 'Compact context'}
+            </Button>
+            {!compaction.enabled && compaction.reason ? (
+              <p className="text-[11px] leading-relaxed text-muted-foreground">
+                {compaction.reason}
+              </p>
+            ) : provider?.contextManagement?.compact.availability ===
+              'runtime-check' ? (
+              <p className="text-[11px] leading-relaxed text-muted-foreground">
+                Availability is verified against the installed provider when you
+                run it.
+              </p>
+            ) : null}
+            {actionMessage ? (
+              <p
+                className={cn(
+                  'text-[11px] leading-relaxed',
+                  actionMessage.tone === 'success'
+                    ? 'text-emerald-400'
+                    : 'text-destructive',
+                )}
+              >
+                {actionMessage.text}
+              </p>
+            ) : null}
+          </div>
+        ) : null}
       </PopoverContent>
     </Popover>
   )

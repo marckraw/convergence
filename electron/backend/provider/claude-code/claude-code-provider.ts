@@ -15,6 +15,8 @@ import type {
   ActivitySignal,
   OneShotInput,
   OneShotResult,
+  ProviderContextManagementInput,
+  ProviderContextManagementResult,
 } from '../provider.types'
 import { parseJsonLines } from '../line-parser'
 import { buildClaudeDescriptor } from '../provider-descriptor.pure'
@@ -225,6 +227,123 @@ export class ClaudeCodeProvider implements Provider {
 
   async oneShot(input: OneShotInput): Promise<OneShotResult> {
     return runClaudeOneShot(this.binaryPath, input, this.taskProgress)
+  }
+
+  async manageContext(
+    config: SessionStartConfig,
+    input: ProviderContextManagementInput,
+  ): Promise<ProviderContextManagementResult> {
+    if (input.kind !== 'compact') {
+      throw new Error(`Unsupported Claude context action: ${input.kind}`)
+    }
+    const continuationToken = config.continuationToken?.trim()
+    if (!continuationToken) {
+      throw new Error('Claude context compaction requires a continuation token')
+    }
+
+    const args = [
+      '-p',
+      '--input-format',
+      'stream-json',
+      '--output-format',
+      'stream-json',
+      '--verbose',
+      '--include-partial-messages',
+      '--permission-mode',
+      resolveClaudeCodePermissionMode(config.permissionConfig),
+      '--resume',
+      continuationToken,
+    ]
+    if (config.model?.trim()) args.push('--model', config.model.trim())
+    if (config.effort?.trim()) args.push('--effort', config.effort.trim())
+
+    const child = spawn(this.binaryPath, args, {
+      cwd: config.workingDirectory,
+      stdio: ['pipe', 'pipe', 'pipe'],
+      env: { ...process.env },
+    })
+    if (!child.stdin || !child.stdout) {
+      child.kill('SIGTERM')
+      throw new Error('Claude Code did not expose stdio pipes')
+    }
+
+    let sawCompaction = false
+    let resultError: string | null = null
+    let parseError: Error | null = null
+    let previousActivity: ActivitySignal = null
+    parseJsonLines(
+      child.stdout,
+      (event) => {
+        const activity = deriveClaudeActivity(event, previousActivity)
+        if (activity === 'compacting') sawCompaction = true
+        if (activity !== 'keep') previousActivity = activity
+        if (
+          event &&
+          typeof event === 'object' &&
+          (event as { type?: unknown }).type === 'result' &&
+          (event as { is_error?: unknown }).is_error === true
+        ) {
+          const result = (event as { result?: unknown }).result
+          resultError =
+            typeof result === 'string' ? result : 'Claude compaction failed'
+        }
+      },
+      (error) => {
+        parseError = error
+      },
+    )
+
+    const completion = new Promise<void>((resolve, reject) => {
+      child.once('error', reject)
+      child.once('exit', (code) => {
+        if (parseError) return reject(parseError)
+        if (code !== 0) {
+          return reject(
+            new Error(`Claude context compaction exited with code ${code}`),
+          )
+        }
+        if (resultError) return reject(new Error(resultError))
+        if (!sawCompaction) {
+          return reject(
+            new Error(
+              'The installed Claude Code CLI did not report compaction support in headless mode',
+            ),
+          )
+        }
+        resolve()
+      })
+    })
+
+    const command = input.instructions?.trim()
+      ? `/compact ${input.instructions.trim()}`
+      : '/compact'
+    child.stdin.write(
+      buildClaudeUserMessageLine({ text: command, parts: [] }) + '\n',
+    )
+    child.stdin.end()
+
+    let timeout: ReturnType<typeof setTimeout> | null = null
+    try {
+      await Promise.race([
+        completion,
+        new Promise<never>((_resolve, reject) => {
+          timeout = setTimeout(() => {
+            child.kill('SIGTERM')
+            reject(new Error('Claude context compaction timed out'))
+          }, 120_000)
+          timeout.unref?.()
+        }),
+      ])
+      return {
+        kind: 'compact',
+        contextWindow: createUnavailableContextWindow(
+          'Context compacted. Claude will report an updated estimate after the next turn.',
+        ),
+      }
+    } finally {
+      if (timeout) clearTimeout(timeout)
+      if (!child.killed) child.kill('SIGTERM')
+    }
   }
 
   start(config: SessionStartConfig): SessionHandle {

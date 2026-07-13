@@ -838,6 +838,13 @@ export function registerIpcHandlers(
     },
   )
 
+  ipcMain.handle(
+    'session:compactContext',
+    async (_event, id: string, instructions?: string) => {
+      await sessionApp.compactSessionContext(id, instructions)
+    },
+  )
+
   ipcMain.handle('session:getQueuedInputs', (_event, sessionId: string) =>
     sessionApp.listQueuedInputs(sessionId),
   )

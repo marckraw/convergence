@@ -35,6 +35,8 @@ export type {
   ProviderEffortOption,
   ProviderModelOption,
   ProviderAttachmentCapability,
+  ProviderContextManagementCapability,
+  ProviderContextManagementAvailability,
   SessionPermissionConfig,
   SessionPermissionPreset,
   CodexApprovalPolicy,

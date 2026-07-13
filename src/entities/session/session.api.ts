@@ -85,6 +85,9 @@ export const sessionApi = {
       interactionResponse,
     }),
 
+  compactContext: (id: string, instructions?: string): Promise<void> =>
+    window.electronAPI.session.compactContext(id, instructions),
+
   approve: (id: string, providerApprovalId?: string): Promise<void> =>
     window.electronAPI.session.approve(id, providerApprovalId),
 

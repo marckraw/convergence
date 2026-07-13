@@ -3,6 +3,8 @@ import type {
   OneShotInput,
   OneShotResult,
   Provider,
+  ProviderContextManagementInput,
+  ProviderContextManagementResult,
   ProviderDescriptor,
   SessionHandle,
   SessionStartConfig,
@@ -51,6 +53,20 @@ export class LocalExecutionHost implements ProviderExecutionHost {
       )
     }
     return provider.oneShot(input)
+  }
+
+  async manageContext(
+    providerId: string,
+    config: SessionStartConfig,
+    input: ProviderContextManagementInput,
+  ): Promise<ProviderContextManagementResult> {
+    const provider = this.requireProvider(providerId)
+    if (!provider.manageContext) {
+      throw new Error(
+        `Provider ${providerId} does not support context management`,
+      )
+    }
+    return provider.manageContext(config, input)
   }
 
   private requireProvider(providerId: string): Provider {

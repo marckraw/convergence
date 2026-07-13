@@ -158,6 +158,7 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
     (s) => s.createAndStartGlobalSession,
   )
   const sendMessageToSession = useSessionStore((s) => s.sendMessageToSession)
+  const compactSessionContext = useSessionStore((s) => s.compactSessionContext)
   const cancelQueuedInput = useSessionStore((s) => s.cancelQueuedInput)
   const sessions = useSessionStore((s) => s.sessions)
   const globalChatSessions = useSessionStore((s) => s.globalChatSessions)
@@ -1067,7 +1068,16 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
         }
         contextWindowDot={
           activeSession ? (
-            <ContextWindowDot contextWindow={activeSession.contextWindow} />
+            <ContextWindowDot
+              contextWindow={activeSession.contextWindow}
+              session={activeSession}
+              provider={activeProvider}
+              hasPendingQueuedInput={queuedInputs.some(
+                (item) =>
+                  item.state === 'queued' || item.state === 'dispatching',
+              )}
+              onCompact={() => compactSessionContext(activeSession.id)}
+            />
           ) : null
         }
         deliveryMode={deliveryMode}

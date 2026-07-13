@@ -1,6 +1,7 @@
 import type {
   MidRunInputMode,
   ProviderAttachmentCapability,
+  ProviderContextManagementCapability,
   ProviderDescriptor,
   ProviderEffortOption,
   ProviderMidRunInputCapability,
@@ -82,6 +83,57 @@ const ANTIGRAVITY_SKILLS_CAPABILITY: ProviderSkillsCapability = {
   invocation: 'native-command',
   activationConfirmation: 'none',
 }
+
+export const CLAUDE_CODE_CONTEXT_MANAGEMENT_CAPABILITY: ProviderContextManagementCapability =
+  {
+    compact: {
+      availability: 'runtime-check',
+      method: 'slash-command',
+      supportsInstructions: true,
+      notes:
+        'Convergence verifies that the installed headless Claude Code CLI emits compaction lifecycle events.',
+    },
+  }
+
+export const CODEX_CONTEXT_MANAGEMENT_CAPABILITY: ProviderContextManagementCapability =
+  {
+    compact: {
+      availability: 'available',
+      method: 'native-rpc',
+      supportsInstructions: false,
+    },
+  }
+
+export const PI_CONTEXT_MANAGEMENT_CAPABILITY: ProviderContextManagementCapability =
+  {
+    compact: {
+      availability: 'available',
+      method: 'native-rpc',
+      supportsInstructions: true,
+    },
+  }
+
+export const CURSOR_CONTEXT_MANAGEMENT_CAPABILITY: ProviderContextManagementCapability =
+  {
+    compact: {
+      availability: 'runtime-check',
+      method: 'slash-command',
+      supportsInstructions: false,
+      notes:
+        'Convergence checks the current ACP session command catalog for /compress before invoking it.',
+    },
+  }
+
+export const ANTIGRAVITY_CONTEXT_MANAGEMENT_CAPABILITY: ProviderContextManagementCapability =
+  {
+    compact: {
+      availability: 'unavailable',
+      method: 'unsupported',
+      supportsInstructions: false,
+      notes:
+        'Antigravity print mode does not expose manual summarizing compaction. Start a new Convergence session for a fresh context.',
+    },
+  }
 
 const UNSUPPORTED_SKILLS_CAPABILITY: ProviderSkillsCapability = {
   catalog: 'unsupported',
@@ -332,6 +384,7 @@ export function buildClaudeDescriptor(): ProviderDescriptor {
     attachments: CLAUDE_CODE_ATTACHMENT_CAPABILITY,
     midRunInput: CLAUDE_CODE_MID_RUN_INPUT_CAPABILITY,
     skills: CLAUDE_CODE_SKILLS_CAPABILITY,
+    contextManagement: CLAUDE_CODE_CONTEXT_MANAGEMENT_CAPABILITY,
   }
 }
 
@@ -481,6 +534,7 @@ export function buildFallbackCodexDescriptor(): ProviderDescriptor {
     attachments: CODEX_ATTACHMENT_CAPABILITY,
     midRunInput: CODEX_MID_RUN_INPUT_CAPABILITY,
     skills: CODEX_SKILLS_CAPABILITY,
+    contextManagement: CODEX_CONTEXT_MANAGEMENT_CAPABILITY,
   }
 }
 
@@ -510,6 +564,7 @@ export function buildFallbackPiDescriptor(): ProviderDescriptor {
     attachments: PI_ATTACHMENT_CAPABILITY,
     midRunInput: PI_MID_RUN_INPUT_CAPABILITY,
     skills: PI_SKILLS_CAPABILITY,
+    contextManagement: PI_CONTEXT_MANAGEMENT_CAPABILITY,
   }
 }
 
@@ -538,6 +593,7 @@ export function buildFallbackCursorDescriptor(): ProviderDescriptor {
     configOptions: [],
     telemetry: CURSOR_ACP_TELEMETRY_CAPABILITY,
     settings: CURSOR_ACP_SETTINGS_INFO,
+    contextManagement: CURSOR_CONTEXT_MANAGEMENT_CAPABILITY,
   }
 }
 
@@ -554,6 +610,7 @@ export function buildFallbackAntigravityDescriptor(): ProviderDescriptor {
     attachments: ANTIGRAVITY_ATTACHMENT_CAPABILITY,
     midRunInput: ANTIGRAVITY_MID_RUN_INPUT_CAPABILITY,
     skills: ANTIGRAVITY_SKILLS_CAPABILITY,
+    contextManagement: ANTIGRAVITY_CONTEXT_MANAGEMENT_CAPABILITY,
   }
 }
 

@@ -62,7 +62,7 @@ function waitFor(
 
 function createMockCursorAcp(
   child: MockChildProcess,
-  options: { holdPrompt?: boolean } = {},
+  options: { holdPrompt?: boolean; availableCommands?: string[] } = {},
 ) {
   const requests: Array<{ method: string; params?: Record<string, unknown> }> =
     []
@@ -143,6 +143,21 @@ function createMockCursorAcp(
                 },
               },
             })
+            if (options.availableCommands) {
+              send({
+                jsonrpc: '2.0',
+                method: 'session/update',
+                params: {
+                  sessionId: message.params?.sessionId,
+                  update: {
+                    sessionUpdate: 'available_commands_update',
+                    availableCommands: options.availableCommands.map(
+                      (name) => ({ name, description: `${name} command` }),
+                    ),
+                  },
+                },
+              })
+            }
             respond(message.id, null)
             break
           case 'session/prompt':
@@ -319,6 +334,41 @@ afterEach(() => {
 })
 
 describe('CursorProvider', () => {
+  it('compresses a loaded session only when ACP advertises /compress', async () => {
+    const child = new MockChildProcess()
+    spawnMock.mockReturnValue(child)
+    const server = createMockCursorAcp(child, {
+      availableCommands: ['/compress'],
+    })
+    const provider = new CursorProvider('agent', noopDebugSink, undefined, {
+      requestTimeoutMs: 1_000,
+    })
+
+    const result = await provider.manageContext?.(
+      {
+        sessionId: 'session-1',
+        workingDirectory: '/repo',
+        initialMessage: '',
+        model: null,
+        effort: null,
+        continuationToken: 'cursor-session-1',
+      },
+      { kind: 'compact' },
+    )
+
+    expect(server.requests.map((request) => request.method)).toEqual([
+      'initialize',
+      'authenticate',
+      'session/load',
+      'session/prompt',
+    ])
+    expect(server.requests.at(-1)?.params).toMatchObject({
+      sessionId: 'cursor-session-1',
+      prompt: [{ type: 'text', text: '/compress' }],
+    })
+    expect(result?.contextWindow.availability).toBe('unavailable')
+  })
+
   it('runs one-shot prompts through Cursor ACP and terminates the process', async () => {
     const child = new MockChildProcess()
     spawnMock.mockReturnValue(child)

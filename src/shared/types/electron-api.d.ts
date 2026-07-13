@@ -755,6 +755,20 @@ interface ProviderTelemetryCapability {
   }
 }
 
+type ProviderContextManagementAvailability =
+  | 'available'
+  | 'runtime-check'
+  | 'unavailable'
+
+interface ProviderContextManagementCapability {
+  compact: {
+    availability: ProviderContextManagementAvailability
+    method: 'native-rpc' | 'slash-command' | 'unsupported'
+    supportsInstructions: boolean
+    notes?: string
+  }
+}
+
 interface ProviderSettingsHelpItem {
   label: string
   value: string
@@ -1083,6 +1097,7 @@ interface ProviderInfo {
   skills?: ProviderSkillsCapability
   configOptions?: ProviderConfigOption[]
   telemetry?: ProviderTelemetryCapability
+  contextManagement?: ProviderContextManagementCapability
   settings?: ProviderSettingsInfo
 }
 
@@ -1661,6 +1676,7 @@ interface ElectronAPI {
       id: string,
       input: SendSessionMessageInput | string,
     ) => Promise<void>
+    compactContext: (id: string, instructions?: string) => Promise<void>
     approve: (id: string, providerApprovalId?: string) => Promise<void>
     deny: (id: string, providerApprovalId?: string) => Promise<void>
     stop: (id: string) => Promise<void>

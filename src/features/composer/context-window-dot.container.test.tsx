@@ -1,6 +1,28 @@
-import { fireEvent, render, screen } from '@testing-library/react'
-import { describe, expect, it } from 'vitest'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { describe, expect, it, vi } from 'vitest'
+import type { ProviderInfo, SessionSummary } from '@/entities/session'
 import { ContextWindowDot } from './context-window-dot.container'
+
+const session = {
+  id: 'session-1',
+  status: 'completed',
+  attention: 'finished',
+  activity: null,
+  continuationToken: 'thread-1',
+  executionHost: 'local',
+} as SessionSummary
+
+const provider = {
+  id: 'codex',
+  name: 'Codex',
+  contextManagement: {
+    compact: {
+      availability: 'available',
+      method: 'native-rpc',
+      supportsInstructions: false,
+    },
+  },
+} as ProviderInfo
 
 describe('ContextWindowDot', () => {
   it('renders a textless context control and shows details on click', async () => {
@@ -14,6 +36,9 @@ describe('ContextWindowDot', () => {
           usedPercentage: 20,
           remainingPercentage: 80,
         }}
+        session={session}
+        provider={provider}
+        onCompact={vi.fn(async () => {})}
       />,
     )
 
@@ -31,7 +56,14 @@ describe('ContextWindowDot', () => {
   })
 
   it('shows unavailable details when context usage is missing', async () => {
-    render(<ContextWindowDot contextWindow={null} />)
+    render(
+      <ContextWindowDot
+        contextWindow={null}
+        session={session}
+        provider={provider}
+        onCompact={vi.fn(async () => {})}
+      />,
+    )
 
     fireEvent.click(
       screen.getByRole('button', { name: 'Context window unavailable' }),
@@ -42,5 +74,27 @@ describe('ContextWindowDot', () => {
         'Context usage has not been reported for this session yet.',
       ),
     ).toBeInTheDocument()
+  })
+
+  it('invokes manual compaction from the context popover', async () => {
+    const onCompact = vi.fn(async () => {})
+    render(
+      <ContextWindowDot
+        contextWindow={null}
+        session={session}
+        provider={provider}
+        onCompact={onCompact}
+      />,
+    )
+
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Context window unavailable' }),
+    )
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Compact context' }),
+    )
+
+    await waitFor(() => expect(onCompact).toHaveBeenCalledOnce())
+    expect(await screen.findByText('Context compacted.')).toBeInTheDocument()
   })
 })

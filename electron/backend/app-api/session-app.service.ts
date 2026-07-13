@@ -29,6 +29,7 @@ export type SessionAppBackend = Pick<
   | 'delete'
   | 'start'
   | 'sendMessage'
+  | 'compactContext'
   | 'getQueuedInputs'
   | 'cancelQueuedInput'
   | 'approve'
@@ -102,6 +103,13 @@ export class SessionAppService {
     input: SessionAppCommandInput,
   ): Promise<void> {
     await this.sessions.sendMessage(sessionId, input)
+  }
+
+  async compactSessionContext(
+    sessionId: string,
+    instructions?: string,
+  ): Promise<void> {
+    await this.sessions.compactContext(sessionId, instructions)
   }
 
   listQueuedInputs(sessionId: string): SessionQueuedInput[] {

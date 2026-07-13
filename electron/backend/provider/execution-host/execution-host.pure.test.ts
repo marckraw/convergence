@@ -15,6 +15,7 @@ describe('capabilitiesForProvider', () => {
       name: 'Provider One',
       supportsContinuation: true,
       supportsOneShot: true,
+      supportsContextManagement: false,
     })
   })
 
@@ -30,6 +31,7 @@ describe('capabilitiesForProvider', () => {
       name: 'Provider Two',
       supportsContinuation: false,
       supportsOneShot: false,
+      supportsContextManagement: false,
     })
   })
 })

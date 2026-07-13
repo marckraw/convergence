@@ -14,6 +14,7 @@ import type {
   SessionStatus,
   AttentionState,
   ActivitySignal,
+  ProviderContextManagementResult,
 } from '../provider/provider.types'
 import {
   getMidRunInputCapabilityForProviderId,
@@ -719,6 +720,115 @@ export class SessionService {
     }
 
     throw new Error(`Session not active: ${id}`)
+  }
+
+  async compactContext(
+    id: string,
+    instructions?: string,
+  ): Promise<ProviderContextManagementResult> {
+    const session = this.getById(id)
+    if (!session) throw new Error(`Session not found: ${id}`)
+    if (session.providerId === 'shell') {
+      throw new Error('Shell sessions do not have a provider context')
+    }
+    if (session.executionHost === 'remote') {
+      throw new Error(
+        'Manual context management is not supported on remote execution hosts yet',
+      )
+    }
+    if (session.status !== 'completed' || this.activeHandles.has(id)) {
+      throw new Error('Context can only be compacted while the session is idle')
+    }
+    if (
+      session.attention === 'needs-input' ||
+      session.attention === 'needs-approval'
+    ) {
+      throw new Error(
+        'Resolve the pending provider request before compacting context',
+      )
+    }
+    if (
+      this.getQueuedInputs(id).some(
+        (item) => item.state === 'queued' || item.state === 'dispatching',
+      )
+    ) {
+      throw new Error('Send or cancel queued input before compacting context')
+    }
+
+    const continuationToken = this.getContinuationToken(id)
+    if (!continuationToken) {
+      throw new Error('Context cannot be compacted without continuation state')
+    }
+    const execution = this.resolveExecution(session)
+    const capability = execution.host.capabilitiesFor(execution.providerId)
+    if (
+      !capability?.supportsContextManagement ||
+      !execution.host.manageContext
+    ) {
+      throw new Error(
+        `${session.providerId} does not support manual context compaction`,
+      )
+    }
+
+    const timestamp = new Date().toISOString()
+    this.applySessionPatch(id, { activity: 'compacting', updatedAt: timestamp })
+    this.notifySessionChange(id)
+
+    try {
+      const result = await execution.host.manageContext(
+        execution.providerId,
+        {
+          sessionId: session.id,
+          workingDirectory: session.workingDirectory,
+          initialMessage: '',
+          previousAssistantTexts: this.getPreviousAssistantMessageTexts(id),
+          model: session.model,
+          effort: session.effort,
+          serviceTier: session.serviceTier ?? null,
+          continuationToken,
+          permissionConfig: session.permissionConfig,
+        },
+        {
+          kind: 'compact',
+          ...(instructions?.trim()
+            ? { instructions: instructions.trim() }
+            : {}),
+        },
+      )
+      const completedAt = new Date().toISOString()
+      this.applySessionPatch(id, {
+        activity: null,
+        contextWindow: result.contextWindow,
+        updatedAt: completedAt,
+      })
+      const note = this.addConversationItem(id, {
+        id: randomUUID(),
+        turnId: null,
+        kind: 'note',
+        state: 'complete',
+        level: 'info',
+        text: 'Provider context compacted manually.',
+        createdAt: completedAt,
+        updatedAt: completedAt,
+        providerMeta: {
+          providerId: session.providerId,
+          providerItemId: null,
+          providerEventType: 'manual-context-compaction',
+        },
+      })
+      this.notifySessionChange(
+        id,
+        note ? { sessionId: id, op: 'add', item: note } : undefined,
+      )
+      return result
+    } catch (error) {
+      this.applySessionPatch(id, {
+        activity: null,
+        updatedAt: new Date().toISOString(),
+      })
+      this.notifySessionChange(id)
+      throw error
+    }
   }
 
   private dispatchToActiveHandle(input: {

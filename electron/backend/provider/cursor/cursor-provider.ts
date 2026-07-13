@@ -9,7 +9,10 @@ import { markSkillSelectionsStatus } from '../../skills/skill-invocation.pure'
 import { CursorSkillsService } from '../../skills/cursor-skills.service'
 import type { SkillSelection } from '../../skills/skills.types'
 import type { ProviderSkillCatalog } from '../../skills/skills.types'
-import { summarizeCursorCommandCatalogUpdate } from '../../skills/cursor-skills.mapper.pure'
+import {
+  mapCursorCommandCatalog,
+  summarizeCursorCommandCatalogUpdate,
+} from '../../skills/cursor-skills.mapper.pure'
 import type {
   InteractionResponse,
   SessionDelta,
@@ -29,6 +32,8 @@ import type {
   OneShotResult,
   Provider,
   ProviderDescriptor,
+  ProviderContextManagementInput,
+  ProviderContextManagementResult,
   SessionContextWindow,
   SessionHandle,
   SessionStartConfig,
@@ -37,8 +42,10 @@ import type {
 import {
   buildCursorAcpInitializeParams,
   buildCursorAcpSessionParams,
+  CursorAcpProcessClient,
   readCursorAcpSessionId,
 } from './cursor-acp-client'
+import { createUnavailableContextWindow } from '../context-window.pure'
 import {
   buildCursorUnavailableContextWindow,
   CURSOR_ACP_LOGIN_METHOD_ID,
@@ -379,6 +386,62 @@ export class CursorProvider implements Provider {
 
   oneShot(input: OneShotInput): Promise<OneShotResult> {
     return runCursorAcpOneShot(this.binaryPath, input, this.debugSink)
+  }
+
+  async manageContext(
+    config: SessionStartConfig,
+    input: ProviderContextManagementInput,
+  ): Promise<ProviderContextManagementResult> {
+    if (input.kind !== 'compact') {
+      throw new Error(`Unsupported Cursor context action: ${input.kind}`)
+    }
+    const cursorSessionId = config.continuationToken?.trim()
+    if (!cursorSessionId) {
+      throw new Error('Cursor context compaction requires a continuation token')
+    }
+
+    const client = new CursorAcpProcessClient(this.binaryPath, {
+      requestTimeoutMs: this.options.requestTimeoutMs,
+      operationTimeoutMs: 120_000,
+    })
+    await client.withAuthenticatedConnection(
+      config.workingDirectory,
+      async (rpc) => {
+        const notifications: Array<{ method: string; params: unknown }> = []
+        rpc.onNotification((method, params) => {
+          notifications.push({ method, params })
+        })
+        const session = await rpc.request('session/load', {
+          sessionId: cursorSessionId,
+          ...buildCursorAcpSessionParams(config.workingDirectory),
+        })
+        await new Promise((resolve) => setTimeout(resolve, 500))
+        const catalog = mapCursorCommandCatalog({ session, notifications })
+        const compress = catalog.skills.find(
+          (entry) => entry.name.toLowerCase() === 'compress' && entry.enabled,
+        )
+        if (!compress) {
+          throw new Error(
+            'The current Cursor ACP session does not advertise the /compress command',
+          )
+        }
+        await rpc.request(
+          'session/prompt',
+          {
+            sessionId: cursorSessionId,
+            prompt: buildCursorAcpPrompt({ text: '/compress' }),
+          },
+          { timeoutMs: 0 },
+        )
+      },
+    )
+
+    return {
+      kind: 'compact',
+      contextWindow: createUnavailableContextWindow(
+        'Context compressed. Cursor ACP does not expose refreshed token usage.',
+      ),
+    }
   }
 
   start(config: SessionStartConfig): SessionHandle {

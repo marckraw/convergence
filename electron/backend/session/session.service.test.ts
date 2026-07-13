@@ -1326,6 +1326,108 @@ describe('SessionService', () => {
     )
   })
 
+  it('compacts an idle resumable session without adding a user message', async () => {
+    const compact = vi.fn(async () => ({
+      kind: 'compact' as const,
+      contextWindow: {
+        availability: 'unavailable' as const,
+        source: 'provider' as const,
+        reason: 'Usage refreshes next turn.',
+      },
+    }))
+    let emitDelta: ((delta: SessionDelta) => void) | null = null
+    const provider: Provider = {
+      id: 'compactable',
+      name: 'Compactable',
+      supportsContinuation: true,
+      describe: async () => ({
+        id: 'compactable',
+        name: 'Compactable',
+        vendorLabel: 'Test',
+        kind: 'conversation',
+        supportsContinuation: true,
+        defaultModelId: 'model',
+        modelOptions: [
+          {
+            id: 'model',
+            label: 'Model',
+            defaultEffort: null,
+            effortOptions: [],
+          },
+        ],
+        attachments: TEST_ATTACHMENT_CAPABILITY,
+        midRunInput: NO_MID_RUN_INPUT_CAPABILITY,
+      }),
+      manageContext: compact,
+      start: () => ({
+        onDelta: (listener) => {
+          emitDelta = listener
+        },
+        onStatusChange: () => {},
+        onAttentionChange: () => {},
+        onContinuationToken: () => {},
+        onContextWindowChange: () => {},
+        onActivityChange: () => {},
+        sendMessage: () => {},
+        approve: () => {},
+        deny: () => {},
+        stop: () => {},
+      }),
+    }
+    const compactRegistry = new ProviderRegistry()
+    compactRegistry.register(provider)
+    const compactService = new SessionService(
+      db,
+      new LocalExecutionHost(compactRegistry),
+    )
+    const created = compactService.create({
+      projectId,
+      workspaceId: null,
+      providerId: 'compactable',
+      model: 'model',
+      effort: null,
+      name: 'Compact me',
+    })
+    await compactService.start(created.id, { text: 'Initial turn' })
+    if (!emitDelta) throw new Error('delta listener was not registered')
+    const pushDelta = emitDelta as (delta: SessionDelta) => void
+    pushDelta({
+      kind: 'session.patch',
+      patch: { continuationToken: 'provider-session-1' },
+    })
+    pushDelta({
+      kind: 'session.patch',
+      patch: { status: 'completed', attention: 'finished' },
+    })
+
+    await compactService.compactContext(created.id)
+
+    expect(compact).toHaveBeenCalledWith(
+      expect.objectContaining({
+        continuationToken: 'provider-session-1',
+        initialMessage: '',
+      }),
+      { kind: 'compact' },
+    )
+    expect(
+      compactService
+        .getConversation(created.id)
+        .filter((item) => item.kind === 'message' && item.actor === 'user'),
+    ).toHaveLength(0)
+    expect(compactService.getConversation(created.id)).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          kind: 'note',
+          text: 'Provider context compacted manually.',
+        }),
+      ]),
+    )
+    expect(compactService.getById(created.id)).toMatchObject({
+      activity: null,
+      contextWindow: { availability: 'unavailable' },
+    })
+  })
+
   it('releases a completed continuation handle and resumes from its token', async () => {
     const db = getDatabase()
     const registry = new ProviderRegistry()
