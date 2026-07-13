@@ -118,6 +118,7 @@ describe('capabilitiesForRemoteProvider', () => {
       name: 'Claude Code',
       supportsContinuation: true,
       supportsOneShot: false,
+      supportsContextManagement: false,
     })
   })
 })

@@ -190,6 +190,20 @@ function createMockCodexServer(
             }
           }
         } else if (
+          message.method === 'thread/compact/start' &&
+          typeof message.id === 'number'
+        ) {
+          respond(message.id, {})
+          enqueue(() => {
+            child.stdout.write(
+              JSON.stringify({
+                jsonrpc: '2.0',
+                method: 'thread/compacted',
+                params: { threadId: message.params?.threadId },
+              }) + '\n',
+            )
+          })
+        } else if (
           message.method === 'turn/steer' &&
           typeof message.id === 'number'
         ) {
@@ -221,6 +235,36 @@ function createMockCodexServer(
 describe('CodexProvider', () => {
   afterEach(() => {
     spawnMock.mockReset()
+  })
+
+  it('compacts a resumed thread through the native app-server method', async () => {
+    const child = new MockChildProcess()
+    const server = createMockCodexServer(child)
+    spawnMock.mockReturnValue(child)
+    const provider = new CodexProvider('/usr/local/bin/codex')
+
+    const result = await provider.manageContext?.(
+      {
+        sessionId: 'session-compact',
+        workingDirectory: process.cwd(),
+        initialMessage: '',
+        model: 'gpt-5.4',
+        effort: 'medium',
+        continuationToken: 'thread-compact',
+      },
+      { kind: 'compact' },
+    )
+
+    expect(server.requests.map((request) => request.method)).toEqual(
+      expect.arrayContaining([
+        'initialize',
+        'thread/resume',
+        'thread/compact/start',
+      ]),
+    )
+    expect(result?.contextWindow).toMatchObject({
+      availability: 'unavailable',
+    })
   })
 
   it('starts yolo threads without approvals or sandboxing', async () => {

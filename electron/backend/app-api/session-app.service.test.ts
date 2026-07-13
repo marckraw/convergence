@@ -45,6 +45,7 @@ function createSessionBackend(
     delete: vi.fn(),
     start: vi.fn(),
     sendMessage: vi.fn(),
+    compactContext: vi.fn(),
     getQueuedInputs: vi.fn(() => []),
     cancelQueuedInput: vi.fn(),
     approve: vi.fn(),

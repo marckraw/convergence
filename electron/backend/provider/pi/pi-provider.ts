@@ -12,12 +12,15 @@ import type {
   OneShotResult,
   Provider,
   ProviderDescriptor,
+  ProviderContextManagementInput,
+  ProviderContextManagementResult,
   MidRunInputMode,
   SessionContextWindow,
   SessionHandle,
   SessionStartConfig,
   SessionStatus,
 } from '../provider.types'
+import { createUnavailableContextWindow } from '../context-window.pure'
 import { ProviderSessionEmitter } from '../provider-session.emitter'
 import {
   buildFallbackPiDescriptor,
@@ -274,6 +277,78 @@ export class PiProvider implements Provider {
       this.taskProgress,
       this.resolveEnvironment,
     )
+  }
+
+  async manageContext(
+    config: SessionStartConfig,
+    input: ProviderContextManagementInput,
+  ): Promise<ProviderContextManagementResult> {
+    if (input.kind !== 'compact') {
+      throw new Error(`Unsupported Pi context action: ${input.kind}`)
+    }
+    const sessionFile = config.continuationToken?.trim()
+    if (!sessionFile) {
+      throw new Error('Pi context compaction requires a continuation token')
+    }
+
+    const childEnv = await this.resolveEnvironment(process.env)
+    const child = spawn(
+      this.binaryPath,
+      ['--mode', 'rpc', '--session', sessionFile],
+      {
+        cwd: config.workingDirectory,
+        stdio: ['pipe', 'pipe', 'pipe'],
+        env: childEnv,
+      },
+    )
+    if (!child.stdin || !child.stdout) {
+      child.kill('SIGTERM')
+      throw new Error('Pi RPC did not expose stdio pipes')
+    }
+    const rpc = new PiRpcClient(child.stdin, child.stdout)
+    let timeout: ReturnType<typeof setTimeout> | null = null
+    const processFailure = new Promise<never>((_resolve, reject) => {
+      child.once('error', reject)
+      child.once('exit', (code, signal) => {
+        reject(
+          new Error(
+            `Pi RPC exited before compaction completed (${code ?? signal ?? 'unknown'})`,
+          ),
+        )
+      })
+    })
+
+    try {
+      const response = await Promise.race([
+        rpc.request({
+          type: 'compact',
+          ...(input.instructions?.trim()
+            ? { customInstructions: input.instructions.trim() }
+            : {}),
+        }),
+        new Promise<never>((_resolve, reject) => {
+          timeout = setTimeout(
+            () => reject(new Error('Pi context compaction timed out')),
+            120_000,
+          )
+          timeout.unref?.()
+        }),
+        processFailure,
+      ])
+      if (!response.success) {
+        throw new Error(response.error || 'Pi context compaction failed')
+      }
+      return {
+        kind: 'compact',
+        contextWindow: createUnavailableContextWindow(
+          'Context compacted. Pi will report refreshed usage after the next turn.',
+        ),
+      }
+    } finally {
+      if (timeout) clearTimeout(timeout)
+      rpc.destroy()
+      child.kill('SIGTERM')
+    }
   }
 
   describe(): Promise<ProviderDescriptor> {

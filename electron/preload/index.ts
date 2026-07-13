@@ -276,6 +276,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
         id,
         typeof input === 'string' ? { text: input } : input,
       ),
+    compactContext: (id: string, instructions?: string) =>
+      ipcRenderer.invoke('session:compactContext', id, instructions),
     approve: (id: string, providerApprovalId?: string) =>
       ipcRenderer.invoke('session:approve', id, providerApprovalId),
     deny: (id: string, providerApprovalId?: string) =>

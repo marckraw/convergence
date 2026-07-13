@@ -96,6 +96,7 @@ interface SessionActions {
     deliveryMode?: MidRunInputMode,
     interactionResponse?: InteractionResponse,
   ) => Promise<void>
+  compactSessionContext: (id: string, instructions?: string) => Promise<void>
   stopSession: (id: string) => Promise<void>
   archiveSession: (id: string) => Promise<void>
   unarchiveSession: (id: string) => Promise<void>
@@ -625,6 +626,17 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
       set({
         error: err instanceof Error ? err.message : 'Failed to send message',
       })
+    }
+  },
+
+  compactSessionContext: async (id: string, instructions?: string) => {
+    set({ error: null })
+    try {
+      await sessionApi.compactContext(id, instructions)
+    } catch (err) {
+      const error = err instanceof Error ? err : new Error(String(err))
+      set({ error: error.message })
+      throw error
     }
   },
 

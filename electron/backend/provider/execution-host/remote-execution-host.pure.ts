@@ -70,6 +70,7 @@ export function capabilitiesForRemoteProvider(
     name: info.name,
     supportsContinuation: info.supportsContinuation,
     supportsOneShot: false,
+    supportsContextManagement: false,
   }
 }
 

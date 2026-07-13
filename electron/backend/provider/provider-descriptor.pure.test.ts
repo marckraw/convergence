@@ -54,6 +54,22 @@ describe('provider-descriptor', () => {
       invocation: 'native-command',
       activationConfirmation: 'none',
     })
+    expect(
+      buildFallbackCodexDescriptor().contextManagement?.compact,
+    ).toMatchObject({ availability: 'available', method: 'native-rpc' })
+    expect(
+      buildFallbackPiDescriptor().contextManagement?.compact,
+    ).toMatchObject({ availability: 'available', method: 'native-rpc' })
+    expect(buildClaudeDescriptor().contextManagement?.compact).toMatchObject({
+      availability: 'runtime-check',
+      method: 'slash-command',
+    })
+    expect(
+      buildFallbackCursorDescriptor().contextManagement?.compact,
+    ).toMatchObject({ availability: 'runtime-check', method: 'slash-command' })
+    expect(
+      buildFallbackAntigravityDescriptor().contextManagement?.compact,
+    ).toMatchObject({ availability: 'unavailable', method: 'unsupported' })
   })
 
   it('exposes current Claude Code aliases and pinned Anthropic model IDs', () => {

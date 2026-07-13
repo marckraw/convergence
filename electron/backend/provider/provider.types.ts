@@ -303,6 +303,34 @@ export interface ProviderTelemetryCapability {
   }
 }
 
+export type ProviderContextManagementAvailability =
+  | 'available'
+  | 'runtime-check'
+  | 'unavailable'
+
+/**
+ * Strategy capability: describes how a provider can reduce live conversation
+ * context while keeping provider mechanics behind the adapter boundary.
+ */
+export interface ProviderContextManagementCapability {
+  compact: {
+    availability: ProviderContextManagementAvailability
+    method: 'native-rpc' | 'slash-command' | 'unsupported'
+    supportsInstructions: boolean
+    notes?: string
+  }
+}
+
+export interface ProviderContextManagementInput {
+  kind: 'compact'
+  instructions?: string
+}
+
+export interface ProviderContextManagementResult {
+  kind: 'compact'
+  contextWindow: SessionContextWindow
+}
+
 export interface ProviderSettingsHelpItem {
   label: string
   value: string
@@ -333,6 +361,7 @@ export interface ProviderDescriptor {
   skills?: ProviderSkillsCapability
   configOptions?: ProviderConfigOption[]
   telemetry?: ProviderTelemetryCapability
+  contextManagement?: ProviderContextManagementCapability
   settings?: ProviderSettingsInfo
 }
 
@@ -386,5 +415,9 @@ export interface Provider {
   supportsContinuation: boolean
   describe: () => Promise<ProviderDescriptor>
   start: (config: SessionStartConfig) => SessionHandle
+  manageContext?: (
+    config: SessionStartConfig,
+    input: ProviderContextManagementInput,
+  ) => Promise<ProviderContextManagementResult>
   oneShot?: (input: OneShotInput) => Promise<OneShotResult>
 }

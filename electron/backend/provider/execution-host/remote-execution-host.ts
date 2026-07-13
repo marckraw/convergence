@@ -11,6 +11,8 @@ import type {
   MidRunInputMode,
   OneShotInput,
   OneShotResult,
+  ProviderContextManagementInput,
+  ProviderContextManagementResult,
   ProviderDescriptor,
   SessionContextWindow,
   SessionHandle,
@@ -202,6 +204,19 @@ export class RemoteExecutionHost implements ProviderExecutionHost {
     }
     throw new Error(
       `Provider ${providerId} does not support one-shot execution`,
+    )
+  }
+
+  async manageContext(
+    providerId: string,
+    _config: SessionStartConfig,
+    _input: ProviderContextManagementInput,
+  ): Promise<ProviderContextManagementResult> {
+    if (!this.capabilitiesFor(providerId)) {
+      throw new Error(`Provider not found: ${providerId}`)
+    }
+    throw new Error(
+      'Manual context management is not supported on remote execution hosts yet',
     )
   }
 

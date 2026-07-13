@@ -20,6 +20,8 @@ import type {
   MidRunInputMode,
   OneShotInput,
   OneShotResult,
+  ProviderContextManagementInput,
+  ProviderContextManagementResult,
 } from '../provider.types'
 import { JsonRpcClient, type JsonRpcId } from './jsonrpc'
 import { ProviderSessionEmitter } from '../provider-session.emitter'
@@ -33,7 +35,10 @@ import type {
   ProviderModelOption,
   ReasoningEffort,
 } from '../provider.types'
-import { deriveCodexContextWindow } from '../context-window.pure'
+import {
+  createUnavailableContextWindow,
+  deriveCodexContextWindow,
+} from '../context-window.pure'
 import {
   buildCodexThreadRecoveryEntry,
   buildTurnFailureEntry,
@@ -808,6 +813,96 @@ export class CodexProvider implements Provider {
 
   async oneShot(input: OneShotInput): Promise<OneShotResult> {
     return runCodexOneShot(this.binaryPath, input, this.taskProgress)
+  }
+
+  async manageContext(
+    config: SessionStartConfig,
+    input: ProviderContextManagementInput,
+  ): Promise<ProviderContextManagementResult> {
+    if (input.kind !== 'compact') {
+      throw new Error(`Unsupported Codex context action: ${input.kind}`)
+    }
+    const threadId = config.continuationToken?.trim()
+    if (!threadId) {
+      throw new Error('Codex context compaction requires a continuation token')
+    }
+
+    const child = spawn(this.binaryPath, ['app-server'], {
+      cwd: config.workingDirectory,
+      stdio: ['pipe', 'pipe', 'pipe'],
+      env: { ...process.env },
+    })
+    if (!child.stdin || !child.stdout) {
+      child.kill('SIGTERM')
+      throw new Error('codex app-server did not expose stdio pipes')
+    }
+
+    const rpc = new JsonRpcClient(child.stdin, child.stdout)
+    const processFailure = new Promise<never>((_resolve, reject) => {
+      child.once('error', reject)
+      child.once('exit', (code, signal) => {
+        reject(
+          new Error(
+            `codex app-server exited before compaction completed (${code ?? signal ?? 'unknown'})`,
+          ),
+        )
+      })
+    })
+    let resolveCompacted: (() => void) | null = null
+    let timeout: ReturnType<typeof setTimeout> | null = null
+    const compacted = new Promise<void>((resolve, reject) => {
+      resolveCompacted = resolve
+      timeout = setTimeout(
+        () => reject(new Error('Codex context compaction timed out')),
+        120_000,
+      )
+      timeout.unref?.()
+    })
+    rpc.onNotification((method, params) => {
+      const item =
+        params && typeof params === 'object'
+          ? (params as { item?: { type?: unknown } }).item
+          : null
+      if (
+        method === 'thread/compacted' ||
+        (method === 'item/completed' && item?.type === 'contextCompaction')
+      ) {
+        resolveCompacted?.()
+      }
+    })
+    try {
+      await rpc.request('initialize', {
+        clientInfo: {
+          name: 'convergence',
+          title: 'Convergence',
+          version: '0.0.0',
+        },
+        capabilities: { experimentalApi: true },
+      })
+      rpc.notify('initialized')
+      const permissionConfig = resolveCodexPermissionConfig(
+        config.permissionConfig,
+      )
+      await rpc.request('thread/resume', {
+        threadId,
+        cwd: config.workingDirectory,
+        approvalPolicy: permissionConfig.approvalPolicy,
+        sandbox: permissionConfig.sandbox,
+        ...(config.serviceTier ? { serviceTier: config.serviceTier } : {}),
+      })
+      await rpc.request('thread/compact/start', { threadId })
+      await Promise.race([compacted, processFailure])
+      return {
+        kind: 'compact',
+        contextWindow: createUnavailableContextWindow(
+          'Context compacted. Codex will report refreshed usage after the next turn.',
+        ),
+      }
+    } finally {
+      if (timeout) clearTimeout(timeout)
+      rpc.destroy()
+      child.kill('SIGTERM')
+    }
   }
 
   start(config: SessionStartConfig): SessionHandle {

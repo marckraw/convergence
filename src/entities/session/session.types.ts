@@ -427,6 +427,20 @@ export interface ProviderTelemetryCapability {
   }
 }
 
+export type ProviderContextManagementAvailability =
+  | 'available'
+  | 'runtime-check'
+  | 'unavailable'
+
+export interface ProviderContextManagementCapability {
+  compact: {
+    availability: ProviderContextManagementAvailability
+    method: 'native-rpc' | 'slash-command' | 'unsupported'
+    supportsInstructions: boolean
+    notes?: string
+  }
+}
+
 export interface ProviderSettingsHelpItem {
   label: string
   value: string
@@ -457,6 +471,7 @@ export interface ProviderInfo {
   skills?: ProviderSkillsCapability
   configOptions?: ProviderConfigOption[]
   telemetry?: ProviderTelemetryCapability
+  contextManagement?: ProviderContextManagementCapability
   settings?: ProviderSettingsInfo
 }
 

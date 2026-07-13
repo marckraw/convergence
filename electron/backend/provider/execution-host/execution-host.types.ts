@@ -2,6 +2,8 @@ import type {
   OneShotInput,
   OneShotResult,
   ProviderDescriptor,
+  ProviderContextManagementInput,
+  ProviderContextManagementResult,
   SessionHandle,
   SessionStartConfig,
 } from '../provider.types'
@@ -16,6 +18,7 @@ export interface ExecutionHostProviderCapabilities {
   name: string
   supportsContinuation: boolean
   supportsOneShot: boolean
+  supportsContextManagement?: boolean
 }
 
 /**
@@ -71,6 +74,13 @@ export interface ProviderExecutionHost {
    * support.
    */
   oneShot(providerId: string, input: OneShotInput): Promise<OneShotResult>
+
+  /** Run a provider-native context control without creating a chat turn. */
+  manageContext?(
+    providerId: string,
+    config: SessionStartConfig,
+    input: ProviderContextManagementInput,
+  ): Promise<ProviderContextManagementResult>
 
   /**
    * Reattach to a run that is already executing on this host, resuming the
