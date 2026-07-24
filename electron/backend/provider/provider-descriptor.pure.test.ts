@@ -84,6 +84,7 @@ describe('provider-descriptor', () => {
       'opus',
       'haiku',
       'claude-fable-5',
+      'claude-opus-5',
       'claude-sonnet-5',
       'claude-opus-4-8',
       'claude-sonnet-4-6',
@@ -95,6 +96,20 @@ describe('provider-descriptor', () => {
       descriptor.modelOptions.find((option) => option.id === 'fable'),
     ).toMatchObject({
       label: 'Claude Fable 5',
+      contextWindowTokens: 1_000_000,
+      defaultEffort: 'high',
+      effortOptions: [
+        { id: 'low', label: 'Low' },
+        { id: 'medium', label: 'Medium' },
+        { id: 'high', label: 'High' },
+        { id: 'xhigh', label: 'Very High' },
+        { id: 'max', label: 'Max' },
+      ],
+    })
+    expect(
+      descriptor.modelOptions.find((option) => option.id === 'claude-opus-5'),
+    ).toMatchObject({
+      label: 'Claude Opus 5',
       contextWindowTokens: 1_000_000,
       defaultEffort: 'high',
       effortOptions: [

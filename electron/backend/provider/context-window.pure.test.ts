@@ -82,6 +82,31 @@ describe('context-window.pure', () => {
     })
   })
 
+  it('estimates the 1M context window for claude-opus-5', () => {
+    expect(
+      deriveClaudeEstimatedContextWindow(
+        {
+          message: {
+            model: 'claude-opus-5',
+            usage: {
+              input_tokens: 1200,
+              cache_creation_input_tokens: 300,
+              cache_read_input_tokens: 8500,
+            },
+          },
+        },
+        'opus',
+      ),
+    ).toEqual({
+      availability: 'available',
+      source: 'estimated',
+      usedTokens: 10000,
+      windowTokens: 1_000_000,
+      usedPercentage: 1,
+      remainingPercentage: 99,
+    })
+  })
+
   it('estimates current 1M-capable claude model context windows', () => {
     expect(
       deriveClaudeEstimatedContextWindow(
