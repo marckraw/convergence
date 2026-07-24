@@ -259,7 +259,7 @@ export function buildClaudeDescriptor(): ProviderDescriptor {
     vendorLabel: 'Anthropic',
     kind: 'conversation',
     supportsContinuation: true,
-    defaultModelId: 'sonnet',
+    defaultModelId: 'opus',
     fastModelId: 'haiku',
     modelOptions: [
       {
@@ -317,6 +317,19 @@ export function buildClaudeDescriptor(): ProviderDescriptor {
       {
         id: 'claude-fable-5',
         label: 'Claude Fable 5',
+        contextWindowTokens: 1_000_000,
+        defaultEffort: 'high',
+        effortOptions: buildEffortOptions([
+          'low',
+          'medium',
+          'high',
+          'xhigh',
+          'max',
+        ]),
+      },
+      {
+        id: 'claude-opus-5',
+        label: 'Claude Opus 5',
         contextWindowTokens: 1_000_000,
         defaultEffort: 'high',
         effortOptions: buildEffortOptions([

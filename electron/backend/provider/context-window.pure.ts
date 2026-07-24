@@ -52,6 +52,7 @@ function deriveClaudeModelContextWindow(
     normalized.includes('[1m]') ||
     normalized.includes('fable') ||
     normalized.includes('mythos') ||
+    normalized.includes('claude-opus-5') ||
     normalized.includes('claude-opus-4-8') ||
     normalized.includes('claude-opus-4-7') ||
     normalized.includes('claude-opus-4-6') ||
