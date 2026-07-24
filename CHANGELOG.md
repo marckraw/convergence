@@ -1,5 +1,11 @@
 # convergence
 
+## 0.45.2
+
+### Patch Changes
+
+- 0de5bd4: Add Claude Opus 5 (claude-opus-5) to the Claude Code provider model catalog with a 1M context window and low–max effort options, include it in context-window estimation, and make Opus the default Claude Code model.
+
 ## 0.45.1
 
 ### Patch Changes
