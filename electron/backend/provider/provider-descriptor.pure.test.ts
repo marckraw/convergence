@@ -75,7 +75,7 @@ describe('provider-descriptor', () => {
   it('exposes current Claude Code aliases and pinned Anthropic model IDs', () => {
     const descriptor = buildClaudeDescriptor()
 
-    expect(descriptor.defaultModelId).toBe('sonnet')
+    expect(descriptor.defaultModelId).toBe('opus')
     expect(descriptor.fastModelId).toBe('haiku')
     expect(descriptor.modelOptions.map((option) => option.id)).toEqual([
       'best',

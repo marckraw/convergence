@@ -259,7 +259,7 @@ export function buildClaudeDescriptor(): ProviderDescriptor {
     vendorLabel: 'Anthropic',
     kind: 'conversation',
     supportsContinuation: true,
-    defaultModelId: 'sonnet',
+    defaultModelId: 'opus',
     fastModelId: 'haiku',
     modelOptions: [
       {
