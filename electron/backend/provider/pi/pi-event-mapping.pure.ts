@@ -120,6 +120,63 @@ export function extractLastAssistantErrorMessage(
   return null
 }
 
+/**
+ * The verdict a pi run ended with. Pi's `agent_end` is not the end of the run:
+ * it can be followed by an auto retry, an overflow-compaction re-prompt, or a
+ * queued follow-up, and only `agent_settled` means "nothing pending". So the
+ * outcome is derived at `agent_end` and held until the run actually settles.
+ */
+export interface PiTurnOutcome {
+  status: 'completed' | 'failed'
+  attention: 'finished' | 'failed'
+  errorNote: string | null
+}
+
+export function buildPiTurnOutcome(event: unknown): PiTurnOutcome {
+  const stopReason = extractLastAssistantStopReason(event)
+
+  if (stopReason === 'aborted') {
+    return { status: 'failed', attention: 'failed', errorNote: null }
+  }
+
+  if (stopReason === 'error') {
+    const message = extractLastAssistantErrorMessage(event)
+    return {
+      status: 'failed',
+      attention: 'failed',
+      errorNote: message ? `Agent failed: ${message}` : 'Agent failed',
+    }
+  }
+
+  return { status: 'completed', attention: 'finished', errorNote: null }
+}
+
+export function buildPiExtensionErrorNote(event: unknown): string | null {
+  if (!event || typeof event !== 'object') return null
+  const record = event as {
+    extensionPath?: unknown
+    event?: unknown
+    error?: unknown
+  }
+
+  const extensionPath =
+    typeof record.extensionPath === 'string' && record.extensionPath.trim()
+      ? record.extensionPath
+      : 'unknown extension'
+  const hook =
+    typeof record.event === 'string' && record.event.trim()
+      ? record.event
+      : null
+  const error =
+    typeof record.error === 'string' && record.error.trim()
+      ? record.error
+      : 'unknown error'
+
+  return hook
+    ? `Pi extension ${extensionPath} failed on ${hook}: ${error}`
+    : `Pi extension ${extensionPath} failed: ${error}`
+}
+
 export function extractToolCallFromEnd(event: unknown): {
   id: string | null
   name: string

@@ -124,9 +124,11 @@ function createPiServer(
             child.stdout.write(
               JSON.stringify({
                 type: 'agent_end',
+                willRetry: false,
                 messages: [{ role: 'assistant', stopReason: 'stop' }],
               }) + '\n',
             )
+            child.stdout.write(JSON.stringify({ type: 'agent_settled' }) + '\n')
           }, 0)
         }
 
@@ -275,9 +277,11 @@ describe('PiProvider continuation recovery', () => {
             child.stdout.write(
               JSON.stringify({
                 type: 'agent_end',
+                willRetry: false,
                 messages: [{ role: 'assistant', stopReason: 'stop' }],
               }) + '\n',
             )
+            child.stdout.write(JSON.stringify({ type: 'agent_settled' }) + '\n')
           }
         }
         newlineIndex = buffer.indexOf('\n')
@@ -396,9 +400,11 @@ describe('PiProvider continuation recovery', () => {
             child.stdout.write(
               JSON.stringify({
                 type: 'agent_end',
+                willRetry: false,
                 messages: [{ role: 'assistant', stopReason: 'stop' }],
               }) + '\n',
             )
+            child.stdout.write(JSON.stringify({ type: 'agent_settled' }) + '\n')
           }
         }
         newlineIndex = buffer.indexOf('\n')
@@ -541,9 +547,11 @@ describe('PiProvider continuation recovery', () => {
             child.stdout.write(
               JSON.stringify({
                 type: 'agent_end',
+                willRetry: false,
                 messages: [{ role: 'assistant', stopReason: 'stop' }],
               }) + '\n',
             )
+            child.stdout.write(JSON.stringify({ type: 'agent_settled' }) + '\n')
           }
         }
         newlineIndex = buffer.indexOf('\n')
@@ -766,6 +774,7 @@ describe('PiProvider continuation recovery', () => {
               child.stdout.write(
                 JSON.stringify({
                   type: 'agent_end',
+                  willRetry: false,
                   messages: [
                     {
                       role: 'assistant',
@@ -774,6 +783,9 @@ describe('PiProvider continuation recovery', () => {
                     },
                   ],
                 }) + '\n',
+              )
+              child.stdout.write(
+                JSON.stringify({ type: 'agent_settled' }) + '\n',
               )
             }, 0)
           }

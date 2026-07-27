@@ -1,11 +1,88 @@
 import { describe, expect, it } from 'vitest'
 import {
+  buildPiExtensionErrorNote,
+  buildPiTurnOutcome,
   derivePiContextWindow,
   extractLastAssistantErrorMessage,
   extractLastAssistantStopReason,
   extractToolCallFromEnd,
   extractToolResultText,
 } from './pi-event-mapping.pure'
+
+describe('buildPiTurnOutcome', () => {
+  it('completes on a normal stop', () => {
+    expect(
+      buildPiTurnOutcome({
+        type: 'agent_end',
+        messages: [{ role: 'assistant', stopReason: 'stop' }],
+      }),
+    ).toEqual({ status: 'completed', attention: 'finished', errorNote: null })
+  })
+
+  it('fails without a note when the run was aborted', () => {
+    expect(
+      buildPiTurnOutcome({
+        type: 'agent_end',
+        messages: [{ role: 'assistant', stopReason: 'aborted' }],
+      }),
+    ).toEqual({ status: 'failed', attention: 'failed', errorNote: null })
+  })
+
+  it('fails with the provider error message when one is present', () => {
+    expect(
+      buildPiTurnOutcome({
+        type: 'agent_end',
+        messages: [
+          {
+            role: 'assistant',
+            stopReason: 'error',
+            errorMessage: '401 Missing Authentication header',
+          },
+        ],
+      }),
+    ).toEqual({
+      status: 'failed',
+      attention: 'failed',
+      errorNote: 'Agent failed: 401 Missing Authentication header',
+    })
+  })
+
+  it('falls back to a generic note when the error message is absent', () => {
+    expect(
+      buildPiTurnOutcome({
+        type: 'agent_end',
+        messages: [{ role: 'assistant', stopReason: 'error' }],
+      }).errorNote,
+    ).toBe('Agent failed')
+  })
+
+  it('completes when the event carries no usable stop reason', () => {
+    expect(buildPiTurnOutcome({ type: 'agent_end' }).status).toBe('completed')
+  })
+})
+
+describe('buildPiExtensionErrorNote', () => {
+  it('names the extension, the hook, and the error', () => {
+    expect(
+      buildPiExtensionErrorNote({
+        type: 'extension_error',
+        extensionPath: '/ext/linear.ts',
+        event: 'agent_end',
+        error: 'listener threw',
+      }),
+    ).toBe('Pi extension /ext/linear.ts failed on agent_end: listener threw')
+  })
+
+  it('degrades when the payload is partial', () => {
+    expect(buildPiExtensionErrorNote({ type: 'extension_error' })).toBe(
+      'Pi extension unknown extension failed: unknown error',
+    )
+  })
+
+  it('returns null for a non-object event', () => {
+    expect(buildPiExtensionErrorNote(null)).toBeNull()
+  })
+})
 
 describe('derivePiContextWindow', () => {
   it('returns available window from contextUsage with explicit percent', () => {
