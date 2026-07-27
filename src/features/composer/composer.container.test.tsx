@@ -756,7 +756,7 @@ describe('ComposerContainer', () => {
     expect(window.electronAPI.providerQuota.list).toHaveBeenCalledWith(false)
   })
 
-  it('shows Codex usage in the composer for Pi OpenAI model selections', async () => {
+  it('hides Codex usage in the composer for Pi sessions on OpenAI models', async () => {
     const baseProvider = useSessionStore.getState().providers[0]
     if (!baseProvider) throw new Error('missing base test provider')
 
@@ -805,12 +805,15 @@ describe('ComposerContainer', () => {
       />,
     )
 
+    // The composer has to settle before asserting an absence, so wait for the
+    // selected Pi model to render first.
+    expect(await screen.findByText('GPT-5.3 Codex')).toBeInTheDocument()
+
+    // Pi bills through its own credentials; Codex's quota is not this
+    // session's quota, whatever model id Pi is running.
     expect(
-      await screen.findByRole('button', {
-        name: 'Codex usage 87% remaining',
-      }),
-    ).toBeInTheDocument()
-    expect(window.electronAPI.providerQuota.list).toHaveBeenCalledWith(false)
+      screen.queryByRole('button', { name: /Codex usage/ }),
+    ).not.toBeInTheDocument()
   })
 
   it('shows Claude Code usage in the composer for Claude Code selections', async () => {

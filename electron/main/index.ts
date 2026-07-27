@@ -327,6 +327,7 @@ async function startApp(): Promise<void> {
         providerRegistry.register(
           new CodexProvider(p.binaryPath, taskProgressService, debugSink),
         )
+        codexQuotaService.setBinaryPath(p.binaryPath)
       } else if (p.id === 'cursor') {
         providerRegistry.register(new CursorProvider(p.binaryPath, debugSink))
       } else if (p.id === 'pi') {

@@ -53,6 +53,16 @@ export class CodexAppServerClient {
     )
   }
 
+  /**
+   * Official quota read. Codex answers this from its own authenticated
+   * session, so Convergence never has to touch the user's raw token.
+   */
+  async readRateLimits(cwd: string = process.cwd()): Promise<unknown> {
+    return this.withServer(cwd, (rpc) =>
+      rpc.request('account/rateLimits/read', {}),
+    )
+  }
+
   private async withServer<T>(
     cwd: string,
     run: (rpc: JsonRpcClient) => Promise<T>,

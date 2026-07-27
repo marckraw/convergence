@@ -2,12 +2,15 @@ import { request as httpsRequest } from 'https'
 import { promises as fs } from 'fs'
 import { homedir } from 'os'
 import { join } from 'path'
+import { CodexAppServerClient } from '../provider/codex/codex-app-server-client'
 import {
   CODEX_QUOTA_CACHE_TTL_MS,
+  CODEX_RATE_LIMITS_TIMEOUT_MS,
   CODEX_USAGE_URL,
 } from './codex-quota.constants'
 import {
   buildCodexQuotaAuthError,
+  mapCodexRateLimitsToQuotaSnapshot,
   mapCodexUsagePayloadToQuotaSnapshot,
   readRecord,
 } from './codex-quota.pure'
@@ -120,10 +123,66 @@ function getJson(request: JsonGetRequest): Promise<unknown> {
   })
 }
 
+/** Reads `account/rateLimits/read` from a codex app-server. */
+export type CodexRateLimitsReader = () => Promise<unknown>
+
+export interface CodexQuotaServiceOptions {
+  jsonGet?: JsonGet
+  readRateLimits?: CodexRateLimitsReader
+}
+
+/**
+ * Quota is read from Codex's own `account/rateLimits/read` app-server method,
+ * which answers from the CLI's authenticated session. The older path — reading
+ * `~/.codex/auth.json` and calling an undocumented chatgpt.com endpoint with
+ * the user's raw access token — survives only as a fallback for codex builds
+ * that do not answer the method.
+ */
 export class CodexQuotaService {
   private cached: ProviderQuotaSnapshot | null = null
+  private binaryPath: string | null = null
 
-  constructor(private readonly jsonGet: JsonGet = getJson) {}
+  constructor(private readonly options: CodexQuotaServiceOptions = {}) {}
+
+  /** Provider detection runs after construction, so the path arrives later. */
+  setBinaryPath(binaryPath: string | null): void {
+    this.binaryPath = binaryPath
+  }
+
+  private async readRateLimits(): Promise<unknown> {
+    if (this.options.readRateLimits) {
+      return this.options.readRateLimits()
+    }
+
+    if (!this.binaryPath) {
+      throw new Error('Codex CLI was not detected.')
+    }
+
+    return new CodexAppServerClient(this.binaryPath, {
+      timeoutMs: CODEX_RATE_LIMITS_TIMEOUT_MS,
+    }).readRateLimits()
+  }
+
+  private async readFromAuthScrape(): Promise<ProviderQuotaSnapshot> {
+    const tokens = await readCodexAuthTokens()
+    const headers: Record<string, string> = {
+      Accept: 'application/json',
+      Authorization: `Bearer ${tokens.accessToken}`,
+      'User-Agent': 'convergence-codex-usage',
+    }
+    if (tokens.accountId) {
+      headers['ChatGPT-Account-Id'] = tokens.accountId
+    }
+
+    const payload = await (this.options.jsonGet ?? getJson)({
+      url: CODEX_USAGE_URL,
+      headers,
+    })
+    return mapCodexUsagePayloadToQuotaSnapshot(
+      payload,
+      new Date().toISOString(),
+    )
+  }
 
   async getQuota(options: { forceRefresh?: boolean } = {}) {
     const now = Date.now()
@@ -136,24 +195,16 @@ export class CodexQuotaService {
     }
 
     try {
-      const tokens = await readCodexAuthTokens()
-      const headers: Record<string, string> = {
-        Accept: 'application/json',
-        Authorization: `Bearer ${tokens.accessToken}`,
-        'User-Agent': 'convergence-codex-usage',
-      }
-      if (tokens.accountId) {
-        headers['ChatGPT-Account-Id'] = tokens.accountId
+      let snapshot: ProviderQuotaSnapshot
+      try {
+        snapshot = mapCodexRateLimitsToQuotaSnapshot(
+          await this.readRateLimits(),
+          new Date().toISOString(),
+        )
+      } catch {
+        snapshot = await this.readFromAuthScrape()
       }
 
-      const payload = await this.jsonGet({
-        url: CODEX_USAGE_URL,
-        headers,
-      })
-      const snapshot = mapCodexUsagePayloadToQuotaSnapshot(
-        payload,
-        new Date().toISOString(),
-      )
       this.cached = snapshot
       return snapshot
     } catch (err) {

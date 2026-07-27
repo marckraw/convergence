@@ -6,14 +6,15 @@ import type { ResolvedProviderSelection } from '@/entities/session'
 
 export type CodexUsageTone = 'green' | 'amber' | 'red' | 'muted'
 
+/**
+ * The pill reports the Codex CLI's own ChatGPT quota, so it belongs to Codex
+ * sessions only. A Pi session bills through Pi's own credentials even when the
+ * selected model happens to be an OpenAI one.
+ */
 export function shouldShowCodexUsagePill(
-  selection: Pick<ResolvedProviderSelection, 'providerId' | 'modelId'>,
+  selection: Pick<ResolvedProviderSelection, 'providerId'>,
 ): boolean {
-  if (selection.providerId === 'codex') return true
-  if (selection.providerId !== 'pi') return false
-
-  const providerPrefix = selection.modelId.split('/')[0]?.toLowerCase()
-  return providerPrefix === 'openai'
+  return selection.providerId === 'codex'
 }
 
 export function getPrimaryCodexWindow(
