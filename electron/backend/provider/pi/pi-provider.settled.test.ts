@@ -136,6 +136,37 @@ function startSession(): {
   return { statuses, attentions, items }
 }
 
+describe('PiProvider thinking level', () => {
+  afterEach(() => {
+    spawnMock.mockReset()
+  })
+
+  it('spawns pi with --thinking max instead of clamping to high', async () => {
+    const child = new MockChildProcess()
+    createPiEventServer(child)
+    spawnMock.mockReturnValue(child)
+
+    const provider = new PiProvider('/usr/local/bin/pi')
+    provider.start({
+      sessionId: 'session-1',
+      workingDirectory: process.cwd(),
+      initialMessage: 'think hard',
+      initialAttachments: undefined,
+      model: 'anthropic/claude-fable-5',
+      effort: 'max',
+      continuationToken: null,
+    })
+
+    await waitFor(() => {
+      expect(spawnMock).toHaveBeenCalled()
+    })
+
+    const args = spawnMock.mock.calls[0]?.[1] as string[]
+    expect(args).toContain('--thinking')
+    expect(args[args.indexOf('--thinking') + 1]).toBe('max')
+  })
+})
+
 describe('PiProvider settled semantics', () => {
   afterEach(() => {
     spawnMock.mockReset()
