@@ -2280,6 +2280,7 @@ export class CodexProvider implements Provider {
       case 'high':
       case 'max':
       case 'xhigh':
+      case 'ultra':
         return value
       default:
         return null
@@ -2302,6 +2303,8 @@ export class CodexProvider implements Provider {
         return 'Max'
       case 'xhigh':
         return 'Very High'
+      case 'ultra':
+        return 'Ultra (multi-agent)'
     }
   }
 }

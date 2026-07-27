@@ -200,39 +200,73 @@ describe('provider-descriptor', () => {
     ])
   })
 
-  it('exposes current GPT-5.6 Codex fallback models first', () => {
+  it('labels the ultra reasoning effort', () => {
+    expect(buildEffortOptions(['max', 'ultra'])).toEqual([
+      { id: 'max', label: 'Max', description: undefined },
+      { id: 'ultra', label: 'Ultra (multi-agent)', description: undefined },
+    ])
+  })
+
+  // Fixture: `model/list` tape from codex 0.145.0, probed 2026-07-27 (MAR-2034).
+  // The fallback is only consulted when that RPC fails, so it mirrors the tape
+  // exactly rather than carrying models OpenAI no longer serves.
+  it('mirrors the live codex 0.145 model/list tape in the fallback catalog', () => {
     const descriptor = buildFallbackCodexDescriptor()
 
-    expect(descriptor.defaultModelId).toBe('gpt-5.6')
+    expect(descriptor.defaultModelId).toBe('gpt-5.6-sol')
     expect(descriptor.fastModelId).toBe('gpt-5.6-luna')
     expect(descriptor.modelOptions.map((option) => option.id)).toEqual([
-      'gpt-5.6',
+      'gpt-5.6-sol',
       'gpt-5.6-terra',
       'gpt-5.6-luna',
       'gpt-5.5',
       'gpt-5.4',
       'gpt-5.4-mini',
-      'gpt-5.4-nano',
-      'gpt-5.3-codex',
       'gpt-5.3-codex-spark',
-      'gpt-5.2',
     ])
+
     expect(
-      descriptor.modelOptions.find((option) => option.id === 'gpt-5.6'),
+      descriptor.modelOptions.every(
+        (option) => option.contextWindowTokens === 272_000,
+      ),
+    ).toBe(true)
+    expect(
+      descriptor.modelOptions.some((option) =>
+        option.effortOptions.some((effort) => effort.id === 'none'),
+      ),
+    ).toBe(false)
+
+    expect(
+      descriptor.modelOptions.find((option) => option.id === 'gpt-5.6-sol'),
     ).toMatchObject({
       label: 'GPT-5.6 Sol',
-      contextWindowTokens: 1_050_000,
-      defaultEffort: 'medium',
+      defaultEffort: 'low',
       effortOptions: [
-        { id: 'none', label: 'None' },
         { id: 'low', label: 'Low' },
         { id: 'medium', label: 'Medium' },
         { id: 'high', label: 'High' },
         { id: 'xhigh', label: 'Very High' },
         { id: 'max', label: 'Max' },
+        { id: 'ultra', label: 'Ultra (multi-agent)' },
       ],
       inputModalities: ['text', 'image'],
     })
+
+    expect(
+      descriptor.modelOptions
+        .find((option) => option.id === 'gpt-5.6-terra')
+        ?.effortOptions.map((effort) => effort.id),
+    ).toEqual(['low', 'medium', 'high', 'xhigh', 'max', 'ultra'])
+    expect(
+      descriptor.modelOptions
+        .find((option) => option.id === 'gpt-5.6-luna')
+        ?.effortOptions.map((effort) => effort.id),
+    ).toEqual(['low', 'medium', 'high', 'xhigh', 'max'])
+    expect(
+      descriptor.modelOptions
+        .find((option) => option.id === 'gpt-5.3-codex-spark')
+        ?.effortOptions.map((effort) => effort.id),
+    ).toEqual(['low', 'medium', 'high', 'xhigh'])
   })
 
   it('exposes Antigravity official models as model + effort options', () => {

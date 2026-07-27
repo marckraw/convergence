@@ -587,6 +587,7 @@ type ReasoningEffort =
   | 'high'
   | 'max'
   | 'xhigh'
+  | 'ultra'
 
 type SessionPermissionPresetData = 'ask' | 'yolo' | 'custom'
 type CodexApprovalPolicyData = 'untrusted' | 'on-request' | 'never'

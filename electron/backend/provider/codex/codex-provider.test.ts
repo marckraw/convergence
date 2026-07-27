@@ -1440,6 +1440,95 @@ describe('CodexProvider', () => {
     })
   })
 
+  it('exposes the ultra reasoning effort reported by model/list', async () => {
+    const child = new MockChildProcess()
+    createMockCodexServer(child, {
+      modelListResponse: {
+        data: [
+          {
+            model: 'gpt-5.6-sol',
+            displayName: 'GPT-5.6 Sol',
+            isDefault: true,
+            defaultReasoningEffort: 'low',
+            supportedReasoningEfforts: [
+              { reasoningEffort: 'low' },
+              { reasoningEffort: 'medium' },
+              { reasoningEffort: 'high' },
+              { reasoningEffort: 'xhigh' },
+              { reasoningEffort: 'max' },
+              {
+                reasoningEffort: 'ultra',
+                description: 'Delegates proactively to sub-agents.',
+              },
+            ],
+          },
+        ],
+      },
+    })
+    spawnMock.mockReturnValue(child)
+
+    const provider = new CodexProvider('/usr/local/bin/codex')
+    const descriptor = await provider.describe()
+
+    const sol = descriptor.modelOptions.find(
+      (option) => option.id === 'gpt-5.6-sol',
+    )
+    expect(descriptor.defaultModelId).toBe('gpt-5.6-sol')
+    expect(sol?.defaultEffort).toBe('low')
+    expect(sol?.effortOptions.map((effort) => effort.id)).toEqual([
+      'low',
+      'medium',
+      'high',
+      'xhigh',
+      'max',
+      'ultra',
+    ])
+    expect(
+      sol?.effortOptions.find((effort) => effort.id === 'ultra'),
+    ).toMatchObject({
+      label: 'Ultra (multi-agent)',
+      description: 'Delegates proactively to sub-agents.',
+    })
+  })
+
+  it('passes the ultra reasoning effort through to turn/start unchanged', async () => {
+    const child = new MockChildProcess()
+    const server = createMockCodexServer(child)
+    spawnMock.mockReturnValue(child)
+
+    const provider = new CodexProvider('/usr/local/bin/codex')
+    const handle = provider.start({
+      sessionId: 'session-1',
+      workingDirectory: process.cwd(),
+      initialMessage: 'delegate this',
+      initialAttachments: undefined,
+      model: 'gpt-5.6-sol',
+      effort: 'ultra',
+      continuationToken: null,
+    })
+
+    handle.onDelta(() => {})
+    handle.onStatusChange(() => {})
+    handle.onContinuationToken(() => {})
+    handle.onAttentionChange(() => {})
+    handle.onContextWindowChange(() => {})
+    handle.onActivityChange(() => {})
+
+    await waitFor(() => {
+      expect(
+        server.requests.some((request) => request.method === 'turn/start'),
+      ).toBe(true)
+    })
+
+    const turnStart = server.requests.find(
+      (request) => request.method === 'turn/start',
+    )
+    expect(turnStart?.params).toMatchObject({
+      model: 'gpt-5.6-sol',
+      effort: 'ultra',
+    })
+  })
+
   it('surfaces MCP URL elicitations and responds on decline', async () => {
     const child = new MockChildProcess()
     const server = createMockCodexServer(child, {
