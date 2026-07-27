@@ -277,8 +277,11 @@ export function buildClaudeDescriptor(): ProviderDescriptor {
         ]),
       },
       {
+        // Alias, like `opus` / `sonnet` / `haiku`: unversioned label, so it
+        // never collides with the pinned `claude-fable-5` row below.
         id: 'fable',
-        label: 'Claude Fable 5',
+        label: 'Claude Fable',
+        description: 'Alias for the latest Fable (currently Fable 5).',
         contextWindowTokens: 1_000_000,
         defaultEffort: 'high',
         effortOptions: buildEffortOptions([
