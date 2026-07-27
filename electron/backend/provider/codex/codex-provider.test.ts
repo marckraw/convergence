@@ -58,6 +58,7 @@ function createMockCodexServer(
   options?: {
     missingThreadIds?: string[]
     skillsResponse?: unknown
+    modelListResponse?: unknown
     autoCompleteTurns?: boolean
     turnStartedId?: string
     steerError?: string
@@ -222,6 +223,11 @@ function createMockCodexServer(
           typeof message.id === 'number'
         ) {
           respond(message.id, options?.skillsResponse ?? { skills: [] })
+        } else if (
+          message.method === 'model/list' &&
+          typeof message.id === 'number'
+        ) {
+          respond(message.id, options?.modelListResponse ?? { data: [] })
         }
       }
 
@@ -1249,6 +1255,189 @@ describe('CodexProvider', () => {
     })
 
     expect(items.some((item) => item.kind === 'input-request')).toBe(false)
+  })
+
+  it('declines unknown server requests without killing the session', async () => {
+    const child = new MockChildProcess()
+    const server = createMockCodexServer(child, {
+      autoCompleteTurns: false,
+      turnStartedId: 'codex-turn-1',
+    })
+    spawnMock.mockReturnValue(child)
+
+    const provider = new CodexProvider('/usr/local/bin/codex')
+    const handle = provider.start({
+      sessionId: 'session-1',
+      workingDirectory: process.cwd(),
+      initialMessage: 'review the diff',
+      initialAttachments: undefined,
+      model: 'gpt-5.4',
+      effort: 'medium',
+      continuationToken: null,
+    })
+
+    const items: Array<
+      Extract<SessionDelta, { kind: 'conversation.item.add' }>['item']
+    > = []
+    const statuses: string[] = []
+    const attentions: string[] = []
+
+    handle.onDelta((delta) => {
+      if (delta.kind === 'conversation.item.add') {
+        items.push(delta.item)
+      }
+    })
+    handle.onStatusChange((status) => {
+      statuses.push(status)
+    })
+    handle.onContinuationToken(() => {})
+    handle.onAttentionChange((attention) => {
+      attentions.push(attention)
+    })
+    handle.onContextWindowChange(() => {})
+    handle.onActivityChange(() => {})
+
+    await waitFor(() => {
+      expect(
+        server.requests.some((request) => request.method === 'turn/start'),
+      ).toBe(true)
+    })
+
+    child.stdout.write(
+      JSON.stringify({
+        jsonrpc: '2.0',
+        id: 900,
+        method: 'autoReview/requestStatus',
+        params: { reviewId: 'review-1' },
+      }) + '\n',
+    )
+
+    await waitFor(() => {
+      expect(server.responses).toContainEqual({
+        id: 900,
+        error: {
+          code: -32601,
+          message:
+            'Convergence does not support Codex server request "autoReview/requestStatus" yet',
+        },
+        result: undefined,
+      })
+    })
+
+    expect(statuses).not.toContain('failed')
+    expect(attentions).not.toContain('failed')
+    expect(items).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          kind: 'note',
+          level: 'warning',
+          text: 'Codex asked for "autoReview/requestStatus"; Convergence declined it because it does not support that request yet.',
+        }),
+      ]),
+    )
+
+    child.stdout.write(
+      JSON.stringify({
+        jsonrpc: '2.0',
+        method: 'turn/completed',
+        params: { turn: { status: 'completed' } },
+      }) + '\n',
+    )
+
+    await waitFor(() => {
+      expect(statuses).toContain('completed')
+    })
+
+    handle.sendMessage('and now ship it')
+
+    await waitFor(() => {
+      expect(
+        server.requests.filter((request) => request.method === 'turn/start'),
+      ).toHaveLength(2)
+    })
+  })
+
+  it('sends the real app version in the session initialize handshake', async () => {
+    const child = new MockChildProcess()
+    const server = createMockCodexServer(child)
+    spawnMock.mockReturnValue(child)
+
+    const provider = new CodexProvider(
+      '/usr/local/bin/codex',
+      null,
+      undefined,
+      '9.9.9',
+    )
+    const handle = provider.start({
+      sessionId: 'session-1',
+      workingDirectory: process.cwd(),
+      initialMessage: 'hello',
+      initialAttachments: undefined,
+      model: 'gpt-5.4',
+      effort: 'medium',
+      continuationToken: null,
+    })
+
+    handle.onDelta(() => {})
+    handle.onStatusChange(() => {})
+    handle.onContinuationToken(() => {})
+    handle.onAttentionChange(() => {})
+    handle.onContextWindowChange(() => {})
+    handle.onActivityChange(() => {})
+
+    await waitFor(() => {
+      expect(
+        server.requests.some((request) => request.method === 'initialize'),
+      ).toBe(true)
+    })
+
+    const initialize = server.requests.find(
+      (request) => request.method === 'initialize',
+    )
+    expect(initialize?.params).toMatchObject({
+      clientInfo: {
+        name: 'convergence',
+        title: 'Convergence',
+        version: '9.9.9',
+      },
+    })
+  })
+
+  it('sends the real app version in the descriptor probe handshake', async () => {
+    const child = new MockChildProcess()
+    const server = createMockCodexServer(child, {
+      modelListResponse: {
+        data: [
+          {
+            model: 'gpt-5.6-sol',
+            displayName: 'GPT-5.6 Sol',
+            isDefault: true,
+            defaultReasoningEffort: 'low',
+            supportedReasoningEfforts: [{ reasoningEffort: 'low' }],
+          },
+        ],
+      },
+    })
+    spawnMock.mockReturnValue(child)
+
+    const provider = new CodexProvider(
+      '/usr/local/bin/codex',
+      null,
+      undefined,
+      '9.9.9',
+    )
+    await provider.describe()
+
+    const initialize = server.requests.find(
+      (request) => request.method === 'initialize',
+    )
+    expect(initialize?.params).toMatchObject({
+      clientInfo: {
+        name: 'convergence',
+        title: 'Convergence',
+        version: '9.9.9',
+      },
+    })
   })
 
   it('surfaces MCP URL elicitations and responds on decline', async () => {
