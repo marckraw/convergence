@@ -38,11 +38,12 @@ import type {
   ProviderDebugEntry,
 } from '../../provider-debug/provider-debug.types'
 import {
+  buildPiExtensionErrorNote,
+  buildPiTurnOutcome,
   derivePiContextWindow,
-  extractLastAssistantErrorMessage,
-  extractLastAssistantStopReason,
   extractToolCallFromEnd,
   extractToolResultText,
+  type PiTurnOutcome,
 } from './pi-event-mapping.pure'
 import {
   mapEffortToPiThinking,
@@ -450,6 +451,7 @@ export class PiProvider implements Provider {
       userMessageItemId: string | null
     } | null = null
     let sawTurnActivity = false
+    let pendingTurnOutcome: PiTurnOutcome | null = null
     const pendingToolCallArgs = new Map<
       string,
       { name: string; args: string }
@@ -771,6 +773,7 @@ export class PiProvider implements Provider {
         case 'agent_start':
           sawTurnActivity = true
           isStreaming = true
+          pendingTurnOutcome = null
           setStatus('running')
           setAttention('none')
           applyActivity({ kind: 'agent_start' })
@@ -809,31 +812,48 @@ export class PiProvider implements Provider {
           break
 
         case 'agent_end': {
+          // Bookkeeping only. Pi may still auto-retry, re-prompt after an
+          // overflow compaction, or drain a queued follow-up after this event,
+          // so the verdict is recorded and published on `agent_settled`.
           sawTurnActivity = true
           flushThinking()
           flushText()
           applyActivity({ kind: 'agent_end' })
           isStreaming = false
-          const stopReason = extractLastAssistantStopReason(event)
-          if (stopReason === 'aborted') {
-            setStatus('failed')
-            setAttention('failed')
-            currentTurn = null
-          } else if (stopReason === 'error') {
-            const errorMessage = extractLastAssistantErrorMessage(event)
+          pendingTurnOutcome = buildPiTurnOutcome(event)
+          break
+        }
+
+        case 'agent_settled': {
+          // The terminal signal: nothing pending, so the last recorded outcome
+          // is the honest one.
+          const outcome: PiTurnOutcome = pendingTurnOutcome ?? {
+            status: 'completed',
+            attention: 'finished',
+            errorNote: null,
+          }
+          pendingTurnOutcome = null
+          isStreaming = false
+          if (outcome.errorNote) {
             sessionEmitter.addNote({
-              text: errorMessage
-                ? `Agent failed: ${errorMessage}`
-                : 'Agent failed',
+              text: outcome.errorNote,
               level: 'error',
             })
-            setStatus('failed')
-            setAttention('failed')
-            currentTurn = null
-          } else {
-            setStatus('completed')
-            setAttention('finished')
-            currentTurn = null
+          }
+          setStatus(outcome.status)
+          setAttention(outcome.attention)
+          currentTurn = null
+          break
+        }
+
+        case 'extension_error': {
+          const note = buildPiExtensionErrorNote(event)
+          if (note) {
+            sessionEmitter.addNote({
+              text: note,
+              level: 'warning',
+              providerEventType: 'extension_error',
+            })
           }
           break
         }

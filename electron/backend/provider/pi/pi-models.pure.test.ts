@@ -85,12 +85,16 @@ describe('mapPiModel', () => {
     expect(option?.inputModalities).toEqual(['text', 'image'])
   })
 
-  it('gives the standard effort ladder for reasoning models (no xhigh for non-openai)', () => {
+  // Pi gates xhigh/max per model via `thinkingLevelMap`, which rides along in
+  // the `get_available_models` payload. These cases mirror what
+  // `get_available_thinking_levels` reports for the same model.
+  it('exposes xhigh and max for an Anthropic model that supports them', () => {
     const option = mapPiModel({
-      id: 'claude-opus-4-6',
-      name: 'Claude Opus 4.6',
+      id: 'claude-fable-5',
+      name: 'Claude Fable 5',
       provider: 'anthropic',
       reasoning: true,
+      thinkingLevelMap: { xhigh: 'xhigh', max: 'max' },
     })
     expect(option?.effortOptions.map((e) => e.id)).toEqual([
       'none',
@@ -98,18 +102,70 @@ describe('mapPiModel', () => {
       'low',
       'medium',
       'high',
+      'xhigh',
+      'max',
     ])
     expect(option?.defaultEffort).toBe('medium')
   })
 
-  it('adds xhigh to the ladder for openai reasoning models', () => {
+  it('stops at xhigh when the model maps xhigh but not max', () => {
     const option = mapPiModel({
+      id: 'gpt-5.5',
+      name: 'GPT-5.5',
+      provider: 'openai-codex',
+      reasoning: true,
+      thinkingLevelMap: { xhigh: 'xhigh', minimal: 'low' },
+    })
+    // Byte-for-byte what pi 0.82.1 answered for this model on this machine.
+    expect(option?.effortOptions.map((e) => e.id)).toEqual([
+      'none',
+      'minimal',
+      'low',
+      'medium',
+      'high',
+      'xhigh',
+    ])
+  })
+
+  it('drops levels the model explicitly maps to null', () => {
+    const option = mapPiModel({
+      id: 'thinky',
+      name: 'Thinky',
+      provider: 'anthropic',
+      reasoning: true,
+      thinkingLevelMap: { minimal: null, xhigh: 'xhigh' },
+    })
+    expect(option?.effortOptions.map((e) => e.id)).toEqual([
+      'none',
+      'low',
+      'medium',
+      'high',
+      'xhigh',
+    ])
+  })
+
+  it('falls back to the heuristic ladder when the model has no thinkingLevelMap', () => {
+    const anthropic = mapPiModel({
+      id: 'claude-opus-4-6',
+      name: 'Claude Opus 4.6',
+      provider: 'anthropic',
+      reasoning: true,
+    })
+    expect(anthropic?.effortOptions.map((e) => e.id)).toEqual([
+      'none',
+      'minimal',
+      'low',
+      'medium',
+      'high',
+    ])
+
+    const openai = mapPiModel({
       id: 'codex-max',
       name: 'Codex Max',
       provider: 'openai',
       reasoning: true,
     })
-    expect(option?.effortOptions.map((e) => e.id)).toEqual([
+    expect(openai?.effortOptions.map((e) => e.id)).toEqual([
       'none',
       'minimal',
       'low',
@@ -203,8 +259,8 @@ describe('mapEffortToPiThinking', () => {
     expect(mapEffortToPiThinking('none')).toBe('off')
   })
 
-  it('maps max to high (pi has no max level)', () => {
-    expect(mapEffortToPiThinking('max')).toBe('high')
+  it('passes max through — pi has a real max thinking level', () => {
+    expect(mapEffortToPiThinking('max')).toBe('max')
   })
 
   it('passes through supported levels', () => {
