@@ -239,6 +239,7 @@ const EFFORT_LABELS: Record<ReasoningEffort, string> = {
   high: 'High',
   max: 'Max',
   xhigh: 'Very High',
+  ultra: 'Ultra (multi-agent)',
 }
 
 export function buildEffortOptions(
@@ -401,6 +402,15 @@ export function buildClaudeDescriptor(): ProviderDescriptor {
   }
 }
 
+/**
+ * Mirrors the `model/list` tape recorded from codex 0.145.0 on 2026-07-27
+ * (MAR-2034). Codex only falls back to this catalog when the RPC itself fails,
+ * so it stays small and honest: no models OpenAI stopped serving, real 272k
+ * context windows, and effort ladders in upstream order (the order carries
+ * meaning — it is the ladder Codex presents).
+ */
+const CODEX_FAMILY_CONTEXT_WINDOW_TOKENS = 272_000
+
 export function buildFallbackCodexDescriptor(): ProviderDescriptor {
   return {
     id: 'codex',
@@ -408,22 +418,22 @@ export function buildFallbackCodexDescriptor(): ProviderDescriptor {
     vendorLabel: 'OpenAI',
     kind: 'conversation',
     supportsContinuation: true,
-    defaultModelId: 'gpt-5.6',
+    defaultModelId: 'gpt-5.6-sol',
     fastModelId: 'gpt-5.6-luna',
     modelOptions: [
       {
-        id: 'gpt-5.6',
+        id: 'gpt-5.6-sol',
         label: 'GPT-5.6 Sol',
-        description: 'Alias for the GPT-5.6 Sol flagship model.',
-        contextWindowTokens: 1_050_000,
-        defaultEffort: 'medium',
+        description: 'GPT-5.6 flagship model.',
+        contextWindowTokens: CODEX_FAMILY_CONTEXT_WINDOW_TOKENS,
+        defaultEffort: 'low',
         effortOptions: buildEffortOptions([
-          'none',
           'low',
           'medium',
           'high',
           'xhigh',
           'max',
+          'ultra',
         ]),
         inputModalities: ['text', 'image'],
       },
@@ -431,15 +441,15 @@ export function buildFallbackCodexDescriptor(): ProviderDescriptor {
         id: 'gpt-5.6-terra',
         label: 'GPT-5.6 Terra',
         description: 'GPT-5.6 model that balances intelligence and cost.',
-        contextWindowTokens: 1_050_000,
+        contextWindowTokens: CODEX_FAMILY_CONTEXT_WINDOW_TOKENS,
         defaultEffort: 'medium',
         effortOptions: buildEffortOptions([
-          'none',
           'low',
           'medium',
           'high',
           'xhigh',
           'max',
+          'ultra',
         ]),
         inputModalities: ['text', 'image'],
       },
@@ -447,10 +457,9 @@ export function buildFallbackCodexDescriptor(): ProviderDescriptor {
         id: 'gpt-5.6-luna',
         label: 'GPT-5.6 Luna',
         description: 'GPT-5.6 model optimized for cost-sensitive workloads.',
-        contextWindowTokens: 1_050_000,
+        contextWindowTokens: CODEX_FAMILY_CONTEXT_WINDOW_TOKENS,
         defaultEffort: 'medium',
         effortOptions: buildEffortOptions([
-          'none',
           'low',
           'medium',
           'high',
@@ -462,86 +471,33 @@ export function buildFallbackCodexDescriptor(): ProviderDescriptor {
       {
         id: 'gpt-5.5',
         label: 'GPT-5.5',
-        contextWindowTokens: 1_050_000,
+        contextWindowTokens: CODEX_FAMILY_CONTEXT_WINDOW_TOKENS,
         defaultEffort: 'medium',
-        effortOptions: buildEffortOptions([
-          'none',
-          'low',
-          'medium',
-          'high',
-          'xhigh',
-        ]),
+        effortOptions: buildEffortOptions(['low', 'medium', 'high', 'xhigh']),
         inputModalities: ['text', 'image'],
       },
       {
         id: 'gpt-5.4',
         label: 'GPT-5.4',
-        contextWindowTokens: 1_050_000,
+        contextWindowTokens: CODEX_FAMILY_CONTEXT_WINDOW_TOKENS,
         defaultEffort: 'medium',
-        effortOptions: buildEffortOptions([
-          'none',
-          'low',
-          'medium',
-          'high',
-          'xhigh',
-        ]),
+        effortOptions: buildEffortOptions(['low', 'medium', 'high', 'xhigh']),
         inputModalities: ['text', 'image'],
       },
       {
         id: 'gpt-5.4-mini',
         label: 'GPT-5.4 Mini',
-        contextWindowTokens: 400_000,
-        defaultEffort: 'none',
-        effortOptions: buildEffortOptions([
-          'none',
-          'low',
-          'medium',
-          'high',
-          'xhigh',
-        ]),
-        inputModalities: ['text', 'image'],
-      },
-      {
-        id: 'gpt-5.4-nano',
-        label: 'GPT-5.4 Nano',
-        contextWindowTokens: 400_000,
-        defaultEffort: 'none',
-        effortOptions: buildEffortOptions([
-          'none',
-          'low',
-          'medium',
-          'high',
-          'xhigh',
-        ]),
-        inputModalities: ['text', 'image'],
-      },
-      {
-        id: 'gpt-5.3-codex',
-        label: 'GPT-5.3 Codex',
-        contextWindowTokens: 400_000,
-        defaultEffort: 'medium',
+        contextWindowTokens: CODEX_FAMILY_CONTEXT_WINDOW_TOKENS,
+        defaultEffort: 'low',
         effortOptions: buildEffortOptions(['low', 'medium', 'high', 'xhigh']),
         inputModalities: ['text', 'image'],
       },
       {
         id: 'gpt-5.3-codex-spark',
         label: 'GPT-5.3 Codex Spark',
+        contextWindowTokens: CODEX_FAMILY_CONTEXT_WINDOW_TOKENS,
         defaultEffort: 'high',
         effortOptions: buildEffortOptions(['low', 'medium', 'high', 'xhigh']),
-      },
-      {
-        id: 'gpt-5.2',
-        label: 'GPT-5.2',
-        contextWindowTokens: 400_000,
-        defaultEffort: 'none',
-        effortOptions: buildEffortOptions([
-          'none',
-          'low',
-          'medium',
-          'high',
-          'xhigh',
-        ]),
-        inputModalities: ['text', 'image'],
       },
     ],
     attachments: CODEX_ATTACHMENT_CAPABILITY,

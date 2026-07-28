@@ -20,6 +20,7 @@ export type ReasoningEffort =
   | 'high'
   | 'max'
   | 'xhigh'
+  | 'ultra'
 
 export type SessionPermissionPreset = 'ask' | 'yolo' | 'custom'
 export type CodexApprovalPolicy = 'untrusted' | 'on-request' | 'never'

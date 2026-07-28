@@ -325,7 +325,12 @@ async function startApp(): Promise<void> {
         )
       } else if (p.id === 'codex') {
         providerRegistry.register(
-          new CodexProvider(p.binaryPath, taskProgressService, debugSink),
+          new CodexProvider(
+            p.binaryPath,
+            taskProgressService,
+            debugSink,
+            app.getVersion(),
+          ),
         )
       } else if (p.id === 'cursor') {
         providerRegistry.register(new CursorProvider(p.binaryPath, debugSink))

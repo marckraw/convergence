@@ -4,6 +4,47 @@ Cross-repository question or stuck? Read the canonical
 [agent ecosystem FAQ](https://github.com/ef-global/agents-daemon/blob/master/docs/ecosystem-faq.md)
 first.
 
+## Single source of truth
+
+The Linear project **convergence** (team `marckraw`, MAR-…) is the single
+source of truth for tickets, roadmap, features, milestones, specs, goals —
+all product and planning content. Do not create or maintain
+backlog/roadmap/spec documents in this repo; when planning output is
+produced, it goes to Linear. The repo holds only durable engineering
+knowledge (see "Planning and documentation ownership" below).
+
+## What this project is
+
+**A UI-first desktop app for managing agent work across local codebases.**
+(North star ratified 2026-07-27.)
+
+Electron app with a provider-neutral session model: one transcript, one
+composer, capability advertisement instead of provider-id branching.
+First-class providers are Claude Code, Codex, and Pi, integrated as
+external CLIs adapted in `electron/backend/provider/`. Lineage: Divergence
+(Rust) is the ancestor, reference-only; Emergence is the descendant.
+Working-relationship charter: `FABLE.md` (local, gitignored).
+
+## Working style
+
+- Main branch is `master`. Small vertical slices; honest states at every
+  beat.
+- **A task's terminal step is a pull request to `master`, created with the
+  ship-it skill** (commit with meaningful messages referencing MAR-xxxx,
+  changeset when user-facing, push, open PR). Agents never merge: Marcin
+  merges, the release pipeline builds the installable version, he installs
+  it, and the improvement gets used inside Convergence itself.
+- Never flip a Linear ticket to Done; terminal agent state is In Review
+  with what changed, commits, verification evidence, and remaining human
+  steps.
+- Verification: the post-task gates below, plus Marcin's own eyes for
+  anything user-facing — there is no machine-eyes tier by ruling
+  (2026-07-27); end UI work with a focused QA checklist for him.
+- Zero TODO/FIXME markers — file a Linear issue instead.
+- Keep Linear bookkeeping current throughout the work: honest issue
+  states, concise progress and verification notes, follow-ups filed for
+  newly discovered work.
+
 ## Post-task requirement
 
 Agents must use the Node version from `.nvmrc` for all repo commands that

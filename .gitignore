@@ -7,6 +7,11 @@ release/
 .env.*
 *.local
 
+# Working-relationship artifacts (local only)
+FABLE.md
+HANDOFF.md
+HANDOFF-*.md
+
 # OS
 .DS_Store
 Thumbs.db

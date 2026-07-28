@@ -24,6 +24,7 @@ import type {
   ProviderContextManagementResult,
 } from '../provider.types'
 import { JsonRpcClient, type JsonRpcId } from './jsonrpc'
+import { buildCodexClientInfo } from './codex-client-info.pure'
 import { ProviderSessionEmitter } from '../provider-session.emitter'
 import {
   buildFallbackCodexDescriptor,
@@ -799,6 +800,7 @@ export class CodexProvider implements Provider {
     private binaryPath: string,
     private taskProgress: TaskProgressService | null = null,
     private debugSink: ProviderDebugSink = noopDebugSink,
+    private appVersion: string | null = null,
   ) {}
 
   describe(): Promise<ProviderDescriptor> {
@@ -872,11 +874,7 @@ export class CodexProvider implements Provider {
     })
     try {
       await rpc.request('initialize', {
-        clientInfo: {
-          name: 'convergence',
-          title: 'Convergence',
-          version: '0.0.0',
-        },
+        clientInfo: buildCodexClientInfo(this.appVersion),
         capabilities: { experimentalApi: true },
       })
       rpc.notify('initialized')
@@ -908,6 +906,7 @@ export class CodexProvider implements Provider {
   start(config: SessionStartConfig): SessionHandle {
     const binaryPath = this.binaryPath
     const debugSink = this.debugSink
+    const clientInfo = buildCodexClientInfo(this.appVersion)
     const sessionId = config.sessionId
     const listeners = {
       delta: [] as ((delta: SessionDelta) => void)[],
@@ -1492,11 +1491,7 @@ export class CodexProvider implements Provider {
       try {
         // Handshake
         await rpc.request('initialize', {
-          clientInfo: {
-            name: 'convergence',
-            title: 'Convergence',
-            version: '0.0.0',
-          },
+          clientInfo,
           capabilities: {
             experimentalApi: true,
           },
@@ -1895,6 +1890,9 @@ export class CodexProvider implements Provider {
             })
             setAttention('needs-input')
           } else {
+            // The app-server protocol grows new server requests continuously.
+            // Declining one is a per-request outcome, not a session outcome:
+            // Codex handles the `-32601` and the turn keeps going.
             flushAssistantBuffer()
             rpc?.respondError(
               id,
@@ -1902,12 +1900,10 @@ export class CodexProvider implements Provider {
               `Convergence does not support Codex server request "${method}" yet`,
             )
             sessionEmitter.addNote({
-              text: `Unsupported Codex server request: ${method}`,
-              level: 'error',
+              text: `Codex asked for "${method}"; Convergence declined it because it does not support that request yet.`,
+              level: 'warning',
               providerEventType: method,
             })
-            setStatus('failed')
-            setAttention('failed')
           }
         }
       })
@@ -2173,11 +2169,7 @@ export class CodexProvider implements Provider {
 
     try {
       await rpc.request('initialize', {
-        clientInfo: {
-          name: 'convergence',
-          title: 'Convergence',
-          version: '0.0.0',
-        },
+        clientInfo: buildCodexClientInfo(this.appVersion),
         capabilities: {
           experimentalApi: true,
         },
@@ -2288,6 +2280,7 @@ export class CodexProvider implements Provider {
       case 'high':
       case 'max':
       case 'xhigh':
+      case 'ultra':
         return value
       default:
         return null
@@ -2310,6 +2303,8 @@ export class CodexProvider implements Provider {
         return 'Max'
       case 'xhigh':
         return 'Very High'
+      case 'ultra':
+        return 'Ultra (multi-agent)'
     }
   }
 }
