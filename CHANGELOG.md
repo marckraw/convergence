@@ -1,5 +1,17 @@
 # convergence
 
+## 0.45.3
+
+### Patch Changes
+
+- c9f04f3: Codex sessions survive unrecognised app-server requests instead of dying: Convergence still declines the request, but now logs a warning note in the transcript and keeps the session running. Codex handshakes also report the real app version rather than `0.0.0`.
+
+  Codex's `ultra` reasoning effort (the multi-agent switch on GPT-5.6 Sol and Terra) is now selectable in the composer, and the fallback model catalog matches what codex 0.145 actually serves — real 272k context windows, no models OpenAI has retired.
+
+- 1e060ed: Pi sessions now report "done" only when Pi is actually done. Completion is keyed on Pi's `agent_settled` signal instead of `agent_end`, so a session no longer shows as finished while Pi is still auto-retrying, re-prompting after an overflow compaction, or draining a queued follow-up. Pi extension failures surface as warning notes instead of passing silently.
+
+  Pi thinking levels now come from each model's own gating rather than a guess: Anthropic models expose `xhigh` and `max` when they support them, and selecting `max` sends `max` to Pi instead of being silently downgraded to `high`.
+
 ## 0.45.2
 
 ### Patch Changes
