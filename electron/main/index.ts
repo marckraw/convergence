@@ -332,6 +332,7 @@ async function startApp(): Promise<void> {
             app.getVersion(),
           ),
         )
+        codexQuotaService.setBinaryPath(p.binaryPath)
       } else if (p.id === 'cursor') {
         providerRegistry.register(new CursorProvider(p.binaryPath, debugSink))
       } else if (p.id === 'pi') {

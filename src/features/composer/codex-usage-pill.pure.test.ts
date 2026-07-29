@@ -38,28 +38,15 @@ const snapshot: ProviderQuotaSnapshot = {
 }
 
 describe('Codex usage pill helpers', () => {
-  it('shows for Codex and Pi OpenAI models only', () => {
-    expect(
-      shouldShowCodexUsagePill({ providerId: 'codex', modelId: 'gpt-5.3' }),
-    ).toBe(true)
-    expect(
-      shouldShowCodexUsagePill({
-        providerId: 'pi',
-        modelId: 'openai/gpt-5.3-codex',
-      }),
-    ).toBe(true)
-    expect(
-      shouldShowCodexUsagePill({
-        providerId: 'pi',
-        modelId: 'openrouter/openai/gpt-5.3',
-      }),
-    ).toBe(false)
-    expect(
-      shouldShowCodexUsagePill({
-        providerId: 'claude-code',
-        modelId: 'claude-sonnet',
-      }),
-    ).toBe(false)
+  // The pill reports the Codex CLI's own ChatGPT quota. A Pi session bills
+  // through Pi's credentials even when the model happens to be an OpenAI one,
+  // so showing Codex's numbers there is simply wrong.
+  it('shows only for Codex sessions', () => {
+    expect(shouldShowCodexUsagePill({ providerId: 'codex' })).toBe(true)
+    // Pi no longer qualifies at all, whatever model it runs — the signature
+    // does not even take a model id any more.
+    expect(shouldShowCodexUsagePill({ providerId: 'pi' })).toBe(false)
+    expect(shouldShowCodexUsagePill({ providerId: 'claude-code' })).toBe(false)
   })
 
   it('uses the five-hour window as the primary composer value', () => {

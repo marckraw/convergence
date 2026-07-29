@@ -72,6 +72,27 @@ describe('provider-descriptor', () => {
     ).toMatchObject({ availability: 'unavailable', method: 'unsupported' })
   })
 
+  // Two rows reading exactly the same thing is unpickable: the user cannot
+  // tell which one they are choosing. Guarding every catalog, not just
+  // Claude's, so an alias added later cannot reintroduce it.
+  it('never shows two model options with the same label', () => {
+    const descriptors = {
+      claude: buildClaudeDescriptor(),
+      codex: buildFallbackCodexDescriptor(),
+      pi: buildFallbackPiDescriptor(),
+      cursor: buildFallbackCursorDescriptor(),
+      antigravity: buildFallbackAntigravityDescriptor(),
+    }
+
+    for (const [name, descriptor] of Object.entries(descriptors)) {
+      const labels = descriptor.modelOptions.map((option) => option.label)
+      const duplicates = labels.filter(
+        (label, index) => labels.indexOf(label) !== index,
+      )
+      expect(`${name}: ${duplicates.join(', ')}`).toBe(`${name}: `)
+    }
+  })
+
   it('exposes current Claude Code aliases and pinned Anthropic model IDs', () => {
     const descriptor = buildClaudeDescriptor()
 
@@ -95,7 +116,7 @@ describe('provider-descriptor', () => {
     expect(
       descriptor.modelOptions.find((option) => option.id === 'fable'),
     ).toMatchObject({
-      label: 'Claude Fable 5',
+      label: 'Claude Fable',
       contextWindowTokens: 1_000_000,
       defaultEffort: 'high',
       effortOptions: [
