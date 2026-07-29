@@ -16,11 +16,23 @@ function errorMessage(error: unknown): string {
     : 'Failed to inspect Cursor commands'
 }
 
+export interface CursorSkillsServiceOptions {
+  appVersion?: string | null
+}
+
 export class CursorSkillsService {
   private client: CursorCommandsClient
 
-  constructor(binaryPath: string, client?: CursorCommandsClient) {
-    this.client = client ?? new CursorAcpProcessClient(binaryPath)
+  constructor(
+    binaryPath: string,
+    client?: CursorCommandsClient,
+    options: CursorSkillsServiceOptions = {},
+  ) {
+    this.client =
+      client ??
+      new CursorAcpProcessClient(binaryPath, {
+        appVersion: options.appVersion ?? null,
+      })
   }
 
   async list(

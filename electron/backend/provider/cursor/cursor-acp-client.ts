@@ -21,6 +21,8 @@ export interface CursorAcpProcessClientOptions {
   spawnProcess?: CursorAcpSpawn
   onDebug?: CursorAcpTransportDebugHandler
   env?: NodeJS.ProcessEnv
+  /** Reported to Cursor in the ACP initialize handshake. */
+  appVersion?: string | null
 }
 
 export interface CursorAcpInitializeParams {
@@ -50,7 +52,14 @@ export interface CursorAcpCommandDiscoveryOptions {
 
 const DEFAULT_COMMAND_DISCOVERY_WAIT_MS = 500
 
-export function buildCursorAcpInitializeParams(): CursorAcpInitializeParams {
+/** Used only when the app version is genuinely unavailable (e.g. bare tests). */
+export const CURSOR_UNKNOWN_APP_VERSION = '0.0.0'
+
+export function buildCursorAcpInitializeParams(
+  appVersion: string | null = null,
+): CursorAcpInitializeParams {
+  const version = appVersion?.trim()
+
   return {
     protocolVersion: 1,
     clientCapabilities: {
@@ -62,7 +71,7 @@ export function buildCursorAcpInitializeParams(): CursorAcpInitializeParams {
     },
     clientInfo: {
       name: 'convergence',
-      version: '0.0.0',
+      version: version ? version : CURSOR_UNKNOWN_APP_VERSION,
     },
   }
 }
@@ -110,6 +119,7 @@ export class CursorAcpProcessClient {
   private spawnProcess: CursorAcpSpawn
   private onDebug: CursorAcpTransportDebugHandler | null
   private env: NodeJS.ProcessEnv
+  private appVersion: string | null
 
   constructor(
     private binaryPath: string,
@@ -123,6 +133,7 @@ export class CursorAcpProcessClient {
     this.spawnProcess = options.spawnProcess ?? spawn
     this.onDebug = options.onDebug ?? null
     this.env = options.env ?? process.env
+    this.appVersion = options.appVersion ?? null
   }
 
   async createSession(cwd: string): Promise<unknown> {
@@ -201,7 +212,10 @@ export class CursorAcpProcessClient {
     run: (rpc: CursorAcpJsonRpcClient) => Promise<T>,
   ): Promise<T> {
     return this.withConnection(cwd, async (rpc) => {
-      await rpc.request('initialize', buildCursorAcpInitializeParams())
+      await rpc.request(
+        'initialize',
+        buildCursorAcpInitializeParams(this.appVersion),
+      )
       await rpc.request('authenticate', {
         methodId: CURSOR_ACP_LOGIN_METHOD_ID,
       })

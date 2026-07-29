@@ -99,6 +99,8 @@ interface CursorSkillCatalogAdapter {
 
 interface CursorProviderOptions {
   requestTimeoutMs?: number
+  /** Reported to Cursor in the ACP initialize handshake. */
+  appVersion?: string | null
 }
 
 function findPendingApproval(
@@ -160,6 +162,7 @@ function runCursorAcpOneShot(
   binaryPath: string,
   input: OneShotInput,
   debugSink: ProviderDebugSink = noopDebugSink,
+  appVersion: string | null = null,
 ): Promise<OneShotResult> {
   return new Promise((resolve, reject) => {
     const child = spawn(binaryPath, ['acp'], {
@@ -319,7 +322,10 @@ function runCursorAcpOneShot(
       const activeRpc = rpc
       if (!activeRpc) return
 
-      await activeRpc.request('initialize', buildCursorAcpInitializeParams())
+      await activeRpc.request(
+        'initialize',
+        buildCursorAcpInitializeParams(appVersion),
+      )
       await activeRpc.request('authenticate', {
         methodId: CURSOR_ACP_LOGIN_METHOD_ID,
       })
@@ -378,6 +384,8 @@ export class CursorProvider implements Provider {
     if (!this.descriptorPromise) {
       this.descriptorPromise = fetchCursorAcpDescriptorOrFallback(
         this.binaryPath,
+        undefined,
+        { appVersion: this.options.appVersion ?? null },
       )
     }
 
@@ -385,7 +393,12 @@ export class CursorProvider implements Provider {
   }
 
   oneShot(input: OneShotInput): Promise<OneShotResult> {
-    return runCursorAcpOneShot(this.binaryPath, input, this.debugSink)
+    return runCursorAcpOneShot(
+      this.binaryPath,
+      input,
+      this.debugSink,
+      this.options.appVersion ?? null,
+    )
   }
 
   async manageContext(
@@ -403,6 +416,7 @@ export class CursorProvider implements Provider {
     const client = new CursorAcpProcessClient(this.binaryPath, {
       requestTimeoutMs: this.options.requestTimeoutMs,
       operationTimeoutMs: 120_000,
+      appVersion: this.options.appVersion ?? null,
     })
     await client.withAuthenticatedConnection(
       config.workingDirectory,
@@ -449,6 +463,7 @@ export class CursorProvider implements Provider {
     const debugSink = this.debugSink
     const thisProviderSkillsService = this.skillsService
     const providerOptions = this.options
+    const appVersion = this.options.appVersion ?? null
     const listeners = {
       delta: [] as ((delta: SessionDelta) => void)[],
       status: [] as ((status: SessionStatus) => void)[],
@@ -1081,7 +1096,10 @@ export class CursorProvider implements Provider {
       if (!activeRpc || stopped) return
 
       try {
-        await activeRpc.request('initialize', buildCursorAcpInitializeParams())
+        await activeRpc.request(
+          'initialize',
+          buildCursorAcpInitializeParams(appVersion),
+        )
         await activeRpc.request('authenticate', {
           methodId: CURSOR_ACP_LOGIN_METHOD_ID,
         })
