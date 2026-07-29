@@ -100,12 +100,18 @@ function createPiEventServer(child: MockChildProcess): {
   }
 }
 
-function startSession(): {
+function startSession(version: string | null = '0.82.1'): {
   statuses: string[]
   attentions: string[]
   items: Array<Extract<SessionDelta, { kind: 'conversation.item.add' }>['item']>
 } {
-  const provider = new PiProvider('/usr/local/bin/pi')
+  const provider = new PiProvider(
+    '/usr/local/bin/pi',
+    null,
+    undefined,
+    undefined,
+    version,
+  )
   const handle = provider.start({
     sessionId: 'session-1',
     workingDirectory: process.cwd(),
@@ -402,5 +408,130 @@ describe('PiProvider settled semantics', () => {
         }),
       ]),
     )
+  })
+})
+
+// `agent_settled` shipped in pi 0.80.4. On anything older it never arrives, so
+// keying completion on it alone leaves the session `running` forever — the
+// exact hang MAR-2048 was filed about. Below the floor we restore the
+// pre-MAR-2035 semantics: settle on `agent_end`.
+describe('PiProvider version floor for settled semantics', () => {
+  afterEach(() => {
+    spawnMock.mockReset()
+  })
+
+  it('settles on agent_end when pi is older than 0.80.4', async () => {
+    const child = new MockChildProcess()
+    const server = createPiEventServer(child)
+    spawnMock.mockReturnValue(child)
+
+    const { statuses, attentions } = startSession('0.79.10')
+
+    await waitFor(() => {
+      expect(server.promptCount()).toBe(1)
+    })
+
+    server.emit({ type: 'agent_start' })
+    server.emit({
+      type: 'agent_end',
+      messages: [{ role: 'assistant', stopReason: 'stop' }],
+    })
+    // No agent_settled: this pi does not know how to send one.
+
+    await waitFor(() => {
+      expect(statuses).toContain('completed')
+      expect(attentions).toContain('finished')
+    })
+  })
+
+  it('settles on agent_end when the pi version is unknown', async () => {
+    const child = new MockChildProcess()
+    const server = createPiEventServer(child)
+    spawnMock.mockReturnValue(child)
+
+    const { statuses, attentions } = startSession(null)
+
+    await waitFor(() => {
+      expect(server.promptCount()).toBe(1)
+    })
+
+    server.emit({ type: 'agent_start' })
+    server.emit({
+      type: 'agent_end',
+      messages: [{ role: 'assistant', stopReason: 'stop' }],
+    })
+
+    await waitFor(() => {
+      expect(statuses).toContain('completed')
+      expect(attentions).toContain('finished')
+    })
+  })
+
+  it('carries an agent_end failure straight through on an old pi', async () => {
+    const child = new MockChildProcess()
+    const server = createPiEventServer(child)
+    spawnMock.mockReturnValue(child)
+
+    const { statuses, attentions, items } = startSession('0.79.10')
+
+    await waitFor(() => {
+      expect(server.promptCount()).toBe(1)
+    })
+
+    server.emit({ type: 'agent_start' })
+    server.emit({
+      type: 'agent_end',
+      messages: [
+        {
+          role: 'assistant',
+          stopReason: 'error',
+          errorMessage: 'provider exploded',
+        },
+      ],
+    })
+
+    await waitFor(() => {
+      expect(statuses).toContain('failed')
+      expect(attentions).toContain('failed')
+      expect(items).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            kind: 'note',
+            level: 'error',
+            text: 'Agent failed: provider exploded',
+          }),
+        ]),
+      )
+    })
+  })
+
+  it('still waits for agent_settled at the floor version', async () => {
+    const child = new MockChildProcess()
+    const server = createPiEventServer(child)
+    spawnMock.mockReturnValue(child)
+
+    const { statuses } = startSession('0.80.4')
+
+    await waitFor(() => {
+      expect(server.promptCount()).toBe(1)
+    })
+
+    server.emit({ type: 'agent_start' })
+    server.emit({
+      type: 'agent_end',
+      willRetry: true,
+      messages: [{ role: 'assistant', stopReason: 'stop' }],
+    })
+
+    await waitFor(() => {
+      expect(statuses).toContain('running')
+    })
+    expect(statuses).not.toContain('completed')
+
+    server.emit({ type: 'agent_settled' })
+
+    await waitFor(() => {
+      expect(statuses).toContain('completed')
+    })
   })
 })

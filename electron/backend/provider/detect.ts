@@ -13,6 +13,11 @@ import { fetchNpmLatestVersion } from './npm-registry'
 import { fetchGithubLatestReleaseVersion } from './github-release'
 import { isPiAuthConfigured } from './pi/pi-auth-status'
 import {
+  PI_OUTDATED_COMPLETION_REASON,
+  PI_OUTDATED_COMPLETION_STATUS_LABEL,
+  piSupportsAgentSettled,
+} from './pi/pi-version.pure'
+import {
   buildNonNpmProviderInstallInfo,
   buildNpmProviderInstallInfo,
   resolveNpmManagedProviderInstall,
@@ -175,6 +180,17 @@ export async function inspectProviderStatuses(): Promise<ProviderStatusInfo[]> {
           ...status,
           statusLabel: 'Needs login',
           reason: 'Run `pi /login` in your terminal.',
+        }
+      }
+      if (
+        provider.id === 'pi' &&
+        status.availability === 'available' &&
+        !piSupportsAgentSettled(version)
+      ) {
+        return {
+          ...status,
+          statusLabel: PI_OUTDATED_COMPLETION_STATUS_LABEL,
+          reason: PI_OUTDATED_COMPLETION_REASON,
         }
       }
       return status

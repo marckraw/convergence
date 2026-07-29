@@ -37,8 +37,10 @@ interface ProviderStatusDialogProps {
 }
 
 function renderStatusBadge(provider: ProviderStatusInfo) {
+  // An available provider that still carries a reason is degraded (needs
+  // login, too old to report completion) — it should not read as all-clear.
   const className =
-    provider.availability === 'available'
+    provider.availability === 'available' && !provider.reason
       ? 'border-emerald-500/20 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300'
       : 'border-warning/20 bg-warning/10 text-warning-foreground'
 
@@ -185,6 +187,9 @@ function renderProviderRow(
       <div className="mt-2 rounded-md border border-border/50 bg-background/40 px-2.5 py-2 text-xs text-muted-foreground">
         {provider.binaryPath ? (
           <div className="space-y-2">
+            {provider.reason && (
+              <p className="text-warning-foreground">{provider.reason}</p>
+            )}
             {provider.version && (
               <div className="space-y-1">
                 <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground/80">
