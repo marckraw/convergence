@@ -352,7 +352,14 @@ function preferredRemoteProviderModel(
       'sonnet',
       'claude-sonnet-4-6',
     ],
-    codex: ['gpt-5.4', 'gpt-5.3-codex', 'gpt-5.3-codex-spark', 'o3'],
+    codex: [
+      'gpt-5.6-sol',
+      'gpt-5.6-terra',
+      'gpt-5.6-luna',
+      'gpt-5.5',
+      'gpt-5.4',
+      'gpt-5.3-codex-spark',
+    ],
   }
 
   return (

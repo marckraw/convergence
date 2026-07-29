@@ -24,9 +24,9 @@ function resolveSelectedModelId(
   }
   if (
     provider.id === 'codex' &&
-    provider.modelOptions.some((m) => m.id === 'gpt-5.6')
+    provider.modelOptions.some((m) => m.id === 'gpt-5.6-sol')
   ) {
-    return 'gpt-5.6'
+    return 'gpt-5.6-sol'
   }
   return provider.defaultModelId
 }
