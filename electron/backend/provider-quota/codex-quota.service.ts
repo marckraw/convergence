@@ -126,9 +126,14 @@ function getJson(request: JsonGetRequest): Promise<unknown> {
 /** Reads `account/rateLimits/read` from a codex app-server. */
 export type CodexRateLimitsReader = () => Promise<unknown>
 
+/** Reads the ChatGPT tokens for the scrape fallback. Injectable so tests do
+ * not depend on whether the machine running them has a real `~/.codex/auth.json`. */
+export type CodexAuthTokensReader = () => Promise<CodexAuthTokens>
+
 export interface CodexQuotaServiceOptions {
   jsonGet?: JsonGet
   readRateLimits?: CodexRateLimitsReader
+  readAuthTokens?: CodexAuthTokensReader
 }
 
 /**
@@ -164,7 +169,7 @@ export class CodexQuotaService {
   }
 
   private async readFromAuthScrape(): Promise<ProviderQuotaSnapshot> {
-    const tokens = await readCodexAuthTokens()
+    const tokens = await (this.options.readAuthTokens ?? readCodexAuthTokens)()
     const headers: Record<string, string> = {
       Accept: 'application/json',
       Authorization: `Bearer ${tokens.accessToken}`,

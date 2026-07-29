@@ -58,6 +58,12 @@ describe('CodexQuotaService', () => {
       readRateLimits: async () => {
         throw new Error('Unknown method: account/rateLimits/read')
       },
+      // CI runners have no real ~/.codex/auth.json; the scrape's token read
+      // must be stubbed or this test only passes on a logged-in machine.
+      readAuthTokens: async () => ({
+        accessToken: 'test-token',
+        accountId: null,
+      }),
     })
 
     const snapshot = await service.getQuota()
@@ -81,6 +87,10 @@ describe('CodexQuotaService', () => {
       readRateLimits: async () => {
         throw new Error('codex app-server timed out')
       },
+      readAuthTokens: async () => ({
+        accessToken: 'test-token',
+        accountId: null,
+      }),
     })
 
     const snapshot = await service.getQuota()
