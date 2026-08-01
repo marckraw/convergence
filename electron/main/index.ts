@@ -240,7 +240,6 @@ async function startApp(): Promise<void> {
     new GuidedReviewDaemonCredentialsService()
   const openRouterCredentials = new OpenRouterCredentialsService()
   const taskProgressService = new TaskProgressService(broadcastTaskProgress)
-  const codexQuotaService = new CodexQuotaService()
   const claudeQuotaService = new ClaudeQuotaService()
   const executionHost = new LocalExecutionHost(providerRegistry)
   const sessionService = new SessionService(
@@ -310,6 +309,8 @@ async function startApp(): Promise<void> {
     // Cleanup is best effort.
   }
   const debugSink = providerDebugService
+  // Constructed here so it can report RPC failures to the debug sink.
+  const codexQuotaService = new CodexQuotaService({ debugSink })
   async function refreshDetectedProviders() {
     const nextDetected = await detectProviders()
 

@@ -3,6 +3,7 @@ import { promises as fs } from 'fs'
 import { homedir } from 'os'
 import { join } from 'path'
 import { CodexAppServerClient } from '../provider/codex/codex-app-server-client'
+import type { ProviderDebugSink } from '../provider-debug/provider-debug-sink'
 import {
   CODEX_QUOTA_CACHE_TTL_MS,
   CODEX_RATE_LIMITS_TIMEOUT_MS,
@@ -134,6 +135,7 @@ export interface CodexQuotaServiceOptions {
   jsonGet?: JsonGet
   readRateLimits?: CodexRateLimitsReader
   readAuthTokens?: CodexAuthTokensReader
+  debugSink?: ProviderDebugSink
 }
 
 /**
@@ -146,6 +148,12 @@ export interface CodexQuotaServiceOptions {
 export class CodexQuotaService {
   private cached: ProviderQuotaSnapshot | null = null
   private binaryPath: string | null = null
+  /**
+   * A cold read spawns a codex app-server and can take ~30s, so concurrent
+   * callers share one in-flight read instead of each paying for their own
+   * process and round trip.
+   */
+  private inFlight: Promise<ProviderQuotaSnapshot> | null = null
 
   constructor(private readonly options: CodexQuotaServiceOptions = {}) {}
 
@@ -189,16 +197,26 @@ export class CodexQuotaService {
     )
   }
 
-  async getQuota(options: { forceRefresh?: boolean } = {}) {
-    const now = Date.now()
-    if (
-      !options.forceRefresh &&
-      this.cached &&
-      now - Date.parse(this.cached.lastCheckedAt) < CODEX_QUOTA_CACHE_TTL_MS
-    ) {
-      return this.cached
-    }
+  /**
+   * The RPC failure is not surfaced to the user — the scrape's messages are
+   * more actionable ("run `codex login`") — but a silently broken RPC path is
+   * undiagnosable, so it goes to the debug sink before we fall back.
+   */
+  private recordRateLimitsFailure(error: unknown): void {
+    this.options.debugSink?.record({
+      sessionId: 'codex-quota',
+      providerId: 'codex',
+      at: Date.now(),
+      direction: 'in',
+      channel: 'response',
+      method: 'account/rateLimits/read',
+      note: `Codex rate limits RPC failed; falling back to the auth.json scrape: ${
+        error instanceof Error ? error.message : String(error)
+      }`,
+    })
+  }
 
+  private async readQuota(): Promise<ProviderQuotaSnapshot> {
     try {
       let snapshot: ProviderQuotaSnapshot
       try {
@@ -206,7 +224,8 @@ export class CodexQuotaService {
           await this.readRateLimits(),
           new Date().toISOString(),
         )
-      } catch {
+      } catch (rpcError) {
+        this.recordRateLimitsFailure(rpcError)
         snapshot = await this.readFromAuthScrape()
       }
 
@@ -224,5 +243,28 @@ export class CodexQuotaService {
       this.cached = buildCodexQuotaAuthError(message, new Date().toISOString())
       return this.cached
     }
+  }
+
+  async getQuota(options: { forceRefresh?: boolean } = {}) {
+    const now = Date.now()
+    if (
+      !options.forceRefresh &&
+      this.cached &&
+      now - Date.parse(this.cached.lastCheckedAt) < CODEX_QUOTA_CACHE_TTL_MS
+    ) {
+      return this.cached
+    }
+
+    // A forceRefresh joins an in-flight read rather than starting a second
+    // one: the read already under way is as fresh as a new one would be.
+    if (this.inFlight) {
+      return this.inFlight
+    }
+
+    this.inFlight = this.readQuota().finally(() => {
+      this.inFlight = null
+    })
+
+    return this.inFlight
   }
 }
