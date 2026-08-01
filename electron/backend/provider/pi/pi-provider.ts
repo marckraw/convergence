@@ -50,6 +50,7 @@ import {
   mapPiModels,
   mapPiModelsJsonFallbackModels,
 } from './pi-models.pure'
+import { piSupportsAgentSettled } from './pi-version.pure'
 import {
   probePiAvailableModels,
   readPiModelsJsonModelIds,
@@ -269,6 +270,7 @@ export class PiProvider implements Provider {
     private taskProgress: TaskProgressService | null = null,
     private debugSink: ProviderDebugSink = noopDebugSink,
     private resolveEnvironment: PiEnvironmentResolver = defaultPiEnvironmentResolver,
+    private version: string | null = null,
   ) {}
 
   async oneShot(input: OneShotInput): Promise<OneShotResult> {
@@ -452,6 +454,7 @@ export class PiProvider implements Provider {
     } | null = null
     let sawTurnActivity = false
     let pendingTurnOutcome: PiTurnOutcome | null = null
+    const settlesOnAgentSettled = piSupportsAgentSettled(this.version)
     const pendingToolCallArgs = new Map<
       string,
       { name: string; args: string }
@@ -476,6 +479,17 @@ export class PiProvider implements Provider {
     function setAttention(attention: AttentionState): void {
       listeners.attention.forEach((cb) => cb(attention))
       sessionEmitter.patchSession({ attention })
+    }
+    /** Publishes a turn verdict and closes out the turn. */
+    function publishTurnOutcome(outcome: PiTurnOutcome): void {
+      pendingTurnOutcome = null
+      isStreaming = false
+      if (outcome.errorNote) {
+        sessionEmitter.addNote({ text: outcome.errorNote, level: 'error' })
+      }
+      setStatus(outcome.status)
+      setAttention(outcome.attention)
+      currentTurn = null
     }
     function setContinuationToken(token: string): void {
       if (sessionFile === token) return
@@ -820,29 +834,28 @@ export class PiProvider implements Provider {
           flushText()
           applyActivity({ kind: 'agent_end' })
           isStreaming = false
-          pendingTurnOutcome = buildPiTurnOutcome(event)
+          const outcome = buildPiTurnOutcome(event)
+          if (settlesOnAgentSettled) {
+            pendingTurnOutcome = outcome
+          } else {
+            // Pre-0.80.4 pi never sends `agent_settled`, so waiting for it
+            // would hang the session. Settle here, as Convergence did before
+            // the signal existed.
+            publishTurnOutcome(outcome)
+          }
           break
         }
 
         case 'agent_settled': {
           // The terminal signal: nothing pending, so the last recorded outcome
           // is the honest one.
-          const outcome: PiTurnOutcome = pendingTurnOutcome ?? {
-            status: 'completed',
-            attention: 'finished',
-            errorNote: null,
-          }
-          pendingTurnOutcome = null
-          isStreaming = false
-          if (outcome.errorNote) {
-            sessionEmitter.addNote({
-              text: outcome.errorNote,
-              level: 'error',
-            })
-          }
-          setStatus(outcome.status)
-          setAttention(outcome.attention)
-          currentTurn = null
+          publishTurnOutcome(
+            pendingTurnOutcome ?? {
+              status: 'completed',
+              attention: 'finished',
+              errorNote: null,
+            },
+          )
           break
         }
 

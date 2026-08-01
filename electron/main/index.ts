@@ -337,8 +337,12 @@ async function startApp(): Promise<void> {
         providerRegistry.register(new CursorProvider(p.binaryPath, debugSink))
       } else if (p.id === 'pi') {
         providerRegistry.register(
-          new PiProvider(p.binaryPath, taskProgressService, debugSink, (env) =>
-            openRouterCredentials.withOpenRouterEnv(env),
+          new PiProvider(
+            p.binaryPath,
+            taskProgressService,
+            debugSink,
+            (env) => openRouterCredentials.withOpenRouterEnv(env),
+            p.version,
           ),
         )
       } else if (p.id === 'antigravity') {
