@@ -1,5 +1,21 @@
 # convergence
 
+## 0.45.5
+
+### Patch Changes
+
+- 3dda0ec: Guided reviews and remote daemon reviews now prefer the current GPT-5.6 Codex models instead of naming retired ones. The preferences pointed at `gpt-5.6` (an alias OpenAI no longer serves) and `gpt-5.3-codex`, so Convergence quietly fell back to whatever was listed first rather than picking the intended flagship.
+
+  The last two provider handshakes that still identified Convergence as version `0.0.0` — the Codex app-server used for skill discovery, and Cursor's ACP connection — now report the real app version.
+
+- 810c118: Fixes Pi sessions hanging forever on older Pi installs. Convergence marks a Pi run finished when Pi reports it has fully settled, but that signal only exists in Pi 0.80.4 and later — on anything older the session sat "running" indefinitely. Convergence now checks the detected Pi version and falls back to the previous completion behaviour below that floor, so sessions always finish.
+
+  The provider status panel now flags a Pi install that is too old to report completion accurately, and explains why an installed provider is degraded instead of only showing a badge.
+
+- aeb1d72: Codex usage limits are now fetched once even when several parts of the app ask at the same time. Each cold read spawns a Codex app-server and can take up to half a minute, so concurrent requests previously meant several processes and several round trips for the same answer.
+
+  When the usage RPC fails and Convergence falls back to the older path, the RPC's own error is now recorded in provider debug logs instead of being discarded, so a broken quota path can be diagnosed.
+
 ## 0.45.4
 
 ### Patch Changes
