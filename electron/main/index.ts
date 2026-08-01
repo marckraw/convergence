@@ -334,7 +334,11 @@ async function startApp(): Promise<void> {
         )
         codexQuotaService.setBinaryPath(p.binaryPath)
       } else if (p.id === 'cursor') {
-        providerRegistry.register(new CursorProvider(p.binaryPath, debugSink))
+        providerRegistry.register(
+          new CursorProvider(p.binaryPath, debugSink, undefined, {
+            appVersion: app.getVersion(),
+          }),
+        )
       } else if (p.id === 'pi') {
         providerRegistry.register(
           new PiProvider(
@@ -370,6 +374,7 @@ async function startApp(): Promise<void> {
   const mcpService = new McpService(projectService, detected)
   const skillsService = new SkillsService(projectService, detected, {
     cacheRepository: new SkillCatalogRepository(db),
+    appVersion: app.getVersion(),
   })
   const promptsService = new PromptsService(db, projectService)
   const projectScriptsRunner = new ProjectScriptsRunner({

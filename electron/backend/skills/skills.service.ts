@@ -37,6 +37,11 @@ export interface SkillsServiceOptions {
     provider: DetectedProvider,
   ) => SkillProviderCatalogAdapter | null
   /**
+   * Reported to provider CLIs in their initialize handshakes. Only consumed by
+   * the default adapter factory; an injected `createAdapter` owns its own.
+   */
+  appVersion?: string | null
+  /**
    * SQLite-backed catalog cache. When provided, each provider adapter is
    * wrapped in a {@link CachingSkillAdapter} so scans persist across opens and
    * restarts. Omitted in unit tests, which then exercise adapters uncached.
@@ -146,9 +151,10 @@ function providerErrorCatalog(
 
 function defaultCreateAdapter(
   provider: DetectedProvider,
+  appVersion: string | null = null,
 ): SkillProviderCatalogAdapter | null {
   if (provider.id === 'codex') {
-    return new CodexSkillsService(provider.binaryPath)
+    return new CodexSkillsService(provider.binaryPath, { appVersion })
   }
   if (provider.id === 'claude-code') {
     return new ClaudeCodeSkillsService()
@@ -157,7 +163,9 @@ function defaultCreateAdapter(
     return new PiSkillsService()
   }
   if (provider.id === 'cursor') {
-    return new CursorSkillsService(provider.binaryPath)
+    return new CursorSkillsService(provider.binaryPath, undefined, {
+      appVersion,
+    })
   }
   if (provider.id === 'antigravity') {
     return new AntigravitySkillsService()
@@ -266,7 +274,9 @@ export class SkillsService {
     options: SkillsServiceOptions = {},
   ) {
     this.now = options.now ?? (() => new Date())
-    this.createAdapter = options.createAdapter ?? defaultCreateAdapter
+    this.createAdapter =
+      options.createAdapter ??
+      ((provider) => defaultCreateAdapter(provider, options.appVersion ?? null))
     this.cacheRepository = options.cacheRepository ?? null
     this.cacheTtlMs = options.cacheTtlMs ?? DEFAULT_CACHE_TTL_MS
   }

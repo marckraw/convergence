@@ -1,4 +1,5 @@
 import { spawn, type ChildProcess, type SpawnOptions } from 'child_process'
+import { buildCodexClientInfo } from './codex-client-info.pure'
 import { JsonRpcClient } from './jsonrpc'
 
 export interface CodexSkillsListOptions {
@@ -14,6 +15,8 @@ export type CodexAppServerSpawn = (
 export interface CodexAppServerClientOptions {
   timeoutMs?: number
   spawnProcess?: CodexAppServerSpawn
+  /** Reported to Codex in the initialize handshake; feeds its compliance log. */
+  appVersion?: string | null
 }
 
 function formatExitError(
@@ -32,6 +35,7 @@ function formatExitError(
 export class CodexAppServerClient {
   private timeoutMs: number
   private spawnProcess: CodexAppServerSpawn
+  private appVersion: string | null
 
   constructor(
     private binaryPath: string,
@@ -39,6 +43,7 @@ export class CodexAppServerClient {
   ) {
     this.timeoutMs = options.timeoutMs ?? 10_000
     this.spawnProcess = options.spawnProcess ?? spawn
+    this.appVersion = options.appVersion ?? null
   }
 
   async listSkills(
@@ -86,11 +91,7 @@ export class CodexAppServerClient {
     const rpc = new JsonRpcClient(child.stdin, child.stdout)
     const operation = (async () => {
       await rpc.request('initialize', {
-        clientInfo: {
-          name: 'convergence',
-          title: 'Convergence',
-          version: '0.0.0',
-        },
+        clientInfo: buildCodexClientInfo(this.appVersion),
         capabilities: {
           experimentalApi: true,
         },

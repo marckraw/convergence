@@ -9,6 +9,7 @@ import {
   resolveRemoteDaemonGenerationModel,
   resolveRemoteDaemonBaseUrl,
 } from './remote-daemon-guide.pure'
+import { buildFallbackCodexDescriptor } from '../provider/provider-descriptor.pure'
 
 describe('remote daemon guide pure helpers', () => {
   it('normalizes HTTP(S) daemon base URLs and strips query/hash/trailing slash', () => {
@@ -340,3 +341,67 @@ function makeRemoteTarget(
     ...overrides,
   }
 }
+
+// The preference list is intersected with whatever the daemon reports, so a
+// stale id is not a crash — it is a preference that silently never matches.
+// This guard keeps it honest against the shipped Codex catalog.
+describe('remote daemon codex model preferences', () => {
+  const codexMeta = (slugs: string[]) => ({
+    providers: [
+      {
+        id: 'codex',
+        available: true,
+        authenticated: true,
+        models: slugs.map((slug) => ({ slug, label: slug })),
+      },
+    ],
+  })
+
+  it('prefers the current Codex flagship when the daemon offers it', () => {
+    expect(
+      resolveRemoteDaemonGenerationModel({
+        provider: 'codex',
+        preferredModel: 'gpt-4.1-retired',
+        meta: codexMeta(['gpt-5.4', 'gpt-5.6-sol', 'gpt-5.6-luna']),
+      }),
+    ).toEqual({ ok: true, model: 'gpt-5.6-sol', changed: true })
+  })
+
+  it('only names Codex models the shipped catalog still serves', () => {
+    const catalogIds = new Set(
+      buildFallbackCodexDescriptor().modelOptions.map((option) => option.id),
+    )
+    const daemonPreferences = [
+      'gpt-5.6-sol',
+      'gpt-5.6-terra',
+      'gpt-5.6-luna',
+      'gpt-5.5',
+      'gpt-5.4',
+      'gpt-5.3-codex-spark',
+    ]
+
+    // A preference naming a model we no longer serve is dead weight.
+    for (const id of daemonPreferences) {
+      expect(catalogIds.has(id)).toBe(true)
+    }
+
+    // And the list above must still be the one the code uses.
+    expect(
+      resolveRemoteDaemonGenerationModel({
+        provider: 'codex',
+        preferredModel: 'nope',
+        meta: codexMeta(daemonPreferences),
+      }),
+    ).toEqual({ ok: true, model: 'gpt-5.6-sol', changed: true })
+  })
+
+  it('falls back to the daemon first model when no preference matches', () => {
+    expect(
+      resolveRemoteDaemonGenerationModel({
+        provider: 'codex',
+        preferredModel: 'nope',
+        meta: codexMeta(['o3']),
+      }),
+    ).toEqual({ ok: true, model: 'o3', changed: true })
+  })
+})

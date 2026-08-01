@@ -29,6 +29,7 @@ export interface CodexSkillsServiceOptions {
   now?: () => number
   cacheTtlMs?: number
   timeoutMs?: number
+  appVersion?: string | null
 }
 
 function errorMessage(error: unknown): string {
@@ -48,6 +49,7 @@ export class CodexSkillsService {
       options.client ??
       new CodexAppServerClient(binaryPath, {
         timeoutMs: options.timeoutMs ?? DEFAULT_TIMEOUT_MS,
+        appVersion: options.appVersion ?? null,
       })
     this.now = options.now ?? (() => Date.now())
     this.cacheTtlMs = options.cacheTtlMs ?? DEFAULT_CACHE_TTL_MS

@@ -108,6 +108,27 @@ describe('CursorAcpProcessClient', () => {
     })
   })
 
+  // Cursor echoes clientInfo into its own client logging, so the handshake
+  // should name the real Convergence build rather than a placeholder.
+  it('reports the real app version in the ACP handshake', () => {
+    expect(buildCursorAcpInitializeParams('0.45.3').clientInfo).toEqual({
+      name: 'convergence',
+      version: '0.45.3',
+    })
+    expect(buildCursorAcpInitializeParams('  1.2.3  ').clientInfo.version).toBe(
+      '1.2.3',
+    )
+  })
+
+  it('falls back when the app version is unavailable', () => {
+    expect(buildCursorAcpInitializeParams(null).clientInfo.version).toBe(
+      '0.0.0',
+    )
+    expect(buildCursorAcpInitializeParams('   ').clientInfo.version).toBe(
+      '0.0.0',
+    )
+  })
+
   it('creates an authenticated disposable session for discovery', async () => {
     const methods: string[] = []
     const spawnHarness = createSpawn((child, message) => {
