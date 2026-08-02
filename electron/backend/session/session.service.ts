@@ -79,6 +79,12 @@ export interface SendMessageInput {
    * clear; omit to leave existing attachments unchanged.
    */
   contextItemIds?: string[]
+  /**
+   * Provider account to serve the turn this message starts (ADR 0007, PA4).
+   * Omitted or null means the ambient default account. The composer's current
+   * selection is not authoritative — this is, per turn.
+   */
+  providerAccountId?: string | null
 }
 
 export interface SessionNamer {
@@ -113,6 +119,12 @@ interface PendingConversationPatch {
 export class SessionService {
   private activeHandles = new Map<string, SessionHandle>()
   private activeTurnIds = new Map<string, string>()
+  /**
+   * Account chosen for the turn a provider is about to open (ADR 0007, PA4).
+   * Written when the handle starts or a message is dispatched, read when the
+   * provider emits the user message that opens the turn row.
+   */
+  private pendingTurnAccountIds = new Map<string, string | null>()
   private pendingConversationPatches = new Map<
     string,
     PendingConversationPatch
@@ -596,6 +608,7 @@ export class SessionService {
       attachments,
       input.attachmentIds,
       input.skillSelections,
+      input.providerAccountId,
     )
   }
 
@@ -709,6 +722,7 @@ export class SessionService {
         attachments,
         input.attachmentIds,
         input.skillSelections,
+        input.providerAccountId,
       )
       return
     }
@@ -879,6 +893,10 @@ export class SessionService {
 
     const augmentedText = this.prepareUserTurnText(session, input.input.text)
 
+    this.pendingTurnAccountIds.set(
+      input.session.id,
+      input.input.providerAccountId ?? null,
+    )
     handle.sendMessage(
       augmentedText,
       attachments,
@@ -886,6 +904,7 @@ export class SessionService {
       {
         deliveryMode,
         interactionResponse: input.input.interactionResponse,
+        providerAccountId: input.input.providerAccountId,
       },
     )
   }
@@ -1294,6 +1313,7 @@ export class SessionService {
         sessionId,
         turnId,
         workingDirectory: row.working_directory,
+        providerAccountId: this.pendingTurnAccountIds.get(sessionId) ?? null,
       })
     }
 
@@ -1480,6 +1500,7 @@ export class SessionService {
     initialAttachments?: Attachment[],
     initialAttachmentIds?: string[],
     initialSkillSelections?: SkillSelection[],
+    providerAccountId?: string | null,
   ): void {
     const execution = this.resolveExecution(session)
     if (!execution.host.capabilitiesFor(execution.providerId)) {
@@ -1508,10 +1529,12 @@ export class SessionService {
       serviceTier: session.serviceTier ?? null,
       continuationToken,
       permissionConfig: session.permissionConfig,
+      providerAccountId: providerAccountId ?? null,
       initialAttachments,
       ...(workspace ? { workspace } : {}),
     })
 
+    this.pendingTurnAccountIds.set(session.id, providerAccountId ?? null)
     this.activeHandles.set(session.id, handle)
     handle.onDelta((delta: SessionDelta) => {
       this.applyDelta(session.id, delta)
@@ -1586,9 +1609,11 @@ export class SessionService {
       if (handle) {
         this.pendingUserAttachmentIds.set(sessionId, item.attachmentIds)
         this.pendingUserSkillSelections.set(sessionId, item.skillSelections)
+        this.pendingTurnAccountIds.set(sessionId, item.providerAccountId)
         handle.sendMessage(augmentedText, attachments, item.skillSelections, {
           deliveryMode: 'normal',
           queuedInputId: item.id,
+          providerAccountId: item.providerAccountId,
         })
         this.queuedInputs.patch(item.id, 'sent')
         return
@@ -1606,6 +1631,9 @@ export class SessionService {
         attachments,
         item.attachmentIds,
         item.skillSelections,
+        // The account chosen when this input was queued, not whatever the
+        // composer shows now — it may have waited through a switch.
+        item.providerAccountId,
       )
       this.queuedInputs.patch(item.id, 'sent')
     } catch (err) {

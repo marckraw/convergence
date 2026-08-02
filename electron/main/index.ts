@@ -85,6 +85,8 @@ import {
 import { SessionNamingService } from '../backend/session/naming/session-naming.service'
 import { SessionForkService } from '../backend/session/fork/session-fork.service'
 import { registerSessionForkIpcHandlers } from '../backend/session/fork/session-fork.ipc'
+import { ProviderAccountRepository } from '../backend/provider-account/provider-account.repository'
+import { resolveAccountForTurn } from '../backend/provider-account/provider-account-resolution.pure'
 import { loadEnvFile } from '../backend/environment/env-file.service'
 import { hydrateProcessPathFromShell } from '../backend/environment/shell-path.service'
 import { GuidedReviewDaemonCredentialsService } from '../backend/credentials/guided-review-daemon-credentials.service'
@@ -311,6 +313,17 @@ async function startApp(): Promise<void> {
   const debugSink = providerDebugService
   // Constructed here so it can report RPC failures to the debug sink.
   const codexQuotaService = new CodexQuotaService({ debugSink })
+  const providerAccountRepository = new ProviderAccountRepository(db)
+  /**
+   * Resolves a recorded account id to the directories that decide which
+   * credential serves a turn. Reads at spawn time rather than caching, so an
+   * account attestation disabled a moment ago stops receiving work.
+   */
+  const resolveClaudeAccountForTurn = (accountId: string | null | undefined) =>
+    resolveAccountForTurn({
+      accountId,
+      account: accountId ? providerAccountRepository.get(accountId) : null,
+    })
   async function refreshDetectedProviders() {
     const nextDetected = await detectProviders()
 
@@ -322,6 +335,7 @@ async function startApp(): Promise<void> {
             taskProgressService,
             debugSink,
             p.version,
+            resolveClaudeAccountForTurn,
           ),
         )
       } else if (p.id === 'codex') {

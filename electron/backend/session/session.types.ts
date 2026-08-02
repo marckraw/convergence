@@ -131,6 +131,8 @@ export interface SessionQueuedInput {
   attachmentIds: string[]
   skillSelections: SkillSelection[]
   providerRequestId: string | null
+  /** Account selected when this input was queued (ADR 0007, PA4). */
+  providerAccountId: string | null
   error: string | null
   createdAt: string
   updatedAt: string

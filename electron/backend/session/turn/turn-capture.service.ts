@@ -58,6 +58,13 @@ export interface StartTurnInput {
   sessionId: string
   turnId: string
   workingDirectory: string
+  /**
+   * The account serving this turn (ADR 0007, PA4). Null means the ambient
+   * default account, which is what every turn taken before accounts existed
+   * ran on. Claude's own transcript records no account attribution, so if this
+   * row does not hold it, the information does not exist.
+   */
+  providerAccountId?: string | null
 }
 
 export interface EndTurnInput {
@@ -131,12 +138,19 @@ export class TurnCaptureService {
       endedAt: null,
       status: 'running' as const,
       summary: null,
+      providerAccountId: input.providerAccountId ?? null,
     }
 
     this.db
       .prepare(
-        `INSERT INTO session_turns (id, session_id, sequence, started_at, ended_at, status, summary)
-         VALUES (@id, @sessionId, @sequence, @startedAt, @endedAt, @status, @summary)`,
+        `INSERT INTO session_turns (
+           id, session_id, sequence, started_at, ended_at, status, summary,
+           provider_account_id
+         )
+         VALUES (
+           @id, @sessionId, @sequence, @startedAt, @endedAt, @status, @summary,
+           @providerAccountId
+         )`,
       )
       .run(insertRow)
 
@@ -162,6 +176,7 @@ export class TurnCaptureService {
         id: input.turnId,
         sessionId: input.sessionId,
         sequence: nextSequence,
+        providerAccountId: input.providerAccountId ?? null,
         startedAt,
         endedAt: null,
         status: 'running',
@@ -214,7 +229,8 @@ export class TurnCaptureService {
   listTurns(sessionId: string): Turn[] {
     const rows = this.db
       .prepare(
-        `SELECT id, session_id, sequence, started_at, ended_at, status, summary
+        `SELECT id, session_id, sequence, started_at, ended_at, status, summary,
+                provider_account_id
          FROM session_turns
          WHERE session_id = ?
          ORDER BY sequence ASC`,

@@ -692,6 +692,34 @@ function ensureSpaceTablesMigrated(database: Database.Database): void {
   }
 }
 
+/**
+ * Per-turn account attribution (ADR 0007, PA4). Additive and nullable: every
+ * existing row means "the ambient default account served this", which is the
+ * truth for every turn taken before accounts existed.
+ *
+ * Claude's own transcript records no account attribution, so if these columns
+ * do not hold it, the information does not exist anywhere.
+ */
+function ensureProviderAccountColumns(database: Database.Database): void {
+  if (
+    !getTableColumnNames(database, 'session_turns').has('provider_account_id')
+  ) {
+    database.exec(
+      'ALTER TABLE session_turns ADD COLUMN provider_account_id TEXT',
+    )
+  }
+
+  if (
+    !getTableColumnNames(database, 'session_queued_inputs').has(
+      'provider_account_id',
+    )
+  ) {
+    database.exec(
+      'ALTER TABLE session_queued_inputs ADD COLUMN provider_account_id TEXT',
+    )
+  }
+}
+
 function ensureSessionColumns(database: Database.Database): void {
   const columnNames = getTableColumnNames(database, 'sessions')
 
@@ -1074,6 +1102,7 @@ export function getDatabase(dbPath?: string): Database.Database {
     ensureCodeReviewGuideTable(database)
     ensureWorkspaceColumns(database)
     ensureSessionColumns(database)
+    ensureProviderAccountColumns(database)
     ensureAttachmentsTableNoFk(database)
     migrateLegacySessionConversations(database)
     ensureSessionsTableShape(database)

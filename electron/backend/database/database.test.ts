@@ -229,6 +229,7 @@ describe('database', () => {
         'ended_at',
         'status',
         'summary',
+        'provider_account_id',
       ].sort(),
     )
 
@@ -266,6 +267,7 @@ describe('database', () => {
         'attachment_ids_json',
         'skill_selections_json',
         'provider_request_id',
+        'provider_account_id',
         'error',
         'created_at',
         'updated_at',

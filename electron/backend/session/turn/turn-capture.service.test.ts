@@ -63,6 +63,33 @@ describe('TurnCaptureService', () => {
     rmSync(tempDir, { recursive: true, force: true })
   })
 
+  it('records the account that served the turn', async () => {
+    // Claude's own transcript records no account attribution, so if this row
+    // does not hold it, the information does not exist anywhere.
+    const sessionId = randomUUID()
+    const turnId = randomUUID()
+    seedSessionRow(db, sessionId, repoPath)
+
+    await service.startTurn({
+      sessionId,
+      turnId,
+      workingDirectory: repoPath,
+      providerAccountId: 'acct-b',
+    })
+
+    expect(service.listTurns(sessionId)[0].providerAccountId).toBe('acct-b')
+  })
+
+  it('records the ambient default account as no account', async () => {
+    const sessionId = randomUUID()
+    const turnId = randomUUID()
+    seedSessionRow(db, sessionId, repoPath)
+
+    await service.startTurn({ sessionId, turnId, workingDirectory: repoPath })
+
+    expect(service.listTurns(sessionId)[0].providerAccountId).toBeNull()
+  })
+
   it('inserts a running turn row on start', async () => {
     const sessionId = randomUUID()
     const turnId = randomUUID()

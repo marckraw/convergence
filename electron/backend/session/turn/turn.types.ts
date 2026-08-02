@@ -10,6 +10,8 @@ export interface Turn {
   endedAt: string | null
   status: TurnStatus
   summary: string | null
+  /** Account that served this turn; null is the ambient default (PA4). */
+  providerAccountId: string | null
 }
 
 export interface TurnFileChange {
@@ -33,6 +35,7 @@ export interface TurnInsertRow {
   endedAt: string | null
   status: TurnStatus
   summary: string | null
+  providerAccountId: string | null
 }
 
 export interface TurnFileChangeInsertRow {

@@ -52,6 +52,7 @@ describe('session pure helpers', () => {
         id: 'queued-1',
         session_id: 'session-1',
         delivery_mode: 'follow-up',
+        provider_account_id: null,
         state: 'queued',
         text: 'continue',
         attachment_ids_json: '["att-1"]',

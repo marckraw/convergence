@@ -14,6 +14,12 @@ export interface SessionQueuedInputDraft {
   text: string
   attachmentIds?: string[]
   skillSelections?: SkillSelection[]
+  /**
+   * Account selected when this input was queued (ADR 0007, PA4). Recorded here
+   * because a queued input may wait through an account switch, and the turn it
+   * eventually starts belongs to the account chosen when the user wrote it.
+   */
+  providerAccountId?: string | null
 }
 
 export type QueuedInputDeliveryMode = Extract<
@@ -79,6 +85,7 @@ export class SessionQueuedInputService {
       attachmentIds: input.attachmentIds ?? [],
       skillSelections: input.skillSelections ?? [],
       providerRequestId: null,
+      providerAccountId: input.providerAccountId ?? null,
       error: null,
       createdAt: timestamp,
       updatedAt: timestamp,
@@ -95,10 +102,11 @@ export class SessionQueuedInputService {
            attachment_ids_json,
            skill_selections_json,
            provider_request_id,
+           provider_account_id,
            error,
            created_at,
            updated_at
-         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
       .run(
         item.id,
@@ -109,6 +117,7 @@ export class SessionQueuedInputService {
         JSON.stringify(item.attachmentIds),
         JSON.stringify(item.skillSelections),
         item.providerRequestId,
+        item.providerAccountId,
         item.error,
         item.createdAt,
         item.updatedAt,
