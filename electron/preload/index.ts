@@ -371,6 +371,22 @@ contextBridge.exposeInMainWorld('electronAPI', {
     list: (forceRefresh?: boolean) =>
       ipcRenderer.invoke('providerQuota:list', forceRefresh),
   },
+  providerAccounts: {
+    list: () => ipcRenderer.invoke('providerAccounts:list'),
+    enrol: (input: { email: string; label?: string | null }) =>
+      ipcRenderer.invoke('providerAccounts:enrol', input),
+    remove: (accountId: string) =>
+      ipcRenderer.invoke('providerAccounts:remove', accountId),
+    setDefault: (accountId: string) =>
+      ipcRenderer.invoke('providerAccounts:setDefault', accountId),
+    rename: (accountId: string, label: string) =>
+      ipcRenderer.invoke('providerAccounts:rename', accountId, label),
+    sweepOrphans: () => ipcRenderer.invoke('providerAccounts:sweepOrphans'),
+    scanSharedSettings: () =>
+      ipcRenderer.invoke('providerAccounts:scanSharedSettings'),
+    attest: () => ipcRenderer.invoke('providerAccounts:attest'),
+    health: () => ipcRenderer.invoke('providerAccounts:health'),
+  },
   mcp: {
     listByProjectId: (projectId: string) =>
       ipcRenderer.invoke('mcp:listByProjectId', projectId),

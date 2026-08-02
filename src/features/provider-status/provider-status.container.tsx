@@ -6,6 +6,11 @@ import {
   type ProviderRuntimeInfo,
   type ProviderStatusInfo,
 } from '@/entities/session'
+import {
+  providerAccountApi,
+  type ProviderAccount,
+  type ProviderAccountHealth,
+} from '@/entities/provider-account'
 import { useDialogStore } from '@/entities/dialog'
 import { Button } from '@/shared/ui/button'
 import { ProviderStatusDialog } from './provider-status.presentational'
@@ -31,6 +36,11 @@ export const ProviderStatusDialogContainer: FC<
   const [runtimeInfo, setRuntimeInfo] = useState<ProviderRuntimeInfo | null>(
     null,
   )
+  const [providerAccounts, setProviderAccounts] = useState<ProviderAccount[]>(
+    [],
+  )
+  const [providerAccountHealth, setProviderAccountHealth] =
+    useState<ProviderAccountHealth | null>(null)
   const [isLoading, setIsLoading] = useState(false)
   const [updatingProviderId, setUpdatingProviderId] = useState<string | null>(
     null,
@@ -43,12 +53,19 @@ export const ProviderStatusDialogContainer: FC<
     setError(null)
 
     try {
-      const [nextStatuses, nextRuntimeInfo] = await Promise.all([
-        providerApi.getStatuses(),
-        providerApi.getRuntimeInfo(),
-      ])
+      const [nextStatuses, nextRuntimeInfo, nextAccounts, nextHealth] =
+        await Promise.all([
+          providerApi.getStatuses(),
+          providerApi.getRuntimeInfo(),
+          providerAccountApi.list(),
+          // The last recorded verdict, not a fresh check: attestation is
+          // scheduled, and opening a dialog should not spend an account.
+          providerAccountApi.health(),
+        ])
       setStatuses(nextStatuses)
       setRuntimeInfo(nextRuntimeInfo)
+      setProviderAccounts(nextAccounts)
+      setProviderAccountHealth(nextHealth)
     } catch (nextError) {
       setError(
         nextError instanceof Error
@@ -104,6 +121,8 @@ export const ProviderStatusDialogContainer: FC<
       onOpenChange={handleOpenChange}
       statuses={statuses}
       runtimeInfo={runtimeInfo}
+      providerAccounts={providerAccounts}
+      providerAccountHealth={providerAccountHealth}
       isLoading={isLoading}
       updatingProviderId={updatingProviderId}
       error={error}
