@@ -53,6 +53,10 @@ describe('ClaudeCodeProvider.oneShot progress emission', () => {
       workingDirectory: '/tmp',
     })
 
+    // The environment now resolves through the account boundary before
+    // spawning, so the child does not exist until that promise settles.
+    await vi.waitFor(() => expect(spawnMock).toHaveBeenCalled())
+
     child.stdout.write(Buffer.from('{"result":"ok"}'))
     child.stdout.end()
     child.emit('exit', 0)
@@ -73,6 +77,10 @@ describe('ClaudeCodeProvider.oneShot progress emission', () => {
       effort: 'medium',
       workingDirectory: '/tmp',
     })
+
+    // The environment now resolves through the account boundary before
+    // spawning, so the child does not exist until that promise settles.
+    await vi.waitFor(() => expect(spawnMock).toHaveBeenCalled())
 
     child.stdout.write(Buffer.from('{"result":"ok"}'))
     child.stdout.end()
@@ -102,6 +110,10 @@ describe('ClaudeCodeProvider.oneShot progress emission', () => {
       workingDirectory: '/tmp',
       requestId: 'req-success',
     })
+
+    // The environment now resolves through the account boundary before
+    // spawning, so the child does not exist until that promise settles.
+    await vi.waitFor(() => expect(spawnMock).toHaveBeenCalled())
 
     child.stdout.write(Buffer.from('{"resu'))
     child.stdout.write(Buffer.from('lt":"ok"}'))
@@ -136,6 +148,10 @@ describe('ClaudeCodeProvider.oneShot progress emission', () => {
       workingDirectory: '/tmp',
       requestId: 'req-fail',
     })
+
+    // The environment now resolves through the account boundary before
+    // spawning, so the child does not exist until that promise settles.
+    await vi.waitFor(() => expect(spawnMock).toHaveBeenCalled())
 
     child.stderr.write(Buffer.from('boom'))
     child.stderr.end()
