@@ -1,5 +1,12 @@
 # convergence
 
+## 0.45.6
+
+### Patch Changes
+
+- 9f0a6cd: Every Claude process Convergence spawns now resolves its environment through one account-aware boundary. With no account selected, behaviour is byte-identical to before; this is the plumbing that later releases' account selection stands on.
+- 51b701a: Internal groundwork for multi-account provider support: the ProviderAccount domain model and storage land behind the scenes. No user-visible changes — account enrolment and selection arrive in later releases.
+
 ## 0.45.5
 
 ### Patch Changes
