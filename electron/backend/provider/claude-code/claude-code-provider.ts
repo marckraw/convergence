@@ -76,6 +76,7 @@ import {
   type PendingClaudeDeferredToolUse,
 } from './claude-ask-user-question.pure'
 import { resolveClaudeCodePermissionMode } from '../session-permissions.pure'
+import { resolveClaudeAccountEnv } from '../../provider-account/provider-account-env.service'
 
 function now(): string {
   return new Date().toISOString()
@@ -117,11 +118,19 @@ interface ClaudeStreamEvent {
   model?: string
 }
 
-function runClaudeOneShot(
+async function runClaudeOneShot(
   binaryPath: string,
   input: OneShotInput,
   taskProgress?: TaskProgressService | null,
 ): Promise<OneShotResult> {
+  // Session naming, fork summarisation, analytics, space synthesis and guided
+  // review all reach Claude through here, so this one resolve scopes every
+  // one-shot rather than each caller spending the ambient default account.
+  const env = await resolveClaudeAccountEnv({
+    account: null,
+    workingDirectory: input.workingDirectory,
+  })
+
   return new Promise((resolve, reject) => {
     const args = [
       '-p',
@@ -138,7 +147,7 @@ function runClaudeOneShot(
     const child = spawn(binaryPath, args, {
       cwd: input.workingDirectory,
       stdio: ['pipe', 'pipe', 'pipe'],
-      env: { ...process.env },
+      env,
     })
 
     const progress = createTaskProgressEmitter(input.requestId, taskProgress)
@@ -257,10 +266,15 @@ export class ClaudeCodeProvider implements Provider {
     if (config.model?.trim()) args.push('--model', config.model.trim())
     if (config.effort?.trim()) args.push('--effort', config.effort.trim())
 
+    const env = await resolveClaudeAccountEnv({
+      account: null,
+      workingDirectory: config.workingDirectory,
+    })
+
     const child = spawn(this.binaryPath, args, {
       cwd: config.workingDirectory,
       stdio: ['pipe', 'pipe', 'pipe'],
-      env: { ...process.env },
+      env,
     })
     if (!child.stdin || !child.stdout) {
       child.kill('SIGTERM')
@@ -1062,6 +1076,22 @@ export class ClaudeCodeProvider implements Provider {
         skillResolution.skillSelections.length > 0
           ? await getTelemetrySink()
           : null
+      // Resolved here, alongside the other pre-spawn await, so the guard below
+      // still covers every suspension point before the process starts.
+      const env = await resolveClaudeAccountEnv({
+        account: null,
+        workingDirectory: config.workingDirectory,
+        injections: {
+          ...(telemetrySink?.env ?? {}),
+          ...(options?.deferredToolResponse
+            ? {
+                CONVERGENCE_CLAUDE_DEFERRED_TOOL_RESPONSE: JSON.stringify(
+                  options.deferredToolResponse,
+                ),
+              }
+            : {}),
+        },
+      })
       if (stopped || child) return
 
       assistantTextBuffer = ''
@@ -1126,17 +1156,7 @@ export class ClaudeCodeProvider implements Provider {
       child = spawn(binaryPath, args, {
         cwd: config.workingDirectory,
         stdio: ['pipe', 'pipe', 'pipe'],
-        env: {
-          ...process.env,
-          ...(telemetrySink?.env ?? {}),
-          ...(options?.deferredToolResponse
-            ? {
-                CONVERGENCE_CLAUDE_DEFERRED_TOOL_RESPONSE: JSON.stringify(
-                  options.deferredToolResponse,
-                ),
-              }
-            : {}),
-        },
+        env,
       })
 
       if (child.stdout) {
