@@ -425,6 +425,33 @@ const SCHEMA = `
 
   CREATE INDEX IF NOT EXISTS idx_skill_catalog_cache_provider
     ON skill_catalog_cache(provider_id);
+
+  CREATE TABLE IF NOT EXISTS provider_accounts (
+    id TEXT PRIMARY KEY,
+    provider_id TEXT NOT NULL,
+    label TEXT NOT NULL,
+    auth_kind TEXT NOT NULL DEFAULT 'subscription-oauth'
+      CHECK (auth_kind IN ('subscription-oauth', 'setup-token')),
+    email TEXT,
+    org_id TEXT,
+    plan TEXT,
+    config_dir TEXT NOT NULL UNIQUE,
+    credential_dir TEXT NOT NULL UNIQUE,
+    execution_host_id TEXT NOT NULL DEFAULT 'local',
+    is_default INTEGER NOT NULL DEFAULT 0,
+    status TEXT NOT NULL DEFAULT 'connected'
+      CHECK (status IN ('connected', 'expired', 'unavailable')),
+    last_validated_at TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_provider_accounts_provider_host
+    ON provider_accounts(provider_id, execution_host_id);
+
+  CREATE UNIQUE INDEX IF NOT EXISTS idx_provider_accounts_single_default
+    ON provider_accounts(provider_id, execution_host_id)
+    WHERE is_default = 1;
 `
 
 function ensureAttachmentsTableNoFk(database: Database.Database): void {
