@@ -61,12 +61,14 @@ export const sessionApi = {
     attachmentIds?: string[],
     skillSelections?: SkillSelection[],
     contextItemIds?: string[],
+    providerAccountId?: string | null,
   ): Promise<void> =>
     window.electronAPI.session.start(id, {
       text: message,
       attachmentIds,
       skillSelections,
       contextItemIds,
+      providerAccountId,
     }),
 
   sendMessage: (
@@ -76,6 +78,7 @@ export const sessionApi = {
     skillSelections?: SkillSelection[],
     deliveryMode?: MidRunInputMode,
     interactionResponse?: InteractionResponse,
+    providerAccountId?: string | null,
   ): Promise<void> =>
     window.electronAPI.session.sendMessage(id, {
       text,
@@ -83,6 +86,7 @@ export const sessionApi = {
       skillSelections,
       deliveryMode,
       interactionResponse,
+      providerAccountId,
     }),
 
   compactContext: (id: string, instructions?: string): Promise<void> =>

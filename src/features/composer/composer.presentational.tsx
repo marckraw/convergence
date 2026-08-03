@@ -45,6 +45,8 @@ import {
   Zap,
 } from 'lucide-react'
 import { ComposerSelect } from './composer-select.presentational'
+import { ComposerAccountPicker } from './composer-account-picker.presentational'
+import type { ProviderAccount } from '@/entities/provider-account'
 import { ComposerContextMentionPicker } from './composer-context-mention.presentational'
 import { ComposerInjectionRootPicker } from './composer-injection-root-picker.presentational'
 import { ComposerPromptInjectionPicker } from './composer-prompt-injection-picker.presentational'
@@ -62,6 +64,10 @@ interface ComposerProps {
   onProviderChange: (id: string) => void
   onModelChange: (id: string, providerId?: string) => void
   onEffortChange: (id: ReasoningEffort | '') => void
+  providerAccounts: ProviderAccount[]
+  selectedProviderAccountId: string | null
+  onProviderAccountChange: (accountId: string | null) => void
+  providerAccountSelectionLocked: boolean
   codexFastMode: boolean
   onCodexFastModeChange: (enabled: boolean) => void
   remoteHostAvailable: boolean
@@ -153,6 +159,10 @@ export const Composer: FC<ComposerProps> = ({
   onProviderChange,
   onModelChange,
   onEffortChange,
+  providerAccounts,
+  selectedProviderAccountId,
+  onProviderAccountChange,
+  providerAccountSelectionLocked,
   codexFastMode,
   onCodexFastModeChange,
   remoteHostAvailable,
@@ -667,6 +677,14 @@ export const Composer: FC<ComposerProps> = ({
                 onChange={(id) => onEffortChange(id as ReasoningEffort)}
                 disabled={selectionDisabled || !selection.model}
                 className="px-2 text-xs text-muted-foreground hover:text-foreground"
+              />
+            )}
+            {selection.providerId === 'claude-code' && (
+              <ComposerAccountPicker
+                accounts={providerAccounts}
+                selectedAccountId={selectedProviderAccountId}
+                onChange={onProviderAccountChange}
+                disabled={disabled || providerAccountSelectionLocked}
               />
             )}
             {selection.providerId === 'codex' ? (

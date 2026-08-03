@@ -19,6 +19,12 @@ export interface SearchableSelectItem {
     label: string
     title?: string
   }
+  /**
+   * Listed but not choosable. For options that exist and matter to the user —
+   * a provider account attestation disabled, say — where hiding them would be
+   * more confusing than showing why they cannot be picked.
+   */
+  disabled?: boolean
 }
 
 export interface SearchableSelectAction {
@@ -158,8 +164,17 @@ export function SearchableSelectPresentational({
                 <CommandItem
                   key={item.id}
                   value={item.id}
-                  onSelect={() => onSelect(item.id)}
-                  className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-2 text-sm aria-selected:bg-accent aria-selected:text-accent-foreground"
+                  disabled={item.disabled}
+                  onSelect={() => {
+                    if (item.disabled) return
+                    onSelect(item.id)
+                  }}
+                  className={cn(
+                    'flex items-center gap-2 rounded-md px-2 py-2 text-sm aria-selected:bg-accent aria-selected:text-accent-foreground',
+                    item.disabled
+                      ? 'cursor-not-allowed opacity-50'
+                      : 'cursor-pointer',
+                  )}
                 >
                   <div className="flex min-w-0 flex-1 flex-col">
                     <span className="flex min-w-0 items-center gap-2">

@@ -10,6 +10,13 @@ export interface Turn {
   endedAt: string | null
   status: TurnStatus
   summary: string | null
+  /**
+   * The provider account that served this turn; `null` is the ambient default
+   * (ADR 0007, PA4). This is the durable record — the composer's selection is
+   * only composer state, so this is what "which account is this conversation
+   * on" actually means.
+   */
+  providerAccountId: string | null
 }
 
 export interface TurnFileChange {
