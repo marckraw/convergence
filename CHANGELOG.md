@@ -1,5 +1,26 @@
 # convergence
 
+## 0.45.7
+
+### Patch Changes
+
+- a42589f: Every Claude turn now records which provider account served it, and holds that
+  account for the whole logical turn — including deferred-tool answers and
+  recovery restarts, which continue on the account that started the work rather
+  than whatever is selected when they happen. Turns taken with no account
+  selected behave exactly as before and are recorded as the default account. An
+  account that identity attestation disabled stops receiving turns instead of
+  being spent silently.
+- 1cb8a9d: Claude provider accounts can now be enrolled, removed and attested. Enrolment
+  creates an isolated credential namespace, shares the whole agent profile by
+  symlink, and captures identity from the account's own configuration. A
+  fail-closed attestation pass disables an account that starts serving a
+  different identity, reports account-directory entries a future Claude release
+  invents, and warns when shared settings supply a credential that would make
+  account selection decorative. Provider status shows enrolled accounts by email
+  and organization; enrolment itself is a developer-console trigger until the
+  settings surface lands.
+
 ## 0.45.6
 
 ### Patch Changes
