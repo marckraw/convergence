@@ -9,6 +9,30 @@ import {
   type ProjectContextItem,
 } from '@/entities/project-context'
 
+let providerAccountsMock: unknown[] = []
+let sessionTurnsMock: unknown[] = []
+
+function buildAccount(overrides: Record<string, unknown> = {}) {
+  return {
+    id: 'acct-a',
+    providerId: 'claude-code',
+    label: 'Personal Max',
+    authKind: 'subscription-oauth',
+    email: 'a@example.com',
+    orgId: 'org-a',
+    plan: 'max',
+    configDir: '/config/acct-a',
+    credentialDir: '/credentials/acct-a',
+    executionHostId: 'local',
+    isDefault: false,
+    status: 'connected',
+    lastValidatedAt: null,
+    createdAt: '2026-08-03T00:00:00.000Z',
+    updatedAt: '2026-08-03T00:00:00.000Z',
+    ...overrides,
+  }
+}
+
 const projectContextItem: ProjectContextItem = {
   id: 'ctx-chaperone',
   projectId: 'project-1',
@@ -60,7 +84,15 @@ const codexProvider = {
 
 describe('ComposerContainer', () => {
   beforeEach(() => {
+    providerAccountsMock = []
+    sessionTurnsMock = []
     ;(window as unknown as { electronAPI: unknown }).electronAPI = {
+      providerAccounts: {
+        list: vi.fn(() => Promise.resolve(providerAccountsMock)),
+      },
+      turns: {
+        listForSession: vi.fn(() => Promise.resolve(sessionTurnsMock)),
+      },
       providerQuota: {
         list: vi.fn().mockResolvedValue([
           {
@@ -304,6 +336,11 @@ describe('ComposerContainer', () => {
     expect(state.sendMessageToSession).toHaveBeenCalledWith(
       'session-1',
       'Try again in this session',
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      null,
     )
     expect(state.createAndStartSession).not.toHaveBeenCalled()
   })
@@ -351,6 +388,9 @@ describe('ComposerContainer', () => {
           status: 'selected',
         },
       ],
+      undefined,
+      undefined,
+      null,
     )
   })
 
@@ -396,6 +436,7 @@ describe('ComposerContainer', () => {
       { preset: 'ask' },
       null,
       undefined,
+      null,
     )
   })
 
@@ -457,6 +498,7 @@ describe('ComposerContainer', () => {
       { preset: 'ask' },
       null,
       'remote',
+      null,
     )
   })
 
@@ -496,6 +538,7 @@ describe('ComposerContainer', () => {
       undefined,
       { preset: 'ask' },
       null,
+      null,
     )
     expect(
       useSessionStore.getState().createAndStartSession,
@@ -533,6 +576,7 @@ describe('ComposerContainer', () => {
       undefined,
       undefined,
       { preset: 'ask' },
+      null,
       null,
     )
   })
@@ -578,6 +622,7 @@ describe('ComposerContainer', () => {
       { preset: 'ask' },
       'default',
       undefined,
+      null,
     )
   })
 
@@ -619,6 +664,7 @@ describe('ComposerContainer', () => {
       { preset: 'ask' },
       'fast',
       undefined,
+      null,
     )
   })
 
@@ -659,6 +705,7 @@ describe('ComposerContainer', () => {
       { preset: 'yolo' },
       null,
       undefined,
+      null,
     )
   })
 
@@ -884,6 +931,8 @@ describe('ComposerContainer', () => {
       undefined,
       undefined,
       'follow-up',
+      undefined,
+      null,
     )
   })
 
@@ -970,7 +1019,159 @@ describe('ComposerContainer', () => {
       undefined,
       undefined,
       'answer',
+      undefined,
+      null,
     )
     expect(screen.queryByRole('radiogroup')).not.toBeInTheDocument()
+  })
+
+  describe('the provider account selector', () => {
+    it('stays out of the way when no account is enrolled', async () => {
+      // Behaviour neutrality: with nothing enrolled the composer looks and
+      // behaves exactly as it did before PA5.
+      render(
+        <ComposerContainer
+          context={{
+            kind: 'project',
+            projectId: 'project-1',
+            workspaceId: null,
+            activeSessionId: 'session-1',
+          }}
+        />,
+      )
+
+      await waitFor(() => {
+        expect(window.electronAPI.providerAccounts.list).toHaveBeenCalled()
+      })
+      expect(screen.queryByText('Default account')).not.toBeInTheDocument()
+    })
+
+    it('presents the account by identity once one is enrolled', async () => {
+      providerAccountsMock = [buildAccount()]
+
+      render(
+        <ComposerContainer
+          context={{
+            kind: 'project',
+            projectId: 'project-1',
+            workspaceId: null,
+            activeSessionId: 'session-1',
+          }}
+        />,
+      )
+
+      // No selection yet, so the trigger names the ambient default.
+      await screen.findByText('Default account')
+
+      fireEvent.click(screen.getByText('Default account'))
+      expect(await screen.findByText('a@example.com')).toBeInTheDocument()
+      expect(screen.getByText('Organization org-a')).toBeInTheDocument()
+    })
+
+    it('sends the next turn on the account the user picked', async () => {
+      // The money shot: the same conversation continues on the new account.
+      providerAccountsMock = [
+        buildAccount({ id: 'acct-b', email: 'b@example.com' }),
+      ]
+
+      render(
+        <ComposerContainer
+          context={{
+            kind: 'project',
+            projectId: 'project-1',
+            workspaceId: null,
+            activeSessionId: 'session-1',
+          }}
+        />,
+      )
+
+      fireEvent.click(await screen.findByText('Default account'))
+      fireEvent.click(await screen.findByText('b@example.com'))
+
+      const textbox = screen.getByPlaceholderText('Send a follow-up...')
+      fireEvent.change(textbox, { target: { value: 'continue on B' } })
+      fireEvent.keyDown(textbox, { key: 'Enter', metaKey: true })
+
+      expect(
+        useSessionStore.getState().sendMessageToSession,
+      ).toHaveBeenCalledWith(
+        'session-1',
+        'continue on B',
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        'acct-b',
+      )
+    })
+
+    it('shows the account that actually served the last turn', async () => {
+      // PA4's record is the honest answer, not anything the composer remembers.
+      providerAccountsMock = [
+        buildAccount({ id: 'acct-b', email: 'b@example.com' }),
+      ]
+      sessionTurnsMock = [
+        {
+          id: 'turn-1',
+          sessionId: 'session-1',
+          sequence: 1,
+          startedAt: '2026-08-03T00:00:00.000Z',
+          endedAt: '2026-08-03T00:01:00.000Z',
+          status: 'completed',
+          summary: null,
+          providerAccountId: 'acct-b',
+        },
+      ]
+
+      render(
+        <ComposerContainer
+          context={{
+            kind: 'project',
+            projectId: 'project-1',
+            workspaceId: null,
+            activeSessionId: 'session-1',
+          }}
+        />,
+      )
+
+      expect(await screen.findByText('b@example.com')).toBeInTheDocument()
+    })
+
+    it('does not offer an account attestation disabled', async () => {
+      providerAccountsMock = [buildAccount({ status: 'unavailable' })]
+
+      render(
+        <ComposerContainer
+          context={{
+            kind: 'project',
+            projectId: 'project-1',
+            workspaceId: null,
+            activeSessionId: 'session-1',
+          }}
+        />,
+      )
+
+      fireEvent.click(await screen.findByText('Default account'))
+      const option = await screen.findByText('a@example.com')
+      expect(option.closest('[data-disabled="true"]')).not.toBeNull()
+
+      fireEvent.click(option)
+
+      const textbox = screen.getByPlaceholderText('Send a follow-up...')
+      fireEvent.change(textbox, { target: { value: 'should stay ambient' } })
+      fireEvent.keyDown(textbox, { key: 'Enter', metaKey: true })
+
+      expect(
+        useSessionStore.getState().sendMessageToSession,
+      ).toHaveBeenCalledWith(
+        'session-1',
+        'should stay ambient',
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        null,
+      )
+    })
   })
 })

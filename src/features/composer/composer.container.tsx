@@ -17,6 +17,13 @@ import {
 import { useAppSettingsStore } from '@/entities/app-settings'
 import { useDialogStore } from '@/entities/dialog'
 import {
+  isProviderAccountSelectionLocked,
+  providerAccountApi,
+  resolveInitialProviderAccountSelection,
+  type ProviderAccount,
+} from '@/entities/provider-account'
+import { turnsApi } from '@/entities/turn'
+import {
   findProviderQuotaSnapshot,
   providerQuotaApi,
   type ProviderQuotaSnapshot,
@@ -131,6 +138,12 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
   const [modelId, setModelId] = useState('')
   const [effortId, setEffortId] = useState<ReasoningEffort | ''>('')
   const [codexFastMode, setCodexFastMode] = useState(false)
+  const [providerAccounts, setProviderAccounts] = useState<ProviderAccount[]>(
+    [],
+  )
+  const [selectedProviderAccountId, setSelectedProviderAccountId] = useState<
+    string | null
+  >(null)
   const [runOnRemoteHost, setRunOnRemoteHost] = useState(false)
   const [permissionConfig, setPermissionConfig] =
     useState<SessionPermissionConfig>(resolveSimplePermissionConfig('ask'))
@@ -621,6 +634,80 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
     )
   }, [selection.providerId])
 
+  // Enrolled accounts, refreshed whenever the composer switches session so a
+  // just-enrolled or just-disabled account shows up without a restart.
+  useEffect(() => {
+    let cancelled = false
+    void (async () => {
+      let accounts: ProviderAccount[]
+      try {
+        accounts = await providerAccountApi.list()
+      } catch {
+        // A composer that cannot list accounts still composes; it offers the
+        // ambient default, which is exactly what it did before PA5.
+        accounts = []
+      }
+      if (!cancelled) setProviderAccounts(accounts)
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [activeSessionId])
+
+  /**
+   * Seeds the picker from PA4's durable record — the account that served the
+   * session's most recent turn — rather than from anything the composer
+   * remembers, which would drift after a restart and quietly show the wrong
+   * identity.
+   */
+  useEffect(() => {
+    let cancelled = false
+
+    const seed = async () => {
+      if (!activeSessionId) {
+        if (!cancelled) {
+          setSelectedProviderAccountId(
+            resolveInitialProviderAccountSelection({
+              accounts: providerAccounts,
+              hasActiveSession: false,
+            }),
+          )
+        }
+        return
+      }
+
+      let lastTurnAccountId: string | null
+      try {
+        const turns = await turnsApi.listForSession(activeSessionId)
+        lastTurnAccountId = turns.at(-1)?.providerAccountId ?? null
+      } catch {
+        // Unreadable turns mean "no record", which resolves to the ambient
+        // default — never a guess at which account was in use.
+        lastTurnAccountId = null
+      }
+
+      if (cancelled) return
+      setSelectedProviderAccountId(
+        resolveInitialProviderAccountSelection({
+          accounts: providerAccounts,
+          lastTurnAccountId,
+          hasActiveSession: true,
+        }),
+      )
+    }
+
+    void seed()
+    return () => {
+      cancelled = true
+    }
+  }, [activeSessionId, providerAccounts])
+
+  const providerAccountSelectionLocked = isProviderAccountSelectionLocked(
+    activeSession
+      ? { status: activeSession.status, attention: activeSession.attention }
+      : null,
+  )
+
   useEffect(() => {
     if (activeSession) {
       setProviderId(activeSession.providerId)
@@ -746,6 +833,8 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
             hasAttachments ? attachmentIds : undefined,
             skillSelections,
             mode,
+            undefined,
+            selectedProviderAccountId,
           )
         } else {
           sendMessageToSession(
@@ -753,6 +842,9 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
             trimmed,
             hasAttachments ? attachmentIds : undefined,
             skillSelections,
+            undefined,
+            undefined,
+            selectedProviderAccountId,
           )
         }
       } else if (mode) {
@@ -762,9 +854,19 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
           undefined,
           undefined,
           mode,
+          undefined,
+          selectedProviderAccountId,
         )
       } else {
-        sendMessageToSession(activeSession.id, trimmed)
+        sendMessageToSession(
+          activeSession.id,
+          trimmed,
+          undefined,
+          undefined,
+          undefined,
+          undefined,
+          selectedProviderAccountId,
+        )
       }
       setValue('')
       setSelectedSkills([])
@@ -790,6 +892,7 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
           skillSelections,
           permissionConfig,
           serviceTier,
+          selectedProviderAccountId,
         )
         if (session) {
           await onGlobalSessionCreated?.(session)
@@ -810,6 +913,7 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
         permissionConfig,
         serviceTier,
         effectiveRunOnRemoteHost ? 'remote' : undefined,
+        selectedProviderAccountId,
       )
     } else {
       createAndStartSession(
@@ -826,6 +930,7 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
         permissionConfig,
         serviceTier,
         effectiveRunOnRemoteHost ? 'remote' : undefined,
+        selectedProviderAccountId,
       )
     }
     setValue('')
@@ -856,6 +961,7 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
     permissionConfig,
     serviceTier,
     effectiveRunOnRemoteHost,
+    selectedProviderAccountId,
   ])
 
   const handleProviderChange = (nextProviderId: string) => {
@@ -1027,6 +1133,10 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
         onProviderChange={handleProviderChange}
         onModelChange={handleModelChange}
         onEffortChange={setEffortId}
+        providerAccounts={providerAccounts}
+        selectedProviderAccountId={selectedProviderAccountId}
+        onProviderAccountChange={setSelectedProviderAccountId}
+        providerAccountSelectionLocked={providerAccountSelectionLocked}
         codexFastMode={codexFastMode}
         onCodexFastModeChange={setCodexFastMode}
         remoteHostAvailable={remoteHostEligible}

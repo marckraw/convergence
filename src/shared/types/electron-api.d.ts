@@ -808,6 +808,8 @@ interface SendSessionMessageInput {
   deliveryMode?: MidRunInputMode
   interactionResponse?: InteractionResponseData
   contextItemIds?: string[]
+  /** Provider account for the turn this message starts (ADR 0007, PA4/PA5). */
+  providerAccountId?: string | null
 }
 
 interface InteractionChoiceOptionData {

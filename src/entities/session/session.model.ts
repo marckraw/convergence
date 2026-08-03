@@ -69,6 +69,7 @@ interface SessionActions {
     permissionConfig?: SessionPermissionConfig,
     serviceTier?: string | null,
     executionHost?: SessionExecutionHostId,
+    providerAccountId?: string | null,
   ) => Promise<void>
   createAndStartGlobalSession: (
     providerId: string,
@@ -80,6 +81,7 @@ interface SessionActions {
     skillSelections?: SkillSelection[],
     permissionConfig?: SessionPermissionConfig,
     serviceTier?: string | null,
+    providerAccountId?: string | null,
   ) => Promise<SessionSummary | null>
   createTerminalSession: (
     projectId: string,
@@ -95,6 +97,7 @@ interface SessionActions {
     skillSelections?: SkillSelection[],
     deliveryMode?: MidRunInputMode,
     interactionResponse?: InteractionResponse,
+    providerAccountId?: string | null,
   ) => Promise<void>
   compactSessionContext: (id: string, instructions?: string) => Promise<void>
   stopSession: (id: string) => Promise<void>
@@ -446,6 +449,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     permissionConfig,
     serviceTier,
     executionHost,
+    providerAccountId,
   ) => {
     set({ error: null })
     try {
@@ -466,6 +470,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
         attachmentIds,
         skillSelections,
         contextItemIds,
+        providerAccountId,
       )
       set((state) => ({
         currentProjectId: projectId,
@@ -505,6 +510,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     skillSelections,
     permissionConfig,
     serviceTier,
+    providerAccountId,
   ) => {
     set({ error: null })
     try {
@@ -522,6 +528,8 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
         message,
         attachmentIds,
         skillSelections,
+        undefined,
+        providerAccountId,
       )
       set((state) => ({
         globalChatSessions: [session, ...state.globalChatSessions],
@@ -611,6 +619,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     skillSelections?: SkillSelection[],
     deliveryMode?: MidRunInputMode,
     interactionResponse?: InteractionResponse,
+    providerAccountId?: string | null,
   ) => {
     set({ error: null })
     try {
@@ -621,6 +630,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
         skillSelections,
         deliveryMode,
         interactionResponse,
+        providerAccountId,
       )
     } catch (err) {
       set({

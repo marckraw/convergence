@@ -32,6 +32,7 @@ describe('turnsApi', () => {
         endedAt: null,
         status: 'running',
         summary: null,
+        providerAccountId: null,
       },
     ]
     listForSession.mockResolvedValue(turns)
@@ -94,6 +95,7 @@ describe('turnsApi', () => {
         endedAt: null,
         status: 'running',
         summary: null,
+        providerAccountId: null,
       },
     }
     innerHandler(delta)
