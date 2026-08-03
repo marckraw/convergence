@@ -1215,6 +1215,55 @@ type ProviderQuotaSnapshotData =
       stale: boolean
     }
 
+type ProviderAccountStatusData = 'connected' | 'expired' | 'unavailable'
+
+interface ProviderAccountData {
+  id: string
+  providerId: string
+  label: string
+  authKind: 'subscription-oauth' | 'setup-token'
+  email: string | null
+  orgId: string | null
+  plan: string | null
+  configDir: string
+  credentialDir: string
+  executionHostId: string
+  isDefault: boolean
+  status: ProviderAccountStatusData
+  lastValidatedAt: string | null
+  createdAt: string
+  updatedAt: string
+}
+
+interface ProviderAccountSettingsWarningData {
+  kind: 'api-key-helper' | 'credential-env-key'
+  key: string
+  message: string
+}
+
+interface ProviderAccountEnrolResult {
+  account: ProviderAccountData
+  warnings: ProviderAccountSettingsWarningData[]
+}
+
+interface ProviderAccountAttestationResultData {
+  accountId: string
+  label: string
+  email: string | null
+  outcome: 'verified' | 'identity-mismatch' | 'identity-unknown' | 'unreadable'
+  status: ProviderAccountStatusData
+  detail: string | null
+  unknownEntries: string[]
+  missingLinks: string[]
+}
+
+interface ProviderAccountHealthData {
+  checkedAt: string | null
+  claudeVersion: string | null
+  accounts: ProviderAccountAttestationResultData[]
+  settingsWarnings: ProviderAccountSettingsWarningData[]
+}
+
 type FeedbackPriorityData = 'low' | 'medium' | 'high'
 
 interface FeedbackContextData {
@@ -1731,6 +1780,20 @@ interface ElectronAPI {
   }
   providerQuota: {
     list: (forceRefresh?: boolean) => Promise<ProviderQuotaSnapshotData[]>
+  }
+  providerAccounts: {
+    list: () => Promise<ProviderAccountData[]>
+    enrol: (input: {
+      email: string
+      label?: string | null
+    }) => Promise<ProviderAccountEnrolResult>
+    remove: (accountId: string) => Promise<void>
+    setDefault: (accountId: string) => Promise<ProviderAccountData[]>
+    rename: (accountId: string, label: string) => Promise<ProviderAccountData[]>
+    sweepOrphans: () => Promise<string[]>
+    scanSharedSettings: () => Promise<ProviderAccountSettingsWarningData[]>
+    attest: () => Promise<ProviderAccountHealthData>
+    health: () => Promise<ProviderAccountHealthData>
   }
   mcp: {
     listByProjectId: (projectId: string) => Promise<ProjectMcpVisibility>

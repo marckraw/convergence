@@ -17,10 +17,17 @@ import {
   Bot,
   CircleAlert,
   CircleCheck,
+  KeyRound,
   RefreshCw,
   Terminal,
   Wrench,
 } from 'lucide-react'
+import {
+  describeProviderAccountStatus,
+  summariseProviderAccountHealth,
+  type ProviderAccount,
+  type ProviderAccountHealth,
+} from '@/entities/provider-account'
 
 interface ProviderStatusDialogProps {
   open: boolean
@@ -28,6 +35,8 @@ interface ProviderStatusDialogProps {
   trigger: ReactNode
   statuses: ProviderStatusInfo[]
   runtimeInfo: ProviderRuntimeInfo | null
+  providerAccounts: ProviderAccount[]
+  providerAccountHealth: ProviderAccountHealth | null
   isLoading: boolean
   updatingProviderId: string | null
   error: string | null
@@ -320,12 +329,104 @@ function formatInstallManager(
   }
 }
 
+/**
+ * Provider accounts (ADR 0007). An account is identity and entitlements rather
+ * than an anonymous slot, so each row leads with the email and organization
+ * that actually served the turns. Read-only here — enrolment gets a real
+ * surface in PA6.
+ */
+function renderProviderAccounts(
+  accounts: ProviderAccount[],
+  health: ProviderAccountHealth | null,
+) {
+  const summary = summariseProviderAccountHealth(health, accounts)
+
+  if (accounts.length === 0 && !summary.hasSettingsOverride) return null
+
+  return (
+    <div className="space-y-2 rounded-xl border border-border/70 bg-card/50 px-4 py-3">
+      <div className="flex items-center gap-2">
+        <KeyRound className="h-4 w-4 text-muted-foreground" />
+        <p className="text-sm font-medium">
+          {accounts.length} Claude account{accounts.length === 1 ? '' : 's'}
+        </p>
+        {health?.checkedAt && (
+          <span className="text-[11px] text-muted-foreground/80">
+            checked {new Date(health.checkedAt).toLocaleString()}
+          </span>
+        )}
+      </div>
+
+      {summary.hasSettingsOverride && (
+        <p className="rounded-lg border border-warning/20 bg-warning/10 px-3 py-2 text-xs text-warning-foreground">
+          Shared settings.json supplies a credential to every Claude process, so
+          account selection has no effect until it is removed.
+        </p>
+      )}
+
+      {accounts.map((account) => {
+        const status = describeProviderAccountStatus(account.status)
+        const detail = health?.accounts.find(
+          (entry) => entry.accountId === account.id,
+        )
+
+        return (
+          <div
+            key={account.id}
+            className="flex flex-col gap-1 border-t border-border/50 pt-2 first-of-type:border-t-0 first-of-type:pt-0"
+          >
+            <div className="flex items-center justify-between gap-2">
+              <span className="truncate text-sm">
+                {account.email ?? account.label}
+                {account.isDefault && (
+                  <span className="ml-2 text-[11px] text-muted-foreground">
+                    default
+                  </span>
+                )}
+              </span>
+              <span
+                className={`rounded-full border px-2 py-0.5 text-[10px] font-medium tracking-wide uppercase ${
+                  status.tone === 'ok'
+                    ? 'border-emerald-500/20 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300'
+                    : status.tone === 'warning'
+                      ? 'border-warning/20 bg-warning/10 text-warning-foreground'
+                      : 'border-destructive/20 bg-destructive/10 text-destructive'
+                }`}
+              >
+                {status.label}
+              </span>
+            </div>
+            {account.orgId && (
+              <span className="truncate text-[11px] text-muted-foreground">
+                org {account.orgId}
+              </span>
+            )}
+            {detail?.detail && (
+              <span className="text-[11px] text-destructive">
+                {detail.detail}
+              </span>
+            )}
+            {detail && detail.unknownEntries.length > 0 && (
+              <span className="text-[11px] text-muted-foreground">
+                Unrecognised entries in the account directory:{' '}
+                {detail.unknownEntries.join(', ')}
+              </span>
+            )}
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
 export const ProviderStatusDialog: FC<ProviderStatusDialogProps> = ({
   open,
   onOpenChange,
   trigger,
   statuses,
   runtimeInfo,
+  providerAccounts,
+  providerAccountHealth,
   isLoading,
   updatingProviderId,
   error,
@@ -378,6 +479,8 @@ export const ProviderStatusDialog: FC<ProviderStatusDialogProps> = ({
                   </p>
                 </div>
               </div>
+
+              {renderProviderAccounts(providerAccounts, providerAccountHealth)}
 
               <div className="space-y-3">
                 {statuses.map((provider) =>

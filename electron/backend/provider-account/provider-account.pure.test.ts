@@ -3,6 +3,7 @@ import { join } from 'path'
 import { fileURLToPath } from 'url'
 import { describe, expect, it } from 'vitest'
 import {
+  assertRemovableAccountDir,
   CLAUDE_KEYCHAIN_ACCOUNT_FALLBACK,
   deriveClaudeKeychainAccount,
   deriveClaudeKeychainService,
@@ -10,6 +11,7 @@ import {
   deriveProviderAccountCredentialDir,
   hashProviderAccountDir,
   mapProviderAccountRow,
+  providerAccountPathToken,
 } from './provider-account.pure'
 import type { ProviderAccountRow } from './provider-account.types'
 
@@ -31,7 +33,7 @@ function dirInput(
 ) {
   return {
     homeDir: HOME,
-    providerId: 'claude',
+    providerId: 'claude-code',
     accountId: ACCOUNT_ID,
     ...overrides,
   }
@@ -63,7 +65,48 @@ describe('provider account directory derivation', () => {
     ).toThrow(/Unsafe provider account accountId/)
     expect(() =>
       deriveProviderAccountCredentialDir(dirInput({ providerId: 'cl/aude' })),
-    ).toThrow(/Unsafe provider account providerId/)
+    ).toThrow(/No provider account path token/)
+  })
+
+  it('speaks registry ids in the domain and path tokens on disk', () => {
+    // Ruled 2026-08-03. The token is hashed into the keychain slot at
+    // enrolment and can never change, so it is pinned per provider rather than
+    // derived from a registry id that might one day be renamed.
+    expect(providerAccountPathToken('claude-code')).toBe('claude')
+    expect(deriveProviderAccountConfigDir(dirInput())).toContain(
+      '/provider-accounts/claude/',
+    )
+    expect(deriveProviderAccountConfigDir(dirInput())).not.toContain(
+      'claude-code',
+    )
+  })
+
+  it('refuses to invent a path token for a provider nobody pinned', () => {
+    // PA9 adds Codex here deliberately; guessing would freeze a wrong
+    // directory name into somebody's keychain slot.
+    expect(() => providerAccountPathToken('codex')).toThrow(
+      /No provider account path token/,
+    )
+  })
+
+  it('guards the one destructive operation against escaping the root', () => {
+    const root = `${HOME}/.convergence/provider-accounts/claude`
+
+    expect(() =>
+      assertRemovableAccountDir(`${root}/${ACCOUNT_ID}`, root),
+    ).not.toThrow()
+    expect(() => assertRemovableAccountDir(`${HOME}/.claude`, root)).toThrow(
+      /not a direct child/,
+    )
+    expect(() => assertRemovableAccountDir(root, root)).toThrow(
+      /not a direct child/,
+    )
+    expect(() =>
+      assertRemovableAccountDir(`${root}/nested/deeper`, root),
+    ).toThrow(/not a direct child/)
+    expect(() => assertRemovableAccountDir(`${root}/..`, root)).toThrow(
+      /not a direct child/,
+    )
   })
 
   it('never consults app.getPath or Electron to build account paths', () => {
@@ -80,9 +123,16 @@ describe('provider account directory derivation', () => {
 
     for (const file of sourceFiles) {
       const source = stripComments(readFileSync(join(MODULE_DIR, file), 'utf8'))
-      expect(source, `${file} must not import electron`).not.toMatch(
-        /from\s+['"]electron['"]/,
-      )
+
+      // An `.ipc.ts` file exists to import `ipcMain`; that is the boundary, not
+      // a path derivation. The two checks that actually protect the keychain
+      // slot still apply to every file, this one included.
+      if (!file.endsWith('.ipc.ts')) {
+        expect(source, `${file} must not import electron`).not.toMatch(
+          /from\s+['"]electron['"]/,
+        )
+      }
+
       expect(source, `${file} must not call app.getPath`).not.toMatch(
         /getPath\s*\(/,
       )
