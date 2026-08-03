@@ -66,6 +66,7 @@ export interface SessionQueuedInputRow {
   attachment_ids_json: string
   skill_selections_json: string
   provider_request_id: string | null
+  provider_account_id: string | null
   error: string | null
   created_at: string
   updated_at: string
@@ -174,6 +175,7 @@ export interface SessionTurnRow {
   ended_at: string | null
   status: string
   summary: string | null
+  provider_account_id: string | null
 }
 
 export interface SessionTurnFileChangeRow {

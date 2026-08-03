@@ -126,6 +126,12 @@ export interface SessionStartConfig {
   continuationToken: string | null
   permissionConfig?: SessionPermissionConfig
   /**
+   * Provider account for the session's first turn. Composer state only after
+   * that: the authoritative record is per-turn, because switching happens
+   * between turns and one logical turn can spawn several processes.
+   */
+  providerAccountId?: string | null
+  /**
    * Workspace materialization source for hosts that cannot use
    * `workingDirectory` (a remote host clones this repository and runs the
    * session in a per-session worktree). Local execution ignores it.
@@ -375,6 +381,11 @@ export interface OneShotInput {
   timeoutMs?: number
   requestId?: string
   permissionConfig?: SessionPermissionConfig
+  /**
+   * Provider account to spend on this call. Omitted or null means the ambient
+   * default account — the behaviour every one-shot had before accounts existed.
+   */
+  providerAccountId?: string | null
 }
 
 export interface OneShotResult {
@@ -401,6 +412,12 @@ export interface SessionHandle {
       queuedInputId?: string | null
       expectedProviderTurnId?: string | null
       interactionResponse?: InteractionResponse
+      /**
+       * Account for the new logical turn this message starts. Ignored when the
+       * message continues a turn already in flight — an answer to a deferred
+       * tool belongs to the account that asked the question.
+       */
+      providerAccountId?: string | null
     },
   ) => void
   approve: (providerApprovalId?: string) => void

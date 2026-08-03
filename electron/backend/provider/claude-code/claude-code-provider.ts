@@ -77,6 +77,8 @@ import {
 } from './claude-ask-user-question.pure'
 import { resolveClaudeCodePermissionMode } from '../session-permissions.pure'
 import { resolveClaudeAccountEnv } from '../../provider-account/provider-account-env.service'
+import type { ClaudeAccountEnvTarget } from '../../provider-account/provider-account-env.pure'
+import { selectTurnAccountSnapshot } from '../../provider-account/provider-account-resolution.pure'
 
 function now(): string {
   return new Date().toISOString()
@@ -122,12 +124,13 @@ async function runClaudeOneShot(
   binaryPath: string,
   input: OneShotInput,
   taskProgress?: TaskProgressService | null,
+  account: ClaudeAccountEnvTarget | null = null,
 ): Promise<OneShotResult> {
   // Session naming, fork summarisation, analytics, space synthesis and guided
   // review all reach Claude through here, so this one resolve scopes every
   // one-shot rather than each caller spending the ambient default account.
   const env = await resolveClaudeAccountEnv({
-    account: null,
+    account,
     workingDirectory: input.workingDirectory,
   })
 
@@ -217,6 +220,20 @@ async function runClaudeOneShot(
   })
 }
 
+/**
+ * Turns a recorded account id into the directories that decide which credential
+ * serves a process. Injected rather than imported so the provider never reaches
+ * into the database, and so tests can drive selection without one.
+ *
+ * Throws for an account that is missing or disabled — failing loudly beats
+ * silently spending a different subscription.
+ */
+export type ClaudeAccountLookup = (
+  accountId: string | null | undefined,
+) => ClaudeAccountEnvTarget | null
+
+const noAccountLookup: ClaudeAccountLookup = () => null
+
 export class ClaudeCodeProvider implements Provider {
   id = 'claude-code'
   name = 'Claude Code'
@@ -228,6 +245,7 @@ export class ClaudeCodeProvider implements Provider {
     private taskProgress: TaskProgressService | null = null,
     private debugSink: ProviderDebugSink = noopDebugSink,
     private version: string | null = null,
+    private accountLookup: ClaudeAccountLookup = noAccountLookup,
   ) {}
 
   async describe(): Promise<ProviderDescriptor> {
@@ -235,7 +253,12 @@ export class ClaudeCodeProvider implements Provider {
   }
 
   async oneShot(input: OneShotInput): Promise<OneShotResult> {
-    return runClaudeOneShot(this.binaryPath, input, this.taskProgress)
+    return runClaudeOneShot(
+      this.binaryPath,
+      input,
+      this.taskProgress,
+      this.accountLookup(input.providerAccountId),
+    )
   }
 
   async manageContext(
@@ -267,7 +290,7 @@ export class ClaudeCodeProvider implements Provider {
     if (config.effort?.trim()) args.push('--effort', config.effort.trim())
 
     const env = await resolveClaudeAccountEnv({
-      account: null,
+      account: this.accountLookup(config.providerAccountId),
       workingDirectory: config.workingDirectory,
     })
 
@@ -365,6 +388,7 @@ export class ClaudeCodeProvider implements Provider {
     const skillsService = this.skillsService
     const debugSink = this.debugSink
     const claudeCodeVersion = this.version
+    const accountLookup = this.accountLookup
     const sessionId = config.sessionId
     const listeners = {
       delta: [] as ((delta: SessionDelta) => void)[],
@@ -420,6 +444,14 @@ export class ClaudeCodeProvider implements Provider {
       skillSelections?: SkillSelection[]
       userMessageItemId: string | null
     } | null = null
+    /**
+     * The account serving the logical turn in flight, resolved once when the
+     * turn begins and held for every process it spawns — deferred-tool answers,
+     * plan approvals, recovery restarts. Re-resolving per spawn would let a
+     * selection made mid-turn leak into a continuation the user believes is
+     * still running on the previous account.
+     */
+    let currentTurnAccount: ClaudeAccountEnvTarget | null = null
     let telemetrySinkPromise: Promise<ClaudeSkillTelemetrySink | null> | null =
       null
     let latestSkillInvocationTarget: {
@@ -681,6 +713,10 @@ export class ClaudeCodeProvider implements Provider {
         userMessageItemId: recoveryTurn.userMessageItemId,
         emitUserEntry: false,
         allowContinuationRecovery: false,
+        // Same logical turn: this restarts work the user already asked for,
+        // so it must not land on a different account than the one that
+        // started it.
+        continuesCurrentTurn: true,
       })
       return true
     }
@@ -1041,9 +1077,23 @@ export class ClaudeCodeProvider implements Provider {
         allowContinuationRecovery?: boolean
         skipPromptInput?: boolean
         deferredToolResponse?: ClaudeDeferredToolHookResponse
+        providerAccountId?: string | null
+        /**
+         * True for a process that continues the logical turn already in
+         * flight rather than starting a new one.
+         */
+        continuesCurrentTurn?: boolean
       },
     ): Promise<void> {
       if (stopped || child) return
+
+      // Resolved before any await, so a selection changing mid-turn cannot
+      // land between the snapshot and the spawn that uses it.
+      currentTurnAccount = selectTurnAccountSnapshot({
+        continuesCurrentTurn: options?.continuesCurrentTurn === true,
+        currentSnapshot: currentTurnAccount,
+        resolveFresh: () => accountLookup(options?.providerAccountId),
+      })
 
       const skillResolution = await resolveSelectedSkills(
         message,
@@ -1079,7 +1129,7 @@ export class ClaudeCodeProvider implements Provider {
       // Resolved here, alongside the other pre-spawn await, so the guard below
       // still covers every suspension point before the process starts.
       const env = await resolveClaudeAccountEnv({
-        account: null,
+        account: currentTurnAccount,
         workingDirectory: config.workingDirectory,
         injections: {
           ...(telemetrySink?.env ?? {}),
@@ -1314,6 +1364,7 @@ export class ClaudeCodeProvider implements Provider {
     const startTimer = setTimeout(() => {
       void startTurn(config.initialMessage, config.initialAttachments, {
         skillSelections: config.initialSkillSelections,
+        providerAccountId: config.providerAccountId,
       })
     }, 10)
 
@@ -1400,11 +1451,17 @@ export class ClaudeCodeProvider implements Provider {
             allowContinuationRecovery: false,
             skipPromptInput: true,
             deferredToolResponse,
+            // An answer belongs to the account that asked the question, so a
+            // selection made while the card was open does not apply here.
+            continuesCurrentTurn: true,
           })
           return
         }
 
-        void startTurn(text, attachments, { skillSelections })
+        void startTurn(text, attachments, {
+          skillSelections,
+          providerAccountId: options?.providerAccountId,
+        })
       },
       approve: () => {
         // Claude Code permission handling is controlled at process startup.

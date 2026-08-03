@@ -210,6 +210,7 @@ describe('row conversions', () => {
     ended_at: null,
     status: 'running',
     summary: null,
+    provider_account_id: null,
   }
 
   const changeRow: SessionTurnFileChangeRow = {
@@ -230,6 +231,7 @@ describe('row conversions', () => {
       id: 'turn-1',
       sessionId: 'session-1',
       sequence: 3,
+      providerAccountId: null,
       startedAt: now,
       endedAt: null,
       status: 'running',
@@ -269,6 +271,7 @@ describe('row conversions', () => {
       id: 'turn-2',
       sessionId: 'session-1',
       sequence: 4,
+      providerAccountId: null,
       startedAt: now,
       endedAt: now,
       status: 'completed',

@@ -56,6 +56,13 @@ export interface ForkCommonInput {
    * session at start. Optional at the IPC boundary; defaults to none.
    */
   seedAttachmentIds?: string[]
+  /**
+   * Provider account for the fork's first turn (ADR 0007, PA4). A fork already
+   * carries provider, model and effort; the account belongs with them, or the
+   * child would silently start on the ambient default while the parent runs on
+   * a chosen one. Omitted means the ambient default.
+   */
+  providerAccountId?: string | null
 }
 
 export interface ForkFullInput extends ForkCommonInput {

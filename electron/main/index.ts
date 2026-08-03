@@ -89,6 +89,7 @@ import { ProviderAccountRepository } from '../backend/provider-account/provider-
 import { ProviderAccountEnrolmentService } from '../backend/provider-account/provider-account-enrolment.service'
 import { ProviderAccountAttestationService } from '../backend/provider-account/provider-account-attestation.service'
 import { registerProviderAccountIpcHandlers } from '../backend/provider-account/provider-account.ipc'
+import { resolveAccountForTurn } from '../backend/provider-account/provider-account-resolution.pure'
 import { loadEnvFile } from '../backend/environment/env-file.service'
 import { hydrateProcessPathFromShell } from '../backend/environment/shell-path.service'
 import { GuidedReviewDaemonCredentialsService } from '../backend/credentials/guided-review-daemon-credentials.service'
@@ -323,6 +324,16 @@ async function startApp(): Promise<void> {
     new ProviderAccountAttestationService({
       repository: providerAccountRepository,
     })
+  /**
+   * Resolves a recorded account id to the directories that decide which
+   * credential serves a turn. Reads at spawn time rather than caching, so an
+   * account attestation disabled a moment ago stops receiving work.
+   */
+  const resolveClaudeAccountForTurn = (accountId: string | null | undefined) =>
+    resolveAccountForTurn({
+      accountId,
+      account: accountId ? providerAccountRepository.get(accountId) : null,
+    })
   async function refreshDetectedProviders() {
     const nextDetected = await detectProviders()
 
@@ -334,6 +345,7 @@ async function startApp(): Promise<void> {
             taskProgressService,
             debugSink,
             p.version,
+            resolveClaudeAccountForTurn,
           ),
         )
         providerAccountEnrolmentService.setBinaryPath(p.binaryPath)

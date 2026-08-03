@@ -10,8 +10,14 @@ export interface SendSessionMessageIpcInput {
   deliveryMode?: string
   interactionResponse?: InteractionResponse
   contextItemIds?: string[]
+  providerAccountId?: string | null
 }
 
+/**
+ * Rebuilds the message explicitly rather than spreading, so a field added to
+ * `SendMessageInput` fails a test instead of being silently dropped on the way
+ * across the IPC boundary.
+ */
 export function sendSessionMessageInputFromIpc(
   input: SendSessionMessageIpcInput,
 ): SendMessageInput {
@@ -22,5 +28,6 @@ export function sendSessionMessageInputFromIpc(
     deliveryMode: input.deliveryMode as MidRunInputMode | undefined,
     interactionResponse: input.interactionResponse,
     contextItemIds: input.contextItemIds,
+    providerAccountId: input.providerAccountId,
   }
 }

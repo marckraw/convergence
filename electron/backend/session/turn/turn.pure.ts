@@ -126,6 +126,7 @@ export function turnFromRow(row: SessionTurnRow): Turn {
     endedAt: row.ended_at,
     status: turnStatusFromValue(row.status),
     summary: row.summary,
+    providerAccountId: row.provider_account_id ?? null,
   }
 }
 
@@ -155,6 +156,7 @@ export function turnToInsertRow(turn: Turn): TurnInsertRow {
     endedAt: turn.endedAt,
     status: turn.status,
     summary: turn.summary,
+    providerAccountId: turn.providerAccountId,
   }
 }
 
