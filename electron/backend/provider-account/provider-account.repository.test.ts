@@ -20,12 +20,12 @@ function accountInput(
     authKind: 'subscription-oauth',
     configDir: deriveProviderAccountConfigDir({
       homeDir: HOME,
-      providerId: 'claude',
+      providerId: 'claude-code',
       accountId: id,
     }),
     credentialDir: deriveProviderAccountCredentialDir({
       homeDir: HOME,
-      providerId: 'claude',
+      providerId: 'claude-code',
       accountId: id,
     }),
     executionHostId: 'local',

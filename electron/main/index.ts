@@ -85,6 +85,10 @@ import {
 import { SessionNamingService } from '../backend/session/naming/session-naming.service'
 import { SessionForkService } from '../backend/session/fork/session-fork.service'
 import { registerSessionForkIpcHandlers } from '../backend/session/fork/session-fork.ipc'
+import { ProviderAccountRepository } from '../backend/provider-account/provider-account.repository'
+import { ProviderAccountEnrolmentService } from '../backend/provider-account/provider-account-enrolment.service'
+import { ProviderAccountAttestationService } from '../backend/provider-account/provider-account-attestation.service'
+import { registerProviderAccountIpcHandlers } from '../backend/provider-account/provider-account.ipc'
 import { loadEnvFile } from '../backend/environment/env-file.service'
 import { hydrateProcessPathFromShell } from '../backend/environment/shell-path.service'
 import { GuidedReviewDaemonCredentialsService } from '../backend/credentials/guided-review-daemon-credentials.service'
@@ -311,6 +315,14 @@ async function startApp(): Promise<void> {
   const debugSink = providerDebugService
   // Constructed here so it can report RPC failures to the debug sink.
   const codexQuotaService = new CodexQuotaService({ debugSink })
+  const providerAccountRepository = new ProviderAccountRepository(db)
+  const providerAccountEnrolmentService = new ProviderAccountEnrolmentService({
+    repository: providerAccountRepository,
+  })
+  const providerAccountAttestationService =
+    new ProviderAccountAttestationService({
+      repository: providerAccountRepository,
+    })
   async function refreshDetectedProviders() {
     const nextDetected = await detectProviders()
 
@@ -324,6 +336,11 @@ async function startApp(): Promise<void> {
             p.version,
           ),
         )
+        providerAccountEnrolmentService.setBinaryPath(p.binaryPath)
+        // A version change is attestation's most important trigger: a release
+        // that renames or ignores the undocumented credential variable arrives
+        // exactly there.
+        providerAccountAttestationService.setClaudeVersion(p.version ?? null)
       } else if (p.id === 'codex') {
         providerRegistry.register(
           new CodexProvider(
@@ -580,6 +597,16 @@ async function startApp(): Promise<void> {
     appSettings: appSettingsService,
   })
   registerSessionForkIpcHandlers(sessionForkService)
+  registerProviderAccountIpcHandlers({
+    repository: providerAccountRepository,
+    enrolment: providerAccountEnrolmentService,
+    attestation: providerAccountAttestationService,
+  })
+  // Fire-and-forget: attestation must never delay startup, and a failure here
+  // leaves accounts exactly as they were rather than disabling them.
+  void providerAccountAttestationService.attestIfDue().catch((error) => {
+    console.warn('Provider account attestation failed:', error)
+  })
   registerFeedbackIpcHandlers(feedbackService)
 
   registerIpcHandlers(

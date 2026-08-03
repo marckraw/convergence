@@ -24,8 +24,13 @@ export interface ReconcileAccountClaudeConfigInput {
   accountConfig: Record<string, unknown> | null
   /** Parsed shared `~/.claude.json`, or null when unreadable. */
   sharedConfig: Record<string, unknown> | null
-  /** The session's working directory, whose trust entry is reconciled. */
-  workingDirectory: string
+  /**
+   * The session's working directory, whose trust entry is reconciled. Omitted
+   * at enrolment, where there is no session yet and therefore no directory
+   * whose trust could honestly be copied — the spawn-time reconciler handles it
+   * when a session actually starts.
+   */
+  workingDirectory?: string
 }
 
 export interface ReconcileAccountClaudeConfigResult {
@@ -57,15 +62,18 @@ export function reconcileAccountClaudeConfig(
     }
   }
 
-  const sharedTrust = readTrustFlag(input.sharedConfig, input.workingDirectory)
-  if (sharedTrust !== undefined) {
+  const workingDirectory = input.workingDirectory
+  const sharedTrust = workingDirectory
+    ? readTrustFlag(input.sharedConfig, workingDirectory)
+    : undefined
+  if (workingDirectory && sharedTrust !== undefined) {
     const projects = isRecord(config.projects) ? { ...config.projects } : {}
-    const existing = isRecord(projects[input.workingDirectory])
-      ? (projects[input.workingDirectory] as Record<string, unknown>)
+    const existing = isRecord(projects[workingDirectory])
+      ? (projects[workingDirectory] as Record<string, unknown>)
       : {}
 
     if (existing[TRUST_KEY] !== sharedTrust) {
-      projects[input.workingDirectory] = {
+      projects[workingDirectory] = {
         ...existing,
         [TRUST_KEY]: sharedTrust,
       }

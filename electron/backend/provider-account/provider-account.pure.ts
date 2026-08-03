@@ -38,6 +38,35 @@ export const CLAUDE_KEYCHAIN_SERVICE_BASE = 'Claude Code'
 /** Keychain account fallback when `$USER` is missing or not slot-safe. */
 export const CLAUDE_KEYCHAIN_ACCOUNT_FALLBACK = 'claude-code-user'
 
+/**
+ * Two vocabularies, mapped in one place (ruled 2026-08-03).
+ *
+ * Rows and the domain model speak the **registry id** (`claude-code`), the same
+ * id the provider registry and session rows already use. Filesystem paths speak
+ * a short, fixed **path token** (`claude`). The token is hashed into the
+ * keychain slot name at enrolment and can never change afterwards, so it is
+ * pinned per provider rather than derived from the registry id — a later rename
+ * of a provider id must not orphan anybody's credentials.
+ *
+ * Unknown providers throw rather than guess: PA9 adds Codex here deliberately,
+ * with the same one-way door in mind.
+ */
+const PROVIDER_ACCOUNT_PATH_TOKENS: Readonly<Record<string, string>> = {
+  'claude-code': 'claude',
+}
+
+export function providerAccountPathToken(providerId: string): string {
+  const token = PROVIDER_ACCOUNT_PATH_TOKENS[providerId]
+  if (!token) {
+    throw new Error(
+      `No provider account path token for ${JSON.stringify(providerId)}. ` +
+        'Account directory names are hashed into keychain slot names, so each ' +
+        'provider needs a token pinned here before it can enrol accounts.',
+    )
+  }
+  return token
+}
+
 const SAFE_PATH_SEGMENT = /^[a-zA-Z0-9._-]+$/
 
 const SAFE_KEYCHAIN_ACCOUNT = /^[a-zA-Z0-9._-]+$/
@@ -45,6 +74,7 @@ const SAFE_KEYCHAIN_ACCOUNT = /^[a-zA-Z0-9._-]+$/
 export interface ProviderAccountDirInput {
   /** Absolute home directory. Passed in, never read from the environment here. */
   homeDir: string
+  /** Registry id, e.g. `claude-code`. Mapped to its path token internally. */
   providerId: string
   accountId: string
 }
@@ -61,7 +91,7 @@ function assertSafeSegment(value: string, field: string): string {
 }
 
 /**
- * `~/.convergence/provider-accounts/<providerId>/<accountId>` — the value of
+ * `~/.convergence/provider-accounts/<pathToken>/<accountId>` — the value of
  * `CLAUDE_CONFIG_DIR` for this account.
  */
 export function deriveProviderAccountConfigDir(
@@ -70,13 +100,13 @@ export function deriveProviderAccountConfigDir(
   return join(
     input.homeDir,
     ...PROVIDER_ACCOUNT_CONFIG_ROOT_SEGMENTS,
-    assertSafeSegment(input.providerId, 'providerId'),
+    assertSafeSegment(providerAccountPathToken(input.providerId), 'providerId'),
     assertSafeSegment(input.accountId, 'accountId'),
   )
 }
 
 /**
- * `~/.convergence/provider-credentials/<providerId>/<accountId>` — the value of
+ * `~/.convergence/provider-credentials/<pathToken>/<accountId>` — the value of
  * `CLAUDE_SECURESTORAGE_CONFIG_DIR` for this account, and therefore the string
  * that decides which keychain slot the account's credential lands in.
  */
@@ -86,9 +116,56 @@ export function deriveProviderAccountCredentialDir(
   return join(
     input.homeDir,
     ...PROVIDER_ACCOUNT_CREDENTIAL_ROOT_SEGMENTS,
-    assertSafeSegment(input.providerId, 'providerId'),
+    assertSafeSegment(providerAccountPathToken(input.providerId), 'providerId'),
     assertSafeSegment(input.accountId, 'accountId'),
   )
+}
+
+/** Roots the sweep and the removal guard scan. */
+export function deriveProviderAccountConfigRoot(
+  homeDir: string,
+  providerId: string,
+): string {
+  return join(
+    homeDir,
+    ...PROVIDER_ACCOUNT_CONFIG_ROOT_SEGMENTS,
+    providerAccountPathToken(providerId),
+  )
+}
+
+export function deriveProviderAccountCredentialRoot(
+  homeDir: string,
+  providerId: string,
+): string {
+  return join(
+    homeDir,
+    ...PROVIDER_ACCOUNT_CREDENTIAL_ROOT_SEGMENTS,
+    providerAccountPathToken(providerId),
+  )
+}
+
+/**
+ * Guard for the only destructive operation in this module. Removal deletes a
+ * directory tree, so it refuses anything that is not a direct child of the
+ * provider's own account root — a malformed or attacker-supplied path can never
+ * reach outside it.
+ */
+export function assertRemovableAccountDir(dir: string, root: string): void {
+  const prefix = root.endsWith('/') ? root : `${root}/`
+  const remainder = dir.startsWith(prefix) ? dir.slice(prefix.length) : null
+
+  if (
+    !remainder ||
+    remainder.includes('/') ||
+    remainder === '.' ||
+    remainder === '..' ||
+    !SAFE_PATH_SEGMENT.test(remainder)
+  ) {
+    throw new Error(
+      `Refusing to remove ${JSON.stringify(dir)}: it is not a direct child of ` +
+        `${JSON.stringify(root)}.`,
+    )
+  }
 }
 
 /** First eight hex characters of `sha256(NFC(dir))`, as Claude Code computes it. */
