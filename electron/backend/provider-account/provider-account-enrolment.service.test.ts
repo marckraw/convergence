@@ -39,6 +39,7 @@ function fakeFs(seed: Record<string, string> = {}) {
     mkdir: vi.fn(async (path: string) => {
       dirs.add(path)
     }),
+    chmod: vi.fn(async () => {}),
     readdir: vi.fn(async (path: string) => {
       const names = entriesOf(path)
       if (!names.length && !dirs.has(path)) throw new Error(`ENOENT: ${path}`)
@@ -138,10 +139,13 @@ describe('ProviderAccountEnrolmentService', () => {
       homeDir: HOME,
       baseEnv: { PATH: '/usr/local/bin', HOME },
       newAccountId: () => ACCOUNT_ID,
-      binaryPath:
-        options.binaryPath === undefined
-          ? '/usr/local/bin/claude'
-          : options.binaryPath,
+      binaryPaths: {
+        'claude-code':
+          options.binaryPath === undefined
+            ? '/usr/local/bin/claude'
+            : options.binaryPath,
+        codex: options.binaryPath === undefined ? '/usr/local/bin/codex' : null,
+      },
     })
   }
 
@@ -314,6 +318,150 @@ describe('ProviderAccountEnrolmentService', () => {
           email: 'someone@example.com',
         }),
       ).rejects.toThrow(/not available on PATH/)
+      expect(runner.run).not.toHaveBeenCalled()
+    })
+  })
+
+  describe('enrol (codex)', () => {
+    const CODEX_HOME = `${HOME}/.convergence/provider-accounts/codex/${ACCOUNT_ID}`
+    const CODEX_AUTH = JSON.stringify({
+      tokens: {
+        access_token: 'at',
+        account_id: 'acc_123',
+        id_token: {
+          email: 'someone@example.com',
+          chatgpt_account_id: 'acc_123',
+          chatgpt_plan_type: 'pro',
+        },
+      },
+    })
+
+    /** What `codex login` does: it writes auth.json into CODEX_HOME. */
+    function loginWritesAuth(files: Map<string, string>, auth = CODEX_AUTH) {
+      return (command: ProviderAccountCommand) => {
+        if (command.args[0] !== 'login') return
+        const home = command.env.CODEX_HOME
+        if (home) files.set(`${home}/auth.json`, auth)
+      }
+    }
+
+    function codexFixture(auth?: string) {
+      const { fs, files, removed } = fakeFs()
+      const runner = fakeRunner({}, loginWritesAuth(files, auth))
+      return {
+        fs,
+        files,
+        removed,
+        runner,
+        subject: service({ fs, run: runner.run }),
+      }
+    }
+
+    it('enrols a Codex account on the same model as a Claude one', async () => {
+      const { subject } = codexFixture()
+
+      const { account } = await subject.enrol({
+        email: 'someone@example.com',
+        providerId: 'codex',
+      })
+
+      expect(account).toMatchObject({
+        id: ACCOUNT_ID,
+        providerId: 'codex',
+        email: 'someone@example.com',
+        orgId: 'acc_123',
+        plan: 'pro',
+        configDir: CODEX_HOME,
+        status: 'connected',
+      })
+    })
+
+    it('runs codex login against the account own CODEX_HOME', async () => {
+      const { subject, runner } = codexFixture()
+
+      await subject.enrol({ email: 'someone@example.com', providerId: 'codex' })
+
+      expect(runner.calls).toHaveLength(1)
+      expect(runner.calls[0].command).toBe('/usr/local/bin/codex')
+      expect(runner.calls[0].args).toEqual(['login'])
+      expect(runner.calls[0].env.CODEX_HOME).toBe(CODEX_HOME)
+    })
+
+    it('records the credential where it actually is, not in a second directory', async () => {
+      // Codex keeps auth.json inside the home. A separate credential directory
+      // would describe a namespace that is not there.
+      const { subject } = codexFixture()
+
+      const { account } = await subject.enrol({
+        email: 'someone@example.com',
+        providerId: 'codex',
+      })
+
+      expect(account.credentialDir).toBe(account.configDir)
+    })
+
+    it('locks the plaintext credential down to its owner', async () => {
+      const { subject, fs } = codexFixture()
+
+      await subject.enrol({ email: 'someone@example.com', providerId: 'codex' })
+
+      expect(fs.chmod).toHaveBeenCalledWith(`${CODEX_HOME}/auth.json`, 0o600)
+    })
+
+    it('does not enrol an account whose identity never appeared', async () => {
+      const { fs } = fakeFs()
+      const runner = fakeRunner()
+
+      await expect(
+        service({ fs, run: runner.run }).enrol({
+          email: 'someone@example.com',
+          providerId: 'codex',
+        }),
+      ).rejects.toThrow(/reported no identity/)
+      expect(repository.list()).toEqual([])
+    })
+
+    it('does not enrol an account when the login fails', async () => {
+      const { fs, files } = fakeFs()
+      const runner = fakeRunner(
+        { code: 1, stderr: 'browser closed' },
+        loginWritesAuth(files),
+      )
+
+      await expect(
+        service({ fs, run: runner.run }).enrol({
+          email: 'someone@example.com',
+          providerId: 'codex',
+        }),
+      ).rejects.toThrow(/browser closed/)
+      expect(repository.list()).toEqual([])
+    })
+
+    it('signs out only the account home, never the shared one', async () => {
+      const { subject, runner, removed } = codexFixture()
+      await subject.enrol({ email: 'someone@example.com', providerId: 'codex' })
+      runner.calls.length = 0
+
+      await subject.remove(ACCOUNT_ID)
+
+      expect(runner.calls).toHaveLength(1)
+      expect(runner.calls[0].args).toEqual(['logout'])
+      expect(runner.calls[0].env.CODEX_HOME).toBe(CODEX_HOME)
+      expect(runner.calls[0].env.CODEX_HOME).not.toBe(`${HOME}/.codex`)
+      expect(repository.get(ACCOUNT_ID)).toBeNull()
+      expect(removed).toContain(CODEX_HOME)
+    })
+
+    it('refuses to enrol when Codex is not on PATH', async () => {
+      const { fs } = fakeFs()
+      const runner = fakeRunner()
+
+      await expect(
+        service({ fs, run: runner.run, binaryPath: null }).enrol({
+          email: 'someone@example.com',
+          providerId: 'codex',
+        }),
+      ).rejects.toThrow(/codex is not available on PATH/)
       expect(runner.run).not.toHaveBeenCalled()
     })
   })

@@ -1,4 +1,8 @@
 import { spawn, type ChildProcess, type SpawnOptions } from 'child_process'
+import {
+  buildCodexAccountEnv,
+  type CodexAccountEnvTarget,
+} from '../../provider-account/provider-account-codex-env.pure'
 import { buildCodexClientInfo } from './codex-client-info.pure'
 import { JsonRpcClient } from './jsonrpc'
 
@@ -17,6 +21,12 @@ export interface CodexAppServerClientOptions {
   spawnProcess?: CodexAppServerSpawn
   /** Reported to Codex in the initialize handshake; feeds its compliance log. */
   appVersion?: string | null
+  /**
+   * The account whose `CODEX_HOME` this server should read (ADR 0007, PA9).
+   * Null is the ambient `~/.codex` login, which is what every caller got before
+   * accounts existed.
+   */
+  account?: CodexAccountEnvTarget | null
 }
 
 function formatExitError(
@@ -36,6 +46,7 @@ export class CodexAppServerClient {
   private timeoutMs: number
   private spawnProcess: CodexAppServerSpawn
   private appVersion: string | null
+  private account: CodexAccountEnvTarget | null
 
   constructor(
     private binaryPath: string,
@@ -44,6 +55,7 @@ export class CodexAppServerClient {
     this.timeoutMs = options.timeoutMs ?? 10_000
     this.spawnProcess = options.spawnProcess ?? spawn
     this.appVersion = options.appVersion ?? null
+    this.account = options.account ?? null
   }
 
   async listSkills(
@@ -75,7 +87,10 @@ export class CodexAppServerClient {
     const child = this.spawnProcess(this.binaryPath, ['app-server'], {
       cwd,
       stdio: ['pipe', 'pipe', 'pipe'],
-      env: { ...process.env },
+      env: buildCodexAccountEnv({
+        baseEnv: process.env,
+        account: this.account,
+      }),
     })
     let stderr = ''
     let timeout: NodeJS.Timeout | null = null

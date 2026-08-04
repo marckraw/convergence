@@ -18,6 +18,7 @@ import { useAppSettingsStore } from '@/entities/app-settings'
 import { useDialogStore } from '@/entities/dialog'
 import {
   isProviderAccountSelectionLocked,
+  providerAccountsForProvider,
   providerAccountApi,
   resolveInitialProviderAccountSelection,
   type ProviderAccount,
@@ -634,6 +635,15 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
     )
   }, [selection.providerId])
 
+  /**
+   * A Codex account cannot serve a Claude turn, so the picker only ever offers
+   * the current provider's accounts (PA9).
+   */
+  const providerAccountsForSession = useMemo(
+    () => providerAccountsForProvider(providerAccounts, providerId),
+    [providerAccounts, providerId],
+  )
+
   // Enrolled accounts, refreshed whenever the composer switches session so a
   // just-enrolled or just-disabled account shows up without a restart.
   useEffect(() => {
@@ -668,7 +678,7 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
         if (!cancelled) {
           setSelectedProviderAccountId(
             resolveInitialProviderAccountSelection({
-              accounts: providerAccounts,
+              accounts: providerAccountsForSession,
               hasActiveSession: false,
             }),
           )
@@ -689,7 +699,7 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
       if (cancelled) return
       setSelectedProviderAccountId(
         resolveInitialProviderAccountSelection({
-          accounts: providerAccounts,
+          accounts: providerAccountsForSession,
           lastTurnAccountId,
           hasActiveSession: true,
         }),
@@ -700,7 +710,7 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
     return () => {
       cancelled = true
     }
-  }, [activeSessionId, providerAccounts])
+  }, [activeSessionId, providerAccountsForSession])
 
   const providerAccountSelectionLocked = isProviderAccountSelectionLocked(
     activeSession
@@ -1133,7 +1143,7 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
         onProviderChange={handleProviderChange}
         onModelChange={handleModelChange}
         onEffortChange={setEffortId}
-        providerAccounts={providerAccounts}
+        providerAccounts={providerAccountsForSession}
         selectedProviderAccountId={selectedProviderAccountId}
         onProviderAccountChange={setSelectedProviderAccountId}
         providerAccountSelectionLocked={providerAccountSelectionLocked}

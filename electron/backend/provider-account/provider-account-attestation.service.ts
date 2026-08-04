@@ -6,12 +6,17 @@ import {
   isAttestationDue,
   type AttestationOutcome,
 } from './provider-account-attestation.pure'
+import {
+  readCodexIdentityFromAuth,
+  CODEX_AUTH_FILE_NAME,
+} from './provider-account-codex.pure'
 import { readClaudeIdentityFromConfig } from './provider-account-enrolment.pure'
 import { detectAccountDirDrift } from './provider-account-manifest.pure'
 import {
   scanSharedSettingsForCredentials,
   type ProviderAccountSettingsWarning,
 } from './provider-account-settings-scan.pure'
+import { providerAccountCredentialLayout } from './provider-account.pure'
 import type { ProviderAccountRepository } from './provider-account.repository'
 import type { ProviderAccountStatus } from './provider-account.types'
 
@@ -127,9 +132,19 @@ export class ProviderAccountAttestationService {
 
     const results: ProviderAccountAttestationResult[] = []
     for (const account of accounts) {
-      const observed = readClaudeIdentityFromConfig(
-        await this.readJson(join(account.configDir, '.claude.json')),
-      )
+      // Same net, different file: each provider reports its identity in the
+      // place its own login writes. Both are read from the account's *own*
+      // directory rather than from a `status` command, which under a shared
+      // home reports whichever login happened last.
+      const isConfigHome =
+        providerAccountCredentialLayout(account.providerId) === 'config-home'
+      const observed = isConfigHome
+        ? readCodexIdentityFromAuth(
+            await this.readJson(join(account.configDir, CODEX_AUTH_FILE_NAME)),
+          )
+        : readClaudeIdentityFromConfig(
+            await this.readJson(join(account.configDir, '.claude.json')),
+          )
       const verdict = attestAccountIdentity({
         enrolled: { email: account.email, orgId: account.orgId },
         observed,
@@ -145,10 +160,15 @@ export class ProviderAccountAttestationService {
         )
       }
 
-      const drift = detectAccountDirDrift({
-        sharedEntries,
-        accountEntries: await this.readdirSafe(account.configDir),
-      })
+      // Drift is a property of the default-shared symlink manifest, which only
+      // Claude accounts have. A Codex home shares nothing, so there is nothing
+      // that could silently partition.
+      const drift = isConfigHome
+        ? { unknownEntries: [], missingLinks: [] }
+        : detectAccountDirDrift({
+            sharedEntries,
+            accountEntries: await this.readdirSafe(account.configDir),
+          })
 
       results.push({
         accountId: account.id,

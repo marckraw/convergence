@@ -24,6 +24,10 @@ import type {
   ProviderContextManagementResult,
 } from '../provider.types'
 import { JsonRpcClient, type JsonRpcId } from './jsonrpc'
+import {
+  buildCodexAccountEnv,
+  type CodexAccountEnvTarget,
+} from '../../provider-account/provider-account-codex-env.pure'
 import { buildCodexClientInfo } from './codex-client-info.pure'
 import { ProviderSessionEmitter } from '../provider-session.emitter'
 import {
@@ -686,6 +690,7 @@ function runCodexOneShot(
   binaryPath: string,
   input: OneShotInput,
   taskProgress?: TaskProgressService | null,
+  account: CodexAccountEnvTarget | null = null,
 ): Promise<OneShotResult> {
   return new Promise((resolve, reject) => {
     const permissionConfig = resolveCodexPermissionConfig(
@@ -715,7 +720,7 @@ function runCodexOneShot(
     const child = spawn(binaryPath, args, {
       cwd: input.workingDirectory,
       stdio: ['ignore', 'pipe', 'pipe'],
-      env: { ...process.env },
+      env: buildCodexAccountEnv({ baseEnv: process.env, account }),
     })
 
     const progress = createTaskProgressEmitter(input.requestId, taskProgress)
@@ -790,6 +795,20 @@ function extractCodexExecText(raw: string): string {
   return trimmed
 }
 
+/**
+ * Resolves a recorded account id to the `CODEX_HOME` that decides which
+ * credential serves a process (ADR 0007, PA9). Injected rather than imported so
+ * the provider never reaches into the database.
+ *
+ * Throws for an account that is missing or disabled — failing loudly beats
+ * silently spending a different subscription.
+ */
+export type CodexAccountLookup = (
+  accountId: string | null | undefined,
+) => CodexAccountEnvTarget | null
+
+const noCodexAccountLookup: CodexAccountLookup = () => null
+
 export class CodexProvider implements Provider {
   id = 'codex'
   name = 'Codex'
@@ -801,6 +820,7 @@ export class CodexProvider implements Provider {
     private taskProgress: TaskProgressService | null = null,
     private debugSink: ProviderDebugSink = noopDebugSink,
     private appVersion: string | null = null,
+    private accountLookup: CodexAccountLookup = noCodexAccountLookup,
   ) {}
 
   describe(): Promise<ProviderDescriptor> {
@@ -814,7 +834,12 @@ export class CodexProvider implements Provider {
   }
 
   async oneShot(input: OneShotInput): Promise<OneShotResult> {
-    return runCodexOneShot(this.binaryPath, input, this.taskProgress)
+    return runCodexOneShot(
+      this.binaryPath,
+      input,
+      this.taskProgress,
+      this.accountLookup(input.providerAccountId),
+    )
   }
 
   async manageContext(
@@ -832,7 +857,10 @@ export class CodexProvider implements Provider {
     const child = spawn(this.binaryPath, ['app-server'], {
       cwd: config.workingDirectory,
       stdio: ['pipe', 'pipe', 'pipe'],
-      env: { ...process.env },
+      env: buildCodexAccountEnv({
+        baseEnv: process.env,
+        account: this.accountLookup(config.providerAccountId),
+      }),
     })
     if (!child.stdin || !child.stdout) {
       child.kill('SIGTERM')
@@ -905,6 +933,18 @@ export class CodexProvider implements Provider {
 
   start(config: SessionStartConfig): SessionHandle {
     const binaryPath = this.binaryPath
+    const accountLookup = this.accountLookup
+    /**
+     * The account this session's `codex app-server` runs under.
+     *
+     * Unlike Claude, Codex holds one long-lived process for the whole session
+     * rather than spawning per turn, so the credential is fixed when the server
+     * starts. ADR 0007's "switching accounts mid-conversation needs no process
+     * lifecycle management" is a property of the per-turn spawn model and does
+     * not carry over here — so a mid-session change is refused out loud rather
+     * than silently served by the account already running.
+     */
+    const sessionAccountId = config.providerAccountId ?? null
     const debugSink = this.debugSink
     const clientInfo = buildCodexClientInfo(this.appVersion)
     const sessionId = config.sessionId
@@ -1526,7 +1566,10 @@ export class CodexProvider implements Provider {
       child = spawn(binaryPath, ['app-server'], {
         cwd: config.workingDirectory,
         stdio: ['pipe', 'pipe', 'pipe'],
-        env: { ...process.env },
+        env: buildCodexAccountEnv({
+          baseEnv: process.env,
+          account: accountLookup(sessionAccountId),
+        }),
       })
 
       if (!child.stdin || !child.stdout) {
@@ -2025,6 +2068,21 @@ export class CodexProvider implements Provider {
       },
       sendMessage: (text, attachments, skillSelections, options) => {
         if (stopped) return
+        if (
+          options?.providerAccountId !== undefined &&
+          (options.providerAccountId ?? null) !== sessionAccountId
+        ) {
+          // Never silently serve the running account while the app claims
+          // otherwise: Codex's transcript records no account attribution, so
+          // nothing would contradict it later.
+          sessionEmitter.addNote({
+            text:
+              'This Codex session is already running on the account it started ' +
+              'with. Start a new session to use a different account.',
+            level: 'error',
+          })
+          return
+        }
         if (!rpc) {
           spawnServer(text, attachments, skillSelections)
           return
@@ -2149,6 +2207,9 @@ export class CodexProvider implements Provider {
   private async fetchDescriptor(): Promise<ProviderDescriptor> {
     const fallback = buildFallbackCodexDescriptor()
 
+    // Deliberately ambient: this probe asks the binary what it can do. It
+    // serves no turn and bills nobody, so scoping it to an account would only
+    // make capability discovery depend on which account is selected.
     const child = spawn(this.binaryPath, ['app-server'], {
       cwd: process.cwd(),
       stdio: ['pipe', 'pipe', 'pipe'],

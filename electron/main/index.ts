@@ -89,7 +89,10 @@ import { ProviderAccountRepository } from '../backend/provider-account/provider-
 import { ProviderAccountEnrolmentService } from '../backend/provider-account/provider-account-enrolment.service'
 import { ProviderAccountAttestationService } from '../backend/provider-account/provider-account-attestation.service'
 import { registerProviderAccountIpcHandlers } from '../backend/provider-account/provider-account.ipc'
-import { resolveAccountForTurn } from '../backend/provider-account/provider-account-resolution.pure'
+import {
+  resolveAccountForTurn,
+  resolveCodexAccountForTurn,
+} from '../backend/provider-account/provider-account-resolution.pure'
 import { loadEnvFile } from '../backend/environment/env-file.service'
 import { hydrateProcessPathFromShell } from '../backend/environment/shell-path.service'
 import { GuidedReviewDaemonCredentialsService } from '../backend/credentials/guided-review-daemon-credentials.service'
@@ -314,9 +317,17 @@ async function startApp(): Promise<void> {
     // Cleanup is best effort.
   }
   const debugSink = providerDebugService
-  // Constructed here so it can report RPC failures to the debug sink.
-  const codexQuotaService = new CodexQuotaService({ debugSink })
   const providerAccountRepository = new ProviderAccountRepository(db)
+  // Constructed here so it can report RPC failures to the debug sink, and so
+  // it reads each account's own CODEX_HOME rather than the ambient one (PA9).
+  const codexQuotaService = new CodexQuotaService({
+    debugSink,
+    resolveAccount: (accountId) =>
+      resolveCodexAccountForTurn({
+        accountId,
+        account: accountId ? providerAccountRepository.get(accountId) : null,
+      }),
+  })
   const providerAccountEnrolmentService = new ProviderAccountEnrolmentService({
     repository: providerAccountRepository,
   })
@@ -334,6 +345,14 @@ async function startApp(): Promise<void> {
       accountId,
       account: accountId ? providerAccountRepository.get(accountId) : null,
     })
+  /** The same guard for Codex, whose account is a `CODEX_HOME` (PA9). */
+  const resolveCodexAccountForSession = (
+    accountId: string | null | undefined,
+  ) =>
+    resolveCodexAccountForTurn({
+      accountId,
+      account: accountId ? providerAccountRepository.get(accountId) : null,
+    })
   async function refreshDetectedProviders() {
     const nextDetected = await detectProviders()
 
@@ -348,7 +367,7 @@ async function startApp(): Promise<void> {
             resolveClaudeAccountForTurn,
           ),
         )
-        providerAccountEnrolmentService.setBinaryPath(p.binaryPath)
+        providerAccountEnrolmentService.setBinaryPath(p.id, p.binaryPath)
         // A version change is attestation's most important trigger: a release
         // that renames or ignores the undocumented credential variable arrives
         // exactly there.
@@ -360,9 +379,11 @@ async function startApp(): Promise<void> {
             taskProgressService,
             debugSink,
             app.getVersion(),
+            resolveCodexAccountForSession,
           ),
         )
         codexQuotaService.setBinaryPath(p.binaryPath)
+        providerAccountEnrolmentService.setBinaryPath(p.id, p.binaryPath)
       } else if (p.id === 'cursor') {
         providerRegistry.register(
           new CursorProvider(p.binaryPath, debugSink, undefined, {

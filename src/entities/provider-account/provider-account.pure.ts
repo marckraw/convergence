@@ -72,6 +72,21 @@ export const AMBIENT_DEFAULT_ACCOUNT_ID = '__ambient-default__'
 
 export const AMBIENT_DEFAULT_ACCOUNT_LABEL = 'Default account'
 
+/**
+ * Only the accounts that could serve this session (ADR 0007, PA9).
+ *
+ * Accounts are per provider — a Codex `CODEX_HOME` cannot serve a Claude turn —
+ * so offering the wrong provider's accounts would promise a swap that
+ * `resolveAccountForTurn` has no way to honour.
+ */
+export function providerAccountsForProvider(
+  accounts: ProviderAccount[],
+  providerId: string | null | undefined,
+): ProviderAccount[] {
+  if (!providerId) return []
+  return accounts.filter((account) => account.providerId === providerId)
+}
+
 export function describeProviderAccountIdentity(
   account: ProviderAccount,
 ): string {
