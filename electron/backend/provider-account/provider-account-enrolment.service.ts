@@ -7,12 +7,14 @@ import {
   reconcileAccountClaudeConfig,
   isRecord,
 } from './provider-account-claude-config.pure'
+import { attestAccountIdentity } from './provider-account-attestation.pure'
 import {
   buildCodexAccountLoginCommand,
   buildCodexAccountLogoutCommand,
   readCodexIdentityFromAuth,
   CODEX_AUTH_FILE_MODE,
   CODEX_AUTH_FILE_NAME,
+  CODEX_HOME_DIR_MODE,
 } from './provider-account-codex.pure'
 import {
   buildProviderAccountLoginCommand,
@@ -269,6 +271,81 @@ export class ProviderAccountEnrolmentService {
   }
 
   /**
+   * Signs an existing account in again, in place.
+   *
+   * The two directories are reused rather than re-derived: both are hashed into
+   * the keychain service name, so a reconnect that minted fresh paths would
+   * authorise a slot no spawn ever looks in. The identity is then re-attested
+   * against the enrolled one and the account is refused if it comes back as
+   * somebody else — signing into the wrong browser session is the easy mistake
+   * here, and rebinding the row would retroactively falsify every turn PA4
+   * attributed to this account.
+   */
+  async reconnect(accountId: string): Promise<ProviderAccount> {
+    const account = this.repository.get(accountId)
+    if (!account) {
+      throw new Error(`Provider account ${accountId} is not enrolled.`)
+    }
+
+    const email = account.email?.trim()
+    if (!email) {
+      throw new Error(
+        `${account.label} has no recorded email to sign in as. Remove it and enrol again.`,
+      )
+    }
+
+    const binaryPath = this.requireBinaryPath(account.providerId)
+
+    // Re-seeded because a shared entry added since enrolment would otherwise
+    // stay unlinked, and an existing link is left alone.
+    await this.seedSymlinks(account.configDir)
+
+    const result = await this.runCommand(
+      buildProviderAccountLoginCommand({
+        binaryPath,
+        configDir: account.configDir,
+        credentialDir: account.credentialDir,
+        email,
+        baseEnv: this.baseEnv,
+      }),
+    )
+
+    if (result.code !== 0) {
+      throw new Error(
+        `claude auth login failed: ${result.stderr.trim() || `exit code ${result.code}`}`,
+      )
+    }
+
+    const identity = readClaudeIdentityFromConfig(
+      await this.readJson(join(account.configDir, '.claude.json')),
+    )
+    const verdict = attestAccountIdentity({
+      enrolled: { email: account.email, orgId: account.orgId },
+      observed: identity,
+    })
+    if (verdict.outcome !== 'verified' || !identity) {
+      throw new Error(
+        verdict.detail ??
+          'The account directory reported no identity after signing in.',
+      )
+    }
+
+    this.repository.saveIdentity(accountId, {
+      email: identity.email ?? account.email,
+      orgId: identity.orgId ?? account.orgId,
+      plan: identity.plan,
+      status: 'connected',
+      lastValidatedAt: new Date().toISOString(),
+    })
+
+    const reconnected = this.repository.get(accountId)
+    if (!reconnected) {
+      throw new Error(`Failed to read back provider account ${accountId}`)
+    }
+    return reconnected
+  }
+
+  /**
    * Codex enrolment (ADR 0007, PA9).
    *
    * Same model, same seams, same attestation net — the differences are
@@ -291,6 +368,8 @@ export class ProviderAccountEnrolmentService {
     })
 
     await this.fs.mkdir(configDir)
+    // MAR-2207: owner-only home, not just an owner-only credential file.
+    await this.fs.chmod(configDir, CODEX_HOME_DIR_MODE)
 
     const result = await this.runCommand(
       buildCodexAccountLoginCommand({

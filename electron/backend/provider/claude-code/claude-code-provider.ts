@@ -79,6 +79,11 @@ import { resolveClaudeCodePermissionMode } from '../session-permissions.pure'
 import { resolveClaudeAccountEnv } from '../../provider-account/provider-account-env.service'
 import type { ClaudeAccountEnvTarget } from '../../provider-account/provider-account-env.pure'
 import { selectTurnAccountSnapshot } from '../../provider-account/provider-account-resolution.pure'
+import {
+  parseClaudeRateLimitEvent,
+  PROVIDER_QUOTA_LOCAL_EXECUTION_HOST_ID,
+} from '../../provider-quota/claude-rate-limit.pure'
+import type { ClaudeRateLimitState } from '../../provider-quota/claude-rate-limit.state'
 
 function now(): string {
   return new Date().toISOString()
@@ -246,6 +251,12 @@ export class ClaudeCodeProvider implements Provider {
     private debugSink: ProviderDebugSink = noopDebugSink,
     private version: string | null = null,
     private accountLookup: ClaudeAccountLookup = noAccountLookup,
+    /**
+     * Where Claude's own `rate_limit_event` readings are filed, keyed by the
+     * account serving the turn (ADR 0007, PA8). Optional: without it the events
+     * are still parsed off the stream and simply have nowhere to go.
+     */
+    private rateLimits: ClaudeRateLimitState | null = null,
   ) {}
 
   async describe(): Promise<ProviderDescriptor> {
@@ -389,6 +400,7 @@ export class ClaudeCodeProvider implements Provider {
     const debugSink = this.debugSink
     const claudeCodeVersion = this.version
     const accountLookup = this.accountLookup
+    const rateLimits = this.rateLimits
     const sessionId = config.sessionId
     const listeners = {
       delta: [] as ((delta: SessionDelta) => void)[],
@@ -451,7 +463,11 @@ export class ClaudeCodeProvider implements Provider {
      * selection made mid-turn leak into a continuation the user believes is
      * still running on the previous account.
      */
-    let currentTurnAccount: ClaudeAccountEnvTarget | null = null
+    let currentTurnAccount: {
+      /** The recorded id, so limit signals can be filed under the right account. */
+      id: string | null
+      target: ClaudeAccountEnvTarget | null
+    } | null = null
     let telemetrySinkPromise: Promise<ClaudeSkillTelemetrySink | null> | null =
       null
     let latestSkillInvocationTarget: {
@@ -701,6 +717,26 @@ export class ClaudeCodeProvider implements Provider {
       }
     }
 
+    /**
+     * Files Claude's own limit reading against the account serving this turn
+     * (ADR 0007, PA8). Unparseable input is dropped rather than displayed —
+     * degrade, never invent — and a signal is never recorded without an account
+     * scope to file it under.
+     */
+    function recordRateLimitEvent(event: unknown): void {
+      if (!rateLimits) return
+      const observation = parseClaudeRateLimitEvent(event)
+      if (!observation) return
+
+      rateLimits.record(
+        {
+          executionHostId: PROVIDER_QUOTA_LOCAL_EXECUTION_HOST_ID,
+          providerAccountId: currentTurnAccount?.id ?? null,
+        },
+        observation,
+      )
+    }
+
     function maybeRestartRecoveredTurn(): boolean {
       if (!pendingRecoveryTurn) {
         return false
@@ -766,8 +802,15 @@ export class ClaudeCodeProvider implements Provider {
         setContextWindow(contextWindow)
       }
 
-      // Skip non-essential event types
-      if (event.type === 'rate_limit_event') return
+      if (event.type === 'rate_limit_event') {
+        // The only account-authoritative usage signal Claude gives us. It used
+        // to be dropped here, which is why the app could sit at a limit for a
+        // week without being able to say so. It is still not a transcript
+        // entry — nothing is rendered into the conversation — it is filed
+        // against the account serving this turn and read by the usage surface.
+        recordRateLimitEvent(event)
+        return
+      }
 
       switch (event.type) {
         case 'system': {
@@ -1092,7 +1135,10 @@ export class ClaudeCodeProvider implements Provider {
       currentTurnAccount = selectTurnAccountSnapshot({
         continuesCurrentTurn: options?.continuesCurrentTurn === true,
         currentSnapshot: currentTurnAccount,
-        resolveFresh: () => accountLookup(options?.providerAccountId),
+        resolveFresh: () => ({
+          id: options?.providerAccountId ?? null,
+          target: accountLookup(options?.providerAccountId),
+        }),
       })
 
       const skillResolution = await resolveSelectedSkills(
@@ -1129,7 +1175,7 @@ export class ClaudeCodeProvider implements Provider {
       // Resolved here, alongside the other pre-spawn await, so the guard below
       // still covers every suspension point before the process starts.
       const env = await resolveClaudeAccountEnv({
-        account: currentTurnAccount,
+        account: currentTurnAccount?.target ?? null,
         workingDirectory: config.workingDirectory,
         injections: {
           ...(telemetrySink?.env ?? {}),

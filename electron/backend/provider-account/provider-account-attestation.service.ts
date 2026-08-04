@@ -150,14 +150,25 @@ export class ProviderAccountAttestationService {
         observed,
       })
 
-      // A null status means "no evidence" — an unreadable file must not
-      // disable an account that is probably fine.
-      if (verdict.status) {
-        this.repository.setStatus(
-          account.id,
-          verdict.status,
-          new Date(checkedAtMs).toISOString(),
-        )
+      const checkedAt = new Date(checkedAtMs).toISOString()
+      if (verdict.outcome === 'verified' && observed) {
+        // A verified account has just proved its identity against the file the
+        // tier is read from, so this is the honest moment to refresh it: an
+        // upgrade lands, a downgrade lands, and a tier stored wrong by an
+        // earlier enrolment heals without a migration. Email and organization
+        // only ever fill in, never overwrite — the match that produced this
+        // verdict tolerates a missing observed field.
+        this.repository.saveIdentity(account.id, {
+          email: observed.email ?? account.email,
+          orgId: observed.orgId ?? account.orgId,
+          plan: observed.plan,
+          status: verdict.status ?? account.status,
+          lastValidatedAt: checkedAt,
+        })
+      } else if (verdict.status) {
+        // A null status means "no evidence" — an unreadable file must not
+        // disable an account that is probably fine.
+        this.repository.setStatus(account.id, verdict.status, checkedAt)
       }
 
       // Drift is a property of the default-shared symlink manifest, which only

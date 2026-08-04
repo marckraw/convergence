@@ -31,6 +31,21 @@ export interface ProviderCreditsQuota {
   balance: string | null
 }
 
+/**
+ * What the provider itself said about *this account's* limits (ADR 0007, PA8).
+ *
+ * Separate from `windows`: for Claude those come from the local usage log,
+ * which every account on this machine shares, so they cannot be attributed.
+ * This signal can. It carries no percentage, and none is invented.
+ */
+export interface ProviderRateLimitSignal {
+  providerAccountId: string | null
+  status: string
+  rateLimitType: string | null
+  resetsAt: string | null
+  observedAt: string
+}
+
 export type ProviderQuotaSnapshot =
   | {
       providerId: ProviderQuotaProviderId
@@ -42,6 +57,7 @@ export type ProviderQuotaSnapshot =
       limitReachedType: string | null
       lastCheckedAt: string
       stale: boolean
+      rateLimit?: ProviderRateLimitSignal | null
     }
   | {
       providerId: ProviderQuotaProviderId
@@ -51,4 +67,5 @@ export type ProviderQuotaSnapshot =
       usageUrl?: string
       lastCheckedAt: string
       stale: boolean
+      rateLimit?: ProviderRateLimitSignal | null
     }

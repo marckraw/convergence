@@ -10,9 +10,13 @@ const HOME = '/Users/tester'
 const CONFIG_DIR = `${HOME}/.convergence/provider-accounts/claude/acct-a`
 const CREDENTIAL_DIR = `${HOME}/.convergence/provider-credentials/claude/acct-a`
 
-function identityJson(email: string, orgId: string) {
+function identityJson(email: string, orgId: string, subscriptionType?: string) {
   return JSON.stringify({
-    oauthAccount: { emailAddress: email, organizationUuid: orgId },
+    oauthAccount: {
+      emailAddress: email,
+      organizationUuid: orgId,
+      ...(subscriptionType ? { subscriptionType } : {}),
+    },
   })
 }
 
@@ -90,6 +94,76 @@ describe('ProviderAccountAttestationService', () => {
     expect(repository.get('acct-a')).toMatchObject({
       status: 'connected',
       lastValidatedAt: new Date(clock).toISOString(),
+    })
+  })
+
+  it('refreshes the plan of a verified account, healing a wrong stored tier', async () => {
+    // The first real enrolment stored `organizationRole` ("admin") as the plan.
+    // Attestation already reads the config it would need to correct it, so the
+    // wrong tier heals itself on the next check instead of needing a migration.
+    repository.saveIdentity('acct-a', {
+      email: 'a@example.com',
+      orgId: 'org-a',
+      plan: 'admin',
+      status: 'connected',
+      lastValidatedAt: null,
+    })
+
+    const subject = service({
+      files: {
+        [`${CONFIG_DIR}/.claude.json`]: identityJson(
+          'a@example.com',
+          'org-a',
+          'max',
+        ),
+      },
+    })
+
+    await subject.attestAll()
+
+    expect(repository.get('acct-a')).toMatchObject({
+      email: 'a@example.com',
+      orgId: 'org-a',
+      plan: 'max',
+      status: 'connected',
+    })
+  })
+
+  it('stops claiming a tier once the account directory records none', async () => {
+    repository.saveIdentity('acct-a', {
+      email: 'a@example.com',
+      orgId: 'org-a',
+      plan: 'admin',
+      status: 'connected',
+      lastValidatedAt: null,
+    })
+
+    const subject = service({
+      files: {
+        [`${CONFIG_DIR}/.claude.json`]: identityJson('a@example.com', 'org-a'),
+      },
+    })
+
+    await subject.attestAll()
+
+    expect(repository.get('acct-a')?.plan).toBeNull()
+  })
+
+  it('leaves the stored identity alone when attestation could not read one', async () => {
+    repository.saveIdentity('acct-a', {
+      email: 'a@example.com',
+      orgId: 'org-a',
+      plan: 'max',
+      status: 'connected',
+      lastValidatedAt: null,
+    })
+
+    await service({}).attestAll()
+
+    expect(repository.get('acct-a')).toMatchObject({
+      email: 'a@example.com',
+      plan: 'max',
+      status: 'connected',
     })
   })
 

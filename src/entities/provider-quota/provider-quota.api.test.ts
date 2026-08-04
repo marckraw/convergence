@@ -33,6 +33,6 @@ describe('providerQuotaApi', () => {
   it('forwards list to the preload bridge', async () => {
     await expect(providerQuotaApi.list(true)).resolves.toEqual([codexSnapshot])
 
-    expect(list).toHaveBeenCalledWith(true)
+    expect(list).toHaveBeenCalledWith(true, undefined)
   })
 })

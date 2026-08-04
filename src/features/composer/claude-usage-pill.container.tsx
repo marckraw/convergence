@@ -1,5 +1,9 @@
 import { useCallback, useRef, useState } from 'react'
-import type { ProviderQuotaSnapshot } from '@/entities/provider-quota'
+import {
+  describeProviderRateLimit,
+  type ProviderQuotaSnapshot,
+  type ProviderRateLimitTone,
+} from '@/entities/provider-quota'
 import { cn } from '@/shared/lib/cn.pure'
 import { Button } from '@/shared/ui/button'
 import { Popover, PopoverContent, PopoverTrigger } from '@/shared/ui/popover'
@@ -17,6 +21,18 @@ interface ClaudeUsagePillContainerProps {
   isLoading: boolean
   onRefresh: () => void
   onOpenSettings: () => void
+}
+
+/**
+ * The provider's own verdict is the one thing here that is account-specific,
+ * so it gets the loud styling: the machine-wide windows below it cannot tell
+ * you that *this* account is out of room.
+ */
+const RATE_LIMIT_TONE: Record<ProviderRateLimitTone, string> = {
+  ok: 'border-emerald-500/35 bg-emerald-500/10 text-emerald-200',
+  warning: 'border-amber-400/40 bg-amber-500/12 text-amber-200',
+  danger: 'border-red-500/45 bg-red-500/12 text-red-200',
+  neutral: 'border-border bg-muted/30 text-muted-foreground',
 }
 
 function formatCheckedAt(value: string | null | undefined): string {
@@ -44,6 +60,7 @@ export function ClaudeUsagePillContainer({
   const unavailableReason =
     snapshot?.status === 'unavailable' ? snapshot.reason : null
   const isAvailable = snapshot?.status === 'available'
+  const rateLimit = describeProviderRateLimit(snapshot?.rateLimit)
 
   const clearCloseTimer = useCallback(() => {
     if (closeTimerRef.current === null) return
@@ -127,10 +144,33 @@ export function ClaudeUsagePillContainer({
           </Button>
         </div>
 
+        {rateLimit ? (
+          <div
+            className={cn(
+              'space-y-0.5 rounded-md border px-3 py-2',
+              RATE_LIMIT_TONE[rateLimit.tone],
+            )}
+          >
+            <p className="text-xs font-semibold">{rateLimit.headline}</p>
+            {rateLimit.detail ? (
+              <p className="text-[11px] leading-relaxed opacity-90">
+                {rateLimit.detail}
+              </p>
+            ) : null}
+            <p className="text-[10px] uppercase tracking-wide opacity-70">
+              Reported by Claude for this account
+            </p>
+          </div>
+        ) : null}
+
         {isAvailable ? (
           <div className="space-y-2">
             <ClaudeUsageWindowRow label="5 hour" window={primary} />
             <ClaudeUsageWindowRow label="Weekly" window={weekly} />
+            <p className="text-[10px] leading-relaxed text-muted-foreground">
+              Windows come from this machine&apos;s local usage log, which every
+              account shares.
+            </p>
           </div>
         ) : (
           <p className="rounded-md border border-dashed border-border px-3 py-2 text-xs leading-relaxed text-muted-foreground">

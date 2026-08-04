@@ -3,6 +3,7 @@ import {
   AMBIENT_DEFAULT_ACCOUNT_ID,
   AMBIENT_DEFAULT_ACCOUNT_LABEL,
   buildProviderAccountPickerItems,
+  buildProviderAccountSettingsRows,
   describeProviderAccountIdentity,
   describeProviderAccountStatus,
   describeSelectedProviderAccount,
@@ -82,6 +83,116 @@ describe('describeProviderAccountStatus', () => {
       label: 'Disabled',
       tone: 'danger',
     })
+  })
+})
+
+describe('buildProviderAccountSettingsRows', () => {
+  it('leads with identity and keeps the label only when it adds something', () => {
+    const [named, unnamed] = buildProviderAccountSettingsRows(
+      [
+        account({ id: 'named', label: 'Work Max' }),
+        account({ id: 'unnamed', label: 'a@example.com' }),
+      ],
+      null,
+    )
+
+    expect(named).toMatchObject({
+      identity: 'a@example.com',
+      label: 'Work Max',
+      showsLabel: true,
+      organization: 'org-a',
+      plan: 'max',
+    })
+    expect(unnamed.showsLabel).toBe(false)
+  })
+
+  it('explains a non-connected status instead of only naming it', () => {
+    const [expired, disabled] = buildProviderAccountSettingsRows(
+      [
+        account({ id: 'expired', status: 'expired' }),
+        account({ id: 'disabled', status: 'unavailable' }),
+      ],
+      null,
+    )
+
+    expect(expired.status.label).toBe('Needs login')
+    expect(expired.statusDetail).toMatch(/Sign in again/)
+    expect(disabled.statusDetail).toMatch(/attestation/)
+  })
+
+  it('prefers the attestation detail, which says who it actually served', () => {
+    const [row] = buildProviderAccountSettingsRows(
+      [account({ status: 'unavailable' })],
+      health({
+        accounts: [
+          result({
+            outcome: 'identity-mismatch',
+            detail: 'Enrolled as a@example.com but now reports b@example.com.',
+          }),
+        ],
+      }),
+    )
+
+    expect(row.statusDetail).toBe(
+      'Enrolled as a@example.com but now reports b@example.com.',
+    )
+  })
+
+  it('says nothing is wrong when nothing is wrong', () => {
+    const [row] = buildProviderAccountSettingsRows(
+      [account()],
+      health({ accounts: [result()] }),
+    )
+
+    expect(row.statusDetail).toBeNull()
+    expect(row.notes).toEqual([])
+  })
+
+  it('surfaces the health verdicts PA7 collects for a connected account', () => {
+    // The net is only worth having if its findings are visible where accounts
+    // are managed — an unreadable check, a layout the manifest did not plan
+    // for, a shared entry that never got linked in.
+    const [row] = buildProviderAccountSettingsRows(
+      [account()],
+      health({
+        accounts: [
+          result({
+            outcome: 'unreadable',
+            unknownEntries: ['credentials-v2'],
+            missingLinks: ['agents'],
+          }),
+        ],
+      }),
+    )
+
+    expect(row.notes).toHaveLength(3)
+    expect(row.notes[0]).toMatch(/could not read/)
+    expect(row.notes[1]).toMatch(/credentials-v2/)
+    expect(row.notes[2]).toMatch(/agents/)
+  })
+
+  it('offers set-default only where it would take effect', () => {
+    const [already, disabled, eligible] = buildProviderAccountSettingsRows(
+      [
+        account({ id: 'already', isDefault: true }),
+        account({ id: 'disabled', status: 'unavailable' }),
+        account({ id: 'eligible' }),
+      ],
+      null,
+    )
+
+    expect(already.canSetDefault).toBe(false)
+    expect(disabled.canSetDefault).toBe(false)
+    expect(eligible.canSetDefault).toBe(true)
+  })
+
+  it('reports no plan rather than a wrong one', () => {
+    const [row] = buildProviderAccountSettingsRows(
+      [account({ plan: null })],
+      null,
+    )
+
+    expect(row.plan).toBeNull()
   })
 })
 

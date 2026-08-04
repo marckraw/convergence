@@ -59,6 +59,94 @@ export function summariseProviderAccountHealth(
 }
 
 /**
+ * One row of the provider-accounts settings surface (ADR 0007, PA6).
+ *
+ * The same SIM framing as the composer picker: identity leads, everything else
+ * qualifies it. Health verdicts live on the row rather than in a separate panel
+ * because the useful question is "is *this* account trustworthy", and PA7's net
+ * is only worth building if its answer is visible where accounts are managed.
+ */
+export interface ProviderAccountSettingsRow {
+  id: string
+  /** Who the account is. */
+  identity: string
+  /** The renameable label, shown only when it says something the identity does not. */
+  label: string
+  showsLabel: boolean
+  organization: string | null
+  /**
+   * The subscription tier, or null. Never a guess: the account directory
+   * records `organizationRole` right beside the tier, and displaying that
+   * instead is how this field said "admin" for a Max account.
+   */
+  plan: string | null
+  isDefault: boolean
+  status: { label: string; tone: 'ok' | 'warning' | 'danger' }
+  /** Why the status is what it is. Null when the account is simply fine. */
+  statusDetail: string | null
+  /** Health observations worth showing even for a connected account. */
+  notes: string[]
+  canSetDefault: boolean
+  lastValidatedAt: string | null
+}
+
+const STATUS_DETAILS: Record<ProviderAccountStatus, string | null> = {
+  connected: null,
+  expired: 'Sign in again before this account can serve turns.',
+  unavailable:
+    'Identity attestation disabled this account. Reconnect it to use it again.',
+}
+
+export function buildProviderAccountSettingsRows(
+  accounts: ProviderAccount[],
+  health: ProviderAccountHealth | null,
+): ProviderAccountSettingsRow[] {
+  const verdicts = new Map(
+    (health?.accounts ?? []).map((verdict) => [verdict.accountId, verdict]),
+  )
+
+  return accounts.map((account) => {
+    const identity = describeProviderAccountIdentity(account)
+    const verdict = verdicts.get(account.id)
+    const notes: string[] = []
+
+    if (verdict?.outcome === 'unreadable') {
+      notes.push(
+        'Convergence could not read this account directory at the last check, ' +
+          'so its identity is unconfirmed rather than wrong.',
+      )
+    }
+    if (verdict?.unknownEntries.length) {
+      notes.push(
+        `The account directory has entries the layout does not account for: ${verdict.unknownEntries.join(', ')}. ` +
+          'Reported rather than silently partitioned.',
+      )
+    }
+    if (verdict?.missingLinks.length) {
+      notes.push(
+        `Shared entries this account cannot see: ${verdict.missingLinks.join(', ')}. ` +
+          'Reconnect relinks them.',
+      )
+    }
+
+    return {
+      id: account.id,
+      identity,
+      label: account.label,
+      showsLabel: account.label.trim() !== identity.trim(),
+      organization: account.orgId,
+      plan: account.plan,
+      isDefault: account.isDefault,
+      status: describeProviderAccountStatus(account.status),
+      statusDetail: verdict?.detail ?? STATUS_DETAILS[account.status],
+      notes,
+      canSetDefault: !account.isDefault && isProviderAccountSelectable(account),
+      lastValidatedAt: account.lastValidatedAt,
+    }
+  })
+}
+
+/**
  * The composer's account picker (ADR 0007, PA5).
  *
  * An account is identity and entitlements, not an anonymous battery: accounts

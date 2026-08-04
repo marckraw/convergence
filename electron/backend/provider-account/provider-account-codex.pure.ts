@@ -64,6 +64,13 @@ export function buildCodexAccountLogoutCommand(
  * enforce because a world-readable `auth.json` is a credential anyone on the
  * machine can copy.
  */
+/**
+ * The home itself is tightened too (MAR-2207): the credential file is 0600,
+ * and a listable home still leaks that an account exists and when it was
+ * touched. Owner-only, both layers.
+ */
+export const CODEX_HOME_DIR_MODE = 0o700
+
 export const CODEX_AUTH_FILE_MODE = 0o600
 
 export const CODEX_AUTH_FILE_NAME = 'auth.json'
