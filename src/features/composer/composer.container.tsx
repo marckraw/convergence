@@ -861,49 +861,16 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
 
     if (activeSession && canContinueActiveSession) {
       const mode = deliveryMode === 'normal' ? undefined : deliveryMode
-      if (hasAttachments || skillSelections) {
-        if (mode) {
-          sendMessageToSession(
-            activeSession.id,
-            trimmed,
-            hasAttachments ? attachmentIds : undefined,
-            skillSelections,
-            mode,
-            undefined,
-            effectiveProviderAccountId,
-          )
-        } else {
-          sendMessageToSession(
-            activeSession.id,
-            trimmed,
-            hasAttachments ? attachmentIds : undefined,
-            skillSelections,
-            undefined,
-            undefined,
-            effectiveProviderAccountId,
-          )
-        }
-      } else if (mode) {
-        sendMessageToSession(
-          activeSession.id,
-          trimmed,
-          undefined,
-          undefined,
-          mode,
-          undefined,
-          effectiveProviderAccountId,
-        )
-      } else {
-        sendMessageToSession(
-          activeSession.id,
-          trimmed,
-          undefined,
-          undefined,
-          undefined,
-          undefined,
-          effectiveProviderAccountId,
-        )
-      }
+      // One call, not four. The branching here only ever existed to skip past
+      // optional positional arguments (MAR-2227); named fields omit them.
+      sendMessageToSession({
+        sessionId: activeSession.id,
+        text: trimmed,
+        attachmentIds: hasAttachments ? attachmentIds : undefined,
+        skillSelections,
+        deliveryMode: mode,
+        providerAccountId: effectiveProviderAccountId,
+      })
       setValue('')
       setSelectedSkills([])
       clearDraft()
@@ -918,56 +885,39 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
         const startMessage = prepareNewSessionMessage
           ? prepareNewSessionMessage(trimmed)
           : trimmed
-        const session = await createAndStartGlobalSession(
-          selection.providerId,
-          selection.modelId,
-          selection.effort?.id ?? null,
+        const session = await createAndStartGlobalSession({
+          providerId: selection.providerId,
+          model: selection.modelId,
+          effort: selection.effort?.id ?? null,
           name,
-          startMessage,
-          hasAttachments ? attachmentIds : undefined,
+          message: startMessage,
+          attachmentIds: hasAttachments ? attachmentIds : undefined,
           skillSelections,
           permissionConfig,
           serviceTier,
-          effectiveProviderAccountId,
-        )
+          providerAccountId: effectiveProviderAccountId,
+        })
         if (session) {
           await onGlobalSessionCreated?.(session)
         }
       })()
-    } else if (hasAttachments || skillSelections) {
-      createAndStartSession(
-        context.projectId,
-        context.workspaceId,
-        selection.providerId,
-        selection.modelId,
-        selection.effort?.id ?? null,
+    } else {
+      createAndStartSession({
+        projectId: context.projectId,
+        workspaceId: context.workspaceId,
+        providerId: selection.providerId,
+        model: selection.modelId,
+        effort: selection.effort?.id ?? null,
         name,
-        trimmed,
-        hasAttachments ? attachmentIds : undefined,
+        message: trimmed,
+        attachmentIds: hasAttachments ? attachmentIds : undefined,
         skillSelections,
         contextItemIds,
         permissionConfig,
         serviceTier,
-        effectiveRunOnRemoteHost ? 'remote' : undefined,
-        effectiveProviderAccountId,
-      )
-    } else {
-      createAndStartSession(
-        context.projectId,
-        context.workspaceId,
-        selection.providerId,
-        selection.modelId,
-        selection.effort?.id ?? null,
-        name,
-        trimmed,
-        undefined,
-        undefined,
-        contextItemIds,
-        permissionConfig,
-        serviceTier,
-        effectiveRunOnRemoteHost ? 'remote' : undefined,
-        effectiveProviderAccountId,
-      )
+        executionHost: effectiveRunOnRemoteHost ? 'remote' : undefined,
+        providerAccountId: effectiveProviderAccountId,
+      })
     }
     setValue('')
     setSelectedSkills([])

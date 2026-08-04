@@ -776,14 +776,12 @@ export const SessionView: FC<SessionViewProps> = ({ onOpenCodeReview }) => {
           onApprove={approveSession}
           onDeny={denySession}
           onInputAnswer={(sessionId, response, displayText) => {
-            void sendMessageToSession(
+            void sendMessageToSession({
               sessionId,
-              displayText,
-              undefined,
-              undefined,
-              'answer',
-              response,
-            )
+              text: displayText,
+              deliveryMode: 'answer',
+              interactionResponse: response,
+            })
           }}
         />
       </div>

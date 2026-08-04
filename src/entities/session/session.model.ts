@@ -2,19 +2,16 @@ import { create } from 'zustand'
 import type {
   ConversationItem,
   ConversationPatchEvent,
-  InteractionResponse,
-  MidRunInputMode,
+  CreateAndStartGlobalSessionRequest,
+  CreateAndStartSessionRequest,
   ProviderInfo,
   QueuedInputPatchEvent,
-  ReasoningEffort,
   NeedsYouDismissals,
   NeedsYouDisposition,
+  SendSessionMessageRequest,
   SessionQueuedInput,
   SessionSummary,
-  SessionExecutionHostId,
-  SessionPermissionConfig,
 } from './session.types'
-import type { SkillSelection } from '@/shared/types/skill.types'
 import { isConversationalProvider } from './session.types'
 import { sessionApi, providerApi } from './session.api'
 import { sessionForkApi } from './session-fork.api'
@@ -56,32 +53,10 @@ interface SessionActions {
   loadProviders: () => Promise<void>
   dismissNeedsYouSession: (id: string) => Promise<void>
   createAndStartSession: (
-    projectId: string,
-    workspaceId: string | null,
-    providerId: string,
-    model: string | null,
-    effort: ReasoningEffort | null,
-    name: string,
-    message: string,
-    attachmentIds?: string[],
-    skillSelections?: SkillSelection[],
-    contextItemIds?: string[],
-    permissionConfig?: SessionPermissionConfig,
-    serviceTier?: string | null,
-    executionHost?: SessionExecutionHostId,
-    providerAccountId?: string | null,
+    request: CreateAndStartSessionRequest,
   ) => Promise<void>
   createAndStartGlobalSession: (
-    providerId: string,
-    model: string | null,
-    effort: ReasoningEffort | null,
-    name: string,
-    message: string,
-    attachmentIds?: string[],
-    skillSelections?: SkillSelection[],
-    permissionConfig?: SessionPermissionConfig,
-    serviceTier?: string | null,
-    providerAccountId?: string | null,
+    request: CreateAndStartGlobalSessionRequest,
   ) => Promise<SessionSummary | null>
   createTerminalSession: (
     projectId: string,
@@ -90,15 +65,7 @@ interface SessionActions {
   ) => Promise<SessionSummary>
   approveSession: (id: string, providerApprovalId?: string) => Promise<void>
   denySession: (id: string, providerApprovalId?: string) => Promise<void>
-  sendMessageToSession: (
-    id: string,
-    text: string,
-    attachmentIds?: string[],
-    skillSelections?: SkillSelection[],
-    deliveryMode?: MidRunInputMode,
-    interactionResponse?: InteractionResponse,
-    providerAccountId?: string | null,
-  ) => Promise<void>
+  sendMessageToSession: (request: SendSessionMessageRequest) => Promise<void>
   compactSessionContext: (id: string, instructions?: string) => Promise<void>
   stopSession: (id: string) => Promise<void>
   archiveSession: (id: string) => Promise<void>
@@ -435,45 +402,30 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     }
   },
 
-  createAndStartSession: async (
-    projectId,
-    workspaceId,
-    providerId,
-    model,
-    effort,
-    name,
-    message,
-    attachmentIds,
-    skillSelections,
-    contextItemIds,
-    permissionConfig,
-    serviceTier,
-    executionHost,
-    providerAccountId,
-  ) => {
+  createAndStartSession: async (request) => {
     set({ error: null })
     try {
       const session = await sessionApi.create({
-        projectId,
-        workspaceId,
-        providerId,
-        model,
-        effort,
-        serviceTier,
-        permissionConfig,
-        name,
-        executionHost,
+        projectId: request.projectId,
+        workspaceId: request.workspaceId,
+        providerId: request.providerId,
+        model: request.model,
+        effort: request.effort,
+        serviceTier: request.serviceTier,
+        permissionConfig: request.permissionConfig,
+        name: request.name,
+        executionHost: request.executionHost,
       })
-      await sessionApi.start(
-        session.id,
-        message,
-        attachmentIds,
-        skillSelections,
-        contextItemIds,
-        providerAccountId,
-      )
+      await sessionApi.start({
+        sessionId: session.id,
+        message: request.message,
+        attachmentIds: request.attachmentIds,
+        skillSelections: request.skillSelections,
+        contextItemIds: request.contextItemIds,
+        providerAccountId: request.providerAccountId,
+      })
       set((state) => ({
-        currentProjectId: projectId,
+        currentProjectId: request.projectId,
         sessions: [session, ...state.sessions],
         globalSessions: [session, ...state.globalSessions],
         activeConversation: [],
@@ -500,37 +452,25 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     }
   },
 
-  createAndStartGlobalSession: async (
-    providerId,
-    model,
-    effort,
-    name,
-    message,
-    attachmentIds,
-    skillSelections,
-    permissionConfig,
-    serviceTier,
-    providerAccountId,
-  ) => {
+  createAndStartGlobalSession: async (request) => {
     set({ error: null })
     try {
       const session = await sessionApi.create({
         contextKind: 'global',
-        providerId,
-        model,
-        effort,
-        serviceTier,
-        permissionConfig,
-        name,
+        providerId: request.providerId,
+        model: request.model,
+        effort: request.effort,
+        serviceTier: request.serviceTier,
+        permissionConfig: request.permissionConfig,
+        name: request.name,
       })
-      await sessionApi.start(
-        session.id,
-        message,
-        attachmentIds,
-        skillSelections,
-        undefined,
-        providerAccountId,
-      )
+      await sessionApi.start({
+        sessionId: session.id,
+        message: request.message,
+        attachmentIds: request.attachmentIds,
+        skillSelections: request.skillSelections,
+        providerAccountId: request.providerAccountId,
+      })
       set((state) => ({
         globalChatSessions: [session, ...state.globalChatSessions],
         globalSessions: [session, ...state.globalSessions],
@@ -612,26 +552,10 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     }
   },
 
-  sendMessageToSession: async (
-    id: string,
-    text: string,
-    attachmentIds?: string[],
-    skillSelections?: SkillSelection[],
-    deliveryMode?: MidRunInputMode,
-    interactionResponse?: InteractionResponse,
-    providerAccountId?: string | null,
-  ) => {
+  sendMessageToSession: async (request) => {
     set({ error: null })
     try {
-      await sessionApi.sendMessage(
-        id,
-        text,
-        attachmentIds,
-        skillSelections,
-        deliveryMode,
-        interactionResponse,
-        providerAccountId,
-      )
+      await sessionApi.sendMessage(request)
     } catch (err) {
       set({
         error: err instanceof Error ? err.message : 'Failed to send message',

@@ -561,3 +561,65 @@ export interface ProviderUpdateResult {
   stderr: string
   error: string | null
 }
+
+/**
+ * What it takes to send one turn, as one value (MAR-2227).
+ *
+ * These four requests were positional parameter lists — seven, ten and
+ * fourteen arguments deep — which is how a call site ends up reading
+ * `undefined, undefined, null` and how adding one session-scoped axis
+ * (execution host, service tier, permission config, provider account…) meant
+ * touching every caller and every assertion. Named fields make the additions
+ * additive and let a caller omit the middle of the list instead of branching
+ * around it.
+ *
+ * The wire already worked this way; only the renderer chain was positional.
+ */
+export interface StartSessionRequest {
+  sessionId: string
+  message: string
+  attachmentIds?: string[]
+  skillSelections?: SkillSelection[]
+  contextItemIds?: string[]
+  providerAccountId?: string | null
+}
+
+export interface SendSessionMessageRequest {
+  sessionId: string
+  text: string
+  attachmentIds?: string[]
+  skillSelections?: SkillSelection[]
+  deliveryMode?: MidRunInputMode
+  interactionResponse?: InteractionResponse
+  providerAccountId?: string | null
+}
+
+export interface CreateAndStartSessionRequest {
+  projectId: string
+  workspaceId: string | null
+  providerId: string
+  model: string | null
+  effort: ReasoningEffort | null
+  name: string
+  message: string
+  attachmentIds?: string[]
+  skillSelections?: SkillSelection[]
+  contextItemIds?: string[]
+  permissionConfig?: SessionPermissionConfig
+  serviceTier?: string | null
+  executionHost?: SessionExecutionHostId
+  providerAccountId?: string | null
+}
+
+export interface CreateAndStartGlobalSessionRequest {
+  providerId: string
+  model: string | null
+  effort: ReasoningEffort | null
+  name: string
+  message: string
+  attachmentIds?: string[]
+  skillSelections?: SkillSelection[]
+  permissionConfig?: SessionPermissionConfig
+  serviceTier?: string | null
+  providerAccountId?: string | null
+}

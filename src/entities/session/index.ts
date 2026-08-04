@@ -43,6 +43,10 @@ export type {
   CodexApprovalPolicy,
   CodexSandboxMode,
   ClaudeCodePermissionMode,
+  StartSessionRequest,
+  SendSessionMessageRequest,
+  CreateAndStartSessionRequest,
+  CreateAndStartGlobalSessionRequest,
 } from './session.types'
 export { useSessionStore } from './session.model'
 export type { SessionStore } from './session.model'
