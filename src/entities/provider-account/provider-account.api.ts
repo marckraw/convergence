@@ -6,9 +6,9 @@ import type {
 } from './provider-account.types'
 
 /**
- * Provider accounts (ADR 0007). PA3 ships the backend and this thin boundary;
- * the enrolment surface itself is PA6, so `enrol` is reachable today only from
- * the developer console.
+ * Provider accounts (ADR 0007). PA3 shipped the backend and this thin boundary;
+ * PA6 gives it a settings surface, so every call here is now reachable by a
+ * person rather than only from the developer console.
  */
 export const providerAccountApi = {
   list: (): Promise<ProviderAccount[]> =>
@@ -18,6 +18,8 @@ export const providerAccountApi = {
     label?: string | null
   }): Promise<ProviderAccountEnrolResult> =>
     window.electronAPI.providerAccounts.enrol(input),
+  reconnect: (accountId: string): Promise<ProviderAccount> =>
+    window.electronAPI.providerAccounts.reconnect(accountId),
   remove: (accountId: string): Promise<void> =>
     window.electronAPI.providerAccounts.remove(accountId),
   setDefault: (accountId: string): Promise<ProviderAccount[]> =>

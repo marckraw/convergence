@@ -318,6 +318,128 @@ describe('ProviderAccountEnrolmentService', () => {
     })
   })
 
+  describe('reconnect', () => {
+    async function enrolledThenBroken() {
+      const { fs, files } = fakeFs()
+      const runner = fakeRunner({}, loginWritesIdentity(files))
+      const subject = service({ fs, run: runner.run })
+      await subject.enrol({ email: 'someone@example.com' })
+      repository.setStatus(ACCOUNT_ID, 'unavailable', null)
+      runner.calls.length = 0
+      return { subject, runner, files, fs }
+    }
+
+    it('logs in again against the same directories, never fresh ones', async () => {
+      // Both paths are hashed into the keychain service name. A reconnect that
+      // derived new ones would authorise a slot no spawn will ever look in.
+      const { subject, runner } = await enrolledThenBroken()
+
+      await subject.reconnect(ACCOUNT_ID)
+
+      expect(runner.calls).toHaveLength(1)
+      expect(runner.calls[0].args).toEqual([
+        'auth',
+        'login',
+        '--email',
+        'someone@example.com',
+      ])
+      expect(runner.calls[0].env.CLAUDE_CONFIG_DIR).toBe(CONFIG_DIR)
+      expect(runner.calls[0].env.CLAUDE_SECURESTORAGE_CONFIG_DIR).toBe(
+        CREDENTIAL_DIR,
+      )
+    })
+
+    it('brings a disabled account back once it proves the enrolled identity', async () => {
+      const { subject } = await enrolledThenBroken()
+
+      const account = await subject.reconnect(ACCOUNT_ID)
+
+      expect(account.status).toBe('connected')
+      expect(repository.get(ACCOUNT_ID)).toMatchObject({
+        status: 'connected',
+        email: 'someone@example.com',
+        plan: 'max',
+      })
+    })
+
+    it('refuses to reconnect as somebody else', async () => {
+      // Signing into the wrong account in the browser is the easy mistake here,
+      // and silently rebinding the row would make every past turn's attribution
+      // a lie. Fail closed and leave the account disabled.
+      const { fs, files } = fakeFs()
+      const runner = fakeRunner({}, loginWritesIdentity(files))
+      const subject = service({ fs, run: runner.run })
+      await subject.enrol({ email: 'someone@example.com' })
+      repository.setStatus(ACCOUNT_ID, 'unavailable', null)
+
+      runner.run.mockImplementation(async (command: ProviderAccountCommand) => {
+        loginWritesIdentity(
+          files,
+          JSON.stringify({
+            oauthAccount: {
+              emailAddress: 'someone-else@example.com',
+              organizationUuid: 'other-org',
+            },
+          }),
+        )(command)
+        return { code: 0, stdout: '', stderr: '' }
+      })
+
+      await expect(subject.reconnect(ACCOUNT_ID)).rejects.toThrow(
+        /someone-else@example.com/,
+      )
+      expect(repository.get(ACCOUNT_ID)?.status).toBe('unavailable')
+      expect(repository.get(ACCOUNT_ID)?.email).toBe('someone@example.com')
+    })
+
+    it('leaves the account disabled when the login fails', async () => {
+      const { fs, files } = fakeFs()
+      const runner = fakeRunner({}, loginWritesIdentity(files))
+      const subject = service({ fs, run: runner.run })
+      await subject.enrol({ email: 'someone@example.com' })
+      repository.setStatus(ACCOUNT_ID, 'expired', null)
+      runner.run.mockResolvedValue({
+        code: 1,
+        stdout: '',
+        stderr: 'browser closed',
+      })
+
+      await expect(subject.reconnect(ACCOUNT_ID)).rejects.toThrow(
+        /browser closed/,
+      )
+      expect(repository.get(ACCOUNT_ID)?.status).toBe('expired')
+    })
+
+    it('refuses to reconnect an account that is not enrolled', async () => {
+      const { fs } = fakeFs()
+      const runner = fakeRunner()
+
+      await expect(
+        service({ fs, run: runner.run }).reconnect('missing'),
+      ).rejects.toThrow(/not enrolled/)
+      expect(runner.run).not.toHaveBeenCalled()
+    })
+
+    it('refuses to reconnect an account with no enrolled email to sign in as', async () => {
+      const { fs } = fakeFs()
+      const runner = fakeRunner()
+      repository.create({
+        id: 'anonymous',
+        providerId: 'claude-code',
+        label: 'anonymous',
+        authKind: 'subscription-oauth',
+        configDir: CONFIG_DIR,
+        credentialDir: CREDENTIAL_DIR,
+        executionHostId: 'local',
+      })
+
+      await expect(
+        service({ fs, run: runner.run }).reconnect('anonymous'),
+      ).rejects.toThrow(/no recorded email/)
+      expect(runner.run).not.toHaveBeenCalled()
+    })
+  })
+
   describe('remove', () => {
     async function enrolled() {
       const { fs, removed, files } = fakeFs()

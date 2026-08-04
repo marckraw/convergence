@@ -121,6 +121,13 @@ export function findOrphanCredentialDirs(input: {
 export interface ClaudeAccountIdentity {
   email: string | null
   orgId: string | null
+  /**
+   * The subscription tier, and only that. `organizationRole` sits next to it in
+   * the same block and reads plausibly — the enrolled Max account records
+   * `"admin"` — which is exactly why it must never be used: a wrong tier is
+   * indistinguishable from a right one until somebody plans around it. When the
+   * config records no tier the field stays null and nothing is displayed.
+   */
   plan: string | null
 }
 
@@ -138,11 +145,7 @@ export function readClaudeIdentityFromConfig(
   const orgId =
     typeof record.organizationUuid === 'string' ? record.organizationUuid : null
   const plan =
-    typeof record.organizationRole === 'string'
-      ? record.organizationRole
-      : typeof record.subscriptionType === 'string'
-        ? record.subscriptionType
-        : null
+    typeof record.subscriptionType === 'string' ? record.subscriptionType : null
 
   if (!email && !orgId) return null
 
