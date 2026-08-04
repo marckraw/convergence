@@ -5,6 +5,7 @@ import {
   buildProviderAccountPickerItems,
   buildProviderAccountSettingsRows,
   describeProviderAccountIdentity,
+  describeProviderAccountSelectionBlock,
   describeProviderAccountStatus,
   describeSelectedProviderAccount,
   isProviderAccountSelectable,
@@ -500,6 +501,22 @@ describe('resolveInitialProviderAccountSelection', () => {
         hasActiveSession: false,
       }),
     ).toBeNull()
+  })
+})
+
+describe('describeProviderAccountSelectionBlock', () => {
+  it('explains that a remote session cannot use a local account', () => {
+    // Accounts live on this machine and the wire protocol carries no account
+    // reference, so a remote host runs on its own credential regardless.
+    expect(describeProviderAccountSelectionBlock('remote')).toMatch(
+      /local-only for now/,
+    )
+  })
+
+  it('blocks nothing for a local session', () => {
+    expect(describeProviderAccountSelectionBlock('local')).toBeNull()
+    expect(describeProviderAccountSelectionBlock(null)).toBeNull()
+    expect(describeProviderAccountSelectionBlock(undefined)).toBeNull()
   })
 })
 

@@ -161,6 +161,24 @@ export const AMBIENT_DEFAULT_ACCOUNT_ID = '__ambient-default__'
 export const AMBIENT_DEFAULT_ACCOUNT_LABEL = 'Default account'
 
 /**
+ * Why the account picker cannot be used right now, or null (ADR 0007, PA10).
+ *
+ * Accounts are host-scoped: their directories live on *this* machine and the
+ * execution-host wire protocol carries no account reference, so a remote
+ * session runs on the remote host's own credential whatever is selected here.
+ * Saying so is the point — a picker that silently did nothing would be worse
+ * than one that explains itself.
+ */
+export function describeProviderAccountSelectionBlock(
+  executionHost: string | null | undefined,
+): string | null {
+  return executionHost === 'remote'
+    ? 'Account selection is local-only for now. This session runs on a remote ' +
+        'execution host, which uses its own credential.'
+    : null
+}
+
+/**
  * Only the accounts that could serve this session (ADR 0007, PA9).
  *
  * Accounts are per provider — a Codex `CODEX_HOME` cannot serve a Claude turn —

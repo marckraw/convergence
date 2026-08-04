@@ -5,6 +5,7 @@ export {
   buildProviderAccountPickerItems,
   buildProviderAccountSettingsRows,
   describeProviderAccountIdentity,
+  describeProviderAccountSelectionBlock,
   describeProviderAccountStatus,
   describeSelectedProviderAccount,
   isProviderAccountSelectable,
