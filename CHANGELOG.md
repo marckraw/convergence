@@ -1,5 +1,24 @@
 # convergence
 
+## 0.45.10
+
+### Patch Changes
+
+- 9a60924: The test suites that drive a real `git` now spend a named time budget instead of
+  vitest's 5s default (MAR-2130, MAR-2248). They init bare repositories, fetch
+  between them and create worktrees on disk — which is exactly what they exist to
+  verify — so their wall-clock time depends on machine load rather than on the
+  code under test, and under the full suite they periodically timed out with a red
+  that said nothing about the product. Internal only; no behaviour change.
+- be95cc7: Connectors follow the account (MAR-2249, PA11). Each Claude account now has a
+  Connectors panel in Settings → Accounts that asks _that account_ what it can
+  reach and authorizes an MCP server through its own credential slot — so the
+  tokens land where the account will actually look for them, once, and survive
+  every later swap. When a turn hits a connector the running account has not
+  authorized, the transcript no longer shrugs: it names the server and the
+  account and offers a control to fix it, and says plainly when the session
+  cannot open a browser instead of pretending an action will work.
+
 ## 0.45.9
 
 ### Patch Changes
