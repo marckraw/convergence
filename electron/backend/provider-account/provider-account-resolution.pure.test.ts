@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
+  assertLocalAccountSelection,
   resolveAccountForTurn,
   selectTurnAccountSnapshot,
 } from './provider-account-resolution.pure'
@@ -121,5 +122,40 @@ describe('selectTurnAccountSnapshot', () => {
         resolveFresh,
       }),
     ).toBe('account-b')
+  })
+})
+
+describe('assertLocalAccountSelection', () => {
+  it('refuses a remote turn that names a local account', () => {
+    // The lying case PA10 exists to prevent: the remote host runs on its own
+    // credential whatever is selected here, and PA4 would still record the
+    // local account id against the turn.
+    expect(() =>
+      assertLocalAccountSelection({
+        executionHost: 'remote',
+        accountId: 'acct-a',
+      }),
+    ).toThrow(/local-only for now/)
+  })
+
+  it('allows a remote turn on the ambient default, which is honest', () => {
+    expect(() =>
+      assertLocalAccountSelection({ executionHost: 'remote', accountId: null }),
+    ).not.toThrow()
+    expect(() =>
+      assertLocalAccountSelection({
+        executionHost: 'remote',
+        accountId: undefined,
+      }),
+    ).not.toThrow()
+  })
+
+  it('leaves local sessions entirely alone', () => {
+    expect(() =>
+      assertLocalAccountSelection({
+        executionHost: 'local',
+        accountId: 'acct-a',
+      }),
+    ).not.toThrow()
   })
 })

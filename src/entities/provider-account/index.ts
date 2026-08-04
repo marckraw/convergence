@@ -4,6 +4,7 @@ export {
   AMBIENT_DEFAULT_ACCOUNT_LABEL,
   buildProviderAccountPickerItems,
   describeProviderAccountIdentity,
+  describeProviderAccountSelectionBlock,
   describeProviderAccountStatus,
   describeSelectedProviderAccount,
   isProviderAccountSelectable,

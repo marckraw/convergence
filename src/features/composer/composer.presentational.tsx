@@ -68,6 +68,7 @@ interface ComposerProps {
   selectedProviderAccountId: string | null
   onProviderAccountChange: (accountId: string | null) => void
   providerAccountSelectionLocked: boolean
+  providerAccountSelectionBlockedReason: string | null
   codexFastMode: boolean
   onCodexFastModeChange: (enabled: boolean) => void
   remoteHostAvailable: boolean
@@ -163,6 +164,7 @@ export const Composer: FC<ComposerProps> = ({
   selectedProviderAccountId,
   onProviderAccountChange,
   providerAccountSelectionLocked,
+  providerAccountSelectionBlockedReason,
   codexFastMode,
   onCodexFastModeChange,
   remoteHostAvailable,
@@ -685,6 +687,7 @@ export const Composer: FC<ComposerProps> = ({
                 selectedAccountId={selectedProviderAccountId}
                 onChange={onProviderAccountChange}
                 disabled={disabled || providerAccountSelectionLocked}
+                unavailableReason={providerAccountSelectionBlockedReason}
               />
             )}
             {selection.providerId === 'codex' ? (

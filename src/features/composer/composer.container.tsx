@@ -17,6 +17,7 @@ import {
 import { useAppSettingsStore } from '@/entities/app-settings'
 import { useDialogStore } from '@/entities/dialog'
 import {
+  describeProviderAccountSelectionBlock,
   isProviderAccountSelectionLocked,
   providerAccountApi,
   resolveInitialProviderAccountSelection,
@@ -702,6 +703,20 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
     }
   }, [activeSessionId, providerAccounts])
 
+  /**
+   * Accounts are host-scoped (ADR 0007, PA10). A remote session runs on the
+   * remote host's own credential, so the selection is neither offered nor sent
+   * — the backend refuses it too, and the two must not disagree.
+   */
+  const providerAccountSelectionBlockedReason =
+    describeProviderAccountSelectionBlock(
+      activeSession?.executionHost ??
+        (effectiveRunOnRemoteHost ? 'remote' : 'local'),
+    )
+  const effectiveProviderAccountId = providerAccountSelectionBlockedReason
+    ? null
+    : selectedProviderAccountId
+
   const providerAccountSelectionLocked = isProviderAccountSelectionLocked(
     activeSession
       ? { status: activeSession.status, attention: activeSession.attention }
@@ -834,7 +849,7 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
             skillSelections,
             mode,
             undefined,
-            selectedProviderAccountId,
+            effectiveProviderAccountId,
           )
         } else {
           sendMessageToSession(
@@ -844,7 +859,7 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
             skillSelections,
             undefined,
             undefined,
-            selectedProviderAccountId,
+            effectiveProviderAccountId,
           )
         }
       } else if (mode) {
@@ -855,7 +870,7 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
           undefined,
           mode,
           undefined,
-          selectedProviderAccountId,
+          effectiveProviderAccountId,
         )
       } else {
         sendMessageToSession(
@@ -865,7 +880,7 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
           undefined,
           undefined,
           undefined,
-          selectedProviderAccountId,
+          effectiveProviderAccountId,
         )
       }
       setValue('')
@@ -892,7 +907,7 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
           skillSelections,
           permissionConfig,
           serviceTier,
-          selectedProviderAccountId,
+          effectiveProviderAccountId,
         )
         if (session) {
           await onGlobalSessionCreated?.(session)
@@ -913,7 +928,7 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
         permissionConfig,
         serviceTier,
         effectiveRunOnRemoteHost ? 'remote' : undefined,
-        selectedProviderAccountId,
+        effectiveProviderAccountId,
       )
     } else {
       createAndStartSession(
@@ -930,7 +945,7 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
         permissionConfig,
         serviceTier,
         effectiveRunOnRemoteHost ? 'remote' : undefined,
-        selectedProviderAccountId,
+        effectiveProviderAccountId,
       )
     }
     setValue('')
@@ -961,7 +976,7 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
     permissionConfig,
     serviceTier,
     effectiveRunOnRemoteHost,
-    selectedProviderAccountId,
+    effectiveProviderAccountId,
   ])
 
   const handleProviderChange = (nextProviderId: string) => {
@@ -1137,6 +1152,9 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
         selectedProviderAccountId={selectedProviderAccountId}
         onProviderAccountChange={setSelectedProviderAccountId}
         providerAccountSelectionLocked={providerAccountSelectionLocked}
+        providerAccountSelectionBlockedReason={
+          providerAccountSelectionBlockedReason
+        }
         codexFastMode={codexFastMode}
         onCodexFastModeChange={setCodexFastMode}
         remoteHostAvailable={remoteHostEligible}

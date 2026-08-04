@@ -43,6 +43,39 @@ export function resolveAccountForTurn(input: {
   }
 }
 
+/**
+ * The message a remote session gets when an account is selected (PA10).
+ *
+ * Written once, so the composer and the backend say the same thing rather than
+ * two different half-truths.
+ */
+export const REMOTE_ACCOUNT_SELECTION_UNAVAILABLE =
+  'Account selection is local-only for now. A session on a remote execution ' +
+  'host runs on that host’s own credential, so pick "Default account" or ' +
+  'run this session locally.'
+
+/**
+ * Refuses a remote turn that names a local account (ADR 0007, PA10).
+ *
+ * Accounts are host-scoped: their directories exist on *this* machine, and the
+ * execution-host wire protocol carries no account reference. A remote host
+ * therefore runs on its own ambient credential no matter what is selected here.
+ *
+ * Failing is the only honest option. Running it anyway would spend an
+ * unexpected subscription *and* record the local account id against the turn,
+ * so the transcript would assert something that never happened — and there is
+ * nothing downstream that could ever contradict it.
+ */
+export function assertLocalAccountSelection(input: {
+  executionHost: string
+  accountId: string | null | undefined
+}): void {
+  if (!input.accountId) return
+  if (input.executionHost !== 'remote') return
+
+  throw new Error(REMOTE_ACCOUNT_SELECTION_UNAVAILABLE)
+}
+
 function describeAccount(account: ProviderAccount): string {
   return account.email ?? account.label
 }

@@ -3188,6 +3188,62 @@ describe('SessionService — liveness clock', () => {
       })
     })
 
+    it('refuses a remote start that names a local account, instead of lying about it', async () => {
+      // The whole of PA10. The remote host runs on its own credential whatever
+      // is selected here, and starting anyway would file the local account id
+      // against a turn it never served — with nothing downstream able to
+      // contradict it.
+      const { host, startCalls } = createFakeRemoteHost()
+      service.setRemoteExecutionHost(host)
+      service.setRemoteWorkspaceSourceResolver(() => ({
+        repository: 'git@github.com:acme/repo.git',
+      }))
+
+      const session = service.create({
+        projectId,
+        workspaceId: null,
+        providerId: 'claude-code',
+        model: 'sonnet',
+        effort: null,
+        name: 'remote with account',
+        executionHost: 'remote',
+      })
+
+      await expect(
+        service.start(session.id, {
+          text: 'hello',
+          providerAccountId: 'acct-a',
+        }),
+      ).rejects.toThrow(/local-only for now/)
+      expect(startCalls).toHaveLength(0)
+      expect(service.getById(session.id)?.status).not.toBe('running')
+    })
+
+    it('still runs a remote session on the ambient default', async () => {
+      const { host, startCalls } = createFakeRemoteHost()
+      service.setRemoteExecutionHost(host)
+      service.setRemoteWorkspaceSourceResolver(() => ({
+        repository: 'git@github.com:acme/repo.git',
+      }))
+
+      const session = service.create({
+        projectId,
+        workspaceId: null,
+        providerId: 'claude-code',
+        model: 'sonnet',
+        effort: null,
+        name: 'remote ambient',
+        executionHost: 'remote',
+      })
+
+      await service.start(session.id, {
+        text: 'hello',
+        providerAccountId: null,
+      })
+
+      expect(startCalls).toHaveLength(1)
+    })
+
     it('rejects remote sessions when the remote host is not configured', async () => {
       const session = service.create({
         projectId,

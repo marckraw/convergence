@@ -1105,6 +1105,82 @@ describe('ComposerContainer', () => {
       )
     })
 
+    it('refuses to offer a local account to a remote session', async () => {
+      // Accounts are host-scoped (PA10). The remote host runs on its own
+      // credential, so offering a picker that silently did nothing would be
+      // worse than saying why there is none.
+      providerAccountsMock = [
+        buildAccount({ id: 'acct-b', email: 'b@example.com' }),
+      ]
+      useSessionStore.setState((state) => ({
+        sessions: state.sessions.map((session) =>
+          session.id === 'session-1'
+            ? { ...session, executionHost: 'remote' as const }
+            : session,
+        ),
+      }))
+
+      render(
+        <ComposerContainer
+          context={{
+            kind: 'project',
+            projectId: 'project-1',
+            workspaceId: null,
+            activeSessionId: 'session-1',
+          }}
+        />,
+      )
+
+      expect(
+        await screen.findByText('Default account · local only'),
+      ).toBeInTheDocument()
+      expect(screen.queryByText('b@example.com')).not.toBeInTheDocument()
+    })
+
+    it('never sends a local account with a remote turn', async () => {
+      providerAccountsMock = [
+        buildAccount({ id: 'acct-b', email: 'b@example.com', isDefault: true }),
+      ]
+      useSessionStore.setState((state) => ({
+        sessions: state.sessions.map((session) =>
+          session.id === 'session-1'
+            ? { ...session, executionHost: 'remote' as const }
+            : session,
+        ),
+      }))
+
+      render(
+        <ComposerContainer
+          context={{
+            kind: 'project',
+            projectId: 'project-1',
+            workspaceId: null,
+            activeSessionId: 'session-1',
+          }}
+        />,
+      )
+
+      await screen.findByText('Default account · local only')
+
+      const textbox = screen.getByPlaceholderText('Send a follow-up...')
+      fireEvent.change(textbox, { target: { value: 'run this remotely' } })
+      fireEvent.keyDown(textbox, { key: 'Enter', metaKey: true })
+
+      // Even an enrolled *default* account is dropped: the backend refuses it,
+      // and the two must not disagree about what is going to happen.
+      expect(
+        useSessionStore.getState().sendMessageToSession,
+      ).toHaveBeenCalledWith(
+        'session-1',
+        'run this remotely',
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        null,
+      )
+    })
+
     it('shows the account that actually served the last turn', async () => {
       // PA4's record is the honest answer, not anything the composer remembers.
       providerAccountsMock = [

@@ -6,6 +6,7 @@ import type {
   SessionRow,
 } from '../database/database.types'
 import type { ProviderExecutionHost } from '../provider/execution-host/execution-host.types'
+import { assertLocalAccountSelection } from '../provider-account/provider-account-resolution.pure'
 import { remoteProviderIdForLocalProvider } from '../provider/execution-host/remote-execution-host.pure'
 import type {
   Attachment,
@@ -893,6 +894,11 @@ export class SessionService {
 
     const augmentedText = this.prepareUserTurnText(session, input.input.text)
 
+    assertLocalAccountSelection({
+      executionHost: input.session.executionHost,
+      accountId: input.input.providerAccountId,
+    })
+
     this.pendingTurnAccountIds.set(
       input.session.id,
       input.input.providerAccountId ?? null,
@@ -1502,6 +1508,15 @@ export class SessionService {
     initialSkillSelections?: SkillSelection[],
     providerAccountId?: string | null,
   ): void {
+    // Accounts are host-scoped (ADR 0007, PA10). Refuse before anything is
+    // spawned or recorded: a remote host runs on its own credential whatever is
+    // selected here, and starting anyway would file the local account id
+    // against a turn it never served.
+    assertLocalAccountSelection({
+      executionHost: session.executionHost,
+      accountId: providerAccountId,
+    })
+
     const execution = this.resolveExecution(session)
     if (!execution.host.capabilitiesFor(execution.providerId)) {
       throw new Error(`Provider not found: ${session.providerId}`)
