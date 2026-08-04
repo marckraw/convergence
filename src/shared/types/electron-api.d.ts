@@ -1206,6 +1206,7 @@ type ProviderQuotaSnapshotData =
       limitReachedType: string | null
       lastCheckedAt: string
       stale: boolean
+      rateLimit?: ProviderRateLimitSignalData | null
     }
   | {
       providerId: 'codex' | 'claude-code' | 'cursor' | 'antigravity'
@@ -1215,7 +1216,16 @@ type ProviderQuotaSnapshotData =
       usageUrl?: string
       lastCheckedAt: string
       stale: boolean
+      rateLimit?: ProviderRateLimitSignalData | null
     }
+
+interface ProviderRateLimitSignalData {
+  providerAccountId: string | null
+  status: string
+  rateLimitType: string | null
+  resetsAt: string | null
+  observedAt: string
+}
 
 type ProviderAccountStatusData = 'connected' | 'expired' | 'unavailable'
 
@@ -1781,7 +1791,10 @@ interface ElectronAPI {
     ) => () => void
   }
   providerQuota: {
-    list: (forceRefresh?: boolean) => Promise<ProviderQuotaSnapshotData[]>
+    list: (
+      forceRefresh?: boolean,
+      scope?: { executionHostId: string; providerAccountId: string | null },
+    ) => Promise<ProviderQuotaSnapshotData[]>
   }
   providerAccounts: {
     list: () => Promise<ProviderAccountData[]>

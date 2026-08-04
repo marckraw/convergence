@@ -645,7 +645,10 @@ describe('AppSettingsDialogContainer', () => {
 
     expect(await screen.findByText('5 hour usage limit')).toBeInTheDocument()
     expect(screen.getByText(/96%/)).toBeInTheDocument()
-    expect(window.electronAPI.providerQuota.list).toHaveBeenCalledWith(false)
+    expect(window.electronAPI.providerQuota.list).toHaveBeenCalledWith(
+      false,
+      undefined,
+    )
     expect(screen.getByText('Current 5-hour Claude usage')).toBeInTheDocument()
     expect(screen.getByText('18.1M tokens, $38.82')).toBeInTheDocument()
     expect(
@@ -655,7 +658,10 @@ describe('AppSettingsDialogContainer', () => {
     fireEvent.click(screen.getByRole('button', { name: /Refresh/ }))
 
     await waitFor(() => {
-      expect(window.electronAPI.providerQuota.list).toHaveBeenCalledWith(true)
+      expect(window.electronAPI.providerQuota.list).toHaveBeenCalledWith(
+        true,
+        undefined,
+      )
     })
     expect(window.electronAPI.appSettings.set).not.toHaveBeenCalled()
     expect(screen.getByRole('button', { name: 'Done' })).toBeInTheDocument()
