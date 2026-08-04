@@ -48,11 +48,52 @@ export const CLAUDE_KEYCHAIN_ACCOUNT_FALLBACK = 'claude-code-user'
  * pinned per provider rather than derived from the registry id — a later rename
  * of a provider id must not orphan anybody's credentials.
  *
- * Unknown providers throw rather than guess: PA9 adds Codex here deliberately,
- * with the same one-way door in mind.
+ * Unknown providers throw rather than guess. Codex was added here deliberately
+ * in PA9, with the same one-way door in mind: `codex` is now pinned forever,
+ * because `CODEX_HOME` points at this directory and moving it strands the
+ * `auth.json` inside it.
  */
 const PROVIDER_ACCOUNT_PATH_TOKENS: Readonly<Record<string, string>> = {
   'claude-code': 'claude',
+  codex: 'codex',
+}
+
+/**
+ * Where a provider actually keeps the credential, which decides how an account
+ * is laid out and how it is torn down.
+ *
+ * - `keychain-namespace` (Claude Code): the secret lives in the OS keychain
+ *   under a slot named from a *separate* directory path, so the account needs
+ *   two directories and removal must run the provider's own logout.
+ * - `config-home` (Codex): the secret is a plaintext `auth.json` inside the
+ *   config home itself, so there is one directory and the file's permissions
+ *   are the protection.
+ *
+ * Modelled rather than branched on `providerId` at each site, so a third
+ * provider states its shape once.
+ */
+export type ProviderAccountCredentialLayout =
+  | 'keychain-namespace'
+  | 'config-home'
+
+const PROVIDER_ACCOUNT_CREDENTIAL_LAYOUTS: Readonly<
+  Record<string, ProviderAccountCredentialLayout>
+> = {
+  'claude-code': 'keychain-namespace',
+  codex: 'config-home',
+}
+
+export function providerAccountCredentialLayout(
+  providerId: string,
+): ProviderAccountCredentialLayout {
+  const layout = PROVIDER_ACCOUNT_CREDENTIAL_LAYOUTS[providerId]
+  if (!layout) {
+    throw new Error(
+      `No credential layout for ${JSON.stringify(providerId)}. A provider must ` +
+        'declare where its credential lives before it can enrol accounts.',
+    )
+  }
+  return layout
 }
 
 export function providerAccountPathToken(providerId: string): string {
@@ -109,14 +150,27 @@ export function deriveProviderAccountConfigDir(
  * `~/.convergence/provider-credentials/<pathToken>/<accountId>` — the value of
  * `CLAUDE_SECURESTORAGE_CONFIG_DIR` for this account, and therefore the string
  * that decides which keychain slot the account's credential lands in.
+ *
+ * For a `config-home` provider such as Codex this returns the config directory
+ * itself, because that is where the credential genuinely is. Minting a second,
+ * permanently empty directory would describe a namespace that does not exist.
  */
 export function deriveProviderAccountCredentialDir(
   input: ProviderAccountDirInput,
 ): string {
+  const token = assertSafeSegment(
+    providerAccountPathToken(input.providerId),
+    'providerId',
+  )
+
+  if (providerAccountCredentialLayout(input.providerId) === 'config-home') {
+    return deriveProviderAccountConfigDir(input)
+  }
+
   return join(
     input.homeDir,
     ...PROVIDER_ACCOUNT_CREDENTIAL_ROOT_SEGMENTS,
-    assertSafeSegment(providerAccountPathToken(input.providerId), 'providerId'),
+    token,
     assertSafeSegment(input.accountId, 'accountId'),
   )
 }

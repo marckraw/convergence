@@ -10,6 +10,7 @@ export {
   isProviderAccountSelectable,
   isProviderAccountSelectionLocked,
   providerAccountIdFromPickerValue,
+  providerAccountsForProvider,
   resolveInitialProviderAccountSelection,
   summariseProviderAccountHealth,
 } from './provider-account.pure'

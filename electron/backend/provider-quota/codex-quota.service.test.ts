@@ -216,3 +216,77 @@ describe('CodexQuotaService', () => {
     expect(entries).toEqual([])
   })
 })
+
+describe('CodexQuotaService account scoping', () => {
+  const ACCOUNT_HOME = '/home/.convergence/provider-accounts/codex/acct-a'
+
+  function scopedService() {
+    const readRateLimits = vi.fn(async () => RATE_LIMITS_RESPONSE)
+    const service = new CodexQuotaService({
+      readRateLimits,
+      resolveAccount: (accountId) =>
+        accountId === 'acct-a' ? { configDir: ACCOUNT_HOME } : null,
+    })
+    return { service, readRateLimits }
+  }
+
+  it('reads limits from the selected account own CODEX_HOME', async () => {
+    const { service, readRateLimits } = scopedService()
+
+    await service.getQuota({
+      scope: { executionHostId: 'local', providerAccountId: 'acct-a' },
+    })
+
+    expect(readRateLimits).toHaveBeenCalledWith({ configDir: ACCOUNT_HOME })
+  })
+
+  it('reads the ambient login when no account is selected', async () => {
+    const { service, readRateLimits } = scopedService()
+
+    await service.getQuota()
+
+    expect(readRateLimits).toHaveBeenCalledWith(null)
+  })
+
+  it('never serves one account numbers under another account name', async () => {
+    // Codex answers these from the account's own authenticated session, so
+    // unlike Claude's shared usage log they genuinely belong to somebody.
+    const { service, readRateLimits } = scopedService()
+
+    await service.getQuota({
+      scope: { executionHostId: 'local', providerAccountId: 'acct-a' },
+    })
+    await service.getQuota({
+      scope: { executionHostId: 'local', providerAccountId: 'acct-b' },
+    })
+
+    expect(readRateLimits).toHaveBeenCalledTimes(2)
+    expect(readRateLimits).toHaveBeenLastCalledWith(null)
+  })
+
+  it('keeps hosts apart as well as accounts', async () => {
+    const { service, readRateLimits } = scopedService()
+
+    await service.getQuota({
+      scope: { executionHostId: 'local', providerAccountId: 'acct-a' },
+    })
+    await service.getQuota({
+      scope: { executionHostId: 'remote', providerAccountId: 'acct-a' },
+    })
+
+    expect(readRateLimits).toHaveBeenCalledTimes(2)
+  })
+
+  it('still serves one account from cache instead of re-reading it', async () => {
+    const { service, readRateLimits } = scopedService()
+    const scope = {
+      executionHostId: 'local',
+      providerAccountId: 'acct-a' as string | null,
+    }
+
+    await service.getQuota({ scope })
+    await service.getQuota({ scope })
+
+    expect(readRateLimits).toHaveBeenCalledTimes(1)
+  })
+})

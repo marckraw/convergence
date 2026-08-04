@@ -10,6 +10,7 @@ import {
   isProviderAccountSelectable,
   isProviderAccountSelectionLocked,
   providerAccountIdFromPickerValue,
+  providerAccountsForProvider,
   resolveInitialProviderAccountSelection,
   summariseProviderAccountHealth,
 } from './provider-account.pure'
@@ -499,5 +500,28 @@ describe('resolveInitialProviderAccountSelection', () => {
         hasActiveSession: false,
       }),
     ).toBeNull()
+  })
+})
+
+describe('providerAccountsForProvider', () => {
+  it('offers only the accounts that could serve this session', () => {
+    // A Codex CODEX_HOME cannot serve a Claude turn, so offering it would
+    // promise a swap resolveAccountForTurn has no way to honour.
+    const accounts = [
+      account({ id: 'claude-a' }),
+      account({ id: 'codex-a', providerId: 'codex' }),
+    ]
+
+    expect(
+      providerAccountsForProvider(accounts, 'claude-code').map((a) => a.id),
+    ).toEqual(['claude-a'])
+    expect(
+      providerAccountsForProvider(accounts, 'codex').map((a) => a.id),
+    ).toEqual(['codex-a'])
+  })
+
+  it('offers nothing when no provider is chosen yet', () => {
+    expect(providerAccountsForProvider([account()], null)).toEqual([])
+    expect(providerAccountsForProvider([account()], '')).toEqual([])
   })
 })

@@ -3,11 +3,19 @@ import { promises as nodeFs } from 'fs'
 import { homedir } from 'os'
 import { join } from 'path'
 import { spawn } from 'child_process'
-import { attestAccountIdentity } from './provider-account-attestation.pure'
 import {
   reconcileAccountClaudeConfig,
   isRecord,
 } from './provider-account-claude-config.pure'
+import { attestAccountIdentity } from './provider-account-attestation.pure'
+import {
+  buildCodexAccountLoginCommand,
+  buildCodexAccountLogoutCommand,
+  readCodexIdentityFromAuth,
+  CODEX_AUTH_FILE_MODE,
+  CODEX_AUTH_FILE_NAME,
+  CODEX_HOME_DIR_MODE,
+} from './provider-account-codex.pure'
 import {
   buildProviderAccountLoginCommand,
   buildProviderAccountLogoutCommand,
@@ -23,6 +31,7 @@ import {
 } from './provider-account-settings-scan.pure'
 import {
   assertRemovableAccountDir,
+  providerAccountCredentialLayout,
   deriveProviderAccountConfigDir,
   deriveProviderAccountConfigRoot,
   deriveProviderAccountCredentialDir,
@@ -48,6 +57,8 @@ import type { ProviderAccount } from './provider-account.types'
 
 export interface ProviderAccountFs {
   mkdir: (path: string) => Promise<void>
+  /** Codex writes its credential as a plaintext file; permissions are ours. */
+  chmod: (path: string, mode: number) => Promise<void>
   readdir: (path: string) => Promise<string[]>
   symlink: (target: string, path: string) => Promise<void>
   readFile: (path: string) => Promise<string>
@@ -69,6 +80,7 @@ const defaultFs: ProviderAccountFs = {
   mkdir: async (path) => {
     await nodeFs.mkdir(path, { recursive: true })
   },
+  chmod: (path, mode) => nodeFs.chmod(path, mode),
   readdir: (path) => nodeFs.readdir(path),
   symlink: (target, path) => nodeFs.symlink(target, path),
   readFile: (path) => nodeFs.readFile(path, 'utf8'),
@@ -107,7 +119,8 @@ export interface ProviderAccountEnrolmentDeps {
   homeDir?: string
   baseEnv?: NodeJS.ProcessEnv
   newAccountId?: () => string
-  binaryPath?: string | null
+  /** Provider binaries by registry id, e.g. `{ 'claude-code': '/usr/bin/claude' }`. */
+  binaryPaths?: Readonly<Record<string, string | null>>
 }
 
 export interface EnrolProviderAccountInput {
@@ -135,7 +148,7 @@ export class ProviderAccountEnrolmentService {
   private readonly homeDir: string
   private readonly baseEnv: NodeJS.ProcessEnv
   private readonly newAccountId: () => string
-  private binaryPath: string | null
+  private readonly binaryPaths = new Map<string, string>()
 
   constructor(deps: ProviderAccountEnrolmentDeps) {
     this.repository = deps.repository
@@ -144,12 +157,22 @@ export class ProviderAccountEnrolmentService {
     this.homeDir = deps.homeDir ?? homedir()
     this.baseEnv = deps.baseEnv ?? process.env
     this.newAccountId = deps.newAccountId ?? (() => randomUUID())
-    this.binaryPath = deps.binaryPath ?? null
+    for (const [providerId, path] of Object.entries(deps.binaryPaths ?? {})) {
+      if (path) this.binaryPaths.set(providerId, path)
+    }
   }
 
-  /** Wired from provider detection in main, mirroring the quota services. */
-  setBinaryPath(binaryPath: string | null): void {
-    this.binaryPath = binaryPath
+  /**
+   * Wired from provider detection in main, mirroring the quota services. Kept
+   * per provider: enrolling a Codex account must run `codex`, and running the
+   * Claude binary instead would authorise a credential store nobody asked for.
+   */
+  setBinaryPath(providerId: string, binaryPath: string | null): void {
+    if (binaryPath) {
+      this.binaryPaths.set(providerId, binaryPath)
+    } else {
+      this.binaryPaths.delete(providerId)
+    }
   }
 
   private get sharedDir(): string {
@@ -160,13 +183,14 @@ export class ProviderAccountEnrolmentService {
     return join(this.homeDir, '.claude.json')
   }
 
-  private requireBinaryPath(): string {
-    if (!this.binaryPath) {
+  private requireBinaryPath(providerId: string): string {
+    const binaryPath = this.binaryPaths.get(providerId)
+    if (!binaryPath) {
       throw new Error(
-        'Claude Code is not available on PATH, so accounts cannot be enrolled.',
+        `${providerId} is not available on PATH, so accounts cannot be enrolled.`,
       )
     }
-    return this.binaryPath
+    return binaryPath
   }
 
   async scanSharedSettings(): Promise<ProviderAccountSettingsWarning[]> {
@@ -177,13 +201,17 @@ export class ProviderAccountEnrolmentService {
   async enrol(
     input: EnrolProviderAccountInput,
   ): Promise<EnrolProviderAccountResult> {
-    const binaryPath = this.requireBinaryPath()
+    const providerId = input.providerId ?? DEFAULT_PROVIDER_ID
+    if (providerAccountCredentialLayout(providerId) === 'config-home') {
+      return this.enrolCodexAccount(input, providerId)
+    }
+
+    const binaryPath = this.requireBinaryPath(providerId)
     const email = input.email.trim()
     if (!email) {
       throw new Error('Enrolment requires the email address of the account.')
     }
 
-    const providerId = input.providerId ?? DEFAULT_PROVIDER_ID
     const accountId = this.newAccountId()
     const dirInput = { homeDir: this.homeDir, providerId, accountId }
     const configDir = deriveProviderAccountConfigDir(dirInput)
@@ -266,7 +294,7 @@ export class ProviderAccountEnrolmentService {
       )
     }
 
-    const binaryPath = this.requireBinaryPath()
+    const binaryPath = this.requireBinaryPath(account.providerId)
 
     // Re-seeded because a shared entry added since enrolment would otherwise
     // stay unlinked, and an existing link is left alone.
@@ -317,13 +345,106 @@ export class ProviderAccountEnrolmentService {
     return reconnected
   }
 
+  /**
+   * Codex enrolment (ADR 0007, PA9).
+   *
+   * Same model, same seams, same attestation net — the differences are
+   * genuinely Codex's: `codex login` takes no email because it authorises
+   * whatever ChatGPT session the browser holds, there is nothing to symlink
+   * because Codex keeps no shared skill or transcript store under this home,
+   * and the credential is a plaintext file rather than a keychain slot, so its
+   * permissions are ours to set.
+   */
+  private async enrolCodexAccount(
+    input: EnrolProviderAccountInput,
+    providerId: string,
+  ): Promise<EnrolProviderAccountResult> {
+    const binaryPath = this.requireBinaryPath(providerId)
+    const accountId = this.newAccountId()
+    const configDir = deriveProviderAccountConfigDir({
+      homeDir: this.homeDir,
+      providerId,
+      accountId,
+    })
+
+    await this.fs.mkdir(configDir)
+    // MAR-2207: owner-only home, not just an owner-only credential file.
+    await this.fs.chmod(configDir, CODEX_HOME_DIR_MODE)
+
+    const result = await this.runCommand(
+      buildCodexAccountLoginCommand({
+        binaryPath,
+        configDir,
+        baseEnv: this.baseEnv,
+      }),
+    )
+
+    if (result.code !== 0) {
+      throw new Error(
+        `codex login failed: ${result.stderr.trim() || `exit code ${result.code}`}`,
+      )
+    }
+
+    const authPath = join(configDir, CODEX_AUTH_FILE_NAME)
+    const identity = readCodexIdentityFromAuth(await this.readJson(authPath))
+    if (!identity) {
+      // Directories stay behind for the sweep to reclaim. Guessing an identity
+      // here is exactly the mistake the ADR forbids.
+      throw new Error(
+        'Login completed but the Codex home reported no identity. ' +
+          'The account was not enrolled.',
+      )
+    }
+
+    // The keychain does this for Claude. Here it is the filesystem's job, and
+    // a world-readable auth.json is a credential anyone on the box can copy.
+    await this.fs.chmod(authPath, CODEX_AUTH_FILE_MODE)
+
+    const account = this.repository.create({
+      id: accountId,
+      providerId,
+      label: deriveProviderAccountLabel(
+        identity.email ?? (input.email.trim() || accountId),
+        input.label,
+      ),
+      authKind: 'subscription-oauth',
+      configDir,
+      // Codex keeps the credential inside the home. Recording a second,
+      // permanently empty directory would describe a namespace that is not
+      // there.
+      credentialDir: configDir,
+      executionHostId: input.executionHostId ?? 'local',
+      email: identity.email,
+      orgId: identity.orgId,
+      plan: identity.plan,
+      status: 'connected',
+      lastValidatedAt: new Date().toISOString(),
+    })
+
+    return { account, warnings: [] }
+  }
+
   async remove(accountId: string): Promise<void> {
     const account = this.repository.get(accountId)
     if (!account) return
 
-    const binaryPath = this.binaryPath
+    const layout = providerAccountCredentialLayout(account.providerId)
+    const binaryPath = this.binaryPaths.get(account.providerId) ?? null
+
     if (binaryPath) {
-      await this.runLogout(binaryPath, account.credentialDir, accountId)
+      if (layout === 'config-home') {
+        // Scoped to this account's own home, so the shared `~/.codex` login is
+        // untouched — the Codex equivalent of the throwaway-config-dir rule.
+        await this.runCommand(
+          buildCodexAccountLogoutCommand({
+            binaryPath,
+            configDir: account.configDir,
+            baseEnv: this.baseEnv,
+          }),
+        )
+      } else {
+        await this.runLogout(binaryPath, account.credentialDir, accountId)
+      }
     }
 
     this.repository.remove(accountId)
@@ -332,14 +453,16 @@ export class ProviderAccountEnrolmentService {
       this.homeDir,
       account.providerId,
     )
+    assertRemovableAccountDir(account.configDir, configRoot)
+    await this.fs.rm(account.configDir)
+
+    if (layout === 'config-home') return
+
     const credentialRoot = deriveProviderAccountCredentialRoot(
       this.homeDir,
       account.providerId,
     )
-    assertRemovableAccountDir(account.configDir, configRoot)
     assertRemovableAccountDir(account.credentialDir, credentialRoot)
-
-    await this.fs.rm(account.configDir)
     await this.fs.rm(account.credentialDir)
   }
 
@@ -364,7 +487,7 @@ export class ProviderAccountEnrolmentService {
         .map((account) => account.credentialDir),
     })
 
-    const binaryPath = this.binaryPath
+    const binaryPath = this.binaryPaths.get(providerId) ?? null
     const swept: string[] = []
     for (const orphan of orphans) {
       if (binaryPath) {
