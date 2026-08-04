@@ -50,6 +50,8 @@ const providerAccounts = {
   scanSharedSettings: vi.fn(),
   attest: vi.fn(),
   health: vi.fn(),
+  listConnectors: vi.fn(),
+  authorizeConnector: vi.fn(),
 }
 
 describe('ProviderAccountsContainer', () => {
@@ -57,6 +59,26 @@ describe('ProviderAccountsContainer', () => {
     vi.clearAllMocks()
     providerAccounts.list.mockResolvedValue([account()])
     providerAccounts.health.mockResolvedValue(health())
+    providerAccounts.listConnectors.mockResolvedValue({
+      providerAccountId: 'acct-a',
+      connectors: [
+        {
+          name: 'linear',
+          status: 'needs-auth',
+          statusLabel: '! Needs authentication',
+          description: 'https://mcp.linear.app/sse',
+          needsAuthorization: true,
+        },
+        {
+          name: 'github',
+          status: 'ready',
+          statusLabel: '✓ Connected',
+          description: 'https://api.github.com/mcp',
+          needsAuthorization: false,
+        },
+      ],
+      error: null,
+    })
     ;(window as unknown as { electronAPI: unknown }).electronAPI = {
       providerAccounts,
     }
@@ -226,5 +248,102 @@ describe('ProviderAccountsContainer', () => {
 
     expect(await screen.findByText(/bridge missing/)).toBeInTheDocument()
     expect(screen.getByText(/No accounts enrolled/)).toBeInTheDocument()
+  })
+
+  describe('connectors', () => {
+    it('asks this account what it can reach, not the machine', async () => {
+      // MCP tokens are per credential slot, so the answer is account-shaped.
+      render(<ProviderAccountsContainer />)
+      await screen.findByText('a@example.com')
+
+      fireEvent.click(screen.getByRole('button', { name: /Connectors/ }))
+
+      await waitFor(() =>
+        expect(providerAccounts.listConnectors).toHaveBeenCalledWith('acct-a'),
+      )
+      expect(await screen.findByText('linear')).toBeInTheDocument()
+      expect(screen.getByText('github')).toBeInTheDocument()
+    })
+
+    it('offers authorize only where this account still needs it', async () => {
+      render(<ProviderAccountsContainer />)
+      await screen.findByText('a@example.com')
+      fireEvent.click(screen.getByRole('button', { name: /Connectors/ }))
+      await screen.findByText('linear')
+
+      expect(screen.getAllByRole('button', { name: 'Authorize' })).toHaveLength(
+        1,
+      )
+    })
+
+    it('authorizes for the account it is showing', async () => {
+      // The lying case, at the surface: authorizing must name the account whose
+      // row the button lives in, never whichever one is ambient.
+      providerAccounts.authorizeConnector.mockResolvedValue({
+        providerAccountId: 'acct-a',
+        connectors: [
+          {
+            name: 'linear',
+            status: 'ready',
+            statusLabel: '✓ Connected',
+            description: 'https://mcp.linear.app/sse',
+            needsAuthorization: false,
+          },
+        ],
+        error: null,
+      })
+
+      render(<ProviderAccountsContainer />)
+      await screen.findByText('a@example.com')
+      fireEvent.click(screen.getByRole('button', { name: /Connectors/ }))
+      await screen.findByText('linear')
+
+      fireEvent.click(screen.getByRole('button', { name: 'Authorize' }))
+
+      await waitFor(() =>
+        expect(providerAccounts.authorizeConnector).toHaveBeenCalledWith({
+          accountId: 'acct-a',
+          serverName: 'linear',
+        }),
+      )
+      // Shows what the authorization achieved, not what it attempted.
+      expect(
+        await screen.findByText(/linear authorized for this account/),
+      ).toBeInTheDocument()
+      expect(
+        screen.queryByRole('button', { name: 'Authorize' }),
+      ).not.toBeInTheDocument()
+    })
+
+    it('reports a failed authorization instead of pretending it worked', async () => {
+      providerAccounts.authorizeConnector.mockRejectedValue(
+        new Error('browser closed'),
+      )
+
+      render(<ProviderAccountsContainer />)
+      await screen.findByText('a@example.com')
+      fireEvent.click(screen.getByRole('button', { name: /Connectors/ }))
+      await screen.findByText('linear')
+
+      fireEvent.click(screen.getByRole('button', { name: 'Authorize' }))
+
+      expect(await screen.findByText(/browser closed/)).toBeInTheDocument()
+    })
+
+    it('says why when the account cannot be asked', async () => {
+      providerAccounts.listConnectors.mockResolvedValue({
+        providerAccountId: 'acct-a',
+        connectors: [],
+        error: 'Claude Code is not available on PATH.',
+      })
+
+      render(<ProviderAccountsContainer />)
+      await screen.findByText('a@example.com')
+      fireEvent.click(screen.getByRole('button', { name: /Connectors/ }))
+
+      expect(
+        await screen.findByText(/not available on PATH/),
+      ).toBeInTheDocument()
+    })
   })
 })

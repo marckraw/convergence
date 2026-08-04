@@ -623,4 +623,88 @@ describe('ConversationItemView', () => {
       ).toBeNull()
     })
   })
+
+  describe('note actions', () => {
+    function noteEntry(action?: {
+      kind: 'authorize-mcp-server'
+      serverName: string
+      providerAccountId: string | null
+    }): ConversationItem {
+      return {
+        id: 'note-1',
+        sessionId: 'session-1',
+        sequence: 1,
+        kind: 'note',
+        state: 'complete',
+        level: 'warning',
+        text: '**linear** is not authorized for work@example.com.',
+        createdAt: '2026-08-05T00:00:00.000Z',
+        updatedAt: '2026-08-05T00:00:00.000Z',
+        ...(action ? { action } : {}),
+      } as ConversationItem
+    }
+
+    it('offers the note action as a real control, not as prose', () => {
+      const onNoteAction = vi.fn()
+      const action = {
+        kind: 'authorize-mcp-server' as const,
+        serverName: 'linear',
+        providerAccountId: 'acct-a',
+      }
+
+      render(
+        <ConversationItemView
+          viewModel={buildTranscriptEntryViewModel({
+            item: noteEntry(action),
+            turnStartedAt: null,
+            resolvedAttachmentsById: {},
+          })}
+          onNoteAction={onNoteAction}
+        />,
+      )
+
+      fireEvent.click(
+        screen.getByRole('button', { name: 'Authorize for this account' }),
+      )
+      expect(onNoteAction).toHaveBeenCalledWith(action)
+    })
+
+    it('renders an ordinary note when there is nothing to do', () => {
+      render(
+        <ConversationItemView
+          viewModel={buildTranscriptEntryViewModel({
+            item: noteEntry(),
+            turnStartedAt: null,
+            resolvedAttachmentsById: {},
+          })}
+          onNoteAction={vi.fn()}
+        />,
+      )
+
+      expect(
+        screen.queryByRole('button', { name: 'Authorize for this account' }),
+      ).not.toBeInTheDocument()
+    })
+
+    it('renders no control on a surface that cannot honour it', () => {
+      // A dead button is worse than none: the note still says what to do.
+      render(
+        <ConversationItemView
+          viewModel={buildTranscriptEntryViewModel({
+            item: noteEntry({
+              kind: 'authorize-mcp-server',
+              serverName: 'linear',
+              providerAccountId: 'acct-a',
+            }),
+            turnStartedAt: null,
+            resolvedAttachmentsById: {},
+          })}
+        />,
+      )
+
+      expect(
+        screen.queryByRole('button', { name: 'Authorize for this account' }),
+      ).not.toBeInTheDocument()
+    })
+  })
 })

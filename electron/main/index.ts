@@ -89,6 +89,7 @@ import { registerSessionForkIpcHandlers } from '../backend/session/fork/session-
 import { ProviderAccountRepository } from '../backend/provider-account/provider-account.repository'
 import { ProviderAccountEnrolmentService } from '../backend/provider-account/provider-account-enrolment.service'
 import { ProviderAccountAttestationService } from '../backend/provider-account/provider-account-attestation.service'
+import { ProviderAccountMcpService } from '../backend/provider-account/provider-account-mcp.service'
 import { registerProviderAccountIpcHandlers } from '../backend/provider-account/provider-account.ipc'
 import {
   resolveAccountForTurn,
@@ -355,6 +356,18 @@ async function startApp(): Promise<void> {
       accountId,
       account: accountId ? providerAccountRepository.get(accountId) : null,
     })
+  /**
+   * Names an account for the dirty-reconnect note (PA11). Reads at note time
+   * rather than caching, so a renamed account is named correctly.
+   */
+  const describeClaudeAccount = (accountId: string | null) => {
+    if (!accountId) return null
+    const account = providerAccountRepository.get(accountId)
+    return account ? (account.email ?? account.label) : null
+  }
+  const providerAccountMcpService = new ProviderAccountMcpService({
+    repository: providerAccountRepository,
+  })
   /** The same guard for Codex, whose account is a `CODEX_HOME` (PA9). */
   const resolveCodexAccountForSession = (
     accountId: string | null | undefined,
@@ -376,9 +389,11 @@ async function startApp(): Promise<void> {
             p.version,
             resolveClaudeAccountForTurn,
             claudeRateLimitState,
+            describeClaudeAccount,
           ),
         )
         providerAccountEnrolmentService.setBinaryPath(p.id, p.binaryPath)
+        providerAccountMcpService.setBinaryPath(p.binaryPath)
         // A version change is attestation's most important trigger: a release
         // that renames or ignores the undocumented credential variable arrives
         // exactly there.
@@ -645,6 +660,7 @@ async function startApp(): Promise<void> {
     repository: providerAccountRepository,
     enrolment: providerAccountEnrolmentService,
     attestation: providerAccountAttestationService,
+    mcp: providerAccountMcpService,
   })
   // Fire-and-forget: attestation must never delay startup, and a failure here
   // leaves accounts exactly as they were rather than disabling them.

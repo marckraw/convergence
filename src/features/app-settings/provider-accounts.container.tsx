@@ -4,6 +4,7 @@ import {
   buildProviderAccountSettingsRows,
   providerAccountApi,
   type ProviderAccount,
+  type ProviderAccountConnectors,
   type ProviderAccountHealth,
 } from '@/entities/provider-account'
 import { ProviderAccountsFields } from './provider-accounts.presentational'
@@ -33,6 +34,14 @@ export const ProviderAccountsContainer: FC = () => {
   )
   const [renameDraft, setRenameDraft] = useState('')
   const [confirmingRemovalAccountId, setConfirmingRemovalAccountId] = useState<
+    string | null
+  >(null)
+  const [expandedConnectorsAccountId, setExpandedConnectorsAccountId] =
+    useState<string | null>(null)
+  const [connectors, setConnectors] =
+    useState<ProviderAccountConnectors | null>(null)
+  const [isLoadingConnectors, setIsLoadingConnectors] = useState(false)
+  const [authorizingServerName, setAuthorizingServerName] = useState<
     string | null
   >(null)
   const [message, setMessage] = useState<string | null>(null)
@@ -184,6 +193,55 @@ export const ProviderAccountsContainer: FC = () => {
     [load, runForAccount],
   )
 
+  const handleToggleConnectors = useCallback(
+    async (accountId: string) => {
+      if (expandedConnectorsAccountId === accountId) {
+        setExpandedConnectorsAccountId(null)
+        return
+      }
+
+      setExpandedConnectorsAccountId(accountId)
+      setConnectors(null)
+      setIsLoadingConnectors(true)
+      try {
+        setConnectors(await providerAccountApi.listConnectors(accountId))
+      } catch (err) {
+        setConnectors({
+          providerAccountId: accountId,
+          connectors: [],
+          error: describeError(err, 'Failed to read connectors.'),
+        })
+      } finally {
+        setIsLoadingConnectors(false)
+      }
+    },
+    [expandedConnectorsAccountId],
+  )
+
+  const handleAuthorizeConnector = useCallback(
+    async (accountId: string, serverName: string) => {
+      setAuthorizingServerName(serverName)
+      setMessage(null)
+      setError(null)
+      try {
+        // Returns the account's refreshed view, so the row reflects what the
+        // authorization actually achieved rather than what it attempted.
+        setConnectors(
+          await providerAccountApi.authorizeConnector({
+            accountId,
+            serverName,
+          }),
+        )
+        setMessage(`${serverName} authorized for this account.`)
+      } catch (err) {
+        setError(describeError(err, `Failed to authorize ${serverName}.`))
+      } finally {
+        setAuthorizingServerName(null)
+      }
+    },
+    [],
+  )
+
   const handleCheckHealth = useCallback(async () => {
     setIsLoading(true)
     setMessage(null)
@@ -212,6 +270,10 @@ export const ProviderAccountsContainer: FC = () => {
       renamingAccountId={renamingAccountId}
       renameDraft={renameDraft}
       confirmingRemovalAccountId={confirmingRemovalAccountId}
+      expandedConnectorsAccountId={expandedConnectorsAccountId}
+      connectors={connectors}
+      isLoadingConnectors={isLoadingConnectors}
+      authorizingServerName={authorizingServerName}
       message={message}
       error={error}
       onEnrolEmailChange={setEnrolEmail}
@@ -233,6 +295,10 @@ export const ProviderAccountsContainer: FC = () => {
       onConfirmRemove={handleConfirmRemove}
       onCancelRemove={() => setConfirmingRemovalAccountId(null)}
       onCheckHealth={() => void handleCheckHealth()}
+      onToggleConnectors={(accountId) => void handleToggleConnectors(accountId)}
+      onAuthorizeConnector={(accountId, serverName) =>
+        void handleAuthorizeConnector(accountId, serverName)
+      }
     />
   )
 }

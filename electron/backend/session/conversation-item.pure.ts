@@ -6,6 +6,7 @@ import type {
   ConversationItemInsertRow,
   ConversationItemKind,
   ConversationItemState,
+  ConversationNoteAction,
   InteractionChoiceOption,
   InteractionFormField,
   InteractionQuestion,
@@ -555,6 +556,32 @@ export function conversationItemFromRow(
         kind,
         level: payload.level as 'info' | 'warning' | 'error',
         text: payload.text as string,
+        ...(parseNoteAction(payload.action)
+          ? { action: parseNoteAction(payload.action)! }
+          : {}),
       }
+  }
+}
+
+/**
+ * Reads a note action back from storage, or nothing.
+ *
+ * Validated rather than cast: a note whose action came from an older or newer
+ * release must render as an ordinary note instead of offering a control the
+ * surface cannot honour.
+ */
+function parseNoteAction(value: unknown): ConversationNoteAction | null {
+  if (typeof value !== 'object' || value === null) return null
+  const record = value as Record<string, unknown>
+  if (record.kind !== 'authorize-mcp-server') return null
+  if (typeof record.serverName !== 'string' || !record.serverName) return null
+
+  return {
+    kind: 'authorize-mcp-server',
+    serverName: record.serverName,
+    providerAccountId:
+      typeof record.providerAccountId === 'string'
+        ? record.providerAccountId
+        : null,
   }
 }

@@ -153,7 +153,27 @@ export type ConversationItem =
       kind: 'note'
       level: 'info' | 'warning' | 'error'
       text: string
+      /**
+       * Something the user can do about this note, if there is one. Kept as
+       * data rather than as prose in `text`, so the surface renders a real
+       * control instead of asking the user to go and find it (ADR 0007, PA11).
+       */
+      action?: ConversationNoteAction
     })
+
+/**
+ * Actions a note can offer.
+ *
+ * A union of one today. The shape exists so the next actionable note does not
+ * have to reinvent the plumbing, and so the renderer can refuse to render an
+ * action it does not understand rather than guessing.
+ */
+export type ConversationNoteAction = {
+  kind: 'authorize-mcp-server'
+  serverName: string
+  /** The account the turn ran as; null is the ambient default. */
+  providerAccountId: string | null
+}
 
 export type ConversationItemDraft = ConversationItem extends infer T
   ? T extends unknown
