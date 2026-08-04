@@ -11,6 +11,7 @@ import { join } from 'path'
 import { tmpdir } from 'os'
 import { execFileSync } from 'child_process'
 import { GitService } from './git.service'
+import { GIT_INTEGRATION_TEST_TIMEOUT_MS } from './git-integration-budget'
 
 function gitInit(dir: string): void {
   execFileSync('git', ['init', dir])
@@ -43,7 +44,7 @@ function addOriginWithUploadPackMarker(
   }
 }
 
-describe('GitService', () => {
+describe('GitService', { timeout: GIT_INTEGRATION_TEST_TIMEOUT_MS }, () => {
   let service: GitService
   let tempDir: string
   let repoPath: string
