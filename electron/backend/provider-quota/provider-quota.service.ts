@@ -1,3 +1,4 @@
+import type { ProviderQuotaAccountScope } from './claude-rate-limit.pure'
 import type {
   ProviderQuotaProviderId,
   ProviderQuotaSnapshot,
@@ -6,6 +7,12 @@ import type {
 
 export interface ProviderQuotaRequestOptions {
   forceRefresh?: boolean
+  /**
+   * Which account the caller is asking about (ADR 0007, PA8). Sources that have
+   * account-authoritative numbers report that account's; sources that only have
+   * machine-wide numbers ignore it rather than pretending otherwise.
+   */
+  scope?: ProviderQuotaAccountScope
 }
 
 /**

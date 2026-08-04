@@ -761,7 +761,14 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
       try {
         setClaudeUsageSnapshot(
           findProviderQuotaSnapshot(
-            await providerQuotaApi.list(forceRefresh),
+            // Scoped to the account that will serve the next turn, so the
+            // provider's own limit reading is that account's rather than
+            // whichever account last happened to run one.
+            await providerQuotaApi.list(forceRefresh, {
+              executionHostId:
+                activeSession?.executionHost === 'remote' ? 'remote' : 'local',
+              providerAccountId: selectedProviderAccountId,
+            }),
             'claude-code',
           ),
         )
@@ -771,7 +778,11 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
         setClaudeUsageLoading(false)
       }
     },
-    [showClaudeUsagePill],
+    [
+      activeSession?.executionHost,
+      selectedProviderAccountId,
+      showClaudeUsagePill,
+    ],
   )
 
   useEffect(() => {

@@ -25,6 +25,25 @@ export interface ProviderQuotaWindow {
   resetLabel?: string
 }
 
+/**
+ * What the provider itself said about this account's limits (ADR 0007, PA8).
+ *
+ * Distinct from `windows`, which for Claude come from ccusage reading the
+ * shared transcript store and are therefore machine-wide. This is the only
+ * account-authoritative usage signal, and it carries no percentage — so none
+ * is reported.
+ */
+export interface ProviderRateLimitSignal {
+  /** The account the signal was observed on; null is the ambient default. */
+  providerAccountId: string | null
+  /** Verbatim provider state, e.g. `allowed`, `allowed_warning`, `rejected`. */
+  status: string
+  /** Which window, e.g. `five_hour` or `seven_day`. Null when unreported. */
+  rateLimitType: string | null
+  resetsAt: string | null
+  observedAt: string
+}
+
 export interface ProviderCreditsQuota {
   hasCredits: boolean
   unlimited: boolean
@@ -41,6 +60,7 @@ export interface ProviderQuotaAvailableSnapshot {
   limitReachedType: string | null
   lastCheckedAt: string
   stale: boolean
+  rateLimit?: ProviderRateLimitSignal | null
 }
 
 export interface ProviderQuotaUnavailableSnapshot {
@@ -51,6 +71,12 @@ export interface ProviderQuotaUnavailableSnapshot {
   usageUrl?: string
   lastCheckedAt: string
   stale: boolean
+  /**
+   * Carried on the unavailable snapshot too: ccusage failing says nothing about
+   * whether the provider told us we are at a limit, and that is exactly the
+   * moment the answer matters most.
+   */
+  rateLimit?: ProviderRateLimitSignal | null
 }
 
 export type ProviderQuotaSnapshot =

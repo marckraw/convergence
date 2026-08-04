@@ -9,6 +9,8 @@ import {
   resolveCcusageNativeBinaryPath,
   resolveCcusageNativePackageName,
 } from './claude-quota.pure'
+import type { ClaudeRateLimitState } from './claude-rate-limit.state'
+import type { ProviderQuotaRequestOptions } from './provider-quota.service'
 import type { ProviderQuotaSnapshot } from './provider-quota.types'
 
 type CcusageRunner = (args: string[]) => Promise<unknown>
@@ -103,9 +105,33 @@ function runCcusage(args: string[]): Promise<unknown> {
 export class ClaudeQuotaService {
   private cached: ProviderQuotaSnapshot | null = null
 
-  constructor(private readonly ccusage: CcusageRunner = runCcusage) {}
+  constructor(
+    private readonly ccusage: CcusageRunner = runCcusage,
+    /**
+     * Claude's own per-account limit signal (PA8). Optional so a bare service
+     * still works; when absent the snapshot simply carries no account-
+     * authoritative reading, which is the truthful state.
+     */
+    private readonly rateLimits: ClaudeRateLimitState | null = null,
+  ) {}
 
-  async getQuota(options: { forceRefresh?: boolean } = {}) {
+  /**
+   * The ccusage half of this snapshot is deliberately **not** keyed by account.
+   * ccusage reads `~/.claude/projects`, which ADR 0007 shares between every
+   * account so conversations stay resumable across a swap — so those numbers
+   * are machine-wide by construction, and keying their cache per account would
+   * manufacture per-account spend figures that do not exist. The half that *is*
+   * account-authoritative — what Claude told us about its own limits — is keyed
+   * by `(executionHostId, providerAccountId)` and attached here.
+   */
+  async getQuota(options: ProviderQuotaRequestOptions = {}) {
+    const snapshot = await this.readUsageLog(options)
+    const rateLimit = options.scope ? this.rateLimits?.get(options.scope) : null
+
+    return rateLimit ? { ...snapshot, rateLimit } : snapshot
+  }
+
+  private async readUsageLog(options: ProviderQuotaRequestOptions) {
     const now = Date.now()
     if (
       !options.forceRefresh &&
