@@ -375,6 +375,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
     list: () => ipcRenderer.invoke('providerAccounts:list'),
     enrol: (input: { email: string; label?: string | null }) =>
       ipcRenderer.invoke('providerAccounts:enrol', input),
+    reconnect: (accountId: string) =>
+      ipcRenderer.invoke('providerAccounts:reconnect', accountId),
     remove: (accountId: string) =>
       ipcRenderer.invoke('providerAccounts:remove', accountId),
     setDefault: (accountId: string) =>

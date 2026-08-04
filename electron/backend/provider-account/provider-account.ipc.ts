@@ -23,6 +23,10 @@ export function registerProviderAccountIpcHandlers(deps: {
     (_event, input: EnrolProviderAccountInput) => deps.enrolment.enrol(input),
   )
 
+  ipcMain.handle('providerAccounts:reconnect', (_event, accountId: string) =>
+    deps.enrolment.reconnect(accountId),
+  )
+
   ipcMain.handle('providerAccounts:remove', (_event, accountId: string) =>
     deps.enrolment.remove(accountId),
   )

@@ -1789,6 +1789,7 @@ interface ElectronAPI {
       email: string
       label?: string | null
     }) => Promise<ProviderAccountEnrolResult>
+    reconnect: (accountId: string) => Promise<ProviderAccountData>
     remove: (accountId: string) => Promise<void>
     setDefault: (accountId: string) => Promise<ProviderAccountData[]>
     rename: (accountId: string, label: string) => Promise<ProviderAccountData[]>
