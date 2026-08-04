@@ -7,6 +7,7 @@ import { execFileSync } from 'child_process'
 import { getDatabase, closeDatabase, resetDatabase } from '../database/database'
 import { GitService } from '../git/git.service'
 import { WorkspaceService } from './workspace.service'
+import { GIT_INTEGRATION_TEST_TIMEOUT_MS } from '../git/git-integration-budget'
 
 function git(dir: string, args: string[]): string {
   return execFileSync('git', args, { cwd: dir, encoding: 'utf8' }).trim()
@@ -32,482 +33,509 @@ function insertProject(
   ).run(projectId, repoPath, JSON.stringify(settings))
 }
 
-describe('WorkspaceService', () => {
-  let service: WorkspaceService
-  let tempDir: string
-  let repoPath: string
-  let projectId: string
+describe(
+  'WorkspaceService',
+  { timeout: GIT_INTEGRATION_TEST_TIMEOUT_MS },
+  () => {
+    let service: WorkspaceService
+    let tempDir: string
+    let repoPath: string
+    let projectId: string
 
-  beforeEach(() => {
-    const db = getDatabase()
-    const gitService = new GitService()
-    tempDir = mkdtempSync(join(tmpdir(), 'convergence-ws-test-'))
-    const workspacesRoot = join(tempDir, 'workspaces')
+    beforeEach(() => {
+      const db = getDatabase()
+      const gitService = new GitService()
+      tempDir = mkdtempSync(join(tmpdir(), 'convergence-ws-test-'))
+      const workspacesRoot = join(tempDir, 'workspaces')
 
-    service = new WorkspaceService(db, gitService, workspacesRoot)
+      service = new WorkspaceService(db, gitService, workspacesRoot)
 
-    repoPath = join(tempDir, 'repo')
-    gitInit(repoPath)
+      repoPath = join(tempDir, 'repo')
+      gitInit(repoPath)
 
-    projectId = 'test-project-id'
-    insertProject(projectId, repoPath)
-  })
-
-  afterEach(() => {
-    closeDatabase()
-    resetDatabase()
-    rmSync(tempDir, { recursive: true, force: true })
-  })
-
-  it('creates a workspace with a new branch', async () => {
-    const ws = await service.create({
-      projectId,
-      branchName: 'feature-test',
+      projectId = 'test-project-id'
+      insertProject(projectId, repoPath)
     })
 
-    expect(ws.id).toBeDefined()
-    expect(ws.projectId).toBe(projectId)
-    expect(ws.branchName).toBe('feature-test')
-    expect(ws.type).toBe('worktree')
-    expect(existsSync(ws.path)).toBe(true)
-  })
-
-  it('copies root env files into a new workspace by default', async () => {
-    writeFileSync(join(repoPath, '.env'), 'ROOT_TOKEN=secret\n')
-    writeFileSync(join(repoPath, '.env.local'), 'LOCAL_TOKEN=secret\n')
-    writeFileSync(join(repoPath, '.env.example'), 'EXAMPLE=1\n')
-
-    const ws = await service.create({
-      projectId,
-      branchName: 'feature-env-files',
+    afterEach(() => {
+      closeDatabase()
+      resetDatabase()
+      rmSync(tempDir, { recursive: true, force: true })
     })
 
-    expect(readFileSync(join(ws.path, '.env'), 'utf8')).toBe(
-      'ROOT_TOKEN=secret\n',
-    )
-    expect(readFileSync(join(ws.path, '.env.local'), 'utf8')).toBe(
-      'LOCAL_TOKEN=secret\n',
-    )
-    expect(existsSync(join(ws.path, '.env.example'))).toBe(false)
-  })
-
-  it('does not copy env files when project env bootstrap is disabled', async () => {
-    getDatabase()
-      .prepare('UPDATE projects SET settings = ? WHERE id = ?')
-      .run(
-        JSON.stringify({
-          workspaceEnvFiles: {
-            copyMode: 'disabled',
-            patterns: ['.env', '.env.*'],
-          },
-        }),
+    it('creates a workspace with a new branch', async () => {
+      const ws = await service.create({
         projectId,
+        branchName: 'feature-test',
+      })
+
+      expect(ws.id).toBeDefined()
+      expect(ws.projectId).toBe(projectId)
+      expect(ws.branchName).toBe('feature-test')
+      expect(ws.type).toBe('worktree')
+      expect(existsSync(ws.path)).toBe(true)
+    })
+
+    it('copies root env files into a new workspace by default', async () => {
+      writeFileSync(join(repoPath, '.env'), 'ROOT_TOKEN=secret\n')
+      writeFileSync(join(repoPath, '.env.local'), 'LOCAL_TOKEN=secret\n')
+      writeFileSync(join(repoPath, '.env.example'), 'EXAMPLE=1\n')
+
+      const ws = await service.create({
+        projectId,
+        branchName: 'feature-env-files',
+      })
+
+      expect(readFileSync(join(ws.path, '.env'), 'utf8')).toBe(
+        'ROOT_TOKEN=secret\n',
       )
-    writeFileSync(join(repoPath, '.env'), 'ROOT_TOKEN=secret\n')
-
-    const ws = await service.create({
-      projectId,
-      branchName: 'feature-env-disabled',
-    })
-
-    expect(existsSync(join(ws.path, '.env'))).toBe(false)
-  })
-
-  it('syncs env files to an existing workspace without overwriting by default', async () => {
-    writeFileSync(join(repoPath, '.env'), 'ROOT_TOKEN=old\n')
-    const ws = await service.create({
-      projectId,
-      branchName: 'feature-env-sync',
-    })
-
-    writeFileSync(join(repoPath, '.env'), 'ROOT_TOKEN=new\n')
-    writeFileSync(join(ws.path, '.env'), 'ROOT_TOKEN=workspace\n')
-    writeFileSync(join(repoPath, '.env.local'), 'LOCAL_TOKEN=new\n')
-
-    const synced = service.syncEnvFiles(ws.id)
-
-    expect(synced.id).toBe(ws.id)
-    expect(readFileSync(join(ws.path, '.env'), 'utf8')).toBe(
-      'ROOT_TOKEN=workspace\n',
-    )
-    expect(readFileSync(join(ws.path, '.env.local'), 'utf8')).toBe(
-      'LOCAL_TOKEN=new\n',
-    )
-  })
-
-  it('overwrites env files when project env bootstrap is configured to overwrite', async () => {
-    getDatabase()
-      .prepare('UPDATE projects SET settings = ? WHERE id = ?')
-      .run(
-        JSON.stringify({
-          workspaceEnvFiles: {
-            copyMode: 'overwrite',
-            patterns: ['.env'],
-          },
-        }),
-        projectId,
+      expect(readFileSync(join(ws.path, '.env.local'), 'utf8')).toBe(
+        'LOCAL_TOKEN=secret\n',
       )
-    writeFileSync(join(repoPath, '.env'), 'ROOT_TOKEN=old\n')
-    const ws = await service.create({
-      projectId,
-      branchName: 'feature-env-overwrite',
+      expect(existsSync(join(ws.path, '.env.example'))).toBe(false)
     })
 
-    writeFileSync(join(repoPath, '.env'), 'ROOT_TOKEN=new\n')
-    writeFileSync(join(ws.path, '.env'), 'ROOT_TOKEN=workspace\n')
+    it('does not copy env files when project env bootstrap is disabled', async () => {
+      getDatabase()
+        .prepare('UPDATE projects SET settings = ? WHERE id = ?')
+        .run(
+          JSON.stringify({
+            workspaceEnvFiles: {
+              copyMode: 'disabled',
+              patterns: ['.env', '.env.*'],
+            },
+          }),
+          projectId,
+        )
+      writeFileSync(join(repoPath, '.env'), 'ROOT_TOKEN=secret\n')
 
-    service.syncEnvFiles(ws.id)
-
-    expect(readFileSync(join(ws.path, '.env'), 'utf8')).toBe('ROOT_TOKEN=new\n')
-  })
-
-  it('creates a workspace from the base branch instead of the current HEAD', async () => {
-    git(repoPath, ['checkout', '-b', 'feature-source'])
-    git(repoPath, ['commit', '--allow-empty', '-m', 'feature change'])
-
-    const featureHead = git(repoPath, ['rev-parse', 'HEAD'])
-    const baseHead = git(repoPath, ['rev-parse', 'master'])
-
-    const ws = await service.create({
-      projectId,
-      branchName: 'feature-test',
-    })
-
-    expect(git(ws.path, ['rev-parse', 'HEAD'])).toBe(baseHead)
-    expect(git(ws.path, ['rev-parse', 'HEAD'])).not.toBe(featureHead)
-  })
-
-  it('fetches and starts from the remote base branch when available', async () => {
-    const remotePath = join(tempDir, 'remote.git')
-    execFileSync('git', ['init', '--bare', remotePath])
-    execFileSync('git', ['symbolic-ref', 'HEAD', 'refs/heads/master'], {
-      cwd: remotePath,
-    })
-
-    const seedPath = join(tempDir, 'seed')
-    gitInit(seedPath)
-    git(seedPath, ['remote', 'add', 'origin', remotePath])
-    git(seedPath, ['push', '-u', 'origin', 'master'])
-
-    repoPath = join(tempDir, 'clone')
-    execFileSync('git', ['clone', remotePath, repoPath])
-    execFileSync('git', ['config', 'user.email', 'test@test.com'], {
-      cwd: repoPath,
-    })
-    execFileSync('git', ['config', 'user.name', 'Test'], { cwd: repoPath })
-
-    closeDatabase()
-    resetDatabase()
-    const db = getDatabase()
-    const gitService = new GitService()
-    service = new WorkspaceService(db, gitService, join(tempDir, 'workspaces'))
-    insertProject(projectId, repoPath, {
-      workspaceCreation: {
-        startStrategy: 'base-branch',
-        baseBranchName: 'master',
-      },
-    })
-
-    const staleMasterHead = git(repoPath, ['rev-parse', 'master'])
-    git(repoPath, ['checkout', '-b', 'feature-source'])
-    git(repoPath, ['commit', '--allow-empty', '-m', 'local feature change'])
-    const featureHead = git(repoPath, ['rev-parse', 'HEAD'])
-
-    git(seedPath, ['commit', '--allow-empty', '-m', 'remote master update'])
-    const remoteMasterHead = git(seedPath, ['rev-parse', 'HEAD'])
-    git(seedPath, ['push', 'origin', 'master'])
-
-    expect(git(repoPath, ['rev-parse', 'origin/master'])).toBe(staleMasterHead)
-
-    const ws = await service.create({
-      projectId,
-      branchName: 'feature-remote-base',
-    })
-
-    const workspaceHead = git(ws.path, ['rev-parse', 'HEAD'])
-    expect(workspaceHead).toBe(remoteMasterHead)
-    expect(workspaceHead).not.toBe(staleMasterHead)
-    expect(workspaceHead).not.toBe(featureHead)
-  })
-
-  it('uses the input baseBranch override instead of the project setting', async () => {
-    getDatabase()
-      .prepare('UPDATE projects SET settings = ? WHERE id = ?')
-      .run(
-        JSON.stringify({
-          workspaceCreation: {
-            startStrategy: 'current-head',
-            baseBranchName: null,
-          },
-        }),
+      const ws = await service.create({
         projectId,
+        branchName: 'feature-env-disabled',
+      })
+
+      expect(existsSync(join(ws.path, '.env'))).toBe(false)
+    })
+
+    it('syncs env files to an existing workspace without overwriting by default', async () => {
+      writeFileSync(join(repoPath, '.env'), 'ROOT_TOKEN=old\n')
+      const ws = await service.create({
+        projectId,
+        branchName: 'feature-env-sync',
+      })
+
+      writeFileSync(join(repoPath, '.env'), 'ROOT_TOKEN=new\n')
+      writeFileSync(join(ws.path, '.env'), 'ROOT_TOKEN=workspace\n')
+      writeFileSync(join(repoPath, '.env.local'), 'LOCAL_TOKEN=new\n')
+
+      const synced = service.syncEnvFiles(ws.id)
+
+      expect(synced.id).toBe(ws.id)
+      expect(readFileSync(join(ws.path, '.env'), 'utf8')).toBe(
+        'ROOT_TOKEN=workspace\n',
+      )
+      expect(readFileSync(join(ws.path, '.env.local'), 'utf8')).toBe(
+        'LOCAL_TOKEN=new\n',
+      )
+    })
+
+    it('overwrites env files when project env bootstrap is configured to overwrite', async () => {
+      getDatabase()
+        .prepare('UPDATE projects SET settings = ? WHERE id = ?')
+        .run(
+          JSON.stringify({
+            workspaceEnvFiles: {
+              copyMode: 'overwrite',
+              patterns: ['.env'],
+            },
+          }),
+          projectId,
+        )
+      writeFileSync(join(repoPath, '.env'), 'ROOT_TOKEN=old\n')
+      const ws = await service.create({
+        projectId,
+        branchName: 'feature-env-overwrite',
+      })
+
+      writeFileSync(join(repoPath, '.env'), 'ROOT_TOKEN=new\n')
+      writeFileSync(join(ws.path, '.env'), 'ROOT_TOKEN=workspace\n')
+
+      service.syncEnvFiles(ws.id)
+
+      expect(readFileSync(join(ws.path, '.env'), 'utf8')).toBe(
+        'ROOT_TOKEN=new\n',
+      )
+    })
+
+    it('creates a workspace from the base branch instead of the current HEAD', async () => {
+      git(repoPath, ['checkout', '-b', 'feature-source'])
+      git(repoPath, ['commit', '--allow-empty', '-m', 'feature change'])
+
+      const featureHead = git(repoPath, ['rev-parse', 'HEAD'])
+      const baseHead = git(repoPath, ['rev-parse', 'master'])
+
+      const ws = await service.create({
+        projectId,
+        branchName: 'feature-test',
+      })
+
+      expect(git(ws.path, ['rev-parse', 'HEAD'])).toBe(baseHead)
+      expect(git(ws.path, ['rev-parse', 'HEAD'])).not.toBe(featureHead)
+    })
+
+    it('fetches and starts from the remote base branch when available', async () => {
+      const remotePath = join(tempDir, 'remote.git')
+      execFileSync('git', ['init', '--bare', remotePath])
+      execFileSync('git', ['symbolic-ref', 'HEAD', 'refs/heads/master'], {
+        cwd: remotePath,
+      })
+
+      const seedPath = join(tempDir, 'seed')
+      gitInit(seedPath)
+      git(seedPath, ['remote', 'add', 'origin', remotePath])
+      git(seedPath, ['push', '-u', 'origin', 'master'])
+
+      repoPath = join(tempDir, 'clone')
+      execFileSync('git', ['clone', remotePath, repoPath])
+      execFileSync('git', ['config', 'user.email', 'test@test.com'], {
+        cwd: repoPath,
+      })
+      execFileSync('git', ['config', 'user.name', 'Test'], { cwd: repoPath })
+
+      closeDatabase()
+      resetDatabase()
+      const db = getDatabase()
+      const gitService = new GitService()
+      service = new WorkspaceService(
+        db,
+        gitService,
+        join(tempDir, 'workspaces'),
+      )
+      insertProject(projectId, repoPath, {
+        workspaceCreation: {
+          startStrategy: 'base-branch',
+          baseBranchName: 'master',
+        },
+      })
+
+      const staleMasterHead = git(repoPath, ['rev-parse', 'master'])
+      git(repoPath, ['checkout', '-b', 'feature-source'])
+      git(repoPath, ['commit', '--allow-empty', '-m', 'local feature change'])
+      const featureHead = git(repoPath, ['rev-parse', 'HEAD'])
+
+      git(seedPath, ['commit', '--allow-empty', '-m', 'remote master update'])
+      const remoteMasterHead = git(seedPath, ['rev-parse', 'HEAD'])
+      git(seedPath, ['push', 'origin', 'master'])
+
+      expect(git(repoPath, ['rev-parse', 'origin/master'])).toBe(
+        staleMasterHead,
       )
 
-    git(repoPath, ['checkout', '-b', 'develop'])
-    git(repoPath, ['commit', '--allow-empty', '-m', 'develop change'])
-    const developHead = git(repoPath, ['rev-parse', 'HEAD'])
-
-    git(repoPath, ['checkout', 'master'])
-    git(repoPath, ['checkout', '-b', 'feature-source'])
-    git(repoPath, ['commit', '--allow-empty', '-m', 'feature change'])
-    const featureHead = git(repoPath, ['rev-parse', 'HEAD'])
-
-    const ws = await service.create({
-      projectId,
-      branchName: 'feature-from-develop',
-      baseBranch: 'develop',
-    })
-
-    const workspaceHead = git(ws.path, ['rev-parse', 'HEAD'])
-    expect(workspaceHead).toBe(developHead)
-    expect(workspaceHead).not.toBe(featureHead)
-  })
-
-  it('uses the current HEAD when the project is configured for that strategy', async () => {
-    getDatabase()
-      .prepare('UPDATE projects SET settings = ? WHERE id = ?')
-      .run(
-        JSON.stringify({
-          workspaceCreation: {
-            startStrategy: 'current-head',
-            baseBranchName: 'master',
-          },
-        }),
+      const ws = await service.create({
         projectId,
-      )
+        branchName: 'feature-remote-base',
+      })
 
-    git(repoPath, ['checkout', '-b', 'feature-source'])
-    git(repoPath, ['commit', '--allow-empty', '-m', 'feature change'])
-
-    const featureHead = git(repoPath, ['rev-parse', 'HEAD'])
-
-    const ws = await service.create({
-      projectId,
-      branchName: 'feature-current-head',
+      const workspaceHead = git(ws.path, ['rev-parse', 'HEAD'])
+      expect(workspaceHead).toBe(remoteMasterHead)
+      expect(workspaceHead).not.toBe(staleMasterHead)
+      expect(workspaceHead).not.toBe(featureHead)
     })
 
-    expect(git(ws.path, ['rev-parse', 'HEAD'])).toBe(featureHead)
-  })
+    it('uses the input baseBranch override instead of the project setting', async () => {
+      getDatabase()
+        .prepare('UPDATE projects SET settings = ? WHERE id = ?')
+        .run(
+          JSON.stringify({
+            workspaceCreation: {
+              startStrategy: 'current-head',
+              baseBranchName: null,
+            },
+          }),
+          projectId,
+        )
 
-  it('creates a workspace from an existing branch', async () => {
-    execFileSync('git', ['branch', 'existing-branch'], { cwd: repoPath })
+      git(repoPath, ['checkout', '-b', 'develop'])
+      git(repoPath, ['commit', '--allow-empty', '-m', 'develop change'])
+      const developHead = git(repoPath, ['rev-parse', 'HEAD'])
 
-    const ws = await service.create({
-      projectId,
-      branchName: 'existing-branch',
+      git(repoPath, ['checkout', 'master'])
+      git(repoPath, ['checkout', '-b', 'feature-source'])
+      git(repoPath, ['commit', '--allow-empty', '-m', 'feature change'])
+      const featureHead = git(repoPath, ['rev-parse', 'HEAD'])
+
+      const ws = await service.create({
+        projectId,
+        branchName: 'feature-from-develop',
+        baseBranch: 'develop',
+      })
+
+      const workspaceHead = git(ws.path, ['rev-parse', 'HEAD'])
+      expect(workspaceHead).toBe(developHead)
+      expect(workspaceHead).not.toBe(featureHead)
     })
 
-    expect(ws.branchName).toBe('existing-branch')
-    expect(existsSync(ws.path)).toBe(true)
-  })
+    it('uses the current HEAD when the project is configured for that strategy', async () => {
+      getDatabase()
+        .prepare('UPDATE projects SET settings = ? WHERE id = ?')
+        .run(
+          JSON.stringify({
+            workspaceCreation: {
+              startStrategy: 'current-head',
+              baseBranchName: 'master',
+            },
+          }),
+          projectId,
+        )
 
-  it('rejects duplicate branch for same project', async () => {
-    await service.create({ projectId, branchName: 'dup-branch' })
+      git(repoPath, ['checkout', '-b', 'feature-source'])
+      git(repoPath, ['commit', '--allow-empty', '-m', 'feature change'])
 
-    await expect(
-      service.create({ projectId, branchName: 'dup-branch' }),
-    ).rejects.toThrow()
-  })
+      const featureHead = git(repoPath, ['rev-parse', 'HEAD'])
 
-  it('throws for non-existent project', async () => {
-    await expect(
-      service.create({ projectId: 'nonexistent', branchName: 'x' }),
-    ).rejects.toThrow('Project not found')
-  })
+      const ws = await service.create({
+        projectId,
+        branchName: 'feature-current-head',
+      })
 
-  it('lists workspaces for a project', async () => {
-    await service.create({ projectId, branchName: 'branch-1' })
-    await service.create({ projectId, branchName: 'branch-2' })
+      expect(git(ws.path, ['rev-parse', 'HEAD'])).toBe(featureHead)
+    })
 
-    const workspaces = service.getByProjectId(projectId)
-    expect(workspaces).toHaveLength(2)
-  })
+    it('creates a workspace from an existing branch', async () => {
+      execFileSync('git', ['branch', 'existing-branch'], { cwd: repoPath })
 
-  it('archives a workspace and its sessions without removing the worktree', async () => {
-    const ws = await service.create({ projectId, branchName: 'archive-me' })
-    const db = getDatabase()
-    db.prepare(
-      `INSERT INTO sessions (id, project_id, workspace_id, provider_id, name, working_directory)
+      const ws = await service.create({
+        projectId,
+        branchName: 'existing-branch',
+      })
+
+      expect(ws.branchName).toBe('existing-branch')
+      expect(existsSync(ws.path)).toBe(true)
+    })
+
+    it('rejects duplicate branch for same project', async () => {
+      await service.create({ projectId, branchName: 'dup-branch' })
+
+      await expect(
+        service.create({ projectId, branchName: 'dup-branch' }),
+      ).rejects.toThrow()
+    })
+
+    it('throws for non-existent project', async () => {
+      await expect(
+        service.create({ projectId: 'nonexistent', branchName: 'x' }),
+      ).rejects.toThrow('Project not found')
+    })
+
+    it('lists workspaces for a project', async () => {
+      await service.create({ projectId, branchName: 'branch-1' })
+      await service.create({ projectId, branchName: 'branch-2' })
+
+      const workspaces = service.getByProjectId(projectId)
+      expect(workspaces).toHaveLength(2)
+    })
+
+    it('archives a workspace and its sessions without removing the worktree', async () => {
+      const ws = await service.create({ projectId, branchName: 'archive-me' })
+      const db = getDatabase()
+      db.prepare(
+        `INSERT INTO sessions (id, project_id, workspace_id, provider_id, name, working_directory)
        VALUES (?, ?, ?, ?, ?, ?)`,
-    ).run('session-1', projectId, ws.id, 'claude-code', 'Session 1', ws.path)
+      ).run('session-1', projectId, ws.id, 'claude-code', 'Session 1', ws.path)
 
-    const archived = await service.archive({ id: ws.id })
+      const archived = await service.archive({ id: ws.id })
 
-    expect(archived.archivedAt).toEqual(expect.any(String))
-    expect(archived.worktreeRemovedAt).toBeNull()
-    expect(existsSync(ws.path)).toBe(true)
+      expect(archived.archivedAt).toEqual(expect.any(String))
+      expect(archived.worktreeRemovedAt).toBeNull()
+      expect(existsSync(ws.path)).toBe(true)
 
-    const session = db
-      .prepare('SELECT archived_at FROM sessions WHERE id = ?')
-      .get('session-1') as { archived_at: string | null }
-    expect(session.archived_at).toBe(archived.archivedAt)
-  })
+      const session = db
+        .prepare('SELECT archived_at FROM sessions WHERE id = ?')
+        .get('session-1') as { archived_at: string | null }
+      expect(session.archived_at).toBe(archived.archivedAt)
+    })
 
-  it('archives a workspace idempotently without changing session archive timestamps', async () => {
-    const ws = await service.create({ projectId, branchName: 'archive-twice' })
-    const db = getDatabase()
-    db.prepare(
-      `INSERT INTO sessions (id, project_id, workspace_id, provider_id, name, working_directory)
+    it('archives a workspace idempotently without changing session archive timestamps', async () => {
+      const ws = await service.create({
+        projectId,
+        branchName: 'archive-twice',
+      })
+      const db = getDatabase()
+      db.prepare(
+        `INSERT INTO sessions (id, project_id, workspace_id, provider_id, name, working_directory)
        VALUES (?, ?, ?, ?, ?, ?)`,
-    ).run('session-1', projectId, ws.id, 'claude-code', 'Session 1', ws.path)
+      ).run('session-1', projectId, ws.id, 'claude-code', 'Session 1', ws.path)
 
-    const first = await service.archive({ id: ws.id })
-    const second = await service.archive({ id: ws.id })
+      const first = await service.archive({ id: ws.id })
+      const second = await service.archive({ id: ws.id })
 
-    expect(second.archivedAt).toBe(first.archivedAt)
-    const session = db
-      .prepare('SELECT archived_at FROM sessions WHERE id = ?')
-      .get('session-1') as { archived_at: string | null }
-    expect(session.archived_at).toBe(first.archivedAt)
-  })
-
-  it('archives a workspace and removes the physical worktree when requested', async () => {
-    const ws = await service.create({ projectId, branchName: 'archive-remove' })
-    expect(existsSync(ws.path)).toBe(true)
-
-    const archived = await service.archive({ id: ws.id, removeWorktree: true })
-
-    expect(archived.archivedAt).toEqual(expect.any(String))
-    expect(archived.worktreeRemovedAt).toEqual(expect.any(String))
-    expect(existsSync(ws.path)).toBe(false)
-  })
-
-  it('does not remove the physical worktree again when it was already removed', async () => {
-    const ws = await service.create({
-      projectId,
-      branchName: 'archive-already-removed',
+      expect(second.archivedAt).toBe(first.archivedAt)
+      const session = db
+        .prepare('SELECT archived_at FROM sessions WHERE id = ?')
+        .get('session-1') as { archived_at: string | null }
+      expect(session.archived_at).toBe(first.archivedAt)
     })
-    const removed = await service.removeWorktree(ws.id)
 
-    const archived = await service.archive({ id: ws.id, removeWorktree: true })
+    it('archives a workspace and removes the physical worktree when requested', async () => {
+      const ws = await service.create({
+        projectId,
+        branchName: 'archive-remove',
+      })
+      expect(existsSync(ws.path)).toBe(true)
 
-    expect(archived.archivedAt).toEqual(expect.any(String))
-    expect(archived.worktreeRemovedAt).toBe(removed.worktreeRemovedAt)
-  })
+      const archived = await service.archive({
+        id: ws.id,
+        removeWorktree: true,
+      })
 
-  it('removes the physical worktree without archiving the workspace', async () => {
-    const ws = await service.create({ projectId, branchName: 'remove-only' })
-    expect(existsSync(ws.path)).toBe(true)
-
-    const updated = await service.removeWorktree(ws.id)
-
-    expect(updated.archivedAt).toBeNull()
-    expect(updated.worktreeRemovedAt).toEqual(expect.any(String))
-    expect(existsSync(ws.path)).toBe(false)
-  })
-
-  it('preserves independently archived sessions when unarchiving a workspace', async () => {
-    const ws = await service.create({
-      projectId,
-      branchName: 'preserve-session-archive',
+      expect(archived.archivedAt).toEqual(expect.any(String))
+      expect(archived.worktreeRemovedAt).toEqual(expect.any(String))
+      expect(existsSync(ws.path)).toBe(false)
     })
-    const db = getDatabase()
-    const independentArchivedAt = '2026-01-01T00:00:00.000Z'
-    db.prepare(
-      `INSERT INTO sessions (id, project_id, workspace_id, provider_id, name, working_directory, archived_at)
+
+    it('does not remove the physical worktree again when it was already removed', async () => {
+      const ws = await service.create({
+        projectId,
+        branchName: 'archive-already-removed',
+      })
+      const removed = await service.removeWorktree(ws.id)
+
+      const archived = await service.archive({
+        id: ws.id,
+        removeWorktree: true,
+      })
+
+      expect(archived.archivedAt).toEqual(expect.any(String))
+      expect(archived.worktreeRemovedAt).toBe(removed.worktreeRemovedAt)
+    })
+
+    it('removes the physical worktree without archiving the workspace', async () => {
+      const ws = await service.create({ projectId, branchName: 'remove-only' })
+      expect(existsSync(ws.path)).toBe(true)
+
+      const updated = await service.removeWorktree(ws.id)
+
+      expect(updated.archivedAt).toBeNull()
+      expect(updated.worktreeRemovedAt).toEqual(expect.any(String))
+      expect(existsSync(ws.path)).toBe(false)
+    })
+
+    it('preserves independently archived sessions when unarchiving a workspace', async () => {
+      const ws = await service.create({
+        projectId,
+        branchName: 'preserve-session-archive',
+      })
+      const db = getDatabase()
+      const independentArchivedAt = '2026-01-01T00:00:00.000Z'
+      db.prepare(
+        `INSERT INTO sessions (id, project_id, workspace_id, provider_id, name, working_directory, archived_at)
        VALUES (?, ?, ?, ?, ?, ?, ?)`,
-    ).run(
-      'session-archived-before',
-      projectId,
-      ws.id,
-      'claude-code',
-      'Session archived before',
-      ws.path,
-      independentArchivedAt,
-    )
-    db.prepare(
-      `INSERT INTO sessions (id, project_id, workspace_id, provider_id, name, working_directory)
+      ).run(
+        'session-archived-before',
+        projectId,
+        ws.id,
+        'claude-code',
+        'Session archived before',
+        ws.path,
+        independentArchivedAt,
+      )
+      db.prepare(
+        `INSERT INTO sessions (id, project_id, workspace_id, provider_id, name, working_directory)
        VALUES (?, ?, ?, ?, ?, ?)`,
-    ).run(
-      'session-active-before',
-      projectId,
-      ws.id,
-      'claude-code',
-      'Session active before',
-      ws.path,
-    )
+      ).run(
+        'session-active-before',
+        projectId,
+        ws.id,
+        'claude-code',
+        'Session active before',
+        ws.path,
+      )
 
-    await service.archive({ id: ws.id })
-    service.unarchive(ws.id)
+      await service.archive({ id: ws.id })
+      service.unarchive(ws.id)
 
-    const rows = db
-      .prepare('SELECT id, archived_at FROM sessions ORDER BY id')
-      .all() as Array<{ id: string; archived_at: string | null }>
-    expect(rows).toEqual([
-      { id: 'session-active-before', archived_at: null },
-      {
-        id: 'session-archived-before',
-        archived_at: independentArchivedAt,
-      },
-    ])
-  })
-
-  it('unarchives a workspace and its sessions without recreating removed worktrees', async () => {
-    const ws = await service.create({ projectId, branchName: 'unarchive-me' })
-    const db = getDatabase()
-    db.prepare(
-      `INSERT INTO sessions (id, project_id, workspace_id, provider_id, name, working_directory)
-       VALUES (?, ?, ?, ?, ?, ?)`,
-    ).run('session-1', projectId, ws.id, 'claude-code', 'Session 1', ws.path)
-
-    const archived = await service.archive({ id: ws.id, removeWorktree: true })
-    expect(archived.worktreeRemovedAt).not.toBeNull()
-
-    const unarchived = service.unarchive(ws.id)
-
-    expect(unarchived.archivedAt).toBeNull()
-    expect(unarchived.worktreeRemovedAt).toBe(archived.worktreeRemovedAt)
-    expect(existsSync(ws.path)).toBe(false)
-
-    const session = db
-      .prepare('SELECT archived_at FROM sessions WHERE id = ?')
-      .get('session-1') as { archived_at: string | null }
-    expect(session.archived_at).toBeNull()
-  })
-
-  it('deletes a workspace and cleans up worktree', async () => {
-    const ws = await service.create({ projectId, branchName: 'delete-me' })
-    expect(existsSync(ws.path)).toBe(true)
-
-    await service.delete(ws.id)
-    expect(existsSync(ws.path)).toBe(false)
-
-    const workspaces = service.getByProjectId(projectId)
-    expect(workspaces).toHaveLength(0)
-  })
-
-  it('deleteAllForProject removes all workspaces', async () => {
-    await service.create({ projectId, branchName: 'ws-1' })
-    await service.create({ projectId, branchName: 'ws-2' })
-    expect(service.getByProjectId(projectId)).toHaveLength(2)
-
-    await service.deleteAllForProject(projectId)
-    expect(service.getByProjectId(projectId)).toHaveLength(0)
-  })
-
-  it('listAll returns an empty array when no workspaces exist', () => {
-    expect(service.listAll()).toEqual([])
-  })
-
-  it('listAll returns workspaces from every project in one call', async () => {
-    const secondRepoPath = join(tempDir, 'repo-2')
-    gitInit(secondRepoPath)
-    const secondProjectId = 'test-project-id-2'
-    insertProject(secondProjectId, secondRepoPath)
-
-    await service.create({ projectId, branchName: 'project-a-branch-1' })
-    await service.create({ projectId, branchName: 'project-a-branch-2' })
-    await service.create({
-      projectId: secondProjectId,
-      branchName: 'project-b-branch-1',
+      const rows = db
+        .prepare('SELECT id, archived_at FROM sessions ORDER BY id')
+        .all() as Array<{ id: string; archived_at: string | null }>
+      expect(rows).toEqual([
+        { id: 'session-active-before', archived_at: null },
+        {
+          id: 'session-archived-before',
+          archived_at: independentArchivedAt,
+        },
+      ])
     })
 
-    const all = service.listAll()
-    expect(all).toHaveLength(3)
-    const projectIds = new Set(all.map((w) => w.projectId))
-    expect(projectIds).toEqual(new Set([projectId, secondProjectId]))
+    it('unarchives a workspace and its sessions without recreating removed worktrees', async () => {
+      const ws = await service.create({ projectId, branchName: 'unarchive-me' })
+      const db = getDatabase()
+      db.prepare(
+        `INSERT INTO sessions (id, project_id, workspace_id, provider_id, name, working_directory)
+       VALUES (?, ?, ?, ?, ?, ?)`,
+      ).run('session-1', projectId, ws.id, 'claude-code', 'Session 1', ws.path)
 
-    expect(service.getByProjectId(projectId)).toHaveLength(2)
-    expect(service.getByProjectId(secondProjectId)).toHaveLength(1)
-  })
-})
+      const archived = await service.archive({
+        id: ws.id,
+        removeWorktree: true,
+      })
+      expect(archived.worktreeRemovedAt).not.toBeNull()
+
+      const unarchived = service.unarchive(ws.id)
+
+      expect(unarchived.archivedAt).toBeNull()
+      expect(unarchived.worktreeRemovedAt).toBe(archived.worktreeRemovedAt)
+      expect(existsSync(ws.path)).toBe(false)
+
+      const session = db
+        .prepare('SELECT archived_at FROM sessions WHERE id = ?')
+        .get('session-1') as { archived_at: string | null }
+      expect(session.archived_at).toBeNull()
+    })
+
+    it('deletes a workspace and cleans up worktree', async () => {
+      const ws = await service.create({ projectId, branchName: 'delete-me' })
+      expect(existsSync(ws.path)).toBe(true)
+
+      await service.delete(ws.id)
+      expect(existsSync(ws.path)).toBe(false)
+
+      const workspaces = service.getByProjectId(projectId)
+      expect(workspaces).toHaveLength(0)
+    })
+
+    it('deleteAllForProject removes all workspaces', async () => {
+      await service.create({ projectId, branchName: 'ws-1' })
+      await service.create({ projectId, branchName: 'ws-2' })
+      expect(service.getByProjectId(projectId)).toHaveLength(2)
+
+      await service.deleteAllForProject(projectId)
+      expect(service.getByProjectId(projectId)).toHaveLength(0)
+    })
+
+    it('listAll returns an empty array when no workspaces exist', () => {
+      expect(service.listAll()).toEqual([])
+    })
+
+    it('listAll returns workspaces from every project in one call', async () => {
+      const secondRepoPath = join(tempDir, 'repo-2')
+      gitInit(secondRepoPath)
+      const secondProjectId = 'test-project-id-2'
+      insertProject(secondProjectId, secondRepoPath)
+
+      await service.create({ projectId, branchName: 'project-a-branch-1' })
+      await service.create({ projectId, branchName: 'project-a-branch-2' })
+      await service.create({
+        projectId: secondProjectId,
+        branchName: 'project-b-branch-1',
+      })
+
+      const all = service.listAll()
+      expect(all).toHaveLength(3)
+      const projectIds = new Set(all.map((w) => w.projectId))
+      expect(projectIds).toEqual(new Set([projectId, secondProjectId]))
+
+      expect(service.getByProjectId(projectId)).toHaveLength(2)
+      expect(service.getByProjectId(secondProjectId)).toHaveLength(1)
+    })
+  },
+)
