@@ -1,3 +1,4 @@
+import type { CodexAccountEnvTarget } from './provider-account-codex-env.pure'
 import type { ClaudeAccountEnvTarget } from './provider-account-env.pure'
 import type { ProviderAccount } from './provider-account.types'
 
@@ -74,6 +75,20 @@ export function assertLocalAccountSelection(input: {
   if (input.executionHost !== 'remote') return
 
   throw new Error(REMOTE_ACCOUNT_SELECTION_UNAVAILABLE)
+}
+
+/**
+ * The same three outcomes for Codex, whose account is a `CODEX_HOME` rather
+ * than a keychain namespace (ADR 0007, PA9). Deliberately the same guard, so a
+ * removed or attestation-disabled account stops receiving work whichever
+ * provider it belongs to.
+ */
+export function resolveCodexAccountForTurn(input: {
+  accountId: string | null | undefined
+  account: ProviderAccount | null
+}): CodexAccountEnvTarget | null {
+  const resolved = resolveAccountForTurn(input)
+  return resolved ? { configDir: resolved.configDir } : null
 }
 
 function describeAccount(account: ProviderAccount): string {

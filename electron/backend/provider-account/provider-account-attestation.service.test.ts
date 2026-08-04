@@ -293,6 +293,75 @@ describe('ProviderAccountAttestationService', () => {
     expect(subject.getHealth().checkedAt).not.toBe(firstCheckedAt)
   })
 
+  it('attests a Codex account against the file its own login writes', async () => {
+    // Same net, different file. A Codex home reports its identity in
+    // auth.json, and reading .claude.json there would find nothing and read as
+    // "unconfirmed" forever.
+    const CODEX_HOME = `${HOME}/.convergence/provider-accounts/codex/acct-c`
+    repository.create({
+      id: 'acct-c',
+      providerId: 'codex',
+      label: 'Codex Pro',
+      authKind: 'subscription-oauth',
+      configDir: CODEX_HOME,
+      credentialDir: CODEX_HOME,
+      executionHostId: 'local',
+      email: 'someone@example.com',
+      orgId: 'acc_123',
+    })
+
+    const subject = service({
+      files: {
+        [`${CONFIG_DIR}/.claude.json`]: identityJson('a@example.com', 'org-a'),
+        [`${CODEX_HOME}/auth.json`]: JSON.stringify({
+          tokens: {
+            account_id: 'acc_123',
+            id_token: { email: 'someone@example.com' },
+          },
+        }),
+      },
+    })
+
+    const report = await subject.attestAll()
+    const codex = report.accounts.find((entry) => entry.accountId === 'acct-c')
+
+    expect(codex).toMatchObject({ outcome: 'verified', status: 'connected' })
+    // A Codex home shares nothing by symlink, so drift cannot apply to it.
+    expect(codex?.unknownEntries).toEqual([])
+    expect(codex?.missingLinks).toEqual([])
+  })
+
+  it('disables a Codex account that has started serving somebody else', async () => {
+    const CODEX_HOME = `${HOME}/.convergence/provider-accounts/codex/acct-c`
+    repository.create({
+      id: 'acct-c',
+      providerId: 'codex',
+      label: 'Codex Pro',
+      authKind: 'subscription-oauth',
+      configDir: CODEX_HOME,
+      credentialDir: CODEX_HOME,
+      executionHostId: 'local',
+      email: 'someone@example.com',
+      orgId: 'acc_123',
+    })
+
+    const subject = service({
+      files: {
+        [`${CONFIG_DIR}/.claude.json`]: identityJson('a@example.com', 'org-a'),
+        [`${CODEX_HOME}/auth.json`]: JSON.stringify({
+          tokens: {
+            account_id: 'acc_999',
+            id_token: { email: 'somebody-else@example.com' },
+          },
+        }),
+      },
+    })
+
+    await subject.attestAll()
+
+    expect(repository.get('acct-c')?.status).toBe('unavailable')
+  })
+
   it('reports an empty health snapshot before the first check', () => {
     expect(service({}).getHealth()).toEqual({
       checkedAt: null,

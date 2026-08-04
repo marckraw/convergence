@@ -24,7 +24,7 @@
  * needs to behave normally. Grows loudly: when something breaks under a
  * selected account, the fix is a name added here.
  */
-export const CLAUDE_ACCOUNT_ENV_ALLOWLIST: readonly string[] = [
+export const PROVIDER_ACCOUNT_ENV_BASE_ALLOWLIST: readonly string[] = [
   // Process basics
   'PATH',
   'HOME',
@@ -73,7 +73,14 @@ export const CLAUDE_ACCOUNT_ENV_ALLOWLIST: readonly string[] = [
   'XDG_CONFIG_HOME',
   'XDG_DATA_HOME',
   'XDG_CACHE_HOME',
-  // Claude Code behaviour switches that carry no credential
+]
+
+/**
+ * The Claude list: the provider-neutral base plus Claude Code's own behaviour
+ * switches, none of which carry a credential.
+ */
+export const CLAUDE_ACCOUNT_ENV_ALLOWLIST: readonly string[] = [
+  ...PROVIDER_ACCOUNT_ENV_BASE_ALLOWLIST,
   'CLAUDE_CODE_ENABLE_TELEMETRY',
   'CLAUDE_CODE_MAX_OUTPUT_TOKENS',
   'DISABLE_TELEMETRY',

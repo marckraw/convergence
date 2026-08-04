@@ -11,6 +11,7 @@ import {
   deriveProviderAccountCredentialDir,
   hashProviderAccountDir,
   mapProviderAccountRow,
+  providerAccountCredentialLayout,
   providerAccountPathToken,
 } from './provider-account.pure'
 import type { ProviderAccountRow } from './provider-account.types'
@@ -81,11 +82,42 @@ describe('provider account directory derivation', () => {
     )
   })
 
-  it('refuses to invent a path token for a provider nobody pinned', () => {
-    // PA9 adds Codex here deliberately; guessing would freeze a wrong
-    // directory name into somebody's keychain slot.
-    expect(() => providerAccountPathToken('codex')).toThrow(
+  it('pins Codex deliberately, and still refuses to invent one', () => {
+    // PA9 adds Codex here as a one-way door: `CODEX_HOME` points at this
+    // directory, so renaming the token later strands the auth.json inside it.
+    // Everything unpinned still throws rather than guessing.
+    expect(providerAccountPathToken('codex')).toBe('codex')
+    expect(() => providerAccountPathToken('cursor')).toThrow(
       /No provider account path token/,
+    )
+    expect(() => providerAccountPathToken('pi')).toThrow(
+      /No provider account path token/,
+    )
+  })
+
+  it('lays out an account the way its provider actually stores credentials', () => {
+    // Claude's secret lives in a keychain slot named from a separate path, so
+    // it needs two directories. Codex's is a plaintext file *inside* the home,
+    // so a second directory would describe a namespace that is not there.
+    expect(providerAccountCredentialLayout('claude-code')).toBe(
+      'keychain-namespace',
+    )
+    expect(providerAccountCredentialLayout('codex')).toBe('config-home')
+    expect(() => providerAccountCredentialLayout('cursor')).toThrow(
+      /No credential layout/,
+    )
+
+    const codex = dirInput({ providerId: 'codex' })
+    expect(deriveProviderAccountConfigDir(codex)).toContain(
+      '/provider-accounts/codex/',
+    )
+    expect(deriveProviderAccountCredentialDir(codex)).toBe(
+      deriveProviderAccountConfigDir(codex),
+    )
+
+    const claude = dirInput()
+    expect(deriveProviderAccountCredentialDir(claude)).not.toBe(
+      deriveProviderAccountConfigDir(claude),
     )
   })
 
