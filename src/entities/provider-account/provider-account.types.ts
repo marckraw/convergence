@@ -52,3 +52,22 @@ export interface ProviderAccountHealth {
   accounts: ProviderAccountAttestationResult[]
   settingsWarnings: ProviderAccountSettingsWarning[]
 }
+
+/**
+ * One MCP server as *this account* sees it (ADR 0007, PA11). Tokens are
+ * namespaced per credential slot, so the same server can be authorized under
+ * one account and not another.
+ */
+export interface ProviderAccountConnector {
+  name: string
+  status: string
+  statusLabel: string
+  description: string
+  needsAuthorization: boolean
+}
+
+export interface ProviderAccountConnectors {
+  providerAccountId: string | null
+  connectors: ProviderAccountConnector[]
+  error: string | null
+}

@@ -80,6 +80,10 @@ import { resolveClaudeAccountEnv } from '../../provider-account/provider-account
 import type { ClaudeAccountEnvTarget } from '../../provider-account/provider-account-env.pure'
 import { selectTurnAccountSnapshot } from '../../provider-account/provider-account-resolution.pure'
 import {
+  describeMcpAuthorizationNote,
+  matchClaudeMcpAuthFailure,
+} from '../../provider-account/provider-account-mcp.pure'
+import {
   parseClaudeRateLimitEvent,
   PROVIDER_QUOTA_LOCAL_EXECUTION_HOST_ID,
 } from '../../provider-quota/claude-rate-limit.pure'
@@ -239,6 +243,11 @@ export type ClaudeAccountLookup = (
 
 const noAccountLookup: ClaudeAccountLookup = () => null
 
+/** Resolves an account id to something a person recognises — usually the email. */
+export type ClaudeAccountLabelLookup = (
+  accountId: string | null,
+) => string | null
+
 export class ClaudeCodeProvider implements Provider {
   id = 'claude-code'
   name = 'Claude Code'
@@ -257,6 +266,17 @@ export class ClaudeCodeProvider implements Provider {
      * are still parsed off the stream and simply have nowhere to go.
      */
     private rateLimits: ClaudeRateLimitState | null = null,
+    /**
+     * Names the account a turn ran as, for the dirty-reconnect note (PA11).
+     * "Linear needs authentication" is ambiguous with several accounts on one
+     * machine — the connector may be fine under yesterday's.
+     */
+    private accountLabelLookup: ClaudeAccountLabelLookup = () => null,
+    /**
+     * False where no browser handoff is possible. The note then says so rather
+     * than offering an action that would appear to do nothing.
+     */
+    private canOpenBrowser: boolean = true,
   ) {}
 
   async describe(): Promise<ProviderDescriptor> {
@@ -401,6 +421,10 @@ export class ClaudeCodeProvider implements Provider {
     const claudeCodeVersion = this.version
     const accountLookup = this.accountLookup
     const rateLimits = this.rateLimits
+    const accountLabelLookup = this.accountLabelLookup
+    const canOpenBrowser = this.canOpenBrowser
+    /** Servers already reported this turn, so one broken connector says it once. */
+    const mcpAuthNotedServers = new Set<string>()
     const sessionId = config.sessionId
     const listeners = {
       delta: [] as ((delta: SessionDelta) => void)[],
@@ -723,6 +747,42 @@ export class ClaudeCodeProvider implements Provider {
      * degrade, never invent — and a signal is never recorded without an account
      * scope to file it under.
      */
+    /**
+     * Dirty reconnection (ADR 0007, PA11).
+     *
+     * A connector this account has not authorized fails inside a tool result,
+     * where it reads as an ordinary tool error and the turn carries on with
+     * that capability quietly missing. Because MCP tokens are per credential
+     * slot, the same connector may be perfectly authorized under the account
+     * used yesterday — so the note names the server *and* the account, and
+     * carries the action rather than telling the user to go and find it.
+     *
+     * Once per server per turn: a failing connector usually fails on every
+     * call, and repeating the same note would bury the turn.
+     */
+    function noteMcpAuthFailure(text: string): void {
+      const failure = matchClaudeMcpAuthFailure(text)
+      if (!failure) return
+      if (mcpAuthNotedServers.has(failure.serverName)) return
+      mcpAuthNotedServers.add(failure.serverName)
+
+      const accountId = currentTurnAccount?.id ?? null
+      sessionEmitter.addNote({
+        level: 'warning',
+        text: describeMcpAuthorizationNote({
+          serverName: failure.serverName,
+          accountLabel: accountLabelLookup(accountId),
+          canOpenBrowser,
+        }),
+        providerEventType: 'mcp_auth',
+        action: {
+          kind: 'authorize-mcp-server',
+          serverName: failure.serverName,
+          providerAccountId: accountId,
+        },
+      })
+    }
+
     function recordRateLimitEvent(event: unknown): void {
       if (!rateLimits) return
       const observation = parseClaudeRateLimitEvent(event)
@@ -948,6 +1008,7 @@ export class ClaudeCodeProvider implements Provider {
                   outputText: resultText,
                   providerEventType: 'tool_result',
                 })
+                noteMcpAuthFailure(resultText)
               }
             }
           }

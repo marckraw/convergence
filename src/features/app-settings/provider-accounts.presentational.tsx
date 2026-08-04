@@ -1,6 +1,9 @@
-import { KeyRound, Pencil, RefreshCw, Star, Trash2 } from 'lucide-react'
-import type { ProviderAccountSettingsRow } from '@/entities/provider-account'
-import type { ProviderAccountSettingsWarning } from '@/entities/provider-account'
+import { KeyRound, Pencil, Plug, RefreshCw, Star, Trash2 } from 'lucide-react'
+import type {
+  ProviderAccountConnectors,
+  ProviderAccountSettingsRow,
+  ProviderAccountSettingsWarning,
+} from '@/entities/provider-account'
 import { cn } from '@/shared/lib/cn.pure'
 import { Button } from '@/shared/ui/button'
 import { Input } from '@/shared/ui/input'
@@ -30,6 +33,11 @@ export interface ProviderAccountsFieldsProps {
   renamingAccountId: string | null
   renameDraft: string
   confirmingRemovalAccountId: string | null
+  /** The account whose connectors are open, if any. */
+  expandedConnectorsAccountId: string | null
+  connectors: ProviderAccountConnectors | null
+  isLoadingConnectors: boolean
+  authorizingServerName: string | null
   message: string | null
   error: string | null
   onEnrolEmailChange: (value: string) => void
@@ -45,6 +53,8 @@ export interface ProviderAccountsFieldsProps {
   onConfirmRemove: (accountId: string) => void
   onCancelRemove: () => void
   onCheckHealth: () => void
+  onToggleConnectors: (accountId: string) => void
+  onAuthorizeConnector: (accountId: string, serverName: string) => void
 }
 
 function formatCheckedAt(value: string | null): string {
@@ -68,6 +78,10 @@ export function ProviderAccountsFields({
   renamingAccountId,
   renameDraft,
   confirmingRemovalAccountId,
+  expandedConnectorsAccountId,
+  connectors,
+  isLoadingConnectors,
+  authorizingServerName,
   message,
   error,
   onEnrolEmailChange,
@@ -83,6 +97,8 @@ export function ProviderAccountsFields({
   onConfirmRemove,
   onCancelRemove,
   onCheckHealth,
+  onToggleConnectors,
+  onAuthorizeConnector,
 }: ProviderAccountsFieldsProps) {
   return (
     <div className="space-y-4">
@@ -121,6 +137,7 @@ export function ProviderAccountsFields({
             const isBusy = busyAccountId === row.id
             const isRenaming = renamingAccountId === row.id
             const isConfirmingRemoval = confirmingRemovalAccountId === row.id
+            const showsConnectors = expandedConnectorsAccountId === row.id
 
             return (
               <section
@@ -175,6 +192,16 @@ export function ProviderAccountsFields({
                     >
                       <Star className="mr-1.5 h-3.5 w-3.5" />
                       Set default
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      aria-expanded={showsConnectors}
+                      onClick={() => onToggleConnectors(row.id)}
+                    >
+                      <Plug className="mr-1.5 h-3.5 w-3.5" />
+                      Connectors
                     </Button>
                     <Button
                       type="button"
@@ -258,6 +285,59 @@ export function ProviderAccountsFields({
                     >
                       Cancel
                     </Button>
+                  </div>
+                ) : null}
+
+                {showsConnectors ? (
+                  <div className="space-y-2 rounded-lg border border-border/70 bg-card/40 px-3 py-3">
+                    <p className="text-xs leading-relaxed text-muted-foreground">
+                      MCP tokens are stored per account, so each account
+                      authorizes a connector once — and keeps it across every
+                      later swap.
+                    </p>
+                    {isLoadingConnectors ? (
+                      <p className="text-sm text-muted-foreground">
+                        Asking this account what it can reach...
+                      </p>
+                    ) : connectors?.error ? (
+                      <p className="text-sm text-muted-foreground">
+                        {connectors.error}
+                      </p>
+                    ) : connectors?.connectors.length === 0 ? (
+                      <p className="text-sm text-muted-foreground">
+                        No MCP servers are configured.
+                      </p>
+                    ) : (
+                      (connectors?.connectors ?? []).map((connector) => (
+                        <div
+                          key={connector.name}
+                          className="flex flex-wrap items-center justify-between gap-2"
+                        >
+                          <div className="min-w-0">
+                            <p className="text-sm font-medium">
+                              {connector.name}
+                            </p>
+                            <p className="truncate text-xs text-muted-foreground">
+                              {connector.statusLabel}
+                            </p>
+                          </div>
+                          {connector.needsAuthorization ? (
+                            <Button
+                              type="button"
+                              size="sm"
+                              disabled={authorizingServerName !== null}
+                              onClick={() =>
+                                onAuthorizeConnector(row.id, connector.name)
+                              }
+                            >
+                              {authorizingServerName === connector.name
+                                ? 'Waiting for browser...'
+                                : 'Authorize'}
+                            </Button>
+                          ) : null}
+                        </div>
+                      ))
+                    )}
                   </div>
                 ) : null}
 

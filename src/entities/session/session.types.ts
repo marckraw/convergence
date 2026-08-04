@@ -275,7 +275,19 @@ export type ConversationItem =
       kind: 'note'
       level: 'info' | 'warning' | 'error'
       text: string
+      /** Something the user can do about it, rendered as a control (PA11). */
+      action?: ConversationNoteAction
     })
+
+/**
+ * Actions a note can offer. A union of one today; the shape exists so the
+ * renderer refuses an action it does not understand rather than guessing.
+ */
+export type ConversationNoteAction = {
+  kind: 'authorize-mcp-server'
+  serverName: string
+  providerAccountId: string | null
+}
 
 export interface ConversationPatchEvent {
   sessionId: string

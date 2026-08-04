@@ -1,5 +1,6 @@
 export type {
   ConversationItem,
+  ConversationNoteAction,
   ConversationPatchEvent,
   ConversationItemKind,
   ConversationItemState,

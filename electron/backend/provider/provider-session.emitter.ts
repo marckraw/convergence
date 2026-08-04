@@ -3,6 +3,7 @@ import type {
   SessionDelta,
   ConversationItem,
   ConversationItemDraft,
+  ConversationNoteAction,
   InteractionRequest,
 } from '../session/conversation-item.types'
 import type { SessionSummary } from '../session/session.types'
@@ -251,6 +252,7 @@ export class ProviderSessionEmitter {
     state?: ConversationItem['state']
     providerItemId?: string | null
     providerEventType?: string | null
+    action?: ConversationNoteAction
   }): string {
     const timestamp = input.timestamp ?? this.now()
     const item = this.buildBaseItem({
@@ -262,6 +264,7 @@ export class ProviderSessionEmitter {
       payload: {
         level: input.level,
         text: input.text,
+        ...(input.action ? { action: input.action } : {}),
       },
     })
     this.emitItem(item)

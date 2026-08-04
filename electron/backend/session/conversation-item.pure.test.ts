@@ -206,4 +206,65 @@ describe('conversation-item migration', () => {
 
     expect(roundTripped).toEqual(item)
   })
+
+  describe('note actions survive storage', () => {
+    function noteRow(action: unknown) {
+      const item = conversationItemToInsertRow({
+        id: 'note-1',
+        sessionId: 'session-1',
+        sequence: 1,
+        turnId: 'turn-1',
+        kind: 'note',
+        state: 'complete',
+        level: 'warning',
+        text: 'linear is not authorized',
+        createdAt: '2026-08-05T00:00:00.000Z',
+        updatedAt: '2026-08-05T00:00:00.000Z',
+        providerMeta: { providerItemId: null, providerEventType: 'mcp_auth' },
+        ...(action === undefined ? {} : { action }),
+      } as never)
+
+      return conversationItemFromRow({
+        id: item.id,
+        session_id: item.sessionId,
+        sequence: item.sequence,
+        turn_id: item.turnId,
+        kind: item.kind,
+        state: item.state,
+        payload_json: item.payloadJson,
+        provider_item_id: item.providerItemId,
+        provider_event_type: item.providerEventType,
+        created_at: item.createdAt,
+        updated_at: item.updatedAt,
+      } as never)
+    }
+
+    it('round-trips an authorize action', () => {
+      // The note outlives the turn; the control has to outlive a restart too.
+      const item = noteRow({
+        kind: 'authorize-mcp-server',
+        serverName: 'linear',
+        providerAccountId: 'acct-a',
+      })
+
+      expect(item.kind === 'note' && item.action).toEqual({
+        kind: 'authorize-mcp-server',
+        serverName: 'linear',
+        providerAccountId: 'acct-a',
+      })
+    })
+
+    it('drops an action it does not understand rather than offering it', () => {
+      // A note written by another release must render as an ordinary note, not
+      // as a control this build cannot honour.
+      expect(
+        noteRow({ kind: 'do-something-else', serverName: 'linear' }),
+      ).not.toHaveProperty('action')
+      expect(noteRow({ kind: 'authorize-mcp-server' })).not.toHaveProperty(
+        'action',
+      )
+      expect(noteRow('nonsense')).not.toHaveProperty('action')
+      expect(noteRow(undefined)).not.toHaveProperty('action')
+    })
+  })
 })

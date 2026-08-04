@@ -1,5 +1,6 @@
 import type {
   ProviderAccount,
+  ProviderAccountConnectors,
   ProviderAccountEnrolResult,
   ProviderAccountHealth,
   ProviderAccountSettingsWarning,
@@ -34,4 +35,18 @@ export const providerAccountApi = {
     window.electronAPI.providerAccounts.attest(),
   health: (): Promise<ProviderAccountHealth> =>
     window.electronAPI.providerAccounts.health(),
+  /**
+   * What this account can reach. Answered by running the provider's own
+   * `mcp list` as the account, because the ambient answer is a different
+   * account's answer (PA11).
+   */
+  listConnectors: (
+    accountId: string | null,
+  ): Promise<ProviderAccountConnectors> =>
+    window.electronAPI.providerAccounts.listConnectors(accountId),
+  authorizeConnector: (input: {
+    accountId: string | null
+    serverName: string
+  }): Promise<ProviderAccountConnectors> =>
+    window.electronAPI.providerAccounts.authorizeConnector(input),
 }

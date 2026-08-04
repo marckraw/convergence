@@ -7,6 +7,7 @@ import {
   useAttachmentStore,
   type Attachment,
 } from '@/entities/attachment'
+import { useDialogStore } from '@/entities/dialog'
 import { ConversationItemView } from './transcript-entry.presentational'
 import { buildTranscriptEntryViewModel } from './transcript-entry.pure'
 
@@ -42,6 +43,17 @@ export const ConversationItem: FC<ConversationItemProps> = ({
     setPreviewAttachment(null)
   }, [])
 
+  const openDialog = useDialogStore((state) => state.open)
+
+  /**
+   * Sends the user to the one place connectors are authorized (PA11), rather
+   * than growing a second authorization entry point in the transcript. The
+   * note already says which server and which account.
+   */
+  const handleNoteAction = useCallback(() => {
+    openDialog('app-settings', { appSettingsSection: 'provider-accounts' })
+  }, [openDialog])
+
   const viewModel = buildTranscriptEntryViewModel({
     item: entry,
     turnStartedAt,
@@ -59,6 +71,7 @@ export const ConversationItem: FC<ConversationItemProps> = ({
         onDeny={onDeny}
         onInputAnswer={onInputAnswer}
         onAttachmentOpen={setPreviewAttachment}
+        onNoteAction={handleNoteAction}
       />
       {previewAttachment && (
         <AttachmentPreviewContainer

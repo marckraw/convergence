@@ -1,5 +1,8 @@
 import type { FC } from 'react'
-import type { InteractionResponse } from '@/entities/session'
+import type {
+  ConversationNoteAction,
+  InteractionResponse,
+} from '@/entities/session'
 import type { SkillSelection } from '@/entities/skill'
 import {
   User,
@@ -39,6 +42,11 @@ interface ConversationItemViewProps {
   onDeny?: () => void
   onInputAnswer?: (response: InteractionResponse, displayText: string) => void
   onAttachmentOpen?: (attachment: Attachment) => void
+  /**
+   * Runs a note's offered action (PA11). Optional: a surface that cannot honour
+   * it renders the note without the control rather than a dead button.
+   */
+  onNoteAction?: (action: ConversationNoteAction) => void
 }
 
 const attentionPromptMarkdownClassName =
@@ -61,6 +69,7 @@ export const ConversationItemView: FC<ConversationItemViewProps> = ({
   onDeny,
   onInputAnswer,
   onAttachmentOpen,
+  onNoteAction,
 }) => {
   const { item: entry } = viewModel
 
@@ -471,6 +480,17 @@ export const ConversationItemView: FC<ConversationItemViewProps> = ({
               content={entry.text}
               size="sm"
             />
+            {entry.action && onNoteAction ? (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="mt-2"
+                onClick={() => onNoteAction(entry.action!)}
+              >
+                Authorize for this account
+              </Button>
+            ) : null}
           </div>
         </ConversationItemShell>
       )

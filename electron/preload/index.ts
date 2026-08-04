@@ -390,6 +390,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.invoke('providerAccounts:scanSharedSettings'),
     attest: () => ipcRenderer.invoke('providerAccounts:attest'),
     health: () => ipcRenderer.invoke('providerAccounts:health'),
+    listConnectors: (accountId: string | null) =>
+      ipcRenderer.invoke('providerAccounts:listConnectors', accountId),
+    authorizeConnector: (input: {
+      accountId: string | null
+      serverName: string
+    }) => ipcRenderer.invoke('providerAccounts:authorizeConnector', input),
   },
   mcp: {
     listByProjectId: (projectId: string) =>

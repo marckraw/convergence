@@ -1,5 +1,6 @@
 import { ipcMain } from 'electron'
 import type { ProviderAccountAttestationService } from './provider-account-attestation.service'
+import type { ProviderAccountMcpService } from './provider-account-mcp.service'
 import type {
   EnrolProviderAccountInput,
   ProviderAccountEnrolmentService,
@@ -15,6 +16,7 @@ export function registerProviderAccountIpcHandlers(deps: {
   repository: ProviderAccountRepository
   enrolment: ProviderAccountEnrolmentService
   attestation: ProviderAccountAttestationService
+  mcp: ProviderAccountMcpService
 }): void {
   ipcMain.handle('providerAccounts:list', () => deps.repository.list())
 
@@ -55,4 +57,17 @@ export function registerProviderAccountIpcHandlers(deps: {
   ipcMain.handle('providerAccounts:attest', () => deps.attestation.attestAll())
 
   ipcMain.handle('providerAccounts:health', () => deps.attestation.getHealth())
+
+  ipcMain.handle(
+    'providerAccounts:listConnectors',
+    (_event, accountId: string | null) => deps.mcp.listConnectors(accountId),
+  )
+
+  ipcMain.handle(
+    'providerAccounts:authorizeConnector',
+    async (_event, input: { accountId: string | null; serverName: string }) => {
+      await deps.mcp.authorizeConnector(input)
+      return deps.mcp.listConnectors(input.accountId)
+    },
+  )
 }

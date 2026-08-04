@@ -1227,6 +1227,18 @@ interface ProviderRateLimitSignalData {
   observedAt: string
 }
 
+interface ProviderAccountConnectorsData {
+  providerAccountId: string | null
+  connectors: Array<{
+    name: string
+    status: string
+    statusLabel: string
+    description: string
+    needsAuthorization: boolean
+  }>
+  error: string | null
+}
+
 type ProviderAccountStatusData = 'connected' | 'expired' | 'unavailable'
 
 interface ProviderAccountData {
@@ -1810,6 +1822,13 @@ interface ElectronAPI {
     scanSharedSettings: () => Promise<ProviderAccountSettingsWarningData[]>
     attest: () => Promise<ProviderAccountHealthData>
     health: () => Promise<ProviderAccountHealthData>
+    listConnectors: (
+      accountId: string | null,
+    ) => Promise<ProviderAccountConnectorsData>
+    authorizeConnector: (input: {
+      accountId: string | null
+      serverName: string
+    }) => Promise<ProviderAccountConnectorsData>
   }
   mcp: {
     listByProjectId: (projectId: string) => Promise<ProjectMcpVisibility>
