@@ -37,6 +37,7 @@ import { NotificationsFields } from './notifications-fields.presentational'
 import { UpdatesFields } from './updates-fields.presentational'
 import { DebugLoggingFields } from './debug-logging-fields.presentational'
 import { PiModelVisibilityContainer } from './pi-model-visibility.container'
+import { ProviderAccountsContainer } from './provider-accounts.container'
 import { ProviderCredentialsContainer } from './provider-credentials.container'
 import { ProviderUsageContainer } from './provider-usage.container'
 import { AnalyticsInsightsContainer } from '../analytics-insights'
@@ -185,6 +186,14 @@ export const AppSettingsDialog: FC<AppSettingsDialogProps> = ({
         'Paste provider API keys once. Convergence stores them in the operating system credential store and passes them to provider processes when needed.',
     },
     {
+      id: 'provider-accounts',
+      navLabel: 'Accounts',
+      navSummary: 'Claude Code accounts you can switch between',
+      title: 'Provider accounts',
+      description:
+        'Enrol more than one Claude Code account on this machine and pick which one serves a turn from the composer. Conversations are shared between them; only the credential changes.',
+    },
+    {
       id: 'usage',
       navLabel: 'Usage',
       navSummary: 'Provider quota windows and credits',
@@ -251,6 +260,7 @@ export const AppSettingsDialog: FC<AppSettingsDialogProps> = ({
   const usesIndependentSave =
     currentSection.id === 'insights' ||
     currentSection.id === 'credentials' ||
+    currentSection.id === 'provider-accounts' ||
     currentSection.id === 'usage'
 
   const renderCurrentSection = () => {
@@ -330,6 +340,8 @@ export const AppSettingsDialog: FC<AppSettingsDialogProps> = ({
         )
       case 'credentials':
         return <ProviderCredentialsContainer />
+      case 'provider-accounts':
+        return <ProviderAccountsContainer />
       case 'usage':
         return <ProviderUsageContainer />
       case 'notifications':

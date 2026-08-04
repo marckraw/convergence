@@ -368,13 +368,17 @@ contextBridge.exposeInMainWorld('electronAPI', {
     },
   },
   providerQuota: {
-    list: (forceRefresh?: boolean) =>
-      ipcRenderer.invoke('providerQuota:list', forceRefresh),
+    list: (
+      forceRefresh?: boolean,
+      scope?: { executionHostId: string; providerAccountId: string | null },
+    ) => ipcRenderer.invoke('providerQuota:list', forceRefresh, scope),
   },
   providerAccounts: {
     list: () => ipcRenderer.invoke('providerAccounts:list'),
     enrol: (input: { email: string; label?: string | null }) =>
       ipcRenderer.invoke('providerAccounts:enrol', input),
+    reconnect: (accountId: string) =>
+      ipcRenderer.invoke('providerAccounts:reconnect', accountId),
     remove: (accountId: string) =>
       ipcRenderer.invoke('providerAccounts:remove', accountId),
     setDefault: (accountId: string) =>

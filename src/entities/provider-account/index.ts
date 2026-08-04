@@ -3,6 +3,7 @@ export {
   AMBIENT_DEFAULT_ACCOUNT_ID,
   AMBIENT_DEFAULT_ACCOUNT_LABEL,
   buildProviderAccountPickerItems,
+  buildProviderAccountSettingsRows,
   describeProviderAccountIdentity,
   describeProviderAccountSelectionBlock,
   describeProviderAccountStatus,
@@ -13,7 +14,10 @@ export {
   resolveInitialProviderAccountSelection,
   summariseProviderAccountHealth,
 } from './provider-account.pure'
-export type { ProviderAccountPickerItem } from './provider-account.pure'
+export type {
+  ProviderAccountPickerItem,
+  ProviderAccountSettingsRow,
+} from './provider-account.pure'
 export type {
   ProviderAccount,
   ProviderAccountAttestationOutcome,

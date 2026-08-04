@@ -986,8 +986,17 @@ export function registerIpcHandlers(
     return result
   })
 
-  ipcMain.handle('providerQuota:list', (_event, forceRefresh?: boolean) =>
-    providerQuotaService.list({ forceRefresh: forceRefresh === true }),
+  ipcMain.handle(
+    'providerQuota:list',
+    (
+      _event,
+      forceRefresh?: boolean,
+      scope?: { executionHostId: string; providerAccountId: string | null },
+    ) =>
+      providerQuotaService.list({
+        forceRefresh: forceRefresh === true,
+        scope,
+      }),
   )
 
   ipcMain.handle('mcp:listByProjectId', (_event, projectId: string) =>

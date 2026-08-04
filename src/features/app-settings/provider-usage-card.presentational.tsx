@@ -1,7 +1,8 @@
 import { ExternalLink } from 'lucide-react'
-import type {
-  ProviderQuotaSnapshot,
-  ProviderQuotaWindow,
+import {
+  describeProviderRateLimit,
+  type ProviderQuotaSnapshot,
+  type ProviderQuotaWindow,
 } from '@/entities/provider-quota'
 import { Button } from '@/shared/ui/button'
 import { ProviderUsageWindowRow } from './provider-usage-window-row.presentational'
@@ -88,6 +89,7 @@ function getSourceLabel(snapshot: ProviderQuotaSnapshot) {
 
 export function ProviderUsageCard({ snapshot }: ProviderUsageCardProps) {
   const usageLinks = getUsageLinks(snapshot)
+  const rateLimit = describeProviderRateLimit(snapshot.rateLimit)
 
   return (
     <section className="space-y-3 rounded-lg border border-border/70 bg-card/25 px-4 py-4">
@@ -115,6 +117,23 @@ export function ProviderUsageCard({ snapshot }: ProviderUsageCardProps) {
           ))}
         </div>
       </div>
+
+      {rateLimit ? (
+        <div className="rounded-lg border border-border/70 bg-card/40 px-4 py-3">
+          <p className="text-sm font-medium text-foreground">
+            {rateLimit.headline}
+          </p>
+          {rateLimit.detail ? (
+            <p className="mt-1 text-sm text-muted-foreground">
+              {rateLimit.detail}
+            </p>
+          ) : null}
+          <p className="mt-1 text-xs text-muted-foreground">
+            Reported by the provider for the selected account. The windows below
+            come from this machine&apos;s shared usage log.
+          </p>
+        </div>
+      ) : null}
 
       {snapshot.status === 'available' ? (
         <>

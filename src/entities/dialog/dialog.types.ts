@@ -21,6 +21,7 @@ export type AppSettingsDialogSection =
   | 'session-forking'
   | 'guided-review'
   | 'credentials'
+  | 'provider-accounts'
   | 'usage'
   | 'pi-models'
   | 'notifications'

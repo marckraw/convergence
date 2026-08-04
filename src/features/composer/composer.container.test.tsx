@@ -156,6 +156,13 @@ describe('ComposerContainer', () => {
             limitReachedType: null,
             lastCheckedAt: '2026-06-17T15:03:00.000Z',
             stale: false,
+            rateLimit: {
+              providerAccountId: null,
+              status: 'allowed_warning',
+              rateLimitType: 'seven_day',
+              resetsAt: '2099-06-21T00:00:00.000Z',
+              observedAt: '2026-06-17T15:00:00.000Z',
+            },
           },
         ]),
       },
@@ -800,7 +807,10 @@ describe('ComposerContainer', () => {
         name: 'Codex usage 87% remaining',
       }),
     ).toBeInTheDocument()
-    expect(window.electronAPI.providerQuota.list).toHaveBeenCalledWith(false)
+    expect(window.electronAPI.providerQuota.list).toHaveBeenCalledWith(
+      false,
+      undefined,
+    )
   })
 
   it('hides Codex usage in the composer for Pi sessions on OpenAI models', async () => {
@@ -888,13 +898,26 @@ describe('ComposerContainer', () => {
       name: 'Claude Code usage 9.4M',
     })
     expect(pill).toBeInTheDocument()
-    expect(window.electronAPI.providerQuota.list).toHaveBeenCalledWith(false)
+    // Scoped to the account that will serve the next turn (PA8): the provider's
+    // own limit reading belongs to an account, not to the machine.
+    expect(window.electronAPI.providerQuota.list).toHaveBeenCalledWith(false, {
+      executionHostId: 'local',
+      providerAccountId: null,
+    })
 
     fireEvent.pointerEnter(pill)
 
     expect(await screen.findByText('Claude Code usage')).toBeInTheDocument()
     expect(screen.getByText('9.4M tokens, $6.81')).toBeInTheDocument()
     expect(screen.getByText('371.9M tokens, $370.55')).toBeInTheDocument()
+
+    // Claude's own reading for this account, in words. Convergence used to
+    // discard this event, which is how the app could sit at a limit all week
+    // with nothing to say about it.
+    expect(screen.getByText('Approaching the limit')).toBeInTheDocument()
+    expect(screen.getByText(/Seven day window/)).toBeInTheDocument()
+    // The windows above are the shared local usage log, and say so.
+    expect(screen.getByText(/every account shares/)).toBeInTheDocument()
   })
 
   it('allows follow-up while a supported provider session is running', () => {

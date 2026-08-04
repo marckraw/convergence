@@ -146,25 +146,34 @@ describe('readClaudeIdentityFromConfig', () => {
         oauthAccount: {
           emailAddress: 'someone@example.com',
           organizationUuid: 'ec48ac90',
+          subscriptionType: 'max',
+        },
+      }),
+    ).toEqual({
+      email: 'someone@example.com',
+      orgId: 'ec48ac90',
+      plan: 'max',
+    })
+  })
+
+  it('never reports the organization role as the plan', () => {
+    // The enrolled Max account records `organizationRole: "admin"`. Reading it
+    // as the plan made the surface say "admin" where the tier belongs, which is
+    // worse than saying nothing: a wrong tier is indistinguishable from a right
+    // one until the user hits a limit they did not expect.
+    expect(
+      readClaudeIdentityFromConfig({
+        oauthAccount: {
+          emailAddress: 'someone@example.com',
+          organizationUuid: 'ec48ac90',
           organizationRole: 'admin',
         },
       }),
     ).toEqual({
       email: 'someone@example.com',
       orgId: 'ec48ac90',
-      plan: 'admin',
+      plan: null,
     })
-  })
-
-  it('falls back to the subscription type when no role is recorded', () => {
-    expect(
-      readClaudeIdentityFromConfig({
-        oauthAccount: {
-          emailAddress: 'someone@example.com',
-          subscriptionType: 'max',
-        },
-      })?.plan,
-    ).toBe('max')
   })
 
   it('returns null rather than inventing an identity', () => {
