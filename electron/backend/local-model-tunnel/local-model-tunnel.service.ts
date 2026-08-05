@@ -21,6 +21,7 @@ import type {
   LocalModelTunnelEventEmitter,
   LocalModelTunnelHealthFailureKind,
   LocalModelTunnelHealthStatus,
+  LocalModelTunnelProbeKind,
   LocalModelTunnelProfile,
   LocalModelTunnelProfileInput,
   LocalModelTunnelRouteCandidate,
@@ -189,7 +190,14 @@ export class LocalModelTunnelService {
       diagnostics: [],
     })
     void this.broadcast()
-    void this.startRouteCandidates(profile, token)
+    // Deliberately not awaited: starting a tunnel takes seconds and the caller
+    // needs the "starting" snapshot now. That makes this the one promise in
+    // the service nobody is holding, so it must carry its own failure handler
+    // (MAR-2250) — otherwise a throw becomes an unhandled rejection and the
+    // profile sits on "starting" forever.
+    void this.startRouteCandidates(profile, token).catch((error) =>
+      this.recordBackgroundStartFailure(profile, token, error),
+    )
     return this.buildSnapshot()
   }
 
@@ -312,6 +320,34 @@ export class LocalModelTunnelService {
         : [buildDefaultLocalModelTunnelProfile()],
     )
     return this.broadcast()
+  }
+
+  /**
+   * Turns a background start failure into a state the UI can show.
+   *
+   * Token-checked, because by the time this runs the user may have stopped the
+   * tunnel or started it again: overwriting a newer status with an older
+   * failure would be its own lie.
+   */
+  private recordBackgroundStartFailure(
+    profile: LocalModelTunnelProfile,
+    token: symbol,
+    error: unknown,
+  ): void {
+    if (this.startTokens.get(profile.id) !== token) return
+    this.startTokens.delete(profile.id)
+    this.processes.delete(profile.id)
+    this.setStatus(profile, {
+      state: 'failed',
+      managed: false,
+      pid: null,
+      error: `Starting the tunnel failed: ${
+        error instanceof Error ? error.message : String(error)
+      }`,
+      activeRouteId: null,
+      activeRouteLabel: null,
+    })
+    void this.broadcast()
   }
 
   private async startRouteCandidates(
@@ -542,11 +578,17 @@ export class LocalModelTunnelService {
     if (managed && current.state === 'starting') return
 
     const probe = await this.probeEndpoint(profile)
-    if (managed) {
+    // Re-read after the probe (MAR-2250). Probing takes real time, and a
+    // background start can finish — or fail — while it runs. Writing back a
+    // status computed from the pre-probe view would erase whatever happened
+    // in between, which is how a recorded failure turns into a bare "stopped".
+    const latest = this.getStatus(profile)
+    const managedNow = this.processes.get(profile.id)
+    if (managedNow) {
       this.setStatus(profile, {
         state: probe.available ? 'running' : 'failed',
         managed: true,
-        pid: managed.child.pid ?? null,
+        pid: managedNow.child.pid ?? null,
         error: probe.available
           ? null
           : (probe.error ?? 'Local endpoint health check failed.'),
@@ -579,7 +621,7 @@ export class LocalModelTunnelService {
       return
     }
 
-    if (current.state === 'external') {
+    if (latest.state === 'external') {
       this.setStatus(profile, {
         state: 'stopped',
         managed: false,
@@ -591,10 +633,10 @@ export class LocalModelTunnelService {
     }
 
     this.setStatus(profile, {
-      state: current.state === 'starting' ? 'stopped' : current.state,
+      state: latest.state === 'starting' ? 'stopped' : latest.state,
       managed: false,
       pid: null,
-      error: current.error,
+      error: latest.error,
       health: probe,
     })
   }
@@ -708,10 +750,26 @@ export class LocalModelTunnelService {
   startMonitoring(intervalMs = MONITOR_INTERVAL_MS): void {
     if (this.monitorTimer) return
     this.monitorTimer = setInterval(() => {
-      void this.refreshMonitoredStatuses().then(() => this.broadcast())
+      void this.refreshTick()
     }, intervalMs)
     this.monitorTimer.unref?.()
-    void this.refreshMonitoredStatuses().then(() => this.broadcast())
+    void this.refreshTick()
+  }
+
+  /**
+   * One monitor pass, unable to reject (MAR-2250). Probes answer rather than
+   * throw, so anything reaching here is a programming error rather than a
+   * state of the world — and the next tick re-reads everything from scratch, so
+   * the honest response is to let it try again rather than to crash the main
+   * process from a timer nobody is awaiting.
+   */
+  private async refreshTick(): Promise<void> {
+    try {
+      await this.refreshMonitoredStatuses()
+      await this.broadcast()
+    } catch {
+      // Deliberately swallowed: see above.
+    }
   }
 
   stopMonitoring(): void {
@@ -943,12 +1001,35 @@ function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
+/**
+ * The answer a probe gives when it could not run at all (MAR-2250).
+ *
+ * A probe is a question about the world, and "I could not tell" is a valid
+ * answer; throwing is not. The callers here are background loops nobody
+ * awaits, so a rejection does not fail an operation — it escapes into the
+ * process's unhandled-rejection channel, where it is attributed to whatever
+ * happened to be running.
+ */
+function probeCouldNotRun(
+  error: unknown,
+  probeKind: LocalModelTunnelProbeKind,
+): ProbeResult {
+  const reason = error instanceof Error ? error.message : String(error)
+  return {
+    ...unhealthyHealth(`Health probe could not run: ${reason}`),
+    probeKind,
+    available: false,
+    responding: false,
+    failureKind: 'network-error',
+  }
+}
+
 function probeTcp(
   host: string,
   port: number,
   timeoutMs: number,
 ): Promise<ProbeResult> {
-  return new Promise((resolve) => {
+  return new Promise<ProbeResult>((resolve) => {
     const startedAt = Date.now()
     const socket = connect({ host, port })
     const finish = (available: boolean) => {
@@ -974,11 +1055,11 @@ function probeTcp(
     socket.once('connect', () => finish(true))
     socket.once('timeout', () => finish(false))
     socket.once('error', () => finish(false))
-  })
+  }).catch((error) => probeCouldNotRun(error, 'tcp'))
 }
 
 function probeHealthUrl(url: string): Promise<ProbeResult> {
-  return new Promise((resolve) => {
+  return new Promise<ProbeResult>((resolve) => {
     const startedAt = Date.now()
     let parsed: URL
     try {
@@ -1046,7 +1127,7 @@ function probeHealthUrl(url: string): Promise<ProbeResult> {
       }),
     )
     req.end()
-  })
+  }).catch((error) => probeCouldNotRun(error, 'http'))
 }
 
 function unknownHealth(): LocalModelTunnelHealthStatus {
