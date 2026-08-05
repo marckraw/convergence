@@ -340,15 +340,14 @@ describe('ComposerContainer', () => {
     fireEvent.keyDown(textbox, { key: 'Enter', metaKey: true })
 
     const state = useSessionStore.getState()
-    expect(state.sendMessageToSession).toHaveBeenCalledWith(
-      'session-1',
-      'Try again in this session',
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      null,
-    )
+    expect(state.sendMessageToSession).toHaveBeenCalledWith({
+      sessionId: 'session-1',
+      text: 'Try again in this session',
+      attachmentIds: undefined,
+      skillSelections: undefined,
+      deliveryMode: undefined,
+      providerAccountId: null,
+    })
     expect(state.createAndStartSession).not.toHaveBeenCalled()
   })
 
@@ -377,11 +376,11 @@ describe('ComposerContainer', () => {
     fireEvent.keyDown(textbox, { key: 'Enter', metaKey: true })
 
     const state = useSessionStore.getState()
-    expect(state.sendMessageToSession).toHaveBeenCalledWith(
-      'session-1',
-      'Try again with planning',
-      undefined,
-      [
+    expect(state.sendMessageToSession).toHaveBeenCalledWith({
+      sessionId: 'session-1',
+      text: 'Try again with planning',
+      attachmentIds: undefined,
+      skillSelections: [
         {
           id: 'claude-code:global:planning',
           providerId: 'claude-code',
@@ -395,10 +394,9 @@ describe('ComposerContainer', () => {
           status: 'selected',
         },
       ],
-      undefined,
-      undefined,
-      null,
-    )
+      deliveryMode: undefined,
+      providerAccountId: null,
+    })
   })
 
   it('passes selected project context items when creating a new session from the composer', () => {
@@ -429,22 +427,22 @@ describe('ComposerContainer', () => {
 
     expect(
       useSessionStore.getState().createAndStartSession,
-    ).toHaveBeenCalledWith(
-      'project-1',
-      null,
-      'claude-code',
-      'claude-sonnet',
-      'medium',
-      'Use the linked chaperone project',
-      'Use the linked chaperone project',
-      undefined,
-      undefined,
-      ['ctx-chaperone'],
-      { preset: 'ask' },
-      null,
-      undefined,
-      null,
-    )
+    ).toHaveBeenCalledWith({
+      projectId: 'project-1',
+      workspaceId: null,
+      providerId: 'claude-code',
+      model: 'claude-sonnet',
+      effort: 'medium',
+      name: 'Use the linked chaperone project',
+      message: 'Use the linked chaperone project',
+      attachmentIds: undefined,
+      skillSelections: undefined,
+      contextItemIds: ['ctx-chaperone'],
+      permissionConfig: { preset: 'ask' },
+      serviceTier: null,
+      executionHost: undefined,
+      providerAccountId: null,
+    })
   })
 
   it('hides the remote host toggle when no remote execution host is configured', () => {
@@ -491,22 +489,22 @@ describe('ComposerContainer', () => {
 
     expect(
       useSessionStore.getState().createAndStartSession,
-    ).toHaveBeenCalledWith(
-      'project-1',
-      null,
-      'claude-code',
-      'claude-sonnet',
-      'medium',
-      'Run remotely',
-      'Run remotely',
-      undefined,
-      undefined,
-      undefined,
-      { preset: 'ask' },
-      null,
-      'remote',
-      null,
-    )
+    ).toHaveBeenCalledWith({
+      projectId: 'project-1',
+      workspaceId: null,
+      providerId: 'claude-code',
+      model: 'claude-sonnet',
+      effort: 'medium',
+      name: 'Run remotely',
+      message: 'Run remotely',
+      attachmentIds: undefined,
+      skillSelections: undefined,
+      contextItemIds: undefined,
+      permissionConfig: { preset: 'ask' },
+      serviceTier: null,
+      executionHost: 'remote',
+      providerAccountId: null,
+    })
   })
 
   it('creates a global session and hides project context controls', () => {
@@ -535,18 +533,18 @@ describe('ComposerContainer', () => {
 
     expect(
       useSessionStore.getState().createAndStartGlobalSession,
-    ).toHaveBeenCalledWith(
-      'claude-code',
-      'claude-sonnet',
-      'medium',
-      'General chat request',
-      'General chat request',
-      undefined,
-      undefined,
-      { preset: 'ask' },
-      null,
-      null,
-    )
+    ).toHaveBeenCalledWith({
+      providerId: 'claude-code',
+      model: 'claude-sonnet',
+      effort: 'medium',
+      name: 'General chat request',
+      message: 'General chat request',
+      attachmentIds: undefined,
+      skillSelections: undefined,
+      permissionConfig: { preset: 'ask' },
+      serviceTier: null,
+      providerAccountId: null,
+    })
     expect(
       useSessionStore.getState().createAndStartSession,
     ).not.toHaveBeenCalled()
@@ -574,18 +572,18 @@ describe('ComposerContainer', () => {
 
     expect(
       useSessionStore.getState().createAndStartGlobalSession,
-    ).toHaveBeenCalledWith(
-      'claude-code',
-      'claude-sonnet',
-      'medium',
-      'General chat request',
-      'Context\n\nGeneral chat request',
-      undefined,
-      undefined,
-      { preset: 'ask' },
-      null,
-      null,
-    )
+    ).toHaveBeenCalledWith({
+      providerId: 'claude-code',
+      model: 'claude-sonnet',
+      effort: 'medium',
+      name: 'General chat request',
+      message: 'Context\n\nGeneral chat request',
+      attachmentIds: undefined,
+      skillSelections: undefined,
+      permissionConfig: { preset: 'ask' },
+      serviceTier: null,
+      providerAccountId: null,
+    })
   })
 
   it('starts new Codex sessions with fast mode off by default', () => {
@@ -615,22 +613,22 @@ describe('ComposerContainer', () => {
 
     expect(
       useSessionStore.getState().createAndStartSession,
-    ).toHaveBeenCalledWith(
-      'project-1',
-      null,
-      'codex',
-      'gpt-5.5',
-      'medium',
-      'Use Codex default tier',
-      'Use Codex default tier',
-      undefined,
-      undefined,
-      undefined,
-      { preset: 'ask' },
-      'default',
-      undefined,
-      null,
-    )
+    ).toHaveBeenCalledWith({
+      projectId: 'project-1',
+      workspaceId: null,
+      providerId: 'codex',
+      model: 'gpt-5.5',
+      effort: 'medium',
+      name: 'Use Codex default tier',
+      message: 'Use Codex default tier',
+      attachmentIds: undefined,
+      skillSelections: undefined,
+      contextItemIds: undefined,
+      permissionConfig: { preset: 'ask' },
+      serviceTier: 'default',
+      executionHost: undefined,
+      providerAccountId: null,
+    })
   })
 
   it('can turn on fast mode for a new Codex session', () => {
@@ -657,22 +655,22 @@ describe('ComposerContainer', () => {
 
     expect(
       useSessionStore.getState().createAndStartSession,
-    ).toHaveBeenCalledWith(
-      'project-1',
-      null,
-      'codex',
-      'gpt-5.5',
-      'medium',
-      'Use Codex fast',
-      'Use Codex fast',
-      undefined,
-      undefined,
-      undefined,
-      { preset: 'ask' },
-      'fast',
-      undefined,
-      null,
-    )
+    ).toHaveBeenCalledWith({
+      projectId: 'project-1',
+      workspaceId: null,
+      providerId: 'codex',
+      model: 'gpt-5.5',
+      effort: 'medium',
+      name: 'Use Codex fast',
+      message: 'Use Codex fast',
+      attachmentIds: undefined,
+      skillSelections: undefined,
+      contextItemIds: undefined,
+      permissionConfig: { preset: 'ask' },
+      serviceTier: 'fast',
+      executionHost: undefined,
+      providerAccountId: null,
+    })
   })
 
   it('passes yolo permission config when selected for a new session', () => {
@@ -698,22 +696,22 @@ describe('ComposerContainer', () => {
 
     expect(
       useSessionStore.getState().createAndStartSession,
-    ).toHaveBeenCalledWith(
-      'project-1',
-      null,
-      'claude-code',
-      'claude-sonnet',
-      'medium',
-      'Run the migration',
-      'Run the migration',
-      undefined,
-      undefined,
-      undefined,
-      { preset: 'yolo' },
-      null,
-      undefined,
-      null,
-    )
+    ).toHaveBeenCalledWith({
+      projectId: 'project-1',
+      workspaceId: null,
+      providerId: 'claude-code',
+      model: 'claude-sonnet',
+      effort: 'medium',
+      name: 'Run the migration',
+      message: 'Run the migration',
+      attachmentIds: undefined,
+      skillSelections: undefined,
+      contextItemIds: undefined,
+      permissionConfig: { preset: 'yolo' },
+      serviceTier: null,
+      executionHost: undefined,
+      providerAccountId: null,
+    })
   })
 
   it('loads global skills when opening the skill picker in global chat', () => {
@@ -948,15 +946,15 @@ describe('ComposerContainer', () => {
 
     expect(
       useSessionStore.getState().sendMessageToSession,
-    ).toHaveBeenCalledWith(
-      'session-1',
-      'Check auth after this',
-      undefined,
-      undefined,
-      'follow-up',
-      undefined,
-      null,
-    )
+    ).toHaveBeenCalledWith({
+      sessionId: 'session-1',
+      text: 'Check auth after this',
+      attachmentIds: undefined,
+      skillSelections: undefined,
+      deliveryMode: 'follow-up',
+      interactionResponse: undefined,
+      providerAccountId: null,
+    })
   })
 
   it('keeps the composer disabled while running when no mode is supported', () => {
@@ -1036,15 +1034,15 @@ describe('ComposerContainer', () => {
 
     expect(
       useSessionStore.getState().sendMessageToSession,
-    ).toHaveBeenCalledWith(
-      'session-1',
-      'Use option B',
-      undefined,
-      undefined,
-      'answer',
-      undefined,
-      null,
-    )
+    ).toHaveBeenCalledWith({
+      sessionId: 'session-1',
+      text: 'Use option B',
+      attachmentIds: undefined,
+      skillSelections: undefined,
+      deliveryMode: 'answer',
+      interactionResponse: undefined,
+      providerAccountId: null,
+    })
     expect(screen.queryByRole('radiogroup')).not.toBeInTheDocument()
   })
 
@@ -1117,15 +1115,15 @@ describe('ComposerContainer', () => {
 
       expect(
         useSessionStore.getState().sendMessageToSession,
-      ).toHaveBeenCalledWith(
-        'session-1',
-        'continue on B',
-        undefined,
-        undefined,
-        undefined,
-        undefined,
-        'acct-b',
-      )
+      ).toHaveBeenCalledWith({
+        sessionId: 'session-1',
+        text: 'continue on B',
+        attachmentIds: undefined,
+        skillSelections: undefined,
+        deliveryMode: undefined,
+        interactionResponse: undefined,
+        providerAccountId: 'acct-b',
+      })
     })
 
     it('refuses to offer a local account to a remote session', async () => {
@@ -1193,15 +1191,15 @@ describe('ComposerContainer', () => {
       // and the two must not disagree about what is going to happen.
       expect(
         useSessionStore.getState().sendMessageToSession,
-      ).toHaveBeenCalledWith(
-        'session-1',
-        'run this remotely',
-        undefined,
-        undefined,
-        undefined,
-        undefined,
-        null,
-      )
+      ).toHaveBeenCalledWith({
+        sessionId: 'session-1',
+        text: 'run this remotely',
+        attachmentIds: undefined,
+        skillSelections: undefined,
+        deliveryMode: undefined,
+        interactionResponse: undefined,
+        providerAccountId: null,
+      })
     })
 
     it('shows the account that actually served the last turn', async () => {
@@ -1262,15 +1260,15 @@ describe('ComposerContainer', () => {
 
       expect(
         useSessionStore.getState().sendMessageToSession,
-      ).toHaveBeenCalledWith(
-        'session-1',
-        'should stay ambient',
-        undefined,
-        undefined,
-        undefined,
-        undefined,
-        null,
-      )
+      ).toHaveBeenCalledWith({
+        sessionId: 'session-1',
+        text: 'should stay ambient',
+        attachmentIds: undefined,
+        skillSelections: undefined,
+        deliveryMode: undefined,
+        interactionResponse: undefined,
+        providerAccountId: null,
+      })
     })
   })
 })

@@ -259,13 +259,13 @@ describe('useSessionStore', () => {
 
     const result = await useSessionStore
       .getState()
-      .createAndStartGlobalSession(
-        'claude-code',
-        'sonnet',
-        'medium',
-        'Global chat',
-        'Hello',
-      )
+      .createAndStartGlobalSession({
+        providerId: 'claude-code',
+        model: 'sonnet',
+        effort: 'medium',
+        name: 'Global chat',
+        message: 'Hello',
+      })
 
     expect(result?.id).toBe('global-session')
     expect(mockElectronAPI.session.create).toHaveBeenCalledWith({

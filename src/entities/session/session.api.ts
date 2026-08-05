@@ -1,7 +1,6 @@
 import type {
   ConversationItem,
   ConversationPatchEvent,
-  InteractionResponse,
   QueuedInputPatchEvent,
   SessionSummary,
   SessionQueuedInput,
@@ -10,12 +9,12 @@ import type {
   ProviderStatusInfo,
   ProviderUpdateResult,
   ReasoningEffort,
-  MidRunInputMode,
   NeedsYouDismissals,
   SessionContextKind,
   SessionPermissionConfig,
+  SendSessionMessageRequest,
+  StartSessionRequest,
 } from './session.types'
-import type { SkillSelection } from '@/shared/types/skill.types'
 
 export const sessionApi = {
   create: (input: {
@@ -55,38 +54,23 @@ export const sessionApi = {
 
   delete: (id: string): Promise<void> => window.electronAPI.session.delete(id),
 
-  start: (
-    id: string,
-    message: string,
-    attachmentIds?: string[],
-    skillSelections?: SkillSelection[],
-    contextItemIds?: string[],
-    providerAccountId?: string | null,
-  ): Promise<void> =>
-    window.electronAPI.session.start(id, {
-      text: message,
-      attachmentIds,
-      skillSelections,
-      contextItemIds,
-      providerAccountId,
+  start: (request: StartSessionRequest): Promise<void> =>
+    window.electronAPI.session.start(request.sessionId, {
+      text: request.message,
+      attachmentIds: request.attachmentIds,
+      skillSelections: request.skillSelections,
+      contextItemIds: request.contextItemIds,
+      providerAccountId: request.providerAccountId,
     }),
 
-  sendMessage: (
-    id: string,
-    text: string,
-    attachmentIds?: string[],
-    skillSelections?: SkillSelection[],
-    deliveryMode?: MidRunInputMode,
-    interactionResponse?: InteractionResponse,
-    providerAccountId?: string | null,
-  ): Promise<void> =>
-    window.electronAPI.session.sendMessage(id, {
-      text,
-      attachmentIds,
-      skillSelections,
-      deliveryMode,
-      interactionResponse,
-      providerAccountId,
+  sendMessage: (request: SendSessionMessageRequest): Promise<void> =>
+    window.electronAPI.session.sendMessage(request.sessionId, {
+      text: request.text,
+      attachmentIds: request.attachmentIds,
+      skillSelections: request.skillSelections,
+      deliveryMode: request.deliveryMode,
+      interactionResponse: request.interactionResponse,
+      providerAccountId: request.providerAccountId,
     }),
 
   compactContext: (id: string, instructions?: string): Promise<void> =>

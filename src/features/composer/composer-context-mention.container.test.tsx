@@ -512,7 +512,7 @@ describe('ComposerContainer — context mention picker', () => {
       useSessionStore.getState().createAndStartSession
     expect(createAndStartSession).toHaveBeenCalledTimes(1)
     const firstCall = vi.mocked(createAndStartSession).mock.calls[0]
-    expect(firstCall?.[8]).toEqual([
+    expect(firstCall?.[0].skillSelections).toEqual([
       expect.objectContaining({
         id: reviewSkill.id,
         providerId: 'claude-code',

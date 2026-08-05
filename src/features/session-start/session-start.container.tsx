@@ -84,18 +84,17 @@ export const SessionStart: FC<SessionStartProps> = ({
     ) {
       return
     }
-    createAndStartSession(
+    createAndStartSession({
       projectId,
       workspaceId,
-      selection.providerId,
-      selection.modelId,
-      selection.effort?.id ?? null,
-      name.trim(),
-      message.trim(),
-      undefined,
-      undefined,
-      selectedContextIds.length > 0 ? selectedContextIds : undefined,
-    )
+      providerId: selection.providerId,
+      model: selection.modelId,
+      effort: selection.effort?.id ?? null,
+      name: name.trim(),
+      message: message.trim(),
+      contextItemIds:
+        selectedContextIds.length > 0 ? selectedContextIds : undefined,
+    })
     setName('')
     setMessage('')
     setSelectedContextIds([])
