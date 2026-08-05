@@ -13,11 +13,44 @@ const LIST_OUTPUT = [
   'github: https://api.github.com/mcp - ✓ Connected',
 ].join('\n')
 
+/**
+ * What the CLI actually said when the Authorize button ran `mcp login`
+ * through pipes (Marcin's QA, installed build, 2026-08-05). Kept verbatim so
+ * any regression back to piped stdio reproduces the field failure here rather
+ * than in his hands.
+ */
+const PIPED_STDIO_REFUSAL =
+  'Couldn\'t complete authentication for "atlassian": stdin isn\'t a terminal, ' +
+  'so authentication can’t be completed here. Re-run in an interactive ' +
+  'terminal — e.g. `ssh -t` — and paste the redirect URL when prompted.'
+
 function fakeRunner(stdout = LIST_OUTPUT, code = 0, stderr = '') {
   const calls: ProviderAccountCommand[] = []
   const run = vi.fn(async (command: ProviderAccountCommand) => {
     calls.push(command)
     return { code, stdout, stderr }
+  })
+  return { run, calls }
+}
+
+/** The fake PTY seam, one level up: a terminal-shaped runner, no node-pty. */
+function fakeInteractiveRunner(output = '', code = 0) {
+  const calls: ProviderAccountCommand[] = []
+  const run = vi.fn(async (command: ProviderAccountCommand) => {
+    calls.push(command)
+    return { code, output }
+  })
+  return { run, calls }
+}
+
+/** A piped runner that answers the way the real CLI answers a pipe. */
+function refusingPipedRunner() {
+  const calls: ProviderAccountCommand[] = []
+  const run = vi.fn(async (command: ProviderAccountCommand) => {
+    calls.push(command)
+    return command.args[1] === 'login'
+      ? { code: 1, stdout: '', stderr: PIPED_STDIO_REFUSAL }
+      : { code: 0, stdout: LIST_OUTPUT, stderr: '' }
   })
   return { run, calls }
 }
@@ -47,11 +80,17 @@ describe('ProviderAccountMcpService', () => {
 
   function service(options: {
     run: ReturnType<typeof fakeRunner>['run']
+    runInteractive?: ReturnType<typeof fakeInteractiveRunner>['run']
     binaryPath?: string | null
   }) {
     return new ProviderAccountMcpService({
       repository,
       runCommand: options.run,
+      runInteractiveCommand:
+        options.runInteractive ??
+        (async () => {
+          throw new Error('the read path must never open a terminal')
+        }),
       baseEnv: { PATH: '/usr/local/bin', HOME },
       binaryPath:
         options.binaryPath === undefined
@@ -132,70 +171,140 @@ describe('ProviderAccountMcpService', () => {
   })
 
   describe('authorizeConnector', () => {
+    it('never asks a pipe to do what only a terminal can (PA11.1)', async () => {
+      // The field bug: `claude mcp login` refuses piped stdio outright, so the
+      // Authorize button failed for every server. The piped runner here answers
+      // exactly as the real CLI did — if login ever routes back through it,
+      // this test fails with Marcin's error rather than his afternoon.
+      const piped = refusingPipedRunner()
+      const terminal = fakeInteractiveRunner('Authenticated.', 0)
+
+      await service({
+        run: piped.run,
+        runInteractive: terminal.run,
+      }).authorizeConnector({ accountId: 'acct-a', serverName: 'atlassian' })
+
+      expect(piped.calls.map((call) => call.args)).not.toContainEqual([
+        'mcp',
+        'login',
+        'atlassian',
+      ])
+      expect(terminal.calls[0].args).toEqual(['mcp', 'login', 'atlassian'])
+    })
+
     it('authorizes through the account own credential slot', async () => {
       // The lying case: tokens landing in the default slot while the app
-      // reports the chosen account is now connected.
-      const runner = fakeRunner('', 0)
+      // reports the chosen account is now connected. Still guarded now that
+      // the command runs on a terminal.
+      const terminal = fakeInteractiveRunner('', 0)
 
-      await service({ run: runner.run }).authorizeConnector({
+      await service({
+        run: fakeRunner().run,
+        runInteractive: terminal.run,
+      }).authorizeConnector({
         accountId: 'acct-a',
         serverName: 'linear',
       })
 
-      expect(runner.calls[0].args).toEqual(['mcp', 'login', 'linear'])
-      expect(runner.calls[0].env.CLAUDE_CONFIG_DIR).toBe(CONFIG_DIR)
-      expect(runner.calls[0].env.CLAUDE_SECURESTORAGE_CONFIG_DIR).toBe(
+      expect(terminal.calls[0].args).toEqual(['mcp', 'login', 'linear'])
+      expect(terminal.calls[0].env.CLAUDE_CONFIG_DIR).toBe(CONFIG_DIR)
+      expect(terminal.calls[0].env.CLAUDE_SECURESTORAGE_CONFIG_DIR).toBe(
         CREDENTIAL_DIR,
       )
-      expect(runner.calls[0].cwd).toBe('/repo')
+      expect(terminal.calls[0].cwd).toBe('/repo')
     })
 
     it('uses the no-browser flow when the caller cannot open one', async () => {
-      const runner = fakeRunner('', 0)
+      const terminal = fakeInteractiveRunner('', 0)
 
-      await service({ run: runner.run }).authorizeConnector({
+      await service({
+        run: fakeRunner().run,
+        runInteractive: terminal.run,
+      }).authorizeConnector({
         accountId: 'acct-a',
         serverName: 'linear',
         canOpenBrowser: false,
       })
 
-      expect(runner.calls[0].args).toContain('--no-browser')
+      expect(terminal.calls[0].args).toContain('--no-browser')
     })
 
     it('reports a failed authorization instead of pretending it worked', async () => {
-      const runner = fakeRunner('', 1, 'browser closed')
+      const terminal = fakeInteractiveRunner('browser closed', 1)
 
       await expect(
-        service({ run: runner.run }).authorizeConnector({
+        service({
+          run: fakeRunner().run,
+          runInteractive: terminal.run,
+        }).authorizeConnector({
           accountId: 'acct-a',
           serverName: 'linear',
         }),
       ).rejects.toThrow(/browser closed/)
     })
 
-    it('refuses to authorize for an account that cannot serve turns', async () => {
-      repository.setStatus('acct-a', 'unavailable', null)
-      const runner = fakeRunner('', 0)
+    it('believes the terminal over a zero exit code', async () => {
+      // A CLI that prints a refusal and exits 0 would otherwise flip the row to
+      // connected for an account that authorized nothing.
+      const terminal = fakeInteractiveRunner(PIPED_STDIO_REFUSAL, 0)
 
       await expect(
-        service({ run: runner.run }).authorizeConnector({
+        service({
+          run: fakeRunner().run,
+          runInteractive: terminal.run,
+        }).authorizeConnector({
+          accountId: 'acct-a',
+          serverName: 'atlassian',
+        }),
+      ).rejects.toThrow(/Authorizing atlassian failed/)
+    })
+
+    it('names the server when the ceremony never finishes', async () => {
+      const terminal = vi.fn(async () => {
+        throw new Error('timed out after 300s')
+      })
+
+      await expect(
+        service({
+          run: fakeRunner().run,
+          runInteractive: terminal,
+        }).authorizeConnector({
+          accountId: 'acct-a',
+          serverName: 'atlassian',
+        }),
+      ).rejects.toThrow(/Authorizing atlassian failed: timed out after 300s/)
+    })
+
+    it('refuses to authorize for an account that cannot serve turns', async () => {
+      repository.setStatus('acct-a', 'unavailable', null)
+      const terminal = fakeInteractiveRunner('', 0)
+
+      await expect(
+        service({
+          run: fakeRunner().run,
+          runInteractive: terminal.run,
+        }).authorizeConnector({
           accountId: 'acct-a',
           serverName: 'linear',
         }),
       ).rejects.toThrow(/unavailable/)
-      expect(runner.run).not.toHaveBeenCalled()
+      expect(terminal.run).not.toHaveBeenCalled()
     })
 
     it('refuses when Claude Code is not on PATH', async () => {
-      const runner = fakeRunner('', 0)
+      const terminal = fakeInteractiveRunner('', 0)
 
       await expect(
-        service({ run: runner.run, binaryPath: null }).authorizeConnector({
+        service({
+          run: fakeRunner().run,
+          runInteractive: terminal.run,
+          binaryPath: null,
+        }).authorizeConnector({
           accountId: 'acct-a',
           serverName: 'linear',
         }),
       ).rejects.toThrow(/not available on PATH/)
-      expect(runner.run).not.toHaveBeenCalled()
+      expect(terminal.run).not.toHaveBeenCalled()
     })
   })
 })

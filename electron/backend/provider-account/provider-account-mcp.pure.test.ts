@@ -3,6 +3,7 @@ import {
   buildClaudeMcpListCommand,
   buildClaudeMcpLoginCommand,
   describeMcpAuthorizationNote,
+  interpretClaudeMcpLoginOutcome,
   matchClaudeMcpAuthFailure,
 } from './provider-account-mcp.pure'
 
@@ -183,5 +184,58 @@ describe('describeMcpAuthorizationNote', () => {
 
     expect(note).toMatch(/cannot open a browser/)
     expect(note).toMatch(/Settings/)
+  })
+})
+
+describe('interpretClaudeMcpLoginOutcome', () => {
+  const ESC = String.fromCharCode(0x1b)
+
+  it('accepts a clean exit as the authorization it looks like', () => {
+    expect(
+      interpretClaudeMcpLoginOutcome({
+        exitCode: 0,
+        output: `${ESC}[32mAuthenticated with atlassian${ESC}[0m\n`,
+      }),
+    ).toEqual({ ok: true, message: null })
+  })
+
+  it('believes an unfamiliar success rather than blocking the refresh', () => {
+    // The row is re-read from `mcp list` afterwards, so the provider gets the
+    // last word; refusing to recognise new wording would only hide it.
+    expect(
+      interpretClaudeMcpLoginOutcome({
+        exitCode: 0,
+        output: 'some future wording nobody has seen yet',
+      }).ok,
+    ).toBe(true)
+  })
+
+  it('refuses to call a printed refusal a success (the lying case)', () => {
+    // The wording is verbatim from the field; the zero exit is the hypothetical
+    // that would otherwise lie — tokens nowhere, row flipped to connected.
+    const outcome = interpretClaudeMcpLoginOutcome({
+      exitCode: 0,
+      output:
+        'Couldn\u2019t complete authentication for "atlassian": stdin isn\u2019t a terminal.',
+    })
+
+    expect(outcome.ok).toBe(false)
+    expect(outcome.message).toMatch(/stdin isn/)
+  })
+
+  it('quotes the terminal when the command exits non-zero', () => {
+    const outcome = interpretClaudeMcpLoginOutcome({
+      exitCode: 1,
+      output: 'connecting\nbrowser closed before approval\n',
+    })
+
+    expect(outcome.ok).toBe(false)
+    expect(outcome.message).toContain('browser closed before approval')
+  })
+
+  it('falls back to the exit code when the terminal said nothing printable', () => {
+    expect(
+      interpretClaudeMcpLoginOutcome({ exitCode: 7, output: `${ESC}[2K   ` }),
+    ).toEqual({ ok: false, message: 'exit code 7' })
   })
 })

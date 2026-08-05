@@ -4,11 +4,13 @@ import type { McpServerStatus } from '../mcp/mcp.types'
 import {
   buildClaudeMcpListCommand,
   buildClaudeMcpLoginCommand,
+  interpretClaudeMcpLoginOutcome,
 } from './provider-account-mcp.pure'
+import type { ProviderAccountCommandRunner } from './provider-account-enrolment.service'
 import type {
-  ProviderAccountCommandResult,
-  ProviderAccountCommandRunner,
-} from './provider-account-enrolment.service'
+  InteractiveCommandResult,
+  ProviderAccountInteractiveRunner,
+} from './provider-account-pty-runner'
 import { resolveAccountForTurn } from './provider-account-resolution.pure'
 import type { ProviderAccountRepository } from './provider-account.repository'
 
@@ -23,6 +25,10 @@ import type { ProviderAccountRepository } from './provider-account.repository'
  * Side effects arrive through the same seam PA3 established — the real
  * `claude mcp login` opens a browser and writes to a keychain slot, so it is
  * only ever run by a person clicking authorize.
+ *
+ * The two questions need different kinds of child process, which is why there
+ * are two runners here rather than one: reading a list is a pipe's job, while
+ * authorizing is a terminal's — `claude mcp login` refuses piped stdio (PA11.1).
  */
 
 export interface ProviderAccountConnector {
@@ -65,7 +71,13 @@ const defaultRunCommand: ProviderAccountCommandRunner = (command) =>
 
 export interface ProviderAccountMcpDeps {
   repository: ProviderAccountRepository
+  /** Reads. A pipe is the right shape for `mcp list`. */
   runCommand?: ProviderAccountCommandRunner
+  /**
+   * Writes. Required rather than defaulted, so no future call site can
+   * accidentally authorize through pipes — the failure that shipped once.
+   */
+  runInteractiveCommand: ProviderAccountInteractiveRunner
   baseEnv?: NodeJS.ProcessEnv
   binaryPath?: string | null
   /**
@@ -78,6 +90,7 @@ export interface ProviderAccountMcpDeps {
 export class ProviderAccountMcpService {
   private readonly repository: ProviderAccountRepository
   private readonly runCommand: ProviderAccountCommandRunner
+  private readonly runInteractiveCommand: ProviderAccountInteractiveRunner
   private readonly baseEnv: NodeJS.ProcessEnv
   private readonly workingDirectory: () => string
   private binaryPath: string | null
@@ -85,6 +98,7 @@ export class ProviderAccountMcpService {
   constructor(deps: ProviderAccountMcpDeps) {
     this.repository = deps.repository
     this.runCommand = deps.runCommand ?? defaultRunCommand
+    this.runInteractiveCommand = deps.runInteractiveCommand
     this.baseEnv = deps.baseEnv ?? process.env
     this.binaryPath = deps.binaryPath ?? null
     this.workingDirectory = deps.workingDirectory ?? (() => process.cwd())
@@ -156,12 +170,18 @@ export class ProviderAccountMcpService {
    * tokens it writes are namespaced to this account's slot and survive every
    * future swap, which is the whole point — and why running it under the wrong
    * environment would leave the account silently unauthorized.
+   *
+   * Runs on a terminal because the provider demands one: under pipes the CLI
+   * answers "stdin isn't a terminal, so authentication can't be completed
+   * here" and nothing is authorized (PA11.1). The browser handoff needs no
+   * keystrokes, so nothing is written to it — the PTY exists to satisfy the
+   * check, not to be typed into.
    */
   async authorizeConnector(input: {
     accountId: string | null
     serverName: string
     canOpenBrowser?: boolean
-  }): Promise<ProviderAccountCommandResult> {
+  }): Promise<InteractiveCommandResult> {
     const binaryPath = this.binaryPath
     if (!binaryPath) {
       throw new Error(
@@ -169,22 +189,36 @@ export class ProviderAccountMcpService {
       )
     }
 
-    const result = await this.runCommand(
-      buildClaudeMcpLoginCommand({
-        binaryPath,
-        account: this.resolveAccount(input.accountId),
-        serverName: input.serverName,
-        baseEnv: this.baseEnv,
-        canOpenBrowser: input.canOpenBrowser,
-        workingDirectory: this.workingDirectory(),
-      }),
-    )
+    const command = buildClaudeMcpLoginCommand({
+      binaryPath,
+      account: this.resolveAccount(input.accountId),
+      serverName: input.serverName,
+      baseEnv: this.baseEnv,
+      canOpenBrowser: input.canOpenBrowser,
+      workingDirectory: this.workingDirectory(),
+    })
 
-    if (result.code !== 0) {
+    let result: InteractiveCommandResult
+    try {
+      result = await this.runInteractiveCommand(command)
+    } catch (error) {
+      // A terminal that never opened or a ceremony nobody finished. Either way
+      // the person needs to know which connector is still unauthorized.
       throw new Error(
         `Authorizing ${input.serverName} failed: ${
-          result.stderr.trim() || `exit code ${result.code}`
+          error instanceof Error ? error.message : String(error)
         }`,
+        { cause: error },
+      )
+    }
+
+    const outcome = interpretClaudeMcpLoginOutcome({
+      exitCode: result.code,
+      output: result.output,
+    })
+    if (!outcome.ok) {
+      throw new Error(
+        `Authorizing ${input.serverName} failed: ${outcome.message}`,
       )
     }
 

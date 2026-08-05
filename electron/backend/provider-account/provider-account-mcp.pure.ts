@@ -1,6 +1,10 @@
 import { buildClaudeAccountEnv } from './provider-account-env.pure'
 import type { ClaudeAccountEnvTarget } from './provider-account-env.pure'
 import type { ProviderAccountCommand } from './provider-account-enrolment.pure'
+import {
+  stripTerminalControlSequences,
+  summarizeTerminalOutput,
+} from './provider-account-pty-runner.pure'
 
 /**
  * Per-account MCP connector authorization (ADR 0007, PA11).
@@ -75,6 +79,68 @@ export function buildClaudeMcpLoginCommand(
       account: input.account,
     }),
     ...(input.workingDirectory ? { cwd: input.workingDirectory } : {}),
+  }
+}
+
+/**
+ * Wordings that mean the login did not authorize anything, as data (PA11.1).
+ *
+ * A terminal has one stream, so a failure arrives as text rather than as
+ * something written to stderr — and a CLI that prints an error can still exit
+ * 0. Both halves are checked because the failure this guards against is the
+ * lying one: reporting success while the account stays unauthorized.
+ *
+ * The first two entries are verbatim from the field (Marcin's QA on the
+ * installed build, 2026-08-05). **Flagged for live verification:** the rest is
+ * standard OAuth vocabulary; a miss here degrades to trusting the exit code,
+ * which is the pre-PTY behaviour rather than a wrong claim.
+ */
+export const CLAUDE_MCP_LOGIN_FAILURE_PATTERNS: readonly RegExp[] = [
+  // Both apostrophes, because the CLI types curly ones and a straight-quote
+  // pattern silently matches nothing — which would fail in the lying direction.
+  /couldn['’]?t complete authentication/i,
+  /stdin isn['’]?t a terminal/i,
+  /authentication (?:failed|was cancell?ed)/i,
+  /failed to authenticate/i,
+  /authorization failed/i,
+]
+
+export interface ClaudeMcpLoginOutcome {
+  ok: boolean
+  /** What to tell the person. Null when the authorization worked. */
+  message: string | null
+}
+
+/**
+ * Did this login actually authorize the server?
+ *
+ * Reads the terminal the way a person would: the exit code first, then what
+ * was on screen. Anything unrecognised counts as success, because the caller
+ * re-reads `mcp list` afterwards — the row's truth comes from the provider,
+ * not from this guess, and refusing to believe an unfamiliar success would
+ * block that refresh.
+ */
+export function interpretClaudeMcpLoginOutcome(input: {
+  exitCode: number
+  output: string
+}): ClaudeMcpLoginOutcome {
+  const text = stripTerminalControlSequences(input.output)
+  const saidItFailed = CLAUDE_MCP_LOGIN_FAILURE_PATTERNS.some((pattern) =>
+    pattern.test(text),
+  )
+
+  if (input.exitCode === 0 && !saidItFailed) {
+    return { ok: true, message: null }
+  }
+
+  const tail = summarizeTerminalOutput(input.output)
+  return {
+    ok: false,
+    message:
+      tail ||
+      (input.exitCode === 0
+        ? 'the command reported an authentication failure'
+        : `exit code ${input.exitCode}`),
   }
 }
 

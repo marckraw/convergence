@@ -90,6 +90,7 @@ import { ProviderAccountRepository } from '../backend/provider-account/provider-
 import { ProviderAccountEnrolmentService } from '../backend/provider-account/provider-account-enrolment.service'
 import { ProviderAccountAttestationService } from '../backend/provider-account/provider-account-attestation.service'
 import { ProviderAccountMcpService } from '../backend/provider-account/provider-account-mcp.service'
+import { createPtyCommandRunner } from '../backend/provider-account/provider-account-pty-runner'
 import { registerProviderAccountIpcHandlers } from '../backend/provider-account/provider-account.ipc'
 import {
   resolveAccountForTurn,
@@ -365,8 +366,15 @@ async function startApp(): Promise<void> {
     const account = providerAccountRepository.get(accountId)
     return account ? (account.email ?? account.label) : null
   }
+  /**
+   * One PTY factory for the app: terminals and the connector-authorize
+   * ceremony both need real terminals, and node-pty is a native module worth
+   * loading exactly once, at the composition root.
+   */
+  const ptyFactory = createNodePtyFactory()
   const providerAccountMcpService = new ProviderAccountMcpService({
     repository: providerAccountRepository,
+    runInteractiveCommand: createPtyCommandRunner({ ptyFactory }),
   })
   /** The same guard for Codex, whose account is a `CODEX_HOME` (PA9). */
   const resolveCodexAccountForSession = (
@@ -739,10 +747,7 @@ async function startApp(): Promise<void> {
     },
   )
 
-  const terminalService = new TerminalService(
-    createNodePtyFactory(),
-    broadcastToRenderers,
-  )
+  const terminalService = new TerminalService(ptyFactory, broadcastToRenderers)
   terminalService.setSessionLastTerminalExitObserver(
     ({ sessionId, exitCode }) =>
       sessionService.markShellSessionExited(sessionId, exitCode),
