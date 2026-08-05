@@ -1,5 +1,28 @@
 # convergence
 
+## 0.45.11
+
+### Patch Changes
+
+- 5e843ec: The Authorize button on a connector now works (MAR-2251, PA11.1). Claude Code
+  refuses to authenticate over piped input — "stdin isn't a terminal" — so
+  Settings → Accounts → Connectors ran a ceremony that could never finish. The
+  authorization now runs on a real terminal, still under the selected account's
+  own environment, so the browser opens, the tokens land in that account's slot,
+  and the row is re-read from the provider afterwards rather than assumed. A
+  login that prints a refusal is reported as a failure even when it exits
+  cleanly, and one nobody finishes is stopped after five minutes with the
+  connector named.
+- 58ed6d4: Local model tunnels no longer lose a start failure, or take it out on the
+  main process (MAR-2250). Starting a tunnel keeps working in the background
+  after the UI gets its "starting" snapshot, and that background work held no
+  failure handler: anything it threw became an unhandled rejection while the
+  profile sat on "starting" forever. It now lands in the profile's status,
+  named. Health probes answer "I could not tell" instead of throwing when their
+  transport fails, and a monitor pass that overlaps a status change no longer
+  writes its stale view back over it — a failure recorded mid-probe used to
+  come back as a bare "stopped" with no error at all.
+
 ## 0.45.10
 
 ### Patch Changes
