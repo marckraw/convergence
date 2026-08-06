@@ -19,6 +19,7 @@ import {
 } from 'lucide-react'
 import { Button } from '@/shared/ui/button'
 import { Markdown } from '@/shared/ui/markdown.container'
+import { ANNOTATION_MESSAGE_ID_ATTRIBUTE } from '@/features/response-annotations'
 import {
   AttachmentChip,
   AttachmentInlinePreview,
@@ -189,11 +190,25 @@ export const ConversationItemView: FC<ConversationItemViewProps> = ({
                   </span>
                 ) : null}
               </ConversationItemHeader>
-              <Markdown
-                className="mt-1 text-foreground"
-                content={viewModel.displayText}
-                size="sm"
-              />
+              {/*
+                Marks this message as annotatable (RA2). Only when it is
+                finished: a streaming message has no attribute, so selecting
+                inside it offers nothing — ruling 5 enforced by absence rather
+                than by a condition somebody has to remember. The wrapper sits
+                around the message text alone so a quote's surrounding context
+                is the agent's words, not the header's.
+              */}
+              <div
+                {...(entry.state === 'complete'
+                  ? { [ANNOTATION_MESSAGE_ID_ATTRIBUTE]: entry.id }
+                  : {})}
+              >
+                <Markdown
+                  className="mt-1 text-foreground"
+                  content={viewModel.displayText}
+                  size="sm"
+                />
+              </div>
             </div>
           </div>
         </ConversationItemShell>

@@ -1,8 +1,15 @@
 import { describe, expect, it } from 'vitest'
 import { DEFAULT_PROJECT_SETTINGS } from '../project'
 import type { Project } from '../project/project.types'
-import type { NeedsYouDismissals, Session } from './session.types'
-import { selectGlobalStatus } from './session.selectors.pure'
+import type {
+  ConversationItem,
+  NeedsYouDismissals,
+  Session,
+} from './session.types'
+import {
+  selectGlobalStatus,
+  selectLatestAgentMessageId,
+} from './session.selectors.pure'
 
 function makeSession(overrides: Partial<Session>): Session {
   return {
@@ -235,5 +242,69 @@ describe('selectGlobalStatus', () => {
       'global-1',
     ])
     expect(result.byProject).toEqual([])
+  })
+})
+
+describe('selectLatestAgentMessageId', () => {
+  function message(overrides: {
+    id: string
+    actor?: 'user' | 'assistant'
+    state?: 'streaming' | 'complete' | 'error'
+    kind?: 'message' | 'thinking'
+  }) {
+    return {
+      id: overrides.id,
+      sessionId: 'session-1',
+      sequence: 1,
+      turnId: 'turn-1',
+      kind: overrides.kind ?? ('message' as const),
+      state: overrides.state ?? ('complete' as const),
+      actor: overrides.actor ?? ('assistant' as const),
+      text: 'text',
+      createdAt: '2026-08-06T10:00:00.000Z',
+      updatedAt: '2026-08-06T10:00:00.000Z',
+      providerMeta: {
+        providerId: 'claude-code',
+        providerItemId: null,
+        providerEventType: 'assistant',
+      },
+    } as unknown as ConversationItem
+  }
+
+  it('finds the newest finished agent message', () => {
+    expect(
+      selectLatestAgentMessageId([
+        message({ id: 'older' }),
+        message({ id: 'newest' }),
+      ]),
+    ).toBe('newest')
+  })
+
+  it('ignores a message still streaming', () => {
+    // Quoting half a sentence the model has not finished writing would put
+    // words in its mouth.
+    expect(
+      selectLatestAgentMessageId([
+        message({ id: 'finished' }),
+        message({ id: 'in-flight', state: 'streaming' }),
+      ]),
+    ).toBe('finished')
+  })
+
+  it('ignores the human own messages and the agent thinking', () => {
+    expect(
+      selectLatestAgentMessageId([
+        message({ id: 'agent' }),
+        message({ id: 'mine', actor: 'user' }),
+        message({ id: 'thought', kind: 'thinking' }),
+      ]),
+    ).toBe('agent')
+  })
+
+  it('answers nothing for a conversation with no agent message yet', () => {
+    expect(selectLatestAgentMessageId([])).toBeNull()
+    expect(
+      selectLatestAgentMessageId([message({ id: 'mine', actor: 'user' })]),
+    ).toBeNull()
   })
 })

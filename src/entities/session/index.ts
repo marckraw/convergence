@@ -73,7 +73,10 @@ export type {
   ResolvedProviderSelection,
   StoredProviderDefaults,
 } from './provider-selection.pure'
-export { selectGlobalStatus } from './session.selectors.pure'
+export {
+  selectGlobalStatus,
+  selectLatestAgentMessageId,
+} from './session.selectors.pure'
 export {
   formatSessionAttentionLabel,
   summarizeAttentionRequests,
