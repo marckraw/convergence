@@ -44,6 +44,7 @@ describe('compileAnnotationsIntoPrompt', () => {
         'Responding to specific parts of your message:',
         '',
         '> The migration runs in a single transaction.',
+        '',
         'This is the part I disagree with.',
       ].join('\n'),
     )
@@ -77,9 +78,11 @@ describe('compileAnnotationsIntoPrompt', () => {
         'Responding to specific parts of your message:',
         '',
         '> Paragraph one.',
+        '',
         'Answering the top of the message.',
         '',
         '> Paragraph two.',
+        '',
         'Answering the bottom of the message.',
       ].join('\n'),
     )
@@ -105,6 +108,7 @@ describe('compileAnnotationsIntoPrompt', () => {
         'Responding to specific parts of your message:',
         '',
         '> I rewrote the scheduler.',
+        '',
         '👍',
       ].join('\n'),
     )
@@ -131,10 +135,15 @@ describe('compileAnnotationsIntoPrompt', () => {
         'Responding to specific parts of your message:',
         '',
         '> The newest claim.',
+        '',
         'Agreed.',
         '',
+        // The label hugs its quote with no blank line between them: a
+        // blockquote may legally interrupt a paragraph, so this still renders
+        // as a label above a quote rather than as one absorbed block.
         '(from your earlier message)',
         '> Something said a while back.',
+        '',
         'Still bothers me.',
       ].join('\n'),
     )
@@ -173,6 +182,7 @@ describe('compileAnnotationsIntoPrompt', () => {
         '> First line.',
         '>',
         '> Third line, after a blank one.',
+        '',
         'All of this.',
       ].join('\n'),
     )
@@ -205,6 +215,7 @@ describe('compileAnnotationsIntoPrompt', () => {
         'Responding to specific parts of your message:',
         '',
         '> A claim.',
+        '',
         'Why?',
         '',
         'Also, please rerun the tests.',
