@@ -80,7 +80,14 @@ function compileBlock(
   // An emoji reaction is a comment with an emoji body (ruling 2), so both
   // kinds render identically here — no separate path to keep in step.
   const body = annotation.body.trim()
-  if (body) lines.push(body)
+  if (body) {
+    // The blank line is load-bearing (MAR-2280). Without it, markdown's lazy
+    // continuation absorbs the response into the blockquote above, and the
+    // human's words render — and read, to a markdown-literate model — as part
+    // of the agent's own quoted sentence. Found in the field, by Marcin,
+    // because nobody had rendered the format before shipping it.
+    lines.push('', body)
+  }
 
   return lines.join('\n')
 }

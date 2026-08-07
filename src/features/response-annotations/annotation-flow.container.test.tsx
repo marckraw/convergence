@@ -258,6 +258,7 @@ describe('response annotations, end to end', () => {
         'Responding to specific parts of your message:',
         '',
         '> runs in a single transaction',
+        '',
         'This is the part that worries me.',
         '',
         'Otherwise it looks good.',
@@ -278,6 +279,7 @@ describe('response annotations, end to end', () => {
         'Responding to specific parts of your message:',
         '',
         '> retries back off exponentially',
+        '',
         'Good.',
       ].join('\n'),
     )
@@ -295,6 +297,7 @@ describe('response annotations, end to end', () => {
         'Responding to specific parts of your message:',
         '',
         '> I rewrote the scheduler',
+        '',
         '👍',
       ].join('\n'),
     )
@@ -315,10 +318,12 @@ describe('response annotations, end to end', () => {
         'Responding to specific parts of your message:',
         '',
         '> The migration',
+        '',
         'Here.',
         '',
         '(from your earlier message)',
         '> warmed on boot',
+        '',
         'And this, from before.',
       ].join('\n'),
     )
