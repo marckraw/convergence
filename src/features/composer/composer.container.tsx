@@ -14,6 +14,13 @@ import {
   withCodexApprovalPolicy,
   withCodexSandbox,
 } from '@/entities/session'
+import { selectLatestAgentMessageId } from '@/entities/session'
+import {
+  compileAnnotationsIntoPrompt,
+  selectPendingAnnotations,
+  useResponseAnnotationStore,
+  useSessionAnnotations,
+} from '@/entities/response-annotation'
 import { useAppSettingsStore } from '@/entities/app-settings'
 import { useDialogStore } from '@/entities/dialog'
 import {
@@ -184,6 +191,43 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
   )
   const sessionList = context.kind === 'project' ? sessions : globalChatSessions
   const activeSession = sessionList.find((s) => s.id === activeSessionId)
+  const annotations = useSessionAnnotations(activeSessionId)
+  const markPendingAnnotationsAsSent = useResponseAnnotationStore(
+    (s) => s.markPendingAsSent,
+  )
+  /**
+   * Which message counts as "the latest" when annotations compile (RA2).
+   *
+   * Selected rather than subscribed-to wholesale: the conversation array gets
+   * a new identity on every streamed token, and the composer must not
+   * re-render for each one. This returns a string, so React bails out unless
+   * the answer actually changes.
+   */
+  const latestAgentMessageId = useSessionStore((s) => {
+    const conversationSessionId =
+      context.kind === 'global'
+        ? s.activeGlobalConversationSessionId
+        : s.activeConversationSessionId
+    // A conversation belonging to some other session says nothing about this
+    // one — better no label than a label computed from the wrong transcript.
+    if (!activeSessionId || conversationSessionId !== activeSessionId) {
+      return null
+    }
+    return selectLatestAgentMessageId(
+      context.kind === 'global'
+        ? s.activeGlobalConversation
+        : s.activeConversation,
+    )
+  })
+  const pendingAnnotations = useMemo(
+    () => selectPendingAnnotations(annotations),
+    [annotations],
+  )
+  const markAnnotationsSent = useCallback(() => {
+    if (activeSessionId && pendingAnnotations.length > 0) {
+      markPendingAnnotationsAsSent(activeSessionId)
+    }
+  }, [activeSessionId, markPendingAnnotationsAsSent, pendingAnnotations.length])
   const activeProvider = providers.find(
     (p) => p.id === activeSession?.providerId,
   )
@@ -847,8 +891,21 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
   const handleSubmit = useCallback(() => {
     const trimmed = value.trim()
     if (!selection.providerId || !selection.modelId) return
-    if (!trimmed && attachments.length === 0) return
+    // Quotes are a message on their own: selecting three passages and hitting
+    // send without typing anything is a complete thought (RA2).
+    if (!trimmed && attachments.length === 0 && pendingAnnotations.length === 0)
+      return
     if (!capabilityResult.ok) return
+
+    // The one place annotations become text. Everything downstream — the
+    // transcript, the provider, the turn record — sees an ordinary message,
+    // which is what "honest wire" means: no side channel, nothing the model
+    // was told that Marcin cannot read back afterwards.
+    const text = compileAnnotationsIntoPrompt(
+      pendingAnnotations,
+      trimmed,
+      latestAgentMessageId,
+    )
 
     const attachmentIds = attachments.map((a) => a.id)
     const hasAttachments = attachmentIds.length > 0
@@ -865,12 +922,13 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
       // optional positional arguments (MAR-2227); named fields omit them.
       sendMessageToSession({
         sessionId: activeSession.id,
-        text: trimmed,
+        text,
         attachmentIds: hasAttachments ? attachmentIds : undefined,
         skillSelections,
         deliveryMode: mode,
         providerAccountId: effectiveProviderAccountId,
       })
+      markAnnotationsSent()
       setValue('')
       setSelectedSkills([])
       clearDraft()
@@ -883,8 +941,8 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
     if (context.kind === 'global') {
       void (async () => {
         const startMessage = prepareNewSessionMessage
-          ? prepareNewSessionMessage(trimmed)
-          : trimmed
+          ? prepareNewSessionMessage(text)
+          : text
         const session = await createAndStartGlobalSession({
           providerId: selection.providerId,
           model: selection.modelId,
@@ -901,6 +959,7 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
           await onGlobalSessionCreated?.(session)
         }
       })()
+      markAnnotationsSent()
     } else {
       createAndStartSession({
         projectId: context.projectId,
@@ -909,7 +968,7 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
         model: selection.modelId,
         effort: selection.effort?.id ?? null,
         name,
-        message: trimmed,
+        message: text,
         attachmentIds: hasAttachments ? attachmentIds : undefined,
         skillSelections,
         contextItemIds,
@@ -918,6 +977,7 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
         executionHost: effectiveRunOnRemoteHost ? 'remote' : undefined,
         providerAccountId: effectiveProviderAccountId,
       })
+      markAnnotationsSent()
     }
     setValue('')
     setSelectedSkills([])
@@ -948,6 +1008,9 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
     serviceTier,
     effectiveRunOnRemoteHost,
     effectiveProviderAccountId,
+    pendingAnnotations,
+    latestAgentMessageId,
+    markAnnotationsSent,
   ])
 
   const handleProviderChange = (nextProviderId: string) => {
@@ -1231,6 +1294,7 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
         }
         disabled={isComposerDisabled}
         attachments={attachments}
+        hasPendingAnnotations={pendingAnnotations.length > 0}
         attachmentErrorByAttachmentId={capabilityResult.errorByAttachmentId}
         hasAttachmentErrors={!capabilityResult.ok}
         attachmentsIngestInFlight={ingestInFlight}

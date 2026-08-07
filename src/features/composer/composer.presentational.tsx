@@ -90,6 +90,12 @@ interface ComposerProps {
   placeholder?: string
   disabled?: boolean
   attachments: Attachment[]
+  /**
+   * Response annotations waiting in the tray above this composer. They are
+   * message content too, so a send with an empty box and a full tray is a
+   * complete thought rather than an empty one (RA2).
+   */
+  hasPendingAnnotations?: boolean
   attachmentErrorByAttachmentId: Record<string, string>
   hasAttachmentErrors: boolean
   attachmentsIngestInFlight: boolean
@@ -185,6 +191,7 @@ export const Composer: FC<ComposerProps> = ({
   selectionDisabled = false,
   placeholder = 'Ask anything, @tag files/folders, :: for injections...',
   disabled = false,
+  hasPendingAnnotations = false,
   attachments,
   attachmentErrorByAttachmentId,
   hasAttachmentErrors,
@@ -369,7 +376,7 @@ export const Composer: FC<ComposerProps> = ({
     if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
       e.preventDefault()
       if (
-        (value.trim() || attachments.length > 0) &&
+        (value.trim() || attachments.length > 0 || hasPendingAnnotations) &&
         !disabled &&
         !hasAttachmentErrors
       ) {
@@ -428,7 +435,7 @@ export const Composer: FC<ComposerProps> = ({
     !disabled &&
     !hasAttachmentErrors &&
     !attachmentsIngestInFlight &&
-    (value.trim().length > 0 || attachments.length > 0)
+    (value.trim().length > 0 || attachments.length > 0 || hasPendingAnnotations)
 
   const modeLabels: Partial<Record<MidRunInputMode, string>> = {
     answer: 'Answer',

@@ -1,5 +1,9 @@
 import type { Project } from '../project/project.types'
-import type { NeedsYouDismissals, SessionSummary } from './session.types'
+import type {
+  ConversationItem,
+  NeedsYouDismissals,
+  SessionSummary,
+} from './session.types'
 
 export interface ProjectActivity {
   projectId: string
@@ -127,4 +131,30 @@ function mostRecentUpdatedAt(activity: ProjectActivity): string {
   return candidates.reduce((latest, session) =>
     session.updatedAt.localeCompare(latest.updatedAt) > 0 ? session : latest,
   ).updatedAt
+}
+
+/**
+ * The newest completed agent message in a conversation, or null if there is
+ * none yet.
+ *
+ * Response annotations need it to tell a quote from the message just written
+ * apart from a quote pulled out of the scrollback (RA1). Scans from the end
+ * because the answer is almost always the last item or two, and this runs on
+ * every store update while a turn is streaming.
+ */
+export function selectLatestAgentMessageId(
+  items: readonly ConversationItem[],
+): string | null {
+  for (let index = items.length - 1; index >= 0; index -= 1) {
+    const item = items[index]
+    if (
+      item &&
+      item.kind === 'message' &&
+      item.actor === 'assistant' &&
+      item.state === 'complete'
+    ) {
+      return item.id
+    }
+  }
+  return null
 }

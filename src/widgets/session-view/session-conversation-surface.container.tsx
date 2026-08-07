@@ -12,6 +12,10 @@ import {
   ComposerContainer,
   type ComposerSessionContext,
 } from '@/features/composer'
+import {
+  AnnotationSelectionCapture,
+  AnnotationTray,
+} from '@/features/response-annotations'
 import { SessionTranscript } from './session-transcript.container'
 import { UiResponsePanel } from './ui-response-panel.presentational'
 
@@ -57,6 +61,7 @@ export const SessionConversationSurface: FC<
     null
 
   const conversationColumn = renderConversationColumn({
+    sessionId: session.id,
     session,
     conversationItems,
     composerContext,
@@ -89,6 +94,7 @@ export const SessionConversationSurface: FC<
 }
 
 interface RenderConversationColumnInput {
+  sessionId: string
   session: Session
   conversationItems: ConversationItem[]
   composerContext: ComposerSessionContext | null
@@ -105,6 +111,7 @@ interface RenderConversationColumnInput {
 }
 
 function renderConversationColumn({
+  sessionId,
   session,
   conversationItems,
   composerContext,
@@ -127,7 +134,15 @@ function renderConversationColumn({
         onInputAnswer={onInputAnswer}
       />
 
+      {/*
+        Both halves of Response Annotations are composed here, by the widget:
+        the popover belongs to the transcript and the tray belongs above the
+        composer, and neither feature may import the other (RA2 layering).
+      */}
+      <AnnotationSelectionCapture sessionId={sessionId} />
+
       <div className="shrink-0 px-4 py-3">
+        <AnnotationTray sessionId={sessionId} />
         {renderComposerArea(composerContext, composerDisabledReason)}
       </div>
     </div>

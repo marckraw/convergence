@@ -708,3 +708,45 @@ describe('ConversationItemView', () => {
     })
   })
 })
+
+describe('annotatable agent messages (RA2)', () => {
+  function agentMessage(state: 'complete' | 'streaming'): ConversationItem {
+    return {
+      id: 'assistant-1',
+      sessionId: 'session-1',
+      sequence: 1,
+      turnId: 'turn-1',
+      kind: 'message',
+      state,
+      actor: 'assistant',
+      text: 'The migration runs in a single transaction.',
+      createdAt: '2026-08-06T10:00:00.000Z',
+      updatedAt: '2026-08-06T10:00:00.000Z',
+      providerMeta: {
+        providerId: 'claude-code',
+        providerItemId: null,
+        providerEventType: 'assistant',
+      },
+    } as ConversationItem
+  }
+
+  it('marks a finished agent message as annotatable', () => {
+    const { container } = renderConversationItemView({
+      entry: agentMessage('complete'),
+    })
+
+    expect(
+      container.querySelector('[data-annotation-message-id="assistant-1"]'),
+    ).not.toBeNull()
+  })
+
+  it('offers nothing on a message still being written', () => {
+    // Ruling 5, enforced by absence: quoting half a sentence the model has not
+    // finished would put words in its mouth, so there is no attribute to find.
+    const { container } = renderConversationItemView({
+      entry: agentMessage('streaming'),
+    })
+
+    expect(container.querySelector('[data-annotation-message-id]')).toBeNull()
+  })
+})
