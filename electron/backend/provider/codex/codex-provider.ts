@@ -45,9 +45,12 @@ import {
   deriveCodexContextWindow,
 } from '../context-window.pure'
 import {
+  buildCodexErrorNote,
   buildCodexThreadRecoveryEntry,
   buildTurnFailureEntry,
+  classifyCodexErrorNotification,
   isCodexThreadNotFoundError,
+  readCodexErrorNotificationMessage,
 } from './codex-errors.pure'
 import {
   buildCodexUserInput,
@@ -1852,17 +1855,26 @@ export class CodexProvider implements Provider {
 
           case 'error': {
             flushAssistantBuffer()
-            activeProviderTurnId = null
-            const error =
-              typeof p.error === 'object' && p.error !== null
-                ? (p.error as { message?: unknown })
-                : null
+            const message = readCodexErrorNotificationMessage(params)
+            const disposition = classifyCodexErrorNotification(message)
+            const note = buildCodexErrorNote(message, disposition, now())
             sessionEmitter.addNote({
-              text: `Error: ${typeof error?.message === 'string' ? error.message : typeof p.message === 'string' ? p.message : 'Unknown error'}`,
-              level: 'error',
+              text: note.text,
+              level: note.level,
+              timestamp: note.timestamp,
             })
-            setStatus('failed')
-            setAttention('failed')
+
+            // Only a message we can name as terminal ends the session here.
+            // Codex's retry notices arrive on this same channel, and failing
+            // the session releases the handle — which SIGTERMs the app-server
+            // in the middle of the retry it was about to survive (MAR-2315).
+            // For everything else the process is the source of truth: if it is
+            // really dying, the exit handler says so.
+            if (disposition === 'fatal') {
+              activeProviderTurnId = null
+              setStatus('failed')
+              setAttention('failed')
+            }
             break
           }
         }
@@ -1900,13 +1912,15 @@ export class CodexProvider implements Provider {
             -32602,
             `Convergence could not render Codex MCP elicitation mode "${String(p.mode)}"`,
           )
+          // Declining a mode we cannot render is a per-request outcome, not a
+          // session outcome — the same lesson MAR-2033 applied to unknown
+          // server requests below. Codex handles the `-32602` and the turn
+          // keeps going (MAR-2315).
           sessionEmitter.addNote({
-            text: `Unsupported Codex MCP elicitation schema for mode: ${String(p.mode)}`,
-            level: 'error',
+            text: `Codex asked for an MCP elicitation in "${String(p.mode)}" mode; Convergence declined it because it cannot render that mode yet.`,
+            level: 'warning',
             providerEventType: method,
           })
-          setStatus('failed')
-          setAttention('failed')
         } else {
           const approvalRequest = buildCodexApprovalRequest(method, p)
           if (approvalRequest) {

@@ -1158,7 +1158,7 @@ describe('CodexProvider', () => {
     })
   })
 
-  it('fails MCP form elicitations with unsupported fields instead of rendering partial forms', async () => {
+  it('declines MCP form elicitations with unsupported fields instead of rendering partial forms', async () => {
     const child = new MockChildProcess()
     const server = createMockCodexServer(child, {
       autoCompleteTurns: false,
@@ -1241,19 +1241,19 @@ describe('CodexProvider', () => {
         },
         result: undefined,
       })
-      expect(statuses).toContain('failed')
-      expect(attentions).toContain('failed')
       expect(items).toEqual(
         expect.arrayContaining([
           expect.objectContaining({
             kind: 'note',
-            level: 'error',
-            text: 'Unsupported Codex MCP elicitation schema for mode: form',
+            level: 'warning',
+            text: 'Codex asked for an MCP elicitation in "form" mode; Convergence declined it because it cannot render that mode yet.',
           }),
         ]),
       )
     })
 
+    expect(statuses).not.toContain('failed')
+    expect(attentions).not.toContain('failed')
     expect(items.some((item) => item.kind === 'input-request')).toBe(false)
   })
 
