@@ -45,9 +45,13 @@ import {
   deriveCodexContextWindow,
 } from '../context-window.pure'
 import {
+  buildCodexErrorNote,
+  buildCodexProcessExitEntry,
   buildCodexThreadRecoveryEntry,
   buildTurnFailureEntry,
+  classifyCodexErrorNotification,
   isCodexThreadNotFoundError,
+  readCodexErrorNotificationMessage,
 } from './codex-errors.pure'
 import {
   buildCodexUserInput,
@@ -78,10 +82,29 @@ import {
   type ProviderDebugSink,
 } from '../../provider-debug/provider-debug-sink'
 import { resolveCodexPermissionConfig } from '../session-permissions.pure'
+import { createRingBuffer } from '../../terminal/ring-buffer.pure'
 import type {
   ProviderDebugChannel,
   ProviderDebugEntry,
 } from '../../provider-debug/provider-debug.types'
+
+/**
+ * How long we wait for the thread id after asking for a thread.
+ *
+ * This used to be 1000ms, measured against nothing. A cold `codex app-server`
+ * needs 13–28s just to answer its cheapest request
+ * (`codex-quota.constants.ts`), so the old budget turned every slow start into
+ * "thread/start response did not include a thread id" (MAR-2316).
+ */
+const CODEX_THREAD_ID_BUDGET_MS = 60_000
+
+/**
+ * How much of the app-server's stderr we keep to quote in its obituary.
+ *
+ * A Rust panic plus its backtrace fits comfortably; the bound exists so a
+ * process that logs all day cannot grow the session's memory.
+ */
+const CODEX_STDERR_TAIL_BYTES = 8 * 1024
 
 async function loadCodexParts(
   attachments: Attachment[] | undefined,
@@ -937,12 +960,15 @@ export class CodexProvider implements Provider {
     /**
      * The account this session's `codex app-server` runs under.
      *
-     * Unlike Claude, Codex holds one long-lived process for the whole session
-     * rather than spawning per turn, so the credential is fixed when the server
-     * starts. ADR 0007's "switching accounts mid-conversation needs no process
-     * lifecycle management" is a property of the per-turn spawn model and does
-     * not carry over here — so a mid-session change is refused out loud rather
-     * than silently served by the account already running.
+     * A Codex session outlives its process but does not own one continuously:
+     * the app-server is spawned lazily and torn down whenever the session is
+     * released — which, since resource-release landed, is after every completed
+     * turn. What is fixed for the session's life is the *credential*, because
+     * every respawn re-reads it from the same closure. ADR 0007's "switching
+     * accounts mid-conversation needs no process lifecycle management" is a
+     * property of Claude's per-turn spawn model and does not carry over, so a
+     * mid-session change is refused out loud rather than silently served by
+     * whichever account the current process happens to hold.
      */
     const sessionAccountId = config.providerAccountId ?? null
     const debugSink = this.debugSink
@@ -998,8 +1024,18 @@ export class CodexProvider implements Provider {
         text: string
       }
     >()
-    let resolveThreadReady: (() => void) | null = null
+    // Everyone waiting for the thread id, not just the most recent caller: a
+    // single slot meant a second waiter silently evicted the first, whose
+    // promise then never settled (MAR-2316).
+    let threadReadyWaiters: Array<() => void> = []
     let activeProviderTurnId: string | null = null
+    let deadInteractionNoted = false
+
+    function notifyThreadReadyWaiters(): void {
+      const waiters = threadReadyWaiters
+      threadReadyWaiters = []
+      waiters.forEach((waiter) => waiter())
+    }
 
     // Map of pending approval request IDs (JSON-RPC id → approval response plan)
     const pendingApprovals = new Map<JsonRpcId, PendingApprovalRequest>()
@@ -1015,7 +1051,12 @@ export class CodexProvider implements Provider {
       now,
     })
 
+    // What the session currently believes about itself. The process dying is
+    // only news while a turn is outstanding, and only this tells us that.
+    let currentStatus: SessionStatus = 'idle'
+
     function setStatus(status: SessionStatus): void {
+      currentStatus = status
       listeners.status.forEach((cb) => cb(status))
       sessionEmitter.patchSession({ status })
     }
@@ -1028,19 +1069,19 @@ export class CodexProvider implements Provider {
     function setContinuationToken(token: string): void {
       threadReady = true
       if (threadId === token) {
-        resolveThreadReady?.()
+        notifyThreadReadyWaiters()
         return
       }
 
       threadId = token
       listeners.continuationToken.forEach((cb) => cb(token))
       sessionEmitter.patchSession({ continuationToken: token })
-      resolveThreadReady?.()
+      notifyThreadReadyWaiters()
     }
 
     function markThreadReady(): void {
       threadReady = true
-      resolveThreadReady?.()
+      notifyThreadReadyWaiters()
     }
 
     function setContextWindow(contextWindow: SessionContextWindow): void {
@@ -1198,13 +1239,14 @@ export class CodexProvider implements Provider {
 
       return new Promise((resolve, reject) => {
         const timeout = setTimeout(() => {
-          resolveThreadReady = null
+          removeWaiter()
           reject(new Error('thread/start response did not include a thread id'))
-        }, 1000)
+        }, CODEX_THREAD_ID_BUDGET_MS)
+        timeout.unref?.()
 
-        resolveThreadReady = () => {
+        const waiter = () => {
           clearTimeout(timeout)
-          resolveThreadReady = null
+          removeWaiter()
           if (threadId) {
             resolve(threadId)
           } else {
@@ -1213,6 +1255,14 @@ export class CodexProvider implements Provider {
             )
           }
         }
+
+        function removeWaiter(): void {
+          threadReadyWaiters = threadReadyWaiters.filter(
+            (candidate) => candidate !== waiter,
+          )
+        }
+
+        threadReadyWaiters.push(waiter)
       })
     }
 
@@ -1555,6 +1605,111 @@ export class CodexProvider implements Provider {
       }
     }
 
+    /**
+     * Answer everything the user was being asked for, when the process that
+     * asked is gone.
+     *
+     * A pending approval used to outlive its app-server: the map still held it,
+     * the session still showed "needs approval", and the click went to
+     * `if (!rpc) return` — swallowed, forever (MAR-2317).
+     */
+    function endPendingInteractions(): void {
+      const abandoned = pendingApprovals.size + pendingUserInputs.size
+      if (abandoned === 0) return
+
+      pendingApprovals.clear()
+      pendingUserInputs.clear()
+      sessionEmitter.addNote({
+        text:
+          abandoned === 1
+            ? 'The Codex process ended while it was waiting on you. Nothing was approved or answered.'
+            : `The Codex process ended while it was waiting on you (${abandoned} requests). Nothing was approved or answered.`,
+        level: 'warning',
+        timestamp: now(),
+      })
+      setAttention('none')
+    }
+
+    function answerApproval(
+      providerApprovalId: string | undefined,
+      decision: 'approve' | 'deny',
+    ): void {
+      const pendingApproval = findPendingApproval(
+        pendingApprovals,
+        providerApprovalId,
+      )
+
+      if (!pendingApproval || !rpc) {
+        // The click is real even when there is nothing left to answer; saying
+        // so beats the silent `if (!rpc) return` it replaces (MAR-2317).
+        if (!rpc) noteInteractionHasNowhereToGo()
+        if (pendingApproval) {
+          pendingApprovals.delete(pendingApproval[0])
+        }
+        if (pendingApprovals.size === 0) {
+          setAttention('none')
+        }
+        return
+      }
+
+      const [id, approvalRequest] = pendingApproval
+      rpc.respond(
+        id,
+        decision === 'approve'
+          ? approvalRequest.approveResult
+          : approvalRequest.denyResult,
+      )
+      pendingApprovals.delete(id)
+      if (pendingApprovals.size === 0) {
+        setAttention('none')
+      }
+    }
+
+    function noteInteractionHasNowhereToGo(): void {
+      if (deadInteractionNoted) return
+      deadInteractionNoted = true
+      sessionEmitter.addNote({
+        text: 'That request belonged to a Codex process that has already ended, so the answer had nowhere to go. Send a message to start a fresh one.',
+        level: 'warning',
+        timestamp: now(),
+      })
+    }
+
+    /**
+     * Give up on this app-server without giving up on the session.
+     *
+     * A hung request or a dead pipe used to leave `rpc` truthy with nothing
+     * behind it, so the next message skipped the respawn at `sendMessage` and
+     * wrote into a closed stdin — a hang with no way out. Tearing both halves
+     * down here puts the session back on the lazy-respawn path (MAR-2316).
+     */
+    function abandonServer(reason: string): void {
+      if (stopped) return
+
+      const abandonedChild = child
+      const abandonedRpc = rpc
+      child = null
+      rpc = null
+      // A fresh process has never heard of this thread (MAR-2317).
+      threadReady = false
+      endPendingInteractions()
+
+      sessionEmitter.addNote({
+        text: `Lost the connection to the Codex app-server: ${reason}. The next message starts a fresh one.`,
+        level: 'error',
+        timestamp: now(),
+      })
+
+      abandonedRpc?.destroy()
+      if (
+        abandonedChild &&
+        abandonedChild.exitCode === null &&
+        abandonedChild.signalCode === null
+      ) {
+        abandonedChild.kill('SIGTERM')
+      }
+    }
+
     function spawnServer(
       initialMessage: string,
       initialAttachments?: Attachment[],
@@ -1571,6 +1726,17 @@ export class CodexProvider implements Provider {
           account: accountLookup(sessionAccountId),
         }),
       })
+      // Captured so the lifecycle handlers below can tell their own process's
+      // death from that of one we already abandoned and replaced.
+      const spawnedChild = child
+      // This process has resumed nothing yet, whatever the last one had done.
+      // Without the reset, a respawn sent `turn/start` against a thread the
+      // new process had never heard of, and the session's survival came down
+      // to whether the error wording happened to contain "not found"
+      // (MAR-2317).
+      threadReady = false
+      deadInteractionNoted = false
+      const stderrTail = createRingBuffer(CODEX_STDERR_TAIL_BYTES)
 
       if (!child.stdin || !child.stdout) {
         sessionEmitter.addNote({
@@ -1582,7 +1748,11 @@ export class CodexProvider implements Provider {
         return
       }
 
-      rpc = new JsonRpcClient(child.stdin, child.stdout)
+      rpc = new JsonRpcClient(child.stdin, child.stdout, {
+        onTransportFailure: (error) => {
+          abandonServer(error.message)
+        },
+      })
 
       // Handle notifications (no response needed)
       rpc.onNotification((method, params) => {
@@ -1602,7 +1772,7 @@ export class CodexProvider implements Provider {
               if (discoveredThreadId) {
                 setContinuationToken(discoveredThreadId)
               } else {
-                resolveThreadReady?.()
+                notifyThreadReadyWaiters()
               }
             }
             break
@@ -1852,17 +2022,26 @@ export class CodexProvider implements Provider {
 
           case 'error': {
             flushAssistantBuffer()
-            activeProviderTurnId = null
-            const error =
-              typeof p.error === 'object' && p.error !== null
-                ? (p.error as { message?: unknown })
-                : null
+            const message = readCodexErrorNotificationMessage(params)
+            const disposition = classifyCodexErrorNotification(message)
+            const note = buildCodexErrorNote(message, disposition, now())
             sessionEmitter.addNote({
-              text: `Error: ${typeof error?.message === 'string' ? error.message : typeof p.message === 'string' ? p.message : 'Unknown error'}`,
-              level: 'error',
+              text: note.text,
+              level: note.level,
+              timestamp: note.timestamp,
             })
-            setStatus('failed')
-            setAttention('failed')
+
+            // Only a message we can name as terminal ends the session here.
+            // Codex's retry notices arrive on this same channel, and failing
+            // the session releases the handle — which SIGTERMs the app-server
+            // in the middle of the retry it was about to survive (MAR-2315).
+            // For everything else the process is the source of truth: if it is
+            // really dying, the exit handler says so.
+            if (disposition === 'fatal') {
+              activeProviderTurnId = null
+              setStatus('failed')
+              setAttention('failed')
+            }
             break
           }
         }
@@ -1900,13 +2079,15 @@ export class CodexProvider implements Provider {
             -32602,
             `Convergence could not render Codex MCP elicitation mode "${String(p.mode)}"`,
           )
+          // Declining a mode we cannot render is a per-request outcome, not a
+          // session outcome — the same lesson MAR-2033 applied to unknown
+          // server requests below. Codex handles the `-32602` and the turn
+          // keeps going (MAR-2315).
           sessionEmitter.addNote({
-            text: `Unsupported Codex MCP elicitation schema for mode: ${String(p.mode)}`,
-            level: 'error',
+            text: `Codex asked for an MCP elicitation in "${String(p.mode)}" mode; Convergence declined it because it cannot render that mode yet.`,
+            level: 'warning',
             providerEventType: method,
           })
-          setStatus('failed')
-          setAttention('failed')
         } else {
           const approvalRequest = buildCodexApprovalRequest(method, p)
           if (approvalRequest) {
@@ -1958,45 +2139,66 @@ export class CodexProvider implements Provider {
       if (child.stderr) {
         child.stderr.on('data', (chunk: Buffer) => {
           recordDebug('stderr', { direction: 'in', bytes: chunk.length })
+          // Kept, not just counted: it is the only place the process ever says
+          // why it died (MAR-2317).
+          stderrTail.append(chunk.toString())
         })
       }
 
-      child.on('exit', (code) => {
-        if (stopped) return
+      spawnedChild.on('exit', (code) => {
+        if (stopped || child !== spawnedChild) return
         recordDebug('lifecycle', {
           direction: 'in',
           note: `child exited with code ${code}`,
         })
         flushAssistantBuffer()
+        const interruptedTurn = currentStatus === 'running'
         activeProviderTurnId = null
         applyActivity({ kind: 'close' })
-        if (code !== 0 && code !== null) {
+        threadReady = false
+        child = null
+        rpc?.destroy()
+        rpc = null
+        endPendingInteractions()
+
+        const exitEntry = buildCodexProcessExitEntry({
+          code,
+          stderrTail: stderrTail.snapshot(),
+          interruptedTurn,
+          timestamp: now(),
+        })
+        if (exitEntry) {
           sessionEmitter.addNote({
-            text: `Process exited with code ${code}`,
-            level: 'error',
+            text: exitEntry.text,
+            level: exitEntry.level,
+            timestamp: exitEntry.timestamp,
           })
           setStatus('failed')
           setAttention('failed')
         }
-        child = null
-        rpc?.destroy()
-        rpc = null
       })
 
-      child.on('error', (err) => {
-        if (stopped) return
+      spawnedChild.on('error', (err) => {
+        if (stopped || child !== spawnedChild) return
         recordDebug('lifecycle', {
           direction: 'in',
           note: `child error: ${err.message}`,
         })
         activeProviderTurnId = null
+        threadReady = false
+        child = null
+        // Mirrors the exit handler: leaving `rpc` alive here was what made the
+        // next message write into a dead stdin instead of respawning
+        // (MAR-2316).
+        rpc?.destroy()
+        rpc = null
+        endPendingInteractions()
         sessionEmitter.addNote({
           text: `Process error: ${err.message}`,
           level: 'error',
         })
         setStatus('failed')
         setAttention('failed')
-        child = null
       })
 
       void initialize(
@@ -2163,34 +2365,10 @@ export class CodexProvider implements Provider {
         })
       },
       approve: (providerApprovalId) => {
-        if (!rpc) return
-        const pendingApproval = findPendingApproval(
-          pendingApprovals,
-          providerApprovalId,
-        )
-        if (!pendingApproval) return
-
-        const [id, approvalRequest] = pendingApproval
-        rpc.respond(id, approvalRequest.approveResult)
-        pendingApprovals.delete(id)
-        if (pendingApprovals.size === 0) {
-          setAttention('none')
-        }
+        answerApproval(providerApprovalId, 'approve')
       },
       deny: (providerApprovalId) => {
-        if (!rpc) return
-        const pendingApproval = findPendingApproval(
-          pendingApprovals,
-          providerApprovalId,
-        )
-        if (!pendingApproval) return
-
-        const [id, approvalRequest] = pendingApproval
-        rpc.respond(id, approvalRequest.denyResult)
-        pendingApprovals.delete(id)
-        if (pendingApprovals.size === 0) {
-          setAttention('none')
-        }
+        answerApproval(providerApprovalId, 'deny')
       },
       dispose: disposeRuntime,
       stop: () => {

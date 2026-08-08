@@ -1,6 +1,6 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { Readable, Writable } from 'stream'
-import { JsonRpcClient } from './jsonrpc'
+import { CODEX_RPC_BUDGETS_MS, JsonRpcClient } from './jsonrpc'
 
 function createMockStreams() {
   const written: string[] = []
@@ -105,5 +105,96 @@ describe('JsonRpcClient', () => {
     client.destroy()
 
     await expect(promise).rejects.toThrow('Client destroyed')
+  })
+})
+
+describe('JsonRpcClient budgets (MAR-2316)', () => {
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it('rejects a request the server never answers, naming the method and the budget', async () => {
+    vi.useFakeTimers()
+    const { stdin, stdout } = createMockStreams()
+    const client = new JsonRpcClient(stdin, stdout)
+
+    const promise = client.request('thread/resume')
+    const settled = vi.fn()
+    void promise.then(settled, settled)
+
+    await vi.advanceTimersByTimeAsync(CODEX_RPC_BUDGETS_MS['thread/resume'] - 1)
+    expect(settled).not.toHaveBeenCalled()
+
+    await vi.advanceTimersByTimeAsync(2)
+
+    await expect(promise).rejects.toThrow(
+      /thread\/resume.*did not answer|did not answer.*thread\/resume/,
+    )
+  })
+
+  it('keeps waiting while the server is still streaming', async () => {
+    vi.useFakeTimers()
+    const { stdin, stdout } = createMockStreams()
+    const client = new JsonRpcClient(stdin, stdout)
+
+    const promise = client.request('turn/start')
+    const settled = vi.fn()
+    void promise.then(settled, settled)
+
+    const budget = CODEX_RPC_BUDGETS_MS['turn/start']
+
+    // Traffic keeps arriving for well past the budget: the server is working,
+    // not hung.
+    for (let elapsed = 0; elapsed < budget * 3; elapsed += budget / 2) {
+      await vi.advanceTimersByTimeAsync(budget / 2)
+      stdout.push(
+        '{"jsonrpc":"2.0","method":"item/agentMessage/delta","params":{"delta":"."}}\n',
+      )
+    }
+
+    expect(settled).not.toHaveBeenCalled()
+
+    stdout.push('{"jsonrpc":"2.0","id":1,"result":{"ok":true}}\n')
+    await expect(promise).resolves.toEqual({ ok: true })
+  })
+
+  it('reports a transport failure instead of writing to a dead pipe', async () => {
+    const { stdout } = createMockStreams()
+    const failures: string[] = []
+    const stdin = new Writable({
+      write(_chunk, _encoding, callback) {
+        callback()
+      },
+    })
+    stdin.destroy()
+
+    const client = new JsonRpcClient(stdin, stdout, {
+      onTransportFailure: (error) => failures.push(error.message),
+    })
+
+    await expect(client.request('turn/start')).rejects.toThrow(
+      /pipe|closed|write/i,
+    )
+    expect(failures).toHaveLength(1)
+  })
+
+  it('surfaces a stdin error rather than leaving it unhandled', async () => {
+    const { stdout } = createMockStreams()
+    const failures: string[] = []
+    const stdin = new Writable({
+      write(_chunk, _encoding, callback) {
+        callback()
+      },
+    })
+
+    const client = new JsonRpcClient(stdin, stdout, {
+      onTransportFailure: (error) => failures.push(error.message),
+    })
+
+    const promise = client.request('skills/list')
+    stdin.emit('error', new Error('write EPIPE'))
+
+    await expect(promise).rejects.toThrow('write EPIPE')
+    expect(failures).toEqual(['write EPIPE'])
   })
 })
