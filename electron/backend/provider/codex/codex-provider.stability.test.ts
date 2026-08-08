@@ -133,7 +133,9 @@ function createMockCodexServer(
 
 function waitFor(
   assertion: () => void,
-  timeoutMs = 500,
+  // Generous on purpose: these assertions are about what the adapter does, not
+  // how fast it does it, and the suite shares a machine with ~300 others.
+  timeoutMs = 2_000,
   intervalMs = 5,
 ): Promise<void> {
   const startedAt = Date.now()
@@ -567,7 +569,7 @@ describe('Codex process death (MAR-2317)', () => {
     })
 
     child.exit(0)
-    await new Promise((resolve) => setTimeout(resolve, 30))
+    await new Promise((resolve) => setTimeout(resolve, 100))
 
     expect(observed.statuses).not.toContain('failed')
     expect(observed.notes).toEqual([])
