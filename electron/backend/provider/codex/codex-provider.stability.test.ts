@@ -16,6 +16,7 @@ vi.mock('child_process', () => ({
 }))
 
 import { CodexProvider } from './codex-provider'
+import { CODEX_RPC_BUDGETS_MS } from './jsonrpc'
 
 /**
  * A Codex app-server that never runs.
@@ -57,6 +58,8 @@ function createMockCodexServer(
     /** Methods the server accepts but never answers. */
     silentMethods?: string[]
     threadId?: string
+    /** Answer `thread/start` without an id, as a cold server does. */
+    threadStartWithoutId?: boolean
   },
 ): MockServer {
   const silent = new Set(options?.silentMethods ?? [])
@@ -105,7 +108,11 @@ function createMockCodexServer(
           if (!silent.has(message.method)) {
             if (message.method === 'initialize') respond(message.id, {})
             else if (message.method === 'thread/start')
-              respond(message.id, { threadId })
+              respond(
+                message.id,
+                options?.threadStartWithoutId ? {} : { threadId },
+              )
+            else if (message.method === 'turn/steer') respond(message.id, {})
             else if (message.method === 'thread/resume')
               respond(message.id, {
                 thread: { id: message.params?.threadId ?? threadId },
@@ -315,5 +322,141 @@ describe('Codex transient errors (MAR-2315)', () => {
         (note) => note.level === 'warning' && note.text.includes('url'),
       ),
     ).toBe(true)
+  })
+})
+
+describe('Codex hangs and dead pipes (MAR-2316)', () => {
+  it('gives up on a server that never answers and respawns on the next message', async () => {
+    vi.useFakeTimers()
+    try {
+      const children = [new MockChildProcess(), new MockChildProcess()]
+      children.forEach((child) =>
+        createMockCodexServer(child, { silentMethods: ['initialize'] }),
+      )
+      let spawnCount = 0
+      spawnMock.mockImplementation(() => children[spawnCount++])
+
+      const handle = startSession(new CodexProvider('/usr/local/bin/codex'))
+      const observed = observe(handle)
+
+      // Let the server spawn and the handshake go out unanswered.
+      await vi.advanceTimersByTimeAsync(50)
+      expect(spawnMock).toHaveBeenCalledTimes(1)
+      expect(observed.notes).toEqual([])
+
+      await vi.advanceTimersByTimeAsync(CODEX_RPC_BUDGETS_MS.initialize + 100)
+
+      expect(
+        observed.notes.some(
+          (note) =>
+            note.level === 'error' &&
+            note.text.includes('Lost the connection to the Codex app-server') &&
+            note.text.includes('initialize'),
+        ),
+      ).toBe(true)
+
+      handle.sendMessage('try again')
+      await vi.advanceTimersByTimeAsync(50)
+
+      expect(spawnMock).toHaveBeenCalledTimes(2)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('recovers from a dead stdin instead of writing into it forever', async () => {
+    const children = [new MockChildProcess(), new MockChildProcess()]
+    const servers = children.map((child) => createMockCodexServer(child))
+    let spawnCount = 0
+    spawnMock.mockImplementation(() => children[spawnCount++])
+
+    const handle = startSession(new CodexProvider('/usr/local/bin/codex'))
+    const observed = observe(handle)
+
+    await waitFor(() => {
+      expect(servers[0].methods()).toContain('turn/start')
+    })
+
+    // The app-server is gone but nobody told us — exactly what `child.on(
+    // 'error')` used to leave behind.
+    children[0].stdin.destroy()
+
+    handle.sendMessage('are you there?')
+
+    await waitFor(() => {
+      expect(
+        observed.notes.some((note) =>
+          note.text.includes('Lost the connection to the Codex app-server'),
+        ),
+      ).toBe(true)
+    })
+
+    handle.sendMessage('try again')
+
+    await waitFor(() => {
+      expect(spawnMock).toHaveBeenCalledTimes(2)
+    })
+    await waitFor(() => {
+      expect(servers[1].methods()).toContain('turn/start')
+    })
+  })
+
+  it('answers every waiter for the thread id, not just the last one', async () => {
+    const child = new MockChildProcess()
+    const server = createMockCodexServer(child, { threadStartWithoutId: true })
+    spawnMock.mockReturnValue(child)
+
+    const handle = startSession(new CodexProvider('/usr/local/bin/codex'))
+    const observed = observe(handle)
+
+    // Both the opening turn and the steer ask for a thread whose id only
+    // arrives later. With one waiter slot the second call evicted the first,
+    // whose promise then never settled.
+    await waitFor(() => {
+      expect(server.methods()).toContain('thread/start')
+    })
+    handle.sendMessage('and also this', undefined, undefined, {
+      deliveryMode: 'steer',
+      expectedProviderTurnId: 'codex-turn-1',
+    })
+    await waitFor(() => {
+      expect(
+        server.methods().filter((method) => method === 'thread/start'),
+      ).toHaveLength(2)
+    })
+
+    notify(child, 'thread/started', { threadId: 'thread-late' })
+
+    await waitFor(() => {
+      expect(server.methods()).toContain('turn/start')
+      expect(server.methods()).toContain('turn/steer')
+    })
+
+    expect(
+      observed.notes.some((note) => note.text.includes('did not include')),
+    ).toBe(false)
+  })
+
+  it('waits out a cold start instead of giving up after a second', async () => {
+    const child = new MockChildProcess()
+    const server = createMockCodexServer(child, { threadStartWithoutId: true })
+    spawnMock.mockReturnValue(child)
+
+    const handle = startSession(new CodexProvider('/usr/local/bin/codex'))
+    const observed = observe(handle)
+
+    await waitFor(() => {
+      expect(server.methods()).toContain('thread/start')
+    })
+
+    // Longer than the old 1000ms budget, far short of a cold start's 13–28s.
+    await new Promise((resolve) => setTimeout(resolve, 1200))
+    notify(child, 'thread/started', { threadId: 'thread-slow' })
+
+    await waitFor(() => {
+      expect(server.methods()).toContain('turn/start')
+    })
+
+    expect(observed.statuses).not.toContain('failed')
   })
 })

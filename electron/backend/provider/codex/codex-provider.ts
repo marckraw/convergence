@@ -86,6 +86,16 @@ import type {
   ProviderDebugEntry,
 } from '../../provider-debug/provider-debug.types'
 
+/**
+ * How long we wait for the thread id after asking for a thread.
+ *
+ * This used to be 1000ms, measured against nothing. A cold `codex app-server`
+ * needs 13–28s just to answer its cheapest request
+ * (`codex-quota.constants.ts`), so the old budget turned every slow start into
+ * "thread/start response did not include a thread id" (MAR-2316).
+ */
+const CODEX_THREAD_ID_BUDGET_MS = 60_000
+
 async function loadCodexParts(
   attachments: Attachment[] | undefined,
 ): Promise<CodexMessagePart[]> {
@@ -1001,8 +1011,17 @@ export class CodexProvider implements Provider {
         text: string
       }
     >()
-    let resolveThreadReady: (() => void) | null = null
+    // Everyone waiting for the thread id, not just the most recent caller: a
+    // single slot meant a second waiter silently evicted the first, whose
+    // promise then never settled (MAR-2316).
+    let threadReadyWaiters: Array<() => void> = []
     let activeProviderTurnId: string | null = null
+
+    function notifyThreadReadyWaiters(): void {
+      const waiters = threadReadyWaiters
+      threadReadyWaiters = []
+      waiters.forEach((waiter) => waiter())
+    }
 
     // Map of pending approval request IDs (JSON-RPC id → approval response plan)
     const pendingApprovals = new Map<JsonRpcId, PendingApprovalRequest>()
@@ -1031,19 +1050,19 @@ export class CodexProvider implements Provider {
     function setContinuationToken(token: string): void {
       threadReady = true
       if (threadId === token) {
-        resolveThreadReady?.()
+        notifyThreadReadyWaiters()
         return
       }
 
       threadId = token
       listeners.continuationToken.forEach((cb) => cb(token))
       sessionEmitter.patchSession({ continuationToken: token })
-      resolveThreadReady?.()
+      notifyThreadReadyWaiters()
     }
 
     function markThreadReady(): void {
       threadReady = true
-      resolveThreadReady?.()
+      notifyThreadReadyWaiters()
     }
 
     function setContextWindow(contextWindow: SessionContextWindow): void {
@@ -1201,13 +1220,14 @@ export class CodexProvider implements Provider {
 
       return new Promise((resolve, reject) => {
         const timeout = setTimeout(() => {
-          resolveThreadReady = null
+          removeWaiter()
           reject(new Error('thread/start response did not include a thread id'))
-        }, 1000)
+        }, CODEX_THREAD_ID_BUDGET_MS)
+        timeout.unref?.()
 
-        resolveThreadReady = () => {
+        const waiter = () => {
           clearTimeout(timeout)
-          resolveThreadReady = null
+          removeWaiter()
           if (threadId) {
             resolve(threadId)
           } else {
@@ -1216,6 +1236,14 @@ export class CodexProvider implements Provider {
             )
           }
         }
+
+        function removeWaiter(): void {
+          threadReadyWaiters = threadReadyWaiters.filter(
+            (candidate) => candidate !== waiter,
+          )
+        }
+
+        threadReadyWaiters.push(waiter)
       })
     }
 
@@ -1558,6 +1586,38 @@ export class CodexProvider implements Provider {
       }
     }
 
+    /**
+     * Give up on this app-server without giving up on the session.
+     *
+     * A hung request or a dead pipe used to leave `rpc` truthy with nothing
+     * behind it, so the next message skipped the respawn at `sendMessage` and
+     * wrote into a closed stdin — a hang with no way out. Tearing both halves
+     * down here puts the session back on the lazy-respawn path (MAR-2316).
+     */
+    function abandonServer(reason: string): void {
+      if (stopped) return
+
+      const abandonedChild = child
+      const abandonedRpc = rpc
+      child = null
+      rpc = null
+
+      sessionEmitter.addNote({
+        text: `Lost the connection to the Codex app-server: ${reason}. The next message starts a fresh one.`,
+        level: 'error',
+        timestamp: now(),
+      })
+
+      abandonedRpc?.destroy()
+      if (
+        abandonedChild &&
+        abandonedChild.exitCode === null &&
+        abandonedChild.signalCode === null
+      ) {
+        abandonedChild.kill('SIGTERM')
+      }
+    }
+
     function spawnServer(
       initialMessage: string,
       initialAttachments?: Attachment[],
@@ -1574,6 +1634,9 @@ export class CodexProvider implements Provider {
           account: accountLookup(sessionAccountId),
         }),
       })
+      // Captured so the lifecycle handlers below can tell their own process's
+      // death from that of one we already abandoned and replaced.
+      const spawnedChild = child
 
       if (!child.stdin || !child.stdout) {
         sessionEmitter.addNote({
@@ -1585,7 +1648,11 @@ export class CodexProvider implements Provider {
         return
       }
 
-      rpc = new JsonRpcClient(child.stdin, child.stdout)
+      rpc = new JsonRpcClient(child.stdin, child.stdout, {
+        onTransportFailure: (error) => {
+          abandonServer(error.message)
+        },
+      })
 
       // Handle notifications (no response needed)
       rpc.onNotification((method, params) => {
@@ -1605,7 +1672,7 @@ export class CodexProvider implements Provider {
               if (discoveredThreadId) {
                 setContinuationToken(discoveredThreadId)
               } else {
-                resolveThreadReady?.()
+                notifyThreadReadyWaiters()
               }
             }
             break
@@ -1975,8 +2042,8 @@ export class CodexProvider implements Provider {
         })
       }
 
-      child.on('exit', (code) => {
-        if (stopped) return
+      spawnedChild.on('exit', (code) => {
+        if (stopped || child !== spawnedChild) return
         recordDebug('lifecycle', {
           direction: 'in',
           note: `child exited with code ${code}`,
@@ -1997,8 +2064,8 @@ export class CodexProvider implements Provider {
         rpc = null
       })
 
-      child.on('error', (err) => {
-        if (stopped) return
+      spawnedChild.on('error', (err) => {
+        if (stopped || child !== spawnedChild) return
         recordDebug('lifecycle', {
           direction: 'in',
           note: `child error: ${err.message}`,
@@ -2011,6 +2078,11 @@ export class CodexProvider implements Provider {
         setStatus('failed')
         setAttention('failed')
         child = null
+        // Mirrors the exit handler: leaving `rpc` alive here was what made the
+        // next message write into a dead stdin instead of respawning
+        // (MAR-2316).
+        rpc?.destroy()
+        rpc = null
       })
 
       void initialize(
