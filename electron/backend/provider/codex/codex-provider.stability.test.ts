@@ -460,3 +460,165 @@ describe('Codex hangs and dead pipes (MAR-2316)', () => {
     expect(observed.statuses).not.toContain('failed')
   })
 })
+
+describe('Codex process death (MAR-2317)', () => {
+  it('resumes the thread on a fresh process instead of starting a turn on it blind', async () => {
+    const children = [new MockChildProcess(), new MockChildProcess()]
+    const servers = children.map((child) => createMockCodexServer(child))
+    let spawnCount = 0
+    spawnMock.mockImplementation(() => children[spawnCount++])
+
+    const handle = startSession(new CodexProvider('/usr/local/bin/codex'))
+    observe(handle)
+
+    await waitFor(() => {
+      expect(servers[0].methods()).toContain('turn/start')
+    })
+    notify(children[0], 'turn/completed', { turn: { status: 'completed' } })
+    await waitFor(() => {
+      expect(servers[0].methods()).toContain('turn/start')
+    })
+
+    // The turn is over and the app-server is released — the shape every
+    // completed Codex turn takes today.
+    children[0].exit(0)
+
+    handle.sendMessage('and one more thing')
+
+    await waitFor(() => {
+      expect(servers[1].methods()).toContain('turn/start')
+    })
+
+    expect(servers[1].methods().indexOf('thread/resume')).toBeGreaterThan(-1)
+    expect(servers[1].methods().indexOf('thread/resume')).toBeLessThan(
+      servers[1].methods().indexOf('turn/start'),
+    )
+  })
+
+  it('quotes what the process said on its way out', async () => {
+    const child = new MockChildProcess()
+    const server = createMockCodexServer(child)
+    spawnMock.mockReturnValue(child)
+
+    const handle = startSession(new CodexProvider('/usr/local/bin/codex'))
+    const observed = observe(handle)
+
+    await waitFor(() => {
+      expect(server.methods()).toContain('turn/start')
+    })
+
+    child.stderr.write("thread 'main' panicked at core/src/client.rs:412\n")
+    await waitFor(() => {
+      expect(child.stderr.readableLength).toBe(0)
+    })
+    child.exit(1)
+
+    await waitFor(() => {
+      expect(
+        observed.notes.some(
+          (note) =>
+            note.level === 'error' &&
+            note.text.startsWith('Process exited with code 1:') &&
+            note.text.includes('core/src/client.rs:412'),
+        ),
+      ).toBe(true)
+    })
+  })
+
+  it('fails honestly when the process ends cleanly mid-turn', async () => {
+    const child = new MockChildProcess()
+    const server = createMockCodexServer(child)
+    spawnMock.mockReturnValue(child)
+
+    const handle = startSession(new CodexProvider('/usr/local/bin/codex'))
+    const observed = observe(handle)
+
+    await waitFor(() => {
+      expect(server.methods()).toContain('turn/start')
+    })
+
+    child.exit(0)
+
+    await waitFor(() => {
+      expect(observed.statuses).toContain('failed')
+    })
+    expect(observed.notes).toContainEqual(
+      expect.objectContaining({
+        text: 'The Codex process ended before finishing the turn',
+        level: 'error',
+      }),
+    )
+  })
+
+  it('stays quiet when the process ends cleanly with nothing in flight', async () => {
+    const child = new MockChildProcess()
+    const server = createMockCodexServer(child)
+    spawnMock.mockReturnValue(child)
+
+    const handle = startSession(new CodexProvider('/usr/local/bin/codex'))
+    const observed = observe(handle)
+
+    await waitFor(() => {
+      expect(server.methods()).toContain('turn/start')
+    })
+    notify(child, 'turn/completed', { turn: { status: 'completed' } })
+    await waitFor(() => {
+      expect(observed.statuses).toContain('completed')
+    })
+
+    child.exit(0)
+    await new Promise((resolve) => setTimeout(resolve, 30))
+
+    expect(observed.statuses).not.toContain('failed')
+    expect(observed.notes).toEqual([])
+  })
+
+  it('ends a pending approval with the process instead of leaving it clickable forever', async () => {
+    const child = new MockChildProcess()
+    const server = createMockCodexServer(child)
+    spawnMock.mockReturnValue(child)
+
+    const handle = startSession(new CodexProvider('/usr/local/bin/codex'))
+    const observed = observe(handle)
+
+    await waitFor(() => {
+      expect(server.methods()).toContain('turn/start')
+    })
+
+    child.stdout.write(
+      JSON.stringify({
+        jsonrpc: '2.0',
+        id: 700,
+        method: 'item/commandExecution/requestApproval',
+        params: { command: 'rm -rf build' },
+      }) + '\n',
+    )
+
+    await waitFor(() => {
+      expect(observed.attentions).toContain('needs-approval')
+    })
+
+    child.exit(1)
+
+    await waitFor(() => {
+      expect(
+        observed.notes.some((note) =>
+          note.text.includes(
+            'The Codex process ended while it was waiting on you',
+          ),
+        ),
+      ).toBe(true)
+    })
+    expect(observed.attentions.at(-1)).not.toBe('needs-approval')
+
+    // The button is still on screen; clicking it must say something rather
+    // than swallow the click.
+    handle.approve?.('700')
+
+    await waitFor(() => {
+      expect(
+        observed.notes.some((note) => note.text.includes('had nowhere to go')),
+      ).toBe(true)
+    })
+  })
+})

@@ -46,6 +46,7 @@ import {
 } from '../context-window.pure'
 import {
   buildCodexErrorNote,
+  buildCodexProcessExitEntry,
   buildCodexThreadRecoveryEntry,
   buildTurnFailureEntry,
   classifyCodexErrorNotification,
@@ -81,6 +82,7 @@ import {
   type ProviderDebugSink,
 } from '../../provider-debug/provider-debug-sink'
 import { resolveCodexPermissionConfig } from '../session-permissions.pure'
+import { createRingBuffer } from '../../terminal/ring-buffer.pure'
 import type {
   ProviderDebugChannel,
   ProviderDebugEntry,
@@ -95,6 +97,14 @@ import type {
  * "thread/start response did not include a thread id" (MAR-2316).
  */
 const CODEX_THREAD_ID_BUDGET_MS = 60_000
+
+/**
+ * How much of the app-server's stderr we keep to quote in its obituary.
+ *
+ * A Rust panic plus its backtrace fits comfortably; the bound exists so a
+ * process that logs all day cannot grow the session's memory.
+ */
+const CODEX_STDERR_TAIL_BYTES = 8 * 1024
 
 async function loadCodexParts(
   attachments: Attachment[] | undefined,
@@ -950,12 +960,15 @@ export class CodexProvider implements Provider {
     /**
      * The account this session's `codex app-server` runs under.
      *
-     * Unlike Claude, Codex holds one long-lived process for the whole session
-     * rather than spawning per turn, so the credential is fixed when the server
-     * starts. ADR 0007's "switching accounts mid-conversation needs no process
-     * lifecycle management" is a property of the per-turn spawn model and does
-     * not carry over here — so a mid-session change is refused out loud rather
-     * than silently served by the account already running.
+     * A Codex session outlives its process but does not own one continuously:
+     * the app-server is spawned lazily and torn down whenever the session is
+     * released — which, since resource-release landed, is after every completed
+     * turn. What is fixed for the session's life is the *credential*, because
+     * every respawn re-reads it from the same closure. ADR 0007's "switching
+     * accounts mid-conversation needs no process lifecycle management" is a
+     * property of Claude's per-turn spawn model and does not carry over, so a
+     * mid-session change is refused out loud rather than silently served by
+     * whichever account the current process happens to hold.
      */
     const sessionAccountId = config.providerAccountId ?? null
     const debugSink = this.debugSink
@@ -1016,6 +1029,7 @@ export class CodexProvider implements Provider {
     // promise then never settled (MAR-2316).
     let threadReadyWaiters: Array<() => void> = []
     let activeProviderTurnId: string | null = null
+    let deadInteractionNoted = false
 
     function notifyThreadReadyWaiters(): void {
       const waiters = threadReadyWaiters
@@ -1037,7 +1051,12 @@ export class CodexProvider implements Provider {
       now,
     })
 
+    // What the session currently believes about itself. The process dying is
+    // only news while a turn is outstanding, and only this tells us that.
+    let currentStatus: SessionStatus = 'idle'
+
     function setStatus(status: SessionStatus): void {
+      currentStatus = status
       listeners.status.forEach((cb) => cb(status))
       sessionEmitter.patchSession({ status })
     }
@@ -1587,6 +1606,76 @@ export class CodexProvider implements Provider {
     }
 
     /**
+     * Answer everything the user was being asked for, when the process that
+     * asked is gone.
+     *
+     * A pending approval used to outlive its app-server: the map still held it,
+     * the session still showed "needs approval", and the click went to
+     * `if (!rpc) return` — swallowed, forever (MAR-2317).
+     */
+    function endPendingInteractions(): void {
+      const abandoned = pendingApprovals.size + pendingUserInputs.size
+      if (abandoned === 0) return
+
+      pendingApprovals.clear()
+      pendingUserInputs.clear()
+      sessionEmitter.addNote({
+        text:
+          abandoned === 1
+            ? 'The Codex process ended while it was waiting on you. Nothing was approved or answered.'
+            : `The Codex process ended while it was waiting on you (${abandoned} requests). Nothing was approved or answered.`,
+        level: 'warning',
+        timestamp: now(),
+      })
+      setAttention('none')
+    }
+
+    function answerApproval(
+      providerApprovalId: string | undefined,
+      decision: 'approve' | 'deny',
+    ): void {
+      const pendingApproval = findPendingApproval(
+        pendingApprovals,
+        providerApprovalId,
+      )
+
+      if (!pendingApproval || !rpc) {
+        // The click is real even when there is nothing left to answer; saying
+        // so beats the silent `if (!rpc) return` it replaces (MAR-2317).
+        if (!rpc) noteInteractionHasNowhereToGo()
+        if (pendingApproval) {
+          pendingApprovals.delete(pendingApproval[0])
+        }
+        if (pendingApprovals.size === 0) {
+          setAttention('none')
+        }
+        return
+      }
+
+      const [id, approvalRequest] = pendingApproval
+      rpc.respond(
+        id,
+        decision === 'approve'
+          ? approvalRequest.approveResult
+          : approvalRequest.denyResult,
+      )
+      pendingApprovals.delete(id)
+      if (pendingApprovals.size === 0) {
+        setAttention('none')
+      }
+    }
+
+    function noteInteractionHasNowhereToGo(): void {
+      if (deadInteractionNoted) return
+      deadInteractionNoted = true
+      sessionEmitter.addNote({
+        text: 'That request belonged to a Codex process that has already ended, so the answer had nowhere to go. Send a message to start a fresh one.',
+        level: 'warning',
+        timestamp: now(),
+      })
+    }
+
+    /**
      * Give up on this app-server without giving up on the session.
      *
      * A hung request or a dead pipe used to leave `rpc` truthy with nothing
@@ -1601,6 +1690,9 @@ export class CodexProvider implements Provider {
       const abandonedRpc = rpc
       child = null
       rpc = null
+      // A fresh process has never heard of this thread (MAR-2317).
+      threadReady = false
+      endPendingInteractions()
 
       sessionEmitter.addNote({
         text: `Lost the connection to the Codex app-server: ${reason}. The next message starts a fresh one.`,
@@ -1637,6 +1729,14 @@ export class CodexProvider implements Provider {
       // Captured so the lifecycle handlers below can tell their own process's
       // death from that of one we already abandoned and replaced.
       const spawnedChild = child
+      // This process has resumed nothing yet, whatever the last one had done.
+      // Without the reset, a respawn sent `turn/start` against a thread the
+      // new process had never heard of, and the session's survival came down
+      // to whether the error wording happened to contain "not found"
+      // (MAR-2317).
+      threadReady = false
+      deadInteractionNoted = false
+      const stderrTail = createRingBuffer(CODEX_STDERR_TAIL_BYTES)
 
       if (!child.stdin || !child.stdout) {
         sessionEmitter.addNote({
@@ -2039,6 +2139,9 @@ export class CodexProvider implements Provider {
       if (child.stderr) {
         child.stderr.on('data', (chunk: Buffer) => {
           recordDebug('stderr', { direction: 'in', bytes: chunk.length })
+          // Kept, not just counted: it is the only place the process ever says
+          // why it died (MAR-2317).
+          stderrTail.append(chunk.toString())
         })
       }
 
@@ -2049,19 +2152,30 @@ export class CodexProvider implements Provider {
           note: `child exited with code ${code}`,
         })
         flushAssistantBuffer()
+        const interruptedTurn = currentStatus === 'running'
         activeProviderTurnId = null
         applyActivity({ kind: 'close' })
-        if (code !== 0 && code !== null) {
+        threadReady = false
+        child = null
+        rpc?.destroy()
+        rpc = null
+        endPendingInteractions()
+
+        const exitEntry = buildCodexProcessExitEntry({
+          code,
+          stderrTail: stderrTail.snapshot(),
+          interruptedTurn,
+          timestamp: now(),
+        })
+        if (exitEntry) {
           sessionEmitter.addNote({
-            text: `Process exited with code ${code}`,
-            level: 'error',
+            text: exitEntry.text,
+            level: exitEntry.level,
+            timestamp: exitEntry.timestamp,
           })
           setStatus('failed')
           setAttention('failed')
         }
-        child = null
-        rpc?.destroy()
-        rpc = null
       })
 
       spawnedChild.on('error', (err) => {
@@ -2071,18 +2185,20 @@ export class CodexProvider implements Provider {
           note: `child error: ${err.message}`,
         })
         activeProviderTurnId = null
-        sessionEmitter.addNote({
-          text: `Process error: ${err.message}`,
-          level: 'error',
-        })
-        setStatus('failed')
-        setAttention('failed')
+        threadReady = false
         child = null
         // Mirrors the exit handler: leaving `rpc` alive here was what made the
         // next message write into a dead stdin instead of respawning
         // (MAR-2316).
         rpc?.destroy()
         rpc = null
+        endPendingInteractions()
+        sessionEmitter.addNote({
+          text: `Process error: ${err.message}`,
+          level: 'error',
+        })
+        setStatus('failed')
+        setAttention('failed')
       })
 
       void initialize(
@@ -2249,34 +2365,10 @@ export class CodexProvider implements Provider {
         })
       },
       approve: (providerApprovalId) => {
-        if (!rpc) return
-        const pendingApproval = findPendingApproval(
-          pendingApprovals,
-          providerApprovalId,
-        )
-        if (!pendingApproval) return
-
-        const [id, approvalRequest] = pendingApproval
-        rpc.respond(id, approvalRequest.approveResult)
-        pendingApprovals.delete(id)
-        if (pendingApprovals.size === 0) {
-          setAttention('none')
-        }
+        answerApproval(providerApprovalId, 'approve')
       },
       deny: (providerApprovalId) => {
-        if (!rpc) return
-        const pendingApproval = findPendingApproval(
-          pendingApprovals,
-          providerApprovalId,
-        )
-        if (!pendingApproval) return
-
-        const [id, approvalRequest] = pendingApproval
-        rpc.respond(id, approvalRequest.denyResult)
-        pendingApprovals.delete(id)
-        if (pendingApprovals.size === 0) {
-          setAttention('none')
-        }
+        answerApproval(providerApprovalId, 'deny')
       },
       dispose: disposeRuntime,
       stop: () => {

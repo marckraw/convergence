@@ -136,6 +136,46 @@ export function buildCodexErrorNote(
   return { text: `Error: ${message}`, level: 'error', timestamp }
 }
 
+/**
+ * What the session should say when the app-server process ends.
+ *
+ * Two silences used to live here (MAR-2317). A crash produced a bare "Process
+ * exited with code 1" while the process's own explanation sat unread in stderr;
+ * and an exit code of 0 in the middle of a turn produced nothing at all, so the
+ * session stayed "running" with no process behind it, forever.
+ *
+ * Returns `null` for the one exit that genuinely needs no note: a clean one
+ * while nothing was in flight.
+ */
+export function buildCodexProcessExitEntry(input: {
+  code: number | null
+  stderrTail: string
+  interruptedTurn: boolean
+  timestamp: string
+}): CodexNoteDraft | null {
+  const tail = input.stderrTail.trim()
+  const suffix = tail ? `: ${tail}` : ''
+  const crashed = input.code !== 0 && input.code !== null
+
+  if (crashed) {
+    return {
+      text: `Process exited with code ${input.code}${suffix}`,
+      level: 'error',
+      timestamp: input.timestamp,
+    }
+  }
+
+  if (input.interruptedTurn) {
+    return {
+      text: `The Codex process ended before finishing the turn${suffix}`,
+      level: 'error',
+      timestamp: input.timestamp,
+    }
+  }
+
+  return null
+}
+
 export function buildCodexThreadRecoveryEntry(
   timestamp: string,
 ): CodexNoteDraft {

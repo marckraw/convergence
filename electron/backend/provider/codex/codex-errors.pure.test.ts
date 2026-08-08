@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   buildCodexErrorNote,
+  buildCodexProcessExitEntry,
   buildCodexThreadRecoveryEntry,
   buildTurnFailureEntry,
   classifyCodexErrorNotification,
@@ -162,6 +163,74 @@ describe('buildCodexErrorNote', () => {
       level: 'error',
       timestamp,
     })
+  })
+})
+
+describe('buildCodexProcessExitEntry', () => {
+  const timestamp = '2026-08-09T10:00:00.000Z'
+
+  it('quotes what the process said on its way out', () => {
+    expect(
+      buildCodexProcessExitEntry({
+        code: 1,
+        stderrTail: 'thread panicked at core/src/client.rs:412\n',
+        interruptedTurn: true,
+        timestamp,
+      }),
+    ).toEqual({
+      text: 'Process exited with code 1: thread panicked at core/src/client.rs:412',
+      level: 'error',
+      timestamp,
+    })
+  })
+
+  it('still names the code when the process said nothing', () => {
+    expect(
+      buildCodexProcessExitEntry({
+        code: 137,
+        stderrTail: '   \n',
+        interruptedTurn: false,
+        timestamp,
+      }),
+    ).toEqual({
+      text: 'Process exited with code 137',
+      level: 'error',
+      timestamp,
+    })
+  })
+
+  it('refuses to let a clean exit mid-turn pass unremarked', () => {
+    expect(
+      buildCodexProcessExitEntry({
+        code: 0,
+        stderrTail: '',
+        interruptedTurn: true,
+        timestamp,
+      }),
+    ).toEqual({
+      text: 'The Codex process ended before finishing the turn',
+      level: 'error',
+      timestamp,
+    })
+  })
+
+  it('says nothing about a clean exit with nothing in flight', () => {
+    expect(
+      buildCodexProcessExitEntry({
+        code: 0,
+        stderrTail: '',
+        interruptedTurn: false,
+        timestamp,
+      }),
+    ).toBeNull()
+    expect(
+      buildCodexProcessExitEntry({
+        code: null,
+        stderrTail: '',
+        interruptedTurn: false,
+        timestamp,
+      }),
+    ).toBeNull()
   })
 })
 
