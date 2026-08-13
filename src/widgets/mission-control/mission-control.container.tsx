@@ -1,4 +1,4 @@
-import { useCallback, useMemo } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import type { FC } from 'react'
 import type { SessionSummary } from '@/entities/session'
 import {
@@ -13,7 +13,9 @@ interface MissionControlProps {
 }
 
 export const MissionControl: FC<MissionControlProps> = ({ onOpenSession }) => {
-  const { cards } = useMissionControlCards()
+  const [query, setQuery] = useState('')
+
+  const { cards, totalCount } = useMissionControlCards(query)
 
   const attentionCount = useMemo(
     () => cards.filter((card) => card.session.attention !== 'none').length,
@@ -33,9 +35,12 @@ export const MissionControl: FC<MissionControlProps> = ({ onOpenSession }) => {
 
   return (
     <MissionControlView
-      totalCount={cards.length}
+      totalCount={totalCount}
+      visibleCount={cards.length}
       attentionCount={attentionCount}
       runningCount={runningCount}
+      query={query}
+      onQueryChange={setQuery}
     >
       <div className="grid grid-cols-[repeat(auto-fill,minmax(260px,1fr))] gap-3">
         {cards.map((card) => (

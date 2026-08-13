@@ -187,6 +187,43 @@ describe('MissionControl', () => {
     expect(await screen.findByText('running tool: Grep')).toBeInTheDocument()
     expect(screen.queryByText('idle')).not.toBeInTheDocument()
   })
+  it('narrows cards as the search query is typed', async () => {
+    seed(
+      [
+        makeSession({ id: 'a', name: 'Wire the room', projectId: 'project-1' }),
+        makeSession({
+          id: 'b',
+          name: 'Fix the tunnel',
+          projectId: 'project-2',
+        }),
+      ],
+      [CLAUDE_CODE],
+    )
+
+    render(<MissionControl />)
+    await screen.findByText('Wire the room')
+
+    fireEvent.change(screen.getByLabelText('Search session cards'), {
+      target: { value: 'tunnel' },
+    })
+
+    expect(screen.queryByText('Wire the room')).not.toBeInTheDocument()
+    expect(screen.getByText('Fix the tunnel')).toBeInTheDocument()
+  })
+  it('tells the two empty states apart', async () => {
+    seed([], [CLAUDE_CODE])
+    const { unmount } = render(<MissionControl />)
+    expect(await screen.findByText('No sessions yet')).toBeInTheDocument()
+    unmount()
+
+    seed([makeSession({ id: 'a' })], [CLAUDE_CODE])
+    render(<MissionControl />)
+    await screen.findByText('Wire the room')
+    fireEvent.change(screen.getByLabelText('Search session cards'), {
+      target: { value: 'zzz' },
+    })
+    expect(screen.getByText(/No cards match/)).toBeInTheDocument()
+  })
   it('opens the session when a card is clicked', async () => {
     const onOpenSession = vi.fn()
     seed([makeSession({ id: 'a' })], [CLAUDE_CODE])
