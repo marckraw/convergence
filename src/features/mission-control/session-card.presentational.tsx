@@ -1,6 +1,7 @@
-import type { FC } from 'react'
-import { Loader2 } from 'lucide-react'
+import type { FC, ReactNode } from 'react'
+import { Loader2, Radio } from 'lucide-react'
 import { formatSessionAttentionLabel } from '@/entities/session'
+import { Button } from '@/shared/ui/button'
 import { SessionBadge } from '@/shared/ui/session-badge.presentational'
 import { cn } from '@/shared/lib/cn.pure'
 import type { SessionCard } from './mission-control.types'
@@ -12,10 +13,19 @@ import {
 
 interface SessionCardViewProps {
   card: SessionCard
+  hailOpen: boolean
   onOpen: (card: SessionCard) => void
+  onToggleHail: (card: SessionCard) => void
+  hailComposer?: ReactNode
 }
 
-export const SessionCardView: FC<SessionCardViewProps> = ({ card, onOpen }) => {
+export const SessionCardView: FC<SessionCardViewProps> = ({
+  card,
+  hailOpen,
+  onOpen,
+  onToggleHail,
+  hailComposer,
+}) => {
   const { session } = card
   const running = session.status === 'running'
   const needsYou = session.attention !== 'none'
@@ -25,6 +35,7 @@ export const SessionCardView: FC<SessionCardViewProps> = ({ card, onOpen }) => {
       className={cn(
         'group flex flex-col rounded-lg border bg-card/40 transition-colors',
         CARD_ATTENTION_STYLES[session.attention],
+        hailOpen && 'ring-1 ring-ring',
       )}
     >
       <div
@@ -89,7 +100,24 @@ export const SessionCardView: FC<SessionCardViewProps> = ({ card, onOpen }) => {
           ) : null}
           <span className="truncate">{card.activityLabel}</span>
         </span>
+
+        <Button
+          type="button"
+          variant={hailOpen ? 'secondary' : 'ghost'}
+          size="sm"
+          className="h-6 shrink-0 px-2 text-[11px] opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100 aria-expanded:opacity-100"
+          aria-expanded={hailOpen}
+          aria-label={`Hail ${session.name}`}
+          onClick={() => onToggleHail(card)}
+        >
+          <Radio className="size-3" />
+          Hail
+        </Button>
       </div>
+
+      {hailOpen && hailComposer ? (
+        <div className="border-t border-white/5 px-3 py-2">{hailComposer}</div>
+      ) : null}
     </div>
   )
 }

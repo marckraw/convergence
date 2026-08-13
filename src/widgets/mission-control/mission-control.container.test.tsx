@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { useProjectStore } from '@/entities/project'
 import { useSessionStore } from '@/entities/session'
@@ -74,6 +74,12 @@ const CLAUDE_CODE = makeProvider('claude-code', {
   supportsAppQueuedFollowUp: true,
   defaultRunningMode: 'follow-up',
 })
+const PI = makeProvider('pi', {
+  supportsNativeFollowUp: true,
+  supportsSteer: true,
+  defaultRunningMode: 'follow-up',
+})
+
 type SendMessage = SessionStore['sendMessageToSession']
 
 let sendMessageToSession: ReturnType<typeof vi.fn<SendMessage>>
@@ -120,6 +126,7 @@ describe('MissionControl', () => {
       session: { getAllSummaries },
     }
   })
+
   it('shows cards for sessions across more than one project', async () => {
     seed(
       [
@@ -140,6 +147,7 @@ describe('MissionControl', () => {
     expect(screen.getByText('Convergence')).toBeInTheDocument()
     expect(screen.getByText('Emergence')).toBeInTheDocument()
   })
+
   it('reads the summaries the app already holds instead of fetching again', async () => {
     seed([makeSession({ id: 'a' })], [CLAUDE_CODE])
 
@@ -148,6 +156,7 @@ describe('MissionControl', () => {
 
     expect(getAllSummaries).not.toHaveBeenCalled()
   })
+
   it('shows two agents in visibly different states at once', async () => {
     seed(
       [
@@ -167,6 +176,7 @@ describe('MissionControl', () => {
     expect(await screen.findByText('running tool: Bash')).toBeInTheDocument()
     expect(screen.getByText('idle')).toBeInTheDocument()
   })
+
   it('updates a card live when a summary update arrives for any session', async () => {
     const session = makeSession({ id: 'a', status: 'idle', activity: null })
     seed([session], [CLAUDE_CODE])
@@ -187,6 +197,7 @@ describe('MissionControl', () => {
     expect(await screen.findByText('running tool: Grep')).toBeInTheDocument()
     expect(screen.queryByText('idle')).not.toBeInTheDocument()
   })
+
   it('narrows cards as the search query is typed', async () => {
     seed(
       [
@@ -210,6 +221,7 @@ describe('MissionControl', () => {
     expect(screen.queryByText('Wire the room')).not.toBeInTheDocument()
     expect(screen.getByText('Fix the tunnel')).toBeInTheDocument()
   })
+
   it('tells the two empty states apart', async () => {
     seed([], [CLAUDE_CODE])
     const { unmount } = render(<MissionControl />)
@@ -224,6 +236,7 @@ describe('MissionControl', () => {
     })
     expect(screen.getByText(/No cards match/)).toBeInTheDocument()
   })
+
   it('opens the session when a card is clicked', async () => {
     const onOpenSession = vi.fn()
     seed([makeSession({ id: 'a' })], [CLAUDE_CODE])
@@ -234,5 +247,135 @@ describe('MissionControl', () => {
     expect(onOpenSession).toHaveBeenCalledWith(
       expect.objectContaining({ id: 'a' }),
     )
+  })
+
+  it('hails an idle session as a new turn, and says so before sending', async () => {
+    seed([makeSession({ id: 'a', status: 'idle' })], [CLAUDE_CODE])
+
+    render(<MissionControl />)
+    fireEvent.click(await screen.findByLabelText('Hail Wire the room'))
+
+    expect(screen.getByText('Starts a new turn')).toBeInTheDocument()
+
+    fireEvent.change(screen.getByLabelText('Hail message to Wire the room'), {
+      target: { value: 'status please' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }))
+
+    await waitFor(() => {
+      expect(sendMessageToSession).toHaveBeenCalledWith({
+        sessionId: 'a',
+        text: 'status please',
+        deliveryMode: undefined,
+      })
+    })
+  })
+
+  it('hails a running session as a queued input, and says so before sending', async () => {
+    seed(
+      [makeSession({ id: 'a', status: 'running', activity: 'streaming' })],
+      [CLAUDE_CODE],
+    )
+
+    render(<MissionControl />)
+    fireEvent.click(await screen.findByLabelText('Hail Wire the room'))
+
+    expect(
+      screen.getByText('Queues behind the current turn'),
+    ).toBeInTheDocument()
+
+    fireEvent.change(screen.getByLabelText('Hail message to Wire the room'), {
+      target: { value: 'also check the logs' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }))
+
+    await waitFor(() => {
+      expect(sendMessageToSession).toHaveBeenCalledWith({
+        sessionId: 'a',
+        text: 'also check the logs',
+        deliveryMode: 'follow-up',
+      })
+    })
+  })
+
+  it('does not claim to queue for a provider that takes follow-ups natively', async () => {
+    seed([makeSession({ id: 'a', providerId: 'pi', status: 'running' })], [PI])
+
+    render(<MissionControl />)
+    fireEvent.click(await screen.findByLabelText('Hail Wire the room'))
+
+    expect(
+      screen.getByText('Delivers into the current turn'),
+    ).toBeInTheDocument()
+    expect(
+      screen.queryByText('Queues behind the current turn'),
+    ).not.toBeInTheDocument()
+  })
+
+  it('flips the label when the session starts running mid-compose', async () => {
+    const session = makeSession({ id: 'a', status: 'idle' })
+    seed([session], [CLAUDE_CODE])
+
+    render(<MissionControl />)
+    fireEvent.click(await screen.findByLabelText('Hail Wire the room'))
+    expect(screen.getByText('Starts a new turn')).toBeInTheDocument()
+
+    fireEvent.change(screen.getByLabelText('Hail message to Wire the room'), {
+      target: { value: 'half-written thought' },
+    })
+
+    act(() => {
+      useSessionStore.getState().handleSessionSummaryUpdate({
+        ...session,
+        status: 'running',
+        activity: 'streaming',
+        updatedAt: '2026-08-13T11:00:00.000Z',
+      })
+    })
+
+    expect(
+      await screen.findByText('Queues behind the current turn'),
+    ).toBeInTheDocument()
+    expect(screen.queryByText('Starts a new turn')).not.toBeInTheDocument()
+    // The typed text survives the status change.
+    expect(screen.getByLabelText('Hail message to Wire the room')).toHaveValue(
+      'half-written thought',
+    )
+  })
+
+  it('keeps the composer open and shows the error when a hail fails', async () => {
+    seed([makeSession({ id: 'a', status: 'idle' })], [CLAUDE_CODE])
+    useSessionStore.setState({
+      sendMessageToSession: vi.fn(async () => {
+        useSessionStore.setState({ error: 'Provider unavailable' })
+      }),
+    })
+
+    render(<MissionControl />)
+    fireEvent.click(await screen.findByLabelText('Hail Wire the room'))
+    fireEvent.change(screen.getByLabelText('Hail message to Wire the room'), {
+      target: { value: 'are you there' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }))
+
+    expect(await screen.findByText('Provider unavailable')).toBeInTheDocument()
+    expect(screen.getByLabelText('Hail message to Wire the room')).toHaveValue(
+      'are you there',
+    )
+  })
+
+  it('does not navigate after a successful hail', async () => {
+    const onOpenSession = vi.fn()
+    seed([makeSession({ id: 'a', status: 'idle' })], [CLAUDE_CODE])
+
+    render(<MissionControl onOpenSession={onOpenSession} />)
+    fireEvent.click(await screen.findByLabelText('Hail Wire the room'))
+    fireEvent.change(screen.getByLabelText('Hail message to Wire the room'), {
+      target: { value: 'stay put' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }))
+
+    await waitFor(() => expect(sendMessageToSession).toHaveBeenCalled())
+    expect(onOpenSession).not.toHaveBeenCalled()
   })
 })

@@ -1,8 +1,12 @@
 import { useCallback, useMemo, useState } from 'react'
 import type { FC } from 'react'
+import { toast } from 'sonner'
+import { useSessionStore } from '@/entities/session'
 import type { SessionSummary } from '@/entities/session'
 import {
+  HailComposer,
   SessionCardView,
+  resolveHailOutcome,
   useMissionControlCards,
 } from '@/features/mission-control'
 import type { SessionCard } from '@/features/mission-control'
@@ -14,8 +18,16 @@ interface MissionControlProps {
 
 export const MissionControl: FC<MissionControlProps> = ({ onOpenSession }) => {
   const [query, setQuery] = useState('')
+  const [hailSessionId, setHailSessionId] = useState<string | null>(null)
+  const [hailText, setHailText] = useState('')
+  const [sending, setSending] = useState(false)
+  const [hailError, setHailError] = useState<string | null>(null)
 
   const { cards, totalCount } = useMissionControlCards(query)
+  const providers = useSessionStore((state) => state.providers)
+  const sendMessageToSession = useSessionStore(
+    (state) => state.sendMessageToSession,
+  )
 
   const attentionCount = useMemo(
     () => cards.filter((card) => card.session.attention !== 'none').length,
@@ -26,12 +38,73 @@ export const MissionControl: FC<MissionControlProps> = ({ onOpenSession }) => {
     [cards],
   )
 
+  const closeHail = useCallback(() => {
+    setHailSessionId(null)
+    setHailText('')
+    setHailError(null)
+  }, [])
+
+  const handleToggleHail = useCallback((card: SessionCard) => {
+    setHailError(null)
+    setHailSessionId((current) => {
+      const next = current === card.session.id ? null : card.session.id
+      if (next !== current) setHailText('')
+      return next
+    })
+  }, [])
+
   const handleOpen = useCallback(
     (card: SessionCard) => {
       onOpenSession?.(card.session)
     },
     [onOpenSession],
   )
+
+  // The outcome is recomputed from the live card on every render, so a status
+  // change arriving mid-compose flips the label before the send happens.
+  const hailCard = cards.find((card) => card.session.id === hailSessionId)
+  const hailOutcome = hailCard
+    ? resolveHailOutcome({
+        status: hailCard.session.status,
+        attention: hailCard.session.attention,
+        provider:
+          providers.find(
+            (provider) => provider.id === hailCard.session.providerId,
+          ) ?? null,
+      })
+    : null
+
+  const handleSend = useCallback(async () => {
+    if (!hailCard || !hailOutcome || hailOutcome.disabled) return
+    const text = hailText.trim()
+    if (!text) return
+
+    setSending(true)
+    setHailError(null)
+    try {
+      await sendMessageToSession({
+        sessionId: hailCard.session.id,
+        text,
+        deliveryMode:
+          hailOutcome.deliveryMode === 'normal'
+            ? undefined
+            : hailOutcome.deliveryMode,
+      })
+      const error = useSessionStore.getState().error
+      if (error) {
+        setHailError(error)
+        return
+      }
+      toast.success(`${hailOutcome.label} · ${hailCard.session.name}`)
+      closeHail()
+    } catch (err) {
+      setHailError(
+        err instanceof Error ? err.message : 'Failed to send the hail',
+      )
+    } finally {
+      setSending(false)
+    }
+  }, [closeHail, hailCard, hailOutcome, hailText, sendMessageToSession])
 
   return (
     <MissionControlView
@@ -47,7 +120,23 @@ export const MissionControl: FC<MissionControlProps> = ({ onOpenSession }) => {
           <SessionCardView
             key={card.session.id}
             card={card}
+            hailOpen={card.session.id === hailSessionId}
             onOpen={handleOpen}
+            onToggleHail={handleToggleHail}
+            hailComposer={
+              hailOutcome && card.session.id === hailSessionId ? (
+                <HailComposer
+                  sessionName={card.session.name}
+                  value={hailText}
+                  outcome={hailOutcome}
+                  sending={sending}
+                  error={hailError}
+                  onChange={setHailText}
+                  onSend={() => void handleSend()}
+                  onCancel={closeHail}
+                />
+              ) : null
+            }
           />
         ))}
       </div>
