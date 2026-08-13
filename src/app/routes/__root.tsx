@@ -91,6 +91,7 @@ function RootRoute() {
           }
           navigation.navigateToChatHome()
         }}
+        onShowMissionControl={navigation.navigateToMissionControl}
         onNewGlobalChat={navigation.navigateToChatHome}
       />
       <Outlet />

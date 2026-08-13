@@ -58,6 +58,7 @@ export function resolveMainViewRoute(
   switch (route.kind) {
     case 'home':
     case 'chat-home':
+    case 'mission-control':
       return ready(route)
     case 'new-code-session':
       return resolveWorkspaceRoute(input, route.workspaceId)

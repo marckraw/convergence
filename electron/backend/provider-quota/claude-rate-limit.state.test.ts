@@ -70,7 +70,9 @@ describe('ClaudeRateLimitState', () => {
   })
 
   it('tracks the ambient default separately from every enrolled account', () => {
-    const state = new ClaudeRateLimitState()
+    // Pinned clock: OBSERVATION's window resets on 2026-08-09, so a real clock
+    // makes this assertion evaporate once that date passes.
+    const state = stateAt({ value: new Date('2026-08-04T12:00:00.000Z') })
     state.record(
       { executionHostId: 'local', providerAccountId: null },
       OBSERVATION,
@@ -104,7 +106,7 @@ describe('ClaudeRateLimitState', () => {
   })
 
   it('replaces a reading rather than accumulating history', () => {
-    const state = new ClaudeRateLimitState()
+    const state = stateAt({ value: new Date('2026-08-04T12:00:00.000Z') })
     const scope = { executionHostId: 'local', providerAccountId: 'acct-a' }
     state.record(scope, OBSERVATION)
     state.record(scope, { ...OBSERVATION, status: 'rejected' })

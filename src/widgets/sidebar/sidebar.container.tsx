@@ -48,6 +48,7 @@ import {
   PanelLeftOpen,
   Pin,
   Plus,
+  Satellite,
   Settings,
 } from 'lucide-react'
 import {
@@ -74,6 +75,8 @@ interface SidebarProps {
   }) => void
   onSelectProjectRoot?: (projectId: string) => void | Promise<void>
   onSelectAnySession?: (session: SessionSummary) => void
+  onShowMissionControl?: () => void
+  missionControlActive?: boolean
   collapsed: boolean
   peek: boolean
   onCollapse: () => void
@@ -102,6 +105,8 @@ export const Sidebar: FC<SidebarProps> = ({
   onOpenCodeReview,
   onSelectProjectRoot,
   onSelectAnySession,
+  onShowMissionControl,
+  missionControlActive = false,
   collapsed,
   peek,
   onCollapse,
@@ -750,6 +755,20 @@ export const Sidebar: FC<SidebarProps> = ({
           >
             <MessageSquareText className="h-4 w-4" />
           </Button>
+          {onShowMissionControl ? (
+            <Button
+              type="button"
+              variant={missionControlActive ? 'secondary' : 'ghost'}
+              size="icon"
+              className="h-9 w-9"
+              title="Mission Control"
+              aria-label="Show Mission Control"
+              aria-pressed={missionControlActive}
+              onClick={onShowMissionControl}
+            >
+              <Satellite className="h-4 w-4" />
+            </Button>
+          ) : null}
         </div>
 
         <div className="flex min-h-0 flex-1 flex-col items-center gap-2 py-3">
@@ -926,6 +945,20 @@ export const Sidebar: FC<SidebarProps> = ({
           >
             <MessageSquareText className="h-4 w-4" />
           </Button>
+          {onShowMissionControl ? (
+            <Button
+              type="button"
+              variant={missionControlActive ? 'secondary' : 'ghost'}
+              size="icon"
+              className="h-8 w-8"
+              title="Mission Control"
+              aria-label="Show Mission Control"
+              aria-pressed={missionControlActive}
+              onClick={onShowMissionControl}
+            >
+              <Satellite className="h-4 w-4" />
+            </Button>
+          ) : null}
         </div>
 
         {peek ? (

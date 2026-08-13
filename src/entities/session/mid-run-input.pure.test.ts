@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { ProviderInfo } from '@/entities/session'
+import type { ProviderInfo } from './session.types'
 import { resolveMidRunInputPolicy } from './mid-run-input.pure'
 
 const provider = (

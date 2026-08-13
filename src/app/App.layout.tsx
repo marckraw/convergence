@@ -3,6 +3,7 @@ import type { FC } from 'react'
 import { Sidebar } from '@/widgets/sidebar'
 import { ChatSurface } from '@/widgets/chat-surface'
 import { GlobalStatusBar } from '@/widgets/global-status-bar'
+import { MissionControl } from '@/widgets/mission-control'
 import { WorkspaceLayout } from '@/widgets/workspace-layout'
 import { NotificationsOnboardingContainer } from '@/features/notifications-onboarding'
 import { useAppSurfaceStore } from '@/entities/app-surface'
@@ -50,6 +51,8 @@ interface AppShellProps {
   onSelectAnySession?: (session: SessionSummary) => void
   onShowCode?: () => void | Promise<void>
   onShowChat?: () => void
+  onShowMissionControl?: () => void
+  missionControlActive?: boolean
   onSelectProjectRoot?: (projectId: string) => void | Promise<void>
   onNewGlobalChat?: () => void
   routeDrivenNavigation?: boolean
@@ -87,6 +90,8 @@ export const AppShell: FC<AppShellProps> = ({
   onSelectAnySession,
   onShowCode,
   onShowChat,
+  onShowMissionControl,
+  missionControlActive = false,
   onSelectProjectRoot,
   onNewGlobalChat,
   routeDrivenNavigation = false,
@@ -296,6 +301,8 @@ export const AppShell: FC<AppShellProps> = ({
               onOpenCodeReview={onOpenCodeReview}
               onSelectProjectRoot={onSelectProjectRoot}
               onSelectAnySession={onSelectAnySession}
+              onShowMissionControl={onShowMissionControl}
+              missionControlActive={missionControlActive}
               collapsed={sidebarCollapsed && !sidebarPeekOpen}
               peek={sidebarCollapsed && sidebarPeekOpen}
               onCollapse={handleCollapseSidebar}
@@ -322,6 +329,8 @@ export const AppShell: FC<AppShellProps> = ({
               fallback={routeFallback}
               onAction={onRouteFallbackAction ?? (() => undefined)}
             />
+          ) : missionControlActive ? (
+            <MissionControl onOpenSession={onSelectAnySession} />
           ) : activeSurface === 'chat' ? (
             <ChatSurface
               selectedSpaceId={effectiveSelectedChatSpaceId}

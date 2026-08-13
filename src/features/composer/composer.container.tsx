@@ -14,7 +14,10 @@ import {
   withCodexApprovalPolicy,
   withCodexSandbox,
 } from '@/entities/session'
-import { selectLatestAgentMessageId } from '@/entities/session'
+import {
+  resolveMidRunInputPolicy,
+  selectLatestAgentMessageId,
+} from '@/entities/session'
 import {
   compileAnnotationsIntoPrompt,
   selectPendingAnnotations,
@@ -71,7 +74,6 @@ import {
   type ComposerInjectionRootItem,
 } from './composer-injection-trigger.pure'
 import { filterComposerPrompts } from './composer-prompt-injection.pure'
-import { resolveMidRunInputPolicy } from './mid-run-input.pure'
 import { isRemoteHostEligible } from './remote-host-toggle.pure'
 import { CodexUsagePillContainer } from './codex-usage-pill.container'
 import { shouldShowCodexUsagePill } from './codex-usage-pill.pure'

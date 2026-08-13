@@ -31,6 +31,8 @@ export function routeMatchToMainViewRoute(
         view: parseCodeReviewView(match.search.view),
         filePath: parseOptionalString(match.search.file),
       }
+    case '/mission-control':
+      return { kind: 'mission-control' }
     case '/chat/':
     case '/chat':
       return { kind: 'chat-home' }

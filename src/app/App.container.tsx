@@ -44,6 +44,7 @@ import { resolveMainViewRoute } from './routes/main-view-route-resolution.pure'
 
 export type MainViewRoute =
   | { kind: 'home' }
+  | { kind: 'mission-control' }
   | { kind: 'code-session'; sessionId: string }
   | { kind: 'new-code-session'; workspaceId: string | null }
   | { kind: 'chat-home' }
@@ -82,6 +83,7 @@ interface AppProps {
   onShowCode?: () => void | Promise<void>
   onShowCodeHome?: () => void | Promise<void>
   onShowChat?: () => void
+  onShowMissionControl?: () => void
   onNewGlobalChat?: () => void
 }
 
@@ -100,6 +102,7 @@ export function App({
   onShowCode,
   onShowCodeHome,
   onShowChat,
+  onShowMissionControl,
   onNewGlobalChat,
 }: AppProps) {
   const routeCodeSessionId =
@@ -127,6 +130,7 @@ export function App({
     mainViewRoute.kind === 'chat-session' ||
     mainViewRoute.kind === 'chat-space'
   const routeChatSpaceActive = mainViewRoute.kind === 'chat-space'
+  const routeMissionControlActive = mainViewRoute.kind === 'mission-control'
   const loadActiveProject = useProjectStore((s) => s.loadActiveProject)
   const projects = useProjectStore((s) => s.projects)
   const activeProject = useProjectStore((s) => s.activeProject)
@@ -600,6 +604,8 @@ export function App({
         onShowCode={onShowCode}
         onSelectProjectRoot={handleSelectProjectRoot}
         onShowChat={onShowChat}
+        onShowMissionControl={onShowMissionControl}
+        missionControlActive={routeMissionControlActive}
         onNewGlobalChat={onNewGlobalChat}
         routeDrivenNavigation={
           !!(
