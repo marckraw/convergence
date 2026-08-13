@@ -3,7 +3,7 @@ import type {
   MidRunInputMode,
   ProviderInfo,
   SessionStatus,
-} from '@/entities/session'
+} from './session.types'
 
 export interface ResolveMidRunInputPolicyInput {
   status: SessionStatus | null

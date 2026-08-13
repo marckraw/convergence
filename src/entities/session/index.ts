@@ -81,6 +81,11 @@ export {
   formatSessionAttentionLabel,
   summarizeAttentionRequests,
 } from './session-attention.pure'
+export { resolveMidRunInputPolicy } from './mid-run-input.pure'
+export type {
+  MidRunInputPolicy,
+  ResolveMidRunInputPolicyInput,
+} from './mid-run-input.pure'
 export type { GlobalStatus, ProjectActivity } from './session.selectors.pure'
 export { formatActivityLabel } from './session.activity.pure'
 export { providerApi, sessionApi } from './session.api'
