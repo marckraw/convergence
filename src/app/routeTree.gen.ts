@@ -9,6 +9,7 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as MissionControlRouteImport } from './routes/mission-control'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as ChatIndexRouteImport } from './routes/chat/index'
 import { Route as CodeReviewRouteImport } from './routes/code/review'
@@ -17,6 +18,11 @@ import { Route as CodeSessionsSessionIdRouteImport } from './routes/code/session
 import { Route as ChatSpaceSpaceIdRouteImport } from './routes/chat/space/$spaceId'
 import { Route as ChatSessionSessionIdRouteImport } from './routes/chat/session/$sessionId'
 
+const MissionControlRoute = MissionControlRouteImport.update({
+  id: '/mission-control',
+  path: '/mission-control',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
@@ -55,6 +61,7 @@ const ChatSessionSessionIdRoute = ChatSessionSessionIdRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/mission-control': typeof MissionControlRoute
   '/code/review': typeof CodeReviewRoute
   '/chat/': typeof ChatIndexRoute
   '/chat/session/$sessionId': typeof ChatSessionSessionIdRoute
@@ -64,6 +71,7 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/mission-control': typeof MissionControlRoute
   '/code/review': typeof CodeReviewRoute
   '/chat': typeof ChatIndexRoute
   '/chat/session/$sessionId': typeof ChatSessionSessionIdRoute
@@ -74,6 +82,7 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/mission-control': typeof MissionControlRoute
   '/code/review': typeof CodeReviewRoute
   '/chat/': typeof ChatIndexRoute
   '/chat/session/$sessionId': typeof ChatSessionSessionIdRoute
@@ -85,6 +94,7 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/mission-control'
     | '/code/review'
     | '/chat/'
     | '/chat/session/$sessionId'
@@ -94,6 +104,7 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/mission-control'
     | '/code/review'
     | '/chat'
     | '/chat/session/$sessionId'
@@ -103,6 +114,7 @@ export interface FileRouteTypes {
   id:
     | '__root__'
     | '/'
+    | '/mission-control'
     | '/code/review'
     | '/chat/'
     | '/chat/session/$sessionId'
@@ -113,6 +125,7 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  MissionControlRoute: typeof MissionControlRoute
   CodeReviewRoute: typeof CodeReviewRoute
   ChatIndexRoute: typeof ChatIndexRoute
   ChatSessionSessionIdRoute: typeof ChatSessionSessionIdRoute
@@ -123,6 +136,13 @@ export interface RootRouteChildren {
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/mission-control': {
+      id: '/mission-control'
+      path: '/mission-control'
+      fullPath: '/mission-control'
+      preLoaderRoute: typeof MissionControlRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/': {
       id: '/'
       path: '/'
@@ -177,6 +197,7 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  MissionControlRoute: MissionControlRoute,
   CodeReviewRoute: CodeReviewRoute,
   ChatIndexRoute: ChatIndexRoute,
   ChatSessionSessionIdRoute: ChatSessionSessionIdRoute,

@@ -218,6 +218,23 @@ the Session runtime but omits repository, Workspace, branch, Pull Request,
 Changed Files, and Project Settings affordances.
 _Avoid_: ChatGPT clone, hidden Project, separate chat runtime
 
+**Mission Control**:
+The surface that shows every Session across every Project as live Session
+Cards, searchable, with the ability to Hail any Session.
+_Avoid_: Dashboard, overview page, sessions list
+
+**Session Card**:
+Mission Control's rendering of one Session as the agent working: Session
+Summary + Activity + Attention as a single live unit. Never the conversation
+content — the transcript is the drill-down.
+_Avoid_: Node, tile, session preview
+
+**Hail**:
+A message composed in Mission Control and sent to a Session without opening its
+transcript; delivered as a new Turn when the Session is idle, or as Queued
+Input when it is running.
+_Avoid_: External send, remote prompt, dispatch (reserved)
+
 **Main View**:
 The routed, full-window work area to the right of the sidebar and above the
 Global Status Bar. A Main View is a durable place the user can navigate to,
