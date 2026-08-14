@@ -8,6 +8,8 @@
     "prepare:release-notes": "node tools/generate-release-notes-json.mjs",
     "dev": "npm run prepare:release-notes && electron-rebuild --force -o better-sqlite3,node-pty && electron-vite dev",
     "dev:clean": "node tools/dev-clean.mjs",
+    "dev:sandbox": "node tools/dev-sandbox.mjs",
+    "dev:seed": "node tools/dev-seed.mjs",
     "build": "npm run prepare:release-notes && electron-rebuild --force -o better-sqlite3,node-pty && electron-vite build",
     "build:preview": "npm run prepare:release-notes && electron-vite build && electron-vite preview",
     "package:mac": "npm run build && electron-builder --mac dmg zip --x64 --arm64 --publish never",
