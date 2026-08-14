@@ -1,19 +1,16 @@
 import { useCallback, useMemo, useState } from 'react'
 import type { FC } from 'react'
-import { toast } from 'sonner'
-import { useSessionStore } from '@/entities/session'
 import type { SessionSummary } from '@/entities/session'
 import {
-  HailComposer,
   SessionCardView,
   SessionFacetPicker,
   SessionStateChips,
   isEmptySessionCardFilter,
-  resolveHailOutcome,
   useMissionControlCards,
   useMissionControlView,
 } from '@/features/mission-control'
 import type { SessionCard } from '@/features/mission-control'
+import { HailDialog } from './hail-dialog.container'
 import { MissionControlView } from './mission-control.presentational'
 
 interface MissionControlProps {
@@ -35,17 +32,9 @@ export const MissionControl: FC<MissionControlProps> = ({ onOpenSession }) => {
     clearFilter,
   } = useMissionControlView()
   const [hailSessionId, setHailSessionId] = useState<string | null>(null)
-  const [hailText, setHailText] = useState('')
-  const [sending, setSending] = useState(false)
-  const [hailError, setHailError] = useState<string | null>(null)
 
   const { cards, totalCount, stateCounts, projectFacets, providerFacets } =
     useMissionControlCards({ filter, order })
-  const providers = useSessionStore((state) => state.providers)
-  const sendMessageToSession = useSessionStore(
-    (state) => state.sendMessageToSession,
-  )
-
   const attentionCount = useMemo(
     () => cards.filter((card) => card.session.attention !== 'none').length,
     [cards],
@@ -55,19 +44,12 @@ export const MissionControl: FC<MissionControlProps> = ({ onOpenSession }) => {
     [cards],
   )
 
-  const closeHail = useCallback(() => {
-    setHailSessionId(null)
-    setHailText('')
-    setHailError(null)
+  const handleHail = useCallback((card: SessionCard) => {
+    setHailSessionId(card.session.id)
   }, [])
 
-  const handleToggleHail = useCallback((card: SessionCard) => {
-    setHailError(null)
-    setHailSessionId((current) => {
-      const next = current === card.session.id ? null : card.session.id
-      if (next !== current) setHailText('')
-      return next
-    })
+  const handleHailOpenChange = useCallback((open: boolean) => {
+    if (!open) setHailSessionId(null)
   }, [])
 
   const handleOpen = useCallback(
@@ -77,51 +59,9 @@ export const MissionControl: FC<MissionControlProps> = ({ onOpenSession }) => {
     [onOpenSession],
   )
 
-  // The outcome is recomputed from the live card on every render, so a status
-  // change arriving mid-compose flips the label before the send happens.
+  // Read from the live card list, so a Hail left open while its Session
+  // changes state shows the new state rather than the one it opened on.
   const hailCard = cards.find((card) => card.session.id === hailSessionId)
-  const hailOutcome = hailCard
-    ? resolveHailOutcome({
-        status: hailCard.session.status,
-        attention: hailCard.session.attention,
-        provider:
-          providers.find(
-            (provider) => provider.id === hailCard.session.providerId,
-          ) ?? null,
-      })
-    : null
-
-  const handleSend = useCallback(async () => {
-    if (!hailCard || !hailOutcome || hailOutcome.disabled) return
-    const text = hailText.trim()
-    if (!text) return
-
-    setSending(true)
-    setHailError(null)
-    try {
-      await sendMessageToSession({
-        sessionId: hailCard.session.id,
-        text,
-        deliveryMode:
-          hailOutcome.deliveryMode === 'normal'
-            ? undefined
-            : hailOutcome.deliveryMode,
-      })
-      const error = useSessionStore.getState().error
-      if (error) {
-        setHailError(error)
-        return
-      }
-      toast.success(`${hailOutcome.label} · ${hailCard.session.name}`)
-      closeHail()
-    } catch (err) {
-      setHailError(
-        err instanceof Error ? err.message : 'Failed to send the hail',
-      )
-    } finally {
-      setSending(false)
-    }
-  }, [closeHail, hailCard, hailOutcome, hailText, sendMessageToSession])
 
   return (
     <MissionControlView
@@ -173,24 +113,12 @@ export const MissionControl: FC<MissionControlProps> = ({ onOpenSession }) => {
             card={card}
             hailOpen={card.session.id === hailSessionId}
             onOpen={handleOpen}
-            onToggleHail={handleToggleHail}
-            hailComposer={
-              hailOutcome && card.session.id === hailSessionId ? (
-                <HailComposer
-                  sessionName={card.session.name}
-                  value={hailText}
-                  outcome={hailOutcome}
-                  sending={sending}
-                  error={hailError}
-                  onChange={setHailText}
-                  onSend={() => void handleSend()}
-                  onCancel={closeHail}
-                />
-              ) : null
-            }
+            onHail={handleHail}
           />
         ))}
       </div>
+
+      <HailDialog card={hailCard ?? null} onOpenChange={handleHailOpenChange} />
     </MissionControlView>
   )
 }

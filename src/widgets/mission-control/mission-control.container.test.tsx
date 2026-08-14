@@ -7,7 +7,17 @@ import type {
   SessionStore,
   SessionSummary,
 } from '@/entities/session'
+import type { ComposerSessionContext } from '@/features/composer'
 import { MissionControl } from './mission-control.container'
+
+// The Hail must render the app's real composer, not a copy of it. The widget's
+// job is aiming it at the right Session; what the composer then does is the
+// composer's own business, and its own tests.
+vi.mock('@/features/composer', () => ({
+  ComposerContainer: ({ context }: { context: ComposerSessionContext }) => (
+    <div data-testid="composer" data-context={JSON.stringify(context)} />
+  ),
+}))
 
 function makeSession(overrides: Partial<SessionSummary> = {}): SessionSummary {
   return {
@@ -72,11 +82,6 @@ function makeProvider(
 const CLAUDE_CODE = makeProvider('claude-code', {
   supportsAnswer: true,
   supportsAppQueuedFollowUp: true,
-  defaultRunningMode: 'follow-up',
-})
-const PI = makeProvider('pi', {
-  supportsNativeFollowUp: true,
-  supportsSteer: true,
   defaultRunningMode: 'follow-up',
 })
 
@@ -249,80 +254,57 @@ describe('MissionControl', () => {
     )
   })
 
-  it('hails an idle session as a new turn, and says so before sending', async () => {
-    seed([makeSession({ id: 'a', status: 'idle' })], [CLAUDE_CODE])
+  it('opens the real composer, aimed at the hailed session', async () => {
+    seed([makeSession({ id: 'a', projectId: 'project-1' })], [CLAUDE_CODE])
 
     render(<MissionControl />)
+    expect(screen.queryByTestId('composer')).not.toBeInTheDocument()
+
     fireEvent.click(await screen.findByLabelText('Hail Wire the room'))
 
-    expect(screen.getByText('Starts a new turn')).toBeInTheDocument()
-
-    fireEvent.change(screen.getByLabelText('Hail message to Wire the room'), {
-      target: { value: 'status please' },
-    })
-    fireEvent.click(screen.getByRole('button', { name: 'Send' }))
-
-    await waitFor(() => {
-      expect(sendMessageToSession).toHaveBeenCalledWith({
-        sessionId: 'a',
-        text: 'status please',
-        deliveryMode: undefined,
-      })
+    const composer = await screen.findByTestId('composer')
+    expect(JSON.parse(composer.dataset.context ?? '{}')).toEqual({
+      kind: 'project',
+      projectId: 'project-1',
+      workspaceId: null,
+      activeSessionId: 'a',
     })
   })
 
-  it('hails a running session as a queued input, and says so before sending', async () => {
+  it('hails a chat session through the global composer context', async () => {
     seed(
-      [makeSession({ id: 'a', status: 'running', activity: 'streaming' })],
+      [
+        makeSession({
+          id: 'chat',
+          contextKind: 'global',
+          projectId: null,
+          name: 'Ask about the room',
+        }),
+      ],
       [CLAUDE_CODE],
     )
 
     render(<MissionControl />)
-    fireEvent.click(await screen.findByLabelText('Hail Wire the room'))
+    fireEvent.click(await screen.findByLabelText('Hail Ask about the room'))
 
-    expect(
-      screen.getByText('Queues behind the current turn'),
-    ).toBeInTheDocument()
-
-    fireEvent.change(screen.getByLabelText('Hail message to Wire the room'), {
-      target: { value: 'also check the logs' },
-    })
-    fireEvent.click(screen.getByRole('button', { name: 'Send' }))
-
-    await waitFor(() => {
-      expect(sendMessageToSession).toHaveBeenCalledWith({
-        sessionId: 'a',
-        text: 'also check the logs',
-        deliveryMode: 'follow-up',
-      })
+    const composer = await screen.findByTestId('composer')
+    expect(JSON.parse(composer.dataset.context ?? '{}')).toEqual({
+      kind: 'global',
+      activeSessionId: 'chat',
     })
   })
 
-  it('does not claim to queue for a provider that takes follow-ups natively', async () => {
-    seed([makeSession({ id: 'a', providerId: 'pi', status: 'running' })], [PI])
-
-    render(<MissionControl />)
-    fireEvent.click(await screen.findByLabelText('Hail Wire the room'))
-
-    expect(
-      screen.getByText('Delivers into the current turn'),
-    ).toBeInTheDocument()
-    expect(
-      screen.queryByText('Queues behind the current turn'),
-    ).not.toBeInTheDocument()
-  })
-
-  it('flips the label when the session starts running mid-compose', async () => {
+  it('names the session and its live state above the composer', async () => {
     const session = makeSession({ id: 'a', status: 'idle' })
     seed([session], [CLAUDE_CODE])
 
     render(<MissionControl />)
     fireEvent.click(await screen.findByLabelText('Hail Wire the room'))
-    expect(screen.getByText('Starts a new turn')).toBeInTheDocument()
 
-    fireEvent.change(screen.getByLabelText('Hail message to Wire the room'), {
-      target: { value: 'half-written thought' },
-    })
+    expect(await screen.findByText('Hail Wire the room')).toBeInTheDocument()
+    expect(screen.getByText(/Convergence · Anthropic/)).toHaveTextContent(
+      'idle',
+    )
 
     act(() => {
       useSessionStore.getState().handleSessionSummaryUpdate({
@@ -333,49 +315,27 @@ describe('MissionControl', () => {
       })
     })
 
-    expect(
-      await screen.findByText('Queues behind the current turn'),
-    ).toBeInTheDocument()
-    expect(screen.queryByText('Starts a new turn')).not.toBeInTheDocument()
-    // The typed text survives the status change.
-    expect(screen.getByLabelText('Hail message to Wire the room')).toHaveValue(
-      'half-written thought',
-    )
+    // The Hail reads the live card, so the state it shows keeps up.
+    await waitFor(() => {
+      expect(screen.getByText(/Convergence · Anthropic/)).toHaveTextContent(
+        'writing response…',
+      )
+    })
   })
 
-  it('keeps the composer open and shows the error when a hail fails', async () => {
-    seed([makeSession({ id: 'a', status: 'idle' })], [CLAUDE_CODE])
-    useSessionStore.setState({
-      sendMessageToSession: vi.fn(async () => {
-        useSessionStore.setState({ error: 'Provider unavailable' })
-      }),
-    })
-
-    render(<MissionControl />)
-    fireEvent.click(await screen.findByLabelText('Hail Wire the room'))
-    fireEvent.change(screen.getByLabelText('Hail message to Wire the room'), {
-      target: { value: 'are you there' },
-    })
-    fireEvent.click(screen.getByRole('button', { name: 'Send' }))
-
-    expect(await screen.findByText('Provider unavailable')).toBeInTheDocument()
-    expect(screen.getByLabelText('Hail message to Wire the room')).toHaveValue(
-      'are you there',
-    )
-  })
-
-  it('does not navigate after a successful hail', async () => {
+  it('closes the hail without navigating to the session', async () => {
     const onOpenSession = vi.fn()
-    seed([makeSession({ id: 'a', status: 'idle' })], [CLAUDE_CODE])
+    seed([makeSession({ id: 'a' })], [CLAUDE_CODE])
 
     render(<MissionControl onOpenSession={onOpenSession} />)
     fireEvent.click(await screen.findByLabelText('Hail Wire the room'))
-    fireEvent.change(screen.getByLabelText('Hail message to Wire the room'), {
-      target: { value: 'stay put' },
-    })
-    fireEvent.click(screen.getByRole('button', { name: 'Send' }))
+    expect(await screen.findByTestId('composer')).toBeInTheDocument()
 
-    await waitFor(() => expect(sendMessageToSession).toHaveBeenCalled())
+    fireEvent.click(screen.getByRole('button', { name: 'Close' }))
+
+    await waitFor(() =>
+      expect(screen.queryByTestId('composer')).not.toBeInTheDocument(),
+    )
     expect(onOpenSession).not.toHaveBeenCalled()
   })
 })

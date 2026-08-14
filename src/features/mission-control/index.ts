@@ -12,9 +12,6 @@ export type {
   MissionControlCardsInput,
 } from './use-mission-control-cards'
 export { SessionCardView } from './session-card.presentational'
-export { HailComposer } from './hail-composer.presentational'
-export { resolveHailOutcome } from './session-hail-outcome.pure'
-export type { HailOutcome, HailOutcomeKind } from './session-hail-outcome.pure'
 export { buildSessionCards } from './mission-control-cards.pure'
 export { SessionStateChips } from './session-state-chips.presentational'
 export { SessionFacetPicker } from './session-facet-picker.container'
