@@ -77,8 +77,6 @@ import { filterComposerPrompts } from './composer-prompt-injection.pure'
 import { isRemoteHostEligible } from './remote-host-toggle.pure'
 import { CodexUsagePillContainer } from './codex-usage-pill.container'
 import { shouldShowCodexUsagePill } from './codex-usage-pill.pure'
-import { ClaudeUsagePillContainer } from './claude-usage-pill.container'
-import { shouldShowClaudeUsagePill } from './claude-usage-pill.pure'
 import { ContextWindowDot } from './context-window-dot.container'
 import { Button } from '@/shared/ui/button'
 import { X } from 'lucide-react'
@@ -171,9 +169,6 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
   const [codexUsageSnapshot, setCodexUsageSnapshot] =
     useState<ProviderQuotaSnapshot | null>(null)
   const [codexUsageLoading, setCodexUsageLoading] = useState(false)
-  const [claudeUsageSnapshot, setClaudeUsageSnapshot] =
-    useState<ProviderQuotaSnapshot | null>(null)
-  const [claudeUsageLoading, setClaudeUsageLoading] = useState(false)
   const providers = useSessionStore((s) => s.providers)
   const openDialog = useDialogStore((s) => s.open)
   const loadProviders = useSessionStore((s) => s.loadProviders)
@@ -464,7 +459,6 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
     activeSession ? undefined : storedDefaults,
   )
   const showCodexUsagePill = shouldShowCodexUsagePill(selection)
-  const showClaudeUsagePill = shouldShowClaudeUsagePill(selection)
   const remoteHostEligible =
     !activeSession &&
     isRemoteHostEligible({
@@ -825,37 +819,6 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
     [showCodexUsagePill],
   )
 
-  const loadClaudeUsage = useCallback(
-    async (forceRefresh = false) => {
-      if (!showClaudeUsagePill) return
-      setClaudeUsageLoading(true)
-      try {
-        setClaudeUsageSnapshot(
-          findProviderQuotaSnapshot(
-            // Scoped to the account that will serve the next turn, so the
-            // provider's own limit reading is that account's rather than
-            // whichever account last happened to run one.
-            await providerQuotaApi.list(forceRefresh, {
-              executionHostId:
-                activeSession?.executionHost === 'remote' ? 'remote' : 'local',
-              providerAccountId: selectedProviderAccountId,
-            }),
-            'claude-code',
-          ),
-        )
-      } catch {
-        setClaudeUsageSnapshot(null)
-      } finally {
-        setClaudeUsageLoading(false)
-      }
-    },
-    [
-      activeSession?.executionHost,
-      selectedProviderAccountId,
-      showClaudeUsagePill,
-    ],
-  )
-
   useEffect(() => {
     if (!showCodexUsagePill) {
       setCodexUsageSnapshot(null)
@@ -869,20 +832,6 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
     }, 120_000)
     return () => window.clearInterval(intervalId)
   }, [loadCodexUsage, showCodexUsagePill])
-
-  useEffect(() => {
-    if (!showClaudeUsagePill) {
-      setClaudeUsageSnapshot(null)
-      setClaudeUsageLoading(false)
-      return undefined
-    }
-
-    void loadClaudeUsage(false)
-    const intervalId = window.setInterval(() => {
-      void loadClaudeUsage(false)
-    }, 120_000)
-    return () => window.clearInterval(intervalId)
-  }, [loadClaudeUsage, showClaudeUsagePill])
 
   const isSessionDone =
     !activeSession ||
@@ -1219,13 +1168,6 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
               snapshot={codexUsageSnapshot}
               isLoading={codexUsageLoading}
               onRefresh={() => void loadCodexUsage(true)}
-              onOpenSettings={handleProviderUsageSettingsOpen}
-            />
-          ) : showClaudeUsagePill ? (
-            <ClaudeUsagePillContainer
-              snapshot={claudeUsageSnapshot}
-              isLoading={claudeUsageLoading}
-              onRefresh={() => void loadClaudeUsage(true)}
               onOpenSettings={handleProviderUsageSettingsOpen}
             />
           ) : null

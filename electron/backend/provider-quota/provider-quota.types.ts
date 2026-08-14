@@ -4,14 +4,17 @@ export type ProviderQuotaProviderId =
   | 'cursor'
   | 'antigravity'
 
+export interface ProviderQuotaAccountScope {
+  /** Accounts are host-scoped since PA1; remote hosts fail closed (PA10). */
+  executionHostId: string
+  providerAccountId: string | null
+}
+
 export type ProviderQuotaWindowKind = 'five-hour' | 'weekly' | 'other'
 export type ProviderQuotaWindowDisplayMode =
   | 'remaining-quota'
   | 'observed-usage'
-export type ProviderQuotaSource =
-  | 'provider-api'
-  | 'provider-event'
-  | 'local-usage-log'
+export type ProviderQuotaSource = 'provider-api' | 'provider-event'
 
 export interface ProviderQuotaWindow {
   kind: ProviderQuotaWindowKind
@@ -23,25 +26,6 @@ export interface ProviderQuotaWindow {
   displayMode?: ProviderQuotaWindowDisplayMode
   valueLabel?: string
   resetLabel?: string
-}
-
-/**
- * What the provider itself said about this account's limits (ADR 0007, PA8).
- *
- * Distinct from `windows`, which for Claude come from ccusage reading the
- * shared transcript store and are therefore machine-wide. This is the only
- * account-authoritative usage signal, and it carries no percentage — so none
- * is reported.
- */
-export interface ProviderRateLimitSignal {
-  /** The account the signal was observed on; null is the ambient default. */
-  providerAccountId: string | null
-  /** Verbatim provider state, e.g. `allowed`, `allowed_warning`, `rejected`. */
-  status: string
-  /** Which window, e.g. `five_hour` or `seven_day`. Null when unreported. */
-  rateLimitType: string | null
-  resetsAt: string | null
-  observedAt: string
 }
 
 export interface ProviderCreditsQuota {
@@ -60,7 +44,6 @@ export interface ProviderQuotaAvailableSnapshot {
   limitReachedType: string | null
   lastCheckedAt: string
   stale: boolean
-  rateLimit?: ProviderRateLimitSignal | null
 }
 
 export interface ProviderQuotaUnavailableSnapshot {
@@ -71,12 +54,6 @@ export interface ProviderQuotaUnavailableSnapshot {
   usageUrl?: string
   lastCheckedAt: string
   stale: boolean
-  /**
-   * Carried on the unavailable snapshot too: ccusage failing says nothing about
-   * whether the provider told us we are at a limit, and that is exactly the
-   * moment the answer matters most.
-   */
-  rateLimit?: ProviderRateLimitSignal | null
 }
 
 export type ProviderQuotaSnapshot =

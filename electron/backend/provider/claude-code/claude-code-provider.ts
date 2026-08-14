@@ -83,11 +83,6 @@ import {
   describeMcpAuthorizationNote,
   matchClaudeMcpAuthFailure,
 } from '../../provider-account/provider-account-mcp.pure'
-import {
-  parseClaudeRateLimitEvent,
-  PROVIDER_QUOTA_LOCAL_EXECUTION_HOST_ID,
-} from '../../provider-quota/claude-rate-limit.pure'
-import type { ClaudeRateLimitState } from '../../provider-quota/claude-rate-limit.state'
 
 function now(): string {
   return new Date().toISOString()
@@ -261,12 +256,6 @@ export class ClaudeCodeProvider implements Provider {
     private version: string | null = null,
     private accountLookup: ClaudeAccountLookup = noAccountLookup,
     /**
-     * Where Claude's own `rate_limit_event` readings are filed, keyed by the
-     * account serving the turn (ADR 0007, PA8). Optional: without it the events
-     * are still parsed off the stream and simply have nowhere to go.
-     */
-    private rateLimits: ClaudeRateLimitState | null = null,
-    /**
      * Names the account a turn ran as, for the dirty-reconnect note (PA11).
      * "Linear needs authentication" is ambiguous with several accounts on one
      * machine — the connector may be fine under yesterday's.
@@ -420,7 +409,6 @@ export class ClaudeCodeProvider implements Provider {
     const debugSink = this.debugSink
     const claudeCodeVersion = this.version
     const accountLookup = this.accountLookup
-    const rateLimits = this.rateLimits
     const accountLabelLookup = this.accountLabelLookup
     const canOpenBrowser = this.canOpenBrowser
     /** Servers already reported this turn, so one broken connector says it once. */
@@ -783,20 +771,6 @@ export class ClaudeCodeProvider implements Provider {
       })
     }
 
-    function recordRateLimitEvent(event: unknown): void {
-      if (!rateLimits) return
-      const observation = parseClaudeRateLimitEvent(event)
-      if (!observation) return
-
-      rateLimits.record(
-        {
-          executionHostId: PROVIDER_QUOTA_LOCAL_EXECUTION_HOST_ID,
-          providerAccountId: currentTurnAccount?.id ?? null,
-        },
-        observation,
-      )
-    }
-
     function maybeRestartRecoveredTurn(): boolean {
       if (!pendingRecoveryTurn) {
         return false
@@ -863,12 +837,10 @@ export class ClaudeCodeProvider implements Provider {
       }
 
       if (event.type === 'rate_limit_event') {
-        // The only account-authoritative usage signal Claude gives us. It used
-        // to be dropped here, which is why the app could sit at a limit for a
-        // week without being able to say so. It is still not a transcript
-        // entry — nothing is rendered into the conversation — it is filed
-        // against the account serving this turn and read by the usage surface.
-        recordRateLimitEvent(event)
+        // Deliberately ignored: Claude's usage surface was retired in
+        // MAR-2401, so nothing reads this signal any more. It is not a
+        // transcript entry either, so it stops here rather than reaching the
+        // switch below.
         return
       }
 

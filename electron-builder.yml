@@ -7,7 +7,6 @@ artifactName: ${productName}-${version}-${arch}.${ext}
 asar: true
 asarUnpack:
   - '**/*.node'
-  - node_modules/@ccusage/**/bin/*
 npmRebuild: false
 files:
   - package.json

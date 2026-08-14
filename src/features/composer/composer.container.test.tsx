@@ -125,44 +125,12 @@ describe('ComposerContainer', () => {
           },
           {
             providerId: 'claude-code',
-            status: 'available',
-            source: 'local-usage-log',
-            planType: null,
-            windows: [
-              {
-                kind: 'five-hour',
-                label: 'Current 5-hour Claude usage',
-                usedPercent: 22,
-                remainingPercent: 78,
-                windowMinutes: 300,
-                resetsAt: '2026-06-17T19:00:00.000Z',
-                displayMode: 'observed-usage',
-                valueLabel: '9.4M tokens, $6.81',
-                resetLabel: 'Ends',
-              },
-              {
-                kind: 'weekly',
-                label: "This week's Claude usage",
-                usedPercent: 42,
-                remainingPercent: 58,
-                windowMinutes: 10_080,
-                resetsAt: '2026-06-21T00:00:00.000Z',
-                displayMode: 'observed-usage',
-                valueLabel: '371.9M tokens, $370.55',
-                resetLabel: 'Ends',
-              },
-            ],
-            credits: null,
-            limitReachedType: null,
+            status: 'unavailable',
+            source: 'manual',
+            reason: 'Open the Claude usage page for live limits.',
+            usageUrl: 'https://claude.ai/new#settings/usage',
             lastCheckedAt: '2026-06-17T15:03:00.000Z',
             stale: false,
-            rateLimit: {
-              providerAccountId: null,
-              status: 'allowed_warning',
-              rateLimitType: 'seven_day',
-              resetsAt: '2099-06-21T00:00:00.000Z',
-              observedAt: '2026-06-17T15:00:00.000Z',
-            },
           },
         ]),
       },
@@ -871,7 +839,7 @@ describe('ComposerContainer', () => {
     ).not.toBeInTheDocument()
   })
 
-  it('shows Claude Code usage in the composer for Claude Code selections', async () => {
+  it('never reads the quota surface for Claude Code selections (MAR-2401)', async () => {
     useAppSettingsStore.setState((state) => ({
       settings: {
         ...state.settings,
@@ -892,30 +860,16 @@ describe('ComposerContainer', () => {
       />,
     )
 
-    const pill = await screen.findByRole('button', {
-      name: 'Claude Code usage 9.4M',
-    })
-    expect(pill).toBeInTheDocument()
-    // Scoped to the account that will serve the next turn (PA8): the provider's
-    // own limit reading belongs to an account, not to the machine.
-    expect(window.electronAPI.providerQuota.list).toHaveBeenCalledWith(false, {
-      executionHostId: 'local',
-      providerAccountId: null,
-    })
+    // The composer must settle before the absence below means anything.
+    expect(await screen.findByText('Claude Sonnet')).toBeInTheDocument()
 
-    fireEvent.pointerEnter(pill)
-
-    expect(await screen.findByText('Claude Code usage')).toBeInTheDocument()
-    expect(screen.getByText('9.4M tokens, $6.81')).toBeInTheDocument()
-    expect(screen.getByText('371.9M tokens, $370.55')).toBeInTheDocument()
-
-    // Claude's own reading for this account, in words. Convergence used to
-    // discard this event, which is how the app could sit at a limit all week
-    // with nothing to say about it.
-    expect(screen.getByText('Approaching the limit')).toBeInTheDocument()
-    expect(screen.getByText(/Seven day window/)).toBeInTheDocument()
-    // The windows above are the shared local usage log, and say so.
-    expect(screen.getByText(/every account shares/)).toBeInTheDocument()
+    expect(
+      screen.queryByRole('button', { name: /Claude Code usage/ }),
+    ).not.toBeInTheDocument()
+    // The point of the removal: computing Claude usage meant re-parsing the
+    // shared ~/.claude transcript store every two minutes. A Claude selection
+    // must not reach the quota surface at all.
+    expect(window.electronAPI.providerQuota.list).not.toHaveBeenCalled()
   })
 
   it('allows follow-up while a supported provider session is running', () => {

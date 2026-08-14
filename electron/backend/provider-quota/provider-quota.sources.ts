@@ -1,4 +1,3 @@
-import type { ClaudeQuotaService } from './claude-quota.service'
 import type { CodexQuotaService } from './codex-quota.service'
 import type {
   ProviderQuotaProviderId,
@@ -33,13 +32,15 @@ interface ManualQuotaSourceDeps {
 
 export interface DefaultProviderQuotaSourcesInput {
   codex: Pick<CodexQuotaService, 'getQuota'>
-  claude: Pick<ClaudeQuotaService, 'getQuota'>
   now?: () => Date
 }
 
 const CLAUDE_USAGE_URL = 'https://claude.ai/new#settings/usage'
 const CURSOR_USAGE_URL = 'https://cursor.com/dashboard'
 const ANTIGRAVITY_USAGE_URL = 'https://www.antigravity.google/docs/plans'
+
+const CLAUDE_MANUAL_REASON =
+  'Claude Code does not expose a machine-readable usage endpoint to Convergence. The only way to compute it locally was to re-parse the shared ~/.claude transcript store, which cost more CPU than the numbers were worth. Open the Claude usage page for live limits.'
 
 const CURSOR_MANUAL_REASON =
   'Cursor ACP does not expose usage or quota counters to Convergence. Open the Cursor dashboard to inspect usage and billing.'
@@ -93,7 +94,6 @@ export function createManualQuotaSource(
  */
 export function createDefaultProviderQuotaSources({
   codex,
-  claude,
   now,
 }: DefaultProviderQuotaSourcesInput): ProviderQuotaSnapshotSource[] {
   return [
@@ -102,12 +102,14 @@ export function createDefaultProviderQuotaSources({
       fallbackSource: 'provider-api',
       service: codex,
     }),
-    createServiceBackedQuotaSource({
-      providerId: 'claude-code',
-      fallbackSource: 'local-usage-log',
-      usageUrl: CLAUDE_USAGE_URL,
-      service: claude,
-    }),
+    createManualQuotaSource(
+      {
+        providerId: 'claude-code',
+        reason: CLAUDE_MANUAL_REASON,
+        usageUrl: CLAUDE_USAGE_URL,
+      },
+      { now },
+    ),
     createManualQuotaSource(
       {
         providerId: 'cursor',

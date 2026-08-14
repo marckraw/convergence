@@ -60,8 +60,6 @@ import { PromptsService } from '../backend/prompts/prompts.service'
 import { AppSettingsService } from '../backend/app-settings/app-settings.service'
 import { AnalyticsService } from '../backend/analytics/analytics.service'
 import { CodexQuotaService } from '../backend/provider-quota/codex-quota.service'
-import { ClaudeQuotaService } from '../backend/provider-quota/claude-quota.service'
-import { ClaudeRateLimitState } from '../backend/provider-quota/claude-rate-limit.state'
 import { AttachmentsService } from '../backend/attachments/attachments.service'
 import { NotificationsService } from '../backend/notifications/notifications.service'
 import { NotificationsStateService } from '../backend/notifications/notifications.state'
@@ -251,16 +249,6 @@ async function startApp(): Promise<void> {
     new GuidedReviewDaemonCredentialsService()
   const openRouterCredentials = new OpenRouterCredentialsService()
   const taskProgressService = new TaskProgressService(broadcastTaskProgress)
-  /**
-   * Shared between the Claude provider, which files `rate_limit_event`
-   * readings against the account serving each turn, and the quota surface,
-   * which reads the selected account's back out (ADR 0007, PA8).
-   */
-  const claudeRateLimitState = new ClaudeRateLimitState()
-  const claudeQuotaService = new ClaudeQuotaService(
-    undefined,
-    claudeRateLimitState,
-  )
   const executionHost = new LocalExecutionHost(providerRegistry)
   const sessionService = new SessionService(
     db,
@@ -396,7 +384,6 @@ async function startApp(): Promise<void> {
             debugSink,
             p.version,
             resolveClaudeAccountForTurn,
-            claudeRateLimitState,
             describeClaudeAccount,
           ),
         )
@@ -738,7 +725,6 @@ async function startApp(): Promise<void> {
     },
     {
       codex: codexQuotaService,
-      claude: claudeQuotaService,
     },
     {
       credentials: executionHostDaemonCredentials,

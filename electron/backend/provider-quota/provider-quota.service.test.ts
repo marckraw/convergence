@@ -19,7 +19,7 @@ function availableSnapshot(
   return {
     providerId,
     status: 'available',
-    source: providerId === 'claude-code' ? 'local-usage-log' : 'provider-api',
+    source: 'provider-api',
     planType: null,
     windows: [],
     credits: null,
@@ -44,11 +44,7 @@ function source(
 describe('ProviderQuotaService', () => {
   it('lists snapshots in source order and forwards force refresh', async () => {
     const codex = source('codex')
-    const claude = source(
-      'claude-code',
-      availableSnapshot('claude-code'),
-      'local-usage-log',
-    )
+    const claude = source('claude-code')
     const cursor = source('cursor')
     const service = new ProviderQuotaService([codex, claude, cursor])
 
@@ -66,9 +62,9 @@ describe('ProviderQuotaService', () => {
   it('isolates source failures into unavailable snapshots', async () => {
     const failingSource: ProviderQuotaSnapshotSource = {
       providerId: 'claude-code',
-      fallbackSource: 'local-usage-log',
+      fallbackSource: 'manual',
       usageUrl: 'https://claude.ai/new#settings/usage',
-      getQuota: vi.fn().mockRejectedValue(new Error('ccusage failed')),
+      getQuota: vi.fn().mockRejectedValue(new Error('quota read failed')),
     }
     const service = new ProviderQuotaService([failingSource, source('codex')], {
       now: () => new Date('2026-01-02T03:04:05.000Z'),
@@ -78,8 +74,8 @@ describe('ProviderQuotaService', () => {
       {
         providerId: 'claude-code',
         status: 'unavailable',
-        source: 'local-usage-log',
-        reason: 'ccusage failed',
+        source: 'manual',
+        reason: 'quota read failed',
         usageUrl: 'https://claude.ai/new#settings/usage',
         lastCheckedAt: '2026-01-02T03:04:05.000Z',
         stale: false,
@@ -113,13 +109,9 @@ describe('ProviderQuotaService', () => {
     const codex = {
       getQuota: vi.fn().mockResolvedValue(availableSnapshot('codex')),
     }
-    const claude = {
-      getQuota: vi.fn().mockResolvedValue(availableSnapshot('claude-code')),
-    }
 
     const sources = createDefaultProviderQuotaSources({
       codex,
-      claude,
       now: () => new Date('2026-01-02T03:04:05.000Z'),
     })
     const service = new ProviderQuotaService(sources)
@@ -132,10 +124,16 @@ describe('ProviderQuotaService', () => {
       'antigravity',
     ])
     expect(codex.getQuota).toHaveBeenCalledWith({ forceRefresh: true })
-    expect(claude.getQuota).toHaveBeenCalledWith({ forceRefresh: true })
     expect(snapshots).toMatchObject([
       { providerId: 'codex', status: 'available' },
-      { providerId: 'claude-code', status: 'available' },
+      // Claude Code is a manual source since MAR-2401: computing its usage
+      // locally meant re-parsing the shared transcript store on every refresh.
+      {
+        providerId: 'claude-code',
+        status: 'unavailable',
+        source: 'manual',
+        usageUrl: 'https://claude.ai/new#settings/usage',
+      },
       {
         providerId: 'cursor',
         status: 'unavailable',
