@@ -1,20 +1,25 @@
-import { useCallback, useMemo, useState } from 'react'
+import {
+  Fragment,
+  useCallback,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react'
 import type { FC } from 'react'
-import { toast } from 'sonner'
-import { useSessionStore } from '@/entities/session'
 import type { SessionSummary } from '@/entities/session'
 import {
-  HailComposer,
   SessionCardView,
   SessionFacetPicker,
   SessionStateChips,
   isEmptySessionCardFilter,
-  resolveHailOutcome,
   useMissionControlCards,
   useMissionControlView,
 } from '@/features/mission-control'
 import type { SessionCard } from '@/features/mission-control'
+import { HailPanel } from './hail-panel.container'
 import { MissionControlView } from './mission-control.presentational'
+import { findRowEndIndex } from './session-card-row.pure'
 
 interface MissionControlProps {
   onOpenSession?: (session: SessionSummary) => void
@@ -35,17 +40,9 @@ export const MissionControl: FC<MissionControlProps> = ({ onOpenSession }) => {
     clearFilter,
   } = useMissionControlView()
   const [hailSessionId, setHailSessionId] = useState<string | null>(null)
-  const [hailText, setHailText] = useState('')
-  const [sending, setSending] = useState(false)
-  const [hailError, setHailError] = useState<string | null>(null)
 
   const { cards, totalCount, stateCounts, projectFacets, providerFacets } =
     useMissionControlCards({ filter, order })
-  const providers = useSessionStore((state) => state.providers)
-  const sendMessageToSession = useSessionStore(
-    (state) => state.sendMessageToSession,
-  )
-
   const attentionCount = useMemo(
     () => cards.filter((card) => card.session.attention !== 'none').length,
     [cards],
@@ -55,20 +52,13 @@ export const MissionControl: FC<MissionControlProps> = ({ onOpenSession }) => {
     [cards],
   )
 
-  const closeHail = useCallback(() => {
-    setHailSessionId(null)
-    setHailText('')
-    setHailError(null)
+  const handleHail = useCallback((card: SessionCard) => {
+    setHailSessionId((current) =>
+      current === card.session.id ? null : card.session.id,
+    )
   }, [])
 
-  const handleToggleHail = useCallback((card: SessionCard) => {
-    setHailError(null)
-    setHailSessionId((current) => {
-      const next = current === card.session.id ? null : card.session.id
-      if (next !== current) setHailText('')
-      return next
-    })
-  }, [])
+  const closeHail = useCallback(() => setHailSessionId(null), [])
 
   const handleOpen = useCallback(
     (card: SessionCard) => {
@@ -77,51 +67,41 @@ export const MissionControl: FC<MissionControlProps> = ({ onOpenSession }) => {
     [onOpenSession],
   )
 
-  // The outcome is recomputed from the live card on every render, so a status
-  // change arriving mid-compose flips the label before the send happens.
-  const hailCard = cards.find((card) => card.session.id === hailSessionId)
-  const hailOutcome = hailCard
-    ? resolveHailOutcome({
-        status: hailCard.session.status,
-        attention: hailCard.session.attention,
-        provider:
-          providers.find(
-            (provider) => provider.id === hailCard.session.providerId,
-          ) ?? null,
-      })
-    : null
+  // Read from the live card list, so a Hail left open while its Session
+  // changes state shows the new state rather than the one it opened on.
+  const hailIndex = cards.findIndex((card) => card.session.id === hailSessionId)
+  const hailCard = hailIndex >= 0 ? cards[hailIndex] : null
 
-  const handleSend = useCallback(async () => {
-    if (!hailCard || !hailOutcome || hailOutcome.disabled) return
-    const text = hailText.trim()
-    if (!text) return
+  /**
+   * The Hail opens under the whole row its card sits in, and only the browser
+   * knows which cards share that row in a responsive grid — so the row is
+   * measured from the laid-out cards and re-measured whenever the grid
+   * resizes. Before layout runs there is no row, and the panel simply waits.
+   */
+  const gridRef = useRef<HTMLDivElement>(null)
+  const [rowEndIndex, setRowEndIndex] = useState<number | null>(null)
 
-    setSending(true)
-    setHailError(null)
-    try {
-      await sendMessageToSession({
-        sessionId: hailCard.session.id,
-        text,
-        deliveryMode:
-          hailOutcome.deliveryMode === 'normal'
-            ? undefined
-            : hailOutcome.deliveryMode,
-      })
-      const error = useSessionStore.getState().error
-      if (error) {
-        setHailError(error)
-        return
-      }
-      toast.success(`${hailOutcome.label} · ${hailCard.session.name}`)
-      closeHail()
-    } catch (err) {
-      setHailError(
-        err instanceof Error ? err.message : 'Failed to send the hail',
-      )
-    } finally {
-      setSending(false)
+  useLayoutEffect(() => {
+    if (hailIndex < 0) {
+      setRowEndIndex(null)
+      return
     }
-  }, [closeHail, hailCard, hailOutcome, hailText, sendMessageToSession])
+
+    const grid = gridRef.current
+    if (!grid) return
+
+    const measure = () => {
+      const tops = [
+        ...grid.querySelectorAll<HTMLElement>('[data-session-card]'),
+      ].map((element) => element.offsetTop)
+      setRowEndIndex(findRowEndIndex(tops, hailIndex))
+    }
+
+    measure()
+    const observer = new ResizeObserver(measure)
+    observer.observe(grid)
+    return () => observer.disconnect()
+  }, [hailIndex, cards.length])
 
   return (
     <MissionControlView
@@ -166,29 +146,22 @@ export const MissionControl: FC<MissionControlProps> = ({ onOpenSession }) => {
         </>
       }
     >
-      <div className="grid grid-cols-[repeat(auto-fill,minmax(260px,1fr))] gap-3">
-        {cards.map((card) => (
-          <SessionCardView
-            key={card.session.id}
-            card={card}
-            hailOpen={card.session.id === hailSessionId}
-            onOpen={handleOpen}
-            onToggleHail={handleToggleHail}
-            hailComposer={
-              hailOutcome && card.session.id === hailSessionId ? (
-                <HailComposer
-                  sessionName={card.session.name}
-                  value={hailText}
-                  outcome={hailOutcome}
-                  sending={sending}
-                  error={hailError}
-                  onChange={setHailText}
-                  onSend={() => void handleSend()}
-                  onCancel={closeHail}
-                />
-              ) : null
-            }
-          />
+      <div
+        ref={gridRef}
+        className="grid grid-cols-[repeat(auto-fill,minmax(260px,1fr))] gap-3"
+      >
+        {cards.map((card, index) => (
+          <Fragment key={card.session.id}>
+            <SessionCardView
+              card={card}
+              hailOpen={card.session.id === hailSessionId}
+              onOpen={handleOpen}
+              onHail={handleHail}
+            />
+            {hailCard && rowEndIndex === index ? (
+              <HailPanel card={hailCard} onClose={closeHail} />
+            ) : null}
+          </Fragment>
         ))}
       </div>
     </MissionControlView>

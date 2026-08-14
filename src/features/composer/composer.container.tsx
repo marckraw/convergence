@@ -186,8 +186,22 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
       ? (s.queuedInputsBySessionId[activeSessionId] ?? EMPTY_QUEUED_INPUTS)
       : EMPTY_QUEUED_INPUTS,
   )
+  /**
+   * The Session this composer is aimed at.
+   *
+   * The scoped lists hold the project or chat currently open, which is the
+   * whole story when the composer sits under a conversation. Aimed from
+   * Mission Control it is not: that Session can belong to a project nobody has
+   * opened, and a composer that cannot find its Session silently becomes a
+   * "start a new session" composer. `globalSessions` is the all-projects list
+   * the app already keeps live, so falling back to it costs nothing and keeps
+   * the composer honest about what it is about to do.
+   */
+  const globalSessions = useSessionStore((s) => s.globalSessions)
   const sessionList = context.kind === 'project' ? sessions : globalChatSessions
-  const activeSession = sessionList.find((s) => s.id === activeSessionId)
+  const activeSession =
+    sessionList.find((s) => s.id === activeSessionId) ??
+    globalSessions.find((s) => s.id === activeSessionId)
   const annotations = useSessionAnnotations(activeSessionId)
   const markPendingAnnotationsAsSent = useResponseAnnotationStore(
     (s) => s.markPendingAsSent,

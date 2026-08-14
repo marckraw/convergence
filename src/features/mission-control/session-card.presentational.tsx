@@ -1,4 +1,4 @@
-import type { FC, ReactNode } from 'react'
+import type { FC } from 'react'
 import { Loader2, Radio } from 'lucide-react'
 import { formatSessionAttentionLabel } from '@/entities/session'
 import { Button } from '@/shared/ui/button'
@@ -13,18 +13,17 @@ import {
 
 interface SessionCardViewProps {
   card: SessionCard
+  /** True while this card's Hail is the one open, so the room shows which. */
   hailOpen: boolean
   onOpen: (card: SessionCard) => void
-  onToggleHail: (card: SessionCard) => void
-  hailComposer?: ReactNode
+  onHail: (card: SessionCard) => void
 }
 
 export const SessionCardView: FC<SessionCardViewProps> = ({
   card,
   hailOpen,
   onOpen,
-  onToggleHail,
-  hailComposer,
+  onHail,
 }) => {
   const { session } = card
   const running = session.status === 'running'
@@ -32,6 +31,8 @@ export const SessionCardView: FC<SessionCardViewProps> = ({
 
   return (
     <div
+      // The room measures card positions to open a Hail under the right row.
+      data-session-card
       className={cn(
         'group flex flex-col rounded-lg border bg-card/40 transition-colors',
         CARD_ATTENTION_STYLES[session.attention],
@@ -108,16 +109,12 @@ export const SessionCardView: FC<SessionCardViewProps> = ({
           className="h-6 shrink-0 px-2 text-[11px] opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100 aria-expanded:opacity-100"
           aria-expanded={hailOpen}
           aria-label={`Hail ${session.name}`}
-          onClick={() => onToggleHail(card)}
+          onClick={() => onHail(card)}
         >
           <Radio className="size-3" />
           Hail
         </Button>
       </div>
-
-      {hailOpen && hailComposer ? (
-        <div className="border-t border-white/5 px-3 py-2">{hailComposer}</div>
-      ) : null}
     </div>
   )
 }
