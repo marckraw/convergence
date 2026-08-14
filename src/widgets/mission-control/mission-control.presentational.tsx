@@ -24,8 +24,8 @@ interface MissionControlViewProps {
   onQueryChange: (query: string) => void
   order: SessionCardOrderPreset
   onOrderChange: (order: SessionCardOrderPreset) => void
-  /** The state chips, composed by the container. */
-  chips: ReactNode
+  /** The filter row — state chips and pickers, composed by the container. */
+  filters: ReactNode
   /** True when nothing is narrowed — drives the empty-room copy. */
   filterIsEmpty: boolean
   onClearFilter: () => void
@@ -41,7 +41,7 @@ export const MissionControlView: FC<MissionControlViewProps> = ({
   onQueryChange,
   order,
   onOrderChange,
-  chips,
+  filters,
   filterIsEmpty,
   onClearFilter,
   children,
@@ -95,7 +95,9 @@ export const MissionControlView: FC<MissionControlViewProps> = ({
           </Select>
         </div>
 
-        <div className="w-full">{chips}</div>
+        <div className="flex w-full flex-wrap items-center gap-1.5">
+          {filters}
+        </div>
       </div>
 
       <div className="app-scrollbar min-h-0 flex-1 overflow-y-auto px-5 py-4">

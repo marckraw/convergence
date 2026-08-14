@@ -9,14 +9,28 @@ export { resolveHailOutcome } from './session-hail-outcome.pure'
 export type { HailOutcome, HailOutcomeKind } from './session-hail-outcome.pure'
 export { buildSessionCards } from './mission-control-cards.pure'
 export { SessionStateChips } from './session-state-chips.presentational'
+export { SessionFacetPicker } from './session-facet-picker.presentational'
 export {
   EMPTY_SESSION_CARD_FILTER,
+  GLOBAL_SESSION_PROJECT_KEY,
   filterSessionCards,
+  filterSessionCardsExcept,
+  getSessionCardProjectKey,
   isEmptySessionCardFilter,
   matchesSessionCardQuery,
+  toggleFilterId,
   toggleSessionCardState,
 } from './session-card-filter.pure'
-export type { SessionCardFilter } from './session-card-filter.pure'
+export type {
+  SessionCardFilter,
+  SessionCardFilterDimension,
+} from './session-card-filter.pure'
+export {
+  buildProjectFacets,
+  buildProviderFacets,
+  formatFacetSummary,
+} from './session-card-facets.pure'
+export type { SessionCardFacetOption } from './session-card-facets.pure'
 export {
   SESSION_CARD_ORDER_PRESETS,
   formatSessionCardOrderPreset,

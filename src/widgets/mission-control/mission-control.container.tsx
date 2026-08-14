@@ -7,9 +7,11 @@ import {
   EMPTY_SESSION_CARD_FILTER,
   HailComposer,
   SessionCardView,
+  SessionFacetPicker,
   SessionStateChips,
   isEmptySessionCardFilter,
   resolveHailOutcome,
+  toggleFilterId,
   toggleSessionCardState,
   useMissionControlCards,
 } from '@/features/mission-control'
@@ -35,10 +37,8 @@ export const MissionControl: FC<MissionControlProps> = ({ onOpenSession }) => {
   const [sending, setSending] = useState(false)
   const [hailError, setHailError] = useState<string | null>(null)
 
-  const { cards, totalCount, stateCounts } = useMissionControlCards({
-    filter,
-    order,
-  })
+  const { cards, totalCount, stateCounts, projectFacets, providerFacets } =
+    useMissionControlCards({ filter, order })
   const providers = useSessionStore((state) => state.providers)
   const sendMessageToSession = useSessionStore(
     (state) => state.sendMessageToSession,
@@ -66,6 +66,28 @@ export const MissionControl: FC<MissionControlProps> = ({ onOpenSession }) => {
 
   const handleClearStates = useCallback(() => {
     setFilter((current) => ({ ...current, states: [] }))
+  }, [])
+
+  const handleToggleProject = useCallback((id: string) => {
+    setFilter((current) => ({
+      ...current,
+      projectIds: toggleFilterId(current.projectIds, id),
+    }))
+  }, [])
+
+  const handleClearProjects = useCallback(() => {
+    setFilter((current) => ({ ...current, projectIds: [] }))
+  }, [])
+
+  const handleToggleProvider = useCallback((id: string) => {
+    setFilter((current) => ({
+      ...current,
+      providerIds: toggleFilterId(current.providerIds, id),
+    }))
+  }, [])
+
+  const handleClearProviders = useCallback(() => {
+    setFilter((current) => ({ ...current, providerIds: [] }))
   }, [])
 
   const handleClearFilter = useCallback(() => {
@@ -152,13 +174,33 @@ export const MissionControl: FC<MissionControlProps> = ({ onOpenSession }) => {
       onOrderChange={setOrder}
       filterIsEmpty={isEmptySessionCardFilter(filter)}
       onClearFilter={handleClearFilter}
-      chips={
-        <SessionStateChips
-          selected={filter.states}
-          counts={stateCounts}
-          onToggle={handleToggleState}
-          onClear={handleClearStates}
-        />
+      filters={
+        <>
+          <SessionStateChips
+            selected={filter.states}
+            counts={stateCounts}
+            onToggle={handleToggleState}
+            onClear={handleClearStates}
+          />
+          <SessionFacetPicker
+            label="Filter by project"
+            allLabel="All projects"
+            noun="project"
+            options={projectFacets}
+            selected={filter.projectIds}
+            onToggle={handleToggleProject}
+            onClear={handleClearProjects}
+          />
+          <SessionFacetPicker
+            label="Filter by provider"
+            allLabel="All providers"
+            noun="provider"
+            options={providerFacets}
+            selected={filter.providerIds}
+            onToggle={handleToggleProvider}
+            onClear={handleClearProviders}
+          />
+        </>
       }
     >
       <div className="grid grid-cols-[repeat(auto-fill,minmax(260px,1fr))] gap-3">
