@@ -1,4 +1,5 @@
 import type { AttentionState, SessionStatus } from '@/entities/session'
+import type { SessionCardState } from './session-card-state.pure'
 
 /**
  * One card must read as a different state from its neighbour at a glance,
@@ -17,6 +18,15 @@ export const ACTIVITY_TEXT_STYLES: Record<SessionStatus, string> = {
   idle: 'text-muted-foreground',
   completed: 'text-muted-foreground',
   failed: 'text-red-600 dark:text-red-400',
+}
+
+/** A selected state chip wears the same colour its cards wear in the room. */
+export const STATE_CHIP_STYLES: Record<SessionCardState, string> = {
+  working: 'border-emerald-500/60 bg-emerald-500/10 text-foreground',
+  'needs-you': 'border-blue-500/60 bg-blue-500/10 text-foreground',
+  idle: 'border-white/25 bg-white/10 text-foreground',
+  finished: 'border-emerald-500/50 bg-emerald-500/[0.07] text-foreground',
+  failed: 'border-red-500/60 bg-red-500/10 text-foreground',
 }
 
 export const STATUS_DOT_STYLES: Record<SessionStatus, string> = {

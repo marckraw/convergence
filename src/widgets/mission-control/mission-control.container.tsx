@@ -6,8 +6,12 @@ import type { SessionSummary } from '@/entities/session'
 import {
   HailComposer,
   SessionCardView,
+  SessionFacetPicker,
+  SessionStateChips,
+  isEmptySessionCardFilter,
   resolveHailOutcome,
   useMissionControlCards,
+  useMissionControlView,
 } from '@/features/mission-control'
 import type { SessionCard } from '@/features/mission-control'
 import { MissionControlView } from './mission-control.presentational'
@@ -17,13 +21,26 @@ interface MissionControlProps {
 }
 
 export const MissionControl: FC<MissionControlProps> = ({ onOpenSession }) => {
-  const [query, setQuery] = useState('')
+  const {
+    filter,
+    order,
+    setQuery,
+    setOrder,
+    toggleState,
+    clearStates,
+    toggleProject,
+    clearProjects,
+    toggleProvider,
+    clearProviders,
+    clearFilter,
+  } = useMissionControlView()
   const [hailSessionId, setHailSessionId] = useState<string | null>(null)
   const [hailText, setHailText] = useState('')
   const [sending, setSending] = useState(false)
   const [hailError, setHailError] = useState<string | null>(null)
 
-  const { cards, totalCount } = useMissionControlCards(query)
+  const { cards, totalCount, stateCounts, projectFacets, providerFacets } =
+    useMissionControlCards({ filter, order })
   const providers = useSessionStore((state) => state.providers)
   const sendMessageToSession = useSessionStore(
     (state) => state.sendMessageToSession,
@@ -112,8 +129,42 @@ export const MissionControl: FC<MissionControlProps> = ({ onOpenSession }) => {
       visibleCount={cards.length}
       attentionCount={attentionCount}
       runningCount={runningCount}
-      query={query}
+      query={filter.query}
       onQueryChange={setQuery}
+      order={order}
+      onOrderChange={setOrder}
+      filterIsEmpty={isEmptySessionCardFilter(filter)}
+      onClearFilter={clearFilter}
+      filters={
+        <>
+          <SessionStateChips
+            selected={filter.states}
+            counts={stateCounts}
+            onToggle={toggleState}
+            onClear={clearStates}
+          />
+          <SessionFacetPicker
+            label="Filter by project"
+            allLabel="All projects"
+            noun="project"
+            searchPlaceholder="Search projects…"
+            options={projectFacets}
+            selected={filter.projectIds}
+            onToggle={toggleProject}
+            onClear={clearProjects}
+          />
+          <SessionFacetPicker
+            label="Filter by provider"
+            allLabel="All providers"
+            noun="provider"
+            searchPlaceholder="Search providers…"
+            options={providerFacets}
+            selected={filter.providerIds}
+            onToggle={toggleProvider}
+            onClear={clearProviders}
+          />
+        </>
+      }
     >
       <div className="grid grid-cols-[repeat(auto-fill,minmax(260px,1fr))] gap-3">
         {cards.map((card) => (

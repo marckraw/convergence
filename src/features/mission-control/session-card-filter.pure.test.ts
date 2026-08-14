@@ -1,33 +1,64 @@
 import { describe, expect, it } from 'vitest'
 import type { SessionSummary } from '@/entities/session'
 import type { SessionCard } from './mission-control.types'
-import { filterSessionCards } from './session-card-filter.pure'
+import {
+  EMPTY_SESSION_CARD_FILTER,
+  GLOBAL_SESSION_PROJECT_KEY,
+  filterSessionCards,
+  filterSessionCardsExcept,
+  getSessionCardProjectKey,
+  isEmptySessionCardFilter,
+  matchesSessionCardQuery,
+  toggleFilterId,
+  toggleSessionCardState,
+} from './session-card-filter.pure'
+import type { SessionCardFilter } from './session-card-filter.pure'
+import { SESSION_CARD_STATES } from './session-card-state.pure'
+import type { SessionCardState } from './session-card-state.pure'
 
 function makeCard(
   overrides: {
     id?: string
     name?: string
+    projectId?: string | null
     projectName?: string
+    contextKind?: SessionSummary['contextKind']
     providerId?: string
     providerLabel?: string
     model?: string | null
     status?: SessionSummary['status']
+    attention?: SessionSummary['attention']
+    activity?: SessionSummary['activity']
     activityLabel?: string
   } = {},
 ): SessionCard {
   const {
     id = 'session-1',
     name = 'Wire the room',
+    projectId = 'project-a',
     projectName = 'Convergence',
+    contextKind = 'project',
     providerId = 'claude-code',
     providerLabel = 'Anthropic',
     model = 'claude-opus-5',
     status = 'idle',
+    attention = 'none',
+    activity = null,
     activityLabel = 'idle',
   } = overrides
 
   return {
-    session: { id, name, providerId, model, status } as SessionSummary,
+    session: {
+      id,
+      name,
+      projectId,
+      contextKind,
+      providerId,
+      model,
+      status,
+      attention,
+      activity,
+    } as SessionSummary,
     projectName,
     providerLabel,
     activityLabel,
@@ -45,7 +76,22 @@ function makeCard(
   }
 }
 
-describe('filterSessionCards', () => {
+function withQuery(query: string): SessionCardFilter {
+  return { ...EMPTY_SESSION_CARD_FILTER, query }
+}
+
+function withStates(...states: SessionCardState[]): SessionCardFilter {
+  return { ...EMPTY_SESSION_CARD_FILTER, states }
+}
+
+function filterWith(overrides: Partial<SessionCardFilter>): SessionCardFilter {
+  return { ...EMPTY_SESSION_CARD_FILTER, ...overrides }
+}
+
+const ids = (cards: readonly SessionCard[]): string[] =>
+  cards.map((card) => card.session.id)
+
+describe('filterSessionCards · query', () => {
   const cards = [
     makeCard({ id: 'a', name: 'Wire the room', projectName: 'Convergence' }),
     makeCard({
@@ -61,71 +107,388 @@ describe('filterSessionCards', () => {
   ]
 
   it('returns every card for an empty or whitespace query', () => {
-    expect(filterSessionCards(cards, '')).toHaveLength(2)
-    expect(filterSessionCards(cards, '   ')).toHaveLength(2)
+    expect(filterSessionCards(cards, withQuery(''))).toHaveLength(2)
+    expect(filterSessionCards(cards, withQuery('   '))).toHaveLength(2)
+  })
+
+  it('returns every card for the empty filter', () => {
+    expect(filterSessionCards(cards, EMPTY_SESSION_CARD_FILTER)).toHaveLength(2)
   })
 
   it('matches on session name', () => {
-    expect(
-      filterSessionCards(cards, 'tunnel').map((card) => card.session.id),
-    ).toEqual(['b'])
+    expect(ids(filterSessionCards(cards, withQuery('tunnel')))).toEqual(['b'])
   })
 
   it('matches on project name', () => {
-    expect(
-      filterSessionCards(cards, 'emergence').map((card) => card.session.id),
-    ).toEqual(['b'])
+    expect(ids(filterSessionCards(cards, withQuery('emergence')))).toEqual([
+      'b',
+    ])
   })
 
   it('matches on provider id and provider label', () => {
-    expect(
-      filterSessionCards(cards, 'claude-code').map((card) => card.session.id),
-    ).toEqual(['a'])
-    expect(
-      filterSessionCards(cards, 'openai').map((card) => card.session.id),
-    ).toEqual(['b'])
+    expect(ids(filterSessionCards(cards, withQuery('claude-code')))).toEqual([
+      'a',
+    ])
+    expect(ids(filterSessionCards(cards, withQuery('openai')))).toEqual(['b'])
   })
 
   it('matches on model', () => {
-    expect(
-      filterSessionCards(cards, 'gpt-5').map((card) => card.session.id),
-    ).toEqual(['b'])
+    expect(ids(filterSessionCards(cards, withQuery('gpt-5')))).toEqual(['b'])
   })
 
   it('matches on status', () => {
-    expect(
-      filterSessionCards(cards, 'running').map((card) => card.session.id),
-    ).toEqual(['b'])
+    expect(ids(filterSessionCards(cards, withQuery('running')))).toEqual(['b'])
   })
 
   it('matches on activity text', () => {
-    expect(
-      filterSessionCards(cards, 'bash').map((card) => card.session.id),
-    ).toEqual(['b'])
+    expect(ids(filterSessionCards(cards, withQuery('bash')))).toEqual(['b'])
   })
 
   it('is case-insensitive', () => {
-    expect(
-      filterSessionCards(cards, 'EMERGENCE').map((card) => card.session.id),
-    ).toEqual(['b'])
+    expect(ids(filterSessionCards(cards, withQuery('EMERGENCE')))).toEqual([
+      'b',
+    ])
   })
 
   it('requires every token of a multi-token query to match', () => {
+    expect(ids(filterSessionCards(cards, withQuery('emergence bash')))).toEqual(
+      ['b'],
+    )
     expect(
-      filterSessionCards(cards, 'emergence bash').map(
-        (card) => card.session.id,
-      ),
-    ).toEqual(['b'])
-    expect(filterSessionCards(cards, 'emergence convergence')).toEqual([])
+      filterSessionCards(cards, withQuery('emergence convergence')),
+    ).toEqual([])
   })
 
   it('returns nothing when no card matches', () => {
-    expect(filterSessionCards(cards, 'zzzz')).toEqual([])
+    expect(filterSessionCards(cards, withQuery('zzzz'))).toEqual([])
   })
 
   it('does not mutate the incoming list', () => {
     const input = [...cards]
-    filterSessionCards(input, 'tunnel')
+    filterSessionCards(input, withQuery('tunnel'))
     expect(input).toHaveLength(2)
+  })
+})
+
+describe('matchesSessionCardQuery', () => {
+  const card = makeCard({ name: 'Wire the room', projectName: 'Convergence' })
+
+  it('matches every card on an empty or whitespace query', () => {
+    expect(matchesSessionCardQuery(card, '')).toBe(true)
+    expect(matchesSessionCardQuery(card, '   ')).toBe(true)
+  })
+
+  it('matches on any card field, case-insensitively', () => {
+    expect(matchesSessionCardQuery(card, 'WIRE')).toBe(true)
+    expect(matchesSessionCardQuery(card, 'convergence')).toBe(true)
+    expect(matchesSessionCardQuery(card, 'claude-opus-5')).toBe(true)
+  })
+
+  it('requires every token to match', () => {
+    expect(matchesSessionCardQuery(card, 'wire convergence')).toBe(true)
+    expect(matchesSessionCardQuery(card, 'wire emergence')).toBe(false)
+  })
+
+  it('ignores the card state — that is the chips job', () => {
+    const working = makeCard({ status: 'running' })
+    expect(matchesSessionCardQuery(working, 'wire')).toBe(true)
+  })
+})
+
+describe('filterSessionCards · states', () => {
+  const cards = [
+    makeCard({ id: 'working', status: 'running' }),
+    makeCard({ id: 'blocked', attention: 'needs-approval' }),
+    makeCard({ id: 'asked', attention: 'needs-input' }),
+    makeCard({ id: 'finished', status: 'completed', attention: 'finished' }),
+    makeCard({ id: 'failed', status: 'failed', attention: 'failed' }),
+    makeCard({ id: 'idle' }),
+  ]
+
+  it('shows the whole room when no state is selected', () => {
+    expect(filterSessionCards(cards, withStates())).toHaveLength(cards.length)
+  })
+
+  it('narrows to a single selected state', () => {
+    expect(ids(filterSessionCards(cards, withStates('working')))).toEqual([
+      'working',
+    ])
+    expect(ids(filterSessionCards(cards, withStates('needs-you')))).toEqual([
+      'blocked',
+      'asked',
+    ])
+    expect(ids(filterSessionCards(cards, withStates('idle')))).toEqual(['idle'])
+    expect(ids(filterSessionCards(cards, withStates('finished')))).toEqual([
+      'finished',
+    ])
+    expect(ids(filterSessionCards(cards, withStates('failed')))).toEqual([
+      'failed',
+    ])
+  })
+
+  it('unions the selected states', () => {
+    expect(
+      ids(filterSessionCards(cards, withStates('working', 'failed'))),
+    ).toEqual(['working', 'failed'])
+  })
+
+  it('shows every card when every state is selected', () => {
+    expect(
+      filterSessionCards(cards, withStates(...SESSION_CARD_STATES)),
+    ).toHaveLength(cards.length)
+  })
+
+  it('keeps the incoming order', () => {
+    expect(
+      ids(filterSessionCards(cards, withStates('idle', 'working'))),
+    ).toEqual(['working', 'idle'])
+  })
+})
+
+describe('filterSessionCards · projects and providers', () => {
+  const cards = [
+    makeCard({ id: 'a1', projectId: 'project-a', projectName: 'Alpha' }),
+    makeCard({
+      id: 'a2',
+      projectId: 'project-a',
+      projectName: 'Alpha',
+      providerId: 'codex',
+      providerLabel: 'OpenAI',
+    }),
+    makeCard({ id: 'b1', projectId: 'project-b', projectName: 'Beta' }),
+    makeCard({
+      id: 'chat',
+      projectId: null,
+      contextKind: 'global',
+      projectName: 'Convergence',
+    }),
+  ]
+
+  it('shows the whole room when no project or provider is picked', () => {
+    expect(filterSessionCards(cards, EMPTY_SESSION_CARD_FILTER)).toHaveLength(4)
+  })
+
+  it('narrows to picked projects', () => {
+    expect(
+      ids(filterSessionCards(cards, filterWith({ projectIds: ['project-a'] }))),
+    ).toEqual(['a1', 'a2'])
+  })
+
+  it('unions several picked projects', () => {
+    expect(
+      ids(
+        filterSessionCards(
+          cards,
+          filterWith({ projectIds: ['project-b', GLOBAL_SESSION_PROJECT_KEY] }),
+        ),
+      ),
+    ).toEqual(['b1', 'chat'])
+  })
+
+  it('narrows to picked providers', () => {
+    expect(
+      ids(filterSessionCards(cards, filterWith({ providerIds: ['codex'] }))),
+    ).toEqual(['a2'])
+  })
+
+  it('intersects project and provider picks', () => {
+    expect(
+      ids(
+        filterSessionCards(
+          cards,
+          filterWith({
+            projectIds: ['project-a'],
+            providerIds: ['claude-code'],
+          }),
+        ),
+      ),
+    ).toEqual(['a1'])
+    expect(
+      filterSessionCards(
+        cards,
+        filterWith({ projectIds: ['project-b'], providerIds: ['codex'] }),
+      ),
+    ).toEqual([])
+  })
+})
+
+describe('getSessionCardProjectKey', () => {
+  it('keys a project session by its project id', () => {
+    expect(getSessionCardProjectKey(makeCard({ projectId: 'project-x' }))).toBe(
+      'project-x',
+    )
+  })
+
+  it('gives chat sessions their own bucket', () => {
+    expect(
+      getSessionCardProjectKey(
+        makeCard({ projectId: null, contextKind: 'global' }),
+      ),
+    ).toBe(GLOBAL_SESSION_PROJECT_KEY)
+  })
+
+  it('buckets a project session that lost its project separately', () => {
+    expect(
+      getSessionCardProjectKey(
+        makeCard({ projectId: null, contextKind: 'project' }),
+      ),
+    ).toBe('unknown')
+  })
+})
+
+describe('filterSessionCardsExcept', () => {
+  const cards = [
+    makeCard({ id: 'a-working', projectId: 'project-a', status: 'running' }),
+    makeCard({ id: 'a-idle', projectId: 'project-a' }),
+    makeCard({ id: 'b-idle', projectId: 'project-b' }),
+  ]
+
+  it('holds the named dimension open and applies the rest', () => {
+    const filter = filterWith({
+      states: ['working'],
+      projectIds: ['project-a'],
+    })
+
+    expect(ids(filterSessionCardsExcept(cards, filter, 'states'))).toEqual([
+      'a-working',
+      'a-idle',
+    ])
+    expect(ids(filterSessionCardsExcept(cards, filter, 'projectIds'))).toEqual([
+      'a-working',
+    ])
+  })
+
+  it('equals the full filter when the held dimension is not narrowing', () => {
+    const filter = filterWith({ states: ['working'] })
+
+    expect(ids(filterSessionCardsExcept(cards, filter, 'projectIds'))).toEqual(
+      ids(filterSessionCards(cards, filter)),
+    )
+  })
+})
+
+describe('filterSessionCards · composition', () => {
+  const cards = [
+    makeCard({
+      id: 'convergence-working',
+      projectName: 'Convergence',
+      status: 'running',
+    }),
+    makeCard({
+      id: 'convergence-idle',
+      projectName: 'Convergence',
+    }),
+    makeCard({
+      id: 'emergence-working',
+      projectId: 'project-e',
+      projectName: 'Emergence',
+      status: 'running',
+    }),
+  ]
+
+  it('applies query and states together', () => {
+    expect(
+      ids(
+        filterSessionCards(
+          cards,
+          filterWith({ query: 'convergence', states: ['working'] }),
+        ),
+      ),
+    ).toEqual(['convergence-working'])
+  })
+
+  it('returns nothing when the two dimensions disagree', () => {
+    expect(
+      filterSessionCards(
+        cards,
+        filterWith({ query: 'emergence', states: ['idle'] }),
+      ),
+    ).toEqual([])
+  })
+
+  it('applies all four dimensions at once', () => {
+    expect(
+      ids(
+        filterSessionCards(
+          cards,
+          filterWith({
+            query: 'wire',
+            states: ['working'],
+            projectIds: ['project-a'],
+            providerIds: ['claude-code'],
+          }),
+        ),
+      ),
+    ).toEqual(['convergence-working'])
+  })
+})
+
+describe('isEmptySessionCardFilter', () => {
+  it('is true for the empty filter and for whitespace', () => {
+    expect(isEmptySessionCardFilter(EMPTY_SESSION_CARD_FILTER)).toBe(true)
+    expect(isEmptySessionCardFilter(withQuery('  '))).toBe(true)
+  })
+
+  it('is false once any dimension narrows', () => {
+    expect(isEmptySessionCardFilter(withQuery('room'))).toBe(false)
+    expect(isEmptySessionCardFilter(withStates('working'))).toBe(false)
+    expect(
+      isEmptySessionCardFilter(filterWith({ projectIds: ['project-a'] })),
+    ).toBe(false)
+    expect(
+      isEmptySessionCardFilter(filterWith({ providerIds: ['codex'] })),
+    ).toBe(false)
+  })
+})
+
+describe('toggleFilterId', () => {
+  it('adds an id that was off', () => {
+    expect(toggleFilterId([], 'project-a')).toEqual(['project-a'])
+  })
+
+  it('removes an id that was on', () => {
+    expect(toggleFilterId(['project-a', 'project-b'], 'project-a')).toEqual([
+      'project-b',
+    ])
+  })
+
+  it('keeps the order the picks were made in', () => {
+    expect(toggleFilterId(['project-b'], 'project-a')).toEqual([
+      'project-b',
+      'project-a',
+    ])
+  })
+
+  it('does not mutate the incoming selection', () => {
+    const ids: string[] = ['project-a']
+    toggleFilterId(ids, 'project-b')
+    expect(ids).toEqual(['project-a'])
+  })
+})
+
+describe('toggleSessionCardState', () => {
+  it('adds a state that was off', () => {
+    expect(toggleSessionCardState([], 'working')).toEqual(['working'])
+  })
+
+  it('removes a state that was on', () => {
+    expect(toggleSessionCardState(['working', 'idle'], 'working')).toEqual([
+      'idle',
+    ])
+  })
+
+  it('keeps the canonical state order however chips are clicked', () => {
+    const clickedBackwards = toggleSessionCardState(
+      toggleSessionCardState(['failed'], 'idle'),
+      'working',
+    )
+
+    expect(clickedBackwards).toEqual(['working', 'idle', 'failed'])
+  })
+
+  it('does not mutate the incoming selection', () => {
+    const states: SessionCardState[] = ['working']
+    toggleSessionCardState(states, 'idle')
+    expect(states).toEqual(['working'])
   })
 })
