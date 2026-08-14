@@ -294,6 +294,21 @@ describe('MissionControl', () => {
     })
   })
 
+  it('toggles the hail off when the same card is hailed again', async () => {
+    seed([makeSession({ id: 'a' })], [CLAUDE_CODE])
+
+    render(<MissionControl />)
+    const hail = await screen.findByLabelText('Hail Wire the room')
+
+    fireEvent.click(hail)
+    expect(await screen.findByTestId('composer')).toBeInTheDocument()
+
+    fireEvent.click(hail)
+    await waitFor(() =>
+      expect(screen.queryByTestId('composer')).not.toBeInTheDocument(),
+    )
+  })
+
   it('names the session and its live state above the composer', async () => {
     const session = makeSession({ id: 'a', status: 'idle' })
     seed([session], [CLAUDE_CODE])
@@ -331,7 +346,7 @@ describe('MissionControl', () => {
     fireEvent.click(await screen.findByLabelText('Hail Wire the room'))
     expect(await screen.findByTestId('composer')).toBeInTheDocument()
 
-    fireEvent.click(screen.getByRole('button', { name: 'Close' }))
+    fireEvent.click(screen.getByLabelText('Close hail'))
 
     await waitFor(() =>
       expect(screen.queryByTestId('composer')).not.toBeInTheDocument(),

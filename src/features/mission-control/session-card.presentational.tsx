@@ -31,6 +31,8 @@ export const SessionCardView: FC<SessionCardViewProps> = ({
 
   return (
     <div
+      // The room measures card positions to open a Hail under the right row.
+      data-session-card
       className={cn(
         'group flex flex-col rounded-lg border bg-card/40 transition-colors',
         CARD_ATTENTION_STYLES[session.attention],
