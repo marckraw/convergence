@@ -1172,10 +1172,7 @@ interface ProviderUpdateResult {
 
 type ProviderQuotaWindowKindData = 'five-hour' | 'weekly' | 'other'
 type ProviderQuotaWindowDisplayModeData = 'remaining-quota' | 'observed-usage'
-type ProviderQuotaSourceData =
-  | 'provider-api'
-  | 'provider-event'
-  | 'local-usage-log'
+type ProviderQuotaSourceData = 'provider-api' | 'provider-event'
 
 interface ProviderQuotaWindowData {
   kind: ProviderQuotaWindowKindData
@@ -1206,7 +1203,6 @@ type ProviderQuotaSnapshotData =
       limitReachedType: string | null
       lastCheckedAt: string
       stale: boolean
-      rateLimit?: ProviderRateLimitSignalData | null
     }
   | {
       providerId: 'codex' | 'claude-code' | 'cursor' | 'antigravity'
@@ -1216,16 +1212,7 @@ type ProviderQuotaSnapshotData =
       usageUrl?: string
       lastCheckedAt: string
       stale: boolean
-      rateLimit?: ProviderRateLimitSignalData | null
     }
-
-interface ProviderRateLimitSignalData {
-  providerAccountId: string | null
-  status: string
-  rateLimitType: string | null
-  resetsAt: string | null
-  observedAt: string
-}
 
 interface ProviderAccountConnectorsData {
   providerAccountId: string | null

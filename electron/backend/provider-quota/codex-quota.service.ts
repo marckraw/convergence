@@ -172,10 +172,9 @@ export class CodexQuotaService {
   /**
    * Cached per `(executionHostId, providerAccountId)` (ADR 0007, PA8/PA9).
    *
-   * Unlike Claude's ccusage numbers, which come from a transcript store every
-   * account shares, Codex's limits are answered by the account's own
-   * authenticated session — so they *are* account-specific, and a single cache
-   * would report whichever account was read first under every other one's name.
+   * Codex's limits are answered by the account's own authenticated session, so
+   * they *are* account-specific, and a single cache would report whichever
+   * account was read first under every other one's name.
    */
   private readonly cached = new Map<string, ProviderQuotaSnapshot>()
   /**

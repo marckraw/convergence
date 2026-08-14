@@ -244,35 +244,11 @@ describe('AppSettingsDialogContainer', () => {
           },
           {
             providerId: 'claude-code',
-            status: 'available',
-            source: 'local-usage-log',
-            planType: null,
-            windows: [
-              {
-                kind: 'five-hour',
-                label: 'Current 5-hour Claude usage',
-                usedPercent: 60,
-                remainingPercent: 40,
-                windowMinutes: 300,
-                resetsAt: '2026-06-11T16:00:00.000Z',
-                displayMode: 'observed-usage',
-                valueLabel: '18.1M tokens, $38.82',
-                resetLabel: 'Ends',
-              },
-              {
-                kind: 'weekly',
-                label: "This week's Claude usage",
-                usedPercent: 63,
-                remainingPercent: 37,
-                windowMinutes: 10_080,
-                resetsAt: '2026-06-14T00:00:00.000Z',
-                displayMode: 'observed-usage',
-                valueLabel: '191.2M tokens, $285.73',
-                resetLabel: 'Ends',
-              },
-            ],
-            credits: null,
-            limitReachedType: null,
+            status: 'unavailable',
+            source: 'manual',
+            reason:
+              'Claude Code does not expose a machine-readable usage endpoint to Convergence. The only way to compute it locally was to re-parse the shared ~/.claude transcript store, which cost more CPU than the numbers were worth. Open the Claude usage page for live limits.',
+            usageUrl: 'https://claude.ai/new#settings/usage',
             lastCheckedAt: '2026-06-11T14:00:00.000Z',
             stale: false,
           },
@@ -649,8 +625,14 @@ describe('AppSettingsDialogContainer', () => {
       false,
       undefined,
     )
-    expect(screen.getByText('Current 5-hour Claude usage')).toBeInTheDocument()
-    expect(screen.getByText('18.1M tokens, $38.82')).toBeInTheDocument()
+    // Claude Code is a manual card since MAR-2401: the app says where to look
+    // rather than re-parsing the transcript store to invent numbers.
+    expect(
+      screen.getByText('Claude Code usage unavailable'),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByText(/re-parse the shared ~\/.claude transcript store/),
+    ).toBeInTheDocument()
     expect(
       screen.getByText(/Cursor ACP does not expose usage or quota counters/),
     ).toBeInTheDocument()

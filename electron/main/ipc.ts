@@ -29,7 +29,6 @@ import { SkillsService } from '../backend/skills/skills.service'
 import { PromptsService } from '../backend/prompts/prompts.service'
 import { AppSettingsService } from '../backend/app-settings/app-settings.service'
 import { CodexQuotaService } from '../backend/provider-quota/codex-quota.service'
-import { ClaudeQuotaService } from '../backend/provider-quota/claude-quota.service'
 import { ProviderQuotaService } from '../backend/provider-quota/provider-quota.service'
 import { createDefaultProviderQuotaSources } from '../backend/provider-quota/provider-quota.sources'
 import { GuidedReviewDaemonCredentialsService } from '../backend/credentials/guided-review-daemon-credentials.service'
@@ -197,7 +196,6 @@ export function registerIpcHandlers(
   },
   providerQuota?: {
     codex: Pick<CodexQuotaService, 'getQuota'>
-    claude: Pick<ClaudeQuotaService, 'getQuota'>
   },
   executionHostRemote?: {
     credentials: ExecutionHostDaemonCredentialsService
@@ -207,7 +205,6 @@ export function registerIpcHandlers(
 ): void {
   const quotaServices = providerQuota ?? {
     codex: new CodexQuotaService(),
-    claude: new ClaudeQuotaService(),
   }
   const providerQuotaService = new ProviderQuotaService(
     createDefaultProviderQuotaSources(quotaServices),

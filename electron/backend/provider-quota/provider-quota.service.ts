@@ -1,5 +1,5 @@
-import type { ProviderQuotaAccountScope } from './claude-rate-limit.pure'
 import type {
+  ProviderQuotaAccountScope,
   ProviderQuotaProviderId,
   ProviderQuotaSnapshot,
   ProviderQuotaUnavailableSnapshot,

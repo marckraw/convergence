@@ -84,7 +84,6 @@ function startSession(options: {
     undefined,
     null,
     lookup,
-    null,
     (id) => (id === 'acct-a' ? 'work@example.com' : null),
     options.canOpenBrowser ?? true,
   )
