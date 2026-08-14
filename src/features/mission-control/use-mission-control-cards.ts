@@ -2,23 +2,34 @@ import { useEffect, useMemo } from 'react'
 import { useProjectStore } from '@/entities/project'
 import { useSessionStore } from '@/entities/session'
 import { buildSessionCards } from './mission-control-cards.pure'
-import { filterSessionCards } from './session-card-filter.pure'
+import {
+  filterSessionCards,
+  matchesSessionCardQuery,
+} from './session-card-filter.pure'
+import type { SessionCardFilter } from './session-card-filter.pure'
 import { orderSessionCards } from './session-card-order.pure'
 import type { SessionCardOrderPreset } from './session-card-order.pure'
+import { countSessionCardStates } from './session-card-state.pure'
+import type { SessionCardStateCounts } from './session-card-state.pure'
 import type { SessionCard } from './mission-control.types'
 
 export interface MissionControlCardsInput {
-  /** Card-level search text; empty means "everything". */
-  query: string
+  /** Everything the room is narrowed by. */
+  filter: SessionCardFilter
   /** How the room is laid out. Defaults to Mission Control's own order. */
   order?: SessionCardOrderPreset
 }
 
 export interface MissionControlCards {
-  /** Cards matching the query, in the chosen order. */
+  /** Cards matching the filter, in the chosen order. */
   cards: SessionCard[]
-  /** Cards in the room before the query narrowed them. */
+  /** Cards in the room before the filter narrowed them. */
   totalCount: number
+  /**
+   * Cards per state, counted after search but before the state chips — so a
+   * chip's number answers "how many appear if I turn this on".
+   */
+  stateCounts: SessionCardStateCounts
 }
 
 /**
@@ -30,7 +41,7 @@ export interface MissionControlCards {
  * no second subscription: one source of truth, already streaming.
  */
 export function useMissionControlCards({
-  query,
+  filter,
   order = 'attention-first',
 }: MissionControlCardsInput): MissionControlCards {
   const sessions = useSessionStore((state) => state.globalSessions)
@@ -47,10 +58,18 @@ export function useMissionControlCards({
     [sessions, projects, providers],
   )
 
-  const cards = useMemo(
-    () => orderSessionCards(filterSessionCards(allCards, query), order),
-    [allCards, query, order],
+  const stateCounts = useMemo(
+    () =>
+      countSessionCardStates(
+        allCards.filter((card) => matchesSessionCardQuery(card, filter.query)),
+      ),
+    [allCards, filter.query],
   )
 
-  return { cards, totalCount: allCards.length }
+  const cards = useMemo(
+    () => orderSessionCards(filterSessionCards(allCards, filter), order),
+    [allCards, filter, order],
+  )
+
+  return { cards, totalCount: allCards.length, stateCounts }
 }

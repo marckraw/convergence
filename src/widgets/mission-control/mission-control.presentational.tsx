@@ -5,6 +5,7 @@ import {
   formatSessionCardOrderPreset,
 } from '@/features/mission-control'
 import type { SessionCardOrderPreset } from '@/features/mission-control'
+import { Button } from '@/shared/ui/button'
 import { Input } from '@/shared/ui/input'
 import {
   Select,
@@ -23,6 +24,11 @@ interface MissionControlViewProps {
   onQueryChange: (query: string) => void
   order: SessionCardOrderPreset
   onOrderChange: (order: SessionCardOrderPreset) => void
+  /** The state chips, composed by the container. */
+  chips: ReactNode
+  /** True when nothing is narrowed — drives the empty-room copy. */
+  filterIsEmpty: boolean
+  onClearFilter: () => void
   children: ReactNode
 }
 
@@ -35,6 +41,9 @@ export const MissionControlView: FC<MissionControlViewProps> = ({
   onQueryChange,
   order,
   onOrderChange,
+  chips,
+  filterIsEmpty,
+  onClearFilter,
   children,
 }) => {
   return (
@@ -85,6 +94,8 @@ export const MissionControlView: FC<MissionControlViewProps> = ({
             </SelectContent>
           </Select>
         </div>
+
+        <div className="w-full">{chips}</div>
       </div>
 
       <div className="app-scrollbar min-h-0 flex-1 overflow-y-auto px-5 py-4">
@@ -100,11 +111,26 @@ export const MissionControlView: FC<MissionControlViewProps> = ({
         ) : visibleCount === 0 ? (
           <div className="flex h-full flex-col items-center justify-center gap-2 text-center">
             <SearchX className="size-6 text-muted-foreground" />
-            <p className="text-sm font-medium">No cards match “{query}”</p>
+            <p className="text-sm font-medium">
+              {query.trim()
+                ? `No cards match “${query}”`
+                : 'No cards in the states you picked'}
+            </p>
             <p className="max-w-sm text-xs text-muted-foreground">
               Card search covers name, project, provider, model, status and
               activity — not conversation content.
             </p>
+            {filterIsEmpty ? null : (
+              <Button
+                type="button"
+                variant="link"
+                size="sm"
+                onClick={onClearFilter}
+                className="h-7 text-xs text-muted-foreground hover:text-foreground"
+              >
+                Show the whole room
+              </Button>
+            )}
           </div>
         ) : (
           children

@@ -9,6 +9,7 @@ import type { SessionCard } from './mission-control.types'
 import {
   SESSION_CARD_STATES,
   classifySessionCardState,
+  countSessionCardStates,
   formatSessionCardState,
 } from './session-card-state.pure'
 
@@ -199,6 +200,46 @@ describe('classifySessionCardState', () => {
         state: expected,
       })
     }
+  })
+})
+
+describe('countSessionCardStates', () => {
+  it('counts an empty room as zero everywhere', () => {
+    expect(countSessionCardStates([])).toEqual({
+      working: 0,
+      'needs-you': 0,
+      idle: 0,
+      finished: 0,
+      failed: 0,
+    })
+  })
+
+  it('counts each card once, into its own state', () => {
+    const counts = countSessionCardStates([
+      makeCard({ status: 'running', attention: 'none', activity: 'streaming' }),
+      makeCard({ status: 'running', attention: 'none', activity: null }),
+      makeCard({ status: 'idle', attention: 'needs-approval', activity: null }),
+      makeCard({ status: 'completed', attention: 'finished', activity: null }),
+      makeCard({ status: 'failed', attention: 'failed', activity: null }),
+      makeCard({ status: 'idle', attention: 'none', activity: null }),
+    ])
+
+    expect(counts).toEqual({
+      working: 2,
+      'needs-you': 1,
+      idle: 1,
+      finished: 1,
+      failed: 1,
+    })
+  })
+
+  it('always totals the number of cards it was given', () => {
+    const cards = MATRIX.map(makeCard)
+    const counts = countSessionCardStates(cards)
+
+    expect(Object.values(counts).reduce((sum, count) => sum + count, 0)).toBe(
+      cards.length,
+    )
   })
 })
 

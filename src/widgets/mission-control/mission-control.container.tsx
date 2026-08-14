@@ -4,14 +4,20 @@ import { toast } from 'sonner'
 import { useSessionStore } from '@/entities/session'
 import type { SessionSummary } from '@/entities/session'
 import {
+  EMPTY_SESSION_CARD_FILTER,
   HailComposer,
   SessionCardView,
+  SessionStateChips,
+  isEmptySessionCardFilter,
   resolveHailOutcome,
+  toggleSessionCardState,
   useMissionControlCards,
 } from '@/features/mission-control'
 import type {
   SessionCard,
+  SessionCardFilter,
   SessionCardOrderPreset,
+  SessionCardState,
 } from '@/features/mission-control'
 import { MissionControlView } from './mission-control.presentational'
 
@@ -20,14 +26,19 @@ interface MissionControlProps {
 }
 
 export const MissionControl: FC<MissionControlProps> = ({ onOpenSession }) => {
-  const [query, setQuery] = useState('')
+  const [filter, setFilter] = useState<SessionCardFilter>(
+    EMPTY_SESSION_CARD_FILTER,
+  )
   const [order, setOrder] = useState<SessionCardOrderPreset>('attention-first')
   const [hailSessionId, setHailSessionId] = useState<string | null>(null)
   const [hailText, setHailText] = useState('')
   const [sending, setSending] = useState(false)
   const [hailError, setHailError] = useState<string | null>(null)
 
-  const { cards, totalCount } = useMissionControlCards({ query, order })
+  const { cards, totalCount, stateCounts } = useMissionControlCards({
+    filter,
+    order,
+  })
   const providers = useSessionStore((state) => state.providers)
   const sendMessageToSession = useSessionStore(
     (state) => state.sendMessageToSession,
@@ -41,6 +52,25 @@ export const MissionControl: FC<MissionControlProps> = ({ onOpenSession }) => {
     () => cards.filter((card) => card.session.status === 'running').length,
     [cards],
   )
+
+  const handleQueryChange = useCallback((query: string) => {
+    setFilter((current) => ({ ...current, query }))
+  }, [])
+
+  const handleToggleState = useCallback((state: SessionCardState) => {
+    setFilter((current) => ({
+      ...current,
+      states: toggleSessionCardState(current.states, state),
+    }))
+  }, [])
+
+  const handleClearStates = useCallback(() => {
+    setFilter((current) => ({ ...current, states: [] }))
+  }, [])
+
+  const handleClearFilter = useCallback(() => {
+    setFilter(EMPTY_SESSION_CARD_FILTER)
+  }, [])
 
   const closeHail = useCallback(() => {
     setHailSessionId(null)
@@ -116,10 +146,20 @@ export const MissionControl: FC<MissionControlProps> = ({ onOpenSession }) => {
       visibleCount={cards.length}
       attentionCount={attentionCount}
       runningCount={runningCount}
-      query={query}
-      onQueryChange={setQuery}
+      query={filter.query}
+      onQueryChange={handleQueryChange}
       order={order}
       onOrderChange={setOrder}
+      filterIsEmpty={isEmptySessionCardFilter(filter)}
+      onClearFilter={handleClearFilter}
+      chips={
+        <SessionStateChips
+          selected={filter.states}
+          counts={stateCounts}
+          onToggle={handleToggleState}
+          onClear={handleClearStates}
+        />
+      }
     >
       <div className="grid grid-cols-[repeat(auto-fill,minmax(260px,1fr))] gap-3">
         {cards.map((card) => (

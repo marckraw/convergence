@@ -39,6 +39,27 @@ export function formatSessionCardState(state: SessionCardState): string {
   return SESSION_CARD_STATE_LABELS[state]
 }
 
+export type SessionCardStateCounts = Record<SessionCardState, number>
+
+/** How many cards sit in each state — the number a filter chip wears. */
+export function countSessionCardStates(
+  cards: readonly SessionCard[],
+): SessionCardStateCounts {
+  const counts = {
+    working: 0,
+    'needs-you': 0,
+    idle: 0,
+    finished: 0,
+    failed: 0,
+  }
+
+  for (const card of cards) {
+    counts[classifySessionCardState(card)] += 1
+  }
+
+  return counts
+}
+
 /**
  * Reads a Session Card's state from status, attention and activity together.
  *
