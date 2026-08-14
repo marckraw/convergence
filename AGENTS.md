@@ -67,9 +67,13 @@ If a command fails because the current phase has not introduced that tool yet, r
 
 ## Local dev server
 
-Agents are not permitted to run `npm run dev` in this repo. When local UI
-testing is needed, tell the user what to verify and ask them to run
-`npm run dev` themselves.
+Agents are not permitted to run `npm run dev`, `npm run dev:sandbox`, or
+`npm run dev:clean` in this repo — launching a dev instance is always the
+user's action. When local UI testing is needed, tell the user what to verify
+and ask them to run the dev server themselves. For iterating beside a live
+app instance, point them at `docs/runbook/dev-sandbox.md`
+(`npm run dev:seed` + `npm run dev:sandbox`); `npm run dev:seed` (a data
+snapshot, not a dev server) is agent-runnable when asked.
 
 ## Planning and documentation ownership
 
