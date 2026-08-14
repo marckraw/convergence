@@ -4,23 +4,16 @@ import { toast } from 'sonner'
 import { useSessionStore } from '@/entities/session'
 import type { SessionSummary } from '@/entities/session'
 import {
-  EMPTY_SESSION_CARD_FILTER,
   HailComposer,
   SessionCardView,
   SessionFacetPicker,
   SessionStateChips,
   isEmptySessionCardFilter,
   resolveHailOutcome,
-  toggleFilterId,
-  toggleSessionCardState,
   useMissionControlCards,
+  useMissionControlView,
 } from '@/features/mission-control'
-import type {
-  SessionCard,
-  SessionCardFilter,
-  SessionCardOrderPreset,
-  SessionCardState,
-} from '@/features/mission-control'
+import type { SessionCard } from '@/features/mission-control'
 import { MissionControlView } from './mission-control.presentational'
 
 interface MissionControlProps {
@@ -28,10 +21,19 @@ interface MissionControlProps {
 }
 
 export const MissionControl: FC<MissionControlProps> = ({ onOpenSession }) => {
-  const [filter, setFilter] = useState<SessionCardFilter>(
-    EMPTY_SESSION_CARD_FILTER,
-  )
-  const [order, setOrder] = useState<SessionCardOrderPreset>('attention-first')
+  const {
+    filter,
+    order,
+    setQuery,
+    setOrder,
+    toggleState,
+    clearStates,
+    toggleProject,
+    clearProjects,
+    toggleProvider,
+    clearProviders,
+    clearFilter,
+  } = useMissionControlView()
   const [hailSessionId, setHailSessionId] = useState<string | null>(null)
   const [hailText, setHailText] = useState('')
   const [sending, setSending] = useState(false)
@@ -52,47 +54,6 @@ export const MissionControl: FC<MissionControlProps> = ({ onOpenSession }) => {
     () => cards.filter((card) => card.session.status === 'running').length,
     [cards],
   )
-
-  const handleQueryChange = useCallback((query: string) => {
-    setFilter((current) => ({ ...current, query }))
-  }, [])
-
-  const handleToggleState = useCallback((state: SessionCardState) => {
-    setFilter((current) => ({
-      ...current,
-      states: toggleSessionCardState(current.states, state),
-    }))
-  }, [])
-
-  const handleClearStates = useCallback(() => {
-    setFilter((current) => ({ ...current, states: [] }))
-  }, [])
-
-  const handleToggleProject = useCallback((id: string) => {
-    setFilter((current) => ({
-      ...current,
-      projectIds: toggleFilterId(current.projectIds, id),
-    }))
-  }, [])
-
-  const handleClearProjects = useCallback(() => {
-    setFilter((current) => ({ ...current, projectIds: [] }))
-  }, [])
-
-  const handleToggleProvider = useCallback((id: string) => {
-    setFilter((current) => ({
-      ...current,
-      providerIds: toggleFilterId(current.providerIds, id),
-    }))
-  }, [])
-
-  const handleClearProviders = useCallback(() => {
-    setFilter((current) => ({ ...current, providerIds: [] }))
-  }, [])
-
-  const handleClearFilter = useCallback(() => {
-    setFilter(EMPTY_SESSION_CARD_FILTER)
-  }, [])
 
   const closeHail = useCallback(() => {
     setHailSessionId(null)
@@ -169,18 +130,18 @@ export const MissionControl: FC<MissionControlProps> = ({ onOpenSession }) => {
       attentionCount={attentionCount}
       runningCount={runningCount}
       query={filter.query}
-      onQueryChange={handleQueryChange}
+      onQueryChange={setQuery}
       order={order}
       onOrderChange={setOrder}
       filterIsEmpty={isEmptySessionCardFilter(filter)}
-      onClearFilter={handleClearFilter}
+      onClearFilter={clearFilter}
       filters={
         <>
           <SessionStateChips
             selected={filter.states}
             counts={stateCounts}
-            onToggle={handleToggleState}
-            onClear={handleClearStates}
+            onToggle={toggleState}
+            onClear={clearStates}
           />
           <SessionFacetPicker
             label="Filter by project"
@@ -189,8 +150,8 @@ export const MissionControl: FC<MissionControlProps> = ({ onOpenSession }) => {
             searchPlaceholder="Search projects…"
             options={projectFacets}
             selected={filter.projectIds}
-            onToggle={handleToggleProject}
-            onClear={handleClearProjects}
+            onToggle={toggleProject}
+            onClear={clearProjects}
           />
           <SessionFacetPicker
             label="Filter by provider"
@@ -199,8 +160,8 @@ export const MissionControl: FC<MissionControlProps> = ({ onOpenSession }) => {
             searchPlaceholder="Search providers…"
             options={providerFacets}
             selected={filter.providerIds}
-            onToggle={handleToggleProvider}
-            onClear={handleClearProviders}
+            onToggle={toggleProvider}
+            onClear={clearProviders}
           />
         </>
       }

@@ -1,6 +1,12 @@
 import { useRef, useState } from 'react'
 import type { FC } from 'react'
-import { Command, CommandEmpty, CommandInput, CommandList } from 'cmdk'
+import {
+  Command,
+  CommandEmpty,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from 'cmdk'
 import { Check, ChevronDown } from 'lucide-react'
 import { cn } from '@/shared/lib/cn.pure'
 import { Button } from '@/shared/ui/button'
@@ -118,12 +124,11 @@ export const SessionFacetPicker: FC<SessionFacetPickerProps> = ({
                 return (
                   // Multi-select: picking keeps the menu open so several
                   // projects can be chosen in one pass.
-                  <button
+                  <CommandItem
                     key={option.id}
-                    type="button"
-                    aria-pressed={active}
-                    onClick={() => onToggle(option.id)}
-                    className="flex w-full cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs hover:bg-accent hover:text-accent-foreground"
+                    value={option.id}
+                    onSelect={() => onToggle(option.id)}
+                    className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-xs aria-selected:bg-accent aria-selected:text-accent-foreground"
                   >
                     <Check
                       className={cn(
@@ -137,7 +142,7 @@ export const SessionFacetPicker: FC<SessionFacetPickerProps> = ({
                     <span className="shrink-0 tabular-nums text-muted-foreground">
                       {option.count}
                     </span>
-                  </button>
+                  </CommandItem>
                 )
               })
             )}
