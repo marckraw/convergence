@@ -9,7 +9,7 @@ export { resolveHailOutcome } from './session-hail-outcome.pure'
 export type { HailOutcome, HailOutcomeKind } from './session-hail-outcome.pure'
 export { buildSessionCards } from './mission-control-cards.pure'
 export { SessionStateChips } from './session-state-chips.presentational'
-export { SessionFacetPicker } from './session-facet-picker.presentational'
+export { SessionFacetPicker } from './session-facet-picker.container'
 export {
   EMPTY_SESSION_CARD_FILTER,
   GLOBAL_SESSION_PROJECT_KEY,
@@ -28,6 +28,7 @@ export type {
 export {
   buildProjectFacets,
   buildProviderFacets,
+  filterFacetOptions,
   formatFacetSummary,
 } from './session-card-facets.pure'
 export type { SessionCardFacetOption } from './session-card-facets.pure'

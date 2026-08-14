@@ -4,6 +4,7 @@ import type { SessionCard } from './mission-control.types'
 import {
   buildProjectFacets,
   buildProviderFacets,
+  filterFacetOptions,
   formatFacetSummary,
 } from './session-card-facets.pure'
 import { EMPTY_SESSION_CARD_FILTER } from './session-card-filter.pure'
@@ -74,17 +75,30 @@ describe('buildProjectFacets', () => {
     expect(buildProjectFacets(cards, EMPTY_SESSION_CARD_FILTER)).toEqual([
       { id: 'project-a', label: 'Alpha', count: 2 },
       { id: 'project-b', label: 'Beta', count: 1 },
-      { id: 'global', label: 'Convergence', count: 1 },
+      { id: 'global', label: 'Convergence (chats)', count: 1 },
     ])
   })
 
-  it('gives chat sessions their own bucket', () => {
-    const facets = buildProjectFacets(cards, EMPTY_SESSION_CARD_FILTER)
-    expect(facets.find((facet) => facet.id === 'global')).toEqual({
-      id: 'global',
-      label: 'Convergence',
-      count: 1,
-    })
+  it('names the chat bucket apart from the project of the same name', () => {
+    const withRealConvergence = [
+      ...cards,
+      makeCard({
+        id: 'repo',
+        projectId: 'project-convergence',
+        projectName: 'Convergence',
+      }),
+    ]
+    const facets = buildProjectFacets(
+      withRealConvergence,
+      EMPTY_SESSION_CARD_FILTER,
+    )
+
+    expect(facets.map((facet) => facet.label)).toEqual([
+      'Alpha',
+      'Beta',
+      'Convergence',
+      'Convergence (chats)',
+    ])
   })
 
   it('holds its own dimension open when counting', () => {
@@ -106,7 +120,7 @@ describe('buildProjectFacets', () => {
     expect(facets).toEqual([
       { id: 'project-a', label: 'Alpha', count: 1 },
       { id: 'project-b', label: 'Beta', count: 0 },
-      { id: 'global', label: 'Convergence', count: 0 },
+      { id: 'global', label: 'Convergence (chats)', count: 0 },
     ])
   })
 
@@ -155,6 +169,42 @@ describe('buildProviderFacets', () => {
       { id: 'claude-code', label: 'Anthropic', count: 1 },
       { id: 'codex', label: 'OpenAI', count: 0 },
     ])
+  })
+})
+
+describe('filterFacetOptions', () => {
+  const options = [
+    { id: 'a', label: 'Backpack', count: 3 },
+    { id: 'b', label: 'backpack-sb-plugins-react', count: 15 },
+    { id: 'c', label: 'Convergence', count: 25 },
+  ]
+
+  it('returns every option for an empty or whitespace query', () => {
+    expect(filterFacetOptions(options, '')).toHaveLength(3)
+    expect(filterFacetOptions(options, '   ')).toHaveLength(3)
+  })
+
+  it('matches labels case-insensitively', () => {
+    expect(filterFacetOptions(options, 'BACKPACK').map((o) => o.id)).toEqual([
+      'a',
+      'b',
+    ])
+  })
+
+  it('requires every token to match', () => {
+    expect(
+      filterFacetOptions(options, 'backpack react').map((o) => o.id),
+    ).toEqual(['b'])
+  })
+
+  it('returns nothing when no label matches', () => {
+    expect(filterFacetOptions(options, 'zzz')).toEqual([])
+  })
+
+  it('does not mutate the incoming options', () => {
+    const input = [...options]
+    filterFacetOptions(input, 'backpack')
+    expect(input).toHaveLength(3)
   })
 })
 

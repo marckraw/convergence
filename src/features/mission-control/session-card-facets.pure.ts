@@ -1,5 +1,6 @@
 import type { SessionCard } from './mission-control.types'
 import {
+  GLOBAL_SESSION_PROJECT_KEY,
   filterSessionCardsExcept,
   getSessionCardProjectKey,
 } from './session-card-filter.pure'
@@ -44,10 +45,18 @@ export function buildProjectFacets(
   cards: readonly SessionCard[],
   filter: SessionCardFilter,
 ): SessionCardFacetOption[] {
-  return buildFacet(cards, filter, 'projectIds', (card) => ({
-    id: getSessionCardProjectKey(card),
-    label: card.projectName,
-  }))
+  return buildFacet(cards, filter, 'projectIds', (card) => {
+    const id = getSessionCardProjectKey(card)
+    return {
+      id,
+      // Chat Sessions carry the app's own name, which collides with the real
+      // Convergence repository in a list of projects. Say which one it is.
+      label:
+        id === GLOBAL_SESSION_PROJECT_KEY
+          ? `${card.projectName} (chats)`
+          : card.projectName,
+    }
+  })
 }
 
 /** The provider picker's options, counted with the provider dimension held open. */
@@ -59,6 +68,23 @@ export function buildProviderFacets(
     id: card.session.providerId,
     label: card.providerLabel,
   }))
+}
+
+/**
+ * Narrows a picker's options as Marcin types. Substring, case-insensitive,
+ * every token — the same forgiving shape as card search.
+ */
+export function filterFacetOptions(
+  options: readonly SessionCardFacetOption[],
+  query: string,
+): SessionCardFacetOption[] {
+  const tokens = query.trim().toLowerCase().split(/\s+/).filter(Boolean)
+  if (tokens.length === 0) return [...options]
+
+  return options.filter((option) => {
+    const label = option.label.toLowerCase()
+    return tokens.every((token) => label.includes(token))
+  })
 }
 
 /** What a picker's trigger says: "All projects", one name, or a count. */

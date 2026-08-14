@@ -186,6 +186,7 @@ export const MissionControl: FC<MissionControlProps> = ({ onOpenSession }) => {
             label="Filter by project"
             allLabel="All projects"
             noun="project"
+            searchPlaceholder="Search projects…"
             options={projectFacets}
             selected={filter.projectIds}
             onToggle={handleToggleProject}
@@ -195,6 +196,7 @@ export const MissionControl: FC<MissionControlProps> = ({ onOpenSession }) => {
             label="Filter by provider"
             allLabel="All providers"
             noun="provider"
+            searchPlaceholder="Search providers…"
             options={providerFacets}
             selected={filter.providerIds}
             onToggle={handleToggleProvider}
