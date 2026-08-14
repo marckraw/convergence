@@ -9,7 +9,10 @@ import {
   resolveHailOutcome,
   useMissionControlCards,
 } from '@/features/mission-control'
-import type { SessionCard } from '@/features/mission-control'
+import type {
+  SessionCard,
+  SessionCardOrderPreset,
+} from '@/features/mission-control'
 import { MissionControlView } from './mission-control.presentational'
 
 interface MissionControlProps {
@@ -18,12 +21,13 @@ interface MissionControlProps {
 
 export const MissionControl: FC<MissionControlProps> = ({ onOpenSession }) => {
   const [query, setQuery] = useState('')
+  const [order, setOrder] = useState<SessionCardOrderPreset>('attention-first')
   const [hailSessionId, setHailSessionId] = useState<string | null>(null)
   const [hailText, setHailText] = useState('')
   const [sending, setSending] = useState(false)
   const [hailError, setHailError] = useState<string | null>(null)
 
-  const { cards, totalCount } = useMissionControlCards(query)
+  const { cards, totalCount } = useMissionControlCards({ query, order })
   const providers = useSessionStore((state) => state.providers)
   const sendMessageToSession = useSessionStore(
     (state) => state.sendMessageToSession,
@@ -114,6 +118,8 @@ export const MissionControl: FC<MissionControlProps> = ({ onOpenSession }) => {
       runningCount={runningCount}
       query={query}
       onQueryChange={setQuery}
+      order={order}
+      onOrderChange={setOrder}
     >
       <div className="grid grid-cols-[repeat(auto-fill,minmax(260px,1fr))] gap-3">
         {cards.map((card) => (

@@ -1,6 +1,18 @@
 import type { FC, ReactNode } from 'react'
-import { Satellite, SearchX } from 'lucide-react'
+import { ArrowDownWideNarrow, Satellite, SearchX } from 'lucide-react'
+import {
+  SESSION_CARD_ORDER_PRESETS,
+  formatSessionCardOrderPreset,
+} from '@/features/mission-control'
+import type { SessionCardOrderPreset } from '@/features/mission-control'
 import { Input } from '@/shared/ui/input'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/shared/ui/select'
 
 interface MissionControlViewProps {
   totalCount: number
@@ -9,6 +21,8 @@ interface MissionControlViewProps {
   runningCount: number
   query: string
   onQueryChange: (query: string) => void
+  order: SessionCardOrderPreset
+  onOrderChange: (order: SessionCardOrderPreset) => void
   children: ReactNode
 }
 
@@ -19,6 +33,8 @@ export const MissionControlView: FC<MissionControlViewProps> = ({
   runningCount,
   query,
   onQueryChange,
+  order,
+  onOrderChange,
   children,
 }) => {
   return (
@@ -36,14 +52,39 @@ export const MissionControlView: FC<MissionControlViewProps> = ({
           </p>
         </div>
 
-        <Input
-          type="search"
-          value={query}
-          placeholder="Search cards by name, project, provider, model, status…"
-          aria-label="Search session cards"
-          className="h-8 w-full max-w-xs text-xs"
-          onChange={(event) => onQueryChange(event.target.value)}
-        />
+        <div className="flex flex-1 flex-wrap items-center justify-end gap-2">
+          <Input
+            type="search"
+            value={query}
+            placeholder="Search cards by name, project, provider, model, status…"
+            aria-label="Search session cards"
+            className="h-8 w-full max-w-xs text-xs"
+            onChange={(event) => onQueryChange(event.target.value)}
+          />
+
+          <Select
+            value={order}
+            onValueChange={(value) =>
+              onOrderChange(value as SessionCardOrderPreset)
+            }
+          >
+            <SelectTrigger
+              size="sm"
+              aria-label="Order session cards"
+              className="h-8 gap-1.5 text-xs"
+            >
+              <ArrowDownWideNarrow className="size-3.5" />
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent align="end">
+              {SESSION_CARD_ORDER_PRESETS.map((preset) => (
+                <SelectItem key={preset} value={preset} className="text-xs">
+                  {formatSessionCardOrderPreset(preset)}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
       </div>
 
       <div className="app-scrollbar min-h-0 flex-1 overflow-y-auto px-5 py-4">

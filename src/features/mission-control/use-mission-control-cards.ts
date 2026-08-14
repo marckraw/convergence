@@ -4,10 +4,18 @@ import { useSessionStore } from '@/entities/session'
 import { buildSessionCards } from './mission-control-cards.pure'
 import { filterSessionCards } from './session-card-filter.pure'
 import { orderSessionCards } from './session-card-order.pure'
+import type { SessionCardOrderPreset } from './session-card-order.pure'
 import type { SessionCard } from './mission-control.types'
 
+export interface MissionControlCardsInput {
+  /** Card-level search text; empty means "everything". */
+  query: string
+  /** How the room is laid out. Defaults to Mission Control's own order. */
+  order?: SessionCardOrderPreset
+}
+
 export interface MissionControlCards {
-  /** Cards matching the query, in Mission Control's default order. */
+  /** Cards matching the query, in the chosen order. */
   cards: SessionCard[]
   /** Cards in the room before the query narrowed them. */
   totalCount: number
@@ -21,7 +29,10 @@ export interface MissionControlCards {
  * `session:summaryUpdated` broadcast. Mission Control adds no second fetch and
  * no second subscription: one source of truth, already streaming.
  */
-export function useMissionControlCards(query: string): MissionControlCards {
+export function useMissionControlCards({
+  query,
+  order = 'attention-first',
+}: MissionControlCardsInput): MissionControlCards {
   const sessions = useSessionStore((state) => state.globalSessions)
   const providers = useSessionStore((state) => state.providers)
   const loadProviders = useSessionStore((state) => state.loadProviders)
@@ -37,8 +48,8 @@ export function useMissionControlCards(query: string): MissionControlCards {
   )
 
   const cards = useMemo(
-    () => orderSessionCards(filterSessionCards(allCards, query)),
-    [allCards, query],
+    () => orderSessionCards(filterSessionCards(allCards, query), order),
+    [allCards, query, order],
   )
 
   return { cards, totalCount: allCards.length }
