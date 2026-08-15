@@ -138,7 +138,6 @@ describe('RelayHopTrail', () => {
 
   it('says why a skip skipped', async () => {
     listHops.mockResolvedValue([
-      hop({ id: 'h1', outcome: 'skipped-disarmed', payloadPreview: null }),
       hop({ id: 'h2', outcome: 'skipped-failed', payloadPreview: null }),
       hop({ id: 'h3', outcome: 'skipped-budget', payloadPreview: null }),
     ])
@@ -146,9 +145,27 @@ describe('RelayHopTrail', () => {
 
     fireEvent.click(await screen.findByRole('button', { name: /Trail/ }))
 
-    expect(screen.getByText('skipped — disarmed')).toBeInTheDocument()
     expect(screen.getByText('skipped — source failed')).toBeInTheDocument()
     expect(screen.getByText('stopped — hop budget')).toBeInTheDocument()
+  })
+
+  it('shows a row written by another version without alarming anyone', async () => {
+    listHops.mockResolvedValue([
+      hop({ id: 'h1', outcome: 'skipped-disarmed', payloadPreview: null }),
+    ])
+    renderTrail()
+
+    // The badge counts alarms; an unreadable row is not one.
+    expect(screen.queryByText(/needs? your eyes/)).not.toBeInTheDocument()
+
+    fireEvent.click(await screen.findByRole('button', { name: /Trail/ }))
+
+    const label = screen.getByText('unknown outcome')
+    expect(label).toBeVisible()
+    expect(label).toHaveAttribute(
+      'title',
+      'Recorded by another version as "skipped-disarmed"',
+    )
   })
 
   it('badges errors and burnt budgets loudly, without being opened', async () => {
@@ -167,7 +184,7 @@ describe('RelayHopTrail', () => {
   it('stays quiet when every hop is ordinary', async () => {
     listHops.mockResolvedValue([
       hop({ id: 'h1' }),
-      hop({ id: 'h2', outcome: 'skipped-disarmed' }),
+      hop({ id: 'h2', outcome: 'skipped-failed' }),
     ])
     renderTrail()
 

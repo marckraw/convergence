@@ -32,7 +32,6 @@ export type RelayHopOutcome =
   | 'delivered'
   | 'queued'
   | 'spawned'
-  | 'skipped-disarmed'
   | 'skipped-failed'
   | 'skipped-budget'
   | 'error'
@@ -49,7 +48,11 @@ export interface RelayHop {
   spawnedSessionId: string | null
   triggerStatus: string
   payloadPreview: string | null
-  outcome: RelayHopOutcome
+  /**
+   * Wider than `RelayHopOutcome` on purpose: that union is what this build
+   * writes, while a stored row may carry a word an older or newer build used.
+   */
+  outcome: string
   error: string | null
 }
 

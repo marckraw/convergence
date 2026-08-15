@@ -8,12 +8,14 @@ const TONE_TEXT: Record<RelayHopTone, string> = {
   delivered: 'text-emerald-400',
   skipped: 'text-muted-foreground',
   alarm: 'text-red-400',
+  unknown: 'text-muted-foreground',
 }
 
 const TONE_DOT: Record<RelayHopTone, string> = {
   delivered: 'bg-emerald-400',
   skipped: 'bg-white/25',
   alarm: 'bg-red-400',
+  unknown: 'bg-white/25',
 }
 
 interface RelayHopRowProps {
@@ -65,6 +67,11 @@ export const RelayHopRow: FC<RelayHopRowProps> = ({
           </>
         ) : null}
         <span
+          title={
+            line.rawOutcome
+              ? `Recorded by another version as "${line.rawOutcome}"`
+              : undefined
+          }
           className={cn('ml-auto shrink-0 font-medium', TONE_TEXT[line.tone])}
         >
           {line.outcomeLabel}

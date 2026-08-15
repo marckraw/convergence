@@ -62,8 +62,9 @@ interface RelayEngineDeps {
  * Convergence is the only thing that moves work between sessions -- agents
  * never call agents. This engine listens for sessions coming to rest, reads
  * the wires the user drew inside a crew, and carries the finished session's
- * last assistant message along them. Every decision it makes, including doing
- * nothing, is written to the hop ledger before it returns.
+ * last assistant message along them. Every wire that actually fires writes a
+ * ledger row before this returns -- deliveries, skips and errors alike. A
+ * disarmed wire does not fire, and so writes nothing.
  */
 export class RelayEngine {
   private readonly relays: RelayService
@@ -127,10 +128,11 @@ export class RelayEngine {
       this.onHopAppended?.(hop)
     }
 
-    if (!relay.armed) {
-      record('skipped-disarmed')
-      return
-    }
+    // A disarmed wire is a switch at rest, not a firing. "No silent hops"
+    // guards deliveries the user cannot see -- it was never a promise to
+    // journal every session that finishes near a switched-off wire, and doing
+    // so buried the real rows under noise.
+    if (!relay.armed) return
 
     // v1 fires on completion only. A failure still writes a row, because
     // "my wire did not fire" must always have a visible answer.

@@ -24,8 +24,14 @@ const BUDGETED_OUTCOMES: readonly RelayHopOutcome[] = [
   'spawned',
 ]
 
-export function isBudgetedOutcome(outcome: RelayHopOutcome): boolean {
-  return BUDGETED_OUTCOMES.includes(outcome)
+/**
+ * Takes a plain string because it reads stored rows, which may carry an
+ * outcome word from another build. An unrecognised word charges nothing: the
+ * budget exists to stop live loops, and a row this build cannot read is not
+ * evidence that a provider turn was spent.
+ */
+export function isBudgetedOutcome(outcome: string): boolean {
+  return (BUDGETED_OUTCOMES as readonly string[]).includes(outcome)
 }
 
 export function normalizeRelayTrigger(value: string): RelayTrigger {

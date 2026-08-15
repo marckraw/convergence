@@ -63,8 +63,9 @@ export class RelayService {
   }
 
   /**
-   * The wires a settled session should be measured against: armed or not, so
-   * the engine can record a disarmed skip rather than stay silent about it.
+   * Every wire leaving a session, armed or not. The arming decision belongs to
+   * the engine, which is the one place that knows what firing means -- a WHERE
+   * clause here would be a second, quieter copy of that rule.
    */
   listForSourceSession(sessionId: string): SessionRelay[] {
     const rows = this.db
@@ -263,9 +264,7 @@ export class RelayService {
     const rows = this.db
       .prepare('SELECT outcome FROM relay_hops WHERE flow_run_id = ?')
       .all(flowRunId) as { outcome: string }[]
-    return rows.filter((row) =>
-      isBudgetedOutcome(row.outcome as RelayHopOutcome),
-    ).length
+    return rows.filter((row) => isBudgetedOutcome(row.outcome)).length
   }
 
   private requireById(id: string): SessionRelay {

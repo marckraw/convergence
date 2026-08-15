@@ -11,10 +11,10 @@ export const ALARMING_RELAY_OUTCOMES: readonly RelayHopOutcome[] = [
   'skipped-budget',
 ]
 
-export type RelayHopTone = 'delivered' | 'skipped' | 'alarm'
+export type RelayHopTone = 'delivered' | 'skipped' | 'alarm' | 'unknown'
 
 export function isAlarmingHop(hop: Pick<RelayHop, 'outcome'>): boolean {
-  return ALARMING_RELAY_OUTCOMES.includes(hop.outcome)
+  return (ALARMING_RELAY_OUTCOMES as readonly string[]).includes(hop.outcome)
 }
 
 export function countAlarmingHops(
@@ -23,26 +23,38 @@ export function countAlarmingHops(
   return hops.filter(isAlarmingHop).length
 }
 
-export function relayHopTone(outcome: RelayHopOutcome): RelayHopTone {
+/**
+ * Takes a plain string, not the union: a ledger row written by a different
+ * build carries a word this one has never heard of, and it must land somewhere
+ * quiet. An unknown outcome is never alarming -- red is reserved for things
+ * this build actually understands to be wrong.
+ */
+export function relayHopTone(outcome: string): RelayHopTone {
   switch (outcome) {
     case 'delivered':
     case 'queued':
     case 'spawned':
       return 'delivered'
-    case 'skipped-disarmed':
     case 'skipped-failed':
       return 'skipped'
-    default:
+    case 'skipped-budget':
+    case 'error':
       return 'alarm'
+    default:
+      return 'unknown'
   }
 }
+
+/** Shown for a row whose outcome word belongs to a different build. */
+export const UNKNOWN_OUTCOME_LABEL = 'unknown outcome'
 
 /**
  * What the ledger calls each outcome. The skips say why in the same breath,
  * because "skipped" on its own is the kind of word that sends someone hunting
- * through logs.
+ * through logs. Anything this build does not recognise gets a neutral label
+ * rather than a blank -- the raw word travels separately, for the tooltip.
  */
-export function formatRelayHopOutcome(outcome: RelayHopOutcome): string {
+export function formatRelayHopOutcome(outcome: string): string {
   switch (outcome) {
     case 'delivered':
       return 'delivered'
@@ -50,14 +62,14 @@ export function formatRelayHopOutcome(outcome: RelayHopOutcome): string {
       return 'queued'
     case 'spawned':
       return 'started a new session'
-    case 'skipped-disarmed':
-      return 'skipped — disarmed'
     case 'skipped-failed':
       return 'skipped — source failed'
     case 'skipped-budget':
       return 'stopped — hop budget'
     case 'error':
       return 'error'
+    default:
+      return UNKNOWN_OUTCOME_LABEL
   }
 }
 
@@ -88,6 +100,12 @@ export interface RelayHopLine {
   /** The session that received the payload, spawned or hailed. */
   targetName: string | null
   outcomeLabel: string
+  /**
+   * The stored word, but only when this build could not translate it. Rendered
+   * as the label's tooltip so an unrecognised row can still be identified
+   * exactly, without putting a raw enum in front of anyone else's eyes.
+   */
+  rawOutcome: string | null
   tone: RelayHopTone
   timeLabel: string
   /** Shown only when the hop actually carried something. */
@@ -108,6 +126,7 @@ export function buildRelayHopLine(
   now: Date,
 ): RelayHopLine {
   const landedIn = hop.spawnedSessionId ?? hop.targetSessionId
+  const tone = relayHopTone(hop.outcome)
 
   return {
     sourceName: resolveName(hop.sourceSessionId) ?? MISSING_SESSION_LABEL,
@@ -115,7 +134,8 @@ export function buildRelayHopLine(
       ? (resolveName(landedIn) ?? MISSING_SESSION_LABEL)
       : null,
     outcomeLabel: formatRelayHopOutcome(hop.outcome),
-    tone: relayHopTone(hop.outcome),
+    rawOutcome: tone === 'unknown' ? hop.outcome : null,
+    tone,
     timeLabel: formatHopTime(hop.firedAt, now),
     payloadPreview: hop.payloadPreview,
     error: hop.error,

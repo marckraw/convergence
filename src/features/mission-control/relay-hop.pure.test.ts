@@ -11,6 +11,7 @@ import {
   formatRelayHopOutcome,
   isAlarmingHop,
   relayHopTone,
+  UNKNOWN_OUTCOME_LABEL,
 } from './relay-hop.pure'
 import { MISSING_SESSION_LABEL } from './relay-sentence.pure'
 
@@ -55,7 +56,7 @@ describe('alarming outcomes', () => {
     for (const outcome of [
       'delivered',
       'queued',
-      'skipped-disarmed',
+      'spawned',
       'skipped-failed',
     ] as const) {
       expect(isAlarmingHop({ outcome })).toBe(false)
@@ -67,7 +68,7 @@ describe('alarming outcomes', () => {
       countAlarmingHops([
         { outcome: 'delivered' },
         { outcome: 'error' },
-        { outcome: 'skipped-disarmed' },
+        { outcome: 'skipped-failed' },
         { outcome: 'skipped-budget' },
       ]),
     ).toBe(2)
@@ -79,16 +80,28 @@ describe('relayHopTone', () => {
   it('sorts every outcome into one of three tones', () => {
     expect(relayHopTone('delivered')).toBe('delivered')
     expect(relayHopTone('queued')).toBe('delivered')
-    expect(relayHopTone('skipped-disarmed')).toBe('skipped')
+    expect(relayHopTone('spawned')).toBe('delivered')
     expect(relayHopTone('skipped-failed')).toBe('skipped')
     expect(relayHopTone('skipped-budget')).toBe('alarm')
     expect(relayHopTone('error')).toBe('alarm')
+  })
+
+  /**
+   * v0.45.22 shipped a `skipped-disarmed` outcome that this build no longer
+   * writes. Those rows are sitting in real ledgers, and a silenced wire is the
+   * least alarming thing in the app -- it must not turn the crew red.
+   */
+  it('files a word from another build as quiet and unknown', () => {
+    expect(relayHopTone('skipped-disarmed')).toBe('unknown')
+    expect(relayHopTone('something-a-later-build-invents')).toBe('unknown')
+    expect(relayHopTone('')).toBe('unknown')
+    expect(isAlarmingHop({ outcome: 'skipped-disarmed' })).toBe(false)
+    expect(countAlarmingHops([{ outcome: 'skipped-disarmed' }])).toBe(0)
   })
 })
 
 describe('formatRelayHopOutcome', () => {
   it('says why a skip skipped, never just "skipped"', () => {
-    expect(formatRelayHopOutcome('skipped-disarmed')).toBe('skipped — disarmed')
     expect(formatRelayHopOutcome('skipped-failed')).toBe(
       'skipped — source failed',
     )
@@ -99,6 +112,30 @@ describe('formatRelayHopOutcome', () => {
     expect(formatRelayHopOutcome('delivered')).toBe('delivered')
     expect(formatRelayHopOutcome('queued')).toBe('queued')
     expect(formatRelayHopOutcome('error')).toBe('error')
+  })
+
+  it('never renders blank for a word it does not know', () => {
+    expect(formatRelayHopOutcome('skipped-disarmed')).toBe(
+      UNKNOWN_OUTCOME_LABEL,
+    )
+    expect(formatRelayHopOutcome('')).toBe(UNKNOWN_OUTCOME_LABEL)
+    expect(UNKNOWN_OUTCOME_LABEL.length).toBeGreaterThan(0)
+  })
+})
+
+describe('buildRelayHopLine — unreadable rows', () => {
+  it('carries the raw word for the tooltip, and only when unknown', () => {
+    const unknown = buildRelayHopLine(
+      hop({ outcome: 'skipped-disarmed' }),
+      resolveName,
+      NOW,
+    )
+    expect(unknown.outcomeLabel).toBe(UNKNOWN_OUTCOME_LABEL)
+    expect(unknown.rawOutcome).toBe('skipped-disarmed')
+    expect(unknown.tone).toBe('unknown')
+
+    // A row this build understands has nothing to disclose.
+    expect(buildRelayHopLine(hop(), resolveName, NOW).rawOutcome).toBeNull()
   })
 })
 
@@ -127,6 +164,7 @@ describe('buildRelayHopLine', () => {
       sourceName: 'Implementor',
       targetName: 'Reviewer',
       outcomeLabel: 'delivered',
+      rawOutcome: null,
       tone: 'delivered',
       timeLabel: 'just now',
       payloadPreview: 'Done. Ready for review.',
