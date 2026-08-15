@@ -118,6 +118,8 @@ import { broadcastTaskProgress } from '../backend/task-progress/task-progress.ip
 import { createNodePtyFactory } from '../backend/terminal/pty-factory'
 import { FeedbackService } from '../backend/feedback/feedback.service'
 import { registerFeedbackIpcHandlers } from '../backend/feedback/feedback.ipc'
+import { CrewService } from '../backend/crew/crew.service'
+import { registerCrewIpcHandlers } from '../backend/crew/crew.ipc'
 import { registerIpcHandlers } from './ipc'
 import { getExternalNavigationAction } from './external-links.pure'
 import { resolveAutoUpdater } from './auto-updater-module.pure'
@@ -244,6 +246,7 @@ async function startApp(): Promise<void> {
   const changedFilesService = new ChangedFilesService(db, gitService)
   const pullRequestService = new PullRequestService(db, gitService)
   const reviewNotesService = new ReviewNotesService(db)
+  const crewService = new CrewService(db)
   const providerRegistry = new ProviderRegistry()
   const guidedReviewDaemonCredentials =
     new GuidedReviewDaemonCredentialsService()
@@ -663,6 +666,7 @@ async function startApp(): Promise<void> {
     console.warn('Provider account attestation failed:', error)
   })
   registerFeedbackIpcHandlers(feedbackService)
+  registerCrewIpcHandlers({ service: crewService })
 
   registerIpcHandlers(
     projectService,
