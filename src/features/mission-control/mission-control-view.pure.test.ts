@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   DEFAULT_MISSION_CONTROL_VIEW,
+  MISSION_CONTROL_VIEW_MODES,
   parseMissionControlView,
   serializeMissionControlView,
 } from './mission-control-view.pure'
@@ -27,13 +28,31 @@ describe('parseMissionControlView', () => {
 
   it('reads back a full stored view', () => {
     const stored = {
+      mode: 'crews' as const,
       order: 'working-first' as const,
       states: ['working' as const, 'failed' as const],
       projectIds: ['project-a'],
       providerIds: ['codex'],
+      crewIds: ['crew-a'],
     }
 
     expect(parseMissionControlView(JSON.stringify(stored))).toEqual(stored)
+  })
+
+  it('falls back to the flat room for a view mode it does not know', () => {
+    expect(parseMissionControlView('{"mode":"constellations"}').mode).toBe(
+      'flat',
+    )
+    expect(parseMissionControlView('{"mode":7}').mode).toBe('flat')
+  })
+
+  it('round-trips both view modes', () => {
+    for (const mode of MISSION_CONTROL_VIEW_MODES) {
+      const view = { ...DEFAULT_MISSION_CONTROL_VIEW, mode }
+      expect(
+        parseMissionControlView(serializeMissionControlView(view)),
+      ).toEqual(view)
+    }
   })
 
   it('round-trips every ordering preset', () => {
@@ -85,10 +104,12 @@ describe('parseMissionControlView', () => {
 describe('serializeMissionControlView', () => {
   it('round-trips a narrowed room', () => {
     const view = {
+      mode: 'crews' as const,
       order: 'by-project' as const,
       states: ['needs-you' as const],
       projectIds: ['project-a', 'global'],
       providerIds: ['claude-code'],
+      crewIds: ['crew-a'],
     }
 
     expect(parseMissionControlView(serializeMissionControlView(view))).toEqual(

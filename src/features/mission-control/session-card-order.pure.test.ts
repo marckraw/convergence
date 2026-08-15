@@ -35,6 +35,7 @@ function makeCard(
     projectName,
     providerLabel: 'Anthropic',
     activityLabel: 'idle',
+    crews: [],
     searchText: id,
   }
 }

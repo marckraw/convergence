@@ -1,6 +1,11 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { useProjectStore } from '@/entities/project'
+import { useSessionCrewStore } from '@/entities/session-crew'
+import type {
+  CreateSessionCrewInput,
+  SessionCrew,
+} from '@/entities/session-crew'
 import { useSessionStore } from '@/entities/session'
 import type {
   ProviderInfo,
@@ -89,6 +94,25 @@ type SendMessage = SessionStore['sendMessageToSession']
 
 let sendMessageToSession: ReturnType<typeof vi.fn<SendMessage>>
 let getAllSummaries: ReturnType<typeof vi.fn>
+let listCrews: ReturnType<typeof vi.fn<() => Promise<SessionCrew[]>>>
+let createCrew: ReturnType<
+  typeof vi.fn<(input: CreateSessionCrewInput) => Promise<SessionCrew>>
+>
+
+function makeCrew(
+  overrides: Partial<SessionCrew> & { id: string },
+): SessionCrew {
+  return {
+    name: overrides.id,
+    emoji: null,
+    accentColor: null,
+    position: 0,
+    createdAt: '2026-08-15T10:00:00.000Z',
+    updatedAt: '2026-08-15T10:00:00.000Z',
+    sessionIds: [],
+    ...overrides,
+  }
+}
 
 function seed(sessions: SessionSummary[], providers: ProviderInfo[] = []) {
   useSessionStore.setState({
@@ -123,13 +147,42 @@ function seed(sessions: SessionSummary[], providers: ProviderInfo[] = []) {
   })
 }
 
+function seedCrews(crews: SessionCrew[]) {
+  listCrews.mockResolvedValue(crews)
+}
+
 describe('MissionControl', () => {
   beforeEach(() => {
+    localStorage.clear()
     sendMessageToSession = vi.fn<SendMessage>(async () => undefined)
     getAllSummaries = vi.fn(async () => [])
+    listCrews = vi.fn(async () => [])
+    createCrew = vi.fn(async (input) =>
+      makeCrew({
+        id: 'created-crew',
+        name: input.name.trim(),
+        emoji: input.emoji ?? null,
+        accentColor: input.accentColor ?? null,
+        sessionIds: [...(input.sessionIds ?? [])],
+      }),
+    )
     ;(window as unknown as { electronAPI: unknown }).electronAPI = {
       session: { getAllSummaries },
+      crew: {
+        list: listCrews,
+        create: createCrew,
+        addMember: vi.fn(),
+        removeMember: vi.fn(),
+        onUpdated: vi.fn(() => () => undefined),
+      },
     }
+    useSessionCrewStore.getState().unsubscribeBroadcast?.()
+    useSessionCrewStore.setState({
+      crews: [],
+      isLoaded: false,
+      error: null,
+      unsubscribeBroadcast: null,
+    })
   })
 
   it('shows cards for sessions across more than one project', async () => {
@@ -352,5 +405,293 @@ describe('MissionControl', () => {
       expect(screen.queryByTestId('composer')).not.toBeInTheDocument(),
     )
     expect(onOpenSession).not.toHaveBeenCalled()
+  })
+
+  describe('the crew filter dimension', () => {
+    it('narrows the flat room to a crew and back', async () => {
+      seedCrews([
+        makeCrew({ id: 'crew-1', name: 'Night shift', sessionIds: ['a'] }),
+      ])
+      seed(
+        [
+          makeSession({ id: 'a', name: 'Owl agent' }),
+          makeSession({ id: 'b', name: 'Lark agent' }),
+        ],
+        [CLAUDE_CODE],
+      )
+
+      render(<MissionControl />)
+
+      const chip = await screen.findByRole('button', { name: /Night shift/ })
+      fireEvent.click(chip)
+
+      await waitFor(() =>
+        expect(screen.queryByText('Lark agent')).not.toBeInTheDocument(),
+      )
+      expect(screen.getByText('Owl agent')).toBeInTheDocument()
+
+      fireEvent.click(chip)
+      expect(await screen.findByText('Lark agent')).toBeInTheDocument()
+    })
+
+    it('counts what turning a chip on would show, not what is already shown', async () => {
+      seedCrews([
+        makeCrew({ id: 'crew-1', name: 'Night shift', sessionIds: ['a'] }),
+        makeCrew({
+          id: 'crew-2',
+          name: 'Day shift',
+          position: 1,
+          sessionIds: ['b'],
+        }),
+      ])
+      seed([makeSession({ id: 'a' }), makeSession({ id: 'b' })], [CLAUDE_CODE])
+
+      render(<MissionControl />)
+      fireEvent.click(
+        await screen.findByRole('button', { name: /Night shift/ }),
+      )
+
+      // Day shift still says 1: its count answers "what if I pick this too".
+      await waitFor(() =>
+        expect(
+          screen.getByRole('button', { name: /Day shift/ }),
+        ).toHaveTextContent('1'),
+      )
+    })
+
+    it('remembers the picked crew across a remount', async () => {
+      seedCrews([
+        makeCrew({ id: 'crew-1', name: 'Night shift', sessionIds: ['a'] }),
+      ])
+      seed(
+        [
+          makeSession({ id: 'a', name: 'Owl agent' }),
+          makeSession({ id: 'b', name: 'Lark agent' }),
+        ],
+        [CLAUDE_CODE],
+      )
+
+      const first = render(<MissionControl />)
+      fireEvent.click(
+        await screen.findByRole('button', { name: /Night shift/ }),
+      )
+      await waitFor(() =>
+        expect(screen.queryByText('Lark agent')).not.toBeInTheDocument(),
+      )
+      first.unmount()
+
+      render(<MissionControl />)
+      expect(await screen.findByText('Owl agent')).toBeInTheDocument()
+      expect(screen.queryByText('Lark agent')).not.toBeInTheDocument()
+    })
+
+    it('badges a card with every crew holding it', async () => {
+      seedCrews([
+        makeCrew({ id: 'crew-1', name: 'Masterminds', sessionIds: ['a'] }),
+        makeCrew({
+          id: 'crew-2',
+          name: 'Workers',
+          position: 1,
+          sessionIds: ['a'],
+        }),
+      ])
+      seed([makeSession({ id: 'a' })], [CLAUDE_CODE])
+
+      render(<MissionControl />)
+
+      expect(
+        await screen.findByTitle('In crew Masterminds'),
+      ).toBeInTheDocument()
+      expect(screen.getByTitle('In crew Workers')).toBeInTheDocument()
+    })
+
+    it('shows no chips at all before any crew exists', async () => {
+      seedCrews([])
+      seed([makeSession({ id: 'a' })], [CLAUDE_CODE])
+
+      render(<MissionControl />)
+      await screen.findByText('Wire the room')
+
+      expect(screen.queryByTitle(/^In crew/)).not.toBeInTheDocument()
+    })
+  })
+
+  describe('crews view', () => {
+    async function switchToCrews() {
+      fireEvent.click(await screen.findByRole('button', { name: 'Crews' }))
+    }
+
+    it('starts flat and switches to bordered crew containers', async () => {
+      seedCrews([makeCrew({ id: 'crew-1', name: 'Night shift' })])
+      seed([makeSession({ id: 'a' })], [CLAUDE_CODE])
+
+      render(<MissionControl />)
+      await screen.findByText('Wire the room')
+      expect(document.querySelectorAll('[data-crew-container]')).toHaveLength(0)
+
+      await switchToCrews()
+
+      expect(
+        await screen.findByRole('heading', { name: 'Night shift' }),
+      ).toBeInTheDocument()
+      expect(
+        document.querySelectorAll('[data-crew-container]').length,
+      ).toBeGreaterThan(0)
+    })
+
+    it('keeps uncrewed sessions visible in a No crew section', async () => {
+      seedCrews([makeCrew({ id: 'crew-1', name: 'Night shift' })])
+      seed([makeSession({ id: 'a', name: 'Loose agent' })], [CLAUDE_CODE])
+
+      render(<MissionControl />)
+      await switchToCrews()
+
+      expect(await screen.findByText('No crew')).toBeInTheDocument()
+      expect(screen.getByText('Loose agent')).toBeInTheDocument()
+    })
+
+    it('renders a session held by two crews inside both containers', async () => {
+      seedCrews([
+        makeCrew({ id: 'crew-1', name: 'Masterminds', sessionIds: ['a'] }),
+        makeCrew({
+          id: 'crew-2',
+          name: 'Workers',
+          position: 1,
+          sessionIds: ['a'],
+        }),
+      ])
+      seed([makeSession({ id: 'a', name: 'Double agent' })], [CLAUDE_CODE])
+
+      render(<MissionControl />)
+      await switchToCrews()
+
+      expect(
+        await screen.findByRole('heading', { name: 'Masterminds' }),
+      ).toBeInTheDocument()
+      expect(
+        screen.getByRole('heading', { name: 'Workers' }),
+      ).toBeInTheDocument()
+      expect(screen.getAllByText('Double agent')).toHaveLength(2)
+      // Nothing is loose, so the catch-all section stays away.
+      expect(screen.queryByText('No crew')).not.toBeInTheDocument()
+    })
+
+    it('shows an empty crew rather than hiding it', async () => {
+      seedCrews([makeCrew({ id: 'crew-1', name: 'Nobody yet' })])
+      seed([makeSession({ id: 'a' })], [CLAUDE_CODE])
+
+      render(<MissionControl />)
+      await switchToCrews()
+
+      expect(
+        await screen.findByRole('heading', { name: 'Nobody yet' }),
+      ).toBeInTheDocument()
+      expect(screen.getByText('0 sessions')).toBeInTheDocument()
+      expect(
+        screen.getByText('No sessions in this crew yet.'),
+      ).toBeInTheDocument()
+    })
+
+    it('remembers the layout choice for the next visit', async () => {
+      seedCrews([makeCrew({ id: 'crew-1', name: 'Night shift' })])
+      seed([makeSession({ id: 'a' })], [CLAUDE_CODE])
+
+      const first = render(<MissionControl />)
+      await switchToCrews()
+      await screen.findByRole('heading', { name: 'Night shift' })
+      first.unmount()
+
+      render(<MissionControl />)
+      expect(
+        await screen.findByRole('heading', { name: 'Night shift' }),
+      ).toBeInTheDocument()
+    })
+
+    it('creates a crew from a card and shows it as a container', async () => {
+      seed([makeSession({ id: 'a' })], [CLAUDE_CODE])
+
+      render(<MissionControl />)
+
+      // Every gesture here is a click: no console, no seeding.
+      fireEvent.click(
+        await screen.findByLabelText('Add Wire the room to a crew', {
+          selector: 'button',
+        }),
+      )
+      fireEvent.click(await screen.findByText('New crew'))
+      fireEvent.change(screen.getByLabelText('New crew name'), {
+        target: { value: 'Night shift' },
+      })
+      fireEvent.click(screen.getByLabelText('Emoji 🌙'))
+      fireEvent.click(screen.getByLabelText('Violet'))
+      fireEvent.click(screen.getByText('Create & add this session'))
+
+      await waitFor(() =>
+        expect(createCrew).toHaveBeenCalledWith({
+          name: 'Night shift',
+          emoji: '🌙',
+          accentColor: '#7c3aed',
+          sessionIds: ['a'],
+        }),
+      )
+
+      fireEvent.keyDown(document.activeElement ?? document.body, {
+        key: 'Escape',
+      })
+      await switchToCrews()
+
+      expect(
+        await screen.findByRole('heading', { name: 'Night shift' }),
+      ).toBeInTheDocument()
+      expect(screen.getByText('1 session')).toBeInTheDocument()
+      // The card sits inside its new crew rather than the catch-all.
+      expect(screen.queryByText('No crew')).not.toBeInTheDocument()
+    })
+
+    it('offers rename, decoration and delete from the crew header', async () => {
+      seedCrews([
+        makeCrew({ id: 'crew-1', name: 'Night shift', sessionIds: ['a'] }),
+      ])
+      seed([makeSession({ id: 'a' })], [CLAUDE_CODE])
+
+      render(<MissionControl />)
+      await switchToCrews()
+
+      fireEvent.click(await screen.findByLabelText('Edit crew Night shift'))
+
+      expect(await screen.findByLabelText('Crew name')).toHaveValue(
+        'Night shift',
+      )
+      expect(screen.getByLabelText('Emoji 🐎')).toBeInTheDocument()
+      expect(screen.getByLabelText('Violet')).toBeInTheDocument()
+      expect(screen.getByText('Delete crew')).toBeInTheDocument()
+    })
+
+    it('gives the No crew section no menu — it is not a crew', async () => {
+      seedCrews([])
+      seed([makeSession({ id: 'a' })], [CLAUDE_CODE])
+
+      render(<MissionControl />)
+      await switchToCrews()
+
+      await screen.findByText('No crew')
+      expect(
+        screen.queryByLabelText('Edit crew No crew'),
+      ).not.toBeInTheDocument()
+    })
+
+    it('hails a card from inside its crew container', async () => {
+      seedCrews([
+        makeCrew({ id: 'crew-1', name: 'Night shift', sessionIds: ['a'] }),
+      ])
+      seed([makeSession({ id: 'a' })], [CLAUDE_CODE])
+
+      render(<MissionControl />)
+      await switchToCrews()
+
+      fireEvent.click(await screen.findByLabelText('Hail Wire the room'))
+
+      expect(await screen.findByTestId('composer')).toBeInTheDocument()
+    })
   })
 })

@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import type { SessionSummary } from '@/entities/session'
+import type { SessionCrew } from '@/entities/session-crew'
 import type { SessionCard } from './mission-control.types'
 import {
+  buildCrewFacets,
   buildProjectFacets,
   buildProviderFacets,
   filterFacetOptions,
@@ -19,6 +21,7 @@ function makeCard(overrides: {
   providerLabel?: string
   status?: SessionSummary['status']
   searchText?: string
+  crews?: SessionCrew[]
 }): SessionCard {
   const {
     id,
@@ -29,6 +32,7 @@ function makeCard(overrides: {
     providerLabel = 'Anthropic',
     status = 'idle',
     searchText = id,
+    crews = [],
   } = overrides
 
   return {
@@ -44,6 +48,7 @@ function makeCard(overrides: {
     projectName,
     providerLabel,
     activityLabel: 'idle',
+    crews,
     searchText,
   }
 }
@@ -241,5 +246,93 @@ describe('formatFacetSummary', () => {
     expect(
       formatFacetSummary(['gone'], options, 'All projects', 'project'),
     ).toBe('1 project')
+  })
+})
+
+describe('buildCrewFacets', () => {
+  function crew(id: string, overrides: Partial<SessionCrew> = {}): SessionCrew {
+    return {
+      id,
+      name: id,
+      emoji: null,
+      accentColor: null,
+      position: 0,
+      createdAt: '2026-08-15T10:00:00Z',
+      updatedAt: '2026-08-15T10:00:00Z',
+      sessionIds: [],
+      ...overrides,
+    }
+  }
+
+  const night = crew('night', { name: 'Night shift', emoji: '🌙' })
+  const day = crew('day', { name: 'Day shift', accentColor: '#7c3aed' })
+  const empty = crew('empty', { name: 'Nobody yet' })
+
+  const cards = [
+    makeCard({ id: 'a', crews: [night] }),
+    makeCard({ id: 'b', crews: [night, day] }),
+    makeCard({ id: 'c' }),
+  ]
+
+  it('carries the decoration of each crew onto its chip', () => {
+    const options = buildCrewFacets(cards, EMPTY_SESSION_CARD_FILTER, [
+      night,
+      day,
+    ])
+
+    expect(options).toEqual([
+      {
+        id: 'night',
+        label: 'Night shift',
+        count: 2,
+        emoji: '🌙',
+        accentColor: null,
+      },
+      {
+        id: 'day',
+        label: 'Day shift',
+        count: 1,
+        emoji: null,
+        accentColor: '#7c3aed',
+      },
+    ])
+  })
+
+  it('keeps an empty crew offered, at zero', () => {
+    const options = buildCrewFacets(cards, EMPTY_SESSION_CARD_FILTER, [empty])
+    expect(options).toEqual([
+      expect.objectContaining({ id: 'empty', count: 0 }),
+    ])
+  })
+
+  it('holds the crew dimension open so a chip counts what turning it on shows', () => {
+    const narrowed: SessionCardFilter = {
+      ...EMPTY_SESSION_CARD_FILTER,
+      crewIds: ['day'],
+    }
+    const options = buildCrewFacets(cards, narrowed, [night, day])
+
+    // Picking Day must not shrink Night's count to "cards already showing".
+    expect(options.map((option) => option.count)).toEqual([2, 1])
+  })
+
+  it('counts a card once per crew it belongs to', () => {
+    const options = buildCrewFacets(
+      [makeCard({ id: 'a', crews: [night, day] })],
+      EMPTY_SESSION_CARD_FILTER,
+      [night, day],
+    )
+
+    expect(options.map((option) => option.count)).toEqual([1, 1])
+  })
+
+  it('respects the other dimensions while counting', () => {
+    const options = buildCrewFacets(
+      cards,
+      { ...EMPTY_SESSION_CARD_FILTER, query: 'b' },
+      [night, day],
+    )
+
+    expect(options.map((option) => option.count)).toEqual([1, 1])
   })
 })

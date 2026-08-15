@@ -7,26 +7,38 @@ import {
   type SessionCardState,
 } from './session-card-state.pure'
 
+export const MISSION_CONTROL_VIEW_MODES = ['flat', 'crews'] as const
+
+/** Flat lays every card in one grid; crews groups them into their containers. */
+export type MissionControlViewMode = (typeof MISSION_CONTROL_VIEW_MODES)[number]
+
 /**
- * The shape of the room Marcin left behind: how it was ordered and what it was
- * narrowed to.
+ * The shape of the room Marcin left behind: which layout he chose, how it was
+ * ordered and what it was narrowed to.
  *
  * The search query is deliberately absent. A search is a gesture he makes and
  * finishes; the states and pickers are the shape he works in, and only a shape
  * is worth restoring.
+ *
+ * Only the VIEW CHOICE lives here. Crews themselves are data and live in
+ * sqlite — this store is view preference and nothing else.
  */
 export interface StoredMissionControlView {
+  mode: MissionControlViewMode
   order: SessionCardOrderPreset
   states: SessionCardState[]
   projectIds: string[]
   providerIds: string[]
+  crewIds: string[]
 }
 
 export const DEFAULT_MISSION_CONTROL_VIEW: StoredMissionControlView = {
+  mode: 'flat',
   order: 'attention-first',
   states: [],
   projectIds: [],
   providerIds: [],
+  crewIds: [],
 }
 
 function readStringArray(value: unknown): string[] {
@@ -57,6 +69,11 @@ export function parseMissionControlView(
   }
 
   const record = parsed as Record<string, unknown>
+  const mode = MISSION_CONTROL_VIEW_MODES.includes(
+    record.mode as MissionControlViewMode,
+  )
+    ? (record.mode as MissionControlViewMode)
+    : DEFAULT_MISSION_CONTROL_VIEW.mode
   const order = SESSION_CARD_ORDER_PRESETS.includes(
     record.order as SessionCardOrderPreset,
   )
@@ -69,10 +86,12 @@ export function parseMissionControlView(
   )
 
   return {
+    mode,
     order,
     states,
     projectIds: readStringArray(record.projectIds),
     providerIds: readStringArray(record.providerIds),
+    crewIds: readStringArray(record.crewIds),
   }
 }
 

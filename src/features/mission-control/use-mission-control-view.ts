@@ -3,6 +3,7 @@ import {
   loadMissionControlView,
   saveMissionControlView,
 } from './mission-control-view.api'
+import type { MissionControlViewMode } from './mission-control-view.pure'
 import {
   EMPTY_SESSION_CARD_FILTER,
   toggleFilterId,
@@ -15,14 +16,18 @@ import type { SessionCardState } from './session-card-state.pure'
 export interface MissionControlViewState {
   filter: SessionCardFilter
   order: SessionCardOrderPreset
+  mode: MissionControlViewMode
   setQuery: (query: string) => void
   setOrder: (order: SessionCardOrderPreset) => void
+  setMode: (mode: MissionControlViewMode) => void
   toggleState: (state: SessionCardState) => void
   clearStates: () => void
   toggleProject: (id: string) => void
   clearProjects: () => void
   toggleProvider: (id: string) => void
   clearProviders: () => void
+  toggleCrew: (id: string) => void
+  clearCrews: () => void
   clearFilter: () => void
 }
 
@@ -41,20 +46,33 @@ export function useMissionControlView(): MissionControlViewState {
       states: stored.states,
       projectIds: stored.projectIds,
       providerIds: stored.providerIds,
+      crewIds: stored.crewIds,
     }
   })
   const [order, setOrder] = useState<SessionCardOrderPreset>(
     () => loadMissionControlView().order,
   )
+  const [mode, setMode] = useState<MissionControlViewMode>(
+    () => loadMissionControlView().mode,
+  )
 
   useEffect(() => {
     saveMissionControlView({
+      mode,
       order,
       states: [...filter.states],
       projectIds: [...filter.projectIds],
       providerIds: [...filter.providerIds],
+      crewIds: [...filter.crewIds],
     })
-  }, [order, filter.states, filter.projectIds, filter.providerIds])
+  }, [
+    mode,
+    order,
+    filter.states,
+    filter.projectIds,
+    filter.providerIds,
+    filter.crewIds,
+  ])
 
   const setQuery = useCallback((query: string) => {
     setFilter((current) => ({ ...current, query }))
@@ -93,6 +111,17 @@ export function useMissionControlView(): MissionControlViewState {
     setFilter((current) => ({ ...current, providerIds: [] }))
   }, [])
 
+  const toggleCrew = useCallback((id: string) => {
+    setFilter((current) => ({
+      ...current,
+      crewIds: toggleFilterId(current.crewIds, id),
+    }))
+  }, [])
+
+  const clearCrews = useCallback(() => {
+    setFilter((current) => ({ ...current, crewIds: [] }))
+  }, [])
+
   const clearFilter = useCallback(() => {
     setFilter(EMPTY_SESSION_CARD_FILTER)
   }, [])
@@ -100,14 +129,18 @@ export function useMissionControlView(): MissionControlViewState {
   return {
     filter,
     order,
+    mode,
     setQuery,
     setOrder,
+    setMode,
     toggleState,
     clearStates,
     toggleProject,
     clearProjects,
     toggleProvider,
     clearProviders,
+    toggleCrew,
+    clearCrews,
     clearFilter,
   }
 }
