@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { useProjectStore } from '@/entities/project'
 import { useSessionCrewStore } from '@/entities/session-crew'
 import { useSessionRelayStore } from '@/entities/session-relay'
+import type { SessionRelay } from '@/entities/session-relay'
 import type {
   CreateSessionCrewInput,
   SessionCrew,
@@ -97,6 +98,7 @@ let sendMessageToSession: ReturnType<typeof vi.fn<SendMessage>>
 let getAllSummaries: ReturnType<typeof vi.fn>
 let listCrews: ReturnType<typeof vi.fn<() => Promise<SessionCrew[]>>>
 let listHops: ReturnType<typeof vi.fn>
+let listRelays: ReturnType<typeof vi.fn>
 let createCrew: ReturnType<
   typeof vi.fn<(input: CreateSessionCrewInput) => Promise<SessionCrew>>
 >
@@ -153,6 +155,27 @@ function seedCrews(crews: SessionCrew[]) {
   listCrews.mockResolvedValue(crews)
 }
 
+function makeRelay(
+  overrides: Partial<SessionRelay> & { id: string },
+): SessionRelay {
+  return {
+    crewId: 'crew-1',
+    sourceSessionId: 'a',
+    trigger: 'settled',
+    action: 'hail',
+    targetSessionId: null,
+    spawnSpec: null,
+    armed: true,
+    createdAt: '2026-08-16T00:00:00.000Z',
+    updatedAt: '2026-08-16T00:00:00.000Z',
+    ...overrides,
+  }
+}
+
+function seedRelays(relays: SessionRelay[]) {
+  listRelays.mockResolvedValue(relays)
+}
+
 describe('MissionControl', () => {
   beforeEach(() => {
     localStorage.clear()
@@ -160,6 +183,7 @@ describe('MissionControl', () => {
     getAllSummaries = vi.fn(async () => [])
     listCrews = vi.fn(async () => [])
     listHops = vi.fn(async () => [])
+    listRelays = vi.fn(async () => [])
     createCrew = vi.fn(async (input) =>
       makeCrew({
         id: 'created-crew',
@@ -179,7 +203,7 @@ describe('MissionControl', () => {
         onUpdated: vi.fn(() => () => undefined),
       },
       relay: {
-        list: vi.fn(async () => []),
+        list: listRelays,
         listHops,
         onUpdated: vi.fn(() => () => undefined),
         onHopAppended: vi.fn(() => () => undefined),
@@ -761,6 +785,254 @@ describe('MissionControl', () => {
       fireEvent.click(await screen.findByLabelText('Hail Wire the room'))
 
       expect(await screen.findByTestId('composer')).toBeInTheDocument()
+    })
+  })
+
+  describe('canvas view', () => {
+    async function switchToCanvas() {
+      fireEvent.click(await screen.findByRole('button', { name: 'Canvas' }))
+    }
+
+    it('draws crewed sessions as nodes inside their crew', async () => {
+      seedCrews([
+        makeCrew({ id: 'crew-1', name: 'Night shift', sessionIds: ['a'] }),
+      ])
+      seed([makeSession({ id: 'a' })], [CLAUDE_CODE])
+
+      render(<MissionControl />)
+      await screen.findByText('Wire the room')
+      expect(
+        document.querySelectorAll('[data-canvas-session-node]'),
+      ).toHaveLength(0)
+
+      await switchToCanvas()
+
+      await waitFor(() => {
+        expect(
+          document.querySelector('[data-canvas-session-node="a"]'),
+        ).toBeInTheDocument()
+      })
+      expect(
+        document.querySelector('[data-canvas-crew="crew-1"]'),
+      ).toBeInTheDocument()
+    })
+
+    /** The canvas is about flows, so a session in no crew has nothing to draw. */
+    it('leaves uncrewed sessions off the canvas', async () => {
+      seedCrews([
+        makeCrew({ id: 'crew-1', name: 'Night shift', sessionIds: ['a'] }),
+      ])
+      seed(
+        [
+          makeSession({ id: 'a' }),
+          makeSession({ id: 'b', name: 'Loose agent' }),
+        ],
+        [CLAUDE_CODE],
+      )
+
+      render(<MissionControl />)
+      await switchToCanvas()
+
+      await waitFor(() => {
+        expect(
+          document.querySelector('[data-canvas-session-node="a"]'),
+        ).toBeInTheDocument()
+      })
+      expect(
+        document.querySelector('[data-canvas-session-node="b"]'),
+      ).not.toBeInTheDocument()
+    })
+
+    it('explains itself when there is nothing wired to draw', async () => {
+      seedCrews([])
+      seed([makeSession({ id: 'a' })], [CLAUDE_CODE])
+
+      render(<MissionControl />)
+      await switchToCanvas()
+
+      expect(
+        await screen.findByText('Nothing wired to draw yet'),
+      ).toBeInTheDocument()
+    })
+
+    it('opens a session from its node, like the card body does', async () => {
+      const onOpenSession = vi.fn()
+      seedCrews([
+        makeCrew({ id: 'crew-1', name: 'Night shift', sessionIds: ['a'] }),
+      ])
+      seed([makeSession({ id: 'a' })], [CLAUDE_CODE])
+
+      render(<MissionControl onOpenSession={onOpenSession} />)
+      await switchToCanvas()
+
+      fireEvent.click(await screen.findByLabelText('Open Wire the room'))
+
+      expect(onOpenSession).toHaveBeenCalledWith(
+        expect.objectContaining({ id: 'a' }),
+      )
+    })
+
+    /**
+     * Both wired sessions have to be on the canvas for a wire to have ends.
+     * The wire's own geometry is React Flow's, computed from measured handle
+     * positions that jsdom does not have -- what it looks like is judged by
+     * eye, and what colour it asks for is pinned in canvas-graph.pure.test.
+     */
+    it('draws both ends of a wire as nodes in one crew', async () => {
+      seedCrews([
+        makeCrew({
+          id: 'crew-1',
+          name: 'Review loop',
+          sessionIds: ['a', 'b'],
+        }),
+      ])
+      seedRelays([
+        makeRelay({ id: 'r1', sourceSessionId: 'a', targetSessionId: 'b' }),
+      ])
+      seed(
+        [
+          makeSession({ id: 'a', name: 'Mastermind' }),
+          makeSession({ id: 'b', name: 'Executor' }),
+        ],
+        [CLAUDE_CODE],
+      )
+
+      render(<MissionControl />)
+      await switchToCanvas()
+
+      await waitFor(() => {
+        expect(
+          document.querySelector('[data-canvas-session-node="a"]'),
+        ).toBeInTheDocument()
+      })
+      expect(
+        document.querySelector('[data-canvas-session-node="b"]'),
+      ).toBeInTheDocument()
+      expect(screen.getByText('Mastermind')).toBeInTheDocument()
+      expect(screen.getByText('Executor')).toBeInTheDocument()
+    })
+
+    it('draws the session a spawn wire promises, before it exists', async () => {
+      seedCrews([makeCrew({ id: 'crew-1', sessionIds: ['a'] })])
+      seedRelays([
+        makeRelay({
+          id: 'r-spawn',
+          sourceSessionId: 'a',
+          action: 'spawn',
+          spawnSpec: {
+            projectId: 'project-1',
+            providerId: 'codex',
+            model: 'gpt-5.6',
+            effort: null,
+            name: 'Reviewer',
+          },
+        }),
+      ])
+      seed([makeSession({ id: 'a' })], [CLAUDE_CODE])
+
+      render(<MissionControl />)
+      await switchToCanvas()
+
+      await waitFor(() => {
+        expect(
+          document.querySelector('[data-canvas-spawn-node="r-spawn"]'),
+        ).toBeInTheDocument()
+      })
+      expect(screen.getByText('Reviewer')).toBeInTheDocument()
+      expect(
+        screen.getByText('starts a new session · codex · gpt-5.6'),
+      ).toBeInTheDocument()
+    })
+
+    it('dims the chip of a spawn wire that is switched off', async () => {
+      seedCrews([makeCrew({ id: 'crew-1', sessionIds: ['a'] })])
+      seedRelays([
+        makeRelay({
+          id: 'r-spawn',
+          sourceSessionId: 'a',
+          action: 'spawn',
+          armed: false,
+          spawnSpec: {
+            projectId: 'project-1',
+            providerId: 'codex',
+            model: null,
+            effort: null,
+            name: 'Reviewer',
+          },
+        }),
+      ])
+      seed([makeSession({ id: 'a' })], [CLAUDE_CODE])
+
+      render(<MissionControl />)
+      await switchToCanvas()
+
+      await waitFor(() => {
+        expect(
+          document.querySelector('[data-canvas-spawn-node="r-spawn"]'),
+        ).toBeInTheDocument()
+      })
+      expect(
+        document.querySelector('[data-canvas-spawn-node="r-spawn"]')?.className,
+      ).toContain('opacity-70')
+    })
+
+    /**
+     * The store keeps live hops only for crews whose trail is already loaded,
+     * and the crew containers that normally ask are not mounted in this view.
+     * Without this the wires would never light, and nothing else would fail.
+     */
+    it('loads the hop trail for every crew it draws, so wires can light', async () => {
+      seedCrews([
+        makeCrew({ id: 'crew-1', sessionIds: ['a'] }),
+        makeCrew({ id: 'crew-2', sessionIds: ['b'] }),
+      ])
+      seed(
+        [makeSession({ id: 'a' }), makeSession({ id: 'b', name: 'Second' })],
+        [CLAUDE_CODE],
+      )
+
+      render(<MissionControl />)
+      await switchToCanvas()
+
+      await waitFor(() => {
+        expect(listHops).toHaveBeenCalledWith('crew-1', undefined)
+      })
+      expect(listHops).toHaveBeenCalledWith('crew-2', undefined)
+    })
+
+    it('does not ask for a trail for a crew it is not drawing', async () => {
+      seedCrews([
+        makeCrew({ id: 'crew-1', sessionIds: ['a'] }),
+        // Empty crews are not drawn, so they have no wires to light.
+        makeCrew({ id: 'crew-empty', sessionIds: [] }),
+      ])
+      seed([makeSession({ id: 'a' })], [CLAUDE_CODE])
+
+      render(<MissionControl />)
+      await switchToCanvas()
+
+      await waitFor(() => {
+        expect(listHops).toHaveBeenCalledWith('crew-1', undefined)
+      })
+      expect(listHops).not.toHaveBeenCalledWith('crew-empty', undefined)
+    })
+
+    it('remembers the canvas the way it remembers the other two views', async () => {
+      seedCrews([
+        makeCrew({ id: 'crew-1', name: 'Night shift', sessionIds: ['a'] }),
+      ])
+      seed([makeSession({ id: 'a' })], [CLAUDE_CODE])
+
+      render(<MissionControl />)
+      await switchToCanvas()
+
+      await waitFor(() => {
+        expect(
+          JSON.parse(
+            localStorage.getItem('convergence-mission-control-view') ?? '{}',
+          ).mode,
+        ).toBe('canvas')
+      })
     })
   })
 })

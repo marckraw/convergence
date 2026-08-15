@@ -35,6 +35,12 @@ interface MissionControlViewProps {
   /** True when nothing is narrowed — drives the empty-room copy. */
   filterIsEmpty: boolean
   onClearFilter: () => void
+  /**
+   * Hands the whole content area to the child, unpadded and unscrolled. The
+   * canvas pans and zooms itself, and an outer scrollbar would fight it for
+   * the wheel.
+   */
+  fillsContent?: boolean
   children: ReactNode
 }
 
@@ -52,11 +58,13 @@ export const MissionControlView: FC<MissionControlViewProps> = ({
   filters,
   filterIsEmpty,
   onClearFilter,
+  fillsContent = false,
   children,
 }) => {
   const modes: { value: MissionControlViewMode; label: string }[] = [
     { value: 'flat', label: 'Flat' },
     { value: 'crews', label: 'Crews' },
+    { value: 'canvas', label: 'Canvas' },
   ]
 
   return (
@@ -138,7 +146,14 @@ export const MissionControlView: FC<MissionControlViewProps> = ({
         </div>
       </div>
 
-      <div className="app-scrollbar min-h-0 flex-1 overflow-y-auto px-5 py-4">
+      <div
+        className={cn(
+          'min-h-0 flex-1',
+          fillsContent
+            ? 'overflow-hidden'
+            : 'app-scrollbar overflow-y-auto px-5 py-4',
+        )}
+      >
         {totalCount === 0 ? (
           <div className="flex h-full flex-col items-center justify-center gap-2 text-center">
             <Satellite className="size-6 text-muted-foreground" />

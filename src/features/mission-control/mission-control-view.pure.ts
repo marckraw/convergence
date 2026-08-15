@@ -7,9 +7,13 @@ import {
   type SessionCardState,
 } from './session-card-state.pure'
 
-export const MISSION_CONTROL_VIEW_MODES = ['flat', 'crews'] as const
+export const MISSION_CONTROL_VIEW_MODES = ['flat', 'crews', 'canvas'] as const
 
-/** Flat lays every card in one grid; crews groups them into their containers. */
+/**
+ * Flat lays every card in one grid; crews groups them into their containers;
+ * canvas draws the crews as wired diagrams. All three are the same room read
+ * three ways -- the canvas is a view, not a workspace, and cannot be authored.
+ */
 export type MissionControlViewMode = (typeof MISSION_CONTROL_VIEW_MODES)[number]
 
 /**
