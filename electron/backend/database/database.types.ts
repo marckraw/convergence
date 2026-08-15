@@ -212,6 +212,22 @@ export interface SpaceAttemptRow {
   created_at: string
 }
 
+export interface SessionCrewRow {
+  id: string
+  name: string
+  emoji: string | null
+  accent_color: string | null
+  position: number
+  created_at: string
+  updated_at: string
+}
+
+export interface SessionCrewMemberRow {
+  crew_id: string
+  session_id: string
+  added_at: string
+}
+
 export interface SpaceArtifactRow {
   id: string
   space_id: string

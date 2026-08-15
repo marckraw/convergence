@@ -185,6 +185,24 @@ contextBridge.exposeInMainWorld('electronAPI', {
     sendPacket: (input: unknown) =>
       ipcRenderer.invoke('reviewNotes:sendPacket', input),
   },
+  crew: {
+    list: () => ipcRenderer.invoke('crew:list'),
+    create: (input: unknown) => ipcRenderer.invoke('crew:create', input),
+    update: (id: string, patch: unknown) =>
+      ipcRenderer.invoke('crew:update', id, patch),
+    delete: (id: string) => ipcRenderer.invoke('crew:delete', id),
+    addMember: (crewId: string, sessionId: string) =>
+      ipcRenderer.invoke('crew:addMember', crewId, sessionId),
+    removeMember: (crewId: string, sessionId: string) =>
+      ipcRenderer.invoke('crew:removeMember', crewId, sessionId),
+    onUpdated: (callback: (crews: unknown) => void) => {
+      const handler = (_: unknown, crews: unknown) => callback(crews)
+      ipcRenderer.on('crew:updated', handler)
+      return () => {
+        ipcRenderer.removeListener('crew:updated', handler)
+      }
+    },
+  },
   git: {
     getBranches: (repoPath: string) =>
       ipcRenderer.invoke('git:getBranches', repoPath),

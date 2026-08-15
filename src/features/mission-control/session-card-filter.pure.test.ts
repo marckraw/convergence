@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { SessionSummary } from '@/entities/session'
+import type { SessionCrew } from '@/entities/session-crew'
 import type { SessionCard } from './mission-control.types'
 import {
   EMPTY_SESSION_CARD_FILTER,
@@ -30,6 +31,7 @@ function makeCard(
     attention?: SessionSummary['attention']
     activity?: SessionSummary['activity']
     activityLabel?: string
+    crews?: SessionCrew[]
   } = {},
 ): SessionCard {
   const {
@@ -45,6 +47,7 @@ function makeCard(
     attention = 'none',
     activity = null,
     activityLabel = 'idle',
+    crews = [],
   } = overrides
 
   return {
@@ -62,6 +65,7 @@ function makeCard(
     projectName,
     providerLabel,
     activityLabel,
+    crews,
     searchText: [
       name,
       projectName,
@@ -490,5 +494,83 @@ describe('toggleSessionCardState', () => {
     const states: SessionCardState[] = ['working']
     toggleSessionCardState(states, 'idle')
     expect(states).toEqual(['working'])
+  })
+})
+
+describe('the crew dimension', () => {
+  function crew(id: string): SessionCrew {
+    return {
+      id,
+      name: id,
+      emoji: null,
+      accentColor: null,
+      position: 0,
+      createdAt: '2026-08-15T10:00:00Z',
+      updatedAt: '2026-08-15T10:00:00Z',
+      sessionIds: [],
+    }
+  }
+
+  const inNight = makeCard({ id: 'a', crews: [crew('night')] })
+  const inBoth = makeCard({ id: 'b', crews: [crew('night'), crew('day')] })
+  const inNone = makeCard({ id: 'c' })
+  const room = [inNight, inBoth, inNone]
+
+  it('shows the whole room when no crew is picked', () => {
+    expect(filterSessionCards(room, EMPTY_SESSION_CARD_FILTER)).toHaveLength(3)
+  })
+
+  it('keeps the cards held by the picked crew', () => {
+    const filtered = filterSessionCards(room, {
+      ...EMPTY_SESSION_CARD_FILTER,
+      crewIds: ['night'],
+    })
+
+    expect(filtered.map((card) => card.session.id)).toEqual(['a', 'b'])
+  })
+
+  it('treats two picked crews as either, never both', () => {
+    const filtered = filterSessionCards(room, {
+      ...EMPTY_SESSION_CARD_FILTER,
+      crewIds: ['night', 'day'],
+    })
+
+    expect(filtered.map((card) => card.session.id)).toEqual(['a', 'b'])
+  })
+
+  it('narrows with the other dimensions, not instead of them', () => {
+    const filtered = filterSessionCards(room, {
+      ...EMPTY_SESSION_CARD_FILTER,
+      crewIds: ['night'],
+      query: 'wire',
+    })
+
+    expect(filtered).toHaveLength(2)
+    expect(
+      filterSessionCards(room, {
+        ...EMPTY_SESSION_CARD_FILTER,
+        crewIds: ['night'],
+        query: 'nothing-matches-this',
+      }),
+    ).toHaveLength(0)
+  })
+
+  it('holds the crew dimension open when counting itself', () => {
+    const held = filterSessionCardsExcept(
+      room,
+      { ...EMPTY_SESSION_CARD_FILTER, crewIds: ['night'] },
+      'crewIds',
+    )
+
+    expect(held).toHaveLength(3)
+  })
+
+  it('counts as a narrowing for the empty-filter check', () => {
+    expect(
+      isEmptySessionCardFilter({
+        ...EMPTY_SESSION_CARD_FILTER,
+        crewIds: ['night'],
+      }),
+    ).toBe(false)
   })
 })

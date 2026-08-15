@@ -1,4 +1,5 @@
 import type { ProviderInfo, SessionSummary } from '@/entities/session'
+import type { SessionCrew } from '@/entities/session-crew'
 import { formatSessionCardActivity } from './session-card-activity.pure'
 import type { SessionCard } from './mission-control.types'
 
@@ -16,6 +17,8 @@ export interface BuildSessionCardsInput {
   sessions: readonly SessionSummary[]
   projects: readonly ProjectNameSource[]
   providers: readonly ProviderLabelSource[]
+  /** Absent while crews are still loading; every card simply holds none. */
+  crews?: readonly SessionCrew[]
 }
 
 /** Chat Sessions have no Project; the app itself is their context. */
@@ -33,7 +36,20 @@ export function buildSessionCards({
   sessions,
   projects,
   providers,
+  crews = [],
 }: BuildSessionCardsInput): SessionCard[] {
+  const crewsBySessionId = new Map<string, SessionCrew[]>()
+  for (const crew of crews) {
+    for (const sessionId of crew.sessionIds) {
+      const existing = crewsBySessionId.get(sessionId)
+      if (existing) {
+        existing.push(crew)
+      } else {
+        crewsBySessionId.set(sessionId, [crew])
+      }
+    }
+  }
+
   const projectNameById = new Map(
     projects.map((project) => [project.id, project.name]),
   )
@@ -64,6 +80,7 @@ export function buildSessionCards({
         projectName,
         providerLabel,
         activityLabel,
+        crews: crewsBySessionId.get(session.id) ?? [],
         searchText: [
           session.name,
           projectName,

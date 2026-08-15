@@ -17,6 +17,7 @@ export interface SessionCardFilter {
   states: readonly SessionCardState[]
   projectIds: readonly string[]
   providerIds: readonly string[]
+  crewIds: readonly string[]
 }
 
 export type SessionCardFilterDimension = keyof SessionCardFilter
@@ -26,6 +27,7 @@ export const EMPTY_SESSION_CARD_FILTER: SessionCardFilter = {
   states: [],
   projectIds: [],
   providerIds: [],
+  crewIds: [],
 }
 
 /**
@@ -77,6 +79,11 @@ const DIMENSION_PREDICATES: Record<
   providerIds: (card, filter) =>
     filter.providerIds.length === 0 ||
     filter.providerIds.includes(card.session.providerId),
+  // Membership is many-to-many, so picking two crews means "in either one",
+  // exactly like picking two projects.
+  crewIds: (card, filter) =>
+    filter.crewIds.length === 0 ||
+    card.crews.some((crew) => filter.crewIds.includes(crew.id)),
 }
 
 const DIMENSIONS = Object.keys(
@@ -118,7 +125,8 @@ export function isEmptySessionCardFilter(filter: SessionCardFilter): boolean {
     filter.query.trim() === '' &&
     filter.states.length === 0 &&
     filter.projectIds.length === 0 &&
-    filter.providerIds.length === 0
+    filter.providerIds.length === 0 &&
+    filter.crewIds.length === 0
   )
 }
 

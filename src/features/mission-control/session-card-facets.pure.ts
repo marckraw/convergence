@@ -1,3 +1,4 @@
+import type { SessionCrew } from '@/entities/session-crew'
 import type { SessionCard } from './mission-control.types'
 import {
   GLOBAL_SESSION_PROJECT_KEY,
@@ -11,6 +12,12 @@ export interface SessionCardFacetOption {
   id: string
   label: string
   count: number
+}
+
+/** A crew option, carrying the decoration its chip is tinted with. */
+export interface SessionCardCrewFacetOption extends SessionCardFacetOption {
+  emoji: string | null
+  accentColor: string | null
 }
 
 function buildFacet(
@@ -67,6 +74,34 @@ export function buildProviderFacets(
   return buildFacet(cards, filter, 'providerIds', (card) => ({
     id: card.session.providerId,
     label: card.providerLabel,
+  }))
+}
+
+/**
+ * The crew chips' options, counted with the crew dimension held open.
+ *
+ * Options come from the crew list rather than from the cards, so a crew with no
+ * members is still offered — an empty crew is legal, and a chip that vanishes
+ * when its last session leaves would be a control that hides itself.
+ */
+export function buildCrewFacets(
+  cards: readonly SessionCard[],
+  filter: SessionCardFilter,
+  crews: readonly SessionCrew[],
+): SessionCardCrewFacetOption[] {
+  const counts = new Map<string, number>()
+  for (const card of filterSessionCardsExcept(cards, filter, 'crewIds')) {
+    for (const crew of card.crews) {
+      counts.set(crew.id, (counts.get(crew.id) ?? 0) + 1)
+    }
+  }
+
+  return crews.map((crew) => ({
+    id: crew.id,
+    label: crew.name,
+    count: counts.get(crew.id) ?? 0,
+    emoji: crew.emoji,
+    accentColor: crew.accentColor,
   }))
 }
 

@@ -523,6 +523,31 @@ interface ReviewNoteData {
   updatedAt: string
 }
 
+interface SessionCrewData {
+  id: string
+  name: string
+  emoji: string | null
+  accentColor: string | null
+  position: number
+  createdAt: string
+  updatedAt: string
+  sessionIds: string[]
+}
+
+interface CreateSessionCrewInputData {
+  name: string
+  emoji?: string | null
+  accentColor?: string | null
+  sessionIds?: string[]
+}
+
+interface UpdateSessionCrewInputData {
+  name?: string
+  emoji?: string | null
+  accentColor?: string | null
+  position?: number
+}
+
 interface CreateReviewNoteInputData {
   sessionId: string
   workspaceId?: string | null
@@ -1683,6 +1708,21 @@ interface ElectronAPI {
     sendPacket: (
       input: SendReviewNotePacketInputData,
     ) => Promise<ReviewNotePacketSendResultData>
+  }
+  crew: {
+    list: () => Promise<SessionCrewData[]>
+    create: (input: CreateSessionCrewInputData) => Promise<SessionCrewData>
+    update: (
+      id: string,
+      patch: UpdateSessionCrewInputData,
+    ) => Promise<SessionCrewData>
+    delete: (id: string) => Promise<void>
+    addMember: (crewId: string, sessionId: string) => Promise<SessionCrewData>
+    removeMember: (
+      crewId: string,
+      sessionId: string,
+    ) => Promise<SessionCrewData>
+    onUpdated: (callback: (crews: SessionCrewData[]) => void) => () => void
   }
   git: {
     getBranches: (repoPath: string) => Promise<string[]>

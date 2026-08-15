@@ -1,25 +1,22 @@
-import {
-  Fragment,
-  useCallback,
-  useLayoutEffect,
-  useMemo,
-  useRef,
-  useState,
-} from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { FC } from 'react'
+import { useSessionCrewStore } from '@/entities/session-crew'
 import type { SessionSummary } from '@/entities/session'
 import {
-  SessionCardView,
+  CrewHeaderMenu,
+  SessionCrewChips,
   SessionFacetPicker,
   SessionStateChips,
+  groupSessionCardsByCrew,
   isEmptySessionCardFilter,
+  sessionCrewGroupKey,
   useMissionControlCards,
   useMissionControlView,
 } from '@/features/mission-control'
 import type { SessionCard } from '@/features/mission-control'
-import { HailPanel } from './hail-panel.container'
+import { CrewContainer } from './crew-container.presentational'
 import { MissionControlView } from './mission-control.presentational'
-import { findRowEndIndex } from './session-card-row.pure'
+import { SessionCardGrid } from './session-card-grid.container'
 
 interface MissionControlProps {
   onOpenSession?: (session: SessionSummary) => void
@@ -29,20 +26,37 @@ export const MissionControl: FC<MissionControlProps> = ({ onOpenSession }) => {
   const {
     filter,
     order,
+    mode,
     setQuery,
     setOrder,
+    setMode,
     toggleState,
     clearStates,
     toggleProject,
     clearProjects,
     toggleProvider,
     clearProviders,
+    toggleCrew,
+    clearCrews,
     clearFilter,
   } = useMissionControlView()
   const [hailSessionId, setHailSessionId] = useState<string | null>(null)
 
-  const { cards, totalCount, stateCounts, projectFacets, providerFacets } =
-    useMissionControlCards({ filter, order })
+  const crews = useSessionCrewStore((state) => state.crews)
+  const loadCrews = useSessionCrewStore((state) => state.load)
+
+  useEffect(() => {
+    void loadCrews()
+  }, [loadCrews])
+
+  const {
+    cards,
+    totalCount,
+    stateCounts,
+    projectFacets,
+    providerFacets,
+    crewFacets,
+  } = useMissionControlCards({ filter, order })
   const attentionCount = useMemo(
     () => cards.filter((card) => card.session.attention !== 'none').length,
     [cards],
@@ -50,6 +64,10 @@ export const MissionControl: FC<MissionControlProps> = ({ onOpenSession }) => {
   const runningCount = useMemo(
     () => cards.filter((card) => card.session.status === 'running').length,
     [cards],
+  )
+  const crewGroups = useMemo(
+    () => groupSessionCardsByCrew(cards, crews),
+    [cards, crews],
   )
 
   const handleHail = useCallback((card: SessionCard) => {
@@ -67,42 +85,6 @@ export const MissionControl: FC<MissionControlProps> = ({ onOpenSession }) => {
     [onOpenSession],
   )
 
-  // Read from the live card list, so a Hail left open while its Session
-  // changes state shows the new state rather than the one it opened on.
-  const hailIndex = cards.findIndex((card) => card.session.id === hailSessionId)
-  const hailCard = hailIndex >= 0 ? cards[hailIndex] : null
-
-  /**
-   * The Hail opens under the whole row its card sits in, and only the browser
-   * knows which cards share that row in a responsive grid — so the row is
-   * measured from the laid-out cards and re-measured whenever the grid
-   * resizes. Before layout runs there is no row, and the panel simply waits.
-   */
-  const gridRef = useRef<HTMLDivElement>(null)
-  const [rowEndIndex, setRowEndIndex] = useState<number | null>(null)
-
-  useLayoutEffect(() => {
-    if (hailIndex < 0) {
-      setRowEndIndex(null)
-      return
-    }
-
-    const grid = gridRef.current
-    if (!grid) return
-
-    const measure = () => {
-      const tops = [
-        ...grid.querySelectorAll<HTMLElement>('[data-session-card]'),
-      ].map((element) => element.offsetTop)
-      setRowEndIndex(findRowEndIndex(tops, hailIndex))
-    }
-
-    measure()
-    const observer = new ResizeObserver(measure)
-    observer.observe(grid)
-    return () => observer.disconnect()
-  }, [hailIndex, cards.length])
-
   return (
     <MissionControlView
       totalCount={totalCount}
@@ -113,6 +95,8 @@ export const MissionControl: FC<MissionControlProps> = ({ onOpenSession }) => {
       onQueryChange={setQuery}
       order={order}
       onOrderChange={setOrder}
+      mode={mode}
+      onModeChange={setMode}
       filterIsEmpty={isEmptySessionCardFilter(filter)}
       onClearFilter={clearFilter}
       filters={
@@ -143,27 +127,49 @@ export const MissionControl: FC<MissionControlProps> = ({ onOpenSession }) => {
             onToggle={toggleProvider}
             onClear={clearProviders}
           />
+          <SessionCrewChips
+            options={crewFacets}
+            selected={filter.crewIds}
+            onToggle={toggleCrew}
+            onClear={clearCrews}
+          />
         </>
       }
     >
-      <div
-        ref={gridRef}
-        className="grid grid-cols-[repeat(auto-fill,minmax(260px,1fr))] gap-3"
-      >
-        {cards.map((card, index) => (
-          <Fragment key={card.session.id}>
-            <SessionCardView
-              card={card}
-              hailOpen={card.session.id === hailSessionId}
-              onOpen={handleOpen}
-              onHail={handleHail}
-            />
-            {hailCard && rowEndIndex === index ? (
-              <HailPanel card={hailCard} onClose={closeHail} />
-            ) : null}
-          </Fragment>
-        ))}
-      </div>
+      {mode === 'crews' ? (
+        <div className="flex flex-col gap-3">
+          {crewGroups.map((group) => (
+            <CrewContainer
+              key={sessionCrewGroupKey(group)}
+              name={group.crew?.name ?? 'No crew'}
+              emoji={group.crew?.emoji ?? null}
+              accentColor={group.crew?.accentColor ?? null}
+              memberCount={group.memberCount}
+              visibleCount={group.cards.length}
+              loose={group.crew === null}
+              menu={
+                group.crew ? <CrewHeaderMenu crew={group.crew} /> : undefined
+              }
+            >
+              <SessionCardGrid
+                cards={group.cards}
+                hailSessionId={hailSessionId}
+                onOpen={handleOpen}
+                onHail={handleHail}
+                onCloseHail={closeHail}
+              />
+            </CrewContainer>
+          ))}
+        </div>
+      ) : (
+        <SessionCardGrid
+          cards={cards}
+          hailSessionId={hailSessionId}
+          onOpen={handleOpen}
+          onHail={handleHail}
+          onCloseHail={closeHail}
+        />
+      )}
     </MissionControlView>
   )
 }

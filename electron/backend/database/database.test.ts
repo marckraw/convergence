@@ -33,6 +33,8 @@ describe('database', () => {
     expect(tableNames).toContain('space_attempts')
     expect(tableNames).toContain('space_artifacts')
     expect(tableNames).toContain('space_sources')
+    expect(tableNames).toContain('session_crews')
+    expect(tableNames).toContain('session_crew_members')
     expect(tableNames).toContain('project_context_items')
     expect(tableNames).toContain('session_context_attachments')
     expect(tableNames).toContain('analytics_profile_snapshots')
@@ -412,6 +414,52 @@ describe('database', () => {
     expect(sourceForeignKeys).toEqual([
       expect.objectContaining({ table: 'spaces', on_delete: 'CASCADE' }),
     ])
+  })
+
+  it('creates crew tables with decoration columns and no foreign keys', () => {
+    const db = getDatabase()
+
+    const crewColumns = db
+      .prepare("PRAGMA table_info('session_crews')")
+      .all() as Array<{ name: string }>
+    expect(crewColumns.map((c) => c.name).sort()).toEqual(
+      [
+        'id',
+        'name',
+        'emoji',
+        'accent_color',
+        'position',
+        'created_at',
+        'updated_at',
+      ].sort(),
+    )
+
+    const memberColumns = db
+      .prepare("PRAGMA table_info('session_crew_members')")
+      .all() as Array<{ name: string }>
+    expect(memberColumns.map((c) => c.name).sort()).toEqual(
+      ['crew_id', 'session_id', 'added_at'].sort(),
+    )
+
+    // Membership must never cascade in either direction: a crew is a label,
+    // not an owner, and a deleted session leaves a harmless orphan row.
+    expect(
+      db.prepare("PRAGMA foreign_key_list('session_crew_members')").all(),
+    ).toEqual([])
+
+    db.prepare(
+      "INSERT INTO session_crews (id, name) VALUES ('c1', 'Convoy')",
+    ).run()
+    db.prepare(
+      "INSERT INTO session_crew_members (crew_id, session_id) VALUES ('c1', 's1')",
+    ).run()
+    expect(() =>
+      db
+        .prepare(
+          "INSERT INTO session_crew_members (crew_id, session_id) VALUES ('c1', 's1')",
+        )
+        .run(),
+    ).toThrow(/UNIQUE/)
   })
 
   it('migrates legacy initiative rows into spaces', () => {

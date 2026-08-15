@@ -35,6 +35,17 @@ export type {
 } from './review-note'
 export { reviewNoteApi, useReviewNoteStore } from './review-note'
 
+export type {
+  CreateSessionCrewInput,
+  SessionCrew,
+  UpdateSessionCrewInput,
+} from './session-crew'
+export {
+  selectCrewsForSession,
+  sessionCrewApi,
+  useSessionCrewStore,
+} from './session-crew'
+
 export type { Session, SessionStatus, AttentionState } from './session'
 export { useSessionStore } from './session'
 

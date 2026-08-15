@@ -1,4 +1,5 @@
 import type { SessionSummary } from '@/entities/session'
+import type { SessionCrew } from '@/entities/session-crew'
 
 /**
  * A Session Card is Mission Control's rendering of one Session as the agent
@@ -11,6 +12,12 @@ export interface SessionCard {
   projectName: string
   providerLabel: string
   activityLabel: string
+  /**
+   * The crews holding this Session, in crew order. Carried on the card so the
+   * crew filter and the card's own accent badges read the same membership and
+   * cannot drift.
+   */
+  crews: SessionCrew[]
   /** Lowercased haystack for card-level search. Never conversation content. */
   searchText: string
 }

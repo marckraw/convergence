@@ -1,4 +1,4 @@
-import type { FC } from 'react'
+import type { FC, ReactNode } from 'react'
 import { Loader2, Radio } from 'lucide-react'
 import { formatSessionAttentionLabel } from '@/entities/session'
 import { Button } from '@/shared/ui/button'
@@ -15,6 +15,8 @@ interface SessionCardViewProps {
   card: SessionCard
   /** True while this card's Hail is the one open, so the room shows which. */
   hailOpen: boolean
+  /** The crew gesture, composed above so this file stays render-only. */
+  crewAction?: ReactNode
   onOpen: (card: SessionCard) => void
   onHail: (card: SessionCard) => void
 }
@@ -22,6 +24,7 @@ interface SessionCardViewProps {
 export const SessionCardView: FC<SessionCardViewProps> = ({
   card,
   hailOpen,
+  crewAction,
   onOpen,
   onHail,
 }) => {
@@ -87,6 +90,33 @@ export const SessionCardView: FC<SessionCardViewProps> = ({
             </>
           ) : null}
         </div>
+
+        {card.crews.length > 0 ? (
+          <div className="flex flex-wrap items-center gap-1">
+            {card.crews.map((crew) => (
+              <span
+                key={crew.id}
+                title={`In crew ${crew.name}`}
+                style={
+                  crew.accentColor
+                    ? {
+                        borderColor: `color-mix(in srgb, ${crew.accentColor} 55%, transparent)`,
+                        backgroundColor: `color-mix(in srgb, ${crew.accentColor} 18%, transparent)`,
+                      }
+                    : undefined
+                }
+                className="flex max-w-full items-center gap-1 rounded-full border border-white/10 px-1.5 py-0.5 text-[10px] leading-none text-muted-foreground"
+              >
+                {crew.emoji ? (
+                  <span aria-hidden className="leading-none">
+                    {crew.emoji}
+                  </span>
+                ) : null}
+                <span className="truncate">{crew.name}</span>
+              </span>
+            ))}
+          </div>
+        ) : null}
       </div>
 
       <div className="flex items-center justify-between gap-2 border-t border-white/5 px-3 py-2">
@@ -102,18 +132,22 @@ export const SessionCardView: FC<SessionCardViewProps> = ({
           <span className="truncate">{card.activityLabel}</span>
         </span>
 
-        <Button
-          type="button"
-          variant={hailOpen ? 'secondary' : 'ghost'}
-          size="sm"
-          className="h-6 shrink-0 px-2 text-[11px] opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100 aria-expanded:opacity-100"
-          aria-expanded={hailOpen}
-          aria-label={`Hail ${session.name}`}
-          onClick={() => onHail(card)}
-        >
-          <Radio className="size-3" />
-          Hail
-        </Button>
+        <div className="flex shrink-0 items-center gap-1">
+          {crewAction}
+
+          <Button
+            type="button"
+            variant={hailOpen ? 'secondary' : 'ghost'}
+            size="sm"
+            className="h-6 shrink-0 px-2 text-[11px] opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100 aria-expanded:opacity-100"
+            aria-expanded={hailOpen}
+            aria-label={`Hail ${session.name}`}
+            onClick={() => onHail(card)}
+          >
+            <Radio className="size-3" />
+            Hail
+          </Button>
+        </div>
       </div>
     </div>
   )

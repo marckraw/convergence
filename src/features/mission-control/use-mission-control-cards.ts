@@ -1,12 +1,17 @@
 import { useEffect, useMemo } from 'react'
 import { useProjectStore } from '@/entities/project'
 import { useSessionStore } from '@/entities/session'
+import { useSessionCrewStore } from '@/entities/session-crew'
 import { buildSessionCards } from './mission-control-cards.pure'
 import {
+  buildCrewFacets,
   buildProjectFacets,
   buildProviderFacets,
 } from './session-card-facets.pure'
-import type { SessionCardFacetOption } from './session-card-facets.pure'
+import type {
+  SessionCardCrewFacetOption,
+  SessionCardFacetOption,
+} from './session-card-facets.pure'
 import {
   filterSessionCards,
   filterSessionCardsExcept,
@@ -39,6 +44,8 @@ export interface MissionControlCards {
   projectFacets: SessionCardFacetOption[]
   /** Provider picker options, counted the same honest way. */
   providerFacets: SessionCardFacetOption[]
+  /** Crew chip options, decoration included, counted the same honest way. */
+  crewFacets: SessionCardCrewFacetOption[]
 }
 
 /**
@@ -57,14 +64,15 @@ export function useMissionControlCards({
   const providers = useSessionStore((state) => state.providers)
   const loadProviders = useSessionStore((state) => state.loadProviders)
   const projects = useProjectStore((state) => state.projects)
+  const crews = useSessionCrewStore((state) => state.crews)
 
   useEffect(() => {
     void loadProviders()
   }, [loadProviders])
 
   const allCards = useMemo(
-    () => buildSessionCards({ sessions, projects, providers }),
-    [sessions, projects, providers],
+    () => buildSessionCards({ sessions, projects, providers, crews }),
+    [sessions, projects, providers, crews],
   )
 
   const stateCounts = useMemo(
@@ -85,6 +93,11 @@ export function useMissionControlCards({
     [allCards, filter],
   )
 
+  const crewFacets = useMemo(
+    () => buildCrewFacets(allCards, filter, crews),
+    [allCards, filter, crews],
+  )
+
   const cards = useMemo(
     () => orderSessionCards(filterSessionCards(allCards, filter), order),
     [allCards, filter, order],
@@ -96,5 +109,6 @@ export function useMissionControlCards({
     stateCounts,
     projectFacets,
     providerFacets,
+    crewFacets,
   }
 }

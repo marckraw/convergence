@@ -201,6 +201,32 @@ const SCHEMA = `
   CREATE INDEX IF NOT EXISTS idx_space_sources_space
     ON space_sources(space_id);
 
+  CREATE TABLE IF NOT EXISTS session_crews (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    emoji TEXT,
+    accent_color TEXT,
+    position INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+
+  -- Membership carries no foreign keys on purpose: a crew is a label, never an
+  -- owner. Deleting a crew must never cascade into sessions, and a deleted
+  -- session must never fail a crew read -- orphan rows are filtered on read.
+  CREATE TABLE IF NOT EXISTS session_crew_members (
+    crew_id TEXT NOT NULL,
+    session_id TEXT NOT NULL,
+    added_at TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE (crew_id, session_id)
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_session_crew_members_crew
+    ON session_crew_members(crew_id);
+
+  CREATE INDEX IF NOT EXISTS idx_session_crew_members_session
+    ON session_crew_members(session_id);
+
   CREATE TABLE IF NOT EXISTS workspaces (
     id TEXT PRIMARY KEY,
     project_id TEXT NOT NULL,

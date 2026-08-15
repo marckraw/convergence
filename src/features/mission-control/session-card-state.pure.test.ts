@@ -48,6 +48,7 @@ function makeCard(overrides: {
     projectName: 'Convergence',
     providerLabel: 'Anthropic',
     activityLabel: 'idle',
+    crews: [],
     searchText: 'card',
   }
 }
