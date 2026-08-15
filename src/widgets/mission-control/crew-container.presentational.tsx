@@ -16,6 +16,18 @@ interface CrewContainerProps {
   loose?: boolean
   /** Rename/decorate/delete, composed above so this file stays render-only. */
   menu?: ReactNode
+  /**
+   * The crew's relays. Sits under the header and above the cards, and stays
+   * visible when the filter empties the room -- a wire you cannot see is a
+   * wire you cannot switch off.
+   */
+  flow?: ReactNode
+  /**
+   * A relay in this crew errored or burned its hop budget. Outlines the whole
+   * container in red: a loop that had to be stopped by force must be findable
+   * from across the room, not only by opening the trail.
+   */
+  alarm?: boolean
   children: ReactNode
 }
 
@@ -34,20 +46,25 @@ export const CrewContainer: FC<CrewContainerProps> = ({
   visibleCount,
   loose = false,
   menu,
+  flow,
+  alarm = false,
   children,
 }) => {
   const filteredOut = memberCount > 0 && visibleCount === 0
-  const accentStyle: CSSProperties | undefined = accentColor
-    ? { borderColor: accentColor }
-    : undefined
+  // An alarm outranks the crew's own colour: the accent is decoration, the red
+  // is news.
+  const accentStyle: CSSProperties | undefined =
+    accentColor && !alarm ? { borderColor: accentColor } : undefined
 
   return (
     <section
       data-crew-container
+      data-crew-alarm={alarm ? 'true' : undefined}
       style={accentStyle}
       className={cn(
         'rounded-lg border transition-opacity',
         loose ? 'border-dashed border-white/10' : 'border-white/15',
+        alarm && 'border-red-500/60 ring-1 ring-red-500/20',
         filteredOut && 'opacity-40',
       )}
     >
@@ -77,6 +94,8 @@ export const CrewContainer: FC<CrewContainerProps> = ({
 
         {menu ? <div className="ml-auto">{menu}</div> : null}
       </div>
+
+      {flow}
 
       <div className="px-4 py-3">
         {memberCount === 0 ? (

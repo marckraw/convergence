@@ -1,10 +1,11 @@
 import type { FC, ReactNode } from 'react'
-import { Loader2, Radio } from 'lucide-react'
+import { Cable, Loader2, Radio } from 'lucide-react'
 import { formatSessionAttentionLabel } from '@/entities/session'
 import { Button } from '@/shared/ui/button'
 import { SessionBadge } from '@/shared/ui/session-badge.presentational'
 import { cn } from '@/shared/lib/cn.pure'
 import type { SessionCard } from './mission-control.types'
+import type { SessionWireHint } from './relay-hop.pure'
 import {
   ACTIVITY_TEXT_STYLES,
   CARD_ATTENTION_STYLES,
@@ -17,6 +18,8 @@ interface SessionCardViewProps {
   hailOpen: boolean
   /** The crew gesture, composed above so this file stays render-only. */
   crewAction?: ReactNode
+  /** Relays touching this session, or null when nothing is wired to it. */
+  wireHint?: SessionWireHint | null
   onOpen: (card: SessionCard) => void
   onHail: (card: SessionCard) => void
 }
@@ -25,6 +28,7 @@ export const SessionCardView: FC<SessionCardViewProps> = ({
   card,
   hailOpen,
   crewAction,
+  wireHint,
   onOpen,
   onHail,
 }) => {
@@ -88,6 +92,22 @@ export const SessionCardView: FC<SessionCardViewProps> = ({
               <span aria-hidden>·</span>
               <span className="truncate">{session.model}</span>
             </>
+          ) : null}
+
+          {wireHint ? (
+            <span
+              title={wireHint.label}
+              aria-label={wireHint.label}
+              className={cn(
+                'flex shrink-0 items-center gap-0.5 tabular-nums',
+                wireHint.outgoing + wireHint.incoming > 0
+                  ? 'text-emerald-400/80'
+                  : 'text-muted-foreground/60',
+              )}
+            >
+              <Cable aria-hidden className="size-3" />
+              {wireHint.total}
+            </span>
           ) : null}
         </div>
 

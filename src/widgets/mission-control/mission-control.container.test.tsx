@@ -2,6 +2,7 @@ import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { useProjectStore } from '@/entities/project'
 import { useSessionCrewStore } from '@/entities/session-crew'
+import { useSessionRelayStore } from '@/entities/session-relay'
 import type {
   CreateSessionCrewInput,
   SessionCrew,
@@ -95,6 +96,7 @@ type SendMessage = SessionStore['sendMessageToSession']
 let sendMessageToSession: ReturnType<typeof vi.fn<SendMessage>>
 let getAllSummaries: ReturnType<typeof vi.fn>
 let listCrews: ReturnType<typeof vi.fn<() => Promise<SessionCrew[]>>>
+let listHops: ReturnType<typeof vi.fn>
 let createCrew: ReturnType<
   typeof vi.fn<(input: CreateSessionCrewInput) => Promise<SessionCrew>>
 >
@@ -157,6 +159,7 @@ describe('MissionControl', () => {
     sendMessageToSession = vi.fn<SendMessage>(async () => undefined)
     getAllSummaries = vi.fn(async () => [])
     listCrews = vi.fn(async () => [])
+    listHops = vi.fn(async () => [])
     createCrew = vi.fn(async (input) =>
       makeCrew({
         id: 'created-crew',
@@ -175,7 +178,23 @@ describe('MissionControl', () => {
         removeMember: vi.fn(),
         onUpdated: vi.fn(() => () => undefined),
       },
+      relay: {
+        list: vi.fn(async () => []),
+        listHops,
+        onUpdated: vi.fn(() => () => undefined),
+        onHopAppended: vi.fn(() => () => undefined),
+      },
     }
+    useSessionRelayStore.getState().unsubscribeBroadcast?.()
+    useSessionRelayStore.getState().unsubscribeHops?.()
+    useSessionRelayStore.setState({
+      relays: [],
+      hopsByCrewId: {},
+      isLoaded: false,
+      error: null,
+      unsubscribeBroadcast: null,
+      unsubscribeHops: null,
+    })
     useSessionCrewStore.getState().unsubscribeBroadcast?.()
     useSessionCrewStore.setState({
       crews: [],
@@ -590,6 +609,56 @@ describe('MissionControl', () => {
       expect(
         screen.getByText('No sessions in this crew yet.'),
       ).toBeInTheDocument()
+    })
+
+    it('outlines a crew in red when one of its wires errored', async () => {
+      seedCrews([
+        makeCrew({ id: 'crew-1', name: 'Review loop', sessionIds: ['a', 'b'] }),
+      ])
+      seed([makeSession({ id: 'a' }), makeSession({ id: 'b' })], [CLAUDE_CODE])
+      listHops.mockResolvedValue([
+        {
+          id: 'h1',
+          relayId: 'r1',
+          crewId: 'crew-1',
+          flowRunId: 'run-1',
+          firedAt: '2026-08-15T10:00:00.000Z',
+          sourceSessionId: 'a',
+          targetSessionId: 'b',
+          spawnedSessionId: null,
+          triggerStatus: 'completed',
+          payloadPreview: null,
+          outcome: 'error',
+          error: 'The target session no longer exists.',
+        },
+      ])
+
+      render(<MissionControl />)
+      await switchToCrews()
+
+      await waitFor(() => {
+        expect(
+          document.querySelector('[data-crew-alarm="true"]'),
+        ).toBeInTheDocument()
+      })
+      expect(
+        screen.getByText('1 relay hop needs your eyes'),
+      ).toBeInTheDocument()
+    })
+
+    it('leaves a crew whose wires all behaved unmarked', async () => {
+      seedCrews([
+        makeCrew({ id: 'crew-1', name: 'Review loop', sessionIds: ['a', 'b'] }),
+      ])
+      seed([makeSession({ id: 'a' }), makeSession({ id: 'b' })], [CLAUDE_CODE])
+
+      render(<MissionControl />)
+      await switchToCrews()
+
+      await screen.findByRole('heading', { name: 'Review loop' })
+      expect(
+        document.querySelector('[data-crew-alarm="true"]'),
+      ).not.toBeInTheDocument()
     })
 
     it('remembers the layout choice for the next visit', async () => {

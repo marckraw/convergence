@@ -1,0 +1,465 @@
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { useProjectStore } from '@/entities/project'
+import type { SessionCrew } from '@/entities/session-crew'
+import { useSessionRelayStore } from '@/entities/session-relay'
+import type { SessionRelay } from '@/entities/session-relay'
+import { useSessionStore } from '@/entities/session'
+import type { SessionSummary } from '@/entities/session'
+import { CrewFlowSection } from './crew-flow-section.container'
+
+function makeSession(id: string, name: string): SessionSummary {
+  return {
+    id,
+    contextKind: 'project',
+    projectId: 'project-1',
+    workspaceId: null,
+    providerId: 'claude-code',
+    model: 'claude-opus-5',
+    effort: null,
+    name,
+    status: 'idle',
+    attention: 'none',
+    activity: null,
+    contextWindow: null,
+    workingDirectory: '/repos/convergence',
+    archivedAt: null,
+    parentSessionId: null,
+    forkStrategy: null,
+    primarySurface: 'conversation',
+    continuationToken: null,
+    lastSequence: 0,
+    createdAt: '2026-08-15T10:00:00.000Z',
+    updatedAt: '2026-08-15T10:00:00.000Z',
+  }
+}
+
+function makeCrew(sessionIds: string[]): SessionCrew {
+  return {
+    id: 'c1',
+    name: 'Review loop',
+    emoji: null,
+    accentColor: null,
+    position: 0,
+    createdAt: '2026-08-15T10:00:00.000Z',
+    updatedAt: '2026-08-15T10:00:00.000Z',
+    sessionIds,
+  }
+}
+
+function makeRelay(
+  overrides: Partial<SessionRelay> & { id: string },
+): SessionRelay {
+  return {
+    crewId: 'c1',
+    sourceSessionId: 'impl',
+    trigger: 'settled',
+    action: 'hail',
+    targetSessionId: 'review',
+    spawnSpec: null,
+    armed: true,
+    createdAt: '2026-08-15T10:00:00.000Z',
+    updatedAt: '2026-08-15T10:00:00.000Z',
+    ...overrides,
+  }
+}
+
+let createRelay: ReturnType<typeof vi.fn>
+let updateRelay: ReturnType<typeof vi.fn>
+let deleteRelay: ReturnType<typeof vi.fn>
+let arm: ReturnType<typeof vi.fn>
+let disarm: ReturnType<typeof vi.fn>
+
+function seedRelays(relays: SessionRelay[]) {
+  useSessionRelayStore.setState({ relays, isLoaded: true })
+}
+
+describe('CrewFlowSection', () => {
+  beforeEach(() => {
+    createRelay = vi.fn(async (input) =>
+      makeRelay({ id: 'created', ...input, armed: input.armed ?? true }),
+    )
+    updateRelay = vi.fn(async (id, patch) => makeRelay({ id, ...patch }))
+    deleteRelay = vi.fn(async () => undefined)
+    arm = vi.fn(async (id) => makeRelay({ id, armed: true }))
+    disarm = vi.fn(async (id) => makeRelay({ id, armed: false }))
+    ;(window as unknown as { electronAPI: unknown }).electronAPI = {
+      relay: {
+        list: vi.fn(async () => []),
+        create: createRelay,
+        update: updateRelay,
+        delete: deleteRelay,
+        arm,
+        disarm,
+        listHops: vi.fn(async () => []),
+        onUpdated: vi.fn(() => () => undefined),
+        onHopAppended: vi.fn(() => () => undefined),
+      },
+    }
+
+    useSessionStore.setState({
+      globalSessions: [
+        makeSession('impl', 'Implementor'),
+        makeSession('review', 'Reviewer'),
+        makeSession('scribe', 'Scribe'),
+      ],
+      providers: [
+        {
+          id: 'codex',
+          name: 'Codex',
+          vendorLabel: 'OpenAI',
+          kind: 'conversation',
+          supportsContinuation: true,
+          defaultModelId: 'gpt-5.6',
+          modelOptions: [],
+          attachments: {},
+          midRunInput: {},
+        },
+        // A shell provider has nothing to hand a payload to, so the form
+        // must never offer it.
+        {
+          id: 'shell',
+          name: 'Shell',
+          vendorLabel: 'Local',
+          kind: 'terminal',
+          supportsContinuation: false,
+          defaultModelId: '',
+          modelOptions: [],
+          attachments: {},
+          midRunInput: {},
+        },
+      ],
+    } as never)
+
+    useProjectStore.setState({
+      projects: [
+        {
+          id: 'project-1',
+          name: 'Convergence',
+          repositoryPath: '/repos/convergence',
+          createdAt: '2026-01-01T00:00:00.000Z',
+          updatedAt: '2026-01-01T00:00:00.000Z',
+        },
+      ],
+    } as never)
+
+    useSessionRelayStore.getState().unsubscribeBroadcast?.()
+    useSessionRelayStore.getState().unsubscribeHops?.()
+    useSessionRelayStore.setState({
+      relays: [],
+      hopsByCrewId: {},
+      isLoaded: false,
+      error: null,
+      unsubscribeBroadcast: null,
+      unsubscribeHops: null,
+    })
+  })
+
+  it('invites the first wire when a crew has members but no relays', () => {
+    render(<CrewFlowSection crew={makeCrew(['impl', 'review'])} />)
+
+    expect(screen.getByText('0 relays')).toBeInTheDocument()
+    expect(screen.getByText(/No relays yet/)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Add relay' })).not.toBeDisabled()
+  })
+
+  it('still offers a wire when the crew holds only one session', () => {
+    render(<CrewFlowSection crew={makeCrew(['impl'])} />)
+
+    // One member cannot be hailed at, but it can still start a new session.
+    expect(screen.getByRole('button', { name: 'Add relay' })).not.toBeDisabled()
+    expect(screen.getByText(/start a new session/)).toBeInTheDocument()
+  })
+
+  it('will not offer a wire in a crew with nothing in it', () => {
+    render(<CrewFlowSection crew={makeCrew([])} />)
+
+    expect(screen.getByRole('button', { name: 'Add relay' })).toBeDisabled()
+    expect(screen.getByText(/Add a session to this crew/)).toBeInTheDocument()
+  })
+
+  it('draws the implementor to reviewer wire entirely by clicking', async () => {
+    render(<CrewFlowSection crew={makeCrew(['impl', 'review'])} />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Add relay' }))
+
+    // Two pickers, both offering this crew's members and nobody else.
+    const [sourceTrigger, targetTrigger] = screen.getAllByRole('combobox')
+    fireEvent.click(sourceTrigger)
+    fireEvent.click(await screen.findByRole('option', { name: /Implementor/ }))
+    fireEvent.click(targetTrigger)
+    fireEvent.click(await screen.findByRole('option', { name: /Reviewer/ }))
+
+    fireEvent.click(screen.getByRole('button', { name: 'Draw wire' }))
+
+    await waitFor(() => {
+      expect(createRelay).toHaveBeenCalledWith({
+        crewId: 'c1',
+        sourceSessionId: 'impl',
+        action: 'hail',
+        targetSessionId: 'review',
+        spawnSpec: null,
+      })
+    })
+  })
+
+  it('keeps the save button closed until both ends are picked', async () => {
+    render(<CrewFlowSection crew={makeCrew(['impl', 'review'])} />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Add relay' }))
+
+    expect(screen.getByRole('button', { name: 'Draw wire' })).toBeDisabled()
+    expect(screen.getByText('Pick the session that finishes.')).toBeVisible()
+
+    const [sourceTrigger] = screen.getAllByRole('combobox')
+    fireEvent.click(sourceTrigger)
+    fireEvent.click(await screen.findByRole('option', { name: /Implementor/ }))
+
+    expect(screen.getByRole('button', { name: 'Draw wire' })).toBeDisabled()
+    expect(
+      screen.getByText('Pick the session that receives its last message.'),
+    ).toBeVisible()
+  })
+
+  it('refuses a wire pointing at its own source, in words', async () => {
+    render(<CrewFlowSection crew={makeCrew(['impl', 'review'])} />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Add relay' }))
+    const [sourceTrigger, targetTrigger] = screen.getAllByRole('combobox')
+    fireEvent.click(sourceTrigger)
+    fireEvent.click(await screen.findByRole('option', { name: /Implementor/ }))
+    fireEvent.click(targetTrigger)
+    fireEvent.click(await screen.findByRole('option', { name: /Implementor/ }))
+
+    expect(
+      screen.getByText('A relay cannot hail the session it listens to.'),
+    ).toBeVisible()
+    expect(screen.getByRole('button', { name: 'Draw wire' })).toBeDisabled()
+    expect(createRelay).not.toHaveBeenCalled()
+  })
+
+  it('refuses a duplicate of a wire the crew already has', async () => {
+    seedRelays([makeRelay({ id: 'r1' })])
+    render(<CrewFlowSection crew={makeCrew(['impl', 'review'])} />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Add relay' }))
+    const [sourceTrigger, targetTrigger] = screen.getAllByRole('combobox')
+    fireEvent.click(sourceTrigger)
+    fireEvent.click(await screen.findByRole('option', { name: /Implementor/ }))
+    fireEvent.click(targetTrigger)
+    fireEvent.click(await screen.findByRole('option', { name: /Reviewer/ }))
+
+    expect(screen.getByText('This crew already has that wire.')).toBeVisible()
+  })
+
+  it('reads an existing wire as a sentence', () => {
+    seedRelays([makeRelay({ id: 'r1' })])
+    render(<CrewFlowSection crew={makeCrew(['impl', 'review'])} />)
+
+    expect(screen.getByText('1 relay')).toBeInTheDocument()
+    expect(
+      screen.getByRole('switch', {
+        name: 'Armed: When Implementor finishes, send its last message to Reviewer',
+      }),
+    ).toBeInTheDocument()
+  })
+
+  it('disarms and re-arms in one click', async () => {
+    seedRelays([makeRelay({ id: 'r1' })])
+    render(<CrewFlowSection crew={makeCrew(['impl', 'review'])} />)
+
+    fireEvent.click(screen.getByRole('switch', { name: /^Armed:/ }))
+    await waitFor(() => expect(disarm).toHaveBeenCalledWith('r1'))
+
+    fireEvent.click(await screen.findByRole('switch', { name: /^Disarmed:/ }))
+    await waitFor(() => expect(arm).toHaveBeenCalledWith('r1'))
+  })
+
+  it('repoints an existing wire through the edit form', async () => {
+    seedRelays([makeRelay({ id: 'r1' })])
+    render(<CrewFlowSection crew={makeCrew(['impl', 'review', 'scribe'])} />)
+
+    fireEvent.click(screen.getByRole('button', { name: /^Edit relay:/ }))
+    const [, targetTrigger] = screen.getAllByRole('combobox')
+    fireEvent.click(targetTrigger)
+    fireEvent.click(await screen.findByRole('option', { name: /Scribe/ }))
+    fireEvent.click(screen.getByRole('button', { name: 'Save wire' }))
+
+    await waitFor(() => {
+      expect(updateRelay).toHaveBeenCalledWith('r1', {
+        sourceSessionId: 'impl',
+        action: 'hail',
+        targetSessionId: 'scribe',
+        spawnSpec: null,
+      })
+    })
+  })
+
+  it('asks twice before cutting a wire', async () => {
+    seedRelays([makeRelay({ id: 'r1' })])
+    render(<CrewFlowSection crew={makeCrew(['impl', 'review'])} />)
+
+    fireEvent.click(screen.getByRole('button', { name: /^Delete relay:/ }))
+    expect(deleteRelay).not.toHaveBeenCalled()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Delete wire?' }))
+    await waitFor(() => expect(deleteRelay).toHaveBeenCalledWith('r1'))
+  })
+
+  it('says plainly when an end of a wire was deleted', () => {
+    seedRelays([makeRelay({ id: 'r1', targetSessionId: 'vanished' })])
+    render(<CrewFlowSection crew={makeCrew(['impl', 'review'])} />)
+
+    expect(
+      screen.getByText('a session that no longer exists'),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByLabelText('This wire has an end that no longer exists'),
+    ).toBeInTheDocument()
+  })
+
+  it('keeps the form open and shows why when the backend rejects the wire', async () => {
+    createRelay.mockRejectedValue(new Error('Relay crew cannot be empty'))
+    render(<CrewFlowSection crew={makeCrew(['impl', 'review'])} />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Add relay' }))
+    const [sourceTrigger, targetTrigger] = screen.getAllByRole('combobox')
+    fireEvent.click(sourceTrigger)
+    fireEvent.click(await screen.findByRole('option', { name: /Implementor/ }))
+    fireEvent.click(targetTrigger)
+    fireEvent.click(await screen.findByRole('option', { name: /Reviewer/ }))
+    fireEvent.click(screen.getByRole('button', { name: 'Draw wire' }))
+
+    expect(
+      await screen.findByText('Relay crew cannot be empty'),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByRole('button', { name: 'Draw wire' }),
+    ).toBeInTheDocument()
+  })
+
+  describe('spawn wires', () => {
+    it('draws a start-a-new-session wire entirely by clicking', async () => {
+      render(<CrewFlowSection crew={makeCrew(['impl', 'review'])} />)
+
+      fireEvent.click(screen.getByRole('button', { name: 'Add relay' }))
+
+      const [sourceTrigger] = screen.getAllByRole('combobox')
+      fireEvent.click(sourceTrigger)
+      fireEvent.click(
+        await screen.findByRole('option', { name: /Implementor/ }),
+      )
+
+      fireEvent.click(
+        screen.getByRole('button', { name: 'start a new session' }),
+      )
+
+      // The target picker is replaced by the spec fields.
+      const [, providerTrigger, projectTrigger] =
+        screen.getAllByRole('combobox')
+      fireEvent.click(providerTrigger)
+      fireEvent.click(await screen.findByRole('option', { name: /Codex/ }))
+      fireEvent.click(projectTrigger)
+      fireEvent.click(
+        await screen.findByRole('option', { name: /Convergence/ }),
+      )
+      fireEvent.change(screen.getByLabelText('Name for the new session'), {
+        target: { value: 'Reviewer' },
+      })
+
+      fireEvent.click(screen.getByRole('button', { name: 'Draw wire' }))
+
+      await waitFor(() => {
+        expect(createRelay).toHaveBeenCalledWith({
+          crewId: 'c1',
+          sourceSessionId: 'impl',
+          action: 'spawn',
+          targetSessionId: null,
+          spawnSpec: {
+            projectId: 'project-1',
+            providerId: 'codex',
+            model: null,
+            effort: null,
+            name: 'Reviewer',
+          },
+        })
+      })
+    })
+
+    it('asks for a provider rather than a target', async () => {
+      render(<CrewFlowSection crew={makeCrew(['impl', 'review'])} />)
+
+      fireEvent.click(screen.getByRole('button', { name: 'Add relay' }))
+      const [sourceTrigger] = screen.getAllByRole('combobox')
+      fireEvent.click(sourceTrigger)
+      fireEvent.click(
+        await screen.findByRole('option', { name: /Implementor/ }),
+      )
+      fireEvent.click(
+        screen.getByRole('button', { name: 'start a new session' }),
+      )
+
+      expect(
+        screen.getByText('Pick the provider for the new session.'),
+      ).toBeVisible()
+      expect(screen.getByRole('button', { name: 'Draw wire' })).toBeDisabled()
+    })
+
+    it('names the session it will open, and where', () => {
+      seedRelays([
+        makeRelay({
+          id: 'r1',
+          action: 'spawn',
+          targetSessionId: null,
+          spawnSpec: {
+            projectId: 'project-1',
+            providerId: 'codex',
+            model: null,
+            effort: null,
+            name: 'Reviewer',
+          },
+        }),
+      ])
+      render(<CrewFlowSection crew={makeCrew(['impl', 'review'])} />)
+
+      expect(
+        screen.getByRole('switch', {
+          name: 'Armed: When Implementor finishes, start a new session called Reviewer — codex in Convergence',
+        }),
+      ).toBeInTheDocument()
+    })
+
+    it('falls back to a default name when the user typed none', async () => {
+      render(<CrewFlowSection crew={makeCrew(['impl'])} />)
+
+      fireEvent.click(screen.getByRole('button', { name: 'Add relay' }))
+      const [sourceTrigger, providerTrigger] = screen.getAllByRole('combobox')
+      fireEvent.click(sourceTrigger)
+      fireEvent.click(
+        await screen.findByRole('option', { name: /Implementor/ }),
+      )
+      fireEvent.click(providerTrigger)
+      fireEvent.click(await screen.findByRole('option', { name: /Codex/ }))
+
+      fireEvent.click(screen.getByRole('button', { name: 'Draw wire' }))
+
+      await waitFor(() => {
+        expect(createRelay).toHaveBeenCalledWith(
+          expect.objectContaining({
+            spawnSpec: expect.objectContaining({ name: 'Relayed session' }),
+          }),
+        )
+      })
+    })
+  })
+
+  it('only shows the wires belonging to this crew', () => {
+    seedRelays([
+      makeRelay({ id: 'mine' }),
+      makeRelay({ id: 'theirs', crewId: 'other-crew' }),
+    ])
+    render(<CrewFlowSection crew={makeCrew(['impl', 'review'])} />)
+
+    expect(screen.getByText('1 relay')).toBeInTheDocument()
+  })
+})
