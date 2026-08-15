@@ -27,6 +27,43 @@ export { SessionCrewPicker } from './session-crew-picker.container'
 export { SessionCrewChips } from './session-crew-chips.presentational'
 export { CrewDecorationPicker } from './crew-decoration-picker.presentational'
 export { CrewHeaderMenu } from './crew-header-menu.container'
+export { CrewFlowSection } from './crew-flow-section.container'
+export { RelayHopTrail } from './relay-hop-trail.container'
+export {
+  ALARMING_RELAY_OUTCOMES,
+  buildRelayHopLine,
+  buildSessionWireHint,
+  countAlarmingHops,
+  formatAlarmSummary,
+  formatHopCount,
+  formatHopTime,
+  formatRelayHopOutcome,
+  isAlarmingHop,
+  relayHopTone,
+} from './relay-hop.pure'
+export type {
+  RelayHopLine,
+  RelayHopTone,
+  SessionWireHint,
+} from './relay-hop.pure'
+export {
+  EMPTY_RELAY_DRAFT,
+  EMPTY_SPAWN_DRAFT,
+  MISSING_SESSION_LABEL,
+  buildRelayEndpointOptions,
+  buildRelaySentence,
+  formatArmedLabel,
+  formatRelayCount,
+  isSavableRelayDraft,
+  relayDraftProblem,
+} from './relay-sentence.pure'
+export type {
+  RelayDraft,
+  RelayEndpointLabel,
+  RelayEndpointOption,
+  RelaySentence,
+  RelaySpawnDraft,
+} from './relay-sentence.pure'
 export {
   CREW_ACCENT_COLORS,
   CREW_EMOJI_CHOICES,

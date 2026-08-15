@@ -1,6 +1,11 @@
 import { Fragment, useLayoutEffect, useRef, useState } from 'react'
 import type { FC } from 'react'
-import { SessionCardView, SessionCrewPicker } from '@/features/mission-control'
+import { useSessionRelayStore } from '@/entities/session-relay'
+import {
+  SessionCardView,
+  SessionCrewPicker,
+  buildSessionWireHint,
+} from '@/features/mission-control'
 import type { SessionCard } from '@/features/mission-control'
 import { HailPanel } from './hail-panel.container'
 import { findRowEndIndex } from './session-card-row.pure'
@@ -30,6 +35,10 @@ export const SessionCardGrid: FC<SessionCardGridProps> = ({
   onHail,
   onCloseHail,
 }) => {
+  // Subscribed to the stable wire list and narrowed per card below: a selector
+  // that filtered inside the subscription would spin zustand.
+  const relays = useSessionRelayStore((state) => state.relays)
+
   // Read from the live card list, so a Hail left open while its Session
   // changes state shows the new state rather than the one it opened on.
   const hailIndex = cards.findIndex((card) => card.session.id === hailSessionId)
@@ -76,6 +85,7 @@ export const SessionCardGrid: FC<SessionCardGridProps> = ({
           <SessionCardView
             card={card}
             hailOpen={card.session.id === hailSessionId}
+            wireHint={buildSessionWireHint(relays, card.session.id)}
             crewAction={
               <SessionCrewPicker
                 sessionId={card.session.id}

@@ -33,6 +33,26 @@ export type SessionExecutionHostId = 'local' | 'remote'
 
 export type SessionContextKind = 'project' | 'global'
 
+/** The two statuses a session can come to rest in. */
+export type SettledSessionStatus = Extract<
+  SessionStatus,
+  'completed' | 'failed'
+>
+
+/**
+ * One session coming to rest, emitted once per status transition into
+ * `completed` or `failed`. Relays trigger on this; it is deliberately a fact
+ * about the transition rather than a snapshot, because by the time subscribers
+ * read the session it may already have been started again.
+ */
+export interface SessionSettledEvent {
+  sessionId: string
+  status: SettledSessionStatus
+  settledAt: string
+}
+
+export type SessionSettledListener = (event: SessionSettledEvent) => void
+
 export type AttentionRequestKind =
   | 'approval'
   | 'question'

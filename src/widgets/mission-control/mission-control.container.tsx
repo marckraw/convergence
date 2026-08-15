@@ -1,9 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { FC } from 'react'
 import { useSessionCrewStore } from '@/entities/session-crew'
+import { useSessionRelayStore } from '@/entities/session-relay'
 import type { SessionSummary } from '@/entities/session'
 import {
+  CrewFlowSection,
   CrewHeaderMenu,
+  countAlarmingHops,
   SessionCrewChips,
   SessionFacetPicker,
   SessionStateChips,
@@ -44,10 +47,13 @@ export const MissionControl: FC<MissionControlProps> = ({ onOpenSession }) => {
 
   const crews = useSessionCrewStore((state) => state.crews)
   const loadCrews = useSessionCrewStore((state) => state.load)
+  const loadRelays = useSessionRelayStore((state) => state.load)
+  const hopsByCrewId = useSessionRelayStore((state) => state.hopsByCrewId)
 
   useEffect(() => {
     void loadCrews()
-  }, [loadCrews])
+    void loadRelays()
+  }, [loadCrews, loadRelays])
 
   const {
     cards,
@@ -149,6 +155,14 @@ export const MissionControl: FC<MissionControlProps> = ({ onOpenSession }) => {
               loose={group.crew === null}
               menu={
                 group.crew ? <CrewHeaderMenu crew={group.crew} /> : undefined
+              }
+              flow={
+                group.crew ? <CrewFlowSection crew={group.crew} /> : undefined
+              }
+              alarm={
+                group.crew
+                  ? countAlarmingHops(hopsByCrewId[group.crew.id] ?? []) > 0
+                  : false
               }
             >
               <SessionCardGrid
