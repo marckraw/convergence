@@ -227,6 +227,54 @@ const SCHEMA = `
   CREATE INDEX IF NOT EXISTS idx_session_crew_members_session
     ON session_crew_members(session_id);
 
+  -- A relay is one wire inside a crew: when its source session settles, it
+  -- carries that session's last assistant message somewhere. Like crew
+  -- membership it declares no foreign keys -- a relay whose source or target
+  -- was deleted must degrade to an unwireable row we can show and remove, never
+  -- a cascade that deletes sessions or a read that crashes.
+  CREATE TABLE IF NOT EXISTS session_relays (
+    id TEXT PRIMARY KEY,
+    crew_id TEXT NOT NULL,
+    source_session_id TEXT NOT NULL,
+    trigger TEXT NOT NULL DEFAULT 'settled',
+    action TEXT NOT NULL,
+    target_session_id TEXT,
+    spawn_spec_json TEXT,
+    armed INTEGER NOT NULL DEFAULT 1,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_session_relays_crew
+    ON session_relays(crew_id);
+
+  CREATE INDEX IF NOT EXISTS idx_session_relays_source
+    ON session_relays(source_session_id);
+
+  -- The ledger. Every firing writes exactly one row -- deliveries, spawns,
+  -- skips and errors alike -- because a wire the user cannot watch fire is a
+  -- silent hop, and silent hops are forbidden.
+  CREATE TABLE IF NOT EXISTS relay_hops (
+    id TEXT PRIMARY KEY,
+    relay_id TEXT NOT NULL,
+    crew_id TEXT NOT NULL,
+    flow_run_id TEXT NOT NULL,
+    fired_at TEXT NOT NULL DEFAULT (datetime('now')),
+    source_session_id TEXT NOT NULL,
+    target_session_id TEXT,
+    spawned_session_id TEXT,
+    trigger_status TEXT NOT NULL,
+    payload_preview TEXT,
+    outcome TEXT NOT NULL,
+    error TEXT
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_relay_hops_crew_fired
+    ON relay_hops(crew_id, fired_at);
+
+  CREATE INDEX IF NOT EXISTS idx_relay_hops_flow_run
+    ON relay_hops(flow_run_id);
+
   CREATE TABLE IF NOT EXISTS workspaces (
     id TEXT PRIMARY KEY,
     project_id TEXT NOT NULL,

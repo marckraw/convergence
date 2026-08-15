@@ -30,6 +30,8 @@ import {
   type CreateSessionInput,
   type QueuedInputPatchEvent,
   type SessionQueuedInput,
+  type SessionSettledEvent,
+  type SessionSettledListener,
 } from './session.types'
 import type {
   ConversationItem,
@@ -146,6 +148,15 @@ export class SessionService {
   private turnCapture: TurnCaptureService | null = null
   private contextInjection: SessionContextInjectionService | null = null
   private onSessionTerminated: ((sessionId: string) => void) | null = null
+  private readonly sessionSettledListeners = new Set<SessionSettledListener>()
+  private pendingSettleEvents: SessionSettledEvent[] = []
+  private settleFlushScheduled = false
+  /**
+   * True only while the constructor fails sessions the previous app run left
+   * running. Those settles are bookkeeping about a process that is already
+   * gone, not sessions finishing now, and must never fire relays at boot.
+   */
+  private recoveringStaleSessions = false
   private remoteExecutionHost: ProviderExecutionHost | null = null
   private remoteWorkspaceSourceResolver:
     | ((workingDirectory: string) => { repository: string } | null)
@@ -166,7 +177,12 @@ export class SessionService {
       getSummary: (sessionId) => this.getSummaryById(sessionId),
       emitNote: (sessionId, kind) => this.emitLivenessNote(sessionId, kind),
     })
-    this.recoverStaleRunningSessions()
+    this.recoveringStaleSessions = true
+    try {
+      this.recoverStaleRunningSessions()
+    } finally {
+      this.recoveringStaleSessions = false
+    }
     this.queuedInputs.recoverDispatching()
   }
 
@@ -282,6 +298,23 @@ export class SessionService {
 
   setSessionTerminatedListener(listener: (sessionId: string) => void): void {
     this.onSessionTerminated = listener
+  }
+
+  /**
+   * Subscribes to sessions coming to rest. Fires once per status transition
+   * into `completed` or `failed`.
+   *
+   * Every other listener seam on this service is a single-slot field whose
+   * setter silently evicts whoever registered before -- and every one of those
+   * slots is already taken by renderer broadcasts, notifications or provider
+   * debug logging. This seam is a list handing back an unsubscribe precisely so
+   * a second observer (relays) can watch settles without displacing the first.
+   */
+  onSessionSettled(listener: SessionSettledListener): () => void {
+    this.sessionSettledListeners.add(listener)
+    return () => {
+      this.sessionSettledListeners.delete(listener)
+    }
   }
 
   rename(id: string, name: string): Session {
@@ -540,6 +573,43 @@ export class SessionService {
       .all(...sessionIds) as AttentionRequestRow[]
 
     return new Map(rows.map((row) => [row.session_id, row]))
+  }
+
+  /**
+   * The text of the newest finished assistant message in a session, or null
+   * when there is none to carry.
+   *
+   * This is the relay payload. It reads the single row rather than
+   * materializing the whole conversation because it runs on every settle, and
+   * it flushes coalesced patches first so a message that finished streaming
+   * moments before the session settled is not missed.
+   */
+  getLastAssistantMessageText(sessionId: string): string | null {
+    this.flushPendingConversationPatchesForSession(sessionId)
+
+    const row = this.db
+      .prepare(
+        `SELECT payload_json
+         FROM session_conversation_items
+         WHERE session_id = ?
+           AND kind = 'message'
+           AND state = 'complete'
+           AND json_extract(payload_json, '$.actor') = 'assistant'
+         ORDER BY sequence DESC
+         LIMIT 1`,
+      )
+      .get(sessionId) as { payload_json: string } | undefined
+
+    if (!row) return null
+
+    let text: unknown
+    try {
+      text = (JSON.parse(row.payload_json) as { text?: unknown }).text
+    } catch {
+      return null
+    }
+
+    return typeof text === 'string' && text.trim().length > 0 ? text : null
   }
 
   getConversation(id: string): ConversationItem[] {
@@ -1393,7 +1463,8 @@ export class SessionService {
     if (!row) return
 
     const prevAttention = row.attention as AttentionState
-    const nextStatus = patch.status ?? (row.status as SessionStatus)
+    const prevStatus = row.status as SessionStatus
+    const nextStatus = patch.status ?? prevStatus
     const nextAttention = patch.attention ?? prevAttention
     const nextActivity =
       patch.activity !== undefined
@@ -1406,6 +1477,7 @@ export class SessionService {
       (nextAttention === 'needs-approval' || nextAttention === 'needs-input')
         ? null
         : row.archived_at
+    const updatedAt = patch.updatedAt ?? new Date().toISOString()
 
     this.db
       .prepare(
@@ -1434,12 +1506,68 @@ export class SessionService {
             : row.continuation_token
           : row.continuation_token,
         nextArchivedAt,
-        patch.updatedAt ?? new Date().toISOString(),
+        updatedAt,
         sessionId,
       )
 
     if (nextAttention !== prevAttention) {
       this.notifyAttention(sessionId, prevAttention, nextAttention)
+    }
+
+    if (
+      nextStatus !== prevStatus &&
+      (nextStatus === 'completed' || nextStatus === 'failed')
+    ) {
+      this.queueSettleEvent({
+        sessionId,
+        status: nextStatus,
+        settledAt: updatedAt,
+      })
+    }
+  }
+
+  /**
+   * Settle events are detected here, in the one statement that writes
+   * `sessions.status`, so no settle path can bypass them -- the provider
+   * lifecycle, the stale-run failure writer and the shell exit path all funnel
+   * through this method.
+   *
+   * They are delivered on the next microtask rather than inline, because the
+   * caller is mid-lifecycle: the handle has not been released and the turn has
+   * not been closed yet. A relay is allowed to point a session back at itself
+   * (A -> B -> A is our own review loop), so a subscriber that acted inline
+   * would queue work into a handle about to be disposed.
+   */
+  private queueSettleEvent(event: SessionSettledEvent): void {
+    if (this.recoveringStaleSessions) return
+
+    this.pendingSettleEvents.push(event)
+    if (this.settleFlushScheduled) return
+
+    this.settleFlushScheduled = true
+    queueMicrotask(() => {
+      this.flushSettleEvents()
+    })
+  }
+
+  private flushSettleEvents(): void {
+    this.settleFlushScheduled = false
+    const events = this.pendingSettleEvents
+    this.pendingSettleEvents = []
+
+    for (const event of events) {
+      for (const listener of [...this.sessionSettledListeners]) {
+        try {
+          listener(event)
+        } catch (error) {
+          // A misbehaving subscriber must never take the session pipeline down
+          // with it; the session has already settled correctly in the database.
+          console.error(
+            `[session] settle listener failed for ${event.sessionId}`,
+            error,
+          )
+        }
+      }
     }
   }
 

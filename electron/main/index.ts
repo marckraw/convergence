@@ -119,7 +119,17 @@ import { createNodePtyFactory } from '../backend/terminal/pty-factory'
 import { FeedbackService } from '../backend/feedback/feedback.service'
 import { registerFeedbackIpcHandlers } from '../backend/feedback/feedback.ipc'
 import { CrewService } from '../backend/crew/crew.service'
-import { registerCrewIpcHandlers } from '../backend/crew/crew.ipc'
+import {
+  broadcastCrews,
+  registerCrewIpcHandlers,
+} from '../backend/crew/crew.ipc'
+import { RelayService } from '../backend/relay/relay.service'
+import { RelayEngine } from '../backend/relay/relay.engine'
+import {
+  broadcastRelayHop,
+  broadcastRelays,
+  registerRelayIpcHandlers,
+} from '../backend/relay/relay.ipc'
 import { registerIpcHandlers } from './ipc'
 import { getExternalNavigationAction } from './external-links.pure'
 import { resolveAutoUpdater } from './auto-updater-module.pure'
@@ -247,6 +257,7 @@ async function startApp(): Promise<void> {
   const pullRequestService = new PullRequestService(db, gitService)
   const reviewNotesService = new ReviewNotesService(db)
   const crewService = new CrewService(db)
+  const relayService = new RelayService(db)
   const providerRegistry = new ProviderRegistry()
   const guidedReviewDaemonCredentials =
     new GuidedReviewDaemonCredentialsService()
@@ -667,6 +678,21 @@ async function startApp(): Promise<void> {
   })
   registerFeedbackIpcHandlers(feedbackService)
   registerCrewIpcHandlers({ service: crewService })
+  registerRelayIpcHandlers({ service: relayService })
+
+  const relayEngine = new RelayEngine({
+    relays: relayService,
+    sessions: sessionService,
+    crews: crewService,
+    onHopAppended: broadcastRelayHop,
+    onRelaysChanged: () => broadcastRelays(relayService.list()),
+    onCrewsChanged: () => broadcastCrews(crewService.list()),
+  })
+  // The multi-subscriber settle seam, deliberately not one of the single-slot
+  // listener setters: renderer broadcasts and notifications keep theirs.
+  sessionService.onSessionSettled((event) => {
+    void relayEngine.handleSettle(event)
+  })
 
   registerIpcHandlers(
     projectService,

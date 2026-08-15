@@ -548,6 +548,68 @@ interface UpdateSessionCrewInputData {
   position?: number
 }
 
+type RelayHopOutcomeData =
+  | 'delivered'
+  | 'queued'
+  | 'spawned'
+  | 'skipped-disarmed'
+  | 'skipped-failed'
+  | 'skipped-budget'
+  | 'error'
+
+interface RelaySpawnSpecData {
+  projectId: string | null
+  providerId: string
+  model: string | null
+  effort: string | null
+  name: string
+}
+
+interface SessionRelayData {
+  id: string
+  crewId: string
+  sourceSessionId: string
+  trigger: 'settled'
+  action: 'hail' | 'spawn'
+  targetSessionId: string | null
+  spawnSpec: RelaySpawnSpecData | null
+  armed: boolean
+  createdAt: string
+  updatedAt: string
+}
+
+interface RelayHopData {
+  id: string
+  relayId: string
+  crewId: string
+  flowRunId: string
+  firedAt: string
+  sourceSessionId: string
+  targetSessionId: string | null
+  spawnedSessionId: string | null
+  triggerStatus: string
+  payloadPreview: string | null
+  outcome: RelayHopOutcomeData
+  error: string | null
+}
+
+interface CreateSessionRelayInputData {
+  crewId: string
+  sourceSessionId: string
+  action: 'hail' | 'spawn'
+  targetSessionId?: string | null
+  spawnSpec?: RelaySpawnSpecData | null
+  armed?: boolean
+}
+
+interface UpdateSessionRelayInputData {
+  sourceSessionId?: string
+  action?: 'hail' | 'spawn'
+  targetSessionId?: string | null
+  spawnSpec?: RelaySpawnSpecData | null
+  armed?: boolean
+}
+
 interface CreateReviewNoteInputData {
   sessionId: string
   workspaceId?: string | null
@@ -1723,6 +1785,20 @@ interface ElectronAPI {
       sessionId: string,
     ) => Promise<SessionCrewData>
     onUpdated: (callback: (crews: SessionCrewData[]) => void) => () => void
+  }
+  relay: {
+    list: () => Promise<SessionRelayData[]>
+    create: (input: CreateSessionRelayInputData) => Promise<SessionRelayData>
+    update: (
+      id: string,
+      patch: UpdateSessionRelayInputData,
+    ) => Promise<SessionRelayData>
+    delete: (id: string) => Promise<void>
+    arm: (id: string) => Promise<SessionRelayData>
+    disarm: (id: string) => Promise<SessionRelayData>
+    listHops: (crewId: string, limit?: number) => Promise<RelayHopData[]>
+    onUpdated: (callback: (relays: SessionRelayData[]) => void) => () => void
+    onHopAppended: (callback: (hop: RelayHopData) => void) => () => void
   }
   git: {
     getBranches: (repoPath: string) => Promise<string[]>

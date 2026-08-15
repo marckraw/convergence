@@ -203,6 +203,31 @@ contextBridge.exposeInMainWorld('electronAPI', {
       }
     },
   },
+  relay: {
+    list: () => ipcRenderer.invoke('relay:list'),
+    create: (input: unknown) => ipcRenderer.invoke('relay:create', input),
+    update: (id: string, patch: unknown) =>
+      ipcRenderer.invoke('relay:update', id, patch),
+    delete: (id: string) => ipcRenderer.invoke('relay:delete', id),
+    arm: (id: string) => ipcRenderer.invoke('relay:arm', id),
+    disarm: (id: string) => ipcRenderer.invoke('relay:disarm', id),
+    listHops: (crewId: string, limit?: number) =>
+      ipcRenderer.invoke('relayHops:list', crewId, limit),
+    onUpdated: (callback: (relays: unknown) => void) => {
+      const handler = (_: unknown, relays: unknown) => callback(relays)
+      ipcRenderer.on('relay:updated', handler)
+      return () => {
+        ipcRenderer.removeListener('relay:updated', handler)
+      }
+    },
+    onHopAppended: (callback: (hop: unknown) => void) => {
+      const handler = (_: unknown, hop: unknown) => callback(hop)
+      ipcRenderer.on('relayHop:appended', handler)
+      return () => {
+        ipcRenderer.removeListener('relayHop:appended', handler)
+      }
+    },
+  },
   git: {
     getBranches: (repoPath: string) =>
       ipcRenderer.invoke('git:getBranches', repoPath),

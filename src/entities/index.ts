@@ -46,6 +46,23 @@ export {
   useSessionCrewStore,
 } from './session-crew'
 
+export type {
+  CreateSessionRelayInput,
+  RelayAction,
+  RelayHop,
+  RelayHopOutcome,
+  RelaySpawnSpec,
+  SessionRelay,
+  UpdateSessionRelayInput,
+} from './session-relay'
+export {
+  selectHopsForCrew,
+  selectRelaysForCrew,
+  selectRelaysForSession,
+  sessionRelayApi,
+  useSessionRelayStore,
+} from './session-relay'
+
 export type { Session, SessionStatus, AttentionState } from './session'
 export { useSessionStore } from './session'
 

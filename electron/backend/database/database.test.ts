@@ -35,6 +35,8 @@ describe('database', () => {
     expect(tableNames).toContain('space_sources')
     expect(tableNames).toContain('session_crews')
     expect(tableNames).toContain('session_crew_members')
+    expect(tableNames).toContain('session_relays')
+    expect(tableNames).toContain('relay_hops')
     expect(tableNames).toContain('project_context_items')
     expect(tableNames).toContain('session_context_attachments')
     expect(tableNames).toContain('analytics_profile_snapshots')
@@ -460,6 +462,98 @@ describe('database', () => {
         )
         .run(),
     ).toThrow(/UNIQUE/)
+  })
+
+  it('creates relay and hop tables with no foreign keys', () => {
+    const db = getDatabase()
+
+    const relayColumns = db
+      .prepare("PRAGMA table_info('session_relays')")
+      .all() as Array<{ name: string }>
+    expect(relayColumns.map((c) => c.name).sort()).toEqual(
+      [
+        'id',
+        'crew_id',
+        'source_session_id',
+        'trigger',
+        'action',
+        'target_session_id',
+        'spawn_spec_json',
+        'armed',
+        'created_at',
+        'updated_at',
+      ].sort(),
+    )
+
+    const hopColumns = db
+      .prepare("PRAGMA table_info('relay_hops')")
+      .all() as Array<{ name: string }>
+    expect(hopColumns.map((c) => c.name).sort()).toEqual(
+      [
+        'id',
+        'relay_id',
+        'crew_id',
+        'flow_run_id',
+        'fired_at',
+        'source_session_id',
+        'target_session_id',
+        'spawned_session_id',
+        'trigger_status',
+        'payload_preview',
+        'outcome',
+        'error',
+      ].sort(),
+    )
+
+    // Deleting a session or a crew must leave the wires and the ledger
+    // standing: a hop that vanishes is a hop nobody can audit.
+    expect(
+      db.prepare("PRAGMA foreign_key_list('session_relays')").all(),
+    ).toEqual([])
+    expect(db.prepare("PRAGMA foreign_key_list('relay_hops')").all()).toEqual(
+      [],
+    )
+  })
+
+  it('defaults a relay to the settled trigger, armed, and survives its sessions', () => {
+    const db = getDatabase()
+
+    db.prepare(
+      "INSERT INTO projects (id, name, repository_path) VALUES ('p1', 'p1', '/tmp/p1')",
+    ).run()
+    db.prepare(
+      `INSERT INTO sessions (id, project_id, provider_id, name, working_directory)
+       VALUES ('s1', 'p1', 'codex', 's1', '/tmp/p1')`,
+    ).run()
+
+    db.prepare(
+      `INSERT INTO session_relays (id, crew_id, source_session_id, action)
+       VALUES ('r1', 'c1', 's1', 'hail')`,
+    ).run()
+
+    const relay = db
+      .prepare("SELECT * FROM session_relays WHERE id = 'r1'")
+      .get() as { trigger: string; armed: number; target_session_id: null }
+    expect(relay.trigger).toBe('settled')
+    expect(relay.armed).toBe(1)
+    expect(relay.target_session_id).toBeNull()
+
+    db.prepare(
+      `INSERT INTO relay_hops (
+         id, relay_id, crew_id, flow_run_id, source_session_id,
+         trigger_status, outcome
+       )
+       VALUES ('h1', 'r1', 'c1', 'run-1', 's1', 'completed', 'delivered')`,
+    ).run()
+
+    db.prepare("DELETE FROM sessions WHERE id = 's1'").run()
+
+    expect(
+      db.prepare('SELECT COUNT(*) AS n FROM session_relays').get(),
+    ).toEqual({ n: 1 })
+    expect(db.prepare('SELECT COUNT(*) AS n FROM relay_hops').get()).toEqual({
+      n: 1,
+    })
   })
 
   it('migrates legacy initiative rows into spaces', () => {

@@ -228,6 +228,34 @@ export interface SessionCrewMemberRow {
   added_at: string
 }
 
+export interface SessionRelayRow {
+  id: string
+  crew_id: string
+  source_session_id: string
+  trigger: string
+  action: string
+  target_session_id: string | null
+  spawn_spec_json: string | null
+  armed: number
+  created_at: string
+  updated_at: string
+}
+
+export interface RelayHopRow {
+  id: string
+  relay_id: string
+  crew_id: string
+  flow_run_id: string
+  fired_at: string
+  source_session_id: string
+  target_session_id: string | null
+  spawned_session_id: string | null
+  trigger_status: string
+  payload_preview: string | null
+  outcome: string
+  error: string | null
+}
+
 export interface SpaceArtifactRow {
   id: string
   space_id: string

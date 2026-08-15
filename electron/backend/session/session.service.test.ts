@@ -28,6 +28,7 @@ import type {
   ConversationPatchEvent,
   SessionDelta,
 } from './conversation-item.types'
+import type { SessionSettledEvent } from './session.types'
 import { SessionService } from './session.service'
 
 const TEST_ATTACHMENT_CAPABILITY: ProviderAttachmentCapability = {
@@ -1924,6 +1925,309 @@ describe('SessionService', () => {
     const updated = service.getById(session.id)!
     expect(updated.attention).toBe('needs-approval')
     expect(updated.archivedAt).toBeNull()
+  })
+
+  describe('onSessionSettled', () => {
+    // Settles are delivered on a microtask, so a test that drives one
+    // synchronously has to let the queue drain before asserting.
+    async function drainSettles(): Promise<void> {
+      await Promise.resolve()
+      await Promise.resolve()
+    }
+
+    function createShellSession(name: string): string {
+      return service.create({
+        projectId,
+        workspaceId: null,
+        providerId: 'shell',
+        model: null,
+        effort: null,
+        name,
+        primarySurface: 'terminal',
+      }).id
+    }
+
+    it('delivers each settle to every subscriber, not only the newest', async () => {
+      const first: SessionSettledEvent[] = []
+      const second: SessionSettledEvent[] = []
+      service.onSessionSettled((event) => first.push(event))
+      service.onSessionSettled((event) => second.push(event))
+
+      const sessionId = createShellSession('two subscribers')
+      service.markShellSessionExited(sessionId, 0)
+      await drainSettles()
+
+      expect(first).toHaveLength(1)
+      expect(first[0]).toMatchObject({ sessionId, status: 'completed' })
+      expect(typeof first[0].settledAt).toBe('string')
+      expect(second).toEqual(first)
+    })
+
+    it('stops delivering to an unsubscribed listener and keeps the rest wired', async () => {
+      const kept: SessionSettledEvent[] = []
+      const dropped: SessionSettledEvent[] = []
+      service.onSessionSettled((event) => kept.push(event))
+      const unsubscribe = service.onSessionSettled((event) =>
+        dropped.push(event),
+      )
+
+      unsubscribe()
+      service.markShellSessionExited(createShellSession('after drop'), 0)
+      await drainSettles()
+
+      expect(kept).toHaveLength(1)
+      expect(dropped).toEqual([])
+    })
+
+    it('reports the settled status for failures as well as completions', async () => {
+      const events: SessionSettledEvent[] = []
+      service.onSessionSettled((event) => events.push(event))
+
+      const failedId = createShellSession('shell that died')
+      service.markShellSessionExited(failedId, 23)
+      await drainSettles()
+
+      expect(events).toHaveLength(1)
+      expect(events[0]).toMatchObject({
+        sessionId: failedId,
+        status: 'failed',
+      })
+    })
+
+    it('fires once per transition, not once per settle write', async () => {
+      const events: SessionSettledEvent[] = []
+      service.onSessionSettled((event) => events.push(event))
+
+      const sessionId = createShellSession('exits twice')
+      service.markShellSessionExited(sessionId, 0)
+      service.markShellSessionExited(sessionId, 0)
+      await drainSettles()
+
+      expect(events).toHaveLength(1)
+    })
+
+    it('ignores patches that move attention without moving status', async () => {
+      const events: SessionSettledEvent[] = []
+      const sessionId = createShellSession('already finished')
+      db.prepare(
+        "UPDATE sessions SET status = 'completed', attention = 'needs-approval' WHERE id = ?",
+      ).run(sessionId)
+
+      service.onSessionSettled((event) => events.push(event))
+      service.approve(sessionId)
+      await drainSettles()
+
+      expect(service.getById(sessionId)!.attention).toBe('finished')
+      expect(events).toEqual([])
+    })
+
+    it('fires when a stale running session is failed by hand', async () => {
+      const events: SessionSettledEvent[] = []
+      service.onSessionSettled((event) => events.push(event))
+
+      const session = service.create({
+        projectId,
+        workspaceId: null,
+        providerId: 'test-provider',
+        model: 'test-model',
+        effort: null,
+        name: 'stale run',
+      })
+      db.prepare("UPDATE sessions SET status = 'running' WHERE id = ?").run(
+        session.id,
+      )
+
+      service.stop(session.id)
+      await drainSettles()
+
+      expect(events).toHaveLength(1)
+      expect(events[0]).toMatchObject({
+        sessionId: session.id,
+        status: 'failed',
+      })
+    })
+
+    it('stays silent for sessions the constructor fails at boot', async () => {
+      const session = service.create({
+        projectId,
+        workspaceId: null,
+        providerId: 'test-provider',
+        model: 'test-model',
+        effort: null,
+        name: 'left running by the last app run',
+      })
+      db.prepare("UPDATE sessions SET status = 'running' WHERE id = ?").run(
+        session.id,
+      )
+
+      const rebooted = new SessionService(db, new LocalExecutionHost(registry))
+      const events: SessionSettledEvent[] = []
+      rebooted.onSessionSettled((event) => events.push(event))
+      await drainSettles()
+
+      expect(rebooted.getById(session.id)!.status).toBe('failed')
+      expect(events).toEqual([])
+    })
+
+    it('keeps a throwing subscriber from taking down the others', async () => {
+      const survived: SessionSettledEvent[] = []
+      const consoleError = vi
+        .spyOn(console, 'error')
+        .mockImplementation(() => {})
+      service.onSessionSettled(() => {
+        throw new Error('relay blew up')
+      })
+      service.onSessionSettled((event) => survived.push(event))
+
+      service.markShellSessionExited(createShellSession('angry relay'), 0)
+      await drainSettles()
+
+      expect(survived).toHaveLength(1)
+      expect(consoleError).toHaveBeenCalled()
+      consoleError.mockRestore()
+    })
+
+    it('leaves the renderer broadcast and the notifications observer working', async () => {
+      const summaries: string[] = []
+      const transitions: Array<{ prev: AttentionState; next: AttentionState }> =
+        []
+      const settles: SessionSettledEvent[] = []
+
+      service.setSummaryUpdateListener((summary) => summaries.push(summary.id))
+      service.setAttentionObserver({
+        onAttentionTransition: (prev, next) => {
+          transitions.push({ prev, next })
+        },
+      })
+      service.onSessionSettled((event) => settles.push(event))
+
+      const session = service.create({
+        projectId,
+        workspaceId: null,
+        providerId: 'test-provider',
+        model: 'test-model',
+        effort: null,
+        name: 'coexistence',
+      })
+
+      await service.start(session.id, { text: 'Go' })
+      await vi.advanceTimersByTimeAsync(2000)
+      service.approve(session.id)
+      await vi.advanceTimersByTimeAsync(4000)
+
+      expect(summaries.length).toBeGreaterThan(0)
+      expect(summaries.every((id) => id === session.id)).toBe(true)
+      expect(transitions).toContainEqual({
+        prev: 'none',
+        next: 'needs-approval',
+      })
+      expect(settles).toHaveLength(1)
+      expect(settles[0]).toMatchObject({
+        sessionId: session.id,
+        status: 'completed',
+      })
+    })
+  })
+
+  describe('getLastAssistantMessageText', () => {
+    function insertMessage(
+      sessionId: string,
+      sequence: number,
+      actor: 'user' | 'assistant',
+      text: string,
+      state: 'complete' | 'streaming' = 'complete',
+    ): void {
+      const timestamp = now()
+      db.prepare(
+        `INSERT INTO session_conversation_items (
+           id, session_id, sequence, kind, state, payload_json, created_at, updated_at
+         )
+         VALUES (?, ?, ?, 'message', ?, ?, ?, ?)`,
+      ).run(
+        `${sessionId}-msg-${sequence}`,
+        sessionId,
+        sequence,
+        state,
+        JSON.stringify({ actor, text }),
+        timestamp,
+        timestamp,
+      )
+    }
+
+    function createSession(name: string): string {
+      return service.create({
+        projectId,
+        workspaceId: null,
+        providerId: 'test-provider',
+        model: 'test-model',
+        effort: null,
+        name,
+      }).id
+    }
+
+    it('returns the newest finished assistant message', () => {
+      const sessionId = createSession('payload')
+      insertMessage(sessionId, 1, 'user', 'Do the thing')
+      insertMessage(sessionId, 2, 'assistant', 'First answer')
+      insertMessage(sessionId, 3, 'assistant', 'Final answer')
+
+      expect(service.getLastAssistantMessageText(sessionId)).toBe(
+        'Final answer',
+      )
+    })
+
+    it('ignores user messages that landed after the assistant', () => {
+      const sessionId = createSession('user last')
+      insertMessage(sessionId, 1, 'assistant', 'Final answer')
+      insertMessage(sessionId, 2, 'user', 'thanks')
+
+      expect(service.getLastAssistantMessageText(sessionId)).toBe(
+        'Final answer',
+      )
+    })
+
+    it('ignores assistant messages still streaming', () => {
+      const sessionId = createSession('streaming last')
+      insertMessage(sessionId, 1, 'assistant', 'Settled answer')
+      insertMessage(sessionId, 2, 'assistant', 'half writ', 'streaming')
+
+      expect(service.getLastAssistantMessageText(sessionId)).toBe(
+        'Settled answer',
+      )
+    })
+
+    it('returns null when the session never produced an assistant message', () => {
+      const sessionId = createSession('nothing said')
+      insertMessage(sessionId, 1, 'user', 'anyone there?')
+
+      expect(service.getLastAssistantMessageText(sessionId)).toBeNull()
+    })
+
+    it('treats a blank assistant message as nothing to carry', () => {
+      const sessionId = createSession('blank')
+      insertMessage(sessionId, 1, 'assistant', '   ')
+
+      expect(service.getLastAssistantMessageText(sessionId)).toBeNull()
+    })
+
+    it('reads the message a provider streamed right before settling', async () => {
+      const session = service.create({
+        projectId,
+        workspaceId: null,
+        providerId: 'test-provider',
+        model: 'test-model',
+        effort: null,
+        name: 'live payload',
+      })
+
+      await service.start(session.id, { text: 'Go' })
+      await vi.advanceTimersByTimeAsync(2000)
+      service.approve(session.id)
+      await vi.advanceTimersByTimeAsync(4000)
+
+      expect(service.getById(session.id)!.status).toBe('completed')
+      expect(service.getLastAssistantMessageText(session.id)).toBe('Done.')
+    })
   })
 })
 
