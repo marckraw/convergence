@@ -31,13 +31,13 @@ export const CanvasWirePopover: FC<CanvasWirePopoverProps> = ({
     data-canvas-wire-popover
     role="dialog"
     aria-label={sentence.text}
-    className="flex w-80 flex-col gap-2 rounded-lg border border-white/15 bg-popover/95 p-3 shadow-lg backdrop-blur-sm"
+    className="flex w-80 flex-col gap-2 rounded-lg border border-border bg-popover/95 p-3 shadow-lg backdrop-blur-sm"
   >
     <div className="flex items-start gap-2">
       <span
         className={cn(
           'mt-1 size-1.5 shrink-0 rounded-full',
-          armed ? 'bg-emerald-500/70' : 'bg-white/25',
+          armed ? 'bg-emerald-500/70' : 'bg-muted-foreground/50',
         )}
         aria-hidden
       />

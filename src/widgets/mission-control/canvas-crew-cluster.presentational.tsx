@@ -23,7 +23,7 @@ export const CanvasCrewCluster: FC<NodeProps> = ({ data }) => {
       data-canvas-crew={cluster.crewId}
       style={{ width: cluster.width, height: cluster.height, ...accentStyle }}
       className={cn(
-        'rounded-xl border border-white/15 bg-white/[0.02]',
+        'rounded-xl border border-border bg-foreground/[0.03]',
         'pointer-events-none',
       )}
     >

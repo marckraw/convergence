@@ -1017,6 +1017,38 @@ describe('MissionControl', () => {
       expect(listHops).not.toHaveBeenCalledWith('crew-empty', undefined)
     })
 
+    it('wears the room’s theme rather than the library’s default', async () => {
+      document.documentElement.classList.add('dark')
+      seedCrews([makeCrew({ id: 'crew-1', sessionIds: ['a'] })])
+      seed([makeSession({ id: 'a' })], [CLAUDE_CODE])
+
+      render(<MissionControl />)
+      await switchToCanvas()
+
+      // React Flow applies its own class through a state update inside an
+      // effect, so it lands a render behind the prop it was given. Both are
+      // asserted inside one waitFor rather than across the gap between them.
+      await waitFor(() => {
+        expect(document.querySelector('[data-session-canvas]')).toHaveAttribute(
+          'data-canvas-color-mode',
+          'dark',
+        )
+        expect(document.querySelector('.react-flow.dark')).toBeInTheDocument()
+      })
+
+      document.documentElement.classList.remove('dark')
+
+      await waitFor(() => {
+        expect(document.querySelector('[data-session-canvas]')).toHaveAttribute(
+          'data-canvas-color-mode',
+          'light',
+        )
+        expect(
+          document.querySelector('.react-flow.dark'),
+        ).not.toBeInTheDocument()
+      })
+    })
+
     it('remembers the canvas the way it remembers the other two views', async () => {
       seedCrews([
         makeCrew({ id: 'crew-1', name: 'Night shift', sessionIds: ['a'] }),

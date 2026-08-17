@@ -34,7 +34,9 @@ import { CanvasCrewCluster } from './canvas-crew-cluster.presentational'
 import { CanvasSessionNode } from './canvas-session-node.presentational'
 import { CanvasSpawnNode } from './canvas-spawn-node.presentational'
 import { CanvasWirePopover } from './canvas-wire-popover.presentational'
+import { CANVAS_THEME_VARS } from './session-canvas.styles'
 import { CANVAS_HANDLE } from './session-canvas.types'
+import { useCanvasColorMode } from './use-canvas-color-mode'
 
 import '@xyflow/react/dist/style.css'
 
@@ -87,6 +89,7 @@ export const SessionCanvas: FC<SessionCanvasProps> = ({ groups, onOpen }) => {
   const hopsByCrewId = useSessionRelayStore((state) => state.hopsByCrewId)
   const loadHops = useSessionRelayStore((state) => state.loadHops)
   const canvasRef = useRef<HTMLDivElement>(null)
+  const colorMode = useCanvasColorMode()
 
   const graph = useMemo(
     () => buildCanvasGraph(groups, relays),
@@ -296,11 +299,20 @@ export const SessionCanvas: FC<SessionCanvasProps> = ({ groups, onOpen }) => {
   }
 
   return (
-    <div ref={canvasRef} data-session-canvas className="relative size-full">
+    <div
+      ref={canvasRef}
+      data-session-canvas
+      data-canvas-color-mode={colorMode}
+      style={CANVAS_THEME_VARS}
+      className="relative size-full"
+    >
       <ReactFlow
         nodes={nodes}
         edges={edges}
         nodeTypes={NODE_TYPES}
+        // Follows the titlebar toggle live, rather than assuming the room is
+        // dark: the library picks light by default and looked pasted on.
+        colorMode={colorMode}
         fitView
         minZoom={0.2}
         maxZoom={1.5}
@@ -313,15 +325,12 @@ export const SessionCanvas: FC<SessionCanvasProps> = ({ groups, onOpen }) => {
         proOptions={{ hideAttribution: false }}
         className="bg-transparent"
       >
-        <Background
-          variant={BackgroundVariant.Dots}
-          gap={20}
-          size={1}
-          className="opacity-40"
-        />
+        {/* The dot colour is themed by CANVAS_THEME_VARS, so no opacity is
+            layered on top -- in light mode that made the grid disappear. */}
+        <Background variant={BackgroundVariant.Dots} gap={20} size={1} />
         <Controls
           showInteractive={false}
-          className="!bottom-4 !left-4 !shadow-none"
+          className="!bottom-4 !left-4 overflow-hidden !rounded-md !border !border-border !shadow-none"
         />
       </ReactFlow>
 

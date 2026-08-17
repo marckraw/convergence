@@ -314,7 +314,14 @@ export function buildCanvasGraph(
  * grey -- "switched off" must never be mistakable for "this crew is grey".
  */
 export const ARMED_WIRE_FALLBACK_COLOR = '#34d399'
-export const DISARMED_WIRE_COLOR = 'rgba(255, 255, 255, 0.22)'
+
+/**
+ * Theme-aware on purpose. This was a flat white, which is a wire you cannot see
+ * at all on a light canvas -- the room has a light mode and a switched-off wire
+ * still has to be findable in it.
+ */
+export const DISARMED_WIRE_COLOR =
+  'color-mix(in srgb, var(--muted-foreground) 70%, transparent)'
 
 export function resolveWireColor(
   edge: Pick<CanvasEdge, 'armed' | 'crewId'>,

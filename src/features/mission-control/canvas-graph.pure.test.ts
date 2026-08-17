@@ -427,6 +427,15 @@ describe('resolveWireColor', () => {
       ARMED_WIRE_FALLBACK_COLOR,
     )
   })
+
+  /**
+   * The room has a light mode. A flat white wire is invisible on it, so the
+   * disarmed colour has to resolve against the theme rather than assume dark.
+   */
+  it('gives the disarmed wire a colour that survives both themes', () => {
+    expect(DISARMED_WIRE_COLOR).toContain('var(--muted-foreground)')
+    expect(DISARMED_WIRE_COLOR).not.toMatch(/#|rgba?\(/)
+  })
 })
 
 describe('formatSpawnNodeSpec', () => {
