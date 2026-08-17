@@ -19,6 +19,7 @@ import {
 import type { SessionCard } from '@/features/mission-control'
 import { CrewContainer } from './crew-container.presentational'
 import { MissionControlView } from './mission-control.presentational'
+import { SessionCanvas } from './session-canvas.container'
 import { SessionCardGrid } from './session-card-grid.container'
 
 interface MissionControlProps {
@@ -105,6 +106,7 @@ export const MissionControl: FC<MissionControlProps> = ({ onOpenSession }) => {
       onModeChange={setMode}
       filterIsEmpty={isEmptySessionCardFilter(filter)}
       onClearFilter={clearFilter}
+      fillsContent={mode === 'canvas'}
       filters={
         <>
           <SessionStateChips
@@ -142,7 +144,9 @@ export const MissionControl: FC<MissionControlProps> = ({ onOpenSession }) => {
         </>
       }
     >
-      {mode === 'crews' ? (
+      {mode === 'canvas' ? (
+        <SessionCanvas groups={crewGroups} onOpen={handleOpen} />
+      ) : mode === 'crews' ? (
         <div className="flex flex-col gap-3">
           {crewGroups.map((group) => (
             <CrewContainer

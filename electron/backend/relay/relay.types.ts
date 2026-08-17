@@ -30,13 +30,14 @@ export interface RelaySpawnSpec {
 
 /**
  * Why a firing ended the way it did. Every one of these writes a ledger row:
- * a wire the user cannot watch is a silent hop, and silent hops are forbidden.
+ * a wire the user cannot watch fire is a silent hop, and silent hops are
+ * forbidden. There is deliberately no member for "the wire was disarmed" --
+ * a switch at rest never fires, so it has no outcome to name.
  */
 export type RelayHopOutcome =
   | 'delivered'
   | 'queued'
   | 'spawned'
-  | 'skipped-disarmed'
   | 'skipped-failed'
   | 'skipped-budget'
   | 'error'
@@ -72,7 +73,13 @@ export interface RelayHop {
   spawnedSessionId: string | null
   triggerStatus: string
   payloadPreview: string | null
-  outcome: RelayHopOutcome
+  /**
+   * Deliberately wider than `RelayHopOutcome`, which is the vocabulary this
+   * build may WRITE. The ledger is a historical record, and a row written by
+   * an older or newer Convergence must still read rather than render blank --
+   * v0.45.22 shipped a `skipped-disarmed` outcome this build no longer knows.
+   */
+  outcome: string
   error: string | null
 }
 
@@ -144,7 +151,7 @@ export function relayHopFromRow(row: RelayHopRow): RelayHop {
     spawnedSessionId: row.spawned_session_id,
     triggerStatus: row.trigger_status,
     payloadPreview: row.payload_preview,
-    outcome: row.outcome as RelayHopOutcome,
+    outcome: row.outcome,
     error: row.error,
   }
 }

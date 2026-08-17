@@ -222,14 +222,35 @@ describe('RelayEngine', () => {
     expect(relays.listHops('c1')[0].error).toContain('failed')
   })
 
-  it('writes a visible skip for a disarmed wire rather than staying silent', async () => {
+  it('stays completely silent for a disarmed wire', async () => {
     wire('s1', 's2', false)
     const gateway = createGateway({})
 
     await createEngine(gateway).handleSettle(settled('s1'))
 
     expect(gateway.sent).toEqual([])
-    expect(relays.listHops('c1')[0].outcome).toBe('skipped-disarmed')
+    // A switch at rest is not a firing: no ledger row, and nothing broadcast
+    // to the windows watching the trail.
+    expect(relays.listHops('c1')).toEqual([])
+    expect(hops).toEqual([])
+  })
+
+  it('still fires the armed wires leaving a session with a disarmed one', async () => {
+    wire('s1', 's2', false)
+    wire('s1', 's3')
+    const gateway = createGateway({})
+
+    await createEngine(gateway).handleSettle(settled('s1'))
+
+    expect(gateway.sent).toEqual([
+      { sessionId: 's3', text: 'Done. Ready for review.' },
+    ])
+    const written = relays.listHops('c1')
+    expect(written).toHaveLength(1)
+    expect(written[0]).toMatchObject({
+      outcome: 'delivered',
+      targetSessionId: 's3',
+    })
   })
 
   it('records an error when the session finished with nothing to carry', async () => {

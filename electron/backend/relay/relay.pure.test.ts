@@ -173,8 +173,9 @@ describe('isBudgetedOutcome', () => {
   })
 
   it('does not charge the budget for skips or errors', () => {
-    expect(isBudgetedOutcome('skipped-disarmed')).toBe(false)
     expect(isBudgetedOutcome('skipped-failed')).toBe(false)
+    // A word from another build is not evidence a provider turn was spent.
+    expect(isBudgetedOutcome('skipped-disarmed')).toBe(false)
     expect(isBudgetedOutcome('skipped-budget')).toBe(false)
     expect(isBudgetedOutcome('error')).toBe(false)
   })

@@ -548,15 +548,6 @@ interface UpdateSessionCrewInputData {
   position?: number
 }
 
-type RelayHopOutcomeData =
-  | 'delivered'
-  | 'queued'
-  | 'spawned'
-  | 'skipped-disarmed'
-  | 'skipped-failed'
-  | 'skipped-budget'
-  | 'error'
-
 interface RelaySpawnSpecData {
   projectId: string | null
   providerId: string
@@ -589,7 +580,8 @@ interface RelayHopData {
   spawnedSessionId: string | null
   triggerStatus: string
   payloadPreview: string | null
-  outcome: RelayHopOutcomeData
+  /** Wider than the written vocabulary: stored rows may predate this build. */
+  outcome: string
   error: string | null
 }
 

@@ -29,6 +29,16 @@ export { CrewDecorationPicker } from './crew-decoration-picker.presentational'
 export { CrewHeaderMenu } from './crew-header-menu.container'
 export { CrewFlowSection } from './crew-flow-section.container'
 export { RelayHopTrail } from './relay-hop-trail.container'
+export { RelayHopRow } from './relay-hop-row.presentational'
+export {
+  PULSE_ALARM_COLOR,
+  WIRE_PULSE_MS,
+  buildWirePulses,
+  collectNewHops,
+  pulseWireColor,
+  pulseWireWidth,
+} from './canvas-pulse.pure'
+export type { WirePulse } from './canvas-pulse.pure'
 export {
   ALARMING_RELAY_OUTCOMES,
   buildRelayHopLine,
@@ -120,4 +130,25 @@ export type {
   SessionCardStateCounts,
 } from './session-card-state.pure'
 export { formatSessionCardActivity } from './session-card-activity.pure'
+export { CARD_ATTENTION_STYLES, STATUS_DOT_STYLES } from './session-card.styles'
+export {
+  CANVAS_NODE_HEIGHT,
+  CANVAS_NODE_WIDTH,
+  CANVAS_SPAWN_NODE_HEIGHT,
+  ARMED_WIRE_FALLBACK_COLOR,
+  DISARMED_WIRE_COLOR,
+  EMPTY_CANVAS_MESSAGE,
+  assignFlowColumns,
+  buildCanvasGraph,
+  formatSpawnNodeSpec,
+  resolveWireColor,
+  spawnNodeId,
+} from './canvas-graph.pure'
+export type {
+  CanvasCrewCluster,
+  CanvasEdge,
+  CanvasGraph,
+  CanvasSessionNode,
+  CanvasSpawnNode,
+} from './canvas-graph.pure'
 export type { SessionCard } from './mission-control.types'

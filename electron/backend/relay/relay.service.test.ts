@@ -405,7 +405,6 @@ describe('RelayService', () => {
       const outcomes = [
         'delivered',
         'queued',
-        'skipped-disarmed',
         'skipped-failed',
         'skipped-budget',
         'error',
