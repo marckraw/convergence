@@ -69,6 +69,30 @@ let updateRelay: ReturnType<typeof vi.fn>
 let deleteRelay: ReturnType<typeof vi.fn>
 let arm: ReturnType<typeof vi.fn>
 let disarm: ReturnType<typeof vi.fn>
+let listAccounts: ReturnType<typeof vi.fn>
+
+function makeAccount(
+  id: string,
+  overrides: Partial<{ isDefault: boolean; email: string; label: string }> = {},
+) {
+  return {
+    id,
+    providerId: 'codex',
+    label: overrides.label ?? id,
+    authKind: 'subscription',
+    email: overrides.email ?? `${id}@example.com`,
+    orgId: null,
+    plan: null,
+    configDir: `/tmp/${id}`,
+    credentialDir: `/tmp/${id}-cred`,
+    executionHostId: 'local',
+    isDefault: overrides.isDefault ?? false,
+    status: 'connected',
+    lastValidatedAt: null,
+    createdAt: '2026-08-19T00:00:00.000Z',
+    updatedAt: '2026-08-19T00:00:00.000Z',
+  }
+}
 
 function seedRelays(relays: SessionRelay[]) {
   useSessionRelayStore.setState({ relays, isLoaded: true })
@@ -76,6 +100,7 @@ function seedRelays(relays: SessionRelay[]) {
 
 describe('CrewFlowSection', () => {
   beforeEach(() => {
+    listAccounts = vi.fn(async () => [])
     createRelay = vi.fn(async (input) =>
       makeRelay({ id: 'created', ...input, armed: input.armed ?? true }),
     )
@@ -95,6 +120,7 @@ describe('CrewFlowSection', () => {
         onUpdated: vi.fn(() => () => undefined),
         onHopAppended: vi.fn(() => () => undefined),
       },
+      providerAccounts: { list: listAccounts },
     }
 
     useSessionStore.setState({
@@ -111,6 +137,19 @@ describe('CrewFlowSection', () => {
           kind: 'conversation',
           supportsContinuation: true,
           defaultModelId: 'gpt-5.6',
+          modelOptions: [],
+          attachments: {},
+          midRunInput: {},
+        },
+        // A second conversational provider, so switching provider can be
+        // exercised -- account ids belong to one provider only.
+        {
+          id: 'claude-code',
+          name: 'Claude Code',
+          vendorLabel: 'Anthropic',
+          kind: 'conversation',
+          supportsContinuation: true,
+          defaultModelId: 'claude-opus-5',
           modelOptions: [],
           attachments: {},
           midRunInput: {},
@@ -381,8 +420,155 @@ describe('CrewFlowSection', () => {
             model: null,
             effort: null,
             name: 'Reviewer',
+            providerAccountId: null,
           },
         })
+      })
+    })
+
+    /**
+     * A preload without the accounts bridge throws synchronously, which no
+     * `.catch` on the promise would ever see. The Flow section has to keep
+     * drawing wires regardless -- the engine falls back to ambient.
+     */
+    it('still draws its wires when accounts cannot be read at all', async () => {
+      ;(
+        window as unknown as { electronAPI: { providerAccounts?: unknown } }
+      ).electronAPI.providerAccounts = undefined
+
+      render(<CrewFlowSection crew={makeCrew(['impl', 'review'])} />)
+
+      expect(
+        await screen.findByRole('button', { name: 'Add relay' }),
+      ).toBeInTheDocument()
+    })
+
+    it('preselects the enrolled default once a provider is chosen', async () => {
+      listAccounts.mockResolvedValue([
+        makeAccount('work'),
+        makeAccount('personal', { isDefault: true, email: 'me@proton.me' }),
+      ])
+      render(<CrewFlowSection crew={makeCrew(['impl', 'review'])} />)
+
+      fireEvent.click(screen.getByRole('button', { name: 'Add relay' }))
+      const [sourceTrigger] = screen.getAllByRole('combobox')
+      fireEvent.click(sourceTrigger)
+      fireEvent.click(
+        await screen.findByRole('option', { name: /Implementor/ }),
+      )
+      fireEvent.click(
+        screen.getByRole('button', { name: 'start a new session' }),
+      )
+
+      // No provider chosen yet, so there is nothing to pick an account from.
+      expect(screen.queryByText('me@proton.me')).not.toBeInTheDocument()
+
+      const [, providerTrigger] = screen.getAllByRole('combobox')
+      fireEvent.click(providerTrigger)
+      fireEvent.click(await screen.findByRole('option', { name: /Codex/ }))
+
+      // The account the composer would have preselected, without being asked.
+      expect(await screen.findByText('me@proton.me')).toBeInTheDocument()
+    })
+
+    it('saves the account the wire was given', async () => {
+      listAccounts.mockResolvedValue([
+        makeAccount('work', { email: 'work@example.com' }),
+        makeAccount('personal', { isDefault: true, email: 'me@proton.me' }),
+      ])
+      render(<CrewFlowSection crew={makeCrew(['impl', 'review'])} />)
+
+      fireEvent.click(screen.getByRole('button', { name: 'Add relay' }))
+      const [sourceTrigger] = screen.getAllByRole('combobox')
+      fireEvent.click(sourceTrigger)
+      fireEvent.click(
+        await screen.findByRole('option', { name: /Implementor/ }),
+      )
+      fireEvent.click(
+        screen.getByRole('button', { name: 'start a new session' }),
+      )
+
+      const [, providerTrigger] = screen.getAllByRole('combobox')
+      fireEvent.click(providerTrigger)
+      fireEvent.click(await screen.findByRole('option', { name: /Codex/ }))
+
+      // Swap off the default onto the other account.
+      const accountTrigger = await screen.findByRole('combobox', {
+        name: /me@proton.me/,
+      })
+      fireEvent.click(accountTrigger)
+      fireEvent.click(
+        await screen.findByRole('option', { name: /work@example.com/ }),
+      )
+
+      fireEvent.change(screen.getByLabelText('Name for the new session'), {
+        target: { value: 'Reviewer' },
+      })
+      fireEvent.click(screen.getByRole('button', { name: 'Draw wire' }))
+
+      await waitFor(() => {
+        expect(createRelay).toHaveBeenCalledWith(
+          expect.objectContaining({
+            spawnSpec: expect.objectContaining({ providerAccountId: 'work' }),
+          }),
+        )
+      })
+    })
+
+    /**
+     * Account ids belong to one provider, so a choice made under Codex would
+     * name an account Claude cannot serve.
+     */
+    it('re-asks the account question when the provider changes', async () => {
+      listAccounts.mockResolvedValue([
+        makeAccount('personal', { isDefault: true, email: 'me@proton.me' }),
+      ])
+      render(<CrewFlowSection crew={makeCrew(['impl', 'review'])} />)
+
+      fireEvent.click(screen.getByRole('button', { name: 'Add relay' }))
+      const [sourceTrigger] = screen.getAllByRole('combobox')
+      fireEvent.click(sourceTrigger)
+      fireEvent.click(
+        await screen.findByRole('option', { name: /Implementor/ }),
+      )
+      fireEvent.click(
+        screen.getByRole('button', { name: 'start a new session' }),
+      )
+
+      const [, providerTrigger] = screen.getAllByRole('combobox')
+      fireEvent.click(providerTrigger)
+      fireEvent.click(await screen.findByRole('option', { name: /Codex/ }))
+      expect(await screen.findByText('me@proton.me')).toBeInTheDocument()
+
+      // Claude has no enrolled accounts in this room, so the picker goes away
+      // rather than keeping a Codex account selected.
+      fireEvent.click(screen.getAllByRole('combobox')[1])
+      fireEvent.click(await screen.findByRole('option', { name: /Claude/ }))
+
+      await waitFor(() => {
+        expect(screen.queryByText('me@proton.me')).not.toBeInTheDocument()
+      })
+    })
+
+    it('shows no account picker when nothing is enrolled', async () => {
+      render(<CrewFlowSection crew={makeCrew(['impl', 'review'])} />)
+
+      fireEvent.click(screen.getByRole('button', { name: 'Add relay' }))
+      const [sourceTrigger] = screen.getAllByRole('combobox')
+      fireEvent.click(sourceTrigger)
+      fireEvent.click(
+        await screen.findByRole('option', { name: /Implementor/ }),
+      )
+      fireEvent.click(
+        screen.getByRole('button', { name: 'start a new session' }),
+      )
+      const [, providerTrigger] = screen.getAllByRole('combobox')
+      fireEvent.click(providerTrigger)
+      fireEvent.click(await screen.findByRole('option', { name: /Codex/ }))
+
+      // Three: source, provider, project. No account picker.
+      await waitFor(() => {
+        expect(screen.getAllByRole('combobox')).toHaveLength(3)
       })
     })
 
@@ -417,6 +603,7 @@ describe('CrewFlowSection', () => {
             model: null,
             effort: null,
             name: 'Reviewer',
+            providerAccountId: null,
           },
         }),
       ])

@@ -9,6 +9,10 @@ import type { Workspace } from '../workspace/workspace.types'
 import type { PullRequestService } from './pull-request.service'
 import type { WorkspacePullRequest } from './pull-request.types'
 import { PullRequestReviewService } from './pull-request-review.service'
+import type {
+  AutomaticTurnAccount,
+  AutomaticTurnAccountSource,
+} from '../provider-account/provider-account-automatic-turn.pure'
 
 vi.mock('child_process', () => ({
   execFile: vi.fn(),
@@ -170,7 +174,31 @@ describe('PullRequestReviewService', () => {
     )
     expect(deps.sessions.start).toHaveBeenCalledWith('session-1', {
       text: expect.stringContaining('Please review Pull Request #123'),
+      // No accounts enrolled in this fixture, so ambient — the old behaviour.
+      providerAccountId: null,
     })
+  })
+
+  it('starts the review on the enrolled default account', () => {
+    const deps = makeDeps({
+      accounts: [{ id: 'personal', isDefault: true, status: 'connected' }],
+    })
+
+    return new PullRequestReviewService(deps)
+      .prepareReviewSession({
+        projectId: 'project-1',
+        reference: '#123',
+        providerId: 'claude-code',
+        model: null,
+        effort: null,
+      })
+      .then(() => {
+        expect(deps.accounts.listByProvider).toHaveBeenCalledWith('claude-code')
+        expect(deps.sessions.start).toHaveBeenCalledWith(
+          'session-1',
+          expect.objectContaining({ providerAccountId: 'personal' }),
+        )
+      })
   })
 
   it('materializes a review workspace without starting a session', async () => {
@@ -324,12 +352,14 @@ function makeDeps(input?: {
   dirty?: boolean
   projects?: ReturnType<typeof makeProject>[]
   remoteUrlByPath?: Record<string, string | null>
+  accounts?: AutomaticTurnAccount[]
 }): {
   projects: ProjectService
   workspaces: WorkspaceService
   git: GitService
   pullRequests: PullRequestService
   sessions: SessionService
+  accounts: AutomaticTurnAccountSource
 } {
   const projects = input?.projects ?? [
     makeProject({ id: 'project-1', name: 'App', repositoryPath: '/repo' }),
@@ -368,6 +398,9 @@ function makeDeps(input?: {
       start: vi.fn().mockResolvedValue(undefined),
       getSummaryById: vi.fn().mockReturnValue(session),
     } as unknown as SessionService,
+    accounts: {
+      listByProvider: vi.fn(() => input?.accounts ?? []),
+    },
   }
 }
 

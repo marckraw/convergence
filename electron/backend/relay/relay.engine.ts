@@ -3,13 +3,20 @@ import type {
   CreateSessionInput,
   SessionSettledEvent,
 } from '../session/session.types'
+import { resolveAccountForAutomaticTurn } from '../provider-account/provider-account-automatic-turn.pure'
+import type { AutomaticTurnAccountSource } from '../provider-account/provider-account-automatic-turn.pure'
 import {
   buildPayloadPreview,
   flowRunBudgetMessage,
   hasFlowRunBudget,
 } from './relay.pure'
 import type { RelayService } from './relay.service'
-import type { RelayHop, RelayHopOutcome, SessionRelay } from './relay.types'
+import type {
+  RelayHop,
+  RelayHopOutcome,
+  RelaySpawnSpec,
+  SessionRelay,
+} from './relay.types'
 
 /**
  * The narrow face of SessionService the engine is allowed to touch.
@@ -19,11 +26,25 @@ import type { RelayHop, RelayHopOutcome, SessionRelay } from './relay.types'
  * substitutes it and can never accidentally start a provider process.
  */
 export interface RelaySessionGateway {
-  getById(sessionId: string): { id: string; status: SessionStatus } | null
+  getById(sessionId: string): {
+    id: string
+    status: SessionStatus
+    providerId: string
+    /** Remote sessions cannot carry a local account (PA10). */
+    executionHost: string
+  } | null
   getLastAssistantMessageText(sessionId: string): string | null
-  sendMessage(sessionId: string, input: { text: string }): Promise<void>
+  /** The account the session's newest turn ran on, or null for ambient. */
+  getLastTurnProviderAccountId(sessionId: string): string | null
+  sendMessage(
+    sessionId: string,
+    input: { text: string; providerAccountId?: string | null },
+  ): Promise<void>
   create(input: CreateSessionInput): { id: string }
-  start(sessionId: string, input: { text: string }): Promise<void>
+  start(
+    sessionId: string,
+    input: { text: string; providerAccountId?: string | null },
+  ): Promise<void>
 }
 
 /**
@@ -48,6 +69,7 @@ interface RelayEngineDeps {
   relays: RelayService
   sessions: RelaySessionGateway
   crews: RelayCrewGateway
+  accounts: AutomaticTurnAccountSource
   /** Called for every ledger row, so windows can watch the trail live. */
   onHopAppended?: (hop: RelayHop) => void
   /** Called when the engine disarms a wire on its own. */
@@ -70,6 +92,7 @@ export class RelayEngine {
   private readonly relays: RelayService
   private readonly sessions: RelaySessionGateway
   private readonly crews: RelayCrewGateway
+  private readonly accounts: AutomaticTurnAccountSource
   private readonly onHopAppended?: (hop: RelayHop) => void
   private readonly onRelaysChanged?: () => void
   private readonly onCrewsChanged?: () => void
@@ -78,6 +101,7 @@ export class RelayEngine {
     this.relays = deps.relays
     this.sessions = deps.sessions
     this.crews = deps.crews
+    this.accounts = deps.accounts
     this.onHopAppended = deps.onHopAppended
     this.onRelaysChanged = deps.onRelaysChanged
     this.onCrewsChanged = deps.onCrewsChanged
@@ -186,7 +210,10 @@ export class RelayEngine {
     const targetWasRunning = target.status === 'running'
 
     try {
-      await this.sessions.sendMessage(targetSessionId, { text: payload })
+      await this.sessions.sendMessage(targetSessionId, {
+        text: payload,
+        providerAccountId: this.resolveInheritedAccountId(target),
+      })
       record(targetWasRunning ? 'queued' : 'delivered', { payloadPreview })
     } catch (error) {
       record('error', {
@@ -194,6 +221,46 @@ export class RelayEngine {
         error: error instanceof Error ? error.message : String(error),
       })
     }
+  }
+
+  /**
+   * Which account a hop into an existing session should ride.
+   *
+   * The session's own, inherited from its last turn -- a relay is another turn
+   * in a conversation already under way, not a new relationship, so it should
+   * not change who is paying for it. Falls back to the enrolled default, and
+   * finally to ambient, which is what every hop did before this existed.
+   */
+  private resolveInheritedAccountId(session: {
+    id: string
+    providerId: string
+    executionHost: string
+  }): string | null {
+    return resolveAccountForAutomaticTurn({
+      executionHost: session.executionHost,
+      lastTurnAccountId: this.sessions.getLastTurnProviderAccountId(session.id),
+      accounts: this.accounts.listByProvider(session.providerId),
+    })
+  }
+
+  /**
+   * Which account a session this wire is about to open should be born on.
+   *
+   * The wire's own choice wins; otherwise the enrolled default for the provider
+   * it names. This has to be right at birth: Codex fixes a session's credential
+   * when its first turn starts and refuses to change it afterwards, so there is
+   * no correcting a spawn that came up on the wrong account.
+   */
+  private resolveSpawnAccountId(spec: RelaySpawnSpec): string | null {
+    if (spec.providerAccountId) return spec.providerAccountId
+
+    return resolveAccountForAutomaticTurn({
+      // A spawn opens a local session; nothing in a spawn spec can ask for a
+      // remote host today.
+      executionHost: 'local',
+      lastTurnAccountId: null,
+      accounts: this.accounts.listByProvider(spec.providerId),
+    })
   }
 
   /**
@@ -264,7 +331,10 @@ export class RelayEngine {
     }
 
     try {
-      await this.sessions.start(spawnedSessionId, { text: payload })
+      await this.sessions.start(spawnedSessionId, {
+        text: payload,
+        providerAccountId: this.resolveSpawnAccountId(spec),
+      })
       record('spawned', { spawnedSessionId, payloadPreview })
     } catch (error) {
       record('error', {

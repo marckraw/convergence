@@ -1,15 +1,15 @@
 import type { FC } from 'react'
 import { KeyRound } from 'lucide-react'
+import { SearchableSelect } from '@/shared/ui/searchable-select.container'
 import {
   AMBIENT_DEFAULT_ACCOUNT_ID,
   buildProviderAccountPickerItems,
   describeSelectedProviderAccount,
   providerAccountIdFromPickerValue,
-  type ProviderAccount,
-} from '@/entities/provider-account'
-import { SearchableSelect } from '@/shared/ui/searchable-select.container'
+} from './provider-account.pure'
+import type { ProviderAccount } from './provider-account.types'
 
-interface ComposerAccountPickerProps {
+interface ProviderAccountPickerProps {
   accounts: ProviderAccount[]
   /** `null` is the ambient default account, not an absent value. */
   selectedAccountId: string | null
@@ -25,14 +25,19 @@ interface ComposerAccountPickerProps {
 }
 
 /**
- * Which Claude account serves the next turn (ADR 0007, PA5).
+ * Which account serves a turn (ADR 0007, PA5).
+ *
+ * Lives in the entity rather than in the composer because it is now asked in
+ * two places: before a turn a human is about to send, and on a relay that will
+ * send one later without them. One picker, so the two can never drift into
+ * describing the same accounts differently.
  *
  * Shows identity rather than capacity: accounts belong to different
  * organizations, and organizations differ in model rollouts and defaults, so a
  * swap can change what actually answers. There is deliberately no
  * "switch when low" affordance — selection is manual by policy.
  */
-export const ComposerAccountPicker: FC<ComposerAccountPickerProps> = ({
+export const ProviderAccountPicker: FC<ProviderAccountPickerProps> = ({
   accounts,
   selectedAccountId,
   onChange,

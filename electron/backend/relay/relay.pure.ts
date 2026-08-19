@@ -55,7 +55,10 @@ const MAX_SPAWN_NAME_LENGTH = 120
  * "start a session" with no provider is not a wire, it is a wish.
  */
 export function normalizeRelaySpawnSpec(
-  spec: RelaySpawnSpec | null | undefined,
+  // Partial because this is the IPC boundary's normalizer: it already trims and
+  // defaults every field, so claiming to receive a complete spec was a lie the
+  // callers had to keep up with.
+  spec: Partial<RelaySpawnSpec> | null | undefined,
 ): RelaySpawnSpec {
   if (!spec) {
     throw new Error('A spawn relay needs a session spec')
@@ -80,6 +83,13 @@ export function normalizeRelaySpawnSpec(
     model: spec.model?.trim() ? spec.model.trim() : null,
     effort: spec.effort?.trim() ? spec.effort.trim() : null,
     name,
+    // Not validated against the enrolled accounts here: a wire may name an
+    // account that is later removed, and refusing to LOAD such a relay would
+    // hide the wire the user needs to see in order to fix it. The engine
+    // resolves at firing time and falls back honestly.
+    providerAccountId: spec.providerAccountId?.trim()
+      ? spec.providerAccountId.trim()
+      : null,
   }
 }
 

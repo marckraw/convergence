@@ -4,6 +4,8 @@ import type { Project } from '../project/project.types'
 import type { WorkspaceService } from '../workspace/workspace.service'
 import type { GitService } from '../git/git.service'
 import type { SessionService } from '../session/session.service'
+import { resolveAccountForAutomaticTurn } from '../provider-account/provider-account-automatic-turn.pure'
+import type { AutomaticTurnAccountSource } from '../provider-account/provider-account-automatic-turn.pure'
 import type { PullRequestService } from './pull-request.service'
 import type {
   GithubCliPullRequestViewJson,
@@ -65,6 +67,7 @@ export class PullRequestReviewService {
       git: GitService
       pullRequests: PullRequestService
       sessions: SessionService
+      accounts: AutomaticTurnAccountSource
     },
   ) {}
 
@@ -137,7 +140,18 @@ export class PullRequestReviewService {
       workspacePath: workspace.path,
     })
 
-    await this.deps.sessions.start(session.id, { text: prompt })
+    // Same disease the relays had: a session Convergence opens on its own ran
+    // on the ambient credential, whatever the user enrolled. Brand new, so
+    // there is no last turn to inherit -- this is the enrolled default or
+    // ambient, and it must be right at birth.
+    await this.deps.sessions.start(session.id, {
+      text: prompt,
+      providerAccountId: resolveAccountForAutomaticTurn({
+        executionHost: 'local',
+        lastTurnAccountId: null,
+        accounts: this.deps.accounts.listByProvider(input.providerId),
+      }),
+    })
 
     return {
       workspace,

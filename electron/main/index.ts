@@ -277,12 +277,21 @@ async function startApp(): Promise<void> {
     sessions: sessionService,
     pullRequests: pullRequestService,
   })
+  // Constructed here rather than with the other account services below: two
+  // services that start turns on their own need it, and the first of them is
+  // built on the next line.
+  const providerAccountRepository = new ProviderAccountRepository(db)
+
   const pullRequestReviewService = new PullRequestReviewService({
     projects: projectService,
     workspaces: workspaceService,
     git: gitService,
     pullRequests: pullRequestService,
     sessions: sessionService,
+    accounts: {
+      listByProvider: (providerId) =>
+        providerAccountRepository.listByProvider(providerId),
+    },
   })
   const attachmentsService = new AttachmentsService(db, attachmentsRoot)
   const feedbackService = new FeedbackService({
@@ -331,7 +340,6 @@ async function startApp(): Promise<void> {
     // Cleanup is best effort.
   }
   const debugSink = providerDebugService
-  const providerAccountRepository = new ProviderAccountRepository(db)
   // Constructed here so it can report RPC failures to the debug sink, and so
   // it reads each account's own CODEX_HOME rather than the ambient one (PA9).
   const codexQuotaService = new CodexQuotaService({
@@ -684,6 +692,14 @@ async function startApp(): Promise<void> {
     relays: relayService,
     sessions: sessionService,
     crews: crewService,
+    // The first thing in the backend to read the enrolled default. Until now
+    // the flag was set here and only ever honoured by the renderer composer,
+    // so every turn Convergence started by itself ran on the ambient
+    // credential.
+    accounts: {
+      listByProvider: (providerId) =>
+        providerAccountRepository.listByProvider(providerId),
+    },
     onHopAppended: broadcastRelayHop,
     onRelaysChanged: () => broadcastRelays(relayService.list()),
     onCrewsChanged: () => broadcastCrews(crewService.list()),

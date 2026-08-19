@@ -208,6 +208,7 @@ describe('MissionControl', () => {
         onUpdated: vi.fn(() => () => undefined),
         onHopAppended: vi.fn(() => () => undefined),
       },
+      providerAccounts: { list: vi.fn(async () => []) },
     }
     useSessionRelayStore.getState().unsubscribeBroadcast?.()
     useSessionRelayStore.getState().unsubscribeHops?.()
@@ -925,6 +926,7 @@ describe('MissionControl', () => {
             model: 'gpt-5.6',
             effort: null,
             name: 'Reviewer',
+            providerAccountId: null,
           },
         }),
       ])
@@ -958,6 +960,7 @@ describe('MissionControl', () => {
             model: null,
             effort: null,
             name: 'Reviewer',
+            providerAccountId: null,
           },
         }),
       ])

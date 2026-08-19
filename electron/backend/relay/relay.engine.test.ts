@@ -4,6 +4,7 @@ import { closeDatabase, getDatabase, resetDatabase } from '../database/database'
 import type { SessionStatus } from '../provider/provider.types'
 import type { SessionSettledEvent } from '../session/session.types'
 import { RelayEngine, type RelaySessionGateway } from './relay.engine'
+import type { AutomaticTurnAccount } from '../provider-account/provider-account-automatic-turn.pure'
 import { MAX_AUTOMATIC_HOPS_PER_FLOW_RUN } from './relay.pure'
 import { RelayService } from './relay.service'
 import type { RelayHop } from './relay.types'
@@ -13,23 +14,33 @@ import type { RelayHop } from './relay.types'
  * human pressing anything, so every test here drives a fake gateway. Nothing
  * in this file may reach a real session, a real provider, or a real process.
  */
+/** What a send or start carried, so tests can assert the account too. */
+interface RecordedTurn {
+  sessionId: string
+  text: string
+  providerAccountId: string | null | undefined
+}
+
 interface FakeGateway extends RelaySessionGateway {
-  sent: Array<{ sessionId: string; text: string }>
+  sent: RecordedTurn[]
   created: Array<Record<string, unknown>>
-  started: Array<{ sessionId: string; text: string }>
+  started: RecordedTurn[]
 }
 
 function createGateway(overrides: {
   lastMessages?: Record<string, string | null>
   statuses?: Record<string, SessionStatus>
   missing?: string[]
+  providerIds?: Record<string, string>
+  executionHosts?: Record<string, string>
+  lastTurnAccounts?: Record<string, string | null>
   sendMessage?: (sessionId: string, input: { text: string }) => Promise<void>
   create?: () => { id: string }
   start?: (sessionId: string) => Promise<void>
 }): FakeGateway {
-  const sent: Array<{ sessionId: string; text: string }> = []
+  const sent: RecordedTurn[] = []
   const created: Array<Record<string, unknown>> = []
-  const started: Array<{ sessionId: string; text: string }> = []
+  const started: RecordedTurn[] = []
   const missing = new Set(overrides.missing ?? [])
 
   return {
@@ -42,7 +53,11 @@ function createGateway(overrides: {
         : {
             id: sessionId,
             status: overrides.statuses?.[sessionId] ?? 'completed',
+            providerId: overrides.providerIds?.[sessionId] ?? 'codex',
+            executionHost: overrides.executionHosts?.[sessionId] ?? 'local',
           },
+    getLastTurnProviderAccountId: (sessionId) =>
+      overrides.lastTurnAccounts?.[sessionId] ?? null,
     getLastAssistantMessageText: (sessionId) =>
       overrides.lastMessages && sessionId in overrides.lastMessages
         ? overrides.lastMessages[sessionId]
@@ -51,7 +66,11 @@ function createGateway(overrides: {
       if (overrides.sendMessage) {
         await overrides.sendMessage(sessionId, input)
       }
-      sent.push({ sessionId, text: input.text })
+      sent.push({
+        sessionId,
+        text: input.text,
+        providerAccountId: input.providerAccountId,
+      })
     },
     create: (input) => {
       created.push(input as unknown as Record<string, unknown>)
@@ -59,7 +78,11 @@ function createGateway(overrides: {
     },
     start: async (sessionId, input) => {
       if (overrides.start) await overrides.start(sessionId)
-      started.push({ sessionId, text: input.text })
+      started.push({
+        sessionId,
+        text: input.text,
+        providerAccountId: input.providerAccountId,
+      })
     },
   }
 }
@@ -78,8 +101,11 @@ describe('RelayEngine', () => {
   let relaysChanged: number
   let crewsChanged: number
   let crewAdditions: Array<{ crewId: string; sessionId: string }>
+  /** Enrolled accounts per provider. Empty by default: ambient, as before. */
+  let accountsByProvider: Record<string, AutomaticTurnAccount[]>
 
   beforeEach(() => {
+    accountsByProvider = {}
     db = getDatabase()
     relays = new RelayService(db)
     hops = []
@@ -115,6 +141,9 @@ describe('RelayEngine', () => {
           crewAdditions.push({ crewId, sessionId })
         },
       },
+      accounts: {
+        listByProvider: (providerId) => accountsByProvider[providerId] ?? [],
+      },
       onHopAppended: (hop) => hops.push(hop),
       onRelaysChanged: () => {
         relaysChanged += 1
@@ -133,6 +162,7 @@ describe('RelayEngine', () => {
       model: string | null
       effort: string | null
       name: string
+      providerAccountId: string | null
     }> = {},
   ) {
     return relays.create({
@@ -145,6 +175,7 @@ describe('RelayEngine', () => {
         model: 'gpt-5.6',
         effort: null,
         name: 'Reviewer',
+        providerAccountId: null,
         ...spec,
       },
     })
@@ -164,6 +195,115 @@ describe('RelayEngine', () => {
     })
   }
 
+  describe('provider accounts', () => {
+    const WORK: AutomaticTurnAccount = {
+      id: 'work',
+      isDefault: false,
+      status: 'connected',
+    }
+    const DEFAULT_ACCOUNT: AutomaticTurnAccount = {
+      id: 'personal',
+      isDefault: true,
+      status: 'connected',
+    }
+
+    it('hops onto the account the target session last rode', async () => {
+      wire()
+      accountsByProvider.codex = [WORK, DEFAULT_ACCOUNT]
+      const gateway = createGateway({ lastTurnAccounts: { s2: 'work' } })
+
+      await createEngine(gateway).handleSettle(settled('s1'))
+
+      expect(gateway.sent[0].providerAccountId).toBe('work')
+    })
+
+    /**
+     * The bug this ticket exists for: with no inherited account the hop used to
+     * run on whichever credential happened to be signed in on the machine.
+     */
+    it('falls back to the enrolled default when the target has no turns', async () => {
+      wire()
+      accountsByProvider.codex = [WORK, DEFAULT_ACCOUNT]
+      const gateway = createGateway({})
+
+      await createEngine(gateway).handleSettle(settled('s1'))
+
+      expect(gateway.sent[0].providerAccountId).toBe('personal')
+    })
+
+    it('stays on ambient when nothing is enrolled, exactly as before', async () => {
+      wire()
+      const gateway = createGateway({})
+
+      await createEngine(gateway).handleSettle(settled('s1'))
+
+      expect(gateway.sent[0].providerAccountId).toBeNull()
+    })
+
+    it('reads the accounts of the target’s provider, not the source’s', async () => {
+      wire()
+      accountsByProvider.codex = [WORK]
+      accountsByProvider['claude-code'] = [DEFAULT_ACCOUNT]
+      const gateway = createGateway({
+        providerIds: { s1: 'codex', s2: 'claude-code' },
+      })
+
+      await createEngine(gateway).handleSettle(settled('s1'))
+
+      expect(gateway.sent[0].providerAccountId).toBe('personal')
+    })
+
+    /** A local account id on a remote host trips the PA10 guard and fails. */
+    it('sends a remote target to ambient rather than breaking the wire', async () => {
+      wire()
+      accountsByProvider.codex = [DEFAULT_ACCOUNT]
+      const gateway = createGateway({
+        executionHosts: { s2: 'remote' },
+        lastTurnAccounts: { s2: 'work' },
+      })
+
+      await createEngine(gateway).handleSettle(settled('s1'))
+
+      expect(gateway.sent[0].providerAccountId).toBeNull()
+      expect(relays.listHops('c1')[0].outcome).toBe('delivered')
+    })
+
+    it('starts a spawn on the account its wire named', async () => {
+      spawnWire('s1', { providerAccountId: 'work' })
+      accountsByProvider.codex = [WORK, DEFAULT_ACCOUNT]
+      const gateway = createGateway({})
+
+      await createEngine(gateway).handleSettle(settled('s1'))
+
+      expect(gateway.started[0].providerAccountId).toBe('work')
+    })
+
+    /**
+     * Codex fixes a session's credential at its first turn and refuses to
+     * change it, so a spawn that came up on ambient could never be corrected.
+     */
+    it('starts an unspecified spawn on the enrolled default', async () => {
+      spawnWire()
+      accountsByProvider.codex = [WORK, DEFAULT_ACCOUNT]
+      const gateway = createGateway({})
+
+      await createEngine(gateway).handleSettle(settled('s1'))
+
+      expect(gateway.started[0].providerAccountId).toBe('personal')
+    })
+
+    it('resolves a spawn against the provider the spec names', async () => {
+      spawnWire('s1', { providerId: 'claude-code' })
+      accountsByProvider.codex = [WORK]
+      accountsByProvider['claude-code'] = [DEFAULT_ACCOUNT]
+      const gateway = createGateway({})
+
+      await createEngine(gateway).handleSettle(settled('s1'))
+
+      expect(gateway.started[0].providerAccountId).toBe('personal')
+    })
+  })
+
   it('carries the last assistant message to the target and records a delivery', async () => {
     const relay = wire()
     const gateway = createGateway({
@@ -174,7 +314,11 @@ describe('RelayEngine', () => {
     await createEngine(gateway).handleSettle(settled('s1'))
 
     expect(gateway.sent).toEqual([
-      { sessionId: 's2', text: 'Review this branch, please.' },
+      {
+        sessionId: 's2',
+        text: 'Review this branch, please.',
+        providerAccountId: null,
+      },
     ])
     expect(relays.listHops('c1')).toHaveLength(1)
     expect(relays.listHops('c1')[0]).toMatchObject({
@@ -243,7 +387,11 @@ describe('RelayEngine', () => {
     await createEngine(gateway).handleSettle(settled('s1'))
 
     expect(gateway.sent).toEqual([
-      { sessionId: 's3', text: 'Done. Ready for review.' },
+      {
+        sessionId: 's3',
+        text: 'Done. Ready for review.',
+        providerAccountId: null,
+      },
     ])
     const written = relays.listHops('c1')
     expect(written).toHaveLength(1)
@@ -422,7 +570,11 @@ describe('RelayEngine', () => {
         },
       ])
       expect(gateway.started).toEqual([
-        { sessionId: 'spawned-1', text: 'Review this branch, please.' },
+        {
+          sessionId: 'spawned-1',
+          text: 'Review this branch, please.',
+          providerAccountId: null,
+        },
       ])
       expect(gateway.sent).toEqual([])
 
@@ -505,6 +657,9 @@ describe('RelayEngine', () => {
           addMember: () => {
             throw new Error('crew is gone')
           },
+        },
+        accounts: {
+          listByProvider: (providerId) => accountsByProvider[providerId] ?? [],
         },
         onHopAppended: (hop) => hops.push(hop),
       })

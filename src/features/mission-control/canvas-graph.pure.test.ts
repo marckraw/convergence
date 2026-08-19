@@ -81,6 +81,7 @@ function spawnWire(
       model: 'gpt-5.6',
       effort: null,
       name: 'Reviewer',
+      providerAccountId: null,
     },
     armed: true,
     createdAt: '2026-08-16T00:00:00.000Z',

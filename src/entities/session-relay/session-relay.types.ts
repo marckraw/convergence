@@ -13,6 +13,12 @@ export interface RelaySpawnSpec {
   model: string | null
   effort: string | null
   name: string
+  /**
+   * The account the spawned session is born on. Null is not "ambient" -- it
+   * means "whatever the enrolled default is when this wire fires", resolved by
+   * the engine at firing time.
+   */
+  providerAccountId: string | null
 }
 
 export interface SessionRelay {

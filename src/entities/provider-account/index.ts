@@ -1,4 +1,5 @@
 export { providerAccountApi } from './provider-account.api'
+export { ProviderAccountPicker } from './provider-account-picker.presentational'
 export {
   AMBIENT_DEFAULT_ACCOUNT_ID,
   AMBIENT_DEFAULT_ACCOUNT_LABEL,
