@@ -47,6 +47,7 @@ describe('normalizeRelaySpawnSpec', () => {
     model: ' gpt-5.6 ',
     effort: ' high ',
     name: '  Reviewer  ',
+    providerAccountId: ' acct-1 ',
   }
 
   it('trims every field the user could have padded', () => {
@@ -56,7 +57,24 @@ describe('normalizeRelaySpawnSpec', () => {
       model: 'gpt-5.6',
       effort: 'high',
       name: 'Reviewer',
+      providerAccountId: 'acct-1',
     })
+  })
+
+  it('reads a spec that names no account as "use the default at firing time"', () => {
+    expect(
+      normalizeRelaySpawnSpec({ providerId: 'codex', name: 'Reviewer' })
+        .providerAccountId,
+    ).toBeNull()
+
+    // Blank is the same as absent: the form sends '' when nothing is picked.
+    expect(
+      normalizeRelaySpawnSpec({
+        providerId: 'codex',
+        name: 'Reviewer',
+        providerAccountId: '   ',
+      }).providerAccountId,
+    ).toBeNull()
   })
 
   it('treats a blank project as a global session', () => {

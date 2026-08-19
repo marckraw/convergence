@@ -26,6 +26,16 @@ export interface RelaySpawnSpec {
   effort: string | null
   /** Starting name; the auto-namer may replace it once the turn produces text. */
   name: string
+  /**
+   * The account the spawned session is born on. Null means "whatever the
+   * enrolled default is when this fires", not "ambient" -- the engine resolves
+   * it at firing time, so a wire drawn before an account was enrolled starts
+   * using it without being redrawn.
+   *
+   * Chosen here rather than corrected later because Codex fixes a session's
+   * credential at its first turn and refuses to change it afterwards.
+   */
+  providerAccountId: string | null
 }
 
 /**
@@ -118,6 +128,13 @@ function parseSpawnSpec(json: string | null): RelaySpawnSpec | null {
       model: typeof parsed.model === 'string' ? parsed.model : null,
       effort: typeof parsed.effort === 'string' ? parsed.effort : null,
       name: typeof parsed.name === 'string' ? parsed.name : 'Relayed session',
+      // Absent in specs written before accounts rode the wires; those keep
+      // resolving to the enrolled default, which is the fix they were missing.
+      providerAccountId:
+        typeof parsed.providerAccountId === 'string' &&
+        parsed.providerAccountId.length > 0
+          ? parsed.providerAccountId
+          : null,
     }
   } catch {
     return null

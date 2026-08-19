@@ -584,6 +584,28 @@ export class SessionService {
    * it flushes coalesced patches first so a message that finished streaming
    * moments before the session settled is not missed.
    */
+  /**
+   * The provider account this session's most recent turn actually ran on.
+   *
+   * Sessions carry no account of their own -- the durable record is per turn --
+   * so this is the same last-turn rule the composer seeds its picker from, read
+   * on the backend so a turn nobody is watching can inherit it too. Null means
+   * the session has no turns yet, or its last one rode the ambient credential.
+   */
+  getLastTurnProviderAccountId(sessionId: string): string | null {
+    const row = this.db
+      .prepare(
+        `SELECT provider_account_id
+         FROM session_turns
+         WHERE session_id = ?
+         ORDER BY sequence DESC
+         LIMIT 1`,
+      )
+      .get(sessionId) as { provider_account_id: string | null } | undefined
+
+    return row?.provider_account_id ?? null
+  }
+
   getLastAssistantMessageText(sessionId: string): string | null {
     this.flushPendingConversationPatchesForSession(sessionId)
 

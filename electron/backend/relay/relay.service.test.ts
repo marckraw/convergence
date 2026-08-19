@@ -181,6 +181,7 @@ describe('RelayService', () => {
       model: 'gpt-5.6',
       effort: 'high',
       name: 'Reviewer',
+      providerAccountId: null,
     }
 
     it('stores and reads back the whole session spec', () => {
