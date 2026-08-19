@@ -71,6 +71,13 @@ export interface SessionRelay {
   targetSessionId: string | null
   /** Set for `spawn` relays, null for `hail`. */
   spawnSpec: RelaySpawnSpec | null
+  /**
+   * A standing brief prepended to every message this wire carries, or null to
+   * carry the message exactly as the source session wrote it. It belongs to
+   * the wire rather than the hop: a wire is a rule, and the rule is the same
+   * every time it fires.
+   */
+  instruction: string | null
   armed: boolean
   createdAt: string
   updatedAt: string
@@ -104,6 +111,7 @@ export interface CreateSessionRelayInput {
   action: RelayAction
   targetSessionId?: string | null
   spawnSpec?: RelaySpawnSpec | null
+  instruction?: string | null
   armed?: boolean
 }
 
@@ -112,6 +120,7 @@ export interface UpdateSessionRelayInput {
   action?: RelayAction
   targetSessionId?: string | null
   spawnSpec?: RelaySpawnSpec | null
+  instruction?: string | null
   armed?: boolean
 }
 
@@ -155,6 +164,10 @@ export function sessionRelayFromRow(row: SessionRelayRow): SessionRelay {
     action: row.action as RelayAction,
     targetSessionId: row.target_session_id,
     spawnSpec: parseSpawnSpec(row.spawn_spec_json),
+    // Read defensively rather than trusted: a row written before the column
+    // existed reads as undefined on some sqlite paths, and "no instruction" is
+    // the honest answer for every one of them.
+    instruction: row.instruction ?? null,
     armed: row.armed !== 0,
     createdAt: row.created_at,
     updatedAt: row.updated_at,

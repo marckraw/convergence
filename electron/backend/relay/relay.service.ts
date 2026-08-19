@@ -6,6 +6,7 @@ import {
   isBudgetedOutcome,
   normalizeRelayAction,
   normalizeRelayCrewId,
+  normalizeRelayInstruction,
   normalizeRelaySessionId,
   normalizeRelaySpawnSpec,
 } from './relay.pure'
@@ -91,6 +92,7 @@ export class RelayService {
       : null
     const spawnSpec =
       action === 'spawn' ? normalizeRelaySpawnSpec(input.spawnSpec) : null
+    const instruction = normalizeRelayInstruction(input.instruction)
 
     assertRelayEndpoints(sourceSessionId, targetSessionId, action)
 
@@ -98,9 +100,9 @@ export class RelayService {
       .prepare(
         `INSERT INTO session_relays (
            id, crew_id, source_session_id, trigger, action,
-           target_session_id, spawn_spec_json, armed
+           target_session_id, spawn_spec_json, instruction, armed
          )
-         VALUES (?, ?, ?, 'settled', ?, ?, ?, ?)`,
+         VALUES (?, ?, ?, 'settled', ?, ?, ?, ?, ?)`,
       )
       .run(
         id,
@@ -109,6 +111,7 @@ export class RelayService {
         action,
         targetSessionId,
         spawnSpec ? JSON.stringify(spawnSpec) : null,
+        instruction,
         input.armed === false ? 0 : 1,
       )
 
@@ -133,6 +136,12 @@ export class RelayService {
           ? normalizeRelaySessionId(patch.targetSessionId, 'target session')
           : null
     const armed = patch.armed === undefined ? current.armed : patch.armed
+    // An untouched instruction survives an edit that was about something else;
+    // clearing it is an explicit null, the same shape every other field uses.
+    const instruction =
+      patch.instruction === undefined
+        ? current.instruction
+        : normalizeRelayInstruction(patch.instruction)
     // Switching a wire to spawn demands a spec in the same edit: a spawn
     // carrying the previous action's leftovers is not a wire anyone drew.
     const spawnSpec =
@@ -153,6 +162,7 @@ export class RelayService {
              action = ?,
              target_session_id = ?,
              spawn_spec_json = ?,
+             instruction = ?,
              armed = ?,
              updated_at = datetime('now')
          WHERE id = ?`,
@@ -162,6 +172,7 @@ export class RelayService {
         action,
         resolvedTarget,
         spawnSpec ? JSON.stringify(spawnSpec) : null,
+        instruction,
         armed ? 1 : 0,
         id,
       )

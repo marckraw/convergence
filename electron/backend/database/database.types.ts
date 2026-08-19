@@ -236,6 +236,8 @@ export interface SessionRelayRow {
   action: string
   target_session_id: string | null
   spawn_spec_json: string | null
+  /** The standing instruction prepended to what the wire carries. */
+  instruction: string | null
   armed: number
   created_at: string
   updated_at: string

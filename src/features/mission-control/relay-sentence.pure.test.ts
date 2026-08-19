@@ -4,6 +4,7 @@ import {
   EMPTY_RELAY_DRAFT,
   EMPTY_SPAWN_DRAFT,
   MISSING_SESSION_LABEL,
+  RELAY_INSTRUCTION_MARKER,
   buildRelayEndpointOptions,
   buildRelaySentence,
   formatArmedLabel,
@@ -31,6 +32,7 @@ function relay(
     action: 'hail',
     targetSessionId: 's2',
     spawnSpec: null,
+    instruction: null,
     armed: true,
     createdAt: '2026-08-15T10:00:00Z',
     updatedAt: '2026-08-15T10:00:00Z',
@@ -43,13 +45,14 @@ function hailWire(
   targetSessionId: string | null,
 ): Pick<
   SessionRelay,
-  'sourceSessionId' | 'targetSessionId' | 'action' | 'spawnSpec'
+  'sourceSessionId' | 'targetSessionId' | 'action' | 'spawnSpec' | 'instruction'
 > {
   return {
     action: 'hail',
     sourceSessionId,
     targetSessionId,
     spawnSpec: null,
+    instruction: null,
   }
 }
 
@@ -107,6 +110,7 @@ describe('buildRelaySentence', () => {
         action: 'spawn',
         sourceSessionId: 's1',
         targetSessionId: null,
+        instruction: null,
         spawnSpec: {
           projectId: 'p1',
           providerId: 'codex',
@@ -138,6 +142,7 @@ describe('buildRelaySentence', () => {
         action: 'spawn',
         sourceSessionId: 's1',
         targetSessionId: null,
+        instruction: null,
         spawnSpec: {
           projectId: 'p1',
           providerId: 'codex',
@@ -165,6 +170,7 @@ describe('buildRelaySentence', () => {
         action: 'spawn',
         sourceSessionId: 's1',
         targetSessionId: null,
+        instruction: null,
         spawnSpec: {
           projectId: 'p1',
           providerId: 'codex',
@@ -188,6 +194,7 @@ describe('buildRelaySentence', () => {
         action: 'spawn',
         sourceSessionId: 's1',
         targetSessionId: null,
+        instruction: null,
         spawnSpec: {
           projectId: 'p1',
           providerId: 'codex',
@@ -211,6 +218,7 @@ describe('buildRelaySentence', () => {
         action: 'spawn',
         sourceSessionId: 's1',
         targetSessionId: null,
+        instruction: null,
         spawnSpec: null,
       },
       resolveName,
@@ -218,6 +226,64 @@ describe('buildRelaySentence', () => {
 
     expect(sentence.target.missing).toBe(true)
     expect(sentence.text).toContain('never described')
+  })
+})
+
+describe('the instruction marker', () => {
+  it('says nothing at all when the wire carries no brief', () => {
+    const sentence = buildRelaySentence(hailWire('s1', 's2'), resolveName)
+
+    expect(sentence.instruction).toBeNull()
+    expect(sentence.text).not.toContain(RELAY_INSTRUCTION_MARKER)
+  })
+
+  it('marks a briefed hail quietly and keeps the brief itself', () => {
+    // The marker earns its place by being short: a row is scanned, and the
+    // brief is one hover or one click away in the form.
+    const sentence = buildRelaySentence(
+      { ...hailWire('s1', 's2'), instruction: 'Review this and push back.' },
+      resolveName,
+    )
+
+    expect(sentence.instruction).toBe('Review this and push back.')
+    expect(sentence.text).toBe(
+      `When Implementor finishes, send its last message to Reviewer · ${RELAY_INSTRUCTION_MARKER}`,
+    )
+  })
+
+  it('marks a briefed spawn after its specifics', () => {
+    const sentence = buildRelaySentence(
+      {
+        action: 'spawn',
+        sourceSessionId: 's1',
+        targetSessionId: null,
+        instruction: 'Start from the branch diff.',
+        spawnSpec: {
+          projectId: 'p1',
+          providerId: 'codex',
+          model: null,
+          effort: null,
+          name: 'Reviewer',
+          providerAccountId: null,
+        },
+      },
+      resolveName,
+      () => 'convergence',
+    )
+
+    expect(sentence.instruction).toBe('Start from the branch diff.')
+    expect(sentence.text).toContain(`· ${RELAY_INSTRUCTION_MARKER}`)
+    expect(sentence.text.endsWith(RELAY_INSTRUCTION_MARKER)).toBe(true)
+  })
+
+  it('treats a whitespace-only brief as no brief', () => {
+    const sentence = buildRelaySentence(
+      { ...hailWire('s1', 's2'), instruction: '   ' },
+      resolveName,
+    )
+
+    expect(sentence.instruction).toBeNull()
+    expect(sentence.text).not.toContain(RELAY_INSTRUCTION_MARKER)
   })
 })
 

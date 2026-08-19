@@ -7,6 +7,7 @@ import { cn } from '@/shared/lib/cn.pure'
 import { Button } from '@/shared/ui/button'
 import { Input } from '@/shared/ui/input'
 import { SearchableSelect } from '@/shared/ui/searchable-select.container'
+import { Textarea } from '@/shared/ui/textarea'
 import type {
   RelayEndpointOption,
   RelaySpawnDraft,
@@ -17,6 +18,8 @@ interface RelayEditorProps {
   action: RelayAction
   sourceSessionId: string | null
   targetSessionId: string | null
+  /** The standing brief this wire prepends; empty carries the message alone. */
+  instruction: string
   spawn: RelaySpawnDraft
   /** Projects a spawned session can open in; the global option is added here. */
   projectOptions: RelayEndpointOption[]
@@ -32,6 +35,7 @@ interface RelayEditorProps {
   onActionChange: (action: RelayAction) => void
   onSourceChange: (sessionId: string) => void
   onTargetChange: (sessionId: string) => void
+  onInstructionChange: (instruction: string) => void
   onSpawnChange: (patch: Partial<RelaySpawnDraft>) => void
   onSave: () => void
   onCancel: () => void
@@ -66,6 +70,7 @@ export const RelayEditor: FC<RelayEditorProps> = ({
   action,
   sourceSessionId,
   targetSessionId,
+  instruction,
   spawn,
   projectOptions,
   providerOptions,
@@ -78,6 +83,7 @@ export const RelayEditor: FC<RelayEditorProps> = ({
   onActionChange,
   onSourceChange,
   onTargetChange,
+  onInstructionChange,
   onSpawnChange,
   onSave,
   onCancel,
@@ -215,6 +221,27 @@ export const RelayEditor: FC<RelayEditorProps> = ({
         />
       </div>
     ) : null}
+
+    {/* Offered for both actions: a brief is about what the far end should do
+        with the message, which is the same question whether that end already
+        exists or is about to. */}
+    <div className="flex flex-col gap-1 pl-3">
+      <label
+        htmlFor="relay-instruction"
+        className="text-[11px] text-muted-foreground"
+      >
+        Instructions (optional) — sent above the message
+      </label>
+      <Textarea
+        id="relay-instruction"
+        value={instruction}
+        placeholder="Take a look at this and tell me what you would change."
+        disabled={busy}
+        rows={2}
+        onChange={(event) => onInstructionChange(event.target.value)}
+        className="min-h-[3.5rem] text-xs"
+      />
+    </div>
 
     <div className="flex items-center justify-between gap-2">
       <p className="text-[11px] text-amber-400">{problem ?? ' '}</p>

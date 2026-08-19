@@ -566,6 +566,8 @@ interface SessionRelayData {
   action: 'hail' | 'spawn'
   targetSessionId: string | null
   spawnSpec: RelaySpawnSpecData | null
+  /** Prepended to what the wire carries; null carries the message as written. */
+  instruction: string | null
   armed: boolean
   createdAt: string
   updatedAt: string
@@ -593,6 +595,7 @@ interface CreateSessionRelayInputData {
   action: 'hail' | 'spawn'
   targetSessionId?: string | null
   spawnSpec?: RelaySpawnSpecData | null
+  instruction?: string | null
   armed?: boolean
 }
 
@@ -601,6 +604,7 @@ interface UpdateSessionRelayInputData {
   action?: 'hail' | 'spawn'
   targetSessionId?: string | null
   spawnSpec?: RelaySpawnSpecData | null
+  instruction?: string | null
   armed?: boolean
 }
 

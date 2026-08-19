@@ -17,6 +17,7 @@ function relay(
     action: 'hail',
     targetSessionId: 's2',
     spawnSpec: null,
+    instruction: null,
     armed: true,
     createdAt: '2026-08-15T10:00:00Z',
     updatedAt: '2026-08-15T10:00:00Z',

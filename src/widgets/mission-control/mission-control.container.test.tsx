@@ -165,6 +165,7 @@ function makeRelay(
     action: 'hail',
     targetSessionId: null,
     spawnSpec: null,
+    instruction: null,
     armed: true,
     createdAt: '2026-08-16T00:00:00.000Z',
     updatedAt: '2026-08-16T00:00:00.000Z',

@@ -174,6 +174,101 @@ describe('RelayService', () => {
     })
   })
 
+  describe('instructions on the wire', () => {
+    it('stores a wire with no instruction as null', () => {
+      expect(createRelay().instruction).toBeNull()
+    })
+
+    it('keeps a brief, trimmed', () => {
+      const relay = service.create({
+        crewId: 'c1',
+        sourceSessionId: 's1',
+        action: 'hail',
+        targetSessionId: 's2',
+        instruction: '  Take a look at this.  ',
+      })
+
+      expect(relay.instruction).toBe('Take a look at this.')
+      expect(service.getById(relay.id)!.instruction).toBe(
+        'Take a look at this.',
+      )
+    })
+
+    it('treats a blank box as no instruction', () => {
+      const relay = service.create({
+        crewId: 'c1',
+        sourceSessionId: 's1',
+        action: 'hail',
+        targetSessionId: 's2',
+        instruction: '   ',
+      })
+
+      expect(relay.instruction).toBeNull()
+    })
+
+    it('leaves the brief alone when an edit is about something else', () => {
+      const relay = service.create({
+        crewId: 'c1',
+        sourceSessionId: 's1',
+        action: 'hail',
+        targetSessionId: 's2',
+        instruction: 'Review it.',
+      })
+
+      expect(
+        service.update(relay.id, { targetSessionId: 's3' }).instruction,
+      ).toBe('Review it.')
+    })
+
+    it('clears the brief when the box is emptied', () => {
+      const relay = service.create({
+        crewId: 'c1',
+        sourceSessionId: 's1',
+        action: 'hail',
+        targetSessionId: 's2',
+        instruction: 'Review it.',
+      })
+
+      expect(
+        service.update(relay.id, { instruction: null }).instruction,
+      ).toBeNull()
+      expect(
+        service.update(relay.id, { instruction: 'Now this.' }).instruction,
+      ).toBe('Now this.')
+    })
+
+    it('refuses a brief nobody meant to write', () => {
+      expect(() =>
+        service.create({
+          crewId: 'c1',
+          sourceSessionId: 's1',
+          action: 'hail',
+          targetSessionId: 's2',
+          instruction: 'x'.repeat(4001),
+        }),
+      ).toThrow('4000')
+    })
+
+    it('carries a brief on a spawn wire too', () => {
+      const relay = service.create({
+        crewId: 'c1',
+        sourceSessionId: 's1',
+        action: 'spawn',
+        instruction: 'Start from the branch diff.',
+        spawnSpec: {
+          projectId: 'p1',
+          providerId: 'codex',
+          model: null,
+          effort: null,
+          name: 'Reviewer',
+          providerAccountId: null,
+        },
+      })
+
+      expect(relay.instruction).toBe('Start from the branch diff.')
+    })
+  })
+
   describe('spawn wires', () => {
     const spec = {
       projectId: 'p1',

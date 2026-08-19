@@ -479,6 +479,7 @@ describe('database', () => {
         'action',
         'target_session_id',
         'spawn_spec_json',
+        'instruction',
         'armed',
         'created_at',
         'updated_at',
@@ -554,6 +555,54 @@ describe('database', () => {
     expect(db.prepare('SELECT COUNT(*) AS n FROM relay_hops').get()).toEqual({
       n: 1,
     })
+  })
+
+  it('adds the relay instruction column to a database that predates it', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'convergence-relay-migration-'))
+    const dbPath = join(dir, 'pre-instruction.sqlite')
+
+    try {
+      // The v1 shape, exactly as it shipped: a wire with nowhere to keep a
+      // standing brief. Opening it must add the column, not lose the wire.
+      const legacy = new Database(dbPath)
+      legacy.exec(`
+        CREATE TABLE session_relays (
+          id TEXT PRIMARY KEY,
+          crew_id TEXT NOT NULL,
+          source_session_id TEXT NOT NULL,
+          trigger TEXT NOT NULL DEFAULT 'settled',
+          action TEXT NOT NULL,
+          target_session_id TEXT,
+          spawn_spec_json TEXT,
+          armed INTEGER NOT NULL DEFAULT 1,
+          created_at TEXT NOT NULL DEFAULT (datetime('now')),
+          updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+        );
+
+        INSERT INTO session_relays (id, crew_id, source_session_id, action, target_session_id)
+        VALUES ('r-old', 'c1', 's1', 'hail', 's2');
+      `)
+      legacy.close()
+
+      const db = getDatabase(dbPath)
+      const columns = db
+        .prepare("PRAGMA table_info('session_relays')")
+        .all() as Array<{ name: string }>
+
+      expect(columns.map((column) => column.name)).toContain('instruction')
+
+      const relay = db
+        .prepare("SELECT * FROM session_relays WHERE id = 'r-old'")
+        .get() as { instruction: string | null; target_session_id: string }
+      // Null is the honest reading of a wire drawn before briefs existed: it
+      // carries the message exactly as it always did.
+      expect(relay.instruction).toBeNull()
+      expect(relay.target_session_id).toBe('s2')
+    } finally {
+      closeDatabase()
+      resetDatabase()
+      rmSync(dir, { recursive: true, force: true })
+    }
   })
 
   it('migrates legacy initiative rows into spaces', () => {

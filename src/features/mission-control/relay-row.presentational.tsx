@@ -4,7 +4,10 @@ import type { SessionRelay } from '@/entities/session-relay'
 import { cn } from '@/shared/lib/cn.pure'
 import { Button } from '@/shared/ui/button'
 import type { RelaySentence } from './relay-sentence.pure'
-import { formatArmedLabel } from './relay-sentence.pure'
+import {
+  RELAY_INSTRUCTION_MARKER,
+  formatArmedLabel,
+} from './relay-sentence.pure'
 
 interface RelayRowProps {
   relay: SessionRelay
@@ -92,6 +95,17 @@ export const RelayRow: FC<RelayRowProps> = ({
         </span>
         {sentence.detail ? (
           <span className="text-muted-foreground/70">· {sentence.detail}</span>
+        ) : null}
+        {/* The brief itself stays in the form: a row is scanned, and a
+            paragraph here would hide the wiring it exists to show. Hover
+            reads it out in full. */}
+        {sentence.instruction ? (
+          <span
+            title={sentence.instruction}
+            className="text-muted-foreground/70"
+          >
+            · {RELAY_INSTRUCTION_MARKER}
+          </span>
         ) : null}
       </p>
 

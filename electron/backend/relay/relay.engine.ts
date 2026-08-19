@@ -9,6 +9,7 @@ import type { AutomaticTurnAccountSource } from '../provider-account/provider-ac
 import {
   ALREADY_FIRED_MESSAGE,
   buildPayloadPreview,
+  compileRelayPayload,
   flowRunBudgetMessage,
   hasFlowRunBudget,
   isBudgetedOutcome,
@@ -231,13 +232,18 @@ export class RelayEngine {
       return
     }
 
-    const payload = this.sessions.getLastAssistantMessageText(event.sessionId)
-    if (!payload) {
+    const message = this.sessions.getLastAssistantMessageText(event.sessionId)
+    if (!message) {
       record('error', {
         error: 'The session finished without an assistant message to carry.',
       })
       return
     }
+
+    // Compiled once, here, so both actions send the same thing and the ledger
+    // records what was actually sent rather than what the session happened to
+    // say. A wire with no instruction compiles to the message untouched.
+    const payload = compileRelayPayload(relay.instruction, message)
     const payloadPreview = buildPayloadPreview(payload)
 
     if (relay.action === 'spawn') {

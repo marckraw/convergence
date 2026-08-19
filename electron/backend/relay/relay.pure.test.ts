@@ -1,16 +1,20 @@
 import { describe, expect, it } from 'vitest'
 import {
+  ALREADY_FIRED_MESSAGE,
   DEFAULT_SPAWN_NAME,
   MAX_AUTOMATIC_HOPS_PER_FLOW_RUN,
+  MAX_RELAY_INSTRUCTION_LENGTH,
   RELAY_PAYLOAD_PREVIEW_LENGTH,
   assertRelayEndpoints,
   normalizeRelaySpawnSpec,
   buildPayloadPreview,
+  compileRelayPayload,
   flowRunBudgetMessage,
   hasFlowRunBudget,
   isBudgetedOutcome,
   normalizeRelayAction,
   normalizeRelayCrewId,
+  normalizeRelayInstruction,
   normalizeRelaySessionId,
   normalizeRelayTrigger,
 } from './relay.pure'
@@ -212,5 +216,97 @@ describe('flowRunBudgetMessage', () => {
     const message = flowRunBudgetMessage(MAX_AUTOMATIC_HOPS_PER_FLOW_RUN)
     expect(message).toContain(String(MAX_AUTOMATIC_HOPS_PER_FLOW_RUN))
     expect(message).toContain('disarmed')
+  })
+})
+
+describe('ALREADY_FIRED_MESSAGE', () => {
+  it('explains the law instead of reporting a fault', () => {
+    expect(ALREADY_FIRED_MESSAGE).toContain('already fired in this run')
+    expect(ALREADY_FIRED_MESSAGE).toContain('once per run')
+    // The loop law is not a failure, so its sentence must not read like one.
+    expect(ALREADY_FIRED_MESSAGE.toLowerCase()).not.toContain('error')
+    expect(ALREADY_FIRED_MESSAGE.toLowerCase()).not.toContain('failed')
+  })
+})
+
+describe('normalizeRelayInstruction', () => {
+  it('keeps a real brief, trimmed', () => {
+    expect(normalizeRelayInstruction('  Review this and push back.  ')).toBe(
+      'Review this and push back.',
+    )
+  })
+
+  it('treats blank as no instruction at all', () => {
+    // An empty string would compile into every payload as a stray blank line;
+    // null is what "carry the message as it is" has always meant.
+    expect(normalizeRelayInstruction('')).toBeNull()
+    expect(normalizeRelayInstruction('   \n\t  ')).toBeNull()
+    expect(normalizeRelayInstruction(null)).toBeNull()
+    expect(normalizeRelayInstruction(undefined)).toBeNull()
+  })
+
+  it('keeps the shape of a multi-line brief', () => {
+    expect(normalizeRelayInstruction('Do this.\n\nThen that.')).toBe(
+      'Do this.\n\nThen that.',
+    )
+  })
+
+  it('refuses a brief nobody meant to write, in words', () => {
+    const tooLong = 'x'.repeat(MAX_RELAY_INSTRUCTION_LENGTH + 1)
+
+    expect(() => normalizeRelayInstruction(tooLong)).toThrow(
+      String(MAX_RELAY_INSTRUCTION_LENGTH),
+    )
+    expect(
+      normalizeRelayInstruction('x'.repeat(MAX_RELAY_INSTRUCTION_LENGTH)),
+    ).toHaveLength(MAX_RELAY_INSTRUCTION_LENGTH)
+  })
+})
+
+describe('compileRelayPayload', () => {
+  const MESSAGE = 'Branch is green, 12 files changed.'
+
+  it('carries the message untouched when no instruction was written', () => {
+    // Byte-identical, deliberately: every wire drawn before instructions
+    // existed must keep sending exactly what it always sent.
+    expect(compileRelayPayload(null, MESSAGE)).toBe(MESSAGE)
+    expect(compileRelayPayload('', MESSAGE)).toBe(MESSAGE)
+    expect(compileRelayPayload('   ', MESSAGE)).toBe(MESSAGE)
+  })
+
+  it('puts the brief above the message with a blank line between', () => {
+    expect(compileRelayPayload('Take a look at this.', MESSAGE)).toBe(
+      `Take a look at this.\n\n${MESSAGE}`,
+    )
+  })
+
+  it('leaves the message itself exactly as the session wrote it', () => {
+    const messy = '  Leading spaces and a trailing newline.\n'
+
+    expect(compileRelayPayload('Brief.', messy)).toBe(`Brief.\n\n${messy}`)
+  })
+
+  /**
+   * The MAR-2280 law, at the string level: the separator is load-bearing.
+   * `src/features/mission-control/relay-payload.render.test.tsx` proves the
+   * same thing through a markdown renderer, which is where the original bug
+   * hid -- it lives over there because this tree has no DOM.
+   */
+  it('never lets the brief run straight into the message', () => {
+    const compiled = compileRelayPayload('Read this and', MESSAGE)
+
+    expect(compiled).toContain('\n\n')
+    expect(compiled).not.toBe(`Read this and\n${MESSAGE}`)
+    expect(compiled.split('\n\n')[0]).toBe('Read this and')
+  })
+
+  it('separates a brief from a message that opens a markdown block', () => {
+    for (const opener of [
+      '> quoted line',
+      '```ts\nconst a = 1\n```',
+      '- item',
+    ]) {
+      expect(compileRelayPayload('Brief.', opener)).toBe(`Brief.\n\n${opener}`)
+    }
   })
 })

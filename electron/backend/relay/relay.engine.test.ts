@@ -185,12 +185,14 @@ describe('RelayEngine', () => {
     source = 's1',
     target = 's2',
     armed = true,
+    instruction: string | null = null,
   ): ReturnType<RelayService['create']> {
     return relays.create({
       crewId: 'c1',
       sourceSessionId: source,
       action: 'hail',
       targetSessionId: target,
+      instruction,
       armed,
     })
   }
@@ -894,6 +896,91 @@ describe('RelayEngine', () => {
       expect(gateway.created).toEqual([])
       expect(relays.listHops('c1')[0].outcome).toBe('skipped-budget')
       expect(relays.getById(relay.id)!.armed).toBe(false)
+    })
+  })
+
+  /**
+   * A wire may carry a standing brief above the message it was written about.
+   * The blank line between them is the MAR-2280 law; `relay.pure.test.ts` and
+   * `relay-payload.render.test.ts` own the format itself, so these tests only
+   * prove the engine actually sends the compiled thing -- and records it.
+   */
+  describe('instructions on the wire', () => {
+    const BRIEF = 'Review this and push back where it is thin.'
+
+    it('sends the brief above the message on a hail', async () => {
+      wire('s1', 's2', true, BRIEF)
+      const gateway = createGateway({
+        lastMessages: { s1: 'Branch is green.' },
+      })
+
+      await createEngine(gateway).handleSettle(settled('s1'))
+
+      expect(gateway.sent[0].text).toBe(`${BRIEF}\n\nBranch is green.`)
+    })
+
+    it('sends the brief above the message on a spawn', async () => {
+      relays.create({
+        crewId: 'c1',
+        sourceSessionId: 's1',
+        action: 'spawn',
+        instruction: BRIEF,
+        spawnSpec: {
+          projectId: 'p1',
+          providerId: 'codex',
+          model: null,
+          effort: null,
+          name: 'Reviewer',
+          providerAccountId: null,
+        },
+      })
+      const gateway = createGateway({
+        lastMessages: { s1: 'Branch is green.' },
+      })
+
+      await createEngine(gateway).handleSettle(settled('s1'))
+
+      expect(gateway.started[0].text).toBe(`${BRIEF}\n\nBranch is green.`)
+    })
+
+    it('records what was actually sent, not what the session said', async () => {
+      // The ledger is the honest account of the wire. A preview showing only
+      // the source's words would hide the brief the target really received.
+      wire('s1', 's2', true, BRIEF)
+      const gateway = createGateway({
+        lastMessages: { s1: 'Branch is green.' },
+      })
+
+      await createEngine(gateway).handleSettle(settled('s1'))
+
+      const preview = relays.listHops('c1')[0].payloadPreview
+      expect(preview).toBe(`${BRIEF} Branch is green.`)
+    })
+
+    it('carries the message alone when the wire has no brief', async () => {
+      wire('s1', 's2')
+      const gateway = createGateway({
+        lastMessages: { s1: 'Branch is green.' },
+      })
+
+      await createEngine(gateway).handleSettle(settled('s1'))
+
+      // Byte-identical to what this wire sent before instructions existed.
+      expect(gateway.sent[0].text).toBe('Branch is green.')
+      expect(relays.listHops('c1')[0].payloadPreview).toBe('Branch is green.')
+    })
+
+    it('briefs each wire on its own terms', async () => {
+      wire('s1', 's2', true, 'Wire one says this.')
+      wire('s1', 's3', true, 'Wire two says something else.')
+      const gateway = createGateway({ lastMessages: { s1: 'Done.' } })
+
+      await createEngine(gateway).handleSettle(settled('s1'))
+
+      expect(gateway.sent.map((turn) => turn.text)).toEqual([
+        'Wire one says this.\n\nDone.',
+        'Wire two says something else.\n\nDone.',
+      ])
     })
   })
 
