@@ -5,6 +5,7 @@ import {
   EMPTY_SPAWN_DRAFT,
   MISSING_SESSION_LABEL,
   RELAY_INSTRUCTION_MARKER,
+  RELAY_TRIGGER_CLAUSES,
   buildRelayEndpointOptions,
   buildRelaySentence,
   formatArmedLabel,
@@ -45,9 +46,15 @@ function hailWire(
   targetSessionId: string | null,
 ): Pick<
   SessionRelay,
-  'sourceSessionId' | 'targetSessionId' | 'action' | 'spawnSpec' | 'instruction'
+  | 'trigger'
+  | 'sourceSessionId'
+  | 'targetSessionId'
+  | 'action'
+  | 'spawnSpec'
+  | 'instruction'
 > {
   return {
+    trigger: 'settled',
     action: 'hail',
     sourceSessionId,
     targetSessionId,
@@ -107,6 +114,7 @@ describe('buildRelaySentence', () => {
   it('reads a spawn as the session it will open, with its specifics', () => {
     const sentence = buildRelaySentence(
       {
+        trigger: 'settled',
         action: 'spawn',
         sourceSessionId: 's1',
         targetSessionId: null,
@@ -139,6 +147,7 @@ describe('buildRelaySentence', () => {
   it('names the account a spawn was explicitly given', () => {
     const sentence = buildRelaySentence(
       {
+        trigger: 'settled',
         action: 'spawn',
         sourceSessionId: 's1',
         targetSessionId: null,
@@ -167,6 +176,7 @@ describe('buildRelaySentence', () => {
   it('stays silent about the account when the wire named none', () => {
     const sentence = buildRelaySentence(
       {
+        trigger: 'settled',
         action: 'spawn',
         sourceSessionId: 's1',
         targetSessionId: null,
@@ -191,6 +201,7 @@ describe('buildRelaySentence', () => {
   it('says an explicitly named account is gone rather than dropping it', () => {
     const sentence = buildRelaySentence(
       {
+        trigger: 'settled',
         action: 'spawn',
         sourceSessionId: 's1',
         targetSessionId: null,
@@ -215,6 +226,7 @@ describe('buildRelaySentence', () => {
   it('says so when a spawn wire lost its spec', () => {
     const sentence = buildRelaySentence(
       {
+        trigger: 'settled',
         action: 'spawn',
         sourceSessionId: 's1',
         targetSessionId: null,
@@ -226,6 +238,27 @@ describe('buildRelaySentence', () => {
 
     expect(sentence.target.missing).toBe(true)
     expect(sentence.text).toContain('never described')
+  })
+})
+
+describe('the trigger clause', () => {
+  it('wraps the source session in the words its trigger owns', () => {
+    const sentence = buildRelaySentence(hailWire('s1', 's2'), resolveName)
+
+    expect(sentence.trigger).toEqual(RELAY_TRIGGER_CLAUSES.settled)
+    expect(sentence.text.startsWith('When Implementor finishes,')).toBe(true)
+  })
+
+  /**
+   * The clause is a map keyed by the trigger union so a second trigger cannot
+   * ship without words. Every reader takes them from here, which is what stops
+   * a row from saying "finishes" about a wire that fires on a message.
+   */
+  it('gives every trigger this build knows a full clause', () => {
+    for (const clause of Object.values(RELAY_TRIGGER_CLAUSES)) {
+      expect(clause.prefix.length).toBeGreaterThan(0)
+      expect(clause.suffix.length).toBeGreaterThan(0)
+    }
   })
 })
 
@@ -254,6 +287,7 @@ describe('the instruction marker', () => {
   it('marks a briefed spawn after its specifics', () => {
     const sentence = buildRelaySentence(
       {
+        trigger: 'settled',
         action: 'spawn',
         sourceSessionId: 's1',
         targetSessionId: null,

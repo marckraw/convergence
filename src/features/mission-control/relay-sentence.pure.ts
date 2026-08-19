@@ -1,5 +1,29 @@
 import type { RelayAction, SessionRelay } from '@/entities/session-relay'
 
+/** The two halves of a trigger clause, wrapped around the source session. */
+export interface RelayTriggerClause {
+  /** Sits before the session name: "When". */
+  prefix: string
+  /** Sits after it: "finishes". */
+  suffix: string
+}
+
+/**
+ * How each trigger reads in a sentence.
+ *
+ * A `Record` keyed by the union, so a trigger added to the type cannot ship
+ * without words — the compiler asks for them here, once, instead of leaving
+ * three files quietly saying "finishes" about a wire that fires on something
+ * else. This is the seam the action clause already had (see `connector`); the
+ * trigger simply never needed one while there was only one of them.
+ */
+export const RELAY_TRIGGER_CLAUSES: Record<
+  SessionRelay['trigger'],
+  RelayTriggerClause
+> = {
+  settled: { prefix: 'When', suffix: 'finishes' },
+}
+
 /** What the sentence calls an endpoint whose session is gone. */
 export const MISSING_SESSION_LABEL = 'a session that no longer exists'
 
@@ -11,6 +35,8 @@ export interface RelayEndpointLabel {
 }
 
 export interface RelaySentence {
+  /** What makes this wire fire, in words wrapped around the source name. */
+  trigger: RelayTriggerClause
   source: RelayEndpointLabel
   /** The phrase between the two ends — what this wire actually does. */
   connector: string
@@ -56,6 +82,7 @@ function endpoint(
 export function buildRelaySentence(
   relay: Pick<
     SessionRelay,
+    | 'trigger'
     | 'sourceSessionId'
     | 'targetSessionId'
     | 'action'
@@ -73,6 +100,8 @@ export function buildRelaySentence(
   resolveAccountLabel?: (accountId: string) => string | null,
 ): RelaySentence {
   const source = endpoint(relay.sourceSessionId, resolveName)
+  const trigger = RELAY_TRIGGER_CLAUSES[relay.trigger]
+  const opening = `${trigger.prefix} ${source.name} ${trigger.suffix}`
   const instruction = relay.instruction?.trim() ? relay.instruction : null
   const marker = instruction ? ` · ${RELAY_INSTRUCTION_MARKER}` : ''
 
@@ -87,12 +116,13 @@ export function buildRelaySentence(
         missing: true,
       }
       return {
+        trigger,
         source,
         connector,
         target,
         detail: null,
         instruction,
-        text: `When ${source.name} finishes, ${connector} ${target.name}${marker}`,
+        text: `${opening}, ${connector} ${target.name}${marker}`,
       }
     }
 
@@ -111,24 +141,26 @@ export function buildRelaySentence(
       : `${spec.providerId} in ${where}`
 
     return {
+      trigger,
       source,
       connector,
       target,
       detail,
       instruction,
-      text: `When ${source.name} finishes, ${connector} ${target.name} — ${detail}${marker}`,
+      text: `${opening}, ${connector} ${target.name} — ${detail}${marker}`,
     }
   }
 
   const connector = 'send its last message to'
   const target = endpoint(relay.targetSessionId, resolveName)
   return {
+    trigger,
     source,
     connector,
     target,
     detail: null,
     instruction,
-    text: `When ${source.name} finishes, ${connector} ${target.name}${marker}`,
+    text: `${opening}, ${connector} ${target.name}${marker}`,
   }
 }
 
