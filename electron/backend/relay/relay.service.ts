@@ -237,26 +237,25 @@ export class RelayService {
   }
 
   /**
-   * The flow run a settling session belongs to: the run of the newest hop that
-   * delivered into it, or a brand new run when nothing relayed into it.
+   * Whether this wire already spent a provider turn in this flow run.
    *
-   * This is deliberately the simplest ancestry that closes the loop. Its known
-   * imprecision: a session that was relayed into once and is later driven by
-   * hand still inherits that old run, so its budget can trip earlier than a
-   * fresh conversation's would. That errs toward disarming, which is the safe
-   * direction, and re-arming is one click.
+   * The loop law: a wire fires at most once per run, so A -> B -> A ends after
+   * two real hops instead of ping-ponging until the budget guard kills it. The
+   * ledger is the authority rather than anything held in memory, because it is
+   * the one record that survives a restart mid-run.
+   *
+   * Budgeted outcomes only, and the filtering happens here rather than in SQL
+   * so `isBudgetedOutcome` stays the single place that knows which words mean
+   * "a turn was spent" -- a WHERE clause listing them would be a second copy
+   * free to drift.
    */
-  resolveFlowRunId(sessionId: string): string {
-    const row = this.db
+  hasFiredInFlowRun(relayId: string, flowRunId: string): boolean {
+    const rows = this.db
       .prepare(
-        `SELECT flow_run_id FROM relay_hops
-         WHERE target_session_id = ? OR spawned_session_id = ?
-         ORDER BY fired_at DESC, rowid DESC
-         LIMIT 1`,
+        'SELECT outcome FROM relay_hops WHERE relay_id = ? AND flow_run_id = ?',
       )
-      .get(sessionId, sessionId) as { flow_run_id: string } | undefined
-
-    return row?.flow_run_id ?? randomUUID()
+      .all(relayId, flowRunId) as { outcome: string }[]
+    return rows.some((row) => isBudgetedOutcome(row.outcome))
   }
 
   /** Hops in this run that actually spent a provider turn. */

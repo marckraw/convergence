@@ -43,6 +43,10 @@ export interface RelaySpawnSpec {
  * a wire the user cannot watch fire is a silent hop, and silent hops are
  * forbidden. There is deliberately no member for "the wire was disarmed" --
  * a switch at rest never fires, so it has no outcome to name.
+ *
+ * `skipped-already-fired` is the loop law working rather than anything going
+ * wrong: a wire fires at most once per flow run, so the second time round a
+ * loop it declines quietly and stays armed for the next run.
  */
 export type RelayHopOutcome =
   | 'delivered'
@@ -50,6 +54,7 @@ export type RelayHopOutcome =
   | 'spawned'
   | 'skipped-failed'
   | 'skipped-budget'
+  | 'skipped-already-fired'
   | 'error'
 
 /**

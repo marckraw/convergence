@@ -353,40 +353,81 @@ describe('RelayService', () => {
     })
   })
 
-  describe('flow run ancestry and budget', () => {
-    it('mints a fresh run for a session nothing relayed into', () => {
-      const first = service.resolveFlowRunId('s1')
-      const second = service.resolveFlowRunId('s2')
+  describe('the loop law and the budget', () => {
+    it('says a wire has not fired when its run holds no hops', () => {
+      const relay = createRelay()
 
-      expect(first).toEqual(expect.any(String))
-      expect(first).not.toBe(second)
+      expect(service.hasFiredInFlowRun(relay.id, 'run-1')).toBe(false)
     })
 
-    it('inherits the run of the newest hop delivered into the session', () => {
+    it('remembers a wire that spent a turn in this run', () => {
       const relay = createRelay()
       service.appendHop({
         relayId: relay.id,
         crewId: 'c1',
-        flowRunId: 'run-old',
+        flowRunId: 'run-1',
         sourceSessionId: 's1',
         targetSessionId: 's2',
         triggerStatus: 'completed',
         outcome: 'delivered',
       })
+
+      expect(service.hasFiredInFlowRun(relay.id, 'run-1')).toBe(true)
+      // The next run is a clean sheet; that is what makes the law a pause
+      // rather than a one-shot fuse.
+      expect(service.hasFiredInFlowRun(relay.id, 'run-2')).toBe(false)
+    })
+
+    it('keeps the answer to the wire that was asked about', () => {
+      const first = createRelay()
+      const second = createRelay({ target: 's3' })
+      service.appendHop({
+        relayId: first.id,
+        crewId: 'c1',
+        flowRunId: 'run-1',
+        sourceSessionId: 's1',
+        targetSessionId: 's2',
+        triggerStatus: 'completed',
+        outcome: 'delivered',
+      })
+
+      expect(service.hasFiredInFlowRun(second.id, 'run-1')).toBe(false)
+    })
+
+    /**
+     * A skip is not a firing. If it counted, one failed source would retire
+     * the wire for the rest of the run without a turn ever being spent.
+     */
+    it('does not count skips, errors or words from another build', () => {
+      const relay = createRelay()
+      for (const outcome of [
+        'skipped-failed',
+        'skipped-budget',
+        'skipped-already-fired',
+        'error',
+      ] as const) {
+        service.appendHop({
+          relayId: relay.id,
+          crewId: 'c1',
+          flowRunId: 'run-1',
+          sourceSessionId: 's1',
+          triggerStatus: 'completed',
+          outcome,
+        })
+      }
       service.appendHop({
         relayId: relay.id,
         crewId: 'c1',
-        flowRunId: 'run-new',
+        flowRunId: 'run-1',
         sourceSessionId: 's1',
-        targetSessionId: 's2',
         triggerStatus: 'completed',
-        outcome: 'delivered',
+        outcome: 'skipped-disarmed' as never,
       })
 
-      expect(service.resolveFlowRunId('s2')).toBe('run-new')
+      expect(service.hasFiredInFlowRun(relay.id, 'run-1')).toBe(false)
     })
 
-    it('inherits through a spawned session as well as a hailed one', () => {
+    it('counts a spawn as this wire having fired', () => {
       const relay = createRelay()
       service.appendHop({
         relayId: relay.id,
@@ -395,10 +436,10 @@ describe('RelayService', () => {
         sourceSessionId: 's1',
         spawnedSessionId: 's3',
         triggerStatus: 'completed',
-        outcome: 'delivered',
+        outcome: 'spawned',
       })
 
-      expect(service.resolveFlowRunId('s3')).toBe('run-spawn')
+      expect(service.hasFiredInFlowRun(relay.id, 'run-spawn')).toBe(true)
     })
 
     it('charges only the hops that spent a provider turn', () => {

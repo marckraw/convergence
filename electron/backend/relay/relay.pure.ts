@@ -162,3 +162,13 @@ export function hasFlowRunBudget(spentHops: number): boolean {
 export function flowRunBudgetMessage(spentHops: number): string {
   return `This flow run already fired ${spentHops} hops, hitting the ${MAX_AUTOMATIC_HOPS_PER_FLOW_RUN}-hop budget. The relay was disarmed to stop the loop.`
 }
+
+/**
+ * The sentence the ledger shows when the loop law ends a chain.
+ *
+ * Deliberately not phrased as a problem: A -> B -> A finishing after two hops
+ * is the wire behaving, and the row exists so the user can see the chain stop
+ * rather than wonder whether anything happened.
+ */
+export const ALREADY_FIRED_MESSAGE =
+  'This wire already fired in this run; a wire fires once per run.'

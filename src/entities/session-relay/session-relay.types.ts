@@ -40,6 +40,8 @@ export type RelayHopOutcome =
   | 'spawned'
   | 'skipped-failed'
   | 'skipped-budget'
+  /** The loop law working: a wire fires at most once per flow run. */
+  | 'skipped-already-fired'
   | 'error'
 
 /** One firing, recorded whether or not anything was carried. */
