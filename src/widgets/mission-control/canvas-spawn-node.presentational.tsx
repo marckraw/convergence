@@ -30,7 +30,7 @@ export const CanvasSpawnNode: FC<NodeProps> = ({ data }) => {
         'flex flex-col justify-center gap-0.5 rounded-lg border border-dashed px-3 py-2',
         spawn.armed
           ? 'border-emerald-500/40 bg-emerald-500/[0.04]'
-          : 'border-white/15 bg-white/[0.02] opacity-70',
+          : 'border-border bg-foreground/[0.03] opacity-70',
       )}
     >
       <Handle
