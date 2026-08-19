@@ -50,6 +50,13 @@ export function buildRelaySentence(
   >,
   resolveName: ResolveSessionName,
   resolveProjectName?: (projectId: string | null) => string,
+  /**
+   * Names an explicitly chosen account. Only consulted when the wire named
+   * one: a spec that leaves it null rides whatever the enrolled default is at
+   * firing time, and printing today's default would be a promise the wire has
+   * not made.
+   */
+  resolveAccountLabel?: (accountId: string) => string | null,
 ): RelaySentence {
   const source = endpoint(relay.sourceSessionId, resolveName)
 
@@ -78,7 +85,13 @@ export function buildRelaySentence(
       name: spec.name,
       missing: false,
     }
-    const detail = `${spec.providerId} in ${where}`
+    const accountLabel = spec.providerAccountId
+      ? (resolveAccountLabel?.(spec.providerAccountId) ??
+        'an account that is gone')
+      : null
+    const detail = accountLabel
+      ? `${spec.providerId} in ${where} · as ${accountLabel}`
+      : `${spec.providerId} in ${where}`
 
     return {
       source,
@@ -135,6 +148,8 @@ export interface RelaySpawnDraft {
   model: string | null
   effort: string | null
   name: string
+  /** Null means the enrolled default for the provider, chosen when it fires. */
+  providerAccountId: string | null
 }
 
 export interface RelayDraft {
@@ -150,6 +165,7 @@ export const EMPTY_SPAWN_DRAFT: RelaySpawnDraft = {
   model: null,
   effort: null,
   name: '',
+  providerAccountId: null,
 }
 
 export const EMPTY_RELAY_DRAFT: RelayDraft = {

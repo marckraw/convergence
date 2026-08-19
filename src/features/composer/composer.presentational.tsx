@@ -45,7 +45,7 @@ import {
   Zap,
 } from 'lucide-react'
 import { ComposerSelect } from './composer-select.presentational'
-import { ComposerAccountPicker } from './composer-account-picker.presentational'
+import { ProviderAccountPicker } from '@/entities/provider-account'
 import type { ProviderAccount } from '@/entities/provider-account'
 import { ComposerContextMentionPicker } from './composer-context-mention.presentational'
 import { ComposerInjectionRootPicker } from './composer-injection-root-picker.presentational'
@@ -689,7 +689,7 @@ export const Composer: FC<ComposerProps> = ({
               />
             )}
             {selection.providerId === 'claude-code' && (
-              <ComposerAccountPicker
+              <ProviderAccountPicker
                 accounts={providerAccounts}
                 selectedAccountId={selectedProviderAccountId}
                 onChange={onProviderAccountChange}

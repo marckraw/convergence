@@ -1,5 +1,7 @@
 import type { FC } from 'react'
 import { ArrowRight } from 'lucide-react'
+import { ProviderAccountPicker } from '@/entities/provider-account'
+import type { ProviderAccount } from '@/entities/provider-account'
 import type { RelayAction } from '@/entities/session-relay'
 import { cn } from '@/shared/lib/cn.pure'
 import { Button } from '@/shared/ui/button'
@@ -21,6 +23,8 @@ interface RelayEditorProps {
   providerOptions: RelayEndpointOption[]
   modelOptions: RelayEndpointOption[]
   effortOptions: RelayEndpointOption[]
+  /** Enrolled accounts for the chosen provider; empty hides the picker. */
+  spawnAccounts: ProviderAccount[]
   /** Why this cannot be saved yet, or null when it is ready. */
   problem: string | null
   busy?: boolean
@@ -67,6 +71,7 @@ export const RelayEditor: FC<RelayEditorProps> = ({
   providerOptions,
   modelOptions,
   effortOptions,
+  spawnAccounts,
   problem,
   busy = false,
   editing,
@@ -172,6 +177,14 @@ export const RelayEditor: FC<RelayEditorProps> = ({
             triggerClassName="h-7 text-xs"
           />
         ) : null}
+        {/* The same picker the composer uses. A spawned session's account is
+            fixed the moment it starts, so this is the only chance to choose. */}
+        <ProviderAccountPicker
+          accounts={spawnAccounts}
+          selectedAccountId={spawn.providerAccountId}
+          onChange={(providerAccountId) => onSpawnChange({ providerAccountId })}
+          disabled={busy}
+        />
         <span>in</span>
         <SearchableSelect
           selectedId={spawn.projectId ?? GLOBAL_PROJECT_OPTION_ID}

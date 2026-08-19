@@ -554,6 +554,8 @@ interface RelaySpawnSpecData {
   model: string | null
   effort: string | null
   name: string
+  /** Null means the enrolled default, resolved when the wire fires. */
+  providerAccountId: string | null
 }
 
 interface SessionRelayData {

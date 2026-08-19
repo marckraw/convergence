@@ -113,6 +113,7 @@ describe('buildRelaySentence', () => {
           model: 'gpt-5.6',
           effort: null,
           name: 'Reviewer',
+          providerAccountId: null,
         },
       },
       resolveName,
@@ -129,6 +130,79 @@ describe('buildRelaySentence', () => {
     expect(sentence.text).toBe(
       'When Implementor finishes, start a new session called Reviewer — codex in Convergence',
     )
+  })
+
+  it('names the account a spawn was explicitly given', () => {
+    const sentence = buildRelaySentence(
+      {
+        action: 'spawn',
+        sourceSessionId: 's1',
+        targetSessionId: null,
+        spawnSpec: {
+          projectId: 'p1',
+          providerId: 'codex',
+          model: null,
+          effort: null,
+          name: 'Reviewer',
+          providerAccountId: 'acct-1',
+        },
+      },
+      resolveName,
+      () => 'Convergence',
+      () => 'me@proton.me',
+    )
+
+    expect(sentence.detail).toBe('codex in Convergence · as me@proton.me')
+  })
+
+  /**
+   * Null is "the enrolled default when this fires", not a named account, so
+   * printing today's default would be a promise the wire has not made.
+   */
+  it('stays silent about the account when the wire named none', () => {
+    const sentence = buildRelaySentence(
+      {
+        action: 'spawn',
+        sourceSessionId: 's1',
+        targetSessionId: null,
+        spawnSpec: {
+          projectId: 'p1',
+          providerId: 'codex',
+          model: null,
+          effort: null,
+          name: 'Reviewer',
+          providerAccountId: null,
+        },
+      },
+      resolveName,
+      () => 'Convergence',
+      () => 'me@proton.me',
+    )
+
+    expect(sentence.detail).toBe('codex in Convergence')
+  })
+
+  it('says an explicitly named account is gone rather than dropping it', () => {
+    const sentence = buildRelaySentence(
+      {
+        action: 'spawn',
+        sourceSessionId: 's1',
+        targetSessionId: null,
+        spawnSpec: {
+          projectId: 'p1',
+          providerId: 'codex',
+          model: null,
+          effort: null,
+          name: 'Reviewer',
+          providerAccountId: 'deleted',
+        },
+      },
+      resolveName,
+      () => 'Convergence',
+      () => null,
+    )
+
+    expect(sentence.detail).toContain('an account that is gone')
   })
 
   it('says so when a spawn wire lost its spec', () => {
@@ -227,6 +301,7 @@ describe('relayDraftProblem', () => {
         model: null,
         effort: null,
         name: 'Reviewer',
+        providerAccountId: null,
       },
     }
 

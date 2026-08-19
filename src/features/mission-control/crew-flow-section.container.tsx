@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { FC } from 'react'
 import { Plus, Radio } from 'lucide-react'
 import type { SessionCrew } from '@/entities/session-crew'
@@ -8,6 +8,13 @@ import {
 } from '@/entities/session-relay'
 import type { RelayAction, SessionRelay } from '@/entities/session-relay'
 import { useProjectStore } from '@/entities/project'
+import {
+  describeProviderAccountIdentity,
+  providerAccountApi,
+  providerAccountsForProvider,
+  resolveInitialProviderAccountSelection,
+} from '@/entities/provider-account'
+import type { ProviderAccount } from '@/entities/provider-account'
 import { useSessionStore } from '@/entities/session'
 import { Button } from '@/shared/ui/button'
 import {
@@ -53,6 +60,30 @@ export const CrewFlowSection: FC<CrewFlowSectionProps> = ({ crew }) => {
   const clearError = useSessionRelayStore((state) => state.clearError)
   const sessions = useSessionStore((state) => state.globalSessions)
   const providers = useSessionStore((state) => state.providers)
+  const [accounts, setAccounts] = useState<ProviderAccount[]>([])
+
+  // Enrolled accounts are read once for the section rather than per wire: the
+  // list is small, changes rarely, and every spawn form in this crew asks the
+  // same question of it.
+  useEffect(() => {
+    let cancelled = false
+    // Wrapped rather than chained off the call: a preload without the accounts
+    // bridge throws synchronously, which no `.catch` would ever see, and the
+    // whole Flow section would go down with it. A room that cannot read
+    // accounts still has to draw its wires -- the engine falls back to ambient
+    // exactly as it did before accounts existed.
+    void (async () => {
+      try {
+        const loaded = await providerAccountApi.list()
+        if (!cancelled) setAccounts(loaded)
+      } catch {
+        // Leave the list empty; the picker simply does not appear.
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [])
   const projects = useProjectStore((state) => state.projects)
 
   const [editor, setEditor] = useState<EditorState>({ kind: 'closed' })
@@ -128,6 +159,21 @@ export const CrewFlowSection: FC<CrewFlowSectionProps> = ({ crew }) => {
     [selectedProvider],
   )
 
+  // Identity, not the label the user typed: two accounts can be nicknamed the
+  // same thing, and a wire's sentence has to say which subscription it spends.
+  const resolveAccountLabel = useCallback(
+    (accountId: string) => {
+      const account = accounts.find((entry) => entry.id === accountId)
+      return account ? describeProviderAccountIdentity(account) : null
+    },
+    [accounts],
+  )
+
+  const spawnAccounts = useMemo(
+    () => providerAccountsForProvider(accounts, draft.spawn.providerId),
+    [accounts, draft.spawn.providerId],
+  )
+
   const effortOptions = useMemo(
     () =>
       (
@@ -177,6 +223,7 @@ export const CrewFlowSection: FC<CrewFlowSectionProps> = ({ crew }) => {
               model: relay.spawnSpec.model,
               effort: relay.spawnSpec.effort,
               name: relay.spawnSpec.name,
+              providerAccountId: relay.spawnSpec.providerAccountId,
             }
           : EMPTY_RELAY_DRAFT.spawn,
       })
@@ -204,6 +251,7 @@ export const CrewFlowSection: FC<CrewFlowSectionProps> = ({ crew }) => {
             model: draft.spawn.model,
             effort: draft.spawn.effort,
             name: draft.spawn.name.trim() || 'Relayed session',
+            providerAccountId: draft.spawn.providerAccountId,
           },
         }
       : {
@@ -309,6 +357,7 @@ export const CrewFlowSection: FC<CrewFlowSectionProps> = ({ crew }) => {
                 relay,
                 resolveName,
                 resolveProjectName,
+                resolveAccountLabel,
               )}
               confirmingDelete={confirmingDeleteId === relay.id}
               busy={busy}
@@ -332,6 +381,7 @@ export const CrewFlowSection: FC<CrewFlowSectionProps> = ({ crew }) => {
           providerOptions={providerOptions}
           modelOptions={modelOptions}
           effortOptions={effortOptions}
+          spawnAccounts={spawnAccounts}
           problem={problem}
           busy={busy}
           editing={editor.kind === 'edit'}
@@ -347,7 +397,28 @@ export const CrewFlowSection: FC<CrewFlowSectionProps> = ({ crew }) => {
           onSpawnChange={(patch: Partial<RelaySpawnDraft>) =>
             setDraft((current) => ({
               ...current,
-              spawn: { ...current.spawn, ...patch },
+              spawn: {
+                ...current.spawn,
+                ...patch,
+                // Changing provider re-asks the account question: ids belong to
+                // one provider, so carrying the old choice over would name an
+                // account that cannot serve the session. Preselects the same
+                // enrolled default the composer would have shown.
+                ...(patch.providerId !== undefined &&
+                patch.providerId !== current.spawn.providerId
+                  ? {
+                      providerAccountId: resolveInitialProviderAccountSelection(
+                        {
+                          accounts: providerAccountsForProvider(
+                            accounts,
+                            patch.providerId,
+                          ),
+                          hasActiveSession: false,
+                        },
+                      ),
+                    }
+                  : {}),
+              },
             }))
           }
           onSave={() => {

@@ -116,6 +116,7 @@ describe('CanvasWirePopover', () => {
           model: 'gpt-5.6',
           effort: null,
           name: 'Reviewer',
+          providerAccountId: null,
         },
       }),
     })
