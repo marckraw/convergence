@@ -18,6 +18,18 @@ export interface CrewHopTrail {
   /** Newest first, the order a trail is read in. */
   hops: RelayHop[]
   hasMore: boolean
+  /**
+   * Which full load produced this trail.
+   *
+   * An older page and a clear are two answers about the same ledger, and it
+   * can answer them in either order. A page fetched before a wipe describes
+   * rows that no longer exist, so it must be recognised as stale on arrival
+   * rather than appended -- otherwise clearing a trail while "Load older" is
+   * in flight puts the deleted history straight back on screen. Bumped by
+   * every full reload; a live hop and an older page both leave it alone,
+   * because neither replaces what is being read.
+   */
+  generation: number
 }
 
 interface SessionRelayState {
@@ -50,7 +62,11 @@ export type SessionRelayStore = SessionRelayState & SessionRelayActions
 
 const EMPTY_RELAYS: SessionRelay[] = []
 const EMPTY_HOPS: RelayHop[] = []
-const EMPTY_TRAIL: CrewHopTrail = { hops: EMPTY_HOPS, hasMore: false }
+const EMPTY_TRAIL: CrewHopTrail = {
+  hops: EMPTY_HOPS,
+  hasMore: false,
+  generation: 0,
+}
 
 /** The trail is capped so a long-running loop cannot grow the window forever. */
 const MAX_TRACKED_HOPS_PER_CREW = 100
@@ -68,7 +84,7 @@ const TRAIL_PAGE_SIZE = 50
 async function fetchTrailPage(
   crewId: string,
   beforeHopId: string | null,
-): Promise<CrewHopTrail> {
+): Promise<{ hops: RelayHop[]; hasMore: boolean }> {
   const fetched = await sessionRelayApi.listHops(
     crewId,
     TRAIL_PAGE_SIZE + 1,
@@ -98,6 +114,9 @@ function prependHop(trail: CrewHopTrail, hop: RelayHop): CrewHopTrail {
   return {
     hops: capped,
     hasMore: trail.hasMore || capped.length < grown.length,
+    // Unchanged: a new firing extends what is being read, it does not replace
+    // it, so an older page already in flight is still about the same trail.
+    generation: trail.generation,
   }
 }
 
@@ -222,8 +241,19 @@ export const useSessionRelayStore = create<SessionRelayStore>((set, get) => ({
 
   loadHops: async (crewId) => {
     try {
-      const trail = await fetchTrailPage(crewId, null)
-      set({ hopsByCrewId: { ...get().hopsByCrewId, [crewId]: trail } })
+      const page = await fetchTrailPage(crewId, null)
+      const previous = get().hopsByCrewId[crewId]
+      set({
+        hopsByCrewId: {
+          ...get().hopsByCrewId,
+          [crewId]: {
+            ...page,
+            // Read after the await, not before: two reloads that overlap must
+            // each land on a generation nobody in flight is still holding.
+            generation: (previous?.generation ?? 0) + 1,
+          },
+        },
+      })
     } catch (err) {
       set({ error: errorMessage(err, 'Failed to load the hop trail') })
     }
@@ -233,6 +263,7 @@ export const useSessionRelayStore = create<SessionRelayStore>((set, get) => ({
     const trail = get().hopsByCrewId[crewId]
     const oldest = trail?.hops[trail.hops.length - 1]
     if (!trail?.hasMore || !oldest) return
+    const generation = trail.generation
 
     try {
       const older = await fetchTrailPage(crewId, oldest.id)
@@ -240,12 +271,23 @@ export const useSessionRelayStore = create<SessionRelayStore>((set, get) => ({
       // the page was in flight, and the new row belongs at the top.
       const current = get().hopsByCrewId[crewId]
       if (!current) return
+
+      // Two ways this answer can have gone stale, and both are checked because
+      // neither catches the other: a reload has replaced the trail (the
+      // generation moved), or the row this page was anchored on is no longer
+      // the one it continues from -- a second press, or a reload that happened
+      // to end on a different row. Either way the honest move is to drop the
+      // page; the trail on screen is already what the ledger says.
+      if (current.generation !== generation) return
+      if (current.hops[current.hops.length - 1]?.id !== oldest.id) return
+
       set({
         hopsByCrewId: {
           ...get().hopsByCrewId,
           [crewId]: {
             hops: [...current.hops, ...older.hops],
             hasMore: older.hasMore,
+            generation,
           },
         },
       })

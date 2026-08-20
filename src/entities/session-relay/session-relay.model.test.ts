@@ -276,6 +276,110 @@ describe('useSessionRelayStore', () => {
     })
   })
 
+  describe('a page that lost its race', () => {
+    function page(from: number, count: number): RelayHop[] {
+      return Array.from({ length: count }, (_, index) =>
+        hop({ id: `h${from + index}` }),
+      )
+    }
+
+    /**
+     * The older page and the clear are two answers about the same trail, and
+     * the ledger can answer them in either order. A page fetched before the
+     * wipe describes rows that no longer exist, so applying it would put
+     * deleted history back on screen -- and leave a "Load older" cursor
+     * pointing at a row the database has never heard of.
+     */
+    it('drops an older page a clear overtook, rather than resurrecting rows', async () => {
+      let releaseOlder: (hops: RelayHop[]) => void = () => undefined
+      const listHops = vi
+        .fn()
+        .mockResolvedValueOnce(page(1, 51))
+        .mockImplementationOnce(
+          () =>
+            new Promise<RelayHop[]>((resolve) => {
+              releaseOlder = resolve
+            }),
+        )
+        .mockResolvedValueOnce([])
+      installMockApi({
+        listHops,
+        clearHops: vi.fn().mockResolvedValue({ removed: 50, kept: 0 }),
+      })
+      await useSessionRelayStore.getState().load()
+      await useSessionRelayStore.getState().loadHops('c1')
+
+      const older = useSessionRelayStore.getState().loadOlderHops('c1')
+      await useSessionRelayStore.getState().clearHops('c1')
+      expect(selectHopsForCrew(useSessionRelayStore.getState(), 'c1')).toEqual(
+        [],
+      )
+
+      releaseOlder(page(51, 2))
+      await older
+
+      expect(selectHopsForCrew(useSessionRelayStore.getState(), 'c1')).toEqual(
+        [],
+      )
+      expect(
+        selectHopTrailForCrew(useSessionRelayStore.getState(), 'c1').hasMore,
+      ).toBe(false)
+    })
+
+    /**
+     * The same guard read from the other side: a full reload that happens to
+     * end on a different row invalidates the anchor the page was fetched from.
+     */
+    it('drops an older page whose anchor is no longer the oldest row', async () => {
+      let releaseOlder: (hops: RelayHop[]) => void = () => undefined
+      const listHops = vi
+        .fn()
+        .mockResolvedValueOnce(page(1, 51))
+        .mockImplementationOnce(
+          () =>
+            new Promise<RelayHop[]>((resolve) => {
+              releaseOlder = resolve
+            }),
+        )
+        .mockResolvedValueOnce(page(1, 3))
+      installMockApi({ listHops })
+      await useSessionRelayStore.getState().load()
+      await useSessionRelayStore.getState().loadHops('c1')
+
+      const older = useSessionRelayStore.getState().loadOlderHops('c1')
+      await useSessionRelayStore.getState().loadHops('c1')
+
+      releaseOlder(page(51, 2))
+      await older
+
+      expect(
+        selectHopsForCrew(useSessionRelayStore.getState(), 'c1').map(
+          (h) => h.id,
+        ),
+      ).toEqual(['h1', 'h2', 'h3'])
+    })
+
+    /** Two quick presses must not append the same page twice. */
+    it('applies only the first of two identical older requests', async () => {
+      const listHops = vi
+        .fn()
+        .mockResolvedValueOnce(page(1, 51))
+        .mockResolvedValue(page(51, 2))
+      installMockApi({ listHops })
+      await useSessionRelayStore.getState().load()
+      await useSessionRelayStore.getState().loadHops('c1')
+
+      await Promise.all([
+        useSessionRelayStore.getState().loadOlderHops('c1'),
+        useSessionRelayStore.getState().loadOlderHops('c1'),
+      ])
+
+      expect(
+        selectHopsForCrew(useSessionRelayStore.getState(), 'c1'),
+      ).toHaveLength(52)
+    })
+  })
+
   describe('clearing a trail', () => {
     it('empties it, reloads what is left, and says what stayed', async () => {
       const clearHops = vi.fn().mockResolvedValue({ removed: 4, kept: 2 })

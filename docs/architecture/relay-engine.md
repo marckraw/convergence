@@ -97,9 +97,10 @@ counter, because one hop can leave batons on two sessions) — and the
 the top and does not leave the next one until a hop is recorded, and a provider
 send is awaited inside that gap, so an IPC call landing there would otherwise
 see a live run as finished. Batons are memory, so a restart makes an
-interrupted run clearable — the same direction the baton already errs. Four
+interrupted run clearable — the same direction the baton already errs. Five
 tests in `relay.engine.test.ts` pin it, including a canary that asserts the
-loop _does_ reopen when the live runs are not spared.
+loop _does_ reopen when the live runs are not spared, and one that fails the
+moment `runsInFlight` is collapsed from a counter to a set.
 
 ### 3. The vocabulary law — write a union, read a string
 
@@ -284,3 +285,8 @@ pins it.
 - **Zustand selectors must return stable references.** Subscribe to the whole
   relay list and narrow with `useMemo`; selecting inside the subscription hands
   zustand a fresh array every render and spins.
+- **An older trail page can outlive the trail it belongs to.** "Load older" and
+  a clear are two answers about the same ledger, returned in either order, so
+  `loadOlderHops` re-checks the crew's trail `generation` _and_ that its anchor
+  is still the oldest row before applying a page. Without both, a clear landing
+  mid-fetch puts the deleted rows straight back on screen.

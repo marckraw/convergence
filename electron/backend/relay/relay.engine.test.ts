@@ -798,6 +798,74 @@ describe('RelayEngine', () => {
     })
 
     /**
+     * Why `runsInFlight` counts instead of remembering a set of ids.
+     *
+     * One settle can leave batons on several sessions, so several settles can
+     * be carrying the SAME run at once. If those were tracked as a set, the
+     * first of them to finish would erase the run for all of them -- and a
+     * clear landing in that gap would delete the rows the sibling settle is
+     * about to be measured against. The wire it already fired would read as
+     * never fired, and the loop the law had closed would reopen.
+     */
+    it('keeps a run two settles are carrying until the last one lets go', async () => {
+      const there = wire('s1', 's2')
+      const alsoThere = wire('s1', 's3')
+      wire('s3', 's1')
+
+      // The hop out of s3 is held open, so that settle is still carrying the
+      // run when the settle out of s2 has finished with it.
+      let releaseSend: () => void = () => undefined
+      const held = new Promise<void>((resolve) => {
+        releaseSend = resolve
+      })
+      const gateway = createGateway({
+        sendMessage: async (sessionId) => {
+          if (sessionId === 's1') await held
+        },
+      })
+      const engine = createEngine(gateway)
+
+      // s1 settles once and feeds both s2 and s3, so one run now has two
+      // batons out.
+      await engine.handleSettle(settled('s1'))
+      const run = relays.listHops('c1', 100)[0].flowRunId
+      expect(relays.listHops('c1', 100)).toHaveLength(2)
+
+      // s3 takes its baton and stalls mid-hop; s2 takes its baton, finds
+      // nothing wired onward, and finishes without leaving a new one. Between
+      // them the run holds no baton at all -- only the settle still in flight.
+      const stalled = engine.handleSettle(settled('s3'))
+      await engine.handleSettle(settled('s2'))
+
+      expect(engine.liveFlowRunIds()).toEqual([run])
+      expect(clearTrail(engine)).toEqual({ removed: 0, kept: 2 })
+      expect(relays.listHops('c1', 100).map((hop) => hop.flowRunId)).toEqual([
+        run,
+        run,
+      ])
+
+      releaseSend()
+      await stalled
+
+      // And the run still ends where it should: s1 comes back round to two
+      // wires that have both already fired in it.
+      await engine.handleSettle(settled('s1'))
+      const trail = relays.listHops('c1', 100)
+      expect(trail.slice(0, 2).map((hop) => hop.outcome)).toEqual([
+        'skipped-already-fired',
+        'skipped-already-fired',
+      ])
+      expect(new Set(trail.slice(0, 2).map((hop) => hop.relayId))).toEqual(
+        new Set([there.id, alsoThere.id]),
+      )
+      expect(gateway.sent.map((turn) => turn.sessionId)).toEqual([
+        's2',
+        's3',
+        's1',
+      ])
+    })
+
+    /**
      * The canary for the mechanism itself. Clearing without asking the engine
      * what is live is precisely the bug this guard exists for, and it must stay
      * visibly broken -- if this ever passes, the ledger stopped being the
