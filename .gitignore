@@ -3,6 +3,11 @@ out/
 dist/
 release/
 .fallow/
+
+# Build artifacts generated on demand (dev/build/typecheck/test all run
+# `npm run prepare:release-notes` first)
+src/shared/generated/
+
 .env
 .env.*
 *.local
