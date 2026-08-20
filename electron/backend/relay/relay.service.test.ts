@@ -566,6 +566,153 @@ describe('RelayService', () => {
     })
   })
 
+  describe('paging back through the trail', () => {
+    /**
+     * Every hop here is written inside the same millisecond, which is the case
+     * paging has to survive: a settle fires every wire leaving a session at
+     * once, so the clock alone cannot order them.
+     */
+    function fireHops(count: number): string[] {
+      const relay = createRelay()
+      const ids: string[] = []
+      for (let index = 0; index < count; index += 1) {
+        ids.push(
+          service.appendHop({
+            relayId: relay.id,
+            crewId: 'c1',
+            flowRunId: 'run-1',
+            sourceSessionId: 's1',
+            triggerStatus: 'completed',
+            outcome: 'delivered',
+          }).id,
+        )
+      }
+      // Newest first, the order a trail is read in.
+      return ids.reverse()
+    }
+
+    it('hands back the page that follows the row it was given', () => {
+      const newestFirst = fireHops(5)
+
+      const first = service.listHops('c1', 2)
+      expect(first.map((hop) => hop.id)).toEqual(newestFirst.slice(0, 2))
+
+      const second = service.listHops('c1', 2, first[first.length - 1].id)
+      expect(second.map((hop) => hop.id)).toEqual(newestFirst.slice(2, 4))
+
+      const third = service.listHops('c1', 2, second[second.length - 1].id)
+      expect(third.map((hop) => hop.id)).toEqual(newestFirst.slice(4))
+    })
+
+    it('runs out rather than wrapping round', () => {
+      const newestFirst = fireHops(2)
+
+      expect(service.listHops('c1', 50, newestFirst[1])).toEqual([])
+    })
+
+    /**
+     * The anchor was cleared out from under the read. Answering with the newest
+     * page would repeat rows the caller is already showing, so "nothing older"
+     * is the honest answer and the next full load corrects it.
+     */
+    it('says nothing is older when the row it was given is gone', () => {
+      fireHops(3)
+
+      expect(service.listHops('c1', 50, 'a-hop-that-no-longer-exists')).toEqual(
+        [],
+      )
+    })
+
+    it('pages one crew without seeing another', () => {
+      const newestFirst = fireHops(3)
+      const relay = createRelay()
+      service.appendHop({
+        relayId: relay.id,
+        crewId: 'other-crew',
+        flowRunId: 'run-1',
+        sourceSessionId: 's1',
+        triggerStatus: 'completed',
+        outcome: 'delivered',
+      })
+
+      const older = service.listHops('c1', 50, newestFirst[0])
+      expect(older.map((hop) => hop.id)).toEqual(newestFirst.slice(1))
+    })
+  })
+
+  describe('clearing a trail', () => {
+    function fireHop(flowRunId: string): void {
+      const relay = createRelay()
+      service.appendHop({
+        relayId: relay.id,
+        crewId: 'c1',
+        flowRunId,
+        sourceSessionId: 's1',
+        triggerStatus: 'completed',
+        outcome: 'delivered',
+      })
+    }
+
+    it('empties the crew and says how much it took', () => {
+      fireHop('run-1')
+      fireHop('run-2')
+
+      expect(service.clearHops('c1')).toEqual({ removed: 2, kept: 0 })
+      expect(service.listHops('c1')).toEqual([])
+    })
+
+    it('leaves the runs it was told to keep', () => {
+      fireHop('run-done')
+      fireHop('run-live')
+      fireHop('run-live')
+
+      expect(service.clearHops('c1', { keepFlowRunIds: ['run-live'] })).toEqual(
+        {
+          removed: 1,
+          kept: 2,
+        },
+      )
+      expect(service.listHops('c1').map((hop) => hop.flowRunId)).toEqual([
+        'run-live',
+        'run-live',
+      ])
+    })
+
+    it('leaves other crews alone', () => {
+      fireHop('run-1')
+      const relay = createRelay()
+      service.appendHop({
+        relayId: relay.id,
+        crewId: 'other-crew',
+        flowRunId: 'run-1',
+        sourceSessionId: 's1',
+        triggerStatus: 'completed',
+        outcome: 'delivered',
+      })
+
+      service.clearHops('c1')
+
+      expect(service.listHops('other-crew')).toHaveLength(1)
+    })
+
+    it('keeps the wires themselves, which are not history', () => {
+      const relay = createRelay()
+      service.appendHop({
+        relayId: relay.id,
+        crewId: 'c1',
+        flowRunId: 'run-1',
+        sourceSessionId: 's1',
+        triggerStatus: 'completed',
+        outcome: 'delivered',
+      })
+
+      service.clearHops('c1')
+
+      expect(service.getById(relay.id)).not.toBeNull()
+      expect(service.getById(relay.id)!.armed).toBe(true)
+    })
+  })
+
   describe('the loop law and the budget', () => {
     it('says a wire has not fired when its run holds no hops', () => {
       const relay = createRelay()

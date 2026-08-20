@@ -686,8 +686,6 @@ async function startApp(): Promise<void> {
   })
   registerFeedbackIpcHandlers(feedbackService)
   registerCrewIpcHandlers({ service: crewService })
-  registerRelayIpcHandlers({ service: relayService })
-
   const relayEngine = new RelayEngine({
     relays: relayService,
     sessions: sessionService,
@@ -703,6 +701,13 @@ async function startApp(): Promise<void> {
     onHopAppended: broadcastRelayHop,
     onRelaysChanged: () => broadcastRelays(relayService.list()),
     onCrewsChanged: () => broadcastCrews(crewService.list()),
+  })
+  // Registered after the engine exists rather than before: clearing a trail
+  // has to ask the engine which runs are still moving, and a handler that
+  // could not ask would be free to empty the ledger the loop law reads.
+  registerRelayIpcHandlers({
+    service: relayService,
+    liveFlowRunIds: () => relayEngine.liveFlowRunIds(),
   })
   // The multi-subscriber settle seam, deliberately not one of the single-slot
   // listener setters: renderer broadcasts and notifications keep theirs.

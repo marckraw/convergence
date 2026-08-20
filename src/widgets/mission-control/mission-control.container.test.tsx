@@ -209,6 +209,7 @@ describe('MissionControl', () => {
         listHops,
         onUpdated: vi.fn(() => () => undefined),
         onHopAppended: vi.fn(() => () => undefined),
+        onHopsCleared: vi.fn(() => () => undefined),
       },
       providerAccounts: { list: vi.fn(async () => []) },
     }
@@ -221,6 +222,7 @@ describe('MissionControl', () => {
       error: null,
       unsubscribeBroadcast: null,
       unsubscribeHops: null,
+      unsubscribeHopsCleared: null,
     })
     useSessionCrewStore.getState().unsubscribeBroadcast?.()
     useSessionCrewStore.setState({
@@ -1000,9 +1002,9 @@ describe('MissionControl', () => {
       await switchToCanvas()
 
       await waitFor(() => {
-        expect(listHops).toHaveBeenCalledWith('crew-1', undefined)
+        expect(listHops).toHaveBeenCalledWith('crew-1', 51, null)
       })
-      expect(listHops).toHaveBeenCalledWith('crew-2', undefined)
+      expect(listHops).toHaveBeenCalledWith('crew-2', 51, null)
     })
 
     it('does not ask for a trail for a crew it is not drawing', async () => {
@@ -1017,9 +1019,9 @@ describe('MissionControl', () => {
       await switchToCanvas()
 
       await waitFor(() => {
-        expect(listHops).toHaveBeenCalledWith('crew-1', undefined)
+        expect(listHops).toHaveBeenCalledWith('crew-1', 51, null)
       })
-      expect(listHops).not.toHaveBeenCalledWith('crew-empty', undefined)
+      expect(listHops).not.toHaveBeenCalledWith('crew-empty', 51, null)
     })
 
     it('wears the room’s theme rather than the library’s default', async () => {

@@ -591,6 +591,13 @@ interface RelayHopData {
   error: string | null
 }
 
+interface ClearRelayHopsResultData {
+  /** Ledger rows deleted. */
+  removed: number
+  /** Rows left standing because their flow run is still in flight. */
+  kept: number
+}
+
 interface CreateSessionRelayInputData {
   crewId: string
   sourceSessionId: string
@@ -1798,9 +1805,15 @@ interface ElectronAPI {
     delete: (id: string) => Promise<void>
     arm: (id: string) => Promise<SessionRelayData>
     disarm: (id: string) => Promise<SessionRelayData>
-    listHops: (crewId: string, limit?: number) => Promise<RelayHopData[]>
+    listHops: (
+      crewId: string,
+      limit?: number,
+      beforeHopId?: string | null,
+    ) => Promise<RelayHopData[]>
+    clearHops: (crewId: string) => Promise<ClearRelayHopsResultData>
     onUpdated: (callback: (relays: SessionRelayData[]) => void) => () => void
     onHopAppended: (callback: (hop: RelayHopData) => void) => () => void
+    onHopsCleared: (callback: (crewId: string) => void) => () => void
   }
   git: {
     getBranches: (repoPath: string) => Promise<string[]>

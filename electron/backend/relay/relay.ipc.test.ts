@@ -19,6 +19,7 @@ vi.mock('electron', () => ({
 import { registerRelayIpcHandlers } from './relay.ipc'
 import { RelayService } from './relay.service'
 import { closeDatabase, getDatabase, resetDatabase } from '../database/database'
+import type { ClearRelayHopsResult } from './relay.service'
 import type { RelayHop, SessionRelay } from './relay.types'
 
 function invoke<T>(channel: string, ...args: unknown[]): T {
@@ -29,7 +30,10 @@ function invoke<T>(channel: string, ...args: unknown[]): T {
 
 describe('relay IPC', () => {
   let broadcast: ReturnType<typeof vi.fn<(relays: SessionRelay[]) => void>>
+  let broadcastCleared: ReturnType<typeof vi.fn<(crewId: string) => void>>
   let service: RelayService
+  /** Stands in for the engine's answer about what is still moving. */
+  let liveFlowRunIds: string[]
 
   beforeEach(() => {
     electronMocks.handlers.clear()
@@ -47,8 +51,15 @@ describe('relay IPC', () => {
       "INSERT INTO session_crews (id, name) VALUES ('c1', 'Review loop')",
     ).run()
     broadcast = vi.fn()
+    broadcastCleared = vi.fn()
+    liveFlowRunIds = []
     service = new RelayService(db)
-    registerRelayIpcHandlers({ service, broadcast })
+    registerRelayIpcHandlers({
+      service,
+      liveFlowRunIds: () => liveFlowRunIds,
+      broadcast,
+      broadcastCleared,
+    })
   })
 
   afterEach(() => {
@@ -64,6 +75,7 @@ describe('relay IPC', () => {
       'relay:disarm',
       'relay:list',
       'relay:update',
+      'relayHops:clear',
       'relayHops:list',
     ])
   })
@@ -124,6 +136,48 @@ describe('relay IPC', () => {
     expect(trail[0].outcome).toBe('delivered')
     expect(invoke<RelayHop[]>('relayHops:list', 'other')).toEqual([])
     expect(broadcast).not.toHaveBeenCalled()
+  })
+
+  function fireHop(relay: SessionRelay, flowRunId: string): RelayHop {
+    return service.appendHop({
+      relayId: relay.id,
+      crewId: 'c1',
+      flowRunId,
+      sourceSessionId: 's1',
+      targetSessionId: 's2',
+      triggerStatus: 'completed',
+      outcome: 'delivered',
+    })
+  }
+
+  it('pages back through the trail from the row it is given', () => {
+    const relay = create()
+    const oldest = fireHop(relay, 'run-1')
+    const newest = fireHop(relay, 'run-2')
+
+    expect(
+      invoke<RelayHop[]>('relayHops:list', 'c1', 1).map((hop) => hop.id),
+    ).toEqual([newest.id])
+    expect(
+      invoke<RelayHop[]>('relayHops:list', 'c1', 1, newest.id).map(
+        (hop) => hop.id,
+      ),
+    ).toEqual([oldest.id])
+  })
+
+  it('clears a trail, sparing the runs the engine says are live', () => {
+    const relay = create()
+    fireHop(relay, 'run-done')
+    fireHop(relay, 'run-live')
+    liveFlowRunIds = ['run-live']
+
+    const result = invoke<ClearRelayHopsResult>('relayHops:clear', 'c1')
+
+    expect(result).toEqual({ removed: 1, kept: 1 })
+    expect(
+      invoke<RelayHop[]>('relayHops:list', 'c1').map((hop) => hop.flowRunId),
+    ).toEqual(['run-live'])
+    expect(broadcastCleared).toHaveBeenCalledWith('c1')
   })
 
   it('surfaces a rejected wire to the caller', () => {

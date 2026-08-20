@@ -121,6 +121,7 @@ describe('CrewFlowSection', () => {
         listHops: vi.fn(async () => []),
         onUpdated: vi.fn(() => () => undefined),
         onHopAppended: vi.fn(() => () => undefined),
+        onHopsCleared: vi.fn(() => () => undefined),
       },
       providerAccounts: { list: listAccounts },
     }

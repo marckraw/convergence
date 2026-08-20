@@ -1,4 +1,5 @@
 import type {
+  ClearRelayHopsResult,
   CreateSessionRelayInput,
   RelayHop,
   SessionRelay,
@@ -21,12 +22,22 @@ export const sessionRelayApi = {
   disarm: (id: string): Promise<SessionRelay> =>
     window.electronAPI.relay.disarm(id),
 
-  listHops: (crewId: string, limit?: number): Promise<RelayHop[]> =>
-    window.electronAPI.relay.listHops(crewId, limit),
+  listHops: (
+    crewId: string,
+    limit?: number,
+    beforeHopId?: string | null,
+  ): Promise<RelayHop[]> =>
+    window.electronAPI.relay.listHops(crewId, limit, beforeHopId),
+
+  clearHops: (crewId: string): Promise<ClearRelayHopsResult> =>
+    window.electronAPI.relay.clearHops(crewId),
 
   onUpdated: (callback: (relays: SessionRelay[]) => void): (() => void) =>
     window.electronAPI.relay.onUpdated(callback),
 
   onHopAppended: (callback: (hop: RelayHop) => void): (() => void) =>
     window.electronAPI.relay.onHopAppended(callback),
+
+  onHopsCleared: (callback: (crewId: string) => void): (() => void) =>
+    window.electronAPI.relay.onHopsCleared(callback),
 }

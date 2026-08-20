@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
+  selectHopTrailForCrew,
   selectHopsForCrew,
   selectRelaysForCrew,
   selectRelaysForSession,
@@ -55,10 +56,12 @@ function installMockApi(
     arm?: ReturnType<typeof vi.fn>
     disarm?: ReturnType<typeof vi.fn>
     listHops?: ReturnType<typeof vi.fn>
+    clearHops?: ReturnType<typeof vi.fn>
   } = {},
 ) {
   const relayListeners: RelayCallback[] = []
   const hopListeners: HopCallback[] = []
+  const clearedListeners: Array<(crewId: string) => void> = []
   const mock = {
     relay: {
       list: overrides.list ?? vi.fn().mockResolvedValue([]),
@@ -68,6 +71,9 @@ function installMockApi(
       arm: overrides.arm ?? vi.fn(),
       disarm: overrides.disarm ?? vi.fn(),
       listHops: overrides.listHops ?? vi.fn().mockResolvedValue([]),
+      clearHops:
+        overrides.clearHops ??
+        vi.fn().mockResolvedValue({ removed: 0, kept: 0 }),
       onUpdated: vi.fn((cb: RelayCallback) => {
         relayListeners.push(cb)
         return () => {
@@ -82,6 +88,13 @@ function installMockApi(
           if (idx >= 0) hopListeners.splice(idx, 1)
         }
       }),
+      onHopsCleared: vi.fn((cb: (crewId: string) => void) => {
+        clearedListeners.push(cb)
+        return () => {
+          const idx = clearedListeners.indexOf(cb)
+          if (idx >= 0) clearedListeners.splice(idx, 1)
+        }
+      }),
     },
   }
   Object.defineProperty(globalThis, 'window', {
@@ -89,7 +102,7 @@ function installMockApi(
     writable: true,
     configurable: true,
   })
-  return { mock, relayListeners, hopListeners }
+  return { mock, relayListeners, hopListeners, clearedListeners }
 }
 
 describe('useSessionRelayStore', () => {
@@ -97,6 +110,7 @@ describe('useSessionRelayStore', () => {
     vi.clearAllMocks()
     useSessionRelayStore.getState().unsubscribeBroadcast?.()
     useSessionRelayStore.getState().unsubscribeHops?.()
+    useSessionRelayStore.getState().unsubscribeHopsCleared?.()
     useSessionRelayStore.setState({
       relays: [],
       hopsByCrewId: {},
@@ -104,6 +118,7 @@ describe('useSessionRelayStore', () => {
       error: null,
       unsubscribeBroadcast: null,
       unsubscribeHops: null,
+      unsubscribeHopsCleared: null,
     })
   })
 
@@ -149,6 +164,286 @@ describe('useSessionRelayStore', () => {
     expect(
       selectHopsForCrew(useSessionRelayStore.getState(), 'c1').map((h) => h.id),
     ).toEqual(['h2', 'h1'])
+  })
+
+  describe('paging back through a trail', () => {
+    /** Newest first, the order the ledger hands them back in. */
+    function page(from: number, count: number): RelayHop[] {
+      return Array.from({ length: count }, (_, index) =>
+        hop({ id: `h${from + index}` }),
+      )
+    }
+
+    it('asks for one row more than a page, and keeps the page', async () => {
+      const listHops = vi.fn().mockResolvedValue(page(1, 51))
+      installMockApi({ listHops })
+      await useSessionRelayStore.getState().load()
+
+      await useSessionRelayStore.getState().loadHops('c1')
+
+      expect(listHops).toHaveBeenCalledWith('c1', 51, null)
+      const trail = selectHopTrailForCrew(useSessionRelayStore.getState(), 'c1')
+      expect(trail.hops).toHaveLength(50)
+      expect(trail.hasMore).toBe(true)
+    })
+
+    it('knows there is nothing behind a page that did not fill', async () => {
+      installMockApi({ listHops: vi.fn().mockResolvedValue(page(1, 3)) })
+      await useSessionRelayStore.getState().load()
+
+      await useSessionRelayStore.getState().loadHops('c1')
+
+      expect(
+        selectHopTrailForCrew(useSessionRelayStore.getState(), 'c1').hasMore,
+      ).toBe(false)
+    })
+
+    it('appends the older page after the rows already on screen', async () => {
+      const listHops = vi
+        .fn()
+        .mockResolvedValueOnce(page(1, 51))
+        .mockResolvedValueOnce(page(51, 2))
+      installMockApi({ listHops })
+      await useSessionRelayStore.getState().load()
+      await useSessionRelayStore.getState().loadHops('c1')
+
+      await useSessionRelayStore.getState().loadOlderHops('c1')
+
+      // Anchored on the oldest row in hand, not on an offset a live hop could
+      // shift underneath the read.
+      expect(listHops).toHaveBeenLastCalledWith('c1', 51, 'h50')
+      const trail = selectHopTrailForCrew(useSessionRelayStore.getState(), 'c1')
+      expect(trail.hops).toHaveLength(52)
+      expect(trail.hops[51].id).toBe('h52')
+      expect(trail.hasMore).toBe(false)
+    })
+
+    it('does not ask for more when the trail says there is none', async () => {
+      const listHops = vi.fn().mockResolvedValue(page(1, 2))
+      installMockApi({ listHops })
+      await useSessionRelayStore.getState().load()
+      await useSessionRelayStore.getState().loadHops('c1')
+      listHops.mockClear()
+
+      await useSessionRelayStore.getState().loadOlderHops('c1')
+
+      expect(listHops).not.toHaveBeenCalled()
+    })
+
+    it('keeps a hop that landed while an older page was in flight', async () => {
+      const listHops = vi
+        .fn()
+        .mockResolvedValueOnce(page(1, 51))
+        .mockResolvedValueOnce(page(51, 1))
+      const { hopListeners } = installMockApi({ listHops })
+      await useSessionRelayStore.getState().load()
+      await useSessionRelayStore.getState().loadHops('c1')
+
+      const older = useSessionRelayStore.getState().loadOlderHops('c1')
+      hopListeners[0](hop({ id: 'fresh' }))
+      await older
+
+      const ids = selectHopsForCrew(useSessionRelayStore.getState(), 'c1').map(
+        (h) => h.id,
+      )
+      expect(ids[0]).toBe('fresh')
+      expect(ids[ids.length - 1]).toBe('h51')
+    })
+
+    it('never truncates history someone deliberately paged in', async () => {
+      const listHops = vi
+        .fn()
+        .mockResolvedValueOnce(page(1, 51))
+        .mockResolvedValueOnce(page(51, 51))
+        .mockResolvedValueOnce(page(101, 5))
+      const { hopListeners } = installMockApi({ listHops })
+      await useSessionRelayStore.getState().load()
+      await useSessionRelayStore.getState().loadHops('c1')
+      await useSessionRelayStore.getState().loadOlderHops('c1')
+      await useSessionRelayStore.getState().loadOlderHops('c1')
+      expect(
+        selectHopsForCrew(useSessionRelayStore.getState(), 'c1'),
+      ).toHaveLength(105)
+
+      hopListeners[0](hop({ id: 'fresh' }))
+
+      // The window holds what it held, with the newest row at the top and the
+      // oldest pushed off the end -- so there is demonstrably more behind it.
+      const trail = selectHopTrailForCrew(useSessionRelayStore.getState(), 'c1')
+      expect(trail.hops).toHaveLength(105)
+      expect(trail.hops[0].id).toBe('fresh')
+      expect(trail.hasMore).toBe(true)
+    })
+  })
+
+  describe('a page that lost its race', () => {
+    function page(from: number, count: number): RelayHop[] {
+      return Array.from({ length: count }, (_, index) =>
+        hop({ id: `h${from + index}` }),
+      )
+    }
+
+    /**
+     * The older page and the clear are two answers about the same trail, and
+     * the ledger can answer them in either order. A page fetched before the
+     * wipe describes rows that no longer exist, so applying it would put
+     * deleted history back on screen -- and leave a "Load older" cursor
+     * pointing at a row the database has never heard of.
+     */
+    it('drops an older page a clear overtook, rather than resurrecting rows', async () => {
+      let releaseOlder: (hops: RelayHop[]) => void = () => undefined
+      const listHops = vi
+        .fn()
+        .mockResolvedValueOnce(page(1, 51))
+        .mockImplementationOnce(
+          () =>
+            new Promise<RelayHop[]>((resolve) => {
+              releaseOlder = resolve
+            }),
+        )
+        .mockResolvedValueOnce([])
+      installMockApi({
+        listHops,
+        clearHops: vi.fn().mockResolvedValue({ removed: 50, kept: 0 }),
+      })
+      await useSessionRelayStore.getState().load()
+      await useSessionRelayStore.getState().loadHops('c1')
+
+      const older = useSessionRelayStore.getState().loadOlderHops('c1')
+      await useSessionRelayStore.getState().clearHops('c1')
+      expect(selectHopsForCrew(useSessionRelayStore.getState(), 'c1')).toEqual(
+        [],
+      )
+
+      releaseOlder(page(51, 2))
+      await older
+
+      expect(selectHopsForCrew(useSessionRelayStore.getState(), 'c1')).toEqual(
+        [],
+      )
+      expect(
+        selectHopTrailForCrew(useSessionRelayStore.getState(), 'c1').hasMore,
+      ).toBe(false)
+    })
+
+    /**
+     * The same guard read from the other side: a full reload that happens to
+     * end on a different row invalidates the anchor the page was fetched from.
+     */
+    it('drops an older page whose anchor is no longer the oldest row', async () => {
+      let releaseOlder: (hops: RelayHop[]) => void = () => undefined
+      const listHops = vi
+        .fn()
+        .mockResolvedValueOnce(page(1, 51))
+        .mockImplementationOnce(
+          () =>
+            new Promise<RelayHop[]>((resolve) => {
+              releaseOlder = resolve
+            }),
+        )
+        .mockResolvedValueOnce(page(1, 3))
+      installMockApi({ listHops })
+      await useSessionRelayStore.getState().load()
+      await useSessionRelayStore.getState().loadHops('c1')
+
+      const older = useSessionRelayStore.getState().loadOlderHops('c1')
+      await useSessionRelayStore.getState().loadHops('c1')
+
+      releaseOlder(page(51, 2))
+      await older
+
+      expect(
+        selectHopsForCrew(useSessionRelayStore.getState(), 'c1').map(
+          (h) => h.id,
+        ),
+      ).toEqual(['h1', 'h2', 'h3'])
+    })
+
+    /** Two quick presses must not append the same page twice. */
+    it('applies only the first of two identical older requests', async () => {
+      const listHops = vi
+        .fn()
+        .mockResolvedValueOnce(page(1, 51))
+        .mockResolvedValue(page(51, 2))
+      installMockApi({ listHops })
+      await useSessionRelayStore.getState().load()
+      await useSessionRelayStore.getState().loadHops('c1')
+
+      await Promise.all([
+        useSessionRelayStore.getState().loadOlderHops('c1'),
+        useSessionRelayStore.getState().loadOlderHops('c1'),
+      ])
+
+      expect(
+        selectHopsForCrew(useSessionRelayStore.getState(), 'c1'),
+      ).toHaveLength(52)
+    })
+  })
+
+  describe('clearing a trail', () => {
+    it('empties it, reloads what is left, and says what stayed', async () => {
+      const clearHops = vi.fn().mockResolvedValue({ removed: 4, kept: 2 })
+      const listHops = vi
+        .fn()
+        .mockResolvedValueOnce([hop({ id: 'h1' }), hop({ id: 'h2' })])
+        .mockResolvedValueOnce([hop({ id: 'h2' })])
+      installMockApi({ listHops, clearHops })
+      await useSessionRelayStore.getState().load()
+      await useSessionRelayStore.getState().loadHops('c1')
+
+      const result = await useSessionRelayStore.getState().clearHops('c1')
+
+      expect(result).toEqual({ removed: 4, kept: 2 })
+      expect(clearHops).toHaveBeenCalledWith('c1')
+      expect(
+        selectHopsForCrew(useSessionRelayStore.getState(), 'c1').map(
+          (h) => h.id,
+        ),
+      ).toEqual(['h2'])
+    })
+
+    it('reloads a trail another window cleared', async () => {
+      const listHops = vi
+        .fn()
+        .mockResolvedValueOnce([hop({ id: 'h1' })])
+        .mockResolvedValueOnce([])
+      const { clearedListeners } = installMockApi({ listHops })
+      await useSessionRelayStore.getState().load()
+      await useSessionRelayStore.getState().loadHops('c1')
+
+      clearedListeners[0]('c1')
+      await vi.waitFor(() =>
+        expect(
+          selectHopsForCrew(useSessionRelayStore.getState(), 'c1'),
+        ).toEqual([]),
+      )
+    })
+
+    it('ignores a clear for a crew this window is not watching', async () => {
+      const listHops = vi.fn().mockResolvedValue([])
+      const { clearedListeners } = installMockApi({ listHops })
+      await useSessionRelayStore.getState().load()
+      listHops.mockClear()
+
+      clearedListeners[0]('a-crew-nobody-opened')
+
+      expect(listHops).not.toHaveBeenCalled()
+    })
+
+    it('reports a refused clear instead of pretending it worked', async () => {
+      installMockApi({
+        listHops: vi.fn().mockResolvedValue([hop({ id: 'h1' })]),
+        clearHops: vi.fn().mockRejectedValue(new Error('database is locked')),
+      })
+      await useSessionRelayStore.getState().load()
+      await useSessionRelayStore.getState().loadHops('c1')
+
+      expect(await useSessionRelayStore.getState().clearHops('c1')).toBeNull()
+      expect(useSessionRelayStore.getState().error).toBe('database is locked')
+      expect(
+        selectHopsForCrew(useSessionRelayStore.getState(), 'c1'),
+      ).toHaveLength(1)
+    })
   })
 
   it('ignores hops for a crew whose trail nobody opened', async () => {

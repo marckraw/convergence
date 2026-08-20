@@ -35,6 +35,20 @@ export interface AppendRelayHopInput {
   error?: string | null
 }
 
+/** What a cleared trail leaves behind. */
+export interface ClearRelayHopsResult {
+  /** Ledger rows deleted. */
+  removed: number
+  /** Rows left standing because their flow run is still in flight. */
+  kept: number
+}
+
+/** Where a page of the trail resumes: one row's place in `(fired_at, rowid)`. */
+interface RelayHopCursor {
+  firedAt: string
+  sequence: number
+}
+
 /**
  * Repository + use-case boundary for relays and their ledger.
  *
@@ -251,17 +265,102 @@ export class RelayService {
     return this.requireHopById(id)
   }
 
-  /** Newest first, because a trail is read from the top. */
-  listHops(crewId: string, limit = 50): RelayHop[] {
-    const rows = this.db
-      .prepare(
-        `SELECT * FROM relay_hops
-         WHERE crew_id = ?
-         ORDER BY fired_at DESC, rowid DESC
-         LIMIT ?`,
-      )
-      .all(crewId, limit) as RelayHopRow[]
+  /**
+   * Newest first, because a trail is read from the top.
+   *
+   * `beforeHopId` names the oldest row the caller already holds and asks for
+   * what comes after it. The cursor is a hop id rather than an offset because
+   * a trail grows at the head while it is being read: paging by offset would
+   * show the same row twice the moment a wire fires mid-read. The order is
+   * `(fired_at, rowid)` descending -- the clock alone is not total, since a
+   * settle fires every wire leaving a session inside the same millisecond, and
+   * the ledger's own insertion order is the only tie-break that reads right.
+   */
+  listHops(
+    crewId: string,
+    limit = 50,
+    beforeHopId?: string | null,
+  ): RelayHop[] {
+    const anchor = beforeHopId ? this.getHopCursor(beforeHopId) : null
+    // The anchor was cleared out from under this read. Answering with the
+    // newest page instead would repeat rows the caller is already showing, so
+    // the honest answer is "nothing older", and the next full load corrects it.
+    if (beforeHopId && !anchor) return []
+
+    const rows = anchor
+      ? (this.db
+          .prepare(
+            `SELECT * FROM relay_hops
+             WHERE crew_id = ?
+               AND (fired_at < ? OR (fired_at = ? AND rowid < ?))
+             ORDER BY fired_at DESC, rowid DESC
+             LIMIT ?`,
+          )
+          .all(
+            crewId,
+            anchor.firedAt,
+            anchor.firedAt,
+            anchor.sequence,
+            limit,
+          ) as RelayHopRow[])
+      : (this.db
+          .prepare(
+            `SELECT * FROM relay_hops
+             WHERE crew_id = ?
+             ORDER BY fired_at DESC, rowid DESC
+             LIMIT ?`,
+          )
+          .all(crewId, limit) as RelayHopRow[])
+
     return rows.map(relayHopFromRow)
+  }
+
+  /**
+   * Forgets one crew's trail.
+   *
+   * `keepFlowRunIds` names the runs that must survive, and the caller that
+   * knows them is the engine: the loop law asks this table whether a wire
+   * already spent its turn, so deleting a live run's rows would tell a wire it
+   * never fired and let a closed loop re-open. Everything else goes -- a
+   * ledger the user cannot empty is a ledger that eventually reads as noise.
+   */
+  clearHops(
+    crewId: string,
+    options: { keepFlowRunIds?: readonly string[] } = {},
+  ): ClearRelayHopsResult {
+    const keep = [...new Set(options.keepFlowRunIds ?? [])]
+
+    const info =
+      keep.length === 0
+        ? this.db
+            .prepare('DELETE FROM relay_hops WHERE crew_id = ?')
+            .run(crewId)
+        : this.db
+            .prepare(
+              `DELETE FROM relay_hops
+               WHERE crew_id = ?
+                 AND flow_run_id NOT IN (${keep.map(() => '?').join(', ')})`,
+            )
+            .run(crewId, ...keep)
+
+    // Counted after the delete rather than predicted before it: what survived
+    // IS what was kept, and one number that cannot disagree with the other.
+    const kept = (
+      this.db
+        .prepare('SELECT COUNT(*) AS count FROM relay_hops WHERE crew_id = ?')
+        .get(crewId) as { count: number }
+    ).count
+
+    return { removed: info.changes, kept }
+  }
+
+  private getHopCursor(hopId: string): RelayHopCursor | null {
+    const row = this.db
+      .prepare(
+        'SELECT fired_at AS firedAt, rowid AS sequence FROM relay_hops WHERE id = ?',
+      )
+      .get(hopId) as RelayHopCursor | undefined
+    return row ?? null
   }
 
   /**

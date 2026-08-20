@@ -47,7 +47,9 @@ export {
 } from './session-crew'
 
 export type {
+  ClearRelayHopsResult,
   CreateSessionRelayInput,
+  CrewHopTrail,
   RelayAction,
   RelayHop,
   RelayHopOutcome,
@@ -56,6 +58,7 @@ export type {
   UpdateSessionRelayInput,
 } from './session-relay'
 export {
+  selectHopTrailForCrew,
   selectHopsForCrew,
   selectRelaysForCrew,
   selectRelaysForSession,

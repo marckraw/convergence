@@ -75,6 +75,14 @@ export interface RelayHop {
   error: string | null
 }
 
+/** What a cleared trail left behind. */
+export interface ClearRelayHopsResult {
+  /** Ledger rows deleted. */
+  removed: number
+  /** Rows left standing because their flow run is still in flight. */
+  kept: number
+}
+
 export interface CreateSessionRelayInput {
   crewId: string
   sourceSessionId: string

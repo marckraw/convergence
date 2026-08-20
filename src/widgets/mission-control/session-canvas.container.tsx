@@ -29,7 +29,10 @@ import type {
   SessionCrewGroup,
   WirePulse,
 } from '@/features/mission-control'
-import { useSessionRelayStore } from '@/entities/session-relay'
+import {
+  selectHopsForCrew,
+  useSessionRelayStore,
+} from '@/entities/session-relay'
 import { CanvasCrewCluster } from './canvas-crew-cluster.presentational'
 import { CanvasSessionNode } from './canvas-session-node.presentational'
 import { CanvasSpawnNode } from './canvas-spawn-node.presentational'
@@ -117,7 +120,9 @@ export const SessionCanvas: FC<SessionCanvasProps> = ({ groups, onOpen }) => {
 
   const hops = useMemo(
     () =>
-      graph.clusters.flatMap((cluster) => hopsByCrewId[cluster.crewId] ?? []),
+      graph.clusters.flatMap((cluster) =>
+        selectHopsForCrew({ hopsByCrewId }, cluster.crewId),
+      ),
     [graph, hopsByCrewId],
   )
 
