@@ -18,6 +18,19 @@ const TONE_DOT: Record<RelayHopTone, string> = {
   unknown: 'bg-white/25',
 }
 
+/**
+ * The "why" line under a row takes the row's own tone. The ledger explains
+ * every skip in words, and once the loop law started writing quiet rows a
+ * permanently red explanation would have made a wire behaving correctly look
+ * like a wire that broke.
+ */
+const TONE_NOTE: Record<RelayHopTone, string> = {
+  delivered: 'text-muted-foreground',
+  skipped: 'text-muted-foreground',
+  alarm: 'text-red-400',
+  unknown: 'text-muted-foreground',
+}
+
 interface RelayHopRowProps {
   line: RelayHopLine
   expanded: boolean
@@ -99,7 +112,12 @@ export const RelayHopRow: FC<RelayHopRowProps> = ({
       </div>
 
       {line.error ? (
-        <p className="mt-0.5 pl-3 text-[11px] leading-snug text-red-400">
+        <p
+          className={cn(
+            'mt-0.5 pl-3 text-[11px] leading-snug',
+            TONE_NOTE[line.tone],
+          )}
+        >
           {line.error}
         </p>
       ) : null}

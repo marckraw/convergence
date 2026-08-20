@@ -57,6 +57,7 @@ function makeRelay(
     action: 'hail',
     targetSessionId: 'review',
     spawnSpec: null,
+    instruction: null,
     armed: true,
     createdAt: '2026-08-15T10:00:00.000Z',
     updatedAt: '2026-08-15T10:00:00.000Z',
@@ -237,6 +238,7 @@ describe('CrewFlowSection', () => {
         sourceSessionId: 'impl',
         action: 'hail',
         targetSessionId: 'review',
+        instruction: null,
         spawnSpec: null,
       })
     })
@@ -329,8 +331,78 @@ describe('CrewFlowSection', () => {
         sourceSessionId: 'impl',
         action: 'hail',
         targetSessionId: 'scribe',
+        instruction: null,
         spawnSpec: null,
       })
+    })
+  })
+
+  describe('instructions on the wire', () => {
+    const INSTRUCTION_LABEL = /Instructions \(optional\)/
+
+    it('sends the brief the user typed with the wire', async () => {
+      render(<CrewFlowSection crew={makeCrew(['impl', 'review'])} />)
+
+      fireEvent.click(screen.getByRole('button', { name: 'Add relay' }))
+      const [sourceTrigger, targetTrigger] = screen.getAllByRole('combobox')
+      fireEvent.click(sourceTrigger)
+      fireEvent.click(
+        await screen.findByRole('option', { name: /Implementor/ }),
+      )
+      fireEvent.click(targetTrigger)
+      fireEvent.click(await screen.findByRole('option', { name: /Reviewer/ }))
+
+      fireEvent.change(screen.getByLabelText(INSTRUCTION_LABEL), {
+        target: { value: 'Take a look at this and push back.' },
+      })
+      fireEvent.click(screen.getByRole('button', { name: 'Draw wire' }))
+
+      await waitFor(() => {
+        expect(createRelay).toHaveBeenCalledWith(
+          expect.objectContaining({
+            instruction: 'Take a look at this and push back.',
+          }),
+        )
+      })
+    })
+
+    it('offers the same box for a spawn wire', async () => {
+      render(<CrewFlowSection crew={makeCrew(['impl'])} />)
+
+      fireEvent.click(screen.getByRole('button', { name: 'Add relay' }))
+
+      // A crew of one opens straight onto the spawn branch; the brief belongs
+      // there too, because the question is about the far end either way.
+      expect(screen.getByLabelText(INSTRUCTION_LABEL)).toBeVisible()
+    })
+
+    it('loads an existing brief into the form and can clear it', async () => {
+      seedRelays([makeRelay({ id: 'r1', instruction: 'Review it closely.' })])
+      render(<CrewFlowSection crew={makeCrew(['impl', 'review'])} />)
+
+      fireEvent.click(screen.getByRole('button', { name: /Edit relay/ }))
+      const box = screen.getByLabelText(INSTRUCTION_LABEL)
+      expect(box).toHaveValue('Review it closely.')
+
+      fireEvent.change(box, { target: { value: '  ' } })
+      fireEvent.click(screen.getByRole('button', { name: 'Save wire' }))
+
+      await waitFor(() => {
+        // An emptied box must actually remove the brief, not silently keep the
+        // old one because the field looked untouched.
+        expect(updateRelay).toHaveBeenCalledWith(
+          'r1',
+          expect.objectContaining({ instruction: null }),
+        )
+      })
+    })
+
+    it('marks a briefed wire in its sentence without printing the brief', () => {
+      seedRelays([makeRelay({ id: 'r1', instruction: 'Review it closely.' })])
+      render(<CrewFlowSection crew={makeCrew(['impl', 'review'])} />)
+
+      expect(screen.getByText('· with instructions')).toBeVisible()
+      expect(screen.queryByText(/Review it closely/)).toBeNull()
     })
   })
 
@@ -414,6 +486,7 @@ describe('CrewFlowSection', () => {
           sourceSessionId: 'impl',
           action: 'spawn',
           targetSessionId: null,
+          instruction: null,
           spawnSpec: {
             projectId: 'project-1',
             providerId: 'codex',

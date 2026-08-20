@@ -185,12 +185,14 @@ describe('RelayEngine', () => {
     source = 's1',
     target = 's2',
     armed = true,
+    instruction: string | null = null,
   ): ReturnType<RelayService['create']> {
     return relays.create({
       crewId: 'c1',
       sourceSessionId: source,
       action: 'hail',
       targetSessionId: target,
+      instruction,
       armed,
     })
   }
@@ -499,45 +501,253 @@ describe('RelayEngine', () => {
     expect(runIds.size).toBe(2)
   })
 
-  it('disarms loudly when a flow run burns its budget', async () => {
-    // s2 is the far end of a hot run: twenty hops have already landed in it,
-    // and its own wire back is what tries to fire next.
-    const relay = wire('s2', 's1')
-    for (let index = 0; index < MAX_AUTOMATIC_HOPS_PER_FLOW_RUN; index += 1) {
+  /**
+   * The loop law. Loops are wanted -- A -> B -> A is our own review loop --
+   * but a chain that has been all the way round has finished, and before this
+   * the only thing that stopped it was twenty real provider turns.
+   */
+  describe('the loop law: once per flow run', () => {
+    it('ends a ping-pong at two real hops with both wires still armed', async () => {
+      const there = wire('s1', 's2')
+      const back = wire('s2', 's1')
+      const gateway = createGateway({})
+      const engine = createEngine(gateway)
+
+      // s1 finishes, hails s2; s2 finishes, hails s1 back; s1 finishes again
+      // -- and that third settle is where the chain has to end.
+      await engine.handleSettle(settled('s1'))
+      await engine.handleSettle(settled('s2'))
+      await engine.handleSettle(settled('s1'))
+
+      expect(gateway.sent.map((turn) => turn.sessionId)).toEqual(['s2', 's1'])
+
+      const trail = relays.listHops('c1', 100)
+      expect(trail).toHaveLength(3)
+      const runIds = new Set(trail.map((hop) => hop.flowRunId))
+      expect(runIds.size).toBe(1)
+
+      const newest = trail[0]
+      expect(newest.outcome).toBe('skipped-already-fired')
+      expect(newest.relayId).toBe(there.id)
+      expect(newest.error).toContain('already fired in this run')
+
+      // Nothing was disarmed and nothing went red: the law is a pause, not a
+      // failure, and the next run must find both wires live.
+      expect(relays.getById(there.id)!.armed).toBe(true)
+      expect(relays.getById(back.id)!.armed).toBe(true)
+      expect(relaysChanged).toBe(0)
+      expect(trail.some((hop) => hop.outcome === 'skipped-budget')).toBe(false)
+    })
+
+    it('lets each wire of a three-node chain fire once, then stops', async () => {
+      wire('s1', 's2')
+      wire('s2', 's3')
+      wire('s3', 's1')
+      const gateway = createGateway({})
+      const engine = createEngine(gateway)
+
+      await engine.handleSettle(settled('s1'))
+      await engine.handleSettle(settled('s2'))
+      await engine.handleSettle(settled('s3'))
+      await engine.handleSettle(settled('s1'))
+
+      expect(gateway.sent.map((turn) => turn.sessionId)).toEqual([
+        's2',
+        's3',
+        's1',
+      ])
+      const outcomes = relays.listHops('c1', 100).map((hop) => hop.outcome)
+      expect(outcomes).toEqual([
+        'skipped-already-fired',
+        'delivered',
+        'delivered',
+        'delivered',
+      ])
+    })
+
+    /**
+     * THE regression this design exists for. Before the baton, ancestry was
+     * inferred from the newest hop that ever landed in a session, with no time
+     * bound -- so a hail typed by hand tomorrow would inherit today's finished
+     * run and find every wire "already fired". Dead forever, from a switch the
+     * user can see is armed.
+     */
+    it('fires again when the same session is driven by hand after the chain ended', async () => {
+      wire('s1', 's2')
+      wire('s2', 's1')
+      const gateway = createGateway({})
+      const engine = createEngine(gateway)
+
+      await engine.handleSettle(settled('s1'))
+      await engine.handleSettle(settled('s2'))
+      await engine.handleSettle(settled('s1'))
+      const afterChain = relays.listHops('c1', 100).length
+
+      // A human hails s1 and it settles again. No baton, so a fresh run.
+      await engine.handleSettle(settled('s1'))
+
+      const trail = relays.listHops('c1', 100)
+      expect(trail).toHaveLength(afterChain + 1)
+      expect(trail[0].outcome).toBe('delivered')
+      expect(trail[0].targetSessionId).toBe('s2')
+      expect(new Set(trail.map((hop) => hop.flowRunId)).size).toBe(2)
+      expect(gateway.sent.map((turn) => turn.sessionId)).toEqual([
+        's2',
+        's1',
+        's2',
+      ])
+    })
+
+    it('spends a baton exactly once, so a chain never re-enters an old run', async () => {
+      wire('s1', 's2')
+      const gateway = createGateway({})
+      const engine = createEngine(gateway)
+
+      await engine.handleSettle(settled('s1'))
+      const deliveredRun = relays.listHops('c1')[0].flowRunId
+
+      // s2 settles twice. The first settle takes the baton, the second finds
+      // none and must start a run of its own rather than re-reading the old.
+      wire('s2', 's3')
+      await engine.handleSettle(settled('s2'))
+      await engine.handleSettle(settled('s2'))
+
+      const trail = relays.listHops('c1', 100)
+      expect(trail).toHaveLength(3)
+      const [newest, middle] = trail
+      expect(middle.flowRunId).toBe(deliveredRun)
+      expect(newest.flowRunId).not.toBe(deliveredRun)
+      expect(newest.outcome).toBe('delivered')
+    })
+
+    it('hands the baton to a session it spawned', async () => {
+      spawnWire('s1')
+      const gateway = createGateway({})
+      const engine = createEngine(gateway)
+
+      await engine.handleSettle(settled('s1'))
+      const spawnRun = relays.listHops('c1')[0].flowRunId
+
+      // The spawned session is now wired onward; its settle continues the run
+      // it was born into rather than opening a second one.
+      wire('spawned-1', 's3')
+      await engine.handleSettle(settled('spawned-1'))
+
+      const trail = relays.listHops('c1', 100)
+      expect(trail).toHaveLength(2)
+      expect(trail[0].flowRunId).toBe(spawnRun)
+    })
+
+    /**
+     * A quiet row is still a row. The engine may decline to act, but it may
+     * never decline silently -- "my wire did not fire" always has an answer.
+     */
+    it('broadcasts the quiet row like any other hop', async () => {
+      wire('s1', 's2')
+      wire('s2', 's1')
+      const engine = createEngine(createGateway({}))
+
+      await engine.handleSettle(settled('s1'))
+      await engine.handleSettle(settled('s2'))
+      await engine.handleSettle(settled('s1'))
+
+      expect(hops).toHaveLength(3)
+      expect(hops[2].outcome).toBe('skipped-already-fired')
+    })
+
+    it('carries nothing and touches no session when it declines', async () => {
+      wire('s1', 's2')
+      wire('s2', 's1')
+      const gateway = createGateway({})
+      const engine = createEngine(gateway)
+
+      await engine.handleSettle(settled('s1'))
+      await engine.handleSettle(settled('s2'))
+      const sentBefore = gateway.sent.length
+      await engine.handleSettle(settled('s1'))
+
+      expect(gateway.sent).toHaveLength(sentBefore)
+      expect(gateway.created).toEqual([])
+      expect(relays.listHops('c1')[0].payloadPreview).toBeNull()
+    })
+
+    /** A failed source is a truer answer than "you already fired". */
+    it('still names a failed source ahead of the loop law', async () => {
+      wire('s1', 's2')
+      wire('s2', 's1')
+      const engine = createEngine(createGateway({}))
+
+      await engine.handleSettle(settled('s1'))
+      await engine.handleSettle(settled('s2'))
+      await engine.handleSettle(settled('s1', 'failed'))
+
+      expect(relays.listHops('c1')[0].outcome).toBe('skipped-failed')
+    })
+  })
+
+  /**
+   * The budget is the backstop behind the loop law, so these tests can no
+   * longer reach it by ping-ponging two wires -- that chain now ends at two
+   * hops. They fill a run the way a wide crew would: with hops from wires
+   * this test is not watching, all landing in the run the engine is really
+   * using. Run ids are minted inside the engine, so the run is read off the
+   * first real hop rather than invented here.
+   */
+  function burnFlowRunBudget(flowRunId: string): void {
+    while (
+      relays.countBudgetedHops(flowRunId) < MAX_AUTOMATIC_HOPS_PER_FLOW_RUN
+    ) {
       relays.appendHop({
-        relayId: relay.id,
+        relayId: 'a-wire-this-test-is-not-watching',
         crewId: 'c1',
-        flowRunId: 'run-hot',
-        sourceSessionId: 's1',
-        targetSessionId: 's2',
+        flowRunId,
+        sourceSessionId: 's3',
+        targetSessionId: 's3',
         triggerStatus: 'completed',
         outcome: 'delivered',
       })
     }
+  }
+
+  it('disarms loudly when a flow run burns its budget', async () => {
+    wire('s1', 's2')
+    const relay = wire('s2', 's1')
     const gateway = createGateway({})
+    const engine = createEngine(gateway)
 
-    await createEngine(gateway).handleSettle(settled('s2'))
+    // One real hop puts s2 in the run and hands it the baton; the rest of the
+    // run's budget is spent by other wires before s2 gets to answer.
+    await engine.handleSettle(settled('s1'))
+    const flowRunId = relays.listHops('c1')[0].flowRunId
+    burnFlowRunBudget(flowRunId)
+    const sentBefore = gateway.sent.length
 
-    expect(gateway.sent).toEqual([])
+    await engine.handleSettle(settled('s2'))
+
+    expect(gateway.sent).toHaveLength(sentBefore)
     const newest = relays.listHops('c1')[0]
     expect(newest.outcome).toBe('skipped-budget')
-    expect(newest.flowRunId).toBe('run-hot')
+    expect(newest.flowRunId).toBe(flowRunId)
     expect(newest.error).toContain(String(MAX_AUTOMATIC_HOPS_PER_FLOW_RUN))
     expect(relays.getById(relay.id)!.armed).toBe(false)
     expect(relaysChanged).toBe(1)
   })
 
-  it('lets a loop run right up to the budget before tripping', async () => {
-    wire('s1', 's2')
-    wire('s2', 's1')
+  it('lets a chain of distinct wires run right up to the budget', async () => {
+    // A relay chain long enough to outrun the budget on its own: n0 -> n1 ->
+    // ... Each wire fires once, so only the length of the chain can exhaust
+    // the run -- which is exactly the case the backstop still exists for.
+    const nodes = Array.from(
+      { length: MAX_AUTOMATIC_HOPS_PER_FLOW_RUN + 2 },
+      (_, index) => `n${index}`,
+    )
+    for (let index = 0; index < nodes.length - 1; index += 1) {
+      wire(nodes[index], nodes[index + 1])
+    }
     const engine = createEngine(createGateway({}))
 
-    // Ping-pong until the guard trips, with a hard stop well above the budget
-    // so a broken guard fails this test instead of hanging the suite.
-    let next = 's1'
-    for (let index = 0; index < MAX_AUTOMATIC_HOPS_PER_FLOW_RUN * 2; index++) {
-      await engine.handleSettle(settled(next))
-      next = next === 's1' ? 's2' : 's1'
+    for (const node of nodes) {
+      await engine.handleSettle(settled(node))
     }
 
     const trail = relays.listHops('c1', 1000)
@@ -546,7 +756,10 @@ describe('RelayEngine', () => {
     )
     expect(budgeted).toHaveLength(MAX_AUTOMATIC_HOPS_PER_FLOW_RUN)
     expect(trail.some((hop) => hop.outcome === 'skipped-budget')).toBe(true)
-    expect(relays.list().every((relay) => !relay.armed)).toBe(true)
+    expect(new Set(trail.map((hop) => hop.flowRunId)).size).toBe(1)
+    // Only the wire that tried to overspend is switched off; the loop law
+    // never disarms anything, so the rest of the chain stays live.
+    expect(relays.list().filter((relay) => !relay.armed)).toHaveLength(1)
   })
 
   describe('the spawn action', () => {
@@ -670,25 +883,104 @@ describe('RelayEngine', () => {
     })
 
     it('charges the flow run budget for a spawn', async () => {
-      const relay = spawnWire('s1')
-      for (let index = 0; index < MAX_AUTOMATIC_HOPS_PER_FLOW_RUN; index += 1) {
-        relays.appendHop({
-          relayId: relay.id,
-          crewId: 'c1',
-          flowRunId: 'run-hot',
-          sourceSessionId: 'x',
-          spawnedSessionId: 's1',
-          triggerStatus: 'completed',
-          outcome: 'spawned',
-        })
-      }
+      wire('s1', 's2')
+      const relay = spawnWire('s2')
       const gateway = createGateway({})
+      const engine = createEngine(gateway)
 
-      await createEngine(gateway).handleSettle(settled('s1'))
+      await engine.handleSettle(settled('s1'))
+      burnFlowRunBudget(relays.listHops('c1')[0].flowRunId)
+
+      await engine.handleSettle(settled('s2'))
 
       expect(gateway.created).toEqual([])
       expect(relays.listHops('c1')[0].outcome).toBe('skipped-budget')
       expect(relays.getById(relay.id)!.armed).toBe(false)
+    })
+  })
+
+  /**
+   * A wire may carry a standing brief above the message it was written about.
+   * The blank line between them is the MAR-2280 law; `relay.pure.test.ts` and
+   * `relay-payload.render.test.ts` own the format itself, so these tests only
+   * prove the engine actually sends the compiled thing -- and records it.
+   */
+  describe('instructions on the wire', () => {
+    const BRIEF = 'Review this and push back where it is thin.'
+
+    it('sends the brief above the message on a hail', async () => {
+      wire('s1', 's2', true, BRIEF)
+      const gateway = createGateway({
+        lastMessages: { s1: 'Branch is green.' },
+      })
+
+      await createEngine(gateway).handleSettle(settled('s1'))
+
+      expect(gateway.sent[0].text).toBe(`${BRIEF}\n\nBranch is green.`)
+    })
+
+    it('sends the brief above the message on a spawn', async () => {
+      relays.create({
+        crewId: 'c1',
+        sourceSessionId: 's1',
+        action: 'spawn',
+        instruction: BRIEF,
+        spawnSpec: {
+          projectId: 'p1',
+          providerId: 'codex',
+          model: null,
+          effort: null,
+          name: 'Reviewer',
+          providerAccountId: null,
+        },
+      })
+      const gateway = createGateway({
+        lastMessages: { s1: 'Branch is green.' },
+      })
+
+      await createEngine(gateway).handleSettle(settled('s1'))
+
+      expect(gateway.started[0].text).toBe(`${BRIEF}\n\nBranch is green.`)
+    })
+
+    it('records what was actually sent, not what the session said', async () => {
+      // The ledger is the honest account of the wire. A preview showing only
+      // the source's words would hide the brief the target really received.
+      wire('s1', 's2', true, BRIEF)
+      const gateway = createGateway({
+        lastMessages: { s1: 'Branch is green.' },
+      })
+
+      await createEngine(gateway).handleSettle(settled('s1'))
+
+      const preview = relays.listHops('c1')[0].payloadPreview
+      expect(preview).toBe(`${BRIEF} Branch is green.`)
+    })
+
+    it('carries the message alone when the wire has no brief', async () => {
+      wire('s1', 's2')
+      const gateway = createGateway({
+        lastMessages: { s1: 'Branch is green.' },
+      })
+
+      await createEngine(gateway).handleSettle(settled('s1'))
+
+      // Byte-identical to what this wire sent before instructions existed.
+      expect(gateway.sent[0].text).toBe('Branch is green.')
+      expect(relays.listHops('c1')[0].payloadPreview).toBe('Branch is green.')
+    })
+
+    it('briefs each wire on its own terms', async () => {
+      wire('s1', 's2', true, 'Wire one says this.')
+      wire('s1', 's3', true, 'Wire two says something else.')
+      const gateway = createGateway({ lastMessages: { s1: 'Done.' } })
+
+      await createEngine(gateway).handleSettle(settled('s1'))
+
+      expect(gateway.sent.map((turn) => turn.text)).toEqual([
+        'Wire one says this.\n\nDone.',
+        'Wire two says something else.\n\nDone.',
+      ])
     })
   })
 

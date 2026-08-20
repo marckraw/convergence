@@ -1,3 +1,4 @@
+import { randomUUID } from 'crypto'
 import type { SessionStatus } from '../provider/provider.types'
 import type {
   CreateSessionInput,
@@ -6,9 +7,12 @@ import type {
 import { resolveAccountForAutomaticTurn } from '../provider-account/provider-account-automatic-turn.pure'
 import type { AutomaticTurnAccountSource } from '../provider-account/provider-account-automatic-turn.pure'
 import {
+  ALREADY_FIRED_MESSAGE,
   buildPayloadPreview,
+  compileRelayPayload,
   flowRunBudgetMessage,
   hasFlowRunBudget,
+  isBudgetedOutcome,
 } from './relay.pure'
 import type { RelayService } from './relay.service'
 import type {
@@ -97,6 +101,26 @@ export class RelayEngine {
   private readonly onRelaysChanged?: () => void
   private readonly onCrewsChanged?: () => void
 
+  /**
+   * The ancestry batons: session id -> the flow run whose work it is holding.
+   *
+   * A hop that lands work in a session leaves a baton on it; that session's
+   * next settle takes the baton and continues the same run. The baton is
+   * one-shot -- taken and deleted -- so a session driven by hand afterwards
+   * starts a fresh run and its wires live again.
+   *
+   * Deliberately in memory rather than inferred from the ledger. The ledger
+   * cannot tell "this settle is the hop I delivered" from "this settle is a
+   * turn the user typed a week later", and under the loop law that difference
+   * is the difference between a wire resting and a wire dead forever.
+   *
+   * A restart drops every baton, so a chain interrupted by a restart resumes
+   * in a fresh run and one wire may fire a second time. That is the direction
+   * this errs on purpose: worst case one extra hop, never a loop, because
+   * once-per-run still governs the new run.
+   */
+  private readonly batons = new Map<string, string>()
+
   constructor(deps: RelayEngineDeps) {
     this.relays = deps.relays
     this.sessions = deps.sessions
@@ -113,12 +137,14 @@ export class RelayEngine {
    */
   async handleSettle(event: SessionSettledEvent): Promise<void> {
     try {
+      // Taken before the wires are read, and once per settle: every wire
+      // leaving this session is measured against the same run, and a session
+      // with nothing wired to it still spends its ticket rather than leaving a
+      // stale run lying around for some later, unrelated turn.
+      const flowRunId = this.takeFlowRunId(event.sessionId)
+
       const relays = this.relays.listForSourceSession(event.sessionId)
       if (relays.length === 0) return
-
-      // Resolved once per settle so every wire leaving this session is
-      // measured against the same run, and the same budget.
-      const flowRunId = this.relays.resolveFlowRunId(event.sessionId)
 
       for (const relay of relays) {
         await this.fire(relay, event, flowRunId)
@@ -129,6 +155,17 @@ export class RelayEngine {
         error,
       )
     }
+  }
+
+  /**
+   * The run a settling session's wires belong to: the baton left on it by
+   * whatever delivered into it, or a brand new run when it settled on its own.
+   */
+  private takeFlowRunId(sessionId: string): string {
+    const held = this.batons.get(sessionId)
+    if (held === undefined) return randomUUID()
+    this.batons.delete(sessionId)
+    return held
   }
 
   private async fire(
@@ -149,6 +186,14 @@ export class RelayEngine {
         outcome,
         error: extra.error ?? null,
       })
+      // A budgeted outcome is the one proof that a session actually received
+      // work in this run, so it is also the only thing that hands on a baton.
+      // Reusing the budget's own vocabulary keeps the two from drifting: a
+      // hop that spends a turn is exactly a hop that continues the chain.
+      if (isBudgetedOutcome(outcome)) {
+        const landedIn = hop.spawnedSessionId ?? hop.targetSessionId
+        if (landedIn) this.batons.set(landedIn, flowRunId)
+      }
       this.onHopAppended?.(hop)
     }
 
@@ -167,6 +212,18 @@ export class RelayEngine {
       return
     }
 
+    // The loop law. A chain that comes back round to a wire it already used
+    // has finished, so the wire declines quietly and stays armed for the next
+    // run -- A -> B -> A ends at two real hops. This is not a failure, which
+    // is why it disarms nothing and reads grey in the trail.
+    if (this.relays.hasFiredInFlowRun(relay.id, flowRunId)) {
+      record('skipped-already-fired', { error: ALREADY_FIRED_MESSAGE })
+      return
+    }
+
+    // Kept as a backstop behind the loop law rather than instead of it: it is
+    // the only guard left if a future trigger finds a way to mint runs faster
+    // than a chain consumes them.
     const spentHops = this.relays.countBudgetedHops(flowRunId)
     if (!hasFlowRunBudget(spentHops)) {
       this.relays.setArmed(relay.id, false)
@@ -175,13 +232,18 @@ export class RelayEngine {
       return
     }
 
-    const payload = this.sessions.getLastAssistantMessageText(event.sessionId)
-    if (!payload) {
+    const message = this.sessions.getLastAssistantMessageText(event.sessionId)
+    if (!message) {
       record('error', {
         error: 'The session finished without an assistant message to carry.',
       })
       return
     }
+
+    // Compiled once, here, so both actions send the same thing and the ledger
+    // records what was actually sent rather than what the session happened to
+    // say. A wire with no instruction compiles to the message untouched.
+    const payload = compileRelayPayload(relay.instruction, message)
     const payloadPreview = buildPayloadPreview(payload)
 
     if (relay.action === 'spawn') {

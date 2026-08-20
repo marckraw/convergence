@@ -216,6 +216,7 @@ export const CrewFlowSection: FC<CrewFlowSectionProps> = ({ crew }) => {
         action: relay.action,
         sourceSessionId: relay.sourceSessionId,
         targetSessionId: relay.targetSessionId,
+        instruction: relay.instruction ?? '',
         spawn: relay.spawnSpec
           ? {
               projectId: relay.spawnSpec.projectId,
@@ -260,16 +261,22 @@ export const CrewFlowSection: FC<CrewFlowSectionProps> = ({ crew }) => {
           spawnSpec: null,
         }
 
+    // Sent as an explicit null rather than omitted, so clearing the box on an
+    // edit actually removes the brief instead of quietly keeping the old one.
+    const instruction = draft.instruction.trim() ? draft.instruction : null
+
     setBusy(true)
     const saved =
       editor.kind === 'create'
         ? await createRelay({
             crewId: crew.id,
             sourceSessionId: draft.sourceSessionId,
+            instruction,
             ...shape,
           })
         : await updateRelay(editor.relayId, {
             sourceSessionId: draft.sourceSessionId,
+            instruction,
             ...shape,
           })
     setBusy(false)
@@ -376,6 +383,7 @@ export const CrewFlowSection: FC<CrewFlowSectionProps> = ({ crew }) => {
           action={draft.action}
           sourceSessionId={draft.sourceSessionId}
           targetSessionId={draft.targetSessionId}
+          instruction={draft.instruction}
           spawn={draft.spawn}
           projectOptions={projectOptions}
           providerOptions={providerOptions}
@@ -393,6 +401,9 @@ export const CrewFlowSection: FC<CrewFlowSectionProps> = ({ crew }) => {
           }
           onTargetChange={(sessionId) =>
             setDraft((current) => ({ ...current, targetSessionId: sessionId }))
+          }
+          onInstructionChange={(instruction) =>
+            setDraft((current) => ({ ...current, instruction }))
           }
           onSpawnChange={(patch: Partial<RelaySpawnDraft>) =>
             setDraft((current) => ({

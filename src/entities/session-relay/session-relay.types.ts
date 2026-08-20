@@ -29,6 +29,11 @@ export interface SessionRelay {
   action: RelayAction
   targetSessionId: string | null
   spawnSpec: RelaySpawnSpec | null
+  /**
+   * A standing brief prepended to every message this wire carries, or null to
+   * carry the message exactly as the source session wrote it.
+   */
+  instruction: string | null
   armed: boolean
   createdAt: string
   updatedAt: string
@@ -40,6 +45,8 @@ export type RelayHopOutcome =
   | 'spawned'
   | 'skipped-failed'
   | 'skipped-budget'
+  /** The loop law working: a wire fires at most once per flow run. */
+  | 'skipped-already-fired'
   | 'error'
 
 /** One firing, recorded whether or not anything was carried. */
@@ -68,6 +75,7 @@ export interface CreateSessionRelayInput {
   action: RelayAction
   targetSessionId?: string | null
   spawnSpec?: RelaySpawnSpec | null
+  instruction?: string | null
   armed?: boolean
 }
 
@@ -76,5 +84,6 @@ export interface UpdateSessionRelayInput {
   action?: RelayAction
   targetSessionId?: string | null
   spawnSpec?: RelaySpawnSpec | null
+  instruction?: string | null
   armed?: boolean
 }

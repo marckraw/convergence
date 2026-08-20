@@ -58,6 +58,7 @@ describe('alarming outcomes', () => {
       'queued',
       'spawned',
       'skipped-failed',
+      'skipped-already-fired',
     ] as const) {
       expect(isAlarmingHop({ outcome })).toBe(false)
     }
@@ -82,6 +83,7 @@ describe('relayHopTone', () => {
     expect(relayHopTone('queued')).toBe('delivered')
     expect(relayHopTone('spawned')).toBe('delivered')
     expect(relayHopTone('skipped-failed')).toBe('skipped')
+    expect(relayHopTone('skipped-already-fired')).toBe('skipped')
     expect(relayHopTone('skipped-budget')).toBe('alarm')
     expect(relayHopTone('error')).toBe('alarm')
   })
@@ -106,6 +108,23 @@ describe('formatRelayHopOutcome', () => {
       'skipped — source failed',
     )
     expect(formatRelayHopOutcome('skipped-budget')).toBe('stopped — hop budget')
+    expect(formatRelayHopOutcome('skipped-already-fired')).toBe(
+      'already fired this run',
+    )
+  })
+
+  /**
+   * The loop law ending a chain is the wire working. If it ever reads as an
+   * alarm the user learns to distrust the thing that stops runaway spending.
+   */
+  it('keeps the loop law quiet rather than alarming', () => {
+    expect(isAlarmingHop({ outcome: 'skipped-already-fired' })).toBe(false)
+    expect(countAlarmingHops([{ outcome: 'skipped-already-fired' }])).toBe(0)
+    expect(
+      (ALARMING_RELAY_OUTCOMES as readonly string[]).includes(
+        'skipped-already-fired',
+      ),
+    ).toBe(false)
   })
 
   it('keeps the plain outcomes plain', () => {

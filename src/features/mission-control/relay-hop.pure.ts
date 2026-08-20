@@ -35,7 +35,11 @@ export function relayHopTone(outcome: string): RelayHopTone {
     case 'queued':
     case 'spawned':
       return 'delivered'
+    // `skipped-already-fired` is grey on purpose: a chain ending after one
+    // pass round its wires is the loop law doing its job, and red would train
+    // the user to fear the thing that is protecting them.
     case 'skipped-failed':
+    case 'skipped-already-fired':
       return 'skipped'
     case 'skipped-budget':
     case 'error':
@@ -66,6 +70,8 @@ export function formatRelayHopOutcome(outcome: string): string {
       return 'skipped — source failed'
     case 'skipped-budget':
       return 'stopped — hop budget'
+    case 'skipped-already-fired':
+      return 'already fired this run'
     case 'error':
       return 'error'
     default:

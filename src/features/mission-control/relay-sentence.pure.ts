@@ -1,5 +1,29 @@
 import type { RelayAction, SessionRelay } from '@/entities/session-relay'
 
+/** The two halves of a trigger clause, wrapped around the source session. */
+export interface RelayTriggerClause {
+  /** Sits before the session name: "When". */
+  prefix: string
+  /** Sits after it: "finishes". */
+  suffix: string
+}
+
+/**
+ * How each trigger reads in a sentence.
+ *
+ * A `Record` keyed by the union, so a trigger added to the type cannot ship
+ * without words — the compiler asks for them here, once, instead of leaving
+ * three files quietly saying "finishes" about a wire that fires on something
+ * else. This is the seam the action clause already had (see `connector`); the
+ * trigger simply never needed one while there was only one of them.
+ */
+export const RELAY_TRIGGER_CLAUSES: Record<
+  SessionRelay['trigger'],
+  RelayTriggerClause
+> = {
+  settled: { prefix: 'When', suffix: 'finishes' },
+}
+
 /** What the sentence calls an endpoint whose session is gone. */
 export const MISSING_SESSION_LABEL = 'a session that no longer exists'
 
@@ -11,15 +35,27 @@ export interface RelayEndpointLabel {
 }
 
 export interface RelaySentence {
+  /** What makes this wire fire, in words wrapped around the source name. */
+  trigger: RelayTriggerClause
   source: RelayEndpointLabel
   /** The phrase between the two ends — what this wire actually does. */
   connector: string
   target: RelayEndpointLabel
   /** Trailing specifics for a spawn: which provider, which project. */
   detail: string | null
+  /**
+   * Set when the wire carries a standing brief. Quiet by design: the sentence
+   * says the wire has instructions, and the instructions themselves live in
+   * the form — a paragraph inlined into every row would bury the wiring the
+   * row exists to show.
+   */
+  instruction: string | null
   /** The whole sentence as plain text, for titles and accessible names. */
   text: string
 }
+
+/** The quiet marker a briefed wire wears in its sentence. */
+export const RELAY_INSTRUCTION_MARKER = 'with instructions'
 
 export type ResolveSessionName = (sessionId: string) => string | null
 
@@ -46,7 +82,12 @@ function endpoint(
 export function buildRelaySentence(
   relay: Pick<
     SessionRelay,
-    'sourceSessionId' | 'targetSessionId' | 'action' | 'spawnSpec'
+    | 'trigger'
+    | 'sourceSessionId'
+    | 'targetSessionId'
+    | 'action'
+    | 'spawnSpec'
+    | 'instruction'
   >,
   resolveName: ResolveSessionName,
   resolveProjectName?: (projectId: string | null) => string,
@@ -59,6 +100,10 @@ export function buildRelaySentence(
   resolveAccountLabel?: (accountId: string) => string | null,
 ): RelaySentence {
   const source = endpoint(relay.sourceSessionId, resolveName)
+  const trigger = RELAY_TRIGGER_CLAUSES[relay.trigger]
+  const opening = `${trigger.prefix} ${source.name} ${trigger.suffix}`
+  const instruction = relay.instruction?.trim() ? relay.instruction : null
+  const marker = instruction ? ` · ${RELAY_INSTRUCTION_MARKER}` : ''
 
   if (relay.action === 'spawn') {
     const spec = relay.spawnSpec
@@ -71,11 +116,13 @@ export function buildRelaySentence(
         missing: true,
       }
       return {
+        trigger,
         source,
         connector,
         target,
         detail: null,
-        text: `When ${source.name} finishes, ${connector} ${target.name}`,
+        instruction,
+        text: `${opening}, ${connector} ${target.name}${marker}`,
       }
     }
 
@@ -94,22 +141,26 @@ export function buildRelaySentence(
       : `${spec.providerId} in ${where}`
 
     return {
+      trigger,
       source,
       connector,
       target,
       detail,
-      text: `When ${source.name} finishes, ${connector} ${target.name} — ${detail}`,
+      instruction,
+      text: `${opening}, ${connector} ${target.name} — ${detail}${marker}`,
     }
   }
 
   const connector = 'send its last message to'
   const target = endpoint(relay.targetSessionId, resolveName)
   return {
+    trigger,
     source,
     connector,
     target,
     detail: null,
-    text: `When ${source.name} finishes, ${connector} ${target.name}`,
+    instruction,
+    text: `${opening}, ${connector} ${target.name}${marker}`,
   }
 }
 
@@ -156,6 +207,8 @@ export interface RelayDraft {
   action: RelayAction
   sourceSessionId: string | null
   targetSessionId: string | null
+  /** Raw textarea text; empty means the wire carries the message untouched. */
+  instruction: string
   spawn: RelaySpawnDraft
 }
 
@@ -172,6 +225,7 @@ export const EMPTY_RELAY_DRAFT: RelayDraft = {
   action: 'hail',
   sourceSessionId: null,
   targetSessionId: null,
+  instruction: '',
   spawn: EMPTY_SPAWN_DRAFT,
 }
 

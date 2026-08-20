@@ -174,6 +174,101 @@ describe('RelayService', () => {
     })
   })
 
+  describe('instructions on the wire', () => {
+    it('stores a wire with no instruction as null', () => {
+      expect(createRelay().instruction).toBeNull()
+    })
+
+    it('keeps a brief, trimmed', () => {
+      const relay = service.create({
+        crewId: 'c1',
+        sourceSessionId: 's1',
+        action: 'hail',
+        targetSessionId: 's2',
+        instruction: '  Take a look at this.  ',
+      })
+
+      expect(relay.instruction).toBe('Take a look at this.')
+      expect(service.getById(relay.id)!.instruction).toBe(
+        'Take a look at this.',
+      )
+    })
+
+    it('treats a blank box as no instruction', () => {
+      const relay = service.create({
+        crewId: 'c1',
+        sourceSessionId: 's1',
+        action: 'hail',
+        targetSessionId: 's2',
+        instruction: '   ',
+      })
+
+      expect(relay.instruction).toBeNull()
+    })
+
+    it('leaves the brief alone when an edit is about something else', () => {
+      const relay = service.create({
+        crewId: 'c1',
+        sourceSessionId: 's1',
+        action: 'hail',
+        targetSessionId: 's2',
+        instruction: 'Review it.',
+      })
+
+      expect(
+        service.update(relay.id, { targetSessionId: 's3' }).instruction,
+      ).toBe('Review it.')
+    })
+
+    it('clears the brief when the box is emptied', () => {
+      const relay = service.create({
+        crewId: 'c1',
+        sourceSessionId: 's1',
+        action: 'hail',
+        targetSessionId: 's2',
+        instruction: 'Review it.',
+      })
+
+      expect(
+        service.update(relay.id, { instruction: null }).instruction,
+      ).toBeNull()
+      expect(
+        service.update(relay.id, { instruction: 'Now this.' }).instruction,
+      ).toBe('Now this.')
+    })
+
+    it('refuses a brief nobody meant to write', () => {
+      expect(() =>
+        service.create({
+          crewId: 'c1',
+          sourceSessionId: 's1',
+          action: 'hail',
+          targetSessionId: 's2',
+          instruction: 'x'.repeat(4001),
+        }),
+      ).toThrow('4000')
+    })
+
+    it('carries a brief on a spawn wire too', () => {
+      const relay = service.create({
+        crewId: 'c1',
+        sourceSessionId: 's1',
+        action: 'spawn',
+        instruction: 'Start from the branch diff.',
+        spawnSpec: {
+          projectId: 'p1',
+          providerId: 'codex',
+          model: null,
+          effort: null,
+          name: 'Reviewer',
+          providerAccountId: null,
+        },
+      })
+
+      expect(relay.instruction).toBe('Start from the branch diff.')
+    })
+  })
+
   describe('spawn wires', () => {
     const spec = {
       projectId: 'p1',
@@ -353,40 +448,81 @@ describe('RelayService', () => {
     })
   })
 
-  describe('flow run ancestry and budget', () => {
-    it('mints a fresh run for a session nothing relayed into', () => {
-      const first = service.resolveFlowRunId('s1')
-      const second = service.resolveFlowRunId('s2')
+  describe('the loop law and the budget', () => {
+    it('says a wire has not fired when its run holds no hops', () => {
+      const relay = createRelay()
 
-      expect(first).toEqual(expect.any(String))
-      expect(first).not.toBe(second)
+      expect(service.hasFiredInFlowRun(relay.id, 'run-1')).toBe(false)
     })
 
-    it('inherits the run of the newest hop delivered into the session', () => {
+    it('remembers a wire that spent a turn in this run', () => {
       const relay = createRelay()
       service.appendHop({
         relayId: relay.id,
         crewId: 'c1',
-        flowRunId: 'run-old',
+        flowRunId: 'run-1',
         sourceSessionId: 's1',
         targetSessionId: 's2',
         triggerStatus: 'completed',
         outcome: 'delivered',
       })
+
+      expect(service.hasFiredInFlowRun(relay.id, 'run-1')).toBe(true)
+      // The next run is a clean sheet; that is what makes the law a pause
+      // rather than a one-shot fuse.
+      expect(service.hasFiredInFlowRun(relay.id, 'run-2')).toBe(false)
+    })
+
+    it('keeps the answer to the wire that was asked about', () => {
+      const first = createRelay()
+      const second = createRelay({ target: 's3' })
+      service.appendHop({
+        relayId: first.id,
+        crewId: 'c1',
+        flowRunId: 'run-1',
+        sourceSessionId: 's1',
+        targetSessionId: 's2',
+        triggerStatus: 'completed',
+        outcome: 'delivered',
+      })
+
+      expect(service.hasFiredInFlowRun(second.id, 'run-1')).toBe(false)
+    })
+
+    /**
+     * A skip is not a firing. If it counted, one failed source would retire
+     * the wire for the rest of the run without a turn ever being spent.
+     */
+    it('does not count skips, errors or words from another build', () => {
+      const relay = createRelay()
+      for (const outcome of [
+        'skipped-failed',
+        'skipped-budget',
+        'skipped-already-fired',
+        'error',
+      ] as const) {
+        service.appendHop({
+          relayId: relay.id,
+          crewId: 'c1',
+          flowRunId: 'run-1',
+          sourceSessionId: 's1',
+          triggerStatus: 'completed',
+          outcome,
+        })
+      }
       service.appendHop({
         relayId: relay.id,
         crewId: 'c1',
-        flowRunId: 'run-new',
+        flowRunId: 'run-1',
         sourceSessionId: 's1',
-        targetSessionId: 's2',
         triggerStatus: 'completed',
-        outcome: 'delivered',
+        outcome: 'skipped-disarmed' as never,
       })
 
-      expect(service.resolveFlowRunId('s2')).toBe('run-new')
+      expect(service.hasFiredInFlowRun(relay.id, 'run-1')).toBe(false)
     })
 
-    it('inherits through a spawned session as well as a hailed one', () => {
+    it('counts a spawn as this wire having fired', () => {
       const relay = createRelay()
       service.appendHop({
         relayId: relay.id,
@@ -395,10 +531,10 @@ describe('RelayService', () => {
         sourceSessionId: 's1',
         spawnedSessionId: 's3',
         triggerStatus: 'completed',
-        outcome: 'delivered',
+        outcome: 'spawned',
       })
 
-      expect(service.resolveFlowRunId('s3')).toBe('run-spawn')
+      expect(service.hasFiredInFlowRun(relay.id, 'run-spawn')).toBe(true)
     })
 
     it('charges only the hops that spent a provider turn', () => {

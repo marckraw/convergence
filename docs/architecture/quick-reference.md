@@ -147,7 +147,25 @@ The user is always asked before download and before install.
 Dev mode (`app.isPackaged === false`) short-circuits every update
 code path. Full spec: `docs/specs/auto-updates.md`.
 
-### 10. Verification rules
+### 10. Flows: the relay engine
+
+Crews can hold **relays** — wires that carry a finished session's last
+assistant message into another session, or into one the wire opens. The
+engine (`electron/backend/relay/`) is deterministic and dumb by design:
+Convergence is the switchboard, agents never call agents.
+
+Four laws bind it: no silent hops (every firing writes a ledger row), the
+loop law (a wire fires once per flow run, carried by an in-memory one-shot
+ancestry baton), the vocabulary law (write a union, read a plain string, so
+rows from another build still render), and the quota law (relay tests reach
+providers through narrow fake gateways and no other way).
+
+How to add a trigger, an action or a payload transform — with the real file
+lists and the rulings behind them — is
+`docs/architecture/relay-engine.md`. Product doctrine lives in the Linear
+document "Flows — constitution & staged map".
+
+### 11. Verification rules
 
 After every finished task, the expected verification flow is:
 

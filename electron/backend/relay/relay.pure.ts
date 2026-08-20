@@ -96,6 +96,58 @@ export function normalizeRelaySpawnSpec(
 /** What a spawned session is called when the wire did not name one. */
 export const DEFAULT_SPAWN_NAME = 'Relayed session'
 
+/**
+ * Long enough for a real briefing, short enough that nobody pastes a document
+ * onto a wire and wonders why every hop costs a fortune.
+ */
+export const MAX_RELAY_INSTRUCTION_LENGTH = 4000
+
+/**
+ * The standing instruction a wire prepends to everything it carries.
+ *
+ * Blank is not a value: an empty box means "carry the message as it is", which
+ * is the behaviour every wire had before instructions existed, so it stores as
+ * null rather than as an empty string nobody would notice compiling into the
+ * payload.
+ */
+export function normalizeRelayInstruction(
+  value: string | null | undefined,
+): string | null {
+  if (value === null || value === undefined) return null
+
+  const trimmed = value.trim()
+  if (trimmed.length === 0) return null
+  if (trimmed.length > MAX_RELAY_INSTRUCTION_LENGTH) {
+    throw new Error(
+      `Relay instructions cannot be longer than ${MAX_RELAY_INSTRUCTION_LENGTH} characters`,
+    )
+  }
+  return trimmed
+}
+
+/**
+ * What the wire actually sends: the standing instruction, then the finished
+ * message it was written about.
+ *
+ * The blank line between them is load-bearing, not cosmetic (the MAR-2280
+ * law). Markdown's lazy continuation would otherwise glue the instruction's
+ * last line onto the message's first, and an instruction that ends inside a
+ * quote or a list would swallow the message into it -- the receiving model
+ * would read one blurred block instead of "here is your brief, here is the
+ * thing it is about".
+ *
+ * No instruction means the payload is returned untouched, byte for byte. A
+ * wire nobody briefed must carry exactly what it always carried.
+ */
+export function compileRelayPayload(
+  instruction: string | null,
+  message: string,
+): string {
+  const brief = instruction?.trim() ?? ''
+  if (brief.length === 0) return message
+  return `${brief}\n\n${message}`
+}
+
 export function normalizeRelaySessionId(value: string, label: string): string {
   const trimmed = value.trim()
   if (trimmed.length === 0) {
@@ -162,3 +214,13 @@ export function hasFlowRunBudget(spentHops: number): boolean {
 export function flowRunBudgetMessage(spentHops: number): string {
   return `This flow run already fired ${spentHops} hops, hitting the ${MAX_AUTOMATIC_HOPS_PER_FLOW_RUN}-hop budget. The relay was disarmed to stop the loop.`
 }
+
+/**
+ * The sentence the ledger shows when the loop law ends a chain.
+ *
+ * Deliberately not phrased as a problem: A -> B -> A finishing after two hops
+ * is the wire behaving, and the row exists so the user can see the chain stop
+ * rather than wonder whether anything happened.
+ */
+export const ALREADY_FIRED_MESSAGE =
+  'This wire already fired in this run; a wire fires once per run.'

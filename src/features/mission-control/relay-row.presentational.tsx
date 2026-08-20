@@ -4,7 +4,10 @@ import type { SessionRelay } from '@/entities/session-relay'
 import { cn } from '@/shared/lib/cn.pure'
 import { Button } from '@/shared/ui/button'
 import type { RelaySentence } from './relay-sentence.pure'
-import { formatArmedLabel } from './relay-sentence.pure'
+import {
+  RELAY_INSTRUCTION_MARKER,
+  formatArmedLabel,
+} from './relay-sentence.pure'
 
 interface RelayRowProps {
   relay: SessionRelay
@@ -70,7 +73,10 @@ export const RelayRow: FC<RelayRowProps> = ({
       </Button>
 
       <p className="flex min-w-0 flex-1 flex-wrap items-center gap-1 text-[11px] leading-tight text-muted-foreground">
-        <span>When</span>
+        {/* Read from the sentence rather than typed here, the same way the
+            action's own words already are: a row must never be able to say
+            "finishes" about a wire that fires on something else. */}
+        <span>{sentence.trigger.prefix}</span>
         <span
           className={cn(
             'font-medium',
@@ -79,7 +85,7 @@ export const RelayRow: FC<RelayRowProps> = ({
         >
           {sentence.source.name}
         </span>
-        <span>finishes</span>
+        <span>{sentence.trigger.suffix}</span>
         <ArrowRight aria-hidden className="size-3 shrink-0" />
         <span>{sentence.connector}</span>
         <span
@@ -92,6 +98,17 @@ export const RelayRow: FC<RelayRowProps> = ({
         </span>
         {sentence.detail ? (
           <span className="text-muted-foreground/70">· {sentence.detail}</span>
+        ) : null}
+        {/* The brief itself stays in the form: a row is scanned, and a
+            paragraph here would hide the wiring it exists to show. Hover
+            reads it out in full. */}
+        {sentence.instruction ? (
+          <span
+            title={sentence.instruction}
+            className="text-muted-foreground/70"
+          >
+            · {RELAY_INSTRUCTION_MARKER}
+          </span>
         ) : null}
       </p>
 

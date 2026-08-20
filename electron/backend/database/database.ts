@@ -240,6 +240,7 @@ const SCHEMA = `
     action TEXT NOT NULL,
     target_session_id TEXT,
     spawn_spec_json TEXT,
+    instruction TEXT,
     armed INTEGER NOT NULL DEFAULT 1,
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
     updated_at TEXT NOT NULL DEFAULT (datetime('now'))
@@ -654,6 +655,17 @@ function ensureProjectScriptColumns(database: Database.Database): void {
     database.exec(
       "ALTER TABLE project_scripts ADD COLUMN icon TEXT NOT NULL DEFAULT 'play'",
     )
+  }
+}
+
+/**
+ * The standing instruction a wire prepends to what it carries (F7). Additive
+ * and nullable: every wire drawn before this existed keeps carrying the bare
+ * message, which is exactly what null means.
+ */
+function ensureRelayColumns(database: Database.Database): void {
+  if (!getTableColumnNames(database, 'session_relays').has('instruction')) {
+    database.exec('ALTER TABLE session_relays ADD COLUMN instruction TEXT')
   }
 }
 
@@ -1177,6 +1189,7 @@ export function getDatabase(dbPath?: string): Database.Database {
     ensureWorkspaceColumns(database)
     ensureSessionColumns(database)
     ensureProviderAccountColumns(database)
+    ensureRelayColumns(database)
     ensureAttachmentsTableNoFk(database)
     migrateLegacySessionConversations(database)
     ensureSessionsTableShape(database)
