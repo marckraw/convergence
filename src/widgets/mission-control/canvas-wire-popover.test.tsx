@@ -24,6 +24,7 @@ function relay(overrides: Partial<SessionRelay> = {}): SessionRelay {
     targetSessionId: 'b',
     spawnSpec: null,
     instruction: null,
+    opener: null,
     armed: true,
     createdAt: '2026-08-16T10:00:00.000Z',
     updatedAt: '2026-08-16T10:00:00.000Z',

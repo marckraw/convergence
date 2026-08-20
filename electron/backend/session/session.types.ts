@@ -153,6 +153,12 @@ export interface SessionQueuedInput {
   providerRequestId: string | null
   /** Account selected when this input was queued (ADR 0007, PA4). */
   providerAccountId: string | null
+  /**
+   * True only for a relay opener (F9): this text is a command for the provider
+   * and must reach it byte for byte, with no project-context block in front of
+   * it. Nothing a person types ever sets this.
+   */
+  skipContextInjection: boolean
   error: string | null
   createdAt: string
   updatedAt: string

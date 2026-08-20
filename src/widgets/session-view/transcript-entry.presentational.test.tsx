@@ -686,6 +686,59 @@ describe('ConversationItemView', () => {
       ).not.toBeInTheDocument()
     })
 
+    /**
+     * F9. Convergence never clears its own transcript, so when a provider
+     * restarts the conversation underneath a session -- `/clear`, or a relay
+     * opener doing it on purpose -- the reader has to be able to SEE where the
+     * model's memory stops. A quiet italic line in a long transcript is
+     * exactly what gets scrolled past.
+     */
+    it('draws a boundary where the conversation restarted', () => {
+      render(
+        <ConversationItemView
+          viewModel={buildTranscriptEntryViewModel({
+            item: {
+              ...noteEntry(),
+              text: 'Context cleared — the conversation restarted fresh.',
+              providerMeta: {
+                providerId: 'claude-code',
+                providerItemId: null,
+                providerEventType: 'session.restarted',
+              },
+            } as ConversationItem,
+            turnStartedAt: null,
+            resolvedAttachmentsById: {},
+          })}
+        />,
+      )
+
+      expect(screen.getByTestId('session-restart-boundary')).toBeVisible()
+      expect(
+        screen.getByText('Context cleared — the conversation restarted fresh.'),
+      ).toBeVisible()
+    })
+
+    it('leaves every other note reading as a note', () => {
+      render(
+        <ConversationItemView
+          viewModel={buildTranscriptEntryViewModel({
+            item: {
+              ...noteEntry(),
+              providerMeta: {
+                providerId: 'claude-code',
+                providerItemId: null,
+                providerEventType: 'system',
+              },
+            } as ConversationItem,
+            turnStartedAt: null,
+            resolvedAttachmentsById: {},
+          })}
+        />,
+      )
+
+      expect(screen.queryByTestId('session-restart-boundary')).toBeNull()
+    })
+
     it('renders no control on a surface that cannot honour it', () => {
       // A dead button is worse than none: the note still says what to do.
       render(

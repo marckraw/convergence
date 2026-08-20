@@ -272,6 +272,7 @@ describe('database', () => {
         'skill_selections_json',
         'provider_request_id',
         'provider_account_id',
+        'skip_context_injection',
         'error',
         'created_at',
         'updated_at',
@@ -480,6 +481,7 @@ describe('database', () => {
         'target_session_id',
         'spawn_spec_json',
         'instruction',
+        'opener',
         'armed',
         'created_at',
         'updated_at',
@@ -557,13 +559,55 @@ describe('database', () => {
     })
   })
 
-  it('adds the relay instruction column to a database that predates it', () => {
+  it('adds the queued-input injection bypass to a database that predates it', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'convergence-queued-migration-'))
+    const dbPath = join(dir, 'pre-bypass.sqlite')
+
+    try {
+      const legacy = new Database(dbPath)
+      legacy.exec(`
+        CREATE TABLE session_queued_inputs (
+          id TEXT PRIMARY KEY,
+          session_id TEXT NOT NULL,
+          delivery_mode TEXT NOT NULL,
+          state TEXT NOT NULL,
+          text TEXT NOT NULL,
+          attachment_ids_json TEXT NOT NULL DEFAULT '[]',
+          skill_selections_json TEXT NOT NULL DEFAULT '[]',
+          provider_request_id TEXT,
+          error TEXT,
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL
+        );
+
+        INSERT INTO session_queued_inputs (id, session_id, delivery_mode, state, text, created_at, updated_at)
+        VALUES ('q-old', 's1', 'follow-up', 'queued', 'carry on', '2026-01-01', '2026-01-01');
+      `)
+      legacy.close()
+
+      const db = getDatabase(dbPath)
+      const row = db
+        .prepare("SELECT * FROM session_queued_inputs WHERE id = 'q-old'")
+        .get() as { skip_context_injection: number; text: string }
+
+      // Zero is what every input a person typed means: inject as normal.
+      expect(row.skip_context_injection).toBe(0)
+      expect(row.text).toBe('carry on')
+    } finally {
+      closeDatabase()
+      resetDatabase()
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('adds the relay instruction and opener columns to a database that predates them', () => {
     const dir = mkdtempSync(join(tmpdir(), 'convergence-relay-migration-'))
     const dbPath = join(dir, 'pre-instruction.sqlite')
 
     try {
       // The v1 shape, exactly as it shipped: a wire with nowhere to keep a
-      // standing brief. Opening it must add the column, not lose the wire.
+      // standing brief or a first send. Opening it must add both columns,
+      // not lose the wire.
       const legacy = new Database(dbPath)
       legacy.exec(`
         CREATE TABLE session_relays (
@@ -590,13 +634,19 @@ describe('database', () => {
         .all() as Array<{ name: string }>
 
       expect(columns.map((column) => column.name)).toContain('instruction')
+      expect(columns.map((column) => column.name)).toContain('opener')
 
       const relay = db
         .prepare("SELECT * FROM session_relays WHERE id = 'r-old'")
-        .get() as { instruction: string | null; target_session_id: string }
+        .get() as {
+        instruction: string | null
+        opener: string | null
+        target_session_id: string
+      }
       // Null is the honest reading of a wire drawn before briefs existed: it
       // carries the message exactly as it always did.
       expect(relay.instruction).toBeNull()
+      expect(relay.opener).toBeNull()
       expect(relay.target_session_id).toBe('s2')
     } finally {
       closeDatabase()

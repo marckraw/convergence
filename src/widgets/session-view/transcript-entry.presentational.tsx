@@ -16,6 +16,7 @@ import {
   Library,
   FileText,
   Link,
+  RotateCcw,
 } from 'lucide-react'
 import { Button } from '@/shared/ui/button'
 import { Markdown } from '@/shared/ui/markdown.container'
@@ -482,6 +483,29 @@ export const ConversationItemView: FC<ConversationItemViewProps> = ({
       )
 
     case 'note':
+      // A restarted conversation is a boundary, not a remark: the model's
+      // memory of everything above it is gone, and a quiet italic line in a
+      // long transcript is exactly the kind of thing a reader scrolls past.
+      // The tag is written by the provider adapters
+      // (electron/backend/provider/session-restart.pure.ts).
+      if (entry.providerMeta?.providerEventType === 'session.restarted') {
+        return (
+          <ConversationItemShell copyText={viewModel.copyText}>
+            <div
+              data-testid="session-restart-boundary"
+              className="flex items-center gap-2 py-3"
+            >
+              <span aria-hidden className="h-px flex-1 bg-amber-400/30" />
+              <span className="flex items-center gap-1.5 text-center text-[11px] leading-snug text-amber-400/90">
+                <RotateCcw aria-hidden className="size-3 shrink-0" />
+                {entry.text}
+              </span>
+              <span aria-hidden className="h-px flex-1 bg-amber-400/30" />
+            </div>
+          </ConversationItemShell>
+        )
+      }
+
       return (
         <ConversationItemShell copyText={viewModel.copyText}>
           <div className="py-2 text-center">

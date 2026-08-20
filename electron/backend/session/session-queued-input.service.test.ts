@@ -41,6 +41,29 @@ describe('SessionQueuedInputService', () => {
     resetDatabase()
   })
 
+  /**
+   * A relay opener may wait in the queue through a whole turn (F9). It is a
+   * command for the provider, so the bypass has to be stored with it -- a
+   * `/clear` that picks up a project-context block on the way out is prose.
+   */
+  it('stores the injection bypass alongside a queued opener', () => {
+    const item = service.enqueue(
+      'session-1',
+      { text: '/clear', skipContextInjection: true },
+      'follow-up',
+    )
+
+    expect(item.skipContextInjection).toBe(true)
+    expect(service.list('session-1')[0].skipContextInjection).toBe(true)
+  })
+
+  it('injects as normal for everything a person queued', () => {
+    const item = service.enqueue('session-1', { text: 'carry on' }, 'follow-up')
+
+    expect(item.skipContextInjection).toBe(false)
+    expect(service.list('session-1')[0].skipContextInjection).toBe(false)
+  })
+
   it('enqueues, lists, and emits an add patch event', () => {
     const item = service.enqueue(
       'session-1',

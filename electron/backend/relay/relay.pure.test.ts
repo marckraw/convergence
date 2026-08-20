@@ -4,10 +4,13 @@ import {
   DEFAULT_SPAWN_NAME,
   MAX_AUTOMATIC_HOPS_PER_FLOW_RUN,
   MAX_RELAY_INSTRUCTION_LENGTH,
+  MAX_RELAY_OPENER_LENGTH,
+  RELAY_OPENER_PREVIEW_LENGTH,
   RELAY_PAYLOAD_PREVIEW_LENGTH,
   assertRelayEndpoints,
   normalizeRelaySpawnSpec,
   buildPayloadPreview,
+  buildRelayHopPreview,
   compileRelayPayload,
   flowRunBudgetMessage,
   hasFlowRunBudget,
@@ -15,6 +18,7 @@ import {
   normalizeRelayAction,
   normalizeRelayCrewId,
   normalizeRelayInstruction,
+  normalizeRelayOpener,
   normalizeRelaySessionId,
   normalizeRelayTrigger,
 } from './relay.pure'
@@ -308,5 +312,79 @@ describe('compileRelayPayload', () => {
     ]) {
       expect(compileRelayPayload('Brief.', opener)).toBe(`Brief.\n\n${opener}`)
     }
+  })
+})
+
+describe('normalizeRelayOpener', () => {
+  it('keeps a real opener, trimmed', () => {
+    expect(normalizeRelayOpener('  /clear  ')).toBe('/clear')
+  })
+
+  it('treats blank as no first send at all', () => {
+    // An empty box means "just deliver the payload", which is what every wire
+    // did before openers existed. An empty string would be a send of nothing.
+    expect(normalizeRelayOpener('')).toBeNull()
+    expect(normalizeRelayOpener('   \n\t ')).toBeNull()
+    expect(normalizeRelayOpener(null)).toBeNull()
+    expect(normalizeRelayOpener(undefined)).toBeNull()
+  })
+
+  /**
+   * The opener is plain text on purpose: `/clear` is Claude's word, and the
+   * same box on another provider may hold an ordinary sentence.
+   */
+  it('does not care whether the opener is a slash command', () => {
+    expect(normalizeRelayOpener('Forget everything above.')).toBe(
+      'Forget everything above.',
+    )
+  })
+
+  it('refuses an opener nobody meant to write, in words', () => {
+    const tooLong = 'x'.repeat(MAX_RELAY_OPENER_LENGTH + 1)
+
+    expect(() => normalizeRelayOpener(tooLong)).toThrow(
+      String(MAX_RELAY_OPENER_LENGTH),
+    )
+    expect(
+      normalizeRelayOpener('x'.repeat(MAX_RELAY_OPENER_LENGTH)),
+    ).toHaveLength(MAX_RELAY_OPENER_LENGTH)
+  })
+})
+
+describe('buildRelayHopPreview', () => {
+  it('previews the payload alone when the wire has no opener', () => {
+    // Byte-identical to the preview this wire wrote before openers existed.
+    expect(buildRelayHopPreview(null, 'Branch is green.')).toBe(
+      buildPayloadPreview('Branch is green.'),
+    )
+  })
+
+  it('names both beats when the wire opens with one', () => {
+    expect(buildRelayHopPreview('/clear', 'Branch is green.')).toBe(
+      'First send: /clear · then: Branch is green.',
+    )
+  })
+
+  it('keeps the payload visible behind a long opener', () => {
+    // Both beats or the row lies about what the target received, so the opener
+    // gets a budget of its own rather than eating the whole preview.
+    const preview = buildRelayHopPreview(
+      'x'.repeat(MAX_RELAY_OPENER_LENGTH),
+      'Branch is green.',
+    )
+
+    expect(preview).toContain('Branch is green.')
+    expect(preview!.length).toBeLessThanOrEqual(RELAY_PAYLOAD_PREVIEW_LENGTH)
+    expect(preview).toContain(`${'x'.repeat(RELAY_OPENER_PREVIEW_LENGTH - 1)}…`)
+  })
+
+  it('collapses an opener written across lines into one', () => {
+    expect(buildRelayHopPreview('/clear\n', 'Done.')).toBe(
+      'First send: /clear · then: Done.',
+    )
+  })
+
+  it('still names the opener when there is nothing to carry', () => {
+    expect(buildRelayHopPreview('/clear', '   ')).toBe('First send: /clear')
   })
 })

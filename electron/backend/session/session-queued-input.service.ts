@@ -20,6 +20,12 @@ export interface SessionQueuedInputDraft {
    * eventually starts belongs to the account chosen when the user wrote it.
    */
   providerAccountId?: string | null
+  /**
+   * Relay openers only (F9). A queued opener may wait through a whole turn
+   * before it dispatches, and it must arrive exactly as the wire wrote it --
+   * a `/clear` with a context block prepended is prose, not a command.
+   */
+  skipContextInjection?: boolean
 }
 
 export type QueuedInputDeliveryMode = Extract<
@@ -86,6 +92,7 @@ export class SessionQueuedInputService {
       skillSelections: input.skillSelections ?? [],
       providerRequestId: null,
       providerAccountId: input.providerAccountId ?? null,
+      skipContextInjection: input.skipContextInjection === true,
       error: null,
       createdAt: timestamp,
       updatedAt: timestamp,
@@ -103,10 +110,11 @@ export class SessionQueuedInputService {
            skill_selections_json,
            provider_request_id,
            provider_account_id,
+           skip_context_injection,
            error,
            created_at,
            updated_at
-         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
       .run(
         item.id,
@@ -118,6 +126,7 @@ export class SessionQueuedInputService {
         JSON.stringify(item.skillSelections),
         item.providerRequestId,
         item.providerAccountId,
+        item.skipContextInjection ? 1 : 0,
         item.error,
         item.createdAt,
         item.updatedAt,

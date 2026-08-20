@@ -25,7 +25,8 @@ session settles
       → fire(relay) per wire
           guards: armed / status / loop law / budget
           payload: gateway read → compileRelayPayload → preview
-          act: RelaySessionGateway.sendMessage | create + start
+          act: RelaySessionGateway.sendMessage | sendMessageWithOpener
+               | create + start
           record: RelayService.appendHop → onHopAppended broadcast
 ```
 
@@ -68,6 +69,17 @@ dead forever, from a switch the user can see is armed. A restart drops the
 batons, so an interrupted chain resumes in a fresh run and one wire may fire
 once more: the design errs toward liveliness, never toward a loop, because
 once-per-run still governs the new run.
+
+**Not every settle is a settle.** A wire with an opener (below) makes the
+target come to rest twice per hop: once when the opener's own turn ends —
+nothing finished, the work is still queued behind it — and once when the work
+is actually done. The engine claims that first beat (`plumbingSettles`, a
+counter per session) _before_ the baton is taken: it fires no wires, writes no
+ledger row, and leaves the baton where it is. Skipping this is not cosmetic.
+Consuming the baton on the plumbing beat would make the real settle mint a
+**fresh** run, every wire would be live again, and A → B → A → B would
+ping-pong forever with each lap legal in its own new run — the loop law
+silently stops ending chains. Two tests in `relay.engine.test.ts` pin it.
 
 The 20-hop **budget** (`MAX_AUTOMATIC_HOPS_PER_FLOW_RUN`) stays as a backstop
 for the case the loop law cannot see: a chain of _distinct_ wires long enough
@@ -165,7 +177,7 @@ one place:
 
 ```ts
 const payload = compileRelayPayload(relay.instruction, message)
-const payloadPreview = buildPayloadPreview(payload)
+const payloadPreview = buildRelayHopPreview(relay.opener, payload)
 ```
 
 A transform is a pure `string → string` composed here. Two rules:
@@ -184,6 +196,56 @@ A transform is a pure `string → string` composed here. Two rules:
 If the transform is configurable per wire it also costs the four touch points
 `instruction` paid: column + migration, normalizer, types on both sides of the
 IPC boundary, and the form.
+
+### The opener: a wire that sends twice (F9)
+
+`session_relays.opener` holds a first message — `/clear` is the case it was
+built for — sent **on its own, verbatim**, with the compiled payload queued
+behind it. One firing is still one hop row, one budget charge and one loop-law
+slot; the outcome is always `queued`, because the payload waits behind the
+opener by construction. The opener is never compiled: `compileRelayPayload`
+touches the payload only, and a brief glued onto a `/clear` would stop it being
+a command.
+
+Three things make it work, and each is a place to be careful:
+
+- **Both beats are one call.** `SessionService.sendMessageWithOpener` sends the
+  opener and enqueues the payload synchronously. A caller that sent the opener
+  and _then_ asked for a follow-up would lose a race: a turn does not report
+  itself `running` until the provider process has actually started (there are
+  awaits before `setStatus('running')` in the Claude adapter), so the session
+  still reads idle and a second turn starts alongside the first.
+- **The injection bypass is a one-caller seam.**
+  `SendMessageInput.skipContextInjection` — and its stored twin
+  `session_queued_inputs.skip_context_injection`, for an opener that waits in
+  the queue — exists so the opener reaches the provider byte for byte.
+  Every-turn project context prepends a block, and a message that no longer
+  STARTS with `/` is prose, not a command. **Do not widen this to other
+  callers**: a turn that quietly loses its project context is a bug everywhere
+  except here, where the context is about to be thrown away anyway. The
+  payload behind the opener keeps its injection, deliberately — it is the turn
+  that most needs the project restated.
+- **The queue is ours, not the provider's.** `dispatchNextQueuedInput` runs on
+  settle and re-reads the continuation token at dispatch, so the payload lands
+  in whatever context the opener left behind. This works on any provider,
+  including ones with no native mid-run input.
+
+The opener is plain text by design: its meaning belongs to whoever receives it.
+`/clear` is Claude's word; on another provider the same box is just a message.
+Hail wires only — a spawn opens a session that has never been used, so the
+service drops an opener there the same way it drops a target.
+
+**The transcript boundary** is the other half of the feature and lives in the
+adapters: Convergence never clears its own transcript, so when a provider
+replaces the conversation id mid-session the transcript would go on implying a
+continuity the model no longer has. `ClaudeCodeProvider.setContinuationToken`
+— the one place that id changes — writes a note tagged
+`SESSION_RESTARTED_EVENT_TYPE` (`electron/backend/provider/session-restart.pure.ts`),
+which the transcript renders as a divider rather than another grey line. A
+_first_ id is silent: a session beginning is not a restart. Any adapter that
+notices its conversation being replaced should emit the same tag; the renderer
+matches that one literal across the tree boundary, and a test on each side
+pins it.
 
 ## Sharp edges
 

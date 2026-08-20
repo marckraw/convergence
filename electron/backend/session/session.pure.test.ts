@@ -58,6 +58,7 @@ describe('session pure helpers', () => {
         attachment_ids_json: '["att-1"]',
         skill_selections_json: '[{"providerId":"codex","skillName":"x"}]',
         provider_request_id: null,
+        skip_context_injection: 0,
         error: null,
         created_at: '2026-01-01T00:00:00.000Z',
         updated_at: '2026-01-01T00:00:01.000Z',
@@ -69,6 +70,35 @@ describe('session pure helpers', () => {
       state: 'queued',
       attachmentIds: ['att-1'],
       skillSelections: [{ providerId: 'codex', skillName: 'x' }],
+      skipContextInjection: false,
     })
+  })
+
+  /**
+   * Only a relay opener sets this (F9). A row that predates the column reads
+   * as "inject as normal", which is what every input a person typed means.
+   */
+  it('reads the opener injection bypass, defaulting to injecting', () => {
+    const row = {
+      id: 'queued-2',
+      session_id: 'session-1',
+      delivery_mode: 'follow-up',
+      provider_account_id: null,
+      state: 'queued',
+      text: '/clear',
+      attachment_ids_json: '[]',
+      skill_selections_json: '[]',
+      provider_request_id: null,
+      skip_context_injection: 1,
+      error: null,
+      created_at: '2026-01-01T00:00:00.000Z',
+      updated_at: '2026-01-01T00:00:01.000Z',
+    }
+
+    expect(queuedInputFromRow(row).skipContextInjection).toBe(true)
+    expect(
+      queuedInputFromRow({ ...row, skip_context_injection: null })
+        .skipContextInjection,
+    ).toBe(false)
   })
 })

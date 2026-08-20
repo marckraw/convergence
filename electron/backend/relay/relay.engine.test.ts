@@ -19,6 +19,8 @@ interface RecordedTurn {
   sessionId: string
   text: string
   providerAccountId: string | null | undefined
+  /** True for the payload that rode behind an opener (F9). */
+  queuedBehindOpener?: boolean
 }
 
 interface FakeGateway extends RelaySessionGateway {
@@ -35,6 +37,10 @@ function createGateway(overrides: {
   executionHosts?: Record<string, string>
   lastTurnAccounts?: Record<string, string | null>
   sendMessage?: (sessionId: string, input: { text: string }) => Promise<void>
+  sendMessageWithOpener?: (
+    sessionId: string,
+    input: { opener: string; text: string },
+  ) => Promise<void>
   create?: () => { id: string }
   start?: (sessionId: string) => Promise<void>
 }): FakeGateway {
@@ -70,6 +76,24 @@ function createGateway(overrides: {
         sessionId,
         text: input.text,
         providerAccountId: input.providerAccountId,
+      })
+    },
+    // `sent` stays the ordered log of everything the target received, so the
+    // two beats of an opener firing are provable by index.
+    sendMessageWithOpener: async (sessionId, input) => {
+      if (overrides.sendMessageWithOpener) {
+        await overrides.sendMessageWithOpener(sessionId, input)
+      }
+      sent.push({
+        sessionId,
+        text: input.opener,
+        providerAccountId: input.providerAccountId,
+      })
+      sent.push({
+        sessionId,
+        text: input.text,
+        providerAccountId: input.providerAccountId,
+        queuedBehindOpener: true,
       })
     },
     create: (input) => {
@@ -186,6 +210,7 @@ describe('RelayEngine', () => {
     target = 's2',
     armed = true,
     instruction: string | null = null,
+    opener: string | null = null,
   ): ReturnType<RelayService['create']> {
     return relays.create({
       crewId: 'c1',
@@ -193,6 +218,7 @@ describe('RelayEngine', () => {
       action: 'hail',
       targetSessionId: target,
       instruction,
+      opener,
       armed,
     })
   }
@@ -981,6 +1007,150 @@ describe('RelayEngine', () => {
         'Wire one says this.\n\nDone.',
         'Wire two says something else.\n\nDone.',
       ])
+    })
+  })
+
+  describe('the opener: a first send before the payload (F9)', () => {
+    const BRIEF = 'Pick up the next task from the queue.'
+
+    it('sends the opener first and queues the payload behind it', async () => {
+      wire('s1', 's2', true, BRIEF, '/clear')
+      const gateway = createGateway({ lastMessages: { s1: 'Lap done.' } })
+
+      await createEngine(gateway).handleSettle(settled('s1'))
+
+      // Two beats into the same session, in this order, and the payload is the
+      // one that waits.
+      expect(gateway.sent).toEqual([
+        {
+          sessionId: 's2',
+          text: '/clear',
+          providerAccountId: null,
+        },
+        {
+          sessionId: 's2',
+          text: `${BRIEF}\n\nLap done.`,
+          providerAccountId: null,
+          queuedBehindOpener: true,
+        },
+      ])
+    })
+
+    it('sends the opener verbatim, with no instruction compiled into it', async () => {
+      // The whole feature dies if anything is prepended: a message that no
+      // longer starts with "/" is prose, not a command.
+      wire('s1', 's2', true, BRIEF, '/clear')
+      const gateway = createGateway({ lastMessages: { s1: 'Lap done.' } })
+
+      await createEngine(gateway).handleSettle(settled('s1'))
+
+      expect(gateway.sent[0].text).toBe('/clear')
+    })
+
+    it('rides both beats on the one account the hop resolved', async () => {
+      wire('s1', 's2', true, null, '/clear')
+      accountsByProvider.codex = [
+        { id: 'work', isDefault: false, status: 'connected' },
+        { id: 'personal', isDefault: true, status: 'connected' },
+      ]
+      const gateway = createGateway({ lastTurnAccounts: { s2: 'work' } })
+
+      await createEngine(gateway).handleSettle(settled('s1'))
+
+      expect(gateway.sent.map((turn) => turn.providerAccountId)).toEqual([
+        'work',
+        'work',
+      ])
+    })
+
+    it('names both beats in the one ledger row it writes', async () => {
+      // No silent sends: a hop that wiped its target before delivering has to
+      // say so, or the trail reads as an ordinary delivery.
+      wire('s1', 's2', true, null, '/clear')
+      const gateway = createGateway({ lastMessages: { s1: 'Lap done.' } })
+
+      await createEngine(gateway).handleSettle(settled('s1'))
+
+      const trail = relays.listHops('c1', 100)
+      expect(trail).toHaveLength(1)
+      expect(trail[0].payloadPreview).toBe(
+        'First send: /clear · then: Lap done.',
+      )
+      // Queued rather than delivered: the payload waits behind the opener by
+      // construction, whatever the target was doing.
+      expect(trail[0].outcome).toBe('queued')
+    })
+
+    it('charges one hop for a firing, not two', async () => {
+      wire('s1', 's2', true, null, '/clear')
+      const gateway = createGateway({})
+
+      await createEngine(gateway).handleSettle(settled('s1'))
+
+      const trail = relays.listHops('c1', 100)
+      expect(trail).toHaveLength(1)
+      expect(relays.countBudgetedHops(trail[0].flowRunId)).toBe(1)
+    })
+
+    /**
+     * The loop law's hardest case. An opener adds a settle that finishes
+     * nothing -- the target coming to rest after being wiped, with its real
+     * work still queued. If that beat spent the run's baton, the settle a
+     * moment later would open a FRESH run, every wire would be live again, and
+     * A -> B -> A -> B would ping-pong for as long as the sessions kept
+     * answering.
+     */
+    it('ends a ping-pong at two hops even though the opener adds a settle', async () => {
+      const there = wire('s1', 's2', true, null, '/clear')
+      const back = wire('s2', 's1')
+      const gateway = createGateway({})
+      const engine = createEngine(gateway)
+
+      await engine.handleSettle(settled('s1'))
+      // s2 comes to rest twice: once because the opener's turn ended, once
+      // because it finished the work that was queued behind it.
+      await engine.handleSettle(settled('s2'))
+      await engine.handleSettle(settled('s2'))
+      await engine.handleSettle(settled('s1'))
+
+      const trail = relays.listHops('c1', 100)
+      expect(new Set(trail.map((hop) => hop.flowRunId)).size).toBe(1)
+      expect(trail.map((hop) => hop.outcome)).toEqual([
+        'skipped-already-fired',
+        'delivered',
+        'queued',
+      ])
+      expect(relays.getById(there.id)!.armed).toBe(true)
+      expect(relays.getById(back.id)!.armed).toBe(true)
+    })
+
+    it('writes nothing for the opener beat, because no wire fired', async () => {
+      wire('s1', 's2', true, null, '/clear')
+      wire('s2', 's3')
+      const gateway = createGateway({})
+      const engine = createEngine(gateway)
+
+      await engine.handleSettle(settled('s1'))
+      const afterHop = relays.listHops('c1', 100).length
+
+      // The opener's own settle. Nothing finished, so nothing is journalled --
+      // the same silence a disarmed wire keeps, not a hidden delivery.
+      await engine.handleSettle(settled('s2'))
+
+      expect(relays.listHops('c1', 100)).toHaveLength(afterHop)
+      expect(gateway.sent.map((turn) => turn.sessionId)).toEqual(['s2', 's2'])
+    })
+
+    it('leaves a wire with no opener sending exactly one message', async () => {
+      wire('s1', 's2')
+      const gateway = createGateway({ lastMessages: { s1: 'Lap done.' } })
+
+      await createEngine(gateway).handleSettle(settled('s1'))
+
+      expect(gateway.sent).toEqual([
+        { sessionId: 's2', text: 'Lap done.', providerAccountId: null },
+      ])
+      expect(relays.listHops('c1')[0].outcome).toBe('delivered')
     })
   })
 

@@ -67,6 +67,8 @@ export interface SessionQueuedInputRow {
   skill_selections_json: string
   provider_request_id: string | null
   provider_account_id: string | null
+  /** 1 only for a relay opener (F9); see ensureQueuedInputColumns. */
+  skip_context_injection: number | null
   error: string | null
   created_at: string
   updated_at: string
@@ -238,6 +240,8 @@ export interface SessionRelayRow {
   spawn_spec_json: string | null
   /** The standing instruction prepended to what the wire carries. */
   instruction: string | null
+  /** The first message the wire sends, ahead of the payload (F9). */
+  opener: string | null
   armed: number
   created_at: string
   updated_at: string
