@@ -85,6 +85,22 @@ The 20-hop **budget** (`MAX_AUTOMATIC_HOPS_PER_FLOW_RUN`) stays as a backstop
 for the case the loop law cannot see: a chain of _distinct_ wires long enough
 to outrun it. It disarms loudly and says why.
 
+**The ledger is load-bearing, so emptying it is guarded.** Because both the
+loop law and the budget count read `relay_hops`, deleting a live run's rows
+would tell a wire it never fired and reopen the loop the law had closed. The
+engine therefore publishes `liveFlowRunIds()` — the union of every baton it
+holds and every run a settle is carrying _right now_ (`runsInFlight`, a
+counter, because one hop can leave batons on two sessions) — and the
+`relayHops:clear` handler passes it to `RelayService.clearHops` as
+`keepFlowRunIds`. Those rows survive the wipe; the UI says how many and why.
+`runsInFlight` is not redundant with the batons: a settle takes its baton at
+the top and does not leave the next one until a hop is recorded, and a provider
+send is awaited inside that gap, so an IPC call landing there would otherwise
+see a live run as finished. Batons are memory, so a restart makes an
+interrupted run clearable — the same direction the baton already errs. Four
+tests in `relay.engine.test.ts` pin it, including a canary that asserts the
+loop _does_ reopen when the live runs are not spared.
+
 ### 3. The vocabulary law — write a union, read a string
 
 `RelayHopOutcome` is the vocabulary this build may **write**. Everything that
@@ -262,6 +278,9 @@ pins it.
   everything they describe is gone.
 - **Deleting a relay means "stop doing this"**, never "pretend it never
   happened" — its hops stay.
+- **Clearing a trail is a read-model convenience over a load-bearing table.**
+  Anything new that deletes from `relay_hops` must spare
+  `RelayEngine.liveFlowRunIds()`, or it silently weakens the loop law.
 - **Zustand selectors must return stable references.** Subscribe to the whole
   relay list and narrow with `useMemo`; selecting inside the subscription hands
   zustand a fresh array every render and spins.

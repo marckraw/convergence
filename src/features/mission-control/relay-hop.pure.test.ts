@@ -6,6 +6,8 @@ import {
   buildSessionWireHint,
   countAlarmingHops,
   formatAlarmSummary,
+  formatClearTrailConfirm,
+  formatKeptHopsNote,
   formatHopCount,
   formatHopTime,
   formatRelayHopOutcome,
@@ -272,5 +274,36 @@ describe('counts and summaries', () => {
   it('gives the red badge a sentence', () => {
     expect(formatAlarmSummary(1)).toBe('1 relay hop needs your eyes')
     expect(formatAlarmSummary(3)).toBe('3 relay hops need your eyes')
+  })
+})
+
+describe('clearing the trail says what it is about to do', () => {
+  it('names the scope, so "clear" cannot be read as "unwire"', () => {
+    expect(formatClearTrailConfirm(0)).toBe(
+      'Clear every hop? The wires and sessions stay.',
+    )
+  })
+
+  it('counts the alerts it is about to dismiss with it', () => {
+    expect(formatClearTrailConfirm(1)).toBe(
+      'Clear every hop? The wires and sessions stay. This also dismisses 1 alert.',
+    )
+    expect(formatClearTrailConfirm(4)).toBe(
+      'Clear every hop? The wires and sessions stay. This also dismisses 4 alerts.',
+    )
+  })
+
+  it('says nothing when a clear took everything', () => {
+    expect(formatKeptHopsNote(0)).toBeNull()
+    expect(formatKeptHopsNote(-1)).toBeNull()
+  })
+
+  it('explains the rows a running flow kept', () => {
+    expect(formatKeptHopsNote(1)).toBe(
+      'Kept 1 hop from a flow that is still running.',
+    )
+    expect(formatKeptHopsNote(3)).toBe(
+      'Kept 3 hops from a flow that is still running.',
+    )
   })
 })

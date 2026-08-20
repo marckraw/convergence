@@ -150,6 +150,20 @@ export class RelayEngine {
    */
   private readonly plumbingSettles = new Map<string, number>()
 
+  /**
+   * Run id -> settles carrying it right now.
+   *
+   * A baton names a run waiting on a session to finish; this names one already
+   * in hand. Between the moment a settle takes its baton and the moment a
+   * delivery leaves the next one, the run is named by neither -- and a provider
+   * send is awaited inside exactly that gap, so an IPC call landing there would
+   * find a live run that looks finished.
+   *
+   * Counted rather than flagged: one hop can leave batons on two sessions, and
+   * both may settle into the same run at once.
+   */
+  private readonly runsInFlight = new Map<string, number>()
+
   constructor(deps: RelayEngineDeps) {
     this.relays = deps.relays
     this.sessions = deps.sessions
@@ -176,11 +190,16 @@ export class RelayEngine {
       // stale run lying around for some later, unrelated turn.
       const flowRunId = this.takeFlowRunId(event.sessionId)
 
-      const relays = this.relays.listForSourceSession(event.sessionId)
-      if (relays.length === 0) return
+      this.enterRun(flowRunId)
+      try {
+        const relays = this.relays.listForSourceSession(event.sessionId)
+        if (relays.length === 0) return
 
-      for (const relay of relays) {
-        await this.fire(relay, event, flowRunId)
+        for (const relay of relays) {
+          await this.fire(relay, event, flowRunId)
+        }
+      } finally {
+        this.leaveRun(flowRunId)
       }
     } catch (error) {
       console.error(
@@ -199,6 +218,36 @@ export class RelayEngine {
     if (held === undefined) return randomUUID()
     this.batons.delete(sessionId)
     return held
+  }
+
+  /**
+   * Every flow run that can still be consulted by the loop law: one this
+   * engine is mid-settle on, or one whose baton is waiting on a session.
+   *
+   * `hasFiredInFlowRun` reads the ledger, so a trail cleared underneath one of
+   * these runs would tell a wire it never fired and let a closed loop reopen.
+   * These are the runs whose rows a clear has to leave alone.
+   *
+   * Batons live in memory, so a restart empties this and a chain interrupted
+   * by one becomes clearable. That is the same direction the baton already
+   * errs: a restarted chain resumes in a fresh run, where once-per-run governs
+   * again -- worst case one extra hop, never a loop.
+   */
+  liveFlowRunIds(): string[] {
+    return [...new Set([...this.runsInFlight.keys(), ...this.batons.values()])]
+  }
+
+  private enterRun(flowRunId: string): void {
+    this.runsInFlight.set(
+      flowRunId,
+      (this.runsInFlight.get(flowRunId) ?? 0) + 1,
+    )
+  }
+
+  private leaveRun(flowRunId: string): void {
+    const carrying = this.runsInFlight.get(flowRunId) ?? 0
+    if (carrying <= 1) this.runsInFlight.delete(flowRunId)
+    else this.runsInFlight.set(flowRunId, carrying - 1)
   }
 
   /** Records that this session's next settle is an opener's turn ending. */

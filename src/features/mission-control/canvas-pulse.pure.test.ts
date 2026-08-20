@@ -94,6 +94,28 @@ describe('buildWirePulses', () => {
   })
 })
 
+/**
+ * Clearing a trail shrinks the list the canvas watches, and a still-running
+ * flow leaves some of its rows behind. Neither is electricity: the seen-set is
+ * only ever added to, so what survives a clear stays history.
+ */
+describe('after a trail is cleared', () => {
+  it('does not relight the rows a live flow kept', () => {
+    const kept = hop({ id: 'h2' })
+    const seen = new Set(['h1', kept.id, 'h3'])
+
+    expect(collectNewHops([kept], seen)).toEqual([])
+  })
+
+  it('still lights the first hop fired after the clear', () => {
+    const kept = hop({ id: 'h2' })
+    const afterwards = hop({ id: 'h4' })
+    const seen = new Set(['h1', kept.id, 'h3'])
+
+    expect(collectNewHops([afterwards, kept], seen)).toEqual([afterwards])
+  })
+})
+
 describe('pulse styling', () => {
   it('keeps the crew’s colour for an ordinary hop', () => {
     expect(pulseWireColor('delivered', '#7c3aed')).toBe('#7c3aed')

@@ -1,5 +1,5 @@
 import { BrowserWindow, ipcMain } from 'electron'
-import type { RelayService } from './relay.service'
+import type { ClearRelayHopsResult, RelayService } from './relay.service'
 import type {
   CreateSessionRelayInput,
   RelayHop,
@@ -9,9 +9,11 @@ import type {
 
 export const RELAY_UPDATED_CHANNEL = 'relay:updated'
 export const RELAY_HOP_APPENDED_CHANNEL = 'relayHop:appended'
+export const RELAY_HOP_CLEARED_CHANNEL = 'relayHop:cleared'
 
 export type RelayBroadcastFn = (relays: SessionRelay[]) => void
 export type RelayHopBroadcastFn = (hop: RelayHop) => void
+export type RelayHopClearedBroadcastFn = (crewId: string) => void
 
 function sendToAllWindows(channel: string, payload: unknown): void {
   for (const win of BrowserWindow.getAllWindows()) {
@@ -30,16 +32,36 @@ export const broadcastRelayHop: RelayHopBroadcastFn = (hop) => {
 }
 
 /**
+ * Says which crew's trail changed, not what is left of it. A window that is
+ * not showing that crew ignores it, and one that is reloads the top of the
+ * trail for itself -- which is also how it learns what a live run kept.
+ */
+export const broadcastRelayHopsCleared: RelayHopClearedBroadcastFn = (
+  crewId,
+) => {
+  sendToAllWindows(RELAY_HOP_CLEARED_CHANNEL, crewId)
+}
+
+/**
  * Every mutation answers the caller AND rebroadcasts the whole wire list, the
  * crew pattern: relays are cross-project furniture, and a second window must
  * never show an armed toggle for a wire this window just switched off.
  */
 export function registerRelayIpcHandlers(deps: {
   service: RelayService
+  /**
+   * The runs a clear must not touch. The engine owns this answer -- the loop
+   * law reads the ledger, so emptying a live run's rows would tell a wire it
+   * never fired -- and it is required rather than optional so no wiring can
+   * produce a handler that clears without asking.
+   */
+  liveFlowRunIds: () => string[]
   broadcast?: RelayBroadcastFn
+  broadcastCleared?: RelayHopClearedBroadcastFn
 }): void {
-  const { service } = deps
+  const { service, liveFlowRunIds } = deps
   const broadcast = deps.broadcast ?? broadcastRelays
+  const broadcastCleared = deps.broadcastCleared ?? broadcastRelayHopsCleared
 
   const mutate = <T>(run: () => T): T => {
     const result = run()
@@ -71,7 +93,20 @@ export function registerRelayIpcHandlers(deps: {
     mutate(() => service.setArmed(id, false)),
   )
 
-  ipcMain.handle('relayHops:list', (_event, crewId: string, limit?: number) =>
-    service.listHops(crewId, limit),
+  ipcMain.handle(
+    'relayHops:list',
+    (_event, crewId: string, limit?: number, beforeHopId?: string | null) =>
+      service.listHops(crewId, limit, beforeHopId),
+  )
+
+  ipcMain.handle(
+    'relayHops:clear',
+    (_event, crewId: string): ClearRelayHopsResult => {
+      const result = service.clearHops(crewId, {
+        keepFlowRunIds: liveFlowRunIds(),
+      })
+      broadcastCleared(crewId)
+      return result
+    },
   )
 }

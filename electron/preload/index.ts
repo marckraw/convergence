@@ -211,8 +211,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
     delete: (id: string) => ipcRenderer.invoke('relay:delete', id),
     arm: (id: string) => ipcRenderer.invoke('relay:arm', id),
     disarm: (id: string) => ipcRenderer.invoke('relay:disarm', id),
-    listHops: (crewId: string, limit?: number) =>
-      ipcRenderer.invoke('relayHops:list', crewId, limit),
+    listHops: (crewId: string, limit?: number, beforeHopId?: string | null) =>
+      ipcRenderer.invoke('relayHops:list', crewId, limit, beforeHopId),
+    clearHops: (crewId: string) =>
+      ipcRenderer.invoke('relayHops:clear', crewId),
     onUpdated: (callback: (relays: unknown) => void) => {
       const handler = (_: unknown, relays: unknown) => callback(relays)
       ipcRenderer.on('relay:updated', handler)
@@ -225,6 +227,13 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.on('relayHop:appended', handler)
       return () => {
         ipcRenderer.removeListener('relayHop:appended', handler)
+      }
+    },
+    onHopsCleared: (callback: (crewId: string) => void) => {
+      const handler = (_: unknown, crewId: string) => callback(crewId)
+      ipcRenderer.on('relayHop:cleared', handler)
+      return () => {
+        ipcRenderer.removeListener('relayHop:cleared', handler)
       }
     },
   },

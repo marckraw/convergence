@@ -216,3 +216,34 @@ export function formatAlarmSummary(count: number): string {
     ? '1 relay hop needs your eyes'
     : `${count} relay hops need your eyes`
 }
+
+/**
+ * What the second press of "Clear trail" is agreeing to.
+ *
+ * Says the scope out loud -- history goes, wires and sessions stay -- because
+ * a crew's Flow section puts the two a few pixels apart, and "clear" is a word
+ * that could plausibly mean either. When the ⚠ badge is showing, the alerts it
+ * counts are named too: they are the one thing on screen that a wipe destroys
+ * without the user having read it.
+ */
+export function formatClearTrailConfirm(alarmingCount: number): string {
+  const base = 'Clear every hop? The wires and sessions stay.'
+  if (alarmingCount === 0) return base
+  return alarmingCount === 1
+    ? `${base} This also dismisses 1 alert.`
+    : `${base} This also dismisses ${alarmingCount} alerts.`
+}
+
+/**
+ * What a clear left behind, or null when it took everything.
+ *
+ * A flow still in flight keeps its rows -- the loop law reads them to know a
+ * wire already fired -- so a trail that does not empty has to say why, or it
+ * reads as a button that half worked.
+ */
+export function formatKeptHopsNote(keptCount: number): string | null {
+  if (keptCount <= 0) return null
+  return keptCount === 1
+    ? 'Kept 1 hop from a flow that is still running.'
+    : `Kept ${keptCount} hops from a flow that is still running.`
+}

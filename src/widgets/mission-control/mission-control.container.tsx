@@ -1,7 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { FC } from 'react'
 import { useSessionCrewStore } from '@/entities/session-crew'
-import { useSessionRelayStore } from '@/entities/session-relay'
+import {
+  selectHopsForCrew,
+  useSessionRelayStore,
+} from '@/entities/session-relay'
 import type { SessionSummary } from '@/entities/session'
 import {
   CrewFlowSection,
@@ -165,7 +168,9 @@ export const MissionControl: FC<MissionControlProps> = ({ onOpenSession }) => {
               }
               alarm={
                 group.crew
-                  ? countAlarmingHops(hopsByCrewId[group.crew.id] ?? []) > 0
+                  ? countAlarmingHops(
+                      selectHopsForCrew({ hopsByCrewId }, group.crew.id),
+                    ) > 0
                   : false
               }
             >

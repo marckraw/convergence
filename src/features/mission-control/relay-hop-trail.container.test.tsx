@@ -28,6 +28,7 @@ function hop(overrides: Partial<RelayHop> & { id: string }): RelayHop {
 }
 
 let listHops: ReturnType<typeof vi.fn>
+let clearHops: ReturnType<typeof vi.fn>
 let hopListeners: Array<(hop: RelayHop) => void>
 
 function renderTrail() {
@@ -38,20 +39,24 @@ describe('RelayHopTrail', () => {
   beforeEach(() => {
     hopListeners = []
     listHops = vi.fn(async () => [])
+    clearHops = vi.fn(async () => ({ removed: 0, kept: 0 }))
     ;(window as unknown as { electronAPI: unknown }).electronAPI = {
       relay: {
         list: vi.fn(async () => []),
         listHops,
+        clearHops,
         onUpdated: vi.fn(() => () => undefined),
         onHopAppended: vi.fn((cb: (hop: RelayHop) => void) => {
           hopListeners.push(cb)
           return () => undefined
         }),
+        onHopsCleared: vi.fn(() => () => undefined),
       },
     }
 
     useSessionRelayStore.getState().unsubscribeBroadcast?.()
     useSessionRelayStore.getState().unsubscribeHops?.()
+    useSessionRelayStore.getState().unsubscribeHopsCleared?.()
     useSessionRelayStore.setState({
       relays: [],
       hopsByCrewId: {},
@@ -59,13 +64,14 @@ describe('RelayHopTrail', () => {
       error: null,
       unsubscribeBroadcast: null,
       unsubscribeHops: null,
+      unsubscribeHopsCleared: null,
     })
   })
 
   it('shows nothing at all until a wire has fired', async () => {
     const { container } = renderTrail()
 
-    await waitFor(() => expect(listHops).toHaveBeenCalledWith('c1', undefined))
+    await waitFor(() => expect(listHops).toHaveBeenCalledWith('c1', 51, null))
     expect(container).toBeEmptyDOMElement()
   })
 
@@ -190,6 +196,150 @@ describe('RelayHopTrail', () => {
 
     await screen.findByText('2 hops')
     expect(screen.queryByText(/needs? your eyes/)).not.toBeInTheDocument()
+  })
+
+  describe('reaching further back', () => {
+    function page(from: number, count: number): RelayHop[] {
+      return Array.from({ length: count }, (_, index) =>
+        hop({ id: `h${from + index}` }),
+      )
+    }
+
+    it('offers nothing to load when the whole trail is on screen', async () => {
+      listHops.mockResolvedValue(page(1, 3))
+      renderTrail()
+
+      fireEvent.click(await screen.findByRole('button', { name: /Trail/ }))
+      expect(
+        screen.queryByRole('button', { name: 'Load older' }),
+      ).not.toBeInTheDocument()
+    })
+
+    it('reaches past the newest page when asked', async () => {
+      listHops
+        .mockResolvedValueOnce(page(1, 51))
+        .mockResolvedValueOnce(page(51, 2))
+      renderTrail()
+
+      fireEvent.click(await screen.findByRole('button', { name: /Trail/ }))
+      expect(screen.getAllByRole('listitem')).toHaveLength(50)
+
+      fireEvent.click(screen.getByRole('button', { name: 'Load older' }))
+
+      await waitFor(() => {
+        expect(screen.getAllByRole('listitem')).toHaveLength(52)
+      })
+      expect(listHops).toHaveBeenLastCalledWith('c1', 51, 'h50')
+      // Nothing behind that page, so the affordance goes rather than opening
+      // onto an empty answer.
+      expect(
+        screen.queryByRole('button', { name: 'Load older' }),
+      ).not.toBeInTheDocument()
+    })
+  })
+
+  describe('clearing the trail', () => {
+    it('asks before it wipes, and says what it is wiping', async () => {
+      listHops.mockResolvedValue([hop({ id: 'h1' })])
+      renderTrail()
+
+      fireEvent.click(
+        await screen.findByRole('button', { name: 'Clear trail' }),
+      )
+
+      expect(clearHops).not.toHaveBeenCalled()
+      expect(
+        screen.getByRole('button', {
+          name: 'Clear every hop? The wires and sessions stay.',
+        }),
+      ).toBeVisible()
+    })
+
+    it('names the alerts a wipe takes with it', async () => {
+      listHops.mockResolvedValue([
+        hop({ id: 'h1', outcome: 'error', error: 'boom' }),
+        hop({ id: 'h2', outcome: 'skipped-budget' }),
+      ])
+      renderTrail()
+
+      fireEvent.click(
+        await screen.findByRole('button', { name: 'Clear trail' }),
+      )
+
+      expect(
+        screen.getByRole('button', {
+          name: 'Clear every hop? The wires and sessions stay. This also dismisses 2 alerts.',
+        }),
+      ).toBeVisible()
+    })
+
+    it('empties the trail on the second press', async () => {
+      listHops
+        .mockResolvedValueOnce([hop({ id: 'h1' })])
+        .mockResolvedValueOnce([])
+      renderTrail()
+
+      fireEvent.click(
+        await screen.findByRole('button', { name: 'Clear trail' }),
+      )
+      fireEvent.click(
+        screen.getByRole('button', {
+          name: 'Clear every hop? The wires and sessions stay.',
+        }),
+      )
+
+      await waitFor(() => expect(clearHops).toHaveBeenCalledWith('c1'))
+      await waitFor(() => {
+        expect(screen.queryByText('1 hop')).not.toBeInTheDocument()
+      })
+    })
+
+    it('says out loud what a running flow kept', async () => {
+      listHops
+        .mockResolvedValueOnce([hop({ id: 'h1' }), hop({ id: 'h2' })])
+        .mockResolvedValueOnce([hop({ id: 'h2' })])
+      clearHops.mockResolvedValue({ removed: 1, kept: 1 })
+      renderTrail()
+
+      fireEvent.click(
+        await screen.findByRole('button', { name: 'Clear trail' }),
+      )
+      fireEvent.click(
+        screen.getByRole('button', {
+          name: 'Clear every hop? The wires and sessions stay.',
+        }),
+      )
+
+      expect(
+        await screen.findByText(
+          'Kept 1 hop from a flow that is still running.',
+        ),
+      ).toBeVisible()
+      expect(screen.getByText('1 hop')).toBeInTheDocument()
+    })
+
+    it('keeps the note visible when the clear emptied the section', async () => {
+      listHops
+        .mockResolvedValueOnce([hop({ id: 'h1' })])
+        .mockResolvedValueOnce([])
+      clearHops.mockResolvedValue({ removed: 1, kept: 2 })
+      renderTrail()
+
+      fireEvent.click(
+        await screen.findByRole('button', { name: 'Clear trail' }),
+      )
+      fireEvent.click(
+        screen.getByRole('button', {
+          name: 'Clear every hop? The wires and sessions stay.',
+        }),
+      )
+
+      expect(
+        await screen.findByText(
+          'Kept 2 hops from a flow that is still running.',
+        ),
+      ).toBeVisible()
+    })
   })
 
   it('grows live when the engine fires while the trail is open', async () => {
