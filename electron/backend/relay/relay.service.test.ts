@@ -269,6 +269,124 @@ describe('RelayService', () => {
     })
   })
 
+  describe('the opener on the wire', () => {
+    it('stores a wire with no opener as null', () => {
+      expect(createRelay().opener).toBeNull()
+    })
+
+    it('stores the opener trimmed, and reads it back', () => {
+      const relay = service.create({
+        crewId: 'c1',
+        sourceSessionId: 's1',
+        action: 'hail',
+        targetSessionId: 's2',
+        opener: '  /clear  ',
+      })
+
+      expect(relay.opener).toBe('/clear')
+      expect(service.getById(relay.id)!.opener).toBe('/clear')
+    })
+
+    it('treats a blank box as no first send', () => {
+      const relay = service.create({
+        crewId: 'c1',
+        sourceSessionId: 's1',
+        action: 'hail',
+        targetSessionId: 's2',
+        opener: '   ',
+      })
+
+      expect(relay.opener).toBeNull()
+    })
+
+    it('leaves the opener alone when an edit was about something else', () => {
+      const relay = service.create({
+        crewId: 'c1',
+        sourceSessionId: 's1',
+        action: 'hail',
+        targetSessionId: 's2',
+        opener: '/clear',
+      })
+
+      expect(service.update(relay.id, { targetSessionId: 's3' }).opener).toBe(
+        '/clear',
+      )
+    })
+
+    it('clears the opener on an explicit null and replaces it on a new value', () => {
+      const relay = service.create({
+        crewId: 'c1',
+        sourceSessionId: 's1',
+        action: 'hail',
+        targetSessionId: 's2',
+        opener: '/clear',
+      })
+
+      expect(service.update(relay.id, { opener: null }).opener).toBeNull()
+      expect(service.update(relay.id, { opener: '/compact' }).opener).toBe(
+        '/compact',
+      )
+    })
+
+    it('refuses an opener nobody meant to write', () => {
+      expect(() =>
+        service.create({
+          crewId: 'c1',
+          sourceSessionId: 's1',
+          action: 'hail',
+          targetSessionId: 's2',
+          opener: 'x'.repeat(501),
+        }),
+      ).toThrow('500')
+    })
+
+    /**
+     * A spawn opens a session that has never been used, so there is nothing to
+     * clear. Dropped rather than refused, exactly like a hail's target, so
+     * changing a wire's action never fails on a field the new action has no
+     * use for.
+     */
+    it('drops the opener on a spawn, at creation and on the switch', () => {
+      const spawned = service.create({
+        crewId: 'c1',
+        sourceSessionId: 's1',
+        action: 'spawn',
+        opener: '/clear',
+        spawnSpec: {
+          projectId: 'p1',
+          providerId: 'codex',
+          model: null,
+          effort: null,
+          name: 'Reviewer',
+          providerAccountId: null,
+        },
+      })
+      expect(spawned.opener).toBeNull()
+
+      const hail = service.create({
+        crewId: 'c1',
+        sourceSessionId: 's1',
+        action: 'hail',
+        targetSessionId: 's2',
+        opener: '/clear',
+      })
+      const switched = service.update(hail.id, {
+        action: 'spawn',
+        targetSessionId: null,
+        spawnSpec: {
+          projectId: 'p1',
+          providerId: 'codex',
+          model: null,
+          effort: null,
+          name: 'Reviewer',
+          providerAccountId: null,
+        },
+      })
+
+      expect(switched.opener).toBeNull()
+    })
+  })
+
   describe('spawn wires', () => {
     const spec = {
       projectId: 'p1',

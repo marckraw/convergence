@@ -96,6 +96,7 @@ const SCHEMA = `
     attachment_ids_json TEXT NOT NULL DEFAULT '[]',
     skill_selections_json TEXT NOT NULL DEFAULT '[]',
     provider_request_id TEXT,
+    skip_context_injection INTEGER NOT NULL DEFAULT 0,
     error TEXT,
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL,
@@ -241,6 +242,7 @@ const SCHEMA = `
     target_session_id TEXT,
     spawn_spec_json TEXT,
     instruction TEXT,
+    opener TEXT,
     armed INTEGER NOT NULL DEFAULT 1,
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
     updated_at TEXT NOT NULL DEFAULT (datetime('now'))
@@ -659,13 +661,19 @@ function ensureProjectScriptColumns(database: Database.Database): void {
 }
 
 /**
- * The standing instruction a wire prepends to what it carries (F7). Additive
- * and nullable: every wire drawn before this existed keeps carrying the bare
- * message, which is exactly what null means.
+ * The two texts a wire carries besides the message: the standing instruction it
+ * prepends (F7) and the opener it sends ahead of the payload (F9). Both are
+ * additive and nullable, because every wire drawn before they existed carries
+ * the bare message with nothing in front of it -- which is exactly what null
+ * means for either column.
  */
 function ensureRelayColumns(database: Database.Database): void {
-  if (!getTableColumnNames(database, 'session_relays').has('instruction')) {
+  const columns = getTableColumnNames(database, 'session_relays')
+  if (!columns.has('instruction')) {
     database.exec('ALTER TABLE session_relays ADD COLUMN instruction TEXT')
+  }
+  if (!columns.has('opener')) {
+    database.exec('ALTER TABLE session_relays ADD COLUMN opener TEXT')
   }
 }
 
@@ -775,6 +783,27 @@ function ensureSpaceTablesMigrated(database: Database.Database): void {
 
   if ((existingSpaces ?? 0) === 0) {
     migrate()
+  }
+}
+
+/**
+ * The relay opener's injection bypass (F9), recorded on the queued input
+ * because an opener may wait in the queue through a restart and must still
+ * reach the provider byte for byte -- a "/clear" with a project-context block
+ * prepended is no longer a command, it is prose.
+ *
+ * Zero for every row that already exists, which is what every other queued
+ * input in the app means: inject as normal.
+ */
+function ensureQueuedInputColumns(database: Database.Database): void {
+  if (
+    !getTableColumnNames(database, 'session_queued_inputs').has(
+      'skip_context_injection',
+    )
+  ) {
+    database.exec(
+      'ALTER TABLE session_queued_inputs ADD COLUMN skip_context_injection INTEGER NOT NULL DEFAULT 0',
+    )
   }
 }
 
@@ -1189,6 +1218,7 @@ export function getDatabase(dbPath?: string): Database.Database {
     ensureWorkspaceColumns(database)
     ensureSessionColumns(database)
     ensureProviderAccountColumns(database)
+    ensureQueuedInputColumns(database)
     ensureRelayColumns(database)
     ensureAttachmentsTableNoFk(database)
     migrateLegacySessionConversations(database)

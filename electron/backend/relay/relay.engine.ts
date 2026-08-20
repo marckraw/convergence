@@ -8,7 +8,7 @@ import { resolveAccountForAutomaticTurn } from '../provider-account/provider-acc
 import type { AutomaticTurnAccountSource } from '../provider-account/provider-account-automatic-turn.pure'
 import {
   ALREADY_FIRED_MESSAGE,
-  buildPayloadPreview,
+  buildRelayHopPreview,
   compileRelayPayload,
   flowRunBudgetMessage,
   hasFlowRunBudget,
@@ -43,6 +43,18 @@ export interface RelaySessionGateway {
   sendMessage(
     sessionId: string,
     input: { text: string; providerAccountId?: string | null },
+  ): Promise<void>
+  /**
+   * Sends the opener on its own and queues the payload behind it, in one call
+   * so nothing can slip between the two beats (F9).
+   */
+  sendMessageWithOpener(
+    sessionId: string,
+    input: {
+      opener: string
+      text: string
+      providerAccountId?: string | null
+    },
   ): Promise<void>
   create(input: CreateSessionInput): { id: string }
   start(
@@ -121,6 +133,23 @@ export class RelayEngine {
    */
   private readonly batons = new Map<string, string>()
 
+  /**
+   * Session id -> settles that belong to Convergence rather than to the agent:
+   * one per opener this engine has sent into that session.
+   *
+   * An opener's turn comes to rest like any other, but nothing finished --
+   * the session was wiped and the work it was sent is still queued behind.
+   * Treating that beat as a settle would consume the run's baton, so the real
+   * settle a moment later would mint a FRESH run, and the loop law -- a wire
+   * fires once per run -- would stop ending chains: A -> B -> A -> B would
+   * ping-pong forever, each lap legal in its own new run.
+   *
+   * So the beat is skipped and the baton left where it is. Nothing is written
+   * to the ledger either, because no wire fired: this is the same silence a
+   * disarmed wire keeps, not a hidden delivery.
+   */
+  private readonly plumbingSettles = new Map<string, number>()
+
   constructor(deps: RelayEngineDeps) {
     this.relays = deps.relays
     this.sessions = deps.sessions
@@ -137,6 +166,10 @@ export class RelayEngine {
    */
   async handleSettle(event: SessionSettledEvent): Promise<void> {
     try {
+      // Claimed before the baton is taken: an opener's turn ending is our own
+      // plumbing, not the session finishing work.
+      if (this.takePlumbingSettle(event.sessionId)) return
+
       // Taken before the wires are read, and once per settle: every wire
       // leaving this session is measured against the same run, and a session
       // with nothing wired to it still spends its ticket rather than leaving a
@@ -166,6 +199,22 @@ export class RelayEngine {
     if (held === undefined) return randomUUID()
     this.batons.delete(sessionId)
     return held
+  }
+
+  /** Records that this session's next settle is an opener's turn ending. */
+  private expectPlumbingSettle(sessionId: string): void {
+    this.plumbingSettles.set(
+      sessionId,
+      (this.plumbingSettles.get(sessionId) ?? 0) + 1,
+    )
+  }
+
+  private takePlumbingSettle(sessionId: string): boolean {
+    const owed = this.plumbingSettles.get(sessionId) ?? 0
+    if (owed === 0) return false
+    if (owed === 1) this.plumbingSettles.delete(sessionId)
+    else this.plumbingSettles.set(sessionId, owed - 1)
+    return true
   }
 
   private async fire(
@@ -244,7 +293,10 @@ export class RelayEngine {
     // records what was actually sent rather than what the session happened to
     // say. A wire with no instruction compiles to the message untouched.
     const payload = compileRelayPayload(relay.instruction, message)
-    const payloadPreview = buildPayloadPreview(payload)
+    // The opener is never compiled into the payload -- it is a separate send,
+    // and an instruction glued onto a `/clear` would stop it being a command.
+    // It appears in the preview because the ledger must name both beats.
+    const payloadPreview = buildRelayHopPreview(relay.opener, payload)
 
     if (relay.action === 'spawn') {
       await this.spawn(relay, payload, payloadPreview, record)
@@ -271,7 +323,25 @@ export class RelayEngine {
     // ledger should say which of the two the user is waiting on.
     const targetWasRunning = target.status === 'running'
 
+    const opener = relay.action === 'hail' ? relay.opener : null
+
     try {
+      if (opener) {
+        await this.sessions.sendMessageWithOpener(targetSessionId, {
+          opener,
+          text: payload,
+          providerAccountId: this.resolveInheritedAccountId(target),
+        })
+        // The target now owes us one settle that is not the end of any work:
+        // the opener's own turn. Claimed before the ledger row so the baton
+        // survives it.
+        this.expectPlumbingSettle(targetSessionId)
+        // Always queued, never delivered: the payload waits behind the opener
+        // by construction, whatever the target was doing when this fired.
+        record('queued', { payloadPreview })
+        return
+      }
+
       await this.sessions.sendMessage(targetSessionId, {
         text: payload,
         providerAccountId: this.resolveInheritedAccountId(target),

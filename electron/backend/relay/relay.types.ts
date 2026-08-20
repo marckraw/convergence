@@ -78,6 +78,16 @@ export interface SessionRelay {
    * every time it fires.
    */
   instruction: string | null
+  /**
+   * A first message sent on its own, ahead of the payload, or null to deliver
+   * the payload straight away. It exists for the recycled worker: `/clear`
+   * here turns a long-lived target session into a fresh one every lap, wiped
+   * and re-briefed by the same wire.
+   *
+   * Hail wires only. A spawn opens a session that was never used, so there is
+   * nothing to clear.
+   */
+  opener: string | null
   armed: boolean
   createdAt: string
   updatedAt: string
@@ -112,6 +122,7 @@ export interface CreateSessionRelayInput {
   targetSessionId?: string | null
   spawnSpec?: RelaySpawnSpec | null
   instruction?: string | null
+  opener?: string | null
   armed?: boolean
 }
 
@@ -121,6 +132,7 @@ export interface UpdateSessionRelayInput {
   targetSessionId?: string | null
   spawnSpec?: RelaySpawnSpec | null
   instruction?: string | null
+  opener?: string | null
   armed?: boolean
 }
 
@@ -168,6 +180,9 @@ export function sessionRelayFromRow(row: SessionRelayRow): SessionRelay {
     // existed reads as undefined on some sqlite paths, and "no instruction" is
     // the honest answer for every one of them.
     instruction: row.instruction ?? null,
+    // Same defensive read as the instruction above, for the same reason: a row
+    // written before openers existed has no first send to make.
+    opener: row.opener ?? null,
     armed: row.armed !== 0,
     createdAt: row.created_at,
     updatedAt: row.updated_at,

@@ -7,6 +7,7 @@ import {
   normalizeRelayAction,
   normalizeRelayCrewId,
   normalizeRelayInstruction,
+  normalizeRelayOpener,
   normalizeRelaySessionId,
   normalizeRelaySpawnSpec,
 } from './relay.pure'
@@ -93,6 +94,11 @@ export class RelayService {
     const spawnSpec =
       action === 'spawn' ? normalizeRelaySpawnSpec(input.spawnSpec) : null
     const instruction = normalizeRelayInstruction(input.instruction)
+    // Dropped on a spawn the same way a target is: the session a spawn opens
+    // has no context to clear, so an opener there would be a first send into a
+    // conversation that started one line ago.
+    const opener =
+      action === 'spawn' ? null : normalizeRelayOpener(input.opener)
 
     assertRelayEndpoints(sourceSessionId, targetSessionId, action)
 
@@ -100,9 +106,9 @@ export class RelayService {
       .prepare(
         `INSERT INTO session_relays (
            id, crew_id, source_session_id, trigger, action,
-           target_session_id, spawn_spec_json, instruction, armed
+           target_session_id, spawn_spec_json, instruction, opener, armed
          )
-         VALUES (?, ?, ?, 'settled', ?, ?, ?, ?, ?)`,
+         VALUES (?, ?, ?, 'settled', ?, ?, ?, ?, ?, ?)`,
       )
       .run(
         id,
@@ -112,6 +118,7 @@ export class RelayService {
         targetSessionId,
         spawnSpec ? JSON.stringify(spawnSpec) : null,
         instruction,
+        opener,
         input.armed === false ? 0 : 1,
       )
 
@@ -152,6 +159,14 @@ export class RelayService {
         : null
     // A hail's target is likewise dropped when the action turns into a spawn.
     const resolvedTarget = action === 'spawn' ? null : targetSessionId
+    const opener =
+      patch.opener === undefined
+        ? current.opener
+        : normalizeRelayOpener(patch.opener)
+    // And so is its opener: a spawn is born fresh, so it has nothing to open
+    // with. Cleared here rather than refused, so switching a wire's action
+    // never fails on a field the new action does not have.
+    const resolvedOpener = action === 'spawn' ? null : opener
 
     assertRelayEndpoints(sourceSessionId, resolvedTarget, action)
 
@@ -163,6 +178,7 @@ export class RelayService {
              target_session_id = ?,
              spawn_spec_json = ?,
              instruction = ?,
+             opener = ?,
              armed = ?,
              updated_at = datetime('now')
          WHERE id = ?`,
@@ -173,6 +189,7 @@ export class RelayService {
         resolvedTarget,
         spawnSpec ? JSON.stringify(spawnSpec) : null,
         instruction,
+        resolvedOpener,
         armed ? 1 : 0,
         id,
       )

@@ -88,6 +88,19 @@ export interface SendMessageInput {
    * selection is not authoritative — this is, per turn.
    */
   providerAccountId?: string | null
+  /**
+   * Sends the text exactly as written, with no project-context block in front
+   * of it (F9).
+   *
+   * The seam exists for one caller: the relay engine's opener. Every-turn
+   * re-injection prepends a block, and a message that no longer STARTS with
+   * `/` stops being a command -- the CLI reads it as prose and the recycled
+   * worker never gets wiped. Nothing a person types sets this, and no other
+   * caller should: a turn that quietly loses its project context is a bug
+   * everywhere except here, where the whole point is that the context is
+   * about to be thrown away.
+   */
+  skipContextInjection?: boolean
 }
 
 export interface SessionNamer {
@@ -726,7 +739,12 @@ export class SessionService {
     return { augmentedText: result.augmentedText }
   }
 
-  private prepareUserTurnText(session: Session, originalText: string): string {
+  private prepareUserTurnText(
+    session: Session,
+    originalText: string,
+    skipContextInjection?: boolean,
+  ): string {
+    if (skipContextInjection) return originalText
     if (!this.contextInjection) return originalText
     return this.contextInjection.prepareUserTurn({ session, originalText })
   }
@@ -807,7 +825,11 @@ export class SessionService {
     }
 
     if (capabilities.supportsContinuation && continuationToken) {
-      const augmentedText = this.prepareUserTurnText(session, input.text)
+      const augmentedText = this.prepareUserTurnText(
+        session,
+        input.text,
+        input.skipContextInjection,
+      )
       this.startHandle(
         session,
         augmentedText,
@@ -827,6 +849,45 @@ export class SessionService {
     }
 
     throw new Error(`Session not active: ${id}`)
+  }
+
+  /**
+   * Sends `opener` on its own and queues `text` behind it (F9, the recycled
+   * worker).
+   *
+   * Two beats, one call, because the gap between them is a race the caller
+   * cannot win: a turn does not report itself running until the provider
+   * process has actually started, so a caller that sent the opener and then
+   * asked for a follow-up would be told the session is idle and start a
+   * second turn alongside the first. Queuing here, synchronously, means the
+   * payload is behind the opener before anything can observe otherwise.
+   *
+   * The opener bypasses context injection so it arrives byte for byte; the
+   * payload does not, because it is an ordinary message and the target may
+   * well need its project context re-stated after being wiped.
+   *
+   * The queue is Convergence's, not the provider's: `dispatchNextQueuedInput`
+   * runs when the session settles, so this works on any provider rather than
+   * only the ones with native mid-run input.
+   */
+  async sendMessageWithOpener(
+    id: string,
+    input: SendMessageInput & { opener: string },
+  ): Promise<void> {
+    await this.sendMessage(id, {
+      text: input.opener,
+      providerAccountId: input.providerAccountId,
+      skipContextInjection: true,
+    })
+
+    this.queuedInputs.enqueue(
+      id,
+      {
+        text: input.text,
+        providerAccountId: input.providerAccountId ?? null,
+      },
+      'follow-up',
+    )
   }
 
   async compactContext(
@@ -984,7 +1045,11 @@ export class SessionService {
       )
     }
 
-    const augmentedText = this.prepareUserTurnText(session, input.input.text)
+    const augmentedText = this.prepareUserTurnText(
+      session,
+      input.input.text,
+      input.input.skipContextInjection,
+    )
 
     assertLocalAccountSelection({
       executionHost: input.session.executionHost,
@@ -1769,7 +1834,11 @@ export class SessionService {
       const attachments = this.resolveAttachments(item.attachmentIds)
       const handle = this.activeHandles.get(sessionId)
 
-      const augmentedText = this.prepareUserTurnText(session, item.text)
+      const augmentedText = this.prepareUserTurnText(
+        session,
+        item.text,
+        item.skipContextInjection,
+      )
 
       if (handle) {
         this.pendingUserAttachmentIds.set(sessionId, item.attachmentIds)

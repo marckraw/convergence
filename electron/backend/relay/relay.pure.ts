@@ -148,6 +148,39 @@ export function compileRelayPayload(
   return `${brief}\n\n${message}`
 }
 
+/**
+ * An opener is one message, not a document: it is a command or a one-line
+ * re-brief, and anything longer is the standing instruction wearing the wrong
+ * hat.
+ */
+export const MAX_RELAY_OPENER_LENGTH = 500
+
+/**
+ * The first message a wire sends, ahead of everything it carries (F9).
+ *
+ * Blank stores as null exactly like the instruction does: an empty box means
+ * "just deliver the payload", which is what every wire did before openers
+ * existed, and an empty string would be a first send of nothing.
+ *
+ * Deliberately not validated as a slash command. The opener is plain text and
+ * its meaning belongs to whoever receives it -- `/clear` is Claude's word, and
+ * on another provider the same box may hold a sentence.
+ */
+export function normalizeRelayOpener(
+  value: string | null | undefined,
+): string | null {
+  if (value === null || value === undefined) return null
+
+  const trimmed = value.trim()
+  if (trimmed.length === 0) return null
+  if (trimmed.length > MAX_RELAY_OPENER_LENGTH) {
+    throw new Error(
+      `A relay opener cannot be longer than ${MAX_RELAY_OPENER_LENGTH} characters`,
+    )
+  }
+  return trimmed
+}
+
 export function normalizeRelaySessionId(value: string, label: string): string {
   const trimmed = value.trim()
   if (trimmed.length === 0) {
@@ -188,16 +221,53 @@ export function assertRelayEndpoints(
 }
 
 /**
- * The ledger's glance at what was carried. Collapses whitespace so a preview
- * stays one readable line in a dense trail.
+ * One readable line, capped. Whitespace collapses because a preview sits in a
+ * dense trail, and nothing empty is a preview -- it reads as null.
  */
-export function buildPayloadPreview(text: string | null): string | null {
+function collapse(text: string | null, limit: number): string | null {
   if (text === null) return null
   const collapsed = text.replace(/\s+/g, ' ').trim()
   if (collapsed.length === 0) return null
-  return collapsed.length > RELAY_PAYLOAD_PREVIEW_LENGTH
-    ? `${collapsed.slice(0, RELAY_PAYLOAD_PREVIEW_LENGTH - 1)}…`
+  return collapsed.length > limit
+    ? `${collapsed.slice(0, limit - 1)}…`
     : collapsed
+}
+
+/**
+ * The ledger's glance at what was carried.
+ */
+export function buildPayloadPreview(text: string | null): string | null {
+  return collapse(text, RELAY_PAYLOAD_PREVIEW_LENGTH)
+}
+
+/**
+ * How much of the opener the ledger shows before the payload gets its turn.
+ * Short on purpose: both beats must stay visible in one glance, so a long
+ * opener may not push the payload out of the preview entirely.
+ */
+export const RELAY_OPENER_PREVIEW_LENGTH = 120
+
+/**
+ * The ledger's glance at a firing that sent two messages.
+ *
+ * No silent sends: a hop that wiped its target before delivering must say so
+ * in the one row it writes, or the user reads "delivered" and never learns
+ * that a `/clear` went first. A wire with no opener previews exactly what it
+ * always did.
+ */
+export function buildRelayHopPreview(
+  opener: string | null,
+  payload: string,
+): string | null {
+  const payloadPreview = buildPayloadPreview(payload)
+  const openerPreview = collapse(opener, RELAY_OPENER_PREVIEW_LENGTH)
+  if (openerPreview === null) return payloadPreview
+
+  const sentence =
+    payloadPreview === null
+      ? `First send: ${openerPreview}`
+      : `First send: ${openerPreview} · then: ${payloadPreview}`
+  return collapse(sentence, RELAY_PAYLOAD_PREVIEW_LENGTH)
 }
 
 /**

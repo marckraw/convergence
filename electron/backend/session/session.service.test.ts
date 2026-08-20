@@ -1,4 +1,5 @@
 import { describe, expect, it, beforeEach, afterEach, vi } from 'vitest'
+import type { Mock } from 'vitest'
 import { mkdtempSync, mkdirSync, rmSync } from 'fs'
 import { join } from 'path'
 import { tmpdir } from 'os'
@@ -3733,5 +3734,159 @@ describe('SessionService — liveness clock', () => {
         'Remote sessions require a repository with an origin remote',
       )
     })
+  })
+})
+
+/**
+ * The relay opener's send path (F9). The opener is a command for the provider
+ * -- `/clear` -- and every-turn project context prepends a block that would
+ * turn it into prose, so it is the one send in the app that skips injection.
+ */
+describe('SessionService opener sends (F9)', () => {
+  let db: Database.Database
+  let service: SessionService
+  let projectContext: ProjectContextService
+  let tempDir: string
+  let projectId: string
+  let sent: Mock<SessionHandle['sendMessage']>
+  let emitDelta: (delta: SessionDelta) => void
+  let sessionId: string
+
+  beforeEach(async () => {
+    db = getDatabase()
+    sent = vi.fn<SessionHandle['sendMessage']>()
+    let deltaListener: ((delta: SessionDelta) => void) | null = null
+
+    const handle: SessionHandle = {
+      onDelta: (listener) => {
+        deltaListener = listener
+      },
+      onStatusChange: () => {},
+      onAttentionChange: () => {},
+      onContextWindowChange: () => {},
+      onActivityChange: () => {},
+      onContinuationToken: () => {},
+      sendMessage: sent,
+      approve: () => {},
+      deny: () => {},
+      stop: () => {},
+    }
+
+    const registry = new ProviderRegistry()
+    registry.register({
+      id: 'continuable',
+      name: 'Continuable Provider',
+      supportsContinuation: true,
+      describe: async () => ({
+        id: 'continuable',
+        name: 'Continuable Provider',
+        vendorLabel: 'Test',
+        kind: 'conversation',
+        supportsContinuation: true,
+        defaultModelId: 'continuable-model',
+        modelOptions: [
+          {
+            id: 'continuable-model',
+            label: 'Continuable Model',
+            defaultEffort: null,
+            effortOptions: [],
+          },
+        ],
+        attachments: TEST_ATTACHMENT_CAPABILITY,
+        midRunInput: NO_MID_RUN_INPUT_CAPABILITY,
+      }),
+      start: () => handle,
+    })
+
+    service = new SessionService(db, new LocalExecutionHost(registry))
+    projectContext = new ProjectContextService(db)
+    service.setSessionContextInjectionService(
+      new SessionContextInjectionService(db, projectContext),
+    )
+
+    tempDir = mkdtempSync(join(tmpdir(), 'convergence-opener-test-'))
+    projectId = 'opener-project'
+    const repoPath = join(tempDir, 'repo')
+    mkdirSync(repoPath, { recursive: true })
+    mkdirSync(join(repoPath, '.git'), { recursive: true })
+    db.prepare(
+      'INSERT INTO projects (id, name, repository_path) VALUES (?, ?, ?)',
+    ).run(projectId, 'Opener Project', repoPath)
+
+    const alwaysOn = projectContext.create({
+      projectId,
+      label: 'lint',
+      body: 'always run npm test',
+      reinjectMode: 'every-turn',
+    })
+
+    const session = service.create({
+      projectId,
+      workspaceId: null,
+      providerId: 'continuable',
+      model: 'continuable-model',
+      effort: null,
+      name: 'opener',
+    })
+    await service.start(session.id, {
+      text: 'go',
+      contextItemIds: [alwaysOn.id],
+    })
+    if (!deltaListener) throw new Error('delta listener was not registered')
+    emitDelta = deltaListener
+    emitDelta({ kind: 'session.patch', patch: { status: 'completed' } })
+    sessionId = session.id
+    sent.mockClear()
+  })
+
+  afterEach(() => {
+    closeDatabase()
+    resetDatabase()
+    rmSync(tempDir, { recursive: true, force: true })
+  })
+
+  it('prepends the every-turn block to an ordinary send', async () => {
+    // The control. Without this, "the opener has no block" proves nothing.
+    await service.sendMessage(sessionId, { text: 'ordinary' })
+
+    expect(sent.mock.calls[0][0]).toContain('always run npm test')
+    expect(sent.mock.calls[0][0].endsWith('ordinary')).toBe(true)
+  })
+
+  it('sends the opener byte for byte, with no block in front of it', async () => {
+    await service.sendMessageWithOpener(sessionId, {
+      opener: '/clear',
+      text: 'next lap',
+    })
+
+    expect(sent).toHaveBeenCalledTimes(1)
+    expect(sent.mock.calls[0][0]).toBe('/clear')
+  })
+
+  it('queues the payload behind the opener rather than sending it', async () => {
+    await service.sendMessageWithOpener(sessionId, {
+      opener: '/clear',
+      text: 'next lap',
+    })
+
+    expect(service.getQueuedInputs(sessionId).map((item) => item.text)).toEqual(
+      ['next lap'],
+    )
+  })
+
+  it('injects context into the payload when it dispatches, as it would for anyone', async () => {
+    // The bypass is the opener's alone: the target was just wiped, so the
+    // payload is exactly the turn that needs its project context re-stated.
+    await service.sendMessageWithOpener(sessionId, {
+      opener: '/clear',
+      text: 'next lap',
+    })
+    sent.mockClear()
+
+    emitDelta({ kind: 'session.patch', patch: { status: 'completed' } })
+
+    expect(sent).toHaveBeenCalledTimes(1)
+    expect(sent.mock.calls[0][0]).toContain('always run npm test')
+    expect(sent.mock.calls[0][0].endsWith('next lap')).toBe(true)
   })
 })
