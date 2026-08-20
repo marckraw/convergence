@@ -23,6 +23,10 @@ import { buildClaudeDescriptor } from '../provider-descriptor.pure'
 import type { ProviderDescriptor } from '../provider.types'
 import { ProviderSessionEmitter } from '../provider-session.emitter'
 import {
+  CONTEXT_RESTARTED_NOTE_TEXT,
+  SESSION_RESTARTED_EVENT_TYPE,
+} from '../session-restart.pure'
+import {
   buildClaudeUserMessageLine,
   type ClaudeMessagePart,
 } from './claude-code-message.pure'
@@ -516,14 +520,33 @@ export class ClaudeCodeProvider implements Provider {
       sessionEmitter.patchSession({ attention })
     }
 
+    /**
+     * The one place this adapter's conversation id changes, which is also the
+     * one place a restart can be noticed.
+     *
+     * A first id is a session beginning and says nothing. An id that REPLACES
+     * one we were already on is the conversation restarting underneath us --
+     * `/clear` mints a new one, and a relay opener does it on purpose (F9).
+     * Convergence never clears its own transcript, so without a marker here it
+     * goes on implying a continuity the model no longer has.
+     */
     function setContinuationToken(token: string): void {
       if (claudeSessionId === token) {
         return
       }
 
+      const previousSessionId = claudeSessionId
       claudeSessionId = token
       listeners.continuationToken.forEach((cb) => cb(token))
       sessionEmitter.patchSession({ continuationToken: token })
+
+      if (previousSessionId) {
+        sessionEmitter.addNote({
+          text: CONTEXT_RESTARTED_NOTE_TEXT,
+          level: 'warning',
+          providerEventType: SESSION_RESTARTED_EVENT_TYPE,
+        })
+      }
     }
 
     function setContextWindow(contextWindow: SessionContextWindow): void {
@@ -856,17 +879,10 @@ export class ClaudeCodeProvider implements Provider {
           ) {
             break
           }
-          if (subtype === 'init' && event.session_id) {
-            const isNewSession = claudeSessionId !== event.session_id
-            setContinuationToken(event.session_id)
-            if (!isNewSession) {
-              break
-            }
-            sessionEmitter.addNote({
-              text: 'Session started',
-              level: 'info',
-            })
-          }
+          // `init` needs nothing of its own: every event carrying a
+          // session_id is adopted above, which is where a replaced id is
+          // noticed. The note this branch used to write could never fire for
+          // exactly that reason.
           break
         }
 
