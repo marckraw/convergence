@@ -160,6 +160,12 @@ ancestry baton), the vocabulary law (write a union, read a plain string, so
 rows from another build still render), and the quota law (relay tests reach
 providers through narrow fake gateways and no other way).
 
+A wire may also carry an **opener** — a first message such as `/clear`, sent
+on its own with the payload queued behind it, which turns a long-lived target
+into a recycled worker wiped and re-briefed every lap. It rides a deliberately
+narrow one-caller seam (`skipContextInjection`) so the command reaches the
+provider byte for byte; do not widen it.
+
 How to add a trigger, an action or a payload transform — with the real file
 lists and the rulings behind them — is
 `docs/architecture/relay-engine.md`. Product doctrine lives in the Linear
