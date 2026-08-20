@@ -58,6 +58,7 @@ function makeRelay(
     targetSessionId: 'review',
     spawnSpec: null,
     instruction: null,
+    opener: null,
     armed: true,
     createdAt: '2026-08-15T10:00:00.000Z',
     updatedAt: '2026-08-15T10:00:00.000Z',
@@ -239,6 +240,7 @@ describe('CrewFlowSection', () => {
         action: 'hail',
         targetSessionId: 'review',
         instruction: null,
+        opener: null,
         spawnSpec: null,
       })
     })
@@ -332,6 +334,7 @@ describe('CrewFlowSection', () => {
         action: 'hail',
         targetSessionId: 'scribe',
         instruction: null,
+        opener: null,
         spawnSpec: null,
       })
     })
@@ -403,6 +406,90 @@ describe('CrewFlowSection', () => {
 
       expect(screen.getByText('· with instructions')).toBeVisible()
       expect(screen.queryByText(/Review it closely/)).toBeNull()
+    })
+  })
+
+  describe('the opener: a first send before the payload', () => {
+    const OPENER_LABEL = /First send \(optional\)/
+
+    async function drawImplToReviewer() {
+      fireEvent.click(screen.getByRole('button', { name: 'Add relay' }))
+      const [sourceTrigger, targetTrigger] = screen.getAllByRole('combobox')
+      fireEvent.click(sourceTrigger)
+      fireEvent.click(
+        await screen.findByRole('option', { name: /Implementor/ }),
+      )
+      fireEvent.click(targetTrigger)
+      fireEvent.click(await screen.findByRole('option', { name: /Reviewer/ }))
+    }
+
+    it('sends the first send the user typed with the wire', async () => {
+      render(<CrewFlowSection crew={makeCrew(['impl', 'review'])} />)
+      await drawImplToReviewer()
+
+      fireEvent.change(screen.getByLabelText(OPENER_LABEL), {
+        target: { value: '/clear' },
+      })
+      fireEvent.click(screen.getByRole('button', { name: 'Draw wire' }))
+
+      await waitFor(() => {
+        expect(createRelay).toHaveBeenCalledWith(
+          expect.objectContaining({ opener: '/clear' }),
+        )
+      })
+    })
+
+    it('sends null when the box was left alone', async () => {
+      render(<CrewFlowSection crew={makeCrew(['impl', 'review'])} />)
+      await drawImplToReviewer()
+
+      fireEvent.click(screen.getByRole('button', { name: 'Draw wire' }))
+
+      await waitFor(() => {
+        expect(createRelay).toHaveBeenCalledWith(
+          expect.objectContaining({ opener: null }),
+        )
+      })
+    })
+
+    /**
+     * A spawn opens a session that has never been used. Offering a first send
+     * there would invite a wire that quietly does nothing.
+     */
+    it('does not offer the box on a spawn wire', async () => {
+      render(<CrewFlowSection crew={makeCrew(['impl'])} />)
+
+      fireEvent.click(screen.getByRole('button', { name: 'Add relay' }))
+
+      expect(screen.queryByLabelText(OPENER_LABEL)).toBeNull()
+    })
+
+    it('loads an existing first send into the form and can clear it', async () => {
+      seedRelays([makeRelay({ id: 'r1', opener: '/clear' })])
+      render(<CrewFlowSection crew={makeCrew(['impl', 'review'])} />)
+
+      fireEvent.click(screen.getByRole('button', { name: /Edit relay/ }))
+      const box = screen.getByLabelText(OPENER_LABEL)
+      expect(box).toHaveValue('/clear')
+
+      fireEvent.change(box, { target: { value: '  ' } })
+      fireEvent.click(screen.getByRole('button', { name: 'Save wire' }))
+
+      await waitFor(() => {
+        expect(updateRelay).toHaveBeenCalledWith(
+          'r1',
+          expect.objectContaining({ opener: null }),
+        )
+      })
+    })
+
+    it('quotes the first send in the wire’s sentence', () => {
+      // The literal text, not "sends something first": which command it is
+      // decides whether the target keeps its memory.
+      seedRelays([makeRelay({ id: 'r1', opener: '/clear' })])
+      render(<CrewFlowSection crew={makeCrew(['impl', 'review'])} />)
+
+      expect(screen.getByText('· sends /clear first')).toBeVisible()
     })
   })
 
@@ -487,6 +574,7 @@ describe('CrewFlowSection', () => {
           action: 'spawn',
           targetSessionId: null,
           instruction: null,
+          opener: null,
           spawnSpec: {
             projectId: 'project-1',
             providerId: 'codex',

@@ -50,12 +50,35 @@ export interface RelaySentence {
    * row exists to show.
    */
   instruction: string | null
+  /**
+   * Set when the wire opens with a first send. The literal text, truncated:
+   * "sends something first" would leave the user guessing at the one word
+   * that decides whether the target gets wiped.
+   */
+  opener: string | null
   /** The whole sentence as plain text, for titles and accessible names. */
   text: string
 }
 
 /** The quiet marker a briefed wire wears in its sentence. */
 export const RELAY_INSTRUCTION_MARKER = 'with instructions'
+
+/**
+ * How much of the opener the sentence quotes. A row is scanned, and an opener
+ * is usually one word -- anything longer is hinted at and read in full on
+ * hover, the same bargain the instruction marker makes.
+ */
+export const RELAY_OPENER_MARKER_LENGTH = 24
+
+/** The marker an opening wire wears: the literal first send, in words. */
+export function relayOpenerMarker(opener: string): string {
+  const collapsed = opener.replace(/\s+/g, ' ').trim()
+  const quoted =
+    collapsed.length > RELAY_OPENER_MARKER_LENGTH
+      ? `${collapsed.slice(0, RELAY_OPENER_MARKER_LENGTH - 1)}…`
+      : collapsed
+  return `sends ${quoted} first`
+}
 
 export type ResolveSessionName = (sessionId: string) => string | null
 
@@ -88,6 +111,7 @@ export function buildRelaySentence(
     | 'action'
     | 'spawnSpec'
     | 'instruction'
+    | 'opener'
   >,
   resolveName: ResolveSessionName,
   resolveProjectName?: (projectId: string | null) => string,
@@ -103,7 +127,15 @@ export function buildRelaySentence(
   const trigger = RELAY_TRIGGER_CLAUSES[relay.trigger]
   const opening = `${trigger.prefix} ${source.name} ${trigger.suffix}`
   const instruction = relay.instruction?.trim() ? relay.instruction : null
-  const marker = instruction ? ` · ${RELAY_INSTRUCTION_MARKER}` : ''
+  // Only a hail can open with a first send: a spawn's far end is a session
+  // that did not exist a moment ago, so there is nothing to clear.
+  const opener =
+    relay.action === 'hail' && relay.opener?.trim() ? relay.opener : null
+  // In the order they happen: the opener goes first, then the brief rides
+  // above the message.
+  const marker =
+    (opener ? ` · ${relayOpenerMarker(opener)}` : '') +
+    (instruction ? ` · ${RELAY_INSTRUCTION_MARKER}` : '')
 
   if (relay.action === 'spawn') {
     const spec = relay.spawnSpec
@@ -122,6 +154,7 @@ export function buildRelaySentence(
         target,
         detail: null,
         instruction,
+        opener,
         text: `${opening}, ${connector} ${target.name}${marker}`,
       }
     }
@@ -147,6 +180,7 @@ export function buildRelaySentence(
       target,
       detail,
       instruction,
+      opener,
       text: `${opening}, ${connector} ${target.name} — ${detail}${marker}`,
     }
   }
@@ -160,6 +194,7 @@ export function buildRelaySentence(
     target,
     detail: null,
     instruction,
+    opener,
     text: `${opening}, ${connector} ${target.name}${marker}`,
   }
 }
@@ -209,6 +244,8 @@ export interface RelayDraft {
   targetSessionId: string | null
   /** Raw textarea text; empty means the wire carries the message untouched. */
   instruction: string
+  /** Raw field text; empty means the payload is delivered straight away. */
+  opener: string
   spawn: RelaySpawnDraft
 }
 
@@ -226,6 +263,7 @@ export const EMPTY_RELAY_DRAFT: RelayDraft = {
   sourceSessionId: null,
   targetSessionId: null,
   instruction: '',
+  opener: '',
   spawn: EMPTY_SPAWN_DRAFT,
 }
 

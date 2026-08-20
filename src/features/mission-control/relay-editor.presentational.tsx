@@ -20,6 +20,8 @@ interface RelayEditorProps {
   targetSessionId: string | null
   /** The standing brief this wire prepends; empty carries the message alone. */
   instruction: string
+  /** The first send, ahead of the payload; empty delivers straight away. */
+  opener: string
   spawn: RelaySpawnDraft
   /** Projects a spawned session can open in; the global option is added here. */
   projectOptions: RelayEndpointOption[]
@@ -36,6 +38,7 @@ interface RelayEditorProps {
   onSourceChange: (sessionId: string) => void
   onTargetChange: (sessionId: string) => void
   onInstructionChange: (instruction: string) => void
+  onOpenerChange: (opener: string) => void
   onSpawnChange: (patch: Partial<RelaySpawnDraft>) => void
   onSave: () => void
   onCancel: () => void
@@ -71,6 +74,7 @@ export const RelayEditor: FC<RelayEditorProps> = ({
   sourceSessionId,
   targetSessionId,
   instruction,
+  opener,
   spawn,
   projectOptions,
   providerOptions,
@@ -84,6 +88,7 @@ export const RelayEditor: FC<RelayEditorProps> = ({
   onSourceChange,
   onTargetChange,
   onInstructionChange,
+  onOpenerChange,
   onSpawnChange,
   onSave,
   onCancel,
@@ -219,6 +224,32 @@ export const RelayEditor: FC<RelayEditorProps> = ({
           onChange={(event) => onSpawnChange({ name: event.target.value })}
           className="h-7 w-40 text-xs"
         />
+      </div>
+    ) : null}
+
+    {/* Hail only. A spawn opens a session that has never been used, so there
+        is nothing for a first send to reset -- offering the box there would
+        invite a wire that quietly does nothing. */}
+    {action === 'hail' ? (
+      <div className="flex flex-col gap-1 pl-3">
+        <label
+          htmlFor="relay-opener"
+          className="text-[11px] text-muted-foreground"
+        >
+          First send (optional) — sent on its own, before the message
+        </label>
+        <Input
+          id="relay-opener"
+          value={opener}
+          placeholder="/clear"
+          disabled={busy}
+          onChange={(event) => onOpenerChange(event.target.value)}
+          className="h-7 text-xs"
+        />
+        <p className="text-[10px] text-muted-foreground/70">
+          e.g. /clear to reset the target before delivering. The message waits
+          until this one has been answered.
+        </p>
       </div>
     ) : null}
 

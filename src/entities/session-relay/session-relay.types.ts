@@ -34,6 +34,12 @@ export interface SessionRelay {
    * carry the message exactly as the source session wrote it.
    */
   instruction: string | null
+  /**
+   * A first message this wire sends on its own, ahead of the payload, or null
+   * to deliver straight away. `/clear` here recycles a long-lived target: the
+   * same wire wipes it and re-briefs it every lap.
+   */
+  opener: string | null
   armed: boolean
   createdAt: string
   updatedAt: string
@@ -76,6 +82,7 @@ export interface CreateSessionRelayInput {
   targetSessionId?: string | null
   spawnSpec?: RelaySpawnSpec | null
   instruction?: string | null
+  opener?: string | null
   armed?: boolean
 }
 
@@ -85,5 +92,6 @@ export interface UpdateSessionRelayInput {
   targetSessionId?: string | null
   spawnSpec?: RelaySpawnSpec | null
   instruction?: string | null
+  opener?: string | null
   armed?: boolean
 }

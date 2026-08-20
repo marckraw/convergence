@@ -7,6 +7,7 @@ import type { RelaySentence } from './relay-sentence.pure'
 import {
   RELAY_INSTRUCTION_MARKER,
   formatArmedLabel,
+  relayOpenerMarker,
 } from './relay-sentence.pure'
 
 interface RelayRowProps {
@@ -98,6 +99,14 @@ export const RelayRow: FC<RelayRowProps> = ({
         </span>
         {sentence.detail ? (
           <span className="text-muted-foreground/70">· {sentence.detail}</span>
+        ) : null}
+        {/* Named rather than hinted at: which first send a wire makes is the
+            difference between re-briefing a session and wiping it, so the row
+            quotes the text. Hover reads a long one out in full. */}
+        {sentence.opener ? (
+          <span title={sentence.opener} className="text-muted-foreground/70">
+            · {relayOpenerMarker(sentence.opener)}
+          </span>
         ) : null}
         {/* The brief itself stays in the form: a row is scanned, and a
             paragraph here would hide the wiring it exists to show. Hover

@@ -217,6 +217,7 @@ export const CrewFlowSection: FC<CrewFlowSectionProps> = ({ crew }) => {
         sourceSessionId: relay.sourceSessionId,
         targetSessionId: relay.targetSessionId,
         instruction: relay.instruction ?? '',
+        opener: relay.opener ?? '',
         spawn: relay.spawnSpec
           ? {
               projectId: relay.spawnSpec.projectId,
@@ -264,6 +265,10 @@ export const CrewFlowSection: FC<CrewFlowSectionProps> = ({ crew }) => {
     // Sent as an explicit null rather than omitted, so clearing the box on an
     // edit actually removes the brief instead of quietly keeping the old one.
     const instruction = draft.instruction.trim() ? draft.instruction : null
+    // Same explicit null, and never on a spawn: a session that opened a moment
+    // ago has nothing to clear, so the field is not offered there and must not
+    // survive a wire that switched actions.
+    const opener = !spawning && draft.opener.trim() ? draft.opener : null
 
     setBusy(true)
     const saved =
@@ -272,11 +277,13 @@ export const CrewFlowSection: FC<CrewFlowSectionProps> = ({ crew }) => {
             crewId: crew.id,
             sourceSessionId: draft.sourceSessionId,
             instruction,
+            opener,
             ...shape,
           })
         : await updateRelay(editor.relayId, {
             sourceSessionId: draft.sourceSessionId,
             instruction,
+            opener,
             ...shape,
           })
     setBusy(false)
@@ -384,6 +391,7 @@ export const CrewFlowSection: FC<CrewFlowSectionProps> = ({ crew }) => {
           sourceSessionId={draft.sourceSessionId}
           targetSessionId={draft.targetSessionId}
           instruction={draft.instruction}
+          opener={draft.opener}
           spawn={draft.spawn}
           projectOptions={projectOptions}
           providerOptions={providerOptions}
@@ -404,6 +412,9 @@ export const CrewFlowSection: FC<CrewFlowSectionProps> = ({ crew }) => {
           }
           onInstructionChange={(instruction) =>
             setDraft((current) => ({ ...current, instruction }))
+          }
+          onOpenerChange={(opener) =>
+            setDraft((current) => ({ ...current, opener }))
           }
           onSpawnChange={(patch: Partial<RelaySpawnDraft>) =>
             setDraft((current) => ({

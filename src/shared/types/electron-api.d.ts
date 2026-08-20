@@ -568,6 +568,8 @@ interface SessionRelayData {
   spawnSpec: RelaySpawnSpecData | null
   /** Prepended to what the wire carries; null carries the message as written. */
   instruction: string | null
+  /** Sent on its own before the payload; null delivers the payload straight. */
+  opener: string | null
   armed: boolean
   createdAt: string
   updatedAt: string
@@ -596,6 +598,7 @@ interface CreateSessionRelayInputData {
   targetSessionId?: string | null
   spawnSpec?: RelaySpawnSpecData | null
   instruction?: string | null
+  opener?: string | null
   armed?: boolean
 }
 
@@ -605,6 +608,7 @@ interface UpdateSessionRelayInputData {
   targetSessionId?: string | null
   spawnSpec?: RelaySpawnSpecData | null
   instruction?: string | null
+  opener?: string | null
   armed?: boolean
 }
 

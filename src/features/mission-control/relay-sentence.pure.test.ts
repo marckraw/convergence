@@ -5,6 +5,7 @@ import {
   EMPTY_SPAWN_DRAFT,
   MISSING_SESSION_LABEL,
   RELAY_INSTRUCTION_MARKER,
+  RELAY_OPENER_MARKER_LENGTH,
   RELAY_TRIGGER_CLAUSES,
   buildRelayEndpointOptions,
   buildRelaySentence,
@@ -12,6 +13,7 @@ import {
   formatRelayCount,
   isSavableRelayDraft,
   relayDraftProblem,
+  relayOpenerMarker,
 } from './relay-sentence.pure'
 import type { RelayDraft, RelaySpawnDraft } from './relay-sentence.pure'
 
@@ -34,6 +36,7 @@ function relay(
     targetSessionId: 's2',
     spawnSpec: null,
     instruction: null,
+    opener: null,
     armed: true,
     createdAt: '2026-08-15T10:00:00Z',
     updatedAt: '2026-08-15T10:00:00Z',
@@ -52,6 +55,7 @@ function hailWire(
   | 'action'
   | 'spawnSpec'
   | 'instruction'
+  | 'opener'
 > {
   return {
     trigger: 'settled',
@@ -60,6 +64,7 @@ function hailWire(
     targetSessionId,
     spawnSpec: null,
     instruction: null,
+    opener: null,
   }
 }
 
@@ -119,6 +124,7 @@ describe('buildRelaySentence', () => {
         sourceSessionId: 's1',
         targetSessionId: null,
         instruction: null,
+        opener: null,
         spawnSpec: {
           projectId: 'p1',
           providerId: 'codex',
@@ -152,6 +158,7 @@ describe('buildRelaySentence', () => {
         sourceSessionId: 's1',
         targetSessionId: null,
         instruction: null,
+        opener: null,
         spawnSpec: {
           projectId: 'p1',
           providerId: 'codex',
@@ -181,6 +188,7 @@ describe('buildRelaySentence', () => {
         sourceSessionId: 's1',
         targetSessionId: null,
         instruction: null,
+        opener: null,
         spawnSpec: {
           projectId: 'p1',
           providerId: 'codex',
@@ -206,6 +214,7 @@ describe('buildRelaySentence', () => {
         sourceSessionId: 's1',
         targetSessionId: null,
         instruction: null,
+        opener: null,
         spawnSpec: {
           projectId: 'p1',
           providerId: 'codex',
@@ -231,6 +240,7 @@ describe('buildRelaySentence', () => {
         sourceSessionId: 's1',
         targetSessionId: null,
         instruction: null,
+        opener: null,
         spawnSpec: null,
       },
       resolveName,
@@ -292,6 +302,7 @@ describe('the instruction marker', () => {
         sourceSessionId: 's1',
         targetSessionId: null,
         instruction: 'Start from the branch diff.',
+        opener: null,
         spawnSpec: {
           projectId: 'p1',
           providerId: 'codex',
@@ -318,6 +329,88 @@ describe('the instruction marker', () => {
 
     expect(sentence.instruction).toBeNull()
     expect(sentence.text).not.toContain(RELAY_INSTRUCTION_MARKER)
+  })
+})
+
+describe('the opener marker', () => {
+  it('says nothing at all when the wire has no first send', () => {
+    const sentence = buildRelaySentence(hailWire('s1', 's2'), resolveName)
+
+    expect(sentence.opener).toBeNull()
+    expect(sentence.text).not.toContain('sends')
+  })
+
+  it('quotes the literal first send in the sentence', () => {
+    // Not "sends something first": which command it is decides whether the
+    // target keeps its memory, so the row names it.
+    const sentence = buildRelaySentence(
+      { ...hailWire('s1', 's2'), opener: '/clear' },
+      resolveName,
+    )
+
+    expect(sentence.opener).toBe('/clear')
+    expect(sentence.text).toBe(
+      'When Implementor finishes, send its last message to Reviewer · sends /clear first',
+    )
+  })
+
+  it('reads both markers in the order the wire does them', () => {
+    const sentence = buildRelaySentence(
+      {
+        ...hailWire('s1', 's2'),
+        opener: '/clear',
+        instruction: 'Pick up the next task.',
+      },
+      resolveName,
+    )
+
+    expect(sentence.text).toBe(
+      `When Implementor finishes, send its last message to Reviewer · sends /clear first · ${RELAY_INSTRUCTION_MARKER}`,
+    )
+  })
+
+  it('treats a whitespace-only first send as none', () => {
+    const sentence = buildRelaySentence(
+      { ...hailWire('s1', 's2'), opener: '   ' },
+      resolveName,
+    )
+
+    expect(sentence.opener).toBeNull()
+  })
+
+  /**
+   * A spawn opens a session that did not exist a moment ago, so there is
+   * nothing for a first send to reset -- and the backend drops it. The
+   * sentence must not promise what the wire will not do.
+   */
+  it('stays silent about an opener a spawn wire is carrying', () => {
+    const sentence = buildRelaySentence(
+      {
+        trigger: 'settled',
+        action: 'spawn',
+        sourceSessionId: 's1',
+        targetSessionId: null,
+        instruction: null,
+        opener: '/clear',
+        spawnSpec: null,
+      },
+      resolveName,
+    )
+
+    expect(sentence.opener).toBeNull()
+    expect(sentence.text).not.toContain('/clear')
+  })
+
+  it('shortens a long first send rather than filling the row with it', () => {
+    const marker = relayOpenerMarker('x'.repeat(RELAY_OPENER_MARKER_LENGTH + 5))
+
+    expect(marker).toBe(
+      `sends ${'x'.repeat(RELAY_OPENER_MARKER_LENGTH - 1)}… first`,
+    )
+  })
+
+  it('collapses a first send written across lines', () => {
+    expect(relayOpenerMarker('/clear\n')).toBe('sends /clear first')
   })
 })
 
