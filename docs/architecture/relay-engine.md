@@ -23,7 +23,7 @@ session settles
       takes the flow-run baton             (in-memory ancestry, see loop law)
       → RelayService.listForSourceSession  service: repository + use cases
       → fire(relay) per wire
-          guards: armed / status / loop law / budget
+          guards: armed / mute / status / loop law / budget
           payload: gateway read → compileRelayPayload → preview
           act: RelaySessionGateway.sendMessage | sendMessageWithOpener
                | create + start
@@ -43,6 +43,43 @@ deliveries, spawns, skips and errors alike. A wire the user cannot watch fire
 is a silent hop. The one exception is ruled and deliberate: a **disarmed** wire
 writes nothing, because a switch at rest never fired (constitution amendment 1,
 2026-08-16).
+
+### 1a. The quiet send — the human may silence one settle (F10, MAR-2537)
+
+A message may be sent asking for quiet: the wires leaving that session do not
+fire when the work in flight finishes. It is a fact about the **settle**, not
+about a turn — `sessions.relays_muted` means _someone asked for quiet since
+this session last came to rest_, set at dispatch and cleared by the settle that
+honours it, in the same `UPDATE` that commits the status so nothing between the
+two writes can leave a session settled but still marked quiet.
+
+If **any** message contributing to the finished work asked for quiet, the settle
+is quiet. Mute wins ties, deliberately: erring quiet costs one manual hail,
+while erring loud spends provider quota and wakes another agent mid-work, and
+those are not symmetric. There is no way to silence one of two messages that
+end together, and there should not be.
+
+**Where the guard sits in `fire()`, and why.** Immediately after `armed`, ahead
+of the status, loop-law and budget guards:
+
+- _behind `armed`_, because a switch at rest is not a firing and a mute is not
+  the switch's state — a disarmed wire keeps the silence law 1 grants it;
+- _ahead of everything else_, because everything below it is a fact about the
+  flow's state while the mute is the human's explicit instruction about this
+  settle. So the ledger says what they actually did, and the row count for a
+  quiet settle stays predictable: N armed wires, N `skipped-muted` rows, always.
+  Under the status guard, a quiet settle that also failed would file as
+  `skipped-failed`, which reads as though the flow tried; under the budget
+  guard, it could disarm a wire on the way past.
+
+`skipped-muted` is deliberately **not** a budgeted outcome and **not** an
+alarming one: no budget is charged, no baton is handed on, the loop law's
+already-fired check stays unsatisfied, and the row reads grey. The wire stays
+armed, and the next ordinary message carries as usual.
+
+Convergence never infers the mute. It does not sniff `/clear` or `/compact` and
+silence itself — a wire that stops firing for reasons the user did not ask for
+is worse than one that fires when they forgot.
 
 ### 2. The loop law — a wire fires once per flow run
 
