@@ -8,6 +8,7 @@ import { resolveAccountForAutomaticTurn } from '../provider-account/provider-acc
 import type { AutomaticTurnAccountSource } from '../provider-account/provider-account-automatic-turn.pure'
 import {
   ALREADY_FIRED_MESSAGE,
+  MUTED_MESSAGE,
   buildRelayHopPreview,
   compileRelayPayload,
   flowRunBudgetMessage,
@@ -300,6 +301,18 @@ export class RelayEngine {
     // journal every session that finishes near a switched-off wire, and doing
     // so buried the real rows under noise.
     if (!relay.armed) return
+
+    // The quiet send (F10). Checked here, ahead of every guard below it,
+    // because everything after `armed` is a fact about the flow's state while
+    // this is the human's explicit instruction about this settle -- so it
+    // outranks them, the ledger says what they actually did, and the row count
+    // stays predictable: one quiet settle with N armed wires writes exactly N
+    // rows, always. Behind the `armed` guard rather than ahead of it, because a
+    // switch at rest is not a firing and a mute is not the switch's state.
+    if (event.relaysMuted) {
+      record('skipped-muted', { error: MUTED_MESSAGE })
+      return
+    }
 
     // v1 fires on completion only. A failure still writes a row, because
     // "my wire did not fire" must always have a visible answer.

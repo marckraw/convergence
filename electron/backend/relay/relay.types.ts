@@ -47,6 +47,11 @@ export interface RelaySpawnSpec {
  * `skipped-already-fired` is the loop law working rather than anything going
  * wrong: a wire fires at most once per flow run, so the second time round a
  * loop it declines quietly and stays armed for the next run.
+ *
+ * `skipped-muted` is the human working: they sent that turn quiet (F10), so
+ * the wire declined and stays armed for the next one. It writes a row for the
+ * same reason every other skip does -- "my wire did not fire" must always have
+ * a visible answer, and "because you asked me not to" is one.
  */
 export type RelayHopOutcome =
   | 'delivered'
@@ -55,6 +60,7 @@ export type RelayHopOutcome =
   | 'skipped-failed'
   | 'skipped-budget'
   | 'skipped-already-fired'
+  | 'skipped-muted'
   | 'error'
 
 /**
