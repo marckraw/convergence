@@ -4,6 +4,7 @@ import { DEFAULT_PROJECT_SETTINGS, useProjectStore } from '@/entities/project'
 import { useDialogStore } from '@/entities/dialog'
 import { useSpaceStore } from '@/entities/space'
 import { useSessionStore } from '@/entities/session'
+import { useSessionRelayStore } from '@/entities/session-relay'
 import { useProjectScriptStore } from '@/entities/project-script'
 import { useWorkspaceStore } from '@/entities/workspace'
 import { TooltipProvider } from '@/shared/ui/tooltip'
@@ -97,6 +98,8 @@ describe('SessionView changed files drawer', () => {
       loading: false,
       error: null,
     })
+
+    useSessionRelayStore.setState({ relays: [], isLoaded: true })
 
     useSessionStore.setState({
       sessions: [
@@ -303,6 +306,74 @@ describe('SessionView changed files drawer', () => {
     expect(screen.getByTestId('session-activity-indicator')).toHaveTextContent(
       'compacting context…',
     )
+  })
+
+  /**
+   * Observed in the real header rather than on the container in isolation.
+   * Removing the chip from `SessionView` breaks nothing and errors nowhere --
+   * the feature is simply gone, and only somebody who remembers it existed
+   * would ever notice. That silent absence is what this pins.
+   */
+  it('shows the wires leaving this session in the header', async () => {
+    useSessionStore.setState((state) => ({
+      ...state,
+      globalSessions: [
+        ...state.sessions,
+        {
+          ...state.sessions[0],
+          id: 'session-2',
+          name: 'Reviewer',
+        },
+      ],
+    }))
+    useSessionRelayStore.setState({
+      relays: [
+        {
+          id: 'relay-1',
+          crewId: 'crew-1',
+          sourceSessionId: 'session-1',
+          trigger: 'settled',
+          action: 'hail',
+          targetSessionId: 'session-2',
+          spawnSpec: null,
+          instruction: null,
+          opener: null,
+          armed: true,
+          createdAt: '2026-08-01T00:00:00.000Z',
+          updatedAt: '2026-08-01T00:00:00.000Z',
+        },
+      ],
+      isLoaded: true,
+    })
+
+    render(
+      <TooltipProvider>
+        <SessionView />
+      </TooltipProvider>,
+    )
+
+    const chip = screen.getByRole('button', {
+      name: '1 wire fires when this session finishes.',
+    })
+    expect(chip).toHaveTextContent('1 wire')
+
+    fireEvent.click(chip)
+    expect(
+      await screen.findByText(
+        'When Test session finishes, send its last message to Reviewer',
+      ),
+    ).toBeInTheDocument()
+  })
+
+  it('leaves the header alone for a session nothing is wired to', () => {
+    render(
+      <TooltipProvider>
+        <SessionView />
+      </TooltipProvider>,
+    )
+
+    expect(screen.queryByText('1 wire')).not.toBeInTheDocument()
+    expect(screen.queryByText('0 wires')).not.toBeInTheDocument()
   })
 
   it('opens the session workspace from the header menu', async () => {

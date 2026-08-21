@@ -130,4 +130,32 @@ describe('SessionWiresContainer', () => {
       }),
     ).toBeInTheDocument()
   })
+
+  it('reads a disarmed wire grey while its armed neighbour stays plain', () => {
+    // Run 17's ruling: a switch at rest must never imply something will happen,
+    // whatever accent its crew wears. Asserted rather than left to the styles,
+    // because a ruling with no test is a ruling waiting to be undone quietly.
+    useSessionRelayStore.setState({
+      relays: [hail('r1', 's1', 's2'), hail('r2', 's1', 's3', false)],
+    })
+    render(<SessionWiresContainer sessionId="s1" />)
+
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: '2 wires leave this session; 1 of them is armed.',
+      }),
+    )
+
+    const armed = screen.getByText(
+      'When Implementor finishes, send its last message to Reviewer',
+    )
+    const disarmed = screen.getByText(
+      'When Implementor finishes, send its last message to Scribe',
+    )
+
+    expect(disarmed.className).toContain('text-muted-foreground/60')
+    expect(disarmed.className).toContain('line-through')
+    expect(armed.className).toContain('text-foreground')
+    expect(armed.className).not.toContain('line-through')
+  })
 })
