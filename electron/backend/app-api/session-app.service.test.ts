@@ -54,6 +54,7 @@ function createSessionBackend(
     rename: vi.fn(),
     regenerateName: vi.fn(),
     setPrimarySurface: vi.fn(() => sessionFixture),
+    setModelSelection: vi.fn(() => sessionFixture),
     setSummaryUpdateListener: vi.fn(),
     setConversationPatchListener: vi.fn(),
     setQueuedInputPatchListener: vi.fn(),
@@ -134,5 +135,29 @@ describe('SessionAppService', () => {
     expect(sessions.sendMessage).toHaveBeenCalledWith('session-1', input)
     expect(sessions.approve).toHaveBeenCalledWith('session-1', 'approval-1')
     expect(sessions.stop).toHaveBeenCalledWith('session-1')
+  })
+
+  it('passes a model selection straight through, refusals included (MAR-2550)', () => {
+    const sessions = createSessionBackend({
+      setModelSelection: vi.fn(() => {
+        throw new Error(
+          'Model and effort can only change while the session is idle.',
+        )
+      }),
+    })
+    const app = new SessionAppService(sessions, {
+      resolveSessionDefaults: vi.fn(async () => null),
+    })
+
+    expect(() =>
+      app.setSessionModelSelection('session-1', {
+        model: 'opus',
+        effort: 'high',
+      }),
+    ).toThrow(/only change while the session is idle/)
+    expect(sessions.setModelSelection).toHaveBeenCalledWith('session-1', {
+      model: 'opus',
+      effort: 'high',
+    })
   })
 })

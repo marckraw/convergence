@@ -1887,6 +1887,10 @@ interface ElectronAPI {
       id: string,
       surface: 'conversation' | 'terminal',
     ) => Promise<SessionSummaryData>
+    setModelSelection: (
+      id: string,
+      input: { model: string | null; effort: ReasoningEffort | null },
+    ) => Promise<SessionSummaryData>
     getNeedsYouDismissals: () => Promise<NeedsYouDismissals>
     setNeedsYouDismissals: (dismissals: NeedsYouDismissals) => Promise<void>
     getRecentIds: () => Promise<string[]>

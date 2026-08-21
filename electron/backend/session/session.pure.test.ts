@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import {
+  describeModelSelectionRefusal,
   isAttentionRequestSummary,
   parseJsonArray,
+  parseReasoningEffort,
   queuedInputFromRow,
   resolveAttentionRequestKind,
 } from './session.pure'
@@ -134,5 +136,88 @@ describe('session pure helpers', () => {
     expect(queuedInputFromRow({ ...row, relays_muted: null }).relaysMuted).toBe(
       false,
     )
+  })
+})
+
+describe('describeModelSelectionRefusal (MAR-2550)', () => {
+  const idle = {
+    status: 'idle',
+    attention: 'none',
+    hasActiveHandle: false,
+  } as const
+
+  it('allows the change on a settled session with no process attached', () => {
+    expect(describeModelSelectionRefusal(idle)).toBeNull()
+    expect(
+      describeModelSelectionRefusal({ ...idle, status: 'completed' }),
+    ).toBeNull()
+    expect(
+      describeModelSelectionRefusal({
+        ...idle,
+        status: 'failed',
+        attention: 'failed',
+      }),
+    ).toBeNull()
+    expect(
+      describeModelSelectionRefusal({ ...idle, attention: 'finished' }),
+    ).toBeNull()
+  })
+
+  it('refuses while a turn is running', () => {
+    expect(
+      describeModelSelectionRefusal({
+        ...idle,
+        status: 'running',
+        hasActiveHandle: true,
+      }),
+    ).toMatch(/current turn to finish/)
+  })
+
+  it('refuses while the agent is waiting on the human', () => {
+    expect(
+      describeModelSelectionRefusal({ ...idle, attention: 'needs-input' }),
+    ).toMatch(/Answer the agent first/)
+    expect(
+      describeModelSelectionRefusal({ ...idle, attention: 'needs-approval' }),
+    ).toMatch(/Answer the agent first/)
+  })
+
+  it('refuses a settled session that still holds a provider process', () => {
+    // The load-bearing case: a completed turn whose handle was kept because no
+    // continuation token arrived still routes the next message into the live
+    // process, which closed over the model it spawned with.
+    expect(
+      describeModelSelectionRefusal({
+        ...idle,
+        status: 'completed',
+        attention: 'finished',
+        hasActiveHandle: true,
+      }),
+    ).toMatch(/provider process attached/)
+  })
+})
+
+describe('parseReasoningEffort', () => {
+  it('accepts every effort a provider descriptor can offer', () => {
+    for (const effort of [
+      'none',
+      'minimal',
+      'low',
+      'medium',
+      'high',
+      'max',
+      'xhigh',
+      'ultra',
+    ]) {
+      expect(parseReasoningEffort(effort)).toBe(effort)
+    }
+  })
+
+  it('rejects anything else', () => {
+    expect(parseReasoningEffort('turbo')).toBeNull()
+    expect(parseReasoningEffort('')).toBeNull()
+    expect(parseReasoningEffort(null)).toBeNull()
+    expect(parseReasoningEffort(undefined)).toBeNull()
+    expect(parseReasoningEffort(3)).toBeNull()
   })
 })

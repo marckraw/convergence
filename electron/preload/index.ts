@@ -342,6 +342,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.invoke('session:regenerateName', id, requestId),
     setPrimarySurface: (id: string, surface: 'conversation' | 'terminal') =>
       ipcRenderer.invoke('session:setPrimarySurface', id, surface),
+    setModelSelection: (
+      id: string,
+      input: { model: string | null; effort: string | null },
+    ) => ipcRenderer.invoke('session:setModelSelection', id, input),
     getNeedsYouDismissals: () =>
       ipcRenderer.invoke('session:getNeedsYouDismissals'),
     setNeedsYouDismissals: (dismissals: unknown) =>

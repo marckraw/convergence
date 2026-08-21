@@ -4279,3 +4279,219 @@ describe('SessionService relay mute', () => {
     expect(settles[0].relaysMuted).toBe(true)
   })
 })
+
+/**
+ * MAR-2550 — the model a conversation runs on is a standing intention held on
+ * the session row, not something fixed at birth. These tests are the whole
+ * claim: an idle session can be rewritten, a busy one refuses out loud, and the
+ * next resumed turn genuinely spawns on the new value.
+ */
+describe('SessionService model selection (MAR-2550)', () => {
+  let db: Database.Database
+  let service: SessionService
+  let tempDir: string
+  let sessionId: string
+  let startConfigs: Array<{ model: string | null; effort: string | null }>
+  let deltaListener: ((delta: SessionDelta) => void) | null
+
+  /** What a provider does the moment it picks the turn up. */
+  function beginTurn(): void {
+    deltaListener?.({ kind: 'session.patch', patch: { status: 'running' } })
+  }
+
+  function settleTurn(): void {
+    deltaListener?.({
+      kind: 'session.patch',
+      patch: { continuationToken: 'resume-token-1', status: 'completed' },
+    })
+  }
+
+  beforeEach(() => {
+    db = getDatabase()
+    startConfigs = []
+    deltaListener = null
+
+    const registry = new ProviderRegistry()
+    registry.register({
+      id: 'switchable',
+      name: 'Switchable Provider',
+      supportsContinuation: true,
+      describe: async () => ({
+        id: 'switchable',
+        name: 'Switchable Provider',
+        vendorLabel: 'Test',
+        kind: 'conversation',
+        supportsContinuation: true,
+        defaultModelId: 'fable',
+        modelOptions: [
+          {
+            id: 'fable',
+            label: 'Fable',
+            defaultEffort: null,
+            effortOptions: [],
+          },
+          {
+            id: 'opus',
+            label: 'Opus',
+            defaultEffort: null,
+            effortOptions: [],
+          },
+        ],
+        attachments: TEST_ATTACHMENT_CAPABILITY,
+        midRunInput: NO_MID_RUN_INPUT_CAPABILITY,
+      }),
+      start: (config) => {
+        startConfigs.push({ model: config.model, effort: config.effort })
+        return {
+          onDelta: (listener) => {
+            deltaListener = listener
+          },
+          onStatusChange: () => {},
+          onAttentionChange: () => {},
+          onContextWindowChange: () => {},
+          onActivityChange: () => {},
+          onContinuationToken: (listener) => {
+            if (config.continuationToken) listener(config.continuationToken)
+          },
+          sendMessage: () => {},
+          approve: () => {},
+          deny: () => {},
+          stop: () => {},
+        }
+      },
+    })
+
+    service = new SessionService(db, new LocalExecutionHost(registry))
+
+    tempDir = mkdtempSync(join(tmpdir(), 'convergence-model-switch-'))
+    const repoPath = join(tempDir, 'repo')
+    mkdirSync(repoPath, { recursive: true })
+    db.prepare(
+      'INSERT INTO projects (id, name, repository_path) VALUES (?, ?, ?)',
+    ).run('switch-project', 'Switch Project', repoPath)
+
+    sessionId = service.create({
+      projectId: 'switch-project',
+      workspaceId: null,
+      providerId: 'switchable',
+      model: 'fable',
+      effort: 'medium',
+      name: 'a long conversation',
+    }).id
+  })
+
+  afterEach(() => {
+    closeDatabase()
+    resetDatabase()
+    rmSync(tempDir, { recursive: true, force: true })
+  })
+
+  it('carries a swapped model into the next resumed turn', async () => {
+    await service.start(sessionId, { text: 'first' })
+    settleTurn()
+
+    service.setModelSelection(sessionId, { model: 'opus', effort: 'high' })
+    await service.sendMessage(sessionId, { text: 'carry on' })
+
+    expect(startConfigs).toEqual([
+      { model: 'fable', effort: 'medium' },
+      { model: 'opus', effort: 'high' },
+    ])
+  })
+
+  it('returns the rewritten summary and broadcasts it', async () => {
+    const summaries: Array<{ model: string | null; effort: string | null }> = []
+    service.setSummaryUpdateListener((summary) => {
+      summaries.push({ model: summary.model, effort: summary.effort })
+    })
+
+    await service.start(sessionId, { text: 'first' })
+    settleTurn()
+
+    const updated = service.setModelSelection(sessionId, {
+      model: 'opus',
+      effort: 'high',
+    })
+
+    expect(updated).toMatchObject({
+      model: 'opus',
+      effort: 'high',
+      providerId: 'switchable',
+    })
+    expect(summaries.at(-1)).toEqual({ model: 'opus', effort: 'high' })
+  })
+
+  it('refuses while a turn is running and leaves the row alone', async () => {
+    await service.start(sessionId, { text: 'first' })
+    beginTurn()
+
+    expect(() =>
+      service.setModelSelection(sessionId, { model: 'opus', effort: 'high' }),
+    ).toThrow(/current turn to finish/)
+    expect(service.getSummaryById(sessionId)).toMatchObject({
+      model: 'fable',
+      effort: 'medium',
+    })
+  })
+
+  it('refuses while the agent is waiting on the human', async () => {
+    await service.start(sessionId, { text: 'first' })
+    deltaListener?.({
+      kind: 'session.patch',
+      patch: { status: 'idle', attention: 'needs-input' },
+    })
+
+    expect(() =>
+      service.setModelSelection(sessionId, { model: 'opus', effort: 'high' }),
+    ).toThrow(/Answer the agent first/)
+  })
+
+  it('refuses a settled session whose provider process is still attached', async () => {
+    // No continuation token arrived, so the handle was kept and the next
+    // message goes into the live process rather than a fresh spawn.
+    await service.start(sessionId, { text: 'first' })
+    deltaListener?.({
+      kind: 'session.patch',
+      patch: { status: 'completed' },
+    })
+
+    expect(() =>
+      service.setModelSelection(sessionId, { model: 'opus', effort: 'high' }),
+    ).toThrow(/provider process attached/)
+  })
+
+  it('refuses an effort no provider could ever accept', async () => {
+    await service.start(sessionId, { text: 'first' })
+    settleTurn()
+
+    expect(() =>
+      service.setModelSelection(sessionId, {
+        model: 'opus',
+        effort: 'turbo',
+      }),
+    ).toThrow(/Unknown reasoning effort/)
+    expect(service.getSummaryById(sessionId)).toMatchObject({ model: 'fable' })
+  })
+
+  it('refuses a shell session, which has no model to change', () => {
+    const shell = service.create({
+      projectId: 'switch-project',
+      workspaceId: null,
+      providerId: 'shell',
+      model: null,
+      effort: null,
+      name: 'terminal',
+      primarySurface: 'terminal',
+    })
+
+    expect(() =>
+      service.setModelSelection(shell.id, { model: 'opus', effort: null }),
+    ).toThrow(/shell provider/)
+  })
+
+  it('refuses a session that does not exist', () => {
+    expect(() =>
+      service.setModelSelection('nope', { model: 'opus', effort: null }),
+    ).toThrow(/Session not found/)
+  })
+})

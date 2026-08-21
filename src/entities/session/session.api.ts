@@ -103,6 +103,15 @@ export const sessionApi = {
       surface,
     ) as Promise<SessionSummary>,
 
+  setModelSelection: (
+    id: string,
+    input: { model: string | null; effort: ReasoningEffort | null },
+  ): Promise<SessionSummary> =>
+    window.electronAPI.session.setModelSelection(
+      id,
+      input,
+    ) as Promise<SessionSummary>,
+
   getNeedsYouDismissals: (): Promise<NeedsYouDismissals> =>
     window.electronAPI.session.getNeedsYouDismissals(),
 

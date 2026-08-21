@@ -125,6 +125,30 @@ describe('SessionRepository', () => {
     expect(repository.isAutoNamed('session-1')).toBe(true)
   })
 
+  it('rewrites the model and effort columns (MAR-2550)', () => {
+    repository.create(createSessionInput())
+
+    repository.setModelSelection('session-1', 'gpt-5.6-sol', 'xhigh')
+
+    expect(repository.findById('session-1')).toMatchObject({
+      model: 'gpt-5.6-sol',
+      effort: 'xhigh',
+      provider_id: 'codex',
+    })
+  })
+
+  it('accepts a null model and effort without disturbing the provider', () => {
+    repository.create(createSessionInput())
+
+    repository.setModelSelection('session-1', null, null)
+
+    expect(repository.findById('session-1')).toMatchObject({
+      model: null,
+      effort: null,
+      provider_id: 'codex',
+    })
+  })
+
   it('deletes a session row', () => {
     repository.create(createSessionInput())
 

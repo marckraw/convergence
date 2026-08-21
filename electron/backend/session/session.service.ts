@@ -50,7 +50,9 @@ import type { SessionContextInjectionService } from './context-injection/session
 import { SessionRepository } from './session.repository'
 import { CONVERSATION_PATCH_FLUSH_MS } from './session.constants'
 import {
+  describeModelSelectionRefusal,
   isAttentionRequestSummary,
+  parseReasoningEffort,
   resolveAttentionRequestKind,
   type AttentionRequestRowLike,
 } from './session.pure'
@@ -371,6 +373,46 @@ export class SessionService {
       )
     }
     this.sessionRepository.setPrimarySurface(id, surface)
+    this.notifySessionChange(id)
+    return this.getById(id)!
+  }
+
+  /**
+   * Changes the model and effort a session's *next* turn will run on
+   * (MAR-2550).
+   *
+   * The provider is deliberately not part of this: continuation tokens are
+   * provider-specific, so a session keeps the provider it was born with. Model
+   * and effort are not — every adapter passes them at turn time, and
+   * `startHandle` re-reads this row for every resumed turn, so persisting here
+   * is the entire mechanism.
+   */
+  setModelSelection(
+    id: string,
+    input: { model: string | null; effort: unknown },
+  ): Session {
+    const session = this.getById(id)
+    if (!session) throw new Error(`Session not found: ${id}`)
+    if (session.providerId === 'shell') {
+      throw new Error(
+        `Session ${id} uses the shell provider and has no model to change`,
+      )
+    }
+
+    const refusal = describeModelSelectionRefusal({
+      status: session.status,
+      attention: session.attention,
+      hasActiveHandle: this.activeHandles.has(id),
+    })
+    if (refusal) throw new Error(refusal)
+
+    const model = input.model?.trim() ? input.model.trim() : null
+    const effort = parseReasoningEffort(input.effort)
+    if (input.effort != null && effort === null) {
+      throw new Error(`Unknown reasoning effort: ${String(input.effort)}`)
+    }
+
+    this.sessionRepository.setModelSelection(id, model, effort)
     this.notifySessionChange(id)
     return this.getById(id)!
   }
