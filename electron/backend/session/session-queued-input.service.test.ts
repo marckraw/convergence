@@ -64,6 +64,29 @@ describe('SessionQueuedInputService', () => {
     expect(service.list('session-1')[0].skipContextInjection).toBe(false)
   })
 
+  /**
+   * A muted message may wait here through a whole turn (F10). The mute belongs
+   * to what the user wrote, not to whatever the composer shows when the queue
+   * finally drains -- the toggle reset the moment they pressed send.
+   */
+  it('stores the quiet send alongside a queued message', () => {
+    const item = service.enqueue(
+      'session-1',
+      { text: 'quick aside', muteRelays: true },
+      'follow-up',
+    )
+
+    expect(item.relaysMuted).toBe(true)
+    expect(service.nextQueued('session-1')?.relaysMuted).toBe(true)
+  })
+
+  it('fires the wires for everything a person queued without muting', () => {
+    const item = service.enqueue('session-1', { text: 'carry on' }, 'follow-up')
+
+    expect(item.relaysMuted).toBe(false)
+    expect(service.nextQueued('session-1')?.relaysMuted).toBe(false)
+  })
+
   it('enqueues, lists, and emits an add patch event', () => {
     const item = service.enqueue(
       'session-1',

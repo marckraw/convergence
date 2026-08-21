@@ -101,6 +101,26 @@ export interface SendMessageInput {
    * about to be thrown away.
    */
   skipContextInjection?: boolean
+  /**
+   * Asks for quiet on this session's next settle: the wires leaving it will
+   * not fire when the work in flight finishes (F10, MAR-2537).
+   *
+   * Scoped to the SETTLE, not to this message. Any other message contributing
+   * to the same finished work is covered too, and there is no way to ask for
+   * quiet for one of two messages that end together -- mute wins ties on
+   * purpose, because erring quiet costs one manual hail while erring loud
+   * spends provider quota and wakes another agent mid-work.
+   *
+   * Never sticky: the settle that honours the request also clears it, so the
+   * session comes back armed and omitting this is always "fire as usual". A
+   * session bound to a flow is meant to fire; the exception is the gesture --
+   * an ad-hoc question, a typed `/clear`, a typed `/compact`.
+   *
+   * Deliberately explicit. Convergence does not sniff the text for slash
+   * commands and mute on its own; a wire that stops firing for reasons the
+   * user did not ask for is worse than one that fires when they forgot.
+   */
+  muteRelays?: boolean
 }
 
 export interface SessionNamer {
@@ -715,6 +735,7 @@ export class SessionService {
       input.attachmentIds,
       input.skillSelections,
       input.providerAccountId,
+      { muteRelays: input.muteRelays },
     )
   }
 
@@ -838,6 +859,7 @@ export class SessionService {
         input.attachmentIds,
         input.skillSelections,
         input.providerAccountId,
+        { muteRelays: input.muteRelays },
       )
       return
     }
@@ -1060,6 +1082,7 @@ export class SessionService {
       input.session.id,
       input.input.providerAccountId ?? null,
     )
+    this.requestRelayMute(input.session.id, input.input.muteRelays)
     handle.sendMessage(
       augmentedText,
       attachments,
@@ -1565,6 +1588,15 @@ export class SessionService {
         ? null
         : row.archived_at
     const updatedAt = patch.updatedAt ?? new Date().toISOString()
+    const isSettling =
+      nextStatus !== prevStatus &&
+      (nextStatus === 'completed' || nextStatus === 'failed')
+    // The quiet request is honoured and cleared by the same statement that
+    // commits the status (F10). Two writes would leave a window -- an
+    // attention observer runs between them, uncaught -- in which a session is
+    // on disk as settled while still marked quiet, and after a restart that
+    // stale marker would silence the next ordinary run.
+    const relaysMuted = row.relays_muted === 1
 
     this.db
       .prepare(
@@ -1574,6 +1606,7 @@ export class SessionService {
              activity = ?,
              context_window = ?,
              continuation_token = ?,
+             relays_muted = ?,
              archived_at = ?,
              updated_at = ?
          WHERE id = ?`,
@@ -1592,6 +1625,7 @@ export class SessionService {
             ? patch.continuationToken
             : row.continuation_token
           : row.continuation_token,
+        isSettling ? 0 : row.relays_muted,
         nextArchivedAt,
         updatedAt,
         sessionId,
@@ -1601,16 +1635,50 @@ export class SessionService {
       this.notifyAttention(sessionId, prevAttention, nextAttention)
     }
 
-    if (
-      nextStatus !== prevStatus &&
-      (nextStatus === 'completed' || nextStatus === 'failed')
-    ) {
+    if (isSettling) {
       this.queueSettleEvent({
         sessionId,
         status: nextStatus,
         settledAt: updatedAt,
+        relaysMuted,
       })
     }
+  }
+
+  /**
+   * Records that a human asked for quiet on this session (F10, MAR-2537).
+   *
+   * A fact about the SETTLE, not about a turn: `sessions.relays_muted` means
+   * "someone asked for quiet since this session last came to rest". Set here,
+   * cleared by the settle that honours it, and if any message contributing to
+   * the finished work asked, the settle is quiet.
+   *
+   * Deliberately not a per-turn slot. Two dispatches can be in flight at once
+   * -- a session does not report itself `running` until awaits inside the
+   * provider adapter have finished, the window run 20 closed for the opener
+   * alone -- so a slot filled at dispatch and consumed when the user message
+   * arrives can be overwritten before either lands. Deliberately not a queue
+   * either: a dispatch that never produces a user-message item would
+   * desynchronize it, and every mute after that would land on the wrong turn,
+   * silently, forever.
+   *
+   * Only ever sets. An ordinary message sent while a quiet one is still in
+   * flight must not cancel it -- mute wins ties on purpose, because erring
+   * quiet costs one manual hail while erring loud spends provider quota and
+   * wakes another agent mid-work.
+   *
+   * In the database rather than in memory: remote runs outlive the app process
+   * and are reattached by `resumeRunningRemoteSessions`, so their settles
+   * arrive after a restart as ordinary settles, with nothing in memory behind
+   * them. `updated_at` is left alone -- a request is not a change to the
+   * session anyone is looking at, and bumping it would reshuffle every list
+   * ordered by recency.
+   */
+  private requestRelayMute(sessionId: string, muteRelays?: boolean): void {
+    if (muteRelays !== true) return
+    this.db
+      .prepare('UPDATE sessions SET relays_muted = 1 WHERE id = ?')
+      .run(sessionId)
   }
 
   /**
@@ -1722,6 +1790,13 @@ export class SessionService {
     initialAttachmentIds?: string[],
     initialSkillSelections?: SkillSelection[],
     providerAccountId?: string | null,
+    /**
+     * What the human asked for when they sent this, rather than how the handle
+     * should be built. An object so the flag names itself at the call site: a
+     * bare eighth positional boolean here would be unreadable at all three of
+     * them.
+     */
+    turnFlags?: { muteRelays?: boolean },
   ): void {
     // Accounts are host-scoped (ADR 0007, PA10). Refuse before anything is
     // spawned or recorded: a remote host runs on its own credential whatever is
@@ -1765,6 +1840,7 @@ export class SessionService {
     })
 
     this.pendingTurnAccountIds.set(session.id, providerAccountId ?? null)
+    this.requestRelayMute(session.id, turnFlags?.muteRelays)
     this.activeHandles.set(session.id, handle)
     handle.onDelta((delta: SessionDelta) => {
       this.applyDelta(session.id, delta)
@@ -1844,6 +1920,9 @@ export class SessionService {
         this.pendingUserAttachmentIds.set(sessionId, item.attachmentIds)
         this.pendingUserSkillSelections.set(sessionId, item.skillSelections)
         this.pendingTurnAccountIds.set(sessionId, item.providerAccountId)
+        // The mute the user chose when they wrote this, not the composer's
+        // state now -- the toggle reset the moment they pressed send.
+        this.requestRelayMute(sessionId, item.relaysMuted)
         handle.sendMessage(augmentedText, attachments, item.skillSelections, {
           deliveryMode: 'normal',
           queuedInputId: item.id,
@@ -1868,6 +1947,7 @@ export class SessionService {
         // The account chosen when this input was queued, not whatever the
         // composer shows now — it may have waited through a switch.
         item.providerAccountId,
+        { muteRelays: item.relaysMuted },
       )
       this.queuedInputs.patch(item.id, 'sent')
     } catch (err) {

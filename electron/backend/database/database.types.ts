@@ -29,6 +29,11 @@ export interface SessionRow {
   working_directory: string
   context_window: string | null
   activity: string | null
+  /**
+   * 1 when a human asked for quiet since this session last settled (F10).
+   * Set at dispatch, cleared by the settle that honours it.
+   */
+  relays_muted: number
   archived_at: string | null
   last_sequence: number
   conversation_version: number
@@ -69,6 +74,8 @@ export interface SessionQueuedInputRow {
   provider_account_id: string | null
   /** 1 only for a relay opener (F9); see ensureQueuedInputColumns. */
   skip_context_injection: number | null
+  /** 1 when the human silenced this message's wires (F10); see ensureQueuedInputColumns. */
+  relays_muted: number | null
   error: string | null
   created_at: string
   updated_at: string

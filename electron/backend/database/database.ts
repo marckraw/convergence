@@ -28,6 +28,7 @@ function buildSessionsTableSql(
       working_directory TEXT NOT NULL,
       context_window TEXT,
       activity TEXT,
+      relays_muted INTEGER NOT NULL DEFAULT 0,
       archived_at TEXT,
       last_sequence INTEGER NOT NULL DEFAULT 0,
       conversation_version INTEGER NOT NULL DEFAULT 2,
@@ -805,6 +806,19 @@ function ensureQueuedInputColumns(database: Database.Database): void {
       'ALTER TABLE session_queued_inputs ADD COLUMN skip_context_injection INTEGER NOT NULL DEFAULT 0',
     )
   }
+
+  // The quiet send (F10, MAR-2537). A muted message may wait here through a
+  // whole turn, and the mute belongs to what the user wrote rather than to
+  // whatever the composer shows when the queue finally drains. Defaulted to 0
+  // because every message queued before the quiet send existed fired its wires,
+  // so there is nothing to backfill.
+  if (
+    !getTableColumnNames(database, 'session_queued_inputs').has('relays_muted')
+  ) {
+    database.exec(
+      'ALTER TABLE session_queued_inputs ADD COLUMN relays_muted INTEGER NOT NULL DEFAULT 0',
+    )
+  }
 }
 
 /**
@@ -872,6 +886,17 @@ function ensureSessionColumns(database: Database.Database): void {
 
   if (!columnNames.has('activity')) {
     database.exec('ALTER TABLE sessions ADD COLUMN activity TEXT')
+  }
+
+  // The quiet send (F10, MAR-2537): a human asked for quiet since this session
+  // last settled. Persisted rather than held in memory because remote runs
+  // outlive the app process and reattach, so their settles arrive after a
+  // restart with nothing in memory behind them. Zero is the honest default --
+  // every session that existed before the quiet send fired its wires.
+  if (!columnNames.has('relays_muted')) {
+    database.exec(
+      'ALTER TABLE sessions ADD COLUMN relays_muted INTEGER NOT NULL DEFAULT 0',
+    )
   }
 
   if (!columnNames.has('archived_at')) {
@@ -1140,6 +1165,7 @@ function ensureSessionsTableShape(database: Database.Database): void {
           working_directory,
           context_window,
           activity,
+          relays_muted,
           archived_at,
           last_sequence,
           conversation_version,
@@ -1167,6 +1193,7 @@ function ensureSessionsTableShape(database: Database.Database): void {
           working_directory,
           context_window,
           activity,
+          ${sourceColumnNames.has('relays_muted') ? 'relays_muted' : '0'},
           archived_at,
           last_sequence,
           conversation_version,

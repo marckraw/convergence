@@ -11,6 +11,8 @@ export interface SendSessionMessageIpcInput {
   interactionResponse?: InteractionResponse
   contextItemIds?: string[]
   providerAccountId?: string | null
+  /** The composer's quiet-send toggle for this one message (F10). */
+  muteRelays?: boolean
 }
 
 /**
@@ -29,5 +31,6 @@ export function sendSessionMessageInputFromIpc(
     interactionResponse: input.interactionResponse,
     contextItemIds: input.contextItemIds,
     providerAccountId: input.providerAccountId,
+    muteRelays: input.muteRelays,
   }
 }

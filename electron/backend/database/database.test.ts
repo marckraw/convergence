@@ -273,6 +273,7 @@ describe('database', () => {
         'provider_request_id',
         'provider_account_id',
         'skip_context_injection',
+        'relays_muted',
         'error',
         'created_at',
         'updated_at',
@@ -592,6 +593,262 @@ describe('database', () => {
 
       // Zero is what every input a person typed means: inject as normal.
       expect(row.skip_context_injection).toBe(0)
+      expect(row.text).toBe('carry on')
+    } finally {
+      closeDatabase()
+      resetDatabase()
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('carries every column it projects when it rebuilds the sessions table', () => {
+    // SYNTHETIC BY CONSTRUCTION. The rebuild fires only on a database carrying
+    // a legacy `transcript` column or missing the context-kind CHECK, and every
+    // such database predates half of what is seeded here -- no live database
+    // reaches this path holding, say, a set `relays_muted`. The test exists to
+    // pin the PROJECTION, not the scenario: the rebuild names its columns twice,
+    // once in the INSERT and once in the SELECT, and a column dropped from
+    // either list silently takes a default. That is the class of bug this
+    // guards, and every column below is a member of it.
+    //
+    // `execution_host` and `execution_host_last_seq` are deliberately absent:
+    // the projection does not carry them today, so asserting them here would
+    // claim a guarantee this code does not make.
+    const dir = mkdtempSync(join(tmpdir(), 'convergence-sessions-rebuild-'))
+    const dbPath = join(dir, 'legacy-shape.sqlite')
+
+    try {
+      const legacy = new Database(dbPath)
+      // No context-kind CHECK in the CREATE, which is what forces the rebuild.
+      legacy.exec(`
+        CREATE TABLE projects (
+          id TEXT PRIMARY KEY,
+          name TEXT NOT NULL,
+          repository_path TEXT NOT NULL UNIQUE,
+          settings TEXT NOT NULL DEFAULT '{}',
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL
+        );
+
+        CREATE TABLE workspaces (
+          id TEXT PRIMARY KEY,
+          project_id TEXT NOT NULL,
+          branch_name TEXT NOT NULL,
+          path TEXT NOT NULL,
+          type TEXT NOT NULL DEFAULT 'worktree',
+          created_at TEXT NOT NULL,
+          UNIQUE(project_id, branch_name),
+          FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE
+        );
+
+        CREATE TABLE sessions (
+          id TEXT PRIMARY KEY,
+          context_kind TEXT NOT NULL DEFAULT 'project',
+          project_id TEXT,
+          workspace_id TEXT,
+          provider_id TEXT NOT NULL,
+          model TEXT,
+          effort TEXT,
+          service_tier TEXT,
+          permission_config TEXT NOT NULL DEFAULT '{"preset":"ask"}',
+          continuation_token TEXT,
+          name TEXT NOT NULL,
+          status TEXT NOT NULL DEFAULT 'idle',
+          attention TEXT NOT NULL DEFAULT 'none',
+          working_directory TEXT NOT NULL,
+          context_window TEXT,
+          activity TEXT,
+          relays_muted INTEGER NOT NULL DEFAULT 0,
+          archived_at TEXT,
+          last_sequence INTEGER NOT NULL DEFAULT 0,
+          conversation_version INTEGER NOT NULL DEFAULT 2,
+          name_auto_generated INTEGER NOT NULL DEFAULT 0,
+          parent_session_id TEXT,
+          fork_strategy TEXT,
+          primary_surface TEXT NOT NULL DEFAULT 'conversation',
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL
+        );
+
+        INSERT INTO projects (id, name, repository_path, settings, created_at, updated_at)
+        VALUES ('p1', 'p', '/tmp/p1', '{}', '2026-01-01', '2026-01-01');
+
+        INSERT INTO workspaces (id, project_id, branch_name, path, type, created_at)
+        VALUES ('w1', 'p1', 'feature', '/tmp/p1-w1', 'worktree', '2026-01-01');
+
+        INSERT INTO sessions (
+          id, context_kind, project_id, workspace_id, provider_id, model, effort,
+          service_tier, permission_config, continuation_token, name, status,
+          attention, working_directory, context_window, activity, relays_muted,
+          archived_at, last_sequence, conversation_version, name_auto_generated,
+          parent_session_id, fork_strategy, primary_surface, created_at, updated_at
+        ) VALUES (
+          's-parent', 'project', 'p1', NULL, 'codex', NULL, NULL,
+          NULL, '{"preset":"ask"}', NULL, 'parent', 'idle',
+          'none', '/tmp/p1', NULL, NULL, 0,
+          NULL, 0, 2, 0,
+          NULL, NULL, 'conversation', '2026-01-01', '2026-01-01'
+        );
+
+        INSERT INTO sessions (
+          id, context_kind, project_id, workspace_id, provider_id, model, effort,
+          service_tier, permission_config, continuation_token, name, status,
+          attention, working_directory, context_window, activity, relays_muted,
+          archived_at, last_sequence, conversation_version, name_auto_generated,
+          parent_session_id, fork_strategy, primary_surface, created_at, updated_at
+        ) VALUES (
+          's-rt', 'project', 'p1', 'w1', 'codex', 'gpt-5.6', 'high',
+          'priority', '{"preset":"yolo"}', 'token-1', 'round trip', 'completed',
+          'finished', '/tmp/p1', '{"availability":"available"}', 'streaming', 1,
+          '2026-02-02T00:00:00.000Z', 7, 2, 1,
+          's-parent', 'full', 'terminal', '2026-01-01', '2026-01-02'
+        );
+      `)
+      legacy.close()
+
+      const db = getDatabase(dbPath)
+      const row = db
+        .prepare(
+          `SELECT id, context_kind, project_id, workspace_id, provider_id, model,
+                  effort, service_tier, permission_config, continuation_token,
+                  name, status, attention, working_directory, context_window,
+                  activity, relays_muted, archived_at, last_sequence,
+                  conversation_version, name_auto_generated, parent_session_id,
+                  fork_strategy, primary_surface, created_at, updated_at
+           FROM sessions WHERE id = 's-rt'`,
+        )
+        .get()
+
+      expect(row).toEqual({
+        id: 's-rt',
+        context_kind: 'project',
+        project_id: 'p1',
+        workspace_id: 'w1',
+        provider_id: 'codex',
+        model: 'gpt-5.6',
+        effort: 'high',
+        service_tier: 'priority',
+        permission_config: '{"preset":"yolo"}',
+        continuation_token: 'token-1',
+        name: 'round trip',
+        status: 'completed',
+        attention: 'finished',
+        working_directory: '/tmp/p1',
+        context_window: '{"availability":"available"}',
+        activity: 'streaming',
+        relays_muted: 1,
+        archived_at: '2026-02-02T00:00:00.000Z',
+        last_sequence: 7,
+        conversation_version: 2,
+        name_auto_generated: 1,
+        parent_session_id: 's-parent',
+        fork_strategy: 'full',
+        primary_surface: 'terminal',
+        created_at: '2026-01-01',
+        updated_at: '2026-01-02',
+      })
+    } finally {
+      closeDatabase()
+      resetDatabase()
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('adds the session relay mute to a database that predates the quiet send', () => {
+    const dir = mkdtempSync(
+      join(tmpdir(), 'convergence-session-mute-migration-'),
+    )
+    const dbPath = join(dir, 'pre-session-mute.sqlite')
+
+    try {
+      const legacy = new Database(dbPath)
+      legacy.exec(`
+        CREATE TABLE projects (
+          id TEXT PRIMARY KEY,
+          name TEXT NOT NULL,
+          repository_path TEXT NOT NULL UNIQUE,
+          settings TEXT NOT NULL DEFAULT '{}',
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL
+        );
+
+        CREATE TABLE sessions (
+          id TEXT PRIMARY KEY,
+          context_kind TEXT NOT NULL DEFAULT 'project',
+          project_id TEXT,
+          workspace_id TEXT,
+          provider_id TEXT NOT NULL,
+          name TEXT NOT NULL,
+          status TEXT NOT NULL DEFAULT 'idle',
+          attention TEXT NOT NULL DEFAULT 'none',
+          working_directory TEXT NOT NULL,
+          last_sequence INTEGER NOT NULL DEFAULT 0,
+          conversation_version INTEGER NOT NULL DEFAULT 2,
+          name_auto_generated INTEGER NOT NULL DEFAULT 0,
+          primary_surface TEXT NOT NULL DEFAULT 'conversation',
+          execution_host TEXT NOT NULL DEFAULT 'local',
+          execution_host_last_seq INTEGER NOT NULL DEFAULT 0,
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL
+        );
+
+        INSERT INTO projects (id, name, repository_path, created_at, updated_at)
+        VALUES ('p1', 'p', '/tmp/p1', '2026-01-01', '2026-01-01');
+
+        INSERT INTO sessions (id, project_id, provider_id, name, working_directory, created_at, updated_at)
+        VALUES ('s-pre-mute', 'p1', 'codex', 's', '/tmp/p1', '2026-01-01', '2026-01-01');
+      `)
+      legacy.close()
+
+      const db = getDatabase(dbPath)
+      const row = db
+        .prepare("SELECT relays_muted FROM sessions WHERE id = 's-pre-mute'")
+        .get() as { relays_muted: number }
+
+      // Nobody asked for quiet before the quiet send existed, which is exactly
+      // what a zero says -- there is nothing to backfill.
+      expect(row.relays_muted).toBe(0)
+    } finally {
+      closeDatabase()
+      resetDatabase()
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('adds the queued-input relay mute to a database that predates the quiet send', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'convergence-mute-migration-'))
+    const dbPath = join(dir, 'pre-mute.sqlite')
+
+    try {
+      const legacy = new Database(dbPath)
+      legacy.exec(`
+        CREATE TABLE session_queued_inputs (
+          id TEXT PRIMARY KEY,
+          session_id TEXT NOT NULL,
+          delivery_mode TEXT NOT NULL,
+          state TEXT NOT NULL,
+          text TEXT NOT NULL,
+          attachment_ids_json TEXT NOT NULL DEFAULT '[]',
+          skill_selections_json TEXT NOT NULL DEFAULT '[]',
+          provider_request_id TEXT,
+          error TEXT,
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL
+        );
+
+        INSERT INTO session_queued_inputs (id, session_id, delivery_mode, state, text, created_at, updated_at)
+        VALUES ('q-pre-mute', 's1', 'follow-up', 'queued', 'carry on', '2026-01-01', '2026-01-01');
+      `)
+      legacy.close()
+
+      const db = getDatabase(dbPath)
+      const row = db
+        .prepare("SELECT * FROM session_queued_inputs WHERE id = 'q-pre-mute'")
+        .get() as { relays_muted: number; text: string }
+
+      // Every message queued before the quiet send existed fired its wires,
+      // which is exactly what a zero means -- nothing to backfill.
+      expect(row.relays_muted).toBe(0)
       expect(row.text).toBe('carry on')
     } finally {
       closeDatabase()

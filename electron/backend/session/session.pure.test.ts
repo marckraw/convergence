@@ -59,6 +59,7 @@ describe('session pure helpers', () => {
         skill_selections_json: '[{"providerId":"codex","skillName":"x"}]',
         provider_request_id: null,
         skip_context_injection: 0,
+        relays_muted: 0,
         error: null,
         created_at: '2026-01-01T00:00:00.000Z',
         updated_at: '2026-01-01T00:00:01.000Z',
@@ -90,6 +91,7 @@ describe('session pure helpers', () => {
       skill_selections_json: '[]',
       provider_request_id: null,
       skip_context_injection: 1,
+      relays_muted: 0,
       error: null,
       created_at: '2026-01-01T00:00:00.000Z',
       updated_at: '2026-01-01T00:00:01.000Z',
@@ -100,5 +102,37 @@ describe('session pure helpers', () => {
       queuedInputFromRow({ ...row, skip_context_injection: null })
         .skipContextInjection,
     ).toBe(false)
+  })
+
+  /**
+   * A queued message may wait through a whole turn (F10). The mute belongs to
+   * the message, so a row written before the column existed reads as "fire",
+   * which is what every message meant before the quiet send.
+   */
+  it('reads the quiet send off a queued input, defaulting to firing', () => {
+    const row = {
+      id: 'queued-3',
+      session_id: 'session-1',
+      delivery_mode: 'follow-up' as const,
+      provider_account_id: null,
+      state: 'queued',
+      text: 'quick aside',
+      attachment_ids_json: '[]',
+      skill_selections_json: '[]',
+      provider_request_id: null,
+      skip_context_injection: 0,
+      relays_muted: 1,
+      error: null,
+      created_at: '2026-01-01T00:00:00.000Z',
+      updated_at: '2026-01-01T00:00:01.000Z',
+    }
+
+    expect(queuedInputFromRow(row).relaysMuted).toBe(true)
+    expect(queuedInputFromRow({ ...row, relays_muted: 0 }).relaysMuted).toBe(
+      false,
+    )
+    expect(queuedInputFromRow({ ...row, relays_muted: null }).relaysMuted).toBe(
+      false,
+    )
   })
 })
