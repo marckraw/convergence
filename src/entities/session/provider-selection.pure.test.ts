@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import {
+  describeUnavailableProviderSelection,
   getProviderDisplayLabel,
   getProviderLifecycleBadge,
-  isModelSelectionLocked,
+  resolveComposerSelectionLocks,
   resolveProviderSelection,
   resolveSessionModelSelectionWrite,
   scopeModelCatalogToProvider,
@@ -213,38 +214,130 @@ describe('resolveProviderSelection', () => {
   })
 })
 
-describe('isModelSelectionLocked (MAR-2550)', () => {
+describe('resolveComposerSelectionLocks (MAR-2550)', () => {
+  const idle = { status: 'completed' as const, attention: 'finished' as const }
+
   it('leaves a draft composer with no session unlocked', () => {
-    expect(isModelSelectionLocked(null)).toBe(false)
+    expect(resolveComposerSelectionLocks(providers, null)).toEqual({
+      mode: 'draft',
+      providerLocked: false,
+      modelLocked: false,
+      canContinue: false,
+    })
   })
 
-  it('unlocks a session that has come to rest', () => {
-    expect(
-      isModelSelectionLocked({ status: 'completed', attention: 'finished' }),
-    ).toBe(false)
-    expect(isModelSelectionLocked({ status: 'idle', attention: 'none' })).toBe(
-      false,
-    )
-    expect(
-      isModelSelectionLocked({ status: 'failed', attention: 'failed' }),
-    ).toBe(false)
+  it('unlocks the model on a session that has come to rest, provider still locked', () => {
+    // The two locks pulling apart, which is the whole feature: a continuation
+    // token is provider-specific, a model is not.
+    for (const rest of [
+      { status: 'completed' as const, attention: 'finished' as const },
+      { status: 'idle' as const, attention: 'none' as const },
+      { status: 'failed' as const, attention: 'failed' as const },
+    ]) {
+      expect(
+        resolveComposerSelectionLocks(providers, {
+          providerId: 'claude-code',
+          ...rest,
+        }),
+      ).toEqual({
+        mode: 'session',
+        providerLocked: true,
+        modelLocked: false,
+        canContinue: true,
+      })
+    }
   })
 
-  it('locks a running turn', () => {
+  it('locks the model on a running turn', () => {
     expect(
-      isModelSelectionLocked({ status: 'running', attention: 'none' }),
+      resolveComposerSelectionLocks(providers, {
+        providerId: 'claude-code',
+        status: 'running',
+        attention: 'none',
+      }).modelLocked,
     ).toBe(true)
   })
 
-  it('locks a turn that is waiting on the human', () => {
+  it('locks the model on a turn that is waiting on the human', () => {
     // The handle is still alive behind an unanswered question, so a change
     // here could only apply to the turn after this one.
+    for (const attention of ['needs-input', 'needs-approval'] as const) {
+      expect(
+        resolveComposerSelectionLocks(providers, {
+          providerId: 'claude-code',
+          status: 'idle',
+          attention,
+        }).modelLocked,
+      ).toBe(true)
+    }
+  })
+
+  it('locks everything on a session whose provider has left the catalog', () => {
+    // The third state, named. Two independent booleans disagreed about it:
+    // one asked "can this continue?" and unlocked the provider select, the
+    // other asked "is there a session?" and kept writing to the hidden row.
     expect(
-      isModelSelectionLocked({ status: 'idle', attention: 'needs-input' }),
-    ).toBe(true)
+      resolveComposerSelectionLocks(providers, {
+        providerId: 'pi',
+        ...idle,
+      }),
+    ).toEqual({
+      mode: 'stranded',
+      providerLocked: true,
+      modelLocked: true,
+      canContinue: false,
+    })
+  })
+
+  it('treats a session that cannot continue as a draft', () => {
+    // The shell provider is the live example. Its next send starts a new
+    // session, so its pickers must configure that -- not write to the row the
+    // composer has already stopped continuing.
+    const shell = {
+      ...providers[0]!,
+      id: 'shell',
+      supportsContinuation: false,
+    }
     expect(
-      isModelSelectionLocked({ status: 'idle', attention: 'needs-approval' }),
-    ).toBe(true)
+      resolveComposerSelectionLocks([...providers, shell], {
+        providerId: 'shell',
+        ...idle,
+      }).mode,
+    ).toBe('draft')
+  })
+})
+
+describe('describeUnavailableProviderSelection (MAR-2550)', () => {
+  it('shows the row own provider rather than the catalog first guess', () => {
+    // The lie this replaces: resolveProviderSelection falls through to
+    // providers[0], so the composer read "OpenAI" while every write it made
+    // landed on a Claude row.
+    const selection = describeUnavailableProviderSelection({
+      providerId: 'claude-code',
+      model: 'fable',
+      effort: 'high',
+    })
+
+    expect(selection.providerId).toBe('claude-code')
+    expect(selection.providerLabel).toContain('claude-code')
+    expect(selection.providerLabel).toContain('unavailable')
+    expect(selection.modelId).toBe('fable')
+    expect(selection.effortId).toBe('high')
+  })
+
+  it('offers no catalog entry to act on', () => {
+    // provider and model stay null because there genuinely is no catalog entry
+    // -- and because that is what the rest of the composer keys off to refuse.
+    const selection = describeUnavailableProviderSelection({
+      providerId: 'claude-code',
+      model: null,
+      effort: null,
+    })
+
+    expect(selection.provider).toBeNull()
+    expect(selection.model).toBeNull()
+    expect(selection.modelId).toBe('')
+    expect(selection.effort).toBeNull()
   })
 })
 

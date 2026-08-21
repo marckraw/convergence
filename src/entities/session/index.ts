@@ -51,9 +51,10 @@ export type {
 export { useSessionStore } from './session.model'
 export type { SessionStore } from './session.model'
 export {
+  describeUnavailableProviderSelection,
   getProviderDisplayLabel,
   getProviderLifecycleBadge,
-  isModelSelectionLocked,
+  resolveComposerSelectionLocks,
   resolveProviderSelection,
   resolveSessionModelSelectionWrite,
   scopeModelCatalogToProvider,
@@ -72,6 +73,8 @@ export {
   withCodexSandbox,
 } from './session-permissions.pure'
 export type {
+  ComposerSelectionLocks,
+  ComposerSelectionMode,
   ProviderLifecycleBadge,
   ResolvedProviderSelection,
   StoredProviderDefaults,

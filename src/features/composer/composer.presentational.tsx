@@ -443,12 +443,17 @@ export const Composer: FC<ComposerProps> = ({
     providers,
     sessionProviderId,
   )
-  const effortItems =
-    selection.model?.effortOptions.map((effort) => ({
-      id: effort.id,
-      label: effort.label,
-      description: effort.description,
-    })) ?? []
+  // A stranded session has no catalog model to read options from, but its row
+  // still carries an effort. Showing it, disabled, beats hiding the control and
+  // leaving the human to guess what the row says (MAR-2550).
+  const effortItems = (
+    selection.model?.effortOptions ??
+    (selection.effort ? [selection.effort] : [])
+  ).map((effort) => ({
+    id: effort.id,
+    label: effort.label,
+    description: effort.description,
+  }))
   const permissionItems = [
     {
       id: 'ask',
@@ -712,7 +717,9 @@ export const Composer: FC<ComposerProps> = ({
               providers={modelCatalogProviders}
               selectedProviderId={selection.providerId}
               selectedModelId={selection.modelId}
-              value={selection.model?.label ?? 'Select model'}
+              value={
+                selection.model?.label || selection.modelId || 'Select model'
+              }
               onChange={(providerId, modelId) =>
                 onModelChange(modelId, providerId)
               }
