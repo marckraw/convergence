@@ -4,6 +4,7 @@ import {
   isModelSelectionLocked,
   type MidRunInputMode,
   resolveProviderSelection,
+  resolveSessionModelSelectionWrite,
   type SessionQueuedInput,
   useSessionStore,
   type ReasoningEffort,
@@ -1160,25 +1161,33 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
   }, [])
 
   const handleModelChange = (nextModelId: string, nextProviderId?: string) => {
-    const nextSelection = resolveProviderSelection(
-      providers,
-      nextProviderId ?? selection.providerId,
-      nextModelId,
-      null,
-      activeSession ? undefined : storedDefaults,
-    )
     if (activeSession) {
       // A live conversation's model lives on its row, not in this component
       // (MAR-2550). Persist and let the returned row redraw the pickers: if the
       // backend refuses -- the turn started between this render and this click
       // -- the composer must keep showing the model the next turn will actually
       // run on, and the store's error becomes a toast.
-      void setSessionModelSelection(activeSession.id, {
-        model: nextSelection.modelId || null,
-        effort: nextSelection.effortId || null,
-      }).catch(() => {})
+      //
+      // A pick that resolves to another provider is refused here rather than
+      // written with its provider quietly dropped, which is how a Codex model
+      // id once landed on a Claude session's row.
+      const write = resolveSessionModelSelectionWrite(
+        providers,
+        activeSession,
+        nextProviderId ?? null,
+        nextModelId,
+      )
+      if (!write) return
+      void setSessionModelSelection(activeSession.id, write).catch(() => {})
       return
     }
+    const nextSelection = resolveProviderSelection(
+      providers,
+      nextProviderId ?? selection.providerId,
+      nextModelId,
+      null,
+      storedDefaults,
+    )
     setProviderId(nextSelection.providerId)
     setModelId(nextSelection.modelId)
     setEffortId(nextSelection.effortId)
@@ -1190,6 +1199,7 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
   const handleEffortChange = (nextEffortId: ReasoningEffort | '') => {
     if (activeSession) {
       void setSessionModelSelection(activeSession.id, {
+        providerId: activeSession.providerId,
         model: activeSession.model,
         effort: nextEffortId || null,
       }).catch(() => {})
@@ -1310,6 +1320,7 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
         onSelectionChange={setCursor}
         selectionDisabled={canContinueActiveSession}
         modelSelectionDisabled={modelSelectionLocked}
+        sessionProviderId={activeSession?.providerId ?? null}
         placeholder={
           activeSession?.attention === 'needs-input'
             ? 'Respond to the agent...'

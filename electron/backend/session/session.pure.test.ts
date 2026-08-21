@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   describeModelSelectionRefusal,
+  describeProviderIdentityRefusal,
   isAttentionRequestSummary,
   parseJsonArray,
   queuedInputFromRow,
@@ -193,5 +194,38 @@ describe('describeModelSelectionRefusal (MAR-2550)', () => {
         hasActiveHandle: true,
       }),
     ).toMatch(/provider process attached/)
+  })
+})
+
+describe('describeProviderIdentityRefusal (MAR-2550)', () => {
+  const session = { providerId: 'claude-code' } as const
+
+  it('allows a selection made against the provider the session runs on', () => {
+    expect(describeProviderIdentityRefusal(session, 'claude-code')).toBeNull()
+  })
+
+  it('refuses a selection made against another provider, naming both', () => {
+    // The exact shape of the escape: a Codex model chosen from a Claude
+    // session's dialog, whose provider was discarded on the way to the row.
+    const refusal = describeProviderIdentityRefusal(session, 'codex')
+
+    expect(refusal).toMatch(/codex/)
+    expect(refusal).toMatch(/claude-code/)
+  })
+
+  it('refuses a selection that names no provider at all', () => {
+    expect(describeProviderIdentityRefusal(session, '')).toMatch(
+      /must say which provider/,
+    )
+  })
+
+  it('asks nothing about the model, so it cannot rot the way a catalog would', () => {
+    // An identity check, not a catalog check: the model id is never inspected,
+    // which is why this cannot become the stale-model-list bug a third time
+    // (MAR-2034, MAR-2046).
+    expect(describeProviderIdentityRefusal(session, 'claude-code')).toBeNull()
+    expect(
+      describeProviderIdentityRefusal({ providerId: 'pi' }, 'pi'),
+    ).toBeNull()
   })
 })

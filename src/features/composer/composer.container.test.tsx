@@ -1499,6 +1499,7 @@ describe('ComposerContainer', () => {
 
       await waitFor(() => {
         expect(setSessionModelSelection).toHaveBeenCalledWith('session-1', {
+          providerId: 'claude-code',
           model: 'claude-opus',
           effort: 'high',
         })
@@ -1516,6 +1517,7 @@ describe('ComposerContainer', () => {
 
       await waitFor(() => {
         expect(setSessionModelSelection).toHaveBeenCalledWith('session-1', {
+          providerId: 'claude-code',
           model: 'claude-sonnet',
           effort: 'high',
         })
@@ -1563,6 +1565,87 @@ describe('ComposerContainer', () => {
       expect(
         screen.getByRole('combobox', { name: 'Claude Sonnet' }),
       ).toBeEnabled()
+    })
+
+    /**
+     * The provider lock has two controls to survive, not one. The select beside
+     * the model picker was locked; the model dialog was not, and it reports a
+     * provider with every pick -- so it was a second, quieter provider switch
+     * that wrote a foreign model id onto the row.
+     */
+    describe('the second door: the model dialog carries a provider too', () => {
+      function addCodexProvider() {
+        useSessionStore.setState((state) => ({
+          providers: [...state.providers, codexProvider],
+        }))
+      }
+
+      it('offers an active session no provider but its own, by any route', async () => {
+        setSessionState({ status: 'completed', attention: 'finished' })
+        addCodexProvider()
+        renderComposer()
+
+        fireEvent.click(screen.getByRole('combobox', { name: 'Claude Sonnet' }))
+        await screen.findByPlaceholderText('Search models...')
+
+        // The filter that names the foreign provider is not there to click.
+        expect(screen.queryByText('OpenAI')).toBeNull()
+
+        // Nor does the filter that names no provider reach any further.
+        fireEvent.click(screen.getByRole('button', { name: /^All/ }))
+        expect(screen.queryByText('GPT-5.5')).toBeNull()
+
+        // Nor does the search box, which answers from the same catalog.
+        fireEvent.change(screen.getByPlaceholderText('Search models...'), {
+          target: { value: 'gpt' },
+        })
+        expect(await screen.findByText('No models found.')).toBeInTheDocument()
+      })
+
+      it('still offers a draft every provider in the catalog', async () => {
+        // The control for the test above: the dialog is scoped, not broken.
+        // This is the exact click sequence that escaped an active session.
+        addCodexProvider()
+        render(
+          <ComposerContainer
+            context={{
+              kind: 'project',
+              projectId: 'project-1',
+              workspaceId: null,
+              activeSessionId: null,
+            }}
+          />,
+        )
+
+        fireEvent.click(screen.getByRole('combobox', { name: 'Claude Sonnet' }))
+        await screen.findByPlaceholderText('Search models...')
+
+        fireEvent.click(screen.getByRole('button', { name: /^OpenAI/ }))
+        expect(await screen.findByText('GPT-5.5')).toBeInTheDocument()
+      })
+
+      it('names the provider it believes in, so the backend can disagree', async () => {
+        // The renderer cannot be the only guard -- this run exists because a
+        // renderer-only guard was removed from one control and nobody noticed.
+        // Sending the provider the selection was made against is what lets the
+        // refusal live where the row is written.
+        const setSessionModelSelection = vi.fn().mockResolvedValue(undefined)
+        useSessionStore.setState({ setSessionModelSelection })
+        setSessionState({ status: 'completed', attention: 'finished' })
+        addCodexProvider()
+        renderComposer()
+
+        fireEvent.click(screen.getByRole('combobox', { name: 'Medium' }))
+        fireEvent.click(await screen.findByText('High'))
+
+        await waitFor(() => {
+          expect(setSessionModelSelection).toHaveBeenCalledWith('session-1', {
+            providerId: 'claude-code',
+            model: 'claude-sonnet',
+            effort: 'high',
+          })
+        })
+      })
     })
   })
 })

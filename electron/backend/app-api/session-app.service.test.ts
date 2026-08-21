@@ -151,11 +151,13 @@ describe('SessionAppService', () => {
 
     expect(() =>
       app.setSessionModelSelection('session-1', {
+        providerId: 'claude-code',
         model: 'opus',
         effort: 'high',
       }),
     ).toThrow(/only change while the session is idle/)
     expect(sessions.setModelSelection).toHaveBeenCalledWith('session-1', {
+      providerId: 'claude-code',
       model: 'opus',
       effort: 'high',
     })

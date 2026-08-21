@@ -55,6 +55,8 @@ export {
   getProviderLifecycleBadge,
   isModelSelectionLocked,
   resolveProviderSelection,
+  resolveSessionModelSelectionWrite,
+  scopeModelCatalogToProvider,
 } from './provider-selection.pure'
 export {
   ASK_PERMISSION_CONFIG,

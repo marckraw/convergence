@@ -22,6 +22,7 @@ import {
   CODEX_SANDBOX_OPTIONS,
   getProviderLifecycleBadge,
   getSimplePermissionPreset,
+  scopeModelCatalogToProvider,
 } from '@/entities/session'
 import { AttachmentsRow, type Attachment } from '@/entities/attachment'
 import type { ProjectContextItem } from '@/entities/project-context'
@@ -109,6 +110,15 @@ interface ComposerProps {
    * stricter one, which is how the model stayed frozen for no reason.
    */
   modelSelectionDisabled?: boolean
+  /**
+   * The provider the session behind this composer is pinned to, or null while
+   * it is still a draft (MAR-2550).
+   *
+   * Scopes the model dialog's catalog. The dialog reports a provider alongside
+   * the model it hands back, so an unscoped catalog was a second way to change
+   * the provider — one the provider select's lock never covered.
+   */
+  sessionProviderId?: string | null
   placeholder?: string
   disabled?: boolean
   attachments: Attachment[]
@@ -215,6 +225,7 @@ export const Composer: FC<ComposerProps> = ({
   onDeliveryModeChange,
   selectionDisabled = false,
   modelSelectionDisabled = false,
+  sessionProviderId = null,
   placeholder = 'Ask anything, @tag files/folders, :: for injections...',
   disabled = false,
   hasPendingAnnotations = false,
@@ -426,6 +437,12 @@ export const Composer: FC<ComposerProps> = ({
         : undefined,
     badge: getProviderLifecycleBadge(provider) ?? undefined,
   }))
+  // An existing session may move between its own provider's models and no
+  // further (MAR-2550). A draft keeps the whole catalog.
+  const modelCatalogProviders = scopeModelCatalogToProvider(
+    providers,
+    sessionProviderId,
+  )
   const effortItems =
     selection.model?.effortOptions.map((effort) => ({
       id: effort.id,
@@ -692,7 +709,7 @@ export const Composer: FC<ComposerProps> = ({
               className="gap-1.5 px-2 text-xs text-muted-foreground hover:text-foreground"
             />
             <ModelPickerDialog
-              providers={providers}
+              providers={modelCatalogProviders}
               selectedProviderId={selection.providerId}
               selectedModelId={selection.modelId}
               value={selection.model?.label ?? 'Select model'}

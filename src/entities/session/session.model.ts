@@ -96,7 +96,11 @@ interface SessionActions {
   ) => Promise<SessionSummary>
   setSessionModelSelection: (
     id: string,
-    input: { model: string | null; effort: ReasoningEffort | null },
+    input: {
+      providerId: string
+      model: string | null
+      effort: ReasoningEffort | null
+    },
   ) => Promise<SessionSummary>
   clearError: () => void
 }
@@ -941,6 +945,10 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
    * session is idle, and a composer that had already redrawn itself would be
    * telling the human their next turn runs on a model it does not. The
    * returned summary — the row as it actually stands — is what redraws it.
+   *
+   * `input.providerId` is the provider the caller believes the session runs on.
+   * The backend refuses when it disagrees with the row, so this field is the
+   * renderer's half of a check it does not get to perform.
    */
   setSessionModelSelection: async (id, input) => {
     set({ error: null })

@@ -52,6 +52,7 @@ import { SessionRepository } from './session.repository'
 import { CONVERSATION_PATCH_FLUSH_MS } from './session.constants'
 import {
   describeModelSelectionRefusal,
+  describeProviderIdentityRefusal,
   isAttentionRequestSummary,
   resolveAttentionRequestKind,
   type AttentionRequestRowLike,
@@ -381,15 +382,20 @@ export class SessionService {
    * Changes the model and effort a session's *next* turn will run on
    * (MAR-2550).
    *
-   * The provider is deliberately not part of this: continuation tokens are
+   * The provider is deliberately not changeable here: continuation tokens are
    * provider-specific, so a session keeps the provider it was born with. Model
    * and effort are not — every adapter passes them at turn time, and
    * `startHandle` re-reads this row for every resumed turn, so persisting here
    * is the entire mechanism.
+   *
+   * `input.providerId` is the provider the selection was made against, and it
+   * is required rather than optional: an omitted check is a check that can be
+   * forgotten. It is compared against the row and nothing else — an identity
+   * check, not a model catalog.
    */
   setModelSelection(
     id: string,
-    input: { model: string | null; effort: unknown },
+    input: { providerId: unknown; model: string | null; effort: unknown },
   ): Session {
     const session = this.getById(id)
     if (!session) throw new Error(`Session not found: ${id}`)
@@ -398,6 +404,12 @@ export class SessionService {
         `Session ${id} uses the shell provider and has no model to change`,
       )
     }
+
+    const mismatch = describeProviderIdentityRefusal(
+      session,
+      typeof input.providerId === 'string' ? input.providerId.trim() : '',
+    )
+    if (mismatch) throw new Error(mismatch)
 
     const refusal = describeModelSelectionRefusal({
       status: session.status,

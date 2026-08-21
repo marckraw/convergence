@@ -933,8 +933,11 @@ export function registerIpcHandlers(
 
   ipcMain.handle(
     'session:setModelSelection',
-    (_event, id: string, input: { model: string | null; effort: unknown }) =>
-      sessionApp.setSessionModelSelection(id, input),
+    (
+      _event,
+      id: string,
+      input: { providerId: unknown; model: string | null; effort: unknown },
+    ) => sessionApp.setSessionModelSelection(id, input),
   )
 
   // Provider handlers

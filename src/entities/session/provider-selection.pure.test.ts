@@ -4,6 +4,8 @@ import {
   getProviderLifecycleBadge,
   isModelSelectionLocked,
   resolveProviderSelection,
+  resolveSessionModelSelectionWrite,
+  scopeModelCatalogToProvider,
 } from './provider-selection.pure'
 import type { ProviderAttachmentCapability } from './session.types'
 
@@ -243,5 +245,82 @@ describe('isModelSelectionLocked (MAR-2550)', () => {
     expect(
       isModelSelectionLocked({ status: 'idle', attention: 'needs-approval' }),
     ).toBe(true)
+  })
+})
+
+describe('scopeModelCatalogToProvider (MAR-2550)', () => {
+  it('shows an existing session its own provider and nothing else', () => {
+    // The escape this closes: the model dialog reports a provider with every
+    // pick, so a catalog holding two providers was a second provider switch.
+    const scoped = scopeModelCatalogToProvider(providers, 'claude-code')
+
+    expect(scoped.map((provider) => provider.id)).toEqual(['claude-code'])
+  })
+
+  it('leaves a draft the whole catalog', () => {
+    // Before a session exists there is no provider to be locked to, and
+    // choosing across providers is the point of the dialog.
+    expect(scopeModelCatalogToProvider(providers, null)).toBe(providers)
+    expect(scopeModelCatalogToProvider(providers, undefined)).toBe(providers)
+  })
+
+  it('scopes a departed provider to nothing rather than to everything', () => {
+    // A provider missing from the catalog must read as an empty picker. The
+    // tempting fallback -- show everything when the match fails -- reopens the
+    // door in exactly the case where the session is least understood.
+    expect(scopeModelCatalogToProvider(providers, 'pi')).toEqual([])
+  })
+})
+
+describe('resolveSessionModelSelectionWrite (MAR-2550)', () => {
+  const claudeSession = { providerId: 'claude-code' }
+
+  it('resolves a pick from the session own provider into a row write', () => {
+    expect(
+      resolveSessionModelSelectionWrite(
+        providers,
+        claudeSession,
+        'claude-code',
+        'sonnet',
+      ),
+    ).toEqual({ providerId: 'claude-code', model: 'sonnet', effort: 'medium' })
+  })
+
+  it('refuses a pick that belongs to another provider', () => {
+    // The bug in full: this pick used to be written as { model: 'gpt-5.4' }
+    // with the Codex provider silently dropped, and the next Claude turn
+    // spawned with a Codex model id.
+    expect(
+      resolveSessionModelSelectionWrite(
+        providers,
+        claudeSession,
+        'codex',
+        'gpt-5.4',
+      ),
+    ).toBeNull()
+  })
+
+  it('refuses when the session provider has left the catalog', () => {
+    // Nothing resolves to `pi`, so the selection lands on some other provider.
+    // Refusing beats writing a model the session cannot run.
+    expect(
+      resolveSessionModelSelectionWrite(
+        providers,
+        { providerId: 'pi' },
+        null,
+        'sonnet',
+      ),
+    ).toBeNull()
+  })
+
+  it('defaults an unstated provider to the session own', () => {
+    expect(
+      resolveSessionModelSelectionWrite(
+        providers,
+        claudeSession,
+        null,
+        'sonnet',
+      ),
+    ).toEqual({ providerId: 'claude-code', model: 'sonnet', effort: 'medium' })
   })
 })

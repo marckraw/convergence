@@ -124,3 +124,64 @@ export function isModelSelectionLocked(
     session.attention === 'needs-approval'
   )
 }
+
+/**
+ * The model catalog an existing session is allowed to be moved around inside
+ * (MAR-2550).
+ *
+ * The model dialog carries a provider dimension — picking a row from another
+ * provider's list calls back with that provider's id — so an unscoped catalog
+ * made it a second provider switch, quieter than the select beside it and not
+ * covered by that select's lock. A control should not offer what it is not
+ * allowed to do, so an existing session sees its own provider and nothing else.
+ *
+ * A draft passes `null` and keeps the whole catalog: choosing across providers
+ * is exactly right before a session exists. A provider that has left the
+ * catalog scopes to nothing, which reads as an empty picker rather than a door.
+ */
+export function scopeModelCatalogToProvider(
+  providers: ProviderInfo[],
+  lockedProviderId: string | null | undefined,
+): ProviderInfo[] {
+  if (!lockedProviderId) return providers
+  return providers.filter((provider) => provider.id === lockedProviderId)
+}
+
+/**
+ * What to persist on an existing session's row for a model pick, or `null`
+ * when the pick belongs to another provider and must be refused (MAR-2550).
+ *
+ * The refusal is defence in depth: `scopeModelCatalogToProvider` already keeps
+ * the foreign provider out of the dialog, and the backend refuses a selection
+ * whose provider disagrees with the row. This is the middle layer, and it is
+ * the one that stops a foreign model id from ever leaving the composer — the
+ * bug it exists for wrote a Codex model id onto a Claude session's row while
+ * silently discarding the Codex provider that came with it.
+ *
+ * `providerId` travels with the write rather than being assumed by the caller:
+ * it is what this side believes, and the backend's identity check is only
+ * worth having if it is told the truth.
+ */
+export function resolveSessionModelSelectionWrite(
+  providers: ProviderInfo[],
+  session: { providerId: string },
+  requestedProviderId: string | null,
+  requestedModelId: string,
+): {
+  providerId: string
+  model: string | null
+  effort: ReasoningEffort | null
+} | null {
+  const selection = resolveProviderSelection(
+    providers,
+    requestedProviderId ?? session.providerId,
+    requestedModelId,
+    null,
+  )
+  if (selection.providerId !== session.providerId) return null
+  return {
+    providerId: selection.providerId,
+    model: selection.modelId || null,
+    effort: selection.effortId || null,
+  }
+}

@@ -126,3 +126,33 @@ export function describeModelSelectionRefusal(session: {
   }
   return null
 }
+
+/**
+ * Why a model selection made against one provider must not be written onto a
+ * session that runs on another, or `null` when the caller agrees with the row
+ * (MAR-2550).
+ *
+ * An identity check, not a catalog check. It asks "does the caller agree with
+ * me about which provider this session runs on?" — a question with no list
+ * behind it, so unlike a model-id allowlist it cannot rot the way MAR-2034 and
+ * MAR-2046 did. The set of legal answers is one element long and the row itself
+ * holds it.
+ *
+ * The provider is fixed for the life of a session because continuation tokens
+ * are provider-specific. Until now that rule lived only in the renderer, on one
+ * of the two controls that can change a model, and the other one — the model
+ * dialog, which carries a provider dimension — quietly kept the power. A guard
+ * on the control is an affordance; a guard where the row is written is the law.
+ */
+export function describeProviderIdentityRefusal(
+  session: { providerId: string },
+  requestedProviderId: string,
+): string | null {
+  if (!requestedProviderId) {
+    return 'A model selection must say which provider it was made against. The provider is fixed for the life of a session.'
+  }
+  if (requestedProviderId !== session.providerId) {
+    return `This selection was made against ${requestedProviderId}, but the session runs on ${session.providerId}. The provider is fixed for the life of a session.`
+  }
+  return null
+}

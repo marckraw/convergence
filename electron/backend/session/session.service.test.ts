@@ -4390,7 +4390,11 @@ describe('SessionService model selection (MAR-2550)', () => {
     await service.start(sessionId, { text: 'first' })
     settleTurn()
 
-    service.setModelSelection(sessionId, { model: 'opus', effort: 'high' })
+    service.setModelSelection(sessionId, {
+      providerId: 'switchable',
+      model: 'opus',
+      effort: 'high',
+    })
     await service.sendMessage(sessionId, { text: 'carry on' })
 
     expect(startConfigs).toEqual([
@@ -4409,6 +4413,7 @@ describe('SessionService model selection (MAR-2550)', () => {
     settleTurn()
 
     const updated = service.setModelSelection(sessionId, {
+      providerId: 'switchable',
       model: 'opus',
       effort: 'high',
     })
@@ -4426,7 +4431,11 @@ describe('SessionService model selection (MAR-2550)', () => {
     beginTurn()
 
     expect(() =>
-      service.setModelSelection(sessionId, { model: 'opus', effort: 'high' }),
+      service.setModelSelection(sessionId, {
+        providerId: 'switchable',
+        model: 'opus',
+        effort: 'high',
+      }),
     ).toThrow(/current turn to finish/)
     expect(service.getSummaryById(sessionId)).toMatchObject({
       model: 'fable',
@@ -4442,7 +4451,11 @@ describe('SessionService model selection (MAR-2550)', () => {
     })
 
     expect(() =>
-      service.setModelSelection(sessionId, { model: 'opus', effort: 'high' }),
+      service.setModelSelection(sessionId, {
+        providerId: 'switchable',
+        model: 'opus',
+        effort: 'high',
+      }),
     ).toThrow(/Answer the agent first/)
   })
 
@@ -4456,7 +4469,11 @@ describe('SessionService model selection (MAR-2550)', () => {
     })
 
     expect(() =>
-      service.setModelSelection(sessionId, { model: 'opus', effort: 'high' }),
+      service.setModelSelection(sessionId, {
+        providerId: 'switchable',
+        model: 'opus',
+        effort: 'high',
+      }),
     ).toThrow(/provider process attached/)
   })
 
@@ -4466,6 +4483,7 @@ describe('SessionService model selection (MAR-2550)', () => {
 
     expect(() =>
       service.setModelSelection(sessionId, {
+        providerId: 'switchable',
         model: 'opus',
         effort: 'turbo',
       }),
@@ -4485,13 +4503,76 @@ describe('SessionService model selection (MAR-2550)', () => {
     })
 
     expect(() =>
-      service.setModelSelection(shell.id, { model: 'opus', effort: null }),
+      service.setModelSelection(shell.id, {
+        providerId: 'shell',
+        model: 'opus',
+        effort: null,
+      }),
     ).toThrow(/shell provider/)
   })
 
   it('refuses a session that does not exist', () => {
     expect(() =>
-      service.setModelSelection('nope', { model: 'opus', effort: null }),
+      service.setModelSelection('nope', {
+        providerId: 'switchable',
+        model: 'opus',
+        effort: null,
+      }),
     ).toThrow(/Session not found/)
+  })
+
+  /**
+   * The provider lock lived only in the renderer, on one of the two controls
+   * that can change a model. The other one -- the model dialog, which reports a
+   * provider alongside the model -- kept the power, and the composer wrote the
+   * foreign model id onto the row while discarding the foreign provider. A
+   * second renderer guard would repeat that mistake one size smaller, so the
+   * refusal lives where the row is actually written.
+   */
+  it('refuses a selection made against another provider', async () => {
+    await service.start(sessionId, { text: 'first' })
+    settleTurn()
+
+    expect(() =>
+      service.setModelSelection(sessionId, {
+        providerId: 'codex',
+        model: 'gpt-5.5',
+        effort: null,
+      }),
+    ).toThrow(/session runs on switchable/)
+    expect(service.getSummaryById(sessionId)).toMatchObject({
+      model: 'fable',
+      effort: 'medium',
+      providerId: 'switchable',
+    })
+  })
+
+  it('refuses a selection that will not say which provider it was made against', async () => {
+    // Required, not optional: a check the caller may omit is a check that gets
+    // omitted. An absent provider disagrees with the row like any other.
+    await service.start(sessionId, { text: 'first' })
+    settleTurn()
+
+    expect(() =>
+      service.setModelSelection(sessionId, {
+        providerId: undefined,
+        model: 'opus',
+        effort: null,
+      }),
+    ).toThrow(/must say which provider/)
+    expect(service.getSummaryById(sessionId)).toMatchObject({ model: 'fable' })
+  })
+
+  it('accepts a selection made against the session own provider', async () => {
+    await service.start(sessionId, { text: 'first' })
+    settleTurn()
+
+    expect(
+      service.setModelSelection(sessionId, {
+        providerId: 'switchable',
+        model: 'opus',
+        effort: null,
+      }),
+    ).toMatchObject({ model: 'opus', providerId: 'switchable' })
   })
 })

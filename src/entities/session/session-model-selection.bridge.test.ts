@@ -90,6 +90,7 @@ describe('the session:setModelSelection preload bridge (MAR-2550)', () => {
 
   it('carries a model change from the store to the real ipc channel', async () => {
     await useSessionStore.getState().setSessionModelSelection('session-1', {
+      providerId: 'claude-code',
       model: 'opus',
       effort: 'high',
     })
@@ -97,7 +98,7 @@ describe('the session:setModelSelection preload bridge (MAR-2550)', () => {
     expect(hoisted.invoke).toHaveBeenCalledWith(
       'session:setModelSelection',
       'session-1',
-      { model: 'opus', effort: 'high' },
+      { providerId: 'claude-code', model: 'opus', effort: 'high' },
     )
   })
 
@@ -109,9 +110,11 @@ describe('the session:setModelSelection preload bridge (MAR-2550)', () => {
     )
 
     await expect(
-      useSessionStore
-        .getState()
-        .setSessionModelSelection('session-1', { model: 'opus', effort: null }),
+      useSessionStore.getState().setSessionModelSelection('session-1', {
+        providerId: 'claude-code',
+        model: 'opus',
+        effort: null,
+      }),
     ).rejects.toThrow(/current turn to finish/)
 
     // App.container turns this into a toast; a refusal the human cannot see is

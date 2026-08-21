@@ -105,7 +105,11 @@ export const sessionApi = {
 
   setModelSelection: (
     id: string,
-    input: { model: string | null; effort: ReasoningEffort | null },
+    input: {
+      providerId: string
+      model: string | null
+      effort: ReasoningEffort | null
+    },
   ): Promise<SessionSummary> =>
     window.electronAPI.session.setModelSelection(
       id,
