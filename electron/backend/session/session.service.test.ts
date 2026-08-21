@@ -4535,6 +4535,50 @@ describe('SessionService model selection (MAR-2550)', () => {
     ).toThrow(/provider process attached/)
   })
 
+  /**
+   * The row and the divider are one fact in two tables: a model that moved
+   * without its boundary is a transcript that silently mixes models, which is
+   * the thing MAR-2551 exists to prevent. Two statements with a failure between
+   * them is exactly how run 22's settle lost a flag, so this is one write.
+   */
+  it('leaves the model unchanged when the divider cannot be written', async () => {
+    await service.start(sessionId, { text: 'first' })
+    settleTurn()
+
+    const realPrepare = db.prepare.bind(db)
+    const prepare = vi.spyOn(db, 'prepare').mockImplementation(((
+      sql: string,
+    ) => {
+      if (sql.includes('INSERT INTO session_conversation_items')) {
+        throw new Error('the disk went away mid-write')
+      }
+      return realPrepare(sql)
+    }) as typeof db.prepare)
+
+    try {
+      expect(() =>
+        service.setModelSelection(sessionId, {
+          providerId: 'switchable',
+          model: 'opus',
+          effort: 'high',
+        }),
+      ).toThrow(/the disk went away mid-write/)
+    } finally {
+      prepare.mockRestore()
+    }
+
+    expect(service.getSummaryById(sessionId)).toMatchObject({
+      model: 'fable',
+      effort: 'medium',
+    })
+    expect(
+      service
+        .getConversation(sessionId)
+        .filter((item) => item.kind === 'note')
+        .map((item) => item.providerMeta?.providerEventType),
+    ).not.toContain('session.model-changed')
+  })
+
   it('refuses an effort no provider could ever accept', async () => {
     await service.start(sessionId, { text: 'first' })
     settleTurn()

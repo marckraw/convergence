@@ -445,29 +445,38 @@ export class SessionService {
       { model, effort },
     )
 
-    this.sessionRepository.setModelSelection(id, model, effort)
+    // One write, because the two halves are only true together. A model that
+    // moved without its divider is a transcript that silently mixes models,
+    // which is the whole thing MAR-2551 exists to prevent; a divider without
+    // the move announces a boundary that never happened. The same answer run
+    // 22 gave the non-atomic settle.
+    const applySelection = this.db.transaction(() => {
+      this.sessionRepository.setModelSelection(id, model, effort)
 
-    // The transcript would otherwise go on implying one author (MAR-2551).
-    // Written here rather than at the next turn because this is the moment the
-    // reader made the decision: the note lands under the last answer of the old
-    // model and above whatever they type next.
-    const note = boundary
-      ? this.addConversationItem(id, {
-          id: randomUUID(),
-          turnId: null,
-          kind: 'note',
-          state: 'complete',
-          level: 'info',
-          text: boundary,
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-          providerMeta: {
-            providerId: session.providerId,
-            providerItemId: null,
-            providerEventType: MODEL_CHANGED_EVENT_TYPE,
-          },
-        })
-      : null
+      // The transcript would otherwise go on implying one author (MAR-2551).
+      // Written here rather than at the next turn because this is the moment
+      // the reader made the decision: the note lands under the last answer of
+      // the old model and above whatever they type next.
+      return boundary
+        ? this.addConversationItem(id, {
+            id: randomUUID(),
+            turnId: null,
+            kind: 'note',
+            state: 'complete',
+            level: 'info',
+            text: boundary,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+            providerMeta: {
+              providerId: session.providerId,
+              providerItemId: null,
+              providerEventType: MODEL_CHANGED_EVENT_TYPE,
+            },
+          })
+        : null
+    })
+
+    const note = applySelection()
 
     this.notifySessionChange(
       id,
