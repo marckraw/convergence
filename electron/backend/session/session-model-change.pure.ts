@@ -30,6 +30,12 @@ function describeModel(model: string | null): string {
  * hard the same author thinks rather than who the author is, and it is already
  * recorded per turn; drawing a boundary for it would make a long session that
  * nudges effort read as a session that keeps changing hands.
+ *
+ * The sentence speaks for the **replies** and nothing else. This note sits
+ * inside the conversation it describes, and the human's own messages are in
+ * that conversation — a line saying everything above was written by the old
+ * model claims their words as the agent's, which is a rendered sentence making
+ * an untrue claim about the transcript it sits in (the MAR-2280 family).
  */
 export function describeModelChange(
   previous: ModelSelectionSnapshot,
@@ -45,7 +51,7 @@ export function describeModelChange(
       : ''
 
   return (
-    `Model changed — ${from} → ${to}${effortSuffix}. Everything above this ` +
-    `point was written by ${from}; everything below runs on ${to}.`
+    `Model changed — ${from} → ${to}${effortSuffix}. Replies above this ` +
+    `point came from ${from}; replies below come from ${to}.`
   )
 }

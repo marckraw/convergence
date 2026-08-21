@@ -22,9 +22,27 @@ describe('session-model-change.pure', () => {
         { model: 'opus', effort: 'high' },
       ),
     ).toBe(
-      'Model changed — fable → opus. Everything above this point was written ' +
-        'by fable; everything below runs on opus.',
+      'Model changed — fable → opus. Replies above this point came from ' +
+        'fable; replies below come from opus.',
     )
+  })
+
+  /**
+   * The note sits inside the conversation it describes, and the human's own
+   * messages are in that conversation. "Everything above this point was written
+   * by fable" hands them their own words as the agent's — a rendered sentence
+   * making an untrue claim about the transcript it sits in (the MAR-2280
+   * family). It may speak for the replies and nothing else.
+   */
+  it('claims authorship of the replies only, never of what the human wrote', () => {
+    const note = describeModelChange(
+      { model: 'fable', effort: null },
+      { model: 'opus', effort: null },
+    )
+
+    expect(note).toContain('Replies above this point came from fable')
+    expect(note).not.toMatch(/everything/i)
+    expect(note).not.toMatch(/written by/i)
   })
 
   it('carries the effort along when it moved with the model', () => {
@@ -67,8 +85,8 @@ describe('session-model-change.pure', () => {
       ),
     ).toBe(
       "Model changed — the provider's default → opus, effort default → high. " +
-        "Everything above this point was written by the provider's default; " +
-        'everything below runs on opus.',
+        "Replies above this point came from the provider's default; replies " +
+        'below come from opus.',
     )
   })
 })

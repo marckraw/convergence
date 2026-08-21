@@ -263,8 +263,8 @@ describe('a transcript that mixes models records it (MAR-2551)', () => {
     })
 
     expect(modelChangeNotes(session.id)).toEqual([
-      'Model changed — fable → opus, effort high → medium. Everything above ' +
-        'this point was written by fable; everything below runs on opus.',
+      'Model changed — fable → opus, effort high → medium. Replies above this ' +
+        'point came from fable; replies below come from opus.',
     ])
 
     await service.sendMessage(session.id, { text: 'carry on' })
