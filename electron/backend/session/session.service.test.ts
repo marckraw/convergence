@@ -4293,6 +4293,8 @@ describe('SessionService model selection (MAR-2550)', () => {
   let sessionId: string
   let startConfigs: Array<{ model: string | null; effort: string | null }>
   let deltaListener: ((delta: SessionDelta) => void) | null
+  /** Set to make the next spawn fail the way a real one can. */
+  let spawnFailure: Error | null
 
   /** What a provider does the moment it picks the turn up. */
   function beginTurn(): void {
@@ -4310,6 +4312,7 @@ describe('SessionService model selection (MAR-2550)', () => {
     db = getDatabase()
     startConfigs = []
     deltaListener = null
+    spawnFailure = null
 
     const registry = new ProviderRegistry()
     registry.register({
@@ -4341,6 +4344,7 @@ describe('SessionService model selection (MAR-2550)', () => {
         midRunInput: NO_MID_RUN_INPUT_CAPABILITY,
       }),
       start: (config) => {
+        if (spawnFailure) throw spawnFailure
         startConfigs.push({ model: config.model, effort: config.effort })
         return {
           onDelta: (listener) => {
@@ -4499,6 +4503,43 @@ describe('SessionService model selection (MAR-2550)', () => {
     await opening
 
     expect(startConfigs).toEqual([{ model: 'fable', effort: 'medium' }])
+  })
+
+  /**
+   * The other half of the marker, and the reason it is cleared in a `finally`
+   * (MAR-2550). A send that never reaches a provider — a spawn that fails, an
+   * attachment that cannot be rebound — still began, so it still has to end.
+   * Cleared on success only, the session would be marked dispatching forever:
+   * no handle, no running turn, nothing left to wait for, and every model
+   * change from then until the app restarts refused because a message is
+   * supposedly still on its way. The feature would die quietly, with a
+   * confusing refusal as its only symptom.
+   */
+  it('lets the model change after a send that never reached the provider', async () => {
+    await service.start(sessionId, { text: 'first' })
+    settleTurn()
+
+    spawnFailure = new Error('the provider process could not be spawned')
+    await expect(
+      service.sendMessage(sessionId, { text: 'carry on' }),
+    ).rejects.toThrow(/could not be spawned/)
+    spawnFailure = null
+
+    expect(
+      service.setModelSelection(sessionId, {
+        providerId: 'switchable',
+        model: 'opus',
+        effort: 'high',
+      }),
+    ).toMatchObject({ model: 'opus', effort: 'high' })
+
+    // And the session is genuinely usable again: the retry runs on the model
+    // the human picked after the failure.
+    await service.sendMessage(sessionId, { text: 'carry on' })
+    expect(startConfigs).toEqual([
+      { model: 'fable', effort: 'medium' },
+      { model: 'opus', effort: 'high' },
+    ])
   })
 
   it('refuses while the agent is waiting on the human', async () => {
