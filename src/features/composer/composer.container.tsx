@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { FC } from 'react'
 import {
+  isModelSelectionLocked,
   type MidRunInputMode,
   resolveProviderSelection,
   type SessionQueuedInput,
@@ -194,6 +195,9 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
    */
   const relays = useSessionRelayStore((s) => s.relays)
   const compactSessionContext = useSessionStore((s) => s.compactSessionContext)
+  const setSessionModelSelection = useSessionStore(
+    (s) => s.setSessionModelSelection,
+  )
   const cancelQueuedInput = useSessionStore((s) => s.cancelQueuedInput)
   const sessions = useSessionStore((s) => s.sessions)
   const globalChatSessions = useSessionStore((s) => s.globalChatSessions)
@@ -260,6 +264,16 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
   )
   const canContinueActiveSession =
     !!activeSession && !!activeProvider?.supportsContinuation
+  /**
+   * The narrower of the two locks (MAR-2550). The provider is fixed for the
+   * life of a session; the model and effort are only fixed while a turn is in
+   * flight, because every adapter reads them at turn time.
+   */
+  const modelSelectionLocked = isModelSelectionLocked(
+    activeSession
+      ? { status: activeSession.status, attention: activeSession.attention }
+      : null,
+  )
   const attachmentsBySessionId = useProjectContextStore(
     (s) => s.attachmentsBySessionId,
   )
@@ -1153,9 +1167,35 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
       null,
       activeSession ? undefined : storedDefaults,
     )
+    if (activeSession) {
+      // A live conversation's model lives on its row, not in this component
+      // (MAR-2550). Persist and let the returned row redraw the pickers: if the
+      // backend refuses -- the turn started between this render and this click
+      // -- the composer must keep showing the model the next turn will actually
+      // run on, and the store's error becomes a toast.
+      void setSessionModelSelection(activeSession.id, {
+        model: nextSelection.modelId || null,
+        effort: nextSelection.effortId || null,
+      }).catch(() => {})
+      return
+    }
     setProviderId(nextSelection.providerId)
     setModelId(nextSelection.modelId)
     setEffortId(nextSelection.effortId)
+  }
+
+  /**
+   * Effort travels with the model: same lifecycle, same lock, same write.
+   */
+  const handleEffortChange = (nextEffortId: ReasoningEffort | '') => {
+    if (activeSession) {
+      void setSessionModelSelection(activeSession.id, {
+        model: activeSession.model,
+        effort: nextEffortId || null,
+      }).catch(() => {})
+      return
+    }
+    setEffortId(nextEffortId)
   }
 
   const handleSkillsBrowse = useCallback(() => {
@@ -1177,7 +1217,7 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
         selection={selection}
         onProviderChange={handleProviderChange}
         onModelChange={handleModelChange}
-        onEffortChange={setEffortId}
+        onEffortChange={handleEffortChange}
         providerAccounts={providerAccountsForSession}
         selectedProviderAccountId={selectedProviderAccountId}
         onProviderAccountChange={setSelectedProviderAccountId}
@@ -1269,6 +1309,7 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
         onMentionDismiss={handleMentionDismiss}
         onSelectionChange={setCursor}
         selectionDisabled={canContinueActiveSession}
+        modelSelectionDisabled={modelSelectionLocked}
         placeholder={
           activeSession?.attention === 'needs-input'
             ? 'Respond to the agent...'

@@ -19,6 +19,7 @@ import type {
 } from '../provider/provider.types'
 import {
   getMidRunInputCapabilityForProviderId,
+  parseReasoningEffort,
   supportsMidRunInputMode,
 } from '../provider/provider-descriptor.pure'
 import type { AttachmentsService } from '../attachments/attachments.service'
@@ -52,7 +53,6 @@ import { CONVERSATION_PATCH_FLUSH_MS } from './session.constants'
 import {
   describeModelSelectionRefusal,
   isAttentionRequestSummary,
-  parseReasoningEffort,
   resolveAttentionRequestKind,
   type AttentionRequestRowLike,
 } from './session.pure'

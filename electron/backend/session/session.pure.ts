@@ -4,7 +4,6 @@ import type {
   AttentionRequestKind,
   AttentionState,
   QueuedInputState,
-  ReasoningEffort,
   SessionQueuedInput,
   SessionStatus,
   SessionSummary,
@@ -91,29 +90,6 @@ export function queuedInputFromRow(
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   }
-}
-
-/**
- * The efforts a session row may hold. The renderer only ever offers a model's
- * own options, but this value reaches a provider CLI as an argument, so the
- * boundary re-checks it rather than trusting the caller.
- */
-export const REASONING_EFFORTS: readonly ReasoningEffort[] = [
-  'none',
-  'minimal',
-  'low',
-  'medium',
-  'high',
-  'max',
-  'xhigh',
-  'ultra',
-]
-
-export function parseReasoningEffort(value: unknown): ReasoningEffort | null {
-  if (typeof value !== 'string') return null
-  return REASONING_EFFORTS.includes(value as ReasoningEffort)
-    ? (value as ReasoningEffort)
-    : null
 }
 
 /**

@@ -242,6 +242,23 @@ const EFFORT_LABELS: Record<ReasoningEffort, string> = {
   ultra: 'Ultra (multi-agent)',
 }
 
+/**
+ * Whether a value is an effort at all (MAR-2550).
+ *
+ * The `ReasoningEffort` union in `provider.types.ts` is the single source of
+ * truth for what a provider may offer, and `EFFORT_LABELS` above is its one
+ * exhaustive enumeration — the compiler rejects this file the moment the union
+ * grows or shrinks without it. Validating against those keys therefore cannot
+ * drift from the union, which a hand-kept second list would: MAR-2034 is on
+ * record for exactly that, with `ultra` missing while live Codex offered it.
+ */
+export function parseReasoningEffort(value: unknown): ReasoningEffort | null {
+  if (typeof value !== 'string') return null
+  return Object.prototype.hasOwnProperty.call(EFFORT_LABELS, value)
+    ? (value as ReasoningEffort)
+    : null
+}
+
 export function buildEffortOptions(
   ids: ReasoningEffort[],
   descriptions: Partial<Record<ReasoningEffort, string>> = {},

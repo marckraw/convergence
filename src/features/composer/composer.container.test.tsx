@@ -1391,4 +1391,178 @@ describe('ComposerContainer', () => {
       })
     })
   })
+
+  /**
+   * MAR-2550 — the selection row holds two different locks, and the whole
+   * feature is the difference between them. The provider is fixed for the life
+   * of a session; the model and effort are only fixed while a turn is in
+   * flight.
+   */
+  describe('the model switch (MAR-2550)', () => {
+    function setSessionState(
+      patch: Partial<{ status: string; attention: string; model: string }>,
+    ) {
+      useSessionStore.setState((state) => ({
+        sessions: state.sessions.map((session) =>
+          session.id === 'session-1'
+            ? ({ ...session, ...patch } as (typeof state.sessions)[number])
+            : session,
+        ),
+      }))
+    }
+
+    function addSecondModel() {
+      useSessionStore.setState((state) => ({
+        providers: state.providers.map((provider) =>
+          provider.id === 'claude-code'
+            ? {
+                ...provider,
+                modelOptions: [
+                  ...provider.modelOptions,
+                  {
+                    id: 'claude-opus',
+                    label: 'Claude Opus',
+                    defaultEffort: 'high' as const,
+                    effortOptions: [
+                      { id: 'low' as const, label: 'Low' },
+                      { id: 'high' as const, label: 'High' },
+                    ],
+                  },
+                ],
+              }
+            : provider,
+        ),
+      }))
+    }
+
+    it('keeps the provider locked on an idle session while the model opens', () => {
+      // The two locks pulling apart. If one boolean still drove both, the
+      // provider select would be enabled here -- which Marcin has forbidden,
+      // because a continuation token is provider-specific.
+      setSessionState({ status: 'completed', attention: 'finished' })
+      renderComposer()
+
+      expect(screen.getByRole('combobox', { name: 'Anthropic' })).toBeDisabled()
+      expect(
+        screen.getByRole('combobox', { name: 'Claude Sonnet' }),
+      ).toBeEnabled()
+      expect(screen.getByRole('combobox', { name: 'Medium' })).toBeEnabled()
+    })
+
+    it('locks the model and effort while a turn is running', () => {
+      setSessionState({ status: 'running', attention: 'none' })
+      render(
+        <ComposerContainer
+          context={{
+            kind: 'project',
+            projectId: 'project-1',
+            workspaceId: null,
+            activeSessionId: 'session-1',
+          }}
+        />,
+      )
+
+      expect(
+        screen.getByRole('combobox', { name: 'Claude Sonnet' }),
+      ).toBeDisabled()
+      expect(screen.getByRole('combobox', { name: 'Medium' })).toBeDisabled()
+      expect(screen.getByRole('combobox', { name: 'Anthropic' })).toBeDisabled()
+    })
+
+    it('locks the model while the agent is waiting on the human', () => {
+      setSessionState({ status: 'idle', attention: 'needs-input' })
+      render(
+        <ComposerContainer
+          context={{
+            kind: 'project',
+            projectId: 'project-1',
+            workspaceId: null,
+            activeSessionId: 'session-1',
+          }}
+        />,
+      )
+
+      expect(
+        screen.getByRole('combobox', { name: 'Claude Sonnet' }),
+      ).toBeDisabled()
+    })
+
+    it('writes a model change to the session row rather than only the composer', async () => {
+      const setSessionModelSelection = vi.fn().mockResolvedValue(undefined)
+      useSessionStore.setState({ setSessionModelSelection })
+      setSessionState({ status: 'completed', attention: 'finished' })
+      addSecondModel()
+      renderComposer()
+
+      fireEvent.click(screen.getByRole('combobox', { name: 'Claude Sonnet' }))
+      fireEvent.click(await screen.findByText('Claude Opus'))
+
+      await waitFor(() => {
+        expect(setSessionModelSelection).toHaveBeenCalledWith('session-1', {
+          model: 'claude-opus',
+          effort: 'high',
+        })
+      })
+    })
+
+    it('writes an effort change to the session row too', async () => {
+      const setSessionModelSelection = vi.fn().mockResolvedValue(undefined)
+      useSessionStore.setState({ setSessionModelSelection })
+      setSessionState({ status: 'completed', attention: 'finished' })
+      renderComposer()
+
+      fireEvent.click(screen.getByRole('combobox', { name: 'Medium' }))
+      fireEvent.click(await screen.findByText('High'))
+
+      await waitFor(() => {
+        expect(setSessionModelSelection).toHaveBeenCalledWith('session-1', {
+          model: 'claude-sonnet',
+          effort: 'high',
+        })
+      })
+    })
+
+    it('keeps showing the old model when the backend refuses the change', async () => {
+      // Nothing optimistic. A composer that redrew itself and then lost the
+      // write would be telling the human their next turn runs on a model it
+      // does not -- the control that looks active while doing nothing.
+      const setSessionModelSelection = vi
+        .fn()
+        .mockRejectedValue(new Error('Model and effort can only change...'))
+      useSessionStore.setState({ setSessionModelSelection })
+      setSessionState({ status: 'completed', attention: 'finished' })
+      addSecondModel()
+      renderComposer()
+
+      fireEvent.click(screen.getByRole('combobox', { name: 'Claude Sonnet' }))
+      fireEvent.click(await screen.findByText('Claude Opus'))
+
+      await waitFor(() => {
+        expect(setSessionModelSelection).toHaveBeenCalled()
+      })
+      expect(
+        screen.getByRole('combobox', { name: 'Claude Sonnet' }),
+      ).toBeInTheDocument()
+    })
+
+    it('leaves a draft composer free to pick both provider and model', () => {
+      // No session yet: neither lock applies, and the write goes nowhere near
+      // the row because there is no row.
+      render(
+        <ComposerContainer
+          context={{
+            kind: 'project',
+            projectId: 'project-1',
+            workspaceId: null,
+            activeSessionId: null,
+          }}
+        />,
+      )
+
+      expect(screen.getByRole('combobox', { name: 'Anthropic' })).toBeEnabled()
+      expect(
+        screen.getByRole('combobox', { name: 'Claude Sonnet' }),
+      ).toBeEnabled()
+    })
+  })
 })

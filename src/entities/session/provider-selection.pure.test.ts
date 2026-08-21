@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   getProviderDisplayLabel,
   getProviderLifecycleBadge,
+  isModelSelectionLocked,
   resolveProviderSelection,
 } from './provider-selection.pure'
 import type { ProviderAttachmentCapability } from './session.types'
@@ -207,5 +208,40 @@ describe('resolveProviderSelection', () => {
     expect(selection.providerId).toBe('claude-code')
     expect(selection.modelId).toBe('sonnet')
     expect(selection.effortId).toBe('high')
+  })
+})
+
+describe('isModelSelectionLocked (MAR-2550)', () => {
+  it('leaves a draft composer with no session unlocked', () => {
+    expect(isModelSelectionLocked(null)).toBe(false)
+  })
+
+  it('unlocks a session that has come to rest', () => {
+    expect(
+      isModelSelectionLocked({ status: 'completed', attention: 'finished' }),
+    ).toBe(false)
+    expect(isModelSelectionLocked({ status: 'idle', attention: 'none' })).toBe(
+      false,
+    )
+    expect(
+      isModelSelectionLocked({ status: 'failed', attention: 'failed' }),
+    ).toBe(false)
+  })
+
+  it('locks a running turn', () => {
+    expect(
+      isModelSelectionLocked({ status: 'running', attention: 'none' }),
+    ).toBe(true)
+  })
+
+  it('locks a turn that is waiting on the human', () => {
+    // The handle is still alive behind an unanswered question, so a change
+    // here could only apply to the turn after this one.
+    expect(
+      isModelSelectionLocked({ status: 'idle', attention: 'needs-input' }),
+    ).toBe(true)
+    expect(
+      isModelSelectionLocked({ status: 'idle', attention: 'needs-approval' }),
+    ).toBe(true)
   })
 })

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   buildClaudeDescriptor,
   buildEffortOptions,
+  parseReasoningEffort,
   buildFallbackAntigravityDescriptor,
   buildFallbackCodexDescriptor,
   buildFallbackCursorDescriptor,
@@ -368,5 +369,40 @@ describe('provider-descriptor', () => {
     })
 
     expect(normalized.midRunInput).toEqual(NO_MID_RUN_INPUT_CAPABILITY)
+  })
+})
+
+describe('parseReasoningEffort (MAR-2550)', () => {
+  /**
+   * Derived from the descriptors themselves rather than a copied list: if a
+   * provider offers a level, that level must survive the boundary. A hand-kept
+   * array here would be the very drift MAR-2034 cost us.
+   */
+  const offeredEfforts = [
+    buildClaudeDescriptor(),
+    buildFallbackCodexDescriptor(),
+    buildFallbackPiDescriptor(),
+    buildFallbackCursorDescriptor(),
+    buildFallbackAntigravityDescriptor(),
+  ].flatMap((descriptor) =>
+    descriptor.modelOptions.flatMap((model) =>
+      model.effortOptions.map((option) => option.id),
+    ),
+  )
+
+  it('accepts every effort a real provider descriptor offers', () => {
+    expect(offeredEfforts.length).toBeGreaterThan(0)
+    for (const effort of new Set(offeredEfforts)) {
+      expect(parseReasoningEffort(effort)).toBe(effort)
+    }
+  })
+
+  it('rejects anything the union does not declare', () => {
+    expect(parseReasoningEffort('turbo')).toBeNull()
+    expect(parseReasoningEffort('')).toBeNull()
+    expect(parseReasoningEffort('toString')).toBeNull()
+    expect(parseReasoningEffort(null)).toBeNull()
+    expect(parseReasoningEffort(undefined)).toBeNull()
+    expect(parseReasoningEffort(3)).toBeNull()
   })
 })

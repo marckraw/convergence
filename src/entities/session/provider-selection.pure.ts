@@ -1,8 +1,10 @@
 import type {
+  AttentionState,
   ProviderEffortOption,
   ProviderInfo,
   ProviderModelOption,
   ReasoningEffort,
+  SessionStatus,
 } from './session.types'
 
 export interface ResolvedProviderSelection {
@@ -96,4 +98,29 @@ export function resolveProviderSelection(
     effort,
     effortId: effort?.id ?? '',
   }
+}
+
+/**
+ * Whether the model and effort pickers should be locked right now (MAR-2550).
+ *
+ * Deliberately narrower than the provider lock beside it. A session keeps its
+ * provider for life — continuation tokens are provider-specific — but every
+ * adapter takes the model and effort at turn time, so an idle conversation can
+ * be moved onto a different model and its next turn will genuinely run there.
+ *
+ * The renderer can only see status and attention; the backend also refuses
+ * while a provider process is still attached, which is invisible from here.
+ * That is the right split: this lock is the affordance, the backend's refusal
+ * is the authority, and a change it rejects surfaces as an error rather than
+ * being quietly dropped.
+ */
+export function isModelSelectionLocked(
+  session: { status: SessionStatus; attention: AttentionState } | null,
+): boolean {
+  if (!session) return false
+  if (session.status === 'running') return true
+  return (
+    session.attention === 'needs-input' ||
+    session.attention === 'needs-approval'
+  )
 }

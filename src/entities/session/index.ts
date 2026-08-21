@@ -53,6 +53,7 @@ export type { SessionStore } from './session.model'
 export {
   getProviderDisplayLabel,
   getProviderLifecycleBadge,
+  isModelSelectionLocked,
   resolveProviderSelection,
 } from './provider-selection.pure'
 export {

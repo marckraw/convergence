@@ -3,7 +3,6 @@ import {
   describeModelSelectionRefusal,
   isAttentionRequestSummary,
   parseJsonArray,
-  parseReasoningEffort,
   queuedInputFromRow,
   resolveAttentionRequestKind,
 } from './session.pure'
@@ -194,30 +193,5 @@ describe('describeModelSelectionRefusal (MAR-2550)', () => {
         hasActiveHandle: true,
       }),
     ).toMatch(/provider process attached/)
-  })
-})
-
-describe('parseReasoningEffort', () => {
-  it('accepts every effort a provider descriptor can offer', () => {
-    for (const effort of [
-      'none',
-      'minimal',
-      'low',
-      'medium',
-      'high',
-      'max',
-      'xhigh',
-      'ultra',
-    ]) {
-      expect(parseReasoningEffort(effort)).toBe(effort)
-    }
-  })
-
-  it('rejects anything else', () => {
-    expect(parseReasoningEffort('turbo')).toBeNull()
-    expect(parseReasoningEffort('')).toBeNull()
-    expect(parseReasoningEffort(null)).toBeNull()
-    expect(parseReasoningEffort(undefined)).toBeNull()
-    expect(parseReasoningEffort(3)).toBeNull()
   })
 })
