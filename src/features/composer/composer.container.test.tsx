@@ -1391,4 +1391,429 @@ describe('ComposerContainer', () => {
       })
     })
   })
+
+  /**
+   * MAR-2550 — the selection row holds two different locks, and the whole
+   * feature is the difference between them. The provider is fixed for the life
+   * of a session; the model and effort are only fixed while a turn is in
+   * flight.
+   */
+  describe('the model switch (MAR-2550)', () => {
+    function setSessionState(
+      patch: Partial<{
+        status: string
+        attention: string
+        model: string
+        providerId: string
+      }>,
+    ) {
+      useSessionStore.setState((state) => ({
+        sessions: state.sessions.map((session) =>
+          session.id === 'session-1'
+            ? ({ ...session, ...patch } as (typeof state.sessions)[number])
+            : session,
+        ),
+      }))
+    }
+
+    function addSecondModel() {
+      useSessionStore.setState((state) => ({
+        providers: state.providers.map((provider) =>
+          provider.id === 'claude-code'
+            ? {
+                ...provider,
+                modelOptions: [
+                  ...provider.modelOptions,
+                  {
+                    id: 'claude-opus',
+                    label: 'Claude Opus',
+                    defaultEffort: 'high' as const,
+                    effortOptions: [
+                      { id: 'low' as const, label: 'Low' },
+                      { id: 'high' as const, label: 'High' },
+                    ],
+                  },
+                ],
+              }
+            : provider,
+        ),
+      }))
+    }
+
+    it('keeps the provider locked on an idle session while the model opens', () => {
+      // The two locks pulling apart. If one boolean still drove both, the
+      // provider select would be enabled here -- which Marcin has forbidden,
+      // because a continuation token is provider-specific.
+      setSessionState({ status: 'completed', attention: 'finished' })
+      renderComposer()
+
+      expect(screen.getByRole('combobox', { name: 'Anthropic' })).toBeDisabled()
+      expect(
+        screen.getByRole('combobox', { name: 'Claude Sonnet' }),
+      ).toBeEnabled()
+      expect(screen.getByRole('combobox', { name: 'Medium' })).toBeEnabled()
+    })
+
+    it('locks the model and effort while a turn is running', () => {
+      setSessionState({ status: 'running', attention: 'none' })
+      render(
+        <ComposerContainer
+          context={{
+            kind: 'project',
+            projectId: 'project-1',
+            workspaceId: null,
+            activeSessionId: 'session-1',
+          }}
+        />,
+      )
+
+      expect(
+        screen.getByRole('combobox', { name: 'Claude Sonnet' }),
+      ).toBeDisabled()
+      expect(screen.getByRole('combobox', { name: 'Medium' })).toBeDisabled()
+      expect(screen.getByRole('combobox', { name: 'Anthropic' })).toBeDisabled()
+    })
+
+    it('locks the model while the agent is waiting on the human', () => {
+      setSessionState({ status: 'idle', attention: 'needs-input' })
+      render(
+        <ComposerContainer
+          context={{
+            kind: 'project',
+            projectId: 'project-1',
+            workspaceId: null,
+            activeSessionId: 'session-1',
+          }}
+        />,
+      )
+
+      expect(
+        screen.getByRole('combobox', { name: 'Claude Sonnet' }),
+      ).toBeDisabled()
+    })
+
+    it('writes a model change to the session row rather than only the composer', async () => {
+      const setSessionModelSelection = vi.fn().mockResolvedValue(undefined)
+      useSessionStore.setState({ setSessionModelSelection })
+      setSessionState({ status: 'completed', attention: 'finished' })
+      addSecondModel()
+      renderComposer()
+
+      fireEvent.click(screen.getByRole('combobox', { name: 'Claude Sonnet' }))
+      fireEvent.click(await screen.findByText('Claude Opus'))
+
+      await waitFor(() => {
+        expect(setSessionModelSelection).toHaveBeenCalledWith('session-1', {
+          providerId: 'claude-code',
+          model: 'claude-opus',
+          effort: 'high',
+        })
+      })
+    })
+
+    it('writes an effort change to the session row too', async () => {
+      const setSessionModelSelection = vi.fn().mockResolvedValue(undefined)
+      useSessionStore.setState({ setSessionModelSelection })
+      setSessionState({ status: 'completed', attention: 'finished' })
+      renderComposer()
+
+      fireEvent.click(screen.getByRole('combobox', { name: 'Medium' }))
+      fireEvent.click(await screen.findByText('High'))
+
+      await waitFor(() => {
+        expect(setSessionModelSelection).toHaveBeenCalledWith('session-1', {
+          providerId: 'claude-code',
+          model: 'claude-sonnet',
+          effort: 'high',
+        })
+      })
+    })
+
+    it('keeps showing the old model when the backend refuses the change', async () => {
+      // Nothing optimistic. A composer that redrew itself and then lost the
+      // write would be telling the human their next turn runs on a model it
+      // does not -- the control that looks active while doing nothing.
+      const setSessionModelSelection = vi
+        .fn()
+        .mockRejectedValue(new Error('Model and effort can only change...'))
+      useSessionStore.setState({ setSessionModelSelection })
+      setSessionState({ status: 'completed', attention: 'finished' })
+      addSecondModel()
+      renderComposer()
+
+      fireEvent.click(screen.getByRole('combobox', { name: 'Claude Sonnet' }))
+      fireEvent.click(await screen.findByText('Claude Opus'))
+
+      await waitFor(() => {
+        expect(setSessionModelSelection).toHaveBeenCalled()
+      })
+      expect(
+        screen.getByRole('combobox', { name: 'Claude Sonnet' }),
+      ).toBeInTheDocument()
+    })
+
+    it('leaves a draft composer free to pick both provider and model', () => {
+      // No session yet: neither lock applies, and the write goes nowhere near
+      // the row because there is no row.
+      render(
+        <ComposerContainer
+          context={{
+            kind: 'project',
+            projectId: 'project-1',
+            workspaceId: null,
+            activeSessionId: null,
+          }}
+        />,
+      )
+
+      expect(screen.getByRole('combobox', { name: 'Anthropic' })).toBeEnabled()
+      expect(
+        screen.getByRole('combobox', { name: 'Claude Sonnet' }),
+      ).toBeEnabled()
+    })
+
+    it('treats a session whose provider cannot continue as a draft', async () => {
+      // The fourth situation the one mode has to answer, and the shell
+      // provider is the live example. Its next send starts a new session, so
+      // the pickers configure that -- they must not write to the row behind
+      // them, and the provider is not fixed to anything.
+      const setSessionModelSelection = vi.fn().mockResolvedValue(undefined)
+      useSessionStore.setState((state) => ({
+        setSessionModelSelection,
+        providers: [
+          {
+            ...state.providers[0]!,
+            id: 'shell',
+            name: 'Shell',
+            vendorLabel: 'Local',
+            supportsContinuation: false,
+          },
+        ],
+      }))
+      setSessionState({
+        status: 'completed',
+        attention: 'finished',
+        providerId: 'shell',
+      })
+      render(
+        <ComposerContainer
+          context={{
+            kind: 'project',
+            projectId: 'project-1',
+            workspaceId: null,
+            activeSessionId: 'session-1',
+          }}
+        />,
+      )
+
+      expect(screen.getByRole('combobox', { name: 'Local' })).toBeEnabled()
+
+      fireEvent.click(screen.getByRole('combobox', { name: 'Medium' }))
+      fireEvent.click(await screen.findByText('High'))
+
+      expect(setSessionModelSelection).not.toHaveBeenCalled()
+    })
+
+    /**
+     * The third state, named (MAR-2550). A session whose provider has left the
+     * catalog is not a draft and not a continuable session -- and while it had
+     * no name, the two booleans that governed the row disagreed about it: one
+     * asked "can this continue?" and unlocked the provider select, the other
+     * asked "is there a session?" and kept writing to the hidden row.
+     */
+    describe('the third state: the session provider has left the catalog', () => {
+      function strandTheSession() {
+        // Claude Code gone, Codex first in the catalog -- so an unscoped
+        // resolve hands back "OpenAI" for a row that says claude-code.
+        useSessionStore.setState({ providers: [codexProvider] })
+      }
+
+      it('locks the provider, the model and the effort together', () => {
+        const setSessionModelSelection = vi.fn().mockResolvedValue(undefined)
+        useSessionStore.setState({ setSessionModelSelection })
+        setSessionState({ status: 'completed', attention: 'finished' })
+        strandTheSession()
+        render(
+          <ComposerContainer
+            context={{
+              kind: 'project',
+              projectId: 'project-1',
+              workspaceId: null,
+              activeSessionId: 'session-1',
+            }}
+          />,
+        )
+
+        expect(
+          screen.getByRole('combobox', { name: 'claude-code (unavailable)' }),
+        ).toBeDisabled()
+        expect(
+          screen.getByRole('combobox', { name: 'claude-sonnet' }),
+        ).toBeDisabled()
+        expect(screen.getByRole('combobox', { name: 'medium' })).toBeDisabled()
+        expect(setSessionModelSelection).not.toHaveBeenCalled()
+      })
+
+      it('shows the session own provider rather than whichever is first', () => {
+        // The honesty half. A composer reading "OpenAI" over a Claude row is
+        // the interface lying about what the next action would do.
+        setSessionState({ status: 'completed', attention: 'finished' })
+        strandTheSession()
+        render(
+          <ComposerContainer
+            context={{
+              kind: 'project',
+              projectId: 'project-1',
+              workspaceId: null,
+              activeSessionId: 'session-1',
+            }}
+          />,
+        )
+
+        expect(screen.queryByRole('combobox', { name: 'OpenAI' })).toBeNull()
+        expect(screen.queryByText('GPT-5.5')).toBeNull()
+      })
+
+      it('refuses a send that was already typed when the provider vanished', () => {
+        // The submit guard on its own, with the greyed box taken out of the
+        // argument: the text is in the composer before the catalog loses the
+        // provider, so keyDown reaches handleSubmit with a real message.
+        // Before the mode existed this fell through to the draft path and would
+        // have created a brand new Codex session out of a Claude row.
+        setSessionState({ status: 'completed', attention: 'finished' })
+        const textbox = renderComposer()
+        fireEvent.change(textbox, { target: { value: 'carry on' } })
+
+        act(() => strandTheSession())
+        fireEvent.keyDown(textbox, { key: 'Enter', metaKey: true })
+
+        expect(
+          useSessionStore.getState().sendMessageToSession,
+        ).not.toHaveBeenCalled()
+        expect(
+          useSessionStore.getState().createAndStartSession,
+        ).not.toHaveBeenCalled()
+      })
+
+      it('lets no write reach the row, by send or by pickers', () => {
+        // Submit is a control too. Before the mode existed this composer fell
+        // through to the draft path and would have created a brand new Codex
+        // session out of a Claude row the human was looking at.
+        const setSessionModelSelection = vi.fn().mockResolvedValue(undefined)
+        useSessionStore.setState({ setSessionModelSelection })
+        setSessionState({ status: 'completed', attention: 'finished' })
+        strandTheSession()
+        render(
+          <ComposerContainer
+            context={{
+              kind: 'project',
+              projectId: 'project-1',
+              workspaceId: null,
+              activeSessionId: 'session-1',
+            }}
+          />,
+        )
+
+        const textbox = screen.getByPlaceholderText(
+          'claude-code is unavailable, so this session cannot continue.',
+        )
+
+        // fireEvent dispatches straight at the handler, so this reaches
+        // handleSubmit whether or not the box is greyed -- which is the point:
+        // the refusal has to live in the submit path, not only in a class name.
+        fireEvent.change(textbox, { target: { value: 'carry on' } })
+        fireEvent.keyDown(textbox, { key: 'Enter', metaKey: true })
+
+        expect(
+          useSessionStore.getState().sendMessageToSession,
+        ).not.toHaveBeenCalled()
+        expect(
+          useSessionStore.getState().createAndStartSession,
+        ).not.toHaveBeenCalled()
+        expect(setSessionModelSelection).not.toHaveBeenCalled()
+        expect(textbox).toBeDisabled()
+      })
+    })
+
+    /**
+     * The provider lock has two controls to survive, not one. The select beside
+     * the model picker was locked; the model dialog was not, and it reports a
+     * provider with every pick -- so it was a second, quieter provider switch
+     * that wrote a foreign model id onto the row.
+     */
+    describe('the second door: the model dialog carries a provider too', () => {
+      function addCodexProvider() {
+        useSessionStore.setState((state) => ({
+          providers: [...state.providers, codexProvider],
+        }))
+      }
+
+      it('offers an active session no provider but its own, by any route', async () => {
+        setSessionState({ status: 'completed', attention: 'finished' })
+        addCodexProvider()
+        renderComposer()
+
+        fireEvent.click(screen.getByRole('combobox', { name: 'Claude Sonnet' }))
+        await screen.findByPlaceholderText('Search models...')
+
+        // The filter that names the foreign provider is not there to click.
+        expect(screen.queryByText('OpenAI')).toBeNull()
+
+        // Nor does the filter that names no provider reach any further.
+        fireEvent.click(screen.getByRole('button', { name: /^All/ }))
+        expect(screen.queryByText('GPT-5.5')).toBeNull()
+
+        // Nor does the search box, which answers from the same catalog.
+        fireEvent.change(screen.getByPlaceholderText('Search models...'), {
+          target: { value: 'gpt' },
+        })
+        expect(await screen.findByText('No models found.')).toBeInTheDocument()
+      })
+
+      it('still offers a draft every provider in the catalog', async () => {
+        // The control for the test above: the dialog is scoped, not broken.
+        // This is the exact click sequence that escaped an active session.
+        addCodexProvider()
+        render(
+          <ComposerContainer
+            context={{
+              kind: 'project',
+              projectId: 'project-1',
+              workspaceId: null,
+              activeSessionId: null,
+            }}
+          />,
+        )
+
+        fireEvent.click(screen.getByRole('combobox', { name: 'Claude Sonnet' }))
+        await screen.findByPlaceholderText('Search models...')
+
+        fireEvent.click(screen.getByRole('button', { name: /^OpenAI/ }))
+        expect(await screen.findByText('GPT-5.5')).toBeInTheDocument()
+      })
+
+      it('names the provider it believes in, so the backend can disagree', async () => {
+        // The renderer cannot be the only guard -- this run exists because a
+        // renderer-only guard was removed from one control and nobody noticed.
+        // Sending the provider the selection was made against is what lets the
+        // refusal live where the row is written.
+        const setSessionModelSelection = vi.fn().mockResolvedValue(undefined)
+        useSessionStore.setState({ setSessionModelSelection })
+        setSessionState({ status: 'completed', attention: 'finished' })
+        addCodexProvider()
+        renderComposer()
+
+        fireEvent.click(screen.getByRole('combobox', { name: 'Medium' }))
+        fireEvent.click(await screen.findByText('High'))
+
+        await waitFor(() => {
+          expect(setSessionModelSelection).toHaveBeenCalledWith('session-1', {
+            providerId: 'claude-code',
+            model: 'claude-sonnet',
+            effort: 'high',
+          })
+        })
+      })
+    })
+  })
 })

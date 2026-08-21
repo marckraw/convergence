@@ -22,6 +22,7 @@ import {
   CODEX_SANDBOX_OPTIONS,
   getProviderLifecycleBadge,
   getSimplePermissionPreset,
+  scopeModelCatalogToProvider,
 } from '@/entities/session'
 import { AttachmentsRow, type Attachment } from '@/entities/attachment'
 import type { ProjectContextItem } from '@/entities/project-context'
@@ -96,7 +97,28 @@ interface ComposerProps {
   deliveryMode: MidRunInputMode
   deliveryModes: MidRunInputMode[]
   onDeliveryModeChange: (mode: MidRunInputMode) => void
+  /**
+   * Locks the parts of the selection row that a session fixes for life --
+   * above all the provider, whose continuation token is provider-specific.
+   * True the moment a resumable session exists.
+   */
   selectionDisabled?: boolean
+  /**
+   * Locks the model and effort pickers, which a session does NOT fix for life
+   * (MAR-2550). Split from `selectionDisabled` rather than folded into it: the
+   * two answer different questions, and one boolean would have to answer the
+   * stricter one, which is how the model stayed frozen for no reason.
+   */
+  modelSelectionDisabled?: boolean
+  /**
+   * The provider the session behind this composer is pinned to, or null while
+   * it is still a draft (MAR-2550).
+   *
+   * Scopes the model dialog's catalog. The dialog reports a provider alongside
+   * the model it hands back, so an unscoped catalog was a second way to change
+   * the provider — one the provider select's lock never covered.
+   */
+  sessionProviderId?: string | null
   placeholder?: string
   disabled?: boolean
   attachments: Attachment[]
@@ -202,6 +224,8 @@ export const Composer: FC<ComposerProps> = ({
   deliveryModes,
   onDeliveryModeChange,
   selectionDisabled = false,
+  modelSelectionDisabled = false,
+  sessionProviderId = null,
   placeholder = 'Ask anything, @tag files/folders, :: for injections...',
   disabled = false,
   hasPendingAnnotations = false,
@@ -413,12 +437,23 @@ export const Composer: FC<ComposerProps> = ({
         : undefined,
     badge: getProviderLifecycleBadge(provider) ?? undefined,
   }))
-  const effortItems =
-    selection.model?.effortOptions.map((effort) => ({
-      id: effort.id,
-      label: effort.label,
-      description: effort.description,
-    })) ?? []
+  // An existing session may move between its own provider's models and no
+  // further (MAR-2550). A draft keeps the whole catalog.
+  const modelCatalogProviders = scopeModelCatalogToProvider(
+    providers,
+    sessionProviderId,
+  )
+  // A stranded session has no catalog model to read options from, but its row
+  // still carries an effort. Showing it, disabled, beats hiding the control and
+  // leaving the human to guess what the row says (MAR-2550).
+  const effortItems = (
+    selection.model?.effortOptions ??
+    (selection.effort ? [selection.effort] : [])
+  ).map((effort) => ({
+    id: effort.id,
+    label: effort.label,
+    description: effort.description,
+  }))
   const permissionItems = [
     {
       id: 'ask',
@@ -679,14 +714,16 @@ export const Composer: FC<ComposerProps> = ({
               className="gap-1.5 px-2 text-xs text-muted-foreground hover:text-foreground"
             />
             <ModelPickerDialog
-              providers={providers}
+              providers={modelCatalogProviders}
               selectedProviderId={selection.providerId}
               selectedModelId={selection.modelId}
-              value={selection.model?.label ?? 'Select model'}
+              value={
+                selection.model?.label || selection.modelId || 'Select model'
+              }
               onChange={(providerId, modelId) =>
                 onModelChange(modelId, providerId)
               }
-              disabled={selectionDisabled || !selection.provider}
+              disabled={modelSelectionDisabled || !selection.provider}
               triggerVariant="ghost"
               triggerSize="sm"
               triggerClassName="px-2 text-xs text-muted-foreground hover:text-foreground"
@@ -697,7 +734,7 @@ export const Composer: FC<ComposerProps> = ({
                 value={selection.effort?.label ?? 'Select effort'}
                 items={effortItems}
                 onChange={(id) => onEffortChange(id as ReasoningEffort)}
-                disabled={selectionDisabled || !selection.model}
+                disabled={modelSelectionDisabled || !selection.model}
                 className="px-2 text-xs text-muted-foreground hover:text-foreground"
               />
             )}

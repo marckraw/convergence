@@ -1,8 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { FC } from 'react'
 import {
+  describeUnavailableProviderSelection,
   type MidRunInputMode,
+  resolveComposerSelectionLocks,
   resolveProviderSelection,
+  resolveSessionModelSelectionWrite,
   type SessionQueuedInput,
   useSessionStore,
   type ReasoningEffort,
@@ -194,6 +197,9 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
    */
   const relays = useSessionRelayStore((s) => s.relays)
   const compactSessionContext = useSessionStore((s) => s.compactSessionContext)
+  const setSessionModelSelection = useSessionStore(
+    (s) => s.setSessionModelSelection,
+  )
   const cancelQueuedInput = useSessionStore((s) => s.cancelQueuedInput)
   const sessions = useSessionStore((s) => s.sessions)
   const globalChatSessions = useSessionStore((s) => s.globalChatSessions)
@@ -258,8 +264,18 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
   const activeProvider = providers.find(
     (p) => p.id === activeSession?.providerId,
   )
-  const canContinueActiveSession =
-    !!activeSession && !!activeProvider?.supportsContinuation
+  /**
+   * One derived mode, read by the provider select, the model dialog, the
+   * effort select and submit alike (MAR-2550).
+   *
+   * These used to be two independent booleans, and they disagreed about the
+   * session whose provider has left the catalog: the provider lock went false
+   * and unlocked itself while every write still went to the hidden row.
+   */
+  const selectionLocks = resolveComposerSelectionLocks(
+    providers,
+    activeSession ?? null,
+  )
   const attachmentsBySessionId = useProjectContextStore(
     (s) => s.attachmentsBySessionId,
   )
@@ -481,13 +497,23 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
       appSettings.defaultEffortId,
     ],
   )
-  const selection = resolveProviderSelection(
-    providers,
-    activeSession?.providerId ?? providerId,
-    activeSession?.model ?? modelId,
-    activeSession?.effort ?? (effortId || null),
-    activeSession ? undefined : storedDefaults,
-  )
+  // A stranded session has no catalog entry to resolve against, and resolving
+  // anyway hands back whichever provider happens to be first -- the composer
+  // reading "OpenAI" over a Claude row (MAR-2550).
+  const selection =
+    selectionLocks.mode === 'stranded' && activeSession
+      ? describeUnavailableProviderSelection(activeSession)
+      : resolveProviderSelection(
+          providers,
+          selectionLocks.canContinue
+            ? (activeSession?.providerId ?? null)
+            : providerId,
+          selectionLocks.canContinue ? (activeSession?.model ?? null) : modelId,
+          selectionLocks.canContinue
+            ? (activeSession?.effort ?? null)
+            : effortId || null,
+          selectionLocks.canContinue ? undefined : storedDefaults,
+        )
   const showCodexUsagePill = shouldShowCodexUsagePill(selection)
   const remoteHostEligible =
     !activeSession &&
@@ -871,11 +897,18 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
     !activeSession ||
     activeSession.status === 'completed' ||
     activeSession.status === 'failed'
-  const isComposerDisabled = midRunPolicy.disabled
+  // Nothing here can reach a stranded session's row, so the box that looks
+  // like it can send does not (MAR-2550).
+  const isComposerDisabled =
+    midRunPolicy.disabled || selectionLocks.mode === 'stranded'
 
   const handleSubmit = useCallback(() => {
     const trimmed = value.trim()
     if (!selection.providerId || !selection.modelId) return
+    // Submit is a control like any other (MAR-2550): a stranded session cannot
+    // be continued, and the fall-through below would start a brand new session
+    // on whichever provider the catalog offered instead.
+    if (selectionLocks.mode === 'stranded') return
     // Quotes are a message on their own: selecting three passages and hitting
     // send without typing anything is a complete thought (RA2).
     if (!trimmed && attachments.length === 0 && pendingAnnotations.length === 0)
@@ -901,7 +934,7 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
         ? selectedContextIds
         : undefined
 
-    if (activeSession && canContinueActiveSession) {
+    if (activeSession && selectionLocks.canContinue) {
       const mode = deliveryMode === 'normal' ? undefined : deliveryMode
       // One call, not four. The branching here only ever existed to skip past
       // optional positional arguments (MAR-2227); named fields omit them.
@@ -982,7 +1015,8 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
     selectedContextIds,
     capabilityResult.ok,
     activeSession,
-    canContinueActiveSession,
+    selectionLocks.mode,
+    selectionLocks.canContinue,
     deliveryMode,
     sendMessageToSession,
     createAndStartSession,
@@ -1146,16 +1180,53 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
   }, [])
 
   const handleModelChange = (nextModelId: string, nextProviderId?: string) => {
+    if (activeSession && selectionLocks.canContinue) {
+      // A live conversation's model lives on its row, not in this component
+      // (MAR-2550). Persist and let the returned row redraw the pickers: if the
+      // backend refuses -- the turn started between this render and this click
+      // -- the composer must keep showing the model the next turn will actually
+      // run on, and the store's error becomes a toast.
+      //
+      // A pick that resolves to another provider is refused here rather than
+      // written with its provider quietly dropped, which is how a Codex model
+      // id once landed on a Claude session's row.
+      const write = resolveSessionModelSelectionWrite(
+        providers,
+        activeSession,
+        nextProviderId ?? null,
+        nextModelId,
+      )
+      if (!write) return
+      void setSessionModelSelection(activeSession.id, write).catch(() => {})
+      return
+    }
     const nextSelection = resolveProviderSelection(
       providers,
       nextProviderId ?? selection.providerId,
       nextModelId,
       null,
-      activeSession ? undefined : storedDefaults,
+      storedDefaults,
     )
     setProviderId(nextSelection.providerId)
     setModelId(nextSelection.modelId)
     setEffortId(nextSelection.effortId)
+  }
+
+  /**
+   * Effort travels with the model: same mode, same lock, same write. It had no
+   * provider dimension to get wrong, and so no guard either -- which is how it
+   * kept writing to a stranded session's row after the model picker stopped.
+   */
+  const handleEffortChange = (nextEffortId: ReasoningEffort | '') => {
+    if (activeSession && selectionLocks.canContinue) {
+      void setSessionModelSelection(activeSession.id, {
+        providerId: activeSession.providerId,
+        model: activeSession.model,
+        effort: nextEffortId || null,
+      }).catch(() => {})
+      return
+    }
+    setEffortId(nextEffortId)
   }
 
   const handleSkillsBrowse = useCallback(() => {
@@ -1177,7 +1248,7 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
         selection={selection}
         onProviderChange={handleProviderChange}
         onModelChange={handleModelChange}
-        onEffortChange={setEffortId}
+        onEffortChange={handleEffortChange}
         providerAccounts={providerAccountsForSession}
         selectedProviderAccountId={selectedProviderAccountId}
         onProviderAccountChange={setSelectedProviderAccountId}
@@ -1268,21 +1339,25 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
         onMentionHover={setMentionHighlightedIndex}
         onMentionDismiss={handleMentionDismiss}
         onSelectionChange={setCursor}
-        selectionDisabled={canContinueActiveSession}
+        selectionDisabled={selectionLocks.providerLocked}
+        modelSelectionDisabled={selectionLocks.modelLocked}
+        sessionProviderId={activeSession?.providerId ?? null}
         placeholder={
-          activeSession?.attention === 'needs-input'
-            ? 'Respond to the agent...'
-            : activeSession?.status === 'running'
-              ? midRunPolicy.disabled
-                ? 'Session is running...'
-                : deliveryMode === 'steer'
-                  ? 'Steer current run...'
-                  : 'Queue a follow-up...'
-              : canContinueActiveSession
-                ? 'Send a follow-up...'
-                : isSessionDone
-                  ? 'What would you like to work on?'
-                  : 'Session is running...'
+          selectionLocks.mode === 'stranded'
+            ? `${activeSession?.providerId ?? 'This session'} is unavailable, so this session cannot continue.`
+            : activeSession?.attention === 'needs-input'
+              ? 'Respond to the agent...'
+              : activeSession?.status === 'running'
+                ? midRunPolicy.disabled
+                  ? 'Session is running...'
+                  : deliveryMode === 'steer'
+                    ? 'Steer current run...'
+                    : 'Queue a follow-up...'
+                : selectionLocks.canContinue
+                  ? 'Send a follow-up...'
+                  : isSessionDone
+                    ? 'What would you like to work on?'
+                    : 'Session is running...'
         }
         disabled={isComposerDisabled}
         attachments={attachments}

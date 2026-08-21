@@ -127,6 +127,8 @@ export function turnFromRow(row: SessionTurnRow): Turn {
     status: turnStatusFromValue(row.status),
     summary: row.summary,
     providerAccountId: row.provider_account_id ?? null,
+    model: row.model ?? null,
+    effort: row.effort ?? null,
   }
 }
 
@@ -157,6 +159,8 @@ export function turnToInsertRow(turn: Turn): TurnInsertRow {
     status: turn.status,
     summary: turn.summary,
     providerAccountId: turn.providerAccountId,
+    model: turn.model,
+    effort: turn.effort,
   }
 }
 

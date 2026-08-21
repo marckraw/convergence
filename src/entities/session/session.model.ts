@@ -8,6 +8,7 @@ import type {
   QueuedInputPatchEvent,
   NeedsYouDismissals,
   NeedsYouDisposition,
+  ReasoningEffort,
   SendSessionMessageRequest,
   SessionQueuedInput,
   SessionSummary,
@@ -92,6 +93,14 @@ interface SessionActions {
   setPrimarySurface: (
     id: string,
     surface: 'conversation' | 'terminal',
+  ) => Promise<SessionSummary>
+  setSessionModelSelection: (
+    id: string,
+    input: {
+      providerId: string
+      model: string | null
+      effort: ReasoningEffort | null
+    },
   ) => Promise<SessionSummary>
   clearError: () => void
 }
@@ -927,6 +936,31 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     // for the round-trip.
     get().handleSessionSummaryUpdate(updated)
     return updated
+  },
+
+  /**
+   * Moves a live session onto a different model or effort (MAR-2550).
+   *
+   * Nothing here is optimistic. The backend refuses the change unless the
+   * session is idle, and a composer that had already redrawn itself would be
+   * telling the human their next turn runs on a model it does not. The
+   * returned summary — the row as it actually stands — is what redraws it.
+   *
+   * `input.providerId` is the provider the caller believes the session runs on.
+   * The backend refuses when it disagrees with the row, so this field is the
+   * renderer's half of a check it does not get to perform.
+   */
+  setSessionModelSelection: async (id, input) => {
+    set({ error: null })
+    try {
+      const updated = await sessionApi.setModelSelection(id, input)
+      get().handleSessionSummaryUpdate(updated)
+      return updated
+    } catch (err) {
+      const error = err instanceof Error ? err : new Error(String(err))
+      set({ error: error.message })
+      throw error
+    }
   },
 
   clearError: () => set({ error: null }),

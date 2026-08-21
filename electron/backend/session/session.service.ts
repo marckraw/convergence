@@ -19,6 +19,7 @@ import type {
 } from '../provider/provider.types'
 import {
   getMidRunInputCapabilityForProviderId,
+  parseReasoningEffort,
   supportsMidRunInputMode,
 } from '../provider/provider-descriptor.pure'
 import type { AttachmentsService } from '../attachments/attachments.service'
@@ -50,10 +51,20 @@ import type { SessionContextInjectionService } from './context-injection/session
 import { SessionRepository } from './session.repository'
 import { CONVERSATION_PATCH_FLUSH_MS } from './session.constants'
 import {
+  describeModelSelectionRefusal,
+  describeProviderIdentityRefusal,
   isAttentionRequestSummary,
   resolveAttentionRequestKind,
   type AttentionRequestRowLike,
 } from './session.pure'
+import {
+  MODEL_CHANGED_EVENT_TYPE,
+  describeModelChange,
+} from './session-model-change.pure'
+import {
+  SessionDispatchRegistry,
+  type SessionDispatch,
+} from './session-dispatch-registry'
 import { SessionQueuedInputService } from './session-queued-input.service'
 import {
   SessionLivenessService,
@@ -197,6 +208,13 @@ export class SessionService {
   private readonly sessionRepository: SessionRepository
   private readonly queuedInputs: SessionQueuedInputService
   private readonly liveness: SessionLivenessService
+  /**
+   * Sends that have begun but have not yet reached a provider. Everything that
+   * must not run while a session is busy asks here as well as at
+   * `activeHandles`, because between them is a window where neither knows
+   * (MAR-2550).
+   */
+  private readonly dispatches = new SessionDispatchRegistry()
 
   constructor(
     private db: Database.Database,
@@ -372,6 +390,98 @@ export class SessionService {
     }
     this.sessionRepository.setPrimarySurface(id, surface)
     this.notifySessionChange(id)
+    return this.getById(id)!
+  }
+
+  /**
+   * Changes the model and effort a session's *next* turn will run on
+   * (MAR-2550).
+   *
+   * The provider is deliberately not changeable here: continuation tokens are
+   * provider-specific, so a session keeps the provider it was born with. Model
+   * and effort are not — every adapter passes them at turn time, and
+   * `startHandle` re-reads this row for every resumed turn, so persisting here
+   * is the entire mechanism.
+   *
+   * `input.providerId` is the provider the selection was made against, and it
+   * is required rather than optional: an omitted check is a check that can be
+   * forgotten. It is compared against the row and nothing else — an identity
+   * check, not a model catalog.
+   */
+  setModelSelection(
+    id: string,
+    input: { providerId: unknown; model: string | null; effort: unknown },
+  ): Session {
+    const session = this.getById(id)
+    if (!session) throw new Error(`Session not found: ${id}`)
+    if (session.providerId === 'shell') {
+      throw new Error(
+        `Session ${id} uses the shell provider and has no model to change`,
+      )
+    }
+
+    const mismatch = describeProviderIdentityRefusal(
+      session,
+      typeof input.providerId === 'string' ? input.providerId.trim() : '',
+    )
+    if (mismatch) throw new Error(mismatch)
+
+    const refusal = describeModelSelectionRefusal({
+      status: session.status,
+      attention: session.attention,
+      hasActiveHandle: this.activeHandles.has(id),
+      hasDispatchInFlight: this.dispatches.isDispatching(id),
+    })
+    if (refusal) throw new Error(refusal)
+
+    const model = input.model?.trim() ? input.model.trim() : null
+    const effort = parseReasoningEffort(input.effort)
+    if (input.effort != null && effort === null) {
+      throw new Error(`Unknown reasoning effort: ${String(input.effort)}`)
+    }
+
+    const boundary = describeModelChange(
+      { model: session.model, effort: session.effort },
+      { model, effort },
+    )
+
+    // One write, because the two halves are only true together. A model that
+    // moved without its divider is a transcript that silently mixes models,
+    // which is the whole thing MAR-2551 exists to prevent; a divider without
+    // the move announces a boundary that never happened. The same answer run
+    // 22 gave the non-atomic settle.
+    const applySelection = this.db.transaction(() => {
+      this.sessionRepository.setModelSelection(id, model, effort)
+
+      // The transcript would otherwise go on implying one author (MAR-2551).
+      // Written here rather than at the next turn because this is the moment
+      // the reader made the decision: the note lands under the last answer of
+      // the old model and above whatever they type next.
+      return boundary
+        ? this.addConversationItem(id, {
+            id: randomUUID(),
+            turnId: null,
+            kind: 'note',
+            state: 'complete',
+            level: 'info',
+            text: boundary,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+            providerMeta: {
+              providerId: session.providerId,
+              providerItemId: null,
+              providerEventType: MODEL_CHANGED_EVENT_TYPE,
+            },
+          })
+        : null
+    })
+
+    const note = applySelection()
+
+    this.notifySessionChange(
+      id,
+      note ? { sessionId: id, op: 'add', item: note } : undefined,
+    )
     return this.getById(id)!
   }
 
@@ -715,6 +825,38 @@ export class SessionService {
   }
 
   async start(id: string, input: SendMessageInput): Promise<void> {
+    return this.withDispatchInFlight(id, () => this.openFirstTurn(id, input))
+  }
+
+  /**
+   * Runs a send with the session marked as dispatching for the whole of it
+   * (MAR-2550).
+   *
+   * The marker is set synchronously — before `dispatch` is entered, let alone
+   * before its first `await` — and cleared only once the send has settled. By
+   * then either a handle is registered, so every guard sees a busy session
+   * again, or the send failed and the session really is idle. In between,
+   * `describeModelSelectionRefusal` would otherwise see a session with no
+   * running status and no handle, accept a new model, write it to the row and
+   * announce the boundary in the transcript, while the turn already in flight
+   * ran on the old one.
+   */
+  private async withDispatchInFlight<T>(
+    sessionId: string,
+    dispatch: (inFlight: SessionDispatch) => Promise<T>,
+  ): Promise<T> {
+    const inFlight = this.dispatches.begin(sessionId)
+    try {
+      return await dispatch(inFlight)
+    } finally {
+      this.dispatches.settle(inFlight)
+    }
+  }
+
+  private async openFirstTurn(
+    id: string,
+    input: SendMessageInput,
+  ): Promise<void> {
     const session = this.getById(id)
     if (!session) throw new Error(`Session not found: ${id}`)
 
@@ -784,6 +926,13 @@ export class SessionService {
   }
 
   async sendMessage(id: string, input: SendMessageInput): Promise<void> {
+    return this.withDispatchInFlight(id, () => this.deliverMessage(id, input))
+  }
+
+  private async deliverMessage(
+    id: string,
+    input: SendMessageInput,
+  ): Promise<void> {
     let session = this.getById(id)
     if (!session) throw new Error(`Session not found: ${id}`)
 
@@ -1500,6 +1649,16 @@ export class SessionService {
         turnId,
         workingDirectory: row.working_directory,
         providerAccountId: this.pendingTurnAccountIds.get(sessionId) ?? null,
+        // Read straight off the row rather than from a pending slot (MAR-2551,
+        // deliberately not a fourth instance of MAR-2539). The account is a
+        // per-send choice and has to be carried from the dispatch site; the
+        // model is standing session state, and it cannot move between dispatch
+        // and this stamp because `describeModelSelectionRefusal` refuses every
+        // write while a handle is attached or a send is in flight — the two
+        // together cover the whole of the send path, from its first statement
+        // to the handle it registers.
+        model: row.model,
+        effort: row.effort,
       })
     }
 

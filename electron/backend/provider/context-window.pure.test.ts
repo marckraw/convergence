@@ -132,6 +132,53 @@ describe('context-window.pure', () => {
     })
   })
 
+  it('keeps the same tier when a claude session switches from fable to opus', () => {
+    const usage = {
+      usage: {
+        input_tokens: 1200,
+        cache_creation_input_tokens: 300,
+        cache_read_input_tokens: 8500,
+      },
+    }
+
+    const onFable = deriveClaudeEstimatedContextWindow(usage, 'fable')
+
+    expect(onFable).toEqual({
+      availability: 'available',
+      source: 'estimated',
+      usedTokens: 10000,
+      windowTokens: 1_000_000,
+      usedPercentage: 1,
+      remainingPercentage: 99,
+    })
+    expect(deriveClaudeEstimatedContextWindow(usage, 'opus')).toEqual(onFable)
+  })
+
+  it('keeps versioned pre-5 opus ids on the 200k tier', () => {
+    expect(
+      deriveClaudeEstimatedContextWindow(
+        {
+          message: {
+            model: 'claude-opus-4-5',
+            usage: {
+              input_tokens: 1200,
+              cache_creation_input_tokens: 300,
+              cache_read_input_tokens: 8500,
+            },
+          },
+        },
+        'opus',
+      ),
+    ).toEqual({
+      availability: 'available',
+      source: 'estimated',
+      usedTokens: 10000,
+      windowTokens: 200_000,
+      usedPercentage: 5,
+      remainingPercentage: 95,
+    })
+  })
+
   it('creates a provider-unavailable fallback state', () => {
     expect(
       createUnavailableContextWindow('Provider does not report context usage.'),

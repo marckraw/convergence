@@ -931,6 +931,15 @@ export function registerIpcHandlers(
       sessionApp.setSessionPrimarySurface(id, surface),
   )
 
+  ipcMain.handle(
+    'session:setModelSelection',
+    (
+      _event,
+      id: string,
+      input: { providerId: unknown; model: string | null; effort: unknown },
+    ) => sessionApp.setSessionModelSelection(id, input),
+  )
+
   // Provider handlers
   async function loadProviderDescriptors() {
     return Promise.all(providerRegistry.getAll().map((p) => p.describe()))

@@ -38,6 +38,7 @@ export type SessionAppBackend = Pick<
   | 'rename'
   | 'regenerateName'
   | 'setPrimarySurface'
+  | 'setModelSelection'
   | 'setSummaryUpdateListener'
   | 'setConversationPatchListener'
   | 'setQueuedInputPatchListener'
@@ -151,6 +152,13 @@ export class SessionAppService {
     surface: PrimarySurface,
   ): Session {
     return this.sessions.setPrimarySurface(sessionId, surface)
+  }
+
+  setSessionModelSelection(
+    sessionId: string,
+    input: { providerId: unknown; model: string | null; effort: unknown },
+  ): Session {
+    return this.sessions.setModelSelection(sessionId, input)
   }
 
   onSessionSummaryUpdate(listener: (summary: SessionSummary) => void): void {

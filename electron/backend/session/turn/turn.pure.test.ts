@@ -211,6 +211,8 @@ describe('row conversions', () => {
     status: 'running',
     summary: null,
     provider_account_id: null,
+    model: 'opus',
+    effort: 'high',
   }
 
   const changeRow: SessionTurnFileChangeRow = {
@@ -232,6 +234,8 @@ describe('row conversions', () => {
       sessionId: 'session-1',
       sequence: 3,
       providerAccountId: null,
+      model: 'opus',
+      effort: 'high',
       startedAt: now,
       endedAt: null,
       status: 'running',
@@ -272,6 +276,8 @@ describe('row conversions', () => {
       sessionId: 'session-1',
       sequence: 4,
       providerAccountId: null,
+      model: 'fable',
+      effort: 'max',
       startedAt: now,
       endedAt: now,
       status: 'completed',

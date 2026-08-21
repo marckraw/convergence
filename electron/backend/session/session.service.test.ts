@@ -4279,3 +4279,443 @@ describe('SessionService relay mute', () => {
     expect(settles[0].relaysMuted).toBe(true)
   })
 })
+
+/**
+ * MAR-2550 — the model a conversation runs on is a standing intention held on
+ * the session row, not something fixed at birth. These tests are the whole
+ * claim: an idle session can be rewritten, a busy one refuses out loud, and the
+ * next resumed turn genuinely spawns on the new value.
+ */
+describe('SessionService model selection (MAR-2550)', () => {
+  let db: Database.Database
+  let service: SessionService
+  let tempDir: string
+  let sessionId: string
+  let startConfigs: Array<{ model: string | null; effort: string | null }>
+  let deltaListener: ((delta: SessionDelta) => void) | null
+  /** Set to make the next spawn fail the way a real one can. */
+  let spawnFailure: Error | null
+
+  /** What a provider does the moment it picks the turn up. */
+  function beginTurn(): void {
+    deltaListener?.({ kind: 'session.patch', patch: { status: 'running' } })
+  }
+
+  function settleTurn(): void {
+    deltaListener?.({
+      kind: 'session.patch',
+      patch: { continuationToken: 'resume-token-1', status: 'completed' },
+    })
+  }
+
+  beforeEach(() => {
+    db = getDatabase()
+    startConfigs = []
+    deltaListener = null
+    spawnFailure = null
+
+    const registry = new ProviderRegistry()
+    registry.register({
+      id: 'switchable',
+      name: 'Switchable Provider',
+      supportsContinuation: true,
+      describe: async () => ({
+        id: 'switchable',
+        name: 'Switchable Provider',
+        vendorLabel: 'Test',
+        kind: 'conversation',
+        supportsContinuation: true,
+        defaultModelId: 'fable',
+        modelOptions: [
+          {
+            id: 'fable',
+            label: 'Fable',
+            defaultEffort: null,
+            effortOptions: [],
+          },
+          {
+            id: 'opus',
+            label: 'Opus',
+            defaultEffort: null,
+            effortOptions: [],
+          },
+        ],
+        attachments: TEST_ATTACHMENT_CAPABILITY,
+        midRunInput: NO_MID_RUN_INPUT_CAPABILITY,
+      }),
+      start: (config) => {
+        if (spawnFailure) throw spawnFailure
+        startConfigs.push({ model: config.model, effort: config.effort })
+        return {
+          onDelta: (listener) => {
+            deltaListener = listener
+          },
+          onStatusChange: () => {},
+          onAttentionChange: () => {},
+          onContextWindowChange: () => {},
+          onActivityChange: () => {},
+          onContinuationToken: (listener) => {
+            if (config.continuationToken) listener(config.continuationToken)
+          },
+          sendMessage: () => {},
+          approve: () => {},
+          deny: () => {},
+          stop: () => {},
+        }
+      },
+    })
+
+    service = new SessionService(db, new LocalExecutionHost(registry))
+
+    tempDir = mkdtempSync(join(tmpdir(), 'convergence-model-switch-'))
+    const repoPath = join(tempDir, 'repo')
+    mkdirSync(repoPath, { recursive: true })
+    db.prepare(
+      'INSERT INTO projects (id, name, repository_path) VALUES (?, ?, ?)',
+    ).run('switch-project', 'Switch Project', repoPath)
+
+    sessionId = service.create({
+      projectId: 'switch-project',
+      workspaceId: null,
+      providerId: 'switchable',
+      model: 'fable',
+      effort: 'medium',
+      name: 'a long conversation',
+    }).id
+  })
+
+  afterEach(() => {
+    closeDatabase()
+    resetDatabase()
+    rmSync(tempDir, { recursive: true, force: true })
+  })
+
+  it('carries a swapped model into the next resumed turn', async () => {
+    await service.start(sessionId, { text: 'first' })
+    settleTurn()
+
+    service.setModelSelection(sessionId, {
+      providerId: 'switchable',
+      model: 'opus',
+      effort: 'high',
+    })
+    await service.sendMessage(sessionId, { text: 'carry on' })
+
+    expect(startConfigs).toEqual([
+      { model: 'fable', effort: 'medium' },
+      { model: 'opus', effort: 'high' },
+    ])
+  })
+
+  it('returns the rewritten summary and broadcasts it', async () => {
+    const summaries: Array<{ model: string | null; effort: string | null }> = []
+    service.setSummaryUpdateListener((summary) => {
+      summaries.push({ model: summary.model, effort: summary.effort })
+    })
+
+    await service.start(sessionId, { text: 'first' })
+    settleTurn()
+
+    const updated = service.setModelSelection(sessionId, {
+      providerId: 'switchable',
+      model: 'opus',
+      effort: 'high',
+    })
+
+    expect(updated).toMatchObject({
+      model: 'opus',
+      effort: 'high',
+      providerId: 'switchable',
+    })
+    expect(summaries.at(-1)).toEqual({ model: 'opus', effort: 'high' })
+  })
+
+  it('refuses while a turn is running and leaves the row alone', async () => {
+    await service.start(sessionId, { text: 'first' })
+    beginTurn()
+
+    expect(() =>
+      service.setModelSelection(sessionId, {
+        providerId: 'switchable',
+        model: 'opus',
+        effort: 'high',
+      }),
+    ).toThrow(/current turn to finish/)
+    expect(service.getSummaryById(sessionId)).toMatchObject({
+      model: 'fable',
+      effort: 'medium',
+    })
+  })
+
+  /**
+   * The window this guard was blind to for four bugs (MAR-2550). A send reads
+   * the session, awaits, and only then registers the handle that makes the
+   * session look busy. A change accepted in between is written to the row and
+   * announced in the transcript while the turn already on its way to the
+   * provider runs on the model it captured before the await.
+   *
+   * The fix is not to re-read the row after the await, which would quietly run
+   * the message on a model chosen after the human pressed send. A session
+   * mid-dispatch is not idle; it now says so.
+   */
+  it('refuses a change made after send but before the turn spawns', async () => {
+    await service.start(sessionId, { text: 'first' })
+    settleTurn()
+
+    // Deliberately not awaited: `sendMessage` has run as far as its first
+    // await, which is exactly the window.
+    const dispatch = service.sendMessage(sessionId, { text: 'carry on' })
+
+    expect(() =>
+      service.setModelSelection(sessionId, {
+        providerId: 'switchable',
+        model: 'opus',
+        effort: 'high',
+      }),
+    ).toThrow(/already on its way to the provider/)
+
+    await dispatch
+
+    // The turn that was in flight ran on what the human could see when they
+    // sent it, and the row still says the same thing.
+    expect(startConfigs).toEqual([
+      { model: 'fable', effort: 'medium' },
+      { model: 'fable', effort: 'medium' },
+    ])
+    expect(service.getSummaryById(sessionId)).toMatchObject({
+      model: 'fable',
+      effort: 'medium',
+    })
+  })
+
+  it('refuses a change made while the first turn is still being opened', async () => {
+    // `start` has the same shape as `sendMessage`: read the row, await, spawn.
+    const opening = service.start(sessionId, { text: 'first' })
+
+    expect(() =>
+      service.setModelSelection(sessionId, {
+        providerId: 'switchable',
+        model: 'opus',
+        effort: 'high',
+      }),
+    ).toThrow(/already on its way to the provider/)
+
+    await opening
+
+    expect(startConfigs).toEqual([{ model: 'fable', effort: 'medium' }])
+  })
+
+  /**
+   * The other half of the marker, and the reason it is cleared in a `finally`
+   * (MAR-2550). A send that never reaches a provider — a spawn that fails, an
+   * attachment that cannot be rebound — still began, so it still has to end.
+   * Cleared on success only, the session would be marked dispatching forever:
+   * no handle, no running turn, nothing left to wait for, and every model
+   * change from then until the app restarts refused because a message is
+   * supposedly still on its way. The feature would die quietly, with a
+   * confusing refusal as its only symptom.
+   */
+  it('lets the model change after a send that never reached the provider', async () => {
+    await service.start(sessionId, { text: 'first' })
+    settleTurn()
+
+    spawnFailure = new Error('the provider process could not be spawned')
+    await expect(
+      service.sendMessage(sessionId, { text: 'carry on' }),
+    ).rejects.toThrow(/could not be spawned/)
+    spawnFailure = null
+
+    expect(
+      service.setModelSelection(sessionId, {
+        providerId: 'switchable',
+        model: 'opus',
+        effort: 'high',
+      }),
+    ).toMatchObject({ model: 'opus', effort: 'high' })
+
+    // And the session is genuinely usable again: the retry runs on the model
+    // the human picked after the failure.
+    await service.sendMessage(sessionId, { text: 'carry on' })
+    expect(startConfigs).toEqual([
+      { model: 'fable', effort: 'medium' },
+      { model: 'opus', effort: 'high' },
+    ])
+  })
+
+  it('refuses while the agent is waiting on the human', async () => {
+    await service.start(sessionId, { text: 'first' })
+    deltaListener?.({
+      kind: 'session.patch',
+      patch: { status: 'idle', attention: 'needs-input' },
+    })
+
+    expect(() =>
+      service.setModelSelection(sessionId, {
+        providerId: 'switchable',
+        model: 'opus',
+        effort: 'high',
+      }),
+    ).toThrow(/Answer the agent first/)
+  })
+
+  it('refuses a settled session whose provider process is still attached', async () => {
+    // No continuation token arrived, so the handle was kept and the next
+    // message goes into the live process rather than a fresh spawn.
+    await service.start(sessionId, { text: 'first' })
+    deltaListener?.({
+      kind: 'session.patch',
+      patch: { status: 'completed' },
+    })
+
+    expect(() =>
+      service.setModelSelection(sessionId, {
+        providerId: 'switchable',
+        model: 'opus',
+        effort: 'high',
+      }),
+    ).toThrow(/provider process attached/)
+  })
+
+  /**
+   * The row and the divider are one fact in two tables: a model that moved
+   * without its boundary is a transcript that silently mixes models, which is
+   * the thing MAR-2551 exists to prevent. Two statements with a failure between
+   * them is exactly how run 22's settle lost a flag, so this is one write.
+   */
+  it('leaves the model unchanged when the divider cannot be written', async () => {
+    await service.start(sessionId, { text: 'first' })
+    settleTurn()
+
+    const realPrepare = db.prepare.bind(db)
+    const prepare = vi.spyOn(db, 'prepare').mockImplementation(((
+      sql: string,
+    ) => {
+      if (sql.includes('INSERT INTO session_conversation_items')) {
+        throw new Error('the disk went away mid-write')
+      }
+      return realPrepare(sql)
+    }) as typeof db.prepare)
+
+    try {
+      expect(() =>
+        service.setModelSelection(sessionId, {
+          providerId: 'switchable',
+          model: 'opus',
+          effort: 'high',
+        }),
+      ).toThrow(/the disk went away mid-write/)
+    } finally {
+      prepare.mockRestore()
+    }
+
+    expect(service.getSummaryById(sessionId)).toMatchObject({
+      model: 'fable',
+      effort: 'medium',
+    })
+    expect(
+      service
+        .getConversation(sessionId)
+        .filter((item) => item.kind === 'note')
+        .map((item) => item.providerMeta?.providerEventType),
+    ).not.toContain('session.model-changed')
+  })
+
+  it('refuses an effort no provider could ever accept', async () => {
+    await service.start(sessionId, { text: 'first' })
+    settleTurn()
+
+    expect(() =>
+      service.setModelSelection(sessionId, {
+        providerId: 'switchable',
+        model: 'opus',
+        effort: 'turbo',
+      }),
+    ).toThrow(/Unknown reasoning effort/)
+    expect(service.getSummaryById(sessionId)).toMatchObject({ model: 'fable' })
+  })
+
+  it('refuses a shell session, which has no model to change', () => {
+    const shell = service.create({
+      projectId: 'switch-project',
+      workspaceId: null,
+      providerId: 'shell',
+      model: null,
+      effort: null,
+      name: 'terminal',
+      primarySurface: 'terminal',
+    })
+
+    expect(() =>
+      service.setModelSelection(shell.id, {
+        providerId: 'shell',
+        model: 'opus',
+        effort: null,
+      }),
+    ).toThrow(/shell provider/)
+  })
+
+  it('refuses a session that does not exist', () => {
+    expect(() =>
+      service.setModelSelection('nope', {
+        providerId: 'switchable',
+        model: 'opus',
+        effort: null,
+      }),
+    ).toThrow(/Session not found/)
+  })
+
+  /**
+   * The provider lock lived only in the renderer, on one of the two controls
+   * that can change a model. The other one -- the model dialog, which reports a
+   * provider alongside the model -- kept the power, and the composer wrote the
+   * foreign model id onto the row while discarding the foreign provider. A
+   * second renderer guard would repeat that mistake one size smaller, so the
+   * refusal lives where the row is actually written.
+   */
+  it('refuses a selection made against another provider', async () => {
+    await service.start(sessionId, { text: 'first' })
+    settleTurn()
+
+    expect(() =>
+      service.setModelSelection(sessionId, {
+        providerId: 'codex',
+        model: 'gpt-5.5',
+        effort: null,
+      }),
+    ).toThrow(/session runs on switchable/)
+    expect(service.getSummaryById(sessionId)).toMatchObject({
+      model: 'fable',
+      effort: 'medium',
+      providerId: 'switchable',
+    })
+  })
+
+  it('refuses a selection that will not say which provider it was made against', async () => {
+    // Required, not optional: a check the caller may omit is a check that gets
+    // omitted. An absent provider disagrees with the row like any other.
+    await service.start(sessionId, { text: 'first' })
+    settleTurn()
+
+    expect(() =>
+      service.setModelSelection(sessionId, {
+        providerId: undefined,
+        model: 'opus',
+        effort: null,
+      }),
+    ).toThrow(/must say which provider/)
+    expect(service.getSummaryById(sessionId)).toMatchObject({ model: 'fable' })
+  })
+
+  it('accepts a selection made against the session own provider', async () => {
+    await service.start(sessionId, { text: 'first' })
+    settleTurn()
+
+    expect(
+      service.setModelSelection(sessionId, {
+        providerId: 'switchable',
+        model: 'opus',
+        effort: null,
+      }),
+    ).toMatchObject({ model: 'opus', providerId: 'switchable' })
+  })
+})

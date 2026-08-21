@@ -65,6 +65,17 @@ export interface StartTurnInput {
    * row does not hold it, the information does not exist.
    */
   providerAccountId?: string | null
+  /**
+   * The model and effort this turn runs on (MAR-2551). Read from the session
+   * row at the moment the turn opens rather than carried in a pending slot:
+   * the row cannot move while a handle is attached, because
+   * `describeModelSelectionRefusal` refuses every write in that window, and the
+   * handle is registered in the same synchronous block that dispatches. So
+   * unlike the account — which is a per-send choice and rides the one-deep slot
+   * MAR-2539 describes — this fact needs no keying at all.
+   */
+  model?: string | null
+  effort?: string | null
 }
 
 export interface EndTurnInput {
@@ -139,17 +150,19 @@ export class TurnCaptureService {
       status: 'running' as const,
       summary: null,
       providerAccountId: input.providerAccountId ?? null,
+      model: input.model ?? null,
+      effort: input.effort ?? null,
     }
 
     this.db
       .prepare(
         `INSERT INTO session_turns (
            id, session_id, sequence, started_at, ended_at, status, summary,
-           provider_account_id
+           provider_account_id, model, effort
          )
          VALUES (
            @id, @sessionId, @sequence, @startedAt, @endedAt, @status, @summary,
-           @providerAccountId
+           @providerAccountId, @model, @effort
          )`,
       )
       .run(insertRow)
@@ -177,6 +190,8 @@ export class TurnCaptureService {
         sessionId: input.sessionId,
         sequence: nextSequence,
         providerAccountId: input.providerAccountId ?? null,
+        model: input.model ?? null,
+        effort: input.effort ?? null,
         startedAt,
         endedAt: null,
         status: 'running',
@@ -230,7 +245,7 @@ export class TurnCaptureService {
     const rows = this.db
       .prepare(
         `SELECT id, session_id, sequence, started_at, ended_at, status, summary,
-                provider_account_id
+                provider_account_id, model, effort
          FROM session_turns
          WHERE session_id = ?
          ORDER BY sequence ASC`,

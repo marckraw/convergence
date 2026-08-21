@@ -4,6 +4,7 @@ import { serializeSessionPermissionConfig } from '../provider/session-permission
 import type {
   CreateSessionInput,
   PrimarySurface,
+  ReasoningEffort,
   SessionContextKind,
   SessionExecutionHostId,
 } from './session.types'
@@ -123,6 +124,25 @@ export class SessionRepository {
         "UPDATE sessions SET primary_surface = ?, updated_at = datetime('now') WHERE id = ?",
       )
       .run(surface, id)
+  }
+
+  /**
+   * Rewrites the standing model intention for a session (MAR-2550).
+   *
+   * The columns were write-once at create until now. They are read fresh from
+   * this row at the start of every resumed turn, so this single statement is
+   * the whole of what makes a mid-conversation model change take effect.
+   */
+  setModelSelection(
+    id: string,
+    model: string | null,
+    effort: ReasoningEffort | null,
+  ): void {
+    this.db
+      .prepare(
+        "UPDATE sessions SET model = ?, effort = ?, updated_at = datetime('now') WHERE id = ?",
+      )
+      .run(model, effort, id)
   }
 
   isAutoNamed(id: string): boolean {

@@ -12,6 +12,13 @@ export interface Turn {
   summary: string | null
   /** Account that served this turn; null is the ambient default (PA4). */
   providerAccountId: string | null
+  /**
+   * The model and effort this turn actually ran on (MAR-2551). Null means the
+   * turn was taken before the record existed, or that the session runs on the
+   * provider's own default with nothing selected.
+   */
+  model: string | null
+  effort: string | null
 }
 
 export interface TurnFileChange {
@@ -36,6 +43,8 @@ export interface TurnInsertRow {
   status: TurnStatus
   summary: string | null
   providerAccountId: string | null
+  model: string | null
+  effort: string | null
 }
 
 export interface TurnFileChangeInsertRow {

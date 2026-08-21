@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
+  describeModelSelectionRefusal,
+  describeProviderIdentityRefusal,
   isAttentionRequestSummary,
   parseJsonArray,
   queuedInputFromRow,
@@ -134,5 +136,114 @@ describe('session pure helpers', () => {
     expect(queuedInputFromRow({ ...row, relays_muted: null }).relaysMuted).toBe(
       false,
     )
+  })
+})
+
+describe('describeModelSelectionRefusal (MAR-2550)', () => {
+  const idle = {
+    status: 'idle',
+    attention: 'none',
+    hasActiveHandle: false,
+    hasDispatchInFlight: false,
+  } as const
+
+  it('allows the change on a settled session with no process attached', () => {
+    expect(describeModelSelectionRefusal(idle)).toBeNull()
+    expect(
+      describeModelSelectionRefusal({ ...idle, status: 'completed' }),
+    ).toBeNull()
+    expect(
+      describeModelSelectionRefusal({
+        ...idle,
+        status: 'failed',
+        attention: 'failed',
+      }),
+    ).toBeNull()
+    expect(
+      describeModelSelectionRefusal({ ...idle, attention: 'finished' }),
+    ).toBeNull()
+  })
+
+  it('refuses while a turn is running', () => {
+    expect(
+      describeModelSelectionRefusal({
+        ...idle,
+        status: 'running',
+        hasActiveHandle: true,
+      }),
+    ).toMatch(/current turn to finish/)
+  })
+
+  it('refuses while the agent is waiting on the human', () => {
+    expect(
+      describeModelSelectionRefusal({ ...idle, attention: 'needs-input' }),
+    ).toMatch(/Answer the agent first/)
+    expect(
+      describeModelSelectionRefusal({ ...idle, attention: 'needs-approval' }),
+    ).toMatch(/Answer the agent first/)
+  })
+
+  /**
+   * The window, in the smallest possible terms. A send reads the session, then
+   * awaits, and only afterwards registers the handle that makes the session
+   * look busy; in between, status and attention and `hasActiveHandle` all say
+   * idle while a turn is already on its way to a provider on the old model.
+   */
+  it('refuses while a send is on its way to the provider', () => {
+    expect(
+      describeModelSelectionRefusal({
+        ...idle,
+        status: 'completed',
+        attention: 'finished',
+        hasDispatchInFlight: true,
+      }),
+    ).toMatch(/already on its way to the provider/)
+  })
+
+  it('refuses a settled session that still holds a provider process', () => {
+    // The load-bearing case: a completed turn whose handle was kept because no
+    // continuation token arrived still routes the next message into the live
+    // process, which closed over the model it spawned with.
+    expect(
+      describeModelSelectionRefusal({
+        ...idle,
+        status: 'completed',
+        attention: 'finished',
+        hasActiveHandle: true,
+      }),
+    ).toMatch(/provider process attached/)
+  })
+})
+
+describe('describeProviderIdentityRefusal (MAR-2550)', () => {
+  const session = { providerId: 'claude-code' } as const
+
+  it('allows a selection made against the provider the session runs on', () => {
+    expect(describeProviderIdentityRefusal(session, 'claude-code')).toBeNull()
+  })
+
+  it('refuses a selection made against another provider, naming both', () => {
+    // The exact shape of the escape: a Codex model chosen from a Claude
+    // session's dialog, whose provider was discarded on the way to the row.
+    const refusal = describeProviderIdentityRefusal(session, 'codex')
+
+    expect(refusal).toMatch(/codex/)
+    expect(refusal).toMatch(/claude-code/)
+  })
+
+  it('refuses a selection that names no provider at all', () => {
+    expect(describeProviderIdentityRefusal(session, '')).toMatch(
+      /must say which provider/,
+    )
+  })
+
+  it('asks nothing about the model, so it cannot rot the way a catalog would', () => {
+    // An identity check, not a catalog check: the model id is never inspected,
+    // which is why this cannot become the stale-model-list bug a third time
+    // (MAR-2034, MAR-2046).
+    expect(describeProviderIdentityRefusal(session, 'claude-code')).toBeNull()
+    expect(
+      describeProviderIdentityRefusal({ providerId: 'pi' }, 'pi'),
+    ).toBeNull()
   })
 })
