@@ -718,6 +718,36 @@ describe('ConversationItemView', () => {
       ).toBeVisible()
     })
 
+    /**
+     * MAR-2551. The other half of the same idea: a restart says the model can
+     * no longer see what is above, a model change says a different model wrote
+     * it. Both are boundaries a reader scrolling back a week needs to see, and
+     * both die as ordinary italic notes if the renderer stops matching the tag.
+     */
+    it('draws a boundary where the model changed', () => {
+      render(
+        <ConversationItemView
+          viewModel={buildTranscriptEntryViewModel({
+            item: {
+              ...noteEntry(),
+              text: 'Model changed — fable → opus.',
+              providerMeta: {
+                providerId: 'claude-code',
+                providerItemId: null,
+                providerEventType: 'session.model-changed',
+              },
+            } as ConversationItem,
+            turnStartedAt: null,
+            resolvedAttachmentsById: {},
+          })}
+        />,
+      )
+
+      expect(screen.getByTestId('session-model-change-boundary')).toBeVisible()
+      expect(screen.getByText('Model changed — fable → opus.')).toBeVisible()
+      expect(screen.queryByTestId('session-restart-boundary')).toBeNull()
+    })
+
     it('leaves every other note reading as a note', () => {
       render(
         <ConversationItemView
@@ -737,6 +767,7 @@ describe('ConversationItemView', () => {
       )
 
       expect(screen.queryByTestId('session-restart-boundary')).toBeNull()
+      expect(screen.queryByTestId('session-model-change-boundary')).toBeNull()
     })
 
     it('renders no control on a surface that cannot honour it', () => {

@@ -234,6 +234,8 @@ describe('database', () => {
         'status',
         'summary',
         'provider_account_id',
+        'model',
+        'effort',
       ].sort(),
     )
 

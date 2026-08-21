@@ -185,6 +185,8 @@ export interface SessionTurnRow {
   status: string
   summary: string | null
   provider_account_id: string | null
+  model: string | null
+  effort: string | null
 }
 
 export interface SessionTurnFileChangeRow {

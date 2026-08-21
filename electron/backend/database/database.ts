@@ -849,6 +849,29 @@ function ensureProviderAccountColumns(database: Database.Database): void {
   }
 }
 
+/**
+ * Per-turn model attribution (MAR-2551). Once a conversation can change model
+ * between turns, the transcript silently mixes authors, and nothing else in the
+ * tree remembers which one wrote which answer: the session row holds only the
+ * standing intention, which is by definition the *latest* one.
+ *
+ * Additive and nullable, like the account columns above. A null means "taken
+ * before this record existed" rather than "ran on no model" — there is nothing
+ * to backfill it from, and inventing the session's current model for old turns
+ * would make the record lie in exactly the way it exists to prevent.
+ */
+function ensureTurnModelColumns(database: Database.Database): void {
+  const columnNames = getTableColumnNames(database, 'session_turns')
+
+  if (!columnNames.has('model')) {
+    database.exec('ALTER TABLE session_turns ADD COLUMN model TEXT')
+  }
+
+  if (!columnNames.has('effort')) {
+    database.exec('ALTER TABLE session_turns ADD COLUMN effort TEXT')
+  }
+}
+
 function ensureSessionColumns(database: Database.Database): void {
   const columnNames = getTableColumnNames(database, 'sessions')
 
@@ -1245,6 +1268,7 @@ export function getDatabase(dbPath?: string): Database.Database {
     ensureWorkspaceColumns(database)
     ensureSessionColumns(database)
     ensureProviderAccountColumns(database)
+    ensureTurnModelColumns(database)
     ensureQueuedInputColumns(database)
     ensureRelayColumns(database)
     ensureAttachmentsTableNoFk(database)

@@ -33,6 +33,8 @@ describe('turnsApi', () => {
         status: 'running',
         summary: null,
         providerAccountId: null,
+        model: 'opus',
+        effort: 'high',
       },
     ]
     listForSession.mockResolvedValue(turns)
@@ -96,6 +98,8 @@ describe('turnsApi', () => {
         status: 'running',
         summary: null,
         providerAccountId: null,
+        model: 'opus',
+        effort: 'high',
       },
     }
     innerHandler(delta)

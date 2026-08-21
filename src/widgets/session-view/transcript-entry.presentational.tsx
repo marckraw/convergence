@@ -17,6 +17,7 @@ import {
   FileText,
   Link,
   RotateCcw,
+  Shuffle,
 } from 'lucide-react'
 import { Button } from '@/shared/ui/button'
 import { Markdown } from '@/shared/ui/markdown.container'
@@ -501,6 +502,29 @@ export const ConversationItemView: FC<ConversationItemViewProps> = ({
                 {entry.text}
               </span>
               <span aria-hidden className="h-px flex-1 bg-amber-400/30" />
+            </div>
+          </ConversationItemShell>
+        )
+      }
+
+      // A model swap is the same class of boundary seen from the other side:
+      // the continuity is real, the author is not. Blue rather than the restart
+      // amber, because nothing was lost — the conversation carries on, it is
+      // just written by someone else from here down. The tag is written by the
+      // session service (electron/backend/session/session-model-change.pure.ts).
+      if (entry.providerMeta?.providerEventType === 'session.model-changed') {
+        return (
+          <ConversationItemShell copyText={viewModel.copyText}>
+            <div
+              data-testid="session-model-change-boundary"
+              className="flex items-center gap-2 py-3"
+            >
+              <span aria-hidden className="h-px flex-1 bg-sky-400/30" />
+              <span className="flex items-center gap-1.5 text-center text-[11px] leading-snug text-sky-400/90">
+                <Shuffle aria-hidden className="size-3 shrink-0" />
+                {entry.text}
+              </span>
+              <span aria-hidden className="h-px flex-1 bg-sky-400/30" />
             </div>
           </ConversationItemShell>
         )

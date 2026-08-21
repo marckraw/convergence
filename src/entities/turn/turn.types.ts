@@ -17,6 +17,13 @@ export interface Turn {
    * on" actually means.
    */
   providerAccountId: string | null
+  /**
+   * The model and effort this turn actually ran on (MAR-2551). The session row
+   * only ever holds the *latest* selection, so once a conversation can change
+   * model between turns this is the only place the mix is written down.
+   */
+  model: string | null
+  effort: string | null
 }
 
 export interface TurnFileChange {

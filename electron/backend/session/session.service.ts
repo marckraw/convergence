@@ -57,6 +57,10 @@ import {
   resolveAttentionRequestKind,
   type AttentionRequestRowLike,
 } from './session.pure'
+import {
+  MODEL_CHANGED_EVENT_TYPE,
+  describeModelChange,
+} from './session-model-change.pure'
 import { SessionQueuedInputService } from './session-queued-input.service'
 import {
   SessionLivenessService,
@@ -424,8 +428,39 @@ export class SessionService {
       throw new Error(`Unknown reasoning effort: ${String(input.effort)}`)
     }
 
+    const boundary = describeModelChange(
+      { model: session.model, effort: session.effort },
+      { model, effort },
+    )
+
     this.sessionRepository.setModelSelection(id, model, effort)
-    this.notifySessionChange(id)
+
+    // The transcript would otherwise go on implying one author (MAR-2551).
+    // Written here rather than at the next turn because this is the moment the
+    // reader made the decision: the note lands under the last answer of the old
+    // model and above whatever they type next.
+    const note = boundary
+      ? this.addConversationItem(id, {
+          id: randomUUID(),
+          turnId: null,
+          kind: 'note',
+          state: 'complete',
+          level: 'info',
+          text: boundary,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+          providerMeta: {
+            providerId: session.providerId,
+            providerItemId: null,
+            providerEventType: MODEL_CHANGED_EVENT_TYPE,
+          },
+        })
+      : null
+
+    this.notifySessionChange(
+      id,
+      note ? { sessionId: id, op: 'add', item: note } : undefined,
+    )
     return this.getById(id)!
   }
 
@@ -1554,6 +1589,15 @@ export class SessionService {
         turnId,
         workingDirectory: row.working_directory,
         providerAccountId: this.pendingTurnAccountIds.get(sessionId) ?? null,
+        // Read straight off the row rather than from a pending slot (MAR-2551,
+        // deliberately not a fourth instance of MAR-2539). The account is a
+        // per-send choice and has to be carried from the dispatch site; the
+        // model is standing session state, and it cannot move between dispatch
+        // and this stamp because `describeModelSelectionRefusal` refuses every
+        // write while a handle is attached, and `startHandle` registers the
+        // handle in the same synchronous block that spawns the turn.
+        model: row.model,
+        effort: row.effort,
       })
     }
 
