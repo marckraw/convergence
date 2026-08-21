@@ -3890,3 +3890,392 @@ describe('SessionService opener sends (F9)', () => {
     expect(sent.mock.calls[0][0].endsWith('next lap')).toBe(true)
   })
 })
+
+/**
+ * The quiet send (F10, MAR-2537): a send that does not wake the wires.
+ *
+ * These pin the carry only -- the composer's flag to the settle event that the
+ * relay engine listens on. What the engine then does with it is the engine's
+ * own suite.
+ */
+describe('SessionService relay mute', () => {
+  let db: Database.Database
+  let registry: ProviderRegistry
+  let service: SessionService
+  let tempDir: string
+  let sessionId: string
+  let settles: SessionSettledEvent[]
+  let deltaListener: ((delta: SessionDelta) => void) | null
+  let emitter: ProviderSessionEmitter
+
+  function emitDelta(delta: SessionDelta): void {
+    deltaListener?.(delta)
+  }
+
+  /**
+   * What a provider does when it takes a message: it goes back to running and
+   * echoes what it was handed. The running beat matters -- a settle is a status
+   * TRANSITION, so a session that never left `completed` never settles again.
+   */
+  function openTurn(text: string): void {
+    emitDelta({ kind: 'session.patch', patch: { status: 'running' } })
+    emitter.addUserMessage({ text })
+  }
+
+  function complete(): void {
+    emitDelta({ kind: 'session.patch', patch: { status: 'completed' } })
+  }
+
+  // Settles are delivered on a microtask.
+  async function drainSettles(): Promise<void> {
+    await Promise.resolve()
+    await Promise.resolve()
+  }
+
+  beforeEach(async () => {
+    db = getDatabase()
+    deltaListener = null
+    settles = []
+
+    emitter = new ProviderSessionEmitter({
+      providerId: 'quiet',
+      emitDelta: (delta) => emitDelta(delta),
+      now,
+    })
+
+    const handle: SessionHandle = {
+      onDelta: (listener) => {
+        deltaListener = listener
+      },
+      onStatusChange: () => {},
+      onAttentionChange: () => {},
+      onContextWindowChange: () => {},
+      onActivityChange: () => {},
+      onContinuationToken: () => {},
+      sendMessage: () => {},
+      approve: () => {},
+      deny: () => {},
+      stop: () => {},
+    }
+
+    registry = new ProviderRegistry()
+    registry.register({
+      id: 'quiet',
+      name: 'Quiet Provider',
+      // Continuation-capable so the handle survives a completion and the next
+      // message is another turn on the same session, which is the shape the
+      // reset has to be proved against.
+      supportsContinuation: true,
+      describe: async () => ({
+        id: 'quiet',
+        name: 'Quiet Provider',
+        vendorLabel: 'Test',
+        kind: 'conversation',
+        supportsContinuation: true,
+        defaultModelId: 'quiet-model',
+        modelOptions: [
+          {
+            id: 'quiet-model',
+            label: 'Quiet Model',
+            defaultEffort: null,
+            effortOptions: [],
+          },
+        ],
+        attachments: TEST_ATTACHMENT_CAPABILITY,
+        midRunInput: NO_MID_RUN_INPUT_CAPABILITY,
+      }),
+      start: () => handle,
+    })
+
+    service = new SessionService(db, new LocalExecutionHost(registry))
+    service.onSessionSettled((event) => settles.push(event))
+
+    tempDir = mkdtempSync(join(tmpdir(), 'convergence-quiet-test-'))
+    const repoPath = join(tempDir, 'repo')
+    mkdirSync(repoPath, { recursive: true })
+    db.prepare(
+      'INSERT INTO projects (id, name, repository_path) VALUES (?, ?, ?)',
+    ).run('quiet-project', 'Quiet Project', repoPath)
+
+    sessionId = service.create({
+      projectId: 'quiet-project',
+      workspaceId: null,
+      providerId: 'quiet',
+      model: 'quiet-model',
+      effort: null,
+      name: 'quiet',
+    }).id
+  })
+
+  afterEach(() => {
+    closeDatabase()
+    resetDatabase()
+    rmSync(tempDir, { recursive: true, force: true })
+  })
+
+  it('carries a muted start all the way to the settle', async () => {
+    await service.start(sessionId, { text: '/compact', muteRelays: true })
+    openTurn('/compact')
+    complete()
+    await drainSettles()
+
+    expect(settles).toHaveLength(1)
+    expect(settles[0]).toMatchObject({ sessionId, relaysMuted: true })
+  })
+
+  it('reports an ordinary start as one that fires its wires', async () => {
+    await service.start(sessionId, { text: 'do the work' })
+    openTurn('do the work')
+    complete()
+    await drainSettles()
+
+    expect(settles[0].relaysMuted).toBe(false)
+  })
+
+  it('carries a muted mid-session message to its own settle', async () => {
+    await service.start(sessionId, { text: 'first' })
+    openTurn('first')
+    complete()
+    await drainSettles()
+
+    await service.sendMessage(sessionId, {
+      text: 'quick aside',
+      muteRelays: true,
+    })
+    openTurn('quick aside')
+    complete()
+    await drainSettles()
+
+    expect(settles.map((event) => event.relaysMuted)).toEqual([false, true])
+  })
+
+  it('stays quiet when two dispatches are in flight and one of them asked for it', async () => {
+    // A session does not report itself running until awaits inside the provider
+    // adapter have finished, so a second send can land before the first user
+    // message arrives. Nothing here may depend on the two being paired up: the
+    // question is only whether ANYONE asked for quiet before this settle.
+    await service.start(sessionId, { text: 'first' })
+    openTurn('first')
+    complete()
+    await drainSettles()
+    settles.length = 0
+
+    await service.sendMessage(sessionId, {
+      text: '/clear',
+      muteRelays: true,
+    })
+    await service.sendMessage(sessionId, { text: 'and also this' })
+    openTurn('/clear')
+    openTurn('and also this')
+    complete()
+    await drainSettles()
+
+    expect(settles.map((event) => event.relaysMuted)).toEqual([true])
+  })
+
+  it('stays quiet when the quiet message is the second of the two in flight', async () => {
+    // The same claim from the other side: order must not decide it, because
+    // mute wins ties. Erring quiet costs one manual hail; erring loud spends
+    // provider quota and wakes another agent mid-work.
+    await service.start(sessionId, { text: 'first' })
+    openTurn('first')
+    complete()
+    await drainSettles()
+    settles.length = 0
+
+    await service.sendMessage(sessionId, { text: 'ordinary' })
+    await service.sendMessage(sessionId, {
+      text: '/compact',
+      muteRelays: true,
+    })
+    openTurn('ordinary')
+    openTurn('/compact')
+    complete()
+    await drainSettles()
+
+    expect(settles.map((event) => event.relaysMuted)).toEqual([true])
+  })
+
+  it('arms again for the next message, because the mute is one settle only', async () => {
+    // The whole ruling in one test: he silences one send, and the message after
+    // it fires as usual without him having to switch anything back on.
+    await service.start(sessionId, { text: '/clear', muteRelays: true })
+    openTurn('/clear')
+    complete()
+    await drainSettles()
+
+    await service.sendMessage(sessionId, { text: 'back to work' })
+    openTurn('back to work')
+    complete()
+    await drainSettles()
+
+    expect(settles.map((event) => event.relaysMuted)).toEqual([true, false])
+  })
+
+  it('clears the request even when the settle it ended was itself muted', async () => {
+    // The clear is what makes the mute per-send rather than sticky, and a muted
+    // settle is exactly the case where forgetting to clear would go unnoticed:
+    // the wire stays silent and looks like it is behaving.
+    await service.start(sessionId, { text: '/clear', muteRelays: true })
+    openTurn('/clear')
+    complete()
+    await drainSettles()
+    expect(settles[0].relaysMuted).toBe(true)
+
+    // Nothing dispatched at all this time -- the session simply runs again and
+    // finishes. There is no second request, so there must be no second mute.
+    openTurn('a turn nobody dispatched')
+    complete()
+    await drainSettles()
+
+    expect(settles.map((event) => event.relaysMuted)).toEqual([true, false])
+  })
+
+  it('does not let a dispatch that never opened a turn mute a later settle', async () => {
+    // A dispatch may never produce a user-message item. Its request still
+    // belongs to the work in flight, so the settle that follows is quiet -- and
+    // then it is gone, rather than waiting to be adopted by something later.
+    await service.start(sessionId, { text: 'first' })
+    openTurn('first')
+    complete()
+    await drainSettles()
+    settles.length = 0
+
+    await service.sendMessage(sessionId, {
+      text: 'never echoed',
+      muteRelays: true,
+    })
+    openTurn('the work that was actually running')
+    complete()
+    await drainSettles()
+    expect(settles[0].relaysMuted).toBe(true)
+
+    await service.sendMessage(sessionId, { text: 'much later' })
+    openTurn('much later')
+    complete()
+    await drainSettles()
+
+    expect(settles.map((event) => event.relaysMuted)).toEqual([true, false])
+  })
+
+  it('keeps a remote quiet turn quiet across a restart', async () => {
+    // Remote runs outlive the app process. `recoverStaleRunningSessions` skips
+    // them on purpose and `resumeRunningRemoteSessions` reattaches instead, so
+    // their settles arrive as ordinary settles with a fresh SessionService
+    // behind them. An in-memory request would already be gone by then -- and
+    // this is the moment the user has least visibility, so it is the worst
+    // possible place to err loud.
+    let remoteDelta: ((delta: SessionDelta) => void) | null = null
+    const remoteHandle: SessionHandle = {
+      onDelta: (listener) => {
+        remoteDelta = listener
+      },
+      onStatusChange: () => {},
+      onAttentionChange: () => {},
+      onContextWindowChange: () => {},
+      onActivityChange: () => {},
+      onContinuationToken: () => {},
+      sendMessage: () => {},
+      approve: () => {},
+      deny: () => {},
+      stop: () => {},
+    }
+    // The remote host speaks the daemon's provider vocabulary, so the session
+    // has to name a provider that maps onto it.
+    const capabilities = {
+      providerId: 'claude',
+      name: 'Claude Code',
+      supportsContinuation: true,
+      supportsOneShot: false,
+    }
+    const remoteHost = {
+      capabilities: () => [capabilities],
+      capabilitiesFor: (providerId: string) =>
+        providerId === 'claude' ? capabilities : null,
+      describe: async () => [],
+      start: () => remoteHandle,
+      attach: () => remoteHandle,
+      oneShot: async () => {
+        throw new Error('one-shot is not supported')
+      },
+    }
+
+    service.setRemoteExecutionHost(remoteHost)
+    service.setRemoteWorkspaceSourceResolver(() => ({
+      repository: 'git@github.com:acme/repo.git',
+    }))
+
+    const remoteId = service.create({
+      projectId: 'quiet-project',
+      workspaceId: null,
+      providerId: 'claude-code',
+      model: 'sonnet',
+      effort: null,
+      name: 'remote quiet',
+      executionHost: 'remote',
+    }).id
+
+    await service.start(remoteId, { text: '/compact', muteRelays: true })
+    // Narrowed rather than called straight through: TypeScript cannot see that
+    // registering the listener assigned it.
+    const emitRemote = remoteDelta as unknown as (delta: SessionDelta) => void
+    emitRemote({ kind: 'session.patch', patch: { status: 'running' } })
+
+    // The restart: a brand new SessionService over the same database, which
+    // reattaches the run the moment the remote host is wired.
+    const revived = new SessionService(db, new LocalExecutionHost(registry))
+    const revivedSettles: SessionSettledEvent[] = []
+    revived.onSessionSettled((event) => revivedSettles.push(event))
+    revived.setRemoteExecutionHost(remoteHost)
+
+    const emitRevived = remoteDelta as unknown as (delta: SessionDelta) => void
+    emitRevived({ kind: 'session.patch', patch: { status: 'completed' } })
+    await drainSettles()
+
+    expect(revivedSettles).toHaveLength(1)
+    expect(revivedSettles[0]).toMatchObject({
+      sessionId: remoteId,
+      relaysMuted: true,
+    })
+  })
+
+  it('commits the mute clear with the status transition, not after it', async () => {
+    // An attention observer runs between the status write and anything after
+    // it, uncaught (MAR-2541). If the clear were a second statement, a throw
+    // there would leave the session on disk as settled but still marked quiet,
+    // and after a restart that stale marker would silence the next ordinary
+    // run -- the loud-direction failure this whole design exists to avoid.
+    service.setAttentionObserver({
+      onAttentionTransition: () => {
+        throw new Error('the notifications observer blew up')
+      },
+    })
+
+    await service.start(sessionId, { text: '/clear', muteRelays: true })
+    openTurn('/clear')
+
+    expect(() =>
+      emitDelta({
+        kind: 'session.patch',
+        patch: { status: 'completed', attention: 'finished' },
+      }),
+    ).toThrow('the notifications observer blew up')
+
+    const row = db
+      .prepare('SELECT status, relays_muted FROM sessions WHERE id = ?')
+      .get(sessionId) as { status: string; relays_muted: number }
+    expect(row).toEqual({ status: 'completed', relays_muted: 0 })
+  })
+
+  it('keeps a muted session quiet when an ordinary message follows it in the same run', async () => {
+    // An ordinary send must not cancel a quiet one that is still in flight. The
+    // request only ever gets added; nothing but the settle takes it away.
+    await service.start(sessionId, { text: '/clear', muteRelays: true })
+    await service.sendMessage(sessionId, { text: 'and then this' })
+    openTurn('/clear')
+    complete()
+    await drainSettles()
+
+    expect(settles[0].relaysMuted).toBe(true)
+  })
+})

@@ -286,6 +286,16 @@ export function flowRunBudgetMessage(spentHops: number): string {
 }
 
 /**
+ * The sentence the ledger shows when a human sent the turn quiet (F10).
+ *
+ * Says both halves out loud, because a grey row with no explanation reads as a
+ * fault: the wire did not fire, AND it is not switched off -- the very next
+ * ordinary message will carry as usual.
+ */
+export const MUTED_MESSAGE =
+  'This message was sent quiet, so the wire did not fire. It is still armed for the next one.'
+
+/**
  * The sentence the ledger shows when the loop law ends a chain.
  *
  * Deliberately not phrased as a problem: A -> B -> A finishing after two hops

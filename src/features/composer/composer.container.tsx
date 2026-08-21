@@ -25,6 +25,7 @@ import {
   useSessionAnnotations,
 } from '@/entities/response-annotation'
 import { useAppSettingsStore } from '@/entities/app-settings'
+import { useSessionRelayStore } from '@/entities/session-relay'
 import { useDialogStore } from '@/entities/dialog'
 import {
   describeProviderAccountSelectionBlock,
@@ -73,6 +74,7 @@ import {
   replaceComposerInjectionRange,
   type ComposerInjectionRootItem,
 } from './composer-injection-trigger.pure'
+import { countArmedOutgoingRelays } from './relay-mute.pure'
 import { filterComposerPrompts } from './composer-prompt-injection.pure'
 import { isRemoteHostEligible } from './remote-host-toggle.pure'
 import { CodexUsagePillContainer } from './codex-usage-pill.container'
@@ -154,6 +156,12 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
     string | null
   >(null)
   const [runOnRemoteHost, setRunOnRemoteHost] = useState(false)
+  /**
+   * The quiet send (F10). Per send and never sticky: it is switched back off
+   * the moment the message leaves, because a session bound to a flow is meant
+   * to fire and the exception is the gesture.
+   */
+  const [relaysMuted, setRelaysMuted] = useState(false)
   const [permissionConfig, setPermissionConfig] =
     useState<SessionPermissionConfig>(resolveSimplePermissionConfig('ask'))
   const [permissionAdvancedOpen, setPermissionAdvancedOpen] = useState(false)
@@ -177,6 +185,14 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
     (s) => s.createAndStartGlobalSession,
   )
   const sendMessageToSession = useSessionStore((s) => s.sendMessageToSession)
+  /**
+   * The whole wire list, narrowed below. Relays are cross-project furniture and
+   * the store already holds every one of them, so "does anything leave this
+   * session?" costs no IPC. Subscribed whole and filtered in a `useMemo`:
+   * filtering inside the selector would hand zustand a fresh array on every
+   * render and spin the app (run 16 hit exactly that).
+   */
+  const relays = useSessionRelayStore((s) => s.relays)
   const compactSessionContext = useSessionStore((s) => s.compactSessionContext)
   const cancelQueuedInput = useSessionStore((s) => s.cancelQueuedInput)
   const sessions = useSessionStore((s) => s.sessions)
@@ -481,6 +497,10 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
       contextKind: context.kind,
     })
   const effectiveRunOnRemoteHost = runOnRemoteHost && remoteHostEligible
+  const armedOutgoingRelays = useMemo(
+    () => countArmedOutgoingRelays(relays, activeSessionId),
+    [relays, activeSessionId],
+  )
   const serviceTier =
     selection.providerId === 'codex'
       ? codexFastMode
@@ -892,10 +912,14 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
         skillSelections,
         deliveryMode: mode,
         providerAccountId: effectiveProviderAccountId,
+        // Only ever sent as true. Omitted otherwise so an ordinary send stays
+        // byte-for-byte what it was before the quiet send existed.
+        muteRelays: relaysMuted || undefined,
       })
       markAnnotationsSent()
       setValue('')
       setSelectedSkills([])
+      setRelaysMuted(false)
       clearDraft()
       return
     }
@@ -973,6 +997,13 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
     serviceTier,
     effectiveRunOnRemoteHost,
     effectiveProviderAccountId,
+    // Load-bearing. Without it the toggle and the send disagree whenever
+    // `attachments` happens to be stable -- which is exactly when the composer
+    // holds an attachment draft, because `attachments` is otherwise a fresh
+    // `[]` literal every render that rebuilds this callback and hides the miss.
+    // The failure runs in the one direction this feature exists to prevent: the
+    // message dispatches unmuted while the button says quiet.
+    relaysMuted,
     pendingAnnotations,
     latestAgentMessageId,
     markAnnotationsSent,
@@ -1156,6 +1187,9 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
         }
         codexFastMode={codexFastMode}
         onCodexFastModeChange={setCodexFastMode}
+        armedOutgoingRelays={armedOutgoingRelays}
+        relaysMuted={relaysMuted}
+        onRelaysMutedChange={setRelaysMuted}
         remoteHostAvailable={remoteHostEligible}
         runOnRemoteHost={effectiveRunOnRemoteHost}
         onRunOnRemoteHostChange={setRunOnRemoteHost}

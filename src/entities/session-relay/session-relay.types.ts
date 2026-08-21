@@ -53,6 +53,8 @@ export type RelayHopOutcome =
   | 'skipped-budget'
   /** The loop law working: a wire fires at most once per flow run. */
   | 'skipped-already-fired'
+  /** The human working: they sent that turn quiet, so the wire held (F10). */
+  | 'skipped-muted'
   | 'error'
 
 /** One firing, recorded whether or not anything was carried. */

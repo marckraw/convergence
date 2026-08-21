@@ -49,6 +49,16 @@ export interface SessionSettledEvent {
   sessionId: string
   status: SettledSessionStatus
   settledAt: string
+  /**
+   * A human asked for quiet before this session came to rest (F10, MAR-2537).
+   *
+   * A fact about the settle rather than about any one turn: if any message
+   * contributing to the work that just finished asked for quiet, the settle is
+   * quiet. The request is cleared as this event is built, so the session comes
+   * back armed for the next one. Required rather than optional so a new settle
+   * path has to answer the question instead of quietly defaulting.
+   */
+  relaysMuted: boolean
 }
 
 export type SessionSettledListener = (event: SessionSettledEvent) => void
@@ -159,6 +169,12 @@ export interface SessionQueuedInput {
    * it. Nothing a person types ever sets this.
    */
   skipContextInjection: boolean
+  /**
+   * The human silenced this message's wires when they sent it (F10). Recorded
+   * here because a queued message may wait through a whole turn, and the mute
+   * belongs to the message rather than to whatever the composer shows later.
+   */
+  relaysMuted: boolean
   error: string | null
   createdAt: string
   updatedAt: string

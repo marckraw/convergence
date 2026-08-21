@@ -592,6 +592,12 @@ export interface SendSessionMessageRequest {
   deliveryMode?: MidRunInputMode
   interactionResponse?: InteractionResponse
   providerAccountId?: string | null
+  /**
+   * Sends this message without waking the wires leaving the session (F10).
+   * Scoped to the settle, not to this message alone -- see `muteRelays` on the
+   * backend's `SendMessageInput` for the full contract.
+   */
+  muteRelays?: boolean
 }
 
 export interface CreateAndStartSessionRequest {

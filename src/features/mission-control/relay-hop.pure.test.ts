@@ -61,6 +61,7 @@ describe('alarming outcomes', () => {
       'spawned',
       'skipped-failed',
       'skipped-already-fired',
+      'skipped-muted',
     ] as const) {
       expect(isAlarmingHop({ outcome })).toBe(false)
     }
@@ -86,6 +87,8 @@ describe('relayHopTone', () => {
     expect(relayHopTone('spawned')).toBe('delivered')
     expect(relayHopTone('skipped-failed')).toBe('skipped')
     expect(relayHopTone('skipped-already-fired')).toBe('skipped')
+    // A wire that held because the human asked it to is not a fault (F10).
+    expect(relayHopTone('skipped-muted')).toBe('skipped')
     expect(relayHopTone('skipped-budget')).toBe('alarm')
     expect(relayHopTone('error')).toBe('alarm')
   })
@@ -110,6 +113,7 @@ describe('formatRelayHopOutcome', () => {
       'skipped — source failed',
     )
     expect(formatRelayHopOutcome('skipped-budget')).toBe('stopped — hop budget')
+    expect(formatRelayHopOutcome('skipped-muted')).toBe('held — sent quiet')
     expect(formatRelayHopOutcome('skipped-already-fired')).toBe(
       'already fired this run',
     )

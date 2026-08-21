@@ -57,6 +57,7 @@ import {
 } from './space-context-panel.presentational'
 import { PullRequestPanel } from './pull-request-panel.presentational'
 import { SessionHeaderDetailRow } from './session-header-detail-row.presentational'
+import { SessionWiresContainer } from './session-wires.container'
 import { SessionConversationSurface } from './session-conversation-surface.container'
 
 function formatRemoteRepositoryLabel(repository: string): string {
@@ -507,6 +508,7 @@ export const SessionView: FC<SessionViewProps> = ({ onOpenCodeReview }) => {
                 Worktree removed
               </span>
             )}
+            <SessionWiresContainer sessionId={session.id} />
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button

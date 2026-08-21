@@ -3,6 +3,8 @@ import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { ComposerContainer } from './composer.container'
 import { useSessionStore } from '@/entities/session'
 import { useAppSettingsStore } from '@/entities/app-settings'
+import { useSessionRelayStore } from '@/entities/session-relay'
+import { useAttachmentStore } from '@/entities/attachment'
 import { useSkillStore } from '@/entities/skill'
 import {
   useProjectContextStore,
@@ -267,6 +269,9 @@ describe('ComposerContainer', () => {
       }),
     })
 
+    useSessionRelayStore.setState({ relays: [], isLoaded: true })
+    useAttachmentStore.setState({ drafts: {}, resolved: {} })
+
     useProjectContextStore.setState({
       itemsByProjectId: { 'project-1': [projectContextItem] },
       attachmentsBySessionId: {},
@@ -282,6 +287,167 @@ describe('ComposerContainer', () => {
       },
       isLoaded: true,
     }))
+  })
+
+  function wireLeaving(sessionId: string, armed = true) {
+    return {
+      id: `relay-${sessionId}-${armed ? 'armed' : 'disarmed'}`,
+      crewId: 'crew-1',
+      sourceSessionId: sessionId,
+      trigger: 'settled' as const,
+      action: 'hail' as const,
+      targetSessionId: 'session-2',
+      spawnSpec: null,
+      instruction: null,
+      opener: null,
+      armed,
+      createdAt: '2026-08-01T00:00:00.000Z',
+      updatedAt: '2026-08-01T00:00:00.000Z',
+    }
+  }
+
+  function renderComposer() {
+    render(
+      <ComposerContainer
+        context={{
+          kind: 'project',
+          projectId: 'project-1',
+          workspaceId: null,
+          activeSessionId: 'session-1',
+        }}
+      />,
+    )
+    return screen.getByPlaceholderText('Send a follow-up...')
+  }
+
+  describe('the quiet send (F10)', () => {
+    it('shows no toggle at all when nothing leaves this session', () => {
+      // A switch that silences nothing would sit on every composer in the app.
+      useSessionRelayStore.setState({ relays: [], isLoaded: true })
+      renderComposer()
+
+      expect(screen.queryByRole('switch', { name: 'Send quiet' })).toBeNull()
+    })
+
+    it('shows no toggle when every wire leaving this session is disarmed', () => {
+      useSessionRelayStore.setState({
+        relays: [wireLeaving('session-1', false)],
+        isLoaded: true,
+      })
+      renderComposer()
+
+      expect(screen.queryByRole('switch', { name: 'Send quiet' })).toBeNull()
+    })
+
+    it('shows the toggle, off, when an armed wire leaves this session', () => {
+      useSessionRelayStore.setState({
+        relays: [wireLeaving('session-1')],
+        isLoaded: true,
+      })
+      renderComposer()
+
+      expect(
+        screen.getByRole('switch', { name: 'Send quiet' }),
+      ).toHaveAttribute('aria-checked', 'false')
+    })
+
+    it('sends quiet in the order a person actually does it: type, toggle, send', () => {
+      // The natural order, and the one that breaks under a stale closure: the
+      // send callback keeps the `relaysMuted` it was built with, so the message
+      // goes out loud while the button says quiet -- the exact direction this
+      // feature exists to prevent. Toggling BEFORE typing hides it, because the
+      // next keystroke rebuilds the callback.
+      //
+      // An attachment sits on the draft on purpose. With no draft the
+      // composer's `attachments` is a fresh `[]` literal every render, which
+      // rebuilds that callback every render and masks the missing dependency
+      // entirely; with a draft it is a stable reference out of the store. So
+      // this is also the only shape in which a real user could hit the bug.
+      useSessionRelayStore.setState({
+        relays: [wireLeaving('session-1')],
+        isLoaded: true,
+      })
+      useAttachmentStore.setState({
+        drafts: {
+          'session-1': {
+            items: [
+              {
+                id: 'att-1',
+                sessionId: 'session-1',
+                kind: 'image',
+                mimeType: 'image/png',
+                filename: 'shot.png',
+                sizeBytes: 4,
+                storagePath: '/tmp/att-1.png',
+                thumbnailPath: null,
+                textPreview: null,
+                createdAt: '2026-08-01T00:00:00.000Z',
+              },
+            ],
+            rejections: [],
+            ingestInFlight: false,
+          },
+        },
+        resolved: {},
+      })
+      const textbox = renderComposer()
+
+      fireEvent.change(textbox, { target: { value: '/compact' } })
+      fireEvent.click(screen.getByRole('switch', { name: 'Send quiet' }))
+      fireEvent.keyDown(textbox, { key: 'Enter', metaKey: true })
+
+      expect(
+        useSessionStore.getState().sendMessageToSession,
+      ).toHaveBeenCalledWith(
+        expect.objectContaining({ text: '/compact', muteRelays: true }),
+      )
+    })
+
+    it('sends quiet when it is switched on, and resets itself afterwards', () => {
+      useSessionRelayStore.setState({
+        relays: [wireLeaving('session-1')],
+        isLoaded: true,
+      })
+      const textbox = renderComposer()
+
+      fireEvent.click(screen.getByRole('switch', { name: 'Send quiet' }))
+      expect(
+        screen.getByRole('switch', { name: 'Send quiet' }),
+      ).toHaveAttribute('aria-checked', 'true')
+
+      fireEvent.change(textbox, { target: { value: '/compact' } })
+      fireEvent.keyDown(textbox, { key: 'Enter', metaKey: true })
+
+      expect(
+        useSessionStore.getState().sendMessageToSession,
+      ).toHaveBeenCalledWith(
+        expect.objectContaining({ text: '/compact', muteRelays: true }),
+      )
+
+      // The whole ruling, on screen: one quiet send, then armed again without
+      // him having to switch anything back.
+      expect(
+        screen.getByRole('switch', { name: 'Send quiet' }),
+      ).toHaveAttribute('aria-checked', 'false')
+    })
+
+    it('leaves an ordinary send exactly as it was before the quiet send existed', () => {
+      useSessionRelayStore.setState({
+        relays: [wireLeaving('session-1')],
+        isLoaded: true,
+      })
+      const textbox = renderComposer()
+
+      fireEvent.change(textbox, { target: { value: 'carry on' } })
+      fireEvent.keyDown(textbox, { key: 'Enter', metaKey: true })
+
+      const call = (
+        useSessionStore.getState().sendMessageToSession as ReturnType<
+          typeof vi.fn
+        >
+      ).mock.calls[0][0]
+      expect(call.muteRelays).toBeUndefined()
+    })
   })
 
   it('continues a failed continuable session instead of creating a new one', () => {

@@ -26,6 +26,13 @@ export interface SessionQueuedInputDraft {
    * a `/clear` with a context block prepended is prose, not a command.
    */
   skipContextInjection?: boolean
+  /**
+   * The human silenced this message's wires when they sent it (F10). Kept with
+   * the message because it may wait here through a whole turn, and the mute is
+   * a fact about what was written rather than about the composer's state when
+   * the queue finally drains.
+   */
+  muteRelays?: boolean
 }
 
 export type QueuedInputDeliveryMode = Extract<
@@ -93,6 +100,7 @@ export class SessionQueuedInputService {
       providerRequestId: null,
       providerAccountId: input.providerAccountId ?? null,
       skipContextInjection: input.skipContextInjection === true,
+      relaysMuted: input.muteRelays === true,
       error: null,
       createdAt: timestamp,
       updatedAt: timestamp,
@@ -111,10 +119,11 @@ export class SessionQueuedInputService {
            provider_request_id,
            provider_account_id,
            skip_context_injection,
+           relays_muted,
            error,
            created_at,
            updated_at
-         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
       .run(
         item.id,
@@ -127,6 +136,7 @@ export class SessionQueuedInputService {
         item.providerRequestId,
         item.providerAccountId,
         item.skipContextInjection ? 1 : 0,
+        item.relaysMuted ? 1 : 0,
         item.error,
         item.createdAt,
         item.updatedAt,

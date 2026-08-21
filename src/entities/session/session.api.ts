@@ -71,6 +71,7 @@ export const sessionApi = {
       deliveryMode: request.deliveryMode,
       interactionResponse: request.interactionResponse,
       providerAccountId: request.providerAccountId,
+      muteRelays: request.muteRelays,
     }),
 
   compactContext: (id: string, instructions?: string): Promise<void> =>

@@ -114,8 +114,14 @@ function createGateway(overrides: {
 function settled(
   sessionId: string,
   status: SessionSettledEvent['status'] = 'completed',
+  relaysMuted = false,
 ): SessionSettledEvent {
-  return { sessionId, status, settledAt: '2026-08-15T10:00:00.000Z' }
+  return {
+    sessionId,
+    status,
+    settledAt: '2026-08-15T10:00:00.000Z',
+    relaysMuted,
+  }
 }
 
 describe('RelayEngine', () => {
@@ -532,6 +538,174 @@ describe('RelayEngine', () => {
    * but a chain that has been all the way round has finished, and before this
    * the only thing that stopped it was twenty real provider turns.
    */
+  describe('the quiet send (F10)', () => {
+    it('declines and says so, without carrying anything', async () => {
+      wire()
+      const gateway = createGateway({})
+
+      await createEngine(gateway).handleSettle(settled('s1', 'completed', true))
+
+      expect(gateway.sent).toEqual([])
+      const trail = relays.listHops('c1')
+      expect(trail).toHaveLength(1)
+      expect(trail[0]).toMatchObject({ outcome: 'skipped-muted' })
+      expect(trail[0].error).toContain('sent quiet')
+      // The row is broadcast like any other: a wire that held is still a wire
+      // the user must be able to watch not fire.
+      expect(hops).toHaveLength(1)
+    })
+
+    it('writes exactly one row per armed wire, and none for a disarmed one', async () => {
+      // The reason the guard sits where it does: the row count for a quiet
+      // settle is predictable -- N armed wires, N rows, always.
+      wire('s1', 's2')
+      wire('s1', 's3')
+      wire('s1', 's4', false)
+      const gateway = createGateway({})
+
+      await createEngine(gateway).handleSettle(settled('s1', 'completed', true))
+
+      const outcomes = relays.listHops('c1', 100).map((hop) => hop.outcome)
+      expect(outcomes).toEqual(['skipped-muted', 'skipped-muted'])
+    })
+
+    it('outranks the failed-settle guard, so the ledger says what the human did', async () => {
+      // A quiet settle that also failed must not read `skipped-failed`, which
+      // would suggest the flow tried and could not.
+      wire()
+      const gateway = createGateway({})
+
+      await createEngine(gateway).handleSettle(settled('s1', 'failed', true))
+
+      expect(relays.listHops('c1')[0].outcome).toBe('skipped-muted')
+    })
+
+    it('spends no budget and leaves the wire live for the next settle', async () => {
+      const there = wire()
+      const gateway = createGateway({})
+      const engine = createEngine(gateway)
+
+      await engine.handleSettle(settled('s1', 'completed', true))
+      await engine.handleSettle(settled('s1'))
+
+      // The ordinary settle after the quiet one carries as usual: nothing was
+      // disarmed, and the muted row charged no budget.
+      expect(gateway.sent.map((turn) => turn.sessionId)).toEqual(['s2'])
+      expect(relays.getById(there.id)!.armed).toBe(true)
+      expect(relaysChanged).toBe(0)
+    })
+
+    it('does not satisfy the loop law, so the wire may still fire in that run', async () => {
+      // A muted row is not a firing. If it counted, a wire that held once would
+      // be dead for the rest of the run -- silently, and only sometimes.
+      const there = wire()
+      const gateway = createGateway({})
+      const engine = createEngine(gateway)
+
+      await engine.handleSettle(settled('s1', 'completed', true))
+      const mutedRun = relays.listHops('c1')[0].flowRunId
+
+      expect(relays.hasFiredInFlowRun(there.id, mutedRun)).toBe(false)
+      expect(relays.countBudgetedHops(mutedRun)).toBe(0)
+    })
+
+    it('outranks the loop law, so a quiet settle never reads "already fired"', async () => {
+      // Ordering, pinned rather than commented. Everything below the mute guard
+      // is a fact about the flow's state; the mute is the human's explicit
+      // instruction about this settle, so it wins. Otherwise a wire that had
+      // already fired this run would file the human's quiet send as the loop
+      // law working, and the row count for a quiet settle would depend on where
+      // in a chain it happened to land.
+      wire('s1', 's2')
+      wire('s2', 's1')
+      const gateway = createGateway({})
+      const engine = createEngine(gateway)
+
+      await engine.handleSettle(settled('s1'))
+      await engine.handleSettle(settled('s2'))
+      // s1 now holds the baton and its wire has already fired in this run.
+      await engine.handleSettle(settled('s1', 'completed', true))
+
+      expect(relays.listHops('c1')[0].outcome).toBe('skipped-muted')
+    })
+
+    it('outranks the budget guard, and disarms nothing on the way past it', async () => {
+      // The budget guard does not merely record: it disarms the wire. A muted
+      // settle meeting an exhausted run must not cost the user a switched-off
+      // wire for a send they asked to be quiet.
+      wire('s1', 's2')
+      const onward = wire('s2', 's3')
+      const gateway = createGateway({})
+      const engine = createEngine(gateway)
+
+      // Burn the run's budget on the ledger, then settle into that same run.
+      await engine.handleSettle(settled('s1'))
+      const run = relays.listHops('c1')[0].flowRunId
+      for (let i = 0; i < MAX_AUTOMATIC_HOPS_PER_FLOW_RUN; i += 1) {
+        relays.appendHop({
+          relayId: onward.id,
+          crewId: 'c1',
+          flowRunId: run,
+          sourceSessionId: 's9',
+          triggerStatus: 'completed',
+          targetSessionId: 's3',
+          spawnedSessionId: null,
+          payloadPreview: null,
+          outcome: 'delivered',
+          error: null,
+        })
+      }
+      relaysChanged = 0
+
+      // s2 holds s1's baton, so this settle belongs to the exhausted run.
+      await engine.handleSettle(settled('s2', 'completed', true))
+
+      expect(relays.listHops('c1')[0].outcome).toBe('skipped-muted')
+      expect(relays.getById(onward.id)!.armed).toBe(true)
+      expect(relaysChanged).toBe(0)
+    })
+
+    it('hands on no baton, so the next settle starts a fresh run', async () => {
+      // A baton follows work that actually landed somewhere. Nothing landed.
+      wire('s1', 's2')
+      wire('s2', 's3')
+      const gateway = createGateway({})
+      const engine = createEngine(gateway)
+
+      await engine.handleSettle(settled('s1', 'completed', true))
+      await engine.handleSettle(settled('s2'))
+
+      const runIds = new Set(relays.listHops('c1', 100).map((h) => h.flowRunId))
+      expect(runIds.size).toBe(2)
+      expect(gateway.sent.map((turn) => turn.sessionId)).toEqual(['s3'])
+    })
+
+    it('takes its baton like any other settle, because a quiet turn still finished', async () => {
+      // Unlike an opener's plumbing settle, a muted settle is real work coming
+      // to rest. It must consume the run it was part of rather than leaving a
+      // baton behind for some later, unrelated turn to inherit.
+      wire('s1', 's2')
+      const back = wire('s2', 's1')
+      const gateway = createGateway({})
+      const engine = createEngine(gateway)
+
+      await engine.handleSettle(settled('s1'))
+      const deliveredRun = relays.listHops('c1')[0].flowRunId
+
+      // s2 now holds s1's baton, and settles quiet.
+      await engine.handleSettle(settled('s2', 'completed', true))
+      const mutedHop = relays.listHops('c1')[0]
+
+      expect(mutedHop.outcome).toBe('skipped-muted')
+      expect(mutedHop.relayId).toBe(back.id)
+      expect(mutedHop.flowRunId).toBe(deliveredRun)
+
+      // The baton was spent, so s2 finishing again mints a fresh run.
+      await engine.handleSettle(settled('s2'))
+      expect(relays.listHops('c1')[0].flowRunId).not.toBe(deliveredRun)
+    })
+  })
+
   describe('the loop law: once per flow run', () => {
     it('ends a ping-pong at two real hops with both wires still armed', async () => {
       const there = wire('s1', 's2')

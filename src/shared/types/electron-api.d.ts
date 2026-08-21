@@ -906,6 +906,12 @@ interface SendSessionMessageInput {
   contextItemIds?: string[]
   /** Provider account for the turn this message starts (ADR 0007, PA4/PA5). */
   providerAccountId?: string | null
+  /**
+   * Asks for quiet on this session's next settle: the wires leaving it hold
+   * instead of firing (F10, MAR-2537). Per send, and cleared by the settle
+   * that honours it.
+   */
+  muteRelays?: boolean
 }
 
 interface InteractionChoiceOptionData {

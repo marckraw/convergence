@@ -35,6 +35,8 @@ import { Textarea } from '@/shared/ui/textarea'
 import { cn } from '@/shared/lib/cn.pure'
 import {
   ArrowUp,
+  Bell,
+  BellOff,
   Cloud,
   FileText,
   Paperclip,
@@ -45,6 +47,7 @@ import {
   Zap,
 } from 'lucide-react'
 import { ComposerSelect } from './composer-select.presentational'
+import { relayMuteTitle } from './relay-mute.pure'
 import { ProviderAccountPicker } from '@/entities/provider-account'
 import type { ProviderAccount } from '@/entities/provider-account'
 import { ComposerContextMentionPicker } from './composer-context-mention.presentational'
@@ -74,6 +77,13 @@ interface ComposerProps {
   remoteHostAvailable: boolean
   runOnRemoteHost: boolean
   onRunOnRemoteHostChange: (enabled: boolean) => void
+  /**
+   * Armed wires leaving this session (F10). Zero renders no control at all --
+   * a switch that silences nothing is noise on every other composer.
+   */
+  armedOutgoingRelays: number
+  relaysMuted: boolean
+  onRelaysMutedChange: (muted: boolean) => void
   permissionConfig: SessionPermissionConfig
   permissionAdvancedOpen: boolean
   onPermissionPresetChange: (preset: 'ask' | 'yolo') => void
@@ -176,6 +186,9 @@ export const Composer: FC<ComposerProps> = ({
   remoteHostAvailable,
   runOnRemoteHost,
   onRunOnRemoteHostChange,
+  armedOutgoingRelays,
+  relaysMuted,
+  onRelaysMutedChange,
   permissionConfig,
   permissionAdvancedOpen,
   onPermissionPresetChange,
@@ -719,6 +732,30 @@ export const Composer: FC<ComposerProps> = ({
               >
                 <Zap className="h-3.5 w-3.5" />
                 Fast
+              </Button>
+            ) : null}
+            {armedOutgoingRelays > 0 ? (
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                role="switch"
+                aria-checked={relaysMuted}
+                aria-label="Send quiet"
+                title={relayMuteTitle(relaysMuted, armedOutgoingRelays)}
+                onClick={() => onRelaysMutedChange(!relaysMuted)}
+                disabled={disabled}
+                className={cn(
+                  'h-7 gap-1.5 px-2 text-xs text-muted-foreground hover:text-foreground',
+                  relaysMuted && 'bg-secondary text-foreground',
+                )}
+              >
+                {relaysMuted ? (
+                  <BellOff className="h-3.5 w-3.5" />
+                ) : (
+                  <Bell className="h-3.5 w-3.5" />
+                )}
+                Quiet
               </Button>
             ) : null}
             {remoteHostAvailable ? (

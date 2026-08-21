@@ -13,6 +13,7 @@ import { useSpaceStore } from '@/entities/space'
 import { useSessionStore, type SessionSummary } from '@/entities/session'
 import { useAppSurfaceStore } from '@/entities/app-surface'
 import { useCodeReviewStore } from '@/entities/code-review'
+import { useSessionRelayStore } from '@/entities/session-relay'
 import { App } from './App.container'
 import { DEFAULT_PROJECT_SETTINGS } from '@/entities/project'
 
@@ -145,6 +146,12 @@ const mockElectronAPI = {
     listTargets: vi.fn().mockResolvedValue([]),
     getSummary: vi.fn().mockResolvedValue({ base: null, files: [] }),
     getFilePatch: vi.fn().mockResolvedValue(''),
+  },
+  relay: {
+    list: vi.fn().mockResolvedValue([]),
+    onUpdated: vi.fn().mockReturnValue(() => {}),
+    onHopAppended: vi.fn().mockReturnValue(() => {}),
+    onHopsCleared: vi.fn().mockReturnValue(() => {}),
   },
   git: {
     getBranches: vi.fn().mockResolvedValue([]),
@@ -337,6 +344,10 @@ describe('App', () => {
     mockElectronAPI.session.getNeedsYouDismissals.mockResolvedValue({})
     mockElectronAPI.session.getRecentIds.mockResolvedValue([])
     mockElectronAPI.codeReview.listTargets.mockResolvedValue([])
+    mockElectronAPI.relay.list.mockResolvedValue([])
+    mockElectronAPI.relay.onUpdated.mockReturnValue(() => {})
+    mockElectronAPI.relay.onHopAppended.mockReturnValue(() => {})
+    mockElectronAPI.relay.onHopsCleared.mockReturnValue(() => {})
     Object.defineProperty(window, 'electronAPI', {
       value: mockElectronAPI,
       writable: true,
@@ -399,6 +410,42 @@ describe('App', () => {
       targets: [],
       targetsLoading: false,
     })
+  })
+
+  /**
+   * Not merely an untested bootstrap. The composer's quiet-send toggle (F10)
+   * appears only when the session has armed outgoing wires, read from this
+   * store -- so if startup stops loading it, the toggle silently never appears
+   * and the feature is gone with no error anywhere.
+   */
+  it('loads and subscribes the relay list at startup', async () => {
+    useSessionRelayStore.setState({ relays: [], isLoaded: false })
+    mockElectronAPI.relay.list.mockResolvedValue([
+      {
+        id: 'relay-1',
+        crewId: 'crew-1',
+        sourceSessionId: 'session-1',
+        trigger: 'settled',
+        action: 'hail',
+        targetSessionId: 'session-2',
+        spawnSpec: null,
+        instruction: null,
+        opener: null,
+        armed: true,
+        createdAt: '2026-08-01T00:00:00.000Z',
+        updatedAt: '2026-08-01T00:00:00.000Z',
+      },
+    ])
+
+    render(<App />)
+
+    await waitFor(() => {
+      expect(useSessionRelayStore.getState().isLoaded).toBe(true)
+    })
+    expect(useSessionRelayStore.getState().relays).toHaveLength(1)
+    // Subscribed too: a list loaded once and never updated would go stale the
+    // first time a wire is armed anywhere else in the app.
+    expect(mockElectronAPI.relay.onUpdated).toHaveBeenCalled()
   })
 
   it('shows welcome message when no project', async () => {
