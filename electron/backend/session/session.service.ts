@@ -61,6 +61,10 @@ import {
   MODEL_CHANGED_EVENT_TYPE,
   describeModelChange,
 } from './session-model-change.pure'
+import {
+  SessionDispatchRegistry,
+  type SessionDispatch,
+} from './session-dispatch-registry'
 import { SessionQueuedInputService } from './session-queued-input.service'
 import {
   SessionLivenessService,
@@ -204,6 +208,13 @@ export class SessionService {
   private readonly sessionRepository: SessionRepository
   private readonly queuedInputs: SessionQueuedInputService
   private readonly liveness: SessionLivenessService
+  /**
+   * Sends that have begun but have not yet reached a provider. Everything that
+   * must not run while a session is busy asks here as well as at
+   * `activeHandles`, because between them is a window where neither knows
+   * (MAR-2550).
+   */
+  private readonly dispatches = new SessionDispatchRegistry()
 
   constructor(
     private db: Database.Database,
@@ -419,6 +430,7 @@ export class SessionService {
       status: session.status,
       attention: session.attention,
       hasActiveHandle: this.activeHandles.has(id),
+      hasDispatchInFlight: this.dispatches.isDispatching(id),
     })
     if (refusal) throw new Error(refusal)
 
@@ -804,6 +816,38 @@ export class SessionService {
   }
 
   async start(id: string, input: SendMessageInput): Promise<void> {
+    return this.withDispatchInFlight(id, () => this.openFirstTurn(id, input))
+  }
+
+  /**
+   * Runs a send with the session marked as dispatching for the whole of it
+   * (MAR-2550).
+   *
+   * The marker is set synchronously — before `dispatch` is entered, let alone
+   * before its first `await` — and cleared only once the send has settled. By
+   * then either a handle is registered, so every guard sees a busy session
+   * again, or the send failed and the session really is idle. In between,
+   * `describeModelSelectionRefusal` would otherwise see a session with no
+   * running status and no handle, accept a new model, write it to the row and
+   * announce the boundary in the transcript, while the turn already in flight
+   * ran on the old one.
+   */
+  private async withDispatchInFlight<T>(
+    sessionId: string,
+    dispatch: (inFlight: SessionDispatch) => Promise<T>,
+  ): Promise<T> {
+    const inFlight = this.dispatches.begin(sessionId)
+    try {
+      return await dispatch(inFlight)
+    } finally {
+      this.dispatches.settle(inFlight)
+    }
+  }
+
+  private async openFirstTurn(
+    id: string,
+    input: SendMessageInput,
+  ): Promise<void> {
     const session = this.getById(id)
     if (!session) throw new Error(`Session not found: ${id}`)
 
@@ -873,6 +917,13 @@ export class SessionService {
   }
 
   async sendMessage(id: string, input: SendMessageInput): Promise<void> {
+    return this.withDispatchInFlight(id, () => this.deliverMessage(id, input))
+  }
+
+  private async deliverMessage(
+    id: string,
+    input: SendMessageInput,
+  ): Promise<void> {
     let session = this.getById(id)
     if (!session) throw new Error(`Session not found: ${id}`)
 
@@ -1594,8 +1645,9 @@ export class SessionService {
         // per-send choice and has to be carried from the dispatch site; the
         // model is standing session state, and it cannot move between dispatch
         // and this stamp because `describeModelSelectionRefusal` refuses every
-        // write while a handle is attached, and `startHandle` registers the
-        // handle in the same synchronous block that spawns the turn.
+        // write while a handle is attached or a send is in flight — the two
+        // together cover the whole of the send path, from its first statement
+        // to the handle it registers.
         model: row.model,
         effort: row.effort,
       })

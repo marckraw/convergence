@@ -144,6 +144,7 @@ describe('describeModelSelectionRefusal (MAR-2550)', () => {
     status: 'idle',
     attention: 'none',
     hasActiveHandle: false,
+    hasDispatchInFlight: false,
   } as const
 
   it('allows the change on a settled session with no process attached', () => {
@@ -180,6 +181,23 @@ describe('describeModelSelectionRefusal (MAR-2550)', () => {
     expect(
       describeModelSelectionRefusal({ ...idle, attention: 'needs-approval' }),
     ).toMatch(/Answer the agent first/)
+  })
+
+  /**
+   * The window, in the smallest possible terms. A send reads the session, then
+   * awaits, and only afterwards registers the handle that makes the session
+   * look busy; in between, status and attention and `hasActiveHandle` all say
+   * idle while a turn is already on its way to a provider on the old model.
+   */
+  it('refuses while a send is on its way to the provider', () => {
+    expect(
+      describeModelSelectionRefusal({
+        ...idle,
+        status: 'completed',
+        attention: 'finished',
+        hasDispatchInFlight: true,
+      }),
+    ).toMatch(/already on its way to the provider/)
   })
 
   it('refuses a settled session that still holds a provider process', () => {

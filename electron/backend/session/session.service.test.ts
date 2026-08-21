@@ -4443,6 +4443,64 @@ describe('SessionService model selection (MAR-2550)', () => {
     })
   })
 
+  /**
+   * The window this guard was blind to for four bugs (MAR-2550). A send reads
+   * the session, awaits, and only then registers the handle that makes the
+   * session look busy. A change accepted in between is written to the row and
+   * announced in the transcript while the turn already on its way to the
+   * provider runs on the model it captured before the await.
+   *
+   * The fix is not to re-read the row after the await, which would quietly run
+   * the message on a model chosen after the human pressed send. A session
+   * mid-dispatch is not idle; it now says so.
+   */
+  it('refuses a change made after send but before the turn spawns', async () => {
+    await service.start(sessionId, { text: 'first' })
+    settleTurn()
+
+    // Deliberately not awaited: `sendMessage` has run as far as its first
+    // await, which is exactly the window.
+    const dispatch = service.sendMessage(sessionId, { text: 'carry on' })
+
+    expect(() =>
+      service.setModelSelection(sessionId, {
+        providerId: 'switchable',
+        model: 'opus',
+        effort: 'high',
+      }),
+    ).toThrow(/already on its way to the provider/)
+
+    await dispatch
+
+    // The turn that was in flight ran on what the human could see when they
+    // sent it, and the row still says the same thing.
+    expect(startConfigs).toEqual([
+      { model: 'fable', effort: 'medium' },
+      { model: 'fable', effort: 'medium' },
+    ])
+    expect(service.getSummaryById(sessionId)).toMatchObject({
+      model: 'fable',
+      effort: 'medium',
+    })
+  })
+
+  it('refuses a change made while the first turn is still being opened', async () => {
+    // `start` has the same shape as `sendMessage`: read the row, await, spawn.
+    const opening = service.start(sessionId, { text: 'first' })
+
+    expect(() =>
+      service.setModelSelection(sessionId, {
+        providerId: 'switchable',
+        model: 'opus',
+        effort: 'high',
+      }),
+    ).toThrow(/already on its way to the provider/)
+
+    await opening
+
+    expect(startConfigs).toEqual([{ model: 'fable', effort: 'medium' }])
+  })
+
   it('refuses while the agent is waiting on the human', async () => {
     await service.start(sessionId, { text: 'first' })
     deltaListener?.({

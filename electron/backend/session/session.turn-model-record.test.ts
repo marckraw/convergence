@@ -277,6 +277,59 @@ describe('a transcript that mixes models records it (MAR-2551)', () => {
   })
 
   /**
+   * The dispatch window, proved where all three records could disagree
+   * (MAR-2550). Between a send reading the session row and the process it
+   * spawns, the session looks idle: no running status, no handle. A model
+   * change accepted there would leave the argv on the old model, the turn
+   * stamped with the new one, and a divider in the transcript announcing a
+   * boundary that never happened.
+   *
+   * This is the fourth defect from that one window — run 20's opener/payload
+   * race, run 22's relay mute carrier, MAR-2539's one-deep per-turn slots, and
+   * this — so the marker it is closed with is a registry the others can adopt
+   * rather than another single-caller patch.
+   */
+  it('refuses a change made mid-dispatch, and the argv, the stamp and the transcript agree', async () => {
+    const [first, second] = queueChildren(2)
+
+    const session = createSession({
+      model: 'fable',
+      effort: 'high',
+      name: 'dispatch window',
+    })
+
+    await service.start(session.id, { text: 'begin' })
+    await waitFor(() => expect(spawnMock).toHaveBeenCalledTimes(1))
+    playTurn(first, 'claude-conversation-4')
+    await waitForIdle(session.id)
+
+    // Deliberately not awaited: this is the window, one await wide.
+    const dispatch = service.sendMessage(session.id, { text: 'carry on' })
+
+    expect(() =>
+      service.setModelSelection(session.id, {
+        providerId: 'claude-code',
+        model: 'opus',
+        effort: 'medium',
+      }),
+    ).toThrow(/already on its way to the provider/)
+
+    await dispatch
+    await waitFor(() => expect(spawnMock).toHaveBeenCalledTimes(2))
+    playTurn(second, 'claude-conversation-4')
+    await waitFor(() => {
+      expect(turnCapture.listTurns(session.id)).toHaveLength(2)
+    })
+
+    // The three readings of the same turn, and the row behind them.
+    expect(flagValue(spawnArgs(1), '--model')).toBe('fable')
+    expect(flagValue(spawnArgs(1), '--effort')).toBe('high')
+    expect(turnCapture.listTurns(session.id)[1].model).toBe('fable')
+    expect(modelChangeNotes(session.id)).toEqual([])
+    expect(service.getById(session.id)?.model).toBe('fable')
+  })
+
+  /**
    * A session that never changes model shows nothing — no placeholder, no
    * empty state. Re-selecting the model already in force is not a change.
    */

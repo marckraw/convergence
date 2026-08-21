@@ -103,14 +103,21 @@ export function queuedInputFromRow(
  * watching. Refusing with a reason is the honest answer — the caller turns
  * this string into a visible failure.
  *
- * `hasActiveHandle` is the load-bearing condition; status and attention are
- * here because they are what the human can see, and a refusal that names an
- * invisible process would read as a bug.
+ * `hasActiveHandle` and `hasDispatchInFlight` are the load-bearing conditions,
+ * and they are two halves of one question: a handle covers a process that
+ * exists, a dispatch covers the send that is on its way to creating one. Status
+ * and attention are here because they are what the human can see, and a refusal
+ * that names an invisible process would read as a bug.
+ *
+ * Every field is required rather than optional. The dispatch window was open
+ * because nobody was asked about it; a condition a caller may omit is a
+ * condition that gets omitted.
  */
 export function describeModelSelectionRefusal(session: {
   status: SessionStatus
   attention: AttentionState
   hasActiveHandle: boolean
+  hasDispatchInFlight: boolean
 }): string | null {
   if (session.status === 'running') {
     return 'Model and effort can only change while the session is idle. Wait for the current turn to finish.'
@@ -123,6 +130,9 @@ export function describeModelSelectionRefusal(session: {
   }
   if (session.hasActiveHandle) {
     return 'Model and effort can only change while the session is idle. This session still has a provider process attached.'
+  }
+  if (session.hasDispatchInFlight) {
+    return 'Model and effort can only change while the session is idle. A message is already on its way to the provider.'
   }
   return null
 }
