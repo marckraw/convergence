@@ -320,6 +320,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
             attachmentIds?: string[]
             skillSelections?: unknown[]
             deliveryMode?: string
+            muteRelays?: boolean
           }
         | string,
     ) =>

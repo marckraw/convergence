@@ -9,6 +9,7 @@ import {
 } from '@/entities/session'
 import { terminalApi, useTerminalStore } from '@/entities/terminal'
 import { useAppSettingsStore } from '@/entities/app-settings'
+import { useSessionRelayStore } from '@/entities/session-relay'
 import { useAppSurfaceStore } from '@/entities/app-surface'
 import {
   useCodeReviewStore,
@@ -184,6 +185,7 @@ export function App({
   )
   const loadRecents = useSessionStore((s) => s.loadRecents)
   const loadAppSettings = useAppSettingsStore((s) => s.load)
+  const loadRelays = useSessionRelayStore((s) => s.load)
   const loadNotificationPrefs = useNotificationsStore((s) => s.loadPrefs)
   const setActiveSurface = useAppSurfaceStore((s) => s.setActiveSurface)
   const codeReviewTargets = useCodeReviewStore((s) => s.targets)
@@ -317,6 +319,14 @@ export function App({
   useEffect(() => {
     void loadAppSettings()
   }, [loadAppSettings])
+
+  // Relays are cross-project furniture, and since F10 the composer asks the
+  // list whether anything leaves the session it is aimed at. Loading it here
+  // rather than in Mission Control alone means the quiet-send toggle appears
+  // for someone who has never opened that screen.
+  useEffect(() => {
+    void loadRelays()
+  }, [loadRelays])
 
   useEffect(() => {
     void loadNotificationPrefs()
