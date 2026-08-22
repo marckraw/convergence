@@ -635,6 +635,13 @@ class RemoteSessionRun {
    * remote host is the only adapter whose provider runs on another machine, so
    * the debug log is the only place a remote turn can be inspected at all —
    * every path that drops an event silently records why it dropped it.
+   *
+   * Where an entry survives is worth knowing before trusting one as evidence
+   * (`provider-debug.service.ts`): every entry lands in an in-memory ring of
+   * the last 500 per session, kept for at most 10 sessions and gone at quit,
+   * and reaches a durable `<userData>/debug-logs/<sessionId>.jsonl` only while
+   * "Capture provider debug logs" is on in settings — read at record time, so
+   * a long turn traced with the setting off leaves no file behind.
    */
   private recordDebug(
     channel: ProviderDebugChannel,
@@ -699,6 +706,26 @@ class RemoteSessionRun {
     this.params.host.notifyEventSeq(this.params.config.sessionId, envelope.seq)
   }
 
+  /**
+   * Two of these kinds carry facts the session record must keep, and the
+   * listener arrays alone cannot deliver them: nothing in Convergence
+   * subscribes to `onStatusChange` or `onContinuationToken` — every provider
+   * implements the pair and no caller reads it. The live path is the
+   * `session.patch` delta, which `SessionService.applyDelta` writes to the
+   * session row.
+   *
+   * So `status` and `continuation-token` do both halves, exactly as
+   * `claude-code-provider.ts:511-513,540-541` does for a local run: fire the
+   * callback for the handle's declared contract, and patch the session for the
+   * reader that actually exists. Without the patch a remote turn never leaves
+   * `running` and its continuation token is never stored, which made every
+   * remote session one turn long (MAR-2582).
+   *
+   * `attention`, `context-window` and `activity` are still callback-only. They
+   * are the same shape of loss and they are not this fix; each changes UI
+   * behaviour Marcin has not ruled on, so they are reported rather than
+   * quietly widened here.
+   */
   private dispatchEvent(event: ExecutionHostEvent): void {
     switch (event.kind) {
       case 'delta': {
@@ -721,6 +748,7 @@ class RemoteSessionRun {
       }
       case 'status':
         for (const listener of this.statusListeners) listener(event.status)
+        this.emitter.patchSession({ status: event.status })
         break
       case 'attention':
         for (const listener of this.attentionListeners)
@@ -728,6 +756,7 @@ class RemoteSessionRun {
         break
       case 'continuation-token':
         for (const listener of this.tokenListeners) listener(event.token)
+        this.emitter.patchSession({ continuationToken: event.token })
         break
       case 'context-window':
         for (const listener of this.contextWindowListeners)

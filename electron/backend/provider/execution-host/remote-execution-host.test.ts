@@ -5,7 +5,6 @@ import type {
   SessionStartConfig,
   SessionStatus,
 } from '../provider.types'
-import type { ExecutionHostEventEnvelope } from '@mrck-labs/execution-host-protocol'
 import {
   describeProviderExecutionHostContract,
   type ExecutionHostContractContext,
@@ -14,213 +13,16 @@ import {
   DAEMON_HEALTH_FIXTURE_0_26_1,
   daemonHealthFixtureWithoutDescriptor,
 } from './execution-host-health.fixture'
+import {
+  createStubDaemon,
+  envelope,
+  waitUntil,
+  type StubDaemon,
+} from './execution-host-daemon.fixture'
 import { RemoteExecutionHost } from './remote-execution-host'
 import { RemoteExecutionHostError } from './remote-execution-host.types'
 import type { ProviderDebugSink } from '../../provider-debug/provider-debug-sink'
 import type { ProviderDebugEntry } from '../../provider-debug/provider-debug.types'
-
-const DAEMON_META = {
-  providers: [
-    {
-      id: 'claude',
-      label: 'Claude Code',
-      available: true,
-      authenticated: true,
-      models: [{ slug: 'sonnet', label: 'Claude Sonnet' }],
-      features: { resume: true, followup: true },
-    },
-    {
-      id: 'codex',
-      label: 'Codex',
-      available: true,
-      authenticated: true,
-      models: [{ slug: 'gpt-5.5', label: 'GPT-5.5' }],
-      features: { resume: false, followup: true },
-    },
-  ],
-}
-
-interface StubDaemon {
-  fetchFn: typeof fetch
-  emit: (envelope: ExecutionHostEventEnvelope) => void
-  /** Pushes an SSE frame the protocol decoder will reject. */
-  emitRaw: (data: string) => void
-  dropStream: () => void
-  startRequests: Array<Record<string, unknown>>
-  commandEnvelopes: Array<Record<string, unknown>>
-  eventStreamLastEventIds: Array<string | null>
-  setMetaStatus: (status: number) => void
-  /** Raw `/health` body; null makes the route 404, as an older daemon does. */
-  setHealthBody: (body: string | null) => void
-  /** A proxy that swallows `/health` by hanging instead of answering. */
-  setHealthHangs: (hangs: boolean) => void
-  healthRequests: Array<{ authorization: string | null }>
-  setStartStatus: (status: number) => void
-  setCommandStatus: (status: number) => void
-  setEventsStatus: (status: number) => void
-}
-
-function createStubDaemon(): StubDaemon {
-  const encoder = new TextEncoder()
-  const log: ExecutionHostEventEnvelope[] = []
-  const startRequests: Array<Record<string, unknown>> = []
-  const commandEnvelopes: Array<Record<string, unknown>> = []
-  const eventStreamLastEventIds: Array<string | null> = []
-  const healthRequests: Array<{ authorization: string | null }> = []
-  const current: {
-    controller: ReadableStreamDefaultController<Uint8Array> | null
-  } = { controller: null }
-  let metaStatus = 200
-  let healthBody: string | null = DAEMON_HEALTH_FIXTURE_0_26_1
-  let healthHangs = false
-  let startStatus = 201
-  let commandStatus = 202
-  let eventsStatus = 200
-
-  const sseChunk = (envelope: ExecutionHostEventEnvelope): Uint8Array =>
-    encoder.encode(`id: ${envelope.seq}\ndata: ${JSON.stringify(envelope)}\n\n`)
-
-  const jsonResponse = (body: unknown, status = 200): Response =>
-    new Response(JSON.stringify(body), {
-      status,
-      headers: { 'Content-Type': 'application/json' },
-    })
-
-  const headerValue = (
-    headers: RequestInit['headers'],
-    name: string,
-  ): string | null => {
-    if (!headers) return null
-    const record = headers as Record<string, string>
-    return record[name] ?? null
-  }
-
-  const fetchFn = (async (input: unknown, init?: RequestInit) => {
-    const url = String(input)
-    const method = init?.method ?? 'GET'
-
-    if (url.endsWith('/health')) {
-      healthRequests.push({
-        authorization: headerValue(init?.headers, 'Authorization'),
-      })
-      if (healthHangs) {
-        // Like real fetch, the only thing that settles this is the caller's
-        // own abort signal.
-        return new Promise<Response>((_resolve, reject) => {
-          init?.signal?.addEventListener('abort', () =>
-            reject(new Error('The operation was aborted due to timeout')),
-          )
-        })
-      }
-      if (healthBody === null) {
-        return jsonResponse({ error: 'not found' }, 404)
-      }
-      return new Response(healthBody, {
-        status: 200,
-        headers: { 'Content-Type': 'application/json' },
-      })
-    }
-
-    if (url.endsWith('/v0/meta')) {
-      if (metaStatus !== 200) {
-        return jsonResponse({ error: 'meta unavailable' }, metaStatus)
-      }
-      return jsonResponse(DAEMON_META)
-    }
-
-    if (method === 'POST' && url.endsWith('/v0/execution/sessions')) {
-      const body = JSON.parse(String(init?.body)) as Record<string, unknown>
-      startRequests.push(body)
-      if (startStatus !== 201) {
-        return jsonResponse({ error: 'start rejected' }, startStatus)
-      }
-      const config = body.config as { sessionId: string }
-      return jsonResponse(
-        { protocolVersion: 1, sessionId: config.sessionId },
-        201,
-      )
-    }
-
-    if (method === 'POST' && url.includes('/commands')) {
-      if (commandStatus !== 202) {
-        return jsonResponse({ error: 'command rejected' }, commandStatus)
-      }
-      commandEnvelopes.push(
-        JSON.parse(String(init?.body)) as Record<string, unknown>,
-      )
-      return jsonResponse({ accepted: true }, 202)
-    }
-
-    if (url.includes('/events')) {
-      const lastEventId = headerValue(init?.headers, 'Last-Event-ID')
-      eventStreamLastEventIds.push(lastEventId)
-      if (eventsStatus !== 200) {
-        return jsonResponse({ error: 'stream rejected' }, eventsStatus)
-      }
-      const afterSeq = lastEventId ? Number(lastEventId) : 0
-      const stream = new ReadableStream<Uint8Array>({
-        start(controller) {
-          current.controller = controller
-          for (const envelope of log) {
-            if (envelope.seq > afterSeq) controller.enqueue(sseChunk(envelope))
-          }
-          init?.signal?.addEventListener('abort', () => {
-            if (current.controller === controller) current.controller = null
-            try {
-              controller.error(new Error('aborted'))
-            } catch {
-              // Stream may already be closed.
-            }
-          })
-        },
-        cancel() {
-          if (current.controller) current.controller = null
-        },
-      })
-      return new Response(stream, { status: 200 })
-    }
-
-    throw new Error(`Unexpected request: ${method} ${url}`)
-  }) as typeof fetch
-
-  return {
-    fetchFn,
-    emit(envelope) {
-      log.push(envelope)
-      current.controller?.enqueue(sseChunk(envelope))
-    },
-    emitRaw(data) {
-      current.controller?.enqueue(encoder.encode(`data: ${data}\n\n`))
-    },
-    dropStream() {
-      const controller = current.controller
-      current.controller = null
-      controller?.close()
-    },
-    startRequests,
-    commandEnvelopes,
-    eventStreamLastEventIds,
-    healthRequests,
-    setMetaStatus(status) {
-      metaStatus = status
-    },
-    setHealthBody(body) {
-      healthBody = body
-    },
-    setHealthHangs(hangs) {
-      healthHangs = hangs
-    },
-    setStartStatus(status) {
-      startStatus = status
-    },
-    setCommandStatus(status) {
-      commandStatus = status
-    },
-    setEventsStatus(status) {
-      eventsStatus = status
-    },
-  }
-}
 
 function createHost(
   stub: StubDaemon,
@@ -344,28 +146,6 @@ function startConfig(sessionId: string): SessionStartConfig {
     model: null,
     effort: null,
     continuationToken: null,
-  }
-}
-
-function envelope(
-  seq: number,
-  event: ExecutionHostEventEnvelope['event'],
-  sessionId = 's-1',
-): ExecutionHostEventEnvelope {
-  return { protocolVersion: 1, sessionId, seq, event }
-}
-
-async function waitUntil(
-  predicate: () => boolean,
-  description: string,
-  timeoutMs = 2000,
-): Promise<void> {
-  const deadline = Date.now() + timeoutMs
-  while (!predicate()) {
-    if (Date.now() > deadline) {
-      throw new Error(`Timed out waiting for ${description}`)
-    }
-    await new Promise((resolve) => setTimeout(resolve, 5))
   }
 }
 
@@ -626,8 +406,21 @@ describe('RemoteExecutionHost', () => {
     stub.emit(envelope(4, { kind: 'heartbeat' }))
 
     await waitUntil(() => heartbeats.length === 1, 'all events to arrive')
+    // Three deltas for four events: the wire delta passes through the mapping
+    // layer unchanged, and the dedicated `status` and `continuation-token`
+    // kinds each become a `session.patch` of their own (MAR-2582). The
+    // callbacks still fire — they are the handle's declared contract — but the
+    // deltas are what a reader actually receives.
     expect(deltas).toEqual([
       { kind: 'session.patch', patch: { status: 'running' } },
+      {
+        kind: 'session.patch',
+        patch: { status: 'running', updatedAt: expect.any(String) },
+      },
+      {
+        kind: 'session.patch',
+        patch: { continuationToken: 'resume-1', updatedAt: expect.any(String) },
+      },
     ])
     expect(statuses).toEqual(['running'])
     expect(tokens).toEqual(['resume-1'])
