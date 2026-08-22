@@ -536,6 +536,33 @@ describe('RemoteExecutionHost', () => {
       expect(racingHost.handshake()?.daemonVersion).toBe('0.27.0')
     })
 
+    it('hands the superseded refresh the newer daemon listing, not its own', async () => {
+      const racing = createRacingDaemon([
+        { version: '0.26.1', providerId: 'claude' },
+        { version: '0.27.0', providerId: 'codex' },
+      ])
+      const racingHost = createRacingHost(racing)
+
+      const first = racingHost.refreshProviders()
+      await settleScheduledWork()
+      const second = racingHost.refreshProviders()
+      await settleScheduledWork()
+
+      racing.releaseMeta(1)
+      racing.releaseHealth(1)
+      await second
+
+      racing.releaseMeta(0)
+      racing.releaseHealth(0)
+
+      // testRemoteExecutionHostConnection reads this return value and then
+      // handshake(), back to back. A superseded refresh that reported its own
+      // dead listing would hand the dialog one daemon's providers under the
+      // other daemon's version and capability badge.
+      const supersededListing = await first
+      expect(supersededListing.map((p) => p.providerId)).toEqual(['codex'])
+    })
+
     it('leaves the handshake untouched when the provider listing fails', async () => {
       await host.refreshProviders()
       expect(host.handshake()?.daemonVersion).toBe('0.26.1')
