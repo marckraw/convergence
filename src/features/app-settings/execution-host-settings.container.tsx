@@ -104,6 +104,7 @@ export const ExecutionHostSettingsContainer: FC<
             ? err.message
             : 'Failed to test daemon connection',
         providers: null,
+        daemon: null,
       })
     } finally {
       setIsConnectionTesting(false)

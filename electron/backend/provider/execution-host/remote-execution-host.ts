@@ -1,14 +1,8 @@
-import type {
-  InteractionResponse,
-  SessionDelta,
-} from '../../session/conversation-item.types'
-import type { SkillSelection } from '../../skills/skills.types'
+import type { SessionDelta } from '../../session/conversation-item.types'
 import { ProviderSessionEmitter } from '../provider-session.emitter'
 import type {
   ActivitySignal,
-  Attachment,
   AttentionState,
-  MidRunInputMode,
   OneShotInput,
   OneShotResult,
   ProviderContextManagementInput,
@@ -20,21 +14,34 @@ import type {
   SessionStatus,
 } from '../provider.types'
 import {
-  decodeExecutionHostEventEnvelope,
-  encodeExecutionHostCommandEnvelope,
-  encodeExecutionHostStartRequest,
-} from './execution-host-protocol.pure'
+  decodeExecutionEventEnvelope,
+  encodeExecutionCommandEnvelope,
+  encodeExecutionStartRequest,
+  EXECUTION_PROTOCOL_VERSION,
+  type ExecutionHostCommand,
+  type ExecutionHostEvent,
+} from '@mrck-labs/execution-host-protocol'
+import {
+  buildWireApproveCommand,
+  buildWireDenyCommand,
+  buildWireSendMessageCommand,
+  buildWireStartRequest,
+  buildWireStopCommand,
+  toLocalSessionDelta,
+} from './execution-host-wire-mapping.pure'
+import {
+  evaluateHandshake,
+  parseDaemonHealth,
+} from './execution-host-handshake.pure'
 import type {
-  ExecutionHostCommand,
-  ExecutionHostEvent,
-} from './execution-host-protocol.types'
-import { EXECUTION_HOST_PROTOCOL_VERSION } from './execution-host-protocol.types'
+  DaemonHealthInfo,
+  EndpointHandshakeResult,
+} from './execution-host-handshake.types'
 import type {
   ExecutionHostProviderCapabilities,
   ProviderExecutionHost,
 } from './execution-host.types'
 import {
-  buildRemoteExecutionHostStartRequest,
   describeRemoteExecutionHostFailure,
   capabilitiesForRemoteProvider,
   createSseParser,
@@ -62,6 +69,16 @@ type FetchFn = typeof fetch
  */
 const DEFAULT_MAX_RECONNECT_ATTEMPTS = 10
 
+/**
+ * Emergence's number, and its reasoning with it
+ * (`packages/client-core/src/endpoint/endpoint-handshake.service.ts:11`):
+ * `/health` runs provider-readiness probes and takes several seconds cold, so
+ * a tight timeout misreports a healthy daemon as one that answered nothing.
+ * The cap exists for the other failure: a proxy that swallows the route by
+ * hanging rather than 404ing would otherwise take the whole refresh with it.
+ */
+const DEFAULT_HEALTH_PROBE_TIMEOUT_MS = 15_000
+
 export interface RemoteExecutionHostDeps {
   connection: RemoteExecutionHostConnectionResolver
   fetch?: FetchFn
@@ -70,6 +87,8 @@ export interface RemoteExecutionHostDeps {
     delayMs?: (attempt: number) => number
     wait?: (ms: number) => Promise<void>
   }
+  /** Overridable so tests can prove the cap without waiting 15 seconds. */
+  healthProbeTimeoutMs?: number
   /**
    * Called after each processed event envelope with its sequence number.
    * Callers persist this to resume the stream after an app restart.
@@ -93,10 +112,20 @@ export class RemoteExecutionHost implements ProviderExecutionHost {
   private readonly maxReconnectAttempts: number
   private readonly reconnectDelayMs: (attempt: number) => number
   private readonly wait: (ms: number) => Promise<void>
+  private readonly healthProbeTimeoutMs: number
   private providers: RemoteExecutionHostProviderInfo[] = []
+  private handshakeResult: EndpointHandshakeResult | null = null
+  /**
+   * Bumped by every refresh so a slow one that finishes last cannot overwrite
+   * a newer one's answer. Same reason Emergence's handshake service keeps one
+   * per endpoint (`endpoint-handshake.service.ts:36-40`).
+   */
+  private refreshGeneration = 0
 
   constructor(private readonly deps: RemoteExecutionHostDeps) {
     this.fetchFn = deps.fetch ?? fetch
+    this.healthProbeTimeoutMs =
+      deps.healthProbeTimeoutMs ?? DEFAULT_HEALTH_PROBE_TIMEOUT_MS
     this.maxReconnectAttempts =
       deps.reconnect?.maxAttempts ?? DEFAULT_MAX_RECONNECT_ATTEMPTS
     this.reconnectDelayMs =
@@ -107,17 +136,79 @@ export class RemoteExecutionHost implements ProviderExecutionHost {
   }
 
   /**
-   * Fetches the daemon provider listing and replaces the capability cache.
-   * Throws RemoteExecutionHostError; on failure the previous cache stays in
-   * place.
+   * Fetches the daemon provider listing and replaces the capability cache,
+   * shaking hands with the daemon over `/health` on the way. Throws
+   * RemoteExecutionHostError; on failure the previous cache stays in place.
+   *
+   * Returns the cache as it stands after the commit, not this call's own read:
+   * a refresh overtaken by a newer one reports the newer daemon, so a caller
+   * that reads handshake() next is never handed a mismatched pair.
    */
   async refreshProviders(): Promise<RemoteExecutionHostProviderInfo[]> {
+    const generation = ++this.refreshGeneration
     const connection = await this.deps.connection.resolveConnection()
+    // Started before the listing rather than after it: /health is
+    // unauthenticated and independent, so it runs concurrently and usually
+    // adds no wall-clock at all. When health is the slower half the refresh
+    // costs max(meta, health), which is why the probe is capped: the added
+    // latency is bounded, not zero. It never rejects, so a meta failure below
+    // leaves nothing dangling.
+    const healthProbe = this.probeHealth(connection)
     const meta = await this.requestJson(connection, '/v0/meta', {
       method: 'GET',
     })
-    this.providers = parseRemoteExecutionHostMeta(meta)
+    const providers = parseRemoteExecutionHostMeta(meta)
+    const health = await healthProbe
+    // The authenticated half of the handshake is the listing that just
+    // succeeded, so 'ok' is a statement of fact at this line and nowhere
+    // earlier.
+    const handshake = health
+      ? evaluateHandshake(health, null, { kind: 'ok' })
+      : null
+    // Both values land in one synchronous step, and only if no newer refresh
+    // has started. Settings changes make two refreshes overlap routinely; a
+    // write on either side of an await pairs one daemon's providers with
+    // another daemon's name.
+    if (generation === this.refreshGeneration) {
+      this.providers = providers
+      this.handshakeResult = handshake
+    }
     return this.providers
+  }
+
+  /**
+   * What the daemon said about itself at the last successful refresh, or null
+   * when it said nothing readable. Null is the honest answer for a daemon too
+   * old to serve `/health`, and callers must treat it as "unknown", never as
+   * "unsupported".
+   */
+  handshake(): EndpointHandshakeResult | null {
+    return this.handshakeResult
+  }
+
+  /**
+   * Reads `GET /health` without the Authorization header: the route is
+   * unauthenticated, and a token has no business riding a request that does
+   * not need one. Never throws, and never outlasts its timeout — a daemon that
+   * predates the route, a proxy that swallows it with a 404, and a proxy that
+   * swallows it by hanging must all still be able to list their providers.
+   */
+  private async probeHealth(
+    connection: RemoteExecutionHostConnection,
+  ): Promise<DaemonHealthInfo | null> {
+    try {
+      const response = await this.fetchFn(
+        buildRemoteUrl(connection.baseUrl, '/health'),
+        {
+          method: 'GET',
+          signal: AbortSignal.timeout(this.healthProbeTimeoutMs),
+        },
+      )
+      if (!response.ok) return null
+      return parseDaemonHealth(JSON.parse(await response.text()))
+    } catch {
+      return null
+    }
   }
 
   capabilities(): ExecutionHostProviderCapabilities[] {
@@ -393,12 +484,17 @@ class RemoteSessionRun {
 
       sendMessage: (text, attachments, skillSelections, options) =>
         this.enqueueCommand(
-          buildSendMessageCommand(text, attachments, skillSelections, options),
+          buildWireSendMessageCommand(
+            text,
+            attachments,
+            skillSelections,
+            options,
+          ),
         ),
       approve: (providerApprovalId) =>
-        this.enqueueCommand({ kind: 'approve', providerApprovalId }),
+        this.enqueueCommand(buildWireApproveCommand(providerApprovalId)),
       deny: (providerApprovalId) =>
-        this.enqueueCommand({ kind: 'deny', providerApprovalId }),
+        this.enqueueCommand(buildWireDenyCommand(providerApprovalId)),
       stop: () => this.stop(),
       dispose: () => this.dispose(),
     }
@@ -413,11 +509,8 @@ class RemoteSessionRun {
           '/v0/execution/sessions',
           {
             method: 'POST',
-            body: encodeExecutionHostStartRequest(
-              buildRemoteExecutionHostStartRequest(
-                this.params.providerId,
-                this.params.config,
-              ),
+            body: encodeExecutionStartRequest(
+              buildWireStartRequest(this.params.providerId, this.params.config),
             ),
           },
         )
@@ -502,7 +595,7 @@ class RemoteSessionRun {
   }
 
   private dispatchRawEvent(raw: string): void {
-    const decoded = decodeExecutionHostEventEnvelope(raw)
+    const decoded = decodeExecutionEventEnvelope(raw)
     if (!decoded.ok) return
     const envelope = decoded.value
     if (envelope.sessionId !== this.params.config.sessionId) return
@@ -514,9 +607,17 @@ class RemoteSessionRun {
 
   private dispatchEvent(event: ExecutionHostEvent): void {
     switch (event.kind) {
-      case 'delta':
-        this.notifyDelta(event.delta)
+      case 'delta': {
+        // A wire delta kind with no local counterpart is not forwarded — the
+        // session service has no branch that could read it. It is still
+        // evidence the daemon is working, though, and before the mapping layer
+        // existed every delta reached applyDelta and bumped liveness on the way
+        // in. The heartbeat keeps that signal without inventing a local delta.
+        const delta = toLocalSessionDelta(event.delta)
+        if (delta) this.notifyDelta(delta)
+        else this.notifyHeartbeat()
         break
+      }
       case 'status':
         for (const listener of this.statusListeners) listener(event.status)
         break
@@ -535,13 +636,17 @@ class RemoteSessionRun {
         for (const listener of this.activityListeners) listener(event.activity)
         break
       case 'heartbeat':
-        for (const listener of this.heartbeatListeners) listener()
+        this.notifyHeartbeat()
         break
     }
   }
 
   private notifyDelta(delta: SessionDelta): void {
     for (const listener of this.deltaListeners) listener(delta)
+  }
+
+  private notifyHeartbeat(): void {
+    for (const listener of this.heartbeatListeners) listener()
   }
 
   private enqueueCommand(command: ExecutionHostCommand): void {
@@ -569,8 +674,8 @@ class RemoteSessionRun {
         )}/commands`,
         {
           method: 'POST',
-          body: encodeExecutionHostCommandEnvelope({
-            protocolVersion: EXECUTION_HOST_PROTOCOL_VERSION,
+          body: encodeExecutionCommandEnvelope({
+            protocolVersion: EXECUTION_PROTOCOL_VERSION,
             sessionId: this.params.config.sessionId,
             command,
           }),
@@ -594,7 +699,7 @@ class RemoteSessionRun {
     if (this.stopped) return
     this.stopped = true
     if (this.started) {
-      void this.postCommand({ kind: 'stop' })
+      void this.postCommand(buildWireStopCommand())
     }
     this.abort.abort()
   }
@@ -624,26 +729,6 @@ class RemoteSessionRun {
       )
     }
     return this.connection
-  }
-}
-
-function buildSendMessageCommand(
-  text: string,
-  attachments?: Attachment[],
-  skillSelections?: SkillSelection[],
-  options?: {
-    deliveryMode: MidRunInputMode
-    queuedInputId?: string | null
-    expectedProviderTurnId?: string | null
-    interactionResponse?: InteractionResponse
-  },
-): ExecutionHostCommand {
-  return {
-    kind: 'send-message',
-    text,
-    ...(attachments ? { attachments } : {}),
-    ...(skillSelections ? { skillSelections } : {}),
-    ...(options ? { options } : {}),
   }
 }
 

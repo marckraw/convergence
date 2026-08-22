@@ -40,6 +40,32 @@ function credentialStatusText(
   return 'Configured'
 }
 
+/**
+ * What the daemon said about itself, when it said anything. A daemon that
+ * serves no `/health` reports null here, and the line is simply absent — an
+ * unknown version must not be dressed up as an answer.
+ */
+function connectionDaemonText(
+  result: RemoteExecutionHostConnectionResult,
+): string | null {
+  const daemon = result.daemon
+  if (!daemon) return null
+  const parts = [`agents-daemon ${daemon.version ?? 'unknown version'}`]
+  if (daemon.apiVersion) parts.push(`API ${daemon.apiVersion}`)
+  return parts.join(' · ')
+}
+
+function connectionCapabilitiesText(
+  result: RemoteExecutionHostConnectionResult,
+): string | null {
+  const capabilities = result.daemon?.protocolCapabilities
+  if (!capabilities) return null
+  if (capabilities.length === 0) {
+    return 'No execution protocol capabilities advertised'
+  }
+  return `${capabilities.length} execution protocol capabilities: ${capabilities.join(', ')}`
+}
+
 function connectionProvidersText(
   result: RemoteExecutionHostConnectionResult,
 ): string | null {
@@ -228,9 +254,19 @@ export const ExecutionHostFields: FC<ExecutionHostFieldsProps> = ({
           role={connectionResult.ok ? 'status' : 'alert'}
         >
           <p>{connectionResult.message}</p>
+          {connectionDaemonText(connectionResult) && (
+            <p className="mt-1 text-xs opacity-80">
+              {connectionDaemonText(connectionResult)}
+            </p>
+          )}
           {connectionProvidersText(connectionResult) && (
             <p className="mt-1 text-xs opacity-80">
               Providers: {connectionProvidersText(connectionResult)}
+            </p>
+          )}
+          {connectionCapabilitiesText(connectionResult) && (
+            <p className="mt-1 break-words text-xs opacity-80">
+              {connectionCapabilitiesText(connectionResult)}
             </p>
           )}
         </div>

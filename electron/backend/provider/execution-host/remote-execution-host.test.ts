@@ -5,11 +5,15 @@ import type {
   SessionStartConfig,
   SessionStatus,
 } from '../provider.types'
-import type { ExecutionHostEventEnvelope } from './execution-host-protocol.types'
+import type { ExecutionHostEventEnvelope } from '@mrck-labs/execution-host-protocol'
 import {
   describeProviderExecutionHostContract,
   type ExecutionHostContractContext,
 } from './execution-host.contract'
+import {
+  DAEMON_HEALTH_FIXTURE_0_26_1,
+  daemonHealthFixtureWithoutDescriptor,
+} from './execution-host-health.fixture'
 import { RemoteExecutionHost } from './remote-execution-host'
 import { RemoteExecutionHostError } from './remote-execution-host.types'
 
@@ -42,6 +46,11 @@ interface StubDaemon {
   commandEnvelopes: Array<Record<string, unknown>>
   eventStreamLastEventIds: Array<string | null>
   setMetaStatus: (status: number) => void
+  /** Raw `/health` body; null makes the route 404, as an older daemon does. */
+  setHealthBody: (body: string | null) => void
+  /** A proxy that swallows `/health` by hanging instead of answering. */
+  setHealthHangs: (hangs: boolean) => void
+  healthRequests: Array<{ authorization: string | null }>
   setStartStatus: (status: number) => void
   setCommandStatus: (status: number) => void
   setEventsStatus: (status: number) => void
@@ -53,10 +62,13 @@ function createStubDaemon(): StubDaemon {
   const startRequests: Array<Record<string, unknown>> = []
   const commandEnvelopes: Array<Record<string, unknown>> = []
   const eventStreamLastEventIds: Array<string | null> = []
+  const healthRequests: Array<{ authorization: string | null }> = []
   const current: {
     controller: ReadableStreamDefaultController<Uint8Array> | null
   } = { controller: null }
   let metaStatus = 200
+  let healthBody: string | null = DAEMON_HEALTH_FIXTURE_0_26_1
+  let healthHangs = false
   let startStatus = 201
   let commandStatus = 202
   let eventsStatus = 200
@@ -82,6 +94,28 @@ function createStubDaemon(): StubDaemon {
   const fetchFn = (async (input: unknown, init?: RequestInit) => {
     const url = String(input)
     const method = init?.method ?? 'GET'
+
+    if (url.endsWith('/health')) {
+      healthRequests.push({
+        authorization: headerValue(init?.headers, 'Authorization'),
+      })
+      if (healthHangs) {
+        // Like real fetch, the only thing that settles this is the caller's
+        // own abort signal.
+        return new Promise<Response>((_resolve, reject) => {
+          init?.signal?.addEventListener('abort', () =>
+            reject(new Error('The operation was aborted due to timeout')),
+          )
+        })
+      }
+      if (healthBody === null) {
+        return jsonResponse({ error: 'not found' }, 404)
+      }
+      return new Response(healthBody, {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      })
+    }
 
     if (url.endsWith('/v0/meta')) {
       if (metaStatus !== 200) {
@@ -159,8 +193,15 @@ function createStubDaemon(): StubDaemon {
     startRequests,
     commandEnvelopes,
     eventStreamLastEventIds,
+    healthRequests,
     setMetaStatus(status) {
       metaStatus = status
+    },
+    setHealthBody(body) {
+      healthBody = body
+    },
+    setHealthHangs(hangs) {
+      healthHangs = hangs
     },
     setStartStatus(status) {
       startStatus = status
@@ -174,7 +215,10 @@ function createStubDaemon(): StubDaemon {
   }
 }
 
-function createHost(stub: StubDaemon): RemoteExecutionHost {
+function createHost(
+  stub: StubDaemon,
+  options: { healthProbeTimeoutMs?: number } = {},
+): RemoteExecutionHost {
   return new RemoteExecutionHost({
     connection: {
       resolveConnection: async () => ({
@@ -184,7 +228,102 @@ function createHost(stub: StubDaemon): RemoteExecutionHost {
     },
     fetch: stub.fetchFn,
     reconnect: { maxAttempts: 2, wait: async () => {} },
+    ...options,
   })
+}
+
+interface DaemonIdentity {
+  version: string
+  providerId: string
+}
+
+interface RacingDaemon {
+  fetchFn: typeof fetch
+  /** Answers the nth `/health` request, 0-based in arrival order. */
+  releaseHealth: (index: number) => void
+  /** Answers the nth `/v0/meta` request, 0-based in arrival order. */
+  releaseMeta: (index: number) => void
+}
+
+/**
+ * A daemon whose answers are held until the test releases them, so two
+ * overlapping refreshes can be interleaved deliberately. Each refresh gets its
+ * own identity — a different version on `/health` and a different provider on
+ * `/v0/meta` — which is what makes a mismatched pair visible.
+ */
+function createRacingDaemon(identities: DaemonIdentity[]): RacingDaemon {
+  const gate = () => {
+    let release!: () => void
+    const promise = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    return { promise, release }
+  }
+  const healthGates = identities.map(gate)
+  const metaGates = identities.map(gate)
+  let healthCalls = 0
+  let metaCalls = 0
+
+  const jsonResponse = (body: unknown): Response =>
+    new Response(JSON.stringify(body), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    })
+
+  const fetchFn = (async (input: unknown) => {
+    const url = String(input)
+    if (url.endsWith('/health')) {
+      const identity = identities[healthCalls]
+      await healthGates[healthCalls++].promise
+      return jsonResponse({
+        ...(JSON.parse(DAEMON_HEALTH_FIXTURE_0_26_1) as Record<
+          string,
+          unknown
+        >),
+        version: identity.version,
+      })
+    }
+    if (url.endsWith('/v0/meta')) {
+      const identity = identities[metaCalls]
+      await metaGates[metaCalls++].promise
+      return jsonResponse({
+        providers: [
+          {
+            id: identity.providerId,
+            label: identity.providerId,
+            available: true,
+            authenticated: true,
+            models: [],
+            features: { resume: true, followup: true },
+          },
+        ],
+      })
+    }
+    throw new Error(`Unexpected request: ${url}`)
+  }) as typeof fetch
+
+  return {
+    fetchFn,
+    releaseHealth: (index) => healthGates[index].release(),
+    releaseMeta: (index) => metaGates[index].release(),
+  }
+}
+
+function createRacingHost(racing: RacingDaemon): RemoteExecutionHost {
+  return new RemoteExecutionHost({
+    connection: {
+      resolveConnection: async () => ({
+        baseUrl: 'http://daemon.test',
+        token: 'test-token',
+      }),
+    },
+    fetch: racing.fetchFn,
+  })
+}
+
+/** Lets every already-scheduled continuation run before the test goes on. */
+async function settleScheduledWork(): Promise<void> {
+  await new Promise((resolve) => setTimeout(resolve, 0))
 }
 
 function startConfig(sessionId: string): SessionStartConfig {
@@ -277,6 +416,173 @@ describe('RemoteExecutionHost', () => {
     expect(descriptors.map((d) => d.id)).toEqual(['claude', 'codex'])
   })
 
+  describe('/health handshake', () => {
+    it('records what agents-daemon 0.26.1 says about itself', async () => {
+      await host.refreshProviders()
+      const handshake = host.handshake()
+
+      expect(handshake?.status).toBe('connected')
+      expect(handshake?.daemonVersion).toBe('0.26.1')
+      expect(handshake?.apiVersion).toBe('v0')
+      expect(handshake?.executionProtocolCapabilities).toHaveLength(17)
+    })
+
+    it('asks for /health without a token, because the route needs none', async () => {
+      await host.refreshProviders()
+      expect(stub.healthRequests).not.toHaveLength(0)
+      for (const request of stub.healthRequests) {
+        expect(request.authorization).toBeNull()
+      }
+    })
+
+    it('still lists providers when the daemon serves no /health', async () => {
+      stub.setHealthBody(null)
+      await expect(host.refreshProviders()).resolves.toHaveLength(2)
+      expect(host.handshake()).toBeNull()
+    })
+
+    it('degrades to connected-without-capabilities when /health omits the descriptor', async () => {
+      stub.setHealthBody(JSON.stringify(daemonHealthFixtureWithoutDescriptor()))
+
+      await host.refreshProviders()
+      expect(host.handshake()).toMatchObject({
+        status: 'connected',
+        daemonVersion: '0.26.1',
+        executionProtocolCapabilities: [],
+      })
+    })
+
+    it('calls a daemon on a later protocol incompatible', async () => {
+      stub.setHealthBody(
+        JSON.stringify({
+          ...(JSON.parse(DAEMON_HEALTH_FIXTURE_0_26_1) as Record<
+            string,
+            unknown
+          >),
+          version: '0.99.0',
+          executionProtocol: { version: 2, capabilities: ['deltas.append.v2'] },
+        }),
+      )
+
+      await host.refreshProviders()
+      expect(host.handshake()).toMatchObject({
+        status: 'incompatible',
+        daemonVersion: '0.99.0',
+      })
+    })
+
+    it('lists providers when /health never answers, and says nothing about the daemon', async () => {
+      const hanging = createStubDaemon()
+      hanging.setHealthHangs(true)
+      const hangingHost = createHost(hanging, { healthProbeTimeoutMs: 20 })
+
+      await expect(hangingHost.refreshProviders()).resolves.toHaveLength(2)
+      expect(hangingHost.handshake()).toBeNull()
+    })
+
+    it('leaves providers and handshake from the same daemon when two refreshes overlap', async () => {
+      const racing = createRacingDaemon([
+        { version: '0.26.1', providerId: 'claude' },
+        { version: '0.27.0', providerId: 'codex' },
+      ])
+      const racingHost = createRacingHost(racing)
+
+      const first = racingHost.refreshProviders()
+      await settleScheduledWork()
+      const second = racingHost.refreshProviders()
+      await settleScheduledWork()
+
+      // The listings land in order, the handshakes in the opposite order —
+      // the interleave a settings change produces.
+      racing.releaseMeta(0)
+      await settleScheduledWork()
+      racing.releaseMeta(1)
+      await settleScheduledWork()
+
+      // Both listings have landed and neither handshake has. Nothing from a
+      // refresh may be visible until both values land together, so a reader
+      // mid-refresh still sees the empty pre-refresh cache — not one daemon's
+      // providers under no version at all.
+      expect(racingHost.capabilities()).toEqual([])
+      expect(racingHost.handshake()).toBeNull()
+
+      racing.releaseHealth(1)
+      await second
+      racing.releaseHealth(0)
+      await first
+
+      expect(racingHost.capabilities().map((c) => c.providerId)).toEqual([
+        'codex',
+      ])
+      expect(racingHost.handshake()?.daemonVersion).toBe('0.27.0')
+    })
+
+    it('does not let a slow refresh finishing last overwrite a newer one', async () => {
+      const racing = createRacingDaemon([
+        { version: '0.26.1', providerId: 'claude' },
+        { version: '0.27.0', providerId: 'codex' },
+      ])
+      const racingHost = createRacingHost(racing)
+
+      const first = racingHost.refreshProviders()
+      await settleScheduledWork()
+      const second = racingHost.refreshProviders()
+      await settleScheduledWork()
+
+      racing.releaseMeta(1)
+      racing.releaseHealth(1)
+      await second
+      expect(racingHost.handshake()?.daemonVersion).toBe('0.27.0')
+
+      racing.releaseMeta(0)
+      racing.releaseHealth(0)
+      await first
+
+      expect(racingHost.capabilities().map((c) => c.providerId)).toEqual([
+        'codex',
+      ])
+      expect(racingHost.handshake()?.daemonVersion).toBe('0.27.0')
+    })
+
+    it('hands the superseded refresh the newer daemon listing, not its own', async () => {
+      const racing = createRacingDaemon([
+        { version: '0.26.1', providerId: 'claude' },
+        { version: '0.27.0', providerId: 'codex' },
+      ])
+      const racingHost = createRacingHost(racing)
+
+      const first = racingHost.refreshProviders()
+      await settleScheduledWork()
+      const second = racingHost.refreshProviders()
+      await settleScheduledWork()
+
+      racing.releaseMeta(1)
+      racing.releaseHealth(1)
+      await second
+
+      racing.releaseMeta(0)
+      racing.releaseHealth(0)
+
+      // testRemoteExecutionHostConnection reads this return value and then
+      // handshake(), back to back. A superseded refresh that reported its own
+      // dead listing would hand the dialog one daemon's providers under the
+      // other daemon's version and capability badge.
+      const supersededListing = await first
+      expect(supersededListing.map((p) => p.providerId)).toEqual(['codex'])
+    })
+
+    it('leaves the handshake untouched when the provider listing fails', async () => {
+      await host.refreshProviders()
+      expect(host.handshake()?.daemonVersion).toBe('0.26.1')
+
+      stub.setMetaStatus(500)
+      await expect(host.refreshProviders()).rejects.toBeInstanceOf(
+        RemoteExecutionHostError,
+      )
+      expect(host.handshake()?.daemonVersion).toBe('0.26.1')
+    })
+  })
+
   it('starts a session, posts the start request, and streams events in order', async () => {
     const deltas: SessionDelta[] = []
     const statuses: SessionStatus[] = []
@@ -315,6 +621,43 @@ describe('RemoteExecutionHost', () => {
     ])
     expect(statuses).toEqual(['running'])
     expect(tokens).toEqual(['resume-1'])
+
+    handle.stop()
+  })
+
+  /**
+   * Before the mapping layer, every wire delta reached SessionService.applyDelta,
+   * which bumps liveness before it switches on kind — so an unreadable kind was
+   * "bump, then ignore". Filtering the delta out must not also throw away the
+   * bump: the daemon spoke, and that is what liveness measures.
+   */
+  it('bumps liveness without forwarding a delta kind it cannot map', async () => {
+    const deltas: SessionDelta[] = []
+    const heartbeats: number[] = []
+
+    const handle = host.start('claude', startConfig('s-1'))
+    handle.onDelta((delta) => deltas.push(delta))
+    handle.onActivityHeartbeat?.(() => heartbeats.push(1))
+
+    await waitUntil(
+      () => stub.eventStreamLastEventIds.length === 1,
+      'event stream to open',
+    )
+
+    stub.emit(
+      envelope(1, {
+        kind: 'delta',
+        delta: {
+          kind: 'turn.patch',
+          turnId: 'turn-1',
+          patch: { status: 'completed' },
+        },
+      }),
+    )
+
+    await waitUntil(() => heartbeats.length === 1, 'the liveness bump')
+    expect(heartbeats).toHaveLength(1)
+    expect(deltas).toEqual([])
 
     handle.stop()
   })

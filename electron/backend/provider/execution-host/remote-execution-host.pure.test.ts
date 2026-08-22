@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { EXECUTION_HOST_PROTOCOL_VERSION } from './execution-host-protocol.types'
+import { EXECUTION_PROTOCOL_VERSION } from '@mrck-labs/execution-host-protocol'
+import { buildWireStartRequest } from './execution-host-wire-mapping.pure'
 import {
-  buildRemoteExecutionHostStartRequest,
   describeRemoteExecutionHostFailure,
   capabilitiesForRemoteProvider,
   createSseParser,
@@ -150,7 +150,7 @@ describe('descriptorForRemoteProvider', () => {
 
 describe('start request and response', () => {
   it('builds a versioned start request around the session config', () => {
-    const request = buildRemoteExecutionHostStartRequest('claude', {
+    const request = buildWireStartRequest('claude', {
       sessionId: 's-1',
       workingDirectory: '/work',
       initialMessage: 'hello',
@@ -158,7 +158,7 @@ describe('start request and response', () => {
       effort: null,
       continuationToken: null,
     })
-    expect(request.protocolVersion).toBe(EXECUTION_HOST_PROTOCOL_VERSION)
+    expect(request.protocolVersion).toBe(EXECUTION_PROTOCOL_VERSION)
     expect(request.providerId).toBe('claude')
     expect(request.config.sessionId).toBe('s-1')
   })

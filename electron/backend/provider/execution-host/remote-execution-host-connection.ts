@@ -1,5 +1,6 @@
 import type { AppSettingsService } from '../../app-settings/app-settings.service'
 import type { ExecutionHostDaemonCredentialsService } from '../../credentials/execution-host-daemon-credentials.service'
+import type { EndpointHandshakeResult } from './execution-host-handshake.types'
 import type { RemoteExecutionHost } from './remote-execution-host'
 import {
   RemoteExecutionHostError,
@@ -17,6 +18,18 @@ export type RemoteExecutionHostConnectionState =
   | 'auth-failed'
   | 'invalid-response'
   | 'daemon-error'
+  | 'incompatible'
+
+/**
+ * What the daemon said about itself during the `/health` handshake. Null means
+ * it did not answer one — an older daemon, or a proxy that hides the route —
+ * which is "unknown", not "unsupported".
+ */
+export interface RemoteExecutionHostDaemonSummary {
+  version: string | null
+  apiVersion: string | null
+  protocolCapabilities: string[]
+}
 
 export interface RemoteExecutionHostConnectionResult {
   ok: boolean
@@ -24,6 +37,7 @@ export interface RemoteExecutionHostConnectionResult {
   baseUrl: string | null
   message: string
   providers: RemoteExecutionHostProviderInfo[] | null
+  daemon: RemoteExecutionHostDaemonSummary | null
 }
 
 interface AppSettingsConnectionResolverDeps {
@@ -98,6 +112,7 @@ export async function testRemoteExecutionHostConnection(deps: {
       baseUrl: null,
       message: 'Remote execution host base URL is not configured.',
       providers: null,
+      daemon: null,
     }
   }
   if (inspected.state === 'missing-token') {
@@ -107,11 +122,33 @@ export async function testRemoteExecutionHostConnection(deps: {
       baseUrl: inspected.baseUrl,
       message: 'Remote execution host API token is not configured.',
       providers: null,
+      daemon: null,
     }
   }
 
   try {
     const providers = await deps.host.refreshProviders()
+    const handshake = deps.host.handshake()
+    const daemon = daemonSummary(handshake)
+
+    // The handshake only ever vetoes a connection the listing already allowed,
+    // and only for the one thing it can prove: a daemon speaking a protocol
+    // this build cannot read. Anything else it reports is added detail, never
+    // a downgrade — a daemon that serves no /health at all connects exactly as
+    // it did before.
+    if (handshake?.status === 'incompatible') {
+      return {
+        ok: false,
+        state: 'incompatible',
+        baseUrl: inspected.baseUrl,
+        message:
+          handshake.detail ??
+          'Remote execution host speaks a protocol this app does not support.',
+        providers,
+        daemon,
+      }
+    }
+
     return {
       ok: true,
       state: 'connected',
@@ -120,6 +157,7 @@ export async function testRemoteExecutionHostConnection(deps: {
         providers.length === 1 ? '' : 's'
       } available.`,
       providers,
+      daemon,
     }
   } catch (error) {
     return {
@@ -131,7 +169,19 @@ export async function testRemoteExecutionHostConnection(deps: {
           ? error.message
           : 'Remote execution host returned an unexpected error.',
       providers: null,
+      daemon: null,
     }
+  }
+}
+
+function daemonSummary(
+  handshake: EndpointHandshakeResult | null,
+): RemoteExecutionHostDaemonSummary | null {
+  if (!handshake) return null
+  return {
+    version: handshake.daemonVersion,
+    apiVersion: handshake.apiVersion,
+    protocolCapabilities: handshake.executionProtocolCapabilities,
   }
 }
 

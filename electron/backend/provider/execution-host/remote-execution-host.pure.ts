@@ -1,6 +1,4 @@
-import type { ProviderDescriptor, SessionStartConfig } from '../provider.types'
-import type { ExecutionHostStartRequest } from './execution-host-protocol.types'
-import { EXECUTION_HOST_PROTOCOL_VERSION } from './execution-host-protocol.types'
+import type { ProviderDescriptor } from '../provider.types'
 import type { ExecutionHostProviderCapabilities } from './execution-host.types'
 import {
   RemoteExecutionHostError,
@@ -114,18 +112,6 @@ export function descriptorForRemoteProvider(
       supportsInterrupt: true,
       defaultRunningMode: 'follow-up',
     },
-  }
-}
-
-export function buildRemoteExecutionHostStartRequest(
-  providerId: string,
-  config: SessionStartConfig,
-): ExecutionHostStartRequest {
-  return {
-    protocolVersion: EXECUTION_HOST_PROTOCOL_VERSION,
-    providerId,
-    config,
-    ...(config.workspace ? { workspace: config.workspace } : {}),
   }
 }
 

@@ -145,6 +145,18 @@ export type RemoteExecutionHostConnectionState =
   | 'auth-failed'
   | 'invalid-response'
   | 'daemon-error'
+  | 'incompatible'
+
+/**
+ * What the daemon reported about itself during the `/health` handshake. Null
+ * means it answered none — an older daemon, or a proxy hiding the route — so
+ * the settings surface says nothing rather than guessing.
+ */
+export interface RemoteExecutionHostDaemonSummary {
+  version: string | null
+  apiVersion: string | null
+  protocolCapabilities: string[]
+}
 
 export interface RemoteExecutionHostProviderSummary {
   providerId: string
@@ -161,6 +173,7 @@ export interface RemoteExecutionHostConnectionResult {
   baseUrl: string | null
   message: string
   providers: RemoteExecutionHostProviderSummary[] | null
+  daemon: RemoteExecutionHostDaemonSummary | null
 }
 
 export type RemoteSessionWorkspaceResult =

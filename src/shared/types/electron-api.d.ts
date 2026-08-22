@@ -2518,6 +2518,7 @@ interface RemoteExecutionHostConnectionResultData {
     | 'auth-failed'
     | 'invalid-response'
     | 'daemon-error'
+    | 'incompatible'
   baseUrl: string | null
   message: string
   providers: Array<{
@@ -2528,6 +2529,11 @@ interface RemoteExecutionHostConnectionResultData {
     supportsContinuation: boolean
     models: Array<{ id: string; label: string }>
   }> | null
+  daemon: {
+    version: string | null
+    apiVersion: string | null
+    protocolCapabilities: string[]
+  } | null
 }
 
 declare global {
