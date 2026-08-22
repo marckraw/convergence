@@ -69,6 +69,16 @@ type FetchFn = typeof fetch
  */
 const DEFAULT_MAX_RECONNECT_ATTEMPTS = 10
 
+/**
+ * Emergence's number, and its reasoning with it
+ * (`packages/client-core/src/endpoint/endpoint-handshake.service.ts:11`):
+ * `/health` runs provider-readiness probes and takes several seconds cold, so
+ * a tight timeout misreports a healthy daemon as one that answered nothing.
+ * The cap exists for the other failure: a proxy that swallows the route by
+ * hanging rather than 404ing would otherwise take the whole refresh with it.
+ */
+const DEFAULT_HEALTH_PROBE_TIMEOUT_MS = 15_000
+
 export interface RemoteExecutionHostDeps {
   connection: RemoteExecutionHostConnectionResolver
   fetch?: FetchFn
@@ -77,6 +87,8 @@ export interface RemoteExecutionHostDeps {
     delayMs?: (attempt: number) => number
     wait?: (ms: number) => Promise<void>
   }
+  /** Overridable so tests can prove the cap without waiting 15 seconds. */
+  healthProbeTimeoutMs?: number
   /**
    * Called after each processed event envelope with its sequence number.
    * Callers persist this to resume the stream after an app restart.
@@ -100,11 +112,20 @@ export class RemoteExecutionHost implements ProviderExecutionHost {
   private readonly maxReconnectAttempts: number
   private readonly reconnectDelayMs: (attempt: number) => number
   private readonly wait: (ms: number) => Promise<void>
+  private readonly healthProbeTimeoutMs: number
   private providers: RemoteExecutionHostProviderInfo[] = []
   private handshakeResult: EndpointHandshakeResult | null = null
+  /**
+   * Bumped by every refresh so a slow one that finishes last cannot overwrite
+   * a newer one's answer. Same reason Emergence's handshake service keeps one
+   * per endpoint (`endpoint-handshake.service.ts:36-40`).
+   */
+  private refreshGeneration = 0
 
   constructor(private readonly deps: RemoteExecutionHostDeps) {
     this.fetchFn = deps.fetch ?? fetch
+    this.healthProbeTimeoutMs =
+      deps.healthProbeTimeoutMs ?? DEFAULT_HEALTH_PROBE_TIMEOUT_MS
     this.maxReconnectAttempts =
       deps.reconnect?.maxAttempts ?? DEFAULT_MAX_RECONNECT_ATTEMPTS
     this.reconnectDelayMs =
@@ -118,8 +139,13 @@ export class RemoteExecutionHost implements ProviderExecutionHost {
    * Fetches the daemon provider listing and replaces the capability cache,
    * shaking hands with the daemon over `/health` on the way. Throws
    * RemoteExecutionHostError; on failure the previous cache stays in place.
+   *
+   * Returns the cache as it stands after the commit, not this call's own read:
+   * a refresh overtaken by a newer one reports the newer daemon, so a caller
+   * that reads handshake() next is never handed a mismatched pair.
    */
   async refreshProviders(): Promise<RemoteExecutionHostProviderInfo[]> {
+    const generation = ++this.refreshGeneration
     const connection = await this.deps.connection.resolveConnection()
     // Started before the listing rather than after it: /health is
     // unauthenticated and independent, so the handshake costs no extra
@@ -129,14 +155,22 @@ export class RemoteExecutionHost implements ProviderExecutionHost {
     const meta = await this.requestJson(connection, '/v0/meta', {
       method: 'GET',
     })
-    this.providers = parseRemoteExecutionHostMeta(meta)
+    const providers = parseRemoteExecutionHostMeta(meta)
     const health = await healthProbe
     // The authenticated half of the handshake is the listing that just
     // succeeded, so 'ok' is a statement of fact at this line and nowhere
     // earlier.
-    this.handshakeResult = health
+    const handshake = health
       ? evaluateHandshake(health, null, { kind: 'ok' })
       : null
+    // Both values land in one synchronous step, and only if no newer refresh
+    // has started. Settings changes make two refreshes overlap routinely; a
+    // write on either side of an await pairs one daemon's providers with
+    // another daemon's name.
+    if (generation === this.refreshGeneration) {
+      this.providers = providers
+      this.handshakeResult = handshake
+    }
     return this.providers
   }
 
@@ -153,8 +187,9 @@ export class RemoteExecutionHost implements ProviderExecutionHost {
   /**
    * Reads `GET /health` without the Authorization header: the route is
    * unauthenticated, and a token has no business riding a request that does
-   * not need one. Never throws — a daemon that predates the route, or a proxy
-   * that swallows it, must still be able to list its providers.
+   * not need one. Never throws, and never outlasts its timeout — a daemon that
+   * predates the route, a proxy that swallows it with a 404, and a proxy that
+   * swallows it by hanging must all still be able to list their providers.
    */
   private async probeHealth(
     connection: RemoteExecutionHostConnection,
@@ -162,7 +197,10 @@ export class RemoteExecutionHost implements ProviderExecutionHost {
     try {
       const response = await this.fetchFn(
         buildRemoteUrl(connection.baseUrl, '/health'),
-        { method: 'GET' },
+        {
+          method: 'GET',
+          signal: AbortSignal.timeout(this.healthProbeTimeoutMs),
+        },
       )
       if (!response.ok) return null
       return parseDaemonHealth(JSON.parse(await response.text()))
