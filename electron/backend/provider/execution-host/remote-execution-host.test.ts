@@ -498,6 +498,14 @@ describe('RemoteExecutionHost', () => {
       await settleScheduledWork()
       racing.releaseMeta(1)
       await settleScheduledWork()
+
+      // Both listings have landed and neither handshake has. Nothing from a
+      // refresh may be visible until both values land together, so a reader
+      // mid-refresh still sees the empty pre-refresh cache — not one daemon's
+      // providers under no version at all.
+      expect(racingHost.capabilities()).toEqual([])
+      expect(racingHost.handshake()).toBeNull()
+
       racing.releaseHealth(1)
       await second
       racing.releaseHealth(0)
