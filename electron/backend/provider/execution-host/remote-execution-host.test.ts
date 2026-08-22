@@ -16,6 +16,8 @@ import {
 } from './execution-host-health.fixture'
 import { RemoteExecutionHost } from './remote-execution-host'
 import { RemoteExecutionHostError } from './remote-execution-host.types'
+import type { ProviderDebugSink } from '../../provider-debug/provider-debug-sink'
+import type { ProviderDebugEntry } from '../../provider-debug/provider-debug.types'
 
 const DAEMON_META = {
   providers: [
@@ -41,6 +43,8 @@ const DAEMON_META = {
 interface StubDaemon {
   fetchFn: typeof fetch
   emit: (envelope: ExecutionHostEventEnvelope) => void
+  /** Pushes an SSE frame the protocol decoder will reject. */
+  emitRaw: (data: string) => void
   dropStream: () => void
   startRequests: Array<Record<string, unknown>>
   commandEnvelopes: Array<Record<string, unknown>>
@@ -185,6 +189,9 @@ function createStubDaemon(): StubDaemon {
       log.push(envelope)
       current.controller?.enqueue(sseChunk(envelope))
     },
+    emitRaw(data) {
+      current.controller?.enqueue(encoder.encode(`data: ${data}\n\n`))
+    },
     dropStream() {
       const controller = current.controller
       current.controller = null
@@ -217,7 +224,10 @@ function createStubDaemon(): StubDaemon {
 
 function createHost(
   stub: StubDaemon,
-  options: { healthProbeTimeoutMs?: number } = {},
+  options: {
+    healthProbeTimeoutMs?: number
+    debugSink?: ProviderDebugSink
+  } = {},
 ): RemoteExecutionHost {
   return new RemoteExecutionHost({
     connection: {
@@ -874,5 +884,110 @@ describe('RemoteExecutionHost', () => {
     const error = new RemoteExecutionHostError('nope', 'http', 503)
     expect(error.kind).toBe('http')
     expect(error.status).toBe(503)
+  })
+
+  describe('wire trace', () => {
+    let entries: ProviderDebugEntry[]
+    let tracingHost: RemoteExecutionHost
+
+    beforeEach(async () => {
+      entries = []
+      tracingHost = createHost(stub, {
+        debugSink: {
+          record: (entry) => entries.push(entry),
+        },
+      })
+      await tracingHost.refreshProviders()
+    })
+
+    const eventEntries = (): ProviderDebugEntry[] =>
+      entries.filter((entry) => entry.channel === 'event')
+
+    it('records every wire event with its kind and a redacted shape', async () => {
+      const handle = tracingHost.start('claude', startConfig('s-1'))
+      handle.onDelta(() => {})
+
+      await waitUntil(
+        () => stub.eventStreamLastEventIds.length === 1,
+        'event stream to open',
+      )
+
+      stub.emit(envelope(1, { kind: 'status', status: 'completed' }))
+      stub.emit(
+        envelope(2, {
+          kind: 'delta',
+          delta: {
+            kind: 'session.patch',
+            patch: { status: 'completed', continuationToken: 'resume-secret' },
+          },
+        }),
+      )
+
+      await waitUntil(() => eventEntries().length === 2, 'events to be traced')
+
+      expect(eventEntries()[0]).toMatchObject({
+        sessionId: 's-1',
+        providerId: 'claude',
+        channel: 'event',
+        direction: 'in',
+        method: 'status',
+        payload: { seq: 1, kind: 'status', status: 'completed' },
+      })
+      expect(eventEntries()[1]).toMatchObject({
+        method: 'delta',
+        payload: {
+          seq: 2,
+          kind: 'delta',
+          delta: {
+            kind: 'session.patch',
+            patchFields: ['status', 'continuationToken'],
+            status: 'completed',
+            continuationToken: { chars: 13, form: 'opaque' },
+          },
+        },
+      })
+      expect(JSON.stringify(entries)).not.toContain('resume-secret')
+
+      handle.dispose?.()
+    })
+
+    it('records why an undecodable envelope was dropped', async () => {
+      const handle = tracingHost.start('claude', startConfig('s-1'))
+      handle.onDelta(() => {})
+
+      await waitUntil(
+        () => stub.eventStreamLastEventIds.length === 1,
+        'event stream to open',
+      )
+
+      stub.emitRaw('{"protocolVersion":1,"sessionId":"s-1","seq":1}')
+
+      await waitUntil(
+        () => eventEntries().length === 1,
+        'the drop to be traced',
+      )
+      expect(eventEntries()[0]?.note).toContain('undecodable envelope')
+
+      handle.dispose?.()
+    })
+
+    it('never quotes the message a command carries', async () => {
+      const handle = tracingHost.start('claude', startConfig('s-1'))
+      handle.onDelta(() => {})
+
+      await waitUntil(
+        () => stub.eventStreamLastEventIds.length === 1,
+        'event stream to open',
+      )
+      handle.sendMessage('the private follow-up')
+
+      await waitUntil(
+        () => entries.some((entry) => entry.method === 'send-message'),
+        'the command to be traced',
+      )
+      expect(JSON.stringify(entries)).not.toContain('private follow-up')
+
+      handle.dispose?.()
+    })
   })
 })

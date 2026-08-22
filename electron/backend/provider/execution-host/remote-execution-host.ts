@@ -58,6 +58,15 @@ import {
   type RemoteExecutionHostConnectionResolver,
   type RemoteExecutionHostProviderInfo,
 } from './remote-execution-host.types'
+import { describeWireEventShape } from './execution-host-wire-trace.pure'
+import {
+  noopDebugSink,
+  type ProviderDebugSink,
+} from '../../provider-debug/provider-debug-sink'
+import type {
+  ProviderDebugChannel,
+  ProviderDebugEntry,
+} from '../../provider-debug/provider-debug.types'
 
 type FetchFn = typeof fetch
 
@@ -94,6 +103,12 @@ export interface RemoteExecutionHostDeps {
    * Callers persist this to resume the stream after an app restart.
    */
   onEventSeq?: (sessionId: string, seq: number) => void
+  /**
+   * Receives a redacted description of every wire event, as the local provider
+   * adapters do for their own transports. Defaults to a no-op sink so tests and
+   * embedders that do not care pay nothing.
+   */
+  debugSink?: ProviderDebugSink
 }
 
 /**
@@ -113,6 +128,7 @@ export class RemoteExecutionHost implements ProviderExecutionHost {
   private readonly reconnectDelayMs: (attempt: number) => number
   private readonly wait: (ms: number) => Promise<void>
   private readonly healthProbeTimeoutMs: number
+  private readonly debugSink: ProviderDebugSink
   private providers: RemoteExecutionHostProviderInfo[] = []
   private handshakeResult: EndpointHandshakeResult | null = null
   /**
@@ -133,6 +149,7 @@ export class RemoteExecutionHost implements ProviderExecutionHost {
     this.wait =
       deps.reconnect?.wait ??
       ((ms) => new Promise((resolve) => setTimeout(resolve, ms)))
+    this.debugSink = deps.debugSink ?? noopDebugSink
   }
 
   /**
@@ -267,6 +284,11 @@ export class RemoteExecutionHost implements ProviderExecutionHost {
   /** @internal Shared by RemoteSessionRun. */
   notifyEventSeq(sessionId: string, seq: number): void {
     this.deps.onEventSeq?.(sessionId, seq)
+  }
+
+  /** @internal Shared by RemoteSessionRun. */
+  recordDebug(entry: ProviderDebugEntry): void {
+    this.debugSink.record(entry)
   }
 
   /**
@@ -523,6 +545,12 @@ class RemoteSessionRun {
       return
     }
 
+    this.recordDebug('lifecycle', {
+      direction: 'out',
+      note: this.params.resume
+        ? `reattached to remote session after seq ${this.lastSeq}`
+        : 'remote session start accepted by the daemon',
+    })
     this.started = true
     await this.flushPendingCommands()
     await this.consumeEventStream()
@@ -542,6 +570,10 @@ class RemoteSessionRun {
           this.abort.signal,
         )
         attempt = 0
+        this.recordDebug('lifecycle', {
+          direction: 'in',
+          note: `event stream open from seq ${this.lastSeq}`,
+        })
       } catch (error) {
         if (this.stopped) return
         attempt += 1
@@ -560,6 +592,10 @@ class RemoteSessionRun {
 
       // The daemon holds the stream open for a live session; reaching the
       // end means the connection dropped. Resume from the last sequence.
+      this.recordDebug('lifecycle', {
+        direction: 'in',
+        note: `event stream ended at seq ${this.lastSeq}; reconnecting`,
+      })
       attempt += 1
       if (attempt >= policy.maxAttempts) {
         this.failSession(
@@ -594,13 +630,71 @@ class RemoteSessionRun {
     }
   }
 
+  /**
+   * Records one redacted line of wire traffic to the session debug log. The
+   * remote host is the only adapter whose provider runs on another machine, so
+   * the debug log is the only place a remote turn can be inspected at all —
+   * every path that drops an event silently records why it dropped it.
+   */
+  private recordDebug(
+    channel: ProviderDebugChannel,
+    partial: Omit<
+      ProviderDebugEntry,
+      'sessionId' | 'providerId' | 'at' | 'channel'
+    >,
+  ): void {
+    this.params.host.recordDebug({
+      sessionId: this.params.config.sessionId,
+      providerId: this.params.providerId,
+      at: Date.now(),
+      channel,
+      ...partial,
+    })
+  }
+
   private dispatchRawEvent(raw: string): void {
     const decoded = decodeExecutionEventEnvelope(raw)
-    if (!decoded.ok) return
+    if (!decoded.ok) {
+      this.recordDebug('event', {
+        direction: 'in',
+        bytes: raw.length,
+        note: `dropped: undecodable envelope (${decoded.reason})`,
+      })
+      return
+    }
     const envelope = decoded.value
-    if (envelope.sessionId !== this.params.config.sessionId) return
-    if (envelope.seq <= this.lastSeq) return
+    if (envelope.sessionId !== this.params.config.sessionId) {
+      this.recordDebug('event', {
+        direction: 'in',
+        bytes: raw.length,
+        method: envelope.event.kind,
+        note: 'dropped: envelope belongs to another session',
+      })
+      return
+    }
+    if (envelope.seq <= this.lastSeq) {
+      this.recordDebug('event', {
+        direction: 'in',
+        bytes: raw.length,
+        method: envelope.event.kind,
+        payload: { seq: envelope.seq, lastSeq: this.lastSeq },
+        note: 'dropped: already-seen sequence',
+      })
+      return
+    }
     this.lastSeq = envelope.seq
+    this.recordDebug('event', {
+      direction: 'in',
+      bytes: raw.length,
+      method: envelope.event.kind,
+      payload: {
+        seq: envelope.seq,
+        ...describeWireEventShape(envelope.event),
+        ...(decoded.warnings?.length
+          ? { decodeWarnings: decoded.warnings }
+          : {}),
+      },
+    })
     this.dispatchEvent(envelope.event)
     this.params.host.notifyEventSeq(this.params.config.sessionId, envelope.seq)
   }
@@ -615,7 +709,14 @@ class RemoteSessionRun {
         // in. The heartbeat keeps that signal without inventing a local delta.
         const delta = toLocalSessionDelta(event.delta)
         if (delta) this.notifyDelta(delta)
-        else this.notifyHeartbeat()
+        else {
+          this.recordDebug('event', {
+            direction: 'in',
+            method: event.delta.kind,
+            note: 'wire delta has no local counterpart; counted as liveness only',
+          })
+          this.notifyHeartbeat()
+        }
         break
       }
       case 'status':
@@ -666,6 +767,11 @@ class RemoteSessionRun {
   }
 
   private async postCommand(command: ExecutionHostCommand): Promise<void> {
+    this.recordDebug('request', {
+      direction: 'out',
+      method: command.kind,
+      note: 'command posted to the daemon',
+    })
     try {
       await this.params.host.requestJson(
         this.requireConnection(),
