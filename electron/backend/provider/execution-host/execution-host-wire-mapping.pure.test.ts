@@ -29,6 +29,7 @@ import {
   EXECUTION_HOST_UNMAPPED_WIRE_FILE_CHANGE_FIELDS,
   EXECUTION_HOST_UNMAPPED_WIRE_ITEM_FIELDS,
   EXECUTION_HOST_UNMAPPED_WIRE_SESSION_PATCH_FIELDS,
+  EXECUTION_HOST_WORKSPACE_EXCLUSIVE_START_CONFIG_FIELDS,
 } from './execution-host-wire-mapping.pure'
 import type { SessionStartConfig } from '../provider.types'
 import type { SessionDelta } from '../../session/conversation-item.types'
@@ -315,7 +316,6 @@ describe('buildWireStartRequest', () => {
   it('round-trips a start request with a workspace source', () => {
     const request = buildWireStartRequest('claude', {
       ...localConfig,
-      workingDirectory: '',
       workspace: {
         repository: 'https://github.com/example/repo.git',
         ref: 'main',
@@ -330,6 +330,45 @@ describe('buildWireStartRequest', () => {
     expect(
       decodeExecutionStartRequest(encodeExecutionStartRequest(request)),
     ).toEqual({ ok: true, value: request })
+  })
+
+  /**
+   * The remote-start blocker. `workingDirectory` names a directory on the
+   * host -- since `projects.v1` the daemon resolves it as a Project -- while
+   * `workspace` asks it to clone a repository into a fresh worktree. Daemon
+   * 0.26.1 refuses a request that asks for both: HTTP 400 "A session cannot
+   * use both a Project working directory and a target repository." Convergence
+   * sent both, so every remote session start failed.
+   */
+  it('omits the working directory when the start carries a workspace', () => {
+    const request = buildWireStartRequest('claude', {
+      ...localConfig,
+      workspace: { repository: 'https://github.com/example/repo.git' },
+    })
+
+    expect(request.config).not.toHaveProperty('workingDirectory')
+    expect(Object.keys(request.config)).not.toContain('workingDirectory')
+    expect(request.workspace).toEqual({
+      repository: 'https://github.com/example/repo.git',
+    })
+  })
+
+  /**
+   * The other half of the exclusivity: a working directory with no workspace
+   * is a legitimate shape -- it is how a daemon-side Project start will look
+   * once RE3 adds the picker -- so the omission must stay conditional.
+   */
+  it('keeps the working directory when the start carries no workspace', () => {
+    const request = buildWireStartRequest('claude', localConfig)
+
+    expect(request.config.workingDirectory).toBe('/work/repo')
+    expect(request).not.toHaveProperty('workspace')
+  })
+
+  it('names the start-config fields a workspace excludes', () => {
+    expect(EXECUTION_HOST_WORKSPACE_EXCLUSIVE_START_CONFIG_FIELDS).toEqual([
+      'workingDirectory',
+    ])
   })
 
   it('rejects start requests with an invalid workspace source', () => {

@@ -64,6 +64,32 @@ export const EXECUTION_HOST_UNMAPPED_START_CONFIG_FIELDS = [
 ] as const satisfies readonly (keyof SessionStartConfig)[]
 
 /**
+ * Local start-config fields the wire must not carry *when the request also
+ * names a workspace*, because the daemon reads them as a competing instruction.
+ *
+ * `workingDirectory` on the wire means "run in this directory that already
+ * exists on the host" — since `projects.v1` the daemon resolves it as a
+ * Project. `workspace` means "clone this repository into a fresh per-session
+ * worktree". A start request carrying both asks the daemon for two different
+ * roots, and daemon 0.26.1 rejects the pair outright with HTTP 400: *"A session
+ * cannot use both a Project working directory and a target repository."*
+ *
+ * Convergence sent both, so every remote session start failed. The local value
+ * was never usable there anyway: it is a path on this machine, which is exactly
+ * why the start carries a workspace for the daemon to clone instead
+ * (`SessionStartConfig.workspace`, `requireRemoteWorkspace`).
+ *
+ * The omission is conditional on purpose. A daemon-side Project start — a
+ * working directory with no workspace — is a real shape the wire must keep
+ * expressing, and RE3 will produce it from a Project picker gated on
+ * `projects.v1`. Dropping `workingDirectory` unconditionally would weld that
+ * future shut.
+ */
+export const EXECUTION_HOST_WORKSPACE_EXCLUSIVE_START_CONFIG_FIELDS = [
+  'workingDirectory',
+] as const satisfies readonly (keyof SessionStartConfig)[]
+
+/**
  * Wire delta kinds Convergence receives but has no local delta for, so the
  * mapping returns null and the session never sees them.
  *
@@ -214,7 +240,9 @@ export const EXECUTION_HOST_UNSENT_LOCAL_SEND_OPTION_FIELDS = [
  * Builds the wire start request for a local session start. The local
  * `workspace` lives inside the config but is a sibling of it on the wire, so
  * it moves up here; everything on
- * EXECUTION_HOST_UNMAPPED_START_CONFIG_FIELDS is left behind.
+ * EXECUTION_HOST_UNMAPPED_START_CONFIG_FIELDS is left behind, and a request
+ * that carries a workspace also leaves
+ * EXECUTION_HOST_WORKSPACE_EXCLUSIVE_START_CONFIG_FIELDS behind.
  */
 export function buildWireStartRequest(
   providerId: string,
@@ -222,7 +250,7 @@ export function buildWireStartRequest(
 ): ExecutionStartRequest {
   const wireConfig: ExecutionStartConfig = {
     sessionId: config.sessionId,
-    workingDirectory: config.workingDirectory,
+    ...(config.workspace ? {} : { workingDirectory: config.workingDirectory }),
     initialMessage: config.initialMessage,
     model: config.model,
     effort: config.effort,

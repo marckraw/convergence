@@ -4,9 +4,19 @@
 
 The remote execution host speaks the daemon's real contract (MAR-2576).
 
-**Almost nothing here is meant to be visible, and that is the point.** Remote
-sessions behave exactly as they did; what changed is what Convergence is
-standing on when it talks to a daemon.
+**Remote sessions can start again.** Against agents-daemon 0.26.1, starting a
+session on a remote host failed outright with HTTP 400: _"A session cannot use
+both a Project working directory and a target repository."_ Convergence was
+sending the daemon two contradictory instructions in one request — a working
+directory (a path on your Mac, which since `projects.v1` the daemon reads as a
+Project) and a repository for it to clone. Older daemons ignored the first;
+0.26.1 refuses the pair. The start request now sends the working directory only
+when there is no repository to clone, so the remote path works against the
+current fleet. This was not introduced by the rewrite below — the previous code
+sent both fields too — but it is fixed here.
+
+**The rest of this change is meant to be invisible**, and that is the point:
+what changed is what Convergence is standing on when it talks to a daemon.
 
 **The wire types are no longer a hand-copy.** Convergence's remote path carried
 a frozen transcription of the daemon's protocol — the same version number, and
