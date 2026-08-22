@@ -19,12 +19,16 @@ import {
   buildWireStartRequest,
   buildWireStopCommand,
   toLocalSessionDelta,
+  toWireSessionDelta,
+  EXECUTION_HOST_UNSENT_LOCAL_DELTA_KINDS,
+  EXECUTION_HOST_UNSENT_LOCAL_ITEM_FIELDS,
   EXECUTION_HOST_UNMAPPED_START_CONFIG_FIELDS,
   EXECUTION_HOST_UNMAPPED_WIRE_DELTA_KINDS,
   EXECUTION_HOST_UNMAPPED_WIRE_ITEM_FIELDS,
   EXECUTION_HOST_UNMAPPED_WIRE_SESSION_PATCH_FIELDS,
 } from './execution-host-wire-mapping.pure'
 import type { SessionStartConfig } from '../provider.types'
+import type { SessionDelta } from '../../session/conversation-item.types'
 
 function eventEnvelope(event: ExecutionHostEvent): ExecutionHostEventEnvelope {
   return {
@@ -643,5 +647,150 @@ describe('toLocalSessionDelta', () => {
       itemId: 'item-9',
       patch: { text: 'Hello there', state: 'streaming' },
     })
+  })
+})
+
+/**
+ * Acceptance (b) of MAR-2576: a delta survives local -> wire -> local
+ * byte-for-byte. This is the proof the anti-corruption layer does not quietly
+ * corrupt the deltas it does carry — as opposed to the losses it declares.
+ */
+describe('delta round-trip local -> wire -> local', () => {
+  const roundTrippable: Array<[string, SessionDelta]> = [
+    [
+      'session.patch',
+      {
+        kind: 'session.patch',
+        patch: {
+          status: 'running',
+          attention: 'needs-approval',
+          activity: 'tool:Bash',
+          continuationToken: 'tok-1',
+          updatedAt: '2026-08-22T10:00:00.000Z',
+        },
+      },
+    ],
+    [
+      'conversation.item.add',
+      {
+        kind: 'conversation.item.add',
+        item: {
+          id: 'item-1',
+          turnId: null,
+          kind: 'message',
+          actor: 'assistant',
+          text: 'hello',
+          state: 'complete',
+          createdAt: '2026-08-22T10:00:00.000Z',
+          updatedAt: '2026-08-22T10:00:01.000Z',
+          providerMeta: {
+            providerId: 'claude',
+            providerItemId: null,
+            providerEventType: 'assistant',
+          },
+        },
+      },
+    ],
+    [
+      'conversation.item.patch',
+      {
+        kind: 'conversation.item.patch',
+        itemId: 'item-1',
+        patch: { text: 'hello there', state: 'streaming' },
+      },
+    ],
+  ]
+
+  it.each(roundTrippable)(
+    'round-trips a %s delta through the encoded envelope',
+    (_kind, local) => {
+      const wire = toWireSessionDelta(local)
+      expect(wire).not.toBeNull()
+      if (!wire) return
+
+      const encoded = encodeExecutionEventEnvelope({
+        protocolVersion: EXECUTION_PROTOCOL_VERSION,
+        sessionId: 'session-1',
+        seq: 1,
+        event: { kind: 'delta', delta: wire },
+      })
+      const decoded = decodeExecutionEventEnvelope(encoded)
+      expect(decoded.ok).toBe(true)
+      if (!decoded.ok || decoded.value.event.kind !== 'delta') return
+
+      const back = toLocalSessionDelta(decoded.value.event.delta)
+      expect(back).toEqual(local)
+
+      // The wire bytes are the thing that has to be stable: mapping the
+      // round-tripped delta back out must encode identically. The local
+      // object itself is only key-order-normalised, never changed in value.
+      expect(back).not.toBeNull()
+      if (!back) return
+      expect(JSON.stringify(toWireSessionDelta(back))).toEqual(
+        JSON.stringify(wire),
+      )
+    },
+  )
+
+  it('names the local-only item fields that do not reach the wire', () => {
+    expect(EXECUTION_HOST_UNSENT_LOCAL_ITEM_FIELDS).toEqual([
+      'turnId',
+      'attachmentIds',
+      'skillSelections',
+      'deliveryMode',
+      'action',
+    ])
+
+    const wire = toWireSessionDelta({
+      kind: 'conversation.item.add',
+      item: {
+        id: 'item-1',
+        turnId: 'turn-1',
+        kind: 'message',
+        actor: 'user',
+        text: 'hi',
+        attachmentIds: ['att-1'],
+        skillSelections: [{ id: 'skill-1' }] as never,
+        deliveryMode: 'steer',
+        state: 'complete',
+        createdAt: '2026-08-22T10:00:00.000Z',
+        updatedAt: '2026-08-22T10:00:01.000Z',
+        providerMeta: {
+          providerId: 'claude',
+          providerItemId: null,
+          providerEventType: 'user',
+        },
+      },
+    })
+
+    expect(wire).not.toBeNull()
+    if (!wire || wire.kind !== 'conversation.item.add') return
+    for (const field of EXECUTION_HOST_UNSENT_LOCAL_ITEM_FIELDS) {
+      expect(wire.item).not.toHaveProperty(field)
+    }
+  })
+
+  it('never sends local turn bookkeeping to a host', () => {
+    expect(EXECUTION_HOST_UNSENT_LOCAL_DELTA_KINDS).toEqual([
+      'turn.add',
+      'turn.fileChanges.add',
+    ])
+    expect(
+      toWireSessionDelta({
+        kind: 'turn.add',
+        turn: {
+          id: 'turn-1',
+          sessionId: 'session-1',
+          sequence: 1,
+          startedAt: '2026-08-22T10:00:00.000Z',
+          endedAt: null,
+          status: 'running',
+          summary: null,
+          providerAccountId: null,
+          model: null,
+          effort: null,
+        },
+      }),
+    ).toBeNull()
   })
 })

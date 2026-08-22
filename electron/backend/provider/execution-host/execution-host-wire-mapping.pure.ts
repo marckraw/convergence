@@ -96,6 +96,34 @@ export const EXECUTION_HOST_UNMAPPED_WIRE_ITEM_FIELDS = [
 ] as const
 
 /**
+ * Local delta kinds that never travel to a host, so the outbound mapping
+ * returns null for them.
+ *
+ * Turn records are Convergence's own bookkeeping, written by the turn-capture
+ * service against local runs. A host mints its own turns and would have no use
+ * for ours, and the local shapes carry fields (`providerAccountId`, `model`,
+ * `effort`, a `renamed` file status) the wire does not model at all.
+ */
+export const EXECUTION_HOST_UNSENT_LOCAL_DELTA_KINDS = [
+  'turn.add',
+  'turn.fileChanges.add',
+] as const satisfies readonly SessionDelta['kind'][]
+
+/**
+ * Local conversation-item fields that do not survive the trip to the wire.
+ * `turnId` is re-derived by whoever persists the item; the rest are
+ * Convergence-local concepts (see EXECUTION_HOST_UNMAPPED_WIRE_ITEM_FIELDS for
+ * the mirror image).
+ */
+export const EXECUTION_HOST_UNSENT_LOCAL_ITEM_FIELDS = [
+  'turnId',
+  'attachmentIds',
+  'skillSelections',
+  'deliveryMode',
+  'action',
+] as const
+
+/**
  * Wire `session.patch` fields with no local counterpart. The local session row
  * has neither: a remote pull request URL is read from the daemon's session
  * snapshot instead (`parseRemoteSessionWorkspaceInfo`), and Rooms are not a
@@ -272,6 +300,47 @@ export function toLocalSessionDelta(
         })),
       }
     case 'turn.patch':
+      return null
+  }
+}
+
+/**
+ * Translates a local delta into the wire one, or null when the local kind is
+ * never sent to a host (see EXECUTION_HOST_UNSENT_LOCAL_DELTA_KINDS).
+ *
+ * The outbound half of the anti-corruption layer. Convergence does not push
+ * deltas today — it only consumes them — but keeping the translation
+ * symmetric is what makes the mapping provable: a delta that survives
+ * local -> wire -> local unchanged is one the layer demonstrably does not
+ * corrupt.
+ */
+export function toWireSessionDelta(
+  delta: SessionDelta,
+): ExecutionSessionDelta | null {
+  switch (delta.kind) {
+    case 'session.patch':
+      return {
+        kind: 'session.patch',
+        patch: pickDefined(delta.patch, LOCAL_SESSION_PATCH_FIELDS),
+      }
+    case 'conversation.item.add':
+      return {
+        kind: 'conversation.item.add',
+        item: pickDefined<ExecutionConversationItem>(delta.item, [
+          'id',
+          'kind',
+          ...LOCAL_CONVERSATION_ITEM_PATCH_FIELDS,
+          'request',
+        ]),
+      }
+    case 'conversation.item.patch':
+      return {
+        kind: 'conversation.item.patch',
+        itemId: delta.itemId,
+        patch: pickDefined(delta.patch, LOCAL_CONVERSATION_ITEM_PATCH_FIELDS),
+      }
+    case 'turn.add':
+    case 'turn.fileChanges.add':
       return null
   }
 }
