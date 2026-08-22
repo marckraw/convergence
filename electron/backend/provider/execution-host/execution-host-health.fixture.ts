@@ -20,3 +20,20 @@ export const DAEMON_HEALTH_FIXTURE_0_26_1 =
 export const DAEMON_HEALTH_FIXTURE_VERSION = '0.26.1'
 export const DAEMON_HEALTH_FIXTURE_GIT_SHA =
   'f62fd1b2b2cd5046c37487062cadb0985f06289f'
+
+/**
+ * The same capture with the additive `executionProtocol` descriptor removed —
+ * what a daemon older than the descriptor answers. Used to prove the handshake
+ * degrades to connected-without-capabilities rather than refusing.
+ */
+export function daemonHealthFixtureWithoutDescriptor(): Record<
+  string,
+  unknown
+> {
+  const body = JSON.parse(DAEMON_HEALTH_FIXTURE_0_26_1) as Record<
+    string,
+    unknown
+  >
+  delete body.executionProtocol
+  return body
+}

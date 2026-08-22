@@ -10,6 +10,10 @@ import {
   describeProviderExecutionHostContract,
   type ExecutionHostContractContext,
 } from './execution-host.contract'
+import {
+  DAEMON_HEALTH_FIXTURE_0_26_1,
+  daemonHealthFixtureWithoutDescriptor,
+} from './execution-host-health.fixture'
 import { RemoteExecutionHost } from './remote-execution-host'
 import { RemoteExecutionHostError } from './remote-execution-host.types'
 
@@ -42,6 +46,9 @@ interface StubDaemon {
   commandEnvelopes: Array<Record<string, unknown>>
   eventStreamLastEventIds: Array<string | null>
   setMetaStatus: (status: number) => void
+  /** Raw `/health` body; null makes the route 404, as an older daemon does. */
+  setHealthBody: (body: string | null) => void
+  healthRequests: Array<{ authorization: string | null }>
   setStartStatus: (status: number) => void
   setCommandStatus: (status: number) => void
   setEventsStatus: (status: number) => void
@@ -53,10 +60,12 @@ function createStubDaemon(): StubDaemon {
   const startRequests: Array<Record<string, unknown>> = []
   const commandEnvelopes: Array<Record<string, unknown>> = []
   const eventStreamLastEventIds: Array<string | null> = []
+  const healthRequests: Array<{ authorization: string | null }> = []
   const current: {
     controller: ReadableStreamDefaultController<Uint8Array> | null
   } = { controller: null }
   let metaStatus = 200
+  let healthBody: string | null = DAEMON_HEALTH_FIXTURE_0_26_1
   let startStatus = 201
   let commandStatus = 202
   let eventsStatus = 200
@@ -82,6 +91,19 @@ function createStubDaemon(): StubDaemon {
   const fetchFn = (async (input: unknown, init?: RequestInit) => {
     const url = String(input)
     const method = init?.method ?? 'GET'
+
+    if (url.endsWith('/health')) {
+      healthRequests.push({
+        authorization: headerValue(init?.headers, 'Authorization'),
+      })
+      if (healthBody === null) {
+        return jsonResponse({ error: 'not found' }, 404)
+      }
+      return new Response(healthBody, {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      })
+    }
 
     if (url.endsWith('/v0/meta')) {
       if (metaStatus !== 200) {
@@ -159,8 +181,12 @@ function createStubDaemon(): StubDaemon {
     startRequests,
     commandEnvelopes,
     eventStreamLastEventIds,
+    healthRequests,
     setMetaStatus(status) {
       metaStatus = status
+    },
+    setHealthBody(body) {
+      healthBody = body
     },
     setStartStatus(status) {
       startStatus = status
@@ -275,6 +301,73 @@ describe('RemoteExecutionHost', () => {
     stub.setMetaStatus(500)
     const descriptors = await host.describe()
     expect(descriptors.map((d) => d.id)).toEqual(['claude', 'codex'])
+  })
+
+  describe('/health handshake', () => {
+    it('records what agents-daemon 0.26.1 says about itself', async () => {
+      await host.refreshProviders()
+      const handshake = host.handshake()
+
+      expect(handshake?.status).toBe('connected')
+      expect(handshake?.daemonVersion).toBe('0.26.1')
+      expect(handshake?.apiVersion).toBe('v0')
+      expect(handshake?.executionProtocolCapabilities).toHaveLength(17)
+    })
+
+    it('asks for /health without a token, because the route needs none', async () => {
+      await host.refreshProviders()
+      expect(stub.healthRequests).not.toHaveLength(0)
+      for (const request of stub.healthRequests) {
+        expect(request.authorization).toBeNull()
+      }
+    })
+
+    it('still lists providers when the daemon serves no /health', async () => {
+      stub.setHealthBody(null)
+      await expect(host.refreshProviders()).resolves.toHaveLength(2)
+      expect(host.handshake()).toBeNull()
+    })
+
+    it('degrades to connected-without-capabilities when /health omits the descriptor', async () => {
+      stub.setHealthBody(JSON.stringify(daemonHealthFixtureWithoutDescriptor()))
+
+      await host.refreshProviders()
+      expect(host.handshake()).toMatchObject({
+        status: 'connected',
+        daemonVersion: '0.26.1',
+        executionProtocolCapabilities: [],
+      })
+    })
+
+    it('calls a daemon on a later protocol incompatible', async () => {
+      stub.setHealthBody(
+        JSON.stringify({
+          ...(JSON.parse(DAEMON_HEALTH_FIXTURE_0_26_1) as Record<
+            string,
+            unknown
+          >),
+          version: '0.99.0',
+          executionProtocol: { version: 2, capabilities: ['deltas.append.v2'] },
+        }),
+      )
+
+      await host.refreshProviders()
+      expect(host.handshake()).toMatchObject({
+        status: 'incompatible',
+        daemonVersion: '0.99.0',
+      })
+    })
+
+    it('leaves the handshake untouched when the provider listing fails', async () => {
+      await host.refreshProviders()
+      expect(host.handshake()?.daemonVersion).toBe('0.26.1')
+
+      stub.setMetaStatus(500)
+      await expect(host.refreshProviders()).rejects.toBeInstanceOf(
+        RemoteExecutionHostError,
+      )
+      expect(host.handshake()?.daemonVersion).toBe('0.26.1')
+    })
   })
 
   it('starts a session, posts the start request, and streams events in order', async () => {

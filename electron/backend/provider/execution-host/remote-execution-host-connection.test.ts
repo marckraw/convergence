@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { AppSettings } from '../../app-settings/app-settings.types'
+import { DAEMON_HEALTH_FIXTURE_0_26_1 } from './execution-host-health.fixture'
 import { RemoteExecutionHost } from './remote-execution-host'
 import {
   AppSettingsRemoteExecutionHostConnectionResolver,
@@ -41,6 +42,28 @@ function hostWith(
 
 const okFetch = (async () =>
   new Response(JSON.stringify(META_RESPONSE), { status: 200 })) as typeof fetch
+
+/**
+ * A daemon that answers both routes: `/health` with a body of the caller's
+ * choosing, `/v0/meta` with the provider listing.
+ */
+function daemonFetch(healthBody: string | null): typeof fetch {
+  return (async (input: unknown) => {
+    if (String(input).endsWith('/health')) {
+      return healthBody === null
+        ? new Response('{}', { status: 404 })
+        : new Response(healthBody, { status: 200 })
+    }
+    return new Response(JSON.stringify(META_RESPONSE), { status: 200 })
+  }) as typeof fetch
+}
+
+function healthWith(overrides: Record<string, unknown>): string {
+  return JSON.stringify({
+    ...(JSON.parse(DAEMON_HEALTH_FIXTURE_0_26_1) as Record<string, unknown>),
+    ...overrides,
+  })
+}
 
 describe('AppSettingsRemoteExecutionHostConnectionResolver', () => {
   it('resolves the configured base URL and token', async () => {
@@ -109,6 +132,62 @@ describe('testRemoteExecutionHostConnection', () => {
     expect(result.ok).toBe(true)
     expect(result.state).toBe('connected')
     expect(result.providers?.map((p) => p.providerId)).toEqual(['claude'])
+  })
+
+  it('reports the daemon version and capabilities it shook hands with', async () => {
+    const resolver = resolverWith({
+      baseUrl: 'https://daemon.test',
+      token: 'tok',
+    })
+    const result = await testRemoteExecutionHostConnection({
+      resolver,
+      host: hostWith(resolver, daemonFetch(DAEMON_HEALTH_FIXTURE_0_26_1)),
+    })
+
+    expect(result.ok).toBe(true)
+    expect(result.state).toBe('connected')
+    expect(result.daemon).toMatchObject({ version: '0.26.1', apiVersion: 'v0' })
+    expect(result.daemon?.protocolCapabilities).toHaveLength(17)
+  })
+
+  it('connects with an unknown daemon when /health is not served', async () => {
+    const resolver = resolverWith({
+      baseUrl: 'https://daemon.test',
+      token: 'tok',
+    })
+    const result = await testRemoteExecutionHostConnection({
+      resolver,
+      host: hostWith(resolver, daemonFetch(null)),
+    })
+
+    expect(result).toMatchObject({
+      ok: true,
+      state: 'connected',
+      daemon: null,
+    })
+  })
+
+  it('refuses a daemon speaking a protocol this app cannot read', async () => {
+    const resolver = resolverWith({
+      baseUrl: 'https://daemon.test',
+      token: 'tok',
+    })
+    const result = await testRemoteExecutionHostConnection({
+      resolver,
+      host: hostWith(
+        resolver,
+        daemonFetch(
+          healthWith({
+            executionProtocol: { version: 2, capabilities: [] },
+          }),
+        ),
+      ),
+    })
+
+    expect(result.ok).toBe(false)
+    expect(result.state).toBe('incompatible')
+    // Still named, so the message says which daemon needs attention.
+    expect(result.daemon?.version).toBe('0.26.1')
   })
 
   it('maps error kinds to connection states', async () => {

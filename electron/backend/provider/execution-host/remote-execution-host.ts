@@ -29,6 +29,14 @@ import {
   buildWireStopCommand,
   toLocalSessionDelta,
 } from './execution-host-wire-mapping.pure'
+import {
+  evaluateHandshake,
+  parseDaemonHealth,
+} from './execution-host-handshake.pure'
+import type {
+  DaemonHealthInfo,
+  EndpointHandshakeResult,
+} from './execution-host-handshake.types'
 import type {
   ExecutionHostProviderCapabilities,
   ProviderExecutionHost,
@@ -93,6 +101,7 @@ export class RemoteExecutionHost implements ProviderExecutionHost {
   private readonly reconnectDelayMs: (attempt: number) => number
   private readonly wait: (ms: number) => Promise<void>
   private providers: RemoteExecutionHostProviderInfo[] = []
+  private handshakeResult: EndpointHandshakeResult | null = null
 
   constructor(private readonly deps: RemoteExecutionHostDeps) {
     this.fetchFn = deps.fetch ?? fetch
@@ -106,17 +115,60 @@ export class RemoteExecutionHost implements ProviderExecutionHost {
   }
 
   /**
-   * Fetches the daemon provider listing and replaces the capability cache.
-   * Throws RemoteExecutionHostError; on failure the previous cache stays in
-   * place.
+   * Fetches the daemon provider listing and replaces the capability cache,
+   * shaking hands with the daemon over `/health` on the way. Throws
+   * RemoteExecutionHostError; on failure the previous cache stays in place.
    */
   async refreshProviders(): Promise<RemoteExecutionHostProviderInfo[]> {
     const connection = await this.deps.connection.resolveConnection()
+    // Started before the listing rather than after it: /health is
+    // unauthenticated and independent, so the handshake costs no extra
+    // wall-clock. It never rejects, so a meta failure below leaves nothing
+    // dangling.
+    const healthProbe = this.probeHealth(connection)
     const meta = await this.requestJson(connection, '/v0/meta', {
       method: 'GET',
     })
     this.providers = parseRemoteExecutionHostMeta(meta)
+    const health = await healthProbe
+    // The authenticated half of the handshake is the listing that just
+    // succeeded, so 'ok' is a statement of fact at this line and nowhere
+    // earlier.
+    this.handshakeResult = health
+      ? evaluateHandshake(health, null, { kind: 'ok' })
+      : null
     return this.providers
+  }
+
+  /**
+   * What the daemon said about itself at the last successful refresh, or null
+   * when it said nothing readable. Null is the honest answer for a daemon too
+   * old to serve `/health`, and callers must treat it as "unknown", never as
+   * "unsupported".
+   */
+  handshake(): EndpointHandshakeResult | null {
+    return this.handshakeResult
+  }
+
+  /**
+   * Reads `GET /health` without the Authorization header: the route is
+   * unauthenticated, and a token has no business riding a request that does
+   * not need one. Never throws — a daemon that predates the route, or a proxy
+   * that swallows it, must still be able to list its providers.
+   */
+  private async probeHealth(
+    connection: RemoteExecutionHostConnection,
+  ): Promise<DaemonHealthInfo | null> {
+    try {
+      const response = await this.fetchFn(
+        buildRemoteUrl(connection.baseUrl, '/health'),
+        { method: 'GET' },
+      )
+      if (!response.ok) return null
+      return parseDaemonHealth(JSON.parse(await response.text()))
+    } catch {
+      return null
+    }
   }
 
   capabilities(): ExecutionHostProviderCapabilities[] {
