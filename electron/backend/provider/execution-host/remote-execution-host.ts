@@ -148,9 +148,11 @@ export class RemoteExecutionHost implements ProviderExecutionHost {
     const generation = ++this.refreshGeneration
     const connection = await this.deps.connection.resolveConnection()
     // Started before the listing rather than after it: /health is
-    // unauthenticated and independent, so the handshake costs no extra
-    // wall-clock. It never rejects, so a meta failure below leaves nothing
-    // dangling.
+    // unauthenticated and independent, so it runs concurrently and usually
+    // adds no wall-clock at all. When health is the slower half the refresh
+    // costs max(meta, health), which is why the probe is capped: the added
+    // latency is bounded, not zero. It never rejects, so a meta failure below
+    // leaves nothing dangling.
     const healthProbe = this.probeHealth(connection)
     const meta = await this.requestJson(connection, '/v0/meta', {
       method: 'GET',
