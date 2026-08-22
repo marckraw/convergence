@@ -5,7 +5,7 @@ import type {
   SessionStartConfig,
   SessionStatus,
 } from '../provider.types'
-import type { ExecutionHostEventEnvelope } from './execution-host-protocol.types'
+import type { ExecutionHostEventEnvelope } from '@mrck-labs/execution-host-protocol'
 import {
   describeProviderExecutionHostContract,
   type ExecutionHostContractContext,

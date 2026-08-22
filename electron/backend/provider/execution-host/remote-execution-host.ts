@@ -1,14 +1,8 @@
-import type {
-  InteractionResponse,
-  SessionDelta,
-} from '../../session/conversation-item.types'
-import type { SkillSelection } from '../../skills/skills.types'
+import type { SessionDelta } from '../../session/conversation-item.types'
 import { ProviderSessionEmitter } from '../provider-session.emitter'
 import type {
   ActivitySignal,
-  Attachment,
   AttentionState,
-  MidRunInputMode,
   OneShotInput,
   OneShotResult,
   ProviderContextManagementInput,
@@ -20,21 +14,26 @@ import type {
   SessionStatus,
 } from '../provider.types'
 import {
-  decodeExecutionHostEventEnvelope,
-  encodeExecutionHostCommandEnvelope,
-  encodeExecutionHostStartRequest,
-} from './execution-host-protocol.pure'
-import type {
-  ExecutionHostCommand,
-  ExecutionHostEvent,
-} from './execution-host-protocol.types'
-import { EXECUTION_HOST_PROTOCOL_VERSION } from './execution-host-protocol.types'
+  decodeExecutionEventEnvelope,
+  encodeExecutionCommandEnvelope,
+  encodeExecutionStartRequest,
+  EXECUTION_PROTOCOL_VERSION,
+  type ExecutionHostCommand,
+  type ExecutionHostEvent,
+} from '@mrck-labs/execution-host-protocol'
+import {
+  buildWireApproveCommand,
+  buildWireDenyCommand,
+  buildWireSendMessageCommand,
+  buildWireStartRequest,
+  buildWireStopCommand,
+  toLocalSessionDelta,
+} from './execution-host-wire-mapping.pure'
 import type {
   ExecutionHostProviderCapabilities,
   ProviderExecutionHost,
 } from './execution-host.types'
 import {
-  buildRemoteExecutionHostStartRequest,
   describeRemoteExecutionHostFailure,
   capabilitiesForRemoteProvider,
   createSseParser,
@@ -393,12 +392,17 @@ class RemoteSessionRun {
 
       sendMessage: (text, attachments, skillSelections, options) =>
         this.enqueueCommand(
-          buildSendMessageCommand(text, attachments, skillSelections, options),
+          buildWireSendMessageCommand(
+            text,
+            attachments,
+            skillSelections,
+            options,
+          ),
         ),
       approve: (providerApprovalId) =>
-        this.enqueueCommand({ kind: 'approve', providerApprovalId }),
+        this.enqueueCommand(buildWireApproveCommand(providerApprovalId)),
       deny: (providerApprovalId) =>
-        this.enqueueCommand({ kind: 'deny', providerApprovalId }),
+        this.enqueueCommand(buildWireDenyCommand(providerApprovalId)),
       stop: () => this.stop(),
       dispose: () => this.dispose(),
     }
@@ -413,11 +417,8 @@ class RemoteSessionRun {
           '/v0/execution/sessions',
           {
             method: 'POST',
-            body: encodeExecutionHostStartRequest(
-              buildRemoteExecutionHostStartRequest(
-                this.params.providerId,
-                this.params.config,
-              ),
+            body: encodeExecutionStartRequest(
+              buildWireStartRequest(this.params.providerId, this.params.config),
             ),
           },
         )
@@ -502,7 +503,7 @@ class RemoteSessionRun {
   }
 
   private dispatchRawEvent(raw: string): void {
-    const decoded = decodeExecutionHostEventEnvelope(raw)
+    const decoded = decodeExecutionEventEnvelope(raw)
     if (!decoded.ok) return
     const envelope = decoded.value
     if (envelope.sessionId !== this.params.config.sessionId) return
@@ -514,9 +515,13 @@ class RemoteSessionRun {
 
   private dispatchEvent(event: ExecutionHostEvent): void {
     switch (event.kind) {
-      case 'delta':
-        this.notifyDelta(event.delta)
+      case 'delta': {
+        // A wire delta kind with no local counterpart is dropped here rather
+        // than forwarded as a shape the session service cannot read.
+        const delta = toLocalSessionDelta(event.delta)
+        if (delta) this.notifyDelta(delta)
         break
+      }
       case 'status':
         for (const listener of this.statusListeners) listener(event.status)
         break
@@ -569,8 +574,8 @@ class RemoteSessionRun {
         )}/commands`,
         {
           method: 'POST',
-          body: encodeExecutionHostCommandEnvelope({
-            protocolVersion: EXECUTION_HOST_PROTOCOL_VERSION,
+          body: encodeExecutionCommandEnvelope({
+            protocolVersion: EXECUTION_PROTOCOL_VERSION,
             sessionId: this.params.config.sessionId,
             command,
           }),
@@ -594,7 +599,7 @@ class RemoteSessionRun {
     if (this.stopped) return
     this.stopped = true
     if (this.started) {
-      void this.postCommand({ kind: 'stop' })
+      void this.postCommand(buildWireStopCommand())
     }
     this.abort.abort()
   }
@@ -624,26 +629,6 @@ class RemoteSessionRun {
       )
     }
     return this.connection
-  }
-}
-
-function buildSendMessageCommand(
-  text: string,
-  attachments?: Attachment[],
-  skillSelections?: SkillSelection[],
-  options?: {
-    deliveryMode: MidRunInputMode
-    queuedInputId?: string | null
-    expectedProviderTurnId?: string | null
-    interactionResponse?: InteractionResponse
-  },
-): ExecutionHostCommand {
-  return {
-    kind: 'send-message',
-    text,
-    ...(attachments ? { attachments } : {}),
-    ...(skillSelections ? { skillSelections } : {}),
-    ...(options ? { options } : {}),
   }
 }
 
