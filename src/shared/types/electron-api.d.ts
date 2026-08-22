@@ -1117,12 +1117,15 @@ interface TurnFileChangeData {
   id: string
   sessionId: string
   turnId: string
+  repoRoot: string | null
   filePath: string
   oldPath: string | null
   status: TurnFileChangeStatusData
   additions: number
   deletions: number
   diff: string
+  truncated: boolean
+  binary: boolean
   createdAt: string
 }
 

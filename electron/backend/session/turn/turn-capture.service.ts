@@ -22,6 +22,7 @@ import {
   looksBinary,
   truncateDiffIfTooLarge,
   turnFileChangeFromRow,
+  turnFileChangeToInsertRow,
   turnFromRow,
 } from './turn.pure'
 import {
@@ -257,8 +258,8 @@ export class TurnCaptureService {
   listFileChanges(turnId: string): TurnFileChange[] {
     const rows = this.db
       .prepare(
-        `SELECT id, session_id, turn_id, file_path, old_path, status,
-                additions, deletions, diff, created_at
+        `SELECT id, session_id, turn_id, repo_root, file_path, old_path, status,
+                additions, deletions, diff, truncated, binary, created_at
          FROM session_turn_file_changes
          WHERE turn_id = ?
          ORDER BY file_path ASC`,
@@ -338,10 +339,11 @@ export class TurnCaptureService {
 
     const insertChange = this.db.prepare(
       `INSERT INTO session_turn_file_changes (
-         id, session_id, turn_id, file_path, old_path, status,
-         additions, deletions, diff, created_at
-       ) VALUES (@id, @sessionId, @turnId, @filePath, @oldPath, @status,
-                 @additions, @deletions, @diff, @createdAt)`,
+         id, session_id, turn_id, repo_root, file_path, old_path, status,
+         additions, deletions, diff, truncated, binary, created_at
+       ) VALUES (@id, @sessionId, @turnId, @repoRoot, @filePath, @oldPath,
+                 @status, @additions, @deletions, @diff, @truncated, @binary,
+                 @createdAt)`,
     )
     const updateTurn = this.db.prepare(
       `UPDATE session_turns
@@ -350,7 +352,9 @@ export class TurnCaptureService {
     )
 
     const tx = this.db.transaction((fileChanges: TurnFileChange[]) => {
-      for (const change of fileChanges) insertChange.run(change)
+      for (const change of fileChanges) {
+        insertChange.run(turnFileChangeToInsertRow(change))
+      }
       updateTurn.run(endedAt, input.status, summary, input.turnId)
     })
     tx(changes)
@@ -437,12 +441,21 @@ export class TurnCaptureService {
         id: randomUUID(),
         sessionId: baseline.sessionId,
         turnId: baseline.turnId,
+        // Local capture reads one working tree, so every change belongs to its
+        // root repository; multi-repo roots only arrive from a host.
+        repoRoot: null,
         filePath,
         oldPath: null,
         status,
         additions: counts.additions,
         deletions: counts.deletions,
         diff: finalDiff,
+        // Both were already computed here and spent only on a marker string in
+        // the diff body. Recording them as fields is what lets a reader tell a
+        // fragment from a whole change without parsing the diff (MAR-2577);
+        // the diff text itself is unchanged.
+        truncated,
+        binary: isBinary || isBinaryDiff(finalDiff),
         createdAt: new Date().toISOString(),
       })
     }

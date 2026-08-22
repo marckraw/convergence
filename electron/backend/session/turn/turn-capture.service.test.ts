@@ -209,7 +209,15 @@ describe('TurnCaptureService', () => {
       additions: 0,
       deletions: 0,
     })
+    // The marker is unchanged, byte for byte — the flag is recorded alongside
+    // it, not instead of it (MAR-2577). A reader no longer has to recognise a
+    // sentinel string to know there is no textual diff here.
     expect(changes[0].diff).toBe('[binary file change]')
+    expect(changes[0]).toMatchObject({
+      binary: true,
+      truncated: false,
+      repoRoot: null,
+    })
   })
 
   it('truncates very large diffs', async () => {
@@ -241,6 +249,14 @@ describe('TurnCaptureService', () => {
     expect(changes[0].diff.startsWith('[diff truncated:')).toBe(true)
     expect(changes[0].additions).toBe(0)
     expect(changes[0].deletions).toBe(0)
+    // The truncation was always computed here and then spent only on the
+    // marker; it is now also a field, which is what a remote change can carry
+    // and a marker string cannot (MAR-2577).
+    expect(changes[0]).toMatchObject({
+      truncated: true,
+      binary: false,
+      repoRoot: null,
+    })
   })
 
   it('short-circuits capture for a non-git working directory', async () => {

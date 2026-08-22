@@ -126,12 +126,15 @@ const SCHEMA = `
     id TEXT PRIMARY KEY,
     session_id TEXT NOT NULL,
     turn_id TEXT NOT NULL,
+    repo_root TEXT,
     file_path TEXT NOT NULL,
     old_path TEXT,
     status TEXT NOT NULL,
     additions INTEGER NOT NULL DEFAULT 0,
     deletions INTEGER NOT NULL DEFAULT 0,
     diff TEXT NOT NULL,
+    truncated INTEGER NOT NULL DEFAULT 0,
+    binary INTEGER NOT NULL DEFAULT 0,
     created_at TEXT NOT NULL,
     FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE,
     FOREIGN KEY (turn_id) REFERENCES session_turns(id) ON DELETE CASCADE,
@@ -872,6 +875,42 @@ function ensureTurnModelColumns(database: Database.Database): void {
   }
 }
 
+/**
+ * What a stored diff *means* (MAR-2577). `truncated` and `binary` were always
+ * computed — local capture derived both and then encoded them as marker strings
+ * inside the diff body, and a remote host reports them as fields the mapping
+ * had nowhere to put. A reader had to parse prose out of a diff to tell a
+ * fragment from a whole change, and over the wire could not tell at all.
+ *
+ * Additive with a false default, because false is the truth for every row
+ * written before this existed: local capture only ever stored a marker in place
+ * of the diff when it cut one, so an untruncated, non-binary row is exactly
+ * what the old code produced. `repo_root` is nullable and null means the
+ * working-directory root repository, which is every row that predates
+ * multi-repo workspaces.
+ */
+function ensureTurnFileChangeColumns(database: Database.Database): void {
+  const columnNames = getTableColumnNames(database, 'session_turn_file_changes')
+
+  if (!columnNames.has('repo_root')) {
+    database.exec(
+      'ALTER TABLE session_turn_file_changes ADD COLUMN repo_root TEXT',
+    )
+  }
+
+  if (!columnNames.has('truncated')) {
+    database.exec(
+      'ALTER TABLE session_turn_file_changes ADD COLUMN truncated INTEGER NOT NULL DEFAULT 0',
+    )
+  }
+
+  if (!columnNames.has('binary')) {
+    database.exec(
+      'ALTER TABLE session_turn_file_changes ADD COLUMN binary INTEGER NOT NULL DEFAULT 0',
+    )
+  }
+}
+
 function ensureSessionColumns(database: Database.Database): void {
   const columnNames = getTableColumnNames(database, 'sessions')
 
@@ -1269,6 +1308,7 @@ export function getDatabase(dbPath?: string): Database.Database {
     ensureSessionColumns(database)
     ensureProviderAccountColumns(database)
     ensureTurnModelColumns(database)
+    ensureTurnFileChangeColumns(database)
     ensureQueuedInputColumns(database)
     ensureRelayColumns(database)
     ensureAttachmentsTableNoFk(database)

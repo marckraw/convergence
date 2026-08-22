@@ -4,6 +4,8 @@ import { turnsApi } from '@/entities/turn'
 import type { Turn, TurnFileChange } from '@/entities/turn'
 import { TurnCard } from './turn-card.presentational'
 import { PierreDiffViewer } from './pierre-diff-viewer.container'
+import { describeTurnFileChange } from './turn-file-change-notice.pure'
+import { TurnFileChangeNotices } from './turn-file-change-notice.presentational'
 
 interface TurnListProps {
   sessionId: string
@@ -130,6 +132,22 @@ export const TurnList: FC<TurnListProps> = ({ sessionId }) => {
     [turns],
   )
 
+  // Read from the record rather than from the diff text: a fragment and a whole
+  // change look identical in the viewer, and only the flags know which this is
+  // (MAR-2577).
+  const selectedChange = useMemo(() => {
+    if (!selection) return null
+    return (
+      fileChangesByTurn[selection.turnId]?.find(
+        (change) => change.filePath === selection.filePath,
+      ) ?? null
+    )
+  }, [selection, fileChangesByTurn])
+  const notices = useMemo(
+    () => describeTurnFileChange(selectedChange),
+    [selectedChange],
+  )
+
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="min-h-0 flex-1 overflow-hidden">
@@ -163,14 +181,17 @@ export const TurnList: FC<TurnListProps> = ({ sessionId }) => {
           </div>
         )}
       </div>
-      <div className="min-h-0 flex-[1.2] border-t border-border">
-        <PierreDiffViewer
-          file={selection?.filePath ?? null}
-          diff={diff}
-          loading={diffLoading}
-          emptyMessage="Select a changed file from a turn to inspect its diff."
-          title="Turn diff"
-        />
+      <div className="flex min-h-0 flex-[1.2] flex-col border-t border-border">
+        <TurnFileChangeNotices notices={notices} />
+        <div className="min-h-0 flex-1">
+          <PierreDiffViewer
+            file={selection?.filePath ?? null}
+            diff={diff}
+            loading={diffLoading}
+            emptyMessage="Select a changed file from a turn to inspect its diff."
+            title="Turn diff"
+          />
+        </div>
       </div>
     </div>
   )

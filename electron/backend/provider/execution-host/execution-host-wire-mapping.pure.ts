@@ -152,24 +152,18 @@ export const EXECUTION_HOST_UNSENT_LOCAL_ITEM_FIELDS = [
 
 /**
  * Wire `ExecutionTurnFileChange` fields the local `TurnFileChange` has nowhere
- * to put. Unlike the item drops these are not harmless: two of them change what
- * a diff *means*, so a remote session's review surface can misread a change it
- * renders. Widening the local turn record is out of scope for this slice —
- * MAR-2577 carries it — and naming the loss here is what makes it findable.
+ * to put.
  *
- * - `repoRoot` — which repository inside a multi-repo workspace the change
- *   belongs to. Dropped, every change reads as belonging to the working
- *   directory root, so identical paths in two repos collapse into one.
- * - `truncated` — the daemon cut this diff at its size limit. Dropped, a
- *   partial diff is rendered as if it were the whole change.
- * - `binary` — the change is to a binary file and the diff text is a marker,
- *   not content. Dropped, that marker reads as the diff itself.
+ * Empty since MAR-2577, and kept rather than deleted: this is the one place a
+ * reader looks to ask "what does a remote file change lose on the way in", and
+ * an empty list is a stronger answer than no list. The three that were here —
+ * `repoRoot`, `truncated`, `binary` — are the ones that change what a diff
+ * *means*, which is why they were the loss worth repairing first: a cut diff
+ * rendered as the whole change, and a binary marker rendered as the content.
+ * The local record now carries all three.
  */
-export const EXECUTION_HOST_UNMAPPED_WIRE_FILE_CHANGE_FIELDS = [
-  'repoRoot',
-  'truncated',
-  'binary',
-] as const satisfies readonly (keyof ExecutionTurnFileChange)[]
+export const EXECUTION_HOST_UNMAPPED_WIRE_FILE_CHANGE_FIELDS =
+  [] as const satisfies readonly (keyof ExecutionTurnFileChange)[]
 
 /**
  * Wire `session.patch` fields with no local counterpart. The local session row
@@ -377,18 +371,21 @@ export function toLocalSessionDelta(
       return {
         kind: 'turn.fileChanges.add',
         turnId: delta.turnId,
-        // See EXECUTION_HOST_UNMAPPED_WIRE_FILE_CHANGE_FIELDS for what this
-        // narrowing costs and why it is not repaired here (MAR-2577).
         fileChanges: delta.fileChanges.map((change) => ({
           id: change.id,
           sessionId: change.sessionId,
           turnId: change.turnId,
+          // Absent on the wire means the working-directory root repository,
+          // which the local record spells null (MAR-2577).
+          repoRoot: change.repoRoot ?? null,
           filePath: change.filePath,
           oldPath: change.oldPath,
           status: change.status,
           additions: change.additions,
           deletions: change.deletions,
           diff: change.diff,
+          truncated: change.truncated,
+          binary: change.binary,
           createdAt: change.createdAt,
         })),
       }

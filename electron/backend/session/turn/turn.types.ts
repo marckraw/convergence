@@ -21,16 +21,37 @@ export interface Turn {
   effort: string | null
 }
 
+/**
+ * One file a turn changed, with the three facts that decide what its diff
+ * *means* (MAR-2577).
+ *
+ * `truncated` and `binary` were computed by local capture and then thrown away
+ * into the diff body as marker strings; a remote host reports them as fields
+ * over the wire and the mapping had nowhere to put them, so a diff the daemon
+ * cut short arrived indistinguishable from a whole one. They are fields here
+ * because a reader has to be able to ask, without parsing prose out of a diff.
+ *
+ * `repoRoot` is workspace-relative and null for the working-directory root
+ * repository, which is every local capture and every single-repo remote run.
+ * It exists so two files with the same path in two repositories of one
+ * workspace stop collapsing into one row (`turns.fileChanges.multiRepo`).
+ */
 export interface TurnFileChange {
   id: string
   sessionId: string
   turnId: string
+  /** Workspace-relative repository root; null means the working-directory root. */
+  repoRoot: string | null
   filePath: string
   oldPath: string | null
   status: TurnFileChangeStatus
   additions: number
   deletions: number
   diff: string
+  /** The diff was cut short: what is stored is a fragment, not the change. */
+  truncated: boolean
+  /** The file is binary, so the diff text is a marker rather than content. */
+  binary: boolean
   createdAt: string
 }
 
@@ -51,12 +72,15 @@ export interface TurnFileChangeInsertRow {
   id: string
   sessionId: string
   turnId: string
+  repoRoot: string | null
   filePath: string
   oldPath: string | null
   status: TurnFileChangeStatus
   additions: number
   deletions: number
   diff: string
+  truncated: number
+  binary: number
   createdAt: string
 }
 

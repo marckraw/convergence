@@ -299,12 +299,15 @@ describe('database', () => {
         'id',
         'session_id',
         'turn_id',
+        'repo_root',
         'file_path',
         'old_path',
         'status',
         'additions',
         'deletions',
         'diff',
+        'truncated',
+        'binary',
         'created_at',
       ].sort(),
     )
@@ -329,6 +332,58 @@ describe('database', () => {
     expect(uniqueColumns.map((c) => c.name).sort()).toEqual(
       ['file_path', 'turn_id'].sort(),
     )
+  })
+
+  it('adds the diff-meaning columns to a database that predates them', () => {
+    const dir = mkdtempSync(
+      join(tmpdir(), 'convergence-file-change-flags-migration-'),
+    )
+    const dbPath = join(dir, 'pre-file-change-flags.sqlite')
+
+    try {
+      const legacy = new Database(dbPath)
+      legacy.exec(`
+        CREATE TABLE session_turn_file_changes (
+          id TEXT PRIMARY KEY,
+          session_id TEXT NOT NULL,
+          turn_id TEXT NOT NULL,
+          file_path TEXT NOT NULL,
+          old_path TEXT,
+          status TEXT NOT NULL,
+          additions INTEGER NOT NULL DEFAULT 0,
+          deletions INTEGER NOT NULL DEFAULT 0,
+          diff TEXT NOT NULL,
+          created_at TEXT NOT NULL
+        );
+
+        INSERT INTO session_turn_file_changes (
+          id, session_id, turn_id, file_path, status, additions, deletions, diff, created_at
+        ) VALUES ('fc-old', 's1', 't1', 'src/a.ts', 'modified', 1, 0, '@@', '2026-01-01');
+      `)
+      legacy.close()
+
+      const db = getDatabase(dbPath)
+      const row = db
+        .prepare(
+          "SELECT repo_root, truncated, binary FROM session_turn_file_changes WHERE id = 'fc-old'",
+        )
+        .get() as {
+        repo_root: string | null
+        truncated: number
+        binary: number
+      }
+
+      // Not a default standing in for an unknown: the old capture path stored a
+      // marker string in place of any diff it cut, so a row that predates these
+      // columns really was a whole, textual change (MAR-2577). Null repo_root
+      // is the working-directory root, which is the only repository that
+      // existed before multi-repo workspaces.
+      expect(row).toEqual({ repo_root: null, truncated: 0, binary: 0 })
+    } finally {
+      closeDatabase()
+      resetDatabase()
+      rmSync(dir, { recursive: true, force: true })
+    }
   })
 
   it('cascades session_turns deletion when parent session is deleted', () => {
