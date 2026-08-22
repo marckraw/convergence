@@ -395,10 +395,17 @@ describe('buildWireStartRequest', () => {
   })
 
   /**
-   * The behaviour-neutrality proof for MAR-2576. Before this slice the local
+   * Behaviour-neutrality on the no-workspace path. Before this slice the local
    * config went onto the wire verbatim and the daemon's own decoder discarded
-   * whatever it did not model. Mapping explicitly must leave the daemon
-   * holding exactly the same value it held before.
+   * whatever it did not model. For a start that carries no workspace — the
+   * only path this covers, since `localConfig` has none — mapping explicitly
+   * must leave the daemon holding exactly the same value it held before.
+   *
+   * The workspace path is deliberately NOT neutral: it drops
+   * `workingDirectory`, which is what makes a remote start work at all against
+   * daemon 0.26.1. See
+   * EXECUTION_HOST_WORKSPACE_EXCLUSIVE_START_CONFIG_FIELDS and the two cases
+   * above.
    */
   it('decodes on the daemon to the same value the unmapped config did', () => {
     const fullConfig: SessionStartConfig = {
