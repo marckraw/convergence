@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   decodeExecutionCommandEnvelope,
   decodeExecutionEventEnvelope,
+  decodeExecutionProtocolDescriptor,
   decodeExecutionStartRequest,
   encodeExecutionCommandEnvelope,
   encodeExecutionEventEnvelope,
@@ -22,13 +23,20 @@ import {
   toWireSessionDelta,
   EXECUTION_HOST_UNSENT_LOCAL_DELTA_KINDS,
   EXECUTION_HOST_UNSENT_LOCAL_ITEM_FIELDS,
+  EXECUTION_HOST_UNSENT_LOCAL_SEND_OPTION_FIELDS,
   EXECUTION_HOST_UNMAPPED_START_CONFIG_FIELDS,
   EXECUTION_HOST_UNMAPPED_WIRE_DELTA_KINDS,
+  EXECUTION_HOST_UNMAPPED_WIRE_FILE_CHANGE_FIELDS,
   EXECUTION_HOST_UNMAPPED_WIRE_ITEM_FIELDS,
   EXECUTION_HOST_UNMAPPED_WIRE_SESSION_PATCH_FIELDS,
 } from './execution-host-wire-mapping.pure'
 import type { SessionStartConfig } from '../provider.types'
 import type { SessionDelta } from '../../session/conversation-item.types'
+import {
+  DAEMON_HEALTH_FIXTURE_0_26_1,
+  DAEMON_HEALTH_FIXTURE_GIT_SHA,
+  DAEMON_HEALTH_FIXTURE_VERSION,
+} from './execution-host-health.fixture'
 
 function eventEnvelope(event: ExecutionHostEvent): ExecutionHostEventEnvelope {
   return {
@@ -224,6 +232,64 @@ describe('execution host command envelope codec', () => {
     expect(buildWireSendMessageCommand('hello')).toEqual({
       kind: 'send-message',
       text: 'hello',
+    })
+  })
+
+  it('never sends the local provider account id to a host', () => {
+    expect(EXECUTION_HOST_UNSENT_LOCAL_SEND_OPTION_FIELDS).toEqual([
+      'providerAccountId',
+    ])
+
+    // The object SessionHandle.sendMessage actually hands over — the local
+    // account id rides along with the delivery bookkeeping.
+    const command = buildWireSendMessageCommand('hello', undefined, undefined, {
+      deliveryMode: 'normal',
+      queuedInputId: 'q-1',
+      expectedProviderTurnId: 'turn-9',
+      providerAccountId: 'account-1',
+    })
+
+    expect(command).toEqual({
+      kind: 'send-message',
+      text: 'hello',
+      options: {
+        deliveryMode: 'normal',
+        queuedInputId: 'q-1',
+        expectedProviderTurnId: 'turn-9',
+      },
+    })
+    // Belt and braces: prove it is absent from the bytes that leave the app,
+    // not merely from a structural comparison that ignores extra keys.
+    expect(
+      encodeExecutionCommandEnvelope({
+        protocolVersion: EXECUTION_PROTOCOL_VERSION,
+        sessionId: 'session-1',
+        command,
+      }),
+    ).not.toContain('account-1')
+  })
+
+  it('carries a structured interaction response through unchanged', () => {
+    expect(
+      buildWireSendMessageCommand('', undefined, undefined, {
+        deliveryMode: 'normal',
+        interactionResponse: {
+          kind: 'form',
+          action: 'accept',
+          values: { name: 'Marcin', count: 2, agree: true },
+        },
+      }),
+    ).toEqual({
+      kind: 'send-message',
+      text: '',
+      options: {
+        deliveryMode: 'normal',
+        interactionResponse: {
+          kind: 'form',
+          action: 'accept',
+          values: { name: 'Marcin', count: 2, agree: true },
+        },
+      },
     })
   })
 })
@@ -563,6 +629,45 @@ describe('toLocalSessionDelta', () => {
     })
   })
 
+  it('names every wire file-change field the local turn record cannot hold', () => {
+    expect(EXECUTION_HOST_UNMAPPED_WIRE_FILE_CHANGE_FIELDS).toEqual([
+      'repoRoot',
+      'truncated',
+      'binary',
+    ])
+
+    // The costly case the constant exists to make findable (MAR-2577): a diff
+    // the daemon cut short arrives with no way to say so, and the review
+    // surface renders the fragment as the whole change.
+    const local = toLocalSessionDelta({
+      kind: 'turn.fileChanges.add',
+      turnId: 'turn-1',
+      fileChanges: [
+        {
+          id: 'fc-1',
+          sessionId: 'session-1',
+          turnId: 'turn-1',
+          repoRoot: 'packages/app',
+          filePath: 'src/index.ts',
+          oldPath: null,
+          status: 'modified',
+          additions: 3,
+          deletions: 1,
+          diff: '@@ cut here',
+          truncated: true,
+          binary: true,
+          createdAt: '2026-08-22T10:00:00.000Z',
+        },
+      ],
+    })
+
+    expect(local?.kind).toBe('turn.fileChanges.add')
+    if (local?.kind !== 'turn.fileChanges.add') return
+    for (const field of EXECUTION_HOST_UNMAPPED_WIRE_FILE_CHANGE_FIELDS) {
+      expect(local.fileChanges[0]).not.toHaveProperty(field)
+    }
+  })
+
   it('maps turn file changes and drops the wire-only diff flags', () => {
     const local = toLocalSessionDelta({
       kind: 'turn.fileChanges.add',
@@ -618,10 +723,14 @@ describe('toLocalSessionDelta', () => {
   })
 
   /**
-   * A live daemon envelope (agents-daemon 0.26.1 * f62fd1b2), captured
-   * verbatim, decoded by the package and mapped to the local delta.
+   * A synthetic envelope, shaped by hand from the package types rather than
+   * captured from a daemon: Convergence's SSE stream is authenticated, so no
+   * unattended trace of a live one exists. The verbatim capture in this folder
+   * is the unauthenticated `/health` descriptor
+   * (execution-host-health.fixture.ts); this case proves only that a
+   * well-formed envelope survives decode and mapping.
    */
-  it('maps a real streaming envelope from agents-daemon 0.26.1', () => {
+  it('maps a well-formed streaming envelope through decode into a local delta', () => {
     const raw = JSON.stringify({
       protocolVersion: 1,
       sessionId: 'session-1',
@@ -792,5 +901,44 @@ describe('delta round-trip local -> wire -> local', () => {
         },
       }),
     ).toBeNull()
+  })
+})
+
+/**
+ * The one verbatim trace in this folder. The package's descriptor decoder is
+ * strict-defensive, and the live fleet advertises capability ids that are not
+ * in its known list — so this is the check that the strictness the mapping
+ * layer now depends on does not reject a daemon that is actually running.
+ */
+describe('execution protocol descriptor from a captured /health', () => {
+  it(`accepts the descriptor agents-daemon ${DAEMON_HEALTH_FIXTURE_VERSION} really serves`, () => {
+    const health = JSON.parse(DAEMON_HEALTH_FIXTURE_0_26_1) as {
+      version: string
+      gitSha: string
+      executionProtocol: unknown
+    }
+    expect(health.version).toBe(DAEMON_HEALTH_FIXTURE_VERSION)
+    expect(health.gitSha).toBe(DAEMON_HEALTH_FIXTURE_GIT_SHA)
+
+    const decoded = decodeExecutionProtocolDescriptor(health.executionProtocol)
+    expect(decoded.ok).toBe(true)
+    if (!decoded.ok) return
+    expect(decoded.value.version).toBe(EXECUTION_PROTOCOL_VERSION)
+    // Ids the package's known-capability list does not contain. The wire type
+    // is `Known | (string & {})` on purpose: the daemon leads, clients follow.
+    expect(decoded.value.capabilities).toEqual(
+      expect.arrayContaining([
+        'deltas.append.v1',
+        'rooms.v1',
+        'projects.v1',
+        'push.v1',
+      ]),
+    )
+  })
+
+  it('rejects a descriptor from a daemon speaking a later protocol', () => {
+    expect(
+      decodeExecutionProtocolDescriptor({ version: 2, capabilities: [] }),
+    ).toEqual({ ok: false, reason: 'unsupported-protocol-version' })
   })
 })

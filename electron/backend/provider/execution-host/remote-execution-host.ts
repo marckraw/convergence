@@ -516,10 +516,14 @@ class RemoteSessionRun {
   private dispatchEvent(event: ExecutionHostEvent): void {
     switch (event.kind) {
       case 'delta': {
-        // A wire delta kind with no local counterpart is dropped here rather
-        // than forwarded as a shape the session service cannot read.
+        // A wire delta kind with no local counterpart is not forwarded — the
+        // session service has no branch that could read it. It is still
+        // evidence the daemon is working, though, and before the mapping layer
+        // existed every delta reached applyDelta and bumped liveness on the way
+        // in. The heartbeat keeps that signal without inventing a local delta.
         const delta = toLocalSessionDelta(event.delta)
         if (delta) this.notifyDelta(delta)
+        else this.notifyHeartbeat()
         break
       }
       case 'status':
@@ -540,13 +544,17 @@ class RemoteSessionRun {
         for (const listener of this.activityListeners) listener(event.activity)
         break
       case 'heartbeat':
-        for (const listener of this.heartbeatListeners) listener()
+        this.notifyHeartbeat()
         break
     }
   }
 
   private notifyDelta(delta: SessionDelta): void {
     for (const listener of this.deltaListeners) listener(delta)
+  }
+
+  private notifyHeartbeat(): void {
+    for (const listener of this.heartbeatListeners) listener()
   }
 
   private enqueueCommand(command: ExecutionHostCommand): void {

@@ -3,20 +3,21 @@ import {
   type ExecutionConversationItem,
   type ExecutionConversationItemPatch,
   type ExecutionHostCommand,
+  type ExecutionSendMessageOptions,
   type ExecutionSessionDelta,
   type ExecutionStartConfig,
   type ExecutionStartRequest,
+  type ExecutionTurnFileChange,
 } from '@mrck-labs/execution-host-protocol'
 import type {
   ConversationItem,
   ConversationItemDraft,
-  InteractionResponse,
   SessionDelta,
 } from '../../session/conversation-item.types'
 import type { SkillSelection } from '../../skills/skills.types'
 import type {
   Attachment,
-  MidRunInputMode,
+  SessionHandle,
   SessionStartConfig,
 } from '../provider.types'
 
@@ -124,6 +125,27 @@ export const EXECUTION_HOST_UNSENT_LOCAL_ITEM_FIELDS = [
 ] as const
 
 /**
+ * Wire `ExecutionTurnFileChange` fields the local `TurnFileChange` has nowhere
+ * to put. Unlike the item drops these are not harmless: two of them change what
+ * a diff *means*, so a remote session's review surface can misread a change it
+ * renders. Widening the local turn record is out of scope for this slice —
+ * MAR-2577 carries it — and naming the loss here is what makes it findable.
+ *
+ * - `repoRoot` — which repository inside a multi-repo workspace the change
+ *   belongs to. Dropped, every change reads as belonging to the working
+ *   directory root, so identical paths in two repos collapse into one.
+ * - `truncated` — the daemon cut this diff at its size limit. Dropped, a
+ *   partial diff is rendered as if it were the whole change.
+ * - `binary` — the change is to a binary file and the diff text is a marker,
+ *   not content. Dropped, that marker reads as the diff itself.
+ */
+export const EXECUTION_HOST_UNMAPPED_WIRE_FILE_CHANGE_FIELDS = [
+  'repoRoot',
+  'truncated',
+  'binary',
+] as const satisfies readonly (keyof ExecutionTurnFileChange)[]
+
+/**
  * Wire `session.patch` fields with no local counterpart. The local session row
  * has neither: a remote pull request URL is read from the daemon's session
  * snapshot instead (`parseRemoteSessionWorkspaceInfo`), and Rooms are not a
@@ -165,12 +187,28 @@ const LOCAL_CONVERSATION_ITEM_PATCH_FIELDS = [
   'level',
 ] as const
 
-export interface LocalSendMessageOptions {
-  deliveryMode: MidRunInputMode
-  queuedInputId?: string | null
-  expectedProviderTurnId?: string | null
-  interactionResponse?: InteractionResponse
-}
+/**
+ * Exactly what `SessionHandle.sendMessage` hands the adapter — derived from the
+ * handle rather than restated, so this mapping can never again believe in a
+ * narrower object than the one it actually receives at runtime.
+ */
+export type LocalSendMessageOptions = NonNullable<
+  Parameters<SessionHandle['sendMessage']>[3]
+>
+
+/**
+ * Local send-message option fields with no home on the wire
+ * `ExecutionSendMessageOptions`.
+ *
+ * - `providerAccountId` — Convergence's own multi-account concept (ADR 0007).
+ *   It names a credential namespace on this machine; a remote run authenticates
+ *   as the daemon's own account, so the id would have no reader on the far side
+ *   and no business travelling there. Local-only by nature (constitution
+ *   Law 4).
+ */
+export const EXECUTION_HOST_UNSENT_LOCAL_SEND_OPTION_FIELDS = [
+  'providerAccountId',
+] as const satisfies readonly (keyof LocalSendMessageOptions)[]
 
 /**
  * Builds the wire start request for a local session start. The local
@@ -217,7 +255,32 @@ export function buildWireSendMessageCommand(
     text,
     ...(attachments ? { attachments } : {}),
     ...(skillSelections ? { skillSelections } : {}),
-    ...(options ? { options } : {}),
+    ...(options ? { options: toWireSendMessageOptions(options) } : {}),
+  }
+}
+
+/**
+ * Names every option field the wire is allowed to carry and copies those,
+ * rather than spreading the caller's object. The spread is what let
+ * `providerAccountId` reach the daemon while the local type claimed it could
+ * not — a field the wire has no slot for still travels if the runtime object
+ * holds it. Construction by allowlist makes the loss provable instead of
+ * accidental; see EXECUTION_HOST_UNSENT_LOCAL_SEND_OPTION_FIELDS.
+ */
+function toWireSendMessageOptions(
+  options: LocalSendMessageOptions,
+): ExecutionSendMessageOptions {
+  return {
+    deliveryMode: options.deliveryMode,
+    ...(options.queuedInputId !== undefined
+      ? { queuedInputId: options.queuedInputId }
+      : {}),
+    ...(options.expectedProviderTurnId !== undefined
+      ? { expectedProviderTurnId: options.expectedProviderTurnId }
+      : {}),
+    ...(options.interactionResponse !== undefined
+      ? { interactionResponse: options.interactionResponse }
+      : {}),
   }
 }
 
@@ -286,6 +349,8 @@ export function toLocalSessionDelta(
       return {
         kind: 'turn.fileChanges.add',
         turnId: delta.turnId,
+        // See EXECUTION_HOST_UNMAPPED_WIRE_FILE_CHANGE_FIELDS for what this
+        // narrowing costs and why it is not repaired here (MAR-2577).
         fileChanges: delta.fileChanges.map((change) => ({
           id: change.id,
           sessionId: change.sessionId,

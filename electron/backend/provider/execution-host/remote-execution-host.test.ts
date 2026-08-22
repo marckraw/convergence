@@ -319,6 +319,43 @@ describe('RemoteExecutionHost', () => {
     handle.stop()
   })
 
+  /**
+   * Before the mapping layer, every wire delta reached SessionService.applyDelta,
+   * which bumps liveness before it switches on kind — so an unreadable kind was
+   * "bump, then ignore". Filtering the delta out must not also throw away the
+   * bump: the daemon spoke, and that is what liveness measures.
+   */
+  it('bumps liveness without forwarding a delta kind it cannot map', async () => {
+    const deltas: SessionDelta[] = []
+    const heartbeats: number[] = []
+
+    const handle = host.start('claude', startConfig('s-1'))
+    handle.onDelta((delta) => deltas.push(delta))
+    handle.onActivityHeartbeat?.(() => heartbeats.push(1))
+
+    await waitUntil(
+      () => stub.eventStreamLastEventIds.length === 1,
+      'event stream to open',
+    )
+
+    stub.emit(
+      envelope(1, {
+        kind: 'delta',
+        delta: {
+          kind: 'turn.patch',
+          turnId: 'turn-1',
+          patch: { status: 'completed' },
+        },
+      }),
+    )
+
+    await waitUntil(() => heartbeats.length === 1, 'the liveness bump')
+    expect(heartbeats).toHaveLength(1)
+    expect(deltas).toEqual([])
+
+    handle.stop()
+  })
+
   it('resumes a dropped stream from the last processed sequence', async () => {
     const statuses: SessionStatus[] = []
     const handle = host.start('claude', startConfig('s-1'))

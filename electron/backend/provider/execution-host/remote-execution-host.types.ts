@@ -1,7 +1,8 @@
 /**
  * Types for the Remote Execution Host: the ProviderExecutionHost adapter that
  * runs Providers on an agents-daemon behind the execution host wire protocol
- * (see execution-host-protocol.types.ts and ADR 0006).
+ * (see the `@mrck-labs/execution-host-protocol` package,
+ * execution-host-wire-mapping.pure.ts and ADR 0006).
  *
  * Error classification mirrors the remote-daemon-guide pattern: every failure
  * carries a kind the caller can branch on without parsing messages.
