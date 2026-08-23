@@ -105,8 +105,11 @@ export interface RemoteExecutionHostDeps {
   onEventSeq?: (sessionId: string, seq: number) => void
   /**
    * Receives a redacted description of every wire event, as the local provider
-   * adapters do for their own transports. Defaults to a no-op sink so tests and
-   * embedders that do not care pay nothing.
+   * adapters do for their own transports. Tracing is unconditional, as it is in
+   * those adapters: every entry is built at the call site whatever the sink is.
+   * Defaulting to a no-op sink only drops what the real sink would then do with
+   * it — ring retention, renderer broadcast, and JSONL persistence — so tests
+   * and embedders that do not care skip the bookkeeping, not the construction.
    */
   debugSink?: ProviderDebugSink
 }
