@@ -18,13 +18,18 @@ _"Binary file — there is no textual diff to show"_. The notice names no cutter
 because the same flag covers Convergence's own 200 KB cap and whatever cap a
 daemon keeps.
 
-`repoRoot` is carried too: which repository inside a multi-repo workspace a
-change belongs to, so identical paths in two repositories stop collapsing into
-one row. Nothing renders it yet.
+Existing turns get the same treatment: the columns are added in place, and the
+values are recovered from the markers the old capture path left in the diff body,
+so a diff that was cut two months ago now says so. Stored diffs are byte-for-byte
+unchanged and no database is rebuilt. What a migration cannot bring back is the
+cut content itself — that was replaced by the marker the day it was written.
 
-Stored diffs are byte-for-byte unchanged, existing rows read back as untruncated
-and non-binary — which is what they are — and the columns are added in place,
-so no database is rebuilt.
+`repoRoot` is carried too: which repository inside a multi-repo workspace a
+change belongs to. Nothing renders it yet, and it is **not** yet part of a
+change's identity — the stored uniqueness is still one row per turn and path, so
+the same path in two repositories is still one change as far as the database is
+concerned. Filed separately; it needs a table rebuild and a decision this change
+does not make.
 
 Honest limit: for a **remote** session none of this is visible yet, because a
 remote turn record does not reach the session at all — `applyDelta` has no

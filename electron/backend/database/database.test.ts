@@ -334,11 +334,88 @@ describe('database', () => {
     )
   })
 
-  it('adds the diff-meaning columns to a database that predates them', () => {
+  it('backfills what a legacy diff meant from the markers it was left with', () => {
     const dir = mkdtempSync(
       join(tmpdir(), 'convergence-file-change-flags-migration-'),
     )
     const dbPath = join(dir, 'pre-file-change-flags.sqlite')
+
+    try {
+      const legacy = new Database(dbPath)
+      legacy.exec(`
+        CREATE TABLE session_turn_file_changes (
+          id TEXT PRIMARY KEY,
+          session_id TEXT NOT NULL,
+          turn_id TEXT NOT NULL,
+          file_path TEXT NOT NULL,
+          old_path TEXT,
+          status TEXT NOT NULL,
+          additions INTEGER NOT NULL DEFAULT 0,
+          deletions INTEGER NOT NULL DEFAULT 0,
+          diff TEXT NOT NULL,
+          created_at TEXT NOT NULL
+        );
+
+        INSERT INTO session_turn_file_changes (
+          id, session_id, turn_id, file_path, status, additions, deletions, diff, created_at
+        ) VALUES
+          ('fc-whole', 's1', 't1', 'src/a.ts', 'modified', 1, 0, '@@ -1 +1 @@', '2026-01-01'),
+          ('fc-cut', 's1', 't1', 'src/b.ts', 'modified', 0, 0, '[diff truncated: 4210 lines]', '2026-01-01'),
+          ('fc-binary-marker', 's1', 't1', 'assets/logo.png', 'modified', 0, 0, '[binary file change]', '2026-01-01'),
+          ('fc-binary-git', 's1', 't1', 'assets/icon.png', 'modified', 0, 0, 'diff --git a/assets/icon.png b/assets/icon.png' || char(10) || 'Binary files a/assets/icon.png and b/assets/icon.png differ', '2026-01-01'),
+          ('fc-mentions-binary', 's1', 't1', 'docs/notes.md', 'modified', 1, 0, '@@ -1 +1 @@' || char(10) || '+Binary files a/x and b/x differ', '2026-01-01');
+      `)
+      legacy.close()
+
+      const db = getDatabase(dbPath)
+      const rows = db
+        .prepare(
+          `SELECT id, repo_root, truncated, binary
+           FROM session_turn_file_changes
+           ORDER BY id ASC`,
+        )
+        .all() as {
+        id: string
+        repo_root: string | null
+        truncated: number
+        binary: number
+      }[]
+
+      // 0 would have been a stand-in for a known-true value, not the truth:
+      // truncateDiffIfTooLarge has been cutting diffs since long before these
+      // columns existed, and the marker it left behind is what says so
+      // (MAR-2577). The last row is the guard on the SQL prefilter — the phrase
+      // appears in the diff's *content*, on an added line, so the line-anchored
+      // predicate must leave it alone.
+      expect(rows).toEqual([
+        {
+          id: 'fc-binary-git',
+          repo_root: null,
+          truncated: 0,
+          binary: 1,
+        },
+        {
+          id: 'fc-binary-marker',
+          repo_root: null,
+          truncated: 0,
+          binary: 1,
+        },
+        { id: 'fc-cut', repo_root: null, truncated: 1, binary: 0 },
+        { id: 'fc-mentions-binary', repo_root: null, truncated: 0, binary: 0 },
+        { id: 'fc-whole', repo_root: null, truncated: 0, binary: 0 },
+      ])
+    } finally {
+      closeDatabase()
+      resetDatabase()
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('leaves repo_root null for legacy rows, which is where they belong', () => {
+    const dir = mkdtempSync(
+      join(tmpdir(), 'convergence-file-change-repo-root-'),
+    )
+    const dbPath = join(dir, 'pre-repo-root.sqlite')
 
     try {
       const legacy = new Database(dbPath)
@@ -365,20 +442,16 @@ describe('database', () => {
       const db = getDatabase(dbPath)
       const row = db
         .prepare(
-          "SELECT repo_root, truncated, binary FROM session_turn_file_changes WHERE id = 'fc-old'",
+          "SELECT repo_root FROM session_turn_file_changes WHERE id = 'fc-old'",
         )
-        .get() as {
-        repo_root: string | null
-        truncated: number
-        binary: number
-      }
+        .get() as { repo_root: string | null }
 
-      // Not a default standing in for an unknown: the old capture path stored a
-      // marker string in place of any diff it cut, so a row that predates these
-      // columns really was a whole, textual change (MAR-2577). Null repo_root
-      // is the working-directory root, which is the only repository that
-      // existed before multi-repo workspaces.
-      expect(row).toEqual({ repo_root: null, truncated: 0, binary: 0 })
+      // Unlike the two flags, this one needs no recovery: turn-capture is the
+      // only writer this table has ever had, it reads a single working tree,
+      // and a remote turn record never reached the database (MAR-2584). Null is
+      // the working-directory root repository, which is where every one of
+      // these rows belongs.
+      expect(row).toEqual({ repo_root: null })
     } finally {
       closeDatabase()
       resetDatabase()

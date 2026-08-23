@@ -33,8 +33,12 @@ export interface Turn {
  *
  * `repoRoot` is workspace-relative and null for the working-directory root
  * repository, which is every local capture and every single-repo remote run.
- * It exists so two files with the same path in two repositories of one
- * workspace stop collapsing into one row (`turns.fileChanges.multiRepo`).
+ * It carries which repository a change belongs to, but it is not yet part of a
+ * change's identity: storage still keys one row per `(turn_id, file_path)`, and
+ * `getFileDiff` still looks a diff up by turn and path alone. Until both move,
+ * the same path in two repositories of one workspace is still one change as far
+ * as this app is concerned — filed, and out of scope here because it needs a
+ * table rebuild.
  */
 export interface TurnFileChange {
   id: string

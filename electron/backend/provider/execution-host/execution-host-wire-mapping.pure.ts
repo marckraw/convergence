@@ -161,6 +161,12 @@ export const EXECUTION_HOST_UNSENT_LOCAL_ITEM_FIELDS = [
  * *means*, which is why they were the loss worth repairing first: a cut diff
  * rendered as the whole change, and a binary marker rendered as the content.
  * The local record now carries all three.
+ *
+ * "Nothing is dropped" is a statement about this mapping only. `repoRoot`
+ * arrives and is stored, but storage still keys a change by `(turn_id,
+ * file_path)`, so two repositories with the same path in one workspace still
+ * land on one identity downstream of here — filed separately, and not a loss
+ * this list can express.
  */
 export const EXECUTION_HOST_UNMAPPED_WIRE_FILE_CHANGE_FIELDS =
   [] as const satisfies readonly (keyof ExecutionTurnFileChange)[]
