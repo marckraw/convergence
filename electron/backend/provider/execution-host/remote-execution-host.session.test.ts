@@ -18,6 +18,56 @@ import {
 } from './execution-host-daemon.fixture'
 import { LocalExecutionHost } from './local-execution-host'
 import { RemoteExecutionHost } from './remote-execution-host'
+import type { ProviderExecutionHost } from './execution-host.types'
+import type { SessionHandle } from '../provider.types'
+import type { SessionDelta } from '../../session/conversation-item.types'
+
+/**
+ * The real remote host, wrapped so a handle the service has released can still
+ * be made to speak.
+ *
+ * The remote adapter goes silent when it is disposed -- that is its own
+ * canary, in the adapter suite -- and the session service does not take that
+ * on trust. This wrapper is a host that does keep talking: it swallows
+ * `dispose()` and keeps every delta listener the service registered, so a test
+ * can deliver an event through a handle that is no longer the session's.
+ *
+ * The wire underneath is unchanged; only the handle misbehaves.
+ */
+function createLingeringHandleHost(inner: RemoteExecutionHost): {
+  host: ProviderExecutionHost
+  emitFromHandle: (index: number, delta: SessionDelta) => void
+} {
+  const listeners: Array<Array<(delta: SessionDelta) => void>> = []
+
+  const wrap = (handle: SessionHandle): SessionHandle => {
+    const own: Array<(delta: SessionDelta) => void> = []
+    listeners.push(own)
+    return {
+      ...handle,
+      onDelta: (callback) => {
+        own.push(callback)
+        handle.onDelta(callback)
+      },
+      dispose: () => {},
+    }
+  }
+
+  return {
+    host: {
+      capabilities: () => inner.capabilities(),
+      capabilitiesFor: (providerId) => inner.capabilitiesFor(providerId),
+      describe: () => inner.describe(),
+      start: (providerId, config) => wrap(inner.start(providerId, config)),
+      attach: (providerId, config, afterSeq) =>
+        wrap(inner.attach(providerId, config, afterSeq)),
+      oneShot: (providerId, input) => inner.oneShot(providerId, input),
+    },
+    emitFromHandle: (index, delta) => {
+      for (const listener of listeners[index] ?? []) listener(delta)
+    },
+  }
+}
 
 /**
  * The seam MAR-2582 was lost in: a wire event arrives at the adapter and the
@@ -38,6 +88,12 @@ describe('remote wire events reaching the session record', () => {
   let tempDir: string
   let sessionId: string
   let cursorWrites: CursorWriteObservation[]
+  /**
+   * One entry per handle the service released. Releasing a handle is what a
+   * settle *does*, so counting releases is how "this event ended a run" is
+   * observed without reaching inside the service.
+   */
+  let releases: string[]
 
   const PROJECT_ID = 'remote-wire-project'
 
@@ -85,6 +141,37 @@ describe('remote wire events reaching the session record', () => {
     return id
   }
 
+  /** One assistant reply, as the daemon streams it: a wire conversation item. */
+  function assistantMessage(
+    seq: number,
+    text: string,
+  ): ReturnType<typeof envelope> {
+    return envelope(
+      seq,
+      {
+        kind: 'delta',
+        delta: {
+          kind: 'conversation.item.add',
+          item: {
+            id: `assistant-${seq}`,
+            kind: 'message',
+            actor: 'assistant',
+            text,
+            state: 'complete',
+            createdAt: '2026-08-23T10:00:00.000Z',
+            updatedAt: '2026-08-23T10:00:00.000Z',
+            providerMeta: {
+              providerId: 'claude',
+              providerItemId: null,
+              providerEventType: 'message',
+            },
+          },
+        },
+      },
+      sessionId,
+    )
+  }
+
   function assistantTexts(): string[] {
     return service
       .getConversation(sessionId)
@@ -107,6 +194,7 @@ describe('remote wire events reaching the session record', () => {
 
     stub = createStubDaemon()
     cursorWrites = []
+    releases = []
     service = new SessionService(
       db,
       new LocalExecutionHost(new ProviderRegistry()),
@@ -137,6 +225,8 @@ describe('remote wire events reaching the session record', () => {
     service.setRemoteWorkspaceSourceResolver(() => ({
       repository: 'git@github.com:acme/repo.git',
     }))
+
+    service.setSessionTerminatedListener((id) => releases.push(id))
 
     sessionId = await createRemoteSession()
   })
@@ -246,32 +336,7 @@ describe('remote wire events reaching the session record', () => {
       () => service.getById(sessionId)?.status === 'running',
       'the second turn to report running',
     )
-    stub.emit(
-      envelope(
-        5,
-        {
-          kind: 'delta',
-          delta: {
-            kind: 'conversation.item.add',
-            item: {
-              id: 'assistant-2',
-              kind: 'message',
-              actor: 'assistant',
-              text: 'the second answer',
-              state: 'complete',
-              createdAt: '2026-08-23T10:00:00.000Z',
-              updatedAt: '2026-08-23T10:00:00.000Z',
-              providerMeta: {
-                providerId: 'claude',
-                providerItemId: null,
-                providerEventType: 'message',
-              },
-            },
-          },
-        },
-        sessionId,
-      ),
-    )
+    stub.emit(assistantMessage(5, 'the second answer'))
     stub.emit(envelope(6, { kind: 'status', status: 'completed' }, sessionId))
 
     await waitUntil(
@@ -416,19 +481,69 @@ describe('remote wire events reaching the session record', () => {
   })
 
   /**
-   * A replayed settle must not end a turn that started after it (MAR-2582).
+   * The settle marker records a settle, not whatever the last event said
+   * (MAR-2582, ea696c33).
    *
-   * Replay is how this wire resumes — the stream reopens at the cursor the
-   * record kept and the daemon sends everything above it — so a cursor that
-   * sits behind the record hands the terminal event back. Rows written by the
-   * shipped build can be in exactly that state, which is why closing the crash
-   * window is not on its own enough: the stale rows already exist.
+   * A remote session keeps taking events after it comes to rest -- the
+   * continuation token often lands last -- and every one of them advances the
+   * stream cursor. If the marker followed the cursor it would climb above the
+   * settle it is supposed to name, and the next stream resume would hand back
+   * a terminal event sitting below a marker that had never seen it.
    *
-   * Applying that event again would release the handle the *new* turn is
-   * streaming on: the message reaches the daemon and the answer never reaches
-   * the app.
+   * The row invariant is `0 < settled_seq <= last_seq`, never equality: the
+   * two are equal only until something arrives after the settle.
    */
-  it('does not let a replayed settle end the turn that follows it', async () => {
+  it('leaves the settle marker where the settle was when a later event carries no status', async () => {
+    await service.start(sessionId, { text: 'hello' })
+    await waitUntil(
+      () => stub.eventStreamLastEventIds.length === 1,
+      'the event stream to open',
+    )
+
+    stub.emit(envelope(1, { kind: 'status', status: 'running' }, sessionId))
+    stub.emit(envelope(2, { kind: 'status', status: 'completed' }, sessionId))
+    await waitUntil(
+      () => service.getById(sessionId)?.status === 'completed',
+      'the turn to settle',
+    )
+    expect(readRow()).toMatchObject({
+      execution_host_last_seq: 2,
+      execution_host_settled_seq: 2,
+    })
+
+    // The token the daemon reports after the turn has already come to rest.
+    stub.emit(
+      envelope(3, { kind: 'continuation-token', token: 'resume-1' }, sessionId),
+    )
+    await waitUntil(
+      () => service.getById(sessionId)?.continuationToken === 'resume-1',
+      'the token to be stored',
+    )
+
+    const row = readRow()
+    expect(row.execution_host_settled_seq).toBe(2)
+    expect(row.execution_host_last_seq).toBe(3)
+    expect(row.execution_host_settled_seq).toBeGreaterThan(0)
+    expect(row.execution_host_settled_seq).toBeLessThanOrEqual(
+      row.execution_host_last_seq,
+    )
+  })
+
+  /**
+   * A settle ends the run of the handle that began it, and of no other
+   * (MAR-2582).
+   *
+   * This is the row the migration leaves behind, built to the shape the
+   * migration actually produces: the backfill sets
+   * `settled_seq = last_seq`, and for a session whose cursor write was lost in
+   * the gap between the status and the cursor, that cursor points at the event
+   * *before* the settle. So both columns hold N-1 and the settle at N sits
+   * above the marker -- "later sequence" is indistinguishable from "new
+   * event", and the marker cannot save this row. Nothing can heal it after the
+   * fact either; the only thing that helps is that the handle carrying turn 2
+   * did not begin the run that settle came from.
+   */
+  it('does not let the settle a migrated row never marked end the turn that follows it', async () => {
     await service.start(sessionId, { text: 'hello' })
     await waitUntil(
       () => stub.eventStreamLastEventIds.length === 1,
@@ -444,13 +559,16 @@ describe('remote wire events reaching the session record', () => {
       () => service.getById(sessionId)?.status === 'completed',
       'the first turn to settle',
     )
-    expect(readRow().execution_host_settled_seq).toBe(3)
+    expect(releases).toEqual([sessionId])
 
-    // The row the old two-write path could leave behind: settled at seq 3,
-    // cursor still at 2. Written here directly because that is the state a
-    // real database carries in from a build that shipped before this fix.
+    // The migrated row: terminal status, cursor one short of its own settle,
+    // marker backfilled to match the cursor
+    // (`database.ts`, `ensureSessionSettledSeqColumn`).
     db.prepare(
-      'UPDATE sessions SET execution_host_last_seq = 2 WHERE id = ?',
+      `UPDATE sessions
+          SET execution_host_last_seq = 2,
+              execution_host_settled_seq = 2
+        WHERE id = ?`,
     ).run(sessionId)
 
     await service.sendMessage(sessionId, { text: 'second' })
@@ -458,8 +576,8 @@ describe('remote wire events reaching the session record', () => {
       () => stub.eventStreamLastEventIds.length === 2,
       'the stream to reopen for the second turn',
     )
-    // Resumed from the stale cursor, so the daemon replays the settle — the
-    // test is worthless unless it does.
+    // Resumed from the stale cursor, so the daemon replays the settle above
+    // the marker -- the test is worthless unless it does.
     expect(stub.eventStreamLastEventIds[1]).toBe('2')
     await waitUntil(
       () => cursorWrites.filter((write) => write.seq === 3).length === 2,
@@ -470,40 +588,14 @@ describe('remote wire events reaching the session record', () => {
       'the second turn to reach the daemon as a command',
     )
 
-    // The turn happened: it reports running, its answer arrives, and it
-    // settles — none of which can reach the record through a handle that the
-    // replayed event released.
+    // The new handle survived the replay: the turn it carries reports running,
+    // answers, and settles, none of which can reach a released handle.
     stub.emit(envelope(4, { kind: 'status', status: 'running' }, sessionId))
     await waitUntil(
       () => service.getById(sessionId)?.status === 'running',
       'the second turn to report running',
     )
-    stub.emit(
-      envelope(
-        5,
-        {
-          kind: 'delta',
-          delta: {
-            kind: 'conversation.item.add',
-            item: {
-              id: 'assistant-2',
-              kind: 'message',
-              actor: 'assistant',
-              text: 'the second answer',
-              state: 'complete',
-              createdAt: '2026-08-23T10:00:00.000Z',
-              updatedAt: '2026-08-23T10:00:00.000Z',
-              providerMeta: {
-                providerId: 'claude',
-                providerItemId: null,
-                providerEventType: 'message',
-              },
-            },
-          },
-        },
-        sessionId,
-      ),
-    )
+    stub.emit(assistantMessage(5, 'the second answer'))
     stub.emit(envelope(6, { kind: 'status', status: 'completed' }, sessionId))
     await waitUntil(
       () => assistantTexts().includes('the second answer'),
@@ -514,12 +606,157 @@ describe('remote wire events reaching the session record', () => {
       'the second turn to settle',
     )
 
-    // One start for the session's whole life, and one stream per turn. A
-    // handle released by the replay would have shown up as a third stream.
+    // One start for the session's whole life, one stream per turn, and one
+    // release per turn. A handle released by the replay would have shown up as
+    // a third stream and a third release.
     expect(stub.startRequests).toHaveLength(1)
     expect(stub.eventStreamLastEventIds).toHaveLength(2)
-    // And the genuine settle still recorded itself, so the next turn's replay
-    // window is measured from the right place.
+    expect(releases).toEqual([sessionId, sessionId])
     expect(readRow().execution_host_settled_seq).toBe(6)
+  })
+
+  /**
+   * One settle, both encodings, one release (MAR-2582).
+   *
+   * The daemon can report the same turn ending twice over: once as a dedicated
+   * `status` event and once as a `session.patch` delta carrying the status.
+   * The duplicate lands at a *higher* sequence than the settle it repeats,
+   * which is exactly what a genuinely new settle looks like -- so no sequence
+   * marker can tell them apart, and this row's marker is not even stale.
+   *
+   * Here the duplicate reaches the app the way it actually would: the first
+   * encoding released the handle, so the second sat unread in the daemon's log
+   * until the next turn's stream resumed over it.
+   */
+  it('does not let a settle repeated in its other encoding end the turn that follows it', async () => {
+    await service.start(sessionId, { text: 'hello' })
+    await waitUntil(
+      () => stub.eventStreamLastEventIds.length === 1,
+      'the event stream to open',
+    )
+
+    stub.emit(envelope(1, { kind: 'status', status: 'running' }, sessionId))
+    stub.emit(
+      envelope(2, { kind: 'continuation-token', token: 'resume-1' }, sessionId),
+    )
+    stub.emit(envelope(3, { kind: 'status', status: 'completed' }, sessionId))
+    await waitUntil(
+      () => service.getById(sessionId)?.status === 'completed',
+      'the first turn to settle',
+    )
+    expect(releases).toEqual([sessionId])
+
+    // The same settle, said again the other way, after the handle that would
+    // have heard it is gone.
+    stub.emit(
+      envelope(
+        4,
+        {
+          kind: 'delta',
+          delta: { kind: 'session.patch', patch: { status: 'completed' } },
+        },
+        sessionId,
+      ),
+    )
+    // Nothing local moved: the record's marker still names sequence 3, which
+    // is why the marker cannot recognise the duplicate when it is replayed.
+    expect(readRow()).toMatchObject({
+      execution_host_last_seq: 3,
+      execution_host_settled_seq: 3,
+    })
+
+    await service.sendMessage(sessionId, { text: 'second' })
+    await waitUntil(
+      () => stub.eventStreamLastEventIds.length === 2,
+      'the stream to reopen for the second turn',
+    )
+    expect(stub.eventStreamLastEventIds[1]).toBe('3')
+    await waitUntil(
+      () => cursorWrites.some((write) => write.seq === 4),
+      'the daemon to replay the duplicate settle',
+    )
+
+    stub.emit(envelope(5, { kind: 'status', status: 'running' }, sessionId))
+    await waitUntil(
+      () => service.getById(sessionId)?.status === 'running',
+      'the second turn to report running',
+    )
+    stub.emit(assistantMessage(6, 'the second answer'))
+    stub.emit(envelope(7, { kind: 'status', status: 'completed' }, sessionId))
+    await waitUntil(
+      () => assistantTexts().includes('the second answer'),
+      "the second turn's answer to reach the session",
+    )
+    await waitUntil(
+      () => service.getById(sessionId)?.status === 'completed',
+      'the second turn to settle',
+    )
+
+    expect(stub.startRequests).toHaveLength(1)
+    expect(stub.eventStreamLastEventIds).toHaveLength(2)
+    expect(releases).toEqual([sessionId, sessionId])
+  })
+
+  /**
+   * A settle ends the run of the handle it came from, and a released handle
+   * has no run left to end (MAR-2582).
+   *
+   * The other half of the same rule as the two tests above: there, a live
+   * handle was handed someone else's settle; here, a handle the service has
+   * already let go of reports one of its own. Its sequence is far above the
+   * marker -- a released handle can say anything -- so nothing but the
+   * attribution stops it from releasing the handle now carrying the session.
+   */
+  it('lets a released handle report a settle without ending the run that replaced it', async () => {
+    const lingering = createLingeringHandleHost(host)
+    service.setRemoteExecutionHost(lingering.host)
+
+    await service.start(sessionId, { text: 'hello' })
+    await waitUntil(
+      () => stub.eventStreamLastEventIds.length === 1,
+      'the event stream to open',
+    )
+    stub.emit(envelope(1, { kind: 'status', status: 'running' }, sessionId))
+    stub.emit(
+      envelope(2, { kind: 'continuation-token', token: 'resume-1' }, sessionId),
+    )
+    stub.emit(envelope(3, { kind: 'status', status: 'completed' }, sessionId))
+    await waitUntil(
+      () => service.getById(sessionId)?.status === 'completed',
+      'the first turn to settle',
+    )
+    expect(releases).toEqual([sessionId])
+
+    await service.sendMessage(sessionId, { text: 'second' })
+    await waitUntil(
+      () => stub.eventStreamLastEventIds.length === 2,
+      'the stream to reopen for the second turn',
+    )
+    stub.emit(envelope(4, { kind: 'status', status: 'running' }, sessionId))
+    await waitUntil(
+      () => service.getById(sessionId)?.status === 'running',
+      'the second turn to report running',
+    )
+
+    // The released handle, speaking out of turn.
+    lingering.emitFromHandle(0, {
+      kind: 'session.patch',
+      patch: { status: 'completed' },
+      executionHostSeq: 99,
+    })
+
+    // The turn it did not begin is still running on the handle that did.
+    expect(releases).toEqual([sessionId])
+    stub.emit(assistantMessage(5, 'the second answer'))
+    stub.emit(envelope(6, { kind: 'status', status: 'completed' }, sessionId))
+    await waitUntil(
+      () => assistantTexts().includes('the second answer'),
+      "the second turn's answer to reach the session",
+    )
+    await waitUntil(
+      () => service.getById(sessionId)?.status === 'completed',
+      'the second turn to settle',
+    )
+    expect(releases).toEqual([sessionId, sessionId])
   })
 })
