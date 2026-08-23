@@ -30,6 +30,14 @@ export interface StubDaemon {
   dropStream: () => void
   startRequests: Array<Record<string, unknown>>
   commandEnvelopes: Array<Record<string, unknown>>
+  /**
+   * The same envelopes with the session id the URL addressed them to — the
+   * half that says a command reached the run it was meant for.
+   */
+  commandRequests: Array<{
+    sessionId: string
+    envelope: Record<string, unknown>
+  }>
   eventStreamLastEventIds: Array<string | null>
   setMetaStatus: (status: number) => void
   /** Raw `/health` body; null makes the route 404, as an older daemon does. */
@@ -59,6 +67,11 @@ export function createStubDaemon(): StubDaemon {
   const log: ExecutionHostEventEnvelope[] = []
   const startRequests: Array<Record<string, unknown>> = []
   const commandEnvelopes: Array<Record<string, unknown>> = []
+  const commandRequests: Array<{
+    sessionId: string
+    envelope: Record<string, unknown>
+  }> = []
+  const startedSessionIds = new Set<string>()
   const eventStreamLastEventIds: Array<string | null> = []
   const healthRequests: Array<{ authorization: string | null }> = []
   const current: {
@@ -129,6 +142,19 @@ export function createStubDaemon(): StubDaemon {
         return jsonResponse({ error: 'start rejected' }, startStatus)
       }
       const config = body.config as { sessionId: string }
+      // The daemon takes one start per session id and answers a second with
+      // 409 (`execution-session-manager.ts:436-438`). A session that already
+      // exists is continued with a `send-message` command, never restarted —
+      // which is what Emergence, the working client for this daemon, does:
+      // it has exactly one call to start and no second one anywhere
+      // (`execution-client.service.ts:128,411`).
+      if (startedSessionIds.has(config.sessionId)) {
+        return jsonResponse(
+          { error: `Session already exists: ${config.sessionId}` },
+          409,
+        )
+      }
+      startedSessionIds.add(config.sessionId)
       return jsonResponse(
         { protocolVersion: 1, sessionId: config.sessionId },
         201,
@@ -139,9 +165,12 @@ export function createStubDaemon(): StubDaemon {
       if (commandStatus !== 202) {
         return jsonResponse({ error: 'command rejected' }, commandStatus)
       }
-      commandEnvelopes.push(
-        JSON.parse(String(init?.body)) as Record<string, unknown>,
-      )
+      const envelope = JSON.parse(String(init?.body)) as Record<string, unknown>
+      commandEnvelopes.push(envelope)
+      commandRequests.push({
+        sessionId: sessionIdFromUrl(url),
+        envelope,
+      })
       return jsonResponse({ accepted: true }, 202)
     }
 
@@ -193,6 +222,7 @@ export function createStubDaemon(): StubDaemon {
     },
     startRequests,
     commandEnvelopes,
+    commandRequests,
     eventStreamLastEventIds,
     healthRequests,
     setMetaStatus(status) {
@@ -214,6 +244,12 @@ export function createStubDaemon(): StubDaemon {
       eventsStatus = status
     },
   }
+}
+
+/** The session id a `/v0/execution/sessions/<id>/...` URL addresses. */
+function sessionIdFromUrl(url: string): string {
+  const match = /\/v0\/execution\/sessions\/([^/]+)\//.exec(url)
+  return match ? decodeURIComponent(match[1]) : ''
 }
 
 /** Wraps one wire event in the envelope the daemon streams it inside. */

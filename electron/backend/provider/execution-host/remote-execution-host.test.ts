@@ -554,6 +554,38 @@ describe('RemoteExecutionHost', () => {
     }
   })
 
+  /**
+   * The daemon takes one start per session id and answers a second with 409
+   * `Session already exists` (`execution-session-manager.ts:436-438`). Pinned
+   * here because the stub daemon enforcing that is what keeps this suite from
+   * agreeing with us instead of with the daemon: without it, a caller that
+   * restarts a live session to continue it looks like it works.
+   */
+  it('surfaces the daemon refusing a second start for a session it already has', async () => {
+    const first = host.start('claude', startConfig('s-1'))
+    await waitUntil(
+      () => stub.startRequests.length === 1,
+      'the first start to be accepted',
+    )
+
+    const deltas: SessionDelta[] = []
+    const statuses: SessionStatus[] = []
+    const second = host.start('claude', startConfig('s-1'))
+    second.onDelta((delta) => deltas.push(delta))
+    second.onStatusChange((status) => statuses.push(status))
+
+    await waitUntil(() => statuses.length === 1, 'the refusal to surface')
+    expect(statuses).toEqual(['failed'])
+    const note = deltas.find((d) => d.kind === 'conversation.item.add')
+    if (note?.kind === 'conversation.item.add' && note.item.kind === 'note') {
+      expect(note.item.text).toContain('Session already exists')
+    } else {
+      throw new Error('expected the refusal to reach the transcript as a note')
+    }
+
+    first.stop()
+  })
+
   it('fails the session after exhausting stream reconnect attempts', async () => {
     stub.setEventsStatus(500)
     const statuses: SessionStatus[] = []
