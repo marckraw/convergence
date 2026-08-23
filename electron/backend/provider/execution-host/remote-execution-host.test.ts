@@ -911,6 +911,56 @@ describe('RemoteExecutionHost', () => {
       second.dispose?.()
     })
 
+    /**
+     * An attach posts no start request, so a connection it never resolved is
+     * not a start the daemon refused (MAR-2582).
+     *
+     * The one-start contract is audited by reading this log. A note that calls
+     * an attach failure a refused start writes evidence of a second start into
+     * the record of a wire that permits exactly one -- and it is read under
+     * pressure, by a human looking for exactly that string.
+     */
+    it('records an attach that never reached the daemon as an attach, not as a refused start', async () => {
+      const offline = new RemoteExecutionHost({
+        connection: {
+          resolveConnection: async () => {
+            throw new RemoteExecutionHostError(
+              'No remote endpoint is configured.',
+              'configuration',
+            )
+          },
+        },
+        fetch: stub.fetchFn,
+        reconnect: { maxAttempts: 2, wait: async () => {} },
+        debugSink: { record: (entry) => entries.push(entry) },
+      })
+
+      const notes: string[] = []
+      const handle = offline.attach('claude', startConfig('s-1'), 3)
+      handle.onDelta((delta) => {
+        if (
+          delta.kind === 'conversation.item.add' &&
+          delta.item.kind === 'note'
+        ) {
+          notes.push(delta.item.text)
+        }
+      })
+
+      await waitUntil(() => notes.length === 1, 'the failure to surface')
+      expect(notes[0]).toContain('failed to attach')
+      expect(stub.startRequests).toHaveLength(0)
+
+      const lifecycle = entries.filter((entry) => entry.channel === 'lifecycle')
+      expect(lifecycle).toHaveLength(1)
+      expect(lifecycle[0]?.note).toContain(
+        'remote session attach could not resolve a connection:',
+      )
+      expect(lifecycle[0]?.note).toContain('No remote endpoint is configured.')
+      expect(entries.some((entry) => entry.note?.includes('refused'))).toBe(
+        false,
+      )
+    })
+
     it('never quotes the message a command carries', async () => {
       const handle = tracingHost.start('claude', startConfig('s-1'))
       handle.onDelta(() => {})

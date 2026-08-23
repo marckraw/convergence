@@ -532,9 +532,17 @@ class RemoteSessionRun {
   }
 
   private async run(): Promise<void> {
+    // Which step is in flight, so a failure below is logged as the thing that
+    // actually failed. The one-start contract is audited by reading this log,
+    // and an attach posts no start at all -- calling its connection failure
+    // "start refused" writes evidence of a second start into the record of a
+    // wire that permits exactly one. A message that misdescribes its own cause
+    // is read under pressure and believed (MAR-2582).
+    let step: 'connection' | 'start' = 'connection'
     try {
       this.connection = await this.params.host.resolveConnection()
       if (!this.params.resume) {
+        step = 'start'
         // Recorded before the request, not after it. A session takes exactly
         // one start on this wire and the daemon answers a second with 409, so
         // "was a second one attempted?" is a question the log has to be able
@@ -559,14 +567,22 @@ class RemoteSessionRun {
       }
     } catch (error) {
       const reason = describeRemoteExecutionHostFailure(error)
+      const attempt = this.params.resume ? 'attach' : 'start'
       this.recordDebug('lifecycle', {
         direction: 'in',
         ...(error instanceof RemoteExecutionHostError && error.status
           ? { payload: { status: error.status } }
           : {}),
-        note: `remote session start refused: ${reason}`,
+        note:
+          step === 'start'
+            ? `remote session start refused: ${reason}`
+            : `remote session ${attempt} could not resolve a connection: ${reason}`,
       })
-      this.failSession(`Remote session failed to start: ${reason}`)
+      this.failSession(
+        this.params.resume
+          ? `Remote session failed to attach: ${reason}`
+          : `Remote session failed to start: ${reason}`,
+      )
       return
     }
 
