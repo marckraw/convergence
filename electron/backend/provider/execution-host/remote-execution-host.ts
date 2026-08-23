@@ -535,6 +535,16 @@ class RemoteSessionRun {
     try {
       this.connection = await this.params.host.resolveConnection()
       if (!this.params.resume) {
+        // Recorded before the request, not after it. A session takes exactly
+        // one start on this wire and the daemon answers a second with 409, so
+        // "was a second one attempted?" is a question the log has to be able
+        // to answer — and a log that only records the ones that succeeded
+        // cannot answer it either way (MAR-2582).
+        this.recordDebug('request', {
+          direction: 'out',
+          method: 'start',
+          note: 'remote session start requested',
+        })
         const response = await this.params.host.requestJson(
           this.connection,
           '/v0/execution/sessions',
@@ -549,6 +559,13 @@ class RemoteSessionRun {
       }
     } catch (error) {
       const reason = describeRemoteExecutionHostFailure(error)
+      this.recordDebug('lifecycle', {
+        direction: 'in',
+        ...(error instanceof RemoteExecutionHostError && error.status
+          ? { payload: { status: error.status } }
+          : {}),
+        note: `remote session start refused: ${reason}`,
+      })
       this.failSession(`Remote session failed to start: ${reason}`)
       return
     }

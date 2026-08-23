@@ -807,6 +807,53 @@ describe('RemoteExecutionHost', () => {
       handle.dispose?.()
     })
 
+    /**
+     * The one-start contract is checked by reading this log, so the log has to
+     * record the starts that were refused as well as the ones that were
+     * accepted. A log holding only successes can be read as "no second start
+     * was attempted" when a second one was attempted and turned down — the
+     * evidence and the claim would not match (MAR-2582).
+     */
+    it('records a start the daemon refused, not only the ones it accepted', async () => {
+      const first = tracingHost.start('claude', startConfig('s-1'))
+      first.onDelta(() => {})
+      await waitUntil(
+        () => stub.startRequests.length === 1,
+        'the first start to be accepted',
+      )
+
+      const second = tracingHost.start('claude', startConfig('s-1'))
+      second.onDelta(() => {})
+
+      await waitUntil(
+        () => entries.some((entry) => entry.note?.includes('refused')),
+        'the refused start to be traced',
+      )
+
+      const startEntries = entries.filter(
+        (entry) => entry.method === 'start' || entry.note?.includes('start'),
+      )
+      expect(
+        startEntries.filter(
+          (entry) => entry.note === 'remote session start requested',
+        ),
+      ).toHaveLength(2)
+      const refusal = startEntries.find((entry) =>
+        entry.note?.includes('refused'),
+      )
+      expect(refusal?.note).toContain('Session already exists')
+      expect(refusal?.payload).toMatchObject({ status: 409 })
+      expect(
+        startEntries.filter(
+          (entry) =>
+            entry.note === 'remote session start accepted by the daemon',
+        ),
+      ).toHaveLength(1)
+
+      first.stop()
+      second.dispose?.()
+    })
+
     it('never quotes the message a command carries', async () => {
       const handle = tracingHost.start('claude', startConfig('s-1'))
       handle.onDelta(() => {})
