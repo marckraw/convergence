@@ -1826,7 +1826,11 @@ export class SessionService {
     // stale marker would silence the next ordinary run.
     const relaysMuted = row.relays_muted === 1
     const hostSeq = executionHostSeq ?? 0
-    const settledSeq = isTerminalSessionStatus(nextStatus) ? hostSeq : 0
+    // Read from the patch, not from the resulting status: the marker means
+    // "this event settled the session", and a patch that carries no status at
+    // all -- a continuation token arriving after the settle -- did not.
+    const settledSeq =
+      patch.status && isTerminalSessionStatus(patch.status) ? hostSeq : 0
 
     this.db
       .prepare(
