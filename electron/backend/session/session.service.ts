@@ -994,6 +994,23 @@ export class SessionService {
       )
     }
 
+    if (session.executionHost === 'remote') {
+      this.sendRemoteTurn({
+        session,
+        text: this.prepareUserTurnText(
+          session,
+          input.text,
+          input.skipContextInjection,
+        ),
+        attachments,
+        attachmentIds: input.attachmentIds,
+        skillSelections: input.skillSelections,
+        providerAccountId: input.providerAccountId,
+        muteRelays: input.muteRelays,
+      })
+      return
+    }
+
     if (capabilities.supportsContinuation && continuationToken) {
       const augmentedText = this.prepareUserTurnText(
         session,
@@ -2091,6 +2108,21 @@ export class SessionService {
         return
       }
 
+      if (session.executionHost === 'remote') {
+        this.sendRemoteTurn({
+          session,
+          text: augmentedText,
+          attachments,
+          attachmentIds: item.attachmentIds,
+          skillSelections: item.skillSelections,
+          providerAccountId: item.providerAccountId,
+          muteRelays: item.relaysMuted,
+          queuedInputId: item.id,
+        })
+        this.queuedInputs.patch(item.id, 'sent')
+        return
+      }
+
       const continuationToken = this.getContinuationToken(sessionId)
       if (!this.continuationSupportedFor(session) || !continuationToken) {
         throw new Error('Session is no longer resumable')
@@ -2144,31 +2176,7 @@ export class SessionService {
       if (session.executionHost !== 'remote') continue
       if (this.activeHandles.has(session.id)) continue
       try {
-        const execution = this.resolveExecution(session)
-        if (!execution.host.attach) {
-          throw new Error('Execution host does not support reattaching')
-        }
-        const handle = execution.host.attach(
-          execution.providerId,
-          {
-            sessionId: session.id,
-            workingDirectory: session.workingDirectory,
-            initialMessage: '',
-            model: session.model,
-            effort: session.effort,
-            serviceTier: session.serviceTier ?? null,
-            continuationToken: session.continuationToken,
-            permissionConfig: session.permissionConfig,
-          },
-          this.sessionRepository.getExecutionHostLastSeq(session.id),
-        )
-        this.activeHandles.set(session.id, handle)
-        handle.onDelta((delta: SessionDelta) => {
-          this.applyDelta(session.id, delta)
-        })
-        handle.onActivityHeartbeat?.(() => {
-          this.liveness.bump(session.id)
-        })
+        this.attachRemoteHandle(session)
       } catch (err) {
         this.markStaleRunningSessionFailed(
           session,
@@ -2179,6 +2187,101 @@ export class SessionService {
         )
       }
     }
+  }
+
+  /**
+   * Attaches to the run a remote session already has on the daemon and makes
+   * the resulting handle the session's active one.
+   *
+   * Resuming from `execution_host_last_seq` is what stops a reattach from
+   * repeating itself: the adapter drops every envelope at or below that
+   * sequence, so the events the daemon replays land once.
+   */
+  private attachRemoteHandle(session: SessionSummary): SessionHandle {
+    const execution = this.resolveExecution(session)
+    if (!execution.host.attach) {
+      throw new Error('Execution host does not support reattaching')
+    }
+    const handle = execution.host.attach(
+      execution.providerId,
+      {
+        sessionId: session.id,
+        workingDirectory: session.workingDirectory,
+        initialMessage: '',
+        model: session.model,
+        effort: session.effort,
+        serviceTier: session.serviceTier ?? null,
+        continuationToken: session.continuationToken,
+        permissionConfig: session.permissionConfig,
+      },
+      this.sessionRepository.getExecutionHostLastSeq(session.id),
+    )
+    this.activeHandles.set(session.id, handle)
+    handle.onDelta((delta: SessionDelta) => {
+      this.applyDelta(session.id, delta)
+    })
+    handle.onActivityHeartbeat?.(() => {
+      this.liveness.bump(session.id)
+    })
+    return handle
+  }
+
+  /**
+   * Carries another turn on a remote session that has no live handle.
+   *
+   * A remote session takes exactly one start. The daemon answers a second one
+   * for the same session id with 409 `Session already exists`
+   * (`execution-session-manager.ts:436-438`), and Emergence — the working
+   * client for this daemon — never sends one: it starts a session once and
+   * every later turn is a `send-message` command on the session it already
+   * has (`execution-client.service.ts:128,411`,
+   * `session-gateway.service.ts:1107-1137`). Starting again to resume is
+   * local-provider semantics, where a fresh process genuinely is how a
+   * conversation continues; on this wire it made every remote session exactly
+   * one turn long (MAR-2582).
+   *
+   * The attach happens here, on send, rather than at boot for every remote
+   * session: each one is a live SSE connection and the database holds
+   * hundreds of them. Only sessions still running when the app closed are
+   * reattached eagerly, by `resumeRunningRemoteSessions`.
+   *
+   * A session the daemon has never heard of is not guarded against, because
+   * nothing local knows that reliably and the daemon does: it answers the
+   * stream with 404 and the adapter fails the session saying so. Emergence
+   * makes the same call.
+   */
+  private sendRemoteTurn(input: {
+    session: Session
+    text: string
+    attachments: Attachment[] | undefined
+    attachmentIds: string[] | undefined
+    skillSelections: SkillSelection[] | undefined
+    providerAccountId: string | null | undefined
+    muteRelays?: boolean
+    queuedInputId?: string
+  }): void {
+    const { session } = input
+    assertLocalAccountSelection({
+      executionHost: session.executionHost,
+      accountId: input.providerAccountId,
+    })
+
+    this.pendingUserAttachmentIds.set(session.id, input.attachmentIds ?? [])
+    this.pendingUserSkillSelections.set(session.id, input.skillSelections ?? [])
+    this.pendingTurnAccountIds.set(session.id, input.providerAccountId ?? null)
+    this.requestRelayMute(session.id, input.muteRelays)
+
+    // Callers reach here having found no handle, but they got here through
+    // awaits — a boot-time reattach or a second send can have landed one in
+    // between. Reusing it costs nothing; opening a second stream for one
+    // session would apply every event twice.
+    const handle =
+      this.activeHandles.get(session.id) ?? this.attachRemoteHandle(session)
+    handle.sendMessage(input.text, input.attachments, input.skillSelections, {
+      deliveryMode: 'normal',
+      ...(input.queuedInputId ? { queuedInputId: input.queuedInputId } : {}),
+      providerAccountId: input.providerAccountId,
+    })
   }
 
   /**

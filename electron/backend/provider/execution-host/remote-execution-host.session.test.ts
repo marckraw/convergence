@@ -53,6 +53,16 @@ describe('remote wire events reaching the session record', () => {
     return id
   }
 
+  function assistantTexts(): string[] {
+    return service
+      .getConversation(sessionId)
+      .filter(
+        (item): item is Extract<typeof item, { kind: 'message' }> =>
+          item.kind === 'message' && item.actor === 'assistant',
+      )
+      .map((item) => item.text)
+  }
+
   beforeEach(async () => {
     db = getDatabase()
     tempDir = mkdtempSync(join(tmpdir(), 'convergence-remote-wire-'))
@@ -137,7 +147,15 @@ describe('remote wire events reaching the session record', () => {
     expect(service.getById(sessionId)?.activity).toBeNull()
   })
 
-  it('carries a second turn on the continuation the wire supplied', async () => {
+  /**
+   * The shape of a remote conversation: one start, then a command per turn.
+   * A second start for the same session id is refused by the daemon with 409
+   * `Session already exists` (`execution-session-manager.ts:436-438`), and
+   * Emergence — the working client for this daemon — has no second start
+   * anywhere: every follow-up is a `send-message` on the session it already
+   * has (`execution-client.service.ts:411-425`).
+   */
+  it('carries a second turn as a command on the run the daemon already has', async () => {
     await service.start(sessionId, { text: 'hello' })
     await waitUntil(
       () => stub.eventStreamLastEventIds.length === 1,
@@ -157,13 +175,109 @@ describe('remote wire events reaching the session record', () => {
     // On master this threw `Session cannot be resumed: missing continuation
     // state. Start a new session.` — the whole defect, in one call.
     await service.sendMessage(sessionId, { text: 'second' })
+
     await waitUntil(
-      () => stub.startRequests.length === 2,
-      'the second turn to be dispatched',
+      () => stub.commandRequests.length === 1,
+      'the second turn to reach the daemon as a command',
     )
-    expect(stub.startRequests[1]).toMatchObject({
-      providerId: 'claude',
-      config: { sessionId, continuationToken: 'resume-1' },
+    expect(stub.startRequests).toHaveLength(1)
+    expect(stub.commandRequests[0]).toMatchObject({
+      sessionId,
+      envelope: {
+        sessionId,
+        command: { kind: 'send-message', text: 'second' },
+      },
+    })
+
+    // Reattached from where the first turn left off, so the daemon's replay
+    // cannot repeat what the transcript already holds.
+    await waitUntil(
+      () => stub.eventStreamLastEventIds.length === 2,
+      'the stream to reopen for the second turn',
+    )
+    expect(stub.eventStreamLastEventIds[1]).toBe('3')
+
+    // Dispatched is not answered. The turn only happened if the reply came
+    // back over the wire and reached the session record.
+    stub.emit(envelope(4, { kind: 'status', status: 'running' }, sessionId))
+    await waitUntil(
+      () => service.getById(sessionId)?.status === 'running',
+      'the second turn to report running',
+    )
+    stub.emit(
+      envelope(
+        5,
+        {
+          kind: 'delta',
+          delta: {
+            kind: 'conversation.item.add',
+            item: {
+              id: 'assistant-2',
+              kind: 'message',
+              actor: 'assistant',
+              text: 'the second answer',
+              state: 'complete',
+              createdAt: '2026-08-23T10:00:00.000Z',
+              updatedAt: '2026-08-23T10:00:00.000Z',
+              providerMeta: {
+                providerId: 'claude',
+                providerItemId: null,
+                providerEventType: 'message',
+              },
+            },
+          },
+        },
+        sessionId,
+      ),
+    )
+    stub.emit(envelope(6, { kind: 'status', status: 'completed' }, sessionId))
+
+    await waitUntil(
+      () => assistantTexts().includes('the second answer'),
+      "the second turn's answer to reach the session",
+    )
+    await waitUntil(
+      () => service.getById(sessionId)?.status === 'completed',
+      'the second turn to settle',
+    )
+  })
+
+  /**
+   * The other way a turn reaches a remote session with no live handle: it was
+   * written while the previous turn was still running, so Convergence held it
+   * and dispatched it at the settle — by which point the handle has been
+   * released. Same wire shape, a different caller, and it went through the
+   * same second start before this fix.
+   */
+  it('carries a queued follow-up on the same run once the turn it waited on settles', async () => {
+    await service.start(sessionId, { text: 'hello' })
+    await waitUntil(
+      () => stub.eventStreamLastEventIds.length === 1,
+      'the event stream to open',
+    )
+
+    stub.emit(envelope(1, { kind: 'status', status: 'running' }, sessionId))
+    await waitUntil(
+      () => service.getById(sessionId)?.status === 'running',
+      'the first turn to report running',
+    )
+
+    await service.sendMessage(sessionId, { text: 'queued' })
+    expect(stub.commandRequests).toHaveLength(0)
+
+    stub.emit(
+      envelope(2, { kind: 'continuation-token', token: 'resume-1' }, sessionId),
+    )
+    stub.emit(envelope(3, { kind: 'status', status: 'completed' }, sessionId))
+
+    await waitUntil(
+      () => stub.commandRequests.length === 1,
+      'the queued follow-up to reach the daemon as a command',
+    )
+    expect(stub.startRequests).toHaveLength(1)
+    expect(stub.commandRequests[0]).toMatchObject({
+      sessionId,
+      envelope: { command: { kind: 'send-message', text: 'queued' } },
     })
   })
 

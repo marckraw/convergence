@@ -271,7 +271,13 @@ export class RemoteExecutionHost implements ProviderExecutionHost {
     config: SessionStartConfig,
     afterSeq: number,
   ): SessionHandle {
-    // No capability check: reattach happens at app boot before the provider
+    // The one way a remote session continues: it is started once and every
+    // later turn attaches to the run the daemon already has, at app boot for a
+    // session that was still running and on send for one that had settled
+    // (`session.service.ts`, `sendRemoteTurn`). A second start is refused by
+    // the daemon with 409 `Session already exists`.
+    //
+    // No capability check: an attach can happen at boot before the provider
     // cache is primed, and the provider was already validated when the
     // session originally started. Failures surface through the handle.
     const session = new RemoteSessionRun({
@@ -720,9 +726,16 @@ class RemoteSessionRun {
    * So `status` and `continuation-token` do both halves, exactly as
    * `claude-code-provider.ts:511-513,540-541` does for a local run: fire the
    * callback for the handle's declared contract, and patch the session for the
-   * reader that actually exists. Without the patch a remote turn never leaves
-   * `running` and its continuation token is never stored, which made every
-   * remote session one turn long (MAR-2582).
+   * reader that actually exists. Without the status patch a remote turn never
+   * leaves `running`: the header spins forever and the next message is treated
+   * as mid-run input — half of what made every remote session one turn long
+   * (MAR-2582).
+   *
+   * The token is patched because the daemon reports it and the session record
+   * should hold what the daemon said, not because a second turn needs it. A
+   * remote turn resumes by attaching to the run the daemon already has; a
+   * continuation token that drove a second start was the other half of the
+   * same defect (`session.service.ts`, `sendRemoteTurn`).
    *
    * `attention`, `context-window` and `activity` are still callback-only. They
    * are the same shape of loss and they are not this fix; each changes UI
