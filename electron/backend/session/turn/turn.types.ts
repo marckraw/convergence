@@ -36,9 +36,12 @@ export interface Turn {
  * It carries which repository a change belongs to, but it is not yet part of a
  * change's identity: storage still keys one row per `(turn_id, file_path)`, and
  * `getFileDiff` still looks a diff up by turn and path alone. Until both move,
- * the same path in two repositories of one workspace is still one change as far
- * as this app is concerned — MAR-2589, out of scope here because it needs a
- * table rebuild.
+ * the same path in two repositories of one workspace does not merge into one
+ * change — it breaks the turn. The second insert raises `UNIQUE constraint
+ * failed`, and `turn-capture.service.ts` writes the file changes and stamps the
+ * turn's `ended_at` inside one transaction, so the rollback costs that turn
+ * every file change and leaves it `running`. MAR-2589, out of scope here
+ * because it needs a table rebuild.
  */
 export interface TurnFileChange {
   id: string

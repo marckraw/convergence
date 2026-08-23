@@ -22,17 +22,25 @@ Existing turns get the same treatment: the columns are added in place, and the
 values are recovered from the markers the old capture path left in the diff body,
 so a diff that was cut two months ago now says so. Stored diffs are byte-for-byte
 unchanged and no database is rebuilt. What a migration cannot bring back is the
-cut content itself — that was replaced by the marker the day it was written.
+cut content itself — that was replaced by the marker the day it was written. The
+columns and the backfill go in as one transaction, because a column's presence is
+also the flag that says the backfill is still owed: interrupted between the two,
+the next boot would see the columns and skip the repair for good.
 
 `repoRoot` is carried too: which repository inside a multi-repo workspace a
 change belongs to. Nothing renders it yet, and it is **not** yet part of a
-change's identity — the stored uniqueness is still one row per turn and path, so
-the same path in two repositories is still one change as far as the database is
-concerned. Filed as MAR-2589; it needs a table rebuild and a decision this change
-does not make.
+change's identity — the stored uniqueness is still one row per turn and path. The
+same path in two repositories does not quietly merge into one change; it breaks
+the turn. The second insert raises `UNIQUE constraint failed`, and that insert
+shares a transaction with the update that stamps the turn's end, so the rollback
+costs the turn every file change and leaves it `running`. Filed as MAR-2589; it
+needs a table rebuild and a decision this change does not make.
 
 Honest limit: for a **remote** session none of this is visible yet, because a
 remote turn record does not reach the session at all — `applyDelta` has no
 branch for the turn deltas the wire sends. That is a separate defect, found
 while doing this one and filed as MAR-2584; this change is what makes the facts
-survive the boundary once it is repaired.
+survive the boundary once it is repaired. MAR-2589 has to land first: remote
+turn persistence is what makes a multi-repo path collision reachable, so
+repairing the boundary before identity would ship the broken turn rather than
+prevent it.

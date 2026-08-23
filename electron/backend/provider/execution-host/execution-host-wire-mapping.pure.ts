@@ -164,8 +164,10 @@ export const EXECUTION_HOST_UNSENT_LOCAL_ITEM_FIELDS = [
  *
  * "Nothing is dropped" is a statement about this mapping only. `repoRoot`
  * arrives and is stored, but storage still keys a change by `(turn_id,
- * file_path)`, so two repositories with the same path in one workspace still
- * land on one identity downstream of here — MAR-2589, and not a loss this list
+ * file_path)`, so two repositories with the same path in one workspace collide
+ * on insert rather than merging: `UNIQUE constraint failed` rolls back the
+ * transaction that also stamps the turn's `ended_at`, costing that turn its
+ * file changes and leaving it `running` — MAR-2589, and not a loss this list
  * can express.
  */
 export const EXECUTION_HOST_UNMAPPED_WIRE_FILE_CHANGE_FIELDS =
