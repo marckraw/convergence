@@ -661,6 +661,63 @@ describe('RemoteExecutionHost', () => {
     handle.stop()
   })
 
+  /**
+   * A disposed run dispatches no buffered events (MAR-2582).
+   *
+   * One stream read hands the adapter a whole batch of frames: a daemon replay
+   * writes them back to back and they arrive coalesced. The session service
+   * disposes a handle from inside a delta listener -- that is what releasing a
+   * handle at a settle is -- so the dispose happens while the rest of that
+   * batch is still in the loop. Delivering the remainder feeds a handle the
+   * service has already let go, and its listeners still write to the session
+   * a *different* handle is now serving.
+   */
+  it('dispatches no buffered events once the run is disposed', async () => {
+    const entries: ProviderDebugEntry[] = []
+    const tracingHost = createHost(stub, {
+      debugSink: { record: (entry) => entries.push(entry) },
+    })
+    await tracingHost.refreshProviders()
+
+    const deltas: SessionDelta[] = []
+    const handle = tracingHost.start('claude', startConfig('s-1'))
+    handle.onDelta((delta) => {
+      deltas.push(delta)
+      // What SessionService.releaseHandle does at a settle, at the same
+      // moment it does it.
+      if (deltas.length === 1) handle.dispose?.()
+    })
+
+    await waitUntil(
+      () => stub.eventStreamLastEventIds.length === 1,
+      'event stream to open',
+    )
+
+    stub.emitBatch([
+      envelope(1, { kind: 'status', status: 'completed' }),
+      envelope(2, { kind: 'status', status: 'running' }),
+      envelope(3, { kind: 'continuation-token', token: 'resume-1' }),
+    ])
+
+    await waitUntil(() => deltas.length === 1, 'the first event to arrive')
+    await waitUntil(
+      () => entries.some((entry) => entry.note?.includes('disposed')),
+      'the dropped events to be traced',
+    )
+    // Nothing after the dispose, and the drop is on the record rather than
+    // silent -- the debug log is the only place a remote turn is inspectable.
+    expect(deltas).toEqual([
+      {
+        kind: 'session.patch',
+        patch: { status: 'completed', updatedAt: expect.any(String) },
+        executionHostSeq: 1,
+      },
+    ])
+    expect(
+      entries.filter((entry) => entry.note === 'dropped: the run is disposed'),
+    ).toHaveLength(2)
+  })
+
   it('reports processed event sequences through onEventSeq', async () => {
     const seqs: Array<[string, number]> = []
     const seqHost = new RemoteExecutionHost({

@@ -25,6 +25,12 @@ export const DAEMON_META = {
 export interface StubDaemon {
   fetchFn: typeof fetch
   emit: (envelope: ExecutionHostEventEnvelope) => void
+  /**
+   * Pushes several envelopes as one chunk, the way a replay reaches a client:
+   * the daemon writes its frames back to back and they arrive coalesced, so a
+   * single stream read hands the adapter the whole batch at once.
+   */
+  emitBatch: (envelopes: ExecutionHostEventEnvelope[]) => void
   /** Pushes an SSE frame the protocol decoder will reject. */
   emitRaw: (data: string) => void
   dropStream: () => void
@@ -211,6 +217,18 @@ export function createStubDaemon(): StubDaemon {
     emit(envelope) {
       log.push(envelope)
       current.controller?.enqueue(sseChunk(envelope))
+    },
+    emitBatch(envelopes) {
+      for (const item of envelopes) log.push(item)
+      const controller = current.controller
+      if (!controller) return
+      controller.enqueue(
+        encoder.encode(
+          envelopes
+            .map((item) => `id: ${item.seq}\ndata: ${JSON.stringify(item)}\n\n`)
+            .join(''),
+        ),
+      )
     },
     emitRaw(data) {
       current.controller?.enqueue(encoder.encode(`data: ${data}\n\n`))

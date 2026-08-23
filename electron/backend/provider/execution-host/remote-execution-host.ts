@@ -644,6 +644,11 @@ class RemoteSessionRun {
         const { done, value } = await reader.read()
         if (done) return
         const events = parser.feed(decoder.decode(value, { stream: true }))
+        // One read delivers a batch: a daemon replay writes its frames back to
+        // back and they arrive coalesced. A listener that disposes the run on
+        // the first of them must not be handed the rest, which `dispatchRawEvent`
+        // decides per event rather than the loop deciding once -- an event
+        // dropped for that reason is traced like every other drop.
         for (const event of events) {
           this.dispatchRawEvent(event.data)
         }
@@ -685,6 +690,18 @@ class RemoteSessionRun {
   }
 
   private dispatchRawEvent(raw: string): void {
+    // A disposed run has no voice. Its listeners belong to a handle the
+    // session service has already released, and an event delivered through
+    // them lands on a session whose live turn is being served by a different
+    // handle entirely (MAR-2582).
+    if (this.stopped || this.dead) {
+      this.recordDebug('event', {
+        direction: 'in',
+        bytes: raw.length,
+        note: 'dropped: the run is disposed',
+      })
+      return
+    }
     const decoded = decodeExecutionEventEnvelope(raw)
     if (!decoded.ok) {
       this.recordDebug('event', {
