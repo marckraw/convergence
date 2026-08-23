@@ -53,12 +53,24 @@ came to rest under an earlier build carries a cursor one event short of its
 own settle, so the replay sits above any marker derived from it. Those rows
 already exist; nothing can repair them after the fact.
 
-So a terminal event is attributed to the handle it arrived on. A handle that
-attached to a session the app already had at rest has no run of its own to end
-until the daemon reports that session moving again, and a handle the app has
-released says nothing about the session at all. A disposed run stops
-dispatching the events already buffered behind it, for the same reason: they
-belong to a handle nobody is listening to any more.
+So a terminal event is attributed to the handle it arrived on, and read for
+where it came from. A handle that attached to a session the app already had at
+rest inherits no run of its own until the daemon reports that session moving
+again, so a settle the daemon replays from the stream cursor changes nothing —
+but a failure the handle raises about _itself_ never came off the wire, and it
+always ends the run it belongs to. That includes an attach that died before it
+ever began: the run failed, the record said so, and the dead handle stayed
+installed as the session's live one, quietly eating every message sent after
+it. A handle the app has released says nothing about the session at all, and a
+disposed run stops dispatching the events already buffered behind it, for the
+same reason: they belong to a handle nobody is listening to any more.
+
+**A message the app cannot deliver says so.** A remote run that has died still
+answers when it is handed a message, and there is nothing else to notice: the
+daemon is what echoes a user's turn back, so a message that never left leaves
+no turn, no error, and no trace. Sends, approvals and denials that reach a run
+that can no longer carry them now surface the same "was not delivered" note as
+a command the daemon refuses.
 
 The session also records which event settled it, in the same write as the
 status and the stream cursor, so an interruption can no longer leave a session
