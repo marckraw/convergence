@@ -38,16 +38,38 @@ hundreds of remote sessions and each attach is a live connection. Only
 sessions that were still running when the app closed are reattached eagerly,
 as before.
 
-**A settle the daemon replays no longer ends the turn that follows it.**
+**A settle now ends the run of the handle that began it, and no other.**
 Resuming a stream means asking the daemon for everything after the last
-sequence the record kept, so a cursor that sits behind the record hands the
+sequence the record kept, so a cursor sitting behind the record hands the
 terminal event back — and applying it a second time released the handle the
 _new_ turn was streaming on: the message reached the daemon and the answer
-never reached the app. The session now records which event settled it, in the
-same write as the status itself, and recognises that event arriving again. The
-stream cursor moved into that write too, so an interruption can no longer
-leave a session recorded as settled with a cursor pointing at the event
-before the settle.
+never reached the app.
+
+Sequence numbers cannot pick that event out. The same settle can arrive
+through both encodings the wire supports — a dedicated status event and a
+session patch carrying one — and the duplicate lands at a _higher_ sequence,
+which is exactly what a genuinely new settle looks like. And a session that
+came to rest under an earlier build carries a cursor one event short of its
+own settle, so the replay sits above any marker derived from it. Those rows
+already exist; nothing can repair them after the fact.
+
+So a terminal event is attributed to the handle it arrived on. A handle that
+attached to a session the app already had at rest has no run of its own to end
+until the daemon reports that session moving again, and a handle the app has
+released says nothing about the session at all. A disposed run stops
+dispatching the events already buffered behind it, for the same reason: they
+belong to a handle nobody is listening to any more.
+
+The session also records which event settled it, in the same write as the
+status and the stream cursor, so an interruption can no longer leave a session
+recorded as settled with a cursor pointing at the event before the settle.
+That is defence in depth rather than the fix — closing the window stops new
+rows entering it and heals none of the rows already in it.
+
+**In the debug log**, an attach that never reached the daemon is recorded as an
+attach that could not resolve a connection. It used to be recorded as a
+refused start, which is evidence of a second start on a wire that permits
+exactly one.
 
 Still callback-only and still dropped, on purpose and filed rather than
 widened here: the wire's `attention`, `context-window` and `activity` events.

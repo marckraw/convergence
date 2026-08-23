@@ -1001,9 +1001,13 @@ function ensureSessionColumns(database: Database.Database): void {
  * grow and a later genuine settle therefore lands above it too.
  *
  * What it cannot recover: a row whose cursor write was lost in the very gap
- * this change closes. Its marker is one sequence short, so one replayed
- * terminal event can still be applied once on that session. Every settle
- * written from here on records its own sequence exactly.
+ * this change closes. Its cursor holds the event *before* the settle, so the
+ * backfilled marker is one sequence short and the settle the daemon replays
+ * lands above it. Nothing here can know that, and nothing needs to: a settle
+ * ends only the run of the handle that began it, and a replayed one belongs
+ * to a handle that is already gone (`session.service.ts`, `handleLifecycle`).
+ * The marker is a cheap first rejection, not the thing that keeps these rows
+ * safe. Every settle written from here on records its own sequence exactly.
  */
 function ensureSessionSettledSeqColumn(database: Database.Database): void {
   const migrate = database.transaction(() => {
