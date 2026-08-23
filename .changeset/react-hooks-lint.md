@@ -19,14 +19,13 @@ config, so deleting the rules is no longer a silent, all-gates-green edit.
 `rules-of-hooks` is an error; the codebase has **zero** violations of it today.
 `exhaustive-deps` is a warning, with **19** across 9 files: 14 of the identity
 kind (a value that could change on every render), 4 where the dependency array
-holds a complex expression, and 1 unnecessary dependency. None of them is a
-reported missing dependency — but the 4 complex-expression warnings say the rule
-could not analyse those arrays at all, so the honest claim is zero that the rule
-could see, and a Quiet-shaped stale closure could still be sitting behind any of
-the four. Extracting those expressions to named variables is the prerequisite
-for trusting the zero, and it belongs to the burn-down, filed separately: nothing
-was mass-edited here, because adding a dependency can turn a mount-once effect
-into a render loop.
+holds a complex expression, and 1 unnecessary dependency. **Not one is a missing
+dependency** — the class the Quiet bug belonged to is genuinely at zero, and the
+4 complex-expression warnings do not hide any: a hook with both an unanalysable
+array _and_ an unlisted value its body reads reports both warnings, measured
+rather than assumed. So the burn-down is 19 render-cost warnings, and the class
+that ships wrong payloads is already clear. Nothing was mass-edited here, because
+adding a dependency can turn a mount-once effect into a render loop.
 
 Only those two rules are enabled, not the plugin's `recommended-latest` preset —
 v7 ships the whole React Compiler rule set, which is a decision rather than a

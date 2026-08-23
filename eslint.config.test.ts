@@ -44,10 +44,13 @@ export function Conditional({ enabled }: { enabled: boolean }) {
 `
 
 /**
- * The Quiet bug's exact shape: the effect reads `muted`, the dependency array
- * does not list it, so the effect keeps the value it closed over first.
+ * The Quiet bug's exact shape, down to the hook: a `useCallback` submit handler
+ * reads `muted`, the dependency array does not list it, so the handler keeps
+ * dispatching the value it closed over on first render while the switch on
+ * screen says otherwise. `useEffect` would report the same warning, but it is
+ * not what MAR-2537 was, and a fixture that says "exact" has to be.
  */
-const STALE_CLOSURE_FIXTURE = `import { useEffect } from 'react'
+const STALE_CLOSURE_FIXTURE = `import { useCallback } from 'react'
 
 export function StaleClosure({
   muted,
@@ -56,10 +59,11 @@ export function StaleClosure({
   muted: boolean
   send: (muted: boolean) => void
 }) {
-  useEffect(() => {
+  const handleSubmit = useCallback(() => {
     send(muted)
   }, [send])
-  return null
+
+  return <button onClick={handleSubmit}>Send</button>
 }
 `
 
@@ -93,7 +97,7 @@ describe('the repo eslint config', () => {
   )
 
   it(
-    'reports a dependency array missing a value the effect reads as a warning',
+    'reports a dependency array missing a value the callback reads as a warning',
     async () => {
       const messages = await lintFixture(STALE_CLOSURE_FIXTURE)
       const violations = messages.filter(
