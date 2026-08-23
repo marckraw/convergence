@@ -166,6 +166,16 @@ interface PendingConversationPatch {
  */
 export class SessionService {
   private activeHandles = new Map<string, SessionHandle>()
+  /**
+   * Handles that joined a run which had already come to rest, and so have no
+   * run of their own to end yet (MAR-2582).
+   *
+   * A handle leaves this set the moment the session it joined reports itself
+   * moving again -- from then on the run is its own and its terminal events
+   * end it. See `handleLifecycle` for why a handle is only allowed to end the
+   * run it began.
+   */
+  private handlesAwaitingTheirRun = new WeakSet<SessionHandle>()
   private activeTurnIds = new Map<string, string>()
   /**
    * Account chosen for the turn a provider is about to open (ADR 0007, PA4).
@@ -1382,10 +1392,32 @@ export class SessionService {
     }
   }
 
-  private applyDelta(sessionId: string, delta: SessionDelta): void {
+  /**
+   * Applies one delta to the session record on behalf of `source`, the handle
+   * that emitted it.
+   *
+   * The handle travels with the delta because a session outlives its handles:
+   * a remote session is started once and every later turn runs on a handle
+   * that attached to the same daemon-side run. Which handle spoke is the only
+   * thing that says whether a terminal event ends anything (MAR-2582).
+   */
+  private applyDelta(
+    sessionId: string,
+    delta: SessionDelta,
+    source: SessionHandle,
+  ): void {
     this.liveness.bump(sessionId)
     switch (delta.kind) {
       case 'session.patch': {
+        // A handle cannot speak over the handle that replaced it. A session
+        // patch is a statement about the run, and this one's run is gone --
+        // letting it through would move the status, the stream cursor and the
+        // settle marker of a turn it has nothing to do with (MAR-2582). Its
+        // conversation items are content and still land; only its claims about
+        // the run are refused. A session with no live handle has nothing being
+        // displaced, so a late patch there lands as it always did.
+        const live = this.activeHandles.get(sessionId)
+        if (live && live !== source) return
         // Still evidence the host is alive (the bump above), and nothing else:
         // the record applied this settle already, and applying it again would
         // end a turn that is only now running.
@@ -1397,7 +1429,8 @@ export class SessionService {
           this.flushPendingConversationPatchesForSession(sessionId)
         }
         this.applySessionPatch(sessionId, delta.patch, delta.executionHostSeq)
-        this.handleLifecycle(sessionId, delta.patch.status)
+        this.noteRunOwnership(source, delta.patch.status)
+        this.handleLifecycle(sessionId, delta.patch.status, source)
         this.notifySessionChange(sessionId)
         return
       }
@@ -1440,24 +1473,19 @@ export class SessionService {
 
   /**
    * Whether this patch is an execution host replaying a settle the record has
-   * already applied (MAR-2582).
+   * already applied, judged by the sequence that settled it (MAR-2582).
    *
-   * Replay is how this wire resumes: a remote stream reopens at the last
-   * sequence the record kept and the daemon sends everything after it. When
-   * that cursor is behind the record -- rows written before the cursor and the
-   * status became one statement still are -- the terminal event comes back.
-   * Running lifecycle on it releases the handle the *next* turn is streaming
-   * on: the message reaches the daemon, the answer never reaches the app, and
-   * the session reports itself finished while the agent is still working.
+   * Defence in depth, and no longer what keeps a replayed settle from ending
+   * the next turn -- `handleLifecycle` does that, because a sequence marker
+   * provably cannot. The same settle can reach the record through two
+   * supported encodings, a dedicated `status` event and a `session.patch`
+   * carrying one, and the second lands at a *higher* sequence: "later
+   * sequence" is exactly what a duplicate looks like. And a row migrated from
+   * a build that wrote the status and the cursor separately carries a marker
+   * one sequence short of its own settle, so the replay sits above it.
    *
-   * Keyed on the settle's own sequence rather than on the status having
-   * changed. A session's status alone cannot tell the two apart -- a genuine
-   * second settle also arrives while the row says `running` -- and a status
-   * comparison would additionally depend on the daemon announcing `running`
-   * for every turn, which is its business and not ours to assume.
-   *
-   * A genuine terminal event still releases its own handle: its sequence is
-   * above the marker, because sequences only grow.
+   * What it still buys: the cheapest possible rejection of the common case,
+   * one row read and one comparison, before anything else looks at the patch.
    */
   private isReplayedHostSettle(
     sessionId: string,
@@ -1787,11 +1815,14 @@ export class SessionService {
    * All three in one statement on purpose. The cursor used to be persisted by
    * a second write that ran after this one returned, so an interruption in the
    * gap left a session recorded as settled with a cursor still pointing at the
-   * event before the settle. The next attach resumed from there, the daemon
-   * replayed the terminal event, and it released the handle the *new* turn was
-   * running on. `MAX` keeps both columns monotonic, so the trailing
-   * `recordRemoteEventSeq` for the same event is now a no-op rather than a
-   * second source of truth.
+   * event before the settle -- and the next attach resumed from there and was
+   * handed the terminal event again. `MAX` keeps both columns monotonic, so
+   * the trailing `recordRemoteEventSeq` for the same event is now a no-op
+   * rather than a second source of truth.
+   *
+   * Closing that window stops new rows entering it and heals none of the rows
+   * already in it, which is why this is not what makes a replayed settle
+   * harmless: `handleLifecycle` is (MAR-2582).
    */
   private applySessionPatch(
     sessionId: string,
@@ -2081,7 +2112,7 @@ export class SessionService {
     this.requestRelayMute(session.id, turnFlags?.muteRelays)
     this.activeHandles.set(session.id, handle)
     handle.onDelta((delta: SessionDelta) => {
-      this.applyDelta(session.id, delta)
+      this.applyDelta(session.id, delta, handle)
     })
     handle.onActivityHeartbeat?.(() => {
       this.liveness.bump(session.id)
@@ -2099,10 +2130,53 @@ export class SessionService {
       .map((item) => item.text)
   }
 
+  /**
+   * A handle takes ownership of the run it joined the moment that run reports
+   * itself moving again (MAR-2582).
+   *
+   * The session leaving a terminal status is the daemon saying the next turn
+   * has begun, and the handle that heard it is the one carrying that turn.
+   */
+  private noteRunOwnership(
+    source: SessionHandle,
+    status: SessionStatus | undefined,
+  ): void {
+    if (status && !isTerminalSessionStatus(status)) {
+      this.handlesAwaitingTheirRun.delete(source)
+    }
+  }
+
+  /**
+   * Ends the run a terminal event came from -- and only that run.
+   *
+   * `source` is the handle that emitted the event, and it ends a run only if
+   * it began one. A handle that attached to a session the record already
+   * showed at rest joined a finished run: the events the daemon replays from
+   * the stream cursor are that run's tail, and the settle among them belongs
+   * to the handle that is already gone (MAR-2582).
+   *
+   * Without that a replayed settle ends the turn that follows it: the message
+   * reaches the daemon, the answer never reaches the app, and the session
+   * reports itself finished while the agent is still working. It cannot be
+   * decided by sequence -- see `isReplayedHostSettle` for why the marker
+   * cannot tell a replay from a duplicate encoding.
+   *
+   * The other half of the rule -- that a released handle says nothing about
+   * this session at all -- is applied a level up, in `applyDelta`, because it
+   * refuses the whole patch rather than only its lifecycle.
+   *
+   * What this costs: it reads the daemon reporting a non-terminal status as
+   * the signal that the next turn has begun. A daemon that settled a turn
+   * without ever announcing it started would leave such a handle attached and
+   * its turn row open. The daemon announces both, and the alternative --
+   * trusting a sequence -- is provably wrong rather than merely dependent.
+   */
   private handleLifecycle(
     sessionId: string,
     status: SessionStatus | undefined,
+    source: SessionHandle,
   ): void {
+    if (this.handlesAwaitingTheirRun.has(source)) return
     if (status === 'failed') {
       this.releaseHandle(sessionId)
       this.closeActiveTurn(sessionId, 'errored')
@@ -2258,6 +2332,11 @@ export class SessionService {
    * Resuming from `execution_host_last_seq` is what stops a reattach from
    * repeating itself: the adapter drops every envelope at or below that
    * sequence, so the events the daemon replays land once.
+   *
+   * A session the record already shows at rest hands back a handle that has no
+   * run of its own yet: whatever the daemon replays above the cursor is the
+   * tail of the run that already finished, and the settle in it must not end
+   * the turn this handle was made to carry (MAR-2582).
    */
   private attachRemoteHandle(session: SessionSummary): SessionHandle {
     const execution = this.resolveExecution(session)
@@ -2279,8 +2358,11 @@ export class SessionService {
       this.sessionRepository.getExecutionHostLastSeq(session.id),
     )
     this.activeHandles.set(session.id, handle)
+    if (isTerminalSessionStatus(session.status)) {
+      this.handlesAwaitingTheirRun.add(handle)
+    }
     handle.onDelta((delta: SessionDelta) => {
-      this.applyDelta(session.id, delta)
+      this.applyDelta(session.id, delta, handle)
     })
     handle.onActivityHeartbeat?.(() => {
       this.liveness.bump(session.id)
