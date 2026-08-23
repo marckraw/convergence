@@ -172,8 +172,12 @@ export class SessionService {
    *
    * A handle leaves this set the moment the session it joined reports itself
    * moving again -- from then on the run is its own and its terminal events
-   * end it. See `handleLifecycle` for why a handle is only allowed to end the
-   * run it began.
+   * end it.
+   *
+   * Membership is half of a predicate, never the whole of one: it says a
+   * handle has not begun its run, which is not the same as saying an event it
+   * carries belongs to someone else's. `handleLifecycle` reads it together
+   * with where the event came from.
    */
   private handlesAwaitingTheirRun = new WeakSet<SessionHandle>()
   private activeTurnIds = new Map<string, string>()
@@ -1430,7 +1434,12 @@ export class SessionService {
         }
         this.applySessionPatch(sessionId, delta.patch, delta.executionHostSeq)
         this.noteRunOwnership(source, delta.patch.status)
-        this.handleLifecycle(sessionId, delta.patch.status, source)
+        this.handleLifecycle(
+          sessionId,
+          delta.patch.status,
+          source,
+          delta.executionHostSeq,
+        )
         this.notifySessionChange(sessionId)
         return
       }
@@ -2149,17 +2158,32 @@ export class SessionService {
   /**
    * Ends the run a terminal event came from -- and only that run.
    *
-   * `source` is the handle that emitted the event, and it ends a run only if
-   * it began one. A handle that attached to a session the record already
-   * showed at rest joined a finished run: the events the daemon replays from
-   * the stream cursor are that run's tail, and the settle among them belongs
-   * to the handle that is already gone (MAR-2582).
+   * `source` is the handle that emitted the event and `executionHostSeq` says
+   * where the event came from. A handle that attached to a session the record
+   * already showed at rest joined a finished run: the events the daemon
+   * replays from the stream cursor are that run's tail, and the settle among
+   * them belongs to the handle that is already gone (MAR-2582).
    *
-   * Without that a replayed settle ends the turn that follows it: the message
-   * reaches the daemon, the answer never reaches the app, and the session
-   * reports itself finished while the agent is still working. It cannot be
-   * decided by sequence -- see `isReplayedHostSettle` for why the marker
-   * cannot tell a replay from a duplicate encoding.
+   * Origin is what decides, not whether the handle has begun its run. Those
+   * two questions look alike and come apart at a failed attach:
+   *
+   * - a terminal event carrying a wire sequence is the daemon speaking. On a
+   *   handle whose run has not yet reported itself moving, it is the previous
+   *   run's tail -- suppress it.
+   * - a terminal event with no sequence was raised by this handle itself. The
+   *   adapter fails a session it cannot reach the daemon for
+   *   (`remote-execution-host.ts`, `failSession`) and that failure never came
+   *   off the wire, so it has no sequence and cannot be a replay. It ends the
+   *   run whether or not the daemon ever reported `running` -- which is
+   *   exactly an attach that died before it began. Suppressing it left the
+   *   dead handle installed as the session's active one, and every later
+   *   message went into it and disappeared.
+   *
+   * Without the first half a replayed settle ends the turn that follows it:
+   * the message reaches the daemon, the answer never reaches the app, and the
+   * session reports itself finished while the agent is still working. It
+   * cannot be decided by sequence alone -- see `isReplayedHostSettle` for why
+   * the marker cannot tell a replay from a duplicate encoding.
    *
    * The other half of the rule -- that a released handle says nothing about
    * this session at all -- is applied a level up, in `applyDelta`, because it
@@ -2175,8 +2199,14 @@ export class SessionService {
     sessionId: string,
     status: SessionStatus | undefined,
     source: SessionHandle,
+    executionHostSeq: number | undefined,
   ): void {
-    if (this.handlesAwaitingTheirRun.has(source)) return
+    if (
+      executionHostSeq !== undefined &&
+      this.handlesAwaitingTheirRun.has(source)
+    ) {
+      return
+    }
     if (status === 'failed') {
       this.releaseHandle(sessionId)
       this.closeActiveTurn(sessionId, 'errored')

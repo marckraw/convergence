@@ -172,6 +172,16 @@ describe('remote wire events reaching the session record', () => {
     )
   }
 
+  function noteTexts(): string[] {
+    return service
+      .getConversation(sessionId)
+      .filter(
+        (item): item is Extract<typeof item, { kind: 'note' }> =>
+          item.kind === 'note',
+      )
+      .map((item) => item.text)
+  }
+
   function assistantTexts(): string[] {
     return service
       .getConversation(sessionId)
@@ -758,5 +768,75 @@ describe('remote wire events reaching the session record', () => {
       'the second turn to settle',
     )
     expect(releases).toEqual([sessionId, sessionId])
+  })
+
+  /**
+   * An attach that fails is a run ending, and it ends on the handle that
+   * failed (MAR-2582).
+   *
+   * The rule above suppresses a terminal event a handle inherited from the run
+   * it joined. A transport failure is not inherited: the adapter raises it
+   * about this handle, and it carries no wire sequence because it never came
+   * off the wire. Read as an inherited settle it was swallowed, and the dead
+   * handle stayed installed as the session's active one -- the record said
+   * failed while every later message went into a run that could not carry it
+   * and vanished without a turn, a note, or an error.
+   */
+  it('releases the handle an attach failed on, so the next message is not swallowed', async () => {
+    await service.start(sessionId, { text: 'hello' })
+    await waitUntil(
+      () => stub.eventStreamLastEventIds.length === 1,
+      'the event stream to open',
+    )
+    stub.emit(envelope(1, { kind: 'status', status: 'running' }, sessionId))
+    stub.emit(
+      envelope(2, { kind: 'continuation-token', token: 'resume-1' }, sessionId),
+    )
+    stub.emit(envelope(3, { kind: 'status', status: 'completed' }, sessionId))
+    await waitUntil(
+      () => service.getById(sessionId)?.status === 'completed',
+      'the first turn to settle',
+    )
+    expect(releases).toEqual([sessionId])
+
+    // The daemon refuses the stream the next turn attaches with, so the run
+    // dies before it ever reports itself running.
+    stub.setEventsStatus(404)
+    await service.sendMessage(sessionId, { text: 'second' })
+    await waitUntil(
+      () => service.getById(sessionId)?.status === 'failed',
+      'the failed attach to reach the session record',
+    )
+    expect(
+      noteTexts().some((text) =>
+        text.includes('Remote session event stream is unavailable'),
+      ),
+    ).toBe(true)
+
+    // The invariant: the handle that failed is the handle that was released.
+    await waitUntil(
+      () => releases.length === 2,
+      'the handle the attach failed on to be released',
+    )
+
+    // And so the session has nothing left to swallow the next message: it
+    // reaches the daemon on a stream of its own.
+    stub.setEventsStatus(200)
+    const streamsBefore = stub.eventStreamLastEventIds.length
+    await service.sendMessage(sessionId, { text: 'third' })
+    await waitUntil(
+      () => stub.commandRequests.length === 2,
+      'the next turn to reach the daemon as a command',
+    )
+    await waitUntil(
+      () => stub.eventStreamLastEventIds.length > streamsBefore,
+      'the stream to reopen for the next turn',
+    )
+    stub.emit(envelope(4, { kind: 'status', status: 'running' }, sessionId))
+    await waitUntil(
+      () => service.getById(sessionId)?.status === 'running',
+      'the next turn to report running',
+    )
+    expect(stub.startRequests).toHaveLength(1)
   })
 })
