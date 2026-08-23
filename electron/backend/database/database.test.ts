@@ -411,6 +411,85 @@ describe('database', () => {
     }
   })
 
+  it('still backfills a legacy row after a migration was interrupted mid-way', () => {
+    const dir = mkdtempSync(
+      join(tmpdir(), 'convergence-file-change-flags-interrupt-'),
+    )
+    const dbPath = join(dir, 'interrupted-migration.sqlite')
+
+    try {
+      const legacy = new Database(dbPath)
+      legacy.exec(`
+        CREATE TABLE session_turn_file_changes (
+          id TEXT PRIMARY KEY,
+          session_id TEXT NOT NULL,
+          turn_id TEXT NOT NULL,
+          file_path TEXT NOT NULL,
+          old_path TEXT,
+          status TEXT NOT NULL,
+          additions INTEGER NOT NULL DEFAULT 0,
+          deletions INTEGER NOT NULL DEFAULT 0,
+          diff TEXT NOT NULL,
+          created_at TEXT NOT NULL
+        );
+
+        INSERT INTO session_turn_file_changes (
+          id, session_id, turn_id, file_path, status, additions, deletions, diff, created_at
+        ) VALUES
+          ('fc-cut', 's1', 't1', 'src/b.ts', 'modified', 0, 0, '[diff truncated: 4210 lines]', '2026-01-01');
+
+        -- Fails the migration's first backfill write, which is exactly the gap
+        -- between the ALTER and the backfill. A process kill at the same point
+        -- leaves the same durable state, because both end as an uncommitted
+        -- transaction SQLite rolls back.
+        CREATE TRIGGER interrupt_backfill
+        BEFORE UPDATE ON session_turn_file_changes
+        BEGIN
+          SELECT RAISE(ABORT, 'simulated interrupt mid-migration');
+        END;
+      `)
+      legacy.close()
+
+      expect(() => getDatabase(dbPath)).toThrow(
+        /simulated interrupt mid-migration/,
+      )
+      closeDatabase()
+      resetDatabase()
+
+      // The interrupt must have taken the columns down with it. If the ALTERs
+      // committed on their own, the column's presence -- which is the only flag
+      // saying whether the backfill still owes this table anything -- would tell
+      // the next boot the work was already done (MAR-2577).
+      const afterInterrupt = new Database(dbPath)
+      const columnsAfterInterrupt = (
+        afterInterrupt
+          .prepare("PRAGMA table_info('session_turn_file_changes')")
+          .all() as { name: string }[]
+      ).map((column) => column.name)
+      expect(columnsAfterInterrupt).not.toContain('truncated')
+      expect(columnsAfterInterrupt).not.toContain('binary')
+      afterInterrupt.exec('DROP TRIGGER interrupt_backfill')
+      afterInterrupt.close()
+
+      // The interrupt is over; this boot is the one that gets to finish. The
+      // row is still knowably truncated, so it must end up saying so.
+      const db = getDatabase(dbPath)
+      const row = db
+        .prepare(
+          `SELECT id, truncated, binary
+           FROM session_turn_file_changes
+           WHERE id = 'fc-cut'`,
+        )
+        .get() as { id: string; truncated: number; binary: number }
+
+      expect(row).toEqual({ id: 'fc-cut', truncated: 1, binary: 0 })
+    } finally {
+      closeDatabase()
+      resetDatabase()
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
   it('leaves repo_root null for legacy rows, which is where they belong', () => {
     const dir = mkdtempSync(
       join(tmpdir(), 'convergence-file-change-repo-root-'),

@@ -900,36 +900,52 @@ function ensureTurnModelColumns(database: Database.Database): void {
  * against a single working tree (`turn-capture.service.ts` is the only writer,
  * and a remote turn record never reached the database at all — MAR-2584), so
  * the working-directory root repository is where all of them belong.
+ *
+ * The columns and the backfill go in as ONE transaction, because the presence
+ * of a column is also the flag that decides whether the backfill still needs to
+ * run. Split them and an interruption in the gap is permanent: the next boot
+ * sees the columns, computes `addedTruncated === false`, skips the backfill for
+ * good, and a genuinely cut diff sits at 0 forever — the stand-in-for-a-known
+ * -value failure this migration exists to prevent, reintroduced by the
+ * migration itself. SQLite's DDL is transactional, so `ALTER TABLE` rolls back
+ * with the rest.
  */
 function ensureTurnFileChangeColumns(database: Database.Database): void {
-  const columnNames = getTableColumnNames(database, 'session_turn_file_changes')
-  const addedTruncated = !columnNames.has('truncated')
-  const addedBinary = !columnNames.has('binary')
-
-  if (!columnNames.has('repo_root')) {
-    database.exec(
-      'ALTER TABLE session_turn_file_changes ADD COLUMN repo_root TEXT',
+  const migrate = database.transaction(() => {
+    const columnNames = getTableColumnNames(
+      database,
+      'session_turn_file_changes',
     )
-  }
+    const addedTruncated = !columnNames.has('truncated')
+    const addedBinary = !columnNames.has('binary')
 
-  if (addedTruncated) {
-    database.exec(
-      'ALTER TABLE session_turn_file_changes ADD COLUMN truncated INTEGER NOT NULL DEFAULT 0',
-    )
-  }
+    if (!columnNames.has('repo_root')) {
+      database.exec(
+        'ALTER TABLE session_turn_file_changes ADD COLUMN repo_root TEXT',
+      )
+    }
 
-  if (addedBinary) {
-    database.exec(
-      'ALTER TABLE session_turn_file_changes ADD COLUMN binary INTEGER NOT NULL DEFAULT 0',
-    )
-  }
+    if (addedTruncated) {
+      database.exec(
+        'ALTER TABLE session_turn_file_changes ADD COLUMN truncated INTEGER NOT NULL DEFAULT 0',
+      )
+    }
 
-  if (addedTruncated || addedBinary) {
-    backfillTurnFileChangeMeaning(database, {
-      truncated: addedTruncated,
-      binary: addedBinary,
-    })
-  }
+    if (addedBinary) {
+      database.exec(
+        'ALTER TABLE session_turn_file_changes ADD COLUMN binary INTEGER NOT NULL DEFAULT 0',
+      )
+    }
+
+    if (addedTruncated || addedBinary) {
+      backfillTurnFileChangeMeaning(database, {
+        truncated: addedTruncated,
+        binary: addedBinary,
+      })
+    }
+  })
+
+  migrate()
 }
 
 /**
