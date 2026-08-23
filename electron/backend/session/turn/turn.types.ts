@@ -37,7 +37,7 @@ export interface Turn {
  * change's identity: storage still keys one row per `(turn_id, file_path)`, and
  * `getFileDiff` still looks a diff up by turn and path alone. Until both move,
  * the same path in two repositories of one workspace is still one change as far
- * as this app is concerned — filed, and out of scope here because it needs a
+ * as this app is concerned — MAR-2589, out of scope here because it needs a
  * table rebuild.
  */
 export interface TurnFileChange {

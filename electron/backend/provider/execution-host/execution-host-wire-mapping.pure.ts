@@ -165,8 +165,8 @@ export const EXECUTION_HOST_UNSENT_LOCAL_ITEM_FIELDS = [
  * "Nothing is dropped" is a statement about this mapping only. `repoRoot`
  * arrives and is stored, but storage still keys a change by `(turn_id,
  * file_path)`, so two repositories with the same path in one workspace still
- * land on one identity downstream of here — filed separately, and not a loss
- * this list can express.
+ * land on one identity downstream of here — MAR-2589, and not a loss this list
+ * can express.
  */
 export const EXECUTION_HOST_UNMAPPED_WIRE_FILE_CHANGE_FIELDS =
   [] as const satisfies readonly (keyof ExecutionTurnFileChange)[]

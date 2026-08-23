@@ -28,11 +28,11 @@ cut content itself — that was replaced by the marker the day it was written.
 change belongs to. Nothing renders it yet, and it is **not** yet part of a
 change's identity — the stored uniqueness is still one row per turn and path, so
 the same path in two repositories is still one change as far as the database is
-concerned. Filed separately; it needs a table rebuild and a decision this change
+concerned. Filed as MAR-2589; it needs a table rebuild and a decision this change
 does not make.
 
 Honest limit: for a **remote** session none of this is visible yet, because a
 remote turn record does not reach the session at all — `applyDelta` has no
 branch for the turn deltas the wire sends. That is a separate defect, found
-while doing this one and filed; this change is what makes the facts survive the
-boundary once it is repaired.
+while doing this one and filed as MAR-2584; this change is what makes the facts
+survive the boundary once it is repaired.
