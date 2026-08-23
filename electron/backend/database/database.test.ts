@@ -817,6 +817,215 @@ describe('database', () => {
     }
   })
 
+  it('remembers which event settled a remote session that predates the marker', () => {
+    const dir = mkdtempSync(
+      join(tmpdir(), 'convergence-settled-seq-migration-'),
+    )
+    const dbPath = join(dir, 'pre-settled-seq.sqlite')
+
+    try {
+      const legacy = new Database(dbPath)
+      legacy.exec(`
+        CREATE TABLE projects (
+          id TEXT PRIMARY KEY,
+          name TEXT NOT NULL,
+          repository_path TEXT NOT NULL UNIQUE,
+          settings TEXT NOT NULL DEFAULT '{}',
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL
+        );
+
+        CREATE TABLE sessions (
+          id TEXT PRIMARY KEY,
+          context_kind TEXT NOT NULL DEFAULT 'project'
+            CHECK (context_kind IN ('project', 'global')),
+          project_id TEXT,
+          workspace_id TEXT,
+          provider_id TEXT NOT NULL,
+          model TEXT,
+          effort TEXT,
+          service_tier TEXT,
+          permission_config TEXT NOT NULL DEFAULT '{"preset":"ask"}',
+          continuation_token TEXT,
+          name TEXT NOT NULL,
+          status TEXT NOT NULL DEFAULT 'idle',
+          attention TEXT NOT NULL DEFAULT 'none',
+          working_directory TEXT NOT NULL,
+          context_window TEXT,
+          activity TEXT,
+          relays_muted INTEGER NOT NULL DEFAULT 0,
+          archived_at TEXT,
+          last_sequence INTEGER NOT NULL DEFAULT 0,
+          conversation_version INTEGER NOT NULL DEFAULT 2,
+          name_auto_generated INTEGER NOT NULL DEFAULT 0,
+          parent_session_id TEXT,
+          fork_strategy TEXT,
+          primary_surface TEXT NOT NULL DEFAULT 'conversation',
+          execution_host TEXT NOT NULL DEFAULT 'local',
+          execution_host_last_seq INTEGER NOT NULL DEFAULT 0,
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL,
+          FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
+          FOREIGN KEY (parent_session_id) REFERENCES sessions(id) ON DELETE SET NULL,
+          CHECK (
+            (context_kind = 'project' AND project_id IS NOT NULL)
+            OR
+            (context_kind = 'global' AND project_id IS NULL AND workspace_id IS NULL)
+          )
+        );
+
+        INSERT INTO projects (id, name, repository_path, created_at, updated_at)
+        VALUES ('p1', 'p', '/tmp/p1', '2026-01-01', '2026-01-01');
+
+        INSERT INTO sessions (
+          id, project_id, provider_id, name, status, working_directory,
+          execution_host, execution_host_last_seq, created_at, updated_at
+        ) VALUES
+          ('s-remote-done', 'p1', 'claude-code', 's', 'completed', '/tmp/p1', 'remote', 7, '2026-01-01', '2026-01-01'),
+          ('s-remote-failed', 'p1', 'claude-code', 's', 'failed', '/tmp/p1', 'remote', 4, '2026-01-01', '2026-01-01'),
+          ('s-remote-running', 'p1', 'claude-code', 's', 'running', '/tmp/p1', 'remote', 9, '2026-01-01', '2026-01-01'),
+          ('s-remote-silent', 'p1', 'claude-code', 's', 'completed', '/tmp/p1', 'remote', 0, '2026-01-01', '2026-01-01'),
+          ('s-local-done', 'p1', 'claude-code', 's', 'completed', '/tmp/p1', 'local', 0, '2026-01-01', '2026-01-01');
+      `)
+      legacy.close()
+
+      const db = getDatabase(dbPath)
+      const rows = db
+        .prepare(
+          'SELECT id, execution_host_settled_seq FROM sessions ORDER BY id ASC',
+        )
+        .all() as { id: string; execution_host_settled_seq: number }[]
+
+      // For a remote session already at rest the old path still knows the
+      // answer: the terminal event was the last one the record applied, so the
+      // cursor holds its sequence. A 0 left on those rows would read as "never
+      // settled" and let the daemon's next replay end the turn after it
+      // (MAR-2582). A run still going has no settle to remember, and a local
+      // session has no sequences at all.
+      expect(rows).toEqual([
+        { id: 's-local-done', execution_host_settled_seq: 0 },
+        { id: 's-remote-done', execution_host_settled_seq: 7 },
+        { id: 's-remote-failed', execution_host_settled_seq: 4 },
+        { id: 's-remote-running', execution_host_settled_seq: 0 },
+        { id: 's-remote-silent', execution_host_settled_seq: 0 },
+      ])
+    } finally {
+      closeDatabase()
+      resetDatabase()
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('still backfills the settle marker after a migration was interrupted mid-way', () => {
+    const dir = mkdtempSync(
+      join(tmpdir(), 'convergence-settled-seq-interrupt-'),
+    )
+    const dbPath = join(dir, 'interrupted-settled-seq.sqlite')
+
+    try {
+      const legacy = new Database(dbPath)
+      legacy.exec(`
+        CREATE TABLE projects (
+          id TEXT PRIMARY KEY,
+          name TEXT NOT NULL,
+          repository_path TEXT NOT NULL UNIQUE,
+          settings TEXT NOT NULL DEFAULT '{}',
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL
+        );
+
+        CREATE TABLE sessions (
+          id TEXT PRIMARY KEY,
+          context_kind TEXT NOT NULL DEFAULT 'project'
+            CHECK (context_kind IN ('project', 'global')),
+          project_id TEXT,
+          workspace_id TEXT,
+          provider_id TEXT NOT NULL,
+          model TEXT,
+          effort TEXT,
+          service_tier TEXT,
+          permission_config TEXT NOT NULL DEFAULT '{"preset":"ask"}',
+          continuation_token TEXT,
+          name TEXT NOT NULL,
+          status TEXT NOT NULL DEFAULT 'idle',
+          attention TEXT NOT NULL DEFAULT 'none',
+          working_directory TEXT NOT NULL,
+          context_window TEXT,
+          activity TEXT,
+          relays_muted INTEGER NOT NULL DEFAULT 0,
+          archived_at TEXT,
+          last_sequence INTEGER NOT NULL DEFAULT 0,
+          conversation_version INTEGER NOT NULL DEFAULT 2,
+          name_auto_generated INTEGER NOT NULL DEFAULT 0,
+          parent_session_id TEXT,
+          fork_strategy TEXT,
+          primary_surface TEXT NOT NULL DEFAULT 'conversation',
+          execution_host TEXT NOT NULL DEFAULT 'local',
+          execution_host_last_seq INTEGER NOT NULL DEFAULT 0,
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL,
+          FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
+          FOREIGN KEY (parent_session_id) REFERENCES sessions(id) ON DELETE SET NULL,
+          CHECK (
+            (context_kind = 'project' AND project_id IS NOT NULL)
+            OR
+            (context_kind = 'global' AND project_id IS NULL AND workspace_id IS NULL)
+          )
+        );
+
+        INSERT INTO projects (id, name, repository_path, created_at, updated_at)
+        VALUES ('p1', 'p', '/tmp/p1', '2026-01-01', '2026-01-01');
+
+        INSERT INTO sessions (
+          id, project_id, provider_id, name, status, working_directory,
+          execution_host, execution_host_last_seq, created_at, updated_at
+        ) VALUES
+          ('s-remote-done', 'p1', 'claude-code', 's', 'completed', '/tmp/p1', 'remote', 7, '2026-01-01', '2026-01-01');
+
+        -- Fails the backfill write, which is the gap between the ALTER and the
+        -- UPDATE. A process kill at the same point leaves the same durable
+        -- state: an uncommitted transaction SQLite rolls back.
+        CREATE TRIGGER interrupt_backfill
+        BEFORE UPDATE ON sessions
+        BEGIN
+          SELECT RAISE(ABORT, 'simulated interrupt mid-migration');
+        END;
+      `)
+      legacy.close()
+
+      expect(() => getDatabase(dbPath)).toThrow(
+        'simulated interrupt mid-migration',
+      )
+      resetDatabase()
+
+      // The column is what decides whether the backfill still needs to run, so
+      // it must not survive a backfill that did not. If it did, the next boot
+      // would skip the backfill for good and this session would keep a 0 that
+      // reads as "never settled".
+      const afterCrash = new Database(dbPath)
+      const columns = (
+        afterCrash.prepare('PRAGMA table_info(sessions)').all() as {
+          name: string
+        }[]
+      ).map((column) => column.name)
+      expect(columns).not.toContain('execution_host_settled_seq')
+      afterCrash.exec('DROP TRIGGER interrupt_backfill')
+      afterCrash.close()
+
+      const db = getDatabase(dbPath)
+      const row = db
+        .prepare(
+          "SELECT execution_host_settled_seq FROM sessions WHERE id = 's-remote-done'",
+        )
+        .get() as { execution_host_settled_seq: number }
+      expect(row.execution_host_settled_seq).toBe(7)
+    } finally {
+      closeDatabase()
+      resetDatabase()
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
   it('adds the queued-input relay mute to a database that predates the quiet send', () => {
     const dir = mkdtempSync(join(tmpdir(), 'convergence-mute-migration-'))
     const dbPath = join(dir, 'pre-mute.sqlite')

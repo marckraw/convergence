@@ -35,6 +35,12 @@ export class ProviderSessionEmitter {
     this.now = options.now ?? (() => new Date().toISOString())
   }
 
+  /**
+   * `origin` carries the execution-host event sequence the patch came from,
+   * for hosts whose transport has one. It travels with the patch so the record
+   * can write both in a single statement and tell a replayed terminal event
+   * from a new one (MAR-2582); local adapters omit it.
+   */
   patchSession(
     patch: Partial<
       Pick<
@@ -47,6 +53,7 @@ export class ProviderSessionEmitter {
         | 'updatedAt'
       >
     >,
+    origin?: { executionHostSeq: number },
   ): void {
     this.emitDeltaFn({
       kind: 'session.patch',
@@ -54,6 +61,7 @@ export class ProviderSessionEmitter {
         ...patch,
         updatedAt: patch.updatedAt ?? this.now(),
       },
+      ...(origin ? { executionHostSeq: origin.executionHostSeq } : {}),
     })
   }
 

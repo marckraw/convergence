@@ -195,6 +195,15 @@ export type SessionDelta =
           | 'updatedAt'
         >
       >
+      /**
+       * The execution-host event sequence this patch came from, when it came
+       * from one. Metadata about the delta rather than a session field: it is
+       * what lets the record commit the patch and the stream cursor in one
+       * write, and recognise a terminal event the stream has replayed
+       * (MAR-2582). Hosts whose transport has no sequence -- every local
+       * adapter -- leave it unset.
+       */
+      executionHostSeq?: number
     }
   | {
       kind: 'conversation.item.add'

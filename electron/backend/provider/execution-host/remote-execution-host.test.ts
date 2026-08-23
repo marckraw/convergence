@@ -411,15 +411,26 @@ describe('RemoteExecutionHost', () => {
     // kinds each become a `session.patch` of their own (MAR-2582). The
     // callbacks still fire — they are the handle's declared contract — but the
     // deltas are what a reader actually receives.
+    //
+    // Every session patch carries the sequence of the envelope it came from,
+    // whichever of the two ways it arrived. That is what the record commits
+    // alongside the patch, and what tells it a settle it has already applied
+    // from one the daemon is reporting for the first time.
     expect(deltas).toEqual([
-      { kind: 'session.patch', patch: { status: 'running' } },
+      {
+        kind: 'session.patch',
+        patch: { status: 'running' },
+        executionHostSeq: 1,
+      },
       {
         kind: 'session.patch',
         patch: { status: 'running', updatedAt: expect.any(String) },
+        executionHostSeq: 2,
       },
       {
         kind: 'session.patch',
         patch: { continuationToken: 'resume-1', updatedAt: expect.any(String) },
+        executionHostSeq: 3,
       },
     ])
     expect(statuses).toEqual(['running'])

@@ -54,6 +54,7 @@ import {
   describeModelSelectionRefusal,
   describeProviderIdentityRefusal,
   isAttentionRequestSummary,
+  isTerminalSessionStatus,
   resolveAttentionRequestKind,
   type AttentionRequestRowLike,
 } from './session.pure'
@@ -1384,17 +1385,22 @@ export class SessionService {
   private applyDelta(sessionId: string, delta: SessionDelta): void {
     this.liveness.bump(sessionId)
     switch (delta.kind) {
-      case 'session.patch':
+      case 'session.patch': {
+        // Still evidence the host is alive (the bump above), and nothing else:
+        // the record applied this settle already, and applying it again would
+        // end a turn that is only now running.
+        if (this.isReplayedHostSettle(sessionId, delta)) return
         if (
           delta.patch.status === 'completed' ||
           delta.patch.status === 'failed'
         ) {
           this.flushPendingConversationPatchesForSession(sessionId)
         }
-        this.applySessionPatch(sessionId, delta.patch)
+        this.applySessionPatch(sessionId, delta.patch, delta.executionHostSeq)
         this.handleLifecycle(sessionId, delta.patch.status)
         this.notifySessionChange(sessionId)
         return
+      }
 
       case 'conversation.item.add': {
         const item = this.addConversationItem(sessionId, delta.item)
@@ -1430,6 +1436,39 @@ export class SessionService {
         })
       }
     }
+  }
+
+  /**
+   * Whether this patch is an execution host replaying a settle the record has
+   * already applied (MAR-2582).
+   *
+   * Replay is how this wire resumes: a remote stream reopens at the last
+   * sequence the record kept and the daemon sends everything after it. When
+   * that cursor is behind the record -- rows written before the cursor and the
+   * status became one statement still are -- the terminal event comes back.
+   * Running lifecycle on it releases the handle the *next* turn is streaming
+   * on: the message reaches the daemon, the answer never reaches the app, and
+   * the session reports itself finished while the agent is still working.
+   *
+   * Keyed on the settle's own sequence rather than on the status having
+   * changed. A session's status alone cannot tell the two apart -- a genuine
+   * second settle also arrives while the row says `running` -- and a status
+   * comparison would additionally depend on the daemon announcing `running`
+   * for every turn, which is its business and not ours to assume.
+   *
+   * A genuine terminal event still releases its own handle: its sequence is
+   * above the marker, because sequences only grow.
+   */
+  private isReplayedHostSettle(
+    sessionId: string,
+    delta: Extract<SessionDelta, { kind: 'session.patch' }>,
+  ): boolean {
+    const seq = delta.executionHostSeq
+    if (seq === undefined) return false
+    const status = delta.patch.status
+    if (!status || !isTerminalSessionStatus(status)) return false
+    const row = this.getRowById(sessionId)
+    return !!row && seq <= row.execution_host_settled_seq
   }
 
   private shouldCoalesceConversationPatch(
@@ -1741,9 +1780,23 @@ export class SessionService {
     return merged
   }
 
+  /**
+   * Writes one session patch, and -- when the patch came from an execution
+   * host event -- the stream cursor and the settle marker with it (MAR-2582).
+   *
+   * All three in one statement on purpose. The cursor used to be persisted by
+   * a second write that ran after this one returned, so an interruption in the
+   * gap left a session recorded as settled with a cursor still pointing at the
+   * event before the settle. The next attach resumed from there, the daemon
+   * replayed the terminal event, and it released the handle the *new* turn was
+   * running on. `MAX` keeps both columns monotonic, so the trailing
+   * `recordRemoteEventSeq` for the same event is now a no-op rather than a
+   * second source of truth.
+   */
   private applySessionPatch(
     sessionId: string,
     patch: Extract<SessionDelta, { kind: 'session.patch' }>['patch'],
+    executionHostSeq?: number,
   ): void {
     const row = this.getRowById(sessionId)
     if (!row) return
@@ -1765,14 +1818,15 @@ export class SessionService {
         : row.archived_at
     const updatedAt = patch.updatedAt ?? new Date().toISOString()
     const isSettling =
-      nextStatus !== prevStatus &&
-      (nextStatus === 'completed' || nextStatus === 'failed')
+      nextStatus !== prevStatus && isTerminalSessionStatus(nextStatus)
     // The quiet request is honoured and cleared by the same statement that
     // commits the status (F10). Two writes would leave a window -- an
     // attention observer runs between them, uncaught -- in which a session is
     // on disk as settled while still marked quiet, and after a restart that
     // stale marker would silence the next ordinary run.
     const relaysMuted = row.relays_muted === 1
+    const hostSeq = executionHostSeq ?? 0
+    const settledSeq = isTerminalSessionStatus(nextStatus) ? hostSeq : 0
 
     this.db
       .prepare(
@@ -1784,6 +1838,8 @@ export class SessionService {
              continuation_token = ?,
              relays_muted = ?,
              archived_at = ?,
+             execution_host_last_seq = MAX(execution_host_last_seq, ?),
+             execution_host_settled_seq = MAX(execution_host_settled_seq, ?),
              updated_at = ?
          WHERE id = ?`,
       )
@@ -1803,6 +1859,8 @@ export class SessionService {
           : row.continuation_token,
         isSettling ? 0 : row.relays_muted,
         nextArchivedAt,
+        hostSeq,
+        settledSeq,
         updatedAt,
         sessionId,
       )

@@ -7,7 +7,23 @@ import type {
   SessionQueuedInput,
   SessionStatus,
   SessionSummary,
+  SettledSessionStatus,
 } from './session.types'
+
+/**
+ * Whether a status means the run behind it has come to rest.
+ *
+ * Named once because two callers must agree on it: the statement that settles
+ * a session, and the guard that decides whether an execution-host event
+ * replaying that settle is allowed to release a handle (MAR-2582). A session
+ * with two different ideas of "terminal" would release handles on one of them
+ * and not the other.
+ */
+export function isTerminalSessionStatus(
+  status: SessionStatus,
+): status is SettledSessionStatus {
+  return status === 'completed' || status === 'failed'
+}
 
 export interface AttentionRequestRowLike {
   kind: 'approval-request' | 'input-request'

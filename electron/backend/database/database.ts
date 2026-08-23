@@ -38,6 +38,7 @@ function buildSessionsTableSql(
       primary_surface TEXT NOT NULL DEFAULT 'conversation',
       execution_host TEXT NOT NULL DEFAULT 'local',
       execution_host_last_seq INTEGER NOT NULL DEFAULT 0,
+      execution_host_settled_seq INTEGER NOT NULL DEFAULT 0,
       created_at TEXT NOT NULL DEFAULT (datetime('now')),
       updated_at TEXT NOT NULL DEFAULT (datetime('now')),
       FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
@@ -971,6 +972,62 @@ function ensureSessionColumns(database: Database.Database): void {
   }
 }
 
+/**
+ * Which execution-host event already ended a turn on this session (MAR-2582).
+ *
+ * An execution host replays: a remote session resumes its event stream from
+ * `execution_host_last_seq`, so an event Convergence has already applied can
+ * arrive a second time. Replaying a terminal `status` is the expensive one --
+ * it would release the handle a *later* turn is running on. The record has to
+ * be able to say "that settle already happened", and it cannot use the stream
+ * cursor to say it: the cursor is what the replay resumes from, so a stale one
+ * is exactly the case that needs catching.
+ *
+ * So this column is written by the same statement that writes the status it
+ * belongs to (`SessionService.applySessionPatch`). It survives whenever the
+ * status survives, which is the property the cursor does not have.
+ *
+ * The column and its backfill go in as ONE transaction, because the presence
+ * of the column is also the flag that says whether the backfill still needs to
+ * run. Split them and an interruption in the gap is permanent: the next boot
+ * sees the column, skips the backfill for good, and every session that settled
+ * before this release keeps a 0 that reads as "never settled". SQLite's DDL is
+ * transactional, so `ALTER TABLE` rolls back with the rest.
+ *
+ * What the backfill recovers: for a remote session already at rest, the
+ * terminal event was the last event the record applied, so the cursor holds
+ * that event's own sequence. A cursor that sits *above* the settle -- an
+ * `attention` event arrived after it -- is still safe, because sequences only
+ * grow and a later genuine settle therefore lands above it too.
+ *
+ * What it cannot recover: a row whose cursor write was lost in the very gap
+ * this change closes. Its marker is one sequence short, so one replayed
+ * terminal event can still be applied once on that session. Every settle
+ * written from here on records its own sequence exactly.
+ */
+function ensureSessionSettledSeqColumn(database: Database.Database): void {
+  const migrate = database.transaction(() => {
+    if (
+      getTableColumnNames(database, 'sessions').has(
+        'execution_host_settled_seq',
+      )
+    ) {
+      return
+    }
+    database.exec(
+      'ALTER TABLE sessions ADD COLUMN execution_host_settled_seq INTEGER NOT NULL DEFAULT 0',
+    )
+    database.exec(`
+      UPDATE sessions
+         SET execution_host_settled_seq = execution_host_last_seq
+       WHERE execution_host != 'local'
+         AND status IN ('completed', 'failed')
+         AND execution_host_last_seq > 0
+    `)
+  })
+  migrate()
+}
+
 function parseLegacyTranscript(
   sessionId: string,
   value: string,
@@ -1267,6 +1324,7 @@ export function getDatabase(dbPath?: string): Database.Database {
     ensureCodeReviewGuideTable(database)
     ensureWorkspaceColumns(database)
     ensureSessionColumns(database)
+    ensureSessionSettledSeqColumn(database)
     ensureProviderAccountColumns(database)
     ensureTurnModelColumns(database)
     ensureQueuedInputColumns(database)

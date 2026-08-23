@@ -548,9 +548,8 @@ class RemoteSessionRun {
         parseRemoteExecutionHostStartResponse(response)
       }
     } catch (error) {
-      this.failSession(
-        `Remote session failed to start: ${describeRemoteExecutionHostFailure(error)}`,
-      )
+      const reason = describeRemoteExecutionHostFailure(error)
+      this.failSession(`Remote session failed to start: ${reason}`)
       return
     }
 
@@ -711,7 +710,12 @@ class RemoteSessionRun {
           : {}),
       },
     })
-    this.dispatchEvent(envelope.event)
+    this.dispatchEvent(envelope.event, envelope.seq)
+    // The cursor write for every event that does not carry a session patch.
+    // A `status` or `continuation-token` event has already committed this
+    // sequence inside its own patch statement (`applySessionPatch`), and the
+    // repository keeps the column monotonic, so this call is a no-op for
+    // those rather than a second, later source of truth.
     this.params.host.notifyEventSeq(this.params.config.sessionId, envelope.seq)
   }
 
@@ -727,9 +731,19 @@ class RemoteSessionRun {
    * `claude-code-provider.ts:511-513,540-541` does for a local run: fire the
    * callback for the handle's declared contract, and patch the session for the
    * reader that actually exists. Without the status patch a remote turn never
-   * leaves `running`: the header spins forever and the next message is treated
-   * as mid-run input — half of what made every remote session one turn long
-   * (MAR-2582).
+   * leaves `running` in the record, and a session stuck at `running` treats the
+   * next message as mid-run input instead of a new turn — half of what made
+   * every remote session one turn long (MAR-2582). What the header shows is a
+   * separate question and is not fixed here: the pill is drawn from
+   * `attention`, and `AttentionIndicator` renders a spinning "Running" for
+   * every value it has no label for — including the `none` a remote session
+   * never leaves, because this adapter still drops the wire's `attention`
+   * events (MAR-2590, MAR-2585).
+   *
+   * Both patches carry the envelope's sequence. That is what lets the record
+   * commit the patch and the stream cursor in one statement, and recognise the
+   * same terminal event arriving twice when a stream is resumed from a cursor
+   * that is behind the record.
    *
    * The token is patched because the daemon reports it and the session record
    * should hold what the daemon said, not because a second turn needs it. A
@@ -742,7 +756,7 @@ class RemoteSessionRun {
    * behaviour Marcin has not ruled on, so they are reported rather than
    * quietly widened here.
    */
-  private dispatchEvent(event: ExecutionHostEvent): void {
+  private dispatchEvent(event: ExecutionHostEvent, seq: number): void {
     switch (event.kind) {
       case 'delta': {
         // A wire delta kind with no local counterpart is not forwarded — the
@@ -751,7 +765,16 @@ class RemoteSessionRun {
         // existed every delta reached applyDelta and bumped liveness on the way
         // in. The heartbeat keeps that signal without inventing a local delta.
         const delta = toLocalSessionDelta(event.delta)
-        if (delta) this.notifyDelta(delta)
+        // A session patch that arrives as a wire *delta* settles the session
+        // exactly as the dedicated `status` event does, so it carries the
+        // sequence for the same two reasons: one write for the patch and the
+        // cursor, and a replayed settle that can be recognised as one.
+        if (delta)
+          this.notifyDelta(
+            delta.kind === 'session.patch'
+              ? { ...delta, executionHostSeq: seq }
+              : delta,
+          )
         else {
           this.recordDebug('event', {
             direction: 'in',
@@ -764,7 +787,10 @@ class RemoteSessionRun {
       }
       case 'status':
         for (const listener of this.statusListeners) listener(event.status)
-        this.emitter.patchSession({ status: event.status })
+        this.emitter.patchSession(
+          { status: event.status },
+          { executionHostSeq: seq },
+        )
         break
       case 'attention':
         for (const listener of this.attentionListeners)
@@ -772,7 +798,10 @@ class RemoteSessionRun {
         break
       case 'continuation-token':
         for (const listener of this.tokenListeners) listener(event.token)
-        this.emitter.patchSession({ continuationToken: event.token })
+        this.emitter.patchSession(
+          { continuationToken: event.token },
+          { executionHostSeq: seq },
+        )
         break
       case 'context-window':
         for (const listener of this.contextWindowListeners)
