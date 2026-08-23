@@ -5,10 +5,9 @@
 Remote sessions stop being one-shot (MAR-2582).
 
 **A remote session could carry exactly one turn.** It started, streamed, and
-the agent answered — and then the header kept spinning forever and every
-follow-up died with _"Session cannot be resumed: missing continuation state.
-Start a new session."_ That made the whole remote path a demo rather than a
-place to work.
+the agent answered — and then every follow-up died with _"Session cannot be
+resumed: missing continuation state. Start a new session."_ That made the whole
+remote path a demo rather than a place to work.
 
 **Two defects, one symptom.**
 
@@ -20,7 +19,8 @@ live path is a session patch, which is what the local adapters send alongside
 the callback, and the remote adapter was the one that only did the dead half.
 It patched the session when a run _failed_ and never when one succeeded. Both
 kinds now patch the session as well as firing the callback, so a remote turn
-settles and the header stops spinning.
+comes to rest in the record and the next message is treated as a new turn
+rather than as input to a run that never finished.
 
 _The next turn asked for the wrong thing._ Having settled, a follow-up went
 down the local-provider path: start the provider again, carrying the
@@ -38,5 +38,20 @@ hundreds of remote sessions and each attach is a live connection. Only
 sessions that were still running when the app closed are reattached eagerly,
 as before.
 
+**A settle the daemon replays no longer ends the turn that follows it.**
+Resuming a stream means asking the daemon for everything after the last
+sequence the record kept, so a cursor that sits behind the record hands the
+terminal event back — and applying it a second time released the handle the
+_new_ turn was streaming on: the message reached the daemon and the answer
+never reached the app. The session now records which event settled it, in the
+same write as the status itself, and recognises that event arriving again. The
+stream cursor moved into that write too, so an interruption can no longer
+leave a session recorded as settled with a cursor pointing at the event
+before the settle.
+
 Still callback-only and still dropped, on purpose and filed rather than
 widened here: the wire's `attention`, `context-window` and `activity` events.
+So the header keeps spinning even once a remote turn has come to rest: the pill
+is drawn from `attention`, and it renders a spinning _Running_ for every value
+it has no label for — including the `none` a remote session never leaves. That
+is MAR-2590, a separate defect this release does not touch.
