@@ -633,6 +633,47 @@ describe('RemoteExecutionHost', () => {
     handle.stop()
   })
 
+  /**
+   * A command a dead run cannot carry is reported, never dropped (MAR-2582).
+   *
+   * The handle stays callable after the run behind it dies, and `sendMessage`
+   * returning is the only thing a caller sees. On this wire the daemon is what
+   * echoes a user turn back, so a message that never left the app leaves
+   * nothing at all behind -- no turn, no error, no trace. That is what a dead
+   * handle left installed on a session did to every message sent into it, and
+   * the silence is its own defect: the session service must not be the only
+   * thing standing between a user and a message that quietly evaporates.
+   */
+  it('reports a message sent into a run that has died instead of dropping it', async () => {
+    stub.setEventsStatus(500)
+    const attentions: AttentionState[] = []
+    const statuses: SessionStatus[] = []
+    const deltas: SessionDelta[] = []
+
+    const handle = host.start('claude', startConfig('s-1'))
+    handle.onAttentionChange((attention) => attentions.push(attention))
+    handle.onStatusChange((status) => statuses.push(status))
+    handle.onDelta((delta) => deltas.push(delta))
+
+    await waitUntil(() => statuses.includes('failed'), 'the run to die')
+    const notesBefore = deltas.filter(
+      (delta) => delta.kind === 'conversation.item.add',
+    ).length
+
+    handle.sendMessage('into the dead run')
+
+    const notes = deltas.filter(
+      (delta) => delta.kind === 'conversation.item.add',
+    )
+    expect(notes).toHaveLength(notesBefore + 1)
+    expect(JSON.stringify(notes[notes.length - 1])).toContain(
+      'was not delivered',
+    )
+    expect(attentions[attentions.length - 1]).toBe('failed')
+    // Reported because it never reached the daemon, not instead of reaching it.
+    expect(stub.commandEnvelopes).toHaveLength(0)
+  })
+
   it('attaches to a running session without posting a start request', async () => {
     const statuses: SessionStatus[] = []
     const handle = host.attach('claude', startConfig('s-1'), 3)

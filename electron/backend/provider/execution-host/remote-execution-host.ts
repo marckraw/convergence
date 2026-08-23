@@ -874,8 +874,33 @@ class RemoteSessionRun {
     for (const listener of this.heartbeatListeners) listener()
   }
 
+  /**
+   * Hands a command to the run, or says so when the run can no longer carry
+   * it.
+   *
+   * A run that has failed or been disposed still answers `sendMessage`, and
+   * returning from it is indistinguishable from delivering the message: the
+   * daemon is what echoes a user turn back, so a message that never left the
+   * app leaves nothing at all behind -- no turn, no error, no trace. That is
+   * what a dead handle left installed on a session did to every message sent
+   * into it, and the silence was its own half of the defect (MAR-2582). The
+   * note is the one `postCommand` already gives a command the daemon refused;
+   * this covers one that never got that far.
+   *
+   * Only commands a user issues arrive here -- send, approve, deny. `stop`
+   * goes straight to `postCommand`, which is what lets it stay silent about a
+   * run that is already gone.
+   */
   private enqueueCommand(command: ExecutionHostCommand): void {
-    if (this.stopped || this.dead) return
+    if (this.stopped || this.dead) {
+      this.emitter.addNote({
+        text: 'Remote session command was not delivered: the remote run is no longer active.',
+        level: 'error',
+      })
+      this.emitter.patchSession({ attention: 'failed' })
+      for (const listener of this.attentionListeners) listener('failed')
+      return
+    }
     if (!this.started) {
       this.pendingCommands.push(command)
       return
