@@ -770,25 +770,23 @@ class RemoteSessionRun {
   }
 
   /**
-   * Two of these kinds carry facts the session record must keep, and the
+   * Three of these kinds carry facts the session record must keep, and the
    * listener arrays alone cannot deliver them: nothing in Convergence
-   * subscribes to `onStatusChange` or `onContinuationToken` — every provider
-   * implements the pair and no caller reads it. The live path is the
-   * `session.patch` delta, which `SessionService.applyDelta` writes to the
-   * session row.
+   * subscribes to `onStatusChange`, `onAttentionChange` or
+   * `onContinuationToken` — every provider implements them and no caller reads
+   * them. The live path is the `session.patch` delta, which
+   * `SessionService.applyDelta` writes to the session row.
    *
-   * So `status` and `continuation-token` do both halves, exactly as
-   * `claude-code-provider.ts:511-513,540-541` does for a local run: fire the
-   * callback for the handle's declared contract, and patch the session for the
-   * reader that actually exists. Without the status patch a remote turn never
-   * leaves `running` in the record, and a session stuck at `running` treats the
-   * next message as mid-run input instead of a new turn — half of what made
-   * every remote session one turn long (MAR-2582). What the header shows is a
-   * separate question and is not fixed here: the pill is drawn from
-   * `attention`, and `AttentionIndicator` renders a spinning "Running" for
-   * every value it has no label for — including the `none` a remote session
-   * never leaves, because this adapter still drops the wire's `attention`
-   * events (MAR-2590, MAR-2585).
+   * So `status`, `attention` and `continuation-token` do both halves, exactly
+   * as `claude-code-provider.ts:511-513,518-521,540-541` does for a local run:
+   * fire the callback for the handle's declared contract, and patch the
+   * session for the reader that actually exists. Without the status patch a
+   * remote turn never leaves `running` in the record, and a session stuck at
+   * `running` treats the next message as mid-run input instead of a new turn —
+   * half of what made every remote session one turn long (MAR-2582). Without
+   * the attention patch a remote session never leaves `'none'`: it could not
+   * report that it had finished, and an approval prompt raised on the far side
+   * never reached the row a human reads (MAR-2590).
    *
    * Both patches carry the envelope's sequence. That is what lets the record
    * commit the patch and the stream cursor in one statement, and recognise the
@@ -801,10 +799,9 @@ class RemoteSessionRun {
    * continuation token that drove a second start was the other half of the
    * same defect (`session.service.ts`, `sendRemoteTurn`).
    *
-   * `attention`, `context-window` and `activity` are still callback-only. They
-   * are the same shape of loss and they are not this fix; each changes UI
-   * behaviour Marcin has not ruled on, so they are reported rather than
-   * quietly widened here.
+   * `context-window` and `activity` are still callback-only. They are the same
+   * shape of loss and they are not this fix; each changes UI behaviour Marcin
+   * has not ruled on, so they are reported rather than quietly widened here.
    */
   private dispatchEvent(event: ExecutionHostEvent, seq: number): void {
     switch (event.kind) {
@@ -845,6 +842,10 @@ class RemoteSessionRun {
       case 'attention':
         for (const listener of this.attentionListeners)
           listener(event.attention)
+        this.emitter.patchSession(
+          { attention: event.attention },
+          { executionHostSeq: seq },
+        )
         break
       case 'continuation-token':
         for (const listener of this.tokenListeners) listener(event.token)

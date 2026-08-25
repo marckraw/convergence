@@ -266,6 +266,73 @@ describe('remote wire events reaching the session record', () => {
     )
   })
 
+  /**
+   * The same vestigial-callback loss MAR-2582 found for `status` and
+   * `continuation-token`, one event later: the adapter forwarded wire
+   * `attention` to `attentionListeners`, and nothing in Convergence subscribes
+   * to those. So a remote session's attention never reached the record and it
+   * sat at `'none'` for its whole life -- a remote turn could never report
+   * that it had finished, or that it was blocked on Marcin (MAR-2590).
+   *
+   * Asserted on the session record, not on the callback, because the callback
+   * fired on master too and the record still never moved.
+   */
+  it('records the attention a wire attention event carries', async () => {
+    await service.start(sessionId, { text: 'hello' })
+    await waitUntil(
+      () => stub.eventStreamLastEventIds.length === 1,
+      'the event stream to open',
+    )
+
+    expect(service.getById(sessionId)?.attention).toBe('none')
+
+    stub.emit(
+      envelope(1, { kind: 'attention', attention: 'finished' }, sessionId),
+    )
+
+    await waitUntil(
+      () => service.getById(sessionId)?.attention === 'finished',
+      'the attention to reach the session record',
+    )
+  })
+
+  /**
+   * The attention a human has to act on is the one that matters most, and it
+   * arrives mid-turn: the run is still `running` when the agent asks. Pinned
+   * separately from `finished` because a bridge that only survived terminal
+   * attention would still lose every approval prompt.
+   */
+  it('records a mid-turn approval request without ending the turn', async () => {
+    await service.start(sessionId, { text: 'hello' })
+    await waitUntil(
+      () => stub.eventStreamLastEventIds.length === 1,
+      'the event stream to open',
+    )
+
+    stub.emit(envelope(1, { kind: 'status', status: 'running' }, sessionId))
+    await waitUntil(
+      () => service.getById(sessionId)?.status === 'running',
+      'the turn to report running',
+    )
+
+    stub.emit(
+      envelope(
+        2,
+        { kind: 'attention', attention: 'needs-approval' },
+        sessionId,
+      ),
+    )
+    await waitUntil(
+      () => service.getById(sessionId)?.attention === 'needs-approval',
+      'the approval request to reach the session record',
+    )
+
+    // Attention is not a settle. The turn is still the daemon's, and the
+    // handle that is carrying it must still be the session's.
+    expect(service.getById(sessionId)?.status).toBe('running')
+    expect(releases).toEqual([])
+  })
+
   it('moves the session out of running when a wire status event completes the turn', async () => {
     await service.start(sessionId, { text: 'hello' })
     await waitUntil(

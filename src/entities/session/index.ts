@@ -48,6 +48,7 @@ export type {
   CreateAndStartSessionRequest,
   CreateAndStartGlobalSessionRequest,
 } from './session.types'
+export { AttentionIndicator } from './attention-indicator.presentational'
 export { useSessionStore } from './session.model'
 export type { SessionStore } from './session.model'
 export {

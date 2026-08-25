@@ -8,11 +8,14 @@ import {
   type SpaceSource,
 } from '@/entities/space'
 import type { SessionSummary } from '@/entities/session'
-import { formatActivityLabel, useSessionStore } from '@/entities/session'
+import {
+  AttentionIndicator,
+  formatActivityLabel,
+  useSessionStore,
+} from '@/entities/session'
 import { switchToSession } from '@/features/command-center'
 import { ComposerContainer } from '@/features/composer'
 import { SessionConversationSurface } from '@/widgets/session-view'
-import { AttentionIndicator } from '@/shared/ui/attention-indicator.presentational'
 import { Button } from '@/shared/ui/button'
 import { Input } from '@/shared/ui/input'
 import { CheckSquare, Folder, MessageSquareText, Square } from 'lucide-react'
@@ -604,7 +607,10 @@ export const ChatSurface: FC<ChatSurfaceProps> = ({
         >
           <MessageSquareText className="h-4 w-4 shrink-0 text-muted-foreground" />
           <span className="truncate text-sm font-medium">{session.name}</span>
-          <AttentionIndicator attention={session.attention} />
+          <AttentionIndicator
+            attention={session.attention}
+            status={session.status}
+          />
           {session.archivedAt ? (
             <span className="rounded-full border border-border/70 px-2 py-0.5 text-[11px] text-muted-foreground">
               Archived

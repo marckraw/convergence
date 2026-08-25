@@ -172,6 +172,45 @@ describe('ChatSurface', () => {
     )
   })
 
+  /**
+   * The header, composed for real, over a session that finished long ago.
+   *
+   * `AttentionIndicator` used to read `attention` alone and spin "Running" for
+   * every value it had no label for -- and `'none'` is the value a settled
+   * session comes to rest at, so the header claimed a dead session was working
+   * (MAR-2590). This asserts through the real container rather than the
+   * component in isolation, because the header only lies once a real session
+   * is threaded into it.
+   */
+  it('does not claim a settled global session is running', () => {
+    useSessionStore.setState({
+      globalChatSessions: [globalSession],
+      activeGlobalSessionId: globalSession.id,
+      activeGlobalConversation: [],
+    })
+
+    render(<ChatSurface selectedSpaceId={null} />)
+
+    expect(screen.getByText('Planning chat')).toBeInTheDocument()
+    expect(screen.queryByText('Running')).not.toBeInTheDocument()
+  })
+
+  /**
+   * The other half of the same claim: when the session really is running, the
+   * header says so.
+   */
+  it('reports a running global session as running', () => {
+    useSessionStore.setState({
+      globalChatSessions: [{ ...globalSession, status: 'running' }],
+      activeGlobalSessionId: globalSession.id,
+      activeGlobalConversation: [],
+    })
+
+    render(<ChatSurface selectedSpaceId={null} />)
+
+    expect(screen.getByText('Running')).toBeInTheDocument()
+  })
+
   it('renders a selected Space home when no chat session is active', () => {
     const onBeginSpaceAttempt = vi.fn()
     useSpaceStore.setState({
