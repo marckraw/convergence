@@ -25,8 +25,9 @@ export interface TurnFileChangeRow extends TurnFileChangeSelection {
    * label that happens to be unique; it is built to be unique across a turn's
    * rows (see `buildTurnFileChangeRows`), which is what makes it safe for
    * `findTurnFileChangeRow` to resolve a click back to one repository and one
-   * path. `filePath` stays raw, because that is what the stored row is keyed
-   * by.
+   * path. It is also spelled the way the tree spells it (`spellForTree`), so
+   * the string held here is the string drawn on screen. `filePath` stays raw,
+   * because that is what the stored row is keyed by.
    */
   treePath: string
   status: TurnFileChangeStatus
@@ -47,7 +48,7 @@ export const TURN_ROOT_REPO_LABEL = '(workspace root)'
  *
  * Uniqueness is the whole job. The tree keys rows by the path it draws, so two
  * rows that agree on that path are one row, and one of the two diffs becomes
- * unreachable from the UI. Three things can make two identities agree:
+ * unreachable from the UI. Four things can make two identities agree:
  *
  * - the same path in two repositories (`apps/web` and `apps/api`, both
  *   `README.md`) — the repository prefix separates them, and it appears only
@@ -56,9 +57,13 @@ export const TURN_ROOT_REPO_LABEL = '(workspace root)'
  * - one repository nested inside another (`a` + `b/c.ts` against `a/b` +
  *   `c.ts`), where the prefix joins to the same path — prefixing cannot help,
  *   because the join is where the ambiguity is;
- * - a repository named exactly like the root label above.
+ * - a repository named exactly like the root label above;
+ * - two compositions that differ only in how they are spelled (`apps\web` and
+ *   `apps/web`), which the tree's own normalisation folds into one path —
+ *   which is why every candidate here is spelled the tree's way first, and
+ *   uniqueness is decided on that spelling rather than on ours.
  *
- * The last two are settled the way an editor settles two tabs called
+ * The last three are settled the way an editor settles two tabs called
  * `index.ts`: the rows that share a path each say which repository they came
  * from, and only those rows do. `claimTreePath` is the backstop for the
  * pathological remainder — a file whose real name is the disambiguated form of
@@ -71,15 +76,18 @@ export function buildTurnFileChangeRows(
   const multiRepo =
     new Set(changes.map((change) => repositoryKey(change.repoRoot))).size > 1
 
-  const drafts = changes.map((change) => {
-    const path = normalizeChangedFilePath(change.filePath)
-    return {
-      change,
-      basePath: multiRepo
-        ? `${repositoryPrefix(change.repoRoot)}/${path}`
-        : path,
-    }
-  })
+  const drafts = changes.map((change) => ({
+    change,
+    // The inner spelling belongs to the join: a prefix laid in front of a raw
+    // './a.ts' buries the './' mid-string, where the normaliser no longer
+    // reaches it and the tree draws a directory called '.'. The outer one is
+    // the claim itself, over the whole composition.
+    basePath: spellForTree(
+      multiRepo
+        ? `${repositoryPrefix(change.repoRoot)}/${spellForTree(change.filePath)}`
+        : change.filePath,
+    ),
+  }))
 
   const basePathCounts = new Map<string, number>()
   for (const draft of drafts) {
@@ -157,11 +165,44 @@ function describeRepository(repoRoot: string | null): string {
   return repository === '' ? 'workspace root' : `repository ${repository}`
 }
 
-/** The first unclaimed spelling of a preferred path, and it is now claimed. */
+/**
+ * A composed tree path, spelled the way the tree will spell it.
+ *
+ * The tree normalises every path it is handed
+ * (`buildPierreChangedFilesTreeInput`), so a row's `treePath` is a claim about
+ * a string the tree re-derives. Claim anything the normaliser would still
+ * change and the row holds one string while the tree draws another: the click
+ * comes back in the tree's spelling, `findTurnFileChangeRow` finds nothing,
+ * and a row the user can see opens no diff. So the claim is made over the
+ * whole composition — repository prefix, path and disambiguator alike — rather
+ * than over the file path alone, which is the half the repository root rides
+ * in front of.
+ *
+ * To a fixed point, because one pass is not always enough: the normaliser
+ * trims before it strips a single leading `./`, so `././a.ts` becomes `./a.ts`
+ * and only the next pass makes it `a.ts`. Settling here is what makes
+ * `normalizeChangedFilePath(row.treePath) === row.treePath` true of every row
+ * this module hands out.
+ */
+function spellForTree(composed: string): string {
+  let spelled = composed
+  let next = normalizeChangedFilePath(spelled)
+  while (next !== spelled) {
+    spelled = next
+    next = normalizeChangedFilePath(spelled)
+  }
+  return spelled
+}
+
+/**
+ * The first unclaimed spelling of a preferred path, and it is now claimed.
+ * Candidates are spelled the tree's way before they are compared, so the
+ * fallback spellings are held to the same invariant as the preferred one.
+ */
 function claimTreePath(preferred: string, taken: Set<string>): string {
-  let candidate = preferred
+  let candidate = spellForTree(preferred)
   for (let attempt = 2; taken.has(candidate); attempt += 1) {
-    candidate = `${preferred} [${attempt}]`
+    candidate = spellForTree(`${preferred} [${attempt}]`)
   }
   taken.add(candidate)
   return candidate

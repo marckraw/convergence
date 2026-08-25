@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { TurnFileChange } from '@/entities/turn'
+import { normalizeChangedFilePath } from './changed-files-tree.pure'
 import {
   buildTurnFileChangeRows,
   findTurnFileChangeRow,
@@ -168,6 +169,89 @@ describe('a tree path no two identities share', () => {
     // The unambiguous row keeps the path a human reads at a glance; only the
     // pair that collides pays for the collision.
     expect(rows[2].treePath).toBe('a/b/d.ts')
+  })
+})
+
+/**
+ * The tree does not draw the string it is handed; it draws
+ * `normalizeChangedFilePath` of that string. So a row's treePath is a claim
+ * about a string the tree re-derives, and a claim made in any other spelling
+ * describes a row that is on screen and cannot be opened.
+ */
+describe('a tree path spelled the way the tree spells it', () => {
+  it('claims, for every row, the string the tree would normalise it to', () => {
+    const rows = buildTurnFileChangeRows([
+      change({ id: 'windows', repoRoot: 'a\\b', filePath: 'c.ts' }),
+      change({ id: 'posix', repoRoot: 'a', filePath: 'b/c.ts' }),
+      change({ id: 'dotted', repoRoot: 'a', filePath: '././d.ts' }),
+      change({
+        id: 'literal',
+        repoRoot: 'a',
+        filePath: 'b/c.ts (repository a)',
+      }),
+    ])
+
+    // The invariant rather than the instance: whatever a row is composed from,
+    // normalising it again changes nothing, which is exactly what the tree
+    // does to it on the way in.
+    for (const row of rows) {
+      expect(normalizeChangedFilePath(row.treePath)).toBe(row.treePath)
+    }
+  })
+
+  it('separates two repositories the tree would spell the same way', () => {
+    const rows = buildTurnFileChangeRows([
+      change({ id: 'windows', repoRoot: 'a\\b', filePath: 'c.ts' }),
+      change({ id: 'posix', repoRoot: 'a/b', filePath: 'c.ts' }),
+    ])
+
+    // Storage keeps these apart -- 'a\b' and 'a/b' are two repo_root values --
+    // but the tree folds both spellings into one path, and so does the row that
+    // says which repository it came from. The backstop is what is left, and it
+    // has to be enough, because a row deduped away is a diff that cannot be
+    // opened at all.
+    expect(rows[0].treePath).not.toBe(rows[1].treePath)
+    expect(rows.map((row) => row.treePath)).toEqual([
+      'a/b/c.ts (repository a/b)',
+      'a/b/c.ts (repository a/b) [2]',
+    ])
+    expect(findTurnFileChangeRow(rows, rows[0].treePath)?.repoRoot).toBe('a\\b')
+    expect(findTurnFileChangeRow(rows, rows[1].treePath)?.repoRoot).toBe('a/b')
+  })
+
+  it('disambiguates on the spelling the tree uses, not on ours', () => {
+    const rows = buildTurnFileChangeRows([
+      change({ id: 'windows', repoRoot: 'a\\b', filePath: 'c.ts' }),
+      change({ id: 'posix', repoRoot: 'a', filePath: 'b/c.ts' }),
+    ])
+
+    // Counted before normalising, these two look like distinct paths and
+    // neither would say which repository it came from -- and then the tree
+    // folds them together anyway.
+    expect(rows.map((row) => row.treePath)).toEqual([
+      'a/b/c.ts (repository a/b)',
+      'a/b/c.ts (repository a)',
+    ])
+  })
+
+  it('keeps a dot-slash path from hanging a directory under its repository', () => {
+    const rows = buildTurnFileChangeRows([
+      change({ id: 'web', repoRoot: 'apps/web', filePath: './src/a.ts' }),
+      change({ id: 'api', repoRoot: 'apps/api', filePath: 'src/b.ts' }),
+    ])
+
+    // Joined raw, the './' lands mid-string where the normaliser leaves it and
+    // the tree draws a directory called '.'.
+    expect(rows[0].treePath).toBe('apps/web/src/a.ts')
+  })
+
+  it('settles a path however many passes settling it takes', () => {
+    const rows = buildTurnFileChangeRows([change({ filePath: '././././a.ts' })])
+
+    // The normaliser strips one leading './' per call, so normalising a fixed
+    // number of times is a bet on how many the path carries -- and the row
+    // that loses the bet claims a string the tree still changes.
+    expect(rows[0].treePath).toBe('a.ts')
   })
 })
 

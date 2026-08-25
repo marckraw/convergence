@@ -235,6 +235,44 @@ describe('TurnList', () => {
     expect(await screen.findByTitle('apps/api/README.md')).toBeInTheDocument()
   })
 
+  it('reaches the diff of a repository whose root is spelled with backslashes', async () => {
+    const getFileDiff = stubTurnsApi(
+      fileChange({
+        id: 'windows',
+        repoRoot: 'apps\\web',
+        filePath: 'README.md',
+        diff: 'windows readme diff',
+      }),
+      fileChange({
+        id: 'api',
+        repoRoot: 'apps/api',
+        filePath: 'README.md',
+        diff: 'api readme diff',
+      }),
+    )
+
+    render(<TurnList sessionId="session-1" />)
+
+    // The tree normalises every path it is handed, so this row is drawn as
+    // 'apps/web/README.md' no matter which spelling the row claimed -- and a
+    // row that claimed the other one is on screen, clickable, and resolves to
+    // nothing (MAR-2589).
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'apps/web/README.md' }),
+    )
+
+    // Through the real container: the diff is fetched for the repository as
+    // storage spells it, not as the tree draws it.
+    await waitFor(() => {
+      expect(getFileDiff).toHaveBeenCalledWith(
+        'turn-1',
+        'README.md',
+        'apps\\web',
+      )
+    })
+    expect(await screen.findByTitle('apps/web/README.md')).toBeInTheDocument()
+  })
+
   it('reaches both diffs when one repository is nested inside the other', async () => {
     const getFileDiff = stubTurnsApi(
       fileChange({
