@@ -19,8 +19,10 @@ import {
   buildWireSendMessageCommand,
   buildWireStartRequest,
   buildWireStopCommand,
+  settledAttentionForStatus,
   toLocalSessionDelta,
   toWireSessionDelta,
+  withSettledAttention,
   EXECUTION_HOST_UNSENT_LOCAL_DELTA_KINDS,
   EXECUTION_HOST_UNSENT_LOCAL_ITEM_FIELDS,
   EXECUTION_HOST_UNSENT_LOCAL_SEND_OPTION_FIELDS,
@@ -802,6 +804,64 @@ describe('toLocalSessionDelta', () => {
       itemId: 'item-9',
       patch: { text: 'Hello there', state: 'streaming' },
     })
+  })
+})
+
+/**
+ * The pairing both encodings of a settle share (MAR-2590).
+ *
+ * The record ends a turn on either a dedicated `status` event or a
+ * `session.patch` carrying a status, so the attention a settle means is
+ * derived in one place and applied to both. These pin the derivation itself;
+ * the two encodings are pinned against the session record in
+ * `remote-execution-host.session.test.ts`.
+ */
+describe('the attention a settle carries', () => {
+  it('pairs each terminal status with the attention it means', () => {
+    expect(settledAttentionForStatus('completed')).toBe('finished')
+    expect(settledAttentionForStatus('failed')).toBe('failed')
+  })
+
+  it('pairs nothing with a status that settles nothing', () => {
+    expect(settledAttentionForStatus('running')).toBeNull()
+    expect(settledAttentionForStatus('idle')).toBeNull()
+  })
+
+  it('fills the attention a terminal patch leaves unsaid', () => {
+    expect(withSettledAttention({ status: 'completed' })).toEqual({
+      status: 'completed',
+      attention: 'finished',
+    })
+    expect(withSettledAttention({ status: 'failed' })).toEqual({
+      status: 'failed',
+      attention: 'failed',
+    })
+  })
+
+  /**
+   * A host that states both halves is the authority on its own run: the wire
+   * models `status` and `attention` on one patch precisely so it can.
+   */
+  it('keeps the attention a terminal patch states for itself', () => {
+    expect(
+      withSettledAttention({ status: 'completed', attention: 'needs-input' }),
+    ).toEqual({ status: 'completed', attention: 'needs-input' })
+  })
+
+  /**
+   * Identity, not merely equality: a patch with nothing to pair is the same
+   * object, so nothing downstream can be handed a copy that differs by a key
+   * order or an added field.
+   */
+  it('returns a patch it has nothing to add to unchanged', () => {
+    const running = {
+      status: 'running' as const,
+      activity: 'streaming' as const,
+    }
+    expect(withSettledAttention(running)).toBe(running)
+
+    const tokenOnly = { continuationToken: 'resume-1' }
+    expect(withSettledAttention(tokenOnly)).toBe(tokenOnly)
   })
 })
 

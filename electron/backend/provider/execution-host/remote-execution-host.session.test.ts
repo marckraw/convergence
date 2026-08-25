@@ -513,6 +513,104 @@ describe('remote wire events reaching the session record', () => {
   })
 
   /**
+   * The settle's other encoding, in the same real order.
+   *
+   * A `session.patch` carrying a terminal status ends the turn exactly as the
+   * dedicated `status` event does -- `SessionService.applyDelta` runs the same
+   * lifecycle for both, and the service's own docblock names them the two
+   * supported encodings (`session.service.ts`, `isReplayedHostSettle`). So a
+   * pairing that lived only on the dedicated bridge left this encoding
+   * settling the row into `completed` with nothing to report: the exact defect
+   * MAR-2590 closed for its twin, still open one branch away.
+   *
+   * Everything around the settle is the captured daemon order -- `running`,
+   * the continuation token that makes the settle release the handle, then the
+   * trailing `attention` frame that arrives too late to reach a released
+   * handle. Only the settle's own encoding differs, because that is the one
+   * thing under test. Daemon 0.26.1 writes a settle as the dedicated pair and
+   * puts only `prUrl`/`roomId` in a session patch
+   * (`execution-session-manager.ts:1150,2045`); the patch encoding is the wire
+   * shape it and every other host is free to send, and the one Convergence
+   * already treats as a settle.
+   */
+  it('leaves a completed remote turn reporting finished when the settle arrives as a session patch', async () => {
+    await service.start(sessionId, { text: 'hello' })
+    await waitUntil(
+      () => stub.eventStreamLastEventIds.length === 1,
+      'the event stream to open',
+    )
+
+    stub.emitBatch([
+      envelope(1, { kind: 'status', status: 'running' }, sessionId),
+      envelope(2, { kind: 'continuation-token', token: 'resume-1' }, sessionId),
+      envelope(
+        3,
+        {
+          kind: 'delta',
+          delta: { kind: 'session.patch', patch: { status: 'completed' } },
+        },
+        sessionId,
+      ),
+      envelope(4, { kind: 'attention', attention: 'finished' }, sessionId),
+    ])
+
+    await waitUntil(
+      () => service.getById(sessionId)?.status === 'completed',
+      'the turn to settle',
+    )
+
+    // Both halves, on the row a human reads.
+    expect(service.getById(sessionId)?.status).toBe('completed')
+    expect(service.getById(sessionId)?.attention).toBe('finished')
+    // And together: the observer that runs inside the settle already sees the
+    // pair, so no window exists in which this session is finished work with
+    // nothing to show for it.
+    expect(releaseObservations).toEqual([
+      { status: 'completed', attention: 'finished' },
+    ])
+  })
+
+  /**
+   * The half the pairing must never take: an attention the host stated itself.
+   *
+   * The wire models `status` and `attention` on one patch precisely so a host
+   * can say both, and a host is the authority on what its own run needs. A
+   * derivation that overwrote an explicit value would turn a run still waiting
+   * on a human into one reporting `finished` -- a worse lie than the silence
+   * MAR-2590 started from, because it points away from the session that needs
+   * something.
+   */
+  it('keeps the attention a settling session patch states for itself', async () => {
+    await service.start(sessionId, { text: 'hello' })
+    await waitUntil(
+      () => stub.eventStreamLastEventIds.length === 1,
+      'the event stream to open',
+    )
+
+    stub.emitBatch([
+      envelope(1, { kind: 'status', status: 'running' }, sessionId),
+      envelope(
+        2,
+        {
+          kind: 'delta',
+          delta: {
+            kind: 'session.patch',
+            patch: { status: 'completed', attention: 'needs-input' },
+          },
+        },
+        sessionId,
+      ),
+    ])
+
+    await waitUntil(
+      () => service.getById(sessionId)?.status === 'completed',
+      'the turn to settle',
+    )
+
+    expect(service.getById(sessionId)?.attention).toBe('needs-input')
+  })
+
+  /**
    * The shape of a remote conversation: one start, then a command per turn.
    * A second start for the same session id is refused by the daemon with 409
    * `Session already exists` (`execution-session-manager.ts:436-438`), and

@@ -28,6 +28,7 @@ import {
   buildWireStartRequest,
   buildWireStopCommand,
   toLocalSessionDelta,
+  withSettledAttention,
 } from './execution-host-wire-mapping.pure'
 import {
   evaluateHandshake,
@@ -813,13 +814,22 @@ class RemoteSessionRun {
         // in. The heartbeat keeps that signal without inventing a local delta.
         const delta = toLocalSessionDelta(event.delta)
         // A session patch that arrives as a wire *delta* settles the session
-        // exactly as the dedicated `status` event does, so it carries the
-        // sequence for the same two reasons: one write for the patch and the
-        // cursor, and a replayed settle that can be recognised as one.
+        // exactly as the dedicated `status` event does -- `applyDelta` ends
+        // the turn on either -- so it is treated exactly the same way here. It
+        // carries the sequence for the same two reasons (one write for the
+        // patch and the cursor, and a replayed settle that can be recognised
+        // as one), and it carries the attention its terminal status means, for
+        // the same reason the dedicated event does: the settle and its outcome
+        // are one fact. A patch that states an attention of its own keeps it,
+        // and a patch with nothing to pair travels unchanged (MAR-2590).
         if (delta)
           this.notifyDelta(
             delta.kind === 'session.patch'
-              ? { ...delta, executionHostSeq: seq }
+              ? {
+                  ...delta,
+                  patch: withSettledAttention(delta.patch),
+                  executionHostSeq: seq,
+                }
               : delta,
           )
         else {
@@ -849,23 +859,15 @@ class RemoteSessionRun {
         // that replaced it, which is the class MAR-2582 spent seven rounds
         // closing. The daemon's own `attention` frame still arrives, now
         // carrying a value the row already holds, and is dropped and named.
-        const settledAttention: AttentionState | null =
-          event.status === 'completed'
-            ? 'finished'
-            : event.status === 'failed'
-              ? 'failed'
-              : null
+        //
+        // The pairing itself is `withSettledAttention`, shared with the delta
+        // encoding above so the two ways a settle can arrive cannot drift.
+        const settled = withSettledAttention({ status: event.status })
         for (const listener of this.statusListeners) listener(event.status)
-        if (settledAttention)
+        if (settled.attention)
           for (const listener of this.attentionListeners)
-            listener(settledAttention)
-        this.emitter.patchSession(
-          {
-            status: event.status,
-            ...(settledAttention ? { attention: settledAttention } : {}),
-          },
-          { executionHostSeq: seq },
-        )
+            listener(settled.attention)
+        this.emitter.patchSession(settled, { executionHostSeq: seq })
         break
       }
       case 'attention':

@@ -440,6 +440,56 @@ describe('RemoteExecutionHost', () => {
   })
 
   /**
+   * The settle pairing touches a session patch that settles nothing: not at
+   * all (MAR-2590).
+   *
+   * A mid-turn patch is the common case by far, and the whole delta path runs
+   * through the same pairing, so "adds a field only to a terminal patch" is a
+   * claim that has to be pinned rather than assumed. Asserted on the keys as
+   * well as the value, because `toEqual` ignores a key whose value is
+   * `undefined` — an `attention: undefined` welded onto every patch would pass
+   * the equality and still change what the mapping emits.
+   */
+  it('forwards a session patch that settles nothing exactly as the wire sent it', async () => {
+    const deltas: SessionDelta[] = []
+
+    const handle = host.start('claude', startConfig('s-1'))
+    handle.onDelta((delta) => deltas.push(delta))
+
+    await waitUntil(
+      () => stub.eventStreamLastEventIds.length === 1,
+      'event stream to open',
+    )
+
+    const patch = {
+      status: 'running',
+      activity: 'streaming',
+      continuationToken: 'resume-1',
+      updatedAt: '2026-08-25T10:00:00.000Z',
+    } as const
+    stub.emit(
+      envelope(1, {
+        kind: 'delta',
+        delta: { kind: 'session.patch', patch },
+      }),
+    )
+
+    await waitUntil(() => deltas.length === 1, 'the patch to arrive')
+
+    const forwarded = deltas[0]
+    expect(forwarded).toEqual({
+      kind: 'session.patch',
+      patch,
+      executionHostSeq: 1,
+    })
+    expect(
+      forwarded.kind === 'session.patch' ? Object.keys(forwarded.patch) : [],
+    ).toEqual(Object.keys(patch))
+
+    handle.stop()
+  })
+
+  /**
    * Before the mapping layer, every wire delta reached SessionService.applyDelta,
    * which bumps liveness before it switches on kind — so an unreadable kind was
    * "bump, then ignore". Filtering the delta out must not also throw away the

@@ -17,8 +17,10 @@ import type {
 import type { SkillSelection } from '../../skills/skills.types'
 import type {
   Attachment,
+  AttentionState,
   SessionHandle,
   SessionStartConfig,
+  SessionStatus,
 } from '../provider.types'
 
 /**
@@ -195,6 +197,67 @@ const LOCAL_SESSION_PATCH_FIELDS = [
   'continuationToken',
   'updatedAt',
 ] as const
+
+/** The patch a local `session.patch` delta carries. */
+type LocalSessionPatch = Extract<
+  SessionDelta,
+  { kind: 'session.patch' }
+>['patch']
+
+/**
+ * The attention a terminal status means, or null for a status that settles
+ * nothing.
+ *
+ * A settle and the attention it carries are one fact: `completed` means
+ * `finished`, `failed` means `failed`. The local path has always written them
+ * together (`claude-code-provider.ts:1071-1072`), and so does the service when
+ * it settles an approval nobody is left to answer
+ * (`session.service.ts:1362-1368`). A host splits them — the daemon sends the
+ * status and the attention as two wire events, and the second arrives after
+ * the settle has released the handle, so it is dropped as a released handle's
+ * claims about a run must be (MAR-2590).
+ *
+ * It is derived here, once, because a settle reaches the record through two
+ * supported encodings — a dedicated `status` event and a `session.patch`
+ * carrying a status — and `SessionService.applyDelta` ends the turn on either.
+ * A pairing applied to only one of them would leave the other reporting
+ * finished work with nothing to show for it, which is the defect this replaces
+ * rather than a shape it may keep.
+ *
+ * The switch is exhaustive on purpose: a new `SessionStatus` is a compile
+ * error here rather than a silently unpaired settle.
+ */
+export function settledAttentionForStatus(
+  status: SessionStatus,
+): AttentionState | null {
+  switch (status) {
+    case 'completed':
+      return 'finished'
+    case 'failed':
+      return 'failed'
+    case 'idle':
+    case 'running':
+      return null
+  }
+}
+
+/**
+ * A session patch with the attention its terminal status means, when it does
+ * not already say one.
+ *
+ * An explicit attention always wins, and the patch is returned untouched:
+ * the wire models `status` and `attention` on the same patch precisely so a
+ * host can state both, and a host is the authority on what its own run needs.
+ * Only silence is filled. A patch this has nothing to add to is returned by
+ * identity, so a non-terminal patch travels byte-identical.
+ */
+export function withSettledAttention(
+  patch: LocalSessionPatch,
+): LocalSessionPatch {
+  if (patch.attention !== undefined || !patch.status) return patch
+  const attention = settledAttentionForStatus(patch.status)
+  return attention ? { ...patch, attention } : patch
+}
 
 /** Local conversation-item fields a wire item patch is allowed to carry. */
 const LOCAL_CONVERSATION_ITEM_PATCH_FIELDS = [

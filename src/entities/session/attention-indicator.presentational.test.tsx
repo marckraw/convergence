@@ -74,6 +74,22 @@ describe('AttentionIndicator', () => {
     })
 
     /**
+     * The other half of the unreadable-attention matrix, pinned as its own
+     * cell: with the session at rest, an attention this build has no branch
+     * for renders nothing at all. Its twin — the same value on a *running*
+     * session — is in the spinner group below, and the two together are the
+     * whole rule: status decides the spinner, attention decides the pill.
+     */
+    it('says nothing about an attention value it has no branch for on an idle session', () => {
+      const { container } = render(
+        <AttentionIndicator attention={'needs-tea' as never} status="idle" />,
+      )
+
+      expect(screen.queryByText('Running')).not.toBeInTheDocument()
+      expect(container).toBeEmptyDOMElement()
+    })
+
+    /**
      * The unexplained values that are not merely unknown but inherited.
      * `labelMap['toString']` on a plain object literal resolves
      * `Object.prototype.toString` -- a function, and truthy, so the quiet
@@ -118,6 +134,24 @@ describe('AttentionIndicator', () => {
 
       expect(screen.getByText('Running')).toBeInTheDocument()
       expect(screen.queryByText('Finished')).not.toBeInTheDocument()
+    })
+
+    /**
+     * An unreadable attention is quiet, not silencing: the session is running
+     * and says so. Quiet is what the *pill* falls back to, and the spinner was
+     * never the pill's to give — a build that hid the spinner here would go
+     * back to inferring "is anything happening?" from attention, which is the
+     * whole defect MAR-2590 closed, mirrored.
+     */
+    it('spins for a running session whose attention it has no branch for', () => {
+      render(
+        <AttentionIndicator
+          attention={'needs-tea' as never}
+          status="running"
+        />,
+      )
+
+      expect(screen.getByText('Running')).toBeInTheDocument()
     })
   })
 })

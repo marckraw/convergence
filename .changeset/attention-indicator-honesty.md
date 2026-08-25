@@ -18,11 +18,13 @@ blocked on you still shows its own pill even while the turn is technically
 running — an approval prompt arrives mid-turn, and the pill you have to act on
 outranks the one that tells you the machine is busy.
 
-An attention value this build has no branch for is quiet too, rather than
-claiming "Running": a false spinner sends you to look at a session that needs
-nothing from you. And the label map is now exhaustive over `AttentionState` at
-the type level, so a new attention state is a compile error instead of a silent
-spinner.
+On a session that is not running, an attention value this build has no branch
+for is quiet too: a pill nobody can explain is not worth sending you to look at
+a session for. A running session still shows "Running" — the spinner is the
+status's to give, and an unreadable attention takes nothing away from what the
+status plainly says. And the label map is now exhaustive over `AttentionState`
+at the type level, so a new attention state is a compile error rather than a
+value that renders as nothing.
 
 That quiet fallback is now actually reachable. The label lookup ran straight
 through a plain object, which resolves inherited properties: an attention value
@@ -50,6 +52,12 @@ attention it means are one fact, so they are now one write, exactly as the
 local path has always written them: `completed` settles as `finished`, `failed`
 settles as `failed`. The daemon's trailing frame still arrives, now carrying a
 value the row already holds, and loses nothing when it is dropped.
+
+A settle can reach the record two ways — the dedicated `status` event, and a
+session patch carrying a terminal status — and Convergence ends the turn on
+either, so both now carry the outcome, from one derivation that cannot drift
+between them. A host that states an attention of its own alongside the status
+keeps it: it is the authority on what its own run needs.
 
 Still callback-only and still dropped, on purpose and filed rather than widened
 here: the wire's `context-window` and `activity` events.

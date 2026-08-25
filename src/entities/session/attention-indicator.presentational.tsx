@@ -9,7 +9,8 @@ import { SessionBadge } from '@/shared/ui/session-badge.presentational'
  *
  * Written as an exclusion so the maps below are exhaustive at the type level:
  * a new attention value is a missing key here, and a compile error, rather
- * than a silent fall-through to the spinner (MAR-2590).
+ * than a value that reaches the fallback below and renders as nothing
+ * (MAR-2590).
  */
 type LabelledAttention = Exclude<AttentionState, 'none'>
 
@@ -92,8 +93,11 @@ export const AttentionIndicator: FC<AttentionIndicatorProps> = ({
 
   // The session record carries whatever the wire sent, so an attention value
   // outside `AttentionState` can arrive at runtime with the types satisfied.
-  // It is quiet for the same reason `'none'` is: claiming "Running" about a
-  // value we cannot explain sends a human to a session that needs nothing.
+  // On a session that is not running it is quiet for the same reason `'none'`
+  // is: a pill nobody can explain sends a human to look at a session that may
+  // need nothing from them. A running session still spins, and should -- the
+  // spinner above is the status's to give, and an attention this build cannot
+  // read takes nothing away from what the status plainly says.
   if (!isLabelledAttention(attention)) return null
 
   const label = labelMap[attention]
