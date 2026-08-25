@@ -268,13 +268,41 @@ export class TurnCaptureService {
     return rows.map(turnFileChangeFromRow)
   }
 
-  getFileDiff(turnId: string, filePath: string): string {
-    const row = this.db
-      .prepare(
-        `SELECT diff FROM session_turn_file_changes
-         WHERE turn_id = ? AND file_path = ?`,
-      )
-      .get(turnId, filePath) as { diff: string } | undefined
+  /**
+   * The diff of one file change, identified the way the row is keyed since
+   * MAR-2589: turn, repository, path.
+   *
+   * `repoRoot` is optional and the two absences mean different things.
+   * `undefined` is "by turn and path alone" — what every caller meant before a
+   * change could belong to a repository, and still the whole answer for a turn
+   * that touched one. A `string | null` names the repository, `null` being the
+   * working-directory root; it is folded to `''` exactly as the identity index
+   * folds it, so a local row (whose `repo_root` is null) resolves through the
+   * repo-aware path to the same row the old lookup returned.
+   */
+  getFileDiff(
+    turnId: string,
+    filePath: string,
+    repoRoot?: string | null,
+  ): string {
+    const row =
+      repoRoot === undefined
+        ? (this.db
+            .prepare(
+              `SELECT diff FROM session_turn_file_changes
+               WHERE turn_id = ? AND file_path = ?`,
+            )
+            .get(turnId, filePath) as { diff: string } | undefined)
+        : (this.db
+            .prepare(
+              `SELECT diff FROM session_turn_file_changes
+               WHERE turn_id = ?
+                 AND COALESCE(repo_root, '') = ?
+                 AND file_path = ?`,
+            )
+            .get(turnId, repoRoot ?? '', filePath) as
+            | { diff: string }
+            | undefined)
     return row?.diff ?? ''
   }
 

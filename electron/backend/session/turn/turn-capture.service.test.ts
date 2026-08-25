@@ -453,4 +453,105 @@ describe('TurnCaptureService', () => {
     expect(diff.length).toBeGreaterThan(0)
     expect(service.getFileDiff(turnId, 'nonexistent.txt')).toBe('')
   })
+
+  it('ends a turn in which two repositories changed the same path', async () => {
+    // Local capture reads one working tree, so it cannot produce this turn --
+    // the writer that will is remote turn persistence (MAR-2584), which this
+    // ticket has to land before. What is reproduced here is the write it will
+    // make: finalizeEnd's transaction, inserting the turn's file changes and
+    // stamping its ended_at together. Under the old (turn_id, file_path) key
+    // the second insert raised UNIQUE constraint failed and took the whole
+    // transaction with it, so the turn lost every change AND stayed running.
+    const sessionId = randomUUID()
+    const turnId = randomUUID()
+    seedSessionRow(db, sessionId, repoPath)
+    await service.startTurn({ sessionId, turnId, workingDirectory: repoPath })
+
+    const insertChange = db.prepare(
+      `INSERT INTO session_turn_file_changes (
+         id, session_id, turn_id, repo_root, file_path, old_path, status,
+         additions, deletions, diff, truncated, binary, created_at
+       ) VALUES (@id, @sessionId, @turnId, @repoRoot, @filePath, NULL,
+                 'modified', 0, 0, @diff, 0, 0, '2026-08-25T00:00:00.000Z')`,
+    )
+    const updateTurn = db.prepare(
+      `UPDATE session_turns SET ended_at = ?, status = ?, summary = ? WHERE id = ?`,
+    )
+
+    db.transaction(() => {
+      insertChange.run({
+        id: randomUUID(),
+        sessionId,
+        turnId,
+        repoRoot: 'apps/web',
+        filePath: 'README.md',
+        diff: 'web readme diff',
+      })
+      insertChange.run({
+        id: randomUUID(),
+        sessionId,
+        turnId,
+        repoRoot: 'apps/api',
+        filePath: 'README.md',
+        diff: 'api readme diff',
+      })
+      updateTurn.run('2026-08-25T00:00:01.000Z', 'completed', null, turnId)
+    })()
+
+    const changes = service.listFileChanges(turnId)
+    expect(changes.map((change) => change.repoRoot).sort()).toEqual([
+      'apps/api',
+      'apps/web',
+    ])
+
+    const turn = service.listTurns(sessionId)[0]
+    expect(turn.status).toBe('completed')
+    expect(turn.endedAt).toBe('2026-08-25T00:00:01.000Z')
+  })
+
+  it('getFileDiff answers for the repository it is asked about', async () => {
+    const sessionId = randomUUID()
+    const turnId = randomUUID()
+    seedSessionRow(db, sessionId, repoPath)
+
+    // A real local turn first, so the row this asks for is one production code
+    // wrote: repo_root null, meaning the working-directory root.
+    writeFileSync(join(repoPath, 'README.md'), 'root before\n')
+    writeFileSync(join(repoPath, 'notes.md'), 'notes before\n')
+    gitCommitAll(repoPath, 'seed')
+    await service.startTurn({ sessionId, turnId, workingDirectory: repoPath })
+    writeFileSync(join(repoPath, 'README.md'), 'root after\n')
+    writeFileSync(join(repoPath, 'notes.md'), 'notes after\n')
+    service.endTurn({
+      sessionId,
+      turnId,
+      status: 'completed',
+      summarySource: null,
+    })
+    await service.flushPendingEnd(sessionId)
+
+    db.prepare(
+      `INSERT INTO session_turn_file_changes (
+         id, session_id, turn_id, repo_root, file_path, old_path, status,
+         additions, deletions, diff, truncated, binary, created_at
+       ) VALUES (?, ?, ?, 'apps/api', 'README.md', NULL, 'modified', 0, 0,
+                 'api readme diff', 0, 0, '2026-08-25T00:00:00.000Z')`,
+    ).run(randomUUID(), sessionId, turnId)
+
+    expect(service.getFileDiff(turnId, 'README.md', 'apps/api')).toBe(
+      'api readme diff',
+    )
+
+    // Null is a repository -- the working-directory root -- not "no answer".
+    const rootDiff = service.getFileDiff(turnId, 'README.md', null)
+    expect(rootDiff).toContain('root after')
+
+    // And the old two-argument call still means what it always meant: by turn
+    // and path alone, which is the whole answer for a path one repository
+    // touched -- every path in every local turn.
+    expect(service.getFileDiff(turnId, 'notes.md')).toContain('notes after')
+
+    // A repository that changed nothing here has no diff to give.
+    expect(service.getFileDiff(turnId, 'README.md', 'apps/web')).toBe('')
+  })
 })
