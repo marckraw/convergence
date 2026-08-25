@@ -72,6 +72,33 @@ describe('AttentionIndicator', () => {
       expect(screen.queryByText('Running')).not.toBeInTheDocument()
       expect(container).toBeEmptyDOMElement()
     })
+
+    /**
+     * The unexplained values that are not merely unknown but inherited.
+     * `labelMap['toString']` on a plain object literal resolves
+     * `Object.prototype.toString` -- a function, and truthy, so the quiet
+     * fallback above never fired and React was handed a function as a child.
+     * `'needs-tea'` above cannot catch this: it is the one attention value
+     * that misses on both the own keys and the prototype.
+     *
+     * Red before the `Object.hasOwn` guard, and it throws rather than merely
+     * rendering wrong -- which is the point: quiet was already the ruling, and
+     * the lookup was not keeping it.
+     */
+    it.each(['toString', 'constructor', 'valueOf', 'hasOwnProperty'])(
+      'says nothing about the inherited property %s',
+      (inherited) => {
+        const { container } = render(
+          <AttentionIndicator
+            attention={inherited as never}
+            status="completed"
+          />,
+        )
+
+        expect(screen.queryByText('Running')).not.toBeInTheDocument()
+        expect(container).toBeEmptyDOMElement()
+      },
+    )
   })
 
   describe('the running spinner', () => {

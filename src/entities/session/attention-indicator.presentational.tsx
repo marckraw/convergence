@@ -27,6 +27,26 @@ const pillStyleMap = {
   failed: 'bg-red-500/10 text-red-700 dark:text-red-500',
 } satisfies Record<LabelledAttention, string>
 
+/**
+ * Whether an attention value has an entry of its own in the maps above.
+ *
+ * A plain `labelMap[attention]` resolves the prototype chain, so an attention
+ * value of `'toString'` or `'constructor'` -- and the session record carries
+ * whatever the wire sent, not only what `AttentionState` allows -- returns an
+ * inherited *function*, which is truthy, survives the fallback below and lands
+ * as a React child. `Object.hasOwn` asks the only question that was ever
+ * meant: is this one of ours?
+ *
+ * It gates both maps, and one guard is enough for both because `satisfies`
+ * above pins them to the same key set: a key in one and not the other is a
+ * compile error, not a runtime miss.
+ */
+function isLabelledAttention(
+  attention: AttentionState,
+): attention is LabelledAttention {
+  return Object.hasOwn(labelMap, attention)
+}
+
 interface AttentionIndicatorProps {
   attention: AttentionState
   status: SessionStatus
@@ -70,14 +90,14 @@ export const AttentionIndicator: FC<AttentionIndicatorProps> = ({
   // `'none'` is a real state, and silence is the honest rendering of it.
   if (attention === 'none') return null
 
-  const label: string | undefined = labelMap[attention]
-  const pillStyle: string | undefined = pillStyleMap[attention]
-
   // The session record carries whatever the wire sent, so an attention value
   // outside `AttentionState` can arrive at runtime with the types satisfied.
   // It is quiet for the same reason `'none'` is: claiming "Running" about a
   // value we cannot explain sends a human to a session that needs nothing.
-  if (!label || !pillStyle) return null
+  if (!isLabelledAttention(attention)) return null
+
+  const label = labelMap[attention]
+  const pillStyle = pillStyleMap[attention]
 
   return (
     <span

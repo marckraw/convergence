@@ -832,13 +832,42 @@ class RemoteSessionRun {
         }
         break
       }
-      case 'status':
+      case 'status': {
+        // A settle and the attention it carries are one fact, so they are one
+        // write. Locally they always were: `claude-code-provider.ts:1071-1072`
+        // sets `'completed'` and `'finished'` from the same event, and the
+        // service applies the same pairing when it settles an approval nobody
+        // is left to answer (`session.service.ts:1362-1368`). The daemon
+        // instead splits them across two wire events, and the second one
+        // arrives after this settle has released the handle -- so on the
+        // remote path the attention half was simply lost, and a finished
+        // remote session reported nothing to act on (MAR-2590).
+        //
+        // Pairing them here rather than letting the trailing frame through is
+        // deliberate: the disposed-run guard in `dispatchRawEvent` is what
+        // stops a released handle from overwriting the attention of the run
+        // that replaced it, which is the class MAR-2582 spent seven rounds
+        // closing. The daemon's own `attention` frame still arrives, now
+        // carrying a value the row already holds, and is dropped and named.
+        const settledAttention: AttentionState | null =
+          event.status === 'completed'
+            ? 'finished'
+            : event.status === 'failed'
+              ? 'failed'
+              : null
         for (const listener of this.statusListeners) listener(event.status)
+        if (settledAttention)
+          for (const listener of this.attentionListeners)
+            listener(settledAttention)
         this.emitter.patchSession(
-          { status: event.status },
+          {
+            status: event.status,
+            ...(settledAttention ? { attention: settledAttention } : {}),
+          },
           { executionHostSeq: seq },
         )
         break
+      }
       case 'attention':
         for (const listener of this.attentionListeners)
           listener(event.attention)

@@ -750,7 +750,13 @@ describe('RemoteExecutionHost', () => {
     expect(deltas).toEqual([
       {
         kind: 'session.patch',
-        patch: { status: 'completed', updatedAt: expect.any(String) },
+        // The settle carries its attention with it: a terminal status and the
+        // attention it means are one fact and one write (MAR-2590).
+        patch: {
+          status: 'completed',
+          attention: 'finished',
+          updatedAt: expect.any(String),
+        },
         executionHostSeq: 1,
       },
     ])

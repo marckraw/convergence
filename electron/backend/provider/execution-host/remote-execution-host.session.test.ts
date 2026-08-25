@@ -21,6 +21,7 @@ import { RemoteExecutionHost } from './remote-execution-host'
 import type { ProviderExecutionHost } from './execution-host.types'
 import type { SessionHandle } from '../provider.types'
 import type { SessionDelta } from '../../session/conversation-item.types'
+import type { ProviderDebugEntry } from '../../provider-debug/provider-debug.types'
 
 /**
  * The real remote host, wrapped so a handle the service has released can still
@@ -94,6 +95,23 @@ describe('remote wire events reaching the session record', () => {
    * observed without reaching inside the service.
    */
   let releases: string[]
+  /**
+   * What the session row held at the instant the settle released the handle.
+   *
+   * The settle does three things in one beat -- writes the row, queues the
+   * `SessionSettled` event relays trigger on, and releases the handle -- so
+   * this is the observer that runs *inside* the settle. It is the only place
+   * that can tell one write from two: a status and an attention written
+   * separately are both present by the end of the turn either way, and differ
+   * only in whether anything could observe the gap between them.
+   */
+  let releaseObservations: Array<{ status: string; attention: string }>
+  /**
+   * Every traced wire line. The remote adapter drops events on purpose and
+   * names each drop, so this is where "the daemon said something we ignored"
+   * is distinguishable from "the daemon never said it".
+   */
+  let debugEntries: ProviderDebugEntry[]
 
   const PROJECT_ID = 'remote-wire-project'
 
@@ -205,6 +223,8 @@ describe('remote wire events reaching the session record', () => {
     stub = createStubDaemon()
     cursorWrites = []
     releases = []
+    releaseObservations = []
+    debugEntries = []
     service = new SessionService(
       db,
       new LocalExecutionHost(new ProviderRegistry()),
@@ -229,6 +249,7 @@ describe('remote wire events reaching the session record', () => {
         })
         service.recordRemoteEventSeq(id, seq)
       },
+      debugSink: { record: (entry) => debugEntries.push(entry) },
     })
     await host.refreshProviders()
     service.setRemoteExecutionHost(host)
@@ -236,7 +257,14 @@ describe('remote wire events reaching the session record', () => {
       repository: 'git@github.com:acme/repo.git',
     }))
 
-    service.setSessionTerminatedListener((id) => releases.push(id))
+    service.setSessionTerminatedListener((id) => {
+      releases.push(id)
+      releaseObservations.push(
+        db
+          .prepare('SELECT status, attention FROM sessions WHERE id = ?')
+          .get(id) as { status: string; attention: string },
+      )
+    })
 
     sessionId = await createRemoteSession()
   })
@@ -354,6 +382,134 @@ describe('remote wire events reaching the session record', () => {
     // The spinner Marcin watched never stop is this field: an activity that
     // outlives the turn keeps the header alive even once the answer has landed.
     expect(service.getById(sessionId)?.activity).toBeNull()
+  })
+
+  /**
+   * The daemon's real settle, in the order the daemon sends it:
+   * `running` -> `continuation-token` -> `completed` -> `attention: finished`.
+   *
+   * That order is the whole defect and it is not reorderable for convenience.
+   * The token arriving before the settle is what makes the settle release the
+   * handle (`session.service.ts:2214-2219`), and a released handle is exactly
+   * what the trailing `finished` frame then arrives too late to reach. So the
+   * daemon does announce that the turn finished, and on master the session
+   * record never heard it: a completed remote session showed no outcome at all
+   * (MAR-2590).
+   *
+   * The fix is not to let that frame through -- a post-disposal frame
+   * overwriting the attention of the run that replaced it is the class
+   * MAR-2582 closed. It is that a terminal status and its attention are one
+   * fact and are written together, exactly as the local path has always
+   * written them (`claude-code-provider.ts:1071-1072`).
+   */
+  it('leaves a completed remote turn reporting finished, in the daemon order', async () => {
+    await service.start(sessionId, { text: 'hello' })
+    await waitUntil(
+      () => stub.eventStreamLastEventIds.length === 1,
+      'the event stream to open',
+    )
+
+    stub.emitBatch([
+      envelope(1, { kind: 'status', status: 'running' }, sessionId),
+      envelope(2, { kind: 'continuation-token', token: 'resume-1' }, sessionId),
+      envelope(3, { kind: 'status', status: 'completed' }, sessionId),
+      envelope(4, { kind: 'attention', attention: 'finished' }, sessionId),
+    ])
+
+    await waitUntil(
+      () => service.getById(sessionId)?.status === 'completed',
+      'the turn to settle',
+    )
+
+    // Both halves of the settle, on the row a human reads.
+    expect(service.getById(sessionId)?.status).toBe('completed')
+    expect(service.getById(sessionId)?.attention).toBe('finished')
+    // And together, not merely both eventually: the observer that runs inside
+    // the settle already sees the pair. Two writes would leave a window here
+    // in which the session is on disk as finished work with nothing to report,
+    // and the settle event relays fire on is queued inside that window.
+    expect(releaseObservations).toEqual([
+      { status: 'completed', attention: 'finished' },
+    ])
+  })
+
+  /**
+   * The other terminal status, pinned separately because it maps to a
+   * different attention: `failed` -> `failed`, the pairing the service already
+   * applies when it settles an approval nobody is left to answer
+   * (`session.service.ts:1362-1368`). A fix that only paired `completed` would
+   * leave every failed remote turn silently blank.
+   */
+  it('leaves a failed remote turn reporting failed', async () => {
+    await service.start(sessionId, { text: 'hello' })
+    await waitUntil(
+      () => stub.eventStreamLastEventIds.length === 1,
+      'the event stream to open',
+    )
+
+    stub.emit(envelope(1, { kind: 'status', status: 'running' }, sessionId))
+    await waitUntil(
+      () => service.getById(sessionId)?.status === 'running',
+      'the turn to report running',
+    )
+
+    stub.emit(envelope(2, { kind: 'status', status: 'failed' }, sessionId))
+    await waitUntil(
+      () => service.getById(sessionId)?.status === 'failed',
+      'the turn to settle failed',
+    )
+
+    expect(service.getById(sessionId)?.attention).toBe('failed')
+  })
+
+  /**
+   * What the daemon's now-redundant `finished` frame costs: nothing.
+   *
+   * This is the frame in Marcin's MAR-2590 QA capture, traced as
+   * "dropped: the run is disposed - 133 bytes" -- the debug facility recorded
+   * the bug before the review found it. It still arrives, it is still dropped
+   * by the guard that keeps a released handle from speaking over its
+   * successor, and now it carries a value the row already holds, so the drop
+   * loses nothing.
+   *
+   * Asserted on the trace, not on the value: a row that reads `finished`
+   * cannot by itself tell "the frame was dropped" from "the frame was
+   * applied and happened to agree". The trace is what says which.
+   */
+  it('drops the daemon trailing finished frame without error and without moving the row', async () => {
+    await service.start(sessionId, { text: 'hello' })
+    await waitUntil(
+      () => stub.eventStreamLastEventIds.length === 1,
+      'the event stream to open',
+    )
+
+    stub.emitBatch([
+      envelope(1, { kind: 'status', status: 'running' }, sessionId),
+      envelope(2, { kind: 'continuation-token', token: 'resume-1' }, sessionId),
+      envelope(3, { kind: 'status', status: 'completed' }, sessionId),
+      envelope(4, { kind: 'attention', attention: 'finished' }, sessionId),
+    ])
+
+    await waitUntil(
+      () => service.getById(sessionId)?.status === 'completed',
+      'the turn to settle',
+    )
+    await waitUntil(
+      () =>
+        debugEntries.some(
+          (entry) => entry.note === 'dropped: the run is disposed',
+        ),
+      'the trailing attention frame to be dropped and named',
+    )
+
+    const settled = service.getById(sessionId)
+    // The drop moved nothing: the settle already wrote both halves.
+    expect(settled?.status).toBe('completed')
+    expect(settled?.attention).toBe('finished')
+    // It is not an error, and a human is told nothing about it.
+    expect(noteTexts()).toEqual([])
+    // And it did not end a second thing: one settle, one released handle.
+    expect(releases).toEqual([sessionId])
   })
 
   /**

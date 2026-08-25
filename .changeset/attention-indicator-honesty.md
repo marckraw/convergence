@@ -24,6 +24,14 @@ nothing from you. And the label map is now exhaustive over `AttentionState` at
 the type level, so a new attention state is a compile error instead of a silent
 spinner.
 
+That quiet fallback is now actually reachable. The label lookup ran straight
+through a plain object, which resolves inherited properties: an attention value
+of `'toString'` — and the session record holds whatever the wire sent it, not
+only what the type allows — returned `Object.prototype.toString`, a function,
+which is truthy, so the fallback never fired and React was handed a function to
+render. The lookup now asks `Object.hasOwn` first, which is the question it
+always meant.
+
 **Remote sessions can finally report that they finished.** The remote execution
 host forwarded the daemon's `attention` events to a callback nothing in
 Convergence subscribes to — the same vestigial-callback loss MAR-2582 found for
@@ -33,6 +41,15 @@ report that it had finished, and an approval prompt raised on the far side
 never reached the row a human reads. Wire `attention` events now patch the
 session as well as firing the callback, through the same handle-scoped dispatch
 the status bridge uses.
+
+And a _finished_ remote turn now says so. The daemon splits a settle across two
+wire events — `status: completed`, then `attention: finished` — and the second
+arrives after the settle has already released the handle, so it is dropped, as
+a released handle's claims about a run must be. A terminal status and the
+attention it means are one fact, so they are now one write, exactly as the
+local path has always written them: `completed` settles as `finished`, `failed`
+settles as `failed`. The daemon's trailing frame still arrives, now carrying a
+value the row already holds, and loses nothing when it is dropped.
 
 Still callback-only and still dropped, on purpose and filed rather than widened
 here: the wire's `context-window` and `activity` events.
