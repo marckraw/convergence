@@ -51,8 +51,10 @@ single-repository turn renders exactly as it did before.
 Where the prefix is not enough, the rows say so themselves. A file tree
 addresses a row by the path it draws, so two rows that agree on that path are
 one row and one of the two diffs cannot be opened at all — and a prefix does
-not separate one repository nested inside another (`a` + `b/c.ts` against `a/b`
-
-- `c.ts` join to the same path), nor a repository whose name is the label the
-  workspace root gets. Those rows now each name the repository they came from,
-  the way an editor labels two tabs called `index.ts`, and only those rows do.
+not separate one repository nested inside another (`a` + `b/c.ts` against
+`a/b` + `c.ts` join to the same path), nor a repository whose name is the
+label the workspace root gets. Those rows now each name the repository they
+came from, the way an editor labels two tabs called `index.ts`, and only those
+rows do. The path a row claims is the path the tree draws, spelling and all:
+the tree normalises what it is handed, so a row claiming any other spelling is
+a row you can see and cannot open.
