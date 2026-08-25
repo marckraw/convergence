@@ -16,6 +16,7 @@
     "electron/**/*",
     "src/shared/lib/keyboard-shortcut.pure.ts",
     "electron.vite.config.ts",
+    "eslint.config.test.ts",
     "vitest.config.ts",
     "vitest.pure.config.ts",
     "vitest.unit.config.ts"
