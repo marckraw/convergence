@@ -164,13 +164,16 @@ export const EXECUTION_HOST_UNSENT_LOCAL_ITEM_FIELDS = [
  * rendered as the whole change, and a binary marker rendered as the content.
  * The local record now carries all three.
  *
- * "Nothing is dropped" is a statement about this mapping only. `repoRoot`
- * arrives and is stored, but storage still keys a change by `(turn_id,
- * file_path)`, so two repositories with the same path in one workspace collide
- * on insert rather than merging: `UNIQUE constraint failed` rolls back the
- * transaction that also stamps the turn's `ended_at`, costing that turn its
- * file changes and leaving it `running` — MAR-2589, and not a loss this list
- * can express.
+ * "Nothing is dropped" was once a statement about this mapping only: `repoRoot`
+ * arrived and was stored, but storage keyed a change by `(turn_id, file_path)`,
+ * so two repositories with the same path in one workspace collided on insert
+ * rather than merging — `UNIQUE constraint failed` rolled back the transaction
+ * that also stamps the turn's `ended_at`, costing that turn its file changes
+ * and leaving it `running`. MAR-2589 closed it by making the repository part of
+ * a change's identity: a unique expression index over `(turn_id,
+ * COALESCE(repo_root, ''), file_path)` in `database.ts`, and a repo-aware
+ * `getFileDiff` down to the changed-files tree. What arrives here now survives
+ * all the way to a row and back out to a diff.
  */
 export const EXECUTION_HOST_UNMAPPED_WIRE_FILE_CHANGE_FIELDS =
   [] as const satisfies readonly (keyof ExecutionTurnFileChange)[]

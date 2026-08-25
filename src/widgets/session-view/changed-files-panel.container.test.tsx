@@ -1033,12 +1033,17 @@ describe('ChangedFilesPanel', () => {
         id: 'change-1',
         sessionId: session.id,
         turnId: 'turn-1',
+        // What the record really carries: null is the working-directory root
+        // repository, which is every change local capture writes (MAR-2577).
+        repoRoot: null,
         filePath: 'src/login.ts',
         oldPath: null,
         status: 'modified' as const,
         additions: 4,
         deletions: 1,
         diff: '--- a\n+++ b\n@@ -1 +1 @@\n-old\n+new\n',
+        truncated: false,
+        binary: false,
         createdAt: '2026-04-23T10:00:30.000Z',
       },
     ]
@@ -1085,6 +1090,7 @@ describe('ChangedFilesPanel', () => {
       expect(turnsApiMock.getFileDiff).toHaveBeenCalledWith(
         'turn-1',
         'src/login.ts',
+        null,
       )
       expect(screen.getByText('Turn diff')).toBeInTheDocument()
       expect(screen.getByText('-old')).toBeInTheDocument()

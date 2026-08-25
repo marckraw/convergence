@@ -1924,7 +1924,11 @@ interface ElectronAPI {
   turns: {
     listForSession: (sessionId: string) => Promise<TurnData[]>
     getFileChanges: (turnId: string) => Promise<TurnFileChangeData[]>
-    getFileDiff: (turnId: string, filePath: string) => Promise<string>
+    getFileDiff: (
+      turnId: string,
+      filePath: string,
+      repoRoot?: string | null,
+    ) => Promise<string>
     onTurnDelta: (callback: (payload: TurnDeltaData) => void) => () => void
   }
   provider: {

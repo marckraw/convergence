@@ -71,11 +71,27 @@ describe('turnsApi', () => {
     expect(result).toEqual(changes)
   })
 
+  it('carries the repository a diff belongs to across the preload bridge', async () => {
+    getFileDiff.mockResolvedValue('api readme diff')
+    const result = await turnsApi.getFileDiff('t1', 'README.md', 'apps/api')
+
+    // The repository is half of a change's identity (MAR-2589); dropped here,
+    // the main process answers with whichever repository's row it finds first.
+    expect(getFileDiff).toHaveBeenCalledWith('t1', 'README.md', 'apps/api')
+    expect(result).toBe('api readme diff')
+  })
+
+  it('carries the working-directory root as null rather than as nothing', async () => {
+    await turnsApi.getFileDiff('t1', 'README.md', null)
+
+    expect(getFileDiff).toHaveBeenCalledWith('t1', 'README.md', null)
+  })
+
   it('forwards getFileDiff to the preload bridge', async () => {
     getFileDiff.mockResolvedValue('unified diff body')
     const result = await turnsApi.getFileDiff('t1', 'a.ts')
 
-    expect(getFileDiff).toHaveBeenCalledWith('t1', 'a.ts')
+    expect(getFileDiff).toHaveBeenCalledWith('t1', 'a.ts', undefined)
     expect(result).toBe('unified diff body')
   })
 

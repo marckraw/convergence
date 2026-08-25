@@ -58,6 +58,67 @@ function buildSessionsTableSql(
   `
 }
 
+/**
+ * The columns of `session_turn_file_changes`, in the order the rebuild copies
+ * them. Named once because the rebuild's `INSERT ... SELECT` has to project
+ * exactly what the new table declares, and a list that drifts from the table
+ * beside it is how a rebuild loses a column's contents in silence.
+ */
+const TURN_FILE_CHANGE_COLUMNS = [
+  'id',
+  'session_id',
+  'turn_id',
+  'repo_root',
+  'file_path',
+  'old_path',
+  'status',
+  'additions',
+  'deletions',
+  'diff',
+  'truncated',
+  'binary',
+  'created_at',
+] as const
+
+/**
+ * A file change's identity is `(turn, repository, path)` (MAR-2589).
+ *
+ * Deliberately no table-level `UNIQUE`: the constraint this table needs cannot
+ * be written as one. `UNIQUE (turn_id, repo_root, file_path)` does not
+ * constrain rows where `repo_root IS NULL` -- SQL treats two NULLs as distinct
+ * -- and null is *every* row local capture has ever written, so the obvious
+ * widening would quietly delete today's guarantee for the common case. The
+ * identity lives in a unique expression index instead
+ * (`ensureTurnFileChangeIdentity`), which folds null to `''` and therefore
+ * holds for both.
+ */
+function buildTurnFileChangesTableSql(
+  tableName: string,
+  includeIfNotExists = true,
+): string {
+  const ifNotExistsClause = includeIfNotExists ? 'IF NOT EXISTS ' : ''
+
+  return `
+    CREATE TABLE ${ifNotExistsClause}${tableName} (
+      id TEXT PRIMARY KEY,
+      session_id TEXT NOT NULL,
+      turn_id TEXT NOT NULL,
+      repo_root TEXT,
+      file_path TEXT NOT NULL,
+      old_path TEXT,
+      status TEXT NOT NULL,
+      additions INTEGER NOT NULL DEFAULT 0,
+      deletions INTEGER NOT NULL DEFAULT 0,
+      diff TEXT NOT NULL,
+      truncated INTEGER NOT NULL DEFAULT 0,
+      binary INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL,
+      FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE,
+      FOREIGN KEY (turn_id) REFERENCES session_turns(id) ON DELETE CASCADE
+    );
+  `
+}
+
 const SCHEMA = `
   CREATE TABLE IF NOT EXISTS projects (
     id TEXT PRIMARY KEY,
@@ -128,24 +189,7 @@ const SCHEMA = `
   CREATE INDEX IF NOT EXISTS idx_session_turns_session_sequence
     ON session_turns(session_id, sequence);
 
-  CREATE TABLE IF NOT EXISTS session_turn_file_changes (
-    id TEXT PRIMARY KEY,
-    session_id TEXT NOT NULL,
-    turn_id TEXT NOT NULL,
-    repo_root TEXT,
-    file_path TEXT NOT NULL,
-    old_path TEXT,
-    status TEXT NOT NULL,
-    additions INTEGER NOT NULL DEFAULT 0,
-    deletions INTEGER NOT NULL DEFAULT 0,
-    diff TEXT NOT NULL,
-    truncated INTEGER NOT NULL DEFAULT 0,
-    binary INTEGER NOT NULL DEFAULT 0,
-    created_at TEXT NOT NULL,
-    FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE,
-    FOREIGN KEY (turn_id) REFERENCES session_turns(id) ON DELETE CASCADE,
-    UNIQUE (turn_id, file_path)
-  );
+  ${buildTurnFileChangesTableSql('session_turn_file_changes')}
 
   CREATE INDEX IF NOT EXISTS idx_session_turn_file_changes_session_turn
     ON session_turn_file_changes(session_id, turn_id);
@@ -1007,6 +1051,143 @@ function backfillTurnFileChangeMeaning(
   }
 }
 
+const TURN_FILE_CHANGE_IDENTITY_INDEX = 'idx_session_turn_file_changes_identity'
+
+const TURN_FILE_CHANGE_IDENTITY_INDEX_SQL = `
+  CREATE UNIQUE INDEX IF NOT EXISTS ${TURN_FILE_CHANGE_IDENTITY_INDEX}
+    ON session_turn_file_changes(turn_id, COALESCE(repo_root, ''), file_path);
+`
+
+/**
+ * Is this database still keyed the pre-MAR-2589 way?
+ *
+ * Asked of the table-level `UNIQUE (turn_id, file_path)` directly rather than
+ * of the new index, because the two can coexist: `SCHEMA` runs before every
+ * migration, and its `CREATE TABLE IF NOT EXISTS` is a no-op against an old
+ * table, so "the new index exists" would answer yes on a database whose old
+ * constraint is still there. `origin: 'u'` is SQLite's marker for an index it
+ * created to back a `UNIQUE` clause, which is exactly the thing a rebuild is
+ * the only way to remove.
+ */
+function hasLegacyTurnFileChangeUniqueConstraint(
+  database: Database.Database,
+): boolean {
+  const indexes = database
+    .prepare("PRAGMA index_list('session_turn_file_changes')")
+    .all() as Array<{ name: string; unique: number; origin: string }>
+
+  return indexes.some((index) => {
+    if (index.origin !== 'u') return false
+    const columns = database
+      .prepare(`PRAGMA index_info('${index.name}')`)
+      .all() as Array<{ name: string | null }>
+    const names = columns.map((column) => column.name)
+    return (
+      names.length === 2 && names[0] === 'turn_id' && names[1] === 'file_path'
+    )
+  })
+}
+
+/**
+ * A file change's identity includes its repository (MAR-2589).
+ *
+ * MAR-2577 gave the row a `repo_root` but left the key at `(turn_id,
+ * file_path)`, so two repositories of one workspace changing the same path in
+ * one turn do not merge -- they break the turn. `finalizeEnd` inserts the file
+ * changes and stamps the turn's `ended_at` in one transaction, so the second
+ * insert's `UNIQUE constraint failed` rolls back both: that turn loses every
+ * file change and stays `running` forever. Unreachable until remote turn
+ * records reach the database (MAR-2584), which is why this lands first.
+ *
+ * Two things have to happen and neither can happen alone:
+ *
+ * 1. The old constraint has to go, and SQLite cannot drop a table-level
+ *    `UNIQUE` -- only a rebuild can: create, copy, drop, rename.
+ * 2. The new one has to arrive as a unique *expression* index. The obvious
+ *    `UNIQUE (turn_id, repo_root, file_path)` does not constrain rows where
+ *    `repo_root IS NULL`, and that is every row this table already holds, so it
+ *    would trade a rare collision for losing the common guarantee. Folding null
+ *    to `''` inside the index keeps both, and keeps "null means the
+ *    working-directory root" -- the design `turn.types.ts` and the wire mapping
+ *    document -- rather than encoding the root as a magic empty string in the
+ *    data.
+ *
+ * The whole rebuild, the index included, is ONE transaction. Between dropping
+ * the old table and renaming the new one into its place there is no table named
+ * `session_turn_file_changes` at all; a process killed in that gap would boot
+ * next time into `SCHEMA`'s `CREATE TABLE IF NOT EXISTS`, get a fresh empty
+ * table, and leave every real row stranded in `session_turn_file_changes_next`
+ * with nothing that knows to look there. SQLite's DDL is transactional, so the
+ * gap either closes or never opens.
+ *
+ * Foreign keys are off for the copy, the same way `ensureSessionsTableShape`
+ * turns them off for its own rebuild. The copy has to be verbatim: enforcement
+ * would re-check every row against `sessions` and `session_turns` on the way
+ * in, and a row whose parent went missing at some point in this database's
+ * history would turn a migration into a failed boot. A rebuild is not the place
+ * to discover an integrity problem it did not cause.
+ */
+function ensureTurnFileChangeIdentity(database: Database.Database): void {
+  if (!hasLegacyTurnFileChangeUniqueConstraint(database)) {
+    // Fresh databases get the new table shape straight from SCHEMA, which
+    // deliberately declares no UNIQUE clause; the identity index is still owed.
+    database.exec(TURN_FILE_CHANGE_IDENTITY_INDEX_SQL)
+    return
+  }
+
+  const columns = TURN_FILE_CHANGE_COLUMNS.join(', ')
+  const foreignKeysEnabled =
+    (database.pragma('foreign_keys', { simple: true }) as number) === 1
+
+  if (foreignKeysEnabled) {
+    database.pragma('foreign_keys = OFF')
+  }
+
+  try {
+    database.transaction(() => {
+      const sourceCount = (
+        database
+          .prepare('SELECT COUNT(*) AS count FROM session_turn_file_changes')
+          .get() as { count: number }
+      ).count
+
+      database.exec('DROP TABLE IF EXISTS session_turn_file_changes_next')
+      database.exec(
+        buildTurnFileChangesTableSql('session_turn_file_changes_next', false),
+      )
+      database.exec(`
+        INSERT INTO session_turn_file_changes_next (${columns})
+        SELECT ${columns} FROM session_turn_file_changes;
+      `)
+      database.exec('DROP TABLE session_turn_file_changes')
+      database.exec(
+        'ALTER TABLE session_turn_file_changes_next RENAME TO session_turn_file_changes',
+      )
+      database.exec(`
+        CREATE INDEX IF NOT EXISTS idx_session_turn_file_changes_session_turn
+          ON session_turn_file_changes(session_id, turn_id);
+      `)
+      database.exec(TURN_FILE_CHANGE_IDENTITY_INDEX_SQL)
+
+      const copiedCount = (
+        database
+          .prepare('SELECT COUNT(*) AS count FROM session_turn_file_changes')
+          .get() as { count: number }
+      ).count
+
+      if (copiedCount !== sourceCount) {
+        throw new Error(
+          `Failed to rebuild session_turn_file_changes: copied ${copiedCount} of ${sourceCount} rows`,
+        )
+      }
+    })()
+  } finally {
+    if (foreignKeysEnabled) {
+      database.pragma('foreign_keys = ON')
+    }
+  }
+}
+
 function ensureSessionColumns(database: Database.Database): void {
   const columnNames = getTableColumnNames(database, 'sessions')
 
@@ -1466,6 +1647,9 @@ export function getDatabase(dbPath?: string): Database.Database {
     ensureProviderAccountColumns(database)
     ensureTurnModelColumns(database)
     ensureTurnFileChangeColumns(database)
+    // After the columns, never before: the identity index reads `repo_root`,
+    // which a database older than MAR-2577 does not have yet.
+    ensureTurnFileChangeIdentity(database)
     ensureQueuedInputColumns(database)
     ensureRelayColumns(database)
     ensureAttachmentsTableNoFk(database)
@@ -1480,7 +1664,11 @@ export function getDatabase(dbPath?: string): Database.Database {
   return database
 }
 
-export { ensureAttachmentsTableNoFk }
+export {
+  ensureAttachmentsTableNoFk,
+  ensureTurnFileChangeIdentity,
+  TURN_FILE_CHANGE_IDENTITY_INDEX,
+}
 
 export function closeDatabase(): void {
   if (db) {

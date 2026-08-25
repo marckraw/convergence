@@ -3,7 +3,13 @@ import Database from 'better-sqlite3'
 import { mkdtempSync, rmSync } from 'fs'
 import { join } from 'path'
 import { tmpdir } from 'os'
-import { getDatabase, closeDatabase, resetDatabase } from './database'
+import {
+  getDatabase,
+  closeDatabase,
+  resetDatabase,
+  ensureTurnFileChangeIdentity,
+  TURN_FILE_CHANGE_IDENTITY_INDEX,
+} from './database'
 
 describe('database', () => {
   afterEach(() => {
@@ -289,7 +295,7 @@ describe('database', () => {
     expect(foreignKeys[0]?.on_delete).toBe('CASCADE')
   })
 
-  it('creates session_turn_file_changes with expected columns, FKs, and unique constraint', () => {
+  it('creates session_turn_file_changes with expected columns, FKs, and identity index', () => {
     const db = getDatabase()
     const columns = db
       .prepare("PRAGMA table_info('session_turn_file_changes')")
@@ -321,17 +327,75 @@ describe('database', () => {
       expect(fk.on_delete).toBe('CASCADE')
     }
 
+    // A change is identified by turn, repository and path (MAR-2589), and that
+    // cannot be a table-level UNIQUE: SQL treats two NULL repo_roots as
+    // distinct, so `UNIQUE (turn_id, repo_root, file_path)` would constrain
+    // nothing for the rows local capture writes. It is a unique expression
+    // index folding null to '' instead -- and the old two-column UNIQUE must be
+    // gone, since a leftover would still refuse the second repository's row.
     const indexList = db
       .prepare("PRAGMA index_list('session_turn_file_changes')")
-      .all() as Array<{ name: string; unique: number }>
-    const uniqueIndex = indexList.find((idx) => idx.unique === 1)
-    expect(uniqueIndex).toBeDefined()
-    const uniqueColumns = db
-      .prepare(`PRAGMA index_info('${uniqueIndex!.name}')`)
-      .all() as Array<{ name: string }>
-    expect(uniqueColumns.map((c) => c.name).sort()).toEqual(
-      ['file_path', 'turn_id'].sort(),
+      .all() as Array<{ name: string; unique: number; origin: string }>
+    expect(indexList.filter((idx) => idx.origin === 'u')).toEqual([])
+
+    const identityIndex = indexList.find(
+      (idx) => idx.name === TURN_FILE_CHANGE_IDENTITY_INDEX,
     )
+    expect(identityIndex).toBeDefined()
+    expect(identityIndex!.unique).toBe(1)
+
+    const identitySql = (
+      db
+        .prepare(
+          "SELECT sql FROM sqlite_master WHERE type = 'index' AND name = ?",
+        )
+        .get(TURN_FILE_CHANGE_IDENTITY_INDEX) as { sql: string }
+    ).sql
+    expect(identitySql).toContain("COALESCE(repo_root, '')")
+    expect(identitySql).toContain('turn_id')
+    expect(identitySql).toContain('file_path')
+  })
+
+  it('holds one row per turn+path within a repository, and one per repository', () => {
+    const db = getDatabase()
+    db.pragma('foreign_keys = OFF')
+    const insert = db.prepare(
+      `INSERT INTO session_turn_file_changes (
+         id, session_id, turn_id, repo_root, file_path, old_path, status,
+         additions, deletions, diff, truncated, binary, created_at
+       ) VALUES (?, 's1', 't1', ?, 'README.md', NULL, 'modified', 0, 0, ?, 0, 0, '2026-08-25')`,
+    )
+
+    // Two repositories of one workspace, one path: two changes, two rows. Under
+    // the old (turn_id, file_path) key the second of these raised UNIQUE
+    // constraint failed, and because turn-capture writes the changes and stamps
+    // the turn's ended_at in one transaction, that rollback cost the turn every
+    // change and left it running (MAR-2589).
+    insert.run('fc-root', null, 'root diff')
+    insert.run('fc-web', 'apps/web', 'web diff')
+    insert.run('fc-api', 'apps/api', 'api diff')
+
+    // ...and the guarantee that was already there is still there. This is the
+    // half the naive `UNIQUE (turn_id, repo_root, file_path)` would have thrown
+    // away: repo_root is null for every row local capture has ever written.
+    expect(() => insert.run('fc-root-again', null, 'second root diff')).toThrow(
+      /UNIQUE constraint failed/,
+    )
+    expect(() => insert.run('fc-web-again', 'apps/web', 'again')).toThrow(
+      /UNIQUE constraint failed/,
+    )
+
+    const rows = db
+      .prepare(
+        `SELECT id, repo_root, diff FROM session_turn_file_changes
+         WHERE turn_id = 't1' ORDER BY id ASC`,
+      )
+      .all() as { id: string; repo_root: string | null; diff: string }[]
+    expect(rows).toEqual([
+      { id: 'fc-api', repo_root: 'apps/api', diff: 'api diff' },
+      { id: 'fc-root', repo_root: null, diff: 'root diff' },
+      { id: 'fc-web', repo_root: 'apps/web', diff: 'web diff' },
+    ])
   })
 
   it('backfills what a legacy diff meant from the markers it was left with', () => {
@@ -534,6 +598,235 @@ describe('database', () => {
     } finally {
       closeDatabase()
       resetDatabase()
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('rebuilds a table keyed the old way without losing a row or a diff byte', () => {
+    const dir = mkdtempSync(
+      join(tmpdir(), 'convergence-file-change-identity-rebuild-'),
+    )
+    const dbPath = join(dir, 'pre-identity.sqlite')
+    // Just under the 200 KB cap turn capture cuts at, so the copy moves a row
+    // of the size this table really holds rather than a token one.
+    const bigDiff = `@@ -1 +1 @@\n${'+a line that is here to take up room\n'.repeat(5000)}`
+
+    try {
+      const legacy = new Database(dbPath)
+      legacy.exec(`
+        CREATE TABLE session_turn_file_changes (
+          id TEXT PRIMARY KEY,
+          session_id TEXT NOT NULL,
+          turn_id TEXT NOT NULL,
+          file_path TEXT NOT NULL,
+          old_path TEXT,
+          status TEXT NOT NULL,
+          additions INTEGER NOT NULL DEFAULT 0,
+          deletions INTEGER NOT NULL DEFAULT 0,
+          diff TEXT NOT NULL,
+          created_at TEXT NOT NULL,
+          UNIQUE (turn_id, file_path)
+        );
+      `)
+      legacy
+        .prepare(
+          `INSERT INTO session_turn_file_changes (
+             id, session_id, turn_id, file_path, old_path, status,
+             additions, deletions, diff, created_at
+           ) VALUES (?, 's1', 't1', ?, ?, ?, ?, ?, ?, ?)`,
+        )
+        .run(
+          'fc-big',
+          'src/big.ts',
+          null,
+          'modified',
+          5000,
+          0,
+          bigDiff,
+          '2026-01-01',
+        )
+      legacy.exec(`
+        INSERT INTO session_turn_file_changes (
+          id, session_id, turn_id, file_path, status, additions, deletions, diff, created_at
+        ) VALUES
+          ('fc-cut', 's1', 't1', 'src/b.ts', 'modified', 0, 0, '[diff truncated: 4210 lines]', '2026-01-02'),
+          ('fc-binary', 's1', 't1', 'assets/logo.png', 'modified', 0, 0, '[binary file change]', '2026-01-03'),
+          ('fc-renamed', 's1', 't2', 'src/new.ts', 'renamed', 1, 1, '@@ -1 +1 @@', '2026-01-04');
+      `)
+      legacy.close()
+
+      const db = getDatabase(dbPath)
+
+      // Every row, and every byte of every diff. A rebuild that quietly dropped
+      // a column would still leave the right number of rows behind.
+      const rows = db
+        .prepare(
+          `SELECT id, session_id, turn_id, repo_root, file_path, old_path, status,
+                  additions, deletions, diff, truncated, binary, created_at
+           FROM session_turn_file_changes ORDER BY id ASC`,
+        )
+        .all() as Array<Record<string, unknown>>
+      expect(rows.map((row) => row.id)).toEqual([
+        'fc-big',
+        'fc-binary',
+        'fc-cut',
+        'fc-renamed',
+      ])
+      expect(rows[0]).toEqual({
+        id: 'fc-big',
+        session_id: 's1',
+        turn_id: 't1',
+        repo_root: null,
+        file_path: 'src/big.ts',
+        old_path: null,
+        status: 'modified',
+        additions: 5000,
+        deletions: 0,
+        diff: bigDiff,
+        truncated: 0,
+        binary: 0,
+        created_at: '2026-01-01',
+      })
+
+      // The MAR-2577 backfill runs first and the rebuild copies what it wrote;
+      // a rebuild that ran before it, or that re-created the columns from
+      // DEFAULT 0, would put a stand-in where a known-true value belongs.
+      expect(rows.map((row) => [row.id, row.truncated, row.binary])).toEqual([
+        ['fc-big', 0, 0],
+        ['fc-binary', 0, 1],
+        ['fc-cut', 1, 0],
+        ['fc-renamed', 0, 0],
+      ])
+
+      const indexes = db
+        .prepare("PRAGMA index_list('session_turn_file_changes')")
+        .all() as Array<{ name: string; unique: number; origin: string }>
+      expect(indexes.filter((index) => index.origin === 'u')).toEqual([])
+      expect(
+        indexes.some((index) => index.name === TURN_FILE_CHANGE_IDENTITY_INDEX),
+      ).toBe(true)
+      expect(
+        indexes.some(
+          (index) =>
+            index.name === 'idx_session_turn_file_changes_session_turn',
+        ),
+      ).toBe(true)
+
+      // The scratch table the rebuild copies through must not outlive it.
+      const tables = db
+        .prepare("SELECT name FROM sqlite_master WHERE type = 'table'")
+        .all() as { name: string }[]
+      expect(tables.map((table) => table.name)).not.toContain(
+        'session_turn_file_changes_next',
+      )
+
+      // And the point of the whole exercise: two repositories, one path.
+      db.pragma('foreign_keys = OFF')
+      expect(() =>
+        db
+          .prepare(
+            `INSERT INTO session_turn_file_changes (
+               id, session_id, turn_id, repo_root, file_path, status,
+               additions, deletions, diff, truncated, binary, created_at
+             ) VALUES ('fc-web', 's1', 't1', 'apps/web', 'src/b.ts', 'modified',
+                       0, 0, 'web diff', 0, 0, '2026-01-05')`,
+          )
+          .run(),
+      ).not.toThrow()
+    } finally {
+      closeDatabase()
+      resetDatabase()
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('leaves the old table whole when the rebuild is interrupted before the rename', () => {
+    const dir = mkdtempSync(
+      join(tmpdir(), 'convergence-file-change-identity-interrupt-'),
+    )
+    const dbPath = join(dir, 'interrupted-rebuild.sqlite')
+
+    try {
+      const database = new Database(dbPath)
+      // The shape a v0.45.33 database is really in: MAR-2577's columns present,
+      // the old two-column UNIQUE still there.
+      database.exec(`
+        CREATE TABLE session_turn_file_changes (
+          id TEXT PRIMARY KEY,
+          session_id TEXT NOT NULL,
+          turn_id TEXT NOT NULL,
+          repo_root TEXT,
+          file_path TEXT NOT NULL,
+          old_path TEXT,
+          status TEXT NOT NULL,
+          additions INTEGER NOT NULL DEFAULT 0,
+          deletions INTEGER NOT NULL DEFAULT 0,
+          diff TEXT NOT NULL,
+          truncated INTEGER NOT NULL DEFAULT 0,
+          binary INTEGER NOT NULL DEFAULT 0,
+          created_at TEXT NOT NULL,
+          UNIQUE (turn_id, file_path)
+        );
+
+        INSERT INTO session_turn_file_changes (
+          id, session_id, turn_id, file_path, status, additions, deletions, diff, created_at
+        ) VALUES ('fc-1', 's1', 't1', 'src/a.ts', 'modified', 1, 0, '@@ -1 +1 @@', '2026-01-01');
+      `)
+
+      /**
+       * A kill between dropping the old table and renaming the new one into its
+       * place. That gap is the only moment no table named
+       * session_turn_file_changes exists, and a boot that found it open would
+       * take SCHEMA's fresh empty table and strand every real row in
+       * session_turn_file_changes_next with nothing that knows to look there.
+       * A killed process leaves the same durable state as this throw: an
+       * uncommitted transaction SQLite rolls back.
+       */
+      const interrupted = new Proxy(database, {
+        get(target, property, receiver) {
+          if (property === 'exec') {
+            return (sql: string) => {
+              if (sql.includes('RENAME TO')) {
+                throw new Error('simulated interrupt mid-rebuild')
+              }
+              return target.exec(sql)
+            }
+          }
+          const value = Reflect.get(target, property, receiver) as unknown
+          return typeof value === 'function' ? value.bind(target) : value
+        },
+      })
+
+      expect(() => ensureTurnFileChangeIdentity(interrupted)).toThrow(
+        /simulated interrupt mid-rebuild/,
+      )
+
+      const rowsAfterInterrupt = database
+        .prepare('SELECT id, diff FROM session_turn_file_changes')
+        .all() as { id: string; diff: string }[]
+      expect(rowsAfterInterrupt).toEqual([{ id: 'fc-1', diff: '@@ -1 +1 @@' }])
+      expect(hasLegacyTwoColumnUnique(database)).toBe(true)
+      const tablesAfterInterrupt = (
+        database
+          .prepare("SELECT name FROM sqlite_master WHERE type = 'table'")
+          .all() as { name: string }[]
+      ).map((table) => table.name)
+      expect(tablesAfterInterrupt).toContain('session_turn_file_changes')
+      expect(tablesAfterInterrupt).not.toContain(
+        'session_turn_file_changes_next',
+      )
+
+      // The interrupt is over; this boot is the one that gets to finish.
+      ensureTurnFileChangeIdentity(database)
+
+      expect(hasLegacyTwoColumnUnique(database)).toBe(false)
+      expect(
+        database
+          .prepare('SELECT id, diff FROM session_turn_file_changes')
+          .all(),
+      ).toEqual([{ id: 'fc-1', diff: '@@ -1 +1 @@' }])
+      database.close()
+    } finally {
       rmSync(dir, { recursive: true, force: true })
     }
   })
@@ -2202,3 +2495,19 @@ describe('database', () => {
     }
   })
 })
+
+function hasLegacyTwoColumnUnique(database: Database.Database): boolean {
+  const indexes = database
+    .prepare("PRAGMA index_list('session_turn_file_changes')")
+    .all() as Array<{ name: string; origin: string }>
+  return indexes.some((index) => {
+    if (index.origin !== 'u') return false
+    const columns = database
+      .prepare(`PRAGMA index_info('${index.name}')`)
+      .all() as Array<{ name: string | null }>
+    const names = columns.map((column) => column.name)
+    return (
+      names.length === 2 && names[0] === 'turn_id' && names[1] === 'file_path'
+    )
+  })
+}

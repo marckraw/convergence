@@ -32,16 +32,20 @@ export interface Turn {
  * because a reader has to be able to ask, without parsing prose out of a diff.
  *
  * `repoRoot` is workspace-relative and null for the working-directory root
- * repository, which is every local capture and every single-repo remote run.
- * It carries which repository a change belongs to, but it is not yet part of a
- * change's identity: storage still keys one row per `(turn_id, file_path)`, and
- * `getFileDiff` still looks a diff up by turn and path alone. Until both move,
- * the same path in two repositories of one workspace does not merge into one
- * change — it breaks the turn. The second insert raises `UNIQUE constraint
- * failed`, and `turn-capture.service.ts` writes the file changes and stamps the
- * turn's `ended_at` inside one transaction, so the rollback costs that turn
- * every file change and leaves it `running`. MAR-2589, out of scope here
- * because it needs a table rebuild.
+ * repository — every local capture, and every remote change whose wire field is
+ * absent. It is not a stand-in for "the turn touched one repository": a remote
+ * run whose single repository is a child discovered under the working
+ * directory names that child, so a one-repository turn can carry a non-null
+ * root on every row.
+ *
+ * It is part of a change's identity since MAR-2589: storage keys one row per
+ * `(turn_id, COALESCE(repo_root, ''), file_path)` through a unique expression
+ * index, and `getFileDiff` takes the repository alongside the path. Before
+ * that, the same path in two repositories of one workspace did not merge into
+ * one change — it broke the turn, because the second insert's `UNIQUE
+ * constraint failed` rolled back the transaction that also stamps the turn's
+ * `ended_at`. Two repositories now hold two rows, and one repository still
+ * holds one row per path, null included.
  */
 export interface TurnFileChange {
   id: string

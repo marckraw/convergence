@@ -1127,8 +1127,8 @@ export function registerIpcHandlers(
 
   ipcMain.handle(
     'turns:getFileDiff',
-    (_event, turnId: string, filePath: string) =>
-      turnCaptureService.getFileDiff(turnId, filePath),
+    (_event, turnId: string, filePath: string, repoRoot?: string | null) =>
+      turnCaptureService.getFileDiff(turnId, filePath, repoRoot),
   )
 
   sessionApp.onTurnDelta((sessionId, delta) => {

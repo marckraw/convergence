@@ -403,8 +403,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.invoke('turns:listForSession', sessionId),
     getFileChanges: (turnId: string) =>
       ipcRenderer.invoke('turns:getFileChanges', turnId),
-    getFileDiff: (turnId: string, filePath: string) =>
-      ipcRenderer.invoke('turns:getFileDiff', turnId, filePath),
+    getFileDiff: (turnId: string, filePath: string, repoRoot?: string | null) =>
+      ipcRenderer.invoke('turns:getFileDiff', turnId, filePath, repoRoot),
     onTurnDelta: (callback: (payload: unknown) => void) => {
       const handler = (_event: unknown, payload: unknown) => callback(payload)
       ipcRenderer.on('turns:delta', handler)
