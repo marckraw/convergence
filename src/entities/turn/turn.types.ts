@@ -30,12 +30,26 @@ export interface TurnFileChange {
   id: string
   sessionId: string
   turnId: string
+  /**
+   * Which repository inside a multi-repo workspace this change belongs to,
+   * workspace-relative; `null` is the working-directory root repository, which
+   * is every locally captured change (MAR-2577).
+   */
+  repoRoot: string | null
   filePath: string
   oldPath: string | null
   status: TurnFileChangeStatus
   additions: number
   deletions: number
   diff: string
+  /**
+   * The stored diff is a fragment, not the change. Rendering it without saying
+   * so is the review surface lying by omission — which is the whole reason
+   * these two are fields rather than marker text inside `diff` (MAR-2577).
+   */
+  truncated: boolean
+  /** The file is binary, so `diff` is a marker rather than content. */
+  binary: boolean
   createdAt: string
 }
 

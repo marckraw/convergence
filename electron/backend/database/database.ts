@@ -2,6 +2,11 @@ import Database from 'better-sqlite3'
 import type { TranscriptEntry } from '../provider/provider.types'
 import { conversationItemToInsertRow } from '../session/conversation-item.pure'
 import { migrateTranscriptToConversationItems } from '../session/conversation-item.pure'
+import { isBinaryDiff } from '../session/turn/turn.pure'
+import {
+  TURN_BINARY_DIFF_MARKER,
+  TURN_DIFF_TRUNCATION_MARKER_PREFIX,
+} from '../session/turn/turn.types'
 
 function buildSessionsTableSql(
   tableName: string,
@@ -127,12 +132,15 @@ const SCHEMA = `
     id TEXT PRIMARY KEY,
     session_id TEXT NOT NULL,
     turn_id TEXT NOT NULL,
+    repo_root TEXT,
     file_path TEXT NOT NULL,
     old_path TEXT,
     status TEXT NOT NULL,
     additions INTEGER NOT NULL DEFAULT 0,
     deletions INTEGER NOT NULL DEFAULT 0,
     diff TEXT NOT NULL,
+    truncated INTEGER NOT NULL DEFAULT 0,
+    binary INTEGER NOT NULL DEFAULT 0,
     created_at TEXT NOT NULL,
     FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE,
     FOREIGN KEY (turn_id) REFERENCES session_turns(id) ON DELETE CASCADE,
@@ -873,6 +881,132 @@ function ensureTurnModelColumns(database: Database.Database): void {
   }
 }
 
+/**
+ * What a stored diff *means* (MAR-2577). `truncated` and `binary` were always
+ * computed — local capture derived both and then encoded them as marker strings
+ * inside the diff body, and a remote host reports them as fields the mapping
+ * had nowhere to put. A reader had to parse prose out of a diff to tell a
+ * fragment from a whole change, and over the wire could not tell at all.
+ *
+ * The columns default to 0, but the default is not the answer for existing
+ * rows: `truncateDiffIfTooLarge` has been cutting diffs since long before this
+ * ticket, so rows written by the old path are genuinely truncated and genuinely
+ * binary. Leaving them at 0 would put a stand-in where a known-true value
+ * belongs, which is the exact failure this ticket exists to stop. So the values
+ * are backfilled from the markers the old path left behind — see
+ * `backfillTurnFileChangeMeaning` for what that can and cannot recover.
+ *
+ * `repo_root` is nullable and stays null for existing rows, and that is a fact
+ * rather than a default: every row in this table was written by local capture
+ * against a single working tree (`turn-capture.service.ts` is the only writer,
+ * and a remote turn record never reached the database at all — MAR-2584), so
+ * the working-directory root repository is where all of them belong.
+ *
+ * The columns and the backfill go in as ONE transaction, because the presence
+ * of a column is also the flag that decides whether the backfill still needs to
+ * run. Split them and an interruption in the gap is permanent: the next boot
+ * sees the columns, computes `addedTruncated === false`, skips the backfill for
+ * good, and a genuinely cut diff sits at 0 forever — the stand-in-for-a-known
+ * -value failure this migration exists to prevent, reintroduced by the
+ * migration itself. SQLite's DDL is transactional, so `ALTER TABLE` rolls back
+ * with the rest.
+ */
+function ensureTurnFileChangeColumns(database: Database.Database): void {
+  const migrate = database.transaction(() => {
+    const columnNames = getTableColumnNames(
+      database,
+      'session_turn_file_changes',
+    )
+    const addedTruncated = !columnNames.has('truncated')
+    const addedBinary = !columnNames.has('binary')
+
+    if (!columnNames.has('repo_root')) {
+      database.exec(
+        'ALTER TABLE session_turn_file_changes ADD COLUMN repo_root TEXT',
+      )
+    }
+
+    if (addedTruncated) {
+      database.exec(
+        'ALTER TABLE session_turn_file_changes ADD COLUMN truncated INTEGER NOT NULL DEFAULT 0',
+      )
+    }
+
+    if (addedBinary) {
+      database.exec(
+        'ALTER TABLE session_turn_file_changes ADD COLUMN binary INTEGER NOT NULL DEFAULT 0',
+      )
+    }
+
+    if (addedTruncated || addedBinary) {
+      backfillTurnFileChangeMeaning(database, {
+        truncated: addedTruncated,
+        binary: addedBinary,
+      })
+    }
+  })
+
+  migrate()
+}
+
+/**
+ * Recovers `truncated` and `binary` for rows written before they were fields
+ * (MAR-2577), reading the two markers the old capture path stored in the diff
+ * body — the same strings the same predicates still recognise today, so a
+ * backfilled row carries what current capture would have written for it.
+ *
+ * What it cannot recover is the cut diff itself. `truncateDiffIfTooLarge`
+ * replaces the whole body with `[diff truncated: N lines]`, so the content was
+ * gone the day the row was written and no migration brings it back; the flag
+ * now says the fragment is a fragment, which is all that was ever knowable.
+ * It also cannot distinguish *who* cut a diff, because nothing was recorded —
+ * but every row here is local capture's, so the cutter is this app's own 200 KB
+ * cap.
+ *
+ * Runs once, only in the branch that just added the columns: a fresh database
+ * gets them from SCHEMA with no rows to repair.
+ */
+function backfillTurnFileChangeMeaning(
+  database: Database.Database,
+  added: { truncated: boolean; binary: boolean },
+): void {
+  if (added.truncated) {
+    // Mirrors isTruncatedDiff(): the marker replaces the body, so a prefix
+    // match is the whole predicate, and SQL can do it without reading diffs
+    // into memory.
+    database
+      .prepare(
+        `UPDATE session_turn_file_changes
+         SET truncated = 1
+         WHERE substr(diff, 1, ?) = ?`,
+      )
+      .run(
+        TURN_DIFF_TRUNCATION_MARKER_PREFIX.length,
+        TURN_DIFF_TRUNCATION_MARKER_PREFIX,
+      )
+  }
+
+  if (added.binary) {
+    // Two shapes reach this column: the marker capture substitutes when it
+    // detects a binary file, and git's own line-anchored notice inside a diff
+    // it produced. Only the first is expressible in SQL, so the LIKE is a
+    // prefilter and isBinaryDiff() — the predicate capture itself uses — makes
+    // the decision.
+    const candidates = database
+      .prepare(
+        `SELECT id, diff FROM session_turn_file_changes
+         WHERE diff = ? OR diff LIKE '%Binary files %differ%'`,
+      )
+      .all(TURN_BINARY_DIFF_MARKER) as { id: string; diff: string }[]
+    const markBinary = database.prepare(
+      'UPDATE session_turn_file_changes SET binary = 1 WHERE id = ?',
+    )
+    for (const candidate of candidates) {
+      if (isBinaryDiff(candidate.diff)) markBinary.run(candidate.id)
+    }
+  }
+}
+
 function ensureSessionColumns(database: Database.Database): void {
   const columnNames = getTableColumnNames(database, 'sessions')
 
@@ -1331,6 +1465,7 @@ export function getDatabase(dbPath?: string): Database.Database {
     ensureSessionSettledSeqColumn(database)
     ensureProviderAccountColumns(database)
     ensureTurnModelColumns(database)
+    ensureTurnFileChangeColumns(database)
     ensureQueuedInputColumns(database)
     ensureRelayColumns(database)
     ensureAttachmentsTableNoFk(database)

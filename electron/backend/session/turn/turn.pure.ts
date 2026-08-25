@@ -139,12 +139,17 @@ export function turnFileChangeFromRow(
     id: row.id,
     sessionId: row.session_id,
     turnId: row.turn_id,
+    repoRoot: row.repo_root ?? null,
     filePath: row.file_path,
     oldPath: row.old_path,
     status: turnFileChangeStatusFromValue(row.status),
     additions: row.additions,
     deletions: row.deletions,
     diff: row.diff,
+    // SQLite has no boolean, and rows written before the columns existed read
+    // back as 0 — which is the truth for them, not a guess (MAR-2577).
+    truncated: row.truncated === 1,
+    binary: row.binary === 1,
     createdAt: row.created_at,
   }
 }
@@ -171,12 +176,15 @@ export function turnFileChangeToInsertRow(
     id: change.id,
     sessionId: change.sessionId,
     turnId: change.turnId,
+    repoRoot: change.repoRoot,
     filePath: change.filePath,
     oldPath: change.oldPath,
     status: change.status,
     additions: change.additions,
     deletions: change.deletions,
     diff: change.diff,
+    truncated: change.truncated ? 1 : 0,
+    binary: change.binary ? 1 : 0,
     createdAt: change.createdAt,
   }
 }

@@ -194,12 +194,15 @@ export interface SessionTurnFileChangeRow {
   id: string
   session_id: string
   turn_id: string
+  repo_root: string | null
   file_path: string
   old_path: string | null
   status: string
   additions: number
   deletions: number
   diff: string
+  truncated: number
+  binary: number
   created_at: string
 }
 

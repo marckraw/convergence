@@ -676,15 +676,15 @@ describe('toLocalSessionDelta', () => {
   })
 
   it('names every wire file-change field the local turn record cannot hold', () => {
-    expect(EXECUTION_HOST_UNMAPPED_WIRE_FILE_CHANGE_FIELDS).toEqual([
-      'repoRoot',
-      'truncated',
-      'binary',
-    ])
+    // Empty since MAR-2577. The list is kept because it is where a reader asks
+    // the question, and "nothing" is an answer worth being able to read.
+    expect(EXECUTION_HOST_UNMAPPED_WIRE_FILE_CHANGE_FIELDS).toEqual([])
+  })
 
-    // The costly case the constant exists to make findable (MAR-2577): a diff
-    // the daemon cut short arrives with no way to say so, and the review
-    // surface renders the fragment as the whole change.
+  it('carries the three fields that decide what a remote diff means', () => {
+    // The costly case this repairs (MAR-2577): a diff the daemon cut short used
+    // to arrive with no way to say so, and the review surface rendered the
+    // fragment as the whole change.
     const local = toLocalSessionDelta({
       kind: 'turn.fileChanges.add',
       turnId: 'turn-1',
@@ -709,12 +709,14 @@ describe('toLocalSessionDelta', () => {
 
     expect(local?.kind).toBe('turn.fileChanges.add')
     if (local?.kind !== 'turn.fileChanges.add') return
-    for (const field of EXECUTION_HOST_UNMAPPED_WIRE_FILE_CHANGE_FIELDS) {
-      expect(local.fileChanges[0]).not.toHaveProperty(field)
-    }
+    expect(local.fileChanges[0]).toMatchObject({
+      repoRoot: 'packages/app',
+      truncated: true,
+      binary: true,
+    })
   })
 
-  it('maps turn file changes and drops the wire-only diff flags', () => {
+  it('maps turn file changes, spelling an absent repoRoot as null', () => {
     const local = toLocalSessionDelta({
       kind: 'turn.fileChanges.add',
       turnId: 'turn-1',
@@ -723,7 +725,6 @@ describe('toLocalSessionDelta', () => {
           id: 'fc-1',
           sessionId: 'session-1',
           turnId: 'turn-1',
-          repoRoot: 'packages/app',
           filePath: 'src/index.ts',
           oldPath: null,
           status: 'modified',
@@ -745,12 +746,16 @@ describe('toLocalSessionDelta', () => {
           id: 'fc-1',
           sessionId: 'session-1',
           turnId: 'turn-1',
+          // Absent on the wire, which means the working-directory root.
+          repoRoot: null,
           filePath: 'src/index.ts',
           oldPath: null,
           status: 'modified',
           additions: 3,
           deletions: 1,
           diff: '@@',
+          truncated: false,
+          binary: false,
           createdAt: '2026-08-22T10:00:00.000Z',
         },
       ],

@@ -219,12 +219,15 @@ describe('row conversions', () => {
     id: 'change-1',
     session_id: 'session-1',
     turn_id: 'turn-1',
+    repo_root: null,
     file_path: 'src/a.ts',
     old_path: null,
     status: 'modified',
     additions: 3,
     deletions: 1,
     diff: '--- a/src/a.ts\n+++ b/src/a.ts\n',
+    truncated: 0,
+    binary: 0,
     created_at: now,
   }
 
@@ -254,13 +257,34 @@ describe('row conversions', () => {
       id: 'change-1',
       sessionId: 'session-1',
       turnId: 'turn-1',
+      repoRoot: null,
       filePath: 'src/a.ts',
       oldPath: null,
       status: 'modified',
       additions: 3,
       deletions: 1,
       diff: '--- a/src/a.ts\n+++ b/src/a.ts\n',
+      truncated: false,
+      binary: false,
       createdAt: now,
+    })
+  })
+
+  it('turnFileChangeFromRow reads the diff-meaning flags as booleans', () => {
+    // SQLite has no boolean: a row says 1, the record has to say true, and a
+    // row written before the columns existed says 0 — which is the truth for
+    // it, not a default standing in for an unknown (MAR-2577).
+    expect(
+      turnFileChangeFromRow({
+        ...changeRow,
+        repo_root: 'packages/app',
+        truncated: 1,
+        binary: 1,
+      }),
+    ).toMatchObject({
+      repoRoot: 'packages/app',
+      truncated: true,
+      binary: true,
     })
   })
 
@@ -291,14 +315,41 @@ describe('row conversions', () => {
       id: 'change-2',
       sessionId: 'session-1',
       turnId: 'turn-1',
+      repoRoot: null,
       filePath: 'src/a.ts',
       oldPath: 'src/old.ts',
       status: 'renamed',
       additions: 0,
       deletions: 0,
       diff: 'rename from src/old.ts\nrename to src/a.ts\n',
+      truncated: false,
+      binary: false,
       createdAt: now,
     }
-    expect(turnFileChangeToInsertRow(change)).toEqual(change)
+    expect(turnFileChangeToInsertRow(change)).toEqual({
+      ...change,
+      truncated: 0,
+      binary: 0,
+    })
+  })
+
+  it('turnFileChangeToInsertRow writes the flags as SQLite integers', () => {
+    expect(
+      turnFileChangeToInsertRow({
+        id: 'change-3',
+        sessionId: 'session-1',
+        turnId: 'turn-1',
+        repoRoot: 'packages/app',
+        filePath: 'assets/logo.png',
+        oldPath: null,
+        status: 'modified',
+        additions: 0,
+        deletions: 0,
+        diff: '[binary file change]',
+        truncated: true,
+        binary: true,
+        createdAt: now,
+      }),
+    ).toMatchObject({ repoRoot: 'packages/app', truncated: 1, binary: 1 })
   })
 })
