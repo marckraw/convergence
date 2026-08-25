@@ -5,7 +5,6 @@ import type {
   SessionStartConfig,
   SessionStatus,
 } from '../provider.types'
-import type { ExecutionHostEventEnvelope } from '@mrck-labs/execution-host-protocol'
 import {
   describeProviderExecutionHostContract,
   type ExecutionHostContractContext,
@@ -14,210 +13,23 @@ import {
   DAEMON_HEALTH_FIXTURE_0_26_1,
   daemonHealthFixtureWithoutDescriptor,
 } from './execution-host-health.fixture'
+import {
+  createStubDaemon,
+  envelope,
+  waitUntil,
+  type StubDaemon,
+} from './execution-host-daemon.fixture'
 import { RemoteExecutionHost } from './remote-execution-host'
 import { RemoteExecutionHostError } from './remote-execution-host.types'
-
-const DAEMON_META = {
-  providers: [
-    {
-      id: 'claude',
-      label: 'Claude Code',
-      available: true,
-      authenticated: true,
-      models: [{ slug: 'sonnet', label: 'Claude Sonnet' }],
-      features: { resume: true, followup: true },
-    },
-    {
-      id: 'codex',
-      label: 'Codex',
-      available: true,
-      authenticated: true,
-      models: [{ slug: 'gpt-5.5', label: 'GPT-5.5' }],
-      features: { resume: false, followup: true },
-    },
-  ],
-}
-
-interface StubDaemon {
-  fetchFn: typeof fetch
-  emit: (envelope: ExecutionHostEventEnvelope) => void
-  dropStream: () => void
-  startRequests: Array<Record<string, unknown>>
-  commandEnvelopes: Array<Record<string, unknown>>
-  eventStreamLastEventIds: Array<string | null>
-  setMetaStatus: (status: number) => void
-  /** Raw `/health` body; null makes the route 404, as an older daemon does. */
-  setHealthBody: (body: string | null) => void
-  /** A proxy that swallows `/health` by hanging instead of answering. */
-  setHealthHangs: (hangs: boolean) => void
-  healthRequests: Array<{ authorization: string | null }>
-  setStartStatus: (status: number) => void
-  setCommandStatus: (status: number) => void
-  setEventsStatus: (status: number) => void
-}
-
-function createStubDaemon(): StubDaemon {
-  const encoder = new TextEncoder()
-  const log: ExecutionHostEventEnvelope[] = []
-  const startRequests: Array<Record<string, unknown>> = []
-  const commandEnvelopes: Array<Record<string, unknown>> = []
-  const eventStreamLastEventIds: Array<string | null> = []
-  const healthRequests: Array<{ authorization: string | null }> = []
-  const current: {
-    controller: ReadableStreamDefaultController<Uint8Array> | null
-  } = { controller: null }
-  let metaStatus = 200
-  let healthBody: string | null = DAEMON_HEALTH_FIXTURE_0_26_1
-  let healthHangs = false
-  let startStatus = 201
-  let commandStatus = 202
-  let eventsStatus = 200
-
-  const sseChunk = (envelope: ExecutionHostEventEnvelope): Uint8Array =>
-    encoder.encode(`id: ${envelope.seq}\ndata: ${JSON.stringify(envelope)}\n\n`)
-
-  const jsonResponse = (body: unknown, status = 200): Response =>
-    new Response(JSON.stringify(body), {
-      status,
-      headers: { 'Content-Type': 'application/json' },
-    })
-
-  const headerValue = (
-    headers: RequestInit['headers'],
-    name: string,
-  ): string | null => {
-    if (!headers) return null
-    const record = headers as Record<string, string>
-    return record[name] ?? null
-  }
-
-  const fetchFn = (async (input: unknown, init?: RequestInit) => {
-    const url = String(input)
-    const method = init?.method ?? 'GET'
-
-    if (url.endsWith('/health')) {
-      healthRequests.push({
-        authorization: headerValue(init?.headers, 'Authorization'),
-      })
-      if (healthHangs) {
-        // Like real fetch, the only thing that settles this is the caller's
-        // own abort signal.
-        return new Promise<Response>((_resolve, reject) => {
-          init?.signal?.addEventListener('abort', () =>
-            reject(new Error('The operation was aborted due to timeout')),
-          )
-        })
-      }
-      if (healthBody === null) {
-        return jsonResponse({ error: 'not found' }, 404)
-      }
-      return new Response(healthBody, {
-        status: 200,
-        headers: { 'Content-Type': 'application/json' },
-      })
-    }
-
-    if (url.endsWith('/v0/meta')) {
-      if (metaStatus !== 200) {
-        return jsonResponse({ error: 'meta unavailable' }, metaStatus)
-      }
-      return jsonResponse(DAEMON_META)
-    }
-
-    if (method === 'POST' && url.endsWith('/v0/execution/sessions')) {
-      const body = JSON.parse(String(init?.body)) as Record<string, unknown>
-      startRequests.push(body)
-      if (startStatus !== 201) {
-        return jsonResponse({ error: 'start rejected' }, startStatus)
-      }
-      const config = body.config as { sessionId: string }
-      return jsonResponse(
-        { protocolVersion: 1, sessionId: config.sessionId },
-        201,
-      )
-    }
-
-    if (method === 'POST' && url.includes('/commands')) {
-      if (commandStatus !== 202) {
-        return jsonResponse({ error: 'command rejected' }, commandStatus)
-      }
-      commandEnvelopes.push(
-        JSON.parse(String(init?.body)) as Record<string, unknown>,
-      )
-      return jsonResponse({ accepted: true }, 202)
-    }
-
-    if (url.includes('/events')) {
-      const lastEventId = headerValue(init?.headers, 'Last-Event-ID')
-      eventStreamLastEventIds.push(lastEventId)
-      if (eventsStatus !== 200) {
-        return jsonResponse({ error: 'stream rejected' }, eventsStatus)
-      }
-      const afterSeq = lastEventId ? Number(lastEventId) : 0
-      const stream = new ReadableStream<Uint8Array>({
-        start(controller) {
-          current.controller = controller
-          for (const envelope of log) {
-            if (envelope.seq > afterSeq) controller.enqueue(sseChunk(envelope))
-          }
-          init?.signal?.addEventListener('abort', () => {
-            if (current.controller === controller) current.controller = null
-            try {
-              controller.error(new Error('aborted'))
-            } catch {
-              // Stream may already be closed.
-            }
-          })
-        },
-        cancel() {
-          if (current.controller) current.controller = null
-        },
-      })
-      return new Response(stream, { status: 200 })
-    }
-
-    throw new Error(`Unexpected request: ${method} ${url}`)
-  }) as typeof fetch
-
-  return {
-    fetchFn,
-    emit(envelope) {
-      log.push(envelope)
-      current.controller?.enqueue(sseChunk(envelope))
-    },
-    dropStream() {
-      const controller = current.controller
-      current.controller = null
-      controller?.close()
-    },
-    startRequests,
-    commandEnvelopes,
-    eventStreamLastEventIds,
-    healthRequests,
-    setMetaStatus(status) {
-      metaStatus = status
-    },
-    setHealthBody(body) {
-      healthBody = body
-    },
-    setHealthHangs(hangs) {
-      healthHangs = hangs
-    },
-    setStartStatus(status) {
-      startStatus = status
-    },
-    setCommandStatus(status) {
-      commandStatus = status
-    },
-    setEventsStatus(status) {
-      eventsStatus = status
-    },
-  }
-}
+import type { ProviderDebugSink } from '../../provider-debug/provider-debug-sink'
+import type { ProviderDebugEntry } from '../../provider-debug/provider-debug.types'
 
 function createHost(
   stub: StubDaemon,
-  options: { healthProbeTimeoutMs?: number } = {},
+  options: {
+    healthProbeTimeoutMs?: number
+    debugSink?: ProviderDebugSink
+  } = {},
 ): RemoteExecutionHost {
   return new RemoteExecutionHost({
     connection: {
@@ -334,28 +146,6 @@ function startConfig(sessionId: string): SessionStartConfig {
     model: null,
     effort: null,
     continuationToken: null,
-  }
-}
-
-function envelope(
-  seq: number,
-  event: ExecutionHostEventEnvelope['event'],
-  sessionId = 's-1',
-): ExecutionHostEventEnvelope {
-  return { protocolVersion: 1, sessionId, seq, event }
-}
-
-async function waitUntil(
-  predicate: () => boolean,
-  description: string,
-  timeoutMs = 2000,
-): Promise<void> {
-  const deadline = Date.now() + timeoutMs
-  while (!predicate()) {
-    if (Date.now() > deadline) {
-      throw new Error(`Timed out waiting for ${description}`)
-    }
-    await new Promise((resolve) => setTimeout(resolve, 5))
   }
 }
 
@@ -616,8 +406,32 @@ describe('RemoteExecutionHost', () => {
     stub.emit(envelope(4, { kind: 'heartbeat' }))
 
     await waitUntil(() => heartbeats.length === 1, 'all events to arrive')
+    // Three deltas for four events: the wire delta passes through the mapping
+    // layer unchanged, and the dedicated `status` and `continuation-token`
+    // kinds each become a `session.patch` of their own (MAR-2582). The
+    // callbacks still fire — they are the handle's declared contract — but the
+    // deltas are what a reader actually receives.
+    //
+    // Every session patch carries the sequence of the envelope it came from,
+    // whichever of the two ways it arrived. That is what the record commits
+    // alongside the patch, and what tells it a settle it has already applied
+    // from one the daemon is reporting for the first time.
     expect(deltas).toEqual([
-      { kind: 'session.patch', patch: { status: 'running' } },
+      {
+        kind: 'session.patch',
+        patch: { status: 'running' },
+        executionHostSeq: 1,
+      },
+      {
+        kind: 'session.patch',
+        patch: { status: 'running', updatedAt: expect.any(String) },
+        executionHostSeq: 2,
+      },
+      {
+        kind: 'session.patch',
+        patch: { continuationToken: 'resume-1', updatedAt: expect.any(String) },
+        executionHostSeq: 3,
+      },
     ])
     expect(statuses).toEqual(['running'])
     expect(tokens).toEqual(['resume-1'])
@@ -751,6 +565,38 @@ describe('RemoteExecutionHost', () => {
     }
   })
 
+  /**
+   * The daemon takes one start per session id and answers a second with 409
+   * `Session already exists` (`execution-session-manager.ts:436-438`). Pinned
+   * here because the stub daemon enforcing that is what keeps this suite from
+   * agreeing with us instead of with the daemon: without it, a caller that
+   * restarts a live session to continue it looks like it works.
+   */
+  it('surfaces the daemon refusing a second start for a session it already has', async () => {
+    const first = host.start('claude', startConfig('s-1'))
+    await waitUntil(
+      () => stub.startRequests.length === 1,
+      'the first start to be accepted',
+    )
+
+    const deltas: SessionDelta[] = []
+    const statuses: SessionStatus[] = []
+    const second = host.start('claude', startConfig('s-1'))
+    second.onDelta((delta) => deltas.push(delta))
+    second.onStatusChange((status) => statuses.push(status))
+
+    await waitUntil(() => statuses.length === 1, 'the refusal to surface')
+    expect(statuses).toEqual(['failed'])
+    const note = deltas.find((d) => d.kind === 'conversation.item.add')
+    if (note?.kind === 'conversation.item.add' && note.item.kind === 'note') {
+      expect(note.item.text).toContain('Session already exists')
+    } else {
+      throw new Error('expected the refusal to reach the transcript as a note')
+    }
+
+    first.stop()
+  })
+
   it('fails the session after exhausting stream reconnect attempts', async () => {
     stub.setEventsStatus(500)
     const statuses: SessionStatus[] = []
@@ -787,6 +633,47 @@ describe('RemoteExecutionHost', () => {
     handle.stop()
   })
 
+  /**
+   * A command a dead run cannot carry is reported, never dropped (MAR-2582).
+   *
+   * The handle stays callable after the run behind it dies, and `sendMessage`
+   * returning is the only thing a caller sees. On this wire the daemon is what
+   * echoes a user turn back, so a message that never left the app leaves
+   * nothing at all behind -- no turn, no error, no trace. That is what a dead
+   * handle left installed on a session did to every message sent into it, and
+   * the silence is its own defect: the session service must not be the only
+   * thing standing between a user and a message that quietly evaporates.
+   */
+  it('reports a message sent into a run that has died instead of dropping it', async () => {
+    stub.setEventsStatus(500)
+    const attentions: AttentionState[] = []
+    const statuses: SessionStatus[] = []
+    const deltas: SessionDelta[] = []
+
+    const handle = host.start('claude', startConfig('s-1'))
+    handle.onAttentionChange((attention) => attentions.push(attention))
+    handle.onStatusChange((status) => statuses.push(status))
+    handle.onDelta((delta) => deltas.push(delta))
+
+    await waitUntil(() => statuses.includes('failed'), 'the run to die')
+    const notesBefore = deltas.filter(
+      (delta) => delta.kind === 'conversation.item.add',
+    ).length
+
+    handle.sendMessage('into the dead run')
+
+    const notes = deltas.filter(
+      (delta) => delta.kind === 'conversation.item.add',
+    )
+    expect(notes).toHaveLength(notesBefore + 1)
+    expect(JSON.stringify(notes[notes.length - 1])).toContain(
+      'was not delivered',
+    )
+    expect(attentions[attentions.length - 1]).toBe('failed')
+    // Reported because it never reached the daemon, not instead of reaching it.
+    expect(stub.commandEnvelopes).toHaveLength(0)
+  })
+
   it('attaches to a running session without posting a start request', async () => {
     const statuses: SessionStatus[] = []
     const handle = host.attach('claude', startConfig('s-1'), 3)
@@ -813,6 +700,63 @@ describe('RemoteExecutionHost', () => {
     })
 
     handle.stop()
+  })
+
+  /**
+   * A disposed run dispatches no buffered events (MAR-2582).
+   *
+   * One stream read hands the adapter a whole batch of frames: a daemon replay
+   * writes them back to back and they arrive coalesced. The session service
+   * disposes a handle from inside a delta listener -- that is what releasing a
+   * handle at a settle is -- so the dispose happens while the rest of that
+   * batch is still in the loop. Delivering the remainder feeds a handle the
+   * service has already let go, and its listeners still write to the session
+   * a *different* handle is now serving.
+   */
+  it('dispatches no buffered events once the run is disposed', async () => {
+    const entries: ProviderDebugEntry[] = []
+    const tracingHost = createHost(stub, {
+      debugSink: { record: (entry) => entries.push(entry) },
+    })
+    await tracingHost.refreshProviders()
+
+    const deltas: SessionDelta[] = []
+    const handle = tracingHost.start('claude', startConfig('s-1'))
+    handle.onDelta((delta) => {
+      deltas.push(delta)
+      // What SessionService.releaseHandle does at a settle, at the same
+      // moment it does it.
+      if (deltas.length === 1) handle.dispose?.()
+    })
+
+    await waitUntil(
+      () => stub.eventStreamLastEventIds.length === 1,
+      'event stream to open',
+    )
+
+    stub.emitBatch([
+      envelope(1, { kind: 'status', status: 'completed' }),
+      envelope(2, { kind: 'status', status: 'running' }),
+      envelope(3, { kind: 'continuation-token', token: 'resume-1' }),
+    ])
+
+    await waitUntil(() => deltas.length === 1, 'the first event to arrive')
+    await waitUntil(
+      () => entries.some((entry) => entry.note?.includes('disposed')),
+      'the dropped events to be traced',
+    )
+    // Nothing after the dispose, and the drop is on the record rather than
+    // silent -- the debug log is the only place a remote turn is inspectable.
+    expect(deltas).toEqual([
+      {
+        kind: 'session.patch',
+        patch: { status: 'completed', updatedAt: expect.any(String) },
+        executionHostSeq: 1,
+      },
+    ])
+    expect(
+      entries.filter((entry) => entry.note === 'dropped: the run is disposed'),
+    ).toHaveLength(2)
   })
 
   it('reports processed event sequences through onEventSeq', async () => {
@@ -874,5 +818,207 @@ describe('RemoteExecutionHost', () => {
     const error = new RemoteExecutionHostError('nope', 'http', 503)
     expect(error.kind).toBe('http')
     expect(error.status).toBe(503)
+  })
+
+  describe('wire trace', () => {
+    let entries: ProviderDebugEntry[]
+    let tracingHost: RemoteExecutionHost
+
+    beforeEach(async () => {
+      entries = []
+      tracingHost = createHost(stub, {
+        debugSink: {
+          record: (entry) => entries.push(entry),
+        },
+      })
+      await tracingHost.refreshProviders()
+    })
+
+    const eventEntries = (): ProviderDebugEntry[] =>
+      entries.filter((entry) => entry.channel === 'event')
+
+    it('records every wire event with its kind and a redacted shape', async () => {
+      const handle = tracingHost.start('claude', startConfig('s-1'))
+      handle.onDelta(() => {})
+
+      await waitUntil(
+        () => stub.eventStreamLastEventIds.length === 1,
+        'event stream to open',
+      )
+
+      stub.emit(envelope(1, { kind: 'status', status: 'completed' }))
+      stub.emit(
+        envelope(2, {
+          kind: 'delta',
+          delta: {
+            kind: 'session.patch',
+            patch: { status: 'completed', continuationToken: 'resume-secret' },
+          },
+        }),
+      )
+
+      await waitUntil(() => eventEntries().length === 2, 'events to be traced')
+
+      expect(eventEntries()[0]).toMatchObject({
+        sessionId: 's-1',
+        providerId: 'claude',
+        channel: 'event',
+        direction: 'in',
+        method: 'status',
+        payload: { seq: 1, kind: 'status', status: 'completed' },
+      })
+      expect(eventEntries()[1]).toMatchObject({
+        method: 'delta',
+        payload: {
+          seq: 2,
+          kind: 'delta',
+          delta: {
+            kind: 'session.patch',
+            patchFields: ['status', 'continuationToken'],
+            status: 'completed',
+            continuationToken: { chars: 13, form: 'opaque' },
+          },
+        },
+      })
+      expect(JSON.stringify(entries)).not.toContain('resume-secret')
+
+      handle.dispose?.()
+    })
+
+    it('records why an undecodable envelope was dropped', async () => {
+      const handle = tracingHost.start('claude', startConfig('s-1'))
+      handle.onDelta(() => {})
+
+      await waitUntil(
+        () => stub.eventStreamLastEventIds.length === 1,
+        'event stream to open',
+      )
+
+      stub.emitRaw('{"protocolVersion":1,"sessionId":"s-1","seq":1}')
+
+      await waitUntil(
+        () => eventEntries().length === 1,
+        'the drop to be traced',
+      )
+      expect(eventEntries()[0]?.note).toContain('undecodable envelope')
+
+      handle.dispose?.()
+    })
+
+    /**
+     * The one-start contract is checked by reading this log, so the log has to
+     * record the starts that were refused as well as the ones that were
+     * accepted. A log holding only successes can be read as "no second start
+     * was attempted" when a second one was attempted and turned down — the
+     * evidence and the claim would not match (MAR-2582).
+     */
+    it('records a start the daemon refused, not only the ones it accepted', async () => {
+      const first = tracingHost.start('claude', startConfig('s-1'))
+      first.onDelta(() => {})
+      await waitUntil(
+        () => stub.startRequests.length === 1,
+        'the first start to be accepted',
+      )
+
+      const second = tracingHost.start('claude', startConfig('s-1'))
+      second.onDelta(() => {})
+
+      await waitUntil(
+        () => entries.some((entry) => entry.note?.includes('refused')),
+        'the refused start to be traced',
+      )
+
+      const startEntries = entries.filter(
+        (entry) => entry.method === 'start' || entry.note?.includes('start'),
+      )
+      expect(
+        startEntries.filter(
+          (entry) => entry.note === 'remote session start requested',
+        ),
+      ).toHaveLength(2)
+      const refusal = startEntries.find((entry) =>
+        entry.note?.includes('refused'),
+      )
+      expect(refusal?.note).toContain('Session already exists')
+      expect(refusal?.payload).toMatchObject({ status: 409 })
+      expect(
+        startEntries.filter(
+          (entry) =>
+            entry.note === 'remote session start accepted by the daemon',
+        ),
+      ).toHaveLength(1)
+
+      first.stop()
+      second.dispose?.()
+    })
+
+    /**
+     * An attach posts no start request, so a connection it never resolved is
+     * not a start the daemon refused (MAR-2582).
+     *
+     * The one-start contract is audited by reading this log. A note that calls
+     * an attach failure a refused start writes evidence of a second start into
+     * the record of a wire that permits exactly one -- and it is read under
+     * pressure, by a human looking for exactly that string.
+     */
+    it('records an attach that never reached the daemon as an attach, not as a refused start', async () => {
+      const offline = new RemoteExecutionHost({
+        connection: {
+          resolveConnection: async () => {
+            throw new RemoteExecutionHostError(
+              'No remote endpoint is configured.',
+              'configuration',
+            )
+          },
+        },
+        fetch: stub.fetchFn,
+        reconnect: { maxAttempts: 2, wait: async () => {} },
+        debugSink: { record: (entry) => entries.push(entry) },
+      })
+
+      const notes: string[] = []
+      const handle = offline.attach('claude', startConfig('s-1'), 3)
+      handle.onDelta((delta) => {
+        if (
+          delta.kind === 'conversation.item.add' &&
+          delta.item.kind === 'note'
+        ) {
+          notes.push(delta.item.text)
+        }
+      })
+
+      await waitUntil(() => notes.length === 1, 'the failure to surface')
+      expect(notes[0]).toContain('failed to attach')
+      expect(stub.startRequests).toHaveLength(0)
+
+      const lifecycle = entries.filter((entry) => entry.channel === 'lifecycle')
+      expect(lifecycle).toHaveLength(1)
+      expect(lifecycle[0]?.note).toContain(
+        'remote session attach could not resolve a connection:',
+      )
+      expect(lifecycle[0]?.note).toContain('No remote endpoint is configured.')
+      expect(entries.some((entry) => entry.note?.includes('refused'))).toBe(
+        false,
+      )
+    })
+
+    it('never quotes the message a command carries', async () => {
+      const handle = tracingHost.start('claude', startConfig('s-1'))
+      handle.onDelta(() => {})
+
+      await waitUntil(
+        () => stub.eventStreamLastEventIds.length === 1,
+        'event stream to open',
+      )
+      handle.sendMessage('the private follow-up')
+
+      await waitUntil(
+        () => entries.some((entry) => entry.method === 'send-message'),
+        'the command to be traced',
+      )
+      expect(JSON.stringify(entries)).not.toContain('private follow-up')
+
+      handle.dispose?.()
+    })
   })
 })

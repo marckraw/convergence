@@ -43,6 +43,7 @@ export interface SessionRow {
   primary_surface: string
   execution_host: string
   execution_host_last_seq: number
+  execution_host_settled_seq: number
   created_at: string
   updated_at: string
 }

@@ -54,6 +54,7 @@ import {
   describeModelSelectionRefusal,
   describeProviderIdentityRefusal,
   isAttentionRequestSummary,
+  isTerminalSessionStatus,
   resolveAttentionRequestKind,
   type AttentionRequestRowLike,
 } from './session.pure'
@@ -165,6 +166,20 @@ interface PendingConversationPatch {
  */
 export class SessionService {
   private activeHandles = new Map<string, SessionHandle>()
+  /**
+   * Handles that joined a run which had already come to rest, and so have no
+   * run of their own to end yet (MAR-2582).
+   *
+   * A handle leaves this set the moment the session it joined reports itself
+   * moving again -- from then on the run is its own and its terminal events
+   * end it.
+   *
+   * Membership is half of a predicate, never the whole of one: it says a
+   * handle has not begun its run, which is not the same as saying an event it
+   * carries belongs to someone else's. `handleLifecycle` reads it together
+   * with where the event came from.
+   */
+  private handlesAwaitingTheirRun = new WeakSet<SessionHandle>()
   private activeTurnIds = new Map<string, string>()
   /**
    * Account chosen for the turn a provider is about to open (ADR 0007, PA4).
@@ -994,6 +1009,23 @@ export class SessionService {
       )
     }
 
+    if (session.executionHost === 'remote') {
+      this.sendRemoteTurn({
+        session,
+        text: this.prepareUserTurnText(
+          session,
+          input.text,
+          input.skipContextInjection,
+        ),
+        attachments,
+        attachmentIds: input.attachmentIds,
+        skillSelections: input.skillSelections,
+        providerAccountId: input.providerAccountId,
+        muteRelays: input.muteRelays,
+      })
+      return
+    }
+
     if (capabilities.supportsContinuation && continuationToken) {
       const augmentedText = this.prepareUserTurnText(
         session,
@@ -1364,20 +1396,53 @@ export class SessionService {
     }
   }
 
-  private applyDelta(sessionId: string, delta: SessionDelta): void {
+  /**
+   * Applies one delta to the session record on behalf of `source`, the handle
+   * that emitted it.
+   *
+   * The handle travels with the delta because a session outlives its handles:
+   * a remote session is started once and every later turn runs on a handle
+   * that attached to the same daemon-side run. Which handle spoke is the only
+   * thing that says whether a terminal event ends anything (MAR-2582).
+   */
+  private applyDelta(
+    sessionId: string,
+    delta: SessionDelta,
+    source: SessionHandle,
+  ): void {
     this.liveness.bump(sessionId)
     switch (delta.kind) {
-      case 'session.patch':
+      case 'session.patch': {
+        // A handle cannot speak over the handle that replaced it. A session
+        // patch is a statement about the run, and this one's run is gone --
+        // letting it through would move the status, the stream cursor and the
+        // settle marker of a turn it has nothing to do with (MAR-2582). Its
+        // conversation items are content and still land; only its claims about
+        // the run are refused. A session with no live handle has nothing being
+        // displaced, so a late patch there lands as it always did.
+        const live = this.activeHandles.get(sessionId)
+        if (live && live !== source) return
+        // Still evidence the host is alive (the bump above), and nothing else:
+        // the record applied this settle already, and applying it again would
+        // end a turn that is only now running.
+        if (this.isReplayedHostSettle(sessionId, delta)) return
         if (
           delta.patch.status === 'completed' ||
           delta.patch.status === 'failed'
         ) {
           this.flushPendingConversationPatchesForSession(sessionId)
         }
-        this.applySessionPatch(sessionId, delta.patch)
-        this.handleLifecycle(sessionId, delta.patch.status)
+        this.applySessionPatch(sessionId, delta.patch, delta.executionHostSeq)
+        this.noteRunOwnership(source, delta.patch.status)
+        this.handleLifecycle(
+          sessionId,
+          delta.patch.status,
+          source,
+          delta.executionHostSeq,
+        )
         this.notifySessionChange(sessionId)
         return
+      }
 
       case 'conversation.item.add': {
         const item = this.addConversationItem(sessionId, delta.item)
@@ -1413,6 +1478,34 @@ export class SessionService {
         })
       }
     }
+  }
+
+  /**
+   * Whether this patch is an execution host replaying a settle the record has
+   * already applied, judged by the sequence that settled it (MAR-2582).
+   *
+   * Defence in depth, and no longer what keeps a replayed settle from ending
+   * the next turn -- `handleLifecycle` does that, because a sequence marker
+   * provably cannot. The same settle can reach the record through two
+   * supported encodings, a dedicated `status` event and a `session.patch`
+   * carrying one, and the second lands at a *higher* sequence: "later
+   * sequence" is exactly what a duplicate looks like. And a row migrated from
+   * a build that wrote the status and the cursor separately carries a marker
+   * one sequence short of its own settle, so the replay sits above it.
+   *
+   * What it still buys: the cheapest possible rejection of the common case,
+   * one row read and one comparison, before anything else looks at the patch.
+   */
+  private isReplayedHostSettle(
+    sessionId: string,
+    delta: Extract<SessionDelta, { kind: 'session.patch' }>,
+  ): boolean {
+    const seq = delta.executionHostSeq
+    if (seq === undefined) return false
+    const status = delta.patch.status
+    if (!status || !isTerminalSessionStatus(status)) return false
+    const row = this.getRowById(sessionId)
+    return !!row && seq <= row.execution_host_settled_seq
   }
 
   private shouldCoalesceConversationPatch(
@@ -1724,9 +1817,26 @@ export class SessionService {
     return merged
   }
 
+  /**
+   * Writes one session patch, and -- when the patch came from an execution
+   * host event -- the stream cursor and the settle marker with it (MAR-2582).
+   *
+   * All three in one statement on purpose. The cursor used to be persisted by
+   * a second write that ran after this one returned, so an interruption in the
+   * gap left a session recorded as settled with a cursor still pointing at the
+   * event before the settle -- and the next attach resumed from there and was
+   * handed the terminal event again. `MAX` keeps both columns monotonic, so
+   * the trailing `recordRemoteEventSeq` for the same event is now a no-op
+   * rather than a second source of truth.
+   *
+   * Closing that window stops new rows entering it and heals none of the rows
+   * already in it, which is why this is not what makes a replayed settle
+   * harmless: `handleLifecycle` is (MAR-2582).
+   */
   private applySessionPatch(
     sessionId: string,
     patch: Extract<SessionDelta, { kind: 'session.patch' }>['patch'],
+    executionHostSeq?: number,
   ): void {
     const row = this.getRowById(sessionId)
     if (!row) return
@@ -1748,14 +1858,19 @@ export class SessionService {
         : row.archived_at
     const updatedAt = patch.updatedAt ?? new Date().toISOString()
     const isSettling =
-      nextStatus !== prevStatus &&
-      (nextStatus === 'completed' || nextStatus === 'failed')
+      nextStatus !== prevStatus && isTerminalSessionStatus(nextStatus)
     // The quiet request is honoured and cleared by the same statement that
     // commits the status (F10). Two writes would leave a window -- an
     // attention observer runs between them, uncaught -- in which a session is
     // on disk as settled while still marked quiet, and after a restart that
     // stale marker would silence the next ordinary run.
     const relaysMuted = row.relays_muted === 1
+    const hostSeq = executionHostSeq ?? 0
+    // Read from the patch, not from the resulting status: the marker means
+    // "this event settled the session", and a patch that carries no status at
+    // all -- a continuation token arriving after the settle -- did not.
+    const settledSeq =
+      patch.status && isTerminalSessionStatus(patch.status) ? hostSeq : 0
 
     this.db
       .prepare(
@@ -1767,6 +1882,8 @@ export class SessionService {
              continuation_token = ?,
              relays_muted = ?,
              archived_at = ?,
+             execution_host_last_seq = MAX(execution_host_last_seq, ?),
+             execution_host_settled_seq = MAX(execution_host_settled_seq, ?),
              updated_at = ?
          WHERE id = ?`,
       )
@@ -1786,6 +1903,8 @@ export class SessionService {
           : row.continuation_token,
         isSettling ? 0 : row.relays_muted,
         nextArchivedAt,
+        hostSeq,
+        settledSeq,
         updatedAt,
         sessionId,
       )
@@ -2002,7 +2121,7 @@ export class SessionService {
     this.requestRelayMute(session.id, turnFlags?.muteRelays)
     this.activeHandles.set(session.id, handle)
     handle.onDelta((delta: SessionDelta) => {
-      this.applyDelta(session.id, delta)
+      this.applyDelta(session.id, delta, handle)
     })
     handle.onActivityHeartbeat?.(() => {
       this.liveness.bump(session.id)
@@ -2020,10 +2139,74 @@ export class SessionService {
       .map((item) => item.text)
   }
 
+  /**
+   * A handle takes ownership of the run it joined the moment that run reports
+   * itself moving again (MAR-2582).
+   *
+   * The session leaving a terminal status is the daemon saying the next turn
+   * has begun, and the handle that heard it is the one carrying that turn.
+   */
+  private noteRunOwnership(
+    source: SessionHandle,
+    status: SessionStatus | undefined,
+  ): void {
+    if (status && !isTerminalSessionStatus(status)) {
+      this.handlesAwaitingTheirRun.delete(source)
+    }
+  }
+
+  /**
+   * Ends the run a terminal event came from -- and only that run.
+   *
+   * `source` is the handle that emitted the event and `executionHostSeq` says
+   * where the event came from. A handle that attached to a session the record
+   * already showed at rest joined a finished run: the events the daemon
+   * replays from the stream cursor are that run's tail, and the settle among
+   * them belongs to the handle that is already gone (MAR-2582).
+   *
+   * Origin is what decides, not whether the handle has begun its run. Those
+   * two questions look alike and come apart at a failed attach:
+   *
+   * - a terminal event carrying a wire sequence is the daemon speaking. On a
+   *   handle whose run has not yet reported itself moving, it is the previous
+   *   run's tail -- suppress it.
+   * - a terminal event with no sequence was raised by this handle itself. The
+   *   adapter fails a session it cannot reach the daemon for
+   *   (`remote-execution-host.ts`, `failSession`) and that failure never came
+   *   off the wire, so it has no sequence and cannot be a replay. It ends the
+   *   run whether or not the daemon ever reported `running` -- which is
+   *   exactly an attach that died before it began. Suppressing it left the
+   *   dead handle installed as the session's active one, and every later
+   *   message went into it and disappeared.
+   *
+   * Without the first half a replayed settle ends the turn that follows it:
+   * the message reaches the daemon, the answer never reaches the app, and the
+   * session reports itself finished while the agent is still working. It
+   * cannot be decided by sequence alone -- see `isReplayedHostSettle` for why
+   * the marker cannot tell a replay from a duplicate encoding.
+   *
+   * The other half of the rule -- that a released handle says nothing about
+   * this session at all -- is applied a level up, in `applyDelta`, because it
+   * refuses the whole patch rather than only its lifecycle.
+   *
+   * What this costs: it reads the daemon reporting a non-terminal status as
+   * the signal that the next turn has begun. A daemon that settled a turn
+   * without ever announcing it started would leave such a handle attached and
+   * its turn row open. The daemon announces both, and the alternative --
+   * trusting a sequence -- is provably wrong rather than merely dependent.
+   */
   private handleLifecycle(
     sessionId: string,
     status: SessionStatus | undefined,
+    source: SessionHandle,
+    executionHostSeq: number | undefined,
   ): void {
+    if (
+      executionHostSeq !== undefined &&
+      this.handlesAwaitingTheirRun.has(source)
+    ) {
+      return
+    }
     if (status === 'failed') {
       this.releaseHandle(sessionId)
       this.closeActiveTurn(sessionId, 'errored')
@@ -2091,6 +2274,21 @@ export class SessionService {
         return
       }
 
+      if (session.executionHost === 'remote') {
+        this.sendRemoteTurn({
+          session,
+          text: augmentedText,
+          attachments,
+          attachmentIds: item.attachmentIds,
+          skillSelections: item.skillSelections,
+          providerAccountId: item.providerAccountId,
+          muteRelays: item.relaysMuted,
+          queuedInputId: item.id,
+        })
+        this.queuedInputs.patch(item.id, 'sent')
+        return
+      }
+
       const continuationToken = this.getContinuationToken(sessionId)
       if (!this.continuationSupportedFor(session) || !continuationToken) {
         throw new Error('Session is no longer resumable')
@@ -2144,31 +2342,7 @@ export class SessionService {
       if (session.executionHost !== 'remote') continue
       if (this.activeHandles.has(session.id)) continue
       try {
-        const execution = this.resolveExecution(session)
-        if (!execution.host.attach) {
-          throw new Error('Execution host does not support reattaching')
-        }
-        const handle = execution.host.attach(
-          execution.providerId,
-          {
-            sessionId: session.id,
-            workingDirectory: session.workingDirectory,
-            initialMessage: '',
-            model: session.model,
-            effort: session.effort,
-            serviceTier: session.serviceTier ?? null,
-            continuationToken: session.continuationToken,
-            permissionConfig: session.permissionConfig,
-          },
-          this.sessionRepository.getExecutionHostLastSeq(session.id),
-        )
-        this.activeHandles.set(session.id, handle)
-        handle.onDelta((delta: SessionDelta) => {
-          this.applyDelta(session.id, delta)
-        })
-        handle.onActivityHeartbeat?.(() => {
-          this.liveness.bump(session.id)
-        })
+        this.attachRemoteHandle(session)
       } catch (err) {
         this.markStaleRunningSessionFailed(
           session,
@@ -2179,6 +2353,109 @@ export class SessionService {
         )
       }
     }
+  }
+
+  /**
+   * Attaches to the run a remote session already has on the daemon and makes
+   * the resulting handle the session's active one.
+   *
+   * Resuming from `execution_host_last_seq` is what stops a reattach from
+   * repeating itself: the adapter drops every envelope at or below that
+   * sequence, so the events the daemon replays land once.
+   *
+   * A session the record already shows at rest hands back a handle that has no
+   * run of its own yet: whatever the daemon replays above the cursor is the
+   * tail of the run that already finished, and the settle in it must not end
+   * the turn this handle was made to carry (MAR-2582).
+   */
+  private attachRemoteHandle(session: SessionSummary): SessionHandle {
+    const execution = this.resolveExecution(session)
+    if (!execution.host.attach) {
+      throw new Error('Execution host does not support reattaching')
+    }
+    const handle = execution.host.attach(
+      execution.providerId,
+      {
+        sessionId: session.id,
+        workingDirectory: session.workingDirectory,
+        initialMessage: '',
+        model: session.model,
+        effort: session.effort,
+        serviceTier: session.serviceTier ?? null,
+        continuationToken: session.continuationToken,
+        permissionConfig: session.permissionConfig,
+      },
+      this.sessionRepository.getExecutionHostLastSeq(session.id),
+    )
+    this.activeHandles.set(session.id, handle)
+    if (isTerminalSessionStatus(session.status)) {
+      this.handlesAwaitingTheirRun.add(handle)
+    }
+    handle.onDelta((delta: SessionDelta) => {
+      this.applyDelta(session.id, delta, handle)
+    })
+    handle.onActivityHeartbeat?.(() => {
+      this.liveness.bump(session.id)
+    })
+    return handle
+  }
+
+  /**
+   * Carries another turn on a remote session that has no live handle.
+   *
+   * A remote session takes exactly one start. The daemon answers a second one
+   * for the same session id with 409 `Session already exists`
+   * (`execution-session-manager.ts:436-438`), and Emergence — the working
+   * client for this daemon — never sends one: it starts a session once and
+   * every later turn is a `send-message` command on the session it already
+   * has (`execution-client.service.ts:128,411`,
+   * `session-gateway.service.ts:1107-1137`). Starting again to resume is
+   * local-provider semantics, where a fresh process genuinely is how a
+   * conversation continues; on this wire it made every remote session exactly
+   * one turn long (MAR-2582).
+   *
+   * The attach happens here, on send, rather than at boot for every remote
+   * session: each one is a live SSE connection and the database holds
+   * hundreds of them. Only sessions still running when the app closed are
+   * reattached eagerly, by `resumeRunningRemoteSessions`.
+   *
+   * A session the daemon has never heard of is not guarded against, because
+   * nothing local knows that reliably and the daemon does: it answers the
+   * stream with 404 and the adapter fails the session saying so. Emergence
+   * makes the same call.
+   */
+  private sendRemoteTurn(input: {
+    session: Session
+    text: string
+    attachments: Attachment[] | undefined
+    attachmentIds: string[] | undefined
+    skillSelections: SkillSelection[] | undefined
+    providerAccountId: string | null | undefined
+    muteRelays?: boolean
+    queuedInputId?: string
+  }): void {
+    const { session } = input
+    assertLocalAccountSelection({
+      executionHost: session.executionHost,
+      accountId: input.providerAccountId,
+    })
+
+    this.pendingUserAttachmentIds.set(session.id, input.attachmentIds ?? [])
+    this.pendingUserSkillSelections.set(session.id, input.skillSelections ?? [])
+    this.pendingTurnAccountIds.set(session.id, input.providerAccountId ?? null)
+    this.requestRelayMute(session.id, input.muteRelays)
+
+    // Callers reach here having found no handle, but they got here through
+    // awaits — a boot-time reattach or a second send can have landed one in
+    // between. Reusing it costs nothing; opening a second stream for one
+    // session would apply every event twice.
+    const handle =
+      this.activeHandles.get(session.id) ?? this.attachRemoteHandle(session)
+    handle.sendMessage(input.text, input.attachments, input.skillSelections, {
+      deliveryMode: 'normal',
+      ...(input.queuedInputId ? { queuedInputId: input.queuedInputId } : {}),
+      providerAccountId: input.providerAccountId,
+    })
   }
 
   /**

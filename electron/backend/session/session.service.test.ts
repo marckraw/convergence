@@ -32,6 +32,28 @@ import type {
 import type { SessionSettledEvent } from './session.types'
 import { SessionService } from './session.service'
 
+/**
+ * A stand-in for the handle a delta came from.
+ *
+ * `applyDelta` attributes every delta to the handle that emitted it, so a
+ * settle can only end the run that handle began (MAR-2582). These tests
+ * synthesize deltas instead of pumping a provider, and the sessions they
+ * synthesize them for have no live handle -- nothing for this one to displace,
+ * so the delta lands exactly as it did before.
+ */
+const SYNTHETIC_HANDLE: SessionHandle = {
+  onDelta: () => {},
+  onStatusChange: () => {},
+  onAttentionChange: () => {},
+  onContinuationToken: () => {},
+  onContextWindowChange: () => {},
+  onActivityChange: () => {},
+  sendMessage: () => {},
+  approve: () => {},
+  deny: () => {},
+  stop: () => {},
+}
+
 const TEST_ATTACHMENT_CAPABILITY: ProviderAttachmentCapability = {
   supportsImage: true,
   supportsPdf: true,
@@ -3300,10 +3322,17 @@ describe('SessionService — liveness clock', () => {
 
     // Synthesize a running-state delta directly so we don't need to
     // pump the test provider's scripted timeline.
-    service['applyDelta'](session.id, {
-      kind: 'session.patch',
-      patch: { status: 'running', updatedAt: new Date(baseline).toISOString() },
-    })
+    service['applyDelta'](
+      session.id,
+      {
+        kind: 'session.patch',
+        patch: {
+          status: 'running',
+          updatedAt: new Date(baseline).toISOString(),
+        },
+      },
+      SYNTHETIC_HANDLE,
+    )
 
     vi.setSystemTime(baseline + 60_000)
     service.triggerLivenessTickForTest()
@@ -3346,20 +3375,31 @@ describe('SessionService — liveness clock', () => {
       name: 'liveness reset',
     })
 
-    service['applyDelta'](session.id, {
-      kind: 'session.patch',
-      patch: { status: 'running', updatedAt: new Date(baseline).toISOString() },
-    })
+    service['applyDelta'](
+      session.id,
+      {
+        kind: 'session.patch',
+        patch: {
+          status: 'running',
+          updatedAt: new Date(baseline).toISOString(),
+        },
+      },
+      SYNTHETIC_HANDLE,
+    )
 
     vi.setSystemTime(baseline + 60_000)
     service.triggerLivenessTickForTest()
 
     // Bump liveness by replaying any delta — pi/codex emit lots of these.
     vi.setSystemTime(baseline + 65_000)
-    service['applyDelta'](session.id, {
-      kind: 'session.patch',
-      patch: { activity: 'streaming' },
-    })
+    service['applyDelta'](
+      session.id,
+      {
+        kind: 'session.patch',
+        patch: { activity: 'streaming' },
+      },
+      SYNTHETIC_HANDLE,
+    )
 
     // Another 60s after the bump should re-trigger the info note.
     vi.setSystemTime(baseline + 65_000 + 60_000)
@@ -3381,10 +3421,14 @@ describe('SessionService — liveness clock', () => {
       name: 'liveness shutdown',
     })
 
-    service['applyDelta'](session.id, {
-      kind: 'session.patch',
-      patch: { status: 'running', updatedAt: new Date().toISOString() },
-    })
+    service['applyDelta'](
+      session.id,
+      {
+        kind: 'session.patch',
+        patch: { status: 'running', updatedAt: new Date().toISOString() },
+      },
+      SYNTHETIC_HANDLE,
+    )
 
     closeDatabase()
 
@@ -3593,10 +3637,14 @@ describe('SessionService — liveness clock', () => {
         name: 'remote survivor',
         executionHost: 'remote',
       })
-      service['applyDelta'](session.id, {
-        kind: 'session.patch',
-        patch: { status: 'running', updatedAt: now() },
-      })
+      service['applyDelta'](
+        session.id,
+        {
+          kind: 'session.patch',
+          patch: { status: 'running', updatedAt: now() },
+        },
+        SYNTHETIC_HANDLE,
+      )
       service.recordRemoteEventSeq(session.id, 7)
 
       const restartRegistry = new ProviderRegistry()
@@ -3656,10 +3704,14 @@ describe('SessionService — liveness clock', () => {
         name: 'unmappable remote survivor',
         executionHost: 'remote',
       })
-      service['applyDelta'](session.id, {
-        kind: 'session.patch',
-        patch: { status: 'running', updatedAt: now() },
-      })
+      service['applyDelta'](
+        session.id,
+        {
+          kind: 'session.patch',
+          patch: { status: 'running', updatedAt: now() },
+        },
+        SYNTHETIC_HANDLE,
+      )
 
       const restartRegistry = new ProviderRegistry()
       restartRegistry.register(createTestProvider())
@@ -3703,14 +3755,22 @@ describe('SessionService — liveness clock', () => {
           providerEventType: 'assistant',
         },
       }
-      service['applyDelta'](session.id, {
-        kind: 'conversation.item.add',
-        item,
-      })
-      service['applyDelta'](session.id, {
-        kind: 'conversation.item.add',
-        item,
-      })
+      service['applyDelta'](
+        session.id,
+        {
+          kind: 'conversation.item.add',
+          item,
+        },
+        SYNTHETIC_HANDLE,
+      )
+      service['applyDelta'](
+        session.id,
+        {
+          kind: 'conversation.item.add',
+          item,
+        },
+        SYNTHETIC_HANDLE,
+      )
 
       expect(service.getConversation(session.id)).toHaveLength(1)
     })

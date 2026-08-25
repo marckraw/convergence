@@ -58,6 +58,15 @@ import {
   type RemoteExecutionHostConnectionResolver,
   type RemoteExecutionHostProviderInfo,
 } from './remote-execution-host.types'
+import { describeWireEventShape } from './execution-host-wire-trace.pure'
+import {
+  noopDebugSink,
+  type ProviderDebugSink,
+} from '../../provider-debug/provider-debug-sink'
+import type {
+  ProviderDebugChannel,
+  ProviderDebugEntry,
+} from '../../provider-debug/provider-debug.types'
 
 type FetchFn = typeof fetch
 
@@ -94,6 +103,15 @@ export interface RemoteExecutionHostDeps {
    * Callers persist this to resume the stream after an app restart.
    */
   onEventSeq?: (sessionId: string, seq: number) => void
+  /**
+   * Receives a redacted description of every wire event, as the local provider
+   * adapters do for their own transports. Tracing is unconditional, as it is in
+   * those adapters: every entry is built at the call site whatever the sink is.
+   * Defaulting to a no-op sink only drops what the real sink would then do with
+   * it — ring retention, renderer broadcast, and JSONL persistence — so tests
+   * and embedders that do not care skip the bookkeeping, not the construction.
+   */
+  debugSink?: ProviderDebugSink
 }
 
 /**
@@ -113,6 +131,7 @@ export class RemoteExecutionHost implements ProviderExecutionHost {
   private readonly reconnectDelayMs: (attempt: number) => number
   private readonly wait: (ms: number) => Promise<void>
   private readonly healthProbeTimeoutMs: number
+  private readonly debugSink: ProviderDebugSink
   private providers: RemoteExecutionHostProviderInfo[] = []
   private handshakeResult: EndpointHandshakeResult | null = null
   /**
@@ -133,6 +152,7 @@ export class RemoteExecutionHost implements ProviderExecutionHost {
     this.wait =
       deps.reconnect?.wait ??
       ((ms) => new Promise((resolve) => setTimeout(resolve, ms)))
+    this.debugSink = deps.debugSink ?? noopDebugSink
   }
 
   /**
@@ -251,7 +271,13 @@ export class RemoteExecutionHost implements ProviderExecutionHost {
     config: SessionStartConfig,
     afterSeq: number,
   ): SessionHandle {
-    // No capability check: reattach happens at app boot before the provider
+    // The one way a remote session continues: it is started once and every
+    // later turn attaches to the run the daemon already has, at app boot for a
+    // session that was still running and on send for one that had settled
+    // (`session.service.ts`, `sendRemoteTurn`). A second start is refused by
+    // the daemon with 409 `Session already exists`.
+    //
+    // No capability check: an attach can happen at boot before the provider
     // cache is primed, and the provider was already validated when the
     // session originally started. Failures surface through the handle.
     const session = new RemoteSessionRun({
@@ -267,6 +293,11 @@ export class RemoteExecutionHost implements ProviderExecutionHost {
   /** @internal Shared by RemoteSessionRun. */
   notifyEventSeq(sessionId: string, seq: number): void {
     this.deps.onEventSeq?.(sessionId, seq)
+  }
+
+  /** @internal Shared by RemoteSessionRun. */
+  recordDebug(entry: ProviderDebugEntry): void {
+    this.debugSink.record(entry)
   }
 
   /**
@@ -501,9 +532,27 @@ class RemoteSessionRun {
   }
 
   private async run(): Promise<void> {
+    // Which step is in flight, so a failure below is logged as the thing that
+    // actually failed. The one-start contract is audited by reading this log,
+    // and an attach posts no start at all -- calling its connection failure
+    // "start refused" writes evidence of a second start into the record of a
+    // wire that permits exactly one. A message that misdescribes its own cause
+    // is read under pressure and believed (MAR-2582).
+    let step: 'connection' | 'start' = 'connection'
     try {
       this.connection = await this.params.host.resolveConnection()
       if (!this.params.resume) {
+        step = 'start'
+        // Recorded before the request, not after it. A session takes exactly
+        // one start on this wire and the daemon answers a second with 409, so
+        // "was a second one attempted?" is a question the log has to be able
+        // to answer — and a log that only records the ones that succeeded
+        // cannot answer it either way (MAR-2582).
+        this.recordDebug('request', {
+          direction: 'out',
+          method: 'start',
+          note: 'remote session start requested',
+        })
         const response = await this.params.host.requestJson(
           this.connection,
           '/v0/execution/sessions',
@@ -517,12 +566,32 @@ class RemoteSessionRun {
         parseRemoteExecutionHostStartResponse(response)
       }
     } catch (error) {
+      const reason = describeRemoteExecutionHostFailure(error)
+      const attempt = this.params.resume ? 'attach' : 'start'
+      this.recordDebug('lifecycle', {
+        direction: 'in',
+        ...(error instanceof RemoteExecutionHostError && error.status
+          ? { payload: { status: error.status } }
+          : {}),
+        note:
+          step === 'start'
+            ? `remote session start refused: ${reason}`
+            : `remote session ${attempt} could not resolve a connection: ${reason}`,
+      })
       this.failSession(
-        `Remote session failed to start: ${describeRemoteExecutionHostFailure(error)}`,
+        this.params.resume
+          ? `Remote session failed to attach: ${reason}`
+          : `Remote session failed to start: ${reason}`,
       )
       return
     }
 
+    this.recordDebug('lifecycle', {
+      direction: 'out',
+      note: this.params.resume
+        ? `reattached to remote session after seq ${this.lastSeq}`
+        : 'remote session start accepted by the daemon',
+    })
     this.started = true
     await this.flushPendingCommands()
     await this.consumeEventStream()
@@ -542,6 +611,10 @@ class RemoteSessionRun {
           this.abort.signal,
         )
         attempt = 0
+        this.recordDebug('lifecycle', {
+          direction: 'in',
+          note: `event stream open from seq ${this.lastSeq}`,
+        })
       } catch (error) {
         if (this.stopped) return
         attempt += 1
@@ -560,6 +633,10 @@ class RemoteSessionRun {
 
       // The daemon holds the stream open for a live session; reaching the
       // end means the connection dropped. Resume from the last sequence.
+      this.recordDebug('lifecycle', {
+        direction: 'in',
+        note: `event stream ended at seq ${this.lastSeq}; reconnecting`,
+      })
       attempt += 1
       if (attempt >= policy.maxAttempts) {
         this.failSession(
@@ -583,6 +660,11 @@ class RemoteSessionRun {
         const { done, value } = await reader.read()
         if (done) return
         const events = parser.feed(decoder.decode(value, { stream: true }))
+        // One read delivers a batch: a daemon replay writes its frames back to
+        // back and they arrive coalesced. A listener that disposes the run on
+        // the first of them must not be handed the rest, which `dispatchRawEvent`
+        // decides per event rather than the loop deciding once -- an event
+        // dropped for that reason is traced like every other drop.
         for (const event of events) {
           this.dispatchRawEvent(event.data)
         }
@@ -594,18 +676,137 @@ class RemoteSessionRun {
     }
   }
 
+  /**
+   * Records one redacted line of wire traffic to the session debug log. The
+   * remote host is the only adapter whose provider runs on another machine, so
+   * the debug log is the only place a remote turn can be inspected at all —
+   * every path that drops an event silently records why it dropped it.
+   *
+   * Where an entry survives is worth knowing before trusting one as evidence
+   * (`provider-debug.service.ts`): every entry lands in an in-memory ring of
+   * the last 500 per session, kept for at most 10 sessions and gone at quit,
+   * and reaches a durable `<userData>/debug-logs/<sessionId>.jsonl` only while
+   * "Capture provider debug logs" is on in settings — read at record time, so
+   * a long turn traced with the setting off leaves no file behind.
+   */
+  private recordDebug(
+    channel: ProviderDebugChannel,
+    partial: Omit<
+      ProviderDebugEntry,
+      'sessionId' | 'providerId' | 'at' | 'channel'
+    >,
+  ): void {
+    this.params.host.recordDebug({
+      sessionId: this.params.config.sessionId,
+      providerId: this.params.providerId,
+      at: Date.now(),
+      channel,
+      ...partial,
+    })
+  }
+
   private dispatchRawEvent(raw: string): void {
+    // A disposed run has no voice. Its listeners belong to a handle the
+    // session service has already released, and an event delivered through
+    // them lands on a session whose live turn is being served by a different
+    // handle entirely (MAR-2582).
+    if (this.stopped || this.dead) {
+      this.recordDebug('event', {
+        direction: 'in',
+        bytes: raw.length,
+        note: 'dropped: the run is disposed',
+      })
+      return
+    }
     const decoded = decodeExecutionEventEnvelope(raw)
-    if (!decoded.ok) return
+    if (!decoded.ok) {
+      this.recordDebug('event', {
+        direction: 'in',
+        bytes: raw.length,
+        note: `dropped: undecodable envelope (${decoded.reason})`,
+      })
+      return
+    }
     const envelope = decoded.value
-    if (envelope.sessionId !== this.params.config.sessionId) return
-    if (envelope.seq <= this.lastSeq) return
+    if (envelope.sessionId !== this.params.config.sessionId) {
+      this.recordDebug('event', {
+        direction: 'in',
+        bytes: raw.length,
+        method: envelope.event.kind,
+        note: 'dropped: envelope belongs to another session',
+      })
+      return
+    }
+    if (envelope.seq <= this.lastSeq) {
+      this.recordDebug('event', {
+        direction: 'in',
+        bytes: raw.length,
+        method: envelope.event.kind,
+        payload: { seq: envelope.seq, lastSeq: this.lastSeq },
+        note: 'dropped: already-seen sequence',
+      })
+      return
+    }
     this.lastSeq = envelope.seq
-    this.dispatchEvent(envelope.event)
+    this.recordDebug('event', {
+      direction: 'in',
+      bytes: raw.length,
+      method: envelope.event.kind,
+      payload: {
+        seq: envelope.seq,
+        ...describeWireEventShape(envelope.event),
+        ...(decoded.warnings?.length
+          ? { decodeWarnings: decoded.warnings }
+          : {}),
+      },
+    })
+    this.dispatchEvent(envelope.event, envelope.seq)
+    // The cursor write for every event that does not carry a session patch.
+    // A `status` or `continuation-token` event has already committed this
+    // sequence inside its own patch statement (`applySessionPatch`), and the
+    // repository keeps the column monotonic, so this call is a no-op for
+    // those rather than a second, later source of truth.
     this.params.host.notifyEventSeq(this.params.config.sessionId, envelope.seq)
   }
 
-  private dispatchEvent(event: ExecutionHostEvent): void {
+  /**
+   * Two of these kinds carry facts the session record must keep, and the
+   * listener arrays alone cannot deliver them: nothing in Convergence
+   * subscribes to `onStatusChange` or `onContinuationToken` — every provider
+   * implements the pair and no caller reads it. The live path is the
+   * `session.patch` delta, which `SessionService.applyDelta` writes to the
+   * session row.
+   *
+   * So `status` and `continuation-token` do both halves, exactly as
+   * `claude-code-provider.ts:511-513,540-541` does for a local run: fire the
+   * callback for the handle's declared contract, and patch the session for the
+   * reader that actually exists. Without the status patch a remote turn never
+   * leaves `running` in the record, and a session stuck at `running` treats the
+   * next message as mid-run input instead of a new turn — half of what made
+   * every remote session one turn long (MAR-2582). What the header shows is a
+   * separate question and is not fixed here: the pill is drawn from
+   * `attention`, and `AttentionIndicator` renders a spinning "Running" for
+   * every value it has no label for — including the `none` a remote session
+   * never leaves, because this adapter still drops the wire's `attention`
+   * events (MAR-2590, MAR-2585).
+   *
+   * Both patches carry the envelope's sequence. That is what lets the record
+   * commit the patch and the stream cursor in one statement, and recognise the
+   * same terminal event arriving twice when a stream is resumed from a cursor
+   * that is behind the record.
+   *
+   * The token is patched because the daemon reports it and the session record
+   * should hold what the daemon said, not because a second turn needs it. A
+   * remote turn resumes by attaching to the run the daemon already has; a
+   * continuation token that drove a second start was the other half of the
+   * same defect (`session.service.ts`, `sendRemoteTurn`).
+   *
+   * `attention`, `context-window` and `activity` are still callback-only. They
+   * are the same shape of loss and they are not this fix; each changes UI
+   * behaviour Marcin has not ruled on, so they are reported rather than
+   * quietly widened here.
+   */
+  private dispatchEvent(event: ExecutionHostEvent, seq: number): void {
     switch (event.kind) {
       case 'delta': {
         // A wire delta kind with no local counterpart is not forwarded — the
@@ -614,12 +815,32 @@ class RemoteSessionRun {
         // existed every delta reached applyDelta and bumped liveness on the way
         // in. The heartbeat keeps that signal without inventing a local delta.
         const delta = toLocalSessionDelta(event.delta)
-        if (delta) this.notifyDelta(delta)
-        else this.notifyHeartbeat()
+        // A session patch that arrives as a wire *delta* settles the session
+        // exactly as the dedicated `status` event does, so it carries the
+        // sequence for the same two reasons: one write for the patch and the
+        // cursor, and a replayed settle that can be recognised as one.
+        if (delta)
+          this.notifyDelta(
+            delta.kind === 'session.patch'
+              ? { ...delta, executionHostSeq: seq }
+              : delta,
+          )
+        else {
+          this.recordDebug('event', {
+            direction: 'in',
+            method: event.delta.kind,
+            note: 'wire delta has no local counterpart; counted as liveness only',
+          })
+          this.notifyHeartbeat()
+        }
         break
       }
       case 'status':
         for (const listener of this.statusListeners) listener(event.status)
+        this.emitter.patchSession(
+          { status: event.status },
+          { executionHostSeq: seq },
+        )
         break
       case 'attention':
         for (const listener of this.attentionListeners)
@@ -627,6 +848,10 @@ class RemoteSessionRun {
         break
       case 'continuation-token':
         for (const listener of this.tokenListeners) listener(event.token)
+        this.emitter.patchSession(
+          { continuationToken: event.token },
+          { executionHostSeq: seq },
+        )
         break
       case 'context-window':
         for (const listener of this.contextWindowListeners)
@@ -649,8 +874,33 @@ class RemoteSessionRun {
     for (const listener of this.heartbeatListeners) listener()
   }
 
+  /**
+   * Hands a command to the run, or says so when the run can no longer carry
+   * it.
+   *
+   * A run that has failed or been disposed still answers `sendMessage`, and
+   * returning from it is indistinguishable from delivering the message: the
+   * daemon is what echoes a user turn back, so a message that never left the
+   * app leaves nothing at all behind -- no turn, no error, no trace. That is
+   * what a dead handle left installed on a session did to every message sent
+   * into it, and the silence was its own half of the defect (MAR-2582). The
+   * note is the one `postCommand` already gives a command the daemon refused;
+   * this covers one that never got that far.
+   *
+   * Only commands a user issues arrive here -- send, approve, deny. `stop`
+   * goes straight to `postCommand`, which is what lets it stay silent about a
+   * run that is already gone.
+   */
   private enqueueCommand(command: ExecutionHostCommand): void {
-    if (this.stopped || this.dead) return
+    if (this.stopped || this.dead) {
+      this.emitter.addNote({
+        text: 'Remote session command was not delivered: the remote run is no longer active.',
+        level: 'error',
+      })
+      this.emitter.patchSession({ attention: 'failed' })
+      for (const listener of this.attentionListeners) listener('failed')
+      return
+    }
     if (!this.started) {
       this.pendingCommands.push(command)
       return
@@ -666,6 +916,11 @@ class RemoteSessionRun {
   }
 
   private async postCommand(command: ExecutionHostCommand): Promise<void> {
+    this.recordDebug('request', {
+      direction: 'out',
+      method: command.kind,
+      note: 'command posted to the daemon',
+    })
     try {
       await this.params.host.requestJson(
         this.requireConnection(),
