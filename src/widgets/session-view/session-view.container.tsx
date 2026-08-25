@@ -3,6 +3,7 @@ import type { FC, MouseEvent as ReactMouseEvent } from 'react'
 import { useProjectStore } from '@/entities/project'
 import type { CodeReviewMode } from '@/entities/code-review'
 import {
+  AttentionIndicator,
   formatActivityLabel,
   useSessionStore,
   type SessionContextWindow,
@@ -47,7 +48,6 @@ import {
   GitPullRequest,
   TerminalSquare,
 } from 'lucide-react'
-import { AttentionIndicator } from '@/shared/ui/attention-indicator.presentational'
 import { cn } from '@/shared/lib/cn.pure'
 import { ChangedFilesPanel } from './changed-files-panel.container'
 import { formatConversationTotalDuration } from './conversation-total-duration.pure'
@@ -484,7 +484,10 @@ export const SessionView: FC<SessionViewProps> = ({ onOpenCodeReview }) => {
             <span className="min-w-0 truncate text-sm font-medium">
               {session.name}
             </span>
-            <AttentionIndicator attention={session.attention} />
+            <AttentionIndicator
+              attention={session.attention}
+              status={session.status}
+            />
             {session.executionHost === 'remote' && (
               <span
                 className="flex items-center gap-1 rounded-full border border-sky-500/30 bg-sky-500/10 px-2 py-0.5 text-[11px] text-sky-600 dark:text-sky-300"

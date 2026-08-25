@@ -28,6 +28,7 @@ import {
   buildWireStartRequest,
   buildWireStopCommand,
   toLocalSessionDelta,
+  withSettledAttention,
 } from './execution-host-wire-mapping.pure'
 import {
   evaluateHandshake,
@@ -770,25 +771,23 @@ class RemoteSessionRun {
   }
 
   /**
-   * Two of these kinds carry facts the session record must keep, and the
+   * Three of these kinds carry facts the session record must keep, and the
    * listener arrays alone cannot deliver them: nothing in Convergence
-   * subscribes to `onStatusChange` or `onContinuationToken` — every provider
-   * implements the pair and no caller reads it. The live path is the
-   * `session.patch` delta, which `SessionService.applyDelta` writes to the
-   * session row.
+   * subscribes to `onStatusChange`, `onAttentionChange` or
+   * `onContinuationToken` — every provider implements them and no caller reads
+   * them. The live path is the `session.patch` delta, which
+   * `SessionService.applyDelta` writes to the session row.
    *
-   * So `status` and `continuation-token` do both halves, exactly as
-   * `claude-code-provider.ts:511-513,540-541` does for a local run: fire the
-   * callback for the handle's declared contract, and patch the session for the
-   * reader that actually exists. Without the status patch a remote turn never
-   * leaves `running` in the record, and a session stuck at `running` treats the
-   * next message as mid-run input instead of a new turn — half of what made
-   * every remote session one turn long (MAR-2582). What the header shows is a
-   * separate question and is not fixed here: the pill is drawn from
-   * `attention`, and `AttentionIndicator` renders a spinning "Running" for
-   * every value it has no label for — including the `none` a remote session
-   * never leaves, because this adapter still drops the wire's `attention`
-   * events (MAR-2590, MAR-2585).
+   * So `status`, `attention` and `continuation-token` do both halves, exactly
+   * as `claude-code-provider.ts:511-513,518-521,540-541` does for a local run:
+   * fire the callback for the handle's declared contract, and patch the
+   * session for the reader that actually exists. Without the status patch a
+   * remote turn never leaves `running` in the record, and a session stuck at
+   * `running` treats the next message as mid-run input instead of a new turn —
+   * half of what made every remote session one turn long (MAR-2582). Without
+   * the attention patch a remote session never leaves `'none'`: it could not
+   * report that it had finished, and an approval prompt raised on the far side
+   * never reached the row a human reads (MAR-2590).
    *
    * Both patches carry the envelope's sequence. That is what lets the record
    * commit the patch and the stream cursor in one statement, and recognise the
@@ -801,10 +800,9 @@ class RemoteSessionRun {
    * continuation token that drove a second start was the other half of the
    * same defect (`session.service.ts`, `sendRemoteTurn`).
    *
-   * `attention`, `context-window` and `activity` are still callback-only. They
-   * are the same shape of loss and they are not this fix; each changes UI
-   * behaviour Marcin has not ruled on, so they are reported rather than
-   * quietly widened here.
+   * `context-window` and `activity` are still callback-only. They are the same
+   * shape of loss and they are not this fix; each changes UI behaviour Marcin
+   * has not ruled on, so they are reported rather than quietly widened here.
    */
   private dispatchEvent(event: ExecutionHostEvent, seq: number): void {
     switch (event.kind) {
@@ -816,13 +814,22 @@ class RemoteSessionRun {
         // in. The heartbeat keeps that signal without inventing a local delta.
         const delta = toLocalSessionDelta(event.delta)
         // A session patch that arrives as a wire *delta* settles the session
-        // exactly as the dedicated `status` event does, so it carries the
-        // sequence for the same two reasons: one write for the patch and the
-        // cursor, and a replayed settle that can be recognised as one.
+        // exactly as the dedicated `status` event does -- `applyDelta` ends
+        // the turn on either -- so it is treated exactly the same way here. It
+        // carries the sequence for the same two reasons (one write for the
+        // patch and the cursor, and a replayed settle that can be recognised
+        // as one), and it carries the attention its terminal status means, for
+        // the same reason the dedicated event does: the settle and its outcome
+        // are one fact. A patch that states an attention of its own keeps it,
+        // and a patch with nothing to pair travels unchanged (MAR-2590).
         if (delta)
           this.notifyDelta(
             delta.kind === 'session.patch'
-              ? { ...delta, executionHostSeq: seq }
+              ? {
+                  ...delta,
+                  patch: withSettledAttention(delta.patch),
+                  executionHostSeq: seq,
+                }
               : delta,
           )
         else {
@@ -835,16 +842,41 @@ class RemoteSessionRun {
         }
         break
       }
-      case 'status':
+      case 'status': {
+        // A settle and the attention it carries are one fact, so they are one
+        // write. Locally they always were: `claude-code-provider.ts:1071-1072`
+        // sets `'completed'` and `'finished'` from the same event, and the
+        // service applies the same pairing when it settles an approval nobody
+        // is left to answer (`session.service.ts:1362-1368`). The daemon
+        // instead splits them across two wire events, and the second one
+        // arrives after this settle has released the handle -- so on the
+        // remote path the attention half was simply lost, and a finished
+        // remote session reported nothing to act on (MAR-2590).
+        //
+        // Pairing them here rather than letting the trailing frame through is
+        // deliberate: the disposed-run guard in `dispatchRawEvent` is what
+        // stops a released handle from overwriting the attention of the run
+        // that replaced it, which is the class MAR-2582 spent seven rounds
+        // closing. The daemon's own `attention` frame still arrives, now
+        // carrying a value the row already holds, and is dropped and named.
+        //
+        // The pairing itself is `withSettledAttention`, shared with the delta
+        // encoding above so the two ways a settle can arrive cannot drift.
+        const settled = withSettledAttention({ status: event.status })
         for (const listener of this.statusListeners) listener(event.status)
-        this.emitter.patchSession(
-          { status: event.status },
-          { executionHostSeq: seq },
-        )
+        if (settled.attention)
+          for (const listener of this.attentionListeners)
+            listener(settled.attention)
+        this.emitter.patchSession(settled, { executionHostSeq: seq })
         break
+      }
       case 'attention':
         for (const listener of this.attentionListeners)
           listener(event.attention)
+        this.emitter.patchSession(
+          { attention: event.attention },
+          { executionHostSeq: seq },
+        )
         break
       case 'continuation-token':
         for (const listener of this.tokenListeners) listener(event.token)
