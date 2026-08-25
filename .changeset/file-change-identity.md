@@ -44,6 +44,15 @@ data.
 repository alongside the path, through preload and the renderer's selection, so
 the diff you get is the one you clicked. Asking without a repository still
 means what it always meant — by turn and path alone, which is the whole answer
-for a turn that touched one repository. The changed-files tree keys rows by
-repository and path, and shows a repository prefix only when the turn actually
-spans more than one; a single-repository turn renders exactly as it did before.
+for a turn that touched one repository. The changed-files tree shows a
+repository prefix only when the turn actually spans more than one, so a
+single-repository turn renders exactly as it did before.
+
+Where the prefix is not enough, the rows say so themselves. A file tree
+addresses a row by the path it draws, so two rows that agree on that path are
+one row and one of the two diffs cannot be opened at all — and a prefix does
+not separate one repository nested inside another (`a` + `b/c.ts` against `a/b`
+
+- `c.ts` join to the same path), nor a repository whose name is the label the
+  workspace root gets. Those rows now each name the repository they came from,
+  the way an editor labels two tabs called `index.ts`, and only those rows do.

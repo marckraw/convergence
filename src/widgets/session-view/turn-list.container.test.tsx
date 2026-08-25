@@ -220,6 +220,8 @@ describe('TurnList', () => {
       )
     })
 
+    expect(await screen.findByTitle('apps/web/README.md')).toBeInTheDocument()
+
     fireEvent.click(screen.getByRole('button', { name: 'apps/api/README.md' }))
     await waitFor(() => {
       expect(getFileDiff).toHaveBeenCalledWith(
@@ -227,6 +229,99 @@ describe('TurnList', () => {
         'README.md',
         'apps/api',
       )
+    })
+    // Through the real turnsApi, the real container and the real diff header:
+    // the second repository's row is the one on screen, not the first.
+    expect(await screen.findByTitle('apps/api/README.md')).toBeInTheDocument()
+  })
+
+  it('reaches both diffs when one repository is nested inside the other', async () => {
+    const getFileDiff = stubTurnsApi(
+      fileChange({
+        id: 'outer',
+        repoRoot: 'a',
+        filePath: 'b/c.ts',
+        diff: 'outer c.ts diff',
+      }),
+      fileChange({
+        id: 'inner',
+        repoRoot: 'a/b',
+        filePath: 'c.ts',
+        diff: 'inner c.ts diff',
+      }),
+    )
+
+    render(<TurnList sessionId="session-1" />)
+
+    // 'a' + 'b/c.ts' and 'a/b' + 'c.ts' join to the same path, so a tree keyed
+    // by that join draws one row and the inner repository's diff cannot be
+    // opened at all (MAR-2589).
+    const outerRow = await screen.findByRole('button', {
+      name: 'a/b/c.ts (repository a)',
+    })
+    const innerRow = screen.getByRole('button', {
+      name: 'a/b/c.ts (repository a/b)',
+    })
+
+    fireEvent.click(innerRow)
+    await waitFor(() => {
+      expect(getFileDiff).toHaveBeenCalledWith('turn-1', 'c.ts', 'a/b')
+    })
+    // The diff pane's header is the rendered end of the selection: it names
+    // the row whose diff is on screen.
+    expect(
+      await screen.findByTitle('a/b/c.ts (repository a/b)'),
+    ).toBeInTheDocument()
+
+    fireEvent.click(outerRow)
+    await waitFor(() => {
+      expect(getFileDiff).toHaveBeenCalledWith('turn-1', 'b/c.ts', 'a')
+    })
+    expect(
+      await screen.findByTitle('a/b/c.ts (repository a)'),
+    ).toBeInTheDocument()
+  })
+
+  it('reaches both diffs when a repository is named like the root label', async () => {
+    const getFileDiff = stubTurnsApi(
+      fileChange({
+        id: 'root',
+        repoRoot: null,
+        filePath: 'README.md',
+        diff: 'root readme diff',
+      }),
+      fileChange({
+        id: 'impostor',
+        repoRoot: ROOT_LABEL,
+        filePath: 'README.md',
+        diff: 'impostor readme diff',
+      }),
+    )
+
+    render(<TurnList sessionId="session-1" />)
+
+    // The root label is a sentence about the workspace, not a reserved word.
+    // A directory really can be called that, and then it is a repository like
+    // any other rather than the same row as the root.
+    const rootRow = await screen.findByRole('button', {
+      name: `${ROOT_LABEL}/README.md (workspace root)`,
+    })
+    const impostorRow = screen.getByRole('button', {
+      name: `${ROOT_LABEL}/README.md (repository ${ROOT_LABEL})`,
+    })
+
+    fireEvent.click(impostorRow)
+    await waitFor(() => {
+      expect(getFileDiff).toHaveBeenCalledWith(
+        'turn-1',
+        'README.md',
+        ROOT_LABEL,
+      )
+    })
+
+    fireEvent.click(rootRow)
+    await waitFor(() => {
+      expect(getFileDiff).toHaveBeenCalledWith('turn-1', 'README.md', null)
     })
   })
 
