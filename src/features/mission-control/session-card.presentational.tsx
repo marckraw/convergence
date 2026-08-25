@@ -6,6 +6,7 @@ import { SessionBadge } from '@/shared/ui/session-badge.presentational'
 import { cn } from '@/shared/lib/cn.pure'
 import type { SessionCard } from './mission-control.types'
 import type { SessionWireHint } from './relay-hop.pure'
+import { buildCardBreatheStyle } from './session-card-breathe.pure'
 import {
   ACTIVITY_TEXT_STYLES,
   CARD_ATTENTION_STYLES,
@@ -40,6 +41,11 @@ export const SessionCardView: FC<SessionCardViewProps> = ({
     <div
       // The room measures card positions to open a Hail under the right row.
       data-session-card
+      // A working card breathes in its crew's colour, so a glance across the
+      // room says who is busy. The stylesheet owns the animation; the card
+      // hands it the colour and the knobs. Absent entirely when not working.
+      data-breathing={running ? 'true' : undefined}
+      style={buildCardBreatheStyle(running, card.crews)}
       className={cn(
         'group flex flex-col rounded-lg border bg-card/40 transition-colors',
         CARD_ATTENTION_STYLES[session.attention],

@@ -267,3 +267,48 @@
     animation: none;
   }
 }
+
+/*
+ * Mission Control: a working card breathes in its crew's colour.
+ *
+ * The glare lives on a pseudo-element so the breath is an `opacity` animation
+ * on its own layer -- the compositor repeats it for free, which matters on a
+ * wall of a hundred and seventy-five cards, where re-painting a blurred shadow
+ * every frame would not be. Every value arrives as a custom property from
+ * `session-card.styles.ts`; nothing here is tunable, on purpose.
+ */
+@keyframes session-card-breathe {
+  0%,
+  100% {
+    opacity: var(--breathe-min);
+  }
+  50% {
+    opacity: var(--breathe-max);
+  }
+}
+
+[data-breathing='true'] {
+  position: relative;
+}
+
+[data-breathing='true']::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  box-shadow: 0 0 var(--breathe-blur) var(--breathe-spread) var(--breathe-color);
+  opacity: var(--breathe-max);
+  animation: session-card-breathe var(--breathe-period) ease-in-out infinite;
+}
+
+/*
+ * Reduced motion keeps the glare and drops the breath: the card still says it
+ * is working, and in whose colour -- only the movement goes. Note the shadow
+ * is left untouched, so the still card glows at the top of the breath.
+ */
+@media (prefers-reduced-motion: reduce) {
+  [data-breathing='true']::after {
+    animation: none;
+  }
+}

@@ -35,3 +35,29 @@ export const STATUS_DOT_STYLES: Record<SessionStatus, string> = {
   completed: 'bg-muted-foreground/40',
   failed: 'bg-red-500',
 }
+
+/**
+ * The breathing glow's tuning knobs — every one of them, in this one object.
+ *
+ * A working card glares in its crew's colour so the room says who is busy from
+ * across it. Tuning that feel ("slower", "subtler") is a one-line change here
+ * and nowhere else: the values travel to the stylesheet as custom properties
+ * set on the card, and `src/app/global.css` only reads them.
+ */
+export const CARD_BREATHE = {
+  /** One full inhale-and-exhale. A glare, not an alarm. */
+  periodMs: 2800,
+  /** Glow strength at the bottom of the breath. */
+  minOpacity: 0.18,
+  /** Glow strength at the top of the breath — and the still value when motion is off. */
+  maxOpacity: 0.6,
+  /** How softly the glare bleeds past the card's edge. */
+  blurPx: 14,
+  /** How far the glare sits out from the edge before the blur starts. */
+  spreadPx: 1,
+  /**
+   * A crewless session still has to say it is working, so it breathes in the
+   * room's working hue — the same emerald `STATUS_DOT_STYLES.running` wears.
+   */
+  neutralColor: 'var(--color-emerald-500)',
+} as const
