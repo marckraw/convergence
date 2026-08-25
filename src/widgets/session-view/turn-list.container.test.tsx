@@ -60,19 +60,34 @@ function fileChange(overrides: Partial<TurnFileChange> = {}): TurnFileChange {
   }
 }
 
-function stubTurnsApi(change: TurnFileChange): void {
+function stubTurnsApi(...changes: TurnFileChange[]): ReturnType<typeof vi.fn> {
+  const getFileDiff = vi
+    .fn()
+    .mockImplementation(
+      (_turnId: string, filePath: string, repoRoot?: string | null) =>
+        Promise.resolve(
+          changes.find(
+            (change) =>
+              change.filePath === filePath &&
+              (repoRoot === undefined || change.repoRoot === repoRoot),
+          )?.diff ?? '',
+        ),
+    )
+
   Object.defineProperty(window, 'electronAPI', {
     configurable: true,
     writable: true,
     value: {
       turns: {
         listForSession: vi.fn().mockResolvedValue([TURN]),
-        getFileChanges: vi.fn().mockResolvedValue([change]),
-        getFileDiff: vi.fn().mockResolvedValue(change.diff),
+        getFileChanges: vi.fn().mockResolvedValue(changes),
+        getFileDiff,
         onTurnDelta: vi.fn().mockReturnValue(() => {}),
       },
     },
   })
+
+  return getFileDiff
 }
 
 async function selectTheChangedFile(): Promise<void> {
@@ -82,6 +97,8 @@ async function selectTheChangedFile(): Promise<void> {
 const TRUNCATED_NOTICE =
   'Diff truncated — this is a fragment, not the whole change.'
 const BINARY_NOTICE = 'Binary file — there is no textual diff to show.'
+
+const ROOT_LABEL = '(workspace root)'
 
 describe('TurnList', () => {
   beforeEach(() => {
@@ -123,5 +140,126 @@ describe('TurnList', () => {
     })
     expect(screen.queryByText(TRUNCATED_NOTICE)).not.toBeInTheDocument()
     expect(screen.queryByText(BINARY_NOTICE)).not.toBeInTheDocument()
+  })
+
+  it('asks for the diff of the repository the selected change belongs to', async () => {
+    const getFileDiff = stubTurnsApi(
+      fileChange({ id: 'root', repoRoot: null, filePath: 'src/parser.ts' }),
+    )
+
+    render(<TurnList sessionId="session-1" />)
+    await selectTheChangedFile()
+
+    // Null is a repository -- the working-directory root -- and the lookup has
+    // to say so, because a turn's other rows may belong to other repositories
+    // at the same path (MAR-2589).
+    await waitFor(() => {
+      expect(getFileDiff).toHaveBeenCalledWith('turn-1', 'src/parser.ts', null)
+    })
+  })
+
+  it('renders a single-repository turn as bare paths, exactly as before', async () => {
+    stubTurnsApi(
+      fileChange({ id: 'a', repoRoot: null, filePath: 'src/parser.ts' }),
+      fileChange({ id: 'b', repoRoot: null, filePath: 'src/lexer.ts' }),
+    )
+
+    render(<TurnList sessionId="session-1" />)
+
+    expect(
+      await screen.findByRole('button', { name: 'src/parser.ts' }),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByRole('button', { name: 'src/lexer.ts' }),
+    ).toBeInTheDocument()
+    expect(screen.queryByText(new RegExp(ROOT_LABEL, 'i'))).toBeNull()
+  })
+
+  it('draws one row per repository when two repositories changed the same path', async () => {
+    const getFileDiff = stubTurnsApi(
+      fileChange({
+        id: 'web',
+        repoRoot: 'apps/web',
+        filePath: 'README.md',
+        diff: 'web readme diff',
+      }),
+      fileChange({
+        id: 'api',
+        repoRoot: 'apps/api',
+        filePath: 'README.md',
+        diff: 'api readme diff',
+      }),
+      fileChange({
+        id: 'root',
+        repoRoot: null,
+        filePath: 'README.md',
+        diff: 'root readme diff',
+      }),
+    )
+
+    render(<TurnList sessionId="session-1" />)
+
+    // Keyed by path alone the tree draws one row and two of the three diffs
+    // are unreachable from the UI.
+    const webRow = await screen.findByRole('button', {
+      name: 'apps/web/README.md',
+    })
+    expect(
+      screen.getByRole('button', { name: 'apps/api/README.md' }),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByRole('button', { name: `${ROOT_LABEL}/README.md` }),
+    ).toBeInTheDocument()
+
+    fireEvent.click(webRow)
+    await waitFor(() => {
+      expect(getFileDiff).toHaveBeenCalledWith(
+        'turn-1',
+        'README.md',
+        'apps/web',
+      )
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: 'apps/api/README.md' }))
+    await waitFor(() => {
+      expect(getFileDiff).toHaveBeenCalledWith(
+        'turn-1',
+        'README.md',
+        'apps/api',
+      )
+    })
+  })
+
+  it('reads the notices off the repository the selection names', async () => {
+    stubTurnsApi(
+      fileChange({
+        id: 'web',
+        repoRoot: 'apps/web',
+        filePath: 'README.md',
+        truncated: false,
+        diff: 'diff --git a/README.md\n+whole',
+      }),
+      fileChange({
+        id: 'api',
+        repoRoot: 'apps/api',
+        filePath: 'README.md',
+        truncated: true,
+        diff: '[diff truncated: 4210 lines]',
+      }),
+    )
+
+    render(<TurnList sessionId="session-1" />)
+
+    // Same path, opposite facts. A lookup that matched on path alone would
+    // find whichever row came first and describe the wrong change.
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'apps/api/README.md' }),
+    )
+    expect(await screen.findByText(TRUNCATED_NOTICE)).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'apps/web/README.md' }))
+    await waitFor(() => {
+      expect(screen.queryByText(TRUNCATED_NOTICE)).not.toBeInTheDocument()
+    })
   })
 })

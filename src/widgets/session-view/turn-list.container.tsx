@@ -6,13 +6,24 @@ import { TurnCard } from './turn-card.presentational'
 import { PierreDiffViewer } from './pierre-diff-viewer.container'
 import { describeTurnFileChange } from './turn-file-change-notice.pure'
 import { TurnFileChangeNotices } from './turn-file-change-notice.presentational'
+import {
+  buildTurnFileChangeRows,
+  findTurnFileChangeRowForSelection,
+  type TurnFileChangeRow,
+} from './turn-file-change-rows.pure'
 
 interface TurnListProps {
   sessionId: string
 }
 
+/**
+ * A turn, a repository, a path. The repository is part of it since MAR-2589:
+ * two repositories of one workspace can each change `README.md` in one turn,
+ * and the path alone cannot say which diff the user asked for.
+ */
 interface Selection {
   turnId: string
+  repoRoot: string | null
   filePath: string
 }
 
@@ -97,6 +108,7 @@ export const TurnList: FC<TurnListProps> = ({ sessionId }) => {
         const result = await turnsApi.getFileDiff(
           selection.turnId,
           selection.filePath,
+          selection.repoRoot,
         )
         if (cancelled || diffRequestIdRef.current !== requestId) return
         setDiff(result || '(no diff available)')
@@ -118,18 +130,48 @@ export const TurnList: FC<TurnListProps> = ({ sessionId }) => {
     setExpanded((prev) => ({ ...prev, [turnId]: !prev[turnId] }))
   }, [])
 
-  const handleSelectFile = useCallback((turnId: string, filePath: string) => {
-    setSelection((current) => {
-      if (current?.turnId === turnId && current.filePath === filePath) {
-        return current
-      }
-      return { turnId, filePath }
-    })
-  }, [])
+  const handleSelectFile = useCallback(
+    (turnId: string, row: TurnFileChangeRow | null) => {
+      setSelection((current) => {
+        if (!row) return null
+        if (
+          current?.turnId === turnId &&
+          current.repoRoot === row.repoRoot &&
+          current.filePath === row.filePath
+        ) {
+          return current
+        }
+        return { turnId, repoRoot: row.repoRoot, filePath: row.filePath }
+      })
+    },
+    [],
+  )
 
   const ordered = useMemo(
     () => [...turns].sort((a, b) => b.sequence - a.sequence),
     [turns],
+  )
+
+  // Built once per turn rather than inside each card: the repository prefix a
+  // row shows depends on how many repositories the whole turn spans, so the
+  // rows are a property of the turn, not of any one change.
+  const rowsByTurn = useMemo(() => {
+    const next: Record<string, TurnFileChangeRow[]> = {}
+    for (const [turnId, changes] of Object.entries(fileChangesByTurn)) {
+      next[turnId] = buildTurnFileChangeRows(changes)
+    }
+    return next
+  }, [fileChangesByTurn])
+
+  const selectedRow = useMemo(
+    () =>
+      selection
+        ? findTurnFileChangeRowForSelection(
+            rowsByTurn[selection.turnId] ?? [],
+            selection,
+          )
+        : null,
+    [selection, rowsByTurn],
   )
 
   // Read from the record rather than from the diff text: a fragment and a whole
@@ -139,7 +181,9 @@ export const TurnList: FC<TurnListProps> = ({ sessionId }) => {
     if (!selection) return null
     return (
       fileChangesByTurn[selection.turnId]?.find(
-        (change) => change.filePath === selection.filePath,
+        (change) =>
+          change.repoRoot === selection.repoRoot &&
+          change.filePath === selection.filePath,
       ) ?? null
     )
   }, [selection, fileChangesByTurn])
@@ -168,14 +212,15 @@ export const TurnList: FC<TurnListProps> = ({ sessionId }) => {
                 key={turn.id}
                 turn={turn}
                 fileChanges={fileChangesByTurn[turn.id] ?? []}
+                fileRows={rowsByTurn[turn.id] ?? []}
                 expanded={expanded[turn.id] ?? false}
-                selectedFilePath={
+                selectedTreePath={
                   selection && selection.turnId === turn.id
-                    ? selection.filePath
+                    ? (selectedRow?.treePath ?? null)
                     : null
                 }
                 onToggle={() => handleToggle(turn.id)}
-                onSelectFile={(filePath) => handleSelectFile(turn.id, filePath)}
+                onSelectFile={(row) => handleSelectFile(turn.id, row)}
               />
             ))}
           </div>
@@ -185,7 +230,7 @@ export const TurnList: FC<TurnListProps> = ({ sessionId }) => {
         <TurnFileChangeNotices notices={notices} />
         <div className="min-h-0 flex-1">
           <PierreDiffViewer
-            file={selection?.filePath ?? null}
+            file={selectedRow?.treePath ?? selection?.filePath ?? null}
             diff={diff}
             loading={diffLoading}
             emptyMessage="Select a changed file from a turn to inspect its diff."

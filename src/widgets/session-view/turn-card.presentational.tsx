@@ -4,14 +4,20 @@ import { Button } from '@/shared/ui/button'
 import { cn } from '@/shared/lib/cn.pure'
 import type { Turn, TurnFileChange } from '@/entities/turn'
 import { ChangedFilesTree } from './changed-files-tree.container'
+import {
+  findTurnFileChangeRow,
+  type TurnFileChangeRow,
+} from './turn-file-change-rows.pure'
 
 interface TurnCardProps {
   turn: Turn
   fileChanges: TurnFileChange[]
+  /** The same changes as tree rows, carrying the repository each belongs to. */
+  fileRows: TurnFileChangeRow[]
   expanded: boolean
-  selectedFilePath: string | null
+  selectedTreePath: string | null
   onToggle: () => void
-  onSelectFile: (filePath: string) => void
+  onSelectFile: (row: TurnFileChangeRow | null) => void
 }
 
 function sumCounts(changes: TurnFileChange[]): {
@@ -30,8 +36,9 @@ function sumCounts(changes: TurnFileChange[]): {
 export const TurnCard: FC<TurnCardProps> = ({
   turn,
   fileChanges,
+  fileRows,
   expanded,
-  selectedFilePath,
+  selectedTreePath,
   onToggle,
   onSelectFile,
 }) => {
@@ -93,13 +100,15 @@ export const TurnCard: FC<TurnCardProps> = ({
       {expanded && fileChanges.length > 0 && (
         <div className="h-44 pb-2 pl-4 pr-1">
           <ChangedFilesTree
-            files={fileChanges.map((change) => ({
-              status: change.status,
-              file: change.filePath,
+            files={fileRows.map((row) => ({
+              status: row.status,
+              file: row.treePath,
             }))}
-            selectedFile={selectedFilePath}
+            selectedFile={selectedTreePath}
             search={false}
-            onSelectFile={onSelectFile}
+            onSelectFile={(treePath) =>
+              onSelectFile(findTurnFileChangeRow(fileRows, treePath))
+            }
             className="h-full"
           />
         </div>
