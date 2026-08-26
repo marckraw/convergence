@@ -1,3 +1,4 @@
+import type { ExecutionHostEndpointRepository } from '../execution-host-endpoint/execution-host-endpoint.repository'
 import type { NotificationPrefs } from '../notifications/notifications.types'
 import type { StateService } from '../state/state.service'
 import type { ProviderDescriptor } from '../provider/provider.types'
@@ -7,11 +8,11 @@ import {
   type AppSettingsInput,
   type DebugLoggingPrefs,
   type ResolvedSessionDefaults,
+  type StoredAppSettings,
 } from './app-settings.types'
 import { APP_SETTINGS_KEY } from './app-settings.constants'
 import {
   filterPiDescriptor,
-  normalizeRemoteBaseUrl,
   parseAppSettings,
   parseCommandCenterShortcut,
   parseDebugLoggingPrefs,
@@ -34,13 +35,29 @@ export class AppSettingsService {
   constructor(
     private readonly stateService: StateService,
     private readonly loadDescriptors: ProviderDescriptorLoader,
+    private readonly executionHostEndpoints: ExecutionHostEndpointRepository,
   ) {}
 
   async getAppSettings(): Promise<AppSettings> {
     const raw = this.stateService.get(APP_SETTINGS_KEY)
     const parsed = parseAppSettings(raw)
     const descriptors = await this.loadDescriptors()
-    return validateAppSettings(parsed, descriptors)
+    return this.withExecutionHostEndpoints(
+      validateAppSettings(parsed, descriptors),
+    )
+  }
+
+  /**
+   * Endpoints live in their own rows, not in the settings blob, because a
+   * session references one by id and the blob has no identity to reference.
+   * Splicing them in here keeps a single stored fact behind the single settings
+   * object every caller already reads (MAR-2620).
+   */
+  private withExecutionHostEndpoints(settings: StoredAppSettings): AppSettings {
+    return {
+      ...settings,
+      executionHostEndpoints: this.executionHostEndpoints.list(),
+    }
   }
 
   getNotificationPrefsSync(): NotificationPrefs {
@@ -112,17 +129,6 @@ export class AppSettingsService {
     )
 
     const existing = parseAppSettings(this.stateService.get(APP_SETTINGS_KEY))
-    const executionHostRemoteBaseUrl =
-      input.executionHostRemoteBaseUrl === undefined
-        ? existing.executionHostRemoteBaseUrl
-        : normalizeRemoteBaseUrl(input.executionHostRemoteBaseUrl)
-    if (
-      input.executionHostRemoteBaseUrl !== undefined &&
-      input.executionHostRemoteBaseUrl !== null &&
-      !executionHostRemoteBaseUrl
-    ) {
-      throw new Error('Remote execution host base URL must be an HTTP(S) URL.')
-    }
 
     const notifications =
       input.notifications === undefined
@@ -170,7 +176,7 @@ export class AppSettingsService {
             return validated
           })()
 
-    const toStore: AppSettings = {
+    const toStore: StoredAppSettings = {
       defaultProviderId: provider ? provider.id : null,
       defaultModelId: model ? model.id : null,
       defaultEffortId:
@@ -178,7 +184,6 @@ export class AppSettingsService {
       namingModelByProvider,
       extractionModelByProvider,
       commandCenterShortcut,
-      executionHostRemoteBaseUrl,
       notifications,
       onboarding,
       updates,
@@ -187,8 +192,14 @@ export class AppSettingsService {
       favoriteModels,
     }
 
+    // Before the blob, not after: a rejected endpoint list must leave every
+    // other setting exactly as it was, rather than saving half a form.
+    if (input.executionHostEndpoints !== undefined) {
+      this.executionHostEndpoints.replaceAll(input.executionHostEndpoints)
+    }
+
     this.stateService.set(APP_SETTINGS_KEY, JSON.stringify(toStore))
-    return toStore
+    return this.withExecutionHostEndpoints(toStore)
   }
 
   async resolveNamingModel(providerId: string): Promise<string | null> {

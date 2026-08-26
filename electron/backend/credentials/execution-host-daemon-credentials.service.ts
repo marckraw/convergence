@@ -1,4 +1,5 @@
 import { execFile } from 'child_process'
+import { DEFAULT_EXECUTION_HOST_ENDPOINT_ID } from '../execution-host-endpoint/execution-host-endpoint.pure'
 
 export interface ExecutionHostDaemonCredentialStatus {
   providerId: 'execution-host-daemon'
@@ -18,7 +19,6 @@ export const EXECUTION_HOST_DAEMON_TOKEN_ENV_KEY =
   'CONVERGENCE_EXECUTION_HOST_DAEMON_TOKEN'
 export const EXECUTION_HOST_DAEMON_KEYCHAIN_SERVICE =
   'convergence.execution-host-daemon'
-export const EXECUTION_HOST_DAEMON_KEYCHAIN_ACCOUNT = 'default'
 
 function isDarwin(): boolean {
   return process.platform === 'darwin'
@@ -37,13 +37,15 @@ function execSecurity(args: string[]): Promise<string> {
   })
 }
 
-async function readKeychainPassword(): Promise<string | null> {
+async function readKeychainPassword(
+  endpointId: string,
+): Promise<string | null> {
   if (!isDarwin()) return null
   try {
     const value = await execSecurity([
       'find-generic-password',
       '-a',
-      EXECUTION_HOST_DAEMON_KEYCHAIN_ACCOUNT,
+      endpointId,
       '-s',
       EXECUTION_HOST_DAEMON_KEYCHAIN_SERVICE,
       '-w',
@@ -55,12 +57,35 @@ async function readKeychainPassword(): Promise<string | null> {
 }
 
 /**
- * API token for the Remote Execution Host daemon: environment variable first,
+ * The environment override predates Endpoints and names no machine, so it
+ * serves only the Endpoint the single-host era became. Letting it answer for
+ * every Endpoint would hand a second daemon the first one's token — the exact
+ * cross-machine confusion Endpoints exist to prevent.
+ */
+function environmentTokenFor(endpointId: string): string | undefined {
+  if (endpointId !== DEFAULT_EXECUTION_HOST_ENDPOINT_ID) return undefined
+  return process.env[EXECUTION_HOST_DAEMON_TOKEN_ENV_KEY]
+}
+
+/**
+ * API token for a Remote Execution Host daemon: environment variable first,
  * macOS keychain otherwise.
+ *
+ * The Keychain account is the Endpoint's id (MAR-2620). Two daemons must never
+ * share one token: the second would authenticate as the first, or silently
+ * overwrite it. The Endpoint migrated from the single-host era carries the id
+ * `'default'`, which is the account name this service already used, so the one
+ * token that is already stored keeps resolving and nothing about the remote
+ * path changes.
+ *
+ * `endpointId` is required at every call rather than defaulted, so a caller
+ * that has not decided which machine it means has to say so.
  */
 export class ExecutionHostDaemonCredentialsService {
-  async getStatus(): Promise<ExecutionHostDaemonCredentialStatus> {
-    if (process.env[EXECUTION_HOST_DAEMON_TOKEN_ENV_KEY]) {
+  async getStatus(
+    endpointId: string,
+  ): Promise<ExecutionHostDaemonCredentialStatus> {
+    if (environmentTokenFor(endpointId)) {
       return {
         providerId: 'execution-host-daemon',
         configured: true,
@@ -84,13 +109,13 @@ export class ExecutionHostDaemonCredentialsService {
       }
     }
 
-    const token = await readKeychainPassword()
+    const token = await readKeychainPassword(endpointId)
     return {
       providerId: 'execution-host-daemon',
       configured: !!token,
       source: token ? 'keychain' : null,
       storage: token ? 'keychain' : null,
-      account: token ? EXECUTION_HOST_DAEMON_KEYCHAIN_ACCOUNT : null,
+      account: token ? endpointId : null,
       service: token ? EXECUTION_HOST_DAEMON_KEYCHAIN_SERVICE : null,
       error: null,
     }
@@ -98,6 +123,7 @@ export class ExecutionHostDaemonCredentialsService {
 
   async setToken(
     input: ExecutionHostDaemonTokenInput,
+    endpointId: string,
   ): Promise<ExecutionHostDaemonCredentialStatus> {
     if (!isDarwin()) {
       throw new Error('Keychain credential storage is only available on macOS.')
@@ -111,7 +137,7 @@ export class ExecutionHostDaemonCredentialsService {
     await execSecurity([
       'add-generic-password',
       '-a',
-      EXECUTION_HOST_DAEMON_KEYCHAIN_ACCOUNT,
+      endpointId,
       '-s',
       EXECUTION_HOST_DAEMON_KEYCHAIN_SERVICE,
       '-w',
@@ -119,10 +145,12 @@ export class ExecutionHostDaemonCredentialsService {
       '-U',
     ])
 
-    return this.getStatus()
+    return this.getStatus(endpointId)
   }
 
-  async deleteToken(): Promise<ExecutionHostDaemonCredentialStatus> {
+  async deleteToken(
+    endpointId: string,
+  ): Promise<ExecutionHostDaemonCredentialStatus> {
     if (!isDarwin()) {
       throw new Error('Keychain credential storage is only available on macOS.')
     }
@@ -131,7 +159,7 @@ export class ExecutionHostDaemonCredentialsService {
       await execSecurity([
         'delete-generic-password',
         '-a',
-        EXECUTION_HOST_DAEMON_KEYCHAIN_ACCOUNT,
+        endpointId,
         '-s',
         EXECUTION_HOST_DAEMON_KEYCHAIN_SERVICE,
       ])
@@ -139,12 +167,12 @@ export class ExecutionHostDaemonCredentialsService {
       // Missing credentials are already deleted.
     }
 
-    return this.getStatus()
+    return this.getStatus(endpointId)
   }
 
-  async resolveToken(): Promise<string | null> {
-    const envToken = process.env[EXECUTION_HOST_DAEMON_TOKEN_ENV_KEY]
+  async resolveToken(endpointId: string): Promise<string | null> {
+    const envToken = environmentTokenFor(endpointId)
     if (envToken) return envToken
-    return readKeychainPassword()
+    return readKeychainPassword(endpointId)
   }
 }

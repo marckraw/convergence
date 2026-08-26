@@ -52,6 +52,7 @@ import { SkillsService } from '../backend/skills/skills.service'
 import { SkillCatalogRepository } from '../backend/skills/skill-catalog-cache.repository'
 import { PromptsService } from '../backend/prompts/prompts.service'
 import { AppSettingsService } from '../backend/app-settings/app-settings.service'
+import { ExecutionHostEndpointRepository } from '../backend/execution-host-endpoint/execution-host-endpoint.repository'
 import { AnalyticsService } from '../backend/analytics/analytics.service'
 import { CodexQuotaService } from '../backend/provider-quota/codex-quota.service'
 import { AttachmentsService } from '../backend/attachments/attachments.service'
@@ -444,8 +445,10 @@ async function startApp(): Promise<void> {
   })
   registerProjectScriptsIpcHandlers(projectScriptsService, projectScriptsRunner)
 
-  const appSettingsService = new AppSettingsService(stateService, async () =>
-    Promise.all(providerRegistry.getAll().map((p) => p.describe())),
+  const appSettingsService = new AppSettingsService(
+    stateService,
+    async () => Promise.all(providerRegistry.getAll().map((p) => p.describe())),
+    new ExecutionHostEndpointRepository(db),
   )
   const executionHostDaemonCredentials =
     new ExecutionHostDaemonCredentialsService()

@@ -115,7 +115,6 @@ describe('app-settings pure helpers', () => {
       namingModelByProvider: {},
       extractionModelByProvider: {},
       commandCenterShortcut: { key: 'k', shiftKey: false, altKey: false },
-      executionHostRemoteBaseUrl: null,
       notifications: DEFAULT_NOTIFICATION_PREFS,
       onboarding: DEFAULT_ONBOARDING_PREFS,
       updates: DEFAULT_UPDATE_PREFS,

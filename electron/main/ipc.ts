@@ -26,6 +26,7 @@ import { CodexQuotaService } from '../backend/provider-quota/codex-quota.service
 import { ProviderQuotaService } from '../backend/provider-quota/provider-quota.service'
 import { createDefaultProviderQuotaSources } from '../backend/provider-quota/provider-quota.sources'
 import type { ExecutionHostDaemonCredentialsService } from '../backend/credentials/execution-host-daemon-credentials.service'
+import { DEFAULT_EXECUTION_HOST_ENDPOINT_ID } from '../backend/execution-host-endpoint/execution-host-endpoint.pure'
 import type { RemoteExecutionHost } from '../backend/provider/execution-host/remote-execution-host'
 import {
   testRemoteExecutionHostConnection,
@@ -536,8 +537,15 @@ export function registerIpcHandlers(
   )
 
   if (executionHostRemote) {
+    // The settings form still edits one daemon: the Endpoint the single-host
+    // era became (MAR-2620). Its id is named here rather than defaulted inside
+    // the credentials service, so the machine this token belongs to is visible
+    // at the call site — and so the Execution Bar cannot later add a second
+    // Endpoint that quietly inherits it.
+    const settingsEndpointId = DEFAULT_EXECUTION_HOST_ENDPOINT_ID
+
     ipcMain.handle('credentials:executionHostDaemon:getStatus', () =>
-      executionHostRemote.credentials.getStatus(),
+      executionHostRemote.credentials.getStatus(settingsEndpointId),
     )
 
     ipcMain.handle(
@@ -546,12 +554,15 @@ export function registerIpcHandlers(
         if (!input || typeof input.token !== 'string') {
           throw new Error('Daemon API token is required.')
         }
-        return executionHostRemote.credentials.setToken({ token: input.token })
+        return executionHostRemote.credentials.setToken(
+          { token: input.token },
+          settingsEndpointId,
+        )
       },
     )
 
     ipcMain.handle('credentials:executionHostDaemon:deleteToken', () =>
-      executionHostRemote.credentials.deleteToken(),
+      executionHostRemote.credentials.deleteToken(settingsEndpointId),
     )
 
     ipcMain.handle('executionHost:testRemoteConnection', () =>

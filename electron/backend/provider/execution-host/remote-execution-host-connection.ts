@@ -50,6 +50,13 @@ interface AppSettingsConnectionResolverDeps {
  * daemon credentials store at call time, so settings changes apply without
  * rebuilding the host. Throws RemoteExecutionHostError('configuration') when
  * the base URL or token is missing.
+ *
+ * Endpoints are plural in the record (MAR-2620) but this resolver still serves
+ * one connection, because a single RemoteExecutionHost instance is all the app
+ * builds today. It therefore reads the first Endpoint -- exactly the one the
+ * settings form edits and the one migrated sessions point at. The strip that
+ * lets a session pick a different Endpoint is slice 2; until it exists, there
+ * is no second Endpoint to be wrong about.
  */
 export class AppSettingsRemoteExecutionHostConnectionResolver implements RemoteExecutionHostConnectionResolver {
   constructor(private readonly deps: AppSettingsConnectionResolverDeps) {}
@@ -81,17 +88,18 @@ export class AppSettingsRemoteExecutionHostConnectionResolver implements RemoteE
     token: string | null
   }> {
     const settings = await this.deps.appSettings.getAppSettings()
-    const baseUrl = settings.executionHostRemoteBaseUrl
-    if (!baseUrl) {
+    const endpoint = settings.executionHostEndpoints[0] ?? null
+    if (!endpoint) {
       return { state: 'missing-base-url', baseUrl: null, token: null }
     }
 
-    const token = (await this.deps.credentials.resolveToken())?.trim() ?? ''
+    const token =
+      (await this.deps.credentials.resolveToken(endpoint.id))?.trim() ?? ''
     if (!token) {
-      return { state: 'missing-token', baseUrl, token: null }
+      return { state: 'missing-token', baseUrl: endpoint.baseUrl, token: null }
     }
 
-    return { state: 'ok', baseUrl, token }
+    return { state: 'ok', baseUrl: endpoint.baseUrl, token }
   }
 }
 

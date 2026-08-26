@@ -1,6 +1,7 @@
 import { describe, expect, it, beforeEach, afterEach } from 'vitest'
 import { getDatabase, closeDatabase, resetDatabase } from '../database/database'
 import { DEFAULT_NOTIFICATION_PREFS } from '../notifications/notifications.defaults'
+import { ExecutionHostEndpointRepository } from '../execution-host-endpoint/execution-host-endpoint.repository'
 import { StateService } from '../state/state.service'
 import type {
   ProviderAttachmentCapability,
@@ -175,7 +176,11 @@ describe('AppSettingsService', () => {
     const db = getDatabase()
     stateService = new StateService(db)
     descriptors = buildDescriptors()
-    service = new AppSettingsService(stateService, async () => descriptors)
+    service = new AppSettingsService(
+      stateService,
+      async () => descriptors,
+      new ExecutionHostEndpointRepository(db),
+    )
   })
 
   afterEach(() => {
@@ -193,7 +198,7 @@ describe('AppSettingsService', () => {
         namingModelByProvider: {},
         extractionModelByProvider: {},
         commandCenterShortcut: { key: 'k', shiftKey: false, altKey: false },
-        executionHostRemoteBaseUrl: null,
+        executionHostEndpoints: [],
         notifications: DEFAULT_NOTIFICATION_PREFS,
         onboarding: DEFAULT_ONBOARDING_PREFS,
         updates: DEFAULT_UPDATE_PREFS,
@@ -211,7 +216,7 @@ describe('AppSettingsService', () => {
         namingModelByProvider: {},
         extractionModelByProvider: {},
         commandCenterShortcut: { key: 'k', shiftKey: false, altKey: false },
-        executionHostRemoteBaseUrl: null,
+        executionHostEndpoints: [],
         notifications: DEFAULT_NOTIFICATION_PREFS,
         onboarding: DEFAULT_ONBOARDING_PREFS,
         updates: DEFAULT_UPDATE_PREFS,
@@ -227,7 +232,7 @@ describe('AppSettingsService', () => {
         namingModelByProvider: {},
         extractionModelByProvider: {},
         commandCenterShortcut: { key: 'k', shiftKey: false, altKey: false },
-        executionHostRemoteBaseUrl: null,
+        executionHostEndpoints: [],
         notifications: DEFAULT_NOTIFICATION_PREFS,
         onboarding: DEFAULT_ONBOARDING_PREFS,
         updates: DEFAULT_UPDATE_PREFS,
@@ -254,7 +259,7 @@ describe('AppSettingsService', () => {
         namingModelByProvider: {},
         extractionModelByProvider: {},
         commandCenterShortcut: { key: 'k', shiftKey: false, altKey: false },
-        executionHostRemoteBaseUrl: null,
+        executionHostEndpoints: [],
         notifications: DEFAULT_NOTIFICATION_PREFS,
         onboarding: DEFAULT_ONBOARDING_PREFS,
         updates: DEFAULT_UPDATE_PREFS,
@@ -281,7 +286,7 @@ describe('AppSettingsService', () => {
         namingModelByProvider: {},
         extractionModelByProvider: {},
         commandCenterShortcut: { key: 'k', shiftKey: false, altKey: false },
-        executionHostRemoteBaseUrl: null,
+        executionHostEndpoints: [],
         notifications: DEFAULT_NOTIFICATION_PREFS,
         onboarding: DEFAULT_ONBOARDING_PREFS,
         updates: DEFAULT_UPDATE_PREFS,
@@ -308,7 +313,7 @@ describe('AppSettingsService', () => {
         namingModelByProvider: {},
         extractionModelByProvider: {},
         commandCenterShortcut: { key: 'k', shiftKey: false, altKey: false },
-        executionHostRemoteBaseUrl: null,
+        executionHostEndpoints: [],
         notifications: DEFAULT_NOTIFICATION_PREFS,
         onboarding: DEFAULT_ONBOARDING_PREFS,
         updates: DEFAULT_UPDATE_PREFS,
@@ -328,7 +333,7 @@ describe('AppSettingsService', () => {
         namingModelByProvider: {},
         extractionModelByProvider: {},
         commandCenterShortcut: { key: 'k', shiftKey: false, altKey: false },
-        executionHostRemoteBaseUrl: null,
+        executionHostEndpoints: [],
         notifications: DEFAULT_NOTIFICATION_PREFS,
         onboarding: DEFAULT_ONBOARDING_PREFS,
         updates: DEFAULT_UPDATE_PREFS,
@@ -464,13 +469,110 @@ describe('AppSettingsService', () => {
         namingModelByProvider: {},
         extractionModelByProvider: {},
         commandCenterShortcut: { key: 'k', shiftKey: false, altKey: false },
-        executionHostRemoteBaseUrl: null,
+        executionHostEndpoints: [],
         notifications: DEFAULT_NOTIFICATION_PREFS,
         onboarding: DEFAULT_ONBOARDING_PREFS,
         updates: DEFAULT_UPDATE_PREFS,
         debugLogging: DEFAULT_DEBUG_LOGGING_PREFS,
         piModelVisibility: DEFAULT_PI_MODEL_VISIBILITY_PREFS,
         favoriteModels: DEFAULT_FAVORITE_MODELS_PREFS,
+      })
+    })
+
+    // MAR-2620: one text field still edits one daemon, and that daemon is now
+    // the first Endpoint. The write path has to survive the round trip, because
+    // a session records the Endpoint's id and nothing downstream can repair a
+    // save that lost it.
+    describe('execution host endpoints', () => {
+      it('round-trips the endpoint the settings form edits', async () => {
+        const stored = await service.setAppSettings({
+          defaultProviderId: null,
+          defaultModelId: null,
+          defaultEffortId: null,
+          executionHostEndpoints: [{ baseUrl: 'https://daemon.example.com/' }],
+        })
+        expect(stored.executionHostEndpoints).toEqual([
+          expect.objectContaining({
+            id: 'default',
+            label: 'Remote daemon',
+            baseUrl: 'https://daemon.example.com',
+            position: 0,
+          }),
+        ])
+
+        const reread = await service.getAppSettings()
+        expect(reread.executionHostEndpoints).toEqual(
+          stored.executionHostEndpoints,
+        )
+      })
+
+      it('keeps the endpoint id across an edit, so recorded sessions still resolve', async () => {
+        await service.setAppSettings({
+          defaultProviderId: null,
+          defaultModelId: null,
+          defaultEffortId: null,
+          executionHostEndpoints: [{ baseUrl: 'https://old.example.com' }],
+        })
+        const moved = await service.setAppSettings({
+          defaultProviderId: null,
+          defaultModelId: null,
+          defaultEffortId: null,
+          executionHostEndpoints: [{ baseUrl: 'https://new.example.com' }],
+        })
+        expect(moved.executionHostEndpoints[0]).toMatchObject({
+          id: 'default',
+          baseUrl: 'https://new.example.com',
+        })
+      })
+
+      it('clears the endpoint when the field is emptied', async () => {
+        await service.setAppSettings({
+          defaultProviderId: null,
+          defaultModelId: null,
+          defaultEffortId: null,
+          executionHostEndpoints: [{ baseUrl: 'https://daemon.example.com' }],
+        })
+        const cleared = await service.setAppSettings({
+          defaultProviderId: null,
+          defaultModelId: null,
+          defaultEffortId: null,
+          executionHostEndpoints: [],
+        })
+        expect(cleared.executionHostEndpoints).toEqual([])
+      })
+
+      it('leaves endpoints alone when the input does not mention them', async () => {
+        await service.setAppSettings({
+          defaultProviderId: null,
+          defaultModelId: null,
+          defaultEffortId: null,
+          executionHostEndpoints: [{ baseUrl: 'https://daemon.example.com' }],
+        })
+        const untouched = await service.setAppSettings({
+          defaultProviderId: 'claude-code',
+          defaultModelId: 'sonnet',
+          defaultEffortId: 'medium',
+        })
+        expect(untouched.executionHostEndpoints).toHaveLength(1)
+      })
+
+      it('refuses a base URL that is not HTTP(S), and saves nothing at all', async () => {
+        await expect(
+          service.setAppSettings({
+            defaultProviderId: 'claude-code',
+            defaultModelId: 'sonnet',
+            defaultEffortId: 'medium',
+            executionHostEndpoints: [{ baseUrl: 'ftp://daemon.example.com' }],
+          }),
+        ).rejects.toThrow(
+          'Remote execution host base URL must be an HTTP(S) URL.',
+        )
+
+        // A rejected endpoint list must not leave half a form saved: the
+        // provider defaults in the same submission stay unwritten too.
+        const after = await service.getAppSettings()
+        expect(after.executionHostEndpoints).toEqual([])
+        expect(after.defaultProviderId).toBeNull()
       })
     })
 

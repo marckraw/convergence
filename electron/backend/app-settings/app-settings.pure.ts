@@ -12,7 +12,7 @@ import {
   DEFAULT_FAVORITE_MODELS_PREFS,
   DEFAULT_ONBOARDING_PREFS,
   DEFAULT_PI_MODEL_VISIBILITY_PREFS,
-  type AppSettings,
+  type StoredAppSettings,
   type DebugLoggingPrefs,
   type FavoriteModelsPrefs,
   type OnboardingPrefs,
@@ -172,27 +172,7 @@ export function parseFavoriteModelsPrefs(value: unknown): FavoriteModelsPrefs {
 
 export { parseCommandCenterShortcut, validateCommandCenterShortcut }
 
-/**
- * Normalizes a remote daemon base URL setting: trims, requires HTTP(S), and
- * strips trailing slashes. Used by the execution host remote endpoint.
- */
-export function normalizeRemoteBaseUrl(value: unknown): string | null {
-  if (typeof value !== 'string') return null
-  const trimmed = value.trim()
-  if (!trimmed) return null
-
-  try {
-    const parsed = new URL(trimmed)
-    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
-      return null
-    }
-    return parsed.href.replace(/\/+$/, '')
-  } catch {
-    return null
-  }
-}
-
-function emptyAppSettings(): AppSettings {
+function emptyAppSettings(): StoredAppSettings {
   return {
     defaultProviderId: null,
     defaultModelId: null,
@@ -200,7 +180,6 @@ function emptyAppSettings(): AppSettings {
     namingModelByProvider: {},
     extractionModelByProvider: {},
     commandCenterShortcut: DEFAULT_COMMAND_CENTER_SHORTCUT,
-    executionHostRemoteBaseUrl: null,
     notifications: DEFAULT_NOTIFICATION_PREFS,
     onboarding: DEFAULT_ONBOARDING_PREFS,
     updates: DEFAULT_UPDATE_PREFS,
@@ -210,12 +189,12 @@ function emptyAppSettings(): AppSettings {
   }
 }
 
-export function parseAppSettings(raw: string | null): AppSettings {
+export function parseAppSettings(raw: string | null): StoredAppSettings {
   const empty = emptyAppSettings()
   if (!raw) return empty
 
   try {
-    const parsed = JSON.parse(raw) as Partial<AppSettings>
+    const parsed = JSON.parse(raw) as Partial<StoredAppSettings>
     return {
       defaultProviderId:
         typeof parsed.defaultProviderId === 'string'
@@ -235,9 +214,6 @@ export function parseAppSettings(raw: string | null): AppSettings {
       ),
       commandCenterShortcut: parseCommandCenterShortcut(
         parsed.commandCenterShortcut,
-      ),
-      executionHostRemoteBaseUrl: normalizeRemoteBaseUrl(
-        parsed.executionHostRemoteBaseUrl,
       ),
       notifications: parseNotificationPrefs(parsed.notifications),
       onboarding: parseOnboardingPrefs(parsed.onboarding),
@@ -271,9 +247,9 @@ export function validateModelMap(
 }
 
 export function validateAppSettings(
-  settings: AppSettings,
+  settings: StoredAppSettings,
   descriptors: ProviderDescriptor[],
-): AppSettings {
+): StoredAppSettings {
   const namingModelByProvider = validateModelMap(
     settings.namingModelByProvider,
     descriptors,
@@ -301,7 +277,6 @@ export function validateAppSettings(
       namingModelByProvider,
       extractionModelByProvider,
       commandCenterShortcut,
-      executionHostRemoteBaseUrl: settings.executionHostRemoteBaseUrl,
       notifications: settings.notifications,
       onboarding: settings.onboarding,
       updates: settings.updates,
@@ -325,7 +300,6 @@ export function validateAppSettings(
       namingModelByProvider,
       extractionModelByProvider,
       commandCenterShortcut,
-      executionHostRemoteBaseUrl: settings.executionHostRemoteBaseUrl,
       notifications: settings.notifications,
       onboarding: settings.onboarding,
       updates: settings.updates,
@@ -348,7 +322,6 @@ export function validateAppSettings(
     namingModelByProvider,
     extractionModelByProvider,
     commandCenterShortcut,
-    executionHostRemoteBaseUrl: settings.executionHostRemoteBaseUrl,
     notifications: settings.notifications,
     onboarding: settings.onboarding,
     updates: settings.updates,
@@ -457,7 +430,7 @@ export function filterPiDescriptor(
 }
 
 export function resolveSessionDefaultsFromSettings(
-  settings: AppSettings,
+  settings: StoredAppSettings,
   descriptors: ProviderDescriptor[],
 ): ResolvedSessionDefaults | null {
   if (descriptors.length === 0) return null

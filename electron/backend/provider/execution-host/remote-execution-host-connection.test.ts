@@ -14,9 +14,28 @@ function resolverWith(input: {
   return new AppSettingsRemoteExecutionHostConnectionResolver({
     appSettings: {
       getAppSettings: async () =>
-        ({ executionHostRemoteBaseUrl: input.baseUrl }) as AppSettings,
+        ({
+          executionHostEndpoints: input.baseUrl
+            ? [
+                {
+                  id: 'default',
+                  label: 'Remote daemon',
+                  baseUrl: input.baseUrl,
+                  position: 0,
+                  createdAt: '2026-01-01',
+                  updatedAt: '2026-01-01',
+                },
+              ]
+            : [],
+        }) as AppSettings,
     },
-    credentials: { resolveToken: async () => input.token },
+    // The token is keyed by endpoint id (MAR-2620): a resolver that asked for
+    // the wrong machine's token would still get one, so the fixture refuses
+    // any id but the one endpoint it was built with.
+    credentials: {
+      resolveToken: async (endpointId: string) =>
+        endpointId === 'default' ? input.token : null,
+    },
   })
 }
 
