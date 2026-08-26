@@ -1,4 +1,5 @@
 import {
+  executionHostRegistryFor,
   seedExecutionHostEndpoint,
   TEST_EXECUTION_HOST_ENDPOINT_ID,
 } from '../../execution-host-endpoint/execution-host-endpoint.fixture'
@@ -257,7 +258,11 @@ describe('remote wire events reaching the session record', () => {
       debugSink: { record: (entry) => debugEntries.push(entry) },
     })
     await host.refreshProviders()
-    service.setRemoteExecutionHost(host)
+    service.setRemoteExecutionHosts(
+      executionHostRegistryFor({
+        [TEST_EXECUTION_HOST_ENDPOINT_ID]: host,
+      }),
+    )
     service.setRemoteWorkspaceSourceResolver(() => ({
       repository: 'git@github.com:acme/repo.git',
     }))
@@ -749,7 +754,11 @@ describe('remote wire events reaching the session record', () => {
       new LocalExecutionHost(new ProviderRegistry()),
       join(tempDir, 'global-sessions'),
     )
-    revived.setRemoteExecutionHost(host)
+    revived.setRemoteExecutionHosts(
+      executionHostRegistryFor({
+        [TEST_EXECUTION_HOST_ENDPOINT_ID]: host,
+      }),
+    )
     revived.setRemoteWorkspaceSourceResolver(() => ({
       repository: 'git@github.com:acme/repo.git',
     }))
@@ -1045,7 +1054,11 @@ describe('remote wire events reaching the session record', () => {
    */
   it('lets a released handle report a settle without ending the run that replaced it', async () => {
     const lingering = createLingeringHandleHost(host)
-    service.setRemoteExecutionHost(lingering.host)
+    service.setRemoteExecutionHosts(
+      executionHostRegistryFor({
+        [TEST_EXECUTION_HOST_ENDPOINT_ID]: lingering.host,
+      }),
+    )
 
     await service.start(sessionId, { text: 'hello' })
     await waitUntil(

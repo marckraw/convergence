@@ -46,6 +46,12 @@ export interface StubDaemon {
   }>
   eventStreamLastEventIds: Array<string | null>
   setMetaStatus: (status: number) => void
+  /**
+   * Replaces the provider listing. Two stub daemons in one test have to be
+   * tellable apart by what they serve, or "each host holds its own cache" is
+   * unobservable.
+   */
+  setMeta: (body: unknown) => void
   /** Raw `/health` body; null makes the route 404, as an older daemon does. */
   setHealthBody: (body: string | null) => void
   /** A proxy that swallows `/health` by hanging instead of answering. */
@@ -84,6 +90,7 @@ export function createStubDaemon(): StubDaemon {
     controller: ReadableStreamDefaultController<Uint8Array> | null
   } = { controller: null }
   let metaStatus = 200
+  let meta: unknown = DAEMON_META
   let healthBody: string | null = DAEMON_HEALTH_FIXTURE_0_26_1
   let healthHangs = false
   let startStatus = 201
@@ -138,7 +145,7 @@ export function createStubDaemon(): StubDaemon {
       if (metaStatus !== 200) {
         return jsonResponse({ error: 'meta unavailable' }, metaStatus)
       }
-      return jsonResponse(DAEMON_META)
+      return jsonResponse(meta)
     }
 
     if (method === 'POST' && url.endsWith('/v0/execution/sessions')) {
@@ -245,6 +252,9 @@ export function createStubDaemon(): StubDaemon {
     healthRequests,
     setMetaStatus(status) {
       metaStatus = status
+    },
+    setMeta(body) {
+      meta = body
     },
     setHealthBody(body) {
       healthBody = body

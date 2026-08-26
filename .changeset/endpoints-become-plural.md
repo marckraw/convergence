@@ -16,3 +16,10 @@ the base URL still in Settings, the sessions that ran on it are moved onto it,
 and the base URL leaves the settings blob so it lives in exactly one place. A
 session whose Endpoint is no longer configured now refuses to start and says
 which one is missing, rather than quietly running on a different machine.
+
+The id a session records is the one its turns are addressed to: there is now
+one remote execution host per Endpoint, resolved by that id, each holding its
+own connection, provider listing and daemon handshake. The remote workspace
+panel asks the same machine. Saving Settings writes the Endpoints and the rest
+of the settings in one transaction, so a rejected save leaves neither half
+stored.

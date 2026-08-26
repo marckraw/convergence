@@ -1,5 +1,8 @@
 import type { ProviderDescriptor } from '../provider.types'
-import type { ExecutionHostProviderCapabilities } from './execution-host.types'
+import type {
+  ExecutionHostProviderCapabilities,
+  RemoteSessionWorkspaceInfo,
+} from './execution-host.types'
 import {
   RemoteExecutionHostError,
   type RemoteExecutionHostProviderInfo,
@@ -201,18 +204,7 @@ export function createSseParser(): { feed: (chunk: string) => SseEvent[] } {
   }
 }
 
-/**
- * The workspace slice of the daemon's session snapshot: where a remote
- * session actually runs and the pull request the daemon opened for it.
- */
-export interface RemoteSessionWorkspaceInfo {
-  workspace: {
-    repository: string
-    branchName: string
-    baseRef: string | null
-  } | null
-  prUrl: string | null
-}
+export type { RemoteSessionWorkspaceInfo }
 
 /**
  * Parses the workspace slice out of a daemon session snapshot. Throws

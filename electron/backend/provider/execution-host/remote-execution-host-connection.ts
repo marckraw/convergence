@@ -43,23 +43,30 @@ export interface RemoteExecutionHostConnectionResult {
 interface AppSettingsConnectionResolverDeps {
   appSettings: Pick<AppSettingsService, 'getAppSettings'>
   credentials: Pick<ExecutionHostDaemonCredentialsService, 'resolveToken'>
+  /** The Endpoint this resolver speaks for. Never optional: see the class. */
+  endpointId: string
 }
 
 /**
- * Resolves the Remote Execution Host endpoint from App Settings and the
+ * Resolves one named Endpoint's base URL and token from App Settings and the
  * daemon credentials store at call time, so settings changes apply without
  * rebuilding the host. Throws RemoteExecutionHostError('configuration') when
  * the base URL or token is missing.
  *
- * Endpoints are plural in the record (MAR-2620) but this resolver still serves
- * one connection, because a single RemoteExecutionHost instance is all the app
- * builds today. It therefore reads the first Endpoint -- exactly the one the
- * settings form edits and the one migrated sessions point at. The strip that
- * lets a session pick a different Endpoint is slice 2; until it exists, there
- * is no second Endpoint to be wrong about.
+ * The Endpoint is fixed at construction and looked up by id, never by
+ * position (MAR-2620). Reading whichever Endpoint happens to be first would
+ * make the id a fact that is checked upstream and then thrown away: a session
+ * recording Endpoint B would validate, and post to Endpoint A. One resolver
+ * serves exactly one machine, and `AppSettingsRemoteExecutionHostRegistry`
+ * builds one per Endpoint.
  */
 export class AppSettingsRemoteExecutionHostConnectionResolver implements RemoteExecutionHostConnectionResolver {
   constructor(private readonly deps: AppSettingsConnectionResolverDeps) {}
+
+  /** Which machine this resolver answers for. */
+  get endpointId(): string {
+    return this.deps.endpointId
+  }
 
   async resolveConnection(): Promise<RemoteExecutionHostConnection> {
     const inspected = await this.inspect()
@@ -88,7 +95,10 @@ export class AppSettingsRemoteExecutionHostConnectionResolver implements RemoteE
     token: string | null
   }> {
     const settings = await this.deps.appSettings.getAppSettings()
-    const endpoint = settings.executionHostEndpoints[0] ?? null
+    const endpoint =
+      settings.executionHostEndpoints.find(
+        (candidate) => candidate.id === this.deps.endpointId,
+      ) ?? null
     if (!endpoint) {
       return { state: 'missing-base-url', baseUrl: null, token: null }
     }

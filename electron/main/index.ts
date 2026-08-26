@@ -92,8 +92,7 @@ import {
 import { loadEnvFile } from '../backend/environment/env-file.service'
 import { hydrateProcessPathFromShell } from '../backend/environment/shell-path.service'
 import { ExecutionHostDaemonCredentialsService } from '../backend/credentials/execution-host-daemon-credentials.service'
-import { RemoteExecutionHost } from '../backend/provider/execution-host/remote-execution-host'
-import { AppSettingsRemoteExecutionHostConnectionResolver } from '../backend/provider/execution-host/remote-execution-host-connection'
+import { AppSettingsRemoteExecutionHostRegistry } from '../backend/provider/execution-host/remote-execution-host.registry'
 import { readGitOriginUrl } from '../backend/git/git-origin'
 import { normalizeGitHubRemoteUrl } from '../backend/git/git-origin.pure'
 import { OpenRouterCredentialsService } from '../backend/credentials/openrouter-credentials.service'
@@ -446,27 +445,25 @@ async function startApp(): Promise<void> {
   registerProjectScriptsIpcHandlers(projectScriptsService, projectScriptsRunner)
 
   const appSettingsService = new AppSettingsService(
+    db,
     stateService,
     async () => Promise.all(providerRegistry.getAll().map((p) => p.describe())),
     new ExecutionHostEndpointRepository(db),
   )
   const executionHostDaemonCredentials =
     new ExecutionHostDaemonCredentialsService()
-  const remoteExecutionHostConnectionResolver =
-    new AppSettingsRemoteExecutionHostConnectionResolver({
-      appSettings: appSettingsService,
-      credentials: executionHostDaemonCredentials,
-    })
-  const remoteExecutionHost = new RemoteExecutionHost({
-    connection: remoteExecutionHostConnectionResolver,
+  const remoteExecutionHosts = new AppSettingsRemoteExecutionHostRegistry({
+    appSettings: appSettingsService,
+    credentials: executionHostDaemonCredentials,
     onEventSeq: (sessionId, seq) =>
       sessionService.recordRemoteEventSeq(sessionId, seq),
     debugSink,
   })
-  // Prime the remote provider cache when a daemon is configured; failures
-  // are expected when it is not and surface later via the connection test.
-  void remoteExecutionHost.refreshProviders().catch(() => {})
-  sessionService.setRemoteExecutionHost(remoteExecutionHost)
+  // Build a host for every configured Endpoint, which primes each one's
+  // provider cache. Failures are expected when a daemon is unconfigured or
+  // unreachable and surface later via the connection test.
+  void remoteExecutionHosts.primeConfiguredEndpoints().catch(() => {})
+  sessionService.setRemoteExecutionHosts(remoteExecutionHosts)
   sessionService.setRemoteWorkspaceSourceResolver((workingDirectory) => {
     const origin = readGitOriginUrl(workingDirectory)
     const repository = origin ? normalizeGitHubRemoteUrl(origin) : null
@@ -731,8 +728,7 @@ async function startApp(): Promise<void> {
     },
     {
       credentials: executionHostDaemonCredentials,
-      host: remoteExecutionHost,
-      resolver: remoteExecutionHostConnectionResolver,
+      registry: remoteExecutionHosts,
     },
   )
 

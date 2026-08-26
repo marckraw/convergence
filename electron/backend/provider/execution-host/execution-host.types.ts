@@ -22,6 +22,21 @@ export interface ExecutionHostProviderCapabilities {
 }
 
 /**
+ * The workspace slice of a host's session snapshot: where a session actually
+ * runs and the pull request the host opened for it. Only hosts that materialize
+ * their own workspace report one -- the Local Execution Host runs in a
+ * directory the app already knows.
+ */
+export interface RemoteSessionWorkspaceInfo {
+  workspace: {
+    repository: string
+    branchName: string
+    baseRef: string | null
+  } | null
+  prUrl: string | null
+}
+
+/**
  * Provider Execution Host: the module that owns where and how Providers
  * actually run. Callers start Sessions and one-shot executions through this
  * interface and never touch provider process mechanics, registries, or
@@ -94,4 +109,15 @@ export interface ProviderExecutionHost {
     config: SessionStartConfig,
     afterSeq: number,
   ): SessionHandle
+
+  /**
+   * Where this host is running the named session, when it materialized the
+   * workspace itself. On the interface rather than on the remote adapter so
+   * that asking about a session goes through the same host resolution a turn
+   * does: a session's workspace must be read from the machine the session
+   * names, never from whichever daemon a caller happens to hold (MAR-2620).
+   */
+  fetchSessionWorkspaceInfo?(
+    sessionId: string,
+  ): Promise<RemoteSessionWorkspaceInfo>
 }

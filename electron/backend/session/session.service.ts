@@ -5,7 +5,11 @@ import type {
   ConversationItemRow,
   SessionRow,
 } from '../database/database.types'
-import type { ProviderExecutionHost } from '../provider/execution-host/execution-host.types'
+import type {
+  ProviderExecutionHost,
+  RemoteSessionWorkspaceInfo,
+} from '../provider/execution-host/execution-host.types'
+import type { RemoteExecutionHostRegistry } from '../provider/execution-host/remote-execution-host.types'
 import {
   describeMissingExecutionHostEndpoint,
   isLocalExecutionHost,
@@ -223,7 +227,7 @@ export class SessionService {
    * gone, not sessions finishing now, and must never fire relays at boot.
    */
   private recoveringStaleSessions = false
-  private remoteExecutionHost: ProviderExecutionHost | null = null
+  private remoteExecutionHosts: RemoteExecutionHostRegistry | null = null
   private remoteWorkspaceSourceResolver:
     | ((workingDirectory: string) => { repository: string } | null)
     | null = null
@@ -292,8 +296,13 @@ export class SessionService {
     this.attentionObserver = observer
   }
 
-  setRemoteExecutionHost(host: ProviderExecutionHost): void {
-    this.remoteExecutionHost = host
+  /**
+   * Supplies the Endpoint-keyed registry remote sessions resolve through. A
+   * registry rather than a host, because which machine a session runs on is
+   * the session's own recorded fact (MAR-2620).
+   */
+  setRemoteExecutionHosts(registry: RemoteExecutionHostRegistry): void {
+    this.remoteExecutionHosts = registry
     this.resumeRunningRemoteSessions()
   }
 
@@ -318,6 +327,13 @@ export class SessionService {
    * outcome this era can produce -- a session quietly running on a machine it
    * never named, with its own record still asserting the old one -- so a
    * missing Endpoint refuses instead (MAR-2620).
+   *
+   * The host comes back keyed by that same id. Checking the id and then
+   * handing back an ambient host would answer "is this Endpoint known?" when
+   * the question is "will this run where it says?" -- two questions that agree
+   * exactly until a second Endpoint exists, which is the era this slice opens.
+   * Every remote call a session makes goes through here for that reason; there
+   * is no other way to reach a remote host from a session id.
    */
   private resolveExecution(
     session: Pick<SessionSummary, 'executionHost' | 'providerId'>,
@@ -326,13 +342,14 @@ export class SessionService {
       return { host: this.executionHost, providerId: session.providerId }
     }
 
-    if (!this.executionHostEndpoints.getById(session.executionHost)) {
+    const endpoint = this.executionHostEndpoints.getById(session.executionHost)
+    if (!endpoint) {
       throw new Error(
         describeMissingExecutionHostEndpoint(session.executionHost),
       )
     }
 
-    if (!this.remoteExecutionHost) {
+    if (!this.remoteExecutionHosts) {
       throw new Error('Remote execution host is not configured')
     }
     const remoteProviderId = remoteProviderIdForLocalProvider(
@@ -343,7 +360,31 @@ export class SessionService {
         `Provider ${session.providerId} is not supported on the remote execution host`,
       )
     }
-    return { host: this.remoteExecutionHost, providerId: remoteProviderId }
+    return {
+      host: this.remoteExecutionHosts.hostFor(endpoint.id),
+      providerId: remoteProviderId,
+    }
+  }
+
+  /**
+   * Where a remote session is running, read from the Endpoint the session
+   * names. Resolving the host the same way a turn does is the point: a
+   * workspace panel that queried an ambient daemon would describe a machine
+   * the session has nothing to do with, and look exactly as convincing.
+   */
+  async fetchRemoteSessionWorkspaceInfo(
+    sessionId: string,
+  ): Promise<RemoteSessionWorkspaceInfo> {
+    const session = this.getSummaryById(sessionId)
+    if (!session) throw new Error(`Session not found: ${sessionId}`)
+
+    const execution = this.resolveExecution(session)
+    if (!execution.host.fetchSessionWorkspaceInfo) {
+      throw new Error(
+        'This session runs on a host that does not report workspace information.',
+      )
+    }
+    return execution.host.fetchSessionWorkspaceInfo(sessionId)
   }
 
   /**

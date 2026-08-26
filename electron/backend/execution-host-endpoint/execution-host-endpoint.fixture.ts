@@ -1,4 +1,6 @@
 import type Database from 'better-sqlite3'
+import type { ProviderExecutionHost } from '../provider/execution-host/execution-host.types'
+import type { RemoteExecutionHostRegistry } from '../provider/execution-host/remote-execution-host.types'
 
 /**
  * A configured Endpoint for tests that need a session to run somewhere other
@@ -20,4 +22,28 @@ export function seedExecutionHostEndpoint(
      VALUES (?, ?, ?, 0)`,
   ).run(id, id, baseUrl)
   return id
+}
+
+/**
+ * A registry that hands back a host only for the Endpoint ids it was given.
+ *
+ * It throws for anything else rather than falling back to the one host it
+ * holds: a fixture that answered every id would make the routing it stands in
+ * for unobservable, which is the exact confusion Endpoint ids exist to
+ * prevent (MAR-2620).
+ */
+export function executionHostRegistryFor(
+  hosts: Record<string, ProviderExecutionHost>,
+): RemoteExecutionHostRegistry {
+  return {
+    hostFor: (endpointId) => {
+      const host = hosts[endpointId]
+      if (!host) {
+        throw new Error(
+          `No execution host registered for endpoint: ${endpointId}`,
+        )
+      }
+      return host
+    },
+  }
 }

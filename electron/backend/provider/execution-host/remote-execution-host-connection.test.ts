@@ -7,35 +7,52 @@ import {
   testRemoteExecutionHostConnection,
 } from './remote-execution-host-connection'
 
-function resolverWith(input: {
-  baseUrl: string | null
-  token: string | null
+function endpoint(
+  id: string,
+  baseUrl: string,
+): AppSettings['executionHostEndpoints'][number] {
+  return {
+    id,
+    label: id,
+    baseUrl,
+    position: 0,
+    createdAt: '2026-01-01',
+    updatedAt: '2026-01-01',
+  }
+}
+
+/**
+ * A resolver over an explicit list of Endpoints and an explicit token per
+ * Endpoint id. Both are keyed by id and neither has a fallback, so a resolver
+ * that reached for the wrong machine gets nothing rather than something
+ * plausible.
+ */
+function resolverOver(input: {
+  endpointId: string
+  endpoints: AppSettings['executionHostEndpoints']
+  tokens: Record<string, string | null>
 }): AppSettingsRemoteExecutionHostConnectionResolver {
   return new AppSettingsRemoteExecutionHostConnectionResolver({
     appSettings: {
       getAppSettings: async () =>
-        ({
-          executionHostEndpoints: input.baseUrl
-            ? [
-                {
-                  id: 'default',
-                  label: 'Remote daemon',
-                  baseUrl: input.baseUrl,
-                  position: 0,
-                  createdAt: '2026-01-01',
-                  updatedAt: '2026-01-01',
-                },
-              ]
-            : [],
-        }) as AppSettings,
+        ({ executionHostEndpoints: input.endpoints }) as AppSettings,
     },
-    // The token is keyed by endpoint id (MAR-2620): a resolver that asked for
-    // the wrong machine's token would still get one, so the fixture refuses
-    // any id but the one endpoint it was built with.
     credentials: {
       resolveToken: async (endpointId: string) =>
-        endpointId === 'default' ? input.token : null,
+        input.tokens[endpointId] ?? null,
     },
+    endpointId: input.endpointId,
+  })
+}
+
+function resolverWith(input: {
+  baseUrl: string | null
+  token: string | null
+}): AppSettingsRemoteExecutionHostConnectionResolver {
+  return resolverOver({
+    endpointId: 'default',
+    endpoints: input.baseUrl ? [endpoint('default', input.baseUrl)] : [],
+    tokens: { default: input.token },
   })
 }
 
@@ -93,6 +110,38 @@ describe('AppSettingsRemoteExecutionHostConnectionResolver', () => {
     await expect(resolver.resolveConnection()).resolves.toEqual({
       baseUrl: 'https://daemon.test',
       token: 'tok',
+    })
+  })
+
+  it('resolves the Endpoint it names, not whichever one is configured first', async () => {
+    // The defect this resolver exists to make impossible: endpoint A is first
+    // in the list, and a resolver bound to B must still address B. Reading by
+    // position validated the id upstream and then discarded it, so a session
+    // on B posted to A (MAR-2620).
+    const resolver = resolverOver({
+      endpointId: 'daemon-b',
+      endpoints: [
+        endpoint('daemon-a', 'https://daemon-a.test'),
+        endpoint('daemon-b', 'https://daemon-b.test'),
+      ],
+      tokens: { 'daemon-a': 'token-a', 'daemon-b': 'token-b' },
+    })
+
+    await expect(resolver.resolveConnection()).resolves.toEqual({
+      baseUrl: 'https://daemon-b.test',
+      token: 'token-b',
+    })
+  })
+
+  it('refuses when its own Endpoint is gone, even with others configured', async () => {
+    const resolver = resolverOver({
+      endpointId: 'daemon-b',
+      endpoints: [endpoint('daemon-a', 'https://daemon-a.test')],
+      tokens: { 'daemon-a': 'token-a' },
+    })
+
+    await expect(resolver.resolveConnection()).rejects.toMatchObject({
+      kind: 'configuration',
     })
   })
 
