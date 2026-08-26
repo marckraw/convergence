@@ -504,19 +504,29 @@ contextBridge.exposeInMainWorld('electronAPI', {
         ipcRenderer.invoke('credentials:openrouter:deleteToken'),
     },
     executionHostDaemon: {
-      getStatus: () =>
-        ipcRenderer.invoke('credentials:executionHostDaemon:getStatus'),
-      setToken: (token: string) =>
+      // Every call names the Endpoint it acts on (MAR-2629). A token belongs
+      // to one machine; a call that did not say which would authenticate as
+      // whichever one the main process happened to default to.
+      getStatus: (endpointId: string) =>
+        ipcRenderer.invoke('credentials:executionHostDaemon:getStatus', {
+          endpointId,
+        }),
+      setToken: (endpointId: string, token: string) =>
         ipcRenderer.invoke('credentials:executionHostDaemon:setToken', {
+          endpointId,
           token,
         }),
-      deleteToken: () =>
-        ipcRenderer.invoke('credentials:executionHostDaemon:deleteToken'),
+      deleteToken: (endpointId: string) =>
+        ipcRenderer.invoke('credentials:executionHostDaemon:deleteToken', {
+          endpointId,
+        }),
     },
   },
   executionHost: {
-    testRemoteConnection: () =>
-      ipcRenderer.invoke('executionHost:testRemoteConnection'),
+    testRemoteConnection: (endpointId: string) =>
+      ipcRenderer.invoke('executionHost:testRemoteConnection', { endpointId }),
+    sessionCountsByEndpoint: () =>
+      ipcRenderer.invoke('executionHost:sessionCountsByEndpoint'),
     getSessionWorkspace: (sessionId: string) =>
       ipcRenderer.invoke('executionHost:getSessionWorkspace', sessionId),
   },

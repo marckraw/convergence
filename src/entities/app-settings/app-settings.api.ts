@@ -28,20 +28,45 @@ export const openRouterCredentialsApi = {
     window.electronAPI.credentials.openRouter.deleteToken(),
 }
 
+/**
+ * The daemon token of one named Endpoint (MAR-2629). `endpointId` is required
+ * at every call rather than defaulted: a caller that has not decided which
+ * machine it means must say so, because the alternative is a token stored
+ * against — or read from — a daemon nobody chose.
+ */
 export const executionHostDaemonCredentialsApi = {
-  getStatus: (): Promise<ExecutionHostDaemonCredentialStatus> =>
-    window.electronAPI.credentials.executionHostDaemon.getStatus(),
+  getStatus: (
+    endpointId: string,
+  ): Promise<ExecutionHostDaemonCredentialStatus> =>
+    window.electronAPI.credentials.executionHostDaemon.getStatus(endpointId),
 
-  setToken: (token: string): Promise<ExecutionHostDaemonCredentialStatus> =>
-    window.electronAPI.credentials.executionHostDaemon.setToken(token),
+  setToken: (
+    endpointId: string,
+    token: string,
+  ): Promise<ExecutionHostDaemonCredentialStatus> =>
+    window.electronAPI.credentials.executionHostDaemon.setToken(
+      endpointId,
+      token,
+    ),
 
-  deleteToken: (): Promise<ExecutionHostDaemonCredentialStatus> =>
-    window.electronAPI.credentials.executionHostDaemon.deleteToken(),
+  deleteToken: (
+    endpointId: string,
+  ): Promise<ExecutionHostDaemonCredentialStatus> =>
+    window.electronAPI.credentials.executionHostDaemon.deleteToken(endpointId),
 }
 
 export const executionHostApi = {
-  testRemoteConnection: (): Promise<RemoteExecutionHostConnectionResult> =>
-    window.electronAPI.executionHost.testRemoteConnection(),
+  testRemoteConnection: (
+    endpointId: string,
+  ): Promise<RemoteExecutionHostConnectionResult> =>
+    window.electronAPI.executionHost.testRemoteConnection(endpointId),
+
+  /**
+   * How many sessions name each execution host id. Read by Settings so a
+   * removal can say what it costs instead of looking free (MAR-2642).
+   */
+  sessionCountsByEndpoint: (): Promise<Record<string, number>> =>
+    window.electronAPI.executionHost.sessionCountsByEndpoint(),
 
   getSessionWorkspace: (
     sessionId: string,

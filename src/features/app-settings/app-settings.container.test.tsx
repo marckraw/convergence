@@ -12,6 +12,7 @@ import {
 } from '@/entities/app-settings'
 import { useAnalyticsStore, type AnalyticsOverview } from '@/entities/analytics'
 import { useDialogStore } from '@/entities/dialog'
+import type { ExecutionHostEndpoint } from '@/entities/execution-host'
 import { Button } from '@/shared/ui/button'
 import { AppSettingsDialogContainer } from './app-settings.container'
 
@@ -156,19 +157,38 @@ const EMPTY_ANALYTICS_OVERVIEW: AnalyticsOverview = {
   generatedProfile: null,
 }
 
-function primeStores(stored: {
-  defaultProviderId: string | null
-  defaultModelId: string | null
-  defaultEffortId:
-    | 'low'
-    | 'medium'
-    | 'high'
-    | 'max'
-    | 'minimal'
-    | 'none'
-    | 'xhigh'
-    | null
-}) {
+function endpoint(
+  id: string,
+  label: string,
+  baseUrl: string,
+  position = 0,
+): ExecutionHostEndpoint {
+  return {
+    id,
+    label,
+    baseUrl,
+    position,
+    createdAt: '2026-08-01T00:00:00.000Z',
+    updatedAt: '2026-08-01T00:00:00.000Z',
+  }
+}
+
+function primeStores(
+  stored: {
+    defaultProviderId: string | null
+    defaultModelId: string | null
+    defaultEffortId:
+      | 'low'
+      | 'medium'
+      | 'high'
+      | 'max'
+      | 'minimal'
+      | 'none'
+      | 'xhigh'
+      | null
+  },
+  executionHostEndpoints: ExecutionHostEndpoint[] = [],
+) {
   useSessionStore.setState({
     sessions: [],
     globalSessions: [],
@@ -185,7 +205,7 @@ function primeStores(stored: {
       namingModelByProvider: {},
       extractionModelByProvider: {},
       commandCenterShortcut: { key: 'k', shiftKey: false, altKey: false },
-      executionHostEndpoints: [],
+      executionHostEndpoints,
       notifications: DEFAULT_NOTIFICATION_PREFS,
       onboarding: DEFAULT_ONBOARDING_PREFS,
       updates: DEFAULT_UPDATE_PREFS,
@@ -309,6 +329,24 @@ describe('AppSettingsDialogContainer', () => {
             error: null,
           }),
         },
+        executionHostDaemon: {
+          getStatus: vi.fn().mockResolvedValue({
+            providerId: 'execution-host-daemon',
+            configured: false,
+            source: null,
+            storage: null,
+            account: null,
+            service: null,
+            error: null,
+          }),
+          setToken: vi.fn(),
+          deleteToken: vi.fn(),
+        },
+      },
+      executionHost: {
+        testRemoteConnection: vi.fn(),
+        getSessionWorkspace: vi.fn(),
+        sessionCountsByEndpoint: vi.fn().mockResolvedValue({}),
       },
       analytics: {
         getOverview: vi.fn().mockResolvedValue(EMPTY_ANALYTICS_OVERVIEW),
@@ -773,11 +811,14 @@ describe('AppSettingsDialogContainer', () => {
   })
 
   it('refuses an invalid remote execution host URL: error renders and Save is disabled', async () => {
-    primeStores({
-      defaultProviderId: 'claude-code',
-      defaultModelId: 'sonnet',
-      defaultEffortId: 'medium',
-    })
+    primeStores(
+      {
+        defaultProviderId: 'claude-code',
+        defaultModelId: 'sonnet',
+        defaultEffortId: 'medium',
+      },
+      [endpoint('default', 'kuba-vps', 'https://daemon.example.com')],
+    )
 
     render(<AppSettingsDialogContainer trigger={<Button>Open</Button>} />)
     fireEvent.click(screen.getByText('Open'))
@@ -797,10 +838,10 @@ describe('AppSettingsDialogContainer', () => {
     expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled()
   })
 
-  it('saves the Execution host URL as the first endpoint, with the id sessions record', async () => {
-    // MAR-2620: one field still edits one daemon, but it now writes an
-    // Endpoint. If the form stopped reaching it, the daemon would look
-    // configured in the dialog and be absent everywhere else.
+  it('refuses to save a row with no address, and points at Remove', async () => {
+    // Blank used to mean "unconfigure the remote host". With an explicit
+    // Remove it means an unfinished row, and saving it would either throw at
+    // the repository or drop a machine the user just typed.
     primeStores({
       defaultProviderId: 'claude-code',
       defaultModelId: 'sonnet',
@@ -811,6 +852,32 @@ describe('AppSettingsDialogContainer', () => {
     fireEvent.click(screen.getByText('Open'))
     expect(await screen.findByText('Settings')).toBeInTheDocument()
 
+    fireEvent.click(screen.getByRole('button', { name: /Add endpoint/ }))
+
+    expect(
+      await screen.findByText(/Enter a base URL, or remove this endpoint/),
+    ).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled()
+  })
+
+  it('saves the first endpoint under the id the stored token is filed by', async () => {
+    // MAR-2642: a minted id here would orphan the Keychain entry the
+    // single-host era wrote and the environment override, both of which serve
+    // 'default' and nothing else.
+    primeStores({
+      defaultProviderId: 'claude-code',
+      defaultModelId: 'sonnet',
+      defaultEffortId: 'medium',
+    })
+
+    render(<AppSettingsDialogContainer trigger={<Button>Open</Button>} />)
+    fireEvent.click(screen.getByText('Open'))
+    expect(await screen.findByText('Settings')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: /Add endpoint/ }))
+    fireEvent.change(await screen.findByLabelText('Endpoint name'), {
+      target: { value: 'kuba-vps' },
+    })
     fireEvent.change(screen.getByLabelText('Execution host URL'), {
       target: { value: 'https://daemon.example.com' },
     })
@@ -820,9 +887,133 @@ describe('AppSettingsDialogContainer', () => {
       expect(window.electronAPI.appSettings.set).toHaveBeenCalledWith(
         expect.objectContaining({
           executionHostEndpoints: [
-            { id: 'default', baseUrl: 'https://daemon.example.com' },
+            {
+              id: 'default',
+              label: 'kuba-vps',
+              baseUrl: 'https://daemon.example.com',
+            },
           ],
         }),
+      )
+    })
+  })
+
+  it('adds a second endpoint with its own id, name and address', async () => {
+    primeStores(
+      {
+        defaultProviderId: 'claude-code',
+        defaultModelId: 'sonnet',
+        defaultEffortId: 'medium',
+      },
+      [endpoint('default', 'kuba-vps', 'https://kuba.example.com')],
+    )
+
+    render(<AppSettingsDialogContainer trigger={<Button>Open</Button>} />)
+    fireEvent.click(screen.getByText('Open'))
+    expect(await screen.findByText('Settings')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: /Add endpoint/ }))
+
+    const names = await screen.findAllByLabelText('Endpoint name')
+    expect(names).toHaveLength(2)
+    fireEvent.change(names[1], { target: { value: 'backpack-automations' } })
+    fireEvent.change(screen.getAllByLabelText('Execution host URL')[1], {
+      target: { value: 'https://backpack.example.com' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+
+    await waitFor(() => {
+      expect(window.electronAPI.appSettings.set).toHaveBeenCalled()
+    })
+    const saved = vi.mocked(window.electronAPI.appSettings.set).mock.calls[0][0]
+      .executionHostEndpoints
+    // The first row keeps the id sessions already point at; the second is a
+    // machine of its own, never a second name for the first one's token.
+    expect(saved).toEqual([
+      {
+        id: 'default',
+        label: 'kuba-vps',
+        baseUrl: 'https://kuba.example.com',
+      },
+      {
+        id: expect.any(String),
+        label: 'backpack-automations',
+        baseUrl: 'https://backpack.example.com',
+      },
+    ])
+    expect(saved?.[1].id).not.toBe('default')
+  })
+
+  it('keeps an endpoint id when its address is edited, so sessions stay attached', async () => {
+    // Slice 1's stability guarantee. A reissued id here would orphan every
+    // session that named the endpoint and its Keychain token with them.
+    primeStores(
+      {
+        defaultProviderId: 'claude-code',
+        defaultModelId: 'sonnet',
+        defaultEffortId: 'medium',
+      },
+      [endpoint('kuba', 'kuba-vps', 'https://kuba.example.com')],
+    )
+
+    render(<AppSettingsDialogContainer trigger={<Button>Open</Button>} />)
+    fireEvent.click(screen.getByText('Open'))
+    expect(await screen.findByText('Settings')).toBeInTheDocument()
+
+    fireEvent.change(screen.getByLabelText('Execution host URL'), {
+      target: { value: 'https://kuba-moved.example.com' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+
+    await waitFor(() => {
+      expect(window.electronAPI.appSettings.set).toHaveBeenCalledWith(
+        expect.objectContaining({
+          executionHostEndpoints: [
+            {
+              id: 'kuba',
+              label: 'kuba-vps',
+              baseUrl: 'https://kuba-moved.example.com',
+            },
+          ],
+        }),
+      )
+    })
+  })
+
+  it('will not remove an endpoint sessions name until the cost is acknowledged', async () => {
+    vi.mocked(
+      window.electronAPI.executionHost.sessionCountsByEndpoint,
+    ).mockResolvedValue({ local: 12, kuba: 2 })
+    primeStores(
+      {
+        defaultProviderId: 'claude-code',
+        defaultModelId: 'sonnet',
+        defaultEffortId: 'medium',
+      },
+      [endpoint('kuba', 'kuba-vps', 'https://kuba.example.com')],
+    )
+
+    render(<AppSettingsDialogContainer trigger={<Button>Open</Button>} />)
+    fireEvent.click(screen.getByText('Open'))
+    expect(await screen.findByText('Settings')).toBeInTheDocument()
+
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Remove endpoint kuba-vps' }),
+    )
+    expect(
+      await screen.findByText(/2 sessions run on “kuba-vps”/),
+    ).toBeInTheDocument()
+
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: 'Confirm removing endpoint kuba-vps',
+      }),
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+
+    await waitFor(() => {
+      expect(window.electronAPI.appSettings.set).toHaveBeenCalledWith(
+        expect.objectContaining({ executionHostEndpoints: [] }),
       )
     })
   })

@@ -15,6 +15,7 @@ import {
   isLocalExecutionHost,
   isRemoteExecutionHost,
   LOCAL_EXECUTION_HOST_ID,
+  parseExecutionHostId,
 } from '../execution-host-endpoint/execution-host-endpoint.pure'
 import { ExecutionHostEndpointRepository } from '../execution-host-endpoint/execution-host-endpoint.repository'
 import { assertLocalAccountSelection } from '../provider-account/provider-account-resolution.pure'
@@ -733,6 +734,22 @@ export class SessionService {
 
   getAllSummaries(): SessionSummary[] {
     return this.buildSessionSummaries(this.sessionRepository.listAll())
+  }
+
+  /**
+   * How many sessions name each execution host, keyed by the id (MAR-2642).
+   *
+   * Blank and absent both mean this machine — that is what every row written
+   * before execution hosts existed meant — so they are folded into `'local'`
+   * rather than reported as a host of their own.
+   */
+  countSessionsByExecutionHost(): Record<string, number> {
+    const counts: Record<string, number> = {}
+    for (const row of this.sessionRepository.countByExecutionHost()) {
+      const id = parseExecutionHostId(row.executionHost)
+      counts[id] = (counts[id] ?? 0) + row.count
+    }
+    return counts
   }
 
   getById(id: string): Session | null {

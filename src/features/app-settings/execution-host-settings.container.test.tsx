@@ -1,7 +1,9 @@
-import { fireEvent, render, screen } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import type { ExecutionHostEndpoint } from '@/entities/execution-host'
 import { TooltipProvider } from '@/shared/ui/tooltip'
 import { ExecutionHostSettingsContainer } from './execution-host-settings.container'
+import type { ExecutionHostEndpointDraft } from './execution-host-settings.pure'
 
 /**
  * Drives the container through `window.electronAPI` rather than through a
@@ -12,6 +14,7 @@ import { ExecutionHostSettingsContainer } from './execution-host-settings.contai
 const executionHost = {
   testRemoteConnection: vi.fn(),
   getSessionWorkspace: vi.fn(),
+  sessionCountsByEndpoint: vi.fn(),
 }
 
 const executionHostDaemon = {
@@ -30,26 +33,69 @@ const CREDENTIAL_STATUS = {
   error: null,
 }
 
-function renderContainer() {
-  return render(
+const ENDPOINT_ID = 'backpack-automations'
+const BASE_URL = 'https://daemon.test'
+
+function draft(
+  overrides: Partial<ExecutionHostEndpointDraft> = {},
+): ExecutionHostEndpointDraft {
+  return {
+    id: ENDPOINT_ID,
+    label: 'backpack-automations',
+    baseUrl: BASE_URL,
+    ...overrides,
+  }
+}
+
+function saved(
+  overrides: Partial<ExecutionHostEndpoint> = {},
+): ExecutionHostEndpoint {
+  return {
+    id: ENDPOINT_ID,
+    label: 'backpack-automations',
+    baseUrl: BASE_URL,
+    position: 1,
+    createdAt: '2026-08-01T00:00:00.000Z',
+    updatedAt: '2026-08-01T00:00:00.000Z',
+    ...overrides,
+  }
+}
+
+function renderContainer(
+  props: Partial<Parameters<typeof ExecutionHostSettingsContainer>[0]> = {},
+) {
+  const onRemove = vi.fn()
+  const view = render(
     <TooltipProvider>
       <ExecutionHostSettingsContainer
-        remoteBaseUrlDraft="https://daemon.test"
-        remoteBaseUrlError={null}
+        draft={draft()}
+        saved={saved()}
+        sessionCount={0}
+        onLabelChange={vi.fn()}
         onRemoteBaseUrlChange={vi.fn()}
+        onRemove={onRemove}
+        {...props}
       />
     </TooltipProvider>,
   )
+  return { ...view, onRemove }
 }
 
 describe('ExecutionHostSettingsContainer', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     executionHostDaemon.getStatus.mockResolvedValue(CREDENTIAL_STATUS)
+    executionHostDaemon.setToken.mockResolvedValue(CREDENTIAL_STATUS)
+    executionHostDaemon.deleteToken.mockResolvedValue({
+      ...CREDENTIAL_STATUS,
+      configured: false,
+      source: null,
+      storage: null,
+    })
     executionHost.testRemoteConnection.mockResolvedValue({
       ok: true,
       state: 'connected',
-      baseUrl: 'https://daemon.test',
+      baseUrl: BASE_URL,
       message: 'Connected. 2 providers available.',
       providers: [
         {
@@ -78,7 +124,9 @@ describe('ExecutionHostSettingsContainer', () => {
     await screen.findByText('Configured in Keychain, token hidden')
 
     fireEvent.click(
-      screen.getByRole('button', { name: 'Test execution host connection' }),
+      screen.getByRole('button', {
+        name: 'Test connection for backpack-automations',
+      }),
     )
 
     expect(
@@ -98,7 +146,7 @@ describe('ExecutionHostSettingsContainer', () => {
     executionHost.testRemoteConnection.mockResolvedValue({
       ok: true,
       state: 'connected',
-      baseUrl: 'https://daemon.test',
+      baseUrl: BASE_URL,
       message: 'Connected. 1 provider available.',
       providers: [],
       daemon: null,
@@ -108,7 +156,9 @@ describe('ExecutionHostSettingsContainer', () => {
     await screen.findByText('Configured in Keychain, token hidden')
 
     fireEvent.click(
-      screen.getByRole('button', { name: 'Test execution host connection' }),
+      screen.getByRole('button', {
+        name: 'Test connection for backpack-automations',
+      }),
     )
 
     expect(
@@ -129,9 +179,154 @@ describe('ExecutionHostSettingsContainer', () => {
     await screen.findByText('Configured in Keychain, token hidden')
 
     fireEvent.click(
-      screen.getByRole('button', { name: 'Test execution host connection' }),
+      screen.getByRole('button', {
+        name: 'Test connection for backpack-automations',
+      }),
     )
 
     expect(await screen.findByText('Daemon unreachable.')).toBeInTheDocument()
+  })
+
+  /**
+   * MAR-2629's canary on the renderer side. Every daemon call this row makes
+   * has to carry this row's Endpoint id — `'default'` is another machine now,
+   * and a token saved to it would authenticate as one.
+   */
+  it('names its own endpoint on every daemon call, never the ambient default', async () => {
+    renderContainer()
+    await waitFor(() =>
+      expect(executionHostDaemon.getStatus).toHaveBeenCalledWith(ENDPOINT_ID),
+    )
+
+    fireEvent.change(screen.getByLabelText('Execution host token'), {
+      target: { value: 'sk-live' },
+    })
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: 'Save token for backpack-automations',
+      }),
+    )
+    await waitFor(() =>
+      expect(executionHostDaemon.setToken).toHaveBeenCalledWith(
+        ENDPOINT_ID,
+        'sk-live',
+      ),
+    )
+
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: 'Remove token for backpack-automations',
+      }),
+    )
+    await waitFor(() =>
+      expect(executionHostDaemon.deleteToken).toHaveBeenCalledWith(ENDPOINT_ID),
+    )
+
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: 'Test connection for backpack-automations',
+      }),
+    )
+    await waitFor(() =>
+      expect(executionHost.testRemoteConnection).toHaveBeenCalledWith(
+        ENDPOINT_ID,
+      ),
+    )
+  })
+
+  it('refuses token and connection work on an endpoint that was never saved', async () => {
+    renderContainer({ saved: null, draft: draft({ label: 'kuba-vps' }) })
+
+    expect(
+      await screen.findByText(
+        'Save settings first — this endpoint does not exist yet.',
+      ),
+    ).toBeInTheDocument()
+    // Asking about an endpoint the main process cannot find would come back as
+    // a refusal that reads like a broken token.
+    expect(executionHostDaemon.getStatus).not.toHaveBeenCalled()
+    expect(
+      screen.getByRole('button', { name: 'Test connection for kuba-vps' }),
+    ).toBeDisabled()
+    expect(
+      screen.getByRole('button', { name: 'Save token for kuba-vps' }),
+    ).toBeDisabled()
+  })
+
+  it('blocks only the connection test while the typed URL is not the saved one', async () => {
+    renderContainer({
+      draft: draft({ baseUrl: 'https://moved.test' }),
+    })
+
+    await screen.findByText('Configured in Keychain, token hidden')
+    expect(
+      screen.getByRole('button', {
+        name: 'Test connection for backpack-automations',
+      }),
+    ).toBeDisabled()
+    expect(
+      screen.getByText(
+        `Save to test the URL you typed — this endpoint still points at ${BASE_URL}.`,
+      ),
+    ).toBeInTheDocument()
+    // The Keychain account is the id, and the id did not change.
+    expect(
+      screen.getByRole('button', {
+        name: 'Remove token for backpack-automations',
+      }),
+    ).toBeEnabled()
+  })
+
+  it('makes a removal that costs sessions say so before it happens', async () => {
+    const { onRemove } = renderContainer({ sessionCount: 3 })
+
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: 'Remove endpoint backpack-automations',
+      }),
+    )
+
+    expect(
+      await screen.findByText(
+        '3 sessions run on “backpack-automations”. Removing it does not move ' +
+          'them — they will refuse to run, because a session may only run on ' +
+          'the machine it named.',
+      ),
+    ).toBeInTheDocument()
+    expect(onRemove).not.toHaveBeenCalled()
+
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: 'Confirm removing endpoint backpack-automations',
+      }),
+    )
+    expect(onRemove).toHaveBeenCalledTimes(1)
+  })
+
+  it('warns about an uncounted removal rather than treating it as free', async () => {
+    const { onRemove } = renderContainer({ sessionCount: null })
+
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: 'Remove endpoint backpack-automations',
+      }),
+    )
+
+    expect(
+      await screen.findByText(/could not count the sessions/),
+    ).toBeInTheDocument()
+    expect(onRemove).not.toHaveBeenCalled()
+  })
+
+  it('removes an endpoint nothing names without ceremony', () => {
+    const { onRemove } = renderContainer({ sessionCount: 0 })
+
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: 'Remove endpoint backpack-automations',
+      }),
+    )
+
+    expect(onRemove).toHaveBeenCalledTimes(1)
   })
 })

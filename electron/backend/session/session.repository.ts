@@ -110,6 +110,25 @@ export class SessionRepository {
       .all() as SessionRow[]
   }
 
+  /**
+   * How many sessions recorded each execution host id (MAR-2642).
+   *
+   * Removing an Endpoint is not free: a session that named it refuses to run
+   * once it is gone (MAR-2620), so the settings surface has to be able to say
+   * how many refusals a removal buys. Counted over every row rather than the
+   * loaded session list, which only ever holds one project's worth — a count
+   * that missed the other projects would understate the damage.
+   */
+  countByExecutionHost(): Array<{ executionHost: string; count: number }> {
+    return this.db
+      .prepare(
+        `SELECT execution_host AS executionHost, COUNT(*) AS count
+         FROM sessions
+         GROUP BY execution_host`,
+      )
+      .all() as Array<{ executionHost: string; count: number }>
+  }
+
   rename(id: string, name: string): void {
     this.db
       .prepare(

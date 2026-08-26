@@ -14,6 +14,7 @@ import {
 } from '@/entities/notifications'
 import {
   DEFAULT_COMMAND_CENTER_SHORTCUT,
+  executionHostApi,
   useAppSettingsStore,
   type CommandCenterShortcutPrefs,
   type DebugLoggingPrefs,
@@ -32,8 +33,12 @@ import {
   AppSettingsDialog,
   type AppSettingsSectionId,
 } from './app-settings.presentational'
-import { DEFAULT_EXECUTION_HOST_ENDPOINT_ID } from '@/entities/execution-host'
-import { getExecutionHostRemoteBaseUrlError } from './execution-host-settings.pure'
+import {
+  executionHostEndpointDrafts,
+  hasExecutionHostEndpointErrors,
+  nextExecutionHostEndpointId,
+  type ExecutionHostEndpointDraft,
+} from './execution-host-settings.pure'
 
 interface AppSettingsContainerProps {
   trigger: ReactNode
@@ -86,8 +91,10 @@ export const AppSettingsDialogContainer: FC<AppSettingsContainerProps> = ({
   const [extractionDraft, setExtractionDraft] = useState<
     Record<string, string>
   >(EMPTY_EXTRACTION_DRAFT)
-  const [executionHostRemoteBaseUrlDraft, setExecutionHostRemoteBaseUrlDraft] =
-    useState('')
+  const [executionHostEndpointsDraft, setExecutionHostEndpointsDraft] =
+    useState<ExecutionHostEndpointDraft[]>([])
+  const [executionHostSessionCounts, setExecutionHostSessionCounts] =
+    useState<Record<string, number> | null>(null)
   const [notificationsDraft, setNotificationsDraft] =
     useState<NotificationPrefs | null>(null)
   const [updatesDraft, setUpdatesDraft] = useState<UpdatePrefs | null>(null)
@@ -130,6 +137,28 @@ export const AppSettingsDialogContainer: FC<AppSettingsContainerProps> = ({
     }
   }, [open, loadProviders, loadSettings, isLoaded])
 
+  /**
+   * How many sessions name each execution host, read when the dialog opens so
+   * a removal can state what it costs. A failure leaves the count null, which
+   * `describeExecutionHostEndpointRemoval` reads as "unknown" and warns about —
+   * never as "none", which would present a destructive removal as free.
+   */
+  useEffect(() => {
+    if (!open) return
+    let cancelled = false
+    void (async () => {
+      try {
+        const counts = await executionHostApi.sessionCountsByEndpoint()
+        if (!cancelled) setExecutionHostSessionCounts(counts)
+      } catch {
+        if (!cancelled) setExecutionHostSessionCounts(null)
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [open])
+
   useEffect(() => {
     if (!open) return
     const requestedSection =
@@ -146,8 +175,8 @@ export const AppSettingsDialogContainer: FC<AppSettingsContainerProps> = ({
     })
     setNamingDraft({ ...settings.namingModelByProvider })
     setExtractionDraft({ ...settings.extractionModelByProvider })
-    setExecutionHostRemoteBaseUrlDraft(
-      settings.executionHostEndpoints[0]?.baseUrl ?? '',
+    setExecutionHostEndpointsDraft(
+      executionHostEndpointDrafts(settings.executionHostEndpoints),
     )
     setNotificationsDraft(settings.notifications)
     setUpdatesDraft(settings.updates)
@@ -226,9 +255,44 @@ export const AppSettingsDialogContainer: FC<AppSettingsContainerProps> = ({
     [],
   )
 
-  const handleExecutionHostRemoteBaseUrlChange = useCallback(
-    (value: string) => {
-      setExecutionHostRemoteBaseUrlDraft(value)
+  const handleExecutionHostLabelChange = useCallback(
+    (endpointId: string, value: string) => {
+      setExecutionHostEndpointsDraft((current) =>
+        current.map((draft) =>
+          draft.id === endpointId ? { ...draft, label: value } : draft,
+        ),
+      )
+    },
+    [],
+  )
+
+  const handleExecutionHostBaseUrlChange = useCallback(
+    (endpointId: string, value: string) => {
+      setExecutionHostEndpointsDraft((current) =>
+        current.map((draft) =>
+          draft.id === endpointId ? { ...draft, baseUrl: value } : draft,
+        ),
+      )
+    },
+    [],
+  )
+
+  const handleAddExecutionHostEndpoint = useCallback(() => {
+    setExecutionHostEndpointsDraft((current) => [
+      ...current,
+      {
+        id: nextExecutionHostEndpointId(current, () => crypto.randomUUID()),
+        label: '',
+        baseUrl: '',
+      },
+    ])
+  }, [])
+
+  const handleRemoveExecutionHostEndpoint = useCallback(
+    (endpointId: string) => {
+      setExecutionHostEndpointsDraft((current) =>
+        current.filter((draft) => draft.id !== endpointId),
+      )
     },
     [],
   )
@@ -343,9 +407,9 @@ export const AppSettingsDialogContainer: FC<AppSettingsContainerProps> = ({
     return systemApi.getInfo()?.platform ?? null
   }, [])
 
-  const executionHostRemoteBaseUrlError = useMemo(
-    () => getExecutionHostRemoteBaseUrlError(executionHostRemoteBaseUrlDraft),
-    [executionHostRemoteBaseUrlDraft],
+  const executionHostEndpointsBlocked = useMemo(
+    () => hasExecutionHostEndpointErrors(executionHostEndpointsDraft),
+    [executionHostEndpointsDraft],
   )
 
   const handleCancel = useCallback(() => {
@@ -361,7 +425,7 @@ export const AppSettingsDialogContainer: FC<AppSettingsContainerProps> = ({
 
   const handleSave = useCallback(async () => {
     if (shortcutsConflict) return
-    if (executionHostRemoteBaseUrlError) return
+    if (executionHostEndpointsBlocked) return
 
     const shortcutToSave = shortcutsDraft ?? settings.commandCenterShortcut
     const conflict = findShortcutConflict(shortcutToSave)
@@ -378,20 +442,15 @@ export const AppSettingsDialogContainer: FC<AppSettingsContainerProps> = ({
         namingModelByProvider: namingDraft,
         extractionModelByProvider: extractionDraft,
         commandCenterShortcut: shortcutToSave,
-        // One field still edits one daemon, and that daemon is now the first
-        // Endpoint (MAR-2620). Clearing it removes the Endpoint, exactly as
-        // clearing the base URL used to unconfigure the remote host; the id is
-        // fixed, so re-entering the URL restores the machine sessions already
-        // point at rather than minting a second one.
-        executionHostEndpoints:
-          executionHostRemoteBaseUrlDraft.trim().length > 0
-            ? [
-                {
-                  id: DEFAULT_EXECUTION_HOST_ENDPOINT_ID,
-                  baseUrl: executionHostRemoteBaseUrlDraft.trim(),
-                },
-              ]
-            : [],
+        // The list is the whole fact (MAR-2642). Each row keeps the id it was
+        // seeded with, so editing a name or an address is an edit to the
+        // machine sessions already point at rather than a new one; a row is
+        // only gone because it was explicitly removed.
+        executionHostEndpoints: executionHostEndpointsDraft.map((endpoint) => ({
+          id: endpoint.id,
+          label: endpoint.label.trim(),
+          baseUrl: endpoint.baseUrl.trim(),
+        })),
         notifications: notificationsDraft ?? settings.notifications,
         onboarding: settings.onboarding,
         updates: updatesDraft ?? settings.updates,
@@ -415,8 +474,8 @@ export const AppSettingsDialogContainer: FC<AppSettingsContainerProps> = ({
     shortcutsDraft,
     shortcutsConflict,
     settings.commandCenterShortcut,
-    executionHostRemoteBaseUrlDraft,
-    executionHostRemoteBaseUrlError,
+    executionHostEndpointsDraft,
+    executionHostEndpointsBlocked,
     notificationsDraft,
     updatesDraft,
     debugLoggingDraft,
@@ -441,8 +500,9 @@ export const AppSettingsDialogContainer: FC<AppSettingsContainerProps> = ({
       selection={selection}
       namingDraft={namingDraft}
       extractionDraft={extractionDraft}
-      executionHostRemoteBaseUrlDraft={executionHostRemoteBaseUrlDraft}
-      executionHostRemoteBaseUrlError={executionHostRemoteBaseUrlError}
+      executionHostEndpointsDraft={executionHostEndpointsDraft}
+      executionHostSavedEndpoints={settings.executionHostEndpoints}
+      executionHostSessionCounts={executionHostSessionCounts}
       notificationsDraft={notificationsDraft ?? settings.notifications}
       updatesDraft={updatesDraft ?? settings.updates}
       debugLoggingDraft={debugLoggingDraft ?? settings.debugLogging}
@@ -454,7 +514,7 @@ export const AppSettingsDialogContainer: FC<AppSettingsContainerProps> = ({
       updatesIsDev={updatesIsDev}
       platform={platform}
       isSaving={isSaving}
-      isSaveBlocked={!!executionHostRemoteBaseUrlError}
+      isSaveBlocked={executionHostEndpointsBlocked}
       error={error}
       activeSection={activeSection}
       onProviderChange={handleProviderChange}
@@ -462,9 +522,10 @@ export const AppSettingsDialogContainer: FC<AppSettingsContainerProps> = ({
       onEffortChange={handleEffortChange}
       onNamingModelChange={handleNamingModelChange}
       onExtractionModelChange={handleExtractionModelChange}
-      onExecutionHostRemoteBaseUrlChange={
-        handleExecutionHostRemoteBaseUrlChange
-      }
+      onAddExecutionHostEndpoint={handleAddExecutionHostEndpoint}
+      onExecutionHostLabelChange={handleExecutionHostLabelChange}
+      onExecutionHostBaseUrlChange={handleExecutionHostBaseUrlChange}
+      onRemoveExecutionHostEndpoint={handleRemoveExecutionHostEndpoint}
       onNotificationsChange={handleNotificationsChange}
       onTestFireNotification={handleTestFire}
       onToggleBackgroundUpdates={handleToggleBackgroundUpdates}

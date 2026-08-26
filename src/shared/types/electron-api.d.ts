@@ -1710,15 +1710,23 @@ interface ElectronAPI {
       deleteToken: () => Promise<OpenRouterCredentialStatusData>
     }
     executionHostDaemon: {
-      getStatus: () => Promise<ExecutionHostDaemonCredentialStatusData>
+      getStatus: (
+        endpointId: string,
+      ) => Promise<ExecutionHostDaemonCredentialStatusData>
       setToken: (
+        endpointId: string,
         token: string,
       ) => Promise<ExecutionHostDaemonCredentialStatusData>
-      deleteToken: () => Promise<ExecutionHostDaemonCredentialStatusData>
+      deleteToken: (
+        endpointId: string,
+      ) => Promise<ExecutionHostDaemonCredentialStatusData>
     }
   }
   executionHost: {
-    testRemoteConnection: () => Promise<RemoteExecutionHostConnectionResultData>
+    testRemoteConnection: (
+      endpointId: string,
+    ) => Promise<RemoteExecutionHostConnectionResultData>
+    sessionCountsByEndpoint: () => Promise<Record<string, number>>
     getSessionWorkspace: (
       sessionId: string,
     ) => Promise<RemoteSessionWorkspaceResultData>
