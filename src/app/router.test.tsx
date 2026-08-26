@@ -306,10 +306,35 @@ describe('app router', () => {
     render(<RouterProvider router={router} />)
 
     await waitFor(() => {
-      expect(screen.getByTestId('app-shell')).toHaveAttribute(
-        'data-route-kind',
-        'home',
-      )
+      expect(router.state.location.pathname).toBe('/')
     })
+    expect(screen.getByTestId('app-shell')).toHaveAttribute(
+      'data-route-kind',
+      'home',
+    )
+  })
+
+  it('replaces a code review URL that outlived its route with the welcome route', async () => {
+    // The router keeps its location in the window hash, so the URL a window
+    // was last sitting on is the URL it boots into after an update. MAR-2609
+    // deleted `/code/review`; anyone parked on one when they installed the
+    // build that removed it reopens Convergence on this exact address, search
+    // parameters and all.
+    await router.navigate({
+      to: '/code/review?targetId=workspace-1&mode=base-branch&view=guide' as never,
+    })
+
+    render(<RouterProvider router={router} />)
+
+    // The location, not the shell's route kind: an unmatched route id already
+    // resolves to `home`, so the shell looks right while the address bar --
+    // the thing that survives the next launch -- still says `/code/review`.
+    await waitFor(() => {
+      expect(router.state.location.pathname).toBe('/')
+    })
+    expect(screen.getByTestId('app-shell')).toHaveAttribute(
+      'data-route-kind',
+      'home',
+    )
   })
 })
