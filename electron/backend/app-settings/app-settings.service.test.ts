@@ -1,6 +1,10 @@
 import { describe, expect, it, beforeEach, afterEach, vi } from 'vitest'
 import { getDatabase, closeDatabase, resetDatabase } from '../database/database'
 import { DEFAULT_NOTIFICATION_PREFS } from '../notifications/notifications.defaults'
+import {
+  recordingExecutionHostCredentials,
+  type RecordingExecutionHostCredentials,
+} from '../credentials/execution-host-daemon-credentials.fixture'
 import { ExecutionHostEndpointRepository } from '../execution-host-endpoint/execution-host-endpoint.repository'
 import { StateService } from '../state/state.service'
 import type {
@@ -171,16 +175,23 @@ describe('AppSettingsService', () => {
   let stateService: StateService
   let service: AppSettingsService
   let descriptors: ProviderDescriptor[]
+  // Records the call rather than the secret: a token's destruction is asserted
+  // on the Keychain account that was named, never on a value.
+  let credentials: RecordingExecutionHostCredentials
+  let forgotten: string[]
 
   beforeEach(() => {
     const db = getDatabase()
     stateService = new StateService(db)
     descriptors = buildDescriptors()
+    credentials = recordingExecutionHostCredentials()
+    forgotten = credentials.forgotten
     service = new AppSettingsService(
       db,
       stateService,
       async () => descriptors,
       new ExecutionHostEndpointRepository(db),
+      credentials,
     )
   })
 
@@ -490,11 +501,13 @@ describe('AppSettingsService', () => {
           defaultProviderId: null,
           defaultModelId: null,
           defaultEffortId: null,
-          executionHostEndpoints: [{ baseUrl: 'https://daemon.example.com/' }],
+          executionHostEndpoints: [
+            { id: 'kuba', baseUrl: 'https://daemon.example.com/' },
+          ],
         })
         expect(stored.executionHostEndpoints).toEqual([
           expect.objectContaining({
-            id: 'default',
+            id: 'kuba',
             label: 'Remote daemon',
             baseUrl: 'https://daemon.example.com',
             position: 0,
@@ -512,16 +525,20 @@ describe('AppSettingsService', () => {
           defaultProviderId: null,
           defaultModelId: null,
           defaultEffortId: null,
-          executionHostEndpoints: [{ baseUrl: 'https://old.example.com' }],
+          executionHostEndpoints: [
+            { id: 'kuba', baseUrl: 'https://old.example.com' },
+          ],
         })
         const moved = await service.setAppSettings({
           defaultProviderId: null,
           defaultModelId: null,
           defaultEffortId: null,
-          executionHostEndpoints: [{ baseUrl: 'https://new.example.com' }],
+          executionHostEndpoints: [
+            { id: 'kuba', baseUrl: 'https://new.example.com' },
+          ],
         })
         expect(moved.executionHostEndpoints[0]).toMatchObject({
-          id: 'default',
+          id: 'kuba',
           baseUrl: 'https://new.example.com',
         })
       })
@@ -531,7 +548,9 @@ describe('AppSettingsService', () => {
           defaultProviderId: null,
           defaultModelId: null,
           defaultEffortId: null,
-          executionHostEndpoints: [{ baseUrl: 'https://daemon.example.com' }],
+          executionHostEndpoints: [
+            { id: 'kuba', baseUrl: 'https://daemon.example.com' },
+          ],
         })
         const cleared = await service.setAppSettings({
           defaultProviderId: null,
@@ -547,7 +566,9 @@ describe('AppSettingsService', () => {
           defaultProviderId: null,
           defaultModelId: null,
           defaultEffortId: null,
-          executionHostEndpoints: [{ baseUrl: 'https://daemon.example.com' }],
+          executionHostEndpoints: [
+            { id: 'kuba', baseUrl: 'https://daemon.example.com' },
+          ],
         })
         const untouched = await service.setAppSettings({
           defaultProviderId: 'claude-code',
@@ -563,7 +584,9 @@ describe('AppSettingsService', () => {
             defaultProviderId: 'claude-code',
             defaultModelId: 'sonnet',
             defaultEffortId: 'medium',
-            executionHostEndpoints: [{ baseUrl: 'ftp://daemon.example.com' }],
+            executionHostEndpoints: [
+              { id: 'kuba', baseUrl: 'ftp://daemon.example.com' },
+            ],
           }),
         ).rejects.toThrow(
           'Remote execution host base URL must be an HTTP(S) URL.',
@@ -576,6 +599,312 @@ describe('AppSettingsService', () => {
         expect(after.defaultProviderId).toBeNull()
       })
 
+      /**
+       * A credential lives and dies with its Endpoint (MAR-2642).
+       *
+       * The Keychain account *is* the Endpoint id, so an entry left behind by a
+       * removal is a token for a machine nobody can see any more: invisible in
+       * Settings, unreachable through the UI, and still sitting in the login
+       * keychain. Removal is the only gesture that destroys one.
+       */
+      it('forgets the token of an endpoint the save removed', async () => {
+        await service.setAppSettings({
+          defaultProviderId: null,
+          defaultModelId: null,
+          defaultEffortId: null,
+          executionHostEndpoints: [
+            { id: 'kuba', baseUrl: 'https://kuba.example.com' },
+            { id: 'backpack', baseUrl: 'https://backpack.example.com' },
+          ],
+        })
+        expect(forgotten).toEqual([])
+
+        await service.setAppSettings({
+          defaultProviderId: null,
+          defaultModelId: null,
+          defaultEffortId: null,
+          executionHostEndpoints: [
+            { id: 'backpack', baseUrl: 'https://backpack.example.com' },
+          ],
+        })
+
+        // Exactly the removed machine's account, and no other one's.
+        expect(forgotten).toEqual(['kuba'])
+      })
+
+      it('keeps an edited endpoint’s id and its token: an edit is not a removal', async () => {
+        await service.setAppSettings({
+          defaultProviderId: null,
+          defaultModelId: null,
+          defaultEffortId: null,
+          executionHostEndpoints: [
+            {
+              id: 'kuba',
+              label: 'kuba-vps',
+              baseUrl: 'https://kuba.example.com',
+            },
+          ],
+        })
+
+        const moved = await service.setAppSettings({
+          defaultProviderId: null,
+          defaultModelId: null,
+          defaultEffortId: null,
+          executionHostEndpoints: [
+            {
+              id: 'kuba',
+              label: 'kuba-box',
+              baseUrl: 'https://moved.example.com',
+            },
+          ],
+        })
+
+        expect(moved.executionHostEndpoints[0]).toMatchObject({
+          id: 'kuba',
+          label: 'kuba-box',
+          baseUrl: 'https://moved.example.com',
+        })
+        // Slice 1's guarantee still holds for editing: same id, same Keychain
+        // account, same token. Only Remove destroys a credential.
+        expect(forgotten).toEqual([])
+      })
+
+      /**
+       * The Keychain and this database are two systems, so a removal cannot be
+       * one write and the only thing left to choose is which goes first. This
+       * is the branch that decides it, and the two below are the two costs.
+       *
+       * The settings commit goes first. Destroying the credential first spends
+       * a real token on a save that may then reject — irreversibly gone, while
+       * the Endpoint that named it is still stored. Committing first leaves an
+       * entry filed under an id no Endpoint will ever bear again, so it can
+       * never authenticate anything: inert garbage, and garbage the next sweep
+       * collects. Data loss is the worse of the two.
+       */
+      it('keeps the save when the token cannot be destroyed, and owes the cleanup', async () => {
+        await service.setAppSettings({
+          defaultProviderId: null,
+          defaultModelId: null,
+          defaultEffortId: null,
+          executionHostEndpoints: [
+            { id: 'kuba', baseUrl: 'https://kuba.example.com' },
+          ],
+        })
+        credentials.stored.add('kuba')
+        credentials.refuses.add('kuba')
+
+        // The save the user asked for happened, so reporting it as failed
+        // would be the lie: what failed is a cleanup they never asked about.
+        await expect(
+          service.setAppSettings({
+            defaultProviderId: null,
+            defaultModelId: null,
+            defaultEffortId: null,
+            executionHostEndpoints: [],
+          }),
+        ).resolves.toMatchObject({ executionHostEndpoints: [] })
+
+        const after = await service.getAppSettings()
+        expect(after.executionHostEndpoints).toEqual([])
+        expect(forgotten).toEqual([])
+        // And the residue is still there to be collected.
+        expect(credentials.stored.has('kuba')).toBe(true)
+      })
+
+      it('sweeps the orphan the failed cleanup left, on the next settings load', async () => {
+        await service.setAppSettings({
+          defaultProviderId: null,
+          defaultModelId: null,
+          defaultEffortId: null,
+          executionHostEndpoints: [
+            { id: 'kuba', baseUrl: 'https://kuba.example.com' },
+            { id: 'backpack', baseUrl: 'https://backpack.example.com' },
+          ],
+        })
+        credentials.stored.add('kuba')
+        credentials.stored.add('backpack')
+        credentials.refuses.add('kuba')
+
+        await service.setAppSettings({
+          defaultProviderId: null,
+          defaultModelId: null,
+          defaultEffortId: null,
+          executionHostEndpoints: [
+            { id: 'backpack', baseUrl: 'https://backpack.example.com' },
+          ],
+        })
+        expect(credentials.stored.has('kuba')).toBe(true)
+
+        // The keychain lets go later — a relocked keychain unlocked, an
+        // authorization prompt answered — and the sweep is what notices.
+        credentials.refuses.delete('kuba')
+        expect(await service.sweepOrphanedExecutionHostCredentials()).toEqual([
+          'kuba',
+        ])
+        expect(credentials.stored.has('kuba')).toBe(false)
+
+        // And it never reaches a credential whose Endpoint still exists.
+        expect(credentials.stored.has('backpack')).toBe(true)
+        expect(await service.sweepOrphanedExecutionHostCredentials()).toEqual(
+          [],
+        )
+      })
+
+      /**
+       * Two removals are two machines, and they are ordered against nothing
+       * (MAR-2642). One at a time means a Keychain that blocks on the first —
+       * an authorization prompt nobody is there to answer, a `security` running
+       * to its timeout — holds up the cleanup of a machine it has nothing to do
+       * with, and a Save that removes both waits on the slowest before it can
+       * even start the second.
+       *
+       * The canary is time, not order: `kuba`'s cleanup is left in flight and
+       * `backpack`'s must have finished anyway. Sequence them again and this
+       * fails, because `backpack`'s would never have been reached.
+       */
+      it('does not let one blocked removal hold up another endpoint’s', async () => {
+        await service.setAppSettings({
+          defaultProviderId: null,
+          defaultModelId: null,
+          defaultEffortId: null,
+          executionHostEndpoints: [
+            { id: 'kuba', baseUrl: 'https://kuba.example.com' },
+            { id: 'backpack', baseUrl: 'https://backpack.example.com' },
+          ],
+        })
+        credentials.stored.add('kuba')
+        credentials.stored.add('backpack')
+        const releaseKuba = credentials.block('kuba')
+
+        const save = service.setAppSettings({
+          defaultProviderId: null,
+          defaultModelId: null,
+          defaultEffortId: null,
+          executionHostEndpoints: [],
+        })
+        await new Promise((resolve) => setTimeout(resolve, 0))
+
+        expect(credentials.forgotten).toEqual(['backpack'])
+
+        releaseKuba()
+        await save
+        expect(credentials.forgotten).toEqual(['backpack', 'kuba'])
+      })
+
+      /**
+       * The same property for the sweep, which walks accounts the Keychain
+       * listed rather than endpoints a Save named. One entry the Keychain will
+       * not release is next sweep's problem; the entries beside it are still
+       * garbage today, and they belong to different machines.
+       */
+      it('sweeps past a blocked orphan to the ones beside it', async () => {
+        await service.setAppSettings({
+          defaultProviderId: null,
+          defaultModelId: null,
+          defaultEffortId: null,
+          executionHostEndpoints: [],
+        })
+        credentials.stored.add('kuba')
+        credentials.stored.add('backpack')
+        const releaseKuba = credentials.block('kuba')
+
+        const swept = service.sweepOrphanedExecutionHostCredentials()
+        await new Promise((resolve) => setTimeout(resolve, 0))
+
+        expect(credentials.stored.has('backpack')).toBe(false)
+
+        releaseKuba()
+        expect(await swept).toEqual(['kuba', 'backpack'])
+      })
+
+      it('keeps the endpoint and its token when the save itself fails', async () => {
+        await service.setAppSettings({
+          defaultProviderId: null,
+          defaultModelId: null,
+          defaultEffortId: null,
+          executionHostEndpoints: [
+            { id: 'kuba', baseUrl: 'https://kuba.example.com' },
+          ],
+        })
+        credentials.stored.add('kuba')
+
+        const failingWrite = vi
+          .spyOn(stateService, 'set')
+          .mockImplementation(() => {
+            throw new Error('app_state is unwritable')
+          })
+
+        await expect(
+          service.setAppSettings({
+            defaultProviderId: null,
+            defaultModelId: null,
+            defaultEffortId: null,
+            executionHostEndpoints: [],
+          }),
+        ).rejects.toThrow('app_state is unwritable')
+        failingWrite.mockRestore()
+
+        // This is what the order buys. The user still has the machine, and
+        // still has the token they would otherwise have had to paste again —
+        // a loss nothing could have undone, spent on a save that never landed.
+        const after = await service.getAppSettings()
+        expect(after.executionHostEndpoints).toHaveLength(1)
+        expect(forgotten).toEqual([])
+        expect(credentials.stored.has('kuba')).toBe(true)
+      })
+
+      it('destroys no token when the endpoint list is refused before anything is written', async () => {
+        await service.setAppSettings({
+          defaultProviderId: null,
+          defaultModelId: null,
+          defaultEffortId: null,
+          executionHostEndpoints: [
+            { id: 'kuba', baseUrl: 'https://kuba.example.com' },
+            { id: 'backpack', baseUrl: 'https://backpack.example.com' },
+          ],
+        })
+
+        // Removing `kuba` and mistyping `backpack`'s URL in one Save. The list
+        // will not normalize, so the save is refused — and the refusal has to
+        // land before the credential is destroyed, or a rejected Save would
+        // still have taken a token from a machine that is still there.
+        await expect(
+          service.setAppSettings({
+            defaultProviderId: null,
+            defaultModelId: null,
+            defaultEffortId: null,
+            executionHostEndpoints: [
+              { id: 'backpack', baseUrl: 'ftp://backpack.example.com' },
+            ],
+          }),
+        ).rejects.toThrow(
+          'Remote execution host base URL must be an HTTP(S) URL.',
+        )
+
+        expect(forgotten).toEqual([])
+        const after = await service.getAppSettings()
+        expect(after.executionHostEndpoints).toHaveLength(2)
+      })
+
+      it('refuses an endpoint with no id rather than filling one in', async () => {
+        // The other half of "ids are never reused": a blank id used to fall
+        // back to 'default', handing a new machine the sessions and the
+        // Keychain account of the one the single-host era became.
+        await expect(
+          service.setAppSettings({
+            defaultProviderId: null,
+            defaultModelId: null,
+            defaultEffortId: null,
+            executionHostEndpoints: [
+              { id: '  ', baseUrl: 'https://daemon.example.com' },
+            ],
+          }),
+        ).rejects.toThrow(/must carry its own id/)
+
+        const after = await service.getAppSettings()
+        expect(after.executionHostEndpoints).toEqual([])
+      })
+
       it('leaves no endpoint row behind when the settings blob write fails', async () => {
         // The other half of the same rule, and the one only atomicity can
         // give: the endpoints commit before the blob, so a blob write that
@@ -585,7 +914,9 @@ describe('AppSettingsService', () => {
           defaultProviderId: null,
           defaultModelId: null,
           defaultEffortId: null,
-          executionHostEndpoints: [{ baseUrl: 'https://before.example.com' }],
+          executionHostEndpoints: [
+            { id: 'kuba', baseUrl: 'https://before.example.com' },
+          ],
         })
 
         const failingWrite = vi
@@ -599,7 +930,9 @@ describe('AppSettingsService', () => {
             defaultProviderId: null,
             defaultModelId: null,
             defaultEffortId: null,
-            executionHostEndpoints: [{ baseUrl: 'https://after.example.com' }],
+            executionHostEndpoints: [
+              { id: 'kuba', baseUrl: 'https://after.example.com' },
+            ],
           }),
         ).rejects.toThrow('app_state is unwritable')
 

@@ -444,14 +444,17 @@ async function startApp(): Promise<void> {
   })
   registerProjectScriptsIpcHandlers(projectScriptsService, projectScriptsRunner)
 
+  // Built before the settings service because that service destroys an
+  // Endpoint's token as part of the save that removes the Endpoint (MAR-2642).
+  const executionHostDaemonCredentials =
+    new ExecutionHostDaemonCredentialsService()
   const appSettingsService = new AppSettingsService(
     db,
     stateService,
     async () => Promise.all(providerRegistry.getAll().map((p) => p.describe())),
     new ExecutionHostEndpointRepository(db),
+    executionHostDaemonCredentials,
   )
-  const executionHostDaemonCredentials =
-    new ExecutionHostDaemonCredentialsService()
   const remoteExecutionHosts = new AppSettingsRemoteExecutionHostRegistry({
     appSettings: appSettingsService,
     credentials: executionHostDaemonCredentials,
