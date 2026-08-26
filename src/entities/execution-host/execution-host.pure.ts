@@ -1,3 +1,5 @@
+import type { ExecutionHostEndpoint } from './execution-host.types'
+
 /**
  * The one execution host that is not an Endpoint: this machine (MAR-2620).
  *
@@ -28,4 +30,22 @@ export function isRemoteExecutionHost(
   executionHostId: string | null | undefined,
 ): boolean {
   return !isLocalExecutionHost(executionHostId)
+}
+
+/** What an Endpoint calls itself before it has been named. */
+export const UNNAMED_EXECUTION_HOST_ENDPOINT_LABEL = 'Unnamed endpoint'
+
+/**
+ * How an Endpoint refers to itself in buttons, warnings, strips and labels.
+ *
+ * Lives with the entity rather than with either surface that renders it: the
+ * settings panel and the Execution Bar both name the same machines, and a
+ * second copy of this rule would let one of them call an unnamed Endpoint
+ * something the other does not — the strip promising a machine Settings has no
+ * row for (MAR-2642).
+ */
+export function executionHostEndpointDisplayName(
+  endpoint: Pick<ExecutionHostEndpoint, 'label'>,
+): string {
+  return endpoint.label.trim() || UNNAMED_EXECUTION_HOST_ENDPOINT_LABEL
 }

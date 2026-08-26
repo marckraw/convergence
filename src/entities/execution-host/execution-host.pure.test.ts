@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import {
   DEFAULT_EXECUTION_HOST_ENDPOINT_ID,
+  executionHostEndpointDisplayName,
   isLocalExecutionHost,
   isRemoteExecutionHost,
   LOCAL_EXECUTION_HOST_ID,
+  UNNAMED_EXECUTION_HOST_ENDPOINT_LABEL,
 } from './execution-host.pure'
 
 describe('execution host ids in the renderer', () => {
@@ -34,5 +36,16 @@ describe('execution host ids in the renderer', () => {
   it('agrees with the backend on the migrated endpoint id', () => {
     expect(DEFAULT_EXECUTION_HOST_ENDPOINT_ID).toBe('default')
     expect(LOCAL_EXECUTION_HOST_ID).toBe('local')
+  })
+})
+
+describe('executionHostEndpointDisplayName', () => {
+  it('uses the name he gave it, and says so when he gave none', () => {
+    expect(executionHostEndpointDisplayName({ label: ' kuba-vps ' })).toBe(
+      'kuba-vps',
+    )
+    expect(executionHostEndpointDisplayName({ label: '  ' })).toBe(
+      UNNAMED_EXECUTION_HOST_ENDPOINT_LABEL,
+    )
   })
 })

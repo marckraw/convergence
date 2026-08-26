@@ -4,7 +4,6 @@ import {
   describeExecutionHostEndpointActionBlocks,
   describeExecutionHostEndpointRemoval,
   describeExecutionHostEndpointRemovalBlock,
-  executionHostEndpointDisplayName,
   executionHostEndpointDrafts,
   executionHostSessionCounts,
   getExecutionHostEndpointBaseUrlError,
@@ -166,17 +165,6 @@ describe('executionHostEndpointDrafts', () => {
       },
       { id: 'kuba', label: 'kuba-vps', baseUrl: 'https://k.test' },
     ])
-  })
-})
-
-describe('executionHostEndpointDisplayName', () => {
-  it('uses the name he gave it, and says so when he gave none', () => {
-    expect(executionHostEndpointDisplayName({ label: ' kuba-vps ' })).toBe(
-      'kuba-vps',
-    )
-    expect(executionHostEndpointDisplayName({ label: '  ' })).toBe(
-      'Unnamed endpoint',
-    )
   })
 })
 

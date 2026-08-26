@@ -3,7 +3,10 @@ import type {
   ExecutionHostSessionCount,
   RemoteExecutionHostConnectionResult,
 } from '@/entities/app-settings'
-import type { ExecutionHostEndpoint } from '@/entities/execution-host'
+import {
+  executionHostEndpointDisplayName,
+  type ExecutionHostEndpoint,
+} from '@/entities/execution-host'
 
 /** One Endpoint as the settings form is currently holding it. */
 export interface ExecutionHostEndpointDraft {
@@ -11,9 +14,6 @@ export interface ExecutionHostEndpointDraft {
   label: string
   baseUrl: string
 }
-
-/** What a row calls itself before it has been named. */
-export const UNNAMED_EXECUTION_HOST_ENDPOINT_LABEL = 'Unnamed endpoint'
 
 const INVALID_BASE_URL_ERROR =
   'Remote execution host base URL must be a valid HTTP(S) URL.'
@@ -76,13 +76,6 @@ export function hasExecutionHostEndpointErrors(
   return drafts.some(
     (draft) => getExecutionHostEndpointBaseUrlError(draft.baseUrl) !== null,
   )
-}
-
-/** How a row refers to itself in buttons, warnings and labels. */
-export function executionHostEndpointDisplayName(
-  draft: Pick<ExecutionHostEndpointDraft, 'label'>,
-): string {
-  return draft.label.trim() || UNNAMED_EXECUTION_HOST_ENDPOINT_LABEL
 }
 
 /**

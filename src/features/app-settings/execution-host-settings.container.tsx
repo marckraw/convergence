@@ -5,13 +5,15 @@ import {
   executionHostDaemonCredentialsApi,
   type ExecutionHostDaemonCredentialStatus,
 } from '@/entities/app-settings'
-import type { ExecutionHostEndpoint } from '@/entities/execution-host'
+import {
+  executionHostEndpointDisplayName,
+  type ExecutionHostEndpoint,
+} from '@/entities/execution-host'
 import { ExecutionHostFields } from './execution-host-fields.presentational'
 import {
   describeExecutionHostEndpointActionBlocks,
   describeExecutionHostEndpointRemoval,
   describeExecutionHostEndpointRemovalBlock,
-  executionHostEndpointDisplayName,
   getExecutionHostEndpointBaseUrlError,
   normalizeExecutionHostBaseUrl,
   visibleExecutionHostConnectionResult,
