@@ -271,11 +271,13 @@
 /*
  * Mission Control: a working card breathes in its crew's colour.
  *
- * The glare lives on a pseudo-element so the breath is an `opacity` animation
- * on its own layer -- the compositor repeats it for free, which matters on a
- * wall of a hundred and seventy-five cards, where re-painting a blurred shadow
- * every frame would not be. Every value arrives as a custom property from
- * `session-card.styles.ts`; nothing here is tunable, on purpose.
+ * The glare lives on a pseudo-element so the breath animates `opacity` alone:
+ * the blurred shadow below is declared once and never animated, and only how
+ * strongly it shows moves. Breathing the card's own `box-shadow` would have
+ * meant animating the shadow itself -- the card's own opacity would fade its
+ * contents along with it -- which is why the glow sits on `::after`. Every
+ * value arrives as a custom property from `session-card.styles.ts`; nothing
+ * here is tunable, on purpose.
  */
 @keyframes session-card-breathe {
   0%,

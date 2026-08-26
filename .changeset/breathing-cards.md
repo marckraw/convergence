@@ -18,10 +18,11 @@ property and the stylesheet only reads it. Every other knob — period, the two
 opacities, blur, spread, the neutral hue — rides along from `CARD_BREATHE`, so
 a round of "slower" or "subtler" is one line in one object and nothing else.
 
-**The glare lives on a pseudo-element so the breath is cheap.** Animating
-`opacity` on `::after` keeps it on its own layer, where the compositor repeats
-it for free; animating the blurred shadow itself would re-paint every frame,
-on every card, on a wall that can hold a hundred and seventy-five of them.
+**The glare lives on a pseudo-element, so the breath animates opacity alone.**
+The blurred shadow is declared once and never animated — only how strongly it
+shows moves. Breathing the card's own `box-shadow` would have meant animating
+the shadow itself, since the card's own opacity fades its contents along with
+it; that is why the glow sits on `::after`.
 
 **Under `prefers-reduced-motion` the card still glows — it just holds still**,
 resting at the top of the breath. The information survives and only the
