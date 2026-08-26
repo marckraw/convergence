@@ -30,29 +30,6 @@ describe('routeMatchToMainViewRoute', () => {
     ).toEqual({ kind: 'new-code-session', workspaceId: 'workspace-1' })
   })
 
-  it('maps code review routes with canonical search state', () => {
-    expect(
-      routeMatchToMainViewRoute(
-        routeMatch(
-          '/code/review',
-          {},
-          {
-            targetId: 'target-1',
-            mode: 'base-branch',
-            view: 'diff',
-            file: 'src/app.ts',
-          },
-        ),
-      ),
-    ).toEqual({
-      kind: 'code-review',
-      targetId: 'target-1',
-      mode: 'base-branch',
-      view: 'diff',
-      filePath: 'src/app.ts',
-    })
-  })
-
   it('maps chat routes', () => {
     expect(routeMatchToMainViewRoute(routeMatch('/chat/'))).toEqual({
       kind: 'chat-home',

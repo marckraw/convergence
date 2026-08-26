@@ -1,14 +1,6 @@
 import { useCallback } from 'react'
 import { useNavigate } from '@tanstack/react-router'
-import type { CodeReviewMode, CodeReviewView } from '@/entities/code-review'
 import type { SessionSummary } from '@/entities/session'
-
-export interface CodeReviewRouteSearch {
-  targetId?: string | null
-  mode?: CodeReviewMode
-  view?: CodeReviewView
-  file?: string | null
-}
 
 export interface MainViewNavigation {
   navigateToWelcome: () => Promise<void>
@@ -16,7 +8,6 @@ export interface MainViewNavigation {
   navigateToMissionControl: () => void
   navigateToCodeSession: (sessionId: string) => void
   navigateToNewCodeSession: (workspaceId: string | null) => void
-  navigateToCodeReview: (search?: CodeReviewRouteSearch) => void
   navigateToChatHome: () => void
   navigateToChatSession: (sessionId: string) => void
   navigateToChatSpace: (spaceId: string, options?: { draft?: boolean }) => void
@@ -53,21 +44,6 @@ export function useMainViewNavigation(): MainViewNavigation {
       void navigate({
         to: '/code/sessions/new',
         search: { workspaceId },
-      })
-    },
-    [navigate],
-  )
-
-  const navigateToCodeReview = useCallback(
-    (search: CodeReviewRouteSearch = {}) => {
-      void navigate({
-        to: '/code/review',
-        search: {
-          targetId: search.targetId ?? null,
-          mode: search.mode ?? 'working-tree',
-          view: search.view ?? 'guide',
-          file: search.file ?? null,
-        },
       })
     },
     [navigate],
@@ -115,7 +91,6 @@ export function useMainViewNavigation(): MainViewNavigation {
     navigateToMissionControl,
     navigateToCodeSession,
     navigateToNewCodeSession,
-    navigateToCodeReview,
     navigateToChatHome,
     navigateToChatSession,
     navigateToChatSpace,

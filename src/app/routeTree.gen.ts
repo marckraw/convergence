@@ -12,7 +12,6 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as MissionControlRouteImport } from './routes/mission-control'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as ChatIndexRouteImport } from './routes/chat/index'
-import { Route as CodeReviewRouteImport } from './routes/code/review'
 import { Route as CodeSessionsNewRouteImport } from './routes/code/sessions/new'
 import { Route as CodeSessionsSessionIdRouteImport } from './routes/code/sessions/$sessionId'
 import { Route as ChatSpaceSpaceIdRouteImport } from './routes/chat/space/$spaceId'
@@ -31,11 +30,6 @@ const IndexRoute = IndexRouteImport.update({
 const ChatIndexRoute = ChatIndexRouteImport.update({
   id: '/chat/',
   path: '/chat/',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const CodeReviewRoute = CodeReviewRouteImport.update({
-  id: '/code/review',
-  path: '/code/review',
   getParentRoute: () => rootRouteImport,
 } as any)
 const CodeSessionsNewRoute = CodeSessionsNewRouteImport.update({
@@ -62,7 +56,6 @@ const ChatSessionSessionIdRoute = ChatSessionSessionIdRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/mission-control': typeof MissionControlRoute
-  '/code/review': typeof CodeReviewRoute
   '/chat/': typeof ChatIndexRoute
   '/chat/session/$sessionId': typeof ChatSessionSessionIdRoute
   '/chat/space/$spaceId': typeof ChatSpaceSpaceIdRoute
@@ -72,7 +65,6 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/mission-control': typeof MissionControlRoute
-  '/code/review': typeof CodeReviewRoute
   '/chat': typeof ChatIndexRoute
   '/chat/session/$sessionId': typeof ChatSessionSessionIdRoute
   '/chat/space/$spaceId': typeof ChatSpaceSpaceIdRoute
@@ -83,7 +75,6 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/mission-control': typeof MissionControlRoute
-  '/code/review': typeof CodeReviewRoute
   '/chat/': typeof ChatIndexRoute
   '/chat/session/$sessionId': typeof ChatSessionSessionIdRoute
   '/chat/space/$spaceId': typeof ChatSpaceSpaceIdRoute
@@ -95,7 +86,6 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/mission-control'
-    | '/code/review'
     | '/chat/'
     | '/chat/session/$sessionId'
     | '/chat/space/$spaceId'
@@ -105,7 +95,6 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/mission-control'
-    | '/code/review'
     | '/chat'
     | '/chat/session/$sessionId'
     | '/chat/space/$spaceId'
@@ -115,7 +104,6 @@ export interface FileRouteTypes {
     | '__root__'
     | '/'
     | '/mission-control'
-    | '/code/review'
     | '/chat/'
     | '/chat/session/$sessionId'
     | '/chat/space/$spaceId'
@@ -126,7 +114,6 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   MissionControlRoute: typeof MissionControlRoute
-  CodeReviewRoute: typeof CodeReviewRoute
   ChatIndexRoute: typeof ChatIndexRoute
   ChatSessionSessionIdRoute: typeof ChatSessionSessionIdRoute
   ChatSpaceSpaceIdRoute: typeof ChatSpaceSpaceIdRoute
@@ -155,13 +142,6 @@ declare module '@tanstack/react-router' {
       path: '/chat'
       fullPath: '/chat/'
       preLoaderRoute: typeof ChatIndexRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/code/review': {
-      id: '/code/review'
-      path: '/code/review'
-      fullPath: '/code/review'
-      preLoaderRoute: typeof CodeReviewRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/code/sessions/new': {
@@ -198,7 +178,6 @@ declare module '@tanstack/react-router' {
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   MissionControlRoute: MissionControlRoute,
-  CodeReviewRoute: CodeReviewRoute,
   ChatIndexRoute: ChatIndexRoute,
   ChatSessionSessionIdRoute: ChatSessionSessionIdRoute,
   ChatSpaceSpaceIdRoute: ChatSpaceSpaceIdRoute,

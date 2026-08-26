@@ -19,14 +19,9 @@ vi.mock('./App.container', async () => {
         workspaceId?: string | null
         spaceId?: string
         draftAttempt?: boolean
-        targetId?: string | null
-        mode?: string
-        view?: string
-        filePath?: string | null
       }
       onSelectCodeSession?: (sessionId: string) => void
       onBeginCodeSessionDraft?: (workspaceId: string) => void
-      onOpenCodeReview?: () => void
       onShowCode?: () => void
       onShowCodeHome?: () => void
       onShowChat?: () => void
@@ -50,15 +45,10 @@ vi.mock('./App.container', async () => {
             data-space-draft={String(
               props.mainViewRoute?.draftAttempt ?? false,
             )}
-            data-review-target-id={props.mainViewRoute?.targetId ?? ''}
-            data-review-mode={props.mainViewRoute?.mode ?? ''}
-            data-review-view={props.mainViewRoute?.view ?? ''}
-            data-review-file={props.mainViewRoute?.filePath ?? ''}
             data-routed-navigation={
               props.onSelectCodeSession ? 'true' : 'false'
             }
             data-routed-draft={props.onBeginCodeSessionDraft ? 'true' : 'false'}
-            data-routed-review={props.onOpenCodeReview ? 'true' : 'false'}
             data-routed-show-code={props.onShowCode ? 'true' : 'false'}
             data-routed-show-code-home={props.onShowCodeHome ? 'true' : 'false'}
             data-routed-show-chat={props.onShowChat ? 'true' : 'false'}
@@ -102,10 +92,6 @@ describe('app router', () => {
       'true',
     )
     expect(screen.getByTestId('app-shell')).toHaveAttribute(
-      'data-routed-review',
-      'true',
-    )
-    expect(screen.getByTestId('app-shell')).toHaveAttribute(
       'data-routed-draft',
       'true',
     )
@@ -140,43 +126,6 @@ describe('app router', () => {
     expect(screen.getByTestId('app-shell')).toHaveAttribute(
       'data-session-id',
       'session-1',
-    )
-  })
-
-  it('passes the code review route into the app shell', async () => {
-    await router.navigate({
-      to: '/code/review',
-      search: {
-        targetId: 'session:session-1',
-        mode: 'base-branch',
-        view: 'diff',
-        file: 'src/app.ts',
-      },
-    })
-
-    render(<RouterProvider router={router} />)
-
-    await waitFor(() => {
-      expect(screen.getByTestId('app-shell')).toHaveAttribute(
-        'data-route-kind',
-        'code-review',
-      )
-    })
-    expect(screen.getByTestId('app-shell')).toHaveAttribute(
-      'data-review-target-id',
-      'session:session-1',
-    )
-    expect(screen.getByTestId('app-shell')).toHaveAttribute(
-      'data-review-mode',
-      'base-branch',
-    )
-    expect(screen.getByTestId('app-shell')).toHaveAttribute(
-      'data-review-view',
-      'diff',
-    )
-    expect(screen.getByTestId('app-shell')).toHaveAttribute(
-      'data-review-file',
-      'src/app.ts',
     )
   })
 
@@ -277,22 +226,6 @@ describe('app router', () => {
       expect(screen.getByTestId('app-shell')).toHaveAttribute(
         'data-route-kind',
         'code-session',
-      )
-    })
-
-    await router.navigate({
-      to: '/code/review',
-      search: {
-        targetId: null,
-        mode: 'working-tree',
-        view: 'guide',
-        file: null,
-      },
-    })
-    await waitFor(() => {
-      expect(screen.getByTestId('app-shell')).toHaveAttribute(
-        'data-route-kind',
-        'code-review',
       )
     })
 
