@@ -1,5 +1,4 @@
 export { ProjectCreate, ProjectCreateDialogContainer } from './project-create'
-export { PullRequestReviewStartDialogContainer } from './pull-request-review-start'
 export { ProjectSettingsDialogContainer } from './project-settings'
 export { ProjectContextSettings } from './project-context-settings'
 export { ReleaseNotesDialogContainer } from './release-notes'
@@ -19,11 +18,3 @@ export { ComposerContainer } from './composer'
 export { AppSettingsDialogContainer } from './app-settings'
 export { TerminalPaneContainer } from './terminal-pane'
 export { LocalModelTunnelStatusContainer } from './local-model-tunnel'
-export type {
-  CodeReviewDiffLine,
-  ReviewNoteDiffAnnotation,
-  ReviewNoteDiffAnnotationMapping,
-  ReviewNoteDiffAnnotationMetadata,
-  ReviewNoteFilter,
-  ReviewNoteGroup,
-} from './code-review-notes'
