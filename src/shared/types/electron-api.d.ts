@@ -1701,6 +1701,9 @@ interface ElectronAPI {
   appSettings: {
     get: () => Promise<AppSettingsData>
     set: (input: AppSettingsInputData) => Promise<AppSettingsData>
+    /** Answers with the Keychain accounts whose Endpoint is gone and which it
+     * destroyed (MAR-2642). */
+    sweepExecutionHostCredentials: () => Promise<string[]>
     onUpdated: (callback: (settings: AppSettingsData) => void) => () => void
   }
   credentials: {

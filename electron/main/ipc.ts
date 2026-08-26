@@ -496,7 +496,43 @@ export function registerIpcHandlers(
   )
 
   // App settings handlers
-  ipcMain.handle('appSettings:get', () => appSettingsService.getAppSettings())
+  ipcMain.handle('appSettings:get', async () => {
+    const settings = await appSettingsService.getAppSettings()
+    // A credential lives and dies with its Endpoint, and a save commits before
+    // it destroys the token of a machine it removed (MAR-2642). A Keychain that
+    // refused that cleanup — or a quit between the two — leaves an entry filed
+    // under an id no Endpoint will ever bear again, so the first settings load
+    // of a launch is one place the debt is collected. Detached and swallowed on
+    // purpose: reading settings must not wait on `security`.
+    //
+    // It is not the only place, and it must not be: the renderer loads settings
+    // once and keeps them, so a sweep hung off this handler alone would run at
+    // most once per launch and a cleanup that failed would sit there until the
+    // app was restarted. `appSettings:sweepExecutionHostCredentials` is what
+    // the settings dialog calls on every open.
+    void appSettingsService
+      .sweepOrphanedExecutionHostCredentials()
+      .catch(() => {})
+    return settings
+  })
+
+  /**
+   * Collects the credential-cleanup debt, on demand (MAR-2642).
+   *
+   * The sweep is idempotent — every account under this service belongs to an
+   * Endpoint, so one that is not a stored id is garbage whatever left it there
+   * — which is what makes it safe to run at every settings-dialog open rather
+   * than once at load. The dialog is where a removal is made and where its
+   * failure would have been reported, so it is where reopening should be able
+   * to finish the job without a restart.
+   *
+   * Awaited rather than detached, and answering with the accounts it emptied:
+   * this handler is asked for the sweep itself, so "it ran" is the only thing
+   * it has to report.
+   */
+  ipcMain.handle('appSettings:sweepExecutionHostCredentials', () =>
+    appSettingsService.sweepOrphanedExecutionHostCredentials(),
+  )
 
   ipcMain.handle('appSettings:set', async (_event, input: AppSettingsInput) => {
     const stored = await appSettingsService.setAppSettings(input)

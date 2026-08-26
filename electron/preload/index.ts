@@ -477,6 +477,14 @@ contextBridge.exposeInMainWorld('electronAPI', {
   },
   appSettings: {
     get: () => ipcRenderer.invoke('appSettings:get'),
+    /**
+     * Collects the daemon-credential cleanup debt (MAR-2642). Exposed to the
+     * renderer because the settings dialog is where a removal was made, and
+     * reopening it must be able to finish a cleanup the Keychain refused
+     * without an app restart.
+     */
+    sweepExecutionHostCredentials: () =>
+      ipcRenderer.invoke('appSettings:sweepExecutionHostCredentials'),
     set: (input: {
       defaultProviderId: string | null
       defaultModelId: string | null
