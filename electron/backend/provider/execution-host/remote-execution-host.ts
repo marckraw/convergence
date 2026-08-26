@@ -52,6 +52,7 @@ import {
   parseRemoteSessionWorkspaceInfo,
   type RemoteSessionWorkspaceInfo,
   remoteExecutionHostReconnectDelayMs,
+  unavailableProviderError,
 } from './remote-execution-host.pure'
 import {
   RemoteExecutionHostError,
@@ -136,6 +137,19 @@ export class RemoteExecutionHost implements ProviderExecutionHost {
   private providers: RemoteExecutionHostProviderInfo[] = []
   private handshakeResult: EndpointHandshakeResult | null = null
   /**
+   * Whether a provider listing has ever landed. The cache alone cannot say:
+   * a daemon that offers nothing and a daemon that was never asked both leave
+   * `providers` empty, and only one of those is a fact about the daemon.
+   */
+  private listed = false
+  /**
+   * Why the most recent listing failed, kept so a refusal can name the real
+   * reason instead of the absence it produced. Cleared by a listing that
+   * lands, so a daemon that came back does not keep answering with the
+   * outage that preceded it.
+   */
+  private listingFailure: Error | null = null
+  /**
    * Bumped by every refresh so a slow one that finishes last cannot overwrite
    * a newer one's answer. Same reason Emergence's handshake service keeps one
    * per endpoint (`endpoint-handshake.service.ts:36-40`).
@@ -167,34 +181,47 @@ export class RemoteExecutionHost implements ProviderExecutionHost {
    */
   async refreshProviders(): Promise<RemoteExecutionHostProviderInfo[]> {
     const generation = ++this.refreshGeneration
-    const connection = await this.deps.connection.resolveConnection()
-    // Started before the listing rather than after it: /health is
-    // unauthenticated and independent, so it runs concurrently and usually
-    // adds no wall-clock at all. When health is the slower half the refresh
-    // costs max(meta, health), which is why the probe is capped: the added
-    // latency is bounded, not zero. It never rejects, so a meta failure below
-    // leaves nothing dangling.
-    const healthProbe = this.probeHealth(connection)
-    const meta = await this.requestJson(connection, '/v0/meta', {
-      method: 'GET',
-    })
-    const providers = parseRemoteExecutionHostMeta(meta)
-    const health = await healthProbe
-    // The authenticated half of the handshake is the listing that just
-    // succeeded, so 'ok' is a statement of fact at this line and nowhere
-    // earlier.
-    const handshake = health
-      ? evaluateHandshake(health, null, { kind: 'ok' })
-      : null
-    // Both values land in one synchronous step, and only if no newer refresh
-    // has started. Settings changes make two refreshes overlap routinely; a
-    // write on either side of an await pairs one daemon's providers with
-    // another daemon's name.
-    if (generation === this.refreshGeneration) {
-      this.providers = providers
-      this.handshakeResult = handshake
+    try {
+      const connection = await this.deps.connection.resolveConnection()
+      // Started before the listing rather than after it: /health is
+      // unauthenticated and independent, so it runs concurrently and usually
+      // adds no wall-clock at all. When health is the slower half the refresh
+      // costs max(meta, health), which is why the probe is capped: the added
+      // latency is bounded, not zero. It never rejects, so a meta failure
+      // below leaves nothing dangling.
+      const healthProbe = this.probeHealth(connection)
+      const meta = await this.requestJson(connection, '/v0/meta', {
+        method: 'GET',
+      })
+      const providers = parseRemoteExecutionHostMeta(meta)
+      const health = await healthProbe
+      // The authenticated half of the handshake is the listing that just
+      // succeeded, so 'ok' is a statement of fact at this line and nowhere
+      // earlier.
+      const handshake = health
+        ? evaluateHandshake(health, null, { kind: 'ok' })
+        : null
+      // Both values land in one synchronous step, and only if no newer refresh
+      // has started. Settings changes make two refreshes overlap routinely; a
+      // write on either side of an await pairs one daemon's providers with
+      // another daemon's name.
+      if (generation === this.refreshGeneration) {
+        this.providers = providers
+        this.handshakeResult = handshake
+        this.listed = true
+        this.listingFailure = null
+      }
+      return this.providers
+    } catch (error) {
+      // Same generation guard as the success path, for the same reason: an
+      // overtaken refresh must not report its failure over a newer one's
+      // answer.
+      if (generation === this.refreshGeneration) {
+        this.listingFailure =
+          error instanceof Error ? error : new Error(String(error))
+      }
+      throw error
     }
-    return this.providers
   }
 
   /**
@@ -243,6 +270,25 @@ export class RemoteExecutionHost implements ProviderExecutionHost {
     return info ? capabilitiesForRemoteProvider(info) : null
   }
 
+  /**
+   * Refuses a provider this host will not run, saying which of the two things
+   * is wrong (MAR-2620).
+   *
+   * Every entry point that needs a provider asks here rather than reading the
+   * cache itself. Three sites each writing `if (!capabilitiesFor(id)) throw`
+   * is three places to relearn that an empty cache is not an answer -- and
+   * `start()` had already learned it wrong, telling a reader "Provider not
+   * found: claude-code" about a daemon that had simply not been asked yet.
+   */
+  private assertProviderListed(providerId: string): void {
+    if (this.capabilitiesFor(providerId)) return
+    throw unavailableProviderError({
+      providerId,
+      listed: this.listed,
+      listingFailure: this.listingFailure,
+    })
+  }
+
   async describe(): Promise<ProviderDescriptor[]> {
     try {
       await this.refreshProviders()
@@ -254,9 +300,7 @@ export class RemoteExecutionHost implements ProviderExecutionHost {
   }
 
   start(providerId: string, config: SessionStartConfig): SessionHandle {
-    if (!this.capabilitiesFor(providerId)) {
-      throw new Error(`Provider not found: ${providerId}`)
-    }
+    this.assertProviderListed(providerId)
 
     const session = new RemoteSessionRun({
       providerId,
@@ -322,9 +366,7 @@ export class RemoteExecutionHost implements ProviderExecutionHost {
     providerId: string,
     _input: OneShotInput,
   ): Promise<OneShotResult> {
-    if (!this.capabilitiesFor(providerId)) {
-      throw new Error(`Provider not found: ${providerId}`)
-    }
+    this.assertProviderListed(providerId)
     throw new Error(
       `Provider ${providerId} does not support one-shot execution`,
     )
@@ -335,9 +377,7 @@ export class RemoteExecutionHost implements ProviderExecutionHost {
     _config: SessionStartConfig,
     _input: ProviderContextManagementInput,
   ): Promise<ProviderContextManagementResult> {
-    if (!this.capabilitiesFor(providerId)) {
-      throw new Error(`Provider not found: ${providerId}`)
-    }
+    this.assertProviderListed(providerId)
     throw new Error(
       'Manual context management is not supported on remote execution hosts yet',
     )

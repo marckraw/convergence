@@ -53,6 +53,10 @@ export interface RemoteSessionWorkspaceInfo {
  *   methods reflect the set of Providers available at the moment of the call.
  * - `start` and `oneShot` throw/reject with an `Error` whose message is
  *   exactly `Provider not found: <providerId>` when the Provider is unknown.
+ *   That sentence is a claim about what the host knows, so an adapter whose
+ *   Provider set arrives over a wire may only make it once the set has
+ *   arrived: before that it must refuse with why it has no listing, never with
+ *   a verdict it has no basis for (MAR-2620).
  *   `oneShot` rejects with `Provider <providerId> does not support one-shot
  *   execution` when the Provider exists but is not one-shot capable.
  * - A `SessionHandle` returned by `start` follows the SessionHandle event
@@ -79,7 +83,8 @@ export interface ProviderExecutionHost {
 
   /**
    * Start a Session run on the named Provider. Throws `Provider not found:
-   * <providerId>` for unknown Providers.
+   * <providerId>` for Providers the host knows it does not have — see the
+   * invariant above for the adapter that has to find out first.
    */
   start(providerId: string, config: SessionStartConfig): SessionHandle
 

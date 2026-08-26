@@ -853,6 +853,48 @@ describe('RemoteExecutionHost', () => {
     )
   })
 
+  it('does not call a provider missing on a host that never listed any', () => {
+    // Never refreshed: the cache is empty because nothing was asked, not
+    // because the daemon said so (MAR-2620).
+    const cold = createHost(stub)
+
+    expect(() => cold.start('claude', startConfig('s-cold'))).toThrow(
+      /has not listed its providers yet/,
+    )
+    expect(() => cold.start('claude', startConfig('s-cold'))).not.toThrow(
+      /Provider not found/,
+    )
+  })
+
+  it('names the listing failure when one is why the cache is empty', async () => {
+    const unreachable = createStubDaemon()
+    unreachable.setMetaStatus(503)
+    const failing = createHost(unreachable)
+    await expect(failing.refreshProviders()).rejects.toThrow()
+
+    expect(() => failing.start('claude', startConfig('s-dark'))).toThrow(
+      /never listed its providers/,
+    )
+    expect(() => failing.start('claude', startConfig('s-dark'))).not.toThrow(
+      /Provider not found/,
+    )
+  })
+
+  it('goes back to the canonical refusal once a listing lands', async () => {
+    const recovering = createStubDaemon()
+    recovering.setMetaStatus(503)
+    const host2 = createHost(recovering)
+    await expect(host2.refreshProviders()).rejects.toThrow()
+
+    recovering.setMetaStatus(200)
+    await host2.refreshProviders()
+
+    // The daemon answered, and its answer is the basis for the claim.
+    expect(() => host2.start('missing', startConfig('s-known'))).toThrow(
+      'Provider not found: missing',
+    )
+  })
+
   it('rejects one-shot execution with canonical errors', async () => {
     await expect(
       host.oneShot('missing', {

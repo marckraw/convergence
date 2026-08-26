@@ -31,19 +31,28 @@ export function seedExecutionHostEndpoint(
  * holds: a fixture that answered every id would make the routing it stands in
  * for unobservable, which is the exact confusion Endpoint ids exist to
  * prevent (MAR-2620).
+ *
+ * `whenReady` resolves for an id it knows and refuses one it does not, for the
+ * same reason: readiness is a question about a named machine, and a fixture
+ * that answered "ready" for every id would let a caller wait on an Endpoint
+ * that does not exist and proceed as though it did.
  */
 export function executionHostRegistryFor(
   hosts: Record<string, ProviderExecutionHost>,
 ): RemoteExecutionHostRegistry {
+  const require = (endpointId: string): ProviderExecutionHost => {
+    const host = hosts[endpointId]
+    if (!host) {
+      throw new Error(
+        `No execution host registered for endpoint: ${endpointId}`,
+      )
+    }
+    return host
+  }
   return {
-    hostFor: (endpointId) => {
-      const host = hosts[endpointId]
-      if (!host) {
-        throw new Error(
-          `No execution host registered for endpoint: ${endpointId}`,
-        )
-      }
-      return host
+    hostFor: require,
+    whenReady: async (endpointId) => {
+      require(endpointId)
     },
   }
 }

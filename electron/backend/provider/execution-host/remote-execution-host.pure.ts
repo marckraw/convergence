@@ -238,6 +238,52 @@ export function parseRemoteSessionWorkspaceInfo(
 }
 
 /**
+ * The refusal a Remote Execution Host gives for a provider it will not start.
+ *
+ * "Provider not found" is a claim about what the daemon answered, so it may
+ * only be made once the daemon has answered. The host decides by reading its
+ * own provider cache, and an empty cache is two different facts wearing one
+ * shape: a daemon that listed no such provider, and a daemon that was never
+ * asked or never replied. Reporting the first when it is the second sends the
+ * reader hunting a provider problem that does not exist, on a machine whose
+ * real trouble is that nothing ever reached it (MAR-2620).
+ */
+export function unavailableProviderError(input: {
+  providerId: string
+  /** Whether a provider listing has ever landed on this host. */
+  listed: boolean
+  /** Why the most recent listing failed, when one did. */
+  listingFailure: Error | null
+}): Error {
+  if (input.listed) {
+    return new Error(`Provider not found: ${input.providerId}`)
+  }
+
+  const failure = input.listingFailure
+  if (!failure) {
+    return new Error(
+      `Cannot start ${input.providerId}: the remote execution host has not ` +
+        'listed its providers yet.',
+    )
+  }
+
+  const message =
+    `Cannot start ${input.providerId}: the remote execution host never ` +
+    `listed its providers. ${failure.message}`
+  // The kind survives the rewrap, so the settings connection test and the
+  // conversation note still classify this the way they classify the listing
+  // failure it came from.
+  return failure instanceof RemoteExecutionHostError
+    ? new RemoteExecutionHostError(
+        message,
+        failure.kind,
+        failure.status,
+        failure,
+      )
+    : new Error(message)
+}
+
+/**
  * Renders a remote failure for the conversation note: the underlying
  * message, the HTTP status when one exists, and an actionable hint derived
  * from the error kind so users can self-diagnose without daemon log access.

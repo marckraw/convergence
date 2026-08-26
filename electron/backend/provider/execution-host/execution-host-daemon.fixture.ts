@@ -60,6 +60,15 @@ export interface StubDaemon {
   setStartStatus: (status: number) => void
   setCommandStatus: (status: number) => void
   setEventsStatus: (status: number) => void
+  /**
+   * The snapshot `GET /v0/execution/sessions/<id>` answers with. Two daemons
+   * in one test must describe different workspaces, or "the panel asked the
+   * machine the session named" cannot be told from "the panel asked
+   * something".
+   */
+  setSessionSnapshot: (sessionId: string, snapshot: unknown) => void
+  /** Session ids whose snapshot this daemon was asked for, in order. */
+  snapshotRequests: string[]
 }
 
 /**
@@ -86,6 +95,8 @@ export function createStubDaemon(): StubDaemon {
   const startedSessionIds = new Set<string>()
   const eventStreamLastEventIds: Array<string | null> = []
   const healthRequests: Array<{ authorization: string | null }> = []
+  const snapshotRequests: string[] = []
+  const sessionSnapshots = new Map<string, unknown>()
   const current: {
     controller: ReadableStreamDefaultController<Uint8Array> | null
   } = { controller: null }
@@ -174,6 +185,16 @@ export function createStubDaemon(): StubDaemon {
       )
     }
 
+    if (method === 'GET' && /\/v0\/execution\/sessions\/[^/]+$/.test(url)) {
+      const sessionId = decodeURIComponent(url.split('/').pop() ?? '')
+      snapshotRequests.push(sessionId)
+      const snapshot = sessionSnapshots.get(sessionId)
+      if (snapshot === undefined) {
+        return jsonResponse({ error: `Unknown session: ${sessionId}` }, 404)
+      }
+      return jsonResponse(snapshot)
+    }
+
     if (method === 'POST' && url.includes('/commands')) {
       if (commandStatus !== 202) {
         return jsonResponse({ error: 'command rejected' }, commandStatus)
@@ -250,6 +271,10 @@ export function createStubDaemon(): StubDaemon {
     commandRequests,
     eventStreamLastEventIds,
     healthRequests,
+    snapshotRequests,
+    setSessionSnapshot(sessionId, snapshot) {
+      sessionSnapshots.set(sessionId, snapshot)
+    },
     setMetaStatus(status) {
       metaStatus = status
     },

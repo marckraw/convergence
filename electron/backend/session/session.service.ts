@@ -367,6 +367,31 @@ export class SessionService {
   }
 
   /**
+   * Waits for the Endpoint's provider listing before a turn is dispatched to
+   * it (MAR-2620).
+   *
+   * The listing is a round trip to the daemon that begins when the host is
+   * built, and `start()` reads its result synchronously. An Endpoint added
+   * after boot -- or reached in the seconds after Convergence starts -- would
+   * otherwise have its first turn refused for a provider that daemon has, one
+   * round trip before it would have worked. This awaits the request already in
+   * flight; it adds no retry and no sleep.
+   *
+   * A session naming an Endpoint that no longer exists returns quietly, so
+   * `resolveExecution` still gives that refusal rather than this raising a
+   * connection error about a machine that is not configured at all.
+   */
+  private async awaitEndpointListing(
+    session: Pick<SessionSummary, 'executionHost'>,
+  ): Promise<void> {
+    if (isLocalExecutionHost(session.executionHost)) return
+    if (!this.remoteExecutionHosts) return
+    const endpoint = this.executionHostEndpoints.getById(session.executionHost)
+    if (!endpoint) return
+    await this.remoteExecutionHosts.whenReady(endpoint.id)
+  }
+
+  /**
    * Where a remote session is running, read from the Endpoint the session
    * names. Resolving the host the same way a turn does is the point: a
    * workspace panel that queried an ambient daemon would describe a machine
@@ -946,6 +971,8 @@ export class SessionService {
 
     const bootContext = this.prepareBootContext(session, input)
 
+    await this.awaitEndpointListing(session)
+
     this.startHandle(
       session,
       bootContext.augmentedText,
@@ -1047,6 +1074,8 @@ export class SessionService {
       })
       return
     }
+
+    await this.awaitEndpointListing(session)
 
     const execution = this.resolveExecution(session)
     const capabilities = execution.host.capabilitiesFor(execution.providerId)

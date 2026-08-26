@@ -70,4 +70,15 @@ export interface RemoteExecutionHostProviderInfo {
  */
 export interface RemoteExecutionHostRegistry {
   hostFor(endpointId: string): ProviderExecutionHost
+
+  /**
+   * Settles when this Endpoint's provider listing has landed, and rejects with
+   * why when it never did.
+   *
+   * `hostFor` hands back a host whose capability cache may still be empty
+   * because the daemon has not answered yet, and `start()` reads that cache
+   * synchronously. Anything about to start a session awaits this first, so a
+   * turn is never refused for a provider the daemon has.
+   */
+  whenReady(endpointId: string): Promise<void>
 }

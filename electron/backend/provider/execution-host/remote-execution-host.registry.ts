@@ -27,15 +27,22 @@ interface RemoteExecutionHostRegistryDeps {
  *
  * Hosts are built on first use and kept, so a session that reattaches after a
  * restart and a turn sent a minute later speak to the same instance and share
- * its cache. Each new host primes that cache immediately: `start()` refuses a
- * provider it has never listed, so a host born cold would reject the first
- * turn on an Endpoint added after boot.
+ * its cache. Each new host starts listing that cache immediately, and
+ * `whenReady` is how a caller waits for the listing rather than hoping it
+ * arrived: `start()` refuses a provider it has never listed, so a host born
+ * cold would reject the first turn on an Endpoint added after boot.
  *
  * Base URL and token are still read per call by the connection resolver, so
  * editing an Endpoint's address applies without rebuilding anything.
  */
 export class AppSettingsRemoteExecutionHostRegistry implements RemoteExecutionHostRegistry {
   private readonly hosts = new Map<string, RemoteExecutionHost>()
+  /**
+   * The listing in flight for each Endpoint, resolving to why it failed or to
+   * null when it landed. It never rejects: most callers only start it, and a
+   * rejected promise nobody awaits is an unhandled rejection.
+   */
+  private readonly listings = new Map<string, Promise<Error | null>>()
 
   constructor(private readonly deps: RemoteExecutionHostRegistryDeps) {}
 
@@ -50,11 +57,51 @@ export class AppSettingsRemoteExecutionHostRegistry implements RemoteExecutionHo
       debugSink: this.deps.debugSink,
     })
     this.hosts.set(endpointId, host)
-    // Fire and forget: an Endpoint that is unreachable or unconfigured must
-    // not stall the caller, and the failure surfaces at the turn or at the
-    // settings connection test rather than here.
-    void host.refreshProviders().catch(() => {})
+    this.beginListing(endpointId, host)
     return host
+  }
+
+  /**
+   * Settles once this Endpoint has answered with its provider listing, and
+   * throws with why when it never did (MAR-2620).
+   *
+   * The listing is a round trip to the daemon, started when the host is built
+   * and read synchronously by `start()`. Between those two moments a turn on a
+   * freshly added Endpoint is refused for a provider the daemon has, so
+   * whoever is about to start a session waits here for the request already in
+   * flight. Not a retry and not a sleep: the same promise, awaited by the one
+   * path that cannot proceed without it.
+   */
+  async whenReady(endpointId: string): Promise<void> {
+    const host = this.hostFor(endpointId)
+    const failure = await (this.listings.get(endpointId) ??
+      this.beginListing(endpointId, host))
+    if (failure) throw failure
+  }
+
+  /**
+   * Starts one Endpoint's provider listing and records it as the attempt
+   * `whenReady` waits on.
+   */
+  private beginListing(
+    endpointId: string,
+    host: RemoteExecutionHost,
+  ): Promise<Error | null> {
+    const attempt: Promise<Error | null> = host.refreshProviders().then(
+      () => null,
+      (error: unknown) => {
+        // A failed listing must not poison the Endpoint. Forgetting the
+        // attempt makes the next turn ask again, so a daemon that was down at
+        // boot works as soon as it is up -- without restarting Convergence,
+        // and without this becoming a retry loop nobody asked for.
+        if (this.listings.get(endpointId) === attempt) {
+          this.listings.delete(endpointId)
+        }
+        return error instanceof Error ? error : new Error(String(error))
+      },
+    )
+    this.listings.set(endpointId, attempt)
+    return attempt
   }
 
   /**
@@ -73,8 +120,10 @@ export class AppSettingsRemoteExecutionHostRegistry implements RemoteExecutionHo
   }
 
   /**
-   * Builds the host for every configured Endpoint, priming each one's provider
-   * cache. Called at boot so the first remote turn does not race the listing.
+   * Builds the host for every configured Endpoint, starting each one's
+   * provider listing. Called at boot so the first remote turn usually finds
+   * the listing already there rather than waiting on it -- `whenReady` is what
+   * makes waiting correct when it is not.
    */
   async primeConfiguredEndpoints(): Promise<void> {
     const settings = await this.deps.appSettings.getAppSettings()

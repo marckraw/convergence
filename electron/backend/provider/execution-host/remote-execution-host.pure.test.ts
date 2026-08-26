@@ -10,6 +10,7 @@ import {
   parseRemoteExecutionHostStartResponse,
   parseRemoteSessionWorkspaceInfo,
   remoteExecutionHostReconnectDelayMs,
+  unavailableProviderError,
 } from './remote-execution-host.pure'
 import { RemoteExecutionHostError } from './remote-execution-host.types'
 
@@ -279,5 +280,62 @@ describe('parseRemoteSessionWorkspaceInfo', () => {
     expect(() => parseRemoteSessionWorkspaceInfo('nope')).toThrow(
       RemoteExecutionHostError,
     )
+  })
+})
+
+describe('unavailableProviderError', () => {
+  it('says provider not found only once the daemon has answered', () => {
+    const error = unavailableProviderError({
+      providerId: 'claude',
+      listed: true,
+      listingFailure: null,
+    })
+
+    expect(error.message).toBe('Provider not found: claude')
+  })
+
+  it('reports why the listing failed instead of blaming the provider', () => {
+    const error = unavailableProviderError({
+      providerId: 'claude',
+      listed: false,
+      listingFailure: new RemoteExecutionHostError(
+        'Remote execution host is unreachable: fetch failed',
+        'network',
+      ),
+    })
+
+    expect(error.message).toContain('never listed its providers')
+    expect(error.message).toContain('unreachable')
+    expect(error.message).not.toContain('Provider not found')
+    // The kind rides along, so the settings connection test and the
+    // conversation note classify this exactly as they classify the listing
+    // failure underneath it.
+    expect(error).toBeInstanceOf(RemoteExecutionHostError)
+    expect((error as RemoteExecutionHostError).kind).toBe('network')
+  })
+
+  it('keeps an auth failure an auth failure', () => {
+    const error = unavailableProviderError({
+      providerId: 'codex',
+      listed: false,
+      listingFailure: new RemoteExecutionHostError('Unauthorized', 'auth', 401),
+    })
+
+    expect((error as RemoteExecutionHostError).kind).toBe('auth')
+    expect((error as RemoteExecutionHostError).status).toBe(401)
+    expect(describeRemoteExecutionHostFailure(error)).toContain(
+      'rejected the API token',
+    )
+  })
+
+  it('admits it has not asked yet when nothing has failed', () => {
+    const error = unavailableProviderError({
+      providerId: 'claude',
+      listed: false,
+      listingFailure: null,
+    })
+
+    expect(error.message).toContain('has not listed its providers yet')
+    expect(error.message).not.toContain('Provider not found')
   })
 })

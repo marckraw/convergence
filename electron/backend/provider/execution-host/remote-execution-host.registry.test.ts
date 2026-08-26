@@ -67,6 +67,25 @@ describe('remote execution hosts, one per endpoint', () => {
     return requestUrls.filter((url) => url.endsWith('/v0/execution/sessions'))
   }
 
+  /** Session-snapshot GETs, as URLs, in the order they were sent. */
+  function snapshotUrls(): string[] {
+    return requestUrls.filter((url) =>
+      /\/v0\/execution\/sessions\/[^/]+$/.test(url),
+    )
+  }
+
+  /** A workspace snapshot naming the machine that served it. */
+  function snapshotFrom(daemon: string): Record<string, unknown> {
+    return {
+      workspace: {
+        repository: 'git@github.com:acme/repo.git',
+        branchName: `convergence/${daemon}`,
+        baseRef: 'main',
+      },
+      prUrl: `https://github.com/acme/repo/pull/${daemon === 'a' ? 1 : 2}`,
+    }
+  }
+
   function createSessionOn(endpointId: string, name: string): string {
     return service.create({
       projectId: PROJECT_ID,
@@ -214,6 +233,33 @@ describe('remote execution hosts, one per endpoint', () => {
     ])
     expect(hostB.handshake()?.daemonVersion).toBe('9.9.9')
     expect(hostA.handshake()?.daemonVersion).not.toBe('9.9.9')
+  })
+
+  it('reads the workspace from the endpoint the session named, not the first one', async () => {
+    const sessionId = createSessionOn(DAEMON_B.id, 'on daemon b')
+    // Both daemons answer, and both answers look right. A panel that asked the
+    // wrong machine would render a branch and a PR with nothing to mark them
+    // as belonging to a session this one never ran.
+    daemonA.setSessionSnapshot(sessionId, snapshotFrom('a'))
+    daemonB.setSessionSnapshot(sessionId, snapshotFrom('b'))
+
+    const info = await service.fetchRemoteSessionWorkspaceInfo(sessionId)
+
+    expect(snapshotUrls()).toEqual([
+      `${DAEMON_B.baseUrl}/v0/execution/sessions/${sessionId}`,
+    ])
+    expect(daemonA.snapshotRequests).toEqual([])
+    expect(info.workspace?.branchName).toBe('convergence/b')
+    expect(info.prUrl).toBe('https://github.com/acme/repo/pull/2')
+  })
+
+  it('refuses a workspace read for an endpoint that is gone rather than asking anywhere', async () => {
+    const sessionId = createSessionOn('daemon-c', 'on a vanished endpoint')
+
+    await expect(
+      service.fetchRemoteSessionWorkspaceInfo(sessionId),
+    ).rejects.toThrow(/endpoint "daemon-c"/)
+    expect(snapshotUrls()).toEqual([])
   })
 
   it('refuses a session whose endpoint is gone rather than posting it anywhere', async () => {
