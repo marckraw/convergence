@@ -6,6 +6,13 @@ import type {
   SessionRow,
 } from '../database/database.types'
 import type { ProviderExecutionHost } from '../provider/execution-host/execution-host.types'
+import {
+  describeMissingExecutionHostEndpoint,
+  isLocalExecutionHost,
+  isRemoteExecutionHost,
+  LOCAL_EXECUTION_HOST_ID,
+} from '../execution-host-endpoint/execution-host-endpoint.pure'
+import { ExecutionHostEndpointRepository } from '../execution-host-endpoint/execution-host-endpoint.repository'
 import { assertLocalAccountSelection } from '../provider-account/provider-account-resolution.pure'
 import { remoteProviderIdForLocalProvider } from '../provider/execution-host/remote-execution-host.pure'
 import type {
@@ -221,6 +228,7 @@ export class SessionService {
     | ((workingDirectory: string) => { repository: string } | null)
     | null = null
   private readonly sessionRepository: SessionRepository
+  private readonly executionHostEndpoints: ExecutionHostEndpointRepository
   private readonly queuedInputs: SessionQueuedInputService
   private readonly liveness: SessionLivenessService
   /**
@@ -237,6 +245,7 @@ export class SessionService {
     private globalWorkingDirectory: string = process.cwd(),
   ) {
     this.sessionRepository = new SessionRepository(db)
+    this.executionHostEndpoints = new ExecutionHostEndpointRepository(db)
     this.queuedInputs = new SessionQueuedInputService(db)
     this.liveness = new SessionLivenessService({
       isOpen: () => this.db.open,
@@ -303,12 +312,24 @@ export class SessionService {
    * Picks the execution host and host-side provider id for a session.
    * Sessions always store the local provider id; remote execution translates
    * it to the daemon's provider namespace at this boundary.
+   *
+   * A session names the Endpoint it runs on, and that Endpoint must still
+   * exist. Falling back to whichever daemon is configured would be the worst
+   * outcome this era can produce -- a session quietly running on a machine it
+   * never named, with its own record still asserting the old one -- so a
+   * missing Endpoint refuses instead (MAR-2620).
    */
   private resolveExecution(
     session: Pick<SessionSummary, 'executionHost' | 'providerId'>,
   ): { host: ProviderExecutionHost; providerId: string } {
-    if (session.executionHost !== 'remote') {
+    if (isLocalExecutionHost(session.executionHost)) {
       return { host: this.executionHost, providerId: session.providerId }
+    }
+
+    if (!this.executionHostEndpoints.getById(session.executionHost)) {
+      throw new Error(
+        describeMissingExecutionHostEndpoint(session.executionHost),
+      )
     }
 
     if (!this.remoteExecutionHost) {
@@ -600,8 +621,8 @@ export class SessionService {
     // repository for a remote host to materialize, so they stay local.
     const executionHost =
       input.contextKind === 'global'
-        ? 'local'
-        : (input.executionHost ?? 'local')
+        ? LOCAL_EXECUTION_HOST_ID
+        : (input.executionHost ?? LOCAL_EXECUTION_HOST_ID)
 
     this.sessionRepository.create({
       id,
@@ -1009,7 +1030,7 @@ export class SessionService {
       )
     }
 
-    if (session.executionHost === 'remote') {
+    if (isRemoteExecutionHost(session.executionHost)) {
       this.sendRemoteTurn({
         session,
         text: this.prepareUserTurnText(
@@ -1102,7 +1123,7 @@ export class SessionService {
     if (session.providerId === 'shell') {
       throw new Error('Shell sessions do not have a provider context')
     }
-    if (session.executionHost === 'remote') {
+    if (isRemoteExecutionHost(session.executionHost)) {
       throw new Error(
         'Manual context management is not supported on remote execution hosts yet',
       )
@@ -2089,10 +2110,9 @@ export class SessionService {
     if (!execution.host.capabilitiesFor(execution.providerId)) {
       throw new Error(`Provider not found: ${session.providerId}`)
     }
-    const workspace =
-      session.executionHost === 'remote'
-        ? this.requireRemoteWorkspace(session)
-        : null
+    const workspace = isRemoteExecutionHost(session.executionHost)
+      ? this.requireRemoteWorkspace(session)
+      : null
 
     if (initialAttachmentIds && initialAttachmentIds.length > 0) {
       this.pendingUserAttachmentIds.set(session.id, initialAttachmentIds)
@@ -2274,7 +2294,7 @@ export class SessionService {
         return
       }
 
-      if (session.executionHost === 'remote') {
+      if (isRemoteExecutionHost(session.executionHost)) {
         this.sendRemoteTurn({
           session,
           text: augmentedText,
@@ -2321,7 +2341,7 @@ export class SessionService {
       const session = sessionSummaryFromRow(row)
       // Remote runs outlive the app process; they are reattached once the
       // remote execution host is wired via setRemoteExecutionHost.
-      if (session.executionHost === 'remote') continue
+      if (isRemoteExecutionHost(session.executionHost)) continue
       this.markStaleRunningSessionFailed(
         session,
         'Session marked failed because Convergence restarted before the provider process finished.',
@@ -2339,7 +2359,7 @@ export class SessionService {
   private resumeRunningRemoteSessions(): void {
     for (const row of this.sessionRepository.listRunningNonShell()) {
       const session = sessionSummaryFromRow(row)
-      if (session.executionHost !== 'remote') continue
+      if (isLocalExecutionHost(session.executionHost)) continue
       if (this.activeHandles.has(session.id)) continue
       try {
         this.attachRemoteHandle(session)

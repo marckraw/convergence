@@ -6,6 +6,10 @@ import { tmpdir } from 'os'
 import type Database from 'better-sqlite3'
 import { getDatabase, closeDatabase, resetDatabase } from '../database/database'
 import {
+  seedExecutionHostEndpoint,
+  TEST_EXECUTION_HOST_ENDPOINT_ID,
+} from '../execution-host-endpoint/execution-host-endpoint.fixture'
+import {
   CLAUDE_CODE_MID_RUN_INPUT_CAPABILITY,
   NO_MID_RUN_INPUT_CAPABILITY,
 } from '../provider/provider-descriptor.pure'
@@ -3436,6 +3440,10 @@ describe('SessionService — liveness clock', () => {
   })
 
   describe('remote execution host routing', () => {
+    beforeEach(() => {
+      seedExecutionHostEndpoint(getDatabase())
+    })
+
     function createFakeRemoteHost() {
       const startCalls: Array<{ providerId: string; config: unknown }> = []
       const handle: SessionHandle = {
@@ -3490,10 +3498,12 @@ describe('SessionService — liveness clock', () => {
         model: 'sonnet',
         effort: null,
         name: 'remote session',
-        executionHost: 'remote',
+        executionHost: TEST_EXECUTION_HOST_ENDPOINT_ID,
       })
-      expect(remote.executionHost).toBe('remote')
-      expect(service.getSummaryById(remote.id)?.executionHost).toBe('remote')
+      expect(remote.executionHost).toBe(TEST_EXECUTION_HOST_ENDPOINT_ID)
+      expect(service.getSummaryById(remote.id)?.executionHost).toBe(
+        TEST_EXECUTION_HOST_ENDPOINT_ID,
+      )
     })
 
     it('forces global sessions onto the local host', () => {
@@ -3503,7 +3513,7 @@ describe('SessionService — liveness clock', () => {
         model: 'sonnet',
         effort: null,
         name: 'global session',
-        executionHost: 'remote',
+        executionHost: TEST_EXECUTION_HOST_ENDPOINT_ID,
       })
       expect(session.executionHost).toBe('local')
     })
@@ -3522,7 +3532,7 @@ describe('SessionService — liveness clock', () => {
         model: 'sonnet',
         effort: null,
         name: 'remote run',
-        executionHost: 'remote',
+        executionHost: TEST_EXECUTION_HOST_ENDPOINT_ID,
       })
       await service.start(session.id, { text: 'hello' })
 
@@ -3555,7 +3565,7 @@ describe('SessionService — liveness clock', () => {
         model: 'sonnet',
         effort: null,
         name: 'remote with account',
-        executionHost: 'remote',
+        executionHost: TEST_EXECUTION_HOST_ENDPOINT_ID,
       })
 
       await expect(
@@ -3566,6 +3576,61 @@ describe('SessionService — liveness clock', () => {
       ).rejects.toThrow(/local-only for now/)
       expect(startCalls).toHaveLength(0)
       expect(service.getById(session.id)?.status).not.toBe('running')
+    })
+
+    it('refuses a session whose endpoint is gone rather than running it on another one', async () => {
+      // The worst outcome this era can produce is a session quietly running on
+      // a machine it never named. `daemon-a` is configured and wired; the
+      // session names `daemon-b`, which is not. Resolving to the configured one
+      // would look like success and be a lie (MAR-2620).
+      const { host, startCalls } = createFakeRemoteHost()
+      service.setRemoteExecutionHost(host)
+      service.setRemoteWorkspaceSourceResolver(() => ({
+        repository: 'git@github.com:acme/repo.git',
+      }))
+
+      const session = service.create({
+        projectId,
+        workspaceId: null,
+        providerId: 'claude-code',
+        model: 'sonnet',
+        effort: null,
+        name: 'session on a vanished endpoint',
+        executionHost: 'daemon-b',
+      })
+      expect(session.executionHost).toBe('daemon-b')
+
+      await expect(
+        service.start(session.id, { text: 'hello' }),
+      ).rejects.toThrow(/endpoint "daemon-b"/)
+      expect(startCalls).toHaveLength(0)
+      expect(service.getById(session.id)?.status).not.toBe('running')
+    })
+
+    it('routes a session to the endpoint it recorded, not to whichever exists', async () => {
+      // Both endpoints are configured, so nothing is missing -- the session
+      // still has to come back holding the id it was created with rather than
+      // the first one in the list.
+      seedExecutionHostEndpoint(getDatabase(), 'daemon-b')
+      const { host, startCalls } = createFakeRemoteHost()
+      service.setRemoteExecutionHost(host)
+      service.setRemoteWorkspaceSourceResolver(() => ({
+        repository: 'git@github.com:acme/repo.git',
+      }))
+
+      const session = service.create({
+        projectId,
+        workspaceId: null,
+        providerId: 'claude-code',
+        model: 'sonnet',
+        effort: null,
+        name: 'second endpoint',
+        executionHost: 'daemon-b',
+      })
+      await service.start(session.id, { text: 'hello' })
+
+      expect(startCalls).toHaveLength(1)
+      expect(service.getSummaryById(session.id)?.executionHost).toBe('daemon-b')
     })
 
     it('still runs a remote session on the ambient default', async () => {
@@ -3582,7 +3647,7 @@ describe('SessionService — liveness clock', () => {
         model: 'sonnet',
         effort: null,
         name: 'remote ambient',
-        executionHost: 'remote',
+        executionHost: TEST_EXECUTION_HOST_ENDPOINT_ID,
       })
 
       await service.start(session.id, {
@@ -3601,7 +3666,7 @@ describe('SessionService — liveness clock', () => {
         model: 'sonnet',
         effort: null,
         name: 'unconfigured remote',
-        executionHost: 'remote',
+        executionHost: TEST_EXECUTION_HOST_ENDPOINT_ID,
       })
       await expect(
         service.sendMessage(session.id, { text: 'hello' }),
@@ -3618,7 +3683,7 @@ describe('SessionService — liveness clock', () => {
         model: 'test-model',
         effort: null,
         name: 'unsupported remote provider',
-        executionHost: 'remote',
+        executionHost: TEST_EXECUTION_HOST_ENDPOINT_ID,
       })
       await expect(
         service.sendMessage(session.id, { text: 'hello' }),
@@ -3635,7 +3700,7 @@ describe('SessionService — liveness clock', () => {
         model: 'sonnet',
         effort: null,
         name: 'remote survivor',
-        executionHost: 'remote',
+        executionHost: TEST_EXECUTION_HOST_ENDPOINT_ID,
       })
       service['applyDelta'](
         session.id,
@@ -3702,7 +3767,7 @@ describe('SessionService — liveness clock', () => {
         model: 'test-model',
         effort: null,
         name: 'unmappable remote survivor',
-        executionHost: 'remote',
+        executionHost: TEST_EXECUTION_HOST_ENDPOINT_ID,
       })
       service['applyDelta'](
         session.id,
@@ -3738,7 +3803,7 @@ describe('SessionService — liveness clock', () => {
         model: 'sonnet',
         effort: null,
         name: 'replay dedupe',
-        executionHost: 'remote',
+        executionHost: TEST_EXECUTION_HOST_ENDPOINT_ID,
       })
       const item = {
         id: 'replayed-item-1',
@@ -3786,7 +3851,7 @@ describe('SessionService — liveness clock', () => {
         model: 'sonnet',
         effort: null,
         name: 'remote without origin',
-        executionHost: 'remote',
+        executionHost: TEST_EXECUTION_HOST_ENDPOINT_ID,
       })
       await expect(
         service.start(session.id, { text: 'hello' }),
@@ -4219,6 +4284,7 @@ describe('SessionService relay mute', () => {
   })
 
   it('keeps a remote quiet turn quiet across a restart', async () => {
+    seedExecutionHostEndpoint(db)
     // Remote runs outlive the app process. `recoverStaleRunningSessions` skips
     // them on purpose and `resumeRunningRemoteSessions` reattaches instead, so
     // their settles arrive as ordinary settles with a fresh SessionService
@@ -4272,7 +4338,7 @@ describe('SessionService relay mute', () => {
       model: 'sonnet',
       effort: null,
       name: 'remote quiet',
-      executionHost: 'remote',
+      executionHost: TEST_EXECUTION_HOST_ENDPOINT_ID,
     }).id
 
     await service.start(remoteId, { text: '/compact', muteRelays: true })

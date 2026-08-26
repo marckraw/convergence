@@ -1,4 +1,5 @@
 import type { SessionRow } from '../database/database.types'
+import { parseExecutionHostId } from '../execution-host-endpoint/execution-host-endpoint.pure'
 import type {
   SessionStatus,
   AttentionState,
@@ -26,10 +27,17 @@ export type ForkStrategy = 'full' | 'summary'
 export type PrimarySurface = 'conversation' | 'terminal'
 
 /**
- * Where the session's Provider runs: inside the app process or on the
- * configured remote agents daemon.
+ * Where the session's Provider runs: `'local'` for inside the app process, or
+ * the id of an execution host Endpoint (MAR-2620).
+ *
+ * Deliberately not a union of literals. There is exactly one value this code
+ * may name — `LOCAL_EXECUTION_HOST_ID` — and every other value is an id the
+ * user's own configuration created. Branch with `isLocalExecutionHost` /
+ * `isRemoteExecutionHost`, or look the Endpoint up; comparing against a
+ * hard-coded remote name is the bug this type change exists to make
+ * impossible.
  */
-export type SessionExecutionHostId = 'local' | 'remote'
+export type SessionExecutionHostId = string
 
 export type SessionContextKind = 'project' | 'global'
 
@@ -109,13 +117,6 @@ function parseForkStrategy(value: string | null): ForkStrategy | null {
 function parsePrimarySurface(value: string | null | undefined): PrimarySurface {
   if (value === 'terminal') return 'terminal'
   return 'conversation'
-}
-
-function parseExecutionHost(
-  value: string | null | undefined,
-): SessionExecutionHostId {
-  if (value === 'remote') return 'remote'
-  return 'local'
 }
 
 interface CreateSessionBaseInput {
@@ -225,7 +226,7 @@ export function sessionSummaryFromRow(row: SessionRow): SessionSummary {
     parentSessionId: row.parent_session_id,
     forkStrategy: parseForkStrategy(row.fork_strategy),
     primarySurface: parsePrimarySurface(row.primary_surface),
-    executionHost: parseExecutionHost(row.execution_host),
+    executionHost: parseExecutionHostId(row.execution_host),
     continuationToken: row.continuation_token,
     lastSequence: row.last_sequence ?? 0,
     createdAt: row.created_at,

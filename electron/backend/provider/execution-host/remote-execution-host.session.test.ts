@@ -1,3 +1,7 @@
+import {
+  seedExecutionHostEndpoint,
+  TEST_EXECUTION_HOST_ENDPOINT_ID,
+} from '../../execution-host-endpoint/execution-host-endpoint.fixture'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { mkdirSync, mkdtempSync, rmSync } from 'fs'
 import { tmpdir } from 'os'
@@ -154,7 +158,7 @@ describe('remote wire events reaching the session record', () => {
       model: 'sonnet',
       effort: null,
       name: 'remote session',
-      executionHost: 'remote',
+      executionHost: TEST_EXECUTION_HOST_ENDPOINT_ID,
     }).id
     return id
   }
@@ -219,6 +223,7 @@ describe('remote wire events reaching the session record', () => {
     db.prepare(
       "INSERT INTO projects (id, name, repository_path) VALUES (?, 'remote', ?)",
     ).run(PROJECT_ID, repoPath)
+    seedExecutionHostEndpoint(db)
 
     stub = createStubDaemon()
     cursorWrites = []

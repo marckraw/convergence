@@ -1,3 +1,4 @@
+import { isLocalExecutionHost } from '../execution-host-endpoint/execution-host-endpoint.pure'
 import type { CodexAccountEnvTarget } from './provider-account-codex-env.pure'
 import type { ClaudeAccountEnvTarget } from './provider-account-env.pure'
 import type { ProviderAccount } from './provider-account.types'
@@ -72,7 +73,7 @@ export function assertLocalAccountSelection(input: {
   accountId: string | null | undefined
 }): void {
   if (!input.accountId) return
-  if (input.executionHost !== 'remote') return
+  if (isLocalExecutionHost(input.executionHost)) return
 
   throw new Error(REMOTE_ACCOUNT_SELECTION_UNAVAILABLE)
 }
