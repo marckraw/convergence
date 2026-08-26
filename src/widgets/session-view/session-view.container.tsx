@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState, useCallback, useMemo } from 'react'
-import type { FC, MouseEvent as ReactMouseEvent } from 'react'
+import type { FC } from 'react'
 import { useProjectStore } from '@/entities/project'
-import type { CodeReviewMode } from '@/entities/code-review'
 import {
   AttentionIndicator,
   formatActivityLabel,
@@ -43,13 +42,10 @@ import {
   MoreVertical,
   ScrollText,
   Square,
-  FileCode,
   GitBranch,
   GitPullRequest,
   TerminalSquare,
 } from 'lucide-react'
-import { cn } from '@/shared/lib/cn.pure'
-import { ChangedFilesPanel } from './changed-files-panel.container'
 import { formatConversationTotalDuration } from './conversation-total-duration.pure'
 import {
   SpaceContextPanel,
@@ -66,21 +62,7 @@ function formatRemoteRepositoryLabel(repository: string): string {
     .replace(/\.git$/, '')
 }
 
-const CHANGED_FILES_MIN_WIDTH = 320
-const CHANGED_FILES_MAX_WIDTH = 960
-const CHANGED_FILES_COMPACT_WIDTH = 320
-const CHANGED_FILES_DEFAULT_EXPANDED_WIDTH = 720
-type ChangedFilesMode = 'docked' | 'overlay'
-
-interface SessionViewProps {
-  onOpenCodeReview?: (search?: {
-    targetId?: string | null
-    mode?: CodeReviewMode
-    file?: string | null
-  }) => void
-}
-
-export const SessionView: FC<SessionViewProps> = ({ onOpenCodeReview }) => {
+export const SessionView: FC = () => {
   const activeProject = useProjectStore((s) => s.activeProject)
   const projects = useProjectStore((s) => s.projects)
   const workspaces = useWorkspaceStore((s) => s.globalWorkspaces)
@@ -128,22 +110,11 @@ export const SessionView: FC<SessionViewProps> = ({ onOpenCodeReview }) => {
     activeSessionId ? (s.treesBySessionId[activeSessionId] ?? null) : null,
   )
   const hasTerminal = terminalTree !== null
-  const [showChangedFiles, setShowChangedFiles] = useState(false)
   const [showPullRequestPanel, setShowPullRequestPanel] = useState(false)
-  const [changedFilesSide, setChangedFilesSide] = useState<'left' | 'right'>(
-    'right',
-  )
-  const [changedFilesMode, setChangedFilesMode] =
-    useState<ChangedFilesMode>('docked')
-  const [changedFilesWidth, setChangedFilesWidth] = useState(
-    CHANGED_FILES_COMPACT_WIDTH,
-  )
   const [branchName, setBranchName] = useState<string | null>(null)
   const [remoteWorkspace, setRemoteWorkspace] =
     useState<RemoteSessionWorkspaceResult | null>(null)
-  const changedFilesDraggingRef = useRef(false)
   const sessionRootRef = useRef<HTMLDivElement>(null)
-  const changedFilesExpanded = changedFilesMode === 'overlay'
 
   const session = sessions.find((s) => s.id === activeSessionId) ?? null
   const remoteSessionId =
@@ -237,16 +208,6 @@ export const SessionView: FC<SessionViewProps> = ({ onOpenCodeReview }) => {
     void loadArtifacts(linkedSpace.id)
   }, [linkedSpace, loadArtifacts, loadAttempts])
 
-  useEffect(() => {
-    if (!changedFilesExpanded) {
-      return
-    }
-
-    setChangedFilesWidth((current) =>
-      Math.max(current, getExpandedDrawerWidth()),
-    )
-  }, [changedFilesExpanded])
-
   // Load branch name for the session's working directory
   useEffect(() => {
     if (session?.workingDirectory) {
@@ -285,81 +246,9 @@ export const SessionView: FC<SessionViewProps> = ({ onOpenCodeReview }) => {
       .catch(() => hydrateAttachments(sessionId, []))
   }, [session, hydrateAttachments])
 
-  const handleChangedFilesResizeStart = useCallback(
-    (event: ReactMouseEvent<HTMLDivElement>) => {
-      event.preventDefault()
-      changedFilesDraggingRef.current = true
-      document.body.style.cursor = 'col-resize'
-      document.body.style.userSelect = 'none'
-
-      const containerRect = sessionRootRef.current?.getBoundingClientRect()
-      const containerLeft = containerRect?.left ?? 0
-      const containerRight = containerRect?.right ?? window.innerWidth
-
-      const handleMouseMove = (moveEvent: MouseEvent) => {
-        if (!changedFilesDraggingRef.current) {
-          return
-        }
-
-        const nextWidth =
-          changedFilesSide === 'right'
-            ? containerRight - moveEvent.clientX
-            : moveEvent.clientX - containerLeft
-
-        setChangedFilesWidth(clampChangedFilesWidth(nextWidth))
-      }
-
-      const handleMouseUp = () => {
-        changedFilesDraggingRef.current = false
-        document.body.style.cursor = ''
-        document.body.style.userSelect = ''
-        window.removeEventListener('mousemove', handleMouseMove)
-        window.removeEventListener('mouseup', handleMouseUp)
-      }
-
-      window.addEventListener('mousemove', handleMouseMove)
-      window.addEventListener('mouseup', handleMouseUp)
-    },
-    [changedFilesSide],
-  )
-
-  const handleToggleExpanded = useCallback(() => {
-    setChangedFilesMode((current) => {
-      if (current === 'overlay') {
-        setChangedFilesWidth(CHANGED_FILES_COMPACT_WIDTH)
-        return 'docked'
-      }
-
-      setChangedFilesWidth((width) => Math.max(width, getExpandedDrawerWidth()))
-      return 'overlay'
-    })
-  }, [])
-
-  const handleToggleChangedFiles = useCallback(() => {
-    setShowChangedFiles((current) => {
-      if (current) {
-        setChangedFilesMode('docked')
-        setChangedFilesWidth(CHANGED_FILES_COMPACT_WIDTH)
-        return false
-      }
-
-      setShowPullRequestPanel(false)
-      return true
-    })
-  }, [])
-
   const handleTogglePullRequestPanel = useCallback(() => {
-    setShowPullRequestPanel((current) => {
-      const next = !current
-      if (next) {
-        setShowChangedFiles(false)
-        setChangedFilesMode('docked')
-        setChangedFilesWidth(CHANGED_FILES_COMPACT_WIDTH)
-      }
-      return next
-    })
+    setShowPullRequestPanel((current) => !current)
   }, [])
-
   // Empty state
   if (!session) {
     const draftWorkspace = draftWorkspaceId
@@ -440,36 +329,8 @@ export const SessionView: FC<SessionViewProps> = ({ onOpenCodeReview }) => {
     )
   }
 
-  const renderChangedFilesPanel = () => (
-    <ChangedFilesPanel
-      session={session}
-      side={changedFilesSide}
-      expanded={changedFilesExpanded}
-      onClose={() => {
-        setShowChangedFiles(false)
-        setChangedFilesMode('docked')
-        setChangedFilesWidth(CHANGED_FILES_COMPACT_WIDTH)
-      }}
-      onToggleSide={() =>
-        setChangedFilesSide((current) =>
-          current === 'right' ? 'left' : 'right',
-        )
-      }
-      onToggleExpanded={handleToggleExpanded}
-      onOpenCodeReview={onOpenCodeReview}
-    />
-  )
-
   return (
     <div ref={sessionRootRef} className="relative flex h-full overflow-hidden">
-      {showChangedFiles &&
-        changedFilesSide === 'left' &&
-        !changedFilesExpanded && (
-          <div className={cn('shrink-0', 'w-80')}>
-            {renderChangedFilesPanel()}
-          </div>
-        )}
-
       {/* Main session area */}
       <div className="relative flex min-w-0 flex-1 flex-col">
         {/* Header */}
@@ -642,16 +503,6 @@ export const SessionView: FC<SessionViewProps> = ({ onOpenCodeReview }) => {
               variant="ghost"
               size="icon"
               className="h-7 w-7"
-              onClick={handleToggleChangedFiles}
-              title="Changed files"
-              aria-pressed={showChangedFiles ? true : undefined}
-            >
-              <FileCode className="h-3.5 w-3.5" />
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-7 w-7"
               onClick={handleTogglePullRequestPanel}
               title="Pull request status"
               aria-pressed={showPullRequestPanel ? true : undefined}
@@ -791,16 +642,7 @@ export const SessionView: FC<SessionViewProps> = ({ onOpenCodeReview }) => {
         />
       </div>
 
-      {/* Changed files side panel */}
-      {showChangedFiles &&
-        changedFilesSide === 'right' &&
-        !changedFilesExpanded && (
-          <div className={cn('shrink-0', 'w-80')}>
-            {renderChangedFilesPanel()}
-          </div>
-        )}
-
-      {showPullRequestPanel && !changedFilesExpanded && (
+      {showPullRequestPanel && (
         <PullRequestPanel
           pullRequest={workspacePullRequest}
           branchName={branchName}
@@ -814,7 +656,7 @@ export const SessionView: FC<SessionViewProps> = ({ onOpenCodeReview }) => {
         />
       )}
 
-      {linkedSpace && !changedFilesExpanded && (
+      {linkedSpace && (
         <SpaceContextPanel
           space={linkedSpace}
           attempts={spaceAttemptViews}
@@ -823,32 +665,6 @@ export const SessionView: FC<SessionViewProps> = ({ onOpenCodeReview }) => {
         />
       )}
 
-      {showChangedFiles && changedFilesExpanded && (
-        <div
-          className={cn(
-            'absolute inset-y-0 z-20 flex overflow-hidden shadow-2xl',
-            changedFilesSide === 'right'
-              ? 'right-0 flex-row'
-              : 'left-0 flex-row-reverse',
-          )}
-          style={
-            {
-              width: changedFilesWidth,
-              WebkitAppRegion: 'no-drag',
-            } as React.CSSProperties
-          }
-        >
-          <div
-            onMouseDown={handleChangedFilesResizeStart}
-            onDoubleClick={handleToggleExpanded}
-            className={cn(
-              'app-resize-handle relative z-10 w-px shrink-0 cursor-col-resize border-x-[6px] border-x-transparent bg-clip-content transition-colors hover:bg-white/10',
-              changedFilesSide === 'right' ? '-ml-1.5' : '-mr-1.5',
-            )}
-          />
-          <div className="min-w-0 flex-1">{renderChangedFilesPanel()}</div>
-        </div>
-      )}
       {session.providerId !== 'shell' && debugLoggingEnabled && (
         <SessionDebugDrawerContainer
           sessionId={session.id}
@@ -881,20 +697,4 @@ function formatSessionContextLabel(
   if (!contextWindow) return 'Unknown'
   if (contextWindow.availability === 'unavailable') return contextWindow.reason
   return `${contextWindow.remainingPercentage}% left`
-}
-
-function clampChangedFilesWidth(width: number): number {
-  return Math.min(
-    CHANGED_FILES_MAX_WIDTH,
-    Math.max(CHANGED_FILES_MIN_WIDTH, width),
-  )
-}
-
-function getExpandedDrawerWidth(): number {
-  return clampChangedFilesWidth(
-    Math.max(
-      CHANGED_FILES_DEFAULT_EXPANDED_WIDTH,
-      Math.floor(window.innerWidth * 0.68),
-    ),
-  )
 }

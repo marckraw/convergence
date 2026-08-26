@@ -55,7 +55,7 @@ const attempt = {
   createdAt: '2026-01-01T00:00:00.000Z',
 }
 
-describe('SessionView changed files drawer', () => {
+describe('SessionView', () => {
   beforeEach(() => {
     Element.prototype.scrollIntoView = vi.fn()
 
@@ -257,34 +257,6 @@ describe('SessionView changed files drawer', () => {
 
   afterEach(() => {
     vi.clearAllMocks()
-  })
-
-  it('toggles changed files between docked and overlay modes', async () => {
-    render(
-      <TooltipProvider>
-        <SessionView />
-      </TooltipProvider>,
-    )
-
-    expect(screen.queryByText('80% left')).not.toBeInTheDocument()
-
-    fireEvent.click(screen.getByRole('button', { name: 'Changed files' }))
-
-    await waitFor(() => {
-      expect(screen.getByTitle('Use wide width')).toBeInTheDocument()
-    })
-
-    fireEvent.click(screen.getByTitle('Use wide width'))
-
-    await waitFor(() => {
-      expect(screen.getByTitle('Use compact width')).toBeInTheDocument()
-    })
-
-    fireEvent.click(screen.getByTitle('Use compact width'))
-
-    await waitFor(() => {
-      expect(screen.getByTitle('Use wide width')).toBeInTheDocument()
-    })
   })
 
   it('shows the live session activity in the header', async () => {
