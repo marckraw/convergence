@@ -772,6 +772,31 @@ describe('AppSettingsDialogContainer', () => {
     expect(window.electronAPI.appSettings.set).not.toHaveBeenCalled()
   })
 
+  it('refuses an invalid remote execution host URL: error renders and Save is disabled', async () => {
+    primeStores({
+      defaultProviderId: 'claude-code',
+      defaultModelId: 'sonnet',
+      defaultEffortId: 'medium',
+    })
+
+    render(<AppSettingsDialogContainer trigger={<Button>Open</Button>} />)
+    fireEvent.click(screen.getByText('Open'))
+    expect(await screen.findByText('Settings')).toBeInTheDocument()
+
+    expect(screen.getByRole('button', { name: 'Save' })).toBeEnabled()
+
+    fireEvent.change(screen.getByLabelText('Execution host URL'), {
+      target: { value: 'ftp://x' },
+    })
+
+    expect(
+      await screen.findByText(
+        'Remote execution host base URL must be a valid HTTP(S) URL.',
+      ),
+    ).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled()
+  })
+
   it('Cancel closes without dispatching save', async () => {
     primeStores({
       defaultProviderId: 'claude-code',
