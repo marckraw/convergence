@@ -179,14 +179,21 @@ function declarationPattern(property: string): RegExp {
 }
 
 /**
- * The value a block declares for `property`, trimmed, or `undefined` when the
- * block declares no such property.
+ * The value a block declares for `property`, or `undefined` when the block
+ * declares no such property.
+ *
+ * Whitespace is collapsed, and that is the only normalisation there is: it
+ * lets a caller compare the value whole against the declaration as written,
+ * however the formatter chose to wrap it.
  */
 function declaredValue(
   declarations: string,
   property: string,
 ): string | undefined {
-  return declarationPattern(property).exec(declarations)?.[1].trim()
+  return declarationPattern(property)
+    .exec(declarations)?.[1]
+    .trim()
+    .replace(/\s+/g, ' ')
 }
 
 /** Every stop of a `@keyframes` body mapped to the opacity its step declares. */
@@ -230,6 +237,26 @@ describe('the breath actually moves', () => {
   })
 })
 
+/**
+ * The glare, declaration by declaration, exactly as the stylesheet has to
+ * declare it.
+ *
+ * Whole values, because a fragment cannot see the failure that matters. The
+ * knobs live in `session-card.styles.ts` so that tuning the feel is a one-line
+ * change; a stylesheet that hardcodes `2800ms` where `var(--breathe-period)`
+ * belongs takes "slower", does nothing, and leaves every test green. Partial
+ * matchers are blind to exactly that: `toContain('var(--breathe-color)')` is
+ * happy with a hardcoded blur beside it, and `/^session-card-breathe\b/`
+ * accepts `session-card-breathe-dead`, because `\b` sits between the `e` and
+ * the `-`. So each declaration is pinned entire -- the animation name with no
+ * prefix and no suffix, every `var()` by name, the timing function, and the
+ * iteration count -- and nothing in it is left under-asserted.
+ */
+const GLARE_SHADOW =
+  '0 0 var(--breathe-blur) var(--breathe-spread) var(--breathe-color)'
+const GLARE_BREATH =
+  'session-card-breathe var(--breathe-period) ease-in-out infinite'
+
 describe('the breathing glow under prefers-reduced-motion', () => {
   it('renders the glare without the breath', () => {
     const reducedBlocks = bodiesFor(GLOBAL_CSS, REDUCED_MOTION).flatMap(
@@ -237,6 +264,8 @@ describe('the breathing glow under prefers-reduced-motion', () => {
     )
 
     expect(reducedBlocks).toHaveLength(1)
+    // Whole value here too: `animation` is a shorthand, and one that carries a
+    // name beside `none` is a breath, not the absence of one.
     expect(declaredValue(reducedBlocks[0], 'animation')).toBe('none')
     // The information survives; only the motion goes. A reduced-motion block
     // that also killed the shadow would delete the fact the card is working.
@@ -262,9 +291,10 @@ describe('the breathing glow under prefers-reduced-motion', () => {
     // property does not change its value, it removes the declaration, and
     // "expected undefined to be defined" is the honest way to say so.
     expect(glare, 'the base rule declares no box-shadow').toBeDefined()
-    expect(glare).toContain('var(--breathe-color)')
     expect(breath, 'the base rule declares no animation').toBeDefined()
-    expect(breath).toMatch(/^session-card-breathe\b/)
+
+    expect(glare).toBe(GLARE_SHADOW)
+    expect(breath).toBe(GLARE_BREATH)
     // The still card sits at the top of the breath rather than at an opacity
     // the animation would otherwise have moved it off.
     expect(declaredValue(base, 'opacity')).toBe('var(--breathe-max)')
