@@ -32,7 +32,6 @@ export function registerNotificationsIpcHandlers(
         defaultEffortId: current.defaultEffortId,
         namingModelByProvider: current.namingModelByProvider,
         extractionModelByProvider: current.extractionModelByProvider,
-        guidedReviewModelByProvider: current.guidedReviewModelByProvider,
         notifications: input,
       })
       broadcastPrefs(stored.notifications)

@@ -6,8 +6,6 @@ export type {
   ExecutionHostDaemonCredentialStatus,
   FavoriteModelRef,
   FavoriteModelsPrefs,
-  GuidedReviewBackend,
-  GuidedReviewDaemonCredentialStatus,
   NotificationEventPrefs,
   NotificationPrefs,
   OnboardingPrefs,
@@ -23,7 +21,6 @@ export {
   DEFAULT_COMMAND_CENTER_SHORTCUT,
   DEFAULT_DEBUG_LOGGING_PREFS,
   DEFAULT_FAVORITE_MODELS_PREFS,
-  DEFAULT_GUIDED_REVIEW_BACKEND,
   DEFAULT_NOTIFICATION_PREFS,
   DEFAULT_ONBOARDING_PREFS,
   DEFAULT_PI_MODEL_VISIBILITY_PREFS,
@@ -33,7 +30,6 @@ export {
   appSettingsApi,
   executionHostApi,
   executionHostDaemonCredentialsApi,
-  guidedReviewDaemonCredentialsApi,
   openRouterCredentialsApi,
 } from './app-settings.api'
 export { useAppSettingsStore } from './app-settings.model'

@@ -17,7 +17,6 @@ import {
   useAppSettingsStore,
   type CommandCenterShortcutPrefs,
   type DebugLoggingPrefs,
-  type GuidedReviewBackend,
 } from '@/entities/app-settings'
 import {
   findShortcutConflict,
@@ -33,7 +32,6 @@ import {
   AppSettingsDialog,
   type AppSettingsSectionId,
 } from './app-settings.presentational'
-import { getGuidedReviewRemoteBaseUrlError } from './guided-review-settings.pure'
 import { getExecutionHostRemoteBaseUrlError } from './execution-host-settings.pure'
 
 interface AppSettingsContainerProps {
@@ -49,16 +47,13 @@ interface Draft {
 const EMPTY_DRAFT: Draft = { providerId: '', modelId: '', effortId: '' }
 const EMPTY_NAMING_DRAFT: Record<string, string> = {}
 const EMPTY_EXTRACTION_DRAFT: Record<string, string> = {}
-const EMPTY_GUIDED_REVIEW_DRAFT: Record<string, string> = {}
 const DEFAULT_SECTION: AppSettingsSectionId = 'session-defaults'
-const DEFAULT_GUIDED_REVIEW_BACKEND: GuidedReviewBackend = 'local'
 
 function isAppSettingsSection(value: unknown): value is AppSettingsSectionId {
   return (
     value === 'session-defaults' ||
     value === 'session-naming' ||
     value === 'session-forking' ||
-    value === 'guided-review' ||
     value === 'credentials' ||
     value === 'usage' ||
     value === 'pi-models' ||
@@ -90,13 +85,6 @@ export const AppSettingsDialogContainer: FC<AppSettingsContainerProps> = ({
   const [extractionDraft, setExtractionDraft] = useState<
     Record<string, string>
   >(EMPTY_EXTRACTION_DRAFT)
-  const [guidedReviewDraft, setGuidedReviewDraft] = useState<
-    Record<string, string>
-  >(EMPTY_GUIDED_REVIEW_DRAFT)
-  const [guidedReviewBackendDraft, setGuidedReviewBackendDraft] =
-    useState<GuidedReviewBackend>(DEFAULT_GUIDED_REVIEW_BACKEND)
-  const [guidedReviewRemoteBaseUrlDraft, setGuidedReviewRemoteBaseUrlDraft] =
-    useState('')
   const [executionHostRemoteBaseUrlDraft, setExecutionHostRemoteBaseUrlDraft] =
     useState('')
   const [notificationsDraft, setNotificationsDraft] =
@@ -157,9 +145,6 @@ export const AppSettingsDialogContainer: FC<AppSettingsContainerProps> = ({
     })
     setNamingDraft({ ...settings.namingModelByProvider })
     setExtractionDraft({ ...settings.extractionModelByProvider })
-    setGuidedReviewDraft({ ...settings.guidedReviewModelByProvider })
-    setGuidedReviewBackendDraft(settings.guidedReviewBackend)
-    setGuidedReviewRemoteBaseUrlDraft(settings.guidedReviewRemoteBaseUrl ?? '')
     setExecutionHostRemoteBaseUrlDraft(
       settings.executionHostRemoteBaseUrl ?? '',
     )
@@ -239,27 +224,6 @@ export const AppSettingsDialogContainer: FC<AppSettingsContainerProps> = ({
     },
     [],
   )
-
-  const handleGuidedReviewModelChange = useCallback(
-    (providerId: string, modelId: string) => {
-      setGuidedReviewDraft((current) => ({
-        ...current,
-        [providerId]: modelId,
-      }))
-    },
-    [],
-  )
-
-  const handleGuidedReviewBackendChange = useCallback(
-    (backend: GuidedReviewBackend) => {
-      setGuidedReviewBackendDraft(backend)
-    },
-    [],
-  )
-
-  const handleGuidedReviewRemoteBaseUrlChange = useCallback((value: string) => {
-    setGuidedReviewRemoteBaseUrlDraft(value)
-  }, [])
 
   const handleExecutionHostRemoteBaseUrlChange = useCallback(
     (value: string) => {
@@ -378,15 +342,6 @@ export const AppSettingsDialogContainer: FC<AppSettingsContainerProps> = ({
     return systemApi.getInfo()?.platform ?? null
   }, [])
 
-  const guidedReviewRemoteBaseUrlError = useMemo(
-    () =>
-      getGuidedReviewRemoteBaseUrlError(
-        guidedReviewBackendDraft,
-        guidedReviewRemoteBaseUrlDraft,
-      ),
-    [guidedReviewBackendDraft, guidedReviewRemoteBaseUrlDraft],
-  )
-
   const executionHostRemoteBaseUrlError = useMemo(
     () => getExecutionHostRemoteBaseUrlError(executionHostRemoteBaseUrlDraft),
     [executionHostRemoteBaseUrlDraft],
@@ -405,7 +360,6 @@ export const AppSettingsDialogContainer: FC<AppSettingsContainerProps> = ({
 
   const handleSave = useCallback(async () => {
     if (shortcutsConflict) return
-    if (guidedReviewRemoteBaseUrlError) return
     if (executionHostRemoteBaseUrlError) return
 
     const shortcutToSave = shortcutsDraft ?? settings.commandCenterShortcut
@@ -422,13 +376,7 @@ export const AppSettingsDialogContainer: FC<AppSettingsContainerProps> = ({
         defaultEffortId: selection.effort?.id ?? null,
         namingModelByProvider: namingDraft,
         extractionModelByProvider: extractionDraft,
-        guidedReviewModelByProvider: guidedReviewDraft,
         commandCenterShortcut: shortcutToSave,
-        guidedReviewBackend: guidedReviewBackendDraft,
-        guidedReviewRemoteBaseUrl:
-          guidedReviewRemoteBaseUrlDraft.trim().length > 0
-            ? guidedReviewRemoteBaseUrlDraft.trim()
-            : null,
         executionHostRemoteBaseUrl:
           executionHostRemoteBaseUrlDraft.trim().length > 0
             ? executionHostRemoteBaseUrlDraft.trim()
@@ -453,13 +401,9 @@ export const AppSettingsDialogContainer: FC<AppSettingsContainerProps> = ({
     selection,
     namingDraft,
     extractionDraft,
-    guidedReviewDraft,
     shortcutsDraft,
     shortcutsConflict,
     settings.commandCenterShortcut,
-    guidedReviewBackendDraft,
-    guidedReviewRemoteBaseUrlDraft,
-    guidedReviewRemoteBaseUrlError,
     executionHostRemoteBaseUrlDraft,
     executionHostRemoteBaseUrlError,
     notificationsDraft,
@@ -486,10 +430,6 @@ export const AppSettingsDialogContainer: FC<AppSettingsContainerProps> = ({
       selection={selection}
       namingDraft={namingDraft}
       extractionDraft={extractionDraft}
-      guidedReviewDraft={guidedReviewDraft}
-      guidedReviewBackend={guidedReviewBackendDraft}
-      guidedReviewRemoteBaseUrlDraft={guidedReviewRemoteBaseUrlDraft}
-      guidedReviewRemoteBaseUrlError={guidedReviewRemoteBaseUrlError}
       executionHostRemoteBaseUrlDraft={executionHostRemoteBaseUrlDraft}
       executionHostRemoteBaseUrlError={executionHostRemoteBaseUrlError}
       notificationsDraft={notificationsDraft ?? settings.notifications}
@@ -503,7 +443,7 @@ export const AppSettingsDialogContainer: FC<AppSettingsContainerProps> = ({
       updatesIsDev={updatesIsDev}
       platform={platform}
       isSaving={isSaving}
-      isSaveBlocked={!!guidedReviewRemoteBaseUrlError}
+      isSaveBlocked={!!executionHostRemoteBaseUrlError}
       error={error}
       activeSection={activeSection}
       onProviderChange={handleProviderChange}
@@ -511,9 +451,6 @@ export const AppSettingsDialogContainer: FC<AppSettingsContainerProps> = ({
       onEffortChange={handleEffortChange}
       onNamingModelChange={handleNamingModelChange}
       onExtractionModelChange={handleExtractionModelChange}
-      onGuidedReviewModelChange={handleGuidedReviewModelChange}
-      onGuidedReviewBackendChange={handleGuidedReviewBackendChange}
-      onGuidedReviewRemoteBaseUrlChange={handleGuidedReviewRemoteBaseUrlChange}
       onExecutionHostRemoteBaseUrlChange={
         handleExecutionHostRemoteBaseUrlChange
       }

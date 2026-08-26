@@ -52,20 +52,13 @@ export const DEFAULT_FAVORITE_MODELS_PREFS: FavoriteModelsPrefs = {
   items: [],
 }
 
-export type GuidedReviewBackend = 'local' | 'remote'
-
-export const DEFAULT_GUIDED_REVIEW_BACKEND: GuidedReviewBackend = 'local'
-
 export interface AppSettings {
   defaultProviderId: string | null
   defaultModelId: string | null
   defaultEffortId: ReasoningEffort | null
   namingModelByProvider: Record<string, string>
   extractionModelByProvider: Record<string, string>
-  guidedReviewModelByProvider: Record<string, string>
   commandCenterShortcut: CommandCenterShortcutPrefs
-  guidedReviewBackend: GuidedReviewBackend
-  guidedReviewRemoteBaseUrl: string | null
   executionHostRemoteBaseUrl: string | null
   notifications: NotificationPrefs
   onboarding: OnboardingPrefs
@@ -79,10 +72,7 @@ export type AppSettingsInput = Omit<
   AppSettings,
   | 'namingModelByProvider'
   | 'extractionModelByProvider'
-  | 'guidedReviewModelByProvider'
   | 'commandCenterShortcut'
-  | 'guidedReviewBackend'
-  | 'guidedReviewRemoteBaseUrl'
   | 'executionHostRemoteBaseUrl'
   | 'notifications'
   | 'onboarding'
@@ -93,10 +83,7 @@ export type AppSettingsInput = Omit<
 > & {
   namingModelByProvider?: Record<string, string>
   extractionModelByProvider?: Record<string, string>
-  guidedReviewModelByProvider?: Record<string, string>
   commandCenterShortcut?: CommandCenterShortcutPrefs
-  guidedReviewBackend?: GuidedReviewBackend
-  guidedReviewRemoteBaseUrl?: string | null
   executionHostRemoteBaseUrl?: string | null
   notifications?: NotificationPrefs
   onboarding?: OnboardingPrefs
@@ -108,16 +95,6 @@ export type AppSettingsInput = Omit<
 
 export interface OpenRouterCredentialStatus {
   providerId: 'openrouter'
-  configured: boolean
-  source: 'environment' | 'keychain' | null
-  storage: 'keychain' | null
-  account: string | null
-  service: string | null
-  error: string | null
-}
-
-export interface GuidedReviewDaemonCredentialStatus {
-  providerId: 'guided-review-daemon'
   configured: boolean
   source: 'environment' | 'keychain' | null
   storage: 'keychain' | null

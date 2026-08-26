@@ -4,7 +4,6 @@ import { useSessionStore, type ProviderInfo } from '@/entities/session'
 import {
   DEFAULT_DEBUG_LOGGING_PREFS,
   DEFAULT_FAVORITE_MODELS_PREFS,
-  DEFAULT_GUIDED_REVIEW_BACKEND,
   DEFAULT_NOTIFICATION_PREFS,
   DEFAULT_ONBOARDING_PREFS,
   DEFAULT_PI_MODEL_VISIBILITY_PREFS,
@@ -185,10 +184,7 @@ function primeStores(stored: {
       ...stored,
       namingModelByProvider: {},
       extractionModelByProvider: {},
-      guidedReviewModelByProvider: {},
       commandCenterShortcut: { key: 'k', shiftKey: false, altKey: false },
-      guidedReviewBackend: DEFAULT_GUIDED_REVIEW_BACKEND,
-      guidedReviewRemoteBaseUrl: null,
       executionHostRemoteBaseUrl: null,
       notifications: DEFAULT_NOTIFICATION_PREFS,
       onboarding: DEFAULT_ONBOARDING_PREFS,
@@ -283,16 +279,6 @@ describe('AppSettingsDialogContainer', () => {
         set: vi.fn().mockImplementation(async (input) => input),
         onUpdated: vi.fn().mockReturnValue(() => {}),
       },
-      codeReviewGuide: {
-        testRemoteDaemonConnection: vi.fn().mockResolvedValue({
-          ok: true,
-          state: 'connected',
-          baseUrl: 'https://daemon.example.com',
-          message: 'Connected to agents-daemon.',
-          health: null,
-          meta: null,
-        }),
-      },
       credentials: {
         openRouter: {
           getStatus: vi.fn().mockResolvedValue({
@@ -315,35 +301,6 @@ describe('AppSettingsDialogContainer', () => {
           }),
           deleteToken: vi.fn().mockResolvedValue({
             providerId: 'openrouter',
-            configured: false,
-            source: null,
-            storage: null,
-            account: null,
-            service: null,
-            error: null,
-          }),
-        },
-        guidedReviewDaemon: {
-          getStatus: vi.fn().mockResolvedValue({
-            providerId: 'guided-review-daemon',
-            configured: false,
-            source: null,
-            storage: null,
-            account: null,
-            service: null,
-            error: null,
-          }),
-          setToken: vi.fn().mockResolvedValue({
-            providerId: 'guided-review-daemon',
-            configured: true,
-            source: 'keychain',
-            storage: 'keychain',
-            account: 'default',
-            service: 'convergence.guided-review-daemon',
-            error: null,
-          }),
-          deleteToken: vi.fn().mockResolvedValue({
-            providerId: 'guided-review-daemon',
             configured: false,
             source: null,
             storage: null,
@@ -384,10 +341,7 @@ describe('AppSettingsDialogContainer', () => {
         defaultEffortId: 'high',
         namingModelByProvider: {},
         extractionModelByProvider: {},
-        guidedReviewModelByProvider: {},
         commandCenterShortcut: { key: 'k', shiftKey: false, altKey: false },
-        guidedReviewBackend: DEFAULT_GUIDED_REVIEW_BACKEND,
-        guidedReviewRemoteBaseUrl: null,
         executionHostRemoteBaseUrl: null,
         notifications: DEFAULT_NOTIFICATION_PREFS,
         onboarding: DEFAULT_ONBOARDING_PREFS,
@@ -461,10 +415,7 @@ describe('AppSettingsDialogContainer', () => {
         defaultEffortId: 'medium',
         namingModelByProvider: {},
         extractionModelByProvider: {},
-        guidedReviewModelByProvider: {},
         commandCenterShortcut: { key: 'k', shiftKey: false, altKey: false },
-        guidedReviewBackend: DEFAULT_GUIDED_REVIEW_BACKEND,
-        guidedReviewRemoteBaseUrl: null,
         executionHostRemoteBaseUrl: null,
         notifications: DEFAULT_NOTIFICATION_PREFS,
         onboarding: DEFAULT_ONBOARDING_PREFS,
@@ -697,110 +648,6 @@ describe('AppSettingsDialogContainer', () => {
     expect(window.electronAPI.appSettings.set).not.toHaveBeenCalled()
     expect(await screen.findByText('OpenRouter API key saved.')).toBeVisible()
     expect(screen.getByRole('button', { name: 'Done' })).toBeInTheDocument()
-  })
-
-  it('saves remote guided review settings and daemon token separately', async () => {
-    primeStores({
-      defaultProviderId: 'claude-code',
-      defaultModelId: 'sonnet',
-      defaultEffortId: 'medium',
-    })
-
-    render(<AppSettingsDialogContainer trigger={<Button>Open</Button>} />)
-    fireEvent.click(screen.getByText('Open'))
-
-    expect(await screen.findByText('Settings')).toBeInTheDocument()
-
-    expect(await screen.findByText('Generation backend')).toBeInTheDocument()
-    fireEvent.click(screen.getByRole('button', { name: 'Remote daemon' }))
-    fireEvent.change(screen.getByLabelText('Base URL'), {
-      target: { value: 'https://daemon.example.com/' },
-    })
-    fireEvent.change(screen.getByLabelText('Token'), {
-      target: { value: 'daemon-token' },
-    })
-    fireEvent.click(screen.getByRole('button', { name: 'Save token' }))
-
-    await waitFor(() => {
-      expect(
-        window.electronAPI.credentials.guidedReviewDaemon.setToken,
-      ).toHaveBeenCalledWith('daemon-token')
-    })
-    expect(await screen.findByText('Daemon API token saved.')).toBeVisible()
-
-    fireEvent.click(screen.getByRole('button', { name: 'Test connection' }))
-    await waitFor(() => {
-      expect(
-        window.electronAPI.codeReviewGuide.testRemoteDaemonConnection,
-      ).toHaveBeenCalled()
-    })
-    expect(await screen.findByText('Connected to agents-daemon.')).toBeVisible()
-
-    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
-    await waitFor(() => {
-      expect(window.electronAPI.appSettings.set).toHaveBeenCalledWith(
-        expect.objectContaining({
-          guidedReviewBackend: 'remote',
-          guidedReviewRemoteBaseUrl: 'https://daemon.example.com/',
-        }),
-      )
-    })
-  })
-
-  it('shows remote guided review daemon connection failures without saving settings', async () => {
-    vi.mocked(
-      window.electronAPI.codeReviewGuide.testRemoteDaemonConnection,
-    ).mockResolvedValue({
-      ok: false,
-      state: 'auth-failed',
-      baseUrl: 'https://daemon.example.com',
-      message: 'Invalid API token',
-      health: null,
-      meta: null,
-    })
-    primeStores({
-      defaultProviderId: 'claude-code',
-      defaultModelId: 'sonnet',
-      defaultEffortId: 'medium',
-    })
-
-    render(<AppSettingsDialogContainer trigger={<Button>Open</Button>} />)
-    fireEvent.click(screen.getByText('Open'))
-
-    expect(await screen.findByText('Settings')).toBeInTheDocument()
-    expect(await screen.findByText('Generation backend')).toBeInTheDocument()
-
-    fireEvent.click(screen.getByRole('button', { name: 'Test connection' }))
-
-    expect(await screen.findByText('Invalid API token')).toBeVisible()
-    expect(window.electronAPI.appSettings.set).not.toHaveBeenCalled()
-  })
-
-  it('blocks saving remote guided review settings until the daemon URL is valid', async () => {
-    primeStores({
-      defaultProviderId: 'claude-code',
-      defaultModelId: 'sonnet',
-      defaultEffortId: 'medium',
-    })
-
-    render(<AppSettingsDialogContainer trigger={<Button>Open</Button>} />)
-    fireEvent.click(screen.getByText('Open'))
-
-    expect(await screen.findByText('Settings')).toBeInTheDocument()
-    expect(await screen.findByText('Generation backend')).toBeInTheDocument()
-
-    fireEvent.click(screen.getByRole('button', { name: 'Remote daemon' }))
-    fireEvent.change(screen.getByLabelText('Base URL'), {
-      target: { value: 'ftp://daemon.example.com' },
-    })
-
-    expect(
-      await screen.findByText(
-        'Remote daemon base URL must be a valid HTTP(S) URL.',
-      ),
-    ).toBeVisible()
-    expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled()
-    expect(window.electronAPI.appSettings.set).not.toHaveBeenCalled()
   })
 
   it('toggling the auto-update switch persists the new updates prefs on save', async () => {

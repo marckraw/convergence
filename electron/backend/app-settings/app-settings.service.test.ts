@@ -13,7 +13,6 @@ import { AppSettingsService } from './app-settings.service'
 import {
   DEFAULT_DEBUG_LOGGING_PREFS,
   DEFAULT_FAVORITE_MODELS_PREFS,
-  DEFAULT_GUIDED_REVIEW_BACKEND,
   DEFAULT_ONBOARDING_PREFS,
   DEFAULT_PI_MODEL_VISIBILITY_PREFS,
 } from './app-settings.types'
@@ -193,10 +192,7 @@ describe('AppSettingsService', () => {
         defaultEffortId: null,
         namingModelByProvider: {},
         extractionModelByProvider: {},
-        guidedReviewModelByProvider: {},
         commandCenterShortcut: { key: 'k', shiftKey: false, altKey: false },
-        guidedReviewBackend: DEFAULT_GUIDED_REVIEW_BACKEND,
-        guidedReviewRemoteBaseUrl: null,
         executionHostRemoteBaseUrl: null,
         notifications: DEFAULT_NOTIFICATION_PREFS,
         onboarding: DEFAULT_ONBOARDING_PREFS,
@@ -214,10 +210,7 @@ describe('AppSettingsService', () => {
         defaultEffortId: 'high',
         namingModelByProvider: {},
         extractionModelByProvider: {},
-        guidedReviewModelByProvider: {},
         commandCenterShortcut: { key: 'k', shiftKey: false, altKey: false },
-        guidedReviewBackend: 'remote',
-        guidedReviewRemoteBaseUrl: 'https://daemon.example.com',
         executionHostRemoteBaseUrl: null,
         notifications: DEFAULT_NOTIFICATION_PREFS,
         onboarding: DEFAULT_ONBOARDING_PREFS,
@@ -233,10 +226,7 @@ describe('AppSettingsService', () => {
         defaultEffortId: 'high',
         namingModelByProvider: {},
         extractionModelByProvider: {},
-        guidedReviewModelByProvider: {},
         commandCenterShortcut: { key: 'k', shiftKey: false, altKey: false },
-        guidedReviewBackend: 'remote',
-        guidedReviewRemoteBaseUrl: 'https://daemon.example.com',
         executionHostRemoteBaseUrl: null,
         notifications: DEFAULT_NOTIFICATION_PREFS,
         onboarding: DEFAULT_ONBOARDING_PREFS,
@@ -263,10 +253,7 @@ describe('AppSettingsService', () => {
         defaultEffortId: null,
         namingModelByProvider: {},
         extractionModelByProvider: {},
-        guidedReviewModelByProvider: {},
         commandCenterShortcut: { key: 'k', shiftKey: false, altKey: false },
-        guidedReviewBackend: DEFAULT_GUIDED_REVIEW_BACKEND,
-        guidedReviewRemoteBaseUrl: null,
         executionHostRemoteBaseUrl: null,
         notifications: DEFAULT_NOTIFICATION_PREFS,
         onboarding: DEFAULT_ONBOARDING_PREFS,
@@ -293,10 +280,7 @@ describe('AppSettingsService', () => {
         defaultEffortId: null,
         namingModelByProvider: {},
         extractionModelByProvider: {},
-        guidedReviewModelByProvider: {},
         commandCenterShortcut: { key: 'k', shiftKey: false, altKey: false },
-        guidedReviewBackend: DEFAULT_GUIDED_REVIEW_BACKEND,
-        guidedReviewRemoteBaseUrl: null,
         executionHostRemoteBaseUrl: null,
         notifications: DEFAULT_NOTIFICATION_PREFS,
         onboarding: DEFAULT_ONBOARDING_PREFS,
@@ -323,10 +307,7 @@ describe('AppSettingsService', () => {
         defaultEffortId: null,
         namingModelByProvider: {},
         extractionModelByProvider: {},
-        guidedReviewModelByProvider: {},
         commandCenterShortcut: { key: 'k', shiftKey: false, altKey: false },
-        guidedReviewBackend: DEFAULT_GUIDED_REVIEW_BACKEND,
-        guidedReviewRemoteBaseUrl: null,
         executionHostRemoteBaseUrl: null,
         notifications: DEFAULT_NOTIFICATION_PREFS,
         onboarding: DEFAULT_ONBOARDING_PREFS,
@@ -346,10 +327,7 @@ describe('AppSettingsService', () => {
         defaultEffortId: null,
         namingModelByProvider: {},
         extractionModelByProvider: {},
-        guidedReviewModelByProvider: {},
         commandCenterShortcut: { key: 'k', shiftKey: false, altKey: false },
-        guidedReviewBackend: DEFAULT_GUIDED_REVIEW_BACKEND,
-        guidedReviewRemoteBaseUrl: null,
         executionHostRemoteBaseUrl: null,
         notifications: DEFAULT_NOTIFICATION_PREFS,
         onboarding: DEFAULT_ONBOARDING_PREFS,
@@ -468,45 +446,6 @@ describe('AppSettingsService', () => {
       ).rejects.toThrow(/Unknown effort id/)
     })
 
-    it('requires a daemon base URL when guided review backend is remote', async () => {
-      await expect(
-        service.setAppSettings({
-          defaultProviderId: null,
-          defaultModelId: null,
-          defaultEffortId: null,
-          guidedReviewBackend: 'remote',
-          guidedReviewRemoteBaseUrl: null,
-        }),
-      ).rejects.toThrow(/requires a daemon base URL/)
-    })
-
-    it('rejects non-http daemon base URLs', async () => {
-      await expect(
-        service.setAppSettings({
-          defaultProviderId: null,
-          defaultModelId: null,
-          defaultEffortId: null,
-          guidedReviewBackend: 'remote',
-          guidedReviewRemoteBaseUrl: 'file:///tmp/daemon',
-        }),
-      ).rejects.toThrow(/must be an HTTP\(S\) URL/)
-    })
-
-    it('normalizes valid daemon base URLs', async () => {
-      const stored = await service.setAppSettings({
-        defaultProviderId: null,
-        defaultModelId: null,
-        defaultEffortId: null,
-        guidedReviewBackend: 'remote',
-        guidedReviewRemoteBaseUrl: ' https://daemon.example.com/ ',
-      })
-
-      expect(stored.guidedReviewBackend).toBe('remote')
-      expect(stored.guidedReviewRemoteBaseUrl).toBe(
-        'https://daemon.example.com',
-      )
-    })
-
     it('allows clearing settings back to null', async () => {
       await service.setAppSettings({
         defaultProviderId: 'claude-code',
@@ -524,10 +463,7 @@ describe('AppSettingsService', () => {
         defaultEffortId: null,
         namingModelByProvider: {},
         extractionModelByProvider: {},
-        guidedReviewModelByProvider: {},
         commandCenterShortcut: { key: 'k', shiftKey: false, altKey: false },
-        guidedReviewBackend: DEFAULT_GUIDED_REVIEW_BACKEND,
-        guidedReviewRemoteBaseUrl: null,
         executionHostRemoteBaseUrl: null,
         notifications: DEFAULT_NOTIFICATION_PREFS,
         onboarding: DEFAULT_ONBOARDING_PREFS,
@@ -709,39 +645,6 @@ describe('AppSettingsService', () => {
       )
       const resolved = await service.resolveExtractionModel('claude-code')
       expect(resolved).toBe('sonnet')
-    })
-  })
-
-  describe('resolveGuidedReviewModel', () => {
-    it('defaults Claude Code guided review to Opus with medium effort', async () => {
-      const resolved = await service.resolveGuidedReviewModel('claude-code')
-      expect(resolved).toEqual({
-        modelId: 'opus',
-        effortId: 'medium',
-      })
-    })
-
-    it('defaults Codex guided review to GPT-5.6 with medium effort', async () => {
-      const resolved = await service.resolveGuidedReviewModel('codex')
-      expect(resolved).toEqual({
-        modelId: 'gpt-5.6',
-        effortId: 'medium',
-      })
-    })
-
-    it('returns the configured guided review override when valid', async () => {
-      await service.setAppSettings({
-        defaultProviderId: null,
-        defaultModelId: null,
-        defaultEffortId: null,
-        guidedReviewModelByProvider: { codex: 'gpt-5.4' },
-      })
-
-      const resolved = await service.resolveGuidedReviewModel('codex')
-      expect(resolved).toEqual({
-        modelId: 'gpt-5.4',
-        effortId: 'medium',
-      })
     })
   })
 

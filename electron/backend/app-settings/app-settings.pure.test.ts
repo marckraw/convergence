@@ -10,20 +10,14 @@ import {
   parseAppSettings,
   parseModelMap,
   parseNotificationPrefs,
-  resolveGuidedReviewModelFromSettings,
   resolveSessionDefaultsFromSettings,
   validateAppSettings,
-  preferredGuidedReviewModelId,
   validatePiModelVisibility,
 } from './app-settings.pure'
-import {
-  buildClaudeDescriptor,
-  buildFallbackCodexDescriptor,
-} from '../provider/provider-descriptor.pure'
+import {} from '../provider/provider-descriptor.pure'
 import {
   DEFAULT_DEBUG_LOGGING_PREFS,
   DEFAULT_FAVORITE_MODELS_PREFS,
-  DEFAULT_GUIDED_REVIEW_BACKEND,
   DEFAULT_ONBOARDING_PREFS,
   DEFAULT_PI_MODEL_VISIBILITY_PREFS,
 } from './app-settings.types'
@@ -120,10 +114,7 @@ describe('app-settings pure helpers', () => {
       defaultEffortId: null,
       namingModelByProvider: {},
       extractionModelByProvider: {},
-      guidedReviewModelByProvider: {},
       commandCenterShortcut: { key: 'k', shiftKey: false, altKey: false },
-      guidedReviewBackend: DEFAULT_GUIDED_REVIEW_BACKEND,
-      guidedReviewRemoteBaseUrl: null,
       executionHostRemoteBaseUrl: null,
       notifications: DEFAULT_NOTIFICATION_PREFS,
       onboarding: DEFAULT_ONBOARDING_PREFS,
@@ -147,20 +138,6 @@ describe('app-settings pure helpers', () => {
         }),
       ).commandCenterShortcut,
     ).toEqual({ key: 'p', shiftKey: true, altKey: false })
-  })
-
-  it('parses guided review remote daemon settings when the URL is valid', () => {
-    expect(
-      parseAppSettings(
-        JSON.stringify({
-          guidedReviewBackend: 'remote',
-          guidedReviewRemoteBaseUrl: ' https://daemon.example.com/ ',
-        }),
-      ),
-    ).toMatchObject({
-      guidedReviewBackend: 'remote',
-      guidedReviewRemoteBaseUrl: 'https://daemon.example.com',
-    })
   })
 
   it('hydrates notification prefs per field', () => {
@@ -226,64 +203,5 @@ describe('app-settings pure helpers', () => {
       modelId: 'sonnet',
       effortId: 'high',
     })
-  })
-
-  it('resolves guided review defaults to Opus with medium effort for Claude Code', () => {
-    const descriptor = buildDescriptors()[0]!
-    const settings = parseAppSettings(null)
-
-    expect(resolveGuidedReviewModelFromSettings(settings, descriptor)).toEqual({
-      modelId: 'opus',
-      effortId: 'medium',
-    })
-  })
-
-  it('keeps configured guided review model overrides when valid', () => {
-    const descriptor = buildDescriptors()[0]!
-    const settings = parseAppSettings(
-      JSON.stringify({
-        guidedReviewModelByProvider: { 'claude-code': 'sonnet' },
-      }),
-    )
-
-    expect(resolveGuidedReviewModelFromSettings(settings, descriptor)).toEqual({
-      modelId: 'sonnet',
-      effortId: 'medium',
-    })
-  })
-})
-
-// The preference guards with `modelOptions.some(...)` and falls through to the
-// descriptor default, so a stale id degrades quietly instead of breaking. That
-// makes it exactly the kind of literal that rots unnoticed.
-describe('preferredGuidedReviewModelId', () => {
-  it('names models the shipped catalogs actually serve', () => {
-    const codex = buildFallbackCodexDescriptor()
-    const claude = buildClaudeDescriptor()
-
-    const codexPreference = preferredGuidedReviewModelId(codex)
-    expect(codexPreference).toBe('gpt-5.6-sol')
-    expect(codex.modelOptions.some((m) => m.id === codexPreference)).toBe(true)
-
-    const claudePreference = preferredGuidedReviewModelId(claude)
-    expect(claudePreference).toBe('opus')
-    expect(claude.modelOptions.some((m) => m.id === claudePreference)).toBe(
-      true,
-    )
-  })
-
-  it('falls back to the descriptor default when the preference is absent', () => {
-    const codex = buildFallbackCodexDescriptor()
-    // Point the default somewhere else so the fall-through is distinguishable
-    // from the preference itself.
-    expect(
-      preferredGuidedReviewModelId({
-        ...codex,
-        defaultModelId: 'gpt-5.4',
-        modelOptions: codex.modelOptions.filter(
-          (option) => option.id !== 'gpt-5.6-sol',
-        ),
-      }),
-    ).toBe('gpt-5.4')
   })
 })
