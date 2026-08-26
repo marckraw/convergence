@@ -93,17 +93,22 @@ const DEFAULT_MAX_RECONNECT_ATTEMPTS = 10
 const DEFAULT_HEALTH_PROBE_TIMEOUT_MS = 15_000
 
 /**
- * How many observe-and-list rounds readiness runs before it gives up
- * (MAR-2620).
+ * How many listings readiness will make before it gives up (MAR-2620).
  *
- * Not a retry policy: a listing that fails throws on the first round, and a
- * host whose configuration is already listed returns on it without a round
- * trip. A further round happens only when the Endpoint was edited while its
+ * Not a retry policy: a listing that fails throws on the first attempt, and a
+ * host whose configuration is already listed returns without a round trip at
+ * all. A further attempt happens only when the Endpoint was edited while its
  * daemon was being asked. The bound is here so a configuration changing faster
  * than any daemon can answer costs one refused turn rather than a loop nothing
  * ends.
+ *
+ * It bounds listings and not observations, and `ensureListed` takes one more
+ * observation than it is allowed listings: an attempt is not an answer until
+ * something has looked at it, so a bound that counted the looks would spend
+ * the last listing and never examine it. Exported so the tests that stand on
+ * the last permitted attempt take the bound from here instead of copying it.
  */
-const MAX_LISTING_ROUNDS = 5
+export const MAX_LISTING_ATTEMPTS = 5
 
 export interface RemoteExecutionHostDeps {
   connection: RemoteExecutionHostConnectionResolver
@@ -329,11 +334,21 @@ export class RemoteExecutionHost implements ProviderExecutionHost {
    * observation is what makes the second look worth taking. A listing about a
    * machine no longer in force is discarded, and the machine now in force is
    * listed instead.
+   *
+   * The loop's invariant, and what makes the refusal below true: every attempt
+   * is evaluated, the last one included. Evaluating an attempt is the check at
+   * the top of the *following* pass, so the loop takes one more pass than it is
+   * allowed listings and spends the extra one observing and nothing else. Reach
+   * the throw and all `MAX_LISTING_ATTEMPTS` listings have been looked at and
+   * each was about a machine this Endpoint had already left -- the
+   * configuration genuinely kept moving, which is the only thing the sentence
+   * claims. It is never reached by a good listing nobody examined.
    */
   async ensureListed(): Promise<void> {
-    for (let round = 0; round < MAX_LISTING_ROUNDS; round += 1) {
+    for (let listings = 0; ; listings += 1) {
       await this.observeConfiguration()
       if (this.inForce(this.listing)) return
+      if (listings === MAX_LISTING_ATTEMPTS) break
       const failure = await this.listOnce()
       if (failure) throw failure
     }
