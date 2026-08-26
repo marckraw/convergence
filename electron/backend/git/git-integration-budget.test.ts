@@ -13,7 +13,6 @@ import { GIT_INTEGRATION_TEST_TIMEOUT_MS } from './git-integration-budget'
  */
 const GIT_INTEGRATION_SUITES = [
   'git/git.service.test.ts',
-  'git/changed-files.service.test.ts',
   'workspace/workspace.service.test.ts',
 ]
 

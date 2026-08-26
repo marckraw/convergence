@@ -1,5 +1,4 @@
 export { pullRequestApi } from './pull-request.api'
-export { pullRequestReviewApi } from './pull-request-review.api'
 export { usePullRequestStore } from './pull-request.model'
 export type { PullRequestStore } from './pull-request.model'
 export type {
@@ -8,10 +7,3 @@ export type {
   PullRequestState,
   WorkspacePullRequest,
 } from './pull-request.types'
-export type {
-  MaterializePullRequestReviewWorkspaceInput,
-  PreparePullRequestReviewSessionInput,
-  PullRequestReviewPreview,
-  PullRequestReviewSessionResult,
-  PullRequestReviewWorkspaceResult,
-} from './pull-request-review.types'

@@ -10,16 +10,13 @@ import type { UpdatePrefs } from '../updates/updates.types'
 import {
   DEFAULT_DEBUG_LOGGING_PREFS,
   DEFAULT_FAVORITE_MODELS_PREFS,
-  DEFAULT_GUIDED_REVIEW_BACKEND,
   DEFAULT_ONBOARDING_PREFS,
   DEFAULT_PI_MODEL_VISIBILITY_PREFS,
   type AppSettings,
   type DebugLoggingPrefs,
   type FavoriteModelsPrefs,
-  type GuidedReviewBackend,
   type OnboardingPrefs,
   type PiModelVisibilityPrefs,
-  type ResolvedOneShotModelDefaults,
   type ResolvedSessionDefaults,
   DEFAULT_COMMAND_CENTER_SHORTCUT,
 } from './app-settings.types'
@@ -175,18 +172,11 @@ export function parseFavoriteModelsPrefs(value: unknown): FavoriteModelsPrefs {
 
 export { parseCommandCenterShortcut, validateCommandCenterShortcut }
 
-export function parseGuidedReviewBackend(value: unknown): GuidedReviewBackend {
-  return value === 'remote' ? 'remote' : DEFAULT_GUIDED_REVIEW_BACKEND
-}
-
 /**
  * Normalizes a remote daemon base URL setting: trims, requires HTTP(S), and
- * strips trailing slashes. Shared by the guided review and execution host
- * remote endpoints.
+ * strips trailing slashes. Used by the execution host remote endpoint.
  */
-export function normalizeGuidedReviewRemoteBaseUrl(
-  value: unknown,
-): string | null {
+export function normalizeRemoteBaseUrl(value: unknown): string | null {
   if (typeof value !== 'string') return null
   const trimmed = value.trim()
   if (!trimmed) return null
@@ -209,10 +199,7 @@ function emptyAppSettings(): AppSettings {
     defaultEffortId: null,
     namingModelByProvider: {},
     extractionModelByProvider: {},
-    guidedReviewModelByProvider: {},
     commandCenterShortcut: DEFAULT_COMMAND_CENTER_SHORTCUT,
-    guidedReviewBackend: DEFAULT_GUIDED_REVIEW_BACKEND,
-    guidedReviewRemoteBaseUrl: null,
     executionHostRemoteBaseUrl: null,
     notifications: DEFAULT_NOTIFICATION_PREFS,
     onboarding: DEFAULT_ONBOARDING_PREFS,
@@ -246,17 +233,10 @@ export function parseAppSettings(raw: string | null): AppSettings {
       extractionModelByProvider: parseModelMap(
         parsed.extractionModelByProvider,
       ),
-      guidedReviewModelByProvider: parseModelMap(
-        parsed.guidedReviewModelByProvider,
-      ),
       commandCenterShortcut: parseCommandCenterShortcut(
         parsed.commandCenterShortcut,
       ),
-      guidedReviewBackend: parseGuidedReviewBackend(parsed.guidedReviewBackend),
-      guidedReviewRemoteBaseUrl: normalizeGuidedReviewRemoteBaseUrl(
-        parsed.guidedReviewRemoteBaseUrl,
-      ),
-      executionHostRemoteBaseUrl: normalizeGuidedReviewRemoteBaseUrl(
+      executionHostRemoteBaseUrl: normalizeRemoteBaseUrl(
         parsed.executionHostRemoteBaseUrl,
       ),
       notifications: parseNotificationPrefs(parsed.notifications),
@@ -302,10 +282,6 @@ export function validateAppSettings(
     settings.extractionModelByProvider,
     descriptors,
   )
-  const guidedReviewModelByProvider = validateModelMap(
-    settings.guidedReviewModelByProvider,
-    descriptors,
-  )
   const favoriteModels = validateFavoriteModels(
     settings.favoriteModels,
     descriptors,
@@ -324,10 +300,7 @@ export function validateAppSettings(
       defaultEffortId: null,
       namingModelByProvider,
       extractionModelByProvider,
-      guidedReviewModelByProvider,
       commandCenterShortcut,
-      guidedReviewBackend: settings.guidedReviewBackend,
-      guidedReviewRemoteBaseUrl: settings.guidedReviewRemoteBaseUrl,
       executionHostRemoteBaseUrl: settings.executionHostRemoteBaseUrl,
       notifications: settings.notifications,
       onboarding: settings.onboarding,
@@ -351,10 +324,7 @@ export function validateAppSettings(
       defaultEffortId: null,
       namingModelByProvider,
       extractionModelByProvider,
-      guidedReviewModelByProvider,
       commandCenterShortcut,
-      guidedReviewBackend: settings.guidedReviewBackend,
-      guidedReviewRemoteBaseUrl: settings.guidedReviewRemoteBaseUrl,
       executionHostRemoteBaseUrl: settings.executionHostRemoteBaseUrl,
       notifications: settings.notifications,
       onboarding: settings.onboarding,
@@ -377,10 +347,7 @@ export function validateAppSettings(
     defaultEffortId: effort ? effort.id : null,
     namingModelByProvider,
     extractionModelByProvider,
-    guidedReviewModelByProvider,
     commandCenterShortcut,
-    guidedReviewBackend: settings.guidedReviewBackend,
-    guidedReviewRemoteBaseUrl: settings.guidedReviewRemoteBaseUrl,
     executionHostRemoteBaseUrl: settings.executionHostRemoteBaseUrl,
     notifications: settings.notifications,
     onboarding: settings.onboarding,
@@ -520,50 +487,4 @@ export function resolveSessionDefaultsFromSettings(
     modelId: model.id,
     effortId: effort.id,
   }
-}
-
-export function resolveGuidedReviewModelFromSettings(
-  settings: AppSettings,
-  descriptor: ProviderDescriptor,
-): ResolvedOneShotModelDefaults | null {
-  const stored = validateAppSettings(settings, [descriptor])
-  const preferredModelId =
-    stored.guidedReviewModelByProvider[descriptor.id] ??
-    preferredGuidedReviewModelId(descriptor)
-  const model =
-    descriptor.modelOptions.find((item) => item.id === preferredModelId) ??
-    descriptor.modelOptions.find(
-      (item) => item.id === descriptor.defaultModelId,
-    ) ??
-    descriptor.modelOptions[0]
-
-  if (!model) return null
-
-  const effort =
-    model.effortOptions.find((item) => item.id === 'medium') ??
-    model.effortOptions.find((item) => item.id === model.defaultEffort) ??
-    model.effortOptions[0] ??
-    null
-
-  return {
-    modelId: model.id,
-    effortId: effort?.id ?? null,
-  }
-}
-
-export function preferredGuidedReviewModelId(
-  descriptor: ProviderDescriptor,
-): string | null {
-  const preferredByProvider: Record<string, string> = {
-    'claude-code': 'opus',
-    codex: 'gpt-5.6-sol',
-  }
-  const preferred = preferredByProvider[descriptor.id]
-  if (
-    preferred &&
-    descriptor.modelOptions.some((option) => option.id === preferred)
-  ) {
-    return preferred
-  }
-  return descriptor.defaultModelId
 }

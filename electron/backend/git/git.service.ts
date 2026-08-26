@@ -1,15 +1,11 @@
 import { execFile } from 'child_process'
-import { createHash } from 'crypto'
 import { existsSync, realpathSync, statSync } from 'fs'
 import { isAbsolute, relative, resolve } from 'path'
-import { isPullRequestReviewBranchName } from '../pull-request/pull-request-reference.pure'
-import { parseNameStatusOutput } from './base-branch-diff.pure'
 import {
   deriveDefaultCloneDirectoryName,
   normalizeCloneRemoteUrl,
   resolveCloneDestination,
 } from './git-clone.pure'
-import type { ChangedFileEntry } from './changed-files.types'
 
 const EXPANDABLE_DIFF_CONTEXT_LINES = 80
 
@@ -110,14 +106,6 @@ export interface BranchOutputFacts {
   remoteUrl: string | null
 }
 
-export interface PullRequestDiffStatus {
-  comparisonRef: string
-  comparisonPoint: string
-  headRef: string
-  versionToken: string
-  files: ChangedFileEntry[]
-}
-
 export class GitService {
   private async refExists(repoPath: string, ref: string): Promise<boolean> {
     try {
@@ -165,29 +153,6 @@ export class GitService {
 
   async getCurrentBranch(repoPath: string): Promise<string> {
     return exec('git', ['rev-parse', '--abbrev-ref', 'HEAD'], repoPath)
-  }
-
-  async getHeadRevision(repoPath: string): Promise<string | null> {
-    return exec('git', ['rev-parse', 'HEAD'], repoPath).catch(() => null)
-  }
-
-  async getWorkingTreeVersionToken(repoPath: string): Promise<string> {
-    const [branchName, headRevision, statusOutput] = await Promise.all([
-      this.getCurrentBranch(repoPath).catch(() => null),
-      this.getHeadRevision(repoPath),
-      exec('git', ['status', '--porcelain=v1', '-u'], repoPath).catch(() => ''),
-    ])
-
-    return createHash('sha256')
-      .update(
-        JSON.stringify({
-          branchName,
-          headRevision,
-          statusOutput,
-        }),
-      )
-      .digest('hex')
-      .slice(0, 16)
   }
 
   async getBranchOutputFacts(repoPath: string): Promise<BranchOutputFacts> {
@@ -248,19 +213,6 @@ export class GitService {
     )
       .then((output) => output.replace(/^origin\//, ''))
       .catch(() => null)
-  }
-
-  async getFirstExistingBranch(
-    repoPath: string,
-    branchNames: string[],
-  ): Promise<string | null> {
-    for (const branchName of branchNames) {
-      if (await this.branchExists(repoPath, branchName)) {
-        return branchName
-      }
-    }
-
-    return null
   }
 
   async resolveBaseBranchStartPoint(
@@ -345,256 +297,6 @@ export class GitService {
       parentDirectory,
     )
     return destinationPath
-  }
-
-  async fetchPullRequestHead(input: {
-    repoPath: string
-    remoteName?: string
-    number: number
-    localBranch: string
-  }): Promise<void> {
-    if (!isPullRequestReviewBranchName(input.localBranch)) {
-      throw new Error(
-        `Refusing to fetch pull request into unsafe branch: ${input.localBranch}`,
-      )
-    }
-
-    await exec(
-      'git',
-      [
-        'fetch',
-        input.remoteName ?? 'origin',
-        `pull/${input.number}/head:${input.localBranch}`,
-      ],
-      input.repoPath,
-    )
-  }
-
-  async updateWorktreeToPullRequestHead(input: {
-    worktreePath: string
-    remoteName?: string
-    number: number
-  }): Promise<void> {
-    const currentBranch = await this.getCurrentBranch(input.worktreePath)
-    if (!isPullRequestReviewBranchName(currentBranch)) {
-      throw new Error(
-        `Refusing to update pull request review worktree on unsafe branch: ${currentBranch}`,
-      )
-    }
-
-    await exec(
-      'git',
-      ['fetch', input.remoteName ?? 'origin', `pull/${input.number}/head`],
-      input.worktreePath,
-    )
-    await exec('git', ['reset', '--hard', 'FETCH_HEAD'], input.worktreePath)
-  }
-
-  async getPullRequestDiff(input: {
-    repoPath: string
-    baseBranch: string
-    headBranch?: string
-    number?: number
-    comparisonPoint?: string | null
-    filePath?: string
-    remoteName?: string
-  }): Promise<string> {
-    if (typeof input.number === 'number') {
-      const refs = await this.resolvePullRequestDiffRefs({
-        repoPath: input.repoPath,
-        number: input.number,
-        baseBranch: input.baseBranch,
-        remoteName: input.remoteName,
-      })
-      const comparisonPoint = input.comparisonPoint ?? refs.comparisonPoint
-      return execAllowExitCodes(
-        'git',
-        [
-          'diff',
-          '--no-color',
-          `--unified=${EXPANDABLE_DIFF_CONTEXT_LINES}`,
-          '--find-renames',
-          comparisonPoint,
-          refs.headRef,
-          ...(input.filePath ? ['--', input.filePath] : []),
-        ],
-        input.repoPath,
-        [0, 1],
-      )
-    }
-
-    if (!input.headBranch) {
-      throw new Error('Pull request diff requires a head branch or PR number')
-    }
-
-    const remoteName = input.remoteName ?? 'origin'
-    const baseBranch = await validateBranchName(
-      input.repoPath,
-      input.baseBranch,
-    )
-
-    await exec('git', ['fetch', remoteName, baseBranch], input.repoPath).catch(
-      () => {},
-    )
-
-    const remoteBase = `${remoteName}/${baseBranch}`
-    const baseRef = (await this.refExists(input.repoPath, remoteBase))
-      ? remoteBase
-      : baseBranch
-
-    return execAllowExitCodes(
-      'git',
-      [
-        'diff',
-        '--no-color',
-        `--unified=${EXPANDABLE_DIFF_CONTEXT_LINES}`,
-        `${baseRef}...${input.headBranch}`,
-      ],
-      input.repoPath,
-      [0, 1],
-    )
-  }
-
-  async getPullRequestStatus(input: {
-    repoPath: string
-    number: number
-    baseBranch: string
-    remoteName?: string
-  }): Promise<PullRequestDiffStatus> {
-    const refs = await this.resolvePullRequestDiffRefs(input)
-    const output = await execAllowExitCodes(
-      'git',
-      [
-        'diff',
-        '--name-status',
-        '--find-renames',
-        refs.comparisonPoint,
-        refs.headRef,
-        '--',
-      ],
-      input.repoPath,
-      [0, 1],
-    ).catch(() => '')
-
-    return {
-      ...refs,
-      files: parseNameStatusOutput(output),
-    }
-  }
-
-  async resolveComparisonRef(
-    repoPath: string,
-    branchName: string,
-  ): Promise<string> {
-    const trimmedBranchName = await validateBranchName(repoPath, branchName)
-
-    const hasOrigin = await exec('git', ['remote'], repoPath)
-      .then((output) => output.split('\n').includes('origin'))
-      .catch(() => false)
-
-    if (hasOrigin) {
-      await exec('git', ['fetch', 'origin', trimmedBranchName], repoPath).catch(
-        () => {},
-      )
-
-      if (
-        await this.refExists(
-          repoPath,
-          `refs/remotes/origin/${trimmedBranchName}`,
-        )
-      ) {
-        return `origin/${trimmedBranchName}`
-      }
-    }
-
-    if (await this.branchExists(repoPath, trimmedBranchName)) {
-      return trimmedBranchName
-    }
-
-    throw new Error(`Base branch not found: ${trimmedBranchName}`)
-  }
-
-  async getMergeBase(
-    repoPath: string,
-    leftRef: string,
-    rightRef: string,
-  ): Promise<string> {
-    return exec('git', ['merge-base', leftRef, rightRef], repoPath)
-  }
-
-  async getNameStatusAgainstRef(
-    repoPath: string,
-    baseRef: string,
-  ): Promise<ChangedFileEntry[]> {
-    const output = await exec(
-      'git',
-      ['diff', '--name-status', '--find-renames', baseRef, '--'],
-      repoPath,
-    ).catch(() => '')
-
-    return parseNameStatusOutput(output)
-  }
-
-  async getUntrackedFiles(repoPath: string): Promise<string[]> {
-    const output = await exec(
-      'git',
-      ['ls-files', '--others', '--exclude-standard'],
-      repoPath,
-    ).catch(() => '')
-
-    if (!output) return []
-    return output.split('\n').filter(Boolean)
-  }
-
-  async getDiffAgainstRef(
-    repoPath: string,
-    baseRef: string,
-    filePath?: string,
-  ): Promise<string> {
-    const repoFilePath = filePath
-      ? resolveRepoFilePath(repoPath, filePath)
-      : null
-    const args = [
-      'diff',
-      '--no-color',
-      `--unified=${EXPANDABLE_DIFF_CONTEXT_LINES}`,
-      '--find-renames',
-      baseRef,
-    ]
-    if (repoFilePath) args.push('--', repoFilePath.relativePath)
-
-    const tracked = await exec('git', args, repoPath).catch(() => '')
-
-    if (!repoFilePath) {
-      return tracked
-    }
-
-    const untracked = await this.getUntrackedFiles(repoPath)
-    if (!untracked.includes(repoFilePath.relativePath)) {
-      return tracked
-    }
-
-    const absoluteFilePath = repoFilePath.absolutePath
-    if (!existsSync(absoluteFilePath)) {
-      return tracked
-    }
-
-    const syntheticUntracked = await execAllowExitCodes(
-      'git',
-      [
-        'diff',
-        '--no-index',
-        '--no-color',
-        `--unified=${EXPANDABLE_DIFF_CONTEXT_LINES}`,
-        '--',
-        '/dev/null',
-        absoluteFilePath,
-      ],
-      repoPath,
-      [0, 1],
-    ).catch(() => '')
-
-    return [tracked, syntheticUntracked].filter(Boolean).join('\n')
   }
 
   async isGitRepository(repoPath: string): Promise<boolean> {
@@ -737,57 +439,6 @@ export class GitService {
     if (existsSync(worktreePath)) {
       const { rm } = await import('fs/promises')
       await rm(worktreePath, { recursive: true, force: true })
-    }
-  }
-
-  private async resolvePullRequestDiffRefs(input: {
-    repoPath: string
-    number: number
-    baseBranch: string
-    remoteName?: string
-  }): Promise<Omit<PullRequestDiffStatus, 'files'>> {
-    const remoteName = input.remoteName ?? 'origin'
-    const headRef = `refs/convergence/pull-requests/${input.number}/head`
-    const comparisonRef = await this.resolveComparisonRef(
-      input.repoPath,
-      input.baseBranch,
-    )
-
-    await exec(
-      'git',
-      ['fetch', remoteName, `+refs/pull/${input.number}/head:${headRef}`],
-      input.repoPath,
-    )
-
-    const comparisonPoint = await this.getMergeBase(
-      input.repoPath,
-      comparisonRef,
-      headRef,
-    ).catch(() => comparisonRef)
-    const [headRevision, comparisonRevision] = await Promise.all([
-      exec('git', ['rev-parse', headRef], input.repoPath),
-      exec('git', ['rev-parse', comparisonPoint], input.repoPath).catch(
-        () => comparisonPoint,
-      ),
-    ])
-    const versionToken = createHash('sha256')
-      .update(
-        JSON.stringify({
-          number: input.number,
-          baseBranch: input.baseBranch,
-          comparisonRef,
-          comparisonRevision,
-          headRevision,
-        }),
-      )
-      .digest('hex')
-      .slice(0, 16)
-
-    return {
-      comparisonRef,
-      comparisonPoint,
-      headRef,
-      versionToken,
     }
   }
 }

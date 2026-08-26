@@ -142,41 +142,6 @@ export interface ProjectScriptRunRow {
   stderr: string
 }
 
-export interface ReviewNoteRow {
-  id: string
-  session_id: string
-  workspace_id: string | null
-  file_path: string
-  mode: string
-  old_start_line: number | null
-  old_end_line: number | null
-  new_start_line: number | null
-  new_end_line: number | null
-  hunk_header: string | null
-  selected_diff: string
-  body: string
-  state: string
-  sent_at: string | null
-  created_at: string
-  updated_at: string
-}
-
-export interface CodeReviewGuideRow {
-  id: string
-  project_id: string
-  target_id: string
-  mode: string
-  cache_key: string
-  cache_identity_json: string
-  status: string
-  overview: string
-  generated_by: string
-  sections_json: string
-  error: string | null
-  created_at: string
-  updated_at: string
-}
-
 export interface SessionTurnRow {
   id: string
   session_id: string

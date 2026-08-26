@@ -34,7 +34,6 @@ vi.mock('./intents', () => ({
     (sessionId: string, target: 'conversation' | 'terminal') => Promise<void>
   >(async () => undefined),
   checkForUpdates: vi.fn<() => Promise<void>>(async () => undefined),
-  openCodeReview: vi.fn<() => void>(),
 }))
 
 import { CommandCenterContainer } from './command-center.container'
@@ -132,7 +131,6 @@ describe('CommandCenterContainer', () => {
     vi.mocked(intents.openDialog).mockClear()
     vi.mocked(intents.beginSessionDraft).mockClear()
     vi.mocked(intents.beginWorkspaceDraft).mockClear()
-    vi.mocked(intents.openCodeReview).mockClear()
 
     useCommandCenterStore.setState({ isOpen: false, query: '' })
     useProjectStore.setState({
@@ -348,29 +346,6 @@ describe('CommandCenterContainer', () => {
 
     expect(onBeginCodeSessionDraft).toHaveBeenCalledWith('w2')
     expect(intents.beginSessionDraft).not.toHaveBeenCalled()
-    expect(useCommandCenterStore.getState().isOpen).toBe(false)
-  })
-
-  it('uses routed navigation for Open Code Review when provided', () => {
-    const onOpenCodeReview = vi.fn()
-    render(<CommandCenterContainer onOpenCodeReview={onOpenCodeReview} />)
-
-    act(() => {
-      useCommandCenterStore.getState().open()
-    })
-
-    fireEvent.change(screen.getByPlaceholderText(/Search projects/i), {
-      target: { value: 'review' },
-    })
-
-    fireEvent.click(screen.getByText('Open Code Review'))
-
-    expect(onOpenCodeReview).toHaveBeenCalledWith({
-      mode: 'working-tree',
-      targetId: null,
-      file: null,
-    })
-    expect(intents.openCodeReview).not.toHaveBeenCalled()
     expect(useCommandCenterStore.getState().isOpen).toBe(false)
   })
 

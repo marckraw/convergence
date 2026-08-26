@@ -413,6 +413,10 @@ const SCHEMA = `
   CREATE INDEX IF NOT EXISTS idx_project_script_runs_script_started
     ON project_script_runs(script_id, started_at DESC);
 
+  -- MAR-2609 excised code review from Convergence: nothing writes or reads
+  -- review_notes or code_review_guides any more. Both tables stay because code
+  -- is cheap to reverse and Marcin's data is not. MAR-2615 drops them once he
+  -- confirms he does not want what is stored here.
   CREATE TABLE IF NOT EXISTS review_notes (
     id TEXT PRIMARY KEY,
     session_id TEXT NOT NULL,
@@ -731,6 +735,11 @@ function ensureRelayColumns(database: Database.Database): void {
   }
 }
 
+/**
+ * Kept after MAR-2609 excised code review: the table has no reader or writer
+ * left, but it still holds Marcin's generated guides. MAR-2615 drops it once
+ * he confirms he does not want them.
+ */
 function ensureCodeReviewGuideTable(database: Database.Database): void {
   database.exec(`
     CREATE TABLE IF NOT EXISTS code_review_guides (

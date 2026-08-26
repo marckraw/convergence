@@ -55,9 +55,8 @@ async function readKeychainPassword(): Promise<string | null> {
 }
 
 /**
- * API token for the Remote Execution Host daemon. Same storage discipline as
- * the guided-review daemon token: environment variable first, macOS keychain
- * otherwise.
+ * API token for the Remote Execution Host daemon: environment variable first,
+ * macOS keychain otherwise.
  */
 export class ExecutionHostDaemonCredentialsService {
   async getStatus(): Promise<ExecutionHostDaemonCredentialStatus> {

@@ -158,32 +158,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.invoke('pullRequest:listByProjectId', projectId),
     refreshForSession: (sessionId: string) =>
       ipcRenderer.invoke('pullRequest:refreshForSession', sessionId),
-    previewReview: (input: { projectId?: string | null; reference: string }) =>
-      ipcRenderer.invoke('pullRequest:previewReview', input),
-    prepareReviewSession: (input: {
-      projectId?: string | null
-      reference: string
-      providerId: string
-      model: string | null
-      effort: string | null
-      sessionName?: string
-    }) => ipcRenderer.invoke('pullRequest:prepareReviewSession', input),
-    materializeReviewWorkspace: (input: {
-      projectId?: string | null
-      reference: string
-    }) => ipcRenderer.invoke('pullRequest:materializeReviewWorkspace', input),
-  },
-  reviewNotes: {
-    listBySession: (sessionId: string) =>
-      ipcRenderer.invoke('reviewNotes:listBySession', sessionId),
-    create: (input: unknown) => ipcRenderer.invoke('reviewNotes:create', input),
-    update: (id: string, patch: unknown) =>
-      ipcRenderer.invoke('reviewNotes:update', id, patch),
-    delete: (id: string) => ipcRenderer.invoke('reviewNotes:delete', id),
-    previewPacket: (input: unknown) =>
-      ipcRenderer.invoke('reviewNotes:previewPacket', input),
-    sendPacket: (input: unknown) =>
-      ipcRenderer.invoke('reviewNotes:sendPacket', input),
   },
   crew: {
     list: () => ipcRenderer.invoke('crew:list'),
@@ -250,28 +224,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.invoke('git:getStatus', repoPath),
     getDiff: (repoPath: string, filePath?: string) =>
       ipcRenderer.invoke('git:getDiff', repoPath, filePath),
-    getBaseBranchStatus: (sessionId: string) =>
-      ipcRenderer.invoke('git:getBaseBranchStatus', sessionId),
-    getBaseBranchDiff: (sessionId: string, filePath: string) =>
-      ipcRenderer.invoke('git:getBaseBranchDiff', sessionId, filePath),
-  },
-  codeReview: {
-    listTargets: (input: unknown) =>
-      ipcRenderer.invoke('codeReview:listTargets', input),
-    getSummary: (input: unknown) =>
-      ipcRenderer.invoke('codeReview:getSummary', input),
-    getFilePatch: (input: unknown) =>
-      ipcRenderer.invoke('codeReview:getFilePatch', input),
-  },
-  codeReviewGuide: {
-    getGuide: (input: unknown) =>
-      ipcRenderer.invoke('codeReviewGuide:getGuide', input),
-    generateGuide: (input: unknown) =>
-      ipcRenderer.invoke('codeReviewGuide:generateGuide', input),
-    refreshGuide: (input: unknown) =>
-      ipcRenderer.invoke('codeReviewGuide:refreshGuide', input),
-    testRemoteDaemonConnection: () =>
-      ipcRenderer.invoke('codeReviewGuide:testRemoteDaemonConnection'),
   },
   session: {
     create: (input: {
@@ -531,9 +483,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
       defaultEffortId: string | null
       namingModelByProvider: Record<string, string>
       extractionModelByProvider: Record<string, string>
-      guidedReviewModelByProvider: Record<string, string>
-      guidedReviewBackend?: 'local' | 'remote'
-      guidedReviewRemoteBaseUrl?: string | null
       notifications?: unknown
       piModelVisibility?: unknown
       favoriteModels?: unknown
@@ -553,16 +502,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
         ipcRenderer.invoke('credentials:openrouter:setToken', { token }),
       deleteToken: () =>
         ipcRenderer.invoke('credentials:openrouter:deleteToken'),
-    },
-    guidedReviewDaemon: {
-      getStatus: () =>
-        ipcRenderer.invoke('credentials:guidedReviewDaemon:getStatus'),
-      setToken: (token: string) =>
-        ipcRenderer.invoke('credentials:guidedReviewDaemon:setToken', {
-          token,
-        }),
-      deleteToken: () =>
-        ipcRenderer.invoke('credentials:guidedReviewDaemon:deleteToken'),
     },
     executionHostDaemon: {
       getStatus: () =>

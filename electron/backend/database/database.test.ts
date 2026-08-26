@@ -48,6 +48,16 @@ describe('database', () => {
     expect(tableNames).toContain('analytics_profile_snapshots')
     expect(tableNames).toContain('skill_catalog_cache')
 
+    // MAR-2609 excised code review, and RULED that these two survive it: code
+    // is cheap to reverse and Marcin's generated guides and review notes are
+    // not. Nothing reads or writes either table any more, so nothing else in
+    // the suite would notice their creation statements being deleted along
+    // with the rest of the feature -- which makes a preservation requirement
+    // that fails by silent absence. MAR-2615 drops them on his word, and
+    // turns this red on purpose.
+    expect(tableNames).toContain('review_notes')
+    expect(tableNames).toContain('code_review_guides')
+
     const sessionColumns = db
       .prepare("PRAGMA table_info('sessions')")
       .all() as Array<{ name: string; notnull: number }>

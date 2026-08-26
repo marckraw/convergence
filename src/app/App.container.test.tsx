@@ -12,7 +12,6 @@ import { useWorkspaceStore } from '@/entities/workspace'
 import { useSpaceStore } from '@/entities/space'
 import { useSessionStore, type SessionSummary } from '@/entities/session'
 import { useAppSurfaceStore } from '@/entities/app-surface'
-import { useCodeReviewStore } from '@/entities/code-review'
 import { useSessionRelayStore } from '@/entities/session-relay'
 import { App } from './App.container'
 import { DEFAULT_PROJECT_SETTINGS } from '@/entities/project'
@@ -142,11 +141,6 @@ const mockElectronAPI = {
     showSourceOpenDialog: vi.fn(),
     synthesize: vi.fn(),
   },
-  codeReview: {
-    listTargets: vi.fn().mockResolvedValue([]),
-    getSummary: vi.fn().mockResolvedValue({ base: null, files: [] }),
-    getFilePatch: vi.fn().mockResolvedValue(''),
-  },
   relay: {
     list: vi.fn().mockResolvedValue([]),
     onUpdated: vi.fn().mockReturnValue(() => {}),
@@ -209,10 +203,7 @@ const mockElectronAPI = {
       defaultEffortId: null,
       namingModelByProvider: {},
       extractionModelByProvider: {},
-      guidedReviewModelByProvider: {},
       commandCenterShortcut: { key: 'k', shiftKey: false, altKey: false },
-      guidedReviewBackend: 'local',
-      guidedReviewRemoteBaseUrl: null,
       notifications: {
         enabled: true,
         toasts: true,
@@ -343,7 +334,6 @@ describe('App', () => {
     mockElectronAPI.session.getSummariesByProjectId.mockResolvedValue([])
     mockElectronAPI.session.getNeedsYouDismissals.mockResolvedValue({})
     mockElectronAPI.session.getRecentIds.mockResolvedValue([])
-    mockElectronAPI.codeReview.listTargets.mockResolvedValue([])
     mockElectronAPI.relay.list.mockResolvedValue([])
     mockElectronAPI.relay.onUpdated.mockReturnValue(() => {})
     mockElectronAPI.relay.onHopAppended.mockReturnValue(() => {})
@@ -401,15 +391,6 @@ describe('App', () => {
       error: null,
     })
     useAppSurfaceStore.setState({ activeSurface: 'code' })
-    useCodeReviewStore.setState({
-      isReviewOpen: false,
-      selectedMode: 'working-tree',
-      selectedView: 'guide',
-      selectedFile: null,
-      selectedTarget: null,
-      targets: [],
-      targetsLoading: false,
-    })
   })
 
   /**
@@ -714,38 +695,15 @@ describe('App', () => {
     mockElectronAPI.project.getActive.mockResolvedValue(mockProject)
     mockElectronAPI.project.getAll.mockResolvedValue([mockProject])
     useAppSurfaceStore.setState({ activeSurface: 'chat' })
-    useCodeReviewStore.setState({ isReviewOpen: true })
 
     render(<App mainViewRoute={{ kind: 'home' }} />)
 
     await waitFor(() => {
       expect(useAppSurfaceStore.getState().activeSurface).toBe('code')
     })
-    expect(useCodeReviewStore.getState().isReviewOpen).toBe(false)
     expect(
       await screen.findByText('What would you like to work on?'),
     ).toBeInTheDocument()
-  })
-
-  it('applies code review route search state to the review store', async () => {
-    render(
-      <App
-        mainViewRoute={{
-          kind: 'code-review',
-          targetId: 'session:session-1',
-          mode: 'base-branch',
-          view: 'diff',
-          filePath: 'src/app.ts',
-        }}
-      />,
-    )
-
-    await waitFor(() => {
-      expect(useCodeReviewStore.getState().isReviewOpen).toBe(true)
-    })
-    expect(useCodeReviewStore.getState().selectedMode).toBe('base-branch')
-    expect(useCodeReviewStore.getState().selectedView).toBe('diff')
-    expect(useCodeReviewStore.getState().selectedFile).toBe('src/app.ts')
   })
 
   it('shows a route fallback for an invalid code session route', async () => {
@@ -769,27 +727,5 @@ describe('App', () => {
     )
 
     expect(await screen.findByText('Space not found')).toBeInTheDocument()
-  })
-
-  it('shows a route fallback for a stale Code Review target route', async () => {
-    mockElectronAPI.project.getActive.mockResolvedValue(mockProject)
-    mockElectronAPI.project.getAll.mockResolvedValue([mockProject])
-    mockElectronAPI.codeReview.listTargets.mockResolvedValue([])
-
-    render(
-      <App
-        mainViewRoute={{
-          kind: 'code-review',
-          targetId: 'missing-target',
-          mode: 'working-tree',
-          view: 'guide',
-          filePath: null,
-        }}
-      />,
-    )
-
-    expect(
-      await screen.findByText('Review target unavailable'),
-    ).toBeInTheDocument()
   })
 })

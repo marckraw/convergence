@@ -3,7 +3,6 @@ import Fuse from 'fuse.js'
 import { useProjectStore } from '@/entities/project'
 import { useWorkspaceStore } from '@/entities/workspace'
 import { useSessionStore } from '@/entities/session'
-import type { CodeReviewMode, CodeReviewView } from '@/entities/code-review'
 import { useAppSettingsStore } from '@/entities/app-settings'
 import { useCommandCenterStore } from './command-center.model'
 import { buildPaletteIndex } from './command-palette-index.pure'
@@ -23,7 +22,6 @@ import {
   beginWorkspaceDraft,
   checkForUpdates,
   forkCurrentSession,
-  openCodeReview,
   openDialog,
   swapPrimarySurface,
   switchToSession,
@@ -34,19 +32,11 @@ import {
 } from './command-center.presentational'
 import type { PaletteItem } from './command-center.types'
 
-interface CodeReviewRouteSearch {
-  targetId?: string | null
-  mode?: CodeReviewMode
-  view?: CodeReviewView
-  file?: string | null
-}
-
 interface CommandCenterContainerProps {
   onSelectCodeSession?: (sessionId: string) => void
   onSelectChatSession?: (sessionId: string) => void
   onBeginCodeSessionDraft?: (workspaceId: string) => void
   onSelectProject?: (projectId: string) => void | Promise<void>
-  onOpenCodeReview?: (search?: CodeReviewRouteSearch) => void
 }
 
 export function CommandCenterContainer({
@@ -54,7 +44,6 @@ export function CommandCenterContainer({
   onSelectChatSession,
   onBeginCodeSessionDraft,
   onSelectProject,
-  onOpenCodeReview,
 }: CommandCenterContainerProps = {}) {
   const isOpen = useCommandCenterStore((s) => s.isOpen)
   const query = useCommandCenterStore((s) => s.query)
@@ -196,23 +185,11 @@ export function CommandCenterContainer({
         case 'check-updates':
           void checkForUpdates()
           return
-        case 'open-code-review':
-          if (onOpenCodeReview) {
-            onOpenCodeReview({
-              mode: 'working-tree',
-              targetId: null,
-              file: null,
-            })
-          } else {
-            openCodeReview()
-          }
-          return
       }
     },
     [
       close,
       onBeginCodeSessionDraft,
-      onOpenCodeReview,
       onSelectProject,
       onSelectChatSession,
       onSelectCodeSession,

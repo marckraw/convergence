@@ -1,6 +1,5 @@
 import { useEffect } from 'react'
 import { createRootRoute, Outlet, useRouterState } from '@tanstack/react-router'
-import type { CodeReviewMode, CodeReviewView } from '@/entities/code-review'
 import { useSessionStore } from '@/entities/session'
 import { App } from '../App.container'
 import { useMainViewNavigation } from '../navigation'
@@ -32,41 +31,12 @@ function RootRoute() {
     },
   })
 
-  const currentCodeReviewSearch =
-    mainViewRoute.kind === 'code-review'
-      ? {
-          targetId: mainViewRoute.targetId,
-          mode: mainViewRoute.mode,
-          view: mainViewRoute.view,
-          file: mainViewRoute.filePath,
-        }
-      : null
-
   return (
     <>
       <App
         mainViewRoute={mainViewRoute}
         onSelectCodeSession={navigation.navigateToCodeSession}
         onBeginCodeSessionDraft={navigation.navigateToNewCodeSession}
-        onOpenCodeReview={navigation.navigateToCodeReview}
-        onCodeReviewSearchChange={(nextSearch: {
-          targetId?: string | null
-          mode?: CodeReviewMode
-          view?: CodeReviewView
-          file?: string | null
-        }) =>
-          navigation.navigateToCodeReview({
-            ...currentCodeReviewSearch,
-            ...nextSearch,
-          })
-        }
-        onCloseCodeReview={() => {
-          if (activeSessionId) {
-            navigation.navigateToCodeSession(activeSessionId)
-            return
-          }
-          void navigation.navigateToWelcome()
-        }}
         onSelectChatSession={navigation.navigateToChatSession}
         onSelectChatSpace={navigation.navigateToChatSpace}
         onBeginChatSpaceAttempt={(spaceId) =>

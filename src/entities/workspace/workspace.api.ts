@@ -1,6 +1,5 @@
 import type {
   ArchiveWorkspaceInput,
-  BaseBranchDiffSummary,
   BranchOutputFacts,
   GitStatusEntry,
   Workspace,
@@ -52,10 +51,4 @@ export const gitApi = {
 
   getDiff: (repoPath: string, filePath?: string): Promise<string> =>
     window.electronAPI.git.getDiff(repoPath, filePath),
-
-  getBaseBranchStatus: (sessionId: string): Promise<BaseBranchDiffSummary> =>
-    window.electronAPI.git.getBaseBranchStatus(sessionId),
-
-  getBaseBranchDiff: (sessionId: string, filePath: string): Promise<string> =>
-    window.electronAPI.git.getBaseBranchDiff(sessionId, filePath),
 }

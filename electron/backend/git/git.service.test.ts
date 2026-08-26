@@ -283,33 +283,5 @@ describe('GitService', { timeout: GIT_INTEGRATION_TEST_TIMEOUT_MS }, () => {
       ).rejects.toThrow(/unsafe branch name/)
       expect(existsSync(markerPath)).toBe(false)
     })
-
-    it('rejects pull request diff base branches before git fetch can run helpers', async () => {
-      const { branchName, markerPath } = addOriginWithUploadPackMarker(
-        repoPath,
-        tempDir,
-      )
-
-      await expect(
-        service.getPullRequestDiff({
-          repoPath,
-          baseBranch: branchName,
-          headBranch: 'HEAD',
-        }),
-      ).rejects.toThrow(/unsafe branch name/)
-      expect(existsSync(markerPath)).toBe(false)
-    })
-
-    it('rejects comparison base branches before git fetch can run helpers', async () => {
-      const { branchName, markerPath } = addOriginWithUploadPackMarker(
-        repoPath,
-        tempDir,
-      )
-
-      await expect(
-        service.resolveComparisonRef(repoPath, branchName),
-      ).rejects.toThrow(/unsafe branch name/)
-      expect(existsSync(markerPath)).toBe(false)
-    })
   })
 })

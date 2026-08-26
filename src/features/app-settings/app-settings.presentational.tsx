@@ -3,7 +3,6 @@ import type { AppSettingsDialogSection } from '@/entities/dialog'
 import type {
   CommandCenterShortcutPrefs,
   DebugLoggingPrefs,
-  GuidedReviewBackend,
 } from '@/entities/app-settings'
 import type {
   ProviderInfo,
@@ -31,7 +30,6 @@ import { SettingsSubsection } from './settings-subsection.presentational'
 import { SessionDefaultsFields } from './session-defaults.presentational'
 import { NamingModelDefaultsFields } from './naming-model-defaults.presentational'
 import { ExtractionModelDefaultsFields } from './extraction-model-defaults.presentational'
-import { GuidedReviewSettingsContainer } from './guided-review-settings.container'
 import { ExecutionHostSettingsContainer } from './execution-host-settings.container'
 import { NotificationsFields } from './notifications-fields.presentational'
 import { UpdatesFields } from './updates-fields.presentational'
@@ -54,10 +52,6 @@ interface AppSettingsDialogProps {
   selection: ResolvedProviderSelection
   namingDraft: Record<string, string>
   extractionDraft: Record<string, string>
-  guidedReviewDraft: Record<string, string>
-  guidedReviewBackend: GuidedReviewBackend
-  guidedReviewRemoteBaseUrlDraft: string
-  guidedReviewRemoteBaseUrlError: string | null
   executionHostRemoteBaseUrlDraft: string
   executionHostRemoteBaseUrlError: string | null
   notificationsDraft: NotificationPrefs
@@ -77,9 +71,6 @@ interface AppSettingsDialogProps {
   onEffortChange: (id: ReasoningEffort | '') => void
   onNamingModelChange: (providerId: string, modelId: string) => void
   onExtractionModelChange: (providerId: string, modelId: string) => void
-  onGuidedReviewModelChange: (providerId: string, modelId: string) => void
-  onGuidedReviewBackendChange: (backend: GuidedReviewBackend) => void
-  onGuidedReviewRemoteBaseUrlChange: (value: string) => void
   onExecutionHostRemoteBaseUrlChange: (value: string) => void
   onNotificationsChange: (prefs: NotificationPrefs) => void
   onTestFireNotification: (severity: NotificationSeverity) => void
@@ -120,10 +111,6 @@ export const AppSettingsDialog: FC<AppSettingsDialogProps> = ({
   selection,
   namingDraft,
   extractionDraft,
-  guidedReviewDraft,
-  guidedReviewBackend,
-  guidedReviewRemoteBaseUrlDraft,
-  guidedReviewRemoteBaseUrlError,
   executionHostRemoteBaseUrlDraft,
   executionHostRemoteBaseUrlError,
   notificationsDraft,
@@ -143,9 +130,6 @@ export const AppSettingsDialog: FC<AppSettingsDialogProps> = ({
   onEffortChange,
   onNamingModelChange,
   onExtractionModelChange,
-  onGuidedReviewModelChange,
-  onGuidedReviewBackendChange,
-  onGuidedReviewRemoteBaseUrlChange,
   onExecutionHostRemoteBaseUrlChange,
   onNotificationsChange,
   onTestFireNotification,
@@ -175,7 +159,7 @@ export const AppSettingsDialog: FC<AppSettingsDialogProps> = ({
       navSummary: 'Provider and per-task model defaults',
       title: 'Session defaults',
       description:
-        'The default provider and the models Convergence uses for new sessions, naming, forking, and guided review.',
+        'The default provider and the models Convergence uses for new sessions, naming, and forking.',
     },
     {
       id: 'credentials',
@@ -307,22 +291,6 @@ export const AppSettingsDialog: FC<AppSettingsDialogProps> = ({
                 providers={providers}
                 extractionDraft={extractionDraft}
                 onExtractionModelChange={onExtractionModelChange}
-              />
-            </SettingsSubsection>
-            <SettingsSubsection
-              withDivider
-              title="Guided review"
-              description="Choose where guided review generation runs and which model each provider uses to generate review plans."
-            >
-              <GuidedReviewSettingsContainer
-                providers={providers}
-                guidedReviewDraft={guidedReviewDraft}
-                backend={guidedReviewBackend}
-                remoteBaseUrlDraft={guidedReviewRemoteBaseUrlDraft}
-                remoteBaseUrlError={guidedReviewRemoteBaseUrlError}
-                onGuidedReviewModelChange={onGuidedReviewModelChange}
-                onBackendChange={onGuidedReviewBackendChange}
-                onRemoteBaseUrlChange={onGuidedReviewRemoteBaseUrlChange}
               />
             </SettingsSubsection>
             <SettingsSubsection

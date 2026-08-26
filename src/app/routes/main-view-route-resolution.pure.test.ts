@@ -1,5 +1,4 @@
 import { describe, expect, it } from 'vitest'
-import type { CodeReviewTarget } from '@/entities/code-review'
 import { DEFAULT_PROJECT_SETTINGS, type Project } from '@/entities/project'
 import type { SessionSummary } from '@/entities/session'
 import type { Space } from '@/entities/space'
@@ -72,42 +71,16 @@ const space: Space = {
   updatedAt: '2026-01-01T00:00:00.000Z',
 }
 
-const reviewTarget: CodeReviewTarget = {
-  id: 'target-1',
-  projectId: project.id,
-  projectName: project.name,
-  repositoryPath: workspace.path,
-  workspaceId: workspace.id,
-  sessionId: codeSession.id,
-  sessionName: codeSession.name,
-  branchName: workspace.branchName,
-  pullRequestId: null,
-  pullRequestNumber: null,
-  pullRequestLabel: null,
-  pullRequestUrl: null,
-  pullRequestBaseBranch: null,
-  pullRequestHeadBranch: null,
-  source: 'session',
-  updatedAt: null,
-  status: {
-    workingTreeFileCount: 1,
-    workingTreeStatusCounts: { M: 1 },
-    error: null,
-  },
-}
-
 function resolve(route: MainViewRoute, overrides = {}) {
   return resolveMainViewRoute({
     route,
     catalogLoaded: true,
     spacesLoaded: true,
-    codeReviewTargetsLoaded: true,
     projects: [project],
     sessions: [codeSession],
     chatSessions: [chatSession],
     workspaces: [workspace],
     spaces: [space],
-    codeReviewTargets: [reviewTarget],
     ...overrides,
   })
 }
@@ -200,7 +173,7 @@ describe('resolveMainViewRoute', () => {
     })
   })
 
-  it('falls back for invalid Spaces and stale Code Review targets', () => {
+  it('falls back for invalid Spaces', () => {
     expect(
       resolve(
         { kind: 'chat-space', spaceId: 'missing', draftAttempt: false },
@@ -209,24 +182,6 @@ describe('resolveMainViewRoute', () => {
     ).toMatchObject({
       status: 'fallback',
       fallback: { reason: 'space-not-found', action: 'chat-home' },
-    })
-    expect(
-      resolve(
-        {
-          kind: 'code-review',
-          targetId: 'missing',
-          mode: 'working-tree',
-          view: 'guide',
-          filePath: null,
-        },
-        { codeReviewTargets: [] },
-      ),
-    ).toMatchObject({
-      status: 'fallback',
-      fallback: {
-        reason: 'code-review-target-not-found',
-        action: 'code-review',
-      },
     })
   })
 })

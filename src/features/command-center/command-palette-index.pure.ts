@@ -18,7 +18,6 @@ import type {
   NewWorkspacePaletteItem,
   ForkSessionPaletteItem,
   CheckUpdatesPaletteItem,
-  OpenCodeReviewPaletteItem,
 } from './command-center.types'
 
 export interface BuildPaletteIndexInput {
@@ -70,12 +69,6 @@ export const PALETTE_DIALOGS: DialogDescriptor[] = [
     kind: 'project-settings',
     title: 'Project Settings',
     description: 'Settings for the active project',
-  },
-  {
-    kind: 'pull-request-review-start',
-    title: 'Review Pull Request',
-    description: 'Create a local review workspace and agent session',
-    aliases: 'pr github code review pull request checkout',
   },
   {
     kind: 'providers',
@@ -229,18 +222,6 @@ export function buildPaletteIndex(
     search: { title: 'Check for updates' },
   }
   items.push(checkUpdates)
-
-  const openCodeReview: OpenCodeReviewPaletteItem = {
-    kind: 'open-code-review',
-    id: 'open-code-review',
-    title: 'Open Code Review',
-    description: 'Review changed files across project workspaces and sessions',
-    search: {
-      title: 'Open Code Review',
-      aliases: 'changed files diff review pull request pr',
-    },
-  }
-  items.push(openCodeReview)
 
   for (const workspace of workspaces) {
     const project = projectsById.get(workspace.projectId)

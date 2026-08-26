@@ -5,13 +5,7 @@ import type { SpaceSynthesisService } from '../backend/space/space-synthesis.ser
 import { StateService } from '../backend/state/state.service'
 import { WorkspaceService } from '../backend/workspace/workspace.service'
 import { GitService } from '../backend/git/git.service'
-import { ChangedFilesService } from '../backend/git/changed-files.service'
-import type { CodeReviewService } from '../backend/code-review/code-review.service'
-import type { CodeReviewGuideService } from '../backend/code-review-guide/code-review-guide.service'
-import type { RemoteCodeReviewGuideDaemonClient } from '../backend/code-review-guide/remote-daemon-guide.service'
 import { PullRequestService } from '../backend/pull-request/pull-request.service'
-import type { PullRequestReviewService } from '../backend/pull-request/pull-request-review.service'
-import type { ReviewNotesService } from '../backend/review-notes/review-notes.service'
 import { SessionAppService } from '../backend/app-api/session-app.service'
 import { SessionService } from '../backend/session/session.service'
 import type { TurnCaptureService } from '../backend/session/turn/turn-capture.service'
@@ -31,7 +25,6 @@ import { AppSettingsService } from '../backend/app-settings/app-settings.service
 import { CodexQuotaService } from '../backend/provider-quota/codex-quota.service'
 import { ProviderQuotaService } from '../backend/provider-quota/provider-quota.service'
 import { createDefaultProviderQuotaSources } from '../backend/provider-quota/provider-quota.sources'
-import { GuidedReviewDaemonCredentialsService } from '../backend/credentials/guided-review-daemon-credentials.service'
 import type { ExecutionHostDaemonCredentialsService } from '../backend/credentials/execution-host-daemon-credentials.service'
 import type { RemoteExecutionHost } from '../backend/provider/execution-host/remote-execution-host'
 import {
@@ -62,21 +55,6 @@ import type {
   CreateProjectContextItemInput,
   UpdateProjectContextItemInput,
 } from '../backend/project-context/project-context.types'
-import type {
-  CreateReviewNoteInput,
-  PreviewReviewNotePacketInput,
-  SendReviewNotePacketInput,
-  UpdateReviewNoteInput,
-} from '../backend/review-notes/review-notes.types'
-import type {
-  CodeReviewFilePatchRequest,
-  CodeReviewListTargetsRequest,
-  CodeReviewSummaryRequest,
-} from '../backend/code-review/code-review.types'
-import type {
-  CodeReviewGuideGenerateRequest,
-  CodeReviewGuideLookupRequest,
-} from '../backend/code-review-guide/code-review-guide.types'
 import type { CreateWorkspaceInput } from '../backend/workspace/workspace.types'
 import type { CreateSessionInput } from '../backend/session/session.types'
 import type { ProjectSettings } from '../backend/project/project-settings.pure'
@@ -169,20 +147,13 @@ export function registerIpcHandlers(
   stateService: StateService,
   workspaceService: WorkspaceService,
   gitService: GitService,
-  changedFilesService: ChangedFilesService,
-  codeReviewService: CodeReviewService,
-  codeReviewGuideService: CodeReviewGuideService,
-  remoteCodeReviewGuideDaemonClient: RemoteCodeReviewGuideDaemonClient,
   pullRequestService: PullRequestService,
-  pullRequestReviewService: PullRequestReviewService,
-  reviewNotesService: ReviewNotesService,
   sessionService: SessionService,
   providerRegistry: ProviderRegistry,
   mcpService: McpService,
   skillsService: SkillsService,
   promptsService: PromptsService,
   appSettingsService: AppSettingsService,
-  guidedReviewDaemonCredentials: GuidedReviewDaemonCredentialsService,
   openRouterCredentials: OpenRouterCredentialsService,
   analyticsService: AnalyticsService,
   attachmentsService: AttachmentsService,
@@ -501,66 +472,6 @@ export function registerIpcHandlers(
     pullRequestService.refreshForSession(sessionId),
   )
 
-  ipcMain.handle(
-    'pullRequest:previewReview',
-    (_event, input: { projectId?: string | null; reference: string }) =>
-      pullRequestReviewService.previewReview(input),
-  )
-
-  ipcMain.handle(
-    'pullRequest:prepareReviewSession',
-    (
-      _event,
-      input: {
-        projectId?: string | null
-        reference: string
-        providerId: string
-        model: string | null
-        effort: CreateSessionInput['effort']
-        sessionName?: string
-      },
-    ) => pullRequestReviewService.prepareReviewSession(input),
-  )
-
-  ipcMain.handle(
-    'pullRequest:materializeReviewWorkspace',
-    (_event, input: { projectId?: string | null; reference: string }) =>
-      pullRequestReviewService.materializeReviewWorkspace(input),
-  )
-
-  // Review note handlers
-  ipcMain.handle('reviewNotes:listBySession', (_event, sessionId: string) =>
-    reviewNotesService.listBySession(sessionId),
-  )
-
-  ipcMain.handle('reviewNotes:create', (_event, input: CreateReviewNoteInput) =>
-    reviewNotesService.create(input),
-  )
-
-  ipcMain.handle(
-    'reviewNotes:update',
-    (_event, id: string, patch: UpdateReviewNoteInput) =>
-      reviewNotesService.update(id, patch),
-  )
-
-  ipcMain.handle('reviewNotes:delete', (_event, id: string) => {
-    reviewNotesService.delete(id)
-  })
-
-  ipcMain.handle(
-    'reviewNotes:previewPacket',
-    (_event, input: PreviewReviewNotePacketInput) =>
-      reviewNotesService.previewPacket(input),
-  )
-
-  ipcMain.handle(
-    'reviewNotes:sendPacket',
-    (_event, input: SendReviewNotePacketInput) =>
-      reviewNotesService.sendPacket(input, (sessionId, text) =>
-        sessionApp.sendSessionMessage(sessionId, { text }),
-      ),
-  )
-
   // Git handlers
   ipcMain.handle('git:getBranches', async (_event, repoPath: string) =>
     gitService.getBranches(repoPath),
@@ -586,56 +497,6 @@ export function registerIpcHandlers(
     'git:getDiff',
     async (_event, repoPath: string, filePath?: string) =>
       gitService.getDiff(repoPath, filePath),
-  )
-
-  ipcMain.handle('git:getBaseBranchStatus', async (_event, sessionId: string) =>
-    changedFilesService.getBaseBranchStatus(sessionId),
-  )
-
-  ipcMain.handle(
-    'git:getBaseBranchDiff',
-    async (_event, sessionId: string, filePath: string) =>
-      changedFilesService.getBaseBranchDiff({ sessionId, filePath }),
-  )
-
-  ipcMain.handle(
-    'codeReview:listTargets',
-    async (_event, input: CodeReviewListTargetsRequest) =>
-      codeReviewService.listTargets(input),
-  )
-
-  ipcMain.handle(
-    'codeReview:getSummary',
-    async (_event, input: CodeReviewSummaryRequest) =>
-      codeReviewService.getSummary(input),
-  )
-
-  ipcMain.handle(
-    'codeReview:getFilePatch',
-    async (_event, input: CodeReviewFilePatchRequest) =>
-      codeReviewService.getFilePatch(input),
-  )
-
-  ipcMain.handle(
-    'codeReviewGuide:getGuide',
-    async (_event, input: CodeReviewGuideLookupRequest) =>
-      codeReviewGuideService.getGuide(input),
-  )
-
-  ipcMain.handle(
-    'codeReviewGuide:generateGuide',
-    async (_event, input: CodeReviewGuideGenerateRequest) =>
-      codeReviewGuideService.generateGuide(input),
-  )
-
-  ipcMain.handle(
-    'codeReviewGuide:refreshGuide',
-    async (_event, input: CodeReviewGuideGenerateRequest) =>
-      codeReviewGuideService.refreshGuide(input),
-  )
-
-  ipcMain.handle('codeReviewGuide:testRemoteDaemonConnection', () =>
-    remoteCodeReviewGuideDaemonClient.testConnection(),
   )
 
   // App settings handlers
@@ -672,24 +533,6 @@ export function registerIpcHandlers(
 
   ipcMain.handle('credentials:openrouter:deleteToken', () =>
     openRouterCredentials.deleteToken(),
-  )
-
-  ipcMain.handle('credentials:guidedReviewDaemon:getStatus', () =>
-    guidedReviewDaemonCredentials.getStatus(),
-  )
-
-  ipcMain.handle(
-    'credentials:guidedReviewDaemon:setToken',
-    (_event, input: { token?: unknown }) => {
-      if (!input || typeof input.token !== 'string') {
-        throw new Error('Daemon API token is required.')
-      }
-      return guidedReviewDaemonCredentials.setToken({ token: input.token })
-    },
-  )
-
-  ipcMain.handle('credentials:guidedReviewDaemon:deleteToken', () =>
-    guidedReviewDaemonCredentials.deleteToken(),
   )
 
   if (executionHostRemote) {

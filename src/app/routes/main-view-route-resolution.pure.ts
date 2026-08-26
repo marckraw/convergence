@@ -1,14 +1,10 @@
-import type { CodeReviewTarget } from '@/entities/code-review'
 import type { Project } from '@/entities/project'
 import type { SessionSummary } from '@/entities/session'
 import type { Space } from '@/entities/space'
 import type { Workspace } from '@/entities/workspace'
 import type { MainViewRoute } from '../App.container'
 
-export type MainViewRouteFallbackAction =
-  | 'welcome'
-  | 'chat-home'
-  | 'code-review'
+export type MainViewRouteFallbackAction = 'welcome' | 'chat-home'
 
 export interface MainViewRouteFallback {
   reason:
@@ -21,7 +17,6 @@ export interface MainViewRouteFallback {
     | 'worktree-removed'
     | 'space-not-found'
     | 'space-archived'
-    | 'code-review-target-not-found'
   title: string
   message: string
   action: MainViewRouteFallbackAction
@@ -41,13 +36,11 @@ export interface MainViewRouteResolutionInput {
   route: MainViewRoute
   catalogLoaded: boolean
   spacesLoaded: boolean
-  codeReviewTargetsLoaded: boolean
   projects: readonly Project[]
   sessions: readonly SessionSummary[]
   chatSessions: readonly SessionSummary[]
   workspaces: readonly Workspace[]
   spaces: readonly Space[]
-  codeReviewTargets: readonly CodeReviewTarget[]
 }
 
 export function resolveMainViewRoute(
@@ -68,8 +61,6 @@ export function resolveMainViewRoute(
       return resolveChatSessionRoute(input, route.sessionId)
     case 'chat-space':
       return resolveChatSpaceRoute(input, route.spaceId)
-    case 'code-review':
-      return resolveCodeReviewRoute(input, route.targetId)
   }
 }
 
@@ -189,34 +180,6 @@ function resolveChatSpaceRoute(
       actionLabel: 'Go to Chat',
     })
   }
-
-  return ready(input.route)
-}
-
-function resolveCodeReviewRoute(
-  input: MainViewRouteResolutionInput,
-  targetId: string | null,
-): MainViewRouteResolution {
-  if (!targetId) return ready(input.route)
-  if (!input.codeReviewTargetsLoaded) return pending(input.route)
-
-  const target = input.codeReviewTargets.find((entry) => entry.id === targetId)
-  if (!target) {
-    return fallback(input.route, {
-      reason: 'code-review-target-not-found',
-      title: 'Review target unavailable',
-      message:
-        'This Code Review route points to a target that no longer exists.',
-      action: 'code-review',
-      actionLabel: 'Open Code Review',
-    })
-  }
-
-  const projectFallback = resolveProject(input, target.projectId)
-  if (projectFallback) return fallback(input.route, projectFallback)
-
-  const workspaceFallback = resolveWorkspace(input, target.workspaceId)
-  if (workspaceFallback) return fallback(input.route, workspaceFallback)
 
   return ready(input.route)
 }

@@ -6,13 +6,12 @@ import {
   type AppSettings,
   type AppSettingsInput,
   type DebugLoggingPrefs,
-  type ResolvedOneShotModelDefaults,
   type ResolvedSessionDefaults,
 } from './app-settings.types'
 import { APP_SETTINGS_KEY } from './app-settings.constants'
 import {
   filterPiDescriptor,
-  normalizeGuidedReviewRemoteBaseUrl,
+  normalizeRemoteBaseUrl,
   parseAppSettings,
   parseCommandCenterShortcut,
   parseDebugLoggingPrefs,
@@ -21,7 +20,6 @@ import {
   parseOnboardingPrefs,
   parsePiModelVisibilityPrefs,
   parseUpdatePrefs,
-  resolveGuidedReviewModelFromSettings,
   resolveSessionDefaultsFromSettings,
   validateAppSettings,
   validateCommandCenterShortcut,
@@ -112,33 +110,12 @@ export class AppSettingsService {
       input.extractionModelByProvider ?? {},
       descriptors,
     )
-    const guidedReviewModelByProvider = validateModelMap(
-      input.guidedReviewModelByProvider ?? {},
-      descriptors,
-    )
 
     const existing = parseAppSettings(this.stateService.get(APP_SETTINGS_KEY))
-    const guidedReviewBackend =
-      input.guidedReviewBackend ?? existing.guidedReviewBackend
-    const guidedReviewRemoteBaseUrl =
-      input.guidedReviewRemoteBaseUrl === undefined
-        ? existing.guidedReviewRemoteBaseUrl
-        : normalizeGuidedReviewRemoteBaseUrl(input.guidedReviewRemoteBaseUrl)
-    if (
-      input.guidedReviewRemoteBaseUrl !== undefined &&
-      input.guidedReviewRemoteBaseUrl !== null &&
-      !guidedReviewRemoteBaseUrl
-    ) {
-      throw new Error('Remote daemon base URL must be an HTTP(S) URL.')
-    }
-    if (guidedReviewBackend === 'remote' && !guidedReviewRemoteBaseUrl) {
-      throw new Error('Remote guided review requires a daemon base URL.')
-    }
-
     const executionHostRemoteBaseUrl =
       input.executionHostRemoteBaseUrl === undefined
         ? existing.executionHostRemoteBaseUrl
-        : normalizeGuidedReviewRemoteBaseUrl(input.executionHostRemoteBaseUrl)
+        : normalizeRemoteBaseUrl(input.executionHostRemoteBaseUrl)
     if (
       input.executionHostRemoteBaseUrl !== undefined &&
       input.executionHostRemoteBaseUrl !== null &&
@@ -200,10 +177,7 @@ export class AppSettingsService {
         model && input.defaultEffortId !== null ? input.defaultEffortId : null,
       namingModelByProvider,
       extractionModelByProvider,
-      guidedReviewModelByProvider,
       commandCenterShortcut,
-      guidedReviewBackend,
-      guidedReviewRemoteBaseUrl,
       executionHostRemoteBaseUrl,
       notifications,
       onboarding,
@@ -264,19 +238,6 @@ export class AppSettingsService {
     }
 
     return descriptor.defaultModelId ?? null
-  }
-
-  async resolveGuidedReviewModel(
-    providerId: string,
-  ): Promise<ResolvedOneShotModelDefaults | null> {
-    const descriptors = await this.loadDescriptors()
-    const descriptor = descriptors.find((item) => item.id === providerId)
-    if (!descriptor) return null
-
-    return resolveGuidedReviewModelFromSettings(
-      parseAppSettings(this.stateService.get(APP_SETTINGS_KEY)),
-      descriptor,
-    )
   }
 
   async resolveSessionDefaults(): Promise<ResolvedSessionDefaults | null> {

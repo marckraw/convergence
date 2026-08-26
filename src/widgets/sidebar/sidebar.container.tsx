@@ -10,7 +10,6 @@ import {
   type SessionSummary,
 } from '@/entities/session'
 import { useTerminalStore, type TerminalIdleNotice } from '@/entities/terminal'
-import type { CodeReviewMode } from '@/entities/code-review'
 import { useNotificationsStore } from '@/entities/notifications'
 import { useTaskProgressStore } from '@/entities/task-progress'
 import {
@@ -68,11 +67,6 @@ interface SidebarProps {
   selectedSpaceId: string | null
   onSelectSpace: (id: string) => void
   activeGlobalSessionId: string | null
-  onOpenCodeReview?: (search?: {
-    targetId?: string | null
-    mode?: CodeReviewMode
-    file?: string | null
-  }) => void
   onSelectProjectRoot?: (projectId: string) => void | Promise<void>
   onSelectAnySession?: (session: SessionSummary) => void
   onShowMissionControl?: () => void
@@ -102,7 +96,6 @@ export const Sidebar: FC<SidebarProps> = ({
   selectedSpaceId,
   onSelectSpace,
   activeGlobalSessionId,
-  onOpenCodeReview,
   onSelectProjectRoot,
   onSelectAnySession,
   onShowMissionControl,
@@ -565,10 +558,6 @@ export const Sidebar: FC<SidebarProps> = ({
     [deleteSession, loadSpaceAttempts, spaces],
   )
 
-  const handleOpenCodeReview = useCallback(() => {
-    onOpenCodeReview?.()
-  }, [onOpenCodeReview])
-
   const handleArchiveWorkspace = async (workspaceId: string) => {
     if (!activeProject) {
       return
@@ -845,7 +834,6 @@ export const Sidebar: FC<SidebarProps> = ({
             activeSurface={activeSurface}
             hasActiveProject={!!activeProject}
             iconOnly
-            onOpenCodeReview={handleOpenCodeReview}
             onOpenDialog={openDialog}
           />
           <AppSettingsDialogContainer
@@ -899,7 +887,6 @@ export const Sidebar: FC<SidebarProps> = ({
             activeSurface={activeSurface}
             hasActiveProject={!!activeProject}
             iconOnly
-            onOpenCodeReview={handleOpenCodeReview}
             onOpenDialog={openDialog}
           />
           <AppSettingsDialogContainer
