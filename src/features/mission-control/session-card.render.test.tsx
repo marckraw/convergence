@@ -17,10 +17,10 @@ import { CARD_BREATHE } from './session-card.styles'
  * the build never emits. These tests ask the DOM what the card actually
  * carries.
  *
- * The last group reads `global.css` instead of the DOM on purpose: the breath
- * is a stylesheet animation and `prefers-reduced-motion` is a media query, and
- * jsdom evaluates neither. The stylesheet is where that promise is kept, so
- * the stylesheet is where it is checked.
+ * The last two groups read `global.css` instead of the DOM on purpose: the
+ * breath is a stylesheet animation and `prefers-reduced-motion` is a media
+ * query, and jsdom evaluates neither. The stylesheet is where that promise is
+ * kept, so the stylesheet is where it is checked.
  */
 
 function crew(id: string, accentColor: string | null): SessionCrew {
@@ -137,6 +137,88 @@ function bodiesFor(css: string, selector: string): string[] {
   }
 }
 
+const BREATHE_KEYFRAMES = '@keyframes session-card-breathe'
+
+/** The `stop { ... }` steps of a `@keyframes` body, in source order. */
+function keyframeSteps(
+  body: string,
+): { stops: string[]; declarations: string }[] {
+  const steps: { stops: string[]; declarations: string }[] = []
+  let from = 0
+
+  for (;;) {
+    const open = body.indexOf('{', from)
+    const close = open < 0 ? -1 : body.indexOf('}', open)
+    if (close < 0) return steps
+
+    steps.push({
+      stops: body
+        .slice(from, open)
+        .split(',')
+        .map((stop) => stop.trim())
+        .filter(Boolean),
+      declarations: body.slice(open + 1, close),
+    })
+    from = close + 1
+  }
+}
+
+/**
+ * The `opacity` declaration of a declaration block, anchored to a declaration
+ * boundary: the start of the block, or a `;`.
+ *
+ * An unanchored `opacity:` matches `--opacity:` just as happily, so renaming a
+ * declaration to a custom property would stop painting while this test stayed
+ * green.
+ */
+const OPACITY_DECLARATION = /(?:^|;)\s*opacity:\s*([^;]+)/
+
+/** The opacity a block declares, or `undefined` if it declares none. */
+function declaredOpacity(declarations: string): string | undefined {
+  return OPACITY_DECLARATION.exec(declarations)?.[1].trim()
+}
+
+/** Every stop of a `@keyframes` body mapped to the opacity its step declares. */
+function opacityByStop(body: string): Map<string, string> {
+  const opacities = new Map<string, string>()
+
+  for (const step of keyframeSteps(body)) {
+    const opacity = declaredOpacity(step.declarations)
+    if (!opacity) continue
+    for (const stop of step.stops) opacities.set(stop, opacity)
+  }
+
+  return opacities
+}
+
+describe('the breath actually moves', () => {
+  it('travels from the min knob at both ends to the max knob at the midpoint', () => {
+    const blocks = bodiesFor(GLOBAL_CSS, BREATHE_KEYFRAMES)
+
+    expect(blocks).toHaveLength(1)
+    const opacity = opacityByStop(blocks[0])
+
+    // Asserting the keyframes merely exist proves nothing: flatten the
+    // midpoint to `--breathe-min` and the glow holds perfectly still while
+    // every other test here stays green. The shape is the feature.
+    expect(opacity.get('0%')).toBe('var(--breathe-min)')
+    expect(opacity.get('100%')).toBe('var(--breathe-min)')
+    expect(opacity.get('50%')).toBe('var(--breathe-max)')
+    expect(opacity.get('50%')).not.toBe(opacity.get('0%'))
+  })
+
+  it('is handed two knobs that span a real range of opacity', () => {
+    // The keyframes can name two different properties and still stand
+    // perfectly still if both knobs are tuned to the same number -- and two
+    // different numbers are not enough either, because CSS clamps opacity into
+    // [0, 1], so a 1 -> 2 breath renders as 1 -> 1. The knobs have to travel
+    // inside the range the browser will actually paint.
+    expect(CARD_BREATHE.minOpacity).toBeGreaterThanOrEqual(0)
+    expect(CARD_BREATHE.minOpacity).toBeLessThan(CARD_BREATHE.maxOpacity)
+    expect(CARD_BREATHE.maxOpacity).toBeLessThanOrEqual(1)
+  })
+})
+
 describe('the breathing glow under prefers-reduced-motion', () => {
   it('renders the glare without the breath', () => {
     const reducedBlocks = bodiesFor(GLOBAL_CSS, REDUCED_MOTION).flatMap(
@@ -166,6 +248,6 @@ describe('the breathing glow under prefers-reduced-motion', () => {
     expect(base).toMatch(/animation:\s*session-card-breathe/)
     // The still card sits at the top of the breath rather than at an opacity
     // the animation would otherwise have moved it off.
-    expect(base).toMatch(/opacity:\s*var\(--breathe-max\)/)
+    expect(declaredOpacity(base)).toBe('var(--breathe-max)')
   })
 })
