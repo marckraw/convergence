@@ -1723,13 +1723,14 @@ interface ElectronAPI {
       deleteToken: (
         endpointId: string,
       ) => Promise<ExecutionHostDaemonCredentialStatusData>
+      environmentOverride: () => Promise<ExecutionHostDaemonEnvironmentOverrideData>
     }
   }
   executionHost: {
     testRemoteConnection: (
       endpointId: string,
     ) => Promise<RemoteExecutionHostConnectionResultData>
-    sessionCountsByEndpoint: () => Promise<Record<string, number>>
+    sessionCountsByEndpoint: () => Promise<ExecutionHostSessionCountData[]>
     getSessionWorkspace: (
       sessionId: string,
     ) => Promise<RemoteSessionWorkspaceResultData>
@@ -1990,7 +1991,7 @@ interface ExecutionHostEndpointData {
 }
 
 interface ExecutionHostEndpointInputData {
-  id?: string
+  id: string
   label?: string
   baseUrl: string
 }
@@ -2167,6 +2168,11 @@ interface OpenRouterCredentialStatusData {
   error: string | null
 }
 
+interface ExecutionHostSessionCountData {
+  executionHostId: string
+  sessions: number
+}
+
 interface ExecutionHostDaemonCredentialStatusData {
   providerId: 'execution-host-daemon'
   configured: boolean
@@ -2175,6 +2181,16 @@ interface ExecutionHostDaemonCredentialStatusData {
   account: string | null
   service: string | null
   error: string | null
+}
+
+/**
+ * The environment override, which is not filed under any Endpoint (MAR-2642).
+ * Carries no token — only that one exists and which id it can serve.
+ */
+interface ExecutionHostDaemonEnvironmentOverrideData {
+  configured: boolean
+  envKey: string
+  endpointId: string
 }
 
 type RemoteSessionWorkspaceResultData =

@@ -39,6 +39,21 @@ export type PrimarySurface = 'conversation' | 'terminal'
  */
 export type SessionExecutionHostId = string
 
+/**
+ * How many sessions name one execution host (MAR-2642).
+ *
+ * A list of pairs rather than a record keyed by id, all the way to the
+ * renderer. The keys here are execution host ids read off session rows —
+ * outside data — and a bare object indexed by outside data answers `toString`
+ * with a function and swallows `__proto__` through the prototype setter. A
+ * pair carries its id as a value, so nothing between the query and the warning
+ * has to index an object with it.
+ */
+export interface ExecutionHostSessionCount {
+  executionHostId: string
+  sessions: number
+}
+
 export type SessionContextKind = 'project' | 'global'
 
 /** The two statuses a session can come to rest in. */

@@ -528,6 +528,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
         ipcRenderer.invoke('credentials:executionHostDaemon:deleteToken', {
           endpointId,
         }),
+      // The one credential that names no Endpoint, and so is asked about
+      // without one (MAR-2642).
+      environmentOverride: () =>
+        ipcRenderer.invoke(
+          'credentials:executionHostDaemon:environmentOverride',
+        ),
     },
   },
   executionHost: {

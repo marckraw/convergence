@@ -591,19 +591,43 @@ export function registerIpcHandlers(
      * The id is resolved against the configured Endpoints rather than trusted,
      * because an unknown id at `setToken` would store a token under an account
      * no Endpoint will ever read and nothing will ever clean up.
+     *
+     * It is resolved exactly as received, never repaired (MAR-2642). This used
+     * to `trim()` first, which meant the guard answered a question about a
+     * value the caller never sent: ` kuba-vps ` was accepted as `kuba-vps` and
+     * wrote a token into the real kuba-vps's Keychain account. That is the
+     * same defect one layer down, where a non-conforming id is refused by name
+     * rather than sanitised, and for the same reason — a rewritten id
+     * addresses a different account than the one that was named.
+     *
+     * The two layers are deliberately not the same. Trimming what a HUMAN
+     * types into a settings field is input normalisation and stays where it
+     * is: the person is present and sees the result. An IPC argument is
+     * machine-supplied, so it is exact or it is refused, and the refusal
+     * quotes the value so a newline cannot hide inside it.
+     *
+     * Synchronous, and that is the point (MAR-2642). Every credential method
+     * takes its Endpoint's queue slot the moment it is called, before its own
+     * first `await` — so the slot is claimed at whatever moment the handler
+     * reaches it, and anything the handler awaits first is a window in which a
+     * removal can claim the slot ahead of it. This used to read the endpoint
+     * list through `getAppSettings`, which awaits provider descriptors that
+     * have nothing to say about which machines exist; a token Save dispatched
+     * before a removal could queue behind it and recreate the credential of a
+     * machine that was already gone. The three handlers below are deliberately
+     * not `async` functions, so no `await` can be added before the claim.
      */
-    const requireEndpointId = async (value: unknown): Promise<string> => {
-      const endpointId = typeof value === 'string' ? value.trim() : ''
+    const requireEndpointId = (value: unknown): string => {
+      const endpointId = typeof value === 'string' ? value : ''
       if (!endpointId) {
         throw new Error('An execution host endpoint id is required.')
       }
-      const settings = await appSettingsService.getAppSettings()
-      const known = settings.executionHostEndpoints.some(
-        (endpoint) => endpoint.id === endpointId,
-      )
+      const known = appSettingsService
+        .listExecutionHostEndpoints()
+        .some((endpoint) => endpoint.id === endpointId)
       if (!known) {
         throw new Error(
-          `Execution host endpoint "${endpointId}" is not configured.`,
+          `Execution host endpoint ${JSON.stringify(endpointId)} is not configured.`,
         )
       }
       return endpointId
@@ -611,16 +635,16 @@ export function registerIpcHandlers(
 
     ipcMain.handle(
       'credentials:executionHostDaemon:getStatus',
-      async (_event, input: { endpointId?: unknown }) =>
+      (_event, input: { endpointId?: unknown }) =>
         executionHostRemote.credentials.getStatus(
-          await requireEndpointId(input?.endpointId),
+          requireEndpointId(input?.endpointId),
         ),
     )
 
     ipcMain.handle(
       'credentials:executionHostDaemon:setToken',
-      async (_event, input: { endpointId?: unknown; token?: unknown }) => {
-        const endpointId = await requireEndpointId(input?.endpointId)
+      (_event, input: { endpointId?: unknown; token?: unknown }) => {
+        const endpointId = requireEndpointId(input?.endpointId)
         if (!input || typeof input.token !== 'string') {
           throw new Error('Daemon API token is required.')
         }
@@ -633,10 +657,24 @@ export function registerIpcHandlers(
 
     ipcMain.handle(
       'credentials:executionHostDaemon:deleteToken',
-      async (_event, input: { endpointId?: unknown }) =>
+      (_event, input: { endpointId?: unknown }) =>
         executionHostRemote.credentials.deleteToken(
-          await requireEndpointId(input?.endpointId),
+          requireEndpointId(input?.endpointId),
         ),
+    )
+
+    /**
+     * Whether the environment override is set, and which Endpoint it serves
+     * (MAR-2642).
+     *
+     * Named no Endpoint id, deliberately: this is the one credential that
+     * cannot be reached through an Endpoint at all. It is not a Keychain entry,
+     * so no sweep collects it, and it serves exactly one id — so if nothing
+     * carries that id, it is a dead credential that no other surface would
+     * mention. Settings asks this so it can say so out loud.
+     */
+    ipcMain.handle('credentials:executionHostDaemon:environmentOverride', () =>
+      executionHostRemote.credentials.describeEnvironmentOverride(),
     )
 
     // The resolver and the host are built from the same id the token handlers
@@ -645,7 +683,7 @@ export function registerIpcHandlers(
     ipcMain.handle(
       'executionHost:testRemoteConnection',
       async (_event, input: { endpointId?: unknown }) => {
-        const endpointId = await requireEndpointId(input?.endpointId)
+        const endpointId = requireEndpointId(input?.endpointId)
         return testRemoteExecutionHostConnection({
           resolver: executionHostRemote.registry.resolverFor(endpointId),
           host: executionHostRemote.registry.hostFor(endpointId),

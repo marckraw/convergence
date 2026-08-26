@@ -38,6 +38,7 @@ import type { AttachmentsService } from '../attachments/attachments.service'
 import type { SkillSelection } from '../skills/skills.types'
 import {
   sessionSummaryFromRow,
+  type ExecutionHostSessionCount,
   type Session,
   type SessionSummary,
   type CreateSessionInput,
@@ -737,19 +738,28 @@ export class SessionService {
   }
 
   /**
-   * How many sessions name each execution host, keyed by the id (MAR-2642).
+   * How many sessions name each execution host (MAR-2642).
    *
    * Blank and absent both mean this machine — that is what every row written
    * before execution hosts existed meant — so they are folded into `'local'`
    * rather than reported as a host of their own.
+   *
+   * Accumulated in a `Map` and returned as pairs. The ids come off session
+   * rows, so they are outside data: a bare object accumulator reads
+   * `counts['toString']` as an inherited function rather than a missing count,
+   * and `counts['__proto__'] = n` goes to the prototype setter and is lost.
+   * Both make a removal warning lie about a real Endpoint.
    */
-  countSessionsByExecutionHost(): Record<string, number> {
-    const counts: Record<string, number> = {}
+  countSessionsByExecutionHost(): ExecutionHostSessionCount[] {
+    const counts = new Map<string, number>()
     for (const row of this.sessionRepository.countByExecutionHost()) {
       const id = parseExecutionHostId(row.executionHost)
-      counts[id] = (counts[id] ?? 0) + row.count
+      counts.set(id, (counts.get(id) ?? 0) + row.count)
     }
-    return counts
+    return [...counts].map(([executionHostId, sessions]) => ({
+      executionHostId,
+      sessions,
+    }))
   }
 
   getById(id: string): Session | null {
