@@ -257,163 +257,6 @@ interface BaseBranchDiffSummaryData {
   files: GitStatusEntryData[]
 }
 
-type CodeReviewModeData = 'working-tree' | 'base-branch'
-
-type CodeReviewTargetSourceData =
-  | 'session'
-  | 'workspace'
-  | 'project-repository'
-  | 'pull-request'
-
-interface CodeReviewTargetStatusData {
-  workingTreeFileCount: number
-  workingTreeStatusCounts: Record<string, number>
-  error: string | null
-}
-
-interface CodeReviewTargetData {
-  id: string
-  projectId: string
-  projectName: string
-  repositoryPath: string
-  workspaceId: string | null
-  sessionId: string | null
-  sessionName: string | null
-  branchName: string | null
-  pullRequestId: string | null
-  pullRequestNumber: number | null
-  pullRequestLabel: string | null
-  pullRequestUrl: string | null
-  pullRequestBaseBranch: string | null
-  pullRequestHeadBranch: string | null
-  source: CodeReviewTargetSourceData
-  updatedAt: string | null
-  status: CodeReviewTargetStatusData
-}
-
-interface CodeReviewListTargetsRequestData {
-  projectId: string
-  sessionId?: string | null
-}
-
-interface CodeReviewSummaryRequestData {
-  target: CodeReviewTargetData
-  mode: CodeReviewModeData
-}
-
-interface CodeReviewCacheIdentityData {
-  comparisonRef: string | null
-  comparisonPoint: string | null
-  workingTreeVersionToken: string
-}
-
-interface CodeReviewFilePatchRequestData extends CodeReviewSummaryRequestData {
-  filePath: string
-  cacheIdentity: CodeReviewCacheIdentityData
-}
-
-interface CodeReviewSummaryData {
-  base: ResolvedBaseBranchData | null
-  cacheIdentity: CodeReviewCacheIdentityData
-  files: GitStatusEntryData[]
-}
-
-type CodeReviewGuideRiskLevelData = 'low' | 'medium' | 'high'
-type CodeReviewGuideStatusData = 'ready' | 'failed'
-type CodeReviewGuideGeneratorData = 'deterministic' | 'agent'
-
-interface CodeReviewGuideFileData {
-  path: string
-  status: string
-  reason: string
-  hunkHints: string[]
-}
-
-interface CodeReviewGuideSectionData {
-  id: string
-  title: string
-  summary: string
-  narrative: string
-  riskLevel: CodeReviewGuideRiskLevelData
-  riskRationale: string
-  checklist: string[]
-  files: CodeReviewGuideFileData[]
-}
-
-interface CodeReviewGuideData {
-  id: string
-  projectId: string
-  targetId: string
-  mode: CodeReviewModeData
-  cacheIdentity: CodeReviewCacheIdentityData
-  status: CodeReviewGuideStatusData
-  overview: string
-  generatedBy: CodeReviewGuideGeneratorData
-  sections: CodeReviewGuideSectionData[]
-  error: string | null
-  createdAt: string
-  updatedAt: string
-}
-
-interface CodeReviewGuideLookupRequestData {
-  target: CodeReviewTargetData
-  mode: CodeReviewModeData
-  cacheIdentity: CodeReviewCacheIdentityData
-}
-
-interface CodeReviewGuideGenerateRequestData extends CodeReviewGuideLookupRequestData {
-  files: GitStatusEntryData[]
-}
-
-type RemoteCodeReviewDaemonConnectionStateData =
-  | 'connected'
-  | 'missing-base-url'
-  | 'invalid-base-url'
-  | 'missing-token'
-  | 'auth-failed'
-  | 'unreachable'
-  | 'invalid-response'
-  | 'daemon-error'
-
-interface RemoteCodeReviewDaemonHealthData {
-  status: 'ok'
-  version: string
-  apiVersion: string
-  uptime: number
-  activeSessions: number
-  providers: Record<string, boolean>
-}
-
-interface RemoteCodeReviewDaemonMetaData {
-  name: string
-  version: string
-  apiVersion: string
-  deployment: {
-    mode: string
-    sharedAcrossTeams: boolean
-  }
-  providers: unknown[]
-  git: {
-    githubAuthenticated: boolean
-  }
-  runtime: {
-    activeSessions: number
-    maxConcurrentAgents: number
-    uptimeSeconds: number
-    host: string
-    port: number
-  }
-}
-
-interface RemoteCodeReviewDaemonConnectionResultData {
-  ok: boolean
-  state: RemoteCodeReviewDaemonConnectionStateData
-  baseUrl: string | null
-  message: string
-  health: RemoteCodeReviewDaemonHealthData | null
-  meta: RemoteCodeReviewDaemonMetaData | null
-}
-
 interface WorkspaceData {
   id: string
   projectId: string
@@ -499,28 +342,6 @@ interface PullRequestReviewWorkspaceResultData {
   pullRequest: WorkspacePullRequestData
   created: boolean
   refreshed: boolean
-}
-
-type ReviewNoteModeData = 'working-tree' | 'base-branch'
-type ReviewNoteStateData = 'draft' | 'sent' | 'resolved'
-
-interface ReviewNoteData {
-  id: string
-  sessionId: string
-  workspaceId: string | null
-  filePath: string
-  mode: ReviewNoteModeData
-  oldStartLine: number | null
-  oldEndLine: number | null
-  newStartLine: number | null
-  newEndLine: number | null
-  hunkHeader: string | null
-  selectedDiff: string
-  body: string
-  state: ReviewNoteStateData
-  sentAt: string | null
-  createdAt: string
-  updatedAt: string
 }
 
 interface SessionCrewData {
@@ -617,44 +438,6 @@ interface UpdateSessionRelayInputData {
   instruction?: string | null
   opener?: string | null
   armed?: boolean
-}
-
-interface CreateReviewNoteInputData {
-  sessionId: string
-  workspaceId?: string | null
-  filePath: string
-  mode: ReviewNoteModeData
-  oldStartLine?: number | null
-  oldEndLine?: number | null
-  newStartLine?: number | null
-  newEndLine?: number | null
-  hunkHeader?: string | null
-  selectedDiff: string
-  body: string
-}
-
-interface UpdateReviewNoteInputData {
-  body?: string
-  state?: ReviewNoteStateData
-}
-
-interface PreviewReviewNotePacketInputData {
-  sessionId: string
-  noteIds?: string[]
-}
-
-interface SendReviewNotePacketInputData {
-  sessionId: string
-  noteIds?: string[]
-}
-
-interface ReviewNotePacketPreviewData {
-  noteCount: number
-  text: string
-}
-
-interface ReviewNotePacketSendResultData extends ReviewNotePacketPreviewData {
-  sentNotes: ReviewNoteData[]
 }
 
 interface CreateWorkspaceInput {
@@ -1774,21 +1557,6 @@ interface ElectronAPI {
       reference: string
     }) => Promise<PullRequestReviewWorkspaceResultData>
   }
-  reviewNotes: {
-    listBySession: (sessionId: string) => Promise<ReviewNoteData[]>
-    create: (input: CreateReviewNoteInputData) => Promise<ReviewNoteData>
-    update: (
-      id: string,
-      patch: UpdateReviewNoteInputData,
-    ) => Promise<ReviewNoteData>
-    delete: (id: string) => Promise<void>
-    previewPacket: (
-      input: PreviewReviewNotePacketInputData,
-    ) => Promise<ReviewNotePacketPreviewData>
-    sendPacket: (
-      input: SendReviewNotePacketInputData,
-    ) => Promise<ReviewNotePacketSendResultData>
-  }
   crew: {
     list: () => Promise<SessionCrewData[]>
     create: (input: CreateSessionCrewInputData) => Promise<SessionCrewData>
@@ -1835,27 +1603,6 @@ interface ElectronAPI {
       sessionId: string,
     ) => Promise<BaseBranchDiffSummaryData>
     getBaseBranchDiff: (sessionId: string, filePath: string) => Promise<string>
-  }
-  codeReview: {
-    listTargets: (
-      input: CodeReviewListTargetsRequestData,
-    ) => Promise<CodeReviewTargetData[]>
-    getSummary: (
-      input: CodeReviewSummaryRequestData,
-    ) => Promise<CodeReviewSummaryData>
-    getFilePatch: (input: CodeReviewFilePatchRequestData) => Promise<string>
-  }
-  codeReviewGuide: {
-    getGuide: (
-      input: CodeReviewGuideLookupRequestData,
-    ) => Promise<CodeReviewGuideData | null>
-    generateGuide: (
-      input: CodeReviewGuideGenerateRequestData,
-    ) => Promise<CodeReviewGuideData>
-    refreshGuide: (
-      input: CodeReviewGuideGenerateRequestData,
-    ) => Promise<CodeReviewGuideData>
-    testRemoteDaemonConnection: () => Promise<RemoteCodeReviewDaemonConnectionResultData>
   }
   session: {
     create: (input: CreateSessionInput) => Promise<SessionSummaryData>
@@ -2032,13 +1779,6 @@ interface ElectronAPI {
       getStatus: () => Promise<OpenRouterCredentialStatusData>
       setToken: (token: string) => Promise<OpenRouterCredentialStatusData>
       deleteToken: () => Promise<OpenRouterCredentialStatusData>
-    }
-    guidedReviewDaemon: {
-      getStatus: () => Promise<GuidedReviewDaemonCredentialStatusData>
-      setToken: (
-        token: string,
-      ) => Promise<GuidedReviewDaemonCredentialStatusData>
-      deleteToken: () => Promise<GuidedReviewDaemonCredentialStatusData>
     }
     executionHostDaemon: {
       getStatus: () => Promise<ExecutionHostDaemonCredentialStatusData>
@@ -2305,10 +2045,7 @@ interface AppSettingsData {
   defaultEffortId: ReasoningEffort | null
   namingModelByProvider: Record<string, string>
   extractionModelByProvider: Record<string, string>
-  guidedReviewModelByProvider: Record<string, string>
   commandCenterShortcut: CommandCenterShortcutPrefsData
-  guidedReviewBackend: 'local' | 'remote'
-  guidedReviewRemoteBaseUrl: string | null
   executionHostRemoteBaseUrl: string | null
   notifications: NotificationPrefsData
   onboarding: OnboardingPrefsData
@@ -2326,10 +2063,7 @@ type AppSettingsInputData = Omit<
   AppSettingsData,
   | 'namingModelByProvider'
   | 'extractionModelByProvider'
-  | 'guidedReviewModelByProvider'
   | 'commandCenterShortcut'
-  | 'guidedReviewBackend'
-  | 'guidedReviewRemoteBaseUrl'
   | 'executionHostRemoteBaseUrl'
   | 'notifications'
   | 'onboarding'
@@ -2340,10 +2074,7 @@ type AppSettingsInputData = Omit<
 > & {
   namingModelByProvider?: Record<string, string>
   extractionModelByProvider?: Record<string, string>
-  guidedReviewModelByProvider?: Record<string, string>
   commandCenterShortcut?: CommandCenterShortcutPrefsData
-  guidedReviewBackend?: 'local' | 'remote'
-  guidedReviewRemoteBaseUrl?: string | null
   executionHostRemoteBaseUrl?: string | null
   notifications?: NotificationPrefsData
   onboarding?: OnboardingPrefsData
@@ -2472,16 +2203,6 @@ interface LocalModelTunnelSnapshotData {
 
 interface OpenRouterCredentialStatusData {
   providerId: 'openrouter'
-  configured: boolean
-  source: 'environment' | 'keychain' | null
-  storage: 'keychain' | null
-  account: string | null
-  service: string | null
-  error: string | null
-}
-
-interface GuidedReviewDaemonCredentialStatusData {
-  providerId: 'guided-review-daemon'
   configured: boolean
   source: 'environment' | 'keychain' | null
   storage: 'keychain' | null

@@ -23,12 +23,8 @@ import { StateService } from '../backend/state/state.service'
 import { WorkspaceService } from '../backend/workspace/workspace.service'
 import { GitService } from '../backend/git/git.service'
 import { ChangedFilesService } from '../backend/git/changed-files.service'
-import { CodeReviewService } from '../backend/code-review/code-review.service'
-import { CodeReviewGuideService } from '../backend/code-review-guide/code-review-guide.service'
-import { RemoteCodeReviewGuideDaemonClient } from '../backend/code-review-guide/remote-daemon-guide.service'
 import { PullRequestService } from '../backend/pull-request/pull-request.service'
 import { PullRequestReviewService } from '../backend/pull-request/pull-request-review.service'
-import { ReviewNotesService } from '../backend/review-notes/review-notes.service'
 import { SessionService } from '../backend/session/session.service'
 import { SessionContextInjectionService } from '../backend/session/context-injection/session-context-injection.service'
 import { TurnCaptureService } from '../backend/session/turn/turn-capture.service'
@@ -96,7 +92,6 @@ import {
 } from '../backend/provider-account/provider-account-resolution.pure'
 import { loadEnvFile } from '../backend/environment/env-file.service'
 import { hydrateProcessPathFromShell } from '../backend/environment/shell-path.service'
-import { GuidedReviewDaemonCredentialsService } from '../backend/credentials/guided-review-daemon-credentials.service'
 import { ExecutionHostDaemonCredentialsService } from '../backend/credentials/execution-host-daemon-credentials.service'
 import { RemoteExecutionHost } from '../backend/provider/execution-host/remote-execution-host'
 import { AppSettingsRemoteExecutionHostConnectionResolver } from '../backend/provider/execution-host/remote-execution-host-connection'
@@ -255,12 +250,9 @@ async function startApp(): Promise<void> {
   const workspaceService = new WorkspaceService(db, gitService, workspacesRoot)
   const changedFilesService = new ChangedFilesService(db, gitService)
   const pullRequestService = new PullRequestService(db, gitService)
-  const reviewNotesService = new ReviewNotesService(db)
   const crewService = new CrewService(db)
   const relayService = new RelayService(db)
   const providerRegistry = new ProviderRegistry()
-  const guidedReviewDaemonCredentials =
-    new GuidedReviewDaemonCredentialsService()
   const openRouterCredentials = new OpenRouterCredentialsService()
   const taskProgressService = new TaskProgressService(broadcastTaskProgress)
   const executionHost = new LocalExecutionHost(providerRegistry)
@@ -269,14 +261,6 @@ async function startApp(): Promise<void> {
     executionHost,
     globalSessionsRoot,
   )
-  const codeReviewService = new CodeReviewService({
-    git: gitService,
-    changedFiles: changedFilesService,
-    projects: projectService,
-    workspaces: workspaceService,
-    sessions: sessionService,
-    pullRequests: pullRequestService,
-  })
   // Constructed here rather than with the other account services below: two
   // services that start turns on their own need it, and the first of them is
   // built on the next line.
@@ -480,11 +464,6 @@ async function startApp(): Promise<void> {
   const appSettingsService = new AppSettingsService(stateService, async () =>
     Promise.all(providerRegistry.getAll().map((p) => p.describe())),
   )
-  const remoteCodeReviewGuideDaemonClient =
-    new RemoteCodeReviewGuideDaemonClient({
-      appSettings: appSettingsService,
-      credentials: guidedReviewDaemonCredentials,
-    })
   const executionHostDaemonCredentials =
     new ExecutionHostDaemonCredentialsService()
   const remoteExecutionHostConnectionResolver =
@@ -506,13 +485,6 @@ async function startApp(): Promise<void> {
     const origin = readGitOriginUrl(workingDirectory)
     const repository = origin ? normalizeGitHubRemoteUrl(origin) : null
     return repository ? { repository } : null
-  })
-  const codeReviewGuideService = new CodeReviewGuideService(db, {
-    providers: providerRegistry,
-    appSettings: appSettingsService,
-    sessions: sessionService,
-    codeReview: codeReviewService,
-    remoteDaemon: remoteCodeReviewGuideDaemonClient,
   })
   const analyticsService = new AnalyticsService(db, {
     providers: providerRegistry,
@@ -723,19 +695,14 @@ async function startApp(): Promise<void> {
     workspaceService,
     gitService,
     changedFilesService,
-    codeReviewService,
-    codeReviewGuideService,
-    remoteCodeReviewGuideDaemonClient,
     pullRequestService,
     pullRequestReviewService,
-    reviewNotesService,
     sessionService,
     providerRegistry,
     mcpService,
     skillsService,
     promptsService,
     appSettingsService,
-    guidedReviewDaemonCredentials,
     openRouterCredentials,
     analyticsService,
     attachmentsService,

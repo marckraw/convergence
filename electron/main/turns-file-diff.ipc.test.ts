@@ -34,9 +34,9 @@ vi.mock('electron', () => ({
  * calls. The rest are placeholders. A signature change that moves either of
  * the two fails this test loudly rather than quietly registering nothing.
  */
-const SESSION_SERVICE_ARGUMENT = 12
-const TURN_CAPTURE_SERVICE_ARGUMENT = 22
-const ARGUMENT_COUNT = 24
+const SESSION_SERVICE_ARGUMENT = 8
+const TURN_CAPTURE_SERVICE_ARGUMENT = 17
+const ARGUMENT_COUNT = 19
 
 function registerWithTurnCapture(
   getFileDiff: TurnCaptureService['getFileDiff'],
