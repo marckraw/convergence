@@ -38,7 +38,6 @@ import {
   ArrowUp,
   Bell,
   BellOff,
-  Cloud,
   FileText,
   Paperclip,
   Plus,
@@ -48,6 +47,8 @@ import {
   Zap,
 } from 'lucide-react'
 import { ComposerSelect } from './composer-select.presentational'
+import { ExecutionBar } from './execution-bar.presentational'
+import type { ExecutionBarView } from './execution-bar.pure'
 import { relayMuteTitle } from './relay-mute.pure'
 import { ProviderAccountPicker } from '@/entities/provider-account'
 import type { ProviderAccount } from '@/entities/provider-account'
@@ -75,9 +76,8 @@ interface ComposerProps {
   providerAccountSelectionBlockedReason: string | null
   codexFastMode: boolean
   onCodexFastModeChange: (enabled: boolean) => void
-  remoteHostAvailable: boolean
-  runOnRemoteHost: boolean
-  onRunOnRemoteHostChange: (enabled: boolean) => void
+  executionBar: ExecutionBarView
+  onExecutionHostChange: (hostId: string) => void
   /**
    * Armed wires leaving this session (F10). Zero renders no control at all --
    * a switch that silences nothing is noise on every other composer.
@@ -205,9 +205,8 @@ export const Composer: FC<ComposerProps> = ({
   providerAccountSelectionBlockedReason,
   codexFastMode,
   onCodexFastModeChange,
-  remoteHostAvailable,
-  runOnRemoteHost,
-  onRunOnRemoteHostChange,
+  executionBar,
+  onExecutionHostChange,
   armedOutgoingRelays,
   relaysMuted,
   onRelaysMutedChange,
@@ -795,30 +794,6 @@ export const Composer: FC<ComposerProps> = ({
                 Quiet
               </Button>
             ) : null}
-            {remoteHostAvailable ? (
-              <Button
-                type="button"
-                size="sm"
-                variant="ghost"
-                role="switch"
-                aria-checked={runOnRemoteHost}
-                aria-label="Run on remote host"
-                title={
-                  runOnRemoteHost
-                    ? 'This session will run on the remote execution host.'
-                    : 'Run this session on the remote execution host instead of this machine.'
-                }
-                onClick={() => onRunOnRemoteHostChange(!runOnRemoteHost)}
-                disabled={disabled || selectionDisabled}
-                className={cn(
-                  'h-7 gap-1.5 px-2 text-xs text-muted-foreground hover:text-foreground',
-                  runOnRemoteHost && 'bg-secondary text-foreground',
-                )}
-              >
-                <Cloud className="h-3.5 w-3.5" />
-                Remote
-              </Button>
-            ) : null}
             {!selectionDisabled ? (
               <>
                 <ComposerSelect
@@ -960,6 +935,11 @@ export const Composer: FC<ComposerProps> = ({
             )}
           </div>
         ) : null}
+        <ExecutionBar
+          view={executionBar}
+          disabled={disabled || selectionDisabled}
+          onChange={onExecutionHostChange}
+        />
       </div>
       <p className="mt-1.5 text-center text-[10px] text-muted-foreground">
         ⌘ + Enter to send

@@ -81,9 +81,9 @@ import {
 import { countArmedOutgoingRelays } from './relay-mute.pure'
 import { filterComposerPrompts } from './composer-prompt-injection.pure'
 import {
-  isRemoteHostEligible,
-  toggledExecutionHostId,
-} from './remote-host-toggle.pure'
+  executionHostForNewSession,
+  resolveExecutionBarView,
+} from './execution-bar.pure'
 import { CodexUsagePillContainer } from './codex-usage-pill.container'
 import { shouldShowCodexUsagePill } from './codex-usage-pill.pure'
 import { ContextWindowDot } from './context-window-dot.container'
@@ -162,7 +162,18 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
   const [selectedProviderAccountId, setSelectedProviderAccountId] = useState<
     string | null
   >(null)
-  const [runOnRemoteHost, setRunOnRemoteHost] = useState(false)
+  /**
+   * The machine he last picked for a session being born (MAR-2642).
+   *
+   * An id, never a boolean: a boolean could say "somewhere else" but not
+   * which somewhere, and a session has to record the machine it ran on. Held
+   * raw and clamped at the read by `resolveExecutionBarView`, so an Endpoint
+   * removed in Settings or a provider the daemon cannot run demotes the send
+   * to local without erasing the pick he made.
+   */
+  const [selectedExecutionHostId, setSelectedExecutionHostId] = useState(
+    LOCAL_EXECUTION_HOST_ID,
+  )
   /**
    * The quiet send (F10). Per send and never sticky: it is switched back off
    * the moment the message leaves, because a session bound to a flow is meant
@@ -519,19 +530,29 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
           selectionLocks.canContinue ? undefined : storedDefaults,
         )
   const showCodexUsagePill = shouldShowCodexUsagePill(selection)
-  const remoteHostEligible =
-    !activeSession &&
-    isRemoteHostEligible({
-      endpoints: appSettings.executionHostEndpoints,
-      providerId: selection.providerId,
-      contextKind: context.kind,
-    })
-  const effectiveRunOnRemoteHost = runOnRemoteHost && remoteHostEligible
-  // Which machine, not whether: a session records the Endpoint it ran on
-  // (MAR-2620). Null when the toggle is off or no Endpoint is configured.
-  const toggledExecutionHost = effectiveRunOnRemoteHost
-    ? toggledExecutionHostId(appSettings.executionHostEndpoints)
-    : null
+  // The one value the strip renders and the send obeys (MAR-2642). Resolved on
+  // every render rather than mirrored into state, so a machine removed in
+  // Settings cannot be shown as selected for even one frame.
+  const executionBar = resolveExecutionBarView({
+    endpoints: appSettings.executionHostEndpoints,
+    liveSessionHostId: activeSession
+      ? (activeSession.executionHost ?? LOCAL_EXECUTION_HOST_ID)
+      : null,
+    providerId: selection.providerId,
+    providerLabel: selection.providerLabel,
+    contextKind: context.kind,
+    selectedHostId: selectedExecutionHostId,
+  })
+  /**
+   * What the send records, derived beside the strip that shows it.
+   *
+   * A primitive on purpose. The send closes over this rather than over the
+   * view, so it cannot come to depend on a field of the view that its
+   * dependency list does not cover — the failure would be the send going to a
+   * machine other than the one named above it, which is the whole of what this
+   * era exists to prevent.
+   */
+  const executionHostForSend = executionHostForNewSession(executionBar)
   const armedOutgoingRelays = useMemo(
     () => countArmedOutgoingRelays(relays, activeSessionId),
     [relays, activeSessionId],
@@ -828,11 +849,7 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
    * — the backend refuses it too, and the two must not disagree.
    */
   const providerAccountSelectionBlockedReason =
-    describeProviderAccountSelectionBlock(
-      activeSession?.executionHost ??
-        toggledExecutionHost ??
-        LOCAL_EXECUTION_HOST_ID,
-    )
+    describeProviderAccountSelectionBlock(executionBar.hostId)
   const effectiveProviderAccountId = providerAccountSelectionBlockedReason
     ? null
     : selectedProviderAccountId
@@ -1006,7 +1023,7 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
         contextItemIds,
         permissionConfig,
         serviceTier,
-        executionHost: toggledExecutionHost ?? undefined,
+        executionHost: executionHostForSend,
         providerAccountId: effectiveProviderAccountId,
       })
       markAnnotationsSent()
@@ -1039,7 +1056,12 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
     prepareNewSessionMessage,
     permissionConfig,
     serviceTier,
-    effectiveRunOnRemoteHost,
+    // The resolved machine, not the whole view: the view is rebuilt every
+    // render and would defeat this memo, while this changes exactly when the
+    // send would go somewhere else. It replaces a dependency on the old
+    // boolean, which never covered *which* Endpoint -- removing the picked one
+    // in Settings left this callback still sending its id.
+    executionHostForSend,
     effectiveProviderAccountId,
     // Load-bearing. Without it the toggle and the send disagree whenever
     // `attachments` happens to be stable -- which is exactly when the composer
@@ -1271,9 +1293,8 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
         armedOutgoingRelays={armedOutgoingRelays}
         relaysMuted={relaysMuted}
         onRelaysMutedChange={setRelaysMuted}
-        remoteHostAvailable={remoteHostEligible}
-        runOnRemoteHost={effectiveRunOnRemoteHost}
-        onRunOnRemoteHostChange={setRunOnRemoteHost}
+        executionBar={executionBar}
+        onExecutionHostChange={setSelectedExecutionHostId}
         permissionConfig={permissionConfig}
         permissionAdvancedOpen={permissionAdvancedOpen}
         onPermissionPresetChange={handlePermissionPresetChange}

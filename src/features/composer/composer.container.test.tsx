@@ -35,6 +35,25 @@ function buildAccount(overrides: Record<string, unknown> = {}) {
   }
 }
 
+function endpointFixture(id: string, label: string, position: number) {
+  return {
+    id,
+    label,
+    baseUrl: `https://${id}.example.com`,
+    position,
+    createdAt: '2026-01-01',
+    updatedAt: '2026-01-01',
+  }
+}
+
+function setEndpoints(endpoints: ReturnType<typeof endpointFixture>[]): void {
+  act(() => {
+    useAppSettingsStore.setState((state) => ({
+      settings: { ...state.settings, executionHostEndpoints: endpoints },
+    }))
+  })
+}
+
 const projectContextItem: ProjectContextItem = {
   id: 'ctx-chaperone',
   projectId: 'project-1',
@@ -579,7 +598,7 @@ describe('ComposerContainer', () => {
     })
   })
 
-  it('hides the remote host toggle when no remote execution host is configured', () => {
+  it('hides the execution bar when no endpoint is configured', () => {
     render(
       <ComposerContainer
         context={{
@@ -591,27 +610,17 @@ describe('ComposerContainer', () => {
       />,
     )
 
-    expect(
-      screen.queryByRole('switch', { name: 'Run on remote host' }),
-    ).not.toBeInTheDocument()
+    expect(screen.queryByText('Runs on')).not.toBeInTheDocument()
   })
 
-  it('starts the session on the remote host when the toggle is on', () => {
-    useAppSettingsStore.setState((state) => ({
-      settings: {
-        ...state.settings,
-        executionHostEndpoints: [
-          {
-            id: 'daemon-a',
-            label: 'Remote daemon',
-            baseUrl: 'https://daemon.example.com',
-            position: 0,
-            createdAt: '2026-01-01',
-            updatedAt: '2026-01-01',
-          },
-        ],
-      },
-    }))
+  it('starts the session on the endpoint he picked in the strip', () => {
+    // Two endpoints on purpose: the killed boolean resolved to whichever came
+    // first, so a green single-endpoint test would prove nothing about which
+    // machine the strip actually names.
+    setEndpoints([
+      endpointFixture('daemon-a', 'kuba-vps', 0),
+      endpointFixture('daemon-b', 'backpack-automations', 1),
+    ])
 
     render(
       <ComposerContainer
@@ -624,7 +633,9 @@ describe('ComposerContainer', () => {
       />,
     )
 
-    fireEvent.click(screen.getByRole('switch', { name: 'Run on remote host' }))
+    expect(screen.getByText('Runs on')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('combobox', { name: /Local/ }))
+    fireEvent.click(screen.getByText('backpack-automations'))
 
     const textbox = screen.getByRole('textbox')
     fireEvent.change(textbox, { target: { value: 'Run remotely' } })
@@ -645,10 +656,78 @@ describe('ComposerContainer', () => {
       contextItemIds: undefined,
       permissionConfig: { preset: 'ask' },
       serviceTier: null,
-      // Which machine, not whether: the toggle records the Endpoint's id.
-      executionHost: 'daemon-a',
+      // Which machine, not whether, and not merely "the first one".
+      executionHost: 'daemon-b',
       providerAccountId: null,
     })
+  })
+
+  it('demotes the send to this machine when the picked endpoint is removed', () => {
+    // One endpoint survives on purpose, so the strip stays a chooser and the
+    // clamp is the load-bearing step. Removing every endpoint would hide the
+    // strip instead, and prove the hidden path rather than this one.
+    setEndpoints([
+      endpointFixture('daemon-a', 'kuba-vps', 0),
+      endpointFixture('daemon-b', 'backpack-automations', 1),
+    ])
+
+    render(
+      <ComposerContainer
+        context={{
+          kind: 'project',
+          projectId: 'project-1',
+          workspaceId: null,
+          activeSessionId: null,
+        }}
+      />,
+    )
+
+    fireEvent.click(screen.getByRole('combobox', { name: /Local/ }))
+    fireEvent.click(screen.getByText('backpack-automations'))
+    expect(
+      screen.getByRole('combobox', { name: /backpack-automations/ }),
+    ).toBeInTheDocument()
+
+    setEndpoints([endpointFixture('daemon-a', 'kuba-vps', 0)])
+    expect(screen.getByRole('combobox', { name: /Local/ })).toBeInTheDocument()
+
+    const textbox = screen.getByRole('textbox')
+    fireEvent.change(textbox, { target: { value: 'Run it' } })
+    fireEvent.keyDown(textbox, { key: 'Enter', metaKey: true })
+
+    expect(
+      useSessionStore.getState().createAndStartSession,
+    ).toHaveBeenCalledWith(
+      expect.objectContaining({ executionHost: undefined }),
+    )
+  })
+
+  it('states the machine of a live session instead of offering a choice', () => {
+    // Per session: the daemon owns a running session, so the machine cannot
+    // change under it and a control that implied otherwise would lie.
+    setEndpoints([endpointFixture('daemon-a', 'kuba-vps', 0)])
+    useSessionStore.setState((state) => ({
+      sessions: state.sessions.map((session) =>
+        session.id === 'session-1'
+          ? { ...session, executionHost: 'daemon-a' }
+          : session,
+      ),
+    }))
+
+    render(
+      <ComposerContainer
+        context={{
+          kind: 'project',
+          projectId: 'project-1',
+          workspaceId: null,
+          activeSessionId: 'session-1',
+        }}
+      />,
+    )
+
+    expect(screen.getByText('Runs on')).toBeInTheDocument()
+    expect(screen.getByText('kuba-vps')).toBeInTheDocument()
+    expect(screen.queryByRole('combobox', { name: /kuba-vps/ })).toBeNull()
   })
 
   it('creates a global session and hides project context controls', () => {
