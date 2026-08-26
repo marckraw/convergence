@@ -46,6 +46,12 @@ export interface StubDaemon {
   }>
   eventStreamLastEventIds: Array<string | null>
   setMetaStatus: (status: number) => void
+  /**
+   * Replaces the provider listing. Two stub daemons in one test have to be
+   * tellable apart by what they serve, or "each host holds its own cache" is
+   * unobservable.
+   */
+  setMeta: (body: unknown) => void
   /** Raw `/health` body; null makes the route 404, as an older daemon does. */
   setHealthBody: (body: string | null) => void
   /** A proxy that swallows `/health` by hanging instead of answering. */
@@ -54,6 +60,15 @@ export interface StubDaemon {
   setStartStatus: (status: number) => void
   setCommandStatus: (status: number) => void
   setEventsStatus: (status: number) => void
+  /**
+   * The snapshot `GET /v0/execution/sessions/<id>` answers with. Two daemons
+   * in one test must describe different workspaces, or "the panel asked the
+   * machine the session named" cannot be told from "the panel asked
+   * something".
+   */
+  setSessionSnapshot: (sessionId: string, snapshot: unknown) => void
+  /** Session ids whose snapshot this daemon was asked for, in order. */
+  snapshotRequests: string[]
 }
 
 /**
@@ -80,10 +95,13 @@ export function createStubDaemon(): StubDaemon {
   const startedSessionIds = new Set<string>()
   const eventStreamLastEventIds: Array<string | null> = []
   const healthRequests: Array<{ authorization: string | null }> = []
+  const snapshotRequests: string[] = []
+  const sessionSnapshots = new Map<string, unknown>()
   const current: {
     controller: ReadableStreamDefaultController<Uint8Array> | null
   } = { controller: null }
   let metaStatus = 200
+  let meta: unknown = DAEMON_META
   let healthBody: string | null = DAEMON_HEALTH_FIXTURE_0_26_1
   let healthHangs = false
   let startStatus = 201
@@ -138,7 +156,7 @@ export function createStubDaemon(): StubDaemon {
       if (metaStatus !== 200) {
         return jsonResponse({ error: 'meta unavailable' }, metaStatus)
       }
-      return jsonResponse(DAEMON_META)
+      return jsonResponse(meta)
     }
 
     if (method === 'POST' && url.endsWith('/v0/execution/sessions')) {
@@ -165,6 +183,16 @@ export function createStubDaemon(): StubDaemon {
         { protocolVersion: 1, sessionId: config.sessionId },
         201,
       )
+    }
+
+    if (method === 'GET' && /\/v0\/execution\/sessions\/[^/]+$/.test(url)) {
+      const sessionId = decodeURIComponent(url.split('/').pop() ?? '')
+      snapshotRequests.push(sessionId)
+      const snapshot = sessionSnapshots.get(sessionId)
+      if (snapshot === undefined) {
+        return jsonResponse({ error: `Unknown session: ${sessionId}` }, 404)
+      }
+      return jsonResponse(snapshot)
     }
 
     if (method === 'POST' && url.includes('/commands')) {
@@ -243,8 +271,15 @@ export function createStubDaemon(): StubDaemon {
     commandRequests,
     eventStreamLastEventIds,
     healthRequests,
+    snapshotRequests,
+    setSessionSnapshot(sessionId, snapshot) {
+      sessionSnapshots.set(sessionId, snapshot)
+    },
     setMetaStatus(status) {
       metaStatus = status
+    },
+    setMeta(body) {
+      meta = body
     },
     setHealthBody(body) {
       healthBody = body
@@ -277,6 +312,50 @@ export function envelope(
   sessionId = 's-1',
 ): ExecutionHostEventEnvelope {
   return { protocolVersion: 1, sessionId, seq, event }
+}
+
+/**
+ * A promise the test settles by hand, so a window that would otherwise close
+ * by luck has a known width.
+ *
+ * Without one, the stub daemon answers within the same run of microtasks the
+ * caller already awaits, and a test about what happens *before* it answers
+ * passes for a reason that has nothing to do with the code under it.
+ */
+export function deferred(): { promise: Promise<void>; release: () => void } {
+  let release = (): void => {}
+  const promise = new Promise<void>((resolve) => {
+    release = () => resolve()
+  })
+  return { promise, release }
+}
+
+/**
+ * Runs a promise and reports what became of it, without ever rethrowing — the
+ * only way to assert that something is still *pending* rather than settled.
+ */
+export function track(promise: Promise<unknown>): {
+  settled: () => 'pending' | 'resolved' | 'rejected'
+  error: () => Error | null
+  done: Promise<void>
+} {
+  let state: 'pending' | 'resolved' | 'rejected' = 'pending'
+  let failure: Error | null = null
+  const done = promise.then(
+    () => {
+      state = 'resolved'
+    },
+    (error: unknown) => {
+      state = 'rejected'
+      failure = error instanceof Error ? error : new Error(String(error))
+    },
+  )
+  return { settled: () => state, error: () => failure, done }
+}
+
+/** Long enough for every queued microtask and timer to have run. */
+export async function letEverythingQueuedRun(): Promise<void> {
+  await new Promise((resolve) => setTimeout(resolve, 25))
 }
 
 /** Polls until the predicate holds, so async wire work needs no sleeps. */

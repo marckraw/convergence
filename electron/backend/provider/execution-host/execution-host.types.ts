@@ -22,6 +22,21 @@ export interface ExecutionHostProviderCapabilities {
 }
 
 /**
+ * The workspace slice of a host's session snapshot: where a session actually
+ * runs and the pull request the host opened for it. Only hosts that materialize
+ * their own workspace report one -- the Local Execution Host runs in a
+ * directory the app already knows.
+ */
+export interface RemoteSessionWorkspaceInfo {
+  workspace: {
+    repository: string
+    branchName: string
+    baseRef: string | null
+  } | null
+  prUrl: string | null
+}
+
+/**
  * Provider Execution Host: the module that owns where and how Providers
  * actually run. Callers start Sessions and one-shot executions through this
  * interface and never touch provider process mechanics, registries, or
@@ -38,6 +53,10 @@ export interface ExecutionHostProviderCapabilities {
  *   methods reflect the set of Providers available at the moment of the call.
  * - `start` and `oneShot` throw/reject with an `Error` whose message is
  *   exactly `Provider not found: <providerId>` when the Provider is unknown.
+ *   That sentence is a claim about what the host knows, so an adapter whose
+ *   Provider set arrives over a wire may only make it once the set has
+ *   arrived: before that it must refuse with why it has no listing, never with
+ *   a verdict it has no basis for (MAR-2620).
  *   `oneShot` rejects with `Provider <providerId> does not support one-shot
  *   execution` when the Provider exists but is not one-shot capable.
  * - A `SessionHandle` returned by `start` follows the SessionHandle event
@@ -64,7 +83,8 @@ export interface ProviderExecutionHost {
 
   /**
    * Start a Session run on the named Provider. Throws `Provider not found:
-   * <providerId>` for unknown Providers.
+   * <providerId>` for Providers the host knows it does not have — see the
+   * invariant above for the adapter that has to find out first.
    */
   start(providerId: string, config: SessionStartConfig): SessionHandle
 
@@ -94,4 +114,15 @@ export interface ProviderExecutionHost {
     config: SessionStartConfig,
     afterSeq: number,
   ): SessionHandle
+
+  /**
+   * Where this host is running the named session, when it materialized the
+   * workspace itself. On the interface rather than on the remote adapter so
+   * that asking about a session goes through the same host resolution a turn
+   * does: a session's workspace must be read from the machine the session
+   * names, never from whichever daemon a caller happens to hold (MAR-2620).
+   */
+  fetchSessionWorkspaceInfo?(
+    sessionId: string,
+  ): Promise<RemoteSessionWorkspaceInfo>
 }

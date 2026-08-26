@@ -11,6 +11,7 @@ import type {
   ReasoningEffort,
   NeedsYouDismissals,
   SessionContextKind,
+  SessionExecutionHostId,
   SessionPermissionConfig,
   SendSessionMessageRequest,
   StartSessionRequest,
@@ -28,7 +29,7 @@ export const sessionApi = {
     permissionConfig?: SessionPermissionConfig
     name: string
     primarySurface?: 'conversation' | 'terminal'
-    executionHost?: 'local' | 'remote'
+    executionHost?: SessionExecutionHostId
   }): Promise<SessionSummary> => window.electronAPI.session.create(input),
 
   getSummariesByProjectId: (projectId: string): Promise<SessionSummary[]> =>

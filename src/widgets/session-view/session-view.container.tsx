@@ -1,3 +1,4 @@
+import { isRemoteExecutionHost } from '@/entities/execution-host'
 import { useEffect, useRef, useState, useCallback, useMemo } from 'react'
 import type { FC } from 'react'
 import { useProjectStore } from '@/entities/project'
@@ -117,8 +118,9 @@ export const SessionView: FC = () => {
   const sessionRootRef = useRef<HTMLDivElement>(null)
 
   const session = sessions.find((s) => s.id === activeSessionId) ?? null
-  const remoteSessionId =
-    session?.executionHost === 'remote' ? session.id : null
+  const remoteSessionId = isRemoteExecutionHost(session?.executionHost)
+    ? (session?.id ?? null)
+    : null
 
   useEffect(() => {
     setRemoteWorkspace(null)
@@ -349,7 +351,7 @@ export const SessionView: FC = () => {
               attention={session.attention}
               status={session.status}
             />
-            {session.executionHost === 'remote' && (
+            {isRemoteExecutionHost(session.executionHost) && (
               <span
                 className="flex items-center gap-1 rounded-full border border-sky-500/30 bg-sky-500/10 px-2 py-0.5 text-[11px] text-sky-600 dark:text-sky-300"
                 title="This session runs on the remote execution host"
@@ -404,7 +406,7 @@ export const SessionView: FC = () => {
                       )?.name ?? 'parent'}
                     </Button>
                   )}
-                  {session.executionHost === 'remote' && (
+                  {isRemoteExecutionHost(session.executionHost) && (
                     <>
                       <SessionHeaderDetailRow
                         icon={<Cloud className="h-3.5 w-3.5" />}

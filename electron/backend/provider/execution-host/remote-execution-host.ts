@@ -43,6 +43,7 @@ import type {
   ProviderExecutionHost,
 } from './execution-host.types'
 import {
+  daemonConfigurationFingerprint,
   describeRemoteExecutionHostFailure,
   capabilitiesForRemoteProvider,
   createSseParser,
@@ -52,6 +53,8 @@ import {
   parseRemoteSessionWorkspaceInfo,
   type RemoteSessionWorkspaceInfo,
   remoteExecutionHostReconnectDelayMs,
+  unavailableProviderError,
+  UNRESOLVED_DAEMON_CONFIGURATION,
 } from './remote-execution-host.pure'
 import {
   RemoteExecutionHostError,
@@ -89,6 +92,24 @@ const DEFAULT_MAX_RECONNECT_ATTEMPTS = 10
  */
 const DEFAULT_HEALTH_PROBE_TIMEOUT_MS = 15_000
 
+/**
+ * How many listings readiness will make before it gives up (MAR-2620).
+ *
+ * Not a retry policy: a listing that fails throws on the first attempt, and a
+ * host whose configuration is already listed returns without a round trip at
+ * all. A further attempt happens only when the Endpoint was edited while its
+ * daemon was being asked. The bound is here so a configuration changing faster
+ * than any daemon can answer costs one refused turn rather than a loop nothing
+ * ends.
+ *
+ * It bounds listings and not observations, and `ensureListed` takes one more
+ * observation than it is allowed listings: an attempt is not an answer until
+ * something has looked at it, so a bound that counted the looks would spend
+ * the last listing and never examine it. Exported so the tests that stand on
+ * the last permitted attempt take the bound from here instead of copying it.
+ */
+export const MAX_LISTING_ATTEMPTS = 5
+
 export interface RemoteExecutionHostDeps {
   connection: RemoteExecutionHostConnectionResolver
   fetch?: FetchFn
@@ -116,15 +137,55 @@ export interface RemoteExecutionHostDeps {
 }
 
 /**
+ * A fact this host derived from one daemon configuration, kept together with
+ * the configuration it came from (MAR-2620).
+ *
+ * The pairing is the whole design. Three times now something derived from an
+ * Endpoint has gone on being used after that Endpoint changed, and each time
+ * the proposed fix was to remember to clear it. A value that carries its own
+ * provenance cannot be forgotten about, because reading it means proving the
+ * provenance still holds -- see `RemoteExecutionHost.inForce`.
+ *
+ * Every state of what it guards wears it, not only the settled one: the
+ * listing that landed, the attempt still in flight, and the failure that
+ * explains an absence. An untreated state is the whole bug back again -- a
+ * caller that joins an attempt started for another machine is answered by that
+ * machine just as surely as one that reads a cache nobody cleared, and the
+ * machine it actually named is never asked.
+ */
+interface DerivedFromConfiguration<T> {
+  configuration: string
+  value: T
+}
+
+/** A provider listing and the handshake read in the same round trip. */
+interface LandedListing {
+  providers: RemoteExecutionHostProviderInfo[]
+  handshake: EndpointHandshakeResult | null
+}
+
+/**
  * Remote Execution Host: runs Providers on an agents-daemon behind the
  * execution host wire protocol. Sessions start with a POST, stream events
  * over SSE (resumed by sequence number on drops), and accept commands as
  * posted envelopes.
  *
  * Provider capability data comes from the daemon's /v0/meta listing and is
- * cached so the synchronous capabilities()/start() interface holds; call
- * refreshProviders() after construction and whenever the daemon connection
- * changes.
+ * cached so the synchronous capabilities()/start() interface holds. The cache
+ * is stored with the daemon configuration it was read from and can only be
+ * read back through `inForce`, which hands it over while -- and only while --
+ * that configuration is still the one the resolver returns. So editing an
+ * Endpoint's base URL or token needs nothing cleared and nobody notified: the
+ * old listing stops being an answer the moment the new configuration is
+ * observed, and every wire call observes it. `ensureListed()` is what observes
+ * it before a turn, and lists the new machine when it differs. The cost of a
+ * URL change is therefore one round trip on the next turn, not a rebuilt host
+ * -- sessions already holding handles from this one keep running.
+ *
+ * The listing still in flight is stored the same way, and readiness proves the
+ * pairing again when it lands: a caller asking about the machine this Endpoint
+ * names now never waits on a round trip aimed somewhere else, and never treats
+ * one that finished about somewhere else as an answer.
  */
 export class RemoteExecutionHost implements ProviderExecutionHost {
   private readonly fetchFn: FetchFn
@@ -133,8 +194,43 @@ export class RemoteExecutionHost implements ProviderExecutionHost {
   private readonly wait: (ms: number) => Promise<void>
   private readonly healthProbeTimeoutMs: number
   private readonly debugSink: ProviderDebugSink
-  private providers: RemoteExecutionHostProviderInfo[] = []
-  private handshakeResult: EndpointHandshakeResult | null = null
+  /**
+   * The daemon configuration the resolver last returned, and the yardstick
+   * every cached answer is measured against. Written by `resolveConnection`,
+   * which every wire call and every listing already goes through, so nothing
+   * has to be told that settings changed -- observing the new configuration is
+   * what invalidates.
+   */
+  private configuration: string = UNRESOLVED_DAEMON_CONFIGURATION
+  /**
+   * The last listing that landed and the handshake that came with it, one
+   * value because they are one fact about one daemon. Never read directly:
+   * `inForce` is the only way in.
+   */
+  private listing: DerivedFromConfiguration<LandedListing> | null = null
+  /**
+   * Why the most recent listing failed, kept so a refusal can name the real
+   * reason instead of the absence it produced. It does not displace a listing
+   * that landed -- a blip must not erase what the daemon last said -- and it
+   * ages out the same way, so neither a daemon that came back nor an Endpoint
+   * that moved keeps answering with the outage that preceded it.
+   */
+  private listingFailure: DerivedFromConfiguration<Error> | null = null
+  /**
+   * The listing in flight and the daemon configuration it was started for, so
+   * callers arriving together share one round trip -- and only when they are
+   * asking about the same machine. Read through `inForce` like every other
+   * derived value here: an attempt against the address this Endpoint has just
+   * been edited away from is not one anybody can wait on, and joining it would
+   * report ready for a daemon that was never asked anything.
+   *
+   * It resolves to why the attempt failed rather than rejecting: most callers
+   * only start it, and a rejected promise nobody awaits is an unhandled
+   * rejection.
+   */
+  private pendingListing: DerivedFromConfiguration<
+    Promise<Error | null>
+  > | null = null
   /**
    * Bumped by every refresh so a slow one that finishes last cannot overwrite
    * a newer one's answer. Same reason Emergence's handshake service keeps one
@@ -163,38 +259,191 @@ export class RemoteExecutionHost implements ProviderExecutionHost {
    *
    * Returns the cache as it stands after the commit, not this call's own read:
    * a refresh overtaken by a newer one reports the newer daemon, so a caller
-   * that reads handshake() next is never handed a mismatched pair.
+   * that reads handshake() next is never handed a mismatched pair. A refresh
+   * whose configuration was superseded while it was in flight reports nothing,
+   * for the same reason -- what it read is not about the machine in force.
    */
   async refreshProviders(): Promise<RemoteExecutionHostProviderInfo[]> {
     const generation = ++this.refreshGeneration
-    const connection = await this.deps.connection.resolveConnection()
-    // Started before the listing rather than after it: /health is
-    // unauthenticated and independent, so it runs concurrently and usually
-    // adds no wall-clock at all. When health is the slower half the refresh
-    // costs max(meta, health), which is why the probe is capped: the added
-    // latency is bounded, not zero. It never rejects, so a meta failure below
-    // leaves nothing dangling.
-    const healthProbe = this.probeHealth(connection)
-    const meta = await this.requestJson(connection, '/v0/meta', {
-      method: 'GET',
-    })
-    const providers = parseRemoteExecutionHostMeta(meta)
-    const health = await healthProbe
-    // The authenticated half of the handshake is the listing that just
-    // succeeded, so 'ok' is a statement of fact at this line and nowhere
-    // earlier.
-    const handshake = health
-      ? evaluateHandshake(health, null, { kind: 'ok' })
-      : null
-    // Both values land in one synchronous step, and only if no newer refresh
-    // has started. Settings changes make two refreshes overlap routinely; a
-    // write on either side of an await pairs one daemon's providers with
-    // another daemon's name.
-    if (generation === this.refreshGeneration) {
-      this.providers = providers
-      this.handshakeResult = handshake
+    // The configuration this attempt is against, recorded before anything can
+    // fail so even a failure knows which machine it is a failure of.
+    let configuration = UNRESOLVED_DAEMON_CONFIGURATION
+    try {
+      const connection = await this.resolveConnection()
+      configuration = daemonConfigurationFingerprint(connection)
+      // Started before the listing rather than after it: /health is
+      // unauthenticated and independent, so it runs concurrently and usually
+      // adds no wall-clock at all. When health is the slower half the refresh
+      // costs max(meta, health), which is why the probe is capped: the added
+      // latency is bounded, not zero. It never rejects, so a meta failure
+      // below leaves nothing dangling.
+      const healthProbe = this.probeHealth(connection)
+      const meta = await this.requestJson(connection, '/v0/meta', {
+        method: 'GET',
+      })
+      const providers = parseRemoteExecutionHostMeta(meta)
+      const health = await healthProbe
+      // The authenticated half of the handshake is the listing that just
+      // succeeded, so 'ok' is a statement of fact at this line and nowhere
+      // earlier.
+      const handshake = health
+        ? evaluateHandshake(health, null, { kind: 'ok' })
+        : null
+      // Both values land in one synchronous step, and only if no newer refresh
+      // has started. Settings changes make two refreshes overlap routinely; a
+      // write on either side of an await pairs one daemon's providers with
+      // another daemon's name.
+      if (generation === this.refreshGeneration) {
+        this.listing = { configuration, value: { providers, handshake } }
+        this.listingFailure = null
+      }
+      return this.listedProviders()
+    } catch (error) {
+      // Same generation guard as the success path, for the same reason: an
+      // overtaken refresh must not report its failure over a newer one's
+      // answer.
+      if (generation === this.refreshGeneration) {
+        this.listingFailure = {
+          configuration,
+          value: error instanceof Error ? error : new Error(String(error)),
+        }
+      }
+      throw error
     }
-    return this.providers
+  }
+
+  /**
+   * Ensures this host's provider listing was read from the daemon
+   * configuration now in force, listing the new one when it was not, and
+   * throwing with why when no listing can be had (MAR-2620).
+   *
+   * What anything about to start a session awaits. `start()` reads the
+   * capability cache synchronously, and there are two ways that cache can be
+   * wrong: it has not arrived yet, and it arrived from an address this
+   * Endpoint no longer points at. Both are settled here, before that read. Not
+   * a retry and not a sleep -- at most one round trip, shared by everyone who
+   * asks while it is running.
+   *
+   * Each round observes before it decides, and a listing only ends the loop
+   * once it has been observed to be about the machine in force. A listing
+   * costs a round trip and an Endpoint can be edited during one, so an attempt
+   * that was correctly scoped when it started can still land about a machine
+   * that has since been left -- and `this.configuration` is itself only as
+   * fresh as the last resolve, so re-reading the field after that await would
+   * measure a stale answer against a stale yardstick and call it a match. The
+   * observation is what makes the second look worth taking. A listing about a
+   * machine no longer in force is discarded, and the machine now in force is
+   * listed instead.
+   *
+   * The loop's invariant, and what makes the refusal below true: every attempt
+   * is evaluated, the last one included. Evaluating an attempt is the check at
+   * the top of the *following* pass, so the loop takes one more pass than it is
+   * allowed listings and spends the extra one observing and nothing else. Reach
+   * the throw and all `MAX_LISTING_ATTEMPTS` listings have been looked at and
+   * each was about a machine this Endpoint had already left -- the
+   * configuration genuinely kept moving, which is the only thing the sentence
+   * claims. It is never reached by a good listing nobody examined.
+   */
+  async ensureListed(): Promise<void> {
+    for (let listings = 0; ; listings += 1) {
+      await this.observeConfiguration()
+      if (this.inForce(this.listing)) return
+      if (listings === MAX_LISTING_ATTEMPTS) break
+      const failure = await this.listOnce()
+      if (failure) throw failure
+    }
+    throw new RemoteExecutionHostError(
+      'The execution host endpoint kept changing while its providers were ' +
+        'being listed, so nothing could be read from the address it points ' +
+        'at now.',
+      'configuration',
+    )
+  }
+
+  /**
+   * Reads which daemon configuration is in force, which is the only way this
+   * host ever learns that, and the yardstick every derived value is then
+   * measured against.
+   *
+   * A failure is not swallowed: it sets the configuration to the unresolved
+   * one, which no landed listing and no attempt in flight can match, so the
+   * refresh that follows runs and throws the same error with the
+   * classification a refusal needs.
+   */
+  private async observeConfiguration(): Promise<void> {
+    try {
+      await this.resolveConnection()
+    } catch {
+      // Deliberately nothing: the refresh that follows reports it.
+    }
+  }
+
+  /**
+   * One listing attempt for the configuration in force, joined rather than
+   * duplicated by callers that arrive together.
+   *
+   * The attempt is keyed by the machine it is against, so a caller asking
+   * about B does not join one started for A -- it starts its own, and B's
+   * daemon is the one that gets asked. Callers asking about the same machine
+   * still share the one round trip: scoping the memo is not the same as having
+   * no memo, and re-listing on every ask would put a round trip and an empty
+   * cache on every turn.
+   *
+   * Synchronous from the caller's observation to the memo write, deliberately:
+   * an await in between would let the configuration move after it was read and
+   * key the attempt to a machine nobody asked about. `ensureListed` observes,
+   * then calls this.
+   *
+   * The attempt is forgotten once it settles, so the next caller re-observes:
+   * that re-read is the invalidation, and a memo that outlived it would be one
+   * more thing derived from an Endpoint that stopped tracking it. Never
+   * rejects; see `pendingListing`.
+   */
+  private listOnce(): Promise<Error | null> {
+    const joined = this.inForce(this.pendingListing)
+    if (joined) return joined
+
+    const configuration = this.configuration
+    const attempt: Promise<Error | null> = this.list().then((failure) => {
+      if (this.pendingListing?.value === attempt) this.pendingListing = null
+      return failure
+    })
+    this.pendingListing = { configuration, value: attempt }
+    return attempt
+  }
+
+  /** One refresh, reporting why it failed rather than throwing it. */
+  private async list(): Promise<Error | null> {
+    try {
+      await this.refreshProviders()
+      return null
+    } catch (error) {
+      return error instanceof Error ? error : new Error(String(error))
+    }
+  }
+
+  /**
+   * A fact this host learned, handed back only while the configuration it was
+   * learned from is still the one in force (MAR-2620).
+   *
+   * The single read of every cached value, and the line that makes a stale
+   * pairing unrepresentable rather than merely tidied up afterwards. Nothing
+   * has to notice that an Endpoint's address changed; an answer derived from
+   * the old one simply cannot be obtained here.
+   */
+  private inForce<T>(known: DerivedFromConfiguration<T> | null): T | null {
+    return known && known.configuration === this.configuration
+      ? known.value
+      : null
+  }
+
+  /**
+   * The providers of the configuration in force -- none while none is known,
+   * which is not the same claim as a daemon that listed none. See
+   * `assertProviderListed` for the difference and who needs it.
+   */
+  private listedProviders(): RemoteExecutionHostProviderInfo[] {
+    return this.inForce(this.listing)?.providers ?? []
   }
 
   /**
@@ -204,7 +453,7 @@ export class RemoteExecutionHost implements ProviderExecutionHost {
    * "unsupported".
    */
   handshake(): EndpointHandshakeResult | null {
-    return this.handshakeResult
+    return this.inForce(this.listing)?.handshake ?? null
   }
 
   /**
@@ -233,14 +482,33 @@ export class RemoteExecutionHost implements ProviderExecutionHost {
   }
 
   capabilities(): ExecutionHostProviderCapabilities[] {
-    return this.providers.map(capabilitiesForRemoteProvider)
+    return this.listedProviders().map(capabilitiesForRemoteProvider)
   }
 
   capabilitiesFor(
     providerId: string,
   ): ExecutionHostProviderCapabilities | null {
-    const info = this.providers.find((p) => p.providerId === providerId)
+    const info = this.listedProviders().find((p) => p.providerId === providerId)
     return info ? capabilitiesForRemoteProvider(info) : null
+  }
+
+  /**
+   * Refuses a provider this host will not run, saying which of the two things
+   * is wrong (MAR-2620).
+   *
+   * Every entry point that needs a provider asks here rather than reading the
+   * cache itself. Three sites each writing `if (!capabilitiesFor(id)) throw`
+   * is three places to relearn that an empty cache is not an answer -- and
+   * `start()` had already learned it wrong, telling a reader "Provider not
+   * found: claude-code" about a daemon that had simply not been asked yet.
+   */
+  private assertProviderListed(providerId: string): void {
+    if (this.capabilitiesFor(providerId)) return
+    throw unavailableProviderError({
+      providerId,
+      listed: this.inForce(this.listing) !== null,
+      listingFailure: this.inForce(this.listingFailure),
+    })
   }
 
   async describe(): Promise<ProviderDescriptor[]> {
@@ -250,13 +518,11 @@ export class RemoteExecutionHost implements ProviderExecutionHost {
       // Describe reflects the last known listing when the daemon is
       // unreachable; live failures surface through session flows instead.
     }
-    return this.providers.map(descriptorForRemoteProvider)
+    return this.listedProviders().map(descriptorForRemoteProvider)
   }
 
   start(providerId: string, config: SessionStartConfig): SessionHandle {
-    if (!this.capabilitiesFor(providerId)) {
-      throw new Error(`Provider not found: ${providerId}`)
-    }
+    this.assertProviderListed(providerId)
 
     const session = new RemoteSessionRun({
       providerId,
@@ -322,9 +588,7 @@ export class RemoteExecutionHost implements ProviderExecutionHost {
     providerId: string,
     _input: OneShotInput,
   ): Promise<OneShotResult> {
-    if (!this.capabilitiesFor(providerId)) {
-      throw new Error(`Provider not found: ${providerId}`)
-    }
+    this.assertProviderListed(providerId)
     throw new Error(
       `Provider ${providerId} does not support one-shot execution`,
     )
@@ -335,17 +599,32 @@ export class RemoteExecutionHost implements ProviderExecutionHost {
     _config: SessionStartConfig,
     _input: ProviderContextManagementInput,
   ): Promise<ProviderContextManagementResult> {
-    if (!this.capabilitiesFor(providerId)) {
-      throw new Error(`Provider not found: ${providerId}`)
-    }
+    this.assertProviderListed(providerId)
     throw new Error(
       'Manual context management is not supported on remote execution hosts yet',
     )
   }
 
-  /** @internal Shared by RemoteSessionRun. */
+  /**
+   * The daemon connection in force, and the one place this host learns what
+   * that is. Every wire call goes through here, so the moment any of them sees
+   * a new address or token, everything cached from the old one becomes
+   * unreadable (see `inForce`).
+   *
+   * @internal Shared by RemoteSessionRun.
+   */
   async resolveConnection(): Promise<RemoteExecutionHostConnection> {
-    return this.deps.connection.resolveConnection()
+    try {
+      const connection = await this.deps.connection.resolveConnection()
+      this.configuration = daemonConfigurationFingerprint(connection)
+      return connection
+    } catch (error) {
+      // An Endpoint that cannot be resolved gets its own configuration rather
+      // than keeping the last good one, so nothing read from the address it
+      // used to have survives its removal.
+      this.configuration = UNRESOLVED_DAEMON_CONFIGURATION
+      throw error
+    }
   }
 
   /** @internal Shared by RemoteSessionRun. */

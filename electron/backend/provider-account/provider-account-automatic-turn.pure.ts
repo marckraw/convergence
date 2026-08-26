@@ -1,3 +1,4 @@
+import { isRemoteExecutionHost } from '../execution-host-endpoint/execution-host-endpoint.pure'
 import type { ProviderAccountStatus } from './provider-account.types'
 
 /**
@@ -69,7 +70,7 @@ export function resolveAccountForAutomaticTurn(input: {
   // 4. A remote session must resolve to ambient: sending it a local account id
   // would trip `assertLocalAccountSelection` and fail the hop outright, so the
   // wire would break rather than degrade.
-  if (input.executionHost === 'remote') return null
+  if (isRemoteExecutionHost(input.executionHost)) return null
 
   const inherited = input.accounts.find(
     (account) =>

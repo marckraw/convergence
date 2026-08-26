@@ -1,3 +1,8 @@
+import {
+  executionHostRegistryFor,
+  seedExecutionHostEndpoint,
+  TEST_EXECUTION_HOST_ENDPOINT_ID,
+} from '../../execution-host-endpoint/execution-host-endpoint.fixture'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { mkdirSync, mkdtempSync, rmSync } from 'fs'
 import { tmpdir } from 'os'
@@ -154,7 +159,7 @@ describe('remote wire events reaching the session record', () => {
       model: 'sonnet',
       effort: null,
       name: 'remote session',
-      executionHost: 'remote',
+      executionHost: TEST_EXECUTION_HOST_ENDPOINT_ID,
     }).id
     return id
   }
@@ -219,6 +224,7 @@ describe('remote wire events reaching the session record', () => {
     db.prepare(
       "INSERT INTO projects (id, name, repository_path) VALUES (?, 'remote', ?)",
     ).run(PROJECT_ID, repoPath)
+    seedExecutionHostEndpoint(db)
 
     stub = createStubDaemon()
     cursorWrites = []
@@ -252,7 +258,11 @@ describe('remote wire events reaching the session record', () => {
       debugSink: { record: (entry) => debugEntries.push(entry) },
     })
     await host.refreshProviders()
-    service.setRemoteExecutionHost(host)
+    service.setRemoteExecutionHosts(
+      executionHostRegistryFor({
+        [TEST_EXECUTION_HOST_ENDPOINT_ID]: host,
+      }),
+    )
     service.setRemoteWorkspaceSourceResolver(() => ({
       repository: 'git@github.com:acme/repo.git',
     }))
@@ -744,7 +754,11 @@ describe('remote wire events reaching the session record', () => {
       new LocalExecutionHost(new ProviderRegistry()),
       join(tempDir, 'global-sessions'),
     )
-    revived.setRemoteExecutionHost(host)
+    revived.setRemoteExecutionHosts(
+      executionHostRegistryFor({
+        [TEST_EXECUTION_HOST_ENDPOINT_ID]: host,
+      }),
+    )
     revived.setRemoteWorkspaceSourceResolver(() => ({
       repository: 'git@github.com:acme/repo.git',
     }))
@@ -1040,7 +1054,11 @@ describe('remote wire events reaching the session record', () => {
    */
   it('lets a released handle report a settle without ending the run that replaced it', async () => {
     const lingering = createLingeringHandleHost(host)
-    service.setRemoteExecutionHost(lingering.host)
+    service.setRemoteExecutionHosts(
+      executionHostRegistryFor({
+        [TEST_EXECUTION_HOST_ENDPOINT_ID]: lingering.host,
+      }),
+    )
 
     await service.start(sessionId, { text: 'hello' })
     await waitUntil(

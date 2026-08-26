@@ -1,3 +1,4 @@
+import { isRemoteExecutionHost } from '@/entities/execution-host'
 import { useEffect, useState } from 'react'
 import type { FC } from 'react'
 import type { Workspace } from '@/entities/workspace'
@@ -363,7 +364,7 @@ export const ProjectTree: FC<ProjectTreeProps> = ({
                   <SessionBadge attention={session.attention} />
                 )}
                 <span className="truncate">{session.name}</span>
-                {session.executionHost === 'remote' && (
+                {isRemoteExecutionHost(session.executionHost) && (
                   <Cloud
                     className="h-3 w-3 shrink-0 text-sky-500/80"
                     aria-label="Runs on remote execution host"

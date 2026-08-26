@@ -28,6 +28,7 @@ import {
   useSessionAnnotations,
 } from '@/entities/response-annotation'
 import { useAppSettingsStore } from '@/entities/app-settings'
+import { LOCAL_EXECUTION_HOST_ID } from '@/entities/execution-host'
 import { useSessionRelayStore } from '@/entities/session-relay'
 import { useDialogStore } from '@/entities/dialog'
 import {
@@ -79,7 +80,10 @@ import {
 } from './composer-injection-trigger.pure'
 import { countArmedOutgoingRelays } from './relay-mute.pure'
 import { filterComposerPrompts } from './composer-prompt-injection.pure'
-import { isRemoteHostEligible } from './remote-host-toggle.pure'
+import {
+  isRemoteHostEligible,
+  toggledExecutionHostId,
+} from './remote-host-toggle.pure'
 import { CodexUsagePillContainer } from './codex-usage-pill.container'
 import { shouldShowCodexUsagePill } from './codex-usage-pill.pure'
 import { ContextWindowDot } from './context-window-dot.container'
@@ -518,11 +522,16 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
   const remoteHostEligible =
     !activeSession &&
     isRemoteHostEligible({
-      remoteBaseUrl: appSettings.executionHostRemoteBaseUrl,
+      endpoints: appSettings.executionHostEndpoints,
       providerId: selection.providerId,
       contextKind: context.kind,
     })
   const effectiveRunOnRemoteHost = runOnRemoteHost && remoteHostEligible
+  // Which machine, not whether: a session records the Endpoint it ran on
+  // (MAR-2620). Null when the toggle is off or no Endpoint is configured.
+  const toggledExecutionHost = effectiveRunOnRemoteHost
+    ? toggledExecutionHostId(appSettings.executionHostEndpoints)
+    : null
   const armedOutgoingRelays = useMemo(
     () => countArmedOutgoingRelays(relays, activeSessionId),
     [relays, activeSessionId],
@@ -821,7 +830,8 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
   const providerAccountSelectionBlockedReason =
     describeProviderAccountSelectionBlock(
       activeSession?.executionHost ??
-        (effectiveRunOnRemoteHost ? 'remote' : 'local'),
+        toggledExecutionHost ??
+        LOCAL_EXECUTION_HOST_ID,
     )
   const effectiveProviderAccountId = providerAccountSelectionBlockedReason
     ? null
@@ -996,7 +1006,7 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
         contextItemIds,
         permissionConfig,
         serviceTier,
-        executionHost: effectiveRunOnRemoteHost ? 'remote' : undefined,
+        executionHost: toggledExecutionHost ?? undefined,
         providerAccountId: effectiveProviderAccountId,
       })
       markAnnotationsSent()

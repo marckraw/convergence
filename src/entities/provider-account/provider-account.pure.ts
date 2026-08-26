@@ -1,3 +1,4 @@
+import { isRemoteExecutionHost } from '@/entities/execution-host'
 import type {
   ProviderAccount,
   ProviderAccountAttestationResult,
@@ -172,7 +173,7 @@ export const AMBIENT_DEFAULT_ACCOUNT_LABEL = 'Default account'
 export function describeProviderAccountSelectionBlock(
   executionHost: string | null | undefined,
 ): string | null {
-  return executionHost === 'remote'
+  return isRemoteExecutionHost(executionHost)
     ? 'Account selection is local-only for now. This session runs on a remote ' +
         'execution host, which uses its own credential.'
     : null

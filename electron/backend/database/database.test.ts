@@ -2505,6 +2505,277 @@ describe('database', () => {
     }
   })
 })
+// MAR-2620: the single remote daemon becomes the first Endpoint, and the two
+// sessions that ran on it stop saying `'remote'` and start saying which.
+describe('execution host endpoints migration', () => {
+  const LEGACY_SCHEMA = `
+      CREATE TABLE projects (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        repository_path TEXT NOT NULL UNIQUE,
+        settings TEXT NOT NULL DEFAULT '{}',
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+
+      CREATE TABLE app_state (
+        key TEXT PRIMARY KEY,
+        value TEXT NOT NULL
+      );
+
+      CREATE TABLE sessions (
+        id TEXT PRIMARY KEY,
+        context_kind TEXT NOT NULL DEFAULT 'project'
+          CHECK (context_kind IN ('project', 'global')),
+        project_id TEXT,
+        workspace_id TEXT,
+        provider_id TEXT NOT NULL,
+        model TEXT,
+        effort TEXT,
+        service_tier TEXT,
+        permission_config TEXT NOT NULL DEFAULT '{"preset":"ask"}',
+        continuation_token TEXT,
+        name TEXT NOT NULL,
+        status TEXT NOT NULL DEFAULT 'idle',
+        attention TEXT NOT NULL DEFAULT 'none',
+        working_directory TEXT NOT NULL,
+        context_window TEXT,
+        activity TEXT,
+        relays_muted INTEGER NOT NULL DEFAULT 0,
+        archived_at TEXT,
+        last_sequence INTEGER NOT NULL DEFAULT 0,
+        conversation_version INTEGER NOT NULL DEFAULT 2,
+        name_auto_generated INTEGER NOT NULL DEFAULT 0,
+        parent_session_id TEXT,
+        fork_strategy TEXT,
+        primary_surface TEXT NOT NULL DEFAULT 'conversation',
+        execution_host TEXT NOT NULL DEFAULT 'local',
+        execution_host_last_seq INTEGER NOT NULL DEFAULT 0,
+        execution_host_settled_seq INTEGER NOT NULL DEFAULT 0,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
+        FOREIGN KEY (parent_session_id) REFERENCES sessions(id) ON DELETE SET NULL,
+        CHECK (
+          (context_kind = 'project' AND project_id IS NOT NULL)
+          OR
+          (context_kind = 'global' AND project_id IS NULL AND workspace_id IS NULL)
+        )
+      );
+
+      INSERT INTO projects (id, name, repository_path, created_at, updated_at)
+      VALUES ('p1', 'p', '/tmp/p1', '2026-01-01', '2026-01-01');
+
+      INSERT INTO sessions (
+        id, project_id, provider_id, name, status, working_directory,
+        execution_host, created_at, updated_at
+      ) VALUES
+        ('s-remote-a', 'p1', 'claude-code', 's', 'completed', '/tmp/p1', 'remote', '2026-01-01', '2026-01-01'),
+        ('s-remote-b', 'p1', 'claude-code', 's', 'failed', '/tmp/p1', 'remote', '2026-01-01', '2026-01-01'),
+        ('s-local', 'p1', 'claude-code', 's', 'completed', '/tmp/p1', 'local', '2026-01-01', '2026-01-01');
+`
+
+  afterEach(() => {
+    closeDatabase()
+    resetDatabase()
+  })
+
+  function seedLegacy(dbPath: string, settingsJson: string | null): void {
+    const legacy = new Database(dbPath)
+    legacy.exec(LEGACY_SCHEMA)
+    if (settingsJson !== null) {
+      legacy
+        .prepare('INSERT INTO app_state (key, value) VALUES (?, ?)')
+        .run('app_settings', settingsJson)
+    }
+    legacy.close()
+  }
+
+  function withTempDb(name: string, run: (dbPath: string) => void): void {
+    const dir = mkdtempSync(join(tmpdir(), `convergence-${name}-`))
+    try {
+      run(join(dir, `${name}.sqlite`))
+    } finally {
+      closeDatabase()
+      resetDatabase()
+      rmSync(dir, { recursive: true, force: true })
+    }
+  }
+
+  it('makes the configured daemon the first endpoint and lands legacy remote rows on it', () => {
+    withTempDb('endpoint-migration', (dbPath) => {
+      seedLegacy(
+        dbPath,
+        JSON.stringify({
+          defaultProviderId: 'claude-code',
+          executionHostRemoteBaseUrl: 'https://daemon.example.com/',
+        }),
+      )
+
+      const db = getDatabase(dbPath)
+
+      // The base URL still in settings is the only daemon those rows could
+      // have run on, so it is the answer the record still knows.
+      expect(
+        db.prepare('SELECT * FROM execution_host_endpoints').all(),
+      ).toEqual([
+        {
+          id: 'default',
+          label: 'Remote daemon',
+          base_url: 'https://daemon.example.com',
+          position: 0,
+          created_at: expect.any(String),
+          updated_at: expect.any(String),
+        },
+      ])
+
+      expect(
+        db
+          .prepare('SELECT id, execution_host FROM sessions ORDER BY id ASC')
+          .all(),
+      ).toEqual([
+        { id: 's-local', execution_host: 'local' },
+        { id: 's-remote-a', execution_host: 'default' },
+        { id: 's-remote-b', execution_host: 'default' },
+      ])
+
+      // One encoding of one fact: the endpoint row is now the only place the
+      // base URL lives, so the settings blob must not keep a copy to drift
+      // from.
+      const settings = JSON.parse(
+        (
+          db
+            .prepare("SELECT value FROM app_state WHERE key = 'app_settings'")
+            .get() as { value: string }
+        ).value,
+      ) as Record<string, unknown>
+      expect(settings).not.toHaveProperty('executionHostRemoteBaseUrl')
+      expect(settings.defaultProviderId).toBe('claude-code')
+    })
+  })
+
+  it('marks legacy remote rows unattributable when no base URL survives', () => {
+    withTempDb('endpoint-migration-no-url', (dbPath) => {
+      seedLegacy(dbPath, JSON.stringify({ defaultProviderId: 'claude-code' }))
+
+      const db = getDatabase(dbPath)
+
+      // Nothing is invented: with no address left in the record there is no
+      // honest Endpoint to attribute these runs to, so they take the reserved
+      // id that matches none and refuses to resolve.
+      expect(
+        db.prepare('SELECT * FROM execution_host_endpoints').all(),
+      ).toEqual([])
+      expect(
+        db
+          .prepare('SELECT id, execution_host FROM sessions ORDER BY id ASC')
+          .all(),
+      ).toEqual([
+        { id: 's-local', execution_host: 'local' },
+        { id: 's-remote-a', execution_host: 'legacy-remote' },
+        { id: 's-remote-b', execution_host: 'legacy-remote' },
+      ])
+    })
+  })
+
+  it('leaves local sessions byte-identical', () => {
+    withTempDb('endpoint-migration-local', (dbPath) => {
+      seedLegacy(
+        dbPath,
+        JSON.stringify({
+          executionHostRemoteBaseUrl: 'https://daemon.example.com',
+        }),
+      )
+
+      const before = new Database(dbPath)
+      const localBefore = before
+        .prepare("SELECT * FROM sessions WHERE id = 's-local'")
+        .get()
+      const totalBefore = before
+        .prepare('SELECT COUNT(*) AS n FROM sessions')
+        .get() as { n: number }
+      before.close()
+
+      const db = getDatabase(dbPath)
+      expect(
+        db.prepare("SELECT * FROM sessions WHERE id = 's-local'").get(),
+      ).toEqual(localBefore)
+      expect(db.prepare('SELECT COUNT(*) AS n FROM sessions').get()).toEqual(
+        totalBefore,
+      )
+    })
+  })
+
+  it('rolls the whole migration back when it is interrupted, and re-runs it on the next boot', () => {
+    withTempDb('endpoint-migration-interrupt', (dbPath) => {
+      seedLegacy(
+        dbPath,
+        JSON.stringify({
+          executionHostRemoteBaseUrl: 'https://daemon.example.com',
+        }),
+      )
+
+      const armed = new Database(dbPath)
+      // Fires on the session backfill, which runs after the table has been
+      // created and seeded — the same durable state a process kill in that gap
+      // would leave, since SQLite rolls an uncommitted transaction back.
+      armed.exec(`
+        CREATE TRIGGER interrupt_backfill
+        BEFORE UPDATE ON sessions
+        BEGIN
+          SELECT RAISE(ABORT, 'simulated interrupt mid-migration');
+        END;
+      `)
+      armed.close()
+
+      expect(() => getDatabase(dbPath)).toThrow(
+        'simulated interrupt mid-migration',
+      )
+      resetDatabase()
+
+      // The table's existence is what says the backfill is done, so it must not
+      // survive a backfill that did not — and the base URL that explains those
+      // rows must still be in settings, or the retry has nothing left to
+      // attribute them to.
+      const afterCrash = new Database(dbPath)
+      expect(
+        afterCrash
+          .prepare(
+            "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'execution_host_endpoints'",
+          )
+          .get(),
+      ).toBeUndefined()
+      expect(
+        afterCrash
+          .prepare(
+            "SELECT execution_host FROM sessions WHERE id = 's-remote-a'",
+          )
+          .get(),
+      ).toEqual({ execution_host: 'remote' })
+      expect(
+        (
+          afterCrash
+            .prepare("SELECT value FROM app_state WHERE key = 'app_settings'")
+            .get() as { value: string }
+        ).value,
+      ).toContain('executionHostRemoteBaseUrl')
+      afterCrash.exec('DROP TRIGGER interrupt_backfill')
+      afterCrash.close()
+
+      const db = getDatabase(dbPath)
+      expect(
+        db.prepare('SELECT id FROM execution_host_endpoints').all(),
+      ).toEqual([{ id: 'default' }])
+      expect(
+        db
+          .prepare(
+            "SELECT execution_host FROM sessions WHERE id = 's-remote-a'",
+          )
+          .get(),
+      ).toEqual({ execution_host: 'default' })
+    })
+  })
+})
 
 function hasLegacyTwoColumnUnique(database: Database.Database): boolean {
   const indexes = database

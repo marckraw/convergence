@@ -1,9 +1,37 @@
 import type { ProviderDescriptor } from '../provider.types'
-import type { ExecutionHostProviderCapabilities } from './execution-host.types'
+import type {
+  ExecutionHostProviderCapabilities,
+  RemoteSessionWorkspaceInfo,
+} from './execution-host.types'
 import {
   RemoteExecutionHostError,
+  type RemoteExecutionHostConnection,
   type RemoteExecutionHostProviderInfo,
 } from './remote-execution-host.types'
+
+/**
+ * The configuration of an Endpoint whose base URL or token could not be
+ * resolved at all. A value of its own rather than the empty string, and one no
+ * URL can contain, so it can never be mistaken for a real machine's
+ * configuration.
+ */
+export const UNRESOLVED_DAEMON_CONFIGURATION = '\u0000unresolved'
+
+/**
+ * The identity of the daemon configuration a listing was read from (MAR-2620).
+ *
+ * Everything a listing depends on goes in. A provider list read from one
+ * address is not true of another, and one read with a token the daemon has
+ * since stopped honouring is not true of that daemon either -- so two
+ * configurations are the same one only when both halves match. Anything left
+ * out here is a way for an answer to outlive the machine it describes.
+ */
+export function daemonConfigurationFingerprint(
+  connection: RemoteExecutionHostConnection | null,
+): string {
+  if (!connection) return UNRESOLVED_DAEMON_CONFIGURATION
+  return `${connection.baseUrl}\u0000${connection.token}`
+}
 
 /**
  * Parses the daemon /v0/meta response into the provider slice the Remote
@@ -201,18 +229,7 @@ export function createSseParser(): { feed: (chunk: string) => SseEvent[] } {
   }
 }
 
-/**
- * The workspace slice of the daemon's session snapshot: where a remote
- * session actually runs and the pull request the daemon opened for it.
- */
-export interface RemoteSessionWorkspaceInfo {
-  workspace: {
-    repository: string
-    branchName: string
-    baseRef: string | null
-  } | null
-  prUrl: string | null
-}
+export type { RemoteSessionWorkspaceInfo }
 
 /**
  * Parses the workspace slice out of a daemon session snapshot. Throws
@@ -243,6 +260,57 @@ export function parseRemoteSessionWorkspaceInfo(
         : null,
     prUrl: typeof value.prUrl === 'string' ? value.prUrl : null,
   }
+}
+
+/**
+ * The refusal a Remote Execution Host gives for a provider it will not start.
+ *
+ * "Provider not found" is a claim about what the daemon answered, so it may
+ * only be made once the daemon has answered. The host decides by reading its
+ * own provider cache, and an empty cache is two different facts wearing one
+ * shape: a daemon that listed no such provider, and a daemon that was never
+ * asked or never replied. Reporting the first when it is the second sends the
+ * reader hunting a provider problem that does not exist, on a machine whose
+ * real trouble is that nothing ever reached it (MAR-2620).
+ */
+export function unavailableProviderError(input: {
+  providerId: string
+  /**
+   * Whether a provider listing has landed for the daemon configuration this
+   * host is pointed at now. A listing read from an address the Endpoint has
+   * since been edited away from is not one: it says nothing about the machine
+   * the refusal is about.
+   */
+  listed: boolean
+  /** Why the most recent listing failed, when one did. */
+  listingFailure: Error | null
+}): Error {
+  if (input.listed) {
+    return new Error(`Provider not found: ${input.providerId}`)
+  }
+
+  const failure = input.listingFailure
+  if (!failure) {
+    return new Error(
+      `Cannot start ${input.providerId}: the remote execution host has not ` +
+        'listed its providers yet.',
+    )
+  }
+
+  const message =
+    `Cannot start ${input.providerId}: the remote execution host never ` +
+    `listed its providers. ${failure.message}`
+  // The kind survives the rewrap, so the settings connection test and the
+  // conversation note still classify this the way they classify the listing
+  // failure it came from.
+  return failure instanceof RemoteExecutionHostError
+    ? new RemoteExecutionHostError(
+        message,
+        failure.kind,
+        failure.status,
+        failure,
+      )
+    : new Error(message)
 }
 
 /**

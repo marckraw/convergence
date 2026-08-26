@@ -323,6 +323,10 @@ _Avoid_: Provider registry, local provider
 A Provider Execution Host adapter that runs Providers on a remote machine such as a VPS daemon, speaking a wire protocol while presenting the same interface as the Local Execution Host.
 _Avoid_: Remote Companion Gateway, agents-daemon endpoint, remote provider
 
+**Execution Host Endpoint**:
+One configured remote machine a Session can run on, identified by an id the Session records and the Keychain keys its token by. `local` is the one execution host that is not an Endpoint. A Session naming an Endpoint that is not configured fails rather than resolving to another one.
+_Avoid_: The remote host, the daemon, remote base URL
+
 **Model**:
 A provider-specific AI model option selected for a Session or provider-powered operation.
 _Avoid_: Provider, backend

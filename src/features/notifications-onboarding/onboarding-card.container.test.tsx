@@ -38,7 +38,7 @@ function primeStores(opts: {
       namingModelByProvider: {},
       extractionModelByProvider: {},
       commandCenterShortcut: { key: 'k', shiftKey: false, altKey: false },
-      executionHostRemoteBaseUrl: null,
+      executionHostEndpoints: [],
       notifications: DEFAULT_NOTIFICATION_PREFS,
       onboarding: {
         ...DEFAULT_ONBOARDING_PREFS,

@@ -204,6 +204,7 @@ const mockElectronAPI = {
       namingModelByProvider: {},
       extractionModelByProvider: {},
       commandCenterShortcut: { key: 'k', shiftKey: false, altKey: false },
+      executionHostEndpoints: [],
       notifications: {
         enabled: true,
         toasts: true,
