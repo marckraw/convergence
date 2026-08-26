@@ -35,9 +35,9 @@ vi.mock('electron', () => ({
  * calls. A signature change that moves either of the two fails this test
  * loudly rather than quietly registering nothing.
  */
-const SESSION_SERVICE_ARGUMENT = 8
-const TURN_CAPTURE_SERVICE_ARGUMENT = 17
-const ARGUMENT_COUNT = 19
+const SESSION_SERVICE_ARGUMENT = 6
+const TURN_CAPTURE_SERVICE_ARGUMENT = 15
+const ARGUMENT_COUNT = 17
 
 interface ArgumentSlot {
   index: number

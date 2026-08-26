@@ -158,20 +158,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.invoke('pullRequest:listByProjectId', projectId),
     refreshForSession: (sessionId: string) =>
       ipcRenderer.invoke('pullRequest:refreshForSession', sessionId),
-    previewReview: (input: { projectId?: string | null; reference: string }) =>
-      ipcRenderer.invoke('pullRequest:previewReview', input),
-    prepareReviewSession: (input: {
-      projectId?: string | null
-      reference: string
-      providerId: string
-      model: string | null
-      effort: string | null
-      sessionName?: string
-    }) => ipcRenderer.invoke('pullRequest:prepareReviewSession', input),
-    materializeReviewWorkspace: (input: {
-      projectId?: string | null
-      reference: string
-    }) => ipcRenderer.invoke('pullRequest:materializeReviewWorkspace', input),
   },
   crew: {
     list: () => ipcRenderer.invoke('crew:list'),
@@ -238,10 +224,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.invoke('git:getStatus', repoPath),
     getDiff: (repoPath: string, filePath?: string) =>
       ipcRenderer.invoke('git:getDiff', repoPath, filePath),
-    getBaseBranchStatus: (sessionId: string) =>
-      ipcRenderer.invoke('git:getBaseBranchStatus', sessionId),
-    getBaseBranchDiff: (sessionId: string, filePath: string) =>
-      ipcRenderer.invoke('git:getBaseBranchDiff', sessionId, filePath),
   },
   session: {
     create: (input: {

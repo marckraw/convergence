@@ -232,29 +232,9 @@ interface BranchOutputFactsData {
   remoteUrl: string | null
 }
 
-type BaseBranchResolutionSourceData =
-  | 'pull-request'
-  | 'project-settings'
-  | 'remote-default'
-  | 'convention'
-  | 'current-branch'
-
-interface ResolvedBaseBranchData {
-  branchName: string
-  comparisonRef: string
-  source: BaseBranchResolutionSourceData
-  warning: string | null
-}
-
 interface GitStatusEntryData {
   status: string
   file: string
-}
-
-interface BaseBranchDiffSummaryData {
-  base: ResolvedBaseBranchData
-  comparisonPoint: string
-  files: GitStatusEntryData[]
 }
 
 interface WorkspaceData {
@@ -304,44 +284,6 @@ interface WorkspacePullRequestData {
   error: string | null
   createdAt: string
   updatedAt: string
-}
-
-interface PullRequestReviewPreviewData {
-  projectId: string
-  projectName: string
-  repositoryOwner: string
-  repositoryName: string
-  number: number
-  title: string | null
-  url: string | null
-  state: PullRequestStateData
-  isDraft: boolean
-  headBranch: string | null
-  baseBranch: string | null
-  mergedAt: string | null
-  reviewBranchName: string
-}
-
-interface PreparePullRequestReviewSessionInputData {
-  projectId?: string | null
-  reference: string
-  providerId: string
-  model: string | null
-  effort: ReasoningEffort | null
-  sessionName?: string
-}
-
-interface PullRequestReviewSessionResultData {
-  workspace: WorkspaceData
-  pullRequest: WorkspacePullRequestData
-  session: SessionSummaryData
-}
-
-interface PullRequestReviewWorkspaceResultData {
-  workspace: WorkspaceData
-  pullRequest: WorkspacePullRequestData
-  created: boolean
-  refreshed: boolean
 }
 
 interface SessionCrewData {
@@ -1545,17 +1487,6 @@ interface ElectronAPI {
     refreshForSession: (
       sessionId: string,
     ) => Promise<WorkspacePullRequestData | null>
-    previewReview: (input: {
-      projectId?: string | null
-      reference: string
-    }) => Promise<PullRequestReviewPreviewData>
-    prepareReviewSession: (
-      input: PreparePullRequestReviewSessionInputData,
-    ) => Promise<PullRequestReviewSessionResultData>
-    materializeReviewWorkspace: (input: {
-      projectId?: string | null
-      reference: string
-    }) => Promise<PullRequestReviewWorkspaceResultData>
   }
   crew: {
     list: () => Promise<SessionCrewData[]>
@@ -1599,10 +1530,6 @@ interface ElectronAPI {
     getBranchOutputFacts: (repoPath: string) => Promise<BranchOutputFactsData>
     getStatus: (repoPath: string) => Promise<GitStatusEntryData[]>
     getDiff: (repoPath: string, filePath?: string) => Promise<string>
-    getBaseBranchStatus: (
-      sessionId: string,
-    ) => Promise<BaseBranchDiffSummaryData>
-    getBaseBranchDiff: (sessionId: string, filePath: string) => Promise<string>
   }
   session: {
     create: (input: CreateSessionInput) => Promise<SessionSummaryData>

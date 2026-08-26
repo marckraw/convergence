@@ -22,9 +22,7 @@ import { ProjectContextService } from '../backend/project-context/project-contex
 import { StateService } from '../backend/state/state.service'
 import { WorkspaceService } from '../backend/workspace/workspace.service'
 import { GitService } from '../backend/git/git.service'
-import { ChangedFilesService } from '../backend/git/changed-files.service'
 import { PullRequestService } from '../backend/pull-request/pull-request.service'
-import { PullRequestReviewService } from '../backend/pull-request/pull-request-review.service'
 import { SessionService } from '../backend/session/session.service'
 import { SessionContextInjectionService } from '../backend/session/context-injection/session-context-injection.service'
 import { TurnCaptureService } from '../backend/session/turn/turn-capture.service'
@@ -248,7 +246,6 @@ async function startApp(): Promise<void> {
   void localModelTunnelService.startAutoStartProfiles()
   localModelTunnelService.startMonitoring()
   const workspaceService = new WorkspaceService(db, gitService, workspacesRoot)
-  const changedFilesService = new ChangedFilesService(db, gitService)
   const pullRequestService = new PullRequestService(db, gitService)
   const crewService = new CrewService(db)
   const relayService = new RelayService(db)
@@ -261,22 +258,8 @@ async function startApp(): Promise<void> {
     executionHost,
     globalSessionsRoot,
   )
-  // Constructed here rather than with the other account services below: two
-  // services that start turns on their own need it, and the first of them is
-  // built on the next line.
   const providerAccountRepository = new ProviderAccountRepository(db)
 
-  const pullRequestReviewService = new PullRequestReviewService({
-    projects: projectService,
-    workspaces: workspaceService,
-    git: gitService,
-    pullRequests: pullRequestService,
-    sessions: sessionService,
-    accounts: {
-      listByProvider: (providerId) =>
-        providerAccountRepository.listByProvider(providerId),
-    },
-  })
   const attachmentsService = new AttachmentsService(db, attachmentsRoot)
   const feedbackService = new FeedbackService({
     appVersion: app.getVersion(),
@@ -694,9 +677,7 @@ async function startApp(): Promise<void> {
     stateService,
     workspaceService,
     gitService,
-    changedFilesService,
     pullRequestService,
-    pullRequestReviewService,
     sessionService,
     providerRegistry,
     mcpService,

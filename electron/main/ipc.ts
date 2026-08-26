@@ -5,9 +5,7 @@ import type { SpaceSynthesisService } from '../backend/space/space-synthesis.ser
 import { StateService } from '../backend/state/state.service'
 import { WorkspaceService } from '../backend/workspace/workspace.service'
 import { GitService } from '../backend/git/git.service'
-import { ChangedFilesService } from '../backend/git/changed-files.service'
 import { PullRequestService } from '../backend/pull-request/pull-request.service'
-import type { PullRequestReviewService } from '../backend/pull-request/pull-request-review.service'
 import { SessionAppService } from '../backend/app-api/session-app.service'
 import { SessionService } from '../backend/session/session.service'
 import type { TurnCaptureService } from '../backend/session/turn/turn-capture.service'
@@ -149,9 +147,7 @@ export function registerIpcHandlers(
   stateService: StateService,
   workspaceService: WorkspaceService,
   gitService: GitService,
-  changedFilesService: ChangedFilesService,
   pullRequestService: PullRequestService,
-  pullRequestReviewService: PullRequestReviewService,
   sessionService: SessionService,
   providerRegistry: ProviderRegistry,
   mcpService: McpService,
@@ -476,33 +472,6 @@ export function registerIpcHandlers(
     pullRequestService.refreshForSession(sessionId),
   )
 
-  ipcMain.handle(
-    'pullRequest:previewReview',
-    (_event, input: { projectId?: string | null; reference: string }) =>
-      pullRequestReviewService.previewReview(input),
-  )
-
-  ipcMain.handle(
-    'pullRequest:prepareReviewSession',
-    (
-      _event,
-      input: {
-        projectId?: string | null
-        reference: string
-        providerId: string
-        model: string | null
-        effort: CreateSessionInput['effort']
-        sessionName?: string
-      },
-    ) => pullRequestReviewService.prepareReviewSession(input),
-  )
-
-  ipcMain.handle(
-    'pullRequest:materializeReviewWorkspace',
-    (_event, input: { projectId?: string | null; reference: string }) =>
-      pullRequestReviewService.materializeReviewWorkspace(input),
-  )
-
   // Git handlers
   ipcMain.handle('git:getBranches', async (_event, repoPath: string) =>
     gitService.getBranches(repoPath),
@@ -528,16 +497,6 @@ export function registerIpcHandlers(
     'git:getDiff',
     async (_event, repoPath: string, filePath?: string) =>
       gitService.getDiff(repoPath, filePath),
-  )
-
-  ipcMain.handle('git:getBaseBranchStatus', async (_event, sessionId: string) =>
-    changedFilesService.getBaseBranchStatus(sessionId),
-  )
-
-  ipcMain.handle(
-    'git:getBaseBranchDiff',
-    async (_event, sessionId: string, filePath: string) =>
-      changedFilesService.getBaseBranchDiff({ sessionId, filePath }),
   )
 
   // App settings handlers
