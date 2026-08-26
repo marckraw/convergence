@@ -6,7 +6,6 @@ export type DialogKind =
   | 'project-create'
   | 'project-settings'
   | 'providers'
-  | 'pull-request-review-start'
   | 'mcp-servers'
   | 'skills-browser'
   | 'prompt-library'
