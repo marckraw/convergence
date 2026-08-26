@@ -1,4 +1,11 @@
 import Database from 'better-sqlite3'
+import { APP_SETTINGS_KEY } from '../app-settings/app-settings.constants'
+import {
+  DEFAULT_EXECUTION_HOST_ENDPOINT_ID,
+  DEFAULT_EXECUTION_HOST_ENDPOINT_LABEL,
+  LEGACY_REMOTE_EXECUTION_HOST_ID,
+  normalizeExecutionHostBaseUrl,
+} from '../execution-host-endpoint/execution-host-endpoint.pure'
 import type { TranscriptEntry } from '../provider/provider.types'
 import { conversationItemToInsertRow } from '../session/conversation-item.pure'
 import { migrateTranscriptToConversationItems } from '../session/conversation-item.pure'
@@ -1356,6 +1363,116 @@ function ensureSessionSettledSeqColumn(database: Database.Database): void {
   migrate()
 }
 
+/**
+ * Endpoints become plural, and the sessions that ran on one say which
+ * (MAR-2620).
+ *
+ * Before this, `sessions.execution_host` held `'local'` or `'remote'`, and
+ * App Settings held exactly one `executionHostRemoteBaseUrl`. That worked while
+ * there could only ever be one daemon. With two, `'remote'` names neither of
+ * them, and a session resolving to whichever daemon happens to be configured
+ * would run on a machine it never agreed to. So the string becomes an id, and
+ * the single base URL becomes the first Endpoint that id points at.
+ *
+ * The table's absence is the flag that says the backfill is still owed, so the
+ * `CREATE TABLE`, the Endpoint it is seeded with, the session rows and the
+ * settings rewrite all go in as ONE transaction. Split them and an interrupt in
+ * any gap is permanent: the next boot sees the table, skips the rest for good,
+ * and Marcin's two remote sessions keep a `'remote'` that resolves to nothing
+ * while the base URL that could have explained it is already gone. SQLite's DDL
+ * is transactional, so `CREATE TABLE` rolls back with the rest.
+ *
+ * What the backfill recovers: which machine those rows ran on. While the
+ * single-host settings still hold a base URL, there was exactly one daemon it
+ * could have been, and that daemon becomes the first Endpoint.
+ *
+ * What it cannot recover: which daemon a `'remote'` row ran on when no base URL
+ * is configured. The address is simply not in the record any more — it was
+ * overwritten or cleared some time after the run. Those rows take the reserved
+ * `legacy-remote` id, which deliberately matches no Endpoint: they resolve to
+ * nothing and say so, because the only alternative is to guess at a machine,
+ * and guessing is the exact failure this era exists to prevent.
+ */
+function ensureExecutionHostEndpoints(database: Database.Database): void {
+  const migrate = database.transaction(() => {
+    if (tableExists(database, 'execution_host_endpoints')) return
+
+    database.exec(`
+      CREATE TABLE execution_host_endpoints (
+        id TEXT PRIMARY KEY,
+        label TEXT NOT NULL,
+        base_url TEXT NOT NULL,
+        position INTEGER NOT NULL DEFAULT 0,
+        created_at TEXT NOT NULL DEFAULT (datetime('now')),
+        updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+      );
+    `)
+
+    const settingsRow = database
+      .prepare('SELECT value FROM app_state WHERE key = ?')
+      .get(APP_SETTINGS_KEY) as { value: string } | undefined
+    const legacySettings = parseLegacySettingsJson(settingsRow?.value)
+    const baseUrl = normalizeExecutionHostBaseUrl(
+      legacySettings
+        ? (legacySettings.executionHostRemoteBaseUrl as string | null)
+        : null,
+    )
+
+    if (baseUrl) {
+      database
+        .prepare(
+          `INSERT INTO execution_host_endpoints (id, label, base_url, position)
+           VALUES (?, ?, ?, 0)`,
+        )
+        .run(
+          DEFAULT_EXECUTION_HOST_ENDPOINT_ID,
+          DEFAULT_EXECUTION_HOST_ENDPOINT_LABEL,
+          baseUrl,
+        )
+    }
+
+    database
+      .prepare(
+        `UPDATE sessions
+            SET execution_host = ?
+          WHERE execution_host = 'remote'`,
+      )
+      .run(
+        baseUrl
+          ? DEFAULT_EXECUTION_HOST_ENDPOINT_ID
+          : LEGACY_REMOTE_EXECUTION_HOST_ID,
+      )
+
+    // The Endpoint row is now the only place the base URL lives. Leaving a copy
+    // in the settings blob would be a second encoding of one fact, and the two
+    // would drift the first time an Endpoint is renamed or removed.
+    if (legacySettings && 'executionHostRemoteBaseUrl' in legacySettings) {
+      delete legacySettings.executionHostRemoteBaseUrl
+      database
+        .prepare('UPDATE app_state SET value = ? WHERE key = ?')
+        .run(JSON.stringify(legacySettings), APP_SETTINGS_KEY)
+    }
+  })
+  migrate()
+}
+
+function parseLegacySettingsJson(
+  raw: string | undefined,
+): Record<string, unknown> | null {
+  if (!raw) return null
+  try {
+    const parsed = JSON.parse(raw) as unknown
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      return null
+    }
+    return parsed as Record<string, unknown>
+  } catch {
+    // An unreadable settings blob is already handled everywhere else by
+    // falling back to defaults; it carries no base URL to migrate either way.
+    return null
+  }
+}
+
 function parseLegacyTranscript(
   sessionId: string,
   value: string,
@@ -1653,6 +1770,9 @@ export function getDatabase(dbPath?: string): Database.Database {
     ensureWorkspaceColumns(database)
     ensureSessionColumns(database)
     ensureSessionSettledSeqColumn(database)
+    // After the session columns, never before: the backfill rewrites
+    // `execution_host`, which a database older than the remote era lacks.
+    ensureExecutionHostEndpoints(database)
     ensureProviderAccountColumns(database)
     ensureTurnModelColumns(database)
     ensureTurnFileChangeColumns(database)
