@@ -185,7 +185,7 @@ function primeStores(stored: {
       namingModelByProvider: {},
       extractionModelByProvider: {},
       commandCenterShortcut: { key: 'k', shiftKey: false, altKey: false },
-      executionHostRemoteBaseUrl: null,
+      executionHostEndpoints: [],
       notifications: DEFAULT_NOTIFICATION_PREFS,
       onboarding: DEFAULT_ONBOARDING_PREFS,
       updates: DEFAULT_UPDATE_PREFS,
@@ -342,7 +342,7 @@ describe('AppSettingsDialogContainer', () => {
         namingModelByProvider: {},
         extractionModelByProvider: {},
         commandCenterShortcut: { key: 'k', shiftKey: false, altKey: false },
-        executionHostRemoteBaseUrl: null,
+        executionHostEndpoints: [],
         notifications: DEFAULT_NOTIFICATION_PREFS,
         onboarding: DEFAULT_ONBOARDING_PREFS,
         updates: DEFAULT_UPDATE_PREFS,
@@ -416,7 +416,7 @@ describe('AppSettingsDialogContainer', () => {
         namingModelByProvider: {},
         extractionModelByProvider: {},
         commandCenterShortcut: { key: 'k', shiftKey: false, altKey: false },
-        executionHostRemoteBaseUrl: null,
+        executionHostEndpoints: [],
         notifications: DEFAULT_NOTIFICATION_PREFS,
         onboarding: DEFAULT_ONBOARDING_PREFS,
         updates: DEFAULT_UPDATE_PREFS,
@@ -795,6 +795,36 @@ describe('AppSettingsDialogContainer', () => {
       ),
     ).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled()
+  })
+
+  it('saves the Execution host URL as the first endpoint, with the id sessions record', async () => {
+    // MAR-2620: one field still edits one daemon, but it now writes an
+    // Endpoint. If the form stopped reaching it, the daemon would look
+    // configured in the dialog and be absent everywhere else.
+    primeStores({
+      defaultProviderId: 'claude-code',
+      defaultModelId: 'sonnet',
+      defaultEffortId: 'medium',
+    })
+
+    render(<AppSettingsDialogContainer trigger={<Button>Open</Button>} />)
+    fireEvent.click(screen.getByText('Open'))
+    expect(await screen.findByText('Settings')).toBeInTheDocument()
+
+    fireEvent.change(screen.getByLabelText('Execution host URL'), {
+      target: { value: 'https://daemon.example.com' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+
+    await waitFor(() => {
+      expect(window.electronAPI.appSettings.set).toHaveBeenCalledWith(
+        expect.objectContaining({
+          executionHostEndpoints: [
+            { id: 'default', baseUrl: 'https://daemon.example.com' },
+          ],
+        }),
+      )
+    })
   })
 
   it('Cancel closes without dispatching save', async () => {

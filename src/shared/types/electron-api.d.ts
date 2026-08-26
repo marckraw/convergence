@@ -894,7 +894,8 @@ interface SessionSummaryData {
   parentSessionId: string | null
   forkStrategy: 'full' | 'summary' | null
   primarySurface: 'conversation' | 'terminal'
-  executionHost?: 'local' | 'remote'
+  /** `'local'`, or an execution host endpoint id (MAR-2620). */
+  executionHost?: string
   continuationToken: string | null
   lastSequence: number
   createdAt: string
@@ -912,7 +913,8 @@ interface CreateSessionInput {
   permissionConfig?: SessionPermissionConfigData
   name: string
   primarySurface?: 'conversation' | 'terminal'
-  executionHost?: 'local' | 'remote'
+  /** `'local'`, or an execution host endpoint id (MAR-2620). */
+  executionHost?: string
 }
 
 interface ProviderInfo {
@@ -1966,6 +1968,22 @@ interface CommandCenterShortcutPrefsData {
   altKey: boolean
 }
 
+/** One machine a session can run on, other than this one (MAR-2620). */
+interface ExecutionHostEndpointData {
+  id: string
+  label: string
+  baseUrl: string
+  position: number
+  createdAt: string
+  updatedAt: string
+}
+
+interface ExecutionHostEndpointInputData {
+  id?: string
+  label?: string
+  baseUrl: string
+}
+
 interface AppSettingsData {
   defaultProviderId: string | null
   defaultModelId: string | null
@@ -1973,7 +1991,7 @@ interface AppSettingsData {
   namingModelByProvider: Record<string, string>
   extractionModelByProvider: Record<string, string>
   commandCenterShortcut: CommandCenterShortcutPrefsData
-  executionHostRemoteBaseUrl: string | null
+  executionHostEndpoints: ExecutionHostEndpointData[]
   notifications: NotificationPrefsData
   onboarding: OnboardingPrefsData
   updates: UpdatePrefsData
@@ -1991,7 +2009,7 @@ type AppSettingsInputData = Omit<
   | 'namingModelByProvider'
   | 'extractionModelByProvider'
   | 'commandCenterShortcut'
-  | 'executionHostRemoteBaseUrl'
+  | 'executionHostEndpoints'
   | 'notifications'
   | 'onboarding'
   | 'updates'
@@ -2002,7 +2020,7 @@ type AppSettingsInputData = Omit<
   namingModelByProvider?: Record<string, string>
   extractionModelByProvider?: Record<string, string>
   commandCenterShortcut?: CommandCenterShortcutPrefsData
-  executionHostRemoteBaseUrl?: string | null
+  executionHostEndpoints?: ExecutionHostEndpointInputData[]
   notifications?: NotificationPrefsData
   onboarding?: OnboardingPrefsData
   updates?: UpdatePrefsData

@@ -83,7 +83,13 @@ export type ForkStrategy = 'full' | 'summary'
 
 export type PrimarySurface = 'conversation' | 'terminal'
 
-export type SessionExecutionHostId = 'local' | 'remote'
+/**
+ * Where the session's provider runs: `'local'`, or the id of an execution host
+ * Endpoint (MAR-2620). Branch with `isLocalExecutionHost` /
+ * `isRemoteExecutionHost` from `@/entities/execution-host`, never against a
+ * hard-coded remote name.
+ */
+export type SessionExecutionHostId = string
 
 export type SessionContextKind = 'project' | 'global'
 

@@ -600,7 +600,16 @@ describe('ComposerContainer', () => {
     useAppSettingsStore.setState((state) => ({
       settings: {
         ...state.settings,
-        executionHostRemoteBaseUrl: 'https://daemon.example.com',
+        executionHostEndpoints: [
+          {
+            id: 'daemon-a',
+            label: 'Remote daemon',
+            baseUrl: 'https://daemon.example.com',
+            position: 0,
+            createdAt: '2026-01-01',
+            updatedAt: '2026-01-01',
+          },
+        ],
       },
     }))
 
@@ -636,7 +645,8 @@ describe('ComposerContainer', () => {
       contextItemIds: undefined,
       permissionConfig: { preset: 'ask' },
       serviceTier: null,
-      executionHost: 'remote',
+      // Which machine, not whether: the toggle records the Endpoint's id.
+      executionHost: 'daemon-a',
       providerAccountId: null,
     })
   })
@@ -1256,7 +1266,7 @@ describe('ComposerContainer', () => {
       useSessionStore.setState((state) => ({
         sessions: state.sessions.map((session) =>
           session.id === 'session-1'
-            ? { ...session, executionHost: 'remote' as const }
+            ? { ...session, executionHost: 'daemon-a' }
             : session,
         ),
       }))
@@ -1285,7 +1295,7 @@ describe('ComposerContainer', () => {
       useSessionStore.setState((state) => ({
         sessions: state.sessions.map((session) =>
           session.id === 'session-1'
-            ? { ...session, executionHost: 'remote' as const }
+            ? { ...session, executionHost: 'daemon-a' }
             : session,
         ),
       }))

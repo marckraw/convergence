@@ -19,7 +19,7 @@ const EMPTY: AppSettings = {
   namingModelByProvider: {},
   extractionModelByProvider: {},
   commandCenterShortcut: DEFAULT_COMMAND_CENTER_SHORTCUT,
-  executionHostRemoteBaseUrl: null,
+  executionHostEndpoints: [],
   notifications: DEFAULT_NOTIFICATION_PREFS,
   onboarding: DEFAULT_ONBOARDING_PREFS,
   updates: DEFAULT_UPDATE_PREFS,

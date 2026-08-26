@@ -1,4 +1,8 @@
 import type {
+  ExecutionHostEndpoint,
+  ExecutionHostEndpointInput,
+} from '@/entities/execution-host'
+import type {
   NotificationEventPrefs,
   NotificationPrefs,
 } from '../notifications'
@@ -59,7 +63,12 @@ export interface AppSettings {
   namingModelByProvider: Record<string, string>
   extractionModelByProvider: Record<string, string>
   commandCenterShortcut: CommandCenterShortcutPrefs
-  executionHostRemoteBaseUrl: string | null
+  /**
+   * The machines other than this one that a session can run on (MAR-2620).
+   * The list is the whole fact: there is no single "the" remote base URL any
+   * more, because there is no longer a single daemon for "the" to refer to.
+   */
+  executionHostEndpoints: ExecutionHostEndpoint[]
   notifications: NotificationPrefs
   onboarding: OnboardingPrefs
   updates: UpdatePrefs
@@ -73,7 +82,7 @@ export type AppSettingsInput = Omit<
   | 'namingModelByProvider'
   | 'extractionModelByProvider'
   | 'commandCenterShortcut'
-  | 'executionHostRemoteBaseUrl'
+  | 'executionHostEndpoints'
   | 'notifications'
   | 'onboarding'
   | 'updates'
@@ -84,7 +93,7 @@ export type AppSettingsInput = Omit<
   namingModelByProvider?: Record<string, string>
   extractionModelByProvider?: Record<string, string>
   commandCenterShortcut?: CommandCenterShortcutPrefs
-  executionHostRemoteBaseUrl?: string | null
+  executionHostEndpoints?: ExecutionHostEndpointInput[]
   notifications?: NotificationPrefs
   onboarding?: OnboardingPrefs
   updates?: UpdatePrefs

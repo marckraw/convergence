@@ -1,3 +1,4 @@
+import { isRemoteExecutionHost } from '@/entities/execution-host'
 import type { ProviderInfo, SessionSummary } from '@/entities/session'
 
 export interface ContextCompactionActionState {
@@ -24,7 +25,7 @@ export function resolveContextCompactionAction(
         `${provider?.name ?? 'This provider'} does not support manual context compaction.`,
     }
   }
-  if (session.executionHost === 'remote') {
+  if (isRemoteExecutionHost(session.executionHost)) {
     return {
       visible: true,
       enabled: false,

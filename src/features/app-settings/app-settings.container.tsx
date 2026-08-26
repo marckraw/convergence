@@ -32,6 +32,7 @@ import {
   AppSettingsDialog,
   type AppSettingsSectionId,
 } from './app-settings.presentational'
+import { DEFAULT_EXECUTION_HOST_ENDPOINT_ID } from '@/entities/execution-host'
 import { getExecutionHostRemoteBaseUrlError } from './execution-host-settings.pure'
 
 interface AppSettingsContainerProps {
@@ -146,7 +147,7 @@ export const AppSettingsDialogContainer: FC<AppSettingsContainerProps> = ({
     setNamingDraft({ ...settings.namingModelByProvider })
     setExtractionDraft({ ...settings.extractionModelByProvider })
     setExecutionHostRemoteBaseUrlDraft(
-      settings.executionHostRemoteBaseUrl ?? '',
+      settings.executionHostEndpoints[0]?.baseUrl ?? '',
     )
     setNotificationsDraft(settings.notifications)
     setUpdatesDraft(settings.updates)
@@ -377,10 +378,20 @@ export const AppSettingsDialogContainer: FC<AppSettingsContainerProps> = ({
         namingModelByProvider: namingDraft,
         extractionModelByProvider: extractionDraft,
         commandCenterShortcut: shortcutToSave,
-        executionHostRemoteBaseUrl:
+        // One field still edits one daemon, and that daemon is now the first
+        // Endpoint (MAR-2620). Clearing it removes the Endpoint, exactly as
+        // clearing the base URL used to unconfigure the remote host; the id is
+        // fixed, so re-entering the URL restores the machine sessions already
+        // point at rather than minting a second one.
+        executionHostEndpoints:
           executionHostRemoteBaseUrlDraft.trim().length > 0
-            ? executionHostRemoteBaseUrlDraft.trim()
-            : null,
+            ? [
+                {
+                  id: DEFAULT_EXECUTION_HOST_ENDPOINT_ID,
+                  baseUrl: executionHostRemoteBaseUrlDraft.trim(),
+                },
+              ]
+            : [],
         notifications: notificationsDraft ?? settings.notifications,
         onboarding: settings.onboarding,
         updates: updatesDraft ?? settings.updates,
