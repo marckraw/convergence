@@ -159,7 +159,7 @@ export const AppSettingsDialog: FC<AppSettingsDialogProps> = ({
       navSummary: 'Provider and per-task model defaults',
       title: 'Session defaults',
       description:
-        'The default provider and the models Convergence uses for new sessions, naming, forking, and guided review.',
+        'The default provider and the models Convergence uses for new sessions, naming, and forking.',
     },
     {
       id: 'credentials',

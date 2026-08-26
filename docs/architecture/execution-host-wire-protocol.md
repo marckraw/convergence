@@ -15,9 +15,9 @@ daemon error-kind discriminator.
 
 ## Authentication
 
-Same model as the remote guided-review daemon: Bearer token on every
-request, `/health` for liveness, `/v0/meta` for capability discovery
-(which Providers and Models the host machine has installed).
+Bearer token on every request, `/health` for liveness, `/v0/meta` for
+capability discovery (which Providers and Models the host machine has
+installed).
 
 ## Endpoints
 

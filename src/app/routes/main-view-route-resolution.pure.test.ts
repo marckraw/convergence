@@ -173,7 +173,7 @@ describe('resolveMainViewRoute', () => {
     })
   })
 
-  it('falls back for invalid Spaces and stale Code Review targets', () => {
+  it('falls back for invalid Spaces', () => {
     expect(
       resolve(
         { kind: 'chat-space', spaceId: 'missing', draftAttempt: false },
