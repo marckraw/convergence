@@ -1,12 +1,40 @@
 import { describe, expect, it } from 'vitest'
 import {
+  DEFAULT_EXECUTION_HOST_ENDPOINT_ID,
   describeMissingExecutionHostEndpoint,
+  isExecutionHostEndpointId,
   isLocalExecutionHost,
   isRemoteExecutionHost,
   normalizeExecutionHostBaseUrl,
   normalizeExecutionHostEndpoints,
   parseExecutionHostId,
+  removedExecutionHostEndpointIds,
+  requireExecutionHostEndpointId,
 } from './execution-host-endpoint.pure'
+
+/**
+ * Ids that must never reach `security` (MAR-2642).
+ *
+ * The Keychain account for an Endpoint is its id, and it travels inside a
+ * command `security -i` reads a line at a time. The first of these is the one
+ * that matters most: a newline is a second keychain command, aimed at whatever
+ * the rest of the line says. The others are quieter — an id with a space or a
+ * quote in it names a different account than the one the session recorded, and
+ * the sweep's listing cannot even see a quoted account to collect it.
+ */
+const HOSTILE_ENDPOINT_IDS = [
+  'kuba\ndelete-generic-password -a default -s convergence.execution-host-daemon',
+  'kuba vps',
+  'kuba"vps',
+  'kuba\\vps',
+  "kuba'vps",
+  'kuba\tvps',
+  'kuba;vps',
+  'kuba/vps',
+  'kuba.vps',
+  '',
+  'k'.repeat(65),
+]
 
 describe('execution host ids', () => {
   it('treats only "local" as this machine', () => {
@@ -57,17 +85,34 @@ describe('normalizeExecutionHostBaseUrl', () => {
 })
 
 describe('normalizeExecutionHostEndpoints', () => {
-  it('defaults the id and label of the endpoint the settings form edits', () => {
+  it('keeps the id it was given and names an unnamed endpoint', () => {
     expect(
-      normalizeExecutionHostEndpoints([{ baseUrl: 'https://daemon.test/' }]),
+      normalizeExecutionHostEndpoints([
+        { id: 'kuba', baseUrl: 'https://daemon.test/' },
+      ]),
     ).toEqual([
       {
-        id: 'default',
+        id: 'kuba',
         label: 'Remote daemon',
         baseUrl: 'https://daemon.test',
         position: 0,
       },
     ])
+  })
+
+  /**
+   * A blank id used to fall back to `'default'` (MAR-2642). That is not a spare
+   * id: it is the one the single-host era's sessions recorded and the Keychain
+   * account its token is filed under, so filling it in hands a machine that
+   * never had it both. Refusing makes the wrong form unavailable rather than
+   * making the fallback smarter.
+   */
+  it('refuses an endpoint that carries no id of its own', () => {
+    expect(() =>
+      normalizeExecutionHostEndpoints([
+        { id: '   ', baseUrl: 'https://daemon.test' },
+      ]),
+    ).toThrow(/must carry its own id/)
   })
 
   it('numbers positions by the order it was given', () => {
@@ -86,7 +131,9 @@ describe('normalizeExecutionHostEndpoints', () => {
     // Silently storing zero endpoints would tell the user their daemon is
     // simply unconfigured, when what actually happened is that they typoed.
     expect(() =>
-      normalizeExecutionHostEndpoints([{ baseUrl: 'ftp://daemon.test' }]),
+      normalizeExecutionHostEndpoints([
+        { id: 'kuba', baseUrl: 'ftp://daemon.test' },
+      ]),
     ).toThrow('Remote execution host base URL must be an HTTP(S) URL.')
   })
 
@@ -105,5 +152,117 @@ describe('normalizeExecutionHostEndpoints', () => {
         { id: 'a', baseUrl: 'https://b.test' },
       ]),
     ).toThrow('Duplicate execution host endpoint id: a')
+  })
+})
+
+describe('removedExecutionHostEndpointIds', () => {
+  const stored = [{ id: 'kuba' }, { id: 'backpack' }]
+
+  it('names the endpoints a save drops and no others', () => {
+    expect(
+      removedExecutionHostEndpointIds(stored, [
+        { id: 'backpack', baseUrl: 'https://backpack.test' },
+      ]),
+    ).toEqual(['kuba'])
+  })
+
+  // An edit keeps the id, so it keeps the Keychain account and the token.
+  // Removal is the only gesture that destroys a credential.
+  it('treats a relabelled, re-addressed endpoint as the same machine', () => {
+    expect(
+      removedExecutionHostEndpointIds(stored, [
+        { id: 'kuba', label: 'kuba-box', baseUrl: 'https://moved.test' },
+        { id: 'backpack', baseUrl: 'https://backpack.test' },
+      ]),
+    ).toEqual([])
+  })
+
+  it('names every endpoint when the save stores none', () => {
+    expect(removedExecutionHostEndpointIds(stored, [])).toEqual([
+      'kuba',
+      'backpack',
+    ])
+  })
+
+  /**
+   * It asks the normalizer which ids survive rather than reading them off the
+   * input, so a list that will not normalize throws here — before the caller
+   * has destroyed anything. A save the user is about to see refused must not
+   * have taken a token from a machine that is still there.
+   */
+  it('refuses a list that will not normalize rather than pricing it', () => {
+    expect(() =>
+      removedExecutionHostEndpointIds(stored, [
+        { id: 'backpack', baseUrl: 'ftp://backpack.test' },
+      ]),
+    ).toThrow('Remote execution host base URL must be an HTTP(S) URL.')
+  })
+})
+
+describe('an endpoint id, where one enters the system', () => {
+  /**
+   * The account is not a key in this database alone: `setToken` puts it inside
+   * a command that `security -i` parses, and the parse is line-based. A
+   * newline is therefore not a strange character in a name — it is the end of
+   * one command and the start of another, run against the same keychain with
+   * the same authority.
+   */
+  it('refuses an id that could start a second keychain command', () => {
+    for (const id of HOSTILE_ENDPOINT_IDS) {
+      expect(isExecutionHostEndpointId(id)).toBe(false)
+      expect(() => requireExecutionHostEndpointId(id)).toThrow(/is not usable/)
+    }
+  })
+
+  /** Named, so the machine being turned away can be identified. */
+  it('says which id it refused', () => {
+    expect(() => requireExecutionHostEndpointId('kuba\nrm')).toThrow(
+      /"kuba\\nrm"/,
+    )
+  })
+
+  /**
+   * Never sanitised, and this is the case that shows why. ` kuba ` repaired to
+   * `kuba` is not a tidier version of the same Endpoint: it is a different
+   * Keychain account than the caller named, so the token would be filed where
+   * nothing reads it while every session that recorded the original still
+   * points at an id no row holds.
+   */
+  it('refuses an id it could have quietly trimmed into a different one', () => {
+    expect(() => requireExecutionHostEndpointId(' kuba ')).toThrow()
+    expect(() =>
+      normalizeExecutionHostEndpoints([
+        { id: ' kuba ', baseUrl: 'https://daemon.test' },
+      ]),
+    ).toThrow(/is not usable/)
+  })
+
+  it('still accepts every id this app actually mints', () => {
+    // A minted UUID, the migrated id the single-host era's token is filed
+    // under, and the shapes a hand-written endpoint could reasonably take.
+    for (const id of [
+      '0b7f4a5e-6c2d-4c1e-9a3f-0d5e8b1c2a34',
+      DEFAULT_EXECUTION_HOST_ENDPOINT_ID,
+      'kuba-vps',
+      'backpack_automations',
+      'A1',
+      'k'.repeat(64),
+    ]) {
+      expect(isExecutionHostEndpointId(id)).toBe(true)
+      expect(requireExecutionHostEndpointId(id)).toBe(id)
+      expect(
+        normalizeExecutionHostEndpoints([
+          { id, baseUrl: 'https://daemon.test' },
+        ])[0].id,
+      ).toBe(id)
+    }
+  })
+
+  it('refuses a hostile id at the settings save, not only at the wire', () => {
+    expect(() =>
+      normalizeExecutionHostEndpoints([
+        { id: HOSTILE_ENDPOINT_IDS[0], baseUrl: 'https://daemon.test' },
+      ]),
+    ).toThrow(/is not usable/)
   })
 })

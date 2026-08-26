@@ -13,9 +13,13 @@ export interface ExecutionHostEndpoint {
   updatedAt: string
 }
 
-/** An endpoint as the settings form supplies it. */
+/**
+ * An endpoint as the settings form supplies it. `id` is required: an Endpoint
+ * with no identity of its own can only inherit one, and an inherited id is
+ * another machine's sessions and another machine's token (MAR-2642).
+ */
 export interface ExecutionHostEndpointInput {
-  id?: string
+  id: string
   label?: string
   baseUrl: string
 }

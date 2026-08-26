@@ -22,9 +22,17 @@ export interface ExecutionHostEndpoint {
   updatedAt: string
 }
 
-/** An Endpoint as the settings surface supplies it: identity plus the facts. */
+/**
+ * An Endpoint as the settings surface supplies it: identity plus the facts.
+ *
+ * `id` is required, and required for the same reason it must never be
+ * reissued. An optional id has to be filled in by whoever receives it, and the
+ * only value that could be filled in is one that already means a specific
+ * machine — so an id-less Endpoint is an Endpoint that inherits another one's
+ * identity, its sessions and its Keychain account (MAR-2642).
+ */
 export interface ExecutionHostEndpointInput {
-  id?: string
+  id: string
   label?: string
   baseUrl: string
 }

@@ -1,14 +1,28 @@
 import type Database from 'better-sqlite3'
 import type { ExecutionHostEndpointRow } from '../database/database.types'
-import { normalizeExecutionHostEndpoints } from './execution-host-endpoint.pure'
+import {
+  normalizeExecutionHostEndpoints,
+  requireExecutionHostEndpointId,
+} from './execution-host-endpoint.pure'
 import type {
   ExecutionHostEndpoint,
   ExecutionHostEndpointInput,
 } from './execution-host-endpoint.types'
 
+/**
+ * A stored row, read back as the Endpoint it claims to be (MAR-2642).
+ *
+ * The id is checked here and not only where it is written, because writing is
+ * not the only way a row arrives: this database is a file on disk, rows predate
+ * the bound the write path now applies, and an id read back off it reaches
+ * `security` exactly like one typed today. Refusing loudly is the honest
+ * answer — the alternative is dropping the row, which hides a machine whose
+ * sessions still name it, or repairing the id, which is that machine's Keychain
+ * account silently becoming somebody else's.
+ */
 function fromRow(row: ExecutionHostEndpointRow): ExecutionHostEndpoint {
   return {
-    id: row.id,
+    id: requireExecutionHostEndpointId(row.id),
     label: row.label,
     baseUrl: row.base_url,
     position: row.position,
