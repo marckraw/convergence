@@ -314,6 +314,50 @@ export function envelope(
   return { protocolVersion: 1, sessionId, seq, event }
 }
 
+/**
+ * A promise the test settles by hand, so a window that would otherwise close
+ * by luck has a known width.
+ *
+ * Without one, the stub daemon answers within the same run of microtasks the
+ * caller already awaits, and a test about what happens *before* it answers
+ * passes for a reason that has nothing to do with the code under it.
+ */
+export function deferred(): { promise: Promise<void>; release: () => void } {
+  let release = (): void => {}
+  const promise = new Promise<void>((resolve) => {
+    release = () => resolve()
+  })
+  return { promise, release }
+}
+
+/**
+ * Runs a promise and reports what became of it, without ever rethrowing — the
+ * only way to assert that something is still *pending* rather than settled.
+ */
+export function track(promise: Promise<unknown>): {
+  settled: () => 'pending' | 'resolved' | 'rejected'
+  error: () => Error | null
+  done: Promise<void>
+} {
+  let state: 'pending' | 'resolved' | 'rejected' = 'pending'
+  let failure: Error | null = null
+  const done = promise.then(
+    () => {
+      state = 'resolved'
+    },
+    (error: unknown) => {
+      state = 'rejected'
+      failure = error instanceof Error ? error : new Error(String(error))
+    },
+  )
+  return { settled: () => state, error: () => failure, done }
+}
+
+/** Long enough for every queued microtask and timer to have run. */
+export async function letEverythingQueuedRun(): Promise<void> {
+  await new Promise((resolve) => setTimeout(resolve, 25))
+}
+
 /** Polls until the predicate holds, so async wire work needs no sleeps. */
 export async function waitUntil(
   predicate: () => boolean,

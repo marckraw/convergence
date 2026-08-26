@@ -32,17 +32,18 @@ interface RemoteExecutionHostRegistryDeps {
  * arrived: `start()` refuses a provider it has never listed, so a host born
  * cold would reject the first turn on an Endpoint added after boot.
  *
- * Base URL and token are still read per call by the connection resolver, so
- * editing an Endpoint's address applies without rebuilding anything.
+ * Base URL and token are read per call by the connection resolver, so editing
+ * an Endpoint's address applies without rebuilding anything — and the host's
+ * own cache is stored with the configuration it was read from, so the old
+ * daemon's provider listing stops being readable as soon as the new address is
+ * observed. Nothing here clears it. That is deliberate: this registry held the
+ * one memo that could have gone stale on its own — a per-Endpoint "the listing
+ * already landed" promise — and it is gone, because the host that owns the
+ * cache is the only thing that can say whether the cache is still about the
+ * machine in force.
  */
 export class AppSettingsRemoteExecutionHostRegistry implements RemoteExecutionHostRegistry {
   private readonly hosts = new Map<string, RemoteExecutionHost>()
-  /**
-   * The listing in flight for each Endpoint, resolving to why it failed or to
-   * null when it landed. It never rejects: most callers only start it, and a
-   * rejected promise nobody awaits is an unhandled rejection.
-   */
-  private readonly listings = new Map<string, Promise<Error | null>>()
 
   constructor(private readonly deps: RemoteExecutionHostRegistryDeps) {}
 
@@ -57,51 +58,38 @@ export class AppSettingsRemoteExecutionHostRegistry implements RemoteExecutionHo
       debugSink: this.deps.debugSink,
     })
     this.hosts.set(endpointId, host)
-    this.beginListing(endpointId, host)
+    this.prime(host)
     return host
   }
 
   /**
-   * Settles once this Endpoint has answered with its provider listing, and
-   * throws with why when it never did (MAR-2620).
+   * Settles once this Endpoint has answered with a provider listing read from
+   * the address it points at now, and throws with why when it never did
+   * (MAR-2620).
    *
    * The listing is a round trip to the daemon, started when the host is built
    * and read synchronously by `start()`. Between those two moments a turn on a
    * freshly added Endpoint is refused for a provider the daemon has, so
    * whoever is about to start a session waits here for the request already in
-   * flight. Not a retry and not a sleep: the same promise, awaited by the one
-   * path that cannot proceed without it.
+   * flight. The same wait covers the other way that cache can be wrong: an
+   * Endpoint whose base URL was edited has a listing from the machine it used
+   * to name, and this does not resolve against it. Not a retry and not a
+   * sleep: at most one round trip, and none at all when nothing changed.
    */
   async whenReady(endpointId: string): Promise<void> {
-    const host = this.hostFor(endpointId)
-    const failure = await (this.listings.get(endpointId) ??
-      this.beginListing(endpointId, host))
-    if (failure) throw failure
+    await this.hostFor(endpointId).ensureListed()
   }
 
   /**
-   * Starts one Endpoint's provider listing and records it as the attempt
-   * `whenReady` waits on.
+   * Starts a host's listing without waiting for it.
+   *
+   * The failure is discarded rather than dropped: nobody is waiting on a prime,
+   * and the host keeps why it failed and re-raises it at the next `whenReady`
+   * or the refusal `start()` gives. Rethrowing here would only be an unhandled
+   * rejection saying the same thing to no one.
    */
-  private beginListing(
-    endpointId: string,
-    host: RemoteExecutionHost,
-  ): Promise<Error | null> {
-    const attempt: Promise<Error | null> = host.refreshProviders().then(
-      () => null,
-      (error: unknown) => {
-        // A failed listing must not poison the Endpoint. Forgetting the
-        // attempt makes the next turn ask again, so a daemon that was down at
-        // boot works as soon as it is up -- without restarting Convergence,
-        // and without this becoming a retry loop nobody asked for.
-        if (this.listings.get(endpointId) === attempt) {
-          this.listings.delete(endpointId)
-        }
-        return error instanceof Error ? error : new Error(String(error))
-      },
-    )
-    this.listings.set(endpointId, attempt)
-    return attempt
+  private prime(host: RemoteExecutionHost): void {
+    void host.ensureListed().catch(() => {})
   }
 
   /**
@@ -120,15 +108,17 @@ export class AppSettingsRemoteExecutionHostRegistry implements RemoteExecutionHo
   }
 
   /**
-   * Builds the host for every configured Endpoint, starting each one's
-   * provider listing. Called at boot so the first remote turn usually finds
-   * the listing already there rather than waiting on it -- `whenReady` is what
-   * makes waiting correct when it is not.
+   * Brings every configured Endpoint's listing up to date with its current
+   * configuration, building hosts that do not exist yet. Called at boot so the
+   * first remote turn usually finds the listing already there rather than
+   * waiting on it, and after a settings Save so an Endpoint that was just added
+   * or just moved is listed before anyone sends to it. An Endpoint whose
+   * configuration did not change costs a settings read and no round trip.
    */
   async primeConfiguredEndpoints(): Promise<void> {
     const settings = await this.deps.appSettings.getAppSettings()
     for (const endpoint of settings.executionHostEndpoints) {
-      this.hostFor(endpoint.id)
+      this.prime(this.hostFor(endpoint.id))
     }
   }
 }

@@ -5,8 +5,33 @@ import type {
 } from './execution-host.types'
 import {
   RemoteExecutionHostError,
+  type RemoteExecutionHostConnection,
   type RemoteExecutionHostProviderInfo,
 } from './remote-execution-host.types'
+
+/**
+ * The configuration of an Endpoint whose base URL or token could not be
+ * resolved at all. A value of its own rather than the empty string, and one no
+ * URL can contain, so it can never be mistaken for a real machine's
+ * configuration.
+ */
+export const UNRESOLVED_DAEMON_CONFIGURATION = '\u0000unresolved'
+
+/**
+ * The identity of the daemon configuration a listing was read from (MAR-2620).
+ *
+ * Everything a listing depends on goes in. A provider list read from one
+ * address is not true of another, and one read with a token the daemon has
+ * since stopped honouring is not true of that daemon either -- so two
+ * configurations are the same one only when both halves match. Anything left
+ * out here is a way for an answer to outlive the machine it describes.
+ */
+export function daemonConfigurationFingerprint(
+  connection: RemoteExecutionHostConnection | null,
+): string {
+  if (!connection) return UNRESOLVED_DAEMON_CONFIGURATION
+  return `${connection.baseUrl}\u0000${connection.token}`
+}
 
 /**
  * Parses the daemon /v0/meta response into the provider slice the Remote
@@ -250,7 +275,12 @@ export function parseRemoteSessionWorkspaceInfo(
  */
 export function unavailableProviderError(input: {
   providerId: string
-  /** Whether a provider listing has ever landed on this host. */
+  /**
+   * Whether a provider listing has landed for the daemon configuration this
+   * host is pointed at now. A listing read from an address the Endpoint has
+   * since been edited away from is not one: it says nothing about the machine
+   * the refusal is about.
+   */
   listed: boolean
   /** Why the most recent listing failed, when one did. */
   listingFailure: Error | null

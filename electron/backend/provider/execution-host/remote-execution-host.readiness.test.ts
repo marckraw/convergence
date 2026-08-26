@@ -18,6 +18,9 @@ import { LocalExecutionHost } from './local-execution-host'
 import { AppSettingsRemoteExecutionHostRegistry } from './remote-execution-host.registry'
 import {
   createStubDaemon,
+  deferred,
+  letEverythingQueuedRun,
+  track,
   waitUntil,
   type StubDaemon,
 } from './execution-host-daemon.fixture'
@@ -49,15 +52,6 @@ describe('a turn on an endpoint whose listing has not landed', () => {
   let service: SessionService
 
   const PROJECT_ID = 'endpoint-readiness-project'
-
-  /** A promise the test settles by hand, so the cold window has a known width. */
-  function deferred(): { promise: Promise<void>; release: () => void } {
-    let release = (): void => {}
-    const promise = new Promise<void>((resolve) => {
-      release = () => resolve()
-    })
-    return { promise, release }
-  }
 
   /**
    * The daemon behind a gate on its provider listing and a switch on its
@@ -92,31 +86,6 @@ describe('a turn on an endpoint whose listing has not landed', () => {
       name,
       executionHost: DAEMON.id,
     }).id
-  }
-
-  /** Runs the send and reports what became of it, without ever rethrowing. */
-  function track(promise: Promise<void>): {
-    settled: () => 'pending' | 'resolved' | 'rejected'
-    error: () => Error | null
-    done: Promise<void>
-  } {
-    let state: 'pending' | 'resolved' | 'rejected' = 'pending'
-    let failure: Error | null = null
-    const done = promise.then(
-      () => {
-        state = 'resolved'
-      },
-      (error: unknown) => {
-        state = 'rejected'
-        failure = error instanceof Error ? error : new Error(String(error))
-      },
-    )
-    return { settled: () => state, error: () => failure, done }
-  }
-
-  /** Long enough for every queued microtask and timer to have run. */
-  async function letEverythingQueuedRun(): Promise<void> {
-    await new Promise((resolve) => setTimeout(resolve, 25))
   }
 
   beforeEach(() => {

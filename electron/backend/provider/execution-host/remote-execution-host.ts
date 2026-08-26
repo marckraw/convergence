@@ -43,6 +43,7 @@ import type {
   ProviderExecutionHost,
 } from './execution-host.types'
 import {
+  daemonConfigurationFingerprint,
   describeRemoteExecutionHostFailure,
   capabilitiesForRemoteProvider,
   createSseParser,
@@ -53,6 +54,7 @@ import {
   type RemoteSessionWorkspaceInfo,
   remoteExecutionHostReconnectDelayMs,
   unavailableProviderError,
+  UNRESOLVED_DAEMON_CONFIGURATION,
 } from './remote-execution-host.pure'
 import {
   RemoteExecutionHostError,
@@ -117,15 +119,43 @@ export interface RemoteExecutionHostDeps {
 }
 
 /**
+ * A fact this host derived from one daemon configuration, kept together with
+ * the configuration it came from (MAR-2620).
+ *
+ * The pairing is the whole design. Three times now something derived from an
+ * Endpoint has gone on being used after that Endpoint changed, and each time
+ * the proposed fix was to remember to clear it. A value that carries its own
+ * provenance cannot be forgotten about, because reading it means proving the
+ * provenance still holds -- see `RemoteExecutionHost.inForce`.
+ */
+interface DerivedFromConfiguration<T> {
+  configuration: string
+  value: T
+}
+
+/** A provider listing and the handshake read in the same round trip. */
+interface LandedListing {
+  providers: RemoteExecutionHostProviderInfo[]
+  handshake: EndpointHandshakeResult | null
+}
+
+/**
  * Remote Execution Host: runs Providers on an agents-daemon behind the
  * execution host wire protocol. Sessions start with a POST, stream events
  * over SSE (resumed by sequence number on drops), and accept commands as
  * posted envelopes.
  *
  * Provider capability data comes from the daemon's /v0/meta listing and is
- * cached so the synchronous capabilities()/start() interface holds; call
- * refreshProviders() after construction and whenever the daemon connection
- * changes.
+ * cached so the synchronous capabilities()/start() interface holds. The cache
+ * is stored with the daemon configuration it was read from and can only be
+ * read back through `inForce`, which hands it over while -- and only while --
+ * that configuration is still the one the resolver returns. So editing an
+ * Endpoint's base URL or token needs nothing cleared and nobody notified: the
+ * old listing stops being an answer the moment the new configuration is
+ * observed, and every wire call observes it. `ensureListed()` is what observes
+ * it before a turn, and lists the new machine when it differs. The cost of a
+ * URL change is therefore one round trip on the next turn, not a rebuilt host
+ * -- sessions already holding handles from this one keep running.
  */
 export class RemoteExecutionHost implements ProviderExecutionHost {
   private readonly fetchFn: FetchFn
@@ -134,21 +164,35 @@ export class RemoteExecutionHost implements ProviderExecutionHost {
   private readonly wait: (ms: number) => Promise<void>
   private readonly healthProbeTimeoutMs: number
   private readonly debugSink: ProviderDebugSink
-  private providers: RemoteExecutionHostProviderInfo[] = []
-  private handshakeResult: EndpointHandshakeResult | null = null
   /**
-   * Whether a provider listing has ever landed. The cache alone cannot say:
-   * a daemon that offers nothing and a daemon that was never asked both leave
-   * `providers` empty, and only one of those is a fact about the daemon.
+   * The daemon configuration the resolver last returned, and the yardstick
+   * every cached answer is measured against. Written by `resolveConnection`,
+   * which every wire call and every listing already goes through, so nothing
+   * has to be told that settings changed -- observing the new configuration is
+   * what invalidates.
    */
-  private listed = false
+  private configuration: string = UNRESOLVED_DAEMON_CONFIGURATION
+  /**
+   * The last listing that landed and the handshake that came with it, one
+   * value because they are one fact about one daemon. Never read directly:
+   * `inForce` is the only way in.
+   */
+  private listing: DerivedFromConfiguration<LandedListing> | null = null
   /**
    * Why the most recent listing failed, kept so a refusal can name the real
-   * reason instead of the absence it produced. Cleared by a listing that
-   * lands, so a daemon that came back does not keep answering with the
-   * outage that preceded it.
+   * reason instead of the absence it produced. It does not displace a listing
+   * that landed -- a blip must not erase what the daemon last said -- and it
+   * ages out the same way, so neither a daemon that came back nor an Endpoint
+   * that moved keeps answering with the outage that preceded it.
    */
-  private listingFailure: Error | null = null
+  private listingFailure: DerivedFromConfiguration<Error> | null = null
+  /**
+   * The listing in flight, so callers arriving together share one round trip.
+   * It resolves to why the attempt failed rather than rejecting: most callers
+   * only start it, and a rejected promise nobody awaits is an unhandled
+   * rejection.
+   */
+  private pendingListing: Promise<Error | null> | null = null
   /**
    * Bumped by every refresh so a slow one that finishes last cannot overwrite
    * a newer one's answer. Same reason Emergence's handshake service keeps one
@@ -177,12 +221,18 @@ export class RemoteExecutionHost implements ProviderExecutionHost {
    *
    * Returns the cache as it stands after the commit, not this call's own read:
    * a refresh overtaken by a newer one reports the newer daemon, so a caller
-   * that reads handshake() next is never handed a mismatched pair.
+   * that reads handshake() next is never handed a mismatched pair. A refresh
+   * whose configuration was superseded while it was in flight reports nothing,
+   * for the same reason -- what it read is not about the machine in force.
    */
   async refreshProviders(): Promise<RemoteExecutionHostProviderInfo[]> {
     const generation = ++this.refreshGeneration
+    // The configuration this attempt is against, recorded before anything can
+    // fail so even a failure knows which machine it is a failure of.
+    let configuration = UNRESOLVED_DAEMON_CONFIGURATION
     try {
-      const connection = await this.deps.connection.resolveConnection()
+      const connection = await this.resolveConnection()
+      configuration = daemonConfigurationFingerprint(connection)
       // Started before the listing rather than after it: /health is
       // unauthenticated and independent, so it runs concurrently and usually
       // adds no wall-clock at all. When health is the slower half the refresh
@@ -206,22 +256,106 @@ export class RemoteExecutionHost implements ProviderExecutionHost {
       // write on either side of an await pairs one daemon's providers with
       // another daemon's name.
       if (generation === this.refreshGeneration) {
-        this.providers = providers
-        this.handshakeResult = handshake
-        this.listed = true
+        this.listing = { configuration, value: { providers, handshake } }
         this.listingFailure = null
       }
-      return this.providers
+      return this.listedProviders()
     } catch (error) {
       // Same generation guard as the success path, for the same reason: an
       // overtaken refresh must not report its failure over a newer one's
       // answer.
       if (generation === this.refreshGeneration) {
-        this.listingFailure =
-          error instanceof Error ? error : new Error(String(error))
+        this.listingFailure = {
+          configuration,
+          value: error instanceof Error ? error : new Error(String(error)),
+        }
       }
       throw error
     }
+  }
+
+  /**
+   * Ensures this host's provider listing was read from the daemon
+   * configuration now in force, listing the new one when it was not, and
+   * throwing with why when no listing can be had (MAR-2620).
+   *
+   * What anything about to start a session awaits. `start()` reads the
+   * capability cache synchronously, and there are two ways that cache can be
+   * wrong: it has not arrived yet, and it arrived from an address this
+   * Endpoint no longer points at. Both are settled here, before that read. Not
+   * a retry and not a sleep -- at most one round trip, shared by everyone who
+   * asks while it is running.
+   */
+  async ensureListed(): Promise<void> {
+    const failure = await this.listOnce()
+    if (failure) throw failure
+  }
+
+  /**
+   * One listing attempt, joined rather than duplicated by callers that arrive
+   * together, and skipped outright when the configuration in force has already
+   * been listed.
+   *
+   * Never rejects; see `pendingListing`. The attempt is forgotten once it
+   * settles, so the next caller re-reads the configuration: that re-read is
+   * the invalidation, and a memo that outlived it would be one more thing
+   * derived from an Endpoint that stopped tracking it.
+   */
+  private listOnce(): Promise<Error | null> {
+    if (this.pendingListing) return this.pendingListing
+    const attempt: Promise<Error | null> = this.listUnlessCurrent().then(
+      (failure) => {
+        if (this.pendingListing === attempt) this.pendingListing = null
+        return failure
+      },
+    )
+    this.pendingListing = attempt
+    return attempt
+  }
+
+  /** Reads the configuration in force, and lists unless it is already listed. */
+  private async listUnlessCurrent(): Promise<Error | null> {
+    try {
+      // Resolving is how the current configuration is observed at all, and it
+      // is what every cached answer is then measured against. A failure here
+      // is not swallowed: it sets the configuration to the unresolved one,
+      // which no landed listing can match, so the refresh below runs and
+      // throws the same error with the classification a refusal needs.
+      await this.resolveConnection()
+    } catch {
+      // Deliberately nothing: the refresh below reports it.
+    }
+    if (this.inForce(this.listing)) return null
+    try {
+      await this.refreshProviders()
+      return null
+    } catch (error) {
+      return error instanceof Error ? error : new Error(String(error))
+    }
+  }
+
+  /**
+   * A fact this host learned, handed back only while the configuration it was
+   * learned from is still the one in force (MAR-2620).
+   *
+   * The single read of every cached value, and the line that makes a stale
+   * pairing unrepresentable rather than merely tidied up afterwards. Nothing
+   * has to notice that an Endpoint's address changed; an answer derived from
+   * the old one simply cannot be obtained here.
+   */
+  private inForce<T>(known: DerivedFromConfiguration<T> | null): T | null {
+    return known && known.configuration === this.configuration
+      ? known.value
+      : null
+  }
+
+  /**
+   * The providers of the configuration in force -- none while none is known,
+   * which is not the same claim as a daemon that listed none. See
+   * `assertProviderListed` for the difference and who needs it.
+   */
+  private listedProviders(): RemoteExecutionHostProviderInfo[] {
+    return this.inForce(this.listing)?.providers ?? []
   }
 
   /**
@@ -231,7 +365,7 @@ export class RemoteExecutionHost implements ProviderExecutionHost {
    * "unsupported".
    */
   handshake(): EndpointHandshakeResult | null {
-    return this.handshakeResult
+    return this.inForce(this.listing)?.handshake ?? null
   }
 
   /**
@@ -260,13 +394,13 @@ export class RemoteExecutionHost implements ProviderExecutionHost {
   }
 
   capabilities(): ExecutionHostProviderCapabilities[] {
-    return this.providers.map(capabilitiesForRemoteProvider)
+    return this.listedProviders().map(capabilitiesForRemoteProvider)
   }
 
   capabilitiesFor(
     providerId: string,
   ): ExecutionHostProviderCapabilities | null {
-    const info = this.providers.find((p) => p.providerId === providerId)
+    const info = this.listedProviders().find((p) => p.providerId === providerId)
     return info ? capabilitiesForRemoteProvider(info) : null
   }
 
@@ -284,8 +418,8 @@ export class RemoteExecutionHost implements ProviderExecutionHost {
     if (this.capabilitiesFor(providerId)) return
     throw unavailableProviderError({
       providerId,
-      listed: this.listed,
-      listingFailure: this.listingFailure,
+      listed: this.inForce(this.listing) !== null,
+      listingFailure: this.inForce(this.listingFailure),
     })
   }
 
@@ -296,7 +430,7 @@ export class RemoteExecutionHost implements ProviderExecutionHost {
       // Describe reflects the last known listing when the daemon is
       // unreachable; live failures surface through session flows instead.
     }
-    return this.providers.map(descriptorForRemoteProvider)
+    return this.listedProviders().map(descriptorForRemoteProvider)
   }
 
   start(providerId: string, config: SessionStartConfig): SessionHandle {
@@ -383,9 +517,26 @@ export class RemoteExecutionHost implements ProviderExecutionHost {
     )
   }
 
-  /** @internal Shared by RemoteSessionRun. */
+  /**
+   * The daemon connection in force, and the one place this host learns what
+   * that is. Every wire call goes through here, so the moment any of them sees
+   * a new address or token, everything cached from the old one becomes
+   * unreadable (see `inForce`).
+   *
+   * @internal Shared by RemoteSessionRun.
+   */
   async resolveConnection(): Promise<RemoteExecutionHostConnection> {
-    return this.deps.connection.resolveConnection()
+    try {
+      const connection = await this.deps.connection.resolveConnection()
+      this.configuration = daemonConfigurationFingerprint(connection)
+      return connection
+    } catch (error) {
+      // An Endpoint that cannot be resolved gets its own configuration rather
+      // than keeping the last good one, so nothing read from the address it
+      // used to have survives its removal.
+      this.configuration = UNRESOLVED_DAEMON_CONFIGURATION
+      throw error
+    }
   }
 
   /** @internal Shared by RemoteSessionRun. */
