@@ -92,6 +92,19 @@ const DEFAULT_MAX_RECONNECT_ATTEMPTS = 10
  */
 const DEFAULT_HEALTH_PROBE_TIMEOUT_MS = 15_000
 
+/**
+ * How many observe-and-list rounds readiness runs before it gives up
+ * (MAR-2620).
+ *
+ * Not a retry policy: a listing that fails throws on the first round, and a
+ * host whose configuration is already listed returns on it without a round
+ * trip. A further round happens only when the Endpoint was edited while its
+ * daemon was being asked. The bound is here so a configuration changing faster
+ * than any daemon can answer costs one refused turn rather than a loop nothing
+ * ends.
+ */
+const MAX_LISTING_ROUNDS = 5
+
 export interface RemoteExecutionHostDeps {
   connection: RemoteExecutionHostConnectionResolver
   fetch?: FetchFn
@@ -127,6 +140,13 @@ export interface RemoteExecutionHostDeps {
  * the proposed fix was to remember to clear it. A value that carries its own
  * provenance cannot be forgotten about, because reading it means proving the
  * provenance still holds -- see `RemoteExecutionHost.inForce`.
+ *
+ * Every state of what it guards wears it, not only the settled one: the
+ * listing that landed, the attempt still in flight, and the failure that
+ * explains an absence. An untreated state is the whole bug back again -- a
+ * caller that joins an attempt started for another machine is answered by that
+ * machine just as surely as one that reads a cache nobody cleared, and the
+ * machine it actually named is never asked.
  */
 interface DerivedFromConfiguration<T> {
   configuration: string
@@ -156,6 +176,11 @@ interface LandedListing {
  * it before a turn, and lists the new machine when it differs. The cost of a
  * URL change is therefore one round trip on the next turn, not a rebuilt host
  * -- sessions already holding handles from this one keep running.
+ *
+ * The listing still in flight is stored the same way, and readiness proves the
+ * pairing again when it lands: a caller asking about the machine this Endpoint
+ * names now never waits on a round trip aimed somewhere else, and never treats
+ * one that finished about somewhere else as an answer.
  */
 export class RemoteExecutionHost implements ProviderExecutionHost {
   private readonly fetchFn: FetchFn
@@ -187,12 +212,20 @@ export class RemoteExecutionHost implements ProviderExecutionHost {
    */
   private listingFailure: DerivedFromConfiguration<Error> | null = null
   /**
-   * The listing in flight, so callers arriving together share one round trip.
+   * The listing in flight and the daemon configuration it was started for, so
+   * callers arriving together share one round trip -- and only when they are
+   * asking about the same machine. Read through `inForce` like every other
+   * derived value here: an attempt against the address this Endpoint has just
+   * been edited away from is not one anybody can wait on, and joining it would
+   * report ready for a daemon that was never asked anything.
+   *
    * It resolves to why the attempt failed rather than rejecting: most callers
    * only start it, and a rejected promise nobody awaits is an unhandled
    * rejection.
    */
-  private pendingListing: Promise<Error | null> | null = null
+  private pendingListing: DerivedFromConfiguration<
+    Promise<Error | null>
+  > | null = null
   /**
    * Bumped by every refresh so a slow one that finishes last cannot overwrite
    * a newer one's answer. Same reason Emergence's handshake service keeps one
@@ -285,47 +318,87 @@ export class RemoteExecutionHost implements ProviderExecutionHost {
    * Endpoint no longer points at. Both are settled here, before that read. Not
    * a retry and not a sleep -- at most one round trip, shared by everyone who
    * asks while it is running.
+   *
+   * Each round observes before it decides, and a listing only ends the loop
+   * once it has been observed to be about the machine in force. A listing
+   * costs a round trip and an Endpoint can be edited during one, so an attempt
+   * that was correctly scoped when it started can still land about a machine
+   * that has since been left -- and `this.configuration` is itself only as
+   * fresh as the last resolve, so re-reading the field after that await would
+   * measure a stale answer against a stale yardstick and call it a match. The
+   * observation is what makes the second look worth taking. A listing about a
+   * machine no longer in force is discarded, and the machine now in force is
+   * listed instead.
    */
   async ensureListed(): Promise<void> {
-    const failure = await this.listOnce()
-    if (failure) throw failure
+    for (let round = 0; round < MAX_LISTING_ROUNDS; round += 1) {
+      await this.observeConfiguration()
+      if (this.inForce(this.listing)) return
+      const failure = await this.listOnce()
+      if (failure) throw failure
+    }
+    throw new RemoteExecutionHostError(
+      'The execution host endpoint kept changing while its providers were ' +
+        'being listed, so nothing could be read from the address it points ' +
+        'at now.',
+      'configuration',
+    )
   }
 
   /**
-   * One listing attempt, joined rather than duplicated by callers that arrive
-   * together, and skipped outright when the configuration in force has already
-   * been listed.
+   * Reads which daemon configuration is in force, which is the only way this
+   * host ever learns that, and the yardstick every derived value is then
+   * measured against.
    *
-   * Never rejects; see `pendingListing`. The attempt is forgotten once it
-   * settles, so the next caller re-reads the configuration: that re-read is
-   * the invalidation, and a memo that outlived it would be one more thing
-   * derived from an Endpoint that stopped tracking it.
+   * A failure is not swallowed: it sets the configuration to the unresolved
+   * one, which no landed listing and no attempt in flight can match, so the
+   * refresh that follows runs and throws the same error with the
+   * classification a refusal needs.
+   */
+  private async observeConfiguration(): Promise<void> {
+    try {
+      await this.resolveConnection()
+    } catch {
+      // Deliberately nothing: the refresh that follows reports it.
+    }
+  }
+
+  /**
+   * One listing attempt for the configuration in force, joined rather than
+   * duplicated by callers that arrive together.
+   *
+   * The attempt is keyed by the machine it is against, so a caller asking
+   * about B does not join one started for A -- it starts its own, and B's
+   * daemon is the one that gets asked. Callers asking about the same machine
+   * still share the one round trip: scoping the memo is not the same as having
+   * no memo, and re-listing on every ask would put a round trip and an empty
+   * cache on every turn.
+   *
+   * Synchronous from the caller's observation to the memo write, deliberately:
+   * an await in between would let the configuration move after it was read and
+   * key the attempt to a machine nobody asked about. `ensureListed` observes,
+   * then calls this.
+   *
+   * The attempt is forgotten once it settles, so the next caller re-observes:
+   * that re-read is the invalidation, and a memo that outlived it would be one
+   * more thing derived from an Endpoint that stopped tracking it. Never
+   * rejects; see `pendingListing`.
    */
   private listOnce(): Promise<Error | null> {
-    if (this.pendingListing) return this.pendingListing
-    const attempt: Promise<Error | null> = this.listUnlessCurrent().then(
-      (failure) => {
-        if (this.pendingListing === attempt) this.pendingListing = null
-        return failure
-      },
-    )
-    this.pendingListing = attempt
+    const joined = this.inForce(this.pendingListing)
+    if (joined) return joined
+
+    const configuration = this.configuration
+    const attempt: Promise<Error | null> = this.list().then((failure) => {
+      if (this.pendingListing?.value === attempt) this.pendingListing = null
+      return failure
+    })
+    this.pendingListing = { configuration, value: attempt }
     return attempt
   }
 
-  /** Reads the configuration in force, and lists unless it is already listed. */
-  private async listUnlessCurrent(): Promise<Error | null> {
-    try {
-      // Resolving is how the current configuration is observed at all, and it
-      // is what every cached answer is then measured against. A failure here
-      // is not swallowed: it sets the configuration to the unresolved one,
-      // which no landed listing can match, so the refresh below runs and
-      // throws the same error with the classification a refusal needs.
-      await this.resolveConnection()
-    } catch {
-      // Deliberately nothing: the refresh below reports it.
-    }
-    if (this.inForce(this.listing)) return null
+  /** One refresh, reporting why it failed rather than throwing it. */
+  private async list(): Promise<Error | null> {
     try {
       await this.refreshProviders()
       return null

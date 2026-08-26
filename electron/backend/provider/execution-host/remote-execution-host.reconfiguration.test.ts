@@ -84,6 +84,7 @@ describe('an endpoint whose base url moves under a live host', () => {
   let newMachine: StubDaemon
   let requestUrls: string[]
   let metaGate: { promise: Promise<void>; release: () => void } | null
+  let oldMetaGate: { promise: Promise<void>; release: () => void } | null
   let appSettings: AppSettingsService
   let registry: AppSettingsRemoteExecutionHostRegistry
   let service: SessionService
@@ -92,14 +93,23 @@ describe('an endpoint whose base url moves under a live host', () => {
 
   /**
    * One fetch over two daemons, dispatched by origin, with an optional gate on
-   * the new machine's provider listing. An origin no daemon serves throws
-   * rather than defaulting: reaching the wrong machine must fail loudly here.
+   * each machine's provider listing. An origin no daemon serves throws rather
+   * than defaulting: reaching the wrong machine must fail loudly here.
+   *
+   * Both machines can be held, not just the new one, because the states worth
+   * standing in are asymmetric: a listing still in flight against the address
+   * an Endpoint has just left is a different thing from one still in flight
+   * against the address it points at now, and a test cannot tell them apart
+   * unless it can hold either.
    */
   function routedFetch(): typeof fetch {
     return (async (input: unknown, init?: RequestInit) => {
       const url = String(input)
       requestUrls.push(url)
-      if (url.startsWith(OLD_URL)) return oldMachine.fetchFn(url, init)
+      if (url.startsWith(OLD_URL)) {
+        if (url.endsWith('/v0/meta') && oldMetaGate) await oldMetaGate.promise
+        return oldMachine.fetchFn(url, init)
+      }
       if (url.startsWith(NEW_URL)) {
         if (url.endsWith('/v0/meta') && metaGate) await metaGate.promise
         return newMachine.fetchFn(url, init)
@@ -118,11 +128,29 @@ describe('an endpoint whose base url moves under a live host', () => {
     return requestUrls.filter((url) => url.endsWith('/v0/execution/sessions'))
   }
 
-  function listedProviderIds(): string[] {
-    return registry
+  function listedProviderIds(
+    from: AppSettingsRemoteExecutionHostRegistry = registry,
+  ): string[] {
+    return from
       .hostFor(ENDPOINT_ID)
       .capabilities()
       .map((entry) => entry.providerId)
+  }
+
+  /**
+   * A registry that has never listed anything, over the same settings and the
+   * same two daemons.
+   *
+   * The suite's own registry is primed and waited for in `beforeEach`, which
+   * is the one state these tests cannot start from: a listing still in flight
+   * is unobservable on a host that already holds one.
+   */
+  function coldRegistry(): AppSettingsRemoteExecutionHostRegistry {
+    return new AppSettingsRemoteExecutionHostRegistry({
+      appSettings,
+      credentials: { resolveToken: async (id: string) => `token-${id}` },
+      fetch: routedFetch(),
+    })
   }
 
   /**
@@ -169,6 +197,7 @@ describe('an endpoint whose base url moves under a live host', () => {
     newMachine.setMeta(CLAUDE_ONLY)
     requestUrls = []
     metaGate = null
+    oldMetaGate = null
 
     appSettings = new AppSettingsService(
       db,
@@ -287,6 +316,93 @@ describe('an endpoint whose base url moves under a live host', () => {
     )
     expect(service.getById(running)?.attention).toBe('finished')
     expect(newMachine.startRequests).toHaveLength(0)
+  })
+
+  it('does not wait on a listing started for the address the endpoint just left', async () => {
+    // The old machine is asked and then held mid-answer. This is the attempt
+    // in flight, and nothing below is allowed to be satisfied by it: a memo
+    // keyed by nothing is joined by everyone, including the caller asking
+    // about a machine that has never been contacted.
+    oldMetaGate = deferred()
+    const cold = coldRegistry()
+    service.setRemoteExecutionHosts(cold)
+    cold.hostFor(ENDPOINT_ID)
+    await letEverythingQueuedRun()
+    expect(metaUrls()).toContain(`${OLD_URL}/v0/meta`)
+
+    await pointEndpointAt(NEW_URL)
+    const sessionId = createSession('follows the endpoint mid-listing')
+    const send = track(service.start(sessionId, { text: 'hello' }))
+
+    // The old machine is still held, so anything that settles here settled
+    // without it — which is only possible if the new machine was asked.
+    await waitUntil(
+      () => send.settled() !== 'pending',
+      'the turn to settle while the old address is still unanswered',
+    )
+    expect(send.error()).toBeNull()
+    await waitUntil(() => startUrls().length > 0, 'the session to be posted')
+
+    expect(metaUrls()).toContain(`${NEW_URL}/v0/meta`)
+    expect(listedProviderIds(cold)).toEqual(['claude'])
+    expect(startUrls()).toEqual([`${NEW_URL}/v0/execution/sessions`])
+    expect(newMachine.startRequests).toHaveLength(1)
+    expect(oldMachine.startRequests).toHaveLength(0)
+
+    oldMetaGate.release()
+  })
+
+  it('still shares one listing between callers asking about the same machine', async () => {
+    metaGate = deferred()
+    await pointEndpointAt(NEW_URL)
+    const listedBefore = metaUrls().length
+
+    const first = track(registry.whenReady(ENDPOINT_ID))
+    const second = track(registry.whenReady(ENDPOINT_ID))
+    await letEverythingQueuedRun()
+    expect(first.settled()).toBe('pending')
+    expect(second.settled()).toBe('pending')
+
+    metaGate.release()
+    await Promise.all([first.done, second.done])
+
+    expect(first.error()).toBeNull()
+    expect(second.error()).toBeNull()
+    // Keying the attempt by the machine it is against must not turn into no
+    // memo at all: two callers, one round trip.
+    expect(metaUrls().slice(listedBefore)).toEqual([`${NEW_URL}/v0/meta`])
+    expect(listedProviderIds()).toEqual(['claude'])
+  })
+
+  it('discards a listing that lands after the endpoint moved and lists the machine now in force', async () => {
+    // Both machines held, so "the old one has answered and the new one has
+    // not" is a state the test can stand in and assert from.
+    oldMetaGate = deferred()
+    metaGate = deferred()
+    const cold = coldRegistry()
+    const ready = track(cold.whenReady(ENDPOINT_ID))
+    await letEverythingQueuedRun()
+
+    await pointEndpointAt(NEW_URL)
+    oldMetaGate.release()
+    // A correctly scoped attempt still spans an await. This one started
+    // against the address in force and landed about an address that no longer
+    // is, so readiness has to go round again rather than accept it.
+    await waitUntil(
+      () => metaUrls().includes(`${NEW_URL}/v0/meta`),
+      'the machine now in force to be listed',
+    )
+
+    expect(ready.settled()).toBe('pending')
+    // The old machine's answer arrived, and it is neither an answer to this
+    // question nor parked in the cache waiting to become one.
+    expect(listedProviderIds(cold)).toEqual([])
+
+    metaGate.release()
+    await ready.done
+
+    expect(ready.error()).toBeNull()
+    expect(listedProviderIds(cold)).toEqual(['claude'])
   })
 
   it('does not list again while the endpoint is unchanged', async () => {
