@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import type { Mock } from 'vitest'
 import { registerIpcHandlers } from './ipc'
 import type { TurnCaptureService } from '../backend/session/turn/turn-capture.service'
 
@@ -31,26 +32,64 @@ vi.mock('electron', () => ({
  * `registerIpcHandlers` takes its collaborators positionally, and only two of
  * them are reachable from this channel: the session service, whose listeners
  * are wired at registration time, and the turn capture service the handler
- * calls. The rest are placeholders. A signature change that moves either of
- * the two fails this test loudly rather than quietly registering nothing.
+ * calls. A signature change that moves either of the two fails this test
+ * loudly rather than quietly registering nothing.
  */
 const SESSION_SERVICE_ARGUMENT = 8
 const TURN_CAPTURE_SERVICE_ARGUMENT = 17
 const ARGUMENT_COUNT = 19
 
-function registerWithTurnCapture(
+interface ArgumentSlot {
+  index: number
+  getFileDiff: Mock
+}
+
+/**
+ * Registers the real handlers with a stub in every argument slot, each one
+ * able to answer `getFileDiff`.
+ *
+ * The constants above are the fragile half of this canary. MAR-2609 re-anchored
+ * them once already, when excising code review shortened the signature, and a
+ * count that still adds up is not evidence that the argument at that index is
+ * still the turn capture service — re-anchoring numbers is exactly how a real
+ * removal would hide here. So no slot is inert: every one records that it was
+ * asked, and the test names the slot that answered. Move the turn capture
+ * service to any other position and the handler answers from that position, and
+ * this goes red saying which one — instead of raising a `TypeError` off an empty
+ * placeholder, which reads like a broken stub rather than a broken wire.
+ */
+function registerHandlers(
   getFileDiff: TurnCaptureService['getFileDiff'],
-): void {
+): ArgumentSlot[] {
   const noop = (): void => {}
-  const args = Array.from({ length: ARGUMENT_COUNT }, () => ({}) as never)
+  const slots: ArgumentSlot[] = Array.from(
+    { length: ARGUMENT_COUNT },
+    (_unused, index) => ({
+      index,
+      getFileDiff: vi.fn(() => `the service at argument ${index}`),
+    }),
+  )
+  slots[TURN_CAPTURE_SERVICE_ARGUMENT].getFileDiff = vi.fn(
+    getFileDiff as (...args: unknown[]) => unknown,
+  )
+
+  const args = slots.map((slot) => ({ getFileDiff: slot.getFileDiff }) as never)
   args[SESSION_SERVICE_ARGUMENT] = {
+    ...(args[SESSION_SERVICE_ARGUMENT] as object),
     setSummaryUpdateListener: noop,
     setConversationPatchListener: noop,
     setQueuedInputPatchListener: noop,
     setTurnDeltaListener: noop,
   } as never
-  args[TURN_CAPTURE_SERVICE_ARGUMENT] = { getFileDiff } as never
   ;(registerIpcHandlers as (...values: never[]) => void)(...args)
+
+  return slots
+}
+
+function slotsThatAnswered(slots: ArgumentSlot[]): number[] {
+  return slots
+    .filter((slot) => slot.getFileDiff.mock.calls.length > 0)
+    .map((slot) => slot.index)
 }
 
 describe('the turns:getFileDiff ipc handler (MAR-2589)', () => {
@@ -58,9 +97,26 @@ describe('the turns:getFileDiff ipc handler (MAR-2589)', () => {
     handlers.clear()
   })
 
+  it('asks the turn capture service, and no other argument', async () => {
+    const slots = registerHandlers(vi.fn().mockReturnValue('turn capture diff'))
+
+    const diff = await handlers.get('turns:getFileDiff')?.(
+      {},
+      'turn-1',
+      'README.md',
+      null,
+    )
+
+    // The identity claim, not the arithmetic one: the object the handler
+    // reached for is the object this test put at that index, proven by the
+    // answer coming back from it and from nowhere else.
+    expect(slotsThatAnswered(slots)).toEqual([TURN_CAPTURE_SERVICE_ARGUMENT])
+    expect(diff).toBe('turn capture diff')
+  })
+
   it('hands the repository the renderer named to the service', async () => {
     const getFileDiff = vi.fn().mockReturnValue('api readme diff')
-    registerWithTurnCapture(getFileDiff)
+    registerHandlers(getFileDiff)
 
     const handler = handlers.get('turns:getFileDiff')
     expect(handler).toBeTypeOf('function')
@@ -73,7 +129,7 @@ describe('the turns:getFileDiff ipc handler (MAR-2589)', () => {
 
   it('hands the working-directory root across as null, not as nothing', async () => {
     const getFileDiff = vi.fn().mockReturnValue('root readme diff')
-    registerWithTurnCapture(getFileDiff)
+    registerHandlers(getFileDiff)
 
     await handlers.get('turns:getFileDiff')?.({}, 'turn-1', 'README.md', null)
 
