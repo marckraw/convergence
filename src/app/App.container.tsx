@@ -12,11 +12,6 @@ import { useAppSettingsStore } from '@/entities/app-settings'
 import { useSessionRelayStore } from '@/entities/session-relay'
 import { useAppSurfaceStore } from '@/entities/app-surface'
 import {
-  useCodeReviewStore,
-  type CodeReviewMode,
-  type CodeReviewView,
-} from '@/entities/code-review'
-import {
   notificationsApi,
   useNotificationsStore,
 } from '@/entities/notifications'
@@ -35,7 +30,6 @@ import {
 import { SpaceSessionLinkDialogContainer } from '@/features/space-session-link'
 import { SessionForkDialogContainer } from '@/features/session-fork'
 import { SessionIntentDialogContainer } from '@/features/session-intent-dialog'
-import { PullRequestReviewStartDialogContainer } from '@/features/pull-request-review-start'
 import { NotificationsToastHostContainer } from '@/features/notifications-toast-host'
 import { UpdatesToastContainer } from '@/features/updates-toast'
 import { ProviderUpdatesToastContainer } from '@/features/provider-updates-toast'
@@ -51,31 +45,11 @@ export type MainViewRoute =
   | { kind: 'chat-home' }
   | { kind: 'chat-session'; sessionId: string }
   | { kind: 'chat-space'; spaceId: string; draftAttempt: boolean }
-  | {
-      kind: 'code-review'
-      targetId: string | null
-      mode: CodeReviewMode
-      view: CodeReviewView
-      filePath: string | null
-    }
 
 interface AppProps {
   mainViewRoute?: MainViewRoute
   onSelectCodeSession?: (sessionId: string) => void
   onBeginCodeSessionDraft?: (workspaceId: string | null) => void
-  onOpenCodeReview?: (search?: {
-    targetId?: string | null
-    mode?: CodeReviewMode
-    view?: CodeReviewView
-    file?: string | null
-  }) => void
-  onCodeReviewSearchChange?: (search: {
-    targetId?: string | null
-    mode?: CodeReviewMode
-    view?: CodeReviewView
-    file?: string | null
-  }) => void
-  onCloseCodeReview?: () => void
   onSelectChatSession?: (sessionId: string) => void
   onSelectChatSpace?: (spaceId: string, options?: { draft?: boolean }) => void
   onBeginChatSpaceAttempt?: (spaceId: string) => void
@@ -92,9 +66,6 @@ export function App({
   mainViewRoute = { kind: 'home' },
   onSelectCodeSession,
   onBeginCodeSessionDraft,
-  onOpenCodeReview,
-  onCodeReviewSearchChange,
-  onCloseCodeReview,
   onSelectChatSession,
   onSelectChatSpace,
   onBeginChatSpaceAttempt,
@@ -111,15 +82,6 @@ export function App({
   const routeNewCodeSessionWorkspaceId =
     mainViewRoute.kind === 'new-code-session' ? mainViewRoute.workspaceId : null
   const routeNewCodeSessionActive = mainViewRoute.kind === 'new-code-session'
-  const routeCodeReviewMode =
-    mainViewRoute.kind === 'code-review' ? mainViewRoute.mode : null
-  const routeCodeReviewFilePath =
-    mainViewRoute.kind === 'code-review' ? mainViewRoute.filePath : null
-  const routeCodeReviewView =
-    mainViewRoute.kind === 'code-review' ? mainViewRoute.view : null
-  const routeCodeReviewTargetId =
-    mainViewRoute.kind === 'code-review' ? mainViewRoute.targetId : null
-  const routeCodeReviewActive = mainViewRoute.kind === 'code-review'
   const routeChatSessionId =
     mainViewRoute.kind === 'chat-session' ? mainViewRoute.sessionId : null
   const routeChatSpaceId =
@@ -188,11 +150,6 @@ export function App({
   const loadRelays = useSessionRelayStore((s) => s.load)
   const loadNotificationPrefs = useNotificationsStore((s) => s.loadPrefs)
   const setActiveSurface = useAppSurfaceStore((s) => s.setActiveSurface)
-  const codeReviewTargets = useCodeReviewStore((s) => s.targets)
-  const codeReviewTargetsLoading = useCodeReviewStore((s) => s.targetsLoading)
-  const openCodeReview = useCodeReviewStore((s) => s.openReview)
-  const closeCodeReview = useCodeReviewStore((s) => s.closeReview)
-  const loadCodeReviewTargets = useCodeReviewStore((s) => s.loadTargets)
   const setNotificationActiveSession = useNotificationsStore(
     (s) => s.setActiveSession,
   )
@@ -210,8 +167,6 @@ export function App({
   const [routeWorkspaceCatalogLoaded, setRouteWorkspaceCatalogLoaded] =
     useState(false)
   const [routeSpacesLoaded, setRouteSpacesLoaded] = useState(false)
-  const [routeCodeReviewTargetsLoaded, setRouteCodeReviewTargetsLoaded] =
-    useState(false)
 
   const routeResolution = useMemo(
     () =>
@@ -221,19 +176,13 @@ export function App({
           routeSessionCatalogLoaded && routeWorkspaceCatalogLoaded && !loading,
         spacesLoaded:
           !routeChatSpaceActive || (routeSpacesLoaded && !spacesLoading),
-        codeReviewTargetsLoaded:
-          !routeCodeReviewActive ||
-          (routeCodeReviewTargetsLoaded && !codeReviewTargetsLoading),
         projects,
         sessions: globalSessions,
         chatSessions: globalChatSessions,
         workspaces: [...globalWorkspaces, ...workspaces],
         spaces,
-        codeReviewTargets,
       }),
     [
-      codeReviewTargets,
-      codeReviewTargetsLoading,
       globalChatSessions,
       globalSessions,
       globalWorkspaces,
@@ -241,8 +190,6 @@ export function App({
       mainViewRoute,
       projects,
       routeChatSpaceActive,
-      routeCodeReviewActive,
-      routeCodeReviewTargetsLoaded,
       routeSessionCatalogLoaded,
       routeSpacesLoaded,
       routeWorkspaceCatalogLoaded,
@@ -298,25 +245,6 @@ export function App({
   }, [loadSpaces, routeChatSpaceActive])
 
   useEffect(() => {
-    if (!routeCodeReviewActive || !activeProject) {
-      setRouteCodeReviewTargetsLoaded(!routeCodeReviewActive || !loading)
-      return
-    }
-
-    setRouteCodeReviewTargetsLoaded(false)
-    void loadCodeReviewTargets({
-      projectId: activeProject.id,
-      sessionId: activeSessionId,
-    }).finally(() => setRouteCodeReviewTargetsLoaded(true))
-  }, [
-    activeProject,
-    activeSessionId,
-    loadCodeReviewTargets,
-    loading,
-    routeCodeReviewActive,
-  ])
-
-  useEffect(() => {
     void loadAppSettings()
   }, [loadAppSettings])
 
@@ -355,7 +283,6 @@ export function App({
   useEffect(() => {
     if (!routeCodeSessionId) return
     setActiveSurface('code')
-    closeCodeReview()
 
     if (routeResolution.status !== 'ready') return
     if (!routeSessionLoaded) return
@@ -367,21 +294,18 @@ export function App({
     routeCodeSessionId,
     routeResolution.status,
     routeSessionLoaded,
-    closeCodeReview,
     setActiveSurface,
   ])
 
   useEffect(() => {
     if (mainViewRoute.kind !== 'home') return
 
-    closeCodeReview()
     setActiveSurface('code')
-  }, [closeCodeReview, mainViewRoute.kind, setActiveSurface])
+  }, [mainViewRoute.kind, setActiveSurface])
 
   useEffect(() => {
     if (!routeChatActive) return
 
-    closeCodeReview()
     setActiveSurface('chat')
 
     if (routeResolution.status !== 'ready') return
@@ -397,7 +321,6 @@ export function App({
     setActiveGlobalSession(routeChatSessionId)
   }, [
     activeGlobalSessionId,
-    closeCodeReview,
     routeChatActive,
     routeChatSessionId,
     routeResolution.status,
@@ -407,40 +330,13 @@ export function App({
   ])
 
   useEffect(() => {
-    if (routeCodeReviewActive) {
-      setActiveSurface('code')
-      openCodeReview({
-        mode: routeCodeReviewMode ?? 'working-tree',
-        view: routeCodeReviewView ?? 'guide',
-        selectedFile: routeCodeReviewFilePath,
-      })
-      return
-    }
-
-    if (routeCodeSessionId) {
-      closeCodeReview()
-    }
-  }, [
-    closeCodeReview,
-    openCodeReview,
-    routeCodeReviewActive,
-    routeCodeReviewFilePath,
-    routeCodeReviewMode,
-    routeCodeReviewView,
-    routeCodeSessionId,
-    setActiveSurface,
-  ])
-
-  useEffect(() => {
     if (!routeNewCodeSessionActive) return
     if (routeResolution.status !== 'ready') return
 
-    closeCodeReview()
     setActiveSurface('code')
     beginStoreSessionDraft(routeNewCodeSessionWorkspaceId)
   }, [
     beginStoreSessionDraft,
-    closeCodeReview,
     routeNewCodeSessionActive,
     routeNewCodeSessionWorkspaceId,
     routeResolution.status,
@@ -537,21 +433,6 @@ export function App({
     }
   }, [sessionError, clearSessionError])
 
-  const handleOpenCodeReview = (
-    search?: Parameters<NonNullable<AppProps['onOpenCodeReview']>>[0],
-  ) => {
-    if (onOpenCodeReview) {
-      onOpenCodeReview(search)
-      return
-    }
-
-    openCodeReview({
-      mode: search?.mode,
-      view: search?.view,
-      selectedFile: search?.file,
-    })
-  }
-
   const handleSelectProjectRoot = async (projectId: string) => {
     setActiveSurface('code')
     prepareForProject(projectId)
@@ -565,7 +446,6 @@ export function App({
     switch (routeResolution.fallback.action) {
       case 'welcome':
         setActiveSurface('code')
-        closeCodeReview()
         if (onShowCodeHome) {
           void onShowCodeHome()
         }
@@ -578,14 +458,6 @@ export function App({
           setActiveGlobalSession(null)
         }
         return
-      case 'code-review':
-        handleOpenCodeReview({
-          targetId: null,
-          mode: 'working-tree',
-          view: 'guide',
-          file: null,
-        })
-        return
     }
   }
 
@@ -596,14 +468,6 @@ export function App({
         activeGlobalSessionId={activeGlobalSessionId}
         onSelectSession={onSelectCodeSession ?? setActiveSession}
         onSelectGlobalSession={setActiveGlobalSession}
-        onOpenCodeReview={handleOpenCodeReview}
-        onCodeReviewSearchChange={onCodeReviewSearchChange}
-        onCloseCodeReview={onCloseCodeReview ?? closeCodeReview}
-        codeReviewActive={routeCodeReviewActive}
-        codeReviewTargetId={routeCodeReviewTargetId}
-        codeReviewMode={routeCodeReviewMode ?? 'working-tree'}
-        codeReviewView={routeCodeReviewView ?? 'guide'}
-        codeReviewFilePath={routeCodeReviewFilePath}
         selectedChatSpaceId={routeChatSpaceId}
         draftChatSpaceId={routeChatSpaceDraftAttempt ? routeChatSpaceId : null}
         onSelectChatSession={onSelectChatSession ?? setActiveGlobalSession}
@@ -621,7 +485,6 @@ export function App({
           !!(
             onSelectCodeSession ||
             onBeginCodeSessionDraft ||
-            onOpenCodeReview ||
             onSelectChatSession ||
             onSelectChatSpace ||
             onShowCode ||
@@ -644,7 +507,6 @@ export function App({
         onSelectChatSession={onSelectChatSession}
         onBeginCodeSessionDraft={onBeginCodeSessionDraft}
         onSelectProject={handleSelectProjectRoot}
-        onOpenCodeReview={() => handleOpenCodeReview()}
       />
       <SpaceSessionLinkDialogContainer />
       <SessionForkDialogContainer />
@@ -652,7 +514,6 @@ export function App({
         onBeginCodeSessionDraft={onBeginCodeSessionDraft}
         onSelectCodeSession={onSelectCodeSession}
       />
-      <PullRequestReviewStartDialogContainer />
       <NotificationsToastHostContainer onFocusSession={onSelectAnySession} />
       <UpdatesToastContainer />
       <ProviderUpdatesToastContainer />

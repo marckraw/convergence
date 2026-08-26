@@ -7,7 +7,6 @@ import { MissionControl } from '@/widgets/mission-control'
 import { WorkspaceLayout } from '@/widgets/workspace-layout'
 import { NotificationsOnboardingContainer } from '@/features/notifications-onboarding'
 import { useAppSurfaceStore } from '@/entities/app-surface'
-import type { CodeReviewMode, CodeReviewView } from '@/entities/code-review'
 import type { SessionSummary } from '@/entities/session'
 import { cn } from '@/shared/lib/cn.pure'
 import { DevBuildRibbon } from './dev-build-ribbon.presentational'
@@ -19,24 +18,6 @@ interface AppShellProps {
   activeGlobalSessionId: string | null
   onSelectSession: (id: string) => void
   onSelectGlobalSession: (id: string | null) => void
-  onOpenCodeReview?: (search?: {
-    targetId?: string | null
-    mode?: CodeReviewMode
-    view?: CodeReviewView
-    file?: string | null
-  }) => void
-  onCodeReviewSearchChange?: (search: {
-    targetId?: string | null
-    mode?: CodeReviewMode
-    view?: CodeReviewView
-    file?: string | null
-  }) => void
-  onCloseCodeReview: () => void
-  codeReviewActive: boolean
-  codeReviewTargetId: string | null
-  codeReviewMode: CodeReviewMode
-  codeReviewView: CodeReviewView
-  codeReviewFilePath: string | null
   selectedChatSpaceId: string | null
   draftChatSpaceId: string | null
   onSelectChatSession: (id: string) => void
@@ -73,14 +54,6 @@ export const AppShell: FC<AppShellProps> = ({
   activeGlobalSessionId,
   onSelectSession,
   onSelectGlobalSession,
-  onOpenCodeReview,
-  onCodeReviewSearchChange,
-  onCloseCodeReview,
-  codeReviewActive,
-  codeReviewTargetId,
-  codeReviewMode,
-  codeReviewView,
-  codeReviewFilePath,
   selectedChatSpaceId,
   draftChatSpaceId,
   onSelectChatSession,
@@ -298,7 +271,6 @@ export const AppShell: FC<AppShellProps> = ({
               selectedSpaceId={effectiveSelectedChatSpaceId}
               onSelectSpace={handleSelectChatSpace}
               activeGlobalSessionId={activeGlobalSessionId}
-              onOpenCodeReview={onOpenCodeReview}
               onSelectProjectRoot={onSelectProjectRoot}
               onSelectAnySession={onSelectAnySession}
               onShowMissionControl={onShowMissionControl}
@@ -361,16 +333,7 @@ export const AppShell: FC<AppShellProps> = ({
             <>
               <NotificationsOnboardingContainer />
               <div className="min-h-0 flex-1">
-                <WorkspaceLayout
-                  codeReviewActive={codeReviewActive}
-                  codeReviewTargetId={codeReviewTargetId}
-                  codeReviewMode={codeReviewMode}
-                  codeReviewView={codeReviewView}
-                  codeReviewFilePath={codeReviewFilePath}
-                  onOpenCodeReview={onOpenCodeReview}
-                  onCodeReviewSearchChange={onCodeReviewSearchChange}
-                  onCloseCodeReview={onCloseCodeReview}
-                />
+                <WorkspaceLayout />
               </div>
             </>
           ) : (

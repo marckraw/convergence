@@ -18,7 +18,6 @@ import type {
   NewWorkspacePaletteItem,
   ForkSessionPaletteItem,
   CheckUpdatesPaletteItem,
-  OpenCodeReviewPaletteItem,
 } from './command-center.types'
 
 export interface BuildPaletteIndexInput {
@@ -229,18 +228,6 @@ export function buildPaletteIndex(
     search: { title: 'Check for updates' },
   }
   items.push(checkUpdates)
-
-  const openCodeReview: OpenCodeReviewPaletteItem = {
-    kind: 'open-code-review',
-    id: 'open-code-review',
-    title: 'Open Code Review',
-    description: 'Review changed files across project workspaces and sessions',
-    search: {
-      title: 'Open Code Review',
-      aliases: 'changed files diff review pull request pr',
-    },
-  }
-  items.push(openCodeReview)
 
   for (const workspace of workspaces) {
     const project = projectsById.get(workspace.projectId)
