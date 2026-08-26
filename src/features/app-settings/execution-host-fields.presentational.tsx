@@ -16,6 +16,8 @@ interface ExecutionHostFieldsProps {
   remoteBaseUrlDraft: string
   remoteBaseUrlError: string | null
   actionBlocks: ExecutionHostEndpointActionBlocks
+  /** Why Remove cannot act yet, or null when it can. */
+  removalBlock: string | null
   credentialStatus: ExecutionHostDaemonCredentialStatus | null
   daemonTokenDraft: string
   showDaemonToken: boolean
@@ -104,6 +106,7 @@ export const ExecutionHostFields: FC<ExecutionHostFieldsProps> = ({
   remoteBaseUrlDraft,
   remoteBaseUrlError,
   actionBlocks,
+  removalBlock,
   credentialStatus,
   daemonTokenDraft,
   showDaemonToken,
@@ -125,7 +128,7 @@ export const ExecutionHostFields: FC<ExecutionHostFieldsProps> = ({
   onConfirmRemove,
   onCancelRemove,
 }) => (
-  <section className="space-y-4 rounded-xl border border-border bg-card/45 p-4">
+  <section className="space-y-4 rounded-2xl border border-border bg-card/45 p-4">
     <div className="flex items-start justify-between gap-4">
       <div className="min-w-0 flex-1 space-y-2">
         <label
@@ -147,8 +150,9 @@ export const ExecutionHostFields: FC<ExecutionHostFieldsProps> = ({
         size="sm"
         className="mt-6 shrink-0"
         aria-label={`Remove endpoint ${displayName}`}
+        title={removalBlock ?? undefined}
         onClick={onRequestRemove}
-        disabled={isRemovalPending}
+        disabled={isRemovalPending || !!removalBlock}
       >
         <Trash2 className="mr-2 h-4 w-4" />
         Remove
@@ -296,7 +300,13 @@ export const ExecutionHostFields: FC<ExecutionHostFieldsProps> = ({
               type="button"
               variant="ghost"
               size="icon"
-              className="absolute right-0 top-0 h-9 w-9"
+              // The eye is 36px to match the field it sits in; the pseudo
+              // element takes the pointer target to 40x40 without moving
+              // anything visible.
+              className={cn(
+                'absolute right-0 top-0 h-9 w-9',
+                "before:absolute before:-inset-0.5 before:content-['']",
+              )}
               aria-label={
                 showDaemonToken
                   ? `Hide token for ${displayName}`

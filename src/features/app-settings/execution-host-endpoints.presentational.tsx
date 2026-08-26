@@ -3,13 +3,21 @@ import { Plus } from 'lucide-react'
 import type { ExecutionHostEndpoint } from '@/entities/execution-host'
 import { Button } from '@/shared/ui/button'
 import { ExecutionHostSettingsContainer } from './execution-host-settings.container'
-import type { ExecutionHostEndpointDraft } from './execution-host-settings.pure'
+import type {
+  ExecutionHostEndpointDraft,
+  ExecutionHostSessionCounts,
+} from './execution-host-settings.pure'
 
 interface ExecutionHostEndpointsFieldsProps {
   drafts: readonly ExecutionHostEndpointDraft[]
   savedEndpoints: readonly ExecutionHostEndpoint[]
-  /** Sessions per execution host id; null when the count could not be read. */
-  sessionCounts: Record<string, number> | null
+  /** Sessions per execution host id, and whether that is known yet. */
+  sessionCounts: ExecutionHostSessionCounts
+  /**
+   * Why the environment override is doing nothing, or null when it is not set
+   * or the endpoint it serves exists.
+   */
+  environmentOverrideWarning: string | null
   onAdd: () => void
   onLabelChange: (endpointId: string, value: string) => void
   onBaseUrlChange: (endpointId: string, value: string) => void
@@ -26,14 +34,24 @@ export const ExecutionHostEndpointsFields: FC<
   drafts,
   savedEndpoints,
   sessionCounts,
+  environmentOverrideWarning,
   onAdd,
   onLabelChange,
   onBaseUrlChange,
   onRemove,
 }) => (
   <div className="space-y-4">
+    {environmentOverrideWarning && (
+      <p
+        role="status"
+        className="rounded-2xl border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm text-amber-700 dark:text-amber-300"
+      >
+        {environmentOverrideWarning}
+      </p>
+    )}
+
     {drafts.length === 0 && (
-      <p className="rounded-xl border border-dashed border-border px-4 py-6 text-center text-sm text-muted-foreground">
+      <p className="rounded-2xl border border-dashed border-border px-4 py-6 text-center text-sm text-muted-foreground">
         No execution host endpoints. Sessions run on this machine.
       </p>
     )}
@@ -45,7 +63,7 @@ export const ExecutionHostEndpointsFields: FC<
         saved={
           savedEndpoints.find((endpoint) => endpoint.id === draft.id) ?? null
         }
-        sessionCount={sessionCounts ? (sessionCounts[draft.id] ?? 0) : null}
+        sessionCounts={sessionCounts}
         onLabelChange={(value) => onLabelChange(draft.id, value)}
         onRemoteBaseUrlChange={(value) => onBaseUrlChange(draft.id, value)}
         onRemove={() => onRemove(draft.id)}

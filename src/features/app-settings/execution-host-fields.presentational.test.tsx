@@ -24,6 +24,7 @@ function makeProps(
     remoteBaseUrlDraft: 'https://daemon.test',
     remoteBaseUrlError: null,
     actionBlocks: { token: null, connection: null },
+    removalBlock: null,
     credentialStatus: {
       providerId: 'execution-host-daemon',
       configured: true,

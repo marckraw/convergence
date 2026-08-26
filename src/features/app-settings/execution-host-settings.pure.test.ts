@@ -3,15 +3,21 @@ import type { ExecutionHostEndpoint } from '@/entities/execution-host'
 import {
   describeExecutionHostEndpointActionBlocks,
   describeExecutionHostEndpointRemoval,
+  describeExecutionHostEndpointRemovalBlock,
   executionHostEndpointDisplayName,
   executionHostEndpointDrafts,
+  executionHostSessionCounts,
   getExecutionHostEndpointBaseUrlError,
   getExecutionHostRemoteBaseUrlError,
   hasExecutionHostEndpointErrors,
+  describeOrphanedExecutionHostEnvironmentOverride,
   nextExecutionHostEndpointId,
   normalizeExecutionHostBaseUrl,
+  visibleExecutionHostConnectionResult,
+  type CountedExecutionHostSessions,
   type ExecutionHostEndpointDraft,
 } from './execution-host-settings.pure'
+import type { RemoteExecutionHostConnectionResult } from '@/entities/app-settings'
 
 function endpoint(
   overrides: Partial<ExecutionHostEndpoint> = {},
@@ -64,6 +70,17 @@ describe('getExecutionHostRemoteBaseUrlError', () => {
 describe('normalizeExecutionHostBaseUrl', () => {
   // Mirrors the backend normalizer. A renderer that compared raw strings would
   // call a case difference an edit and block a test that would have worked.
+  /**
+   * The trimming here is deliberate and stays (MAR-2642).
+   *
+   * The IPC boundary refuses an endpoint id rather than trimming it, and this
+   * is not the same rule read differently. An id is a Keychain account, an IPC
+   * argument is machine-supplied, and repairing one silently answers a request
+   * that named a different machine — so it is refused by name in
+   * `electron/main/execution-host-credentials.ipc.test.ts`. A base URL is typed
+   * by a person who is standing right there and sees the field, and a paste
+   * that carries a trailing space is their intent, not a different daemon.
+   */
   it('agrees with the stored form for casing and trailing slashes', () => {
     expect(normalizeExecutionHostBaseUrl('HTTPS://Daemon.Example.com/')).toBe(
       'https://daemon.example.com',
@@ -97,20 +114,32 @@ describe('getExecutionHostEndpointBaseUrlError', () => {
 })
 
 describe('nextExecutionHostEndpointId', () => {
-  // The Keychain account and CONVERGENCE_EXECUTION_HOST_DAEMON_TOKEN are keyed
-  // to 'default' and to nothing else, so the first Endpoint has to claim it.
-  it("gives the first endpoint 'default' so the stored token still resolves", () => {
-    expect(nextExecutionHostEndpointId([], () => 'minted')).toBe('default')
-  })
-
-  it('mints a fresh id once default is taken, never sharing an account', () => {
+  it('mints a fresh id, never sharing a Keychain account', () => {
     expect(nextExecutionHostEndpointId([draft()], () => 'minted')).toBe(
       'minted',
     )
   })
 
+  /**
+   * The hole this closed. `'default'` used to be claimed by whichever row asked
+   * while no row held it — but "not currently taken" is not "never used". Remove
+   * the Endpoint that owned it and the very next Add inherited its identity: its
+   * Keychain account, its `CONVERGENCE_EXECUTION_HOST_DAEMON_TOKEN`, and every
+   * session that recorded it.
+   */
+  it("never hands out 'default', not even when no row holds it", () => {
+    expect(nextExecutionHostEndpointId([], () => 'minted')).toBe('minted')
+  })
+
+  it("never hands out 'default' after the endpoint that had it is removed", () => {
+    const afterRemovingDefault: ExecutionHostEndpointDraft[] = []
+    expect(
+      nextExecutionHostEndpointId(afterRemovingDefault, () => 'minted'),
+    ).not.toBe('default')
+  })
+
   it('keeps minting until the id is free', () => {
-    const ids = ['default', 'taken', 'free']
+    const ids = ['taken', 'free']
     let index = 0
     expect(
       nextExecutionHostEndpointId([draft(), draft({ id: 'taken' })], () => {
@@ -195,11 +224,23 @@ describe('describeExecutionHostEndpointActionBlocks', () => {
 })
 
 describe('describeExecutionHostEndpointRemoval', () => {
-  it('is free only when the count is known to be zero', () => {
+  function counted(
+    byEndpointId: Record<string, number>,
+  ): CountedExecutionHostSessions {
+    return executionHostSessionCounts(
+      Object.entries(byEndpointId).map(([executionHostId, sessions]) => ({
+        executionHostId,
+        sessions,
+      })),
+    )
+  }
+
+  it('is free only when the count arrived and said zero', () => {
     expect(
       describeExecutionHostEndpointRemoval({
         label: 'kuba-vps',
-        sessionCount: 0,
+        endpointId: 'kuba',
+        counts: counted({ kuba: 0 }),
       }),
     ).toBeNull()
   })
@@ -208,25 +249,267 @@ describe('describeExecutionHostEndpointRemoval', () => {
     expect(
       describeExecutionHostEndpointRemoval({
         label: 'kuba-vps',
-        sessionCount: 1,
+        endpointId: 'kuba',
+        counts: counted({ kuba: 1 }),
       }),
     ).toMatch(/^1 session runs on “kuba-vps”\./)
     expect(
       describeExecutionHostEndpointRemoval({
         label: 'kuba-vps',
-        sessionCount: 4,
+        endpointId: 'kuba',
+        counts: counted({ kuba: 4, other: 9 }),
       }),
     ).toMatch(/^4 sessions run on “kuba-vps”\./)
   })
 
   // An unknown count is a cost, not an absence of one: reporting "no sessions"
   // because the count failed is exactly the lie this era exists to prevent.
-  it('warns rather than going quiet when the count is unknown', () => {
+  it('warns rather than going quiet when the count failed', () => {
     expect(
       describeExecutionHostEndpointRemoval({
         label: '',
-        sessionCount: null,
+        endpointId: 'kuba',
+        counts: { status: 'failed' },
       }),
     ).toMatch(/could not count the sessions that run on “Unnamed endpoint”/)
+  })
+
+  /**
+   * Endpoint ids are the user's own, and these three are the ones a bare
+   * object gets wrong: `counts['toString']` answers with an inherited function
+   * rather than a missing count, and `counts['__proto__'] = n` goes to the
+   * prototype setter and is dropped. The third prototype-pollution bug in this
+   * codebase, so the storage is a Map rather than the symptom being patched.
+   */
+  it('counts endpoints named after Object.prototype members', () => {
+    // Built from pairs, not an object literal: `{ __proto__: 3 }` sets the
+    // prototype instead of a key, so a fixture written that way would test
+    // nothing and pass.
+    const counts = executionHostSessionCounts([
+      { executionHostId: 'toString', sessions: 2 },
+      { executionHostId: '__proto__', sessions: 3 },
+      { executionHostId: 'constructor', sessions: 4 },
+    ])
+    expect(
+      describeExecutionHostEndpointRemoval({
+        label: 'toString',
+        endpointId: 'toString',
+        counts,
+      }),
+    ).toMatch(/^2 sessions run on “toString”\./)
+    expect(
+      describeExecutionHostEndpointRemoval({
+        label: 'proto',
+        endpointId: '__proto__',
+        counts,
+      }),
+    ).toMatch(/^3 sessions run on “proto”\./)
+    expect(
+      describeExecutionHostEndpointRemoval({
+        label: 'constructor',
+        endpointId: 'constructor',
+        counts,
+      }),
+    ).toMatch(/^4 sessions run on “constructor”\./)
+  })
+
+  it('reports an endpoint the count never mentioned as free', () => {
+    expect(
+      describeExecutionHostEndpointRemoval({
+        label: 'kuba-vps',
+        endpointId: 'kuba',
+        counts: counted({ local: 12 }),
+      }),
+    ).toBeNull()
+  })
+})
+
+describe('describeExecutionHostEndpointRemovalBlock', () => {
+  // A removal is priced by a count. Before the count lands there is no price,
+  // and "no price yet" must not be spent as "free" — that is the stale-zero
+  // hole, and it is why Remove waits rather than guessing.
+  it('holds Remove while the count is still in flight', () => {
+    expect(
+      describeExecutionHostEndpointRemovalBlock({
+        label: 'kuba-vps',
+        counts: { status: 'counting' },
+      }),
+    ).toMatch(/Still counting the sessions that run on “kuba-vps”/)
+  })
+
+  // A failed count will not arrive by waiting, and blocking forever would make
+  // the Endpoint unremovable. That one is a warning to acknowledge instead.
+  it('does not hold Remove when the count failed, only when it is pending', () => {
+    expect(
+      describeExecutionHostEndpointRemovalBlock({
+        label: 'kuba-vps',
+        counts: { status: 'failed' },
+      }),
+    ).toBeNull()
+    expect(
+      describeExecutionHostEndpointRemovalBlock({
+        label: 'kuba-vps',
+        counts: executionHostSessionCounts([]),
+      }),
+    ).toBeNull()
+  })
+})
+
+describe('visibleExecutionHostConnectionResult', () => {
+  const result: RemoteExecutionHostConnectionResult = {
+    ok: true,
+    state: 'connected',
+    baseUrl: 'https://daemon.example.com',
+    message: 'Connected. 2 providers available.',
+    providers: [],
+    daemon: null,
+  }
+
+  it('shows the answer while it is still about the address and the token that dialled', () => {
+    expect(
+      visibleExecutionHostConnectionResult({
+        attempt: {
+          baseUrl: 'https://daemon.example.com',
+          tokenGeneration: 2,
+          result,
+        },
+        baseUrl: 'https://daemon.example.com/',
+        tokenGeneration: 2,
+      }),
+    ).toBe(result)
+  })
+
+  // The era's own constraint, inside its own settings panel: a green
+  // "Connected" under an address that was retyped is a claim about a machine
+  // nobody tested.
+  it('hides the answer the moment the address it describes changes', () => {
+    expect(
+      visibleExecutionHostConnectionResult({
+        attempt: {
+          baseUrl: 'https://daemon.example.com',
+          tokenGeneration: 0,
+          result,
+        },
+        baseUrl: 'https://moved.example.com',
+        tokenGeneration: 0,
+      }),
+    ).toBeNull()
+  })
+
+  /**
+   * The same staleness in the other dimension. A test authenticates with one
+   * token, so a token that has since been replaced or removed leaves the answer
+   * describing a handshake nothing would repeat — the address is only half of
+   * what an answer is about.
+   */
+  it('hides the answer the moment the token that dialled is replaced', () => {
+    expect(
+      visibleExecutionHostConnectionResult({
+        attempt: {
+          baseUrl: 'https://daemon.example.com',
+          tokenGeneration: 0,
+          result,
+        },
+        baseUrl: 'https://daemon.example.com',
+        tokenGeneration: 1,
+      }),
+    ).toBeNull()
+  })
+
+  // A result that lands after the token changed is stale on arrival, which is
+  // the same comparison rather than a second rule about timing.
+  it('hides an answer that arrives after the token it used was replaced', () => {
+    const arrivedLate = {
+      baseUrl: 'https://daemon.example.com',
+      tokenGeneration: 3,
+      result,
+    }
+    expect(
+      visibleExecutionHostConnectionResult({
+        attempt: arrivedLate,
+        baseUrl: 'https://daemon.example.com',
+        tokenGeneration: 4,
+      }),
+    ).toBeNull()
+  })
+
+  it('hides it while the address is unfinished rather than matching null to null', () => {
+    expect(
+      visibleExecutionHostConnectionResult({
+        attempt: { baseUrl: null, tokenGeneration: 0, result },
+        baseUrl: 'not a url',
+        tokenGeneration: 0,
+      }),
+    ).toBeNull()
+  })
+
+  it('has nothing to show before a test has run', () => {
+    expect(
+      visibleExecutionHostConnectionResult({
+        attempt: null,
+        baseUrl: 'https://daemon.example.com',
+        tokenGeneration: 0,
+      }),
+    ).toBeNull()
+  })
+})
+
+describe('describeOrphanedExecutionHostEnvironmentOverride', () => {
+  const OVERRIDE = {
+    configured: true,
+    envKey: 'CONVERGENCE_EXECUTION_HOST_DAEMON_TOKEN',
+    endpointId: 'default',
+  }
+
+  it('says nothing when the variable is not set', () => {
+    expect(
+      describeOrphanedExecutionHostEnvironmentOverride({
+        override: { ...OVERRIDE, configured: false },
+        savedEndpoints: [],
+      }),
+    ).toBeNull()
+    // Nor before Convergence has managed to ask.
+    expect(
+      describeOrphanedExecutionHostEnvironmentOverride({
+        override: null,
+        savedEndpoints: [],
+      }),
+    ).toBeNull()
+  })
+
+  it('says nothing while the endpoint it serves still exists', () => {
+    expect(
+      describeOrphanedExecutionHostEnvironmentOverride({
+        override: OVERRIDE,
+        savedEndpoints: [endpoint({ id: 'default' })],
+      }),
+    ).toBeNull()
+  })
+
+  /**
+   * The visible consequence of "Add always mints" (MAR-2642). Refusing to hand
+   * `'default'` to a new machine is right — it would inherit the override's
+   * credential along with the id — but it leaves the override set, serving an
+   * Endpoint that no longer exists, doing nothing. A dead credential nobody
+   * mentions is exactly the invisible state this era exists to stop.
+   */
+  it('says so plainly when nothing carries the id it serves', () => {
+    const message = describeOrphanedExecutionHostEnvironmentOverride({
+      override: OVERRIDE,
+      savedEndpoints: [endpoint({ id: 'kuba' })],
+    })
+
+    expect(message).toContain('CONVERGENCE_EXECUTION_HOST_DAEMON_TOKEN')
+    expect(message).toContain('default')
+    expect(message).toContain('authenticates nothing')
+  })
+
+  it('says so on a machine that has no endpoints at all', () => {
+    expect(
+      describeOrphanedExecutionHostEnvironmentOverride({
+        override: OVERRIDE,
+        savedEndpoints: [],
+      }),
+    ).toContain('authenticates nothing')
   })
 })

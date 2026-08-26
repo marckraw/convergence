@@ -1,9 +1,13 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ExecutionHostEndpoint } from '@/entities/execution-host'
 import { TooltipProvider } from '@/shared/ui/tooltip'
 import { ExecutionHostSettingsContainer } from './execution-host-settings.container'
-import type { ExecutionHostEndpointDraft } from './execution-host-settings.pure'
+import {
+  executionHostSessionCounts,
+  type ExecutionHostEndpointDraft,
+  type ExecutionHostSessionCounts,
+} from './execution-host-settings.pure'
 
 /**
  * Drives the container through `window.electronAPI` rather than through a
@@ -61,6 +65,12 @@ function saved(
   }
 }
 
+function counted(sessions: number): ExecutionHostSessionCounts {
+  return executionHostSessionCounts([
+    { executionHostId: ENDPOINT_ID, sessions },
+  ])
+}
+
 function renderContainer(
   props: Partial<Parameters<typeof ExecutionHostSettingsContainer>[0]> = {},
 ) {
@@ -70,7 +80,7 @@ function renderContainer(
       <ExecutionHostSettingsContainer
         draft={draft()}
         saved={saved()}
-        sessionCount={0}
+        sessionCounts={counted(0)}
         onLabelChange={vi.fn()}
         onRemoteBaseUrlChange={vi.fn()}
         onRemove={onRemove}
@@ -78,7 +88,7 @@ function renderContainer(
       />
     </TooltipProvider>,
   )
-  return { ...view, onRemove }
+  return { ...view, onRemove, props }
 }
 
 describe('ExecutionHostSettingsContainer', () => {
@@ -278,7 +288,7 @@ describe('ExecutionHostSettingsContainer', () => {
   })
 
   it('makes a removal that costs sessions say so before it happens', async () => {
-    const { onRemove } = renderContainer({ sessionCount: 3 })
+    const { onRemove } = renderContainer({ sessionCounts: counted(3) })
 
     fireEvent.click(
       screen.getByRole('button', {
@@ -304,7 +314,9 @@ describe('ExecutionHostSettingsContainer', () => {
   })
 
   it('warns about an uncounted removal rather than treating it as free', async () => {
-    const { onRemove } = renderContainer({ sessionCount: null })
+    const { onRemove } = renderContainer({
+      sessionCounts: { status: 'failed' },
+    })
 
     fireEvent.click(
       screen.getByRole('button', {
@@ -318,8 +330,28 @@ describe('ExecutionHostSettingsContainer', () => {
     expect(onRemove).not.toHaveBeenCalled()
   })
 
+  it('will not remove an endpoint while the count is still in flight', () => {
+    // The stale-count hole: a zero left over from the previous open would
+    // authorise this removal with no ceremony at all while the real count was
+    // still being read. A removal is priced by a count, so it waits for one.
+    const { onRemove } = renderContainer({
+      sessionCounts: { status: 'counting' },
+    })
+
+    const remove = screen.getByRole('button', {
+      name: 'Remove endpoint backpack-automations',
+    })
+    expect(remove).toBeDisabled()
+    expect(remove.getAttribute('title')).toMatch(
+      /Still counting the sessions that run on “backpack-automations”/,
+    )
+
+    fireEvent.click(remove)
+    expect(onRemove).not.toHaveBeenCalled()
+  })
+
   it('removes an endpoint nothing names without ceremony', () => {
-    const { onRemove } = renderContainer({ sessionCount: 0 })
+    const { onRemove } = renderContainer({ sessionCounts: counted(0) })
 
     fireEvent.click(
       screen.getByRole('button', {
@@ -328,5 +360,133 @@ describe('ExecutionHostSettingsContainer', () => {
     )
 
     expect(onRemove).toHaveBeenCalledTimes(1)
+  })
+
+  /**
+   * A connection result is an answer about one address. Retyping the address
+   * with a green "Connected" still sitting under it is this era's own
+   * constraint broken in its own settings panel: the surface would be showing
+   * something that does not match the machine it names.
+   */
+  it('drops a connection result the moment the address it describes is edited', async () => {
+    const { rerender } = renderContainer()
+    await screen.findByText('Configured in Keychain, token hidden')
+
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: 'Test connection for backpack-automations',
+      }),
+    )
+    expect(
+      await screen.findByText('Connected. 2 providers available.'),
+    ).toBeInTheDocument()
+
+    rerender(
+      <TooltipProvider>
+        <ExecutionHostSettingsContainer
+          draft={draft({ baseUrl: 'https://moved.test' })}
+          saved={saved()}
+          sessionCounts={counted(0)}
+          onLabelChange={vi.fn()}
+          onRemoteBaseUrlChange={vi.fn()}
+          onRemove={vi.fn()}
+        />
+      </TooltipProvider>,
+    )
+
+    expect(
+      screen.queryByText('Connected. 2 providers available.'),
+    ).not.toBeInTheDocument()
+  })
+
+  /**
+   * The same staleness in the other dimension (MAR-2642). A test authenticates
+   * with one token, so an answer that lands after the token was replaced
+   * describes a handshake nothing would repeat.
+   *
+   * The order here is the one only provenance survives: the dial goes out
+   * first, the token changes while it is in flight, and the answer arrives
+   * afterwards — too late for anything to have cleared it, and carrying its own
+   * proof that it is no longer about this row.
+   */
+  it('never shows a connection result that arrives after the token was replaced', async () => {
+    let answerConnection!: (result: unknown) => void
+    executionHost.testRemoteConnection.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          answerConnection = resolve
+        }),
+    )
+    renderContainer()
+    await screen.findByText('Configured in Keychain, token hidden')
+
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: 'Test connection for backpack-automations',
+      }),
+    )
+    await waitFor(() =>
+      expect(executionHost.testRemoteConnection).toHaveBeenCalledWith(
+        ENDPOINT_ID,
+      ),
+    )
+
+    fireEvent.change(screen.getByLabelText('Execution host token'), {
+      target: { value: 'sk-live' },
+    })
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: 'Save token for backpack-automations',
+      }),
+    )
+    expect(
+      await screen.findByText('Daemon API token saved.'),
+    ).toBeInTheDocument()
+
+    await act(async () => {
+      answerConnection({
+        ok: true,
+        state: 'connected',
+        baseUrl: BASE_URL,
+        message: 'Connected. 2 providers available.',
+        providers: [],
+        daemon: null,
+      })
+    })
+
+    expect(
+      screen.queryByText('Connected. 2 providers available.'),
+    ).not.toBeInTheDocument()
+  })
+
+  it('keeps the result when the same address is merely re-typed', async () => {
+    const { rerender } = renderContainer()
+    await screen.findByText('Configured in Keychain, token hidden')
+
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: 'Test connection for backpack-automations',
+      }),
+    )
+    expect(
+      await screen.findByText('Connected. 2 providers available.'),
+    ).toBeInTheDocument()
+
+    rerender(
+      <TooltipProvider>
+        <ExecutionHostSettingsContainer
+          draft={draft({ baseUrl: 'HTTPS://Daemon.Test/' })}
+          saved={saved()}
+          sessionCounts={counted(0)}
+          onLabelChange={vi.fn()}
+          onRemoteBaseUrlChange={vi.fn()}
+          onRemove={vi.fn()}
+        />
+      </TooltipProvider>,
+    )
+
+    expect(
+      screen.getByText('Connected. 2 providers available.'),
+    ).toBeInTheDocument()
   })
 })

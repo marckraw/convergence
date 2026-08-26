@@ -32,7 +32,10 @@ import { SessionDefaultsFields } from './session-defaults.presentational'
 import { NamingModelDefaultsFields } from './naming-model-defaults.presentational'
 import { ExtractionModelDefaultsFields } from './extraction-model-defaults.presentational'
 import { ExecutionHostEndpointsFields } from './execution-host-endpoints.presentational'
-import type { ExecutionHostEndpointDraft } from './execution-host-settings.pure'
+import type {
+  ExecutionHostEndpointDraft,
+  ExecutionHostSessionCounts,
+} from './execution-host-settings.pure'
 import { NotificationsFields } from './notifications-fields.presentational'
 import { UpdatesFields } from './updates-fields.presentational'
 import { DebugLoggingFields } from './debug-logging-fields.presentational'
@@ -56,7 +59,9 @@ interface AppSettingsDialogProps {
   extractionDraft: Record<string, string>
   executionHostEndpointsDraft: readonly ExecutionHostEndpointDraft[]
   executionHostSavedEndpoints: readonly ExecutionHostEndpoint[]
-  executionHostSessionCounts: Record<string, number> | null
+  executionHostSessionCounts: ExecutionHostSessionCounts
+  /** Why the environment override serves nobody, or null. */
+  executionHostEnvironmentOverrideWarning: string | null
   notificationsDraft: NotificationPrefs
   updatesDraft: UpdatePrefs
   debugLoggingDraft: DebugLoggingPrefs
@@ -120,6 +125,7 @@ export const AppSettingsDialog: FC<AppSettingsDialogProps> = ({
   executionHostEndpointsDraft,
   executionHostSavedEndpoints,
   executionHostSessionCounts,
+  executionHostEnvironmentOverrideWarning,
   notificationsDraft,
   updatesDraft,
   debugLoggingDraft,
@@ -312,6 +318,9 @@ export const AppSettingsDialog: FC<AppSettingsDialogProps> = ({
                 drafts={executionHostEndpointsDraft}
                 savedEndpoints={executionHostSavedEndpoints}
                 sessionCounts={executionHostSessionCounts}
+                environmentOverrideWarning={
+                  executionHostEnvironmentOverrideWarning
+                }
                 onAdd={onAddExecutionHostEndpoint}
                 onLabelChange={onExecutionHostLabelChange}
                 onBaseUrlChange={onExecutionHostBaseUrlChange}

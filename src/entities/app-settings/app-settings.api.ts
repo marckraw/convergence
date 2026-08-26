@@ -3,6 +3,8 @@ import type {
   AppSettings,
   AppSettingsInput,
   ExecutionHostDaemonCredentialStatus,
+  ExecutionHostDaemonEnvironmentOverride,
+  ExecutionHostSessionCount,
   OpenRouterCredentialStatus,
   RemoteExecutionHostConnectionResult,
 } from './app-settings.types'
@@ -12,6 +14,19 @@ export const appSettingsApi = {
 
   set: (input: AppSettingsInput): Promise<AppSettings> =>
     window.electronAPI.appSettings.set(input),
+
+  /**
+   * Destroys stored daemon credentials whose Endpoint no longer exists, and
+   * answers with the accounts it emptied (MAR-2642).
+   *
+   * A removal commits the settings before it destroys the token, so a Keychain
+   * that refused the cleanup — or a quit between the two — leaves an entry
+   * filed under an id no Endpoint will ever bear again. The sweep is
+   * idempotent, so the surface where removals are made can simply ask for it
+   * again each time it opens rather than waiting for a restart.
+   */
+  sweepExecutionHostCredentials: (): Promise<string[]> =>
+    window.electronAPI.appSettings.sweepExecutionHostCredentials(),
 
   onUpdated: (callback: (settings: AppSettings) => void): (() => void) =>
     window.electronAPI.appSettings.onUpdated(callback),
@@ -53,6 +68,14 @@ export const executionHostDaemonCredentialsApi = {
     endpointId: string,
   ): Promise<ExecutionHostDaemonCredentialStatus> =>
     window.electronAPI.credentials.executionHostDaemon.deleteToken(endpointId),
+
+  /**
+   * The one daemon credential that names no Endpoint, so it is asked about
+   * without one (MAR-2642). No sweep can reach it and no row records it, so a
+   * surface that never asked would leave a dead credential invisible.
+   */
+  environmentOverride: (): Promise<ExecutionHostDaemonEnvironmentOverride> =>
+    window.electronAPI.credentials.executionHostDaemon.environmentOverride(),
 }
 
 export const executionHostApi = {
@@ -62,10 +85,10 @@ export const executionHostApi = {
     window.electronAPI.executionHost.testRemoteConnection(endpointId),
 
   /**
-   * How many sessions name each execution host id. Read by Settings so a
-   * removal can say what it costs instead of looking free (MAR-2642).
+   * How many sessions name each execution host. Read by Settings so a removal
+   * can say what it costs instead of looking free (MAR-2642).
    */
-  sessionCountsByEndpoint: (): Promise<Record<string, number>> =>
+  sessionCountsByEndpoint: (): Promise<ExecutionHostSessionCount[]> =>
     window.electronAPI.executionHost.sessionCountsByEndpoint(),
 
   getSessionWorkspace: (

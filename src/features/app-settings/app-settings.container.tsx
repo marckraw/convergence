@@ -13,11 +13,14 @@ import {
   type NotificationSeverity,
 } from '@/entities/notifications'
 import {
+  appSettingsApi,
   DEFAULT_COMMAND_CENTER_SHORTCUT,
   executionHostApi,
+  executionHostDaemonCredentialsApi,
   useAppSettingsStore,
   type CommandCenterShortcutPrefs,
   type DebugLoggingPrefs,
+  type ExecutionHostDaemonEnvironmentOverride,
 } from '@/entities/app-settings'
 import {
   findShortcutConflict,
@@ -34,10 +37,13 @@ import {
   type AppSettingsSectionId,
 } from './app-settings.presentational'
 import {
+  describeOrphanedExecutionHostEnvironmentOverride,
   executionHostEndpointDrafts,
+  executionHostSessionCounts,
   hasExecutionHostEndpointErrors,
   nextExecutionHostEndpointId,
   type ExecutionHostEndpointDraft,
+  type ExecutionHostSessionCounts,
 } from './execution-host-settings.pure'
 
 interface AppSettingsContainerProps {
@@ -93,8 +99,10 @@ export const AppSettingsDialogContainer: FC<AppSettingsContainerProps> = ({
   >(EMPTY_EXTRACTION_DRAFT)
   const [executionHostEndpointsDraft, setExecutionHostEndpointsDraft] =
     useState<ExecutionHostEndpointDraft[]>([])
-  const [executionHostSessionCounts, setExecutionHostSessionCounts] =
-    useState<Record<string, number> | null>(null)
+  const [sessionCounts, setSessionCounts] =
+    useState<ExecutionHostSessionCounts>({ status: 'counting' })
+  const [environmentOverride, setEnvironmentOverride] =
+    useState<ExecutionHostDaemonEnvironmentOverride | null>(null)
   const [notificationsDraft, setNotificationsDraft] =
     useState<NotificationPrefs | null>(null)
   const [updatesDraft, setUpdatesDraft] = useState<UpdatePrefs | null>(null)
@@ -138,22 +146,72 @@ export const AppSettingsDialogContainer: FC<AppSettingsContainerProps> = ({
   }, [open, loadProviders, loadSettings, isLoaded])
 
   /**
-   * How many sessions name each execution host, read when the dialog opens so
-   * a removal can state what it costs. A failure leaves the count null, which
-   * `describeExecutionHostEndpointRemoval` reads as "unknown" and warns about —
-   * never as "none", which would present a destructive removal as free.
+   * How many sessions name each execution host, counted afresh every time the
+   * dialog opens so a removal can state what it costs.
+   *
+   * Reset to "counting" first: sessions start, finish and are deleted while
+   * Settings is closed, so a count kept from the last open is a number about a
+   * different moment, and a stale zero would authorise a removal that strands
+   * live sessions. A failure says so rather than reporting none — presenting a
+   * destructive removal as free is the lie this era exists to prevent.
    */
   useEffect(() => {
     if (!open) return
     let cancelled = false
+    setSessionCounts({ status: 'counting' })
     void (async () => {
       try {
         const counts = await executionHostApi.sessionCountsByEndpoint()
-        if (!cancelled) setExecutionHostSessionCounts(counts)
+        if (!cancelled) setSessionCounts(executionHostSessionCounts(counts))
       } catch {
-        if (!cancelled) setExecutionHostSessionCounts(null)
+        if (!cancelled) setSessionCounts({ status: 'failed' })
       }
     })()
+    return () => {
+      cancelled = true
+    }
+  }, [open])
+
+  /**
+   * Collects the daemon-credential cleanup debt, every time the dialog opens
+   * (MAR-2642).
+   *
+   * A removal commits the settings before it destroys the token, so a Keychain
+   * that refused the cleanup leaves an entry filed under an id no Endpoint will
+   * ever bear again. Settings are loaded once and then kept, so a sweep that
+   * only rode along with that load would run at most once per launch — the user
+   * whose cleanup just failed would have to quit the app to have it retried.
+   * This is the surface where the removal was made, so reopening it is the
+   * gesture that should collect the debt.
+   *
+   * Fired and not awaited: nothing on this dialog waits on `security`, and a
+   * sweep that cannot run today is simply asked for again on the next open.
+   */
+  useEffect(() => {
+    if (!open) return
+    void appSettingsApi.sweepExecutionHostCredentials().catch(() => {})
+  }, [open])
+
+  /**
+   * Whether the environment override exists, read afresh every time the dialog
+   * opens (MAR-2642).
+   *
+   * It is process environment, so it changes only between launches — but it is
+   * also the one daemon credential no sweep can collect and no Endpoint row
+   * records. Reset to null first so a stale "it is set" from a previous open
+   * cannot outlive the answer, and a failure leaves it null: silence is the
+   * honest reading of "Convergence could not ask".
+   */
+  useEffect(() => {
+    if (!open) return
+    let cancelled = false
+    setEnvironmentOverride(null)
+    void executionHostDaemonCredentialsApi
+      .environmentOverride()
+      .then((override) => {
+        if (!cancelled) setEnvironmentOverride(override)
+      })
+      .catch(() => {})
     return () => {
       cancelled = true
     }
@@ -407,6 +465,15 @@ export const AppSettingsDialogContainer: FC<AppSettingsContainerProps> = ({
     return systemApi.getInfo()?.platform ?? null
   }, [])
 
+  const executionHostEnvironmentOverrideWarning = useMemo(
+    () =>
+      describeOrphanedExecutionHostEnvironmentOverride({
+        override: environmentOverride,
+        savedEndpoints: settings.executionHostEndpoints,
+      }),
+    [environmentOverride, settings.executionHostEndpoints],
+  )
+
   const executionHostEndpointsBlocked = useMemo(
     () => hasExecutionHostEndpointErrors(executionHostEndpointsDraft),
     [executionHostEndpointsDraft],
@@ -502,7 +569,10 @@ export const AppSettingsDialogContainer: FC<AppSettingsContainerProps> = ({
       extractionDraft={extractionDraft}
       executionHostEndpointsDraft={executionHostEndpointsDraft}
       executionHostSavedEndpoints={settings.executionHostEndpoints}
-      executionHostSessionCounts={executionHostSessionCounts}
+      executionHostSessionCounts={sessionCounts}
+      executionHostEnvironmentOverrideWarning={
+        executionHostEnvironmentOverrideWarning
+      }
       notificationsDraft={notificationsDraft ?? settings.notifications}
       updatesDraft={updatesDraft ?? settings.updates}
       debugLoggingDraft={debugLoggingDraft ?? settings.debugLogging}

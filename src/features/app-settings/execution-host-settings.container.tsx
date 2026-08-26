@@ -4,24 +4,28 @@ import {
   executionHostApi,
   executionHostDaemonCredentialsApi,
   type ExecutionHostDaemonCredentialStatus,
-  type RemoteExecutionHostConnectionResult,
 } from '@/entities/app-settings'
 import type { ExecutionHostEndpoint } from '@/entities/execution-host'
 import { ExecutionHostFields } from './execution-host-fields.presentational'
 import {
   describeExecutionHostEndpointActionBlocks,
   describeExecutionHostEndpointRemoval,
+  describeExecutionHostEndpointRemovalBlock,
   executionHostEndpointDisplayName,
   getExecutionHostEndpointBaseUrlError,
+  normalizeExecutionHostBaseUrl,
+  visibleExecutionHostConnectionResult,
+  type ExecutionHostConnectionAttempt,
   type ExecutionHostEndpointDraft,
+  type ExecutionHostSessionCounts,
 } from './execution-host-settings.pure'
 
 interface ExecutionHostSettingsContainerProps {
   draft: ExecutionHostEndpointDraft
   /** The stored Endpoint this row edits, or null while it is only typed. */
   saved: ExecutionHostEndpoint | null
-  /** How many sessions name it; null when Convergence could not count. */
-  sessionCount: number | null
+  /** How many sessions name each Endpoint, and whether that is known yet. */
+  sessionCounts: ExecutionHostSessionCounts
   onLabelChange: (value: string) => void
   onRemoteBaseUrlChange: (value: string) => void
   onRemove: () => void
@@ -40,7 +44,7 @@ export const ExecutionHostSettingsContainer: FC<
 > = ({
   draft,
   saved,
-  sessionCount,
+  sessionCounts,
   onLabelChange,
   onRemoteBaseUrlChange,
   onRemove,
@@ -54,8 +58,12 @@ export const ExecutionHostSettingsContainer: FC<
     null,
   )
   const [credentialError, setCredentialError] = useState<string | null>(null)
-  const [connectionResult, setConnectionResult] =
-    useState<RemoteExecutionHostConnectionResult | null>(null)
+  const [connectionAttempt, setConnectionAttempt] =
+    useState<ExecutionHostConnectionAttempt | null>(null)
+  // How many times this row has changed its own token. A connection result is
+  // about the token that dialled, so the count is what a result is compared
+  // against — never the token, which has no business leaving the main process.
+  const [tokenGeneration, setTokenGeneration] = useState(0)
   const [isConnectionTesting, setIsConnectionTesting] = useState(false)
   const [isRemovalPending, setIsRemovalPending] = useState(false)
 
@@ -66,12 +74,27 @@ export const ExecutionHostSettingsContainer: FC<
     [draft, saved],
   )
   const baseUrlError = getExecutionHostEndpointBaseUrlError(draft.baseUrl)
-  const removalWarning = describeExecutionHostEndpointRemoval({
-    label: draft.label,
-    // A row that was never saved has no sessions by construction, and the count
-    // is about the stored Endpoint — reporting an unknown count for something
-    // that cannot be named yet would invent a cost.
-    sessionCount: saved ? sessionCount : 0,
+  // A row that was never saved has no sessions by construction: nothing can
+  // name an Endpoint that does not exist, so no count is consulted at all —
+  // neither to price its removal nor to hold it up.
+  const removalBlock = saved
+    ? describeExecutionHostEndpointRemovalBlock({
+        label: draft.label,
+        counts: sessionCounts,
+      })
+    : null
+  const removalWarning =
+    saved && sessionCounts.status !== 'counting'
+      ? describeExecutionHostEndpointRemoval({
+          label: draft.label,
+          endpointId: draft.id,
+          counts: sessionCounts,
+        })
+      : null
+  const connectionResult = visibleExecutionHostConnectionResult({
+    attempt: connectionAttempt,
+    baseUrl: draft.baseUrl,
+    tokenGeneration,
   })
 
   const isTokenBlocked = !!actionBlocks.token
@@ -105,6 +128,10 @@ export const ExecutionHostSettingsContainer: FC<
     setIsCredentialSaving(true)
     setCredentialError(null)
     setCredentialMessage(null)
+    // Counted from the moment the write is dispatched, not from its answer: a
+    // save that fails partway through leaves a token nobody can vouch for, and
+    // a test already in flight is dialling with the old one either way.
+    setTokenGeneration((current) => current + 1)
     try {
       const next = await executionHostDaemonCredentialsApi.setToken(
         endpointId,
@@ -112,7 +139,6 @@ export const ExecutionHostSettingsContainer: FC<
       )
       setCredentialStatus(next)
       setDaemonTokenDraft('')
-      setConnectionResult(null)
       setCredentialMessage('Daemon API token saved.')
     } catch (err) {
       setCredentialError(
@@ -127,12 +153,12 @@ export const ExecutionHostSettingsContainer: FC<
     setIsCredentialSaving(true)
     setCredentialError(null)
     setCredentialMessage(null)
+    setTokenGeneration((current) => current + 1)
     try {
       const next =
         await executionHostDaemonCredentialsApi.deleteToken(endpointId)
       setCredentialStatus(next)
       setDaemonTokenDraft('')
-      setConnectionResult(null)
       setCredentialMessage('Daemon API token removed.')
     } catch (err) {
       setCredentialError(
@@ -149,26 +175,37 @@ export const ExecutionHostSettingsContainer: FC<
     setIsConnectionTesting(true)
     setCredentialError(null)
     setCredentialMessage(null)
+    // What the answer will be about, read before dialling: the address on
+    // screen and the token era doing the dialling. An answer that outlives
+    // either of them is not an answer about anything on this row.
+    const testedBaseUrl = normalizeExecutionHostBaseUrl(draft.baseUrl)
+    const testedTokenGeneration = tokenGeneration
     try {
-      setConnectionResult(
-        await executionHostApi.testRemoteConnection(endpointId),
-      )
+      setConnectionAttempt({
+        baseUrl: testedBaseUrl,
+        tokenGeneration: testedTokenGeneration,
+        result: await executionHostApi.testRemoteConnection(endpointId),
+      })
     } catch (err) {
-      setConnectionResult({
-        ok: false,
-        state: 'daemon-error',
-        baseUrl: null,
-        message:
-          err instanceof Error
-            ? err.message
-            : 'Failed to test daemon connection',
-        providers: null,
-        daemon: null,
+      setConnectionAttempt({
+        baseUrl: testedBaseUrl,
+        tokenGeneration: testedTokenGeneration,
+        result: {
+          ok: false,
+          state: 'daemon-error',
+          baseUrl: null,
+          message:
+            err instanceof Error
+              ? err.message
+              : 'Failed to test daemon connection',
+          providers: null,
+          daemon: null,
+        },
       })
     } finally {
       setIsConnectionTesting(false)
     }
-  }, [endpointId])
+  }, [draft.baseUrl, endpointId, tokenGeneration])
 
   const handleRequestRemove = useCallback(() => {
     // Nothing names it and nothing is stored: removing costs nothing, so
@@ -192,6 +229,7 @@ export const ExecutionHostSettingsContainer: FC<
       labelDraft={draft.label}
       remoteBaseUrlDraft={draft.baseUrl}
       remoteBaseUrlError={baseUrlError}
+      removalBlock={removalBlock}
       actionBlocks={actionBlocks}
       credentialStatus={credentialStatus}
       daemonTokenDraft={daemonTokenDraft}
