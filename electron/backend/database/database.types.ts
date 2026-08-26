@@ -300,3 +300,17 @@ export interface AnalyticsProfileSnapshotRow {
   profile_json: string
   created_at: string
 }
+
+/**
+ * One machine a session can run on, other than this one (MAR-2620). The id is
+ * what `sessions.execution_host` stores, so it is the row's identity rather
+ * than a generated key.
+ */
+export interface ExecutionHostEndpointRow {
+  id: string
+  label: string
+  base_url: string
+  position: number
+  created_at: string
+  updated_at: string
+}
