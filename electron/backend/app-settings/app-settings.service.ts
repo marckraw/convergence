@@ -1,3 +1,4 @@
+import type Database from 'better-sqlite3'
 import type { ExecutionHostEndpointRepository } from '../execution-host-endpoint/execution-host-endpoint.repository'
 import type { NotificationPrefs } from '../notifications/notifications.types'
 import type { StateService } from '../state/state.service'
@@ -33,6 +34,7 @@ type ProviderDescriptorLoader = () => Promise<ProviderDescriptor[]>
 
 export class AppSettingsService {
   constructor(
+    private readonly db: Database.Database,
     private readonly stateService: StateService,
     private readonly loadDescriptors: ProviderDescriptorLoader,
     private readonly executionHostEndpoints: ExecutionHostEndpointRepository,
@@ -192,13 +194,20 @@ export class AppSettingsService {
       favoriteModels,
     }
 
-    // Before the blob, not after: a rejected endpoint list must leave every
-    // other setting exactly as it was, rather than saving half a form.
-    if (input.executionHostEndpoints !== undefined) {
-      this.executionHostEndpoints.replaceAll(input.executionHostEndpoints)
-    }
+    // One transaction, because one Save is one fact. The endpoints live in
+    // their own rows and the rest of the settings in a blob, and committing
+    // them separately means a failure on either side leaves the other half
+    // stored: an endpoint row the user saw rejected, standing against a blob
+    // that never mentioned it. Endpoints go first inside it so a list that
+    // will not normalize aborts before anything is written at all.
+    const applySave = this.db.transaction(() => {
+      if (input.executionHostEndpoints !== undefined) {
+        this.executionHostEndpoints.replaceAll(input.executionHostEndpoints)
+      }
+      this.stateService.set(APP_SETTINGS_KEY, JSON.stringify(toStore))
+    })
+    applySave()
 
-    this.stateService.set(APP_SETTINGS_KEY, JSON.stringify(toStore))
     return this.withExecutionHostEndpoints(toStore)
   }
 

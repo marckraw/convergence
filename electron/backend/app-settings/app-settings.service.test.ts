@@ -1,4 +1,4 @@
-import { describe, expect, it, beforeEach, afterEach } from 'vitest'
+import { describe, expect, it, beforeEach, afterEach, vi } from 'vitest'
 import { getDatabase, closeDatabase, resetDatabase } from '../database/database'
 import { DEFAULT_NOTIFICATION_PREFS } from '../notifications/notifications.defaults'
 import { ExecutionHostEndpointRepository } from '../execution-host-endpoint/execution-host-endpoint.repository'
@@ -177,6 +177,7 @@ describe('AppSettingsService', () => {
     stateService = new StateService(db)
     descriptors = buildDescriptors()
     service = new AppSettingsService(
+      db,
       stateService,
       async () => descriptors,
       new ExecutionHostEndpointRepository(db),
@@ -573,6 +574,40 @@ describe('AppSettingsService', () => {
         const after = await service.getAppSettings()
         expect(after.executionHostEndpoints).toEqual([])
         expect(after.defaultProviderId).toBeNull()
+      })
+
+      it('leaves no endpoint row behind when the settings blob write fails', async () => {
+        // The other half of the same rule, and the one only atomicity can
+        // give: the endpoints commit before the blob, so a blob write that
+        // fails used to leave an Endpoint stored against a Save the user saw
+        // rejected. Two writes that must be true together are one write.
+        await service.setAppSettings({
+          defaultProviderId: null,
+          defaultModelId: null,
+          defaultEffortId: null,
+          executionHostEndpoints: [{ baseUrl: 'https://before.example.com' }],
+        })
+
+        const failingWrite = vi
+          .spyOn(stateService, 'set')
+          .mockImplementation(() => {
+            throw new Error('app_state is unwritable')
+          })
+
+        await expect(
+          service.setAppSettings({
+            defaultProviderId: null,
+            defaultModelId: null,
+            defaultEffortId: null,
+            executionHostEndpoints: [{ baseUrl: 'https://after.example.com' }],
+          }),
+        ).rejects.toThrow('app_state is unwritable')
+
+        failingWrite.mockRestore()
+        const after = await service.getAppSettings()
+        expect(after.executionHostEndpoints).toEqual([
+          expect.objectContaining({ baseUrl: 'https://before.example.com' }),
+        ])
       })
     })
 
