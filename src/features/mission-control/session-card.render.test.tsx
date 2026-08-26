@@ -164,18 +164,29 @@ function keyframeSteps(
 }
 
 /**
- * The `opacity` declaration of a declaration block, anchored to a declaration
- * boundary: the start of the block, or a `;`.
+ * A matcher for one CSS declaration, anchored to a declaration boundary: the
+ * start of the block, or a `;`. The value is captured up to the next `;`.
  *
- * An unanchored `opacity:` matches `--opacity:` just as happily, so renaming a
- * declaration to a custom property would stop painting while this test stayed
- * green.
+ * The anchor is the whole point, and it is not specific to one property. An
+ * unanchored `opacity:` matches `--opacity:` just as happily -- and so does an
+ * unanchored `box-shadow:` or `animation:`. Renaming any of them to a custom
+ * property stops the browser applying it, while a test that merely searched
+ * for the text stayed green. So every declaration this file reads goes through
+ * here, and no loose form is left behind to copy from a neighbour.
  */
-const OPACITY_DECLARATION = /(?:^|;)\s*opacity:\s*([^;]+)/
+function declarationPattern(property: string): RegExp {
+  return new RegExp(`(?:^|;)\\s*${property}:\\s*([^;]+)`)
+}
 
-/** The opacity a block declares, or `undefined` if it declares none. */
-function declaredOpacity(declarations: string): string | undefined {
-  return OPACITY_DECLARATION.exec(declarations)?.[1].trim()
+/**
+ * The value a block declares for `property`, trimmed, or `undefined` when the
+ * block declares no such property.
+ */
+function declaredValue(
+  declarations: string,
+  property: string,
+): string | undefined {
+  return declarationPattern(property).exec(declarations)?.[1].trim()
 }
 
 /** Every stop of a `@keyframes` body mapped to the opacity its step declares. */
@@ -183,7 +194,7 @@ function opacityByStop(body: string): Map<string, string> {
   const opacities = new Map<string, string>()
 
   for (const step of keyframeSteps(body)) {
-    const opacity = declaredOpacity(step.declarations)
+    const opacity = declaredValue(step.declarations, 'opacity')
     if (!opacity) continue
     for (const stop of step.stops) opacities.set(stop, opacity)
   }
@@ -226,10 +237,10 @@ describe('the breathing glow under prefers-reduced-motion', () => {
     )
 
     expect(reducedBlocks).toHaveLength(1)
-    expect(reducedBlocks[0]).toMatch(/animation:\s*none/)
+    expect(declaredValue(reducedBlocks[0], 'animation')).toBe('none')
     // The information survives; only the motion goes. A reduced-motion block
     // that also killed the shadow would delete the fact the card is working.
-    expect(reducedBlocks[0]).not.toMatch(/box-shadow/)
+    expect(declaredValue(reducedBlocks[0], 'box-shadow')).toBeUndefined()
   })
 
   it('leaves a glow behind for that block to hold still', () => {
@@ -244,10 +255,18 @@ describe('the breathing glow under prefers-reduced-motion', () => {
     expect(bases).toHaveLength(1)
     const [base] = bases
 
-    expect(base).toMatch(/box-shadow:[^;]*var\(--breathe-color\)/)
-    expect(base).toMatch(/animation:\s*session-card-breathe/)
+    const glare = declaredValue(base, 'box-shadow')
+    const breath = declaredValue(base, 'animation')
+
+    // Present before shaped, on purpose: renaming a declaration to a custom
+    // property does not change its value, it removes the declaration, and
+    // "expected undefined to be defined" is the honest way to say so.
+    expect(glare, 'the base rule declares no box-shadow').toBeDefined()
+    expect(glare).toContain('var(--breathe-color)')
+    expect(breath, 'the base rule declares no animation').toBeDefined()
+    expect(breath).toMatch(/^session-card-breathe\b/)
     // The still card sits at the top of the breath rather than at an opacity
     // the animation would otherwise have moved it off.
-    expect(declaredOpacity(base)).toBe('var(--breathe-max)')
+    expect(declaredValue(base, 'opacity')).toBe('var(--breathe-max)')
   })
 })
