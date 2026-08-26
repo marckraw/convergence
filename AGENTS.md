@@ -18,6 +18,9 @@ knowledge (see "Planning and documentation ownership" below).
 **A UI-first desktop app for managing agent work across local codebases.**
 (North star ratified 2026-07-27.)
 
+Convergence is the conversation and Mission Control; code review lives in
+Codewalk (MAR-2609).
+
 Electron app with a provider-neutral session model: one transcript, one
 composer, capability advertisement instead of provider-id branching.
 First-class providers are Claude Code, Codex, and Pi, integrated as
