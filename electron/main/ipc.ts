@@ -26,7 +26,6 @@ import { CodexQuotaService } from '../backend/provider-quota/codex-quota.service
 import { ProviderQuotaService } from '../backend/provider-quota/provider-quota.service'
 import { createDefaultProviderQuotaSources } from '../backend/provider-quota/provider-quota.sources'
 import type { ExecutionHostDaemonCredentialsService } from '../backend/credentials/execution-host-daemon-credentials.service'
-import { DEFAULT_EXECUTION_HOST_ENDPOINT_ID } from '../backend/execution-host-endpoint/execution-host-endpoint.pure'
 import { testRemoteExecutionHostConnection } from '../backend/provider/execution-host/remote-execution-host-connection'
 import type { AppSettingsRemoteExecutionHostRegistry } from '../backend/provider/execution-host/remote-execution-host.registry'
 import { describeRemoteExecutionHostFailure } from '../backend/provider/execution-host/remote-execution-host.pure'
@@ -497,7 +496,43 @@ export function registerIpcHandlers(
   )
 
   // App settings handlers
-  ipcMain.handle('appSettings:get', () => appSettingsService.getAppSettings())
+  ipcMain.handle('appSettings:get', async () => {
+    const settings = await appSettingsService.getAppSettings()
+    // A credential lives and dies with its Endpoint, and a save commits before
+    // it destroys the token of a machine it removed (MAR-2642). A Keychain that
+    // refused that cleanup — or a quit between the two — leaves an entry filed
+    // under an id no Endpoint will ever bear again, so the first settings load
+    // of a launch is one place the debt is collected. Detached and swallowed on
+    // purpose: reading settings must not wait on `security`.
+    //
+    // It is not the only place, and it must not be: the renderer loads settings
+    // once and keeps them, so a sweep hung off this handler alone would run at
+    // most once per launch and a cleanup that failed would sit there until the
+    // app was restarted. `appSettings:sweepExecutionHostCredentials` is what
+    // the settings dialog calls on every open.
+    void appSettingsService
+      .sweepOrphanedExecutionHostCredentials()
+      .catch(() => {})
+    return settings
+  })
+
+  /**
+   * Collects the credential-cleanup debt, on demand (MAR-2642).
+   *
+   * The sweep is idempotent — every account under this service belongs to an
+   * Endpoint, so one that is not a stored id is garbage whatever left it there
+   * — which is what makes it safe to run at every settings-dialog open rather
+   * than once at load. The dialog is where a removal is made and where its
+   * failure would have been reported, so it is where reopening should be able
+   * to finish the job without a restart.
+   *
+   * Awaited rather than detached, and answering with the accounts it emptied:
+   * this handler is asked for the sweep itself, so "it ran" is the only thing
+   * it has to report.
+   */
+  ipcMain.handle('appSettings:sweepExecutionHostCredentials', () =>
+    appSettingsService.sweepOrphanedExecutionHostCredentials(),
+  )
 
   ipcMain.handle('appSettings:set', async (_event, input: AppSettingsInput) => {
     const stored = await appSettingsService.setAppSettings(input)
@@ -538,43 +573,122 @@ export function registerIpcHandlers(
     openRouterCredentials.deleteToken(),
   )
 
-  if (executionHostRemote) {
-    // The settings form still edits one daemon: the Endpoint the single-host
-    // era became (MAR-2620). Its id is named here rather than defaulted inside
-    // the credentials service, so the machine this token belongs to is visible
-    // at the call site — and so the Execution Bar cannot later add a second
-    // Endpoint that quietly inherits it.
-    const settingsEndpointId = DEFAULT_EXECUTION_HOST_ENDPOINT_ID
+  ipcMain.handle('executionHost:sessionCountsByEndpoint', () =>
+    sessionService.countSessionsByExecutionHost(),
+  )
 
-    ipcMain.handle('credentials:executionHostDaemon:getStatus', () =>
-      executionHostRemote.credentials.getStatus(settingsEndpointId),
+  if (executionHostRemote) {
+    /**
+     * Every daemon handler acts on the Endpoint the caller named (MAR-2629).
+     *
+     * These four used to close over `DEFAULT_EXECUTION_HOST_ENDPOINT_ID`, which
+     * was correct only while one Endpoint could exist. With several, an
+     * ambient default is the slice-1 defect shape exactly — an id validated
+     * upstream and then not the one used — except here it writes a secret: a
+     * token saved for kuba-vps would land in backpack-automations' Keychain
+     * account and authenticate as the wrong machine.
+     *
+     * The id is resolved against the configured Endpoints rather than trusted,
+     * because an unknown id at `setToken` would store a token under an account
+     * no Endpoint will ever read and nothing will ever clean up.
+     *
+     * It is resolved exactly as received, never repaired (MAR-2642). This used
+     * to `trim()` first, which meant the guard answered a question about a
+     * value the caller never sent: ` kuba-vps ` was accepted as `kuba-vps` and
+     * wrote a token into the real kuba-vps's Keychain account. That is the
+     * same defect one layer down, where a non-conforming id is refused by name
+     * rather than sanitised, and for the same reason — a rewritten id
+     * addresses a different account than the one that was named.
+     *
+     * The two layers are deliberately not the same. Trimming what a HUMAN
+     * types into a settings field is input normalisation and stays where it
+     * is: the person is present and sees the result. An IPC argument is
+     * machine-supplied, so it is exact or it is refused, and the refusal
+     * quotes the value so a newline cannot hide inside it.
+     *
+     * Synchronous, and that is the point (MAR-2642). Every credential method
+     * takes its Endpoint's queue slot the moment it is called, before its own
+     * first `await` — so the slot is claimed at whatever moment the handler
+     * reaches it, and anything the handler awaits first is a window in which a
+     * removal can claim the slot ahead of it. This used to read the endpoint
+     * list through `getAppSettings`, which awaits provider descriptors that
+     * have nothing to say about which machines exist; a token Save dispatched
+     * before a removal could queue behind it and recreate the credential of a
+     * machine that was already gone. The three handlers below are deliberately
+     * not `async` functions, so no `await` can be added before the claim.
+     */
+    const requireEndpointId = (value: unknown): string => {
+      const endpointId = typeof value === 'string' ? value : ''
+      if (!endpointId) {
+        throw new Error('An execution host endpoint id is required.')
+      }
+      const known = appSettingsService
+        .listExecutionHostEndpoints()
+        .some((endpoint) => endpoint.id === endpointId)
+      if (!known) {
+        throw new Error(
+          `Execution host endpoint ${JSON.stringify(endpointId)} is not configured.`,
+        )
+      }
+      return endpointId
+    }
+
+    ipcMain.handle(
+      'credentials:executionHostDaemon:getStatus',
+      (_event, input: { endpointId?: unknown }) =>
+        executionHostRemote.credentials.getStatus(
+          requireEndpointId(input?.endpointId),
+        ),
     )
 
     ipcMain.handle(
       'credentials:executionHostDaemon:setToken',
-      (_event, input: { token?: unknown }) => {
+      (_event, input: { endpointId?: unknown; token?: unknown }) => {
+        const endpointId = requireEndpointId(input?.endpointId)
         if (!input || typeof input.token !== 'string') {
           throw new Error('Daemon API token is required.')
         }
         return executionHostRemote.credentials.setToken(
           { token: input.token },
-          settingsEndpointId,
+          endpointId,
         )
       },
     )
 
-    ipcMain.handle('credentials:executionHostDaemon:deleteToken', () =>
-      executionHostRemote.credentials.deleteToken(settingsEndpointId),
+    ipcMain.handle(
+      'credentials:executionHostDaemon:deleteToken',
+      (_event, input: { endpointId?: unknown }) =>
+        executionHostRemote.credentials.deleteToken(
+          requireEndpointId(input?.endpointId),
+        ),
     )
 
-    // The same Endpoint id the token handlers above use, so "the daemon the
-    // settings form edits" has one encoding rather than two that agree only
-    // while there is one Endpoint.
-    ipcMain.handle('executionHost:testRemoteConnection', () =>
-      testRemoteExecutionHostConnection({
-        resolver: executionHostRemote.registry.resolverFor(settingsEndpointId),
-        host: executionHostRemote.registry.hostFor(settingsEndpointId),
-      }),
+    /**
+     * Whether the environment override is set, and which Endpoint it serves
+     * (MAR-2642).
+     *
+     * Named no Endpoint id, deliberately: this is the one credential that
+     * cannot be reached through an Endpoint at all. It is not a Keychain entry,
+     * so no sweep collects it, and it serves exactly one id — so if nothing
+     * carries that id, it is a dead credential that no other surface would
+     * mention. Settings asks this so it can say so out loud.
+     */
+    ipcMain.handle('credentials:executionHostDaemon:environmentOverride', () =>
+      executionHostRemote.credentials.describeEnvironmentOverride(),
+    )
+
+    // The resolver and the host are built from the same id the token handlers
+    // above resolved, so "the daemon this row tests" has one encoding rather
+    // than two that agree only while there is one Endpoint.
+    ipcMain.handle(
+      'executionHost:testRemoteConnection',
+      async (_event, input: { endpointId?: unknown }) => {
+        const endpointId = requireEndpointId(input?.endpointId)
+        return testRemoteExecutionHostConnection({
+          resolver: executionHostRemote.registry.resolverFor(endpointId),
+          host: executionHostRemote.registry.hostFor(endpointId),
+        })
+      },
     )
 
     // Routed through the session service rather than a host held here: the

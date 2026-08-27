@@ -14,6 +14,7 @@ import type {
   NotificationSeverity,
 } from '@/entities/notifications'
 import type { UpdatePrefs, UpdateStatus } from '@/entities/updates'
+import type { ExecutionHostEndpoint } from '@/entities/execution-host'
 import {
   Dialog,
   DialogClose,
@@ -30,7 +31,11 @@ import { SettingsSubsection } from './settings-subsection.presentational'
 import { SessionDefaultsFields } from './session-defaults.presentational'
 import { NamingModelDefaultsFields } from './naming-model-defaults.presentational'
 import { ExtractionModelDefaultsFields } from './extraction-model-defaults.presentational'
-import { ExecutionHostSettingsContainer } from './execution-host-settings.container'
+import { ExecutionHostEndpointsFields } from './execution-host-endpoints.presentational'
+import type {
+  ExecutionHostEndpointDraft,
+  ExecutionHostSessionCounts,
+} from './execution-host-settings.pure'
 import { NotificationsFields } from './notifications-fields.presentational'
 import { UpdatesFields } from './updates-fields.presentational'
 import { DebugLoggingFields } from './debug-logging-fields.presentational'
@@ -52,8 +57,11 @@ interface AppSettingsDialogProps {
   selection: ResolvedProviderSelection
   namingDraft: Record<string, string>
   extractionDraft: Record<string, string>
-  executionHostRemoteBaseUrlDraft: string
-  executionHostRemoteBaseUrlError: string | null
+  executionHostEndpointsDraft: readonly ExecutionHostEndpointDraft[]
+  executionHostSavedEndpoints: readonly ExecutionHostEndpoint[]
+  executionHostSessionCounts: ExecutionHostSessionCounts
+  /** Why the environment override serves nobody, or null. */
+  executionHostEnvironmentOverrideWarning: string | null
   notificationsDraft: NotificationPrefs
   updatesDraft: UpdatePrefs
   debugLoggingDraft: DebugLoggingPrefs
@@ -71,7 +79,10 @@ interface AppSettingsDialogProps {
   onEffortChange: (id: ReasoningEffort | '') => void
   onNamingModelChange: (providerId: string, modelId: string) => void
   onExtractionModelChange: (providerId: string, modelId: string) => void
-  onExecutionHostRemoteBaseUrlChange: (value: string) => void
+  onAddExecutionHostEndpoint: () => void
+  onExecutionHostLabelChange: (endpointId: string, value: string) => void
+  onExecutionHostBaseUrlChange: (endpointId: string, value: string) => void
+  onRemoveExecutionHostEndpoint: (endpointId: string) => void
   onNotificationsChange: (prefs: NotificationPrefs) => void
   onTestFireNotification: (severity: NotificationSeverity) => void
   onToggleBackgroundUpdates: (next: boolean) => void
@@ -111,8 +122,10 @@ export const AppSettingsDialog: FC<AppSettingsDialogProps> = ({
   selection,
   namingDraft,
   extractionDraft,
-  executionHostRemoteBaseUrlDraft,
-  executionHostRemoteBaseUrlError,
+  executionHostEndpointsDraft,
+  executionHostSavedEndpoints,
+  executionHostSessionCounts,
+  executionHostEnvironmentOverrideWarning,
   notificationsDraft,
   updatesDraft,
   debugLoggingDraft,
@@ -130,7 +143,10 @@ export const AppSettingsDialog: FC<AppSettingsDialogProps> = ({
   onEffortChange,
   onNamingModelChange,
   onExtractionModelChange,
-  onExecutionHostRemoteBaseUrlChange,
+  onAddExecutionHostEndpoint,
+  onExecutionHostLabelChange,
+  onExecutionHostBaseUrlChange,
+  onRemoveExecutionHostEndpoint,
   onNotificationsChange,
   onTestFireNotification,
   onToggleBackgroundUpdates,
@@ -295,13 +311,20 @@ export const AppSettingsDialog: FC<AppSettingsDialogProps> = ({
             </SettingsSubsection>
             <SettingsSubsection
               withDivider
-              title="Remote execution host"
-              description="Agents daemon that can run provider sessions remotely. Configure the endpoint here; choosing where sessions run comes per session."
+              title="Execution host endpoints"
+              description="Machines other than this one that can run provider sessions, each with its own address and token. Choosing where a session runs comes per session."
             >
-              <ExecutionHostSettingsContainer
-                remoteBaseUrlDraft={executionHostRemoteBaseUrlDraft}
-                remoteBaseUrlError={executionHostRemoteBaseUrlError}
-                onRemoteBaseUrlChange={onExecutionHostRemoteBaseUrlChange}
+              <ExecutionHostEndpointsFields
+                drafts={executionHostEndpointsDraft}
+                savedEndpoints={executionHostSavedEndpoints}
+                sessionCounts={executionHostSessionCounts}
+                environmentOverrideWarning={
+                  executionHostEnvironmentOverrideWarning
+                }
+                onAdd={onAddExecutionHostEndpoint}
+                onLabelChange={onExecutionHostLabelChange}
+                onBaseUrlChange={onExecutionHostBaseUrlChange}
+                onRemove={onRemoveExecutionHostEndpoint}
               />
             </SettingsSubsection>
           </div>

@@ -1,5 +1,7 @@
 import type Database from 'better-sqlite3'
 import type { ExecutionHostEndpointRepository } from '../execution-host-endpoint/execution-host-endpoint.repository'
+import type { ExecutionHostEndpoint } from '../execution-host-endpoint/execution-host-endpoint.types'
+import { removedExecutionHostEndpointIds } from '../execution-host-endpoint/execution-host-endpoint.pure'
 import type { NotificationPrefs } from '../notifications/notifications.types'
 import type { StateService } from '../state/state.service'
 import type { ProviderDescriptor } from '../provider/provider.types'
@@ -32,12 +34,35 @@ import {
 
 type ProviderDescriptorLoader = () => Promise<ProviderDescriptor[]>
 
+/**
+ * The credential store an Endpoint's token lives in (MAR-2642).
+ *
+ * Named as a port rather than taking the concrete service so this module keeps
+ * knowing only one thing about tokens: that a credential lives and dies with
+ * its Endpoint. Required rather than optional, so the wiring cannot go missing
+ * and leave every gate green with tokens quietly outliving their machines.
+ */
+export interface ExecutionHostEndpointCredentials {
+  /** Destroys one named Endpoint's token, or rejects having left it stored. */
+  forgetEndpoint(endpointId: string): Promise<void>
+  /**
+   * Destroys every stored credential whose Endpoint no longer exists, and
+   * answers with the accounts it emptied.
+   *
+   * `isLive` is a question rather than a list because the store asks it again
+   * at the moment of each delete: an Endpoint added while the sweep was
+   * running is not an orphan.
+   */
+  sweepEndpoints(isLive: (endpointId: string) => boolean): Promise<string[]>
+}
+
 export class AppSettingsService {
   constructor(
     private readonly db: Database.Database,
     private readonly stateService: StateService,
     private readonly loadDescriptors: ProviderDescriptorLoader,
     private readonly executionHostEndpoints: ExecutionHostEndpointRepository,
+    private readonly executionHostCredentials: ExecutionHostEndpointCredentials,
   ) {}
 
   async getAppSettings(): Promise<AppSettings> {
@@ -194,6 +219,20 @@ export class AppSettingsService {
       favoriteModels,
     }
 
+    // A credential lives and dies with its Endpoint (MAR-2642), and removal is
+    // the only gesture that destroys one: an edit to a row's label or URL keeps
+    // its id, so it keeps its Keychain account and its token. Priced before
+    // anything is written, from the stored rows on one side and the normalizer
+    // on the other, so a list that will not normalize is refused here — before
+    // anything has been written or destroyed.
+    const removedEndpointIds =
+      input.executionHostEndpoints === undefined
+        ? []
+        : removedExecutionHostEndpointIds(
+            this.executionHostEndpoints.list(),
+            input.executionHostEndpoints,
+          )
+
     // One transaction, because one Save is one fact. The endpoints live in
     // their own rows and the rest of the settings in a blob, and committing
     // them separately means a failure on either side leaves the other half
@@ -208,7 +247,69 @@ export class AppSettingsService {
     })
     applySave()
 
+    // The Keychain and this database are different systems, so one write
+    // across both is not available and the only thing left to choose is the
+    // order. The settings commit goes first, and the credential is cleaned up
+    // after it, because the two failures are not the same size. Destroying the
+    // credential first spends a real token on a save that may then reject — a
+    // token irreversibly gone while the Endpoint that named it is still
+    // stored. Committing first leaves, at worst, an entry filed under an id no
+    // Endpoint will ever bear again: ids are never reused (MAR-2642), so an
+    // orphan can never authenticate anything. Inert garbage beats data loss.
+    //
+    // Which makes a failure here a debt rather than a defect, so it is not
+    // raised: the save the user asked for did happen, and reporting it as
+    // failed would be the lie. `sweepOrphanedExecutionHostCredentials` collects
+    // the debt on the next settings load and on every settings-dialog open, and
+    // keeps collecting it until the Keychain lets go.
+    //
+    // Concurrently, and settled rather than sequenced (MAR-2642): removing two
+    // Endpoints removes two machines' credentials, and they are ordered against
+    // nothing. One at a time means a Keychain that blocks on the first — an
+    // authorization prompt nobody answers, a `security` that runs to its
+    // timeout — holds up the cleanup of a machine it has nothing to do with.
+    // Each failure is still swallowed against its own Endpoint, so one refusal
+    // is one debt rather than the end of the batch.
+    await Promise.allSettled(
+      removedEndpointIds.map((removed) =>
+        this.executionHostCredentials.forgetEndpoint(removed),
+      ),
+    )
+
     return this.withExecutionHostEndpoints(toStore)
+  }
+
+  /**
+   * Destroys stored credentials whose Endpoint no longer exists (MAR-2642).
+   *
+   * The residue handler for the order above, and self-healing by construction:
+   * every credential this store holds belongs to an Endpoint, so an account
+   * that is not one of the stored ids is garbage whatever left it there — a
+   * cleanup the Keychain refused, or a quit between the commit and it.
+   *
+   * Liveness is passed as a question rather than a list so the store can ask it
+   * again at each delete, against the rows as they are then. Answers with the
+   * accounts it emptied, so a caller can say what it did rather than that it
+   * ran.
+   */
+  async sweepOrphanedExecutionHostCredentials(): Promise<string[]> {
+    return this.executionHostCredentials.sweepEndpoints(
+      (endpointId) => !!this.executionHostEndpoints.getById(endpointId),
+    )
+  }
+
+  /**
+   * The stored Endpoints, read synchronously (MAR-2642).
+   *
+   * `getAppSettings` is asynchronous only because it validates against provider
+   * descriptors, which have nothing to say about which machines exist. A caller
+   * that must resolve an Endpoint id *before* its first `await` — because what
+   * follows takes a credential queue, and anything awaited before that can be
+   * overtaken by the removal it is racing — has no business loading descriptors
+   * to do it.
+   */
+  listExecutionHostEndpoints(): ExecutionHostEndpoint[] {
+    return this.executionHostEndpoints.list()
   }
 
   async resolveNamingModel(providerId: string): Promise<string | null> {

@@ -170,10 +170,10 @@ export function SearchableSelectPresentational({
                     onSelect(item.id)
                   }}
                   className={cn(
-                    'flex items-center gap-2 rounded-md px-2 py-2 text-sm aria-selected:bg-accent aria-selected:text-accent-foreground',
+                    'flex gap-2 rounded-md px-2 py-2 text-sm aria-selected:bg-accent aria-selected:text-accent-foreground',
                     item.disabled
-                      ? 'cursor-not-allowed opacity-50'
-                      : 'cursor-pointer',
+                      ? 'cursor-not-allowed items-start opacity-50'
+                      : 'cursor-pointer items-center',
                   )}
                 >
                   <div className="flex min-w-0 flex-1 flex-col">
@@ -189,7 +189,17 @@ export function SearchableSelectPresentational({
                       ) : null}
                     </span>
                     {item.description ? (
-                      <span className="truncate text-[11px] text-muted-foreground">
+                      <span
+                        className={cn(
+                          'text-[11px] text-muted-foreground',
+                          // A disabled row's description is the reason it
+                          // cannot be picked, and this popover has no tooltip:
+                          // truncated, that reason is a mystery no hover
+                          // solves. It wraps. Every other description is
+                          // supplementary and keeps the single line.
+                          item.disabled ? 'whitespace-normal' : 'truncate',
+                        )}
+                      >
                         {item.description}
                       </span>
                     ) : null}

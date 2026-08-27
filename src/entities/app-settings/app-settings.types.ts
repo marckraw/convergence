@@ -122,6 +122,22 @@ export interface ExecutionHostDaemonCredentialStatus {
   error: string | null
 }
 
+/**
+ * The environment override, which belongs to no Endpoint (MAR-2642).
+ *
+ * It predates Endpoints and names no machine, so it serves exactly one id: the
+ * one the single-host era became. Carries no token — only that one exists, so
+ * Settings can say when it exists and serves nobody.
+ */
+export interface ExecutionHostDaemonEnvironmentOverride {
+  /** Whether the variable is set at all. */
+  configured: boolean
+  /** The variable's name, so a message can say what to unset. */
+  envKey: string
+  /** The single Endpoint id it can serve, and the only one. */
+  endpointId: string
+}
+
 export type RemoteExecutionHostConnectionState =
   | 'connected'
   | 'missing-base-url'
@@ -151,6 +167,18 @@ export interface RemoteExecutionHostProviderSummary {
   authenticated: boolean
   supportsContinuation: boolean
   models: { id: string; label: string }[]
+}
+
+/**
+ * How many sessions name one execution host (MAR-2642).
+ *
+ * Pairs rather than a record keyed by id: the ids are the user's own, and a
+ * bare object indexed by them answers `toString` with a function and loses
+ * `__proto__` to the prototype setter.
+ */
+export interface ExecutionHostSessionCount {
+  executionHostId: string
+  sessions: number
 }
 
 export interface RemoteExecutionHostConnectionResult {

@@ -18,8 +18,13 @@ function makeProps(
   connectionResult: RemoteExecutionHostConnectionResult | null,
 ): Parameters<typeof ExecutionHostFields>[0] {
   return {
+    endpointId: 'default',
+    displayName: 'kuba-vps',
+    labelDraft: 'kuba-vps',
     remoteBaseUrlDraft: 'https://daemon.test',
     remoteBaseUrlError: null,
+    actionBlocks: { token: null, connection: null },
+    removalBlock: null,
     credentialStatus: {
       providerId: 'execution-host-daemon',
       configured: true,
@@ -36,12 +41,18 @@ function makeProps(
     credentialMessage: null,
     credentialError: null,
     connectionResult,
+    removalWarning: null,
+    isRemovalPending: false,
+    onLabelChange: vi.fn(),
     onRemoteBaseUrlChange: vi.fn(),
     onDaemonTokenChange: vi.fn(),
     onToggleDaemonTokenVisibility: vi.fn(),
     onSaveDaemonToken: vi.fn(),
     onDeleteDaemonToken: vi.fn(),
     onTestDaemonConnection: vi.fn(),
+    onRequestRemove: vi.fn(),
+    onConfirmRemove: vi.fn(),
+    onCancelRemove: vi.fn(),
   }
 }
 

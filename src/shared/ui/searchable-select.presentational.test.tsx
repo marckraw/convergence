@@ -55,6 +55,39 @@ describe('SearchableSelect', () => {
     expect(onCreate).toHaveBeenCalledTimes(1)
   })
 
+  it('shows a disabled item its reason in full, without a hover', async () => {
+    // A row listed but not choosable owes an explanation where it sits: there
+    // is no tooltip in this popover, so a truncated reason is a mystery rather
+    // than an answer. Descriptions on choosable rows are supplementary and
+    // keep their single line.
+    render(
+      <SearchableSelect
+        selectedId="local"
+        value="Local"
+        items={[
+          { id: 'local', label: 'Local', description: 'This machine' },
+          {
+            id: 'kuba',
+            label: 'kuba-vps',
+            description:
+              'Pi has no counterpart on the agents daemon, so it can only ' +
+              'run here.',
+            disabled: true,
+          },
+        ]}
+        onChange={vi.fn()}
+      />,
+    )
+
+    fireEvent.click(screen.getByRole('combobox', { name: /local/i }))
+
+    const reason = await screen.findByText(
+      'Pi has no counterpart on the agents daemon, so it can only run here.',
+    )
+    expect(reason).not.toHaveClass('truncate')
+    expect(screen.getByText('This machine')).toHaveClass('truncate')
+  })
+
   it('renders a selected item badge and allows searching by badge text', async () => {
     render(
       <SearchableSelect

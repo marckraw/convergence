@@ -9,6 +9,7 @@ import {
   resetDatabase,
 } from '../../database/database'
 import { AppSettingsService } from '../../app-settings/app-settings.service'
+import { recordingExecutionHostCredentials } from '../../credentials/execution-host-daemon-credentials.fixture'
 import { ExecutionHostEndpointRepository } from '../../execution-host-endpoint/execution-host-endpoint.repository'
 import { seedExecutionHostEndpoint } from '../../execution-host-endpoint/execution-host-endpoint.fixture'
 import { StateService } from '../../state/state.service'
@@ -109,6 +110,7 @@ describe('a turn on an endpoint whose listing has not landed', () => {
       new StateService(db),
       async () => [],
       new ExecutionHostEndpointRepository(db),
+      recordingExecutionHostCredentials(),
     )
     registry = new AppSettingsRemoteExecutionHostRegistry({
       appSettings,

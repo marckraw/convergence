@@ -35,6 +35,146 @@ function buildAccount(overrides: Record<string, unknown> = {}) {
   }
 }
 
+function endpointFixture(id: string, label: string, position: number) {
+  return {
+    id,
+    label,
+    baseUrl: `https://${id}.example.com`,
+    position,
+    createdAt: '2026-01-01',
+    updatedAt: '2026-01-01',
+  }
+}
+
+function setEndpoints(endpoints: ReturnType<typeof endpointFixture>[]): void {
+  act(() => {
+    useAppSettingsStore.setState((state) => ({
+      settings: { ...state.settings, executionHostEndpoints: endpoints },
+    }))
+  })
+}
+
+/**
+ * A class attribute as whole tokens.
+ *
+ * Every styling assertion in this file goes through here. A substring match on
+ * the class attribute cannot tell a class from its own negation:
+ * `bg-transparent` contains `bg-`, `-mt-0` contains `-mt-`, and both would sail
+ * past a prefix test while the surface was gone and the tuck was nothing. Match
+ * whole classes or match nothing.
+ *
+ * `Element`, not `HTMLElement`, and `classList`, not `className`: the strip
+ * carries SVG icons, whose `className` is an `SVGAnimatedString` rather than a
+ * string. A sweep that could not read them would be a sweep with holes in it.
+ */
+function classTokens(element: Element): string[] {
+  return Array.from(element.classList)
+}
+
+/** Whole classes, so the value is part of what is being matched. */
+const TUCK_CLASS = /^-mt-(\d+(?:\.\d+)?)$/
+const INSET_CLASS = /^mx-(\d+(?:\.\d+)?)$/
+const SHADOW_CLASS = /^shadow(-(?:[a-z0-9]+|\[[^\]]+\]))?$/
+
+/**
+ * Every class that would draw a line along the strip's top edge: the top side
+ * itself (`border-t`), both horizontal edges (`border-y`), and the all-sides
+ * forms (`border`, `border-2`), which include the top.
+ *
+ * The family, not the one member. A width suffix is the same rule drawn
+ * thicker, so `border-t-2` is not an escape from `border-t` — and asserting
+ * `not.toContain('border-t')` on whole tokens is exactly the near-miss that
+ * stays green while the separator is back and heavier than before. The
+ * per-side survivors `border-x` and `border-b` are the look, so they must not
+ * match here.
+ */
+const TOP_BORDER_CLASS = /^border(-[ty])?(-(?:\d+(?:\.\d+)?|\[[^\]]+\]))?$/
+
+/**
+ * The scale of a whole spacing class (`-mt-4` -> 4, `-mt-0` -> 0), or null when
+ * the element carries no such class at all. Both zero and absent fail a knob
+ * whose entire job is to be non-zero, and they read differently in the failure.
+ */
+function spacingScale(element: HTMLElement, pattern: RegExp): number | null {
+  for (const token of classTokens(element)) {
+    const match = pattern.exec(token)
+    if (match) return Number(match[1])
+  }
+  return null
+}
+
+/** Whole classes again, and the arbitrary form counts: `z-[10]` is a layer. */
+const Z_INDEX_CLASS = /^z-(?:(\d+)|\[(\d+)\])$/
+
+/**
+ * `relative z-10` -> 10. An element that is not positioned cannot claim a
+ * layer at all, so it counts as 0 whatever `z-*` class it carries.
+ */
+function zIndexOf(element: HTMLElement): number {
+  const tokens = classTokens(element)
+  if (!tokens.includes('relative')) return 0
+  for (const token of tokens) {
+    const match = Z_INDEX_CLASS.exec(token)
+    if (match) return Number(match[1] ?? match[2])
+  }
+  return 0
+}
+
+/** The strip's own type scale, and the only one it is allowed to carry. */
+const STRIP_TEXT_SIZE_CLASS = 'text-[11px]'
+
+/**
+ * Any whole type-scale class: the named steps, and the arbitrary form with a
+ * length in it. Sizes are asserted as a *set* equal to the one above rather
+ * than by membership, because `text-sm` added beside `text-[11px]` wins in the
+ * cascade while a `toContain` check stays green.
+ *
+ * `text-[color:...]` is a colour, not a size, and must not match here.
+ */
+const TEXT_SIZE_CLASS =
+  /^text-(?:xs|sm|base|lg|xl|[2-9]xl|\[\d+(?:\.\d+)?(?:px|rem|em)\])$/
+
+/**
+ * Weight above the strip's `font-medium`. Loud has two halves, and this is the
+ * half that needs no size change to get there: `font-semibold` alone turns a
+ * label into a heading while every size assertion still passes.
+ */
+const LOUD_FONT_WEIGHT_CLASS = /^font-(?:semibold|bold|extrabold|black)$/
+
+/**
+ * Colour that shouts. `text-foreground` and `text-muted-foreground` are the
+ * strip's two quiet tones; everything matched here is the palette a person
+ * reaches for once they have decided something deserves attention — which, in
+ * this strip, exactly one sentence has.
+ */
+const EMPHATIC_TEXT_COLOR_CLASS =
+  /^text-(?:warning|destructive|primary|red|orange|amber|yellow|green|blue)(?:-|$)/
+
+/** Every whole type-scale class on an element. */
+function textSizeClasses(element: Element): string[] {
+  return classTokens(element).filter((token) => TEXT_SIZE_CLASS.test(token))
+}
+
+/**
+ * Every class in a subtree that raises the volume, optionally sparing one
+ * element and its contents.
+ *
+ * The sweep reaches the leaves because the treatment lives on the spans, not
+ * on the strip that holds them. It returns the offending classes rather than
+ * asserting, so the failure names what did it.
+ */
+function loudClassesWithin(root: Element, except?: Element): string[] {
+  return [root, ...Array.from(root.querySelectorAll('*'))]
+    .filter((element) => !except?.contains(element))
+    .flatMap((element) =>
+      classTokens(element).filter(
+        (token) =>
+          LOUD_FONT_WEIGHT_CLASS.test(token) ||
+          EMPHATIC_TEXT_COLOR_CLASS.test(token),
+      ),
+    )
+}
+
 const projectContextItem: ProjectContextItem = {
   id: 'ctx-chaperone',
   projectId: 'project-1',
@@ -79,6 +219,44 @@ const codexProvider = {
     supportsNativeFollowUp: false,
     supportsAppQueuedFollowUp: true,
     supportsSteer: true,
+    supportsInterrupt: true,
+    defaultRunningMode: 'follow-up' as const,
+  },
+}
+
+const piProvider = {
+  id: 'pi',
+  name: 'Pi Agent',
+  vendorLabel: 'Pi',
+  kind: 'conversation' as const,
+  supportsContinuation: true,
+  defaultModelId: 'default',
+  modelOptions: [
+    {
+      id: 'default',
+      label: 'Pi default',
+      defaultEffort: 'medium' as const,
+      effortOptions: [
+        { id: 'low' as const, label: 'Low' },
+        { id: 'medium' as const, label: 'Medium' },
+        { id: 'high' as const, label: 'High' },
+      ],
+    },
+  ],
+  attachments: {
+    supportsImage: false,
+    supportsPdf: false,
+    supportsText: true,
+    maxImageBytes: 0,
+    maxPdfBytes: 0,
+    maxTextBytes: 1024 * 1024,
+    maxTotalBytes: 1024 * 1024,
+  },
+  midRunInput: {
+    supportsAnswer: false,
+    supportsNativeFollowUp: false,
+    supportsAppQueuedFollowUp: true,
+    supportsSteer: false,
     supportsInterrupt: true,
     defaultRunningMode: 'follow-up' as const,
   },
@@ -270,7 +448,13 @@ describe('ComposerContainer', () => {
     })
 
     useSessionRelayStore.setState({ relays: [], isLoaded: true })
-    useAttachmentStore.setState({ drafts: {}, resolved: {} })
+    // A fresh ingest spy per test: the drop path calls the store action
+    // directly, and a mock left standing would count a neighbour's drop.
+    useAttachmentStore.setState({
+      drafts: {},
+      resolved: {},
+      ingestFiles: vi.fn().mockResolvedValue(undefined),
+    })
 
     useProjectContextStore.setState({
       itemsByProjectId: { 'project-1': [projectContextItem] },
@@ -284,6 +468,9 @@ describe('ComposerContainer', () => {
       settings: {
         ...state.settings,
         piModelVisibility: { additionalModelIds: [] },
+        // Endpoints are settings, and settings survive a render. Without this
+        // reset, whether the strip is hidden depends on which test ran first.
+        executionHostEndpoints: [],
       },
       isLoaded: true,
     }))
@@ -579,7 +766,7 @@ describe('ComposerContainer', () => {
     })
   })
 
-  it('hides the remote host toggle when no remote execution host is configured', () => {
+  it('hides the execution bar when no endpoint is configured', () => {
     render(
       <ComposerContainer
         context={{
@@ -591,27 +778,16 @@ describe('ComposerContainer', () => {
       />,
     )
 
-    expect(
-      screen.queryByRole('switch', { name: 'Run on remote host' }),
-    ).not.toBeInTheDocument()
+    expect(screen.queryByText('Runs on')).not.toBeInTheDocument()
   })
 
-  it('starts the session on the remote host when the toggle is on', () => {
-    useAppSettingsStore.setState((state) => ({
-      settings: {
-        ...state.settings,
-        executionHostEndpoints: [
-          {
-            id: 'daemon-a',
-            label: 'Remote daemon',
-            baseUrl: 'https://daemon.example.com',
-            position: 0,
-            createdAt: '2026-01-01',
-            updatedAt: '2026-01-01',
-          },
-        ],
-      },
-    }))
+  it('stacks the strip beneath the composer card instead of nesting it inside', () => {
+    // The depth is structural, not decorative. The strip is a second surface
+    // the composer card rests on; as a child of the card it could only ever be
+    // one surface divided by a rule, which is the look this replaced. Every
+    // class here would still read as plausible from inside the card, so the
+    // load-bearing assertion is the nesting, not the styling.
+    setEndpoints([endpointFixture('daemon-a', 'kuba-vps', 0)])
 
     render(
       <ComposerContainer
@@ -624,7 +800,125 @@ describe('ComposerContainer', () => {
       />,
     )
 
-    fireEvent.click(screen.getByRole('switch', { name: 'Run on remote host' }))
+    const card = screen.getByTestId('composer-root')
+    const strip = screen.getByTestId('execution-bar')
+
+    expect(card.contains(strip)).toBe(false)
+    expect(strip.parentElement).toBe(card.parentElement)
+    expect(card.nextElementSibling).toBe(strip)
+
+    // A later sibling paints over an earlier one, so "underneath" survives only
+    // while the card explicitly claims the higher layer.
+    expect(zIndexOf(card)).toBeGreaterThan(zIndexOf(strip))
+
+    // A transparent strip is not a second surface; one that is not pulled up
+    // behind the card is merely the next row down; one the card's corners do
+    // not overhang is a band, not a layer; and a card with no shadow is not
+    // resting on anything. Each is asserted as a whole class, because
+    // `bg-transparent`, `-mt-0` and `mx-0` are exactly the mutations that carry
+    // the prefix a looser matcher would have taken for the real thing.
+    const stripTokens = classTokens(strip)
+    expect(stripTokens).toContain('bg-sidebar')
+    expect(spacingScale(strip, TUCK_CLASS)).toBeGreaterThan(0)
+    expect(spacingScale(strip, INSET_CLASS)).toBeGreaterThan(0)
+    expect(classTokens(card)).toContain('shadow-md')
+
+    // The row separator is gone for good: it said "one surface, divided". The
+    // whole family is forbidden, not the single class that was deleted — a top
+    // edge drawn as `border-y`, or as a bare all-sides `border`, undoes the
+    // stacking just as completely.
+    expect(stripTokens.filter((token) => TOP_BORDER_CLASS.test(token))).toEqual(
+      [],
+    )
+  })
+
+  it('drops the card depth when there is no strip beneath it', () => {
+    // No endpoints configured, so the strip does not render at all. A shadow is
+    // a claim that something sits underneath, and with nothing under the card
+    // it is a lie about the layout rather than a matter of taste.
+    render(
+      <ComposerContainer
+        context={{
+          kind: 'project',
+          projectId: 'project-1',
+          workspaceId: null,
+          activeSessionId: null,
+        }}
+      />,
+    )
+
+    expect(screen.queryByTestId('execution-bar')).not.toBeInTheDocument()
+
+    const card = screen.getByTestId('composer-root')
+    expect(
+      classTokens(card).filter((token) => SHADOW_CLASS.test(token)),
+    ).toEqual([])
+    expect(zIndexOf(card)).toBe(0)
+  })
+
+  it('attaches a file dropped on the strip', async () => {
+    // The strip is a sibling of the card, so drag handlers on the card alone
+    // leave the visible band inert: a file dropped on it lands on nothing.
+    // Restructuring for layering also moves elements out of behavioural
+    // boundaries — one DOM tree carries both — so the drop target is the
+    // surface group around the two layers, not the card.
+    setEndpoints([endpointFixture('daemon-a', 'kuba-vps', 0)])
+
+    render(
+      <ComposerContainer
+        context={{
+          kind: 'project',
+          projectId: 'project-1',
+          workspaceId: null,
+          activeSessionId: null,
+        }}
+      />,
+    )
+
+    fireEvent.drop(screen.getByTestId('execution-bar'), {
+      dataTransfer: {
+        files: [
+          new File([new Uint8Array([1, 2, 3])], 'shot.png', {
+            type: 'image/png',
+          }),
+        ],
+      },
+    })
+
+    const ingestFiles = useAttachmentStore.getState().ingestFiles as ReturnType<
+      typeof vi.fn
+    >
+    await waitFor(() => {
+      expect(ingestFiles).toHaveBeenCalledTimes(1)
+    })
+    expect(ingestFiles.mock.calls[0][1]).toMatchObject([
+      { name: 'shot.png', mimeType: 'image/png' },
+    ])
+  })
+
+  it('starts the session on the endpoint he picked in the strip', () => {
+    // Two endpoints on purpose: the killed boolean resolved to whichever came
+    // first, so a green single-endpoint test would prove nothing about which
+    // machine the strip actually names.
+    setEndpoints([
+      endpointFixture('daemon-a', 'kuba-vps', 0),
+      endpointFixture('daemon-b', 'backpack-automations', 1),
+    ])
+
+    render(
+      <ComposerContainer
+        context={{
+          kind: 'project',
+          projectId: 'project-1',
+          workspaceId: null,
+          activeSessionId: null,
+        }}
+      />,
+    )
+
+    expect(screen.getByText('Runs on')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('combobox', { name: /Local/ }))
+    fireEvent.click(screen.getByText('backpack-automations'))
 
     const textbox = screen.getByRole('textbox')
     fireEvent.change(textbox, { target: { value: 'Run remotely' } })
@@ -645,9 +939,333 @@ describe('ComposerContainer', () => {
       contextItemIds: undefined,
       permissionConfig: { preset: 'ask' },
       serviceTier: null,
-      // Which machine, not whether: the toggle records the Endpoint's id.
-      executionHost: 'daemon-a',
+      // Which machine, not whether, and not merely "the first one".
+      executionHost: 'daemon-b',
       providerAccountId: null,
+    })
+  })
+
+  it('demotes the send to this machine when the picked endpoint is removed', () => {
+    // One endpoint survives on purpose, so the strip stays a chooser and the
+    // clamp is the load-bearing step. Removing every endpoint would hide the
+    // strip instead, and prove the hidden path rather than this one.
+    setEndpoints([
+      endpointFixture('daemon-a', 'kuba-vps', 0),
+      endpointFixture('daemon-b', 'backpack-automations', 1),
+    ])
+
+    render(
+      <ComposerContainer
+        context={{
+          kind: 'project',
+          projectId: 'project-1',
+          workspaceId: null,
+          activeSessionId: null,
+        }}
+      />,
+    )
+
+    fireEvent.click(screen.getByRole('combobox', { name: /Local/ }))
+    fireEvent.click(screen.getByText('backpack-automations'))
+    expect(
+      screen.getByRole('combobox', { name: /backpack-automations/ }),
+    ).toBeInTheDocument()
+
+    setEndpoints([endpointFixture('daemon-a', 'kuba-vps', 0)])
+    expect(screen.getByRole('combobox', { name: /Local/ })).toBeInTheDocument()
+
+    const textbox = screen.getByRole('textbox')
+    fireEvent.change(textbox, { target: { value: 'Run it' } })
+    fireEvent.keyDown(textbox, { key: 'Enter', metaKey: true })
+
+    expect(
+      useSessionStore.getState().createAndStartSession,
+    ).toHaveBeenCalledWith(
+      expect.objectContaining({ executionHost: undefined }),
+    )
+  })
+
+  it('states the machine of a live session instead of offering a choice', () => {
+    // Per session: the daemon owns a running session, so the machine cannot
+    // change under it and a control that implied otherwise would lie.
+    setEndpoints([endpointFixture('daemon-a', 'kuba-vps', 0)])
+    useSessionStore.setState((state) => ({
+      sessions: state.sessions.map((session) =>
+        session.id === 'session-1'
+          ? { ...session, executionHost: 'daemon-a' }
+          : session,
+      ),
+    }))
+
+    render(
+      <ComposerContainer
+        context={{
+          kind: 'project',
+          projectId: 'project-1',
+          workspaceId: null,
+          activeSessionId: 'session-1',
+        }}
+      />,
+    )
+
+    expect(screen.getByText('Runs on')).toBeInTheDocument()
+    expect(screen.getByText('kuba-vps')).toBeInTheDocument()
+    expect(screen.queryByRole('combobox', { name: /kuba-vps/ })).toBeNull()
+  })
+
+  it('names the endpoint a live session can no longer reach, id and all', () => {
+    // The rendered half of the rule. A bare "Removed endpoint" cannot say
+    // WHICH machine this session named, and once two are removed every one of
+    // their sessions reads the same. One endpoint survives on purpose, so a
+    // lookup that answered from the wrong row would have something plausible
+    // to answer with.
+    setEndpoints([endpointFixture('daemon-a', 'kuba-vps', 0)])
+    useSessionStore.setState((state) => ({
+      sessions: state.sessions.map((session) =>
+        session.id === 'session-1'
+          ? { ...session, executionHost: 'daemon-b' }
+          : session,
+      ),
+    }))
+
+    render(
+      <ComposerContainer
+        context={{
+          kind: 'project',
+          projectId: 'project-1',
+          workspaceId: null,
+          activeSessionId: 'session-1',
+        }}
+      />,
+    )
+
+    expect(screen.getByText('Removed endpoint (daemon-b)')).toBeInTheDocument()
+    expect(
+      screen.getByText(
+        'This session names "daemon-b", an endpoint that is no longer ' +
+          'configured, so it will refuse to run.',
+      ),
+    ).toBeInTheDocument()
+    expect(screen.queryByText('kuba-vps')).toBeNull()
+  })
+
+  it('hides the strip in a global chat, endpoints configured or not', () => {
+    // A global session has no repository to clone, so every remote row would
+    // be unpickable and the chooser would be the empty promise the
+    // constitution forbids. Endpoints are configured on purpose: with none,
+    // the "no endpoints" rule hides the strip anyway and this would prove
+    // nothing about the context it was given.
+    setEndpoints([endpointFixture('daemon-a', 'kuba-vps', 0)])
+
+    render(
+      <ComposerContainer context={{ kind: 'global', activeSessionId: null }} />,
+    )
+
+    expect(screen.queryByText('Runs on')).toBeNull()
+  })
+
+  it('blocks the endpoint rows the selected provider cannot use, with the reason', async () => {
+    // Driven through the provider picker rather than a prop, because the
+    // strip's job is to answer to whatever the row above it currently says.
+    // Blocked and listed, not hidden: a row that vanished when he changed
+    // provider would leave him hunting for a machine he configured.
+    setEndpoints([endpointFixture('daemon-a', 'kuba-vps', 0)])
+    useSessionStore.setState((state) => ({
+      providers: [...state.providers, piProvider],
+    }))
+
+    render(
+      <ComposerContainer
+        context={{
+          kind: 'project',
+          projectId: 'project-1',
+          workspaceId: null,
+          activeSessionId: null,
+        }}
+      />,
+    )
+
+    fireEvent.click(screen.getByRole('combobox', { name: 'Anthropic' }))
+    fireEvent.click(await screen.findByText('Pi'))
+
+    fireEvent.click(screen.getByRole('combobox', { name: /Local/ }))
+    const blockedRow = screen.getByRole('option', { name: /kuba-vps/ })
+    expect(blockedRow).toHaveAttribute('aria-disabled', 'true')
+    // The reason sits in the row, not in a tooltip: a greyed row that says
+    // nothing is a mystery rather than an answer.
+    expect(blockedRow).toHaveTextContent(
+      'Pi has no counterpart on the agents daemon, so it can only run here.',
+    )
+
+    fireEvent.click(blockedRow)
+    expect(screen.getByRole('combobox', { name: /Local/ })).toBeInTheDocument()
+  })
+
+  it('restores the endpoint he picked when the provider that blocked it comes back, and sends there', async () => {
+    // The round trip, through the real container, because the promise lives in
+    // the composition and not in the clamp. `resolveExecutionBarView` leaves
+    // the raw pick alone so a provider swap demotes the send without erasing
+    // the machine he chose -- but a container that reset the pick inside its
+    // provider handler would keep the clamp correct about an input it had
+    // already destroyed, and both suites would stay green. This is the only
+    // test that can fail for that.
+    setEndpoints([
+      endpointFixture('daemon-a', 'kuba-vps', 0),
+      endpointFixture('daemon-b', 'backpack-automations', 1),
+    ])
+    useSessionStore.setState((state) => ({
+      providers: [...state.providers, piProvider],
+    }))
+
+    render(
+      <ComposerContainer
+        context={{
+          kind: 'project',
+          projectId: 'project-1',
+          workspaceId: null,
+          activeSessionId: null,
+        }}
+      />,
+    )
+
+    fireEvent.click(screen.getByRole('combobox', { name: /Local/ }))
+    fireEvent.click(screen.getByText('backpack-automations'))
+    expect(
+      screen.getByRole('combobox', { name: /backpack-automations/ }),
+    ).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('combobox', { name: 'Anthropic' }))
+    fireEvent.click(await screen.findByText('Pi'))
+
+    // Demoted to this machine, and the row he picked is still listed with the
+    // reason it cannot be picked right now.
+    expect(screen.getByRole('combobox', { name: /Local/ })).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('combobox', { name: /Local/ }))
+    expect(
+      screen.getByRole('option', { name: /backpack-automations/ }),
+    ).toHaveTextContent(
+      'Pi has no counterpart on the agents daemon, so it can only run here.',
+    )
+    fireEvent.keyDown(document, { key: 'Escape' })
+    await waitFor(() => {
+      expect(
+        screen.queryByRole('option', { name: /backpack-automations/ }),
+      ).toBeNull()
+    })
+
+    fireEvent.click(screen.getByRole('combobox', { name: 'Pi' }))
+    fireEvent.click(await screen.findByText('Anthropic'))
+
+    expect(
+      screen.getByRole('combobox', { name: /backpack-automations/ }),
+    ).toBeInTheDocument()
+
+    const textbox = screen.getByRole('textbox')
+    fireEvent.change(textbox, { target: { value: 'Run it there after all' } })
+    fireEvent.keyDown(textbox, { key: 'Enter', metaKey: true })
+
+    // The load-bearing half. "It looks restored" and "it runs there" are two
+    // different claims, and only the second one is the one he asked the strip
+    // for -- so the assertion is on the id that left with the send, not on the
+    // label that came back to the trigger.
+    expect(
+      useSessionStore.getState().createAndStartSession,
+    ).toHaveBeenCalledWith(
+      expect.objectContaining({
+        providerId: 'claude-code',
+        executionHost: 'daemon-b',
+      }),
+    )
+  })
+
+  describe('the quiet type treatment, ruled "lets do quiet until i look" (Marcin, 2026-08-27, MAR-2642)', () => {
+    // A deliberate absence of emphasis needs enforcing, not a note. Nothing
+    // else in this file touches a type scale or a text tone, so a strip
+    // loudened to headline weight passes every other test here — the comment
+    // in execution-bar.styles.ts explains why this is quiet, and these two
+    // tests are what make that comment true.
+    //
+    // Fable asked whether the machine name should carry more presence than the
+    // model name in the row above, given that it governs everything above it.
+    // The answer is quoted in the title, verbatim. A red here is a
+    // contradiction of that ruling, not a typo to fix: take it back to Marcin.
+
+    it('keeps the label and the chooser at the strip scale and tone', () => {
+      setEndpoints([endpointFixture('daemon-a', 'kuba-vps', 0)])
+
+      render(
+        <ComposerContainer
+          context={{
+            kind: 'project',
+            projectId: 'project-1',
+            workspaceId: null,
+            activeSessionId: null,
+          }}
+        />,
+      )
+
+      const label = screen.getByText('Runs on')
+      expect(textSizeClasses(label)).toEqual([STRIP_TEXT_SIZE_CLASS])
+      expect(classTokens(label)).toContain('text-muted-foreground')
+
+      // Asserted on the rendered trigger rather than the exported constant:
+      // the Button brings `text-sm` and `text-xs` of its own, and what the
+      // strip is ruled to be is whatever survives that merge onto the element.
+      const chooser = screen.getByRole('combobox', { name: /Local/ })
+      expect(textSizeClasses(chooser)).toEqual([STRIP_TEXT_SIZE_CLASS])
+      expect(classTokens(chooser)).toContain('text-muted-foreground')
+
+      // No session is live, so nothing in here could have earned emphasis.
+      expect(loudClassesWithin(screen.getByTestId('execution-bar'))).toEqual([])
+    })
+
+    it('states the machine quietly and lets only the refusal be loud', () => {
+      // The removed-endpoint state on purpose: it is the one moment the strip
+      // holds both readings at once — a machine that is context, and a
+      // sentence that is a live signal — so the exception can be pinned as an
+      // exception rather than as the only thing on screen.
+      setEndpoints([endpointFixture('daemon-a', 'kuba-vps', 0)])
+      useSessionStore.setState((state) => ({
+        sessions: state.sessions.map((session) =>
+          session.id === 'session-1'
+            ? { ...session, executionHost: 'daemon-b' }
+            : session,
+        ),
+      }))
+
+      render(
+        <ComposerContainer
+          context={{
+            kind: 'project',
+            projectId: 'project-1',
+            workspaceId: null,
+            activeSessionId: 'session-1',
+          }}
+        />,
+      )
+
+      const label = screen.getByText('Runs on')
+      expect(textSizeClasses(label)).toEqual([STRIP_TEXT_SIZE_CLASS])
+      expect(classTokens(label)).toContain('text-muted-foreground')
+
+      // The machine governs every turn above it and is still 11px. That is the
+      // reading that was heard and declined, held in place.
+      const fact = screen.getByText('Removed endpoint (daemon-b)')
+      expect(textSizeClasses(fact)).toEqual([STRIP_TEXT_SIZE_CLASS])
+
+      // The one exception, and an exception in colour alone: a session that
+      // will refuse to run is a live signal, not context.
+      const warning = screen.getByText(
+        'This session names "daemon-b", an endpoint that is no longer ' +
+          'configured, so it will refuse to run.',
+      )
+      expect(classTokens(warning)).toContain('text-warning-foreground')
+      expect(textSizeClasses(warning)).toEqual([STRIP_TEXT_SIZE_CLASS])
+
+      // ...and nothing else in the strip gets to shout alongside it.
+      expect(
+        loudClassesWithin(screen.getByTestId('execution-bar'), warning),
+      ).toEqual([])
     })
   })
 

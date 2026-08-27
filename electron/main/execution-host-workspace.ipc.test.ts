@@ -10,6 +10,7 @@ import {
   resetDatabase,
 } from '../backend/database/database'
 import { AppSettingsService } from '../backend/app-settings/app-settings.service'
+import { recordingExecutionHostCredentials } from '../backend/credentials/execution-host-daemon-credentials.fixture'
 import { ExecutionHostEndpointRepository } from '../backend/execution-host-endpoint/execution-host-endpoint.repository'
 import { seedExecutionHostEndpoint } from '../backend/execution-host-endpoint/execution-host-endpoint.fixture'
 import { StateService } from '../backend/state/state.service'
@@ -131,6 +132,7 @@ describe('the executionHost:getSessionWorkspace ipc handler', () => {
       new StateService(db),
       async () => [],
       new ExecutionHostEndpointRepository(db),
+      recordingExecutionHostCredentials(),
     )
     const registry = new AppSettingsRemoteExecutionHostRegistry({
       appSettings,

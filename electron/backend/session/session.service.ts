@@ -15,6 +15,7 @@ import {
   isLocalExecutionHost,
   isRemoteExecutionHost,
   LOCAL_EXECUTION_HOST_ID,
+  parseExecutionHostId,
 } from '../execution-host-endpoint/execution-host-endpoint.pure'
 import { ExecutionHostEndpointRepository } from '../execution-host-endpoint/execution-host-endpoint.repository'
 import { assertLocalAccountSelection } from '../provider-account/provider-account-resolution.pure'
@@ -37,6 +38,7 @@ import type { AttachmentsService } from '../attachments/attachments.service'
 import type { SkillSelection } from '../skills/skills.types'
 import {
   sessionSummaryFromRow,
+  type ExecutionHostSessionCount,
   type Session,
   type SessionSummary,
   type CreateSessionInput,
@@ -733,6 +735,31 @@ export class SessionService {
 
   getAllSummaries(): SessionSummary[] {
     return this.buildSessionSummaries(this.sessionRepository.listAll())
+  }
+
+  /**
+   * How many sessions name each execution host (MAR-2642).
+   *
+   * Blank and absent both mean this machine — that is what every row written
+   * before execution hosts existed meant — so they are folded into `'local'`
+   * rather than reported as a host of their own.
+   *
+   * Accumulated in a `Map` and returned as pairs. The ids come off session
+   * rows, so they are outside data: a bare object accumulator reads
+   * `counts['toString']` as an inherited function rather than a missing count,
+   * and `counts['__proto__'] = n` goes to the prototype setter and is lost.
+   * Both make a removal warning lie about a real Endpoint.
+   */
+  countSessionsByExecutionHost(): ExecutionHostSessionCount[] {
+    const counts = new Map<string, number>()
+    for (const row of this.sessionRepository.countByExecutionHost()) {
+      const id = parseExecutionHostId(row.executionHost)
+      counts.set(id, (counts.get(id) ?? 0) + row.count)
+    }
+    return [...counts].map(([executionHostId, sessions]) => ({
+      executionHostId,
+      sessions,
+    }))
   }
 
   getById(id: string): Session | null {

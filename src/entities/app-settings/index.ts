@@ -4,6 +4,8 @@ export type {
   CommandCenterShortcutPrefs,
   DebugLoggingPrefs,
   ExecutionHostDaemonCredentialStatus,
+  ExecutionHostDaemonEnvironmentOverride,
+  ExecutionHostSessionCount,
   FavoriteModelRef,
   FavoriteModelsPrefs,
   NotificationEventPrefs,
