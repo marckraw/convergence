@@ -856,6 +856,83 @@ describe('ComposerContainer', () => {
     expect(screen.getByRole('combobox', { name: /Local/ })).toBeInTheDocument()
   })
 
+  it('restores the endpoint he picked when the provider that blocked it comes back, and sends there', async () => {
+    // The round trip, through the real container, because the promise lives in
+    // the composition and not in the clamp. `resolveExecutionBarView` leaves
+    // the raw pick alone so a provider swap demotes the send without erasing
+    // the machine he chose -- but a container that reset the pick inside its
+    // provider handler would keep the clamp correct about an input it had
+    // already destroyed, and both suites would stay green. This is the only
+    // test that can fail for that.
+    setEndpoints([
+      endpointFixture('daemon-a', 'kuba-vps', 0),
+      endpointFixture('daemon-b', 'backpack-automations', 1),
+    ])
+    useSessionStore.setState((state) => ({
+      providers: [...state.providers, piProvider],
+    }))
+
+    render(
+      <ComposerContainer
+        context={{
+          kind: 'project',
+          projectId: 'project-1',
+          workspaceId: null,
+          activeSessionId: null,
+        }}
+      />,
+    )
+
+    fireEvent.click(screen.getByRole('combobox', { name: /Local/ }))
+    fireEvent.click(screen.getByText('backpack-automations'))
+    expect(
+      screen.getByRole('combobox', { name: /backpack-automations/ }),
+    ).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('combobox', { name: 'Anthropic' }))
+    fireEvent.click(await screen.findByText('Pi'))
+
+    // Demoted to this machine, and the row he picked is still listed with the
+    // reason it cannot be picked right now.
+    expect(screen.getByRole('combobox', { name: /Local/ })).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('combobox', { name: /Local/ }))
+    expect(
+      screen.getByRole('option', { name: /backpack-automations/ }),
+    ).toHaveTextContent(
+      'Pi has no counterpart on the agents daemon, so it can only run here.',
+    )
+    fireEvent.keyDown(document, { key: 'Escape' })
+    await waitFor(() => {
+      expect(
+        screen.queryByRole('option', { name: /backpack-automations/ }),
+      ).toBeNull()
+    })
+
+    fireEvent.click(screen.getByRole('combobox', { name: 'Pi' }))
+    fireEvent.click(await screen.findByText('Anthropic'))
+
+    expect(
+      screen.getByRole('combobox', { name: /backpack-automations/ }),
+    ).toBeInTheDocument()
+
+    const textbox = screen.getByRole('textbox')
+    fireEvent.change(textbox, { target: { value: 'Run it there after all' } })
+    fireEvent.keyDown(textbox, { key: 'Enter', metaKey: true })
+
+    // The load-bearing half. "It looks restored" and "it runs there" are two
+    // different claims, and only the second one is the one he asked the strip
+    // for -- so the assertion is on the id that left with the send, not on the
+    // label that came back to the trigger.
+    expect(
+      useSessionStore.getState().createAndStartSession,
+    ).toHaveBeenCalledWith(
+      expect.objectContaining({
+        providerId: 'claude-code',
+        executionHost: 'daemon-b',
+      }),
+    )
+  })
+
   it('creates a global session and hides project context controls', () => {
     render(
       <ComposerContainer
