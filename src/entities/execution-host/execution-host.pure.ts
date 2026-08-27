@@ -11,8 +11,13 @@ import type { ExecutionHostEndpoint } from './execution-host.types'
 export const LOCAL_EXECUTION_HOST_ID = 'local'
 
 /**
- * The id the Endpoint born from the single-host era carries. The settings form
- * still edits exactly one daemon, and this is the one it edits.
+ * The id the Endpoint born from the single-host era carries (MAR-2620).
+ *
+ * Not "the one Settings edits" any more: since MAR-2642 the settings surface
+ * holds a list, and this is one row in it — the only one whose id predates
+ * plurality. It still has to be named, because an Endpoint's Keychain account
+ * is its id, and the daemon token stored before Endpoints were plural is filed
+ * under this one.
  */
 export const DEFAULT_EXECUTION_HOST_ENDPOINT_ID = 'default'
 

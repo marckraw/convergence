@@ -103,6 +103,44 @@ const codexProvider = {
   },
 }
 
+const piProvider = {
+  id: 'pi',
+  name: 'Pi Agent',
+  vendorLabel: 'Pi',
+  kind: 'conversation' as const,
+  supportsContinuation: true,
+  defaultModelId: 'default',
+  modelOptions: [
+    {
+      id: 'default',
+      label: 'Pi default',
+      defaultEffort: 'medium' as const,
+      effortOptions: [
+        { id: 'low' as const, label: 'Low' },
+        { id: 'medium' as const, label: 'Medium' },
+        { id: 'high' as const, label: 'High' },
+      ],
+    },
+  ],
+  attachments: {
+    supportsImage: false,
+    supportsPdf: false,
+    supportsText: true,
+    maxImageBytes: 0,
+    maxPdfBytes: 0,
+    maxTextBytes: 1024 * 1024,
+    maxTotalBytes: 1024 * 1024,
+  },
+  midRunInput: {
+    supportsAnswer: false,
+    supportsNativeFollowUp: false,
+    supportsAppQueuedFollowUp: true,
+    supportsSteer: false,
+    supportsInterrupt: true,
+    defaultRunningMode: 'follow-up' as const,
+  },
+}
+
 describe('ComposerContainer', () => {
   beforeEach(() => {
     providerAccountsMock = []
@@ -728,6 +766,94 @@ describe('ComposerContainer', () => {
     expect(screen.getByText('Runs on')).toBeInTheDocument()
     expect(screen.getByText('kuba-vps')).toBeInTheDocument()
     expect(screen.queryByRole('combobox', { name: /kuba-vps/ })).toBeNull()
+  })
+
+  it('names the endpoint a live session can no longer reach, id and all', () => {
+    // The rendered half of the rule. A bare "Removed endpoint" cannot say
+    // WHICH machine this session named, and once two are removed every one of
+    // their sessions reads the same. One endpoint survives on purpose, so a
+    // lookup that answered from the wrong row would have something plausible
+    // to answer with.
+    setEndpoints([endpointFixture('daemon-a', 'kuba-vps', 0)])
+    useSessionStore.setState((state) => ({
+      sessions: state.sessions.map((session) =>
+        session.id === 'session-1'
+          ? { ...session, executionHost: 'daemon-b' }
+          : session,
+      ),
+    }))
+
+    render(
+      <ComposerContainer
+        context={{
+          kind: 'project',
+          projectId: 'project-1',
+          workspaceId: null,
+          activeSessionId: 'session-1',
+        }}
+      />,
+    )
+
+    expect(screen.getByText('Removed endpoint (daemon-b)')).toBeInTheDocument()
+    expect(
+      screen.getByText(
+        'This session names "daemon-b", an endpoint that is no longer ' +
+          'configured, so it will refuse to run.',
+      ),
+    ).toBeInTheDocument()
+    expect(screen.queryByText('kuba-vps')).toBeNull()
+  })
+
+  it('hides the strip in a global chat, endpoints configured or not', () => {
+    // A global session has no repository to clone, so every remote row would
+    // be unpickable and the chooser would be the empty promise the
+    // constitution forbids. Endpoints are configured on purpose: with none,
+    // the "no endpoints" rule hides the strip anyway and this would prove
+    // nothing about the context it was given.
+    setEndpoints([endpointFixture('daemon-a', 'kuba-vps', 0)])
+
+    render(
+      <ComposerContainer context={{ kind: 'global', activeSessionId: null }} />,
+    )
+
+    expect(screen.queryByText('Runs on')).toBeNull()
+  })
+
+  it('blocks the endpoint rows the selected provider cannot use, with the reason', async () => {
+    // Driven through the provider picker rather than a prop, because the
+    // strip's job is to answer to whatever the row above it currently says.
+    // Blocked and listed, not hidden: a row that vanished when he changed
+    // provider would leave him hunting for a machine he configured.
+    setEndpoints([endpointFixture('daemon-a', 'kuba-vps', 0)])
+    useSessionStore.setState((state) => ({
+      providers: [...state.providers, piProvider],
+    }))
+
+    render(
+      <ComposerContainer
+        context={{
+          kind: 'project',
+          projectId: 'project-1',
+          workspaceId: null,
+          activeSessionId: null,
+        }}
+      />,
+    )
+
+    fireEvent.click(screen.getByRole('combobox', { name: 'Anthropic' }))
+    fireEvent.click(await screen.findByText('Pi'))
+
+    fireEvent.click(screen.getByRole('combobox', { name: /Local/ }))
+    const blockedRow = screen.getByRole('option', { name: /kuba-vps/ })
+    expect(blockedRow).toHaveAttribute('aria-disabled', 'true')
+    // The reason sits in the row, not in a tooltip: a greyed row that says
+    // nothing is a mystery rather than an answer.
+    expect(blockedRow).toHaveTextContent(
+      'Pi has no counterpart on the agents daemon, so it can only run here.',
+    )
+
+    fireEvent.click(blockedRow)
+    expect(screen.getByRole('combobox', { name: /Local/ })).toBeInTheDocument()
   })
 
   it('creates a global session and hides project context controls', () => {

@@ -6,21 +6,42 @@ import {
 } from '@/entities/execution-host'
 
 /**
- * Providers the remote agents daemon can run. Mirrors the backend mapping in
- * electron/backend/provider/execution-host/remote-execution-host.pure.ts —
- * keep the two lists in sync.
+ * Providers the remote agents daemon can run — a placeholder, and knowingly
+ * fallible (MAR-2642).
+ *
+ * This is a local table asserting a remote fact. It mirrors the mapping in
+ * electron/backend/provider/execution-host/remote-execution-host.pure.ts, and
+ * both are guesses about a machine neither of them asked: the first daemon
+ * that gains a provider this set does not know will be told it cannot run it,
+ * and nothing here will notice. S3 of the Execution Bar constitution
+ * (MAR-2619) asks the daemon for its own advertised providers and deletes this
+ * set. Until it lands, keep the two lists in sync.
  */
 const REMOTE_CAPABLE_PROVIDER_IDS = new Set(['claude-code', 'codex', 'cursor'])
 
 /** What this machine is called in the strip. */
 export const LOCAL_EXECUTION_HOST_LABEL = 'Local'
 
-/** What a session names when the Endpoint it named is gone. */
-export const REMOVED_EXECUTION_HOST_LABEL = 'Removed endpoint'
+/**
+ * What a session names when the Endpoint it named is gone (MAR-2642).
+ *
+ * The id is in the label because this is the state where naming the machine
+ * matters most: the session will refuse to run, and two removed endpoints are
+ * one indistinguishable "Removed endpoint" unless it says which one it named.
+ * The id is the honest fallback, not the right answer — a session records only
+ * the endpoint id, so the name he gave the machine dies with the settings row
+ * (MAR-2662 records the display name at start).
+ */
+function removedExecutionHostLabel(endpointId: string): string {
+  return `Removed endpoint (${endpointId})`
+}
 
-const REMOVED_ENDPOINT_WARNING =
-  'This session names an endpoint that is no longer configured, so it will ' +
-  'refuse to run.'
+function removedEndpointWarning(endpointId: string): string {
+  return (
+    `This session names "${endpointId}", an endpoint that is no longer ` +
+    'configured, so it will refuse to run.'
+  )
+}
 
 /** One machine the strip offers, and whether it can be picked right now. */
 export interface ExecutionHostChoice {
@@ -171,8 +192,8 @@ function settledView(
     return {
       mode: 'settled',
       hostId,
-      label: REMOVED_EXECUTION_HOST_LABEL,
-      warning: REMOVED_ENDPOINT_WARNING,
+      label: removedExecutionHostLabel(hostId),
+      warning: removedEndpointWarning(hostId),
     }
   }
   return {

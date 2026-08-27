@@ -4,7 +4,6 @@ import {
   describeRemoteExecutionBlock,
   executionHostForNewSession,
   LOCAL_EXECUTION_HOST_LABEL,
-  REMOVED_EXECUTION_HOST_LABEL,
   resolveExecutionBarView,
   type ExecutionBarInput,
   type ExecutionBarView,
@@ -180,19 +179,37 @@ describe('the strip once the session is live', () => {
     })
   })
 
-  it('says a live session names an Endpoint that is gone, rather than nothing', () => {
+  it('names the Endpoint a live session will refuse to run on, id and all', () => {
     // Slice 1 made that session refuse to run. The strip must not present it
-    // as running here, and must not stay silent about why it will not run.
+    // as running here, must not stay silent about why it will not run, and
+    // must say WHICH machine it named -- this is the state where naming the
+    // machine matters most, and the strip exists to name the machine.
     expect(
       view({ liveSessionHostId: 'bp', endpoints: [endpoint('kuba')] }),
     ).toEqual({
       mode: 'settled',
       hostId: 'bp',
-      label: REMOVED_EXECUTION_HOST_LABEL,
+      label: 'Removed endpoint (bp)',
       warning:
-        'This session names an endpoint that is no longer configured, so ' +
-        'it will refuse to run.',
+        'This session names "bp", an endpoint that is no longer configured, ' +
+        'so it will refuse to run.',
     })
+  })
+
+  it('tells two removed Endpoints apart, which one bare label cannot', () => {
+    // Remove two machines and every one of their sessions says the same thing
+    // unless the id is in it. Then he cannot tell which configuration to
+    // restore, which is the whole cost of a nameless refusal.
+    const [first, second] = ['kuba-vps-2', 'backpack-automations'].map(
+      (hostId) => view({ liveSessionHostId: hostId, endpoints: [] }),
+    )
+    expect(first).not.toEqual(second)
+    expect(first.mode === 'settled' && first.label).toBe(
+      'Removed endpoint (kuba-vps-2)',
+    )
+    expect(second.mode === 'settled' && second.warning).toContain(
+      'backpack-automations',
+    )
   })
 
   it('still says it when every Endpoint is gone, because removal moves nothing', () => {
@@ -201,7 +218,7 @@ describe('the strip once the session is live', () => {
     expect(view({ liveSessionHostId: 'bp', endpoints: [] })).toMatchObject({
       mode: 'settled',
       hostId: 'bp',
-      label: REMOVED_EXECUTION_HOST_LABEL,
+      label: 'Removed endpoint (bp)',
     })
   })
 })

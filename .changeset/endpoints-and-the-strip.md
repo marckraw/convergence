@@ -33,7 +33,10 @@ machine a session will run on. This machine first and by default, then each
 configured endpoint. It is a chooser while a session is being born and a
 statement of fact once the session is live, because the daemon owns a running
 session and its machine cannot change underneath it. A live session whose
-endpoint has since been removed says so rather than appearing to run here.
+endpoint has since been removed names that endpoint rather than appearing to
+run here, so two removed machines are not one anonymous refusal. The strip is
+hidden in global chat, where there is no repository to clone and so no remote
+choice that could be picked.
 
 The "Remote" toggle is gone. It was a yes/no in a world that now has several
 machines, and it always resolved to whichever endpoint happened to be first —
@@ -41,7 +44,10 @@ so picking the second one was not something it could express. The strip records
 which machine, and when the machine picked stops being reachable (its endpoint
 removed, or a provider selected that the daemon cannot run) the strip shows this
 machine and the session starts here, rather than sending to a machine that has
-gone. The tier stays hidden entirely when no endpoint is configured.
+gone. An endpoint the selected provider cannot use stays in the list, greyed and
+carrying the reason it cannot be picked — a row that vanished on a provider
+change would leave you hunting for a machine you configured. The tier stays
+hidden entirely when no endpoint is configured.
 
 The strip does **not** yet change the provider and model list above it: picking
 a remote machine still shows this machine's provider catalog, exactly as the old
