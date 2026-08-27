@@ -19,15 +19,20 @@ interface ExecutionBarProps {
 }
 
 /**
- * The tier beneath the composer's option row that names the machine
- * (MAR-2642).
+ * The layer beneath the composer that names the machine (MAR-2642).
  *
  * A chooser while a session is being born, a statement of fact once it is
  * live — the daemon owns a running session and the machine cannot change under
  * it, so offering a choice there would be a control that lies about what it
  * does.
  *
- * The row is a wrapping flex with a gap and exactly one element in it. The
+ * Rendered as a *sibling* of the composer card, never a child of it: the depth
+ * is structural, not decorative. A recessed plate, inset so the card's corners
+ * overhang it and tucked up behind it so only its lower band shows. Nest this
+ * back inside the card and it collapses into a divided row again — the canary
+ * in `composer.container.test.tsx` goes red when it does.
+ *
+ * The strip is a wrapping flex with a gap and exactly one element in it. The
  * Project picker joins it later; nothing stands empty waiting for it.
  */
 export const ExecutionBar: FC<ExecutionBarProps> = ({
@@ -38,7 +43,7 @@ export const ExecutionBar: FC<ExecutionBarProps> = ({
   if (view.mode === 'hidden') return null
 
   return (
-    <div className={stripClass}>
+    <div className={stripClass} data-testid="execution-bar">
       <span className={stripLabelClass}>Runs on</span>
       {view.mode === 'choosing' ? (
         <ComposerSelect
