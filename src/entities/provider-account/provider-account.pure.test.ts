@@ -5,12 +5,12 @@ import {
   buildProviderAccountPickerItems,
   buildProviderAccountSettingsRows,
   describeProviderAccountIdentity,
-  describeProviderAccountSelectionBlock,
   describeProviderAccountStatus,
   describeSelectedProviderAccount,
   isProviderAccountSelectable,
   isProviderAccountSelectionLocked,
   providerAccountIdFromPickerValue,
+  providerAccountsForHost,
   providerAccountsForProvider,
   resolveInitialProviderAccountSelection,
   summariseProviderAccountHealth,
@@ -504,19 +504,27 @@ describe('resolveInitialProviderAccountSelection', () => {
   })
 })
 
-describe('describeProviderAccountSelectionBlock', () => {
-  it('explains that a remote session cannot use a local account', () => {
-    // Accounts live on this machine and the wire protocol carries no account
-    // reference, so a remote host runs on its own credential regardless.
-    expect(describeProviderAccountSelectionBlock('remote')).toMatch(
-      /local-only for now/,
-    )
+describe('providerAccountsForHost', () => {
+  const accounts = [
+    account({ id: 'claude-a' }),
+    account({ id: 'codex-a', providerId: 'codex' }),
+  ]
+
+  it('offers no account at all on a daemon, because there is none to offer', () => {
+    // Not "a choice that is disabled" — accounts are directories on this
+    // machine and the wire protocol carries no account reference, so on an
+    // Endpoint the concept is absent. The picker renders nothing when handed
+    // nothing, which is how the control disappears (MAR-2682, "the account
+    // picker is gone on a remote").
+    expect(providerAccountsForHost(accounts, 'kuba', 'claude-code')).toEqual([])
   })
 
-  it('blocks nothing for a local session', () => {
-    expect(describeProviderAccountSelectionBlock('local')).toBeNull()
-    expect(describeProviderAccountSelectionBlock(null)).toBeNull()
-    expect(describeProviderAccountSelectionBlock(undefined)).toBeNull()
+  it('is exactly the per-provider list on this machine', () => {
+    for (const host of ['local', '', null, undefined]) {
+      expect(providerAccountsForHost(accounts, host, 'claude-code')).toEqual(
+        providerAccountsForProvider(accounts, 'claude-code'),
+      )
+    }
   })
 })
 

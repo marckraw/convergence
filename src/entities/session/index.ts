@@ -49,8 +49,29 @@ export type {
   CreateAndStartGlobalSessionRequest,
 } from './session.types'
 export { AttentionIndicator } from './attention-indicator.presentational'
-export { useSessionStore } from './session.model'
+export { selectLocalProviders, useSessionStore } from './session.model'
 export type { SessionStore } from './session.model'
+export {
+  landedProviderCatalog,
+  LOCAL_PROVIDER_CATALOG_SOURCE,
+  localProviderCatalogs,
+  offeredProviders,
+  providerCatalogHostLabel,
+  providerCatalogInForce,
+  providerCatalogOf,
+  providerCatalogSourceForHost,
+  resolveOptionRowCatalog,
+  selectableProviderDescriptors,
+} from './provider-catalog.pure'
+export type {
+  OptionRowCatalog,
+  OptionRowNotice,
+  ProviderCatalog,
+  ProviderCatalogEntry,
+  ProviderCatalogs,
+  ProviderCatalogSource,
+  ProviderCatalogState,
+} from './provider-catalog.pure'
 export {
   describeUnavailableProviderSelection,
   getProviderDisplayLabel,

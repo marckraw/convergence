@@ -16,6 +16,7 @@ import type {
   SendSessionMessageRequest,
   StartSessionRequest,
 } from './session.types'
+import type { ProviderCatalog } from './provider-catalog.pure'
 
 export const sessionApi = {
   create: (input: {
@@ -152,7 +153,12 @@ export const sessionApi = {
 }
 
 export const providerApi = {
-  getAll: (): Promise<ProviderInfo[]> => window.electronAPI.provider.getAll(),
+  /**
+   * One machine's catalog. The argument is the machine: omitted means this one,
+   * which is what every surface but the composer means (MAR-2682).
+   */
+  getAll: (executionHostId?: string | null): Promise<ProviderCatalog> =>
+    window.electronAPI.provider.getAll(executionHostId),
   getAllAvailable: (): Promise<ProviderInfo[]> =>
     window.electronAPI.provider.getAllAvailable(),
   getStatuses: (): Promise<ProviderStatusInfo[]> =>
