@@ -1,14 +1,15 @@
+import { LOCAL_EXECUTION_HOST_ID } from '@/shared/lib/execution-host-id.pure'
 import type { ExecutionHostEndpoint } from './execution-host.types'
 
 /**
  * The one execution host that is not an Endpoint: this machine (MAR-2620).
  *
- * Mirrors the backend constant of the same name. Every other value a session's
- * `executionHost` can hold is an Endpoint id, so `'local'` is the only literal
- * the renderer may compare against — the string `'remote'` named a single
- * daemon back when there could only be one, and cannot name which of several.
+ * Re-exported from the shared module rather than declared here, because the
+ * predicate that reads it is called by the main process too and had to live
+ * where both sides can import it (MAR-2682). Renderer code keeps importing it
+ * from this entity, which is where the rest of the vocabulary lives.
  */
-export const LOCAL_EXECUTION_HOST_ID = 'local'
+export { LOCAL_EXECUTION_HOST_ID }
 
 /**
  * The id the Endpoint born from the single-host era carries (MAR-2620).

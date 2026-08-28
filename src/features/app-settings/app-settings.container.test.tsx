@@ -1,6 +1,12 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { useSessionStore, type ProviderInfo } from '@/entities/session'
+import {
+  localProviderCatalogs,
+  offeredProviders,
+  providerCatalogOf,
+  useSessionStore,
+  type ProviderInfo,
+} from '@/entities/session'
 import {
   DEFAULT_DEBUG_LOGGING_PREFS,
   DEFAULT_FAVORITE_MODELS_PREFS,
@@ -196,7 +202,7 @@ function primeStores(
     currentProjectId: null,
     activeSessionId: null,
     draftWorkspaceId: null,
-    providers,
+    providerCatalogs: localProviderCatalogs(providers),
     error: null,
   })
   useAppSettingsStore.setState({
@@ -233,7 +239,11 @@ describe('AppSettingsDialogContainer', () => {
     })
     ;(window as unknown as { electronAPI: unknown }).electronAPI = {
       provider: {
-        getAll: vi.fn().mockResolvedValue(providers),
+        getAll: vi
+          .fn()
+          .mockResolvedValue(
+            providerCatalogOf('local', offeredProviders(providers)),
+          ),
         getAllAvailable: vi.fn().mockResolvedValue(providers),
       },
       providerQuota: {
@@ -400,7 +410,7 @@ describe('AppSettingsDialogContainer', () => {
   it('persists selected additional Pi models and reloads filtered providers after save', async () => {
     const allProviders = [...providers, piProvider]
     vi.mocked(window.electronAPI.provider.getAll).mockResolvedValue(
-      allProviders,
+      providerCatalogOf('local', offeredProviders(allProviders)),
     )
     vi.mocked(window.electronAPI.provider.getAllAvailable).mockResolvedValue(
       allProviders,

@@ -16,12 +16,6 @@ interface ProviderAccountPickerProps {
   onChange: (accountId: string | null) => void
   /** Locked while a turn — including its continuations — is still in flight. */
   disabled?: boolean
-  /**
-   * Why no account can be picked at all, if that is the case (PA10). Rendered
-   * instead of the picker: a control that silently did nothing would be worse
-   * than one that says why.
-   */
-  unavailableReason?: string | null
 }
 
 /**
@@ -42,22 +36,12 @@ export const ProviderAccountPicker: FC<ProviderAccountPickerProps> = ({
   selectedAccountId,
   onChange,
   disabled = false,
-  unavailableReason = null,
 }) => {
+  // No accounts, no picker. On a daemon that is not a filtered-empty list but
+  // the absence of the concept: accounts are directories on this machine, and
+  // the wire protocol carries no account reference (MAR-2682, "the account
+  // picker is gone on a remote").
   if (accounts.length === 0) return null
-
-  if (unavailableReason) {
-    return (
-      <span
-        title={unavailableReason}
-        aria-label={unavailableReason}
-        className="flex shrink-0 items-center gap-1.5 px-2 text-xs text-muted-foreground opacity-60"
-      >
-        <KeyRound className="h-3.5 w-3.5" />
-        Default account · local only
-      </span>
-    )
-  }
 
   return (
     <SearchableSelect

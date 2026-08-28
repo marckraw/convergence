@@ -1,4 +1,5 @@
 import type { ProviderDescriptor } from '../provider.types'
+import type { ProviderCatalogEntry } from '../provider-catalog.types'
 import type {
   ExecutionHostProviderCapabilities,
   RemoteSessionWorkspaceInfo,
@@ -70,6 +71,7 @@ export function parseRemoteExecutionHostMeta(
       name: entry.label,
       available: entry.available,
       authenticated: entry.authenticated,
+      details: typeof entry.details === 'string' ? entry.details : null,
       supportsContinuation: features.resume === true,
       models: models.flatMap((model) => {
         if (!isRecord(model) || typeof model.slug !== 'string') return []
@@ -105,14 +107,27 @@ export function capabilitiesForRemoteProvider(
  * daemon does not transport full descriptor metadata, so capability fields
  * default to the conservative remote baseline: follow-up mid-run input only
  * and no attachment ingestion (byte transfer lands with MAR-1415).
+ *
+ * The id is translated into the local namespace, because this descriptor is
+ * what a session is picked from and a session records the local id (MAR-2682).
+ * A catalog that handed out daemon ids would be offering rows that
+ * `resolveExecution` translates a second time and then cannot find.
+ *
+ * There is no vendor label, and the blank is the answer rather than a gap. The
+ * option row renders `vendorLabel || name` as a provider's primary label, so a
+ * constant here made every provider on every daemon read "Remote daemon" — one
+ * word in the three places three different providers should have been. The
+ * vendor of a remote run is the Endpoint, and naming the machine is the strip's
+ * job, one tier below and already done; this row's job is to say *which
+ * provider*, which is `name`.
  */
 export function descriptorForRemoteProvider(
   info: RemoteExecutionHostProviderInfo,
 ): ProviderDescriptor {
   return {
-    id: info.providerId,
+    id: localProviderIdForRemoteProvider(info.providerId),
     name: info.name,
-    vendorLabel: 'Remote daemon',
+    vendorLabel: '',
     kind: 'conversation',
     supportsContinuation: info.supportsContinuation,
     defaultModelId: info.models[0]?.id ?? '',
@@ -144,24 +159,116 @@ export function descriptorForRemoteProvider(
 }
 
 /**
- * Maps a local provider registry id to the provider id the remote daemon
- * advertises, or null when the provider has no remote counterpart. The two
- * registries grew separate namespaces (`claude-code` locally, `claude` on the
- * daemon); sessions always store the local id and translate at the host
- * boundary.
+ * The one place the two provider namespaces meet (MAR-2682).
+ *
+ * The daemon and the local registry grew separate names for the same CLI --
+ * `claude-code` here, `claude` there -- and that difference is the entire
+ * content of this table. A pair goes in here or nowhere: two functions each
+ * holding their own half is how one direction gains an entry the other lacks,
+ * and a provider that translates out but not back is a session that starts and
+ * can never be described again.
+ *
+ * Absence is deliberately not a claim. Everything unlisted translates to
+ * itself, because a table that answered "no such provider" for an id it merely
+ * does not know would be this file asserting what some daemon can run -- the
+ * same guess `REMOTE_CAPABLE_PROVIDER_IDS` made in the composer, in the same
+ * shape, and MAR-2619's "nothing local may assert a remote fact" deletes both.
+ * What a machine can run is what its
+ * own listing says.
+ */
+const PROVIDER_ID_PAIRS: ReadonlyArray<
+  readonly [localProviderId: string, remoteProviderId: string]
+> = [['claude-code', 'claude']]
+
+/**
+ * The id the daemon knows a local provider by. Sessions always store the local
+ * id and translate at the host boundary.
  */
 export function remoteProviderIdForLocalProvider(
   localProviderId: string,
+): string {
+  const pair = PROVIDER_ID_PAIRS.find(([local]) => local === localProviderId)
+  return pair ? pair[1] : localProviderId
+}
+
+/**
+ * The id the local registry knows a daemon provider by -- the inverse of
+ * `remoteProviderIdForLocalProvider`, derived from the same pairs so the two
+ * cannot disagree.
+ */
+export function localProviderIdForRemoteProvider(
+  remoteProviderId: string,
+): string {
+  const pair = PROVIDER_ID_PAIRS.find(
+    ([, remote]) => remote === remoteProviderId,
+  )
+  return pair ? pair[0] : remoteProviderId
+}
+
+/**
+ * Why this daemon will not run this provider, in the daemon's own words, or
+ * null when it will (MAR-2682).
+ *
+ * Nothing here is diagnosed locally. `available` and `authenticated` are the
+ * daemon's verdict and `details` is its explanation -- `'missing binary'`, and
+ * whatever else it learns to say -- so a disabled row quotes the machine rather
+ * than guessing on its behalf. A daemon that sends no `details` still gets a
+ * true sentence, just a shorter one: what it reported, with nothing added.
+ *
+ * Availability is read before authentication because a CLI that is not there
+ * cannot be signed in, and leading with the sign-in would send a reader hunting
+ * for credentials on a machine that has nothing to sign in to.
+ */
+export function describeRemoteProviderBlock(
+  info: RemoteExecutionHostProviderInfo,
 ): string | null {
-  switch (localProviderId) {
-    case 'claude-code':
-      return 'claude'
-    case 'codex':
-      return 'codex'
-    case 'cursor':
-      return 'cursor'
-    default:
-      return null
+  const state = !info.available
+    ? 'unavailable'
+    : !info.authenticated
+      ? 'not signed in'
+      : null
+  if (!state) return null
+  const because = info.details ? `: ${info.details}` : ''
+  return `The daemon reports ${info.name} as ${state}${because}.`
+}
+
+/**
+ * What Settings says about a connected daemon's provider listing (MAR-2682).
+ *
+ * "Available" means one thing in this app: a provider the machine will
+ * actually run. The count therefore comes from `describeRemoteProviderBlock`,
+ * the same derivation the option row filters on -- it used to be
+ * `providers.length`, so Settings said five while the composer offered three,
+ * about the same daemon in the same app.
+ *
+ * The blocked ones are named rather than dropped, for the reason a disabled row
+ * is kept: a human who installed five CLIs and is told about three needs to
+ * know which two the daemon will not run, and where to go and look.
+ */
+export function describeRemoteProviderListing(
+  providers: readonly RemoteExecutionHostProviderInfo[],
+): string {
+  const blocked = providers.filter(
+    (info) => describeRemoteProviderBlock(info) !== null,
+  )
+  const runnable = providers.length - blocked.length
+  const counted = `${runnable} provider${runnable === 1 ? '' : 's'} available`
+  if (blocked.length === 0) return `${counted}.`
+  return `${counted}, ${blocked.length} blocked: ${blocked
+    .map((info) => info.name)
+    .join(', ')}.`
+}
+
+/**
+ * One row of a remote machine's catalog: what the provider is, and whether that
+ * machine will take a session on it (MAR-2682).
+ */
+export function catalogEntryForRemoteProvider(
+  info: RemoteExecutionHostProviderInfo,
+): ProviderCatalogEntry {
+  return {
+    descriptor: descriptorForRemoteProvider(info),
+    blockedReason: describeRemoteProviderBlock(info),
   }
 }
 
@@ -311,6 +418,29 @@ export function unavailableProviderError(input: {
         failure,
       )
     : new Error(message)
+}
+
+/**
+ * The refusal a Remote Execution Host gives for a provider the daemon listed
+ * but will not run (MAR-2682).
+ *
+ * The block was only ever enforced in the renderer, by keeping the entry out of
+ * `selectableProviderDescriptors`. That is where it belongs for *picking*, and
+ * it is not where a refusal belongs: a start can arrive from a resumed session,
+ * a relay, or any surface that never read the option row, and the daemon would
+ * have rejected all of them after a round trip with a message of its own
+ * choosing. Refused here, in the daemon's own words, beside the sibling refusal
+ * for a provider it never listed at all.
+ *
+ * A plain Error, like `Provider not found` above: the daemon answered, so this
+ * is not a configuration, auth, network or transport failure, and typing it as
+ * one would misclassify it for the settings connection test.
+ */
+export function blockedProviderError(
+  providerId: string,
+  blockedReason: string,
+): Error {
+  return new Error(`Cannot start ${providerId}: ${blockedReason}`)
 }
 
 /**

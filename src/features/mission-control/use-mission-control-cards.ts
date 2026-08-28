@@ -1,6 +1,6 @@
 import { useEffect, useMemo } from 'react'
 import { useProjectStore } from '@/entities/project'
-import { useSessionStore } from '@/entities/session'
+import { selectLocalProviders, useSessionStore } from '@/entities/session'
 import { useSessionCrewStore } from '@/entities/session-crew'
 import { buildSessionCards } from './mission-control-cards.pure'
 import {
@@ -61,7 +61,7 @@ export function useMissionControlCards({
   order = 'attention-first',
 }: MissionControlCardsInput): MissionControlCards {
   const sessions = useSessionStore((state) => state.globalSessions)
-  const providers = useSessionStore((state) => state.providers)
+  const providers = useSessionStore(selectLocalProviders)
   const loadProviders = useSessionStore((state) => state.loadProviders)
   const projects = useProjectStore((state) => state.projects)
   const crews = useSessionCrewStore((state) => state.crews)

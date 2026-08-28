@@ -56,8 +56,6 @@ export const ExecutionBar: FC<ExecutionBarProps> = ({
             (choice): SearchableSelectItem => ({
               id: choice.id,
               label: choice.label,
-              description: choice.blockedReason ?? undefined,
-              disabled: Boolean(choice.blockedReason),
             }),
           )}
           onChange={onChange}

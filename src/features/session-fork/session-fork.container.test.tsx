@@ -1,6 +1,7 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
+  localProviderCatalogs,
   useSessionStore,
   type ConversationItem,
   type ForkFullInput,
@@ -206,9 +207,10 @@ function primeStores(
     currentProjectId: 'project-1',
     activeSessionId: 'parent-1',
     draftWorkspaceId: null,
-    providers,
+    providerCatalogs: localProviderCatalogs(providers),
     error: null,
     loadProviders: vi.fn().mockResolvedValue(undefined),
+    loadProviderCatalog: vi.fn().mockResolvedValue(undefined),
     previewFork:
       options.previewFork ?? vi.fn().mockResolvedValue(sampleSummary),
     forkFull:

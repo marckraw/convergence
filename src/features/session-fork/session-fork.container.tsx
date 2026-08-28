@@ -3,6 +3,7 @@ import type { FC } from 'react'
 import {
   resolveProviderSelection,
   sessionApi,
+  selectLocalProviders,
   useSessionStore,
   type ForkStrategy,
   type ReasoningEffort,
@@ -36,7 +37,7 @@ export const SessionForkDialogContainer: FC = () => {
   const open = useDialogStore((s) => s.openDialog === 'session-fork')
   const payload = useDialogStore((s) => s.payload)
   const closeDialog = useDialogStore((s) => s.close)
-  const providers = useSessionStore((s) => s.providers)
+  const providers = useSessionStore(selectLocalProviders)
   const loadProviders = useSessionStore((s) => s.loadProviders)
   const globalSessions = useSessionStore((s) => s.globalSessions)
   const previewFork = useSessionStore((s) => s.previewFork)

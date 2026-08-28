@@ -4,7 +4,6 @@ import type {
   ConversationPatchEvent,
   CreateAndStartGlobalSessionRequest,
   CreateAndStartSessionRequest,
-  ProviderInfo,
   QueuedInputPatchEvent,
   NeedsYouDismissals,
   NeedsYouDisposition,
@@ -13,8 +12,18 @@ import type {
   SessionQueuedInput,
   SessionSummary,
 } from './session.types'
-import { isConversationalProvider } from './session.types'
 import { sessionApi, providerApi } from './session.api'
+import type { ProviderInfo } from './session.types'
+import {
+  landedProviderCatalog,
+  LOCAL_PROVIDER_CATALOG_SOURCE,
+  providerCatalogInForce,
+  selectableProviderDescriptors,
+  type ProviderCatalogEntry,
+  type ProviderCatalogs,
+  type ProviderCatalogSource,
+  type ProviderCatalogState,
+} from './provider-catalog.pure'
 import { sessionForkApi } from './session-fork.api'
 import type {
   ForkFullInput,
@@ -41,7 +50,17 @@ interface SessionState {
   activeProjectSessionId: string | null
   activeGlobalSessionId: string | null
   draftWorkspaceId: string | null
-  providers: ProviderInfo[]
+  /**
+   * Every machine's provider catalog, keyed by the machine it was read from
+   * (MAR-2682).
+   *
+   * A map and never a flat list. One list cannot say which machine it is true
+   * of, and the composer holding one was exactly the contradiction S3 closes:
+   * the strip named a daemon while the row above it offered whatever this
+   * laptop had installed. Read through `providerCatalogInForce`, never
+   * directly -- the key alone does not prove the pairing still holds.
+   */
+  providerCatalogs: ProviderCatalogs
   error: string | null
 }
 
@@ -52,6 +71,7 @@ interface SessionActions {
   loadRecents: () => Promise<void>
   recordRecentSession: (id: string) => void
   loadProviders: () => Promise<void>
+  loadProviderCatalog: (source: ProviderCatalogSource) => Promise<void>
   dismissNeedsYouSession: (id: string) => Promise<void>
   createAndStartSession: (
     request: CreateAndStartSessionRequest,
@@ -245,7 +265,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
   activeProjectSessionId: null,
   activeGlobalSessionId: null,
   draftWorkspaceId: null,
-  providers: [],
+  providerCatalogs: {},
   error: null,
 
   loadSessions: async (projectId: string) => {
@@ -370,12 +390,69 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     persistRecents(next)
   },
 
+  /** This machine's catalog. What every surface but the composer means. */
   loadProviders: async () => {
-    const providers = await providerApi.getAll()
-    // Conversation surfaces (composer, session-start) only ever pick a real
-    // chat provider; the synthetic shell provider is selected implicitly by
-    // the terminal-session-create flow.
-    set({ providers: providers.filter(isConversationalProvider) })
+    await get().loadProviderCatalog(LOCAL_PROVIDER_CATALOG_SOURCE)
+  },
+
+  /**
+   * Asks one machine what it runs, and files the answer under that machine
+   * (MAR-2682).
+   *
+   * Every state it passes through carries the source it is about, pending
+   * included: two Endpoints are asked concurrently the moment he switches
+   * between them, and a `pending` marker with no source on it would let the
+   * row read the other machine's round trip as its own.
+   *
+   * The source is re-checked after the await, not before it: an Endpoint can
+   * be repointed while its catalog is in flight, and a reply about the address
+   * it used to have is not an answer about the address it has now. Reading
+   * `providerCatalogInForce` at the write is what makes that reply land
+   * nowhere instead of landing wrong.
+   *
+   * `pending` is written only when nothing about this machine is in force. A
+   * re-ask about a machine already answered for -- remounting the composer, or
+   * a setting that changes what this machine's own catalog is filtered to --
+   * keeps the answer on screen while the new one is fetched, because it is
+   * still an answer about that machine. What must never be shown is a *stale*
+   * one, and a stale entry is by construction not in force, so it goes to
+   * `pending` and the row says it is asking.
+   */
+  loadProviderCatalog: async (source: ProviderCatalogSource) => {
+    set((state) =>
+      providerCatalogInForce(state.providerCatalogs, source)
+        ? state
+        : {
+            providerCatalogs: {
+              ...state.providerCatalogs,
+              [source.executionHostId]: { status: 'pending', source },
+            },
+          },
+    )
+
+    const commit = (next: ProviderCatalogState) => {
+      set((state) =>
+        providerCatalogInForce(state.providerCatalogs, source)
+          ? {
+              providerCatalogs: {
+                ...state.providerCatalogs,
+                [source.executionHostId]: next,
+              },
+            }
+          : state,
+      )
+    }
+
+    try {
+      const catalog = await providerApi.getAll(source.executionHostId)
+      commit(landedProviderCatalog(source, catalog))
+    } catch (error) {
+      commit({
+        status: 'failed',
+        source,
+        reason: error instanceof Error ? error.message : String(error),
+      })
+    }
   },
 
   dismissNeedsYouSession: async (id: string) => {
@@ -965,3 +1042,51 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
 
   clearError: () => set({ error: null }),
 }))
+
+/**
+ * This machine's providers, for every surface that has only ever meant this
+ * machine (MAR-2682).
+ *
+ * Settings, analytics, session-start, the fork dialog and Mission Control all
+ * describe the local registry and nothing else, so they read it by name here
+ * rather than by taking whatever catalog happens to be first. A selector and
+ * not a second field: one fact, one place it is written, and no way for the
+ * two to disagree.
+ *
+ * The empty array is a module constant so zustand sees a stable reference and
+ * does not re-render every subscriber on every unrelated store write.
+ */
+export function selectLocalProviders(state: SessionStore): ProviderInfo[] {
+  const local = providerCatalogInForce(
+    state.providerCatalogs,
+    LOCAL_PROVIDER_CATALOG_SOURCE,
+  )
+  if (local?.status !== 'landed') return NO_PROVIDERS
+  return descriptorsOf(local.providers)
+}
+
+const NO_PROVIDERS: ProviderInfo[] = []
+
+/**
+ * The descriptors of one catalog, the same array every time it is asked for.
+ *
+ * A zustand selector is called on every store write and its result compared by
+ * identity, so a fresh `.map()` here would re-render every provider-reading
+ * surface on every unrelated session update -- and a selector that returns a
+ * new array each call is the classic way to spin the app (run 16 hit exactly
+ * that shape in this codebase). Keyed on the entries array, which only changes
+ * when a catalog actually lands, and weak so a catalog that is replaced takes
+ * its cached projection with it.
+ */
+const descriptorCache = new WeakMap<
+  readonly ProviderCatalogEntry[],
+  ProviderInfo[]
+>()
+
+function descriptorsOf(entries: ProviderCatalogEntry[]): ProviderInfo[] {
+  const cached = descriptorCache.get(entries)
+  if (cached) return cached
+  const descriptors = selectableProviderDescriptors(entries)
+  descriptorCache.set(entries, descriptors)
+  return descriptors
+}

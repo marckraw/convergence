@@ -5,8 +5,13 @@ import {
   describeRemoteExecutionHostFailure,
   capabilitiesForRemoteProvider,
   createSseParser,
+  catalogEntryForRemoteProvider,
+  describeRemoteProviderBlock,
+  describeRemoteProviderListing,
   descriptorForRemoteProvider,
+  localProviderIdForRemoteProvider,
   parseRemoteExecutionHostMeta,
+  remoteProviderIdForLocalProvider,
   parseRemoteExecutionHostStartResponse,
   parseRemoteSessionWorkspaceInfo,
   remoteExecutionHostReconnectDelayMs,
@@ -60,6 +65,7 @@ describe('parseRemoteExecutionHostMeta', () => {
         name: 'Claude Code',
         available: true,
         authenticated: true,
+        details: 'ready',
         supportsContinuation: true,
         models: [
           { id: 'sonnet', label: 'Claude Sonnet' },
@@ -71,6 +77,7 @@ describe('parseRemoteExecutionHostMeta', () => {
         name: 'Codex',
         available: false,
         authenticated: false,
+        details: 'missing binary',
         supportsContinuation: false,
         models: [],
       },
@@ -111,6 +118,149 @@ describe('parseRemoteExecutionHostMeta', () => {
   })
 })
 
+describe('the two provider namespaces (MAR-2682)', () => {
+  it('translates claude both ways from one table, so the halves cannot drift', () => {
+    // A provider that translates out but not back is a session that starts and
+    // can never be described again, so the pair is derived from one table.
+    expect(remoteProviderIdForLocalProvider('claude-code')).toBe('claude')
+    expect(localProviderIdForRemoteProvider('claude')).toBe('claude-code')
+    expect(
+      localProviderIdForRemoteProvider(
+        remoteProviderIdForLocalProvider('claude-code'),
+      ),
+    ).toBe('claude-code')
+  })
+
+  it('translates an unknown id to itself rather than claiming it does not exist', () => {
+    // Ruling 6. Answering "no such provider" for an id this table merely does
+    // not know would be this process guessing what some daemon can run — the
+    // same guess `REMOTE_CAPABLE_PROVIDER_IDS` made, in the same shape. What a
+    // machine runs is what its own listing says.
+    for (const id of ['codex', 'cursor', 'pi', 'gemini', 'antigravity']) {
+      expect(remoteProviderIdForLocalProvider(id)).toBe(id)
+      expect(localProviderIdForRemoteProvider(id)).toBe(id)
+    }
+  })
+})
+
+describe('describeRemoteProviderBlock', () => {
+  it('quotes the daemon, rather than diagnosing on its behalf', () => {
+    const [, codex] = parseRemoteExecutionHostMeta(DAEMON_META)
+    expect(describeRemoteProviderBlock(codex!)).toBe(
+      'The daemon reports Codex as unavailable: missing binary.',
+    )
+  })
+
+  it('blocks nothing the daemon says it will run', () => {
+    const [claude] = parseRemoteExecutionHostMeta(DAEMON_META)
+    expect(describeRemoteProviderBlock(claude!)).toBeNull()
+  })
+
+  it('leads with availability, because an absent CLI cannot be signed in', () => {
+    const [info] = parseRemoteExecutionHostMeta({
+      providers: [
+        {
+          id: 'cursor',
+          label: 'Cursor',
+          available: false,
+          authenticated: false,
+          details: 'not installed',
+          models: [],
+          features: {},
+        },
+      ],
+    })
+    expect(describeRemoteProviderBlock(info!)).toBe(
+      'The daemon reports Cursor as unavailable: not installed.',
+    )
+  })
+
+  it('names the sign-in when the CLI is there and the credential is not', () => {
+    const [info] = parseRemoteExecutionHostMeta({
+      providers: [
+        {
+          id: 'codex',
+          label: 'Codex',
+          available: true,
+          authenticated: false,
+          models: [],
+          features: {},
+        },
+      ],
+    })
+    // No `details` from this daemon, so the sentence is shorter and still only
+    // says what the machine reported.
+    expect(describeRemoteProviderBlock(info!)).toBe(
+      'The daemon reports Codex as not signed in.',
+    )
+  })
+})
+
+describe('describeRemoteProviderListing', () => {
+  function listing(
+    entries: Array<{
+      id: string
+      label: string
+      block?: 'absent' | 'signed-out'
+    }>,
+  ) {
+    return parseRemoteExecutionHostMeta({
+      providers: entries.map((entry) => ({
+        id: entry.id,
+        label: entry.label,
+        available: entry.block !== 'absent',
+        authenticated: entry.block === undefined,
+        models: [],
+        features: {},
+      })),
+    })
+  }
+
+  it('counts what the machine will run, not what it listed', () => {
+    // The number Settings shows and the number of options the composer offers
+    // are one fact. Counting the listing made them disagree by exactly the
+    // blocked ones (MAR-2682).
+    expect(
+      describeRemoteProviderListing(
+        listing([
+          { id: 'claude', label: 'Claude Code' },
+          { id: 'codex', label: 'Codex' },
+          { id: 'pi', label: 'Pi' },
+          { id: 'cursor', label: 'Cursor', block: 'absent' },
+          { id: 'gemini', label: 'Gemini', block: 'signed-out' },
+        ]),
+      ),
+    ).toBe('3 providers available, 2 blocked: Cursor, Gemini.')
+  })
+
+  it('says nothing about blocking when nothing is blocked', () => {
+    expect(
+      describeRemoteProviderListing(listing([{ id: 'pi', label: 'Pi' }])),
+    ).toBe('1 provider available.')
+  })
+
+  it('is honest about a daemon that will run none of what it lists', () => {
+    expect(
+      describeRemoteProviderListing(
+        listing([{ id: 'cursor', label: 'Cursor', block: 'absent' }]),
+      ),
+    ).toBe('0 providers available, 1 blocked: Cursor.')
+  })
+})
+
+describe('catalogEntryForRemoteProvider', () => {
+  it('pairs the local-namespace descriptor with the daemon’s own verdict', () => {
+    const [claude, codex] = parseRemoteExecutionHostMeta(DAEMON_META)
+    expect(catalogEntryForRemoteProvider(claude!)).toEqual({
+      descriptor: descriptorForRemoteProvider(claude!),
+      blockedReason: null,
+    })
+    const blocked = catalogEntryForRemoteProvider(codex!)
+    expect(blocked.descriptor.id).toBe('codex')
+    expect(blocked.blockedReason).toMatch(/missing binary/)
+  })
+})
+
 describe('capabilitiesForRemoteProvider', () => {
   it('never advertises one-shot support', () => {
     const [claude] = parseRemoteExecutionHostMeta(DAEMON_META)
@@ -129,7 +279,7 @@ describe('descriptorForRemoteProvider', () => {
     const [claude] = parseRemoteExecutionHostMeta(DAEMON_META)
     const descriptor = descriptorForRemoteProvider(claude!)
     expect(descriptor).toMatchObject({
-      id: 'claude',
+      id: 'claude-code',
       name: 'Claude Code',
       kind: 'conversation',
       supportsContinuation: true,

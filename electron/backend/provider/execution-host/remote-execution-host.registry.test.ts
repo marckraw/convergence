@@ -14,6 +14,7 @@ import { ExecutionHostEndpointRepository } from '../../execution-host-endpoint/e
 import { seedExecutionHostEndpoint } from '../../execution-host-endpoint/execution-host-endpoint.fixture'
 import { StateService } from '../../state/state.service'
 import { SessionService } from '../../session/session.service'
+import { ProviderCatalogService } from '../provider-catalog.service'
 import { ProviderRegistry } from '../provider-registry'
 import { LocalExecutionHost } from './local-execution-host'
 import { AppSettingsRemoteExecutionHostRegistry } from './remote-execution-host.registry'
@@ -44,6 +45,7 @@ describe('remote execution hosts, one per endpoint', () => {
   let requestUrls: string[]
   let registry: AppSettingsRemoteExecutionHostRegistry
   let service: SessionService
+  let appSettings: AppSettingsService
 
   const PROJECT_ID = 'endpoint-routing-project'
 
@@ -120,7 +122,7 @@ describe('remote execution hosts, one per endpoint', () => {
     daemonB = createStubDaemon()
     requestUrls = []
 
-    const appSettings = new AppSettingsService(
+    appSettings = new AppSettingsService(
       db,
       new StateService(db),
       async () => [],
@@ -272,5 +274,141 @@ describe('remote execution hosts, one per endpoint', () => {
     )
     // Nothing to wait for: the refusal happens before any transport exists.
     expect(startUrls()).toEqual([])
+  })
+
+  it('refuses a listed-but-blocked provider in the daemon’s own words', async () => {
+    // The permission question, asked by name. `SessionService` used to gate on
+    // `capabilitiesFor` -- a descriptive method -- and rewrite a null into
+    // "Provider not found", so a CLI this daemon lists and refuses to run came
+    // back as a provider that does not exist, about a machine the human never
+    // touched. Listed and blocked is not absent, and the refusal is the
+    // daemon's sentence (MAR-2682).
+    daemonB.setMeta({
+      providers: [
+        {
+          id: 'codex',
+          label: 'Codex',
+          available: false,
+          authenticated: true,
+          details: 'missing binary',
+          models: [{ slug: 'gpt-5.5', label: 'GPT-5.5' }],
+          features: { resume: true, followup: true },
+        },
+      ],
+    })
+    await registry.hostFor(DAEMON_B.id).refreshProviders()
+
+    const sessionId = service.create({
+      projectId: PROJECT_ID,
+      workspaceId: null,
+      providerId: 'codex',
+      model: 'gpt-5.5',
+      effort: null,
+      name: 'blocked on daemon b',
+      executionHost: DAEMON_B.id,
+    }).id
+
+    // Something else about this session is wrong too, and it is wrong *later*:
+    // the old gate let a blocked provider through -- `capabilitiesFor` is
+    // non-null for one the daemon lists and refuses -- so the first thing that
+    // failed downstream got to name the refusal, and the human was told about a
+    // missing git remote instead of a CLI their daemon cannot run. The
+    // permission question is asked first, so the answer is the daemon's.
+    service.setRemoteWorkspaceSourceResolver(() => null)
+
+    await expect(service.start(sessionId, { text: 'hello' })).rejects.toThrow(
+      'Cannot start codex: The daemon reports Codex as unavailable: missing binary.',
+    )
+    expect(startUrls()).toEqual([])
+  })
+
+  it('leaves a session unchanged when its provider is blocked on send', async () => {
+    // The other door, and the one where the descriptive gate cost something
+    // that outlives the refusal. `sendMessage` used to let a blocked provider
+    // past `capabilitiesFor` into `sendRemoteTurn`, which writes the turn's
+    // bookkeeping before it attaches -- so a quiet send that was then refused
+    // left `relays_muted` set on the session and every later turn went out
+    // silently, for a turn that never happened (MAR-2682).
+    daemonB.setMeta({
+      providers: [
+        {
+          id: 'codex',
+          label: 'Codex',
+          available: true,
+          authenticated: false,
+          details: 'run `codex login`',
+          models: [{ slug: 'gpt-5.5', label: 'GPT-5.5' }],
+          features: { resume: true, followup: true },
+        },
+      ],
+    })
+    await registry.hostFor(DAEMON_B.id).refreshProviders()
+
+    const sessionId = service.create({
+      projectId: PROJECT_ID,
+      workspaceId: null,
+      providerId: 'codex',
+      model: 'gpt-5.5',
+      effort: null,
+      name: 'blocked quiet send',
+      executionHost: DAEMON_B.id,
+    }).id
+
+    await expect(
+      service.sendMessage(sessionId, { text: 'hello', muteRelays: true }),
+    ).rejects.toThrow(
+      'Cannot start codex: The daemon reports Codex as not signed in: run `codex login`.',
+    )
+    // Read from the row, because that is where the mark outlives the send: the
+    // session summary does not carry it, and every later settle does.
+    expect(
+      db
+        .prepare('SELECT relays_muted FROM sessions WHERE id = ?')
+        .get(sessionId),
+    ).toMatchObject({ relays_muted: 0 })
+    expect(startUrls()).toEqual([])
+  })
+
+  it('mints no host for an endpoint removed after the caller checked', async () => {
+    // The window a membership check upstream cannot close. `ProviderCatalogService`
+    // lists the configured ids, awaits, and only then asks for a host; a removal
+    // landing in that gap does not merely answer stale -- `hostFor` would build
+    // the host, memoise it and prime a request to a machine nobody is configured
+    // for. The check that matters is the one at the mint, and it is synchronous
+    // (MAR-2682).
+    const DAEMON_C = { id: 'daemon-c', baseUrl: 'https://daemon-c.test' }
+    seedExecutionHostEndpoint(db, DAEMON_C.id, DAEMON_C.baseUrl)
+
+    const catalogs = new ProviderCatalogService({
+      local: { describe: async () => [] },
+      filterLocalDescriptors: (descriptors) => descriptors,
+      remote: {
+        listEndpointIds: async () => {
+          const ids = (
+            await appSettings.getAppSettings()
+          ).executionHostEndpoints.map((endpoint) => endpoint.id)
+          // Standing inside the window: the row goes away between the answer
+          // and the caller acting on it.
+          db.prepare('DELETE FROM execution_host_endpoints WHERE id = ?').run(
+            DAEMON_C.id,
+          )
+          return ids
+        },
+        hostFor: (endpointId) => registry.hostFor(endpointId),
+      },
+    })
+
+    await expect(catalogs.get(DAEMON_C.id)).rejects.toThrow(
+      /endpoint "daemon-c" is not configured/,
+    )
+    // Nothing was dialled...
+    expect(
+      requestUrls.filter((url) => url.startsWith(DAEMON_C.baseUrl)),
+    ).toEqual([])
+    // ...and nothing was kept: a memoised host would be handed back here
+    // without ever reaching the check again.
+    expect(() => registry.hostFor(DAEMON_C.id)).toThrow(
+      /endpoint "daemon-c" is not configured/,
+    )
   })
 })

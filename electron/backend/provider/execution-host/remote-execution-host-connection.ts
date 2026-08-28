@@ -2,6 +2,7 @@ import type { AppSettingsService } from '../../app-settings/app-settings.service
 import type { ExecutionHostDaemonCredentialsService } from '../../credentials/execution-host-daemon-credentials.service'
 import type { EndpointHandshakeResult } from './execution-host-handshake.types'
 import type { RemoteExecutionHost } from './remote-execution-host'
+import { describeRemoteProviderListing } from './remote-execution-host.pure'
 import {
   RemoteExecutionHostError,
   type RemoteExecutionHostConnection,
@@ -120,7 +121,18 @@ export class AppSettingsRemoteExecutionHostConnectionResolver implements RemoteE
  */
 export async function testRemoteExecutionHostConnection(deps: {
   resolver: AppSettingsRemoteExecutionHostConnectionResolver
-  host: RemoteExecutionHost
+  /**
+   * The host for this Endpoint, asked for only once the configuration check
+   * above has passed.
+   *
+   * A thunk rather than the host itself: the registry refuses to mint one for
+   * an Endpoint that is not configured (MAR-2682), and that is exactly the case
+   * this function answers with `missing-base-url` -- a sentence naming what is
+   * absent. Taking the host eagerly would build it before the check that says
+   * it should not exist, and turn the clearest message the settings row has
+   * into a raw rejection.
+   */
+  host: () => RemoteExecutionHost
 }): Promise<RemoteExecutionHostConnectionResult> {
   const inspected = await deps.resolver.inspect()
   if (inspected.state === 'missing-base-url') {
@@ -145,8 +157,9 @@ export async function testRemoteExecutionHostConnection(deps: {
   }
 
   try {
-    const providers = await deps.host.refreshProviders()
-    const handshake = deps.host.handshake()
+    const host = deps.host()
+    const providers = await host.refreshProviders()
+    const handshake = host.handshake()
     const daemon = daemonSummary(handshake)
 
     // The handshake only ever vetoes a connection the listing already allowed,
@@ -171,9 +184,10 @@ export async function testRemoteExecutionHostConnection(deps: {
       ok: true,
       state: 'connected',
       baseUrl: inspected.baseUrl,
-      message: `Connected. ${providers.length} provider${
-        providers.length === 1 ? '' : 's'
-      } available.`,
+      // Counted by what this daemon will run, not by what it listed: the same
+      // question the option row asks, from the same derivation, so the two
+      // surfaces cannot report different numbers about one machine (MAR-2682).
+      message: `Connected. ${describeRemoteProviderListing(providers)}`,
       providers,
       daemon,
     }

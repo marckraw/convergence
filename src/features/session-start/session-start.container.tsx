@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from 'react'
 import type { FC } from 'react'
 import {
   resolveProviderSelection,
+  selectLocalProviders,
   useSessionStore,
   type ReasoningEffort,
 } from '@/entities/session'
@@ -30,7 +31,7 @@ export const SessionStart: FC<SessionStartProps> = ({
   const [modelId, setModelId] = useState('')
   const [effortId, setEffortId] = useState<ReasoningEffort | ''>('')
   const [selectedContextIds, setSelectedContextIds] = useState<string[]>([])
-  const providers = useSessionStore((s) => s.providers)
+  const providers = useSessionStore(selectLocalProviders)
   const loadProviders = useSessionStore((s) => s.loadProviders)
   const createAndStartSession = useSessionStore((s) => s.createAndStartSession)
   const appSettings = useAppSettingsStore((s) => s.settings)

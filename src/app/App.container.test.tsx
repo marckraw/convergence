@@ -371,7 +371,7 @@ describe('App', () => {
       activeProjectSessionId: null,
       activeGlobalSessionId: null,
       draftWorkspaceId: null,
-      providers: [],
+      providerCatalogs: {},
       error: null,
     })
     useSpaceStore.setState({

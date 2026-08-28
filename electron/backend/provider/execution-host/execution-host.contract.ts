@@ -18,6 +18,15 @@ export interface ExecutionHostContractContext {
    * provider and reject one-shot calls with the canonical unsupported error.
    */
   hostSupportsOneShot?: boolean
+  /**
+   * The id `fullProviderId` carries in this host's *catalog*, when that differs
+   * from the id the host is driven by. The remote host is driven with the
+   * daemon's ids and describes itself in the local registry's, because a
+   * descriptor is what a session is picked from and a session records the local
+   * id (MAR-2682). Defaults to `fullProviderId`, which is the local host and
+   * every host whose two namespaces are one.
+   */
+  describedProviderId?: string
 }
 
 /**
@@ -25,13 +34,20 @@ export interface ExecutionHostContractContext {
  * (local or remote) must pass this suite unchanged — it pins the interface
  * invariants documented in execution-host.types.ts, so callers like
  * SessionService can treat adapters as interchangeable.
+ *
+ * The vocabulary is the one execution-host.types.ts defines: *listed* is what
+ * the host knows about, *runnable* is what it will actually start, *blocked* is
+ * the difference. These checks are about the listing; `assertProviderRunnable`
+ * is the only one about permission. The word "available" is not used for either
+ * — it was, and a reader took a descriptive method for a gate because of it
+ * (MAR-2682).
  */
 export function describeProviderExecutionHostContract(
   adapterName: string,
   setup: () => ExecutionHostContractContext,
 ): void {
   describe(`ProviderExecutionHost contract: ${adapterName}`, () => {
-    it('lists capabilities for every available provider', () => {
+    it('summarizes capabilities for every listed provider', () => {
       const ctx = setup()
       const ids = ctx.host.capabilities().map((c) => c.providerId)
       expect(ids).toContain(ctx.fullProviderId)
@@ -62,10 +78,29 @@ export function describeProviderExecutionHostContract(
       expect(ctx.host.capabilitiesFor(ctx.unknownProviderId)).toBeNull()
     })
 
-    it('describes every available provider', async () => {
+    it('answers the permission question for a provider it will run', () => {
+      const ctx = setup()
+      expect(() =>
+        ctx.host.assertProviderRunnable(ctx.fullProviderId),
+      ).not.toThrow()
+    })
+
+    it('refuses an unknown provider by name, not by silence', () => {
+      // The same sentence `start` gives, from the method callers ask *before*
+      // starting. A gate that answered null here is how "listed and refused"
+      // reached a human as "not found" (MAR-2682).
+      const ctx = setup()
+      expect(() =>
+        ctx.host.assertProviderRunnable(ctx.unknownProviderId),
+      ).toThrow(`Provider not found: ${ctx.unknownProviderId}`)
+    })
+
+    it('describes every listed provider', async () => {
       const ctx = setup()
       const descriptors = await ctx.host.describe()
-      expect(descriptors.map((d) => d.id)).toContain(ctx.fullProviderId)
+      expect(descriptors.map((d) => d.id)).toContain(
+        ctx.describedProviderId ?? ctx.fullProviderId,
+      )
     })
 
     it('starts a session and returns a live handle', () => {

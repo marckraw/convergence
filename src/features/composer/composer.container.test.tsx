@@ -1,7 +1,16 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { ComposerContainer } from './composer.container'
-import { useSessionStore } from '@/entities/session'
+import {
+  landedProviderCatalog,
+  localProviderCatalogs,
+  providerCatalogOf,
+  providerCatalogSourceForHost,
+  selectLocalProviders,
+  useSessionStore,
+  type ProviderCatalogEntry,
+  type ProviderInfo,
+} from '@/entities/session'
 import { useAppSettingsStore } from '@/entities/app-settings'
 import { useSessionRelayStore } from '@/entities/session-relay'
 import { useAttachmentStore } from '@/entities/attachment'
@@ -50,6 +59,78 @@ function setEndpoints(endpoints: ReturnType<typeof endpointFixture>[]): void {
   act(() => {
     useAppSettingsStore.setState((state) => ({
       settings: { ...state.settings, executionHostEndpoints: endpoints },
+    }))
+  })
+}
+
+/**
+ * A remote provider descriptor, in the shape the daemon's catalog arrives in:
+ * the local provider id (a session records that one) and the daemon's own
+ * model slugs, which are not this machine's.
+ */
+function remoteProvider(
+  id: string,
+  name: string,
+  models: { id: string; label: string }[],
+) {
+  return {
+    id,
+    name,
+    vendorLabel: 'Remote daemon',
+    kind: 'conversation' as const,
+    supportsContinuation: true,
+    defaultModelId: models[0]?.id ?? '',
+    modelOptions: models.map((model) => ({
+      ...model,
+      defaultEffort: null,
+      effortOptions: [],
+    })),
+    attachments: {
+      supportsImage: false,
+      supportsPdf: false,
+      supportsText: false,
+      maxImageBytes: 0,
+      maxPdfBytes: 0,
+      maxTextBytes: 0,
+      maxTotalBytes: 0,
+    },
+    midRunInput: {
+      supportsAnswer: false,
+      supportsNativeFollowUp: true,
+      supportsAppQueuedFollowUp: false,
+      supportsSteer: false,
+      supportsInterrupt: true,
+      defaultRunningMode: 'follow-up' as const,
+    },
+  }
+}
+
+/**
+ * Files a landed catalog for one machine, built through the product's own
+ * derivation.
+ *
+ * The source is resolved the same way the container resolves it, so a fixture
+ * cannot file a catalog under a pairing the app could never produce — which is
+ * the whole point of keying catalogs by machine (MAR-2682).
+ */
+function seedCatalog(
+  hostId: string,
+  entries: ProviderCatalogEntry[],
+  unreachableReason: string | null = null,
+): void {
+  const source = providerCatalogSourceForHost(
+    hostId,
+    useAppSettingsStore.getState().settings.executionHostEndpoints,
+  )
+  act(() => {
+    useSessionStore.setState((state) => ({
+      providerCatalogs: {
+        ...state.providerCatalogs,
+        [source.executionHostId]: landedProviderCatalog(
+          source,
+          providerCatalogOf(hostId, entries, unreachableReason),
+        ),
+      },
     }))
   })
 }
@@ -262,6 +343,25 @@ const piProvider = {
   },
 }
 
+/**
+ * The seeded catalog's descriptors, read back the way the app reads them.
+ *
+ * The store no longer holds a bare provider list — it holds one catalog per
+ * machine — so a test that wants to vary a provider goes through the same
+ * selector the surfaces do and reseeds this machine's catalog. Reaching past it
+ * would let a fixture assert a shape the product cannot produce (MAR-2682).
+ */
+function seededProviders(): ProviderInfo[] {
+  return selectLocalProviders(useSessionStore.getState())
+}
+
+/** Reseeds this machine's catalog with each descriptor rewritten. */
+function reseedProviders(map: (provider: ProviderInfo) => ProviderInfo): void {
+  useSessionStore.setState({
+    providerCatalogs: localProviderCatalogs(seededProviders().map(map)),
+  })
+}
+
 describe('ComposerContainer', () => {
   beforeEach(() => {
     providerAccountsMock = []
@@ -317,6 +417,7 @@ describe('ComposerContainer', () => {
     }
 
     const loadProviders = vi.fn()
+    const loadProviderCatalog = vi.fn()
     const createAndStartSession = vi.fn()
     const createAndStartGlobalSession = vi.fn()
     const sendMessageToSession = vi.fn()
@@ -390,7 +491,7 @@ describe('ComposerContainer', () => {
         },
       ],
       globalChatSessions: [],
-      providers: [
+      providerCatalogs: localProviderCatalogs([
         {
           id: 'claude-code',
           name: 'Claude Code',
@@ -421,9 +522,10 @@ describe('ComposerContainer', () => {
           },
           midRunInput: testMidRunInput,
         },
-      ],
+      ]),
       queuedInputsBySessionId: {},
       loadProviders,
+      loadProviderCatalog,
       createAndStartSession,
       createAndStartGlobalSession,
       sendMessageToSession,
@@ -904,6 +1006,17 @@ describe('ComposerContainer', () => {
       endpointFixture('daemon-a', 'kuba-vps', 0),
       endpointFixture('daemon-b', 'backpack-automations', 1),
     ])
+    // daemon-b's own catalog, with a model slug this machine does not have.
+    // The send below reads back that slug, so this also proves the row obeyed
+    // the strip rather than resolving against the local registry (MAR-2682).
+    seedCatalog('daemon-b', [
+      {
+        descriptor: remoteProvider('claude-code', 'Claude Code', [
+          { id: 'sonnet', label: 'Claude Sonnet' },
+        ]),
+        blockedReason: null,
+      },
+    ])
 
     render(
       <ComposerContainer
@@ -930,8 +1043,9 @@ describe('ComposerContainer', () => {
       projectId: 'project-1',
       workspaceId: null,
       providerId: 'claude-code',
-      model: 'claude-sonnet',
-      effort: 'medium',
+      // daemon-b's slug, not this machine's `claude-sonnet`.
+      model: 'sonnet',
+      effort: null,
       name: 'Run remotely',
       message: 'Run remotely',
       attachmentIds: undefined,
@@ -1064,58 +1178,26 @@ describe('ComposerContainer', () => {
     expect(screen.queryByText('Runs on')).toBeNull()
   })
 
-  it('blocks the endpoint rows the selected provider cannot use, with the reason', async () => {
-    // Driven through the provider picker rather than a prop, because the
-    // strip's job is to answer to whatever the row above it currently says.
-    // Blocked and listed, not hidden: a row that vanished when he changed
-    // provider would leave him hunting for a machine he configured.
+  it('lists whatever the machine he picked says it runs, and nothing local', async () => {
+    // The contradiction MAR-2682 closes: the strip named a daemon while the row
+    // above it went on offering every CLI installed here. Pi is on this machine
+    // and not on that one, so it must be gone the moment the strip moves --
+    // and the daemon's own model slug must be what the row shows.
     setEndpoints([endpointFixture('daemon-a', 'kuba-vps', 0)])
-    useSessionStore.setState((state) => ({
-      providers: [...state.providers, piProvider],
-    }))
-
-    render(
-      <ComposerContainer
-        context={{
-          kind: 'project',
-          projectId: 'project-1',
-          workspaceId: null,
-          activeSessionId: null,
-        }}
-      />,
-    )
-
-    fireEvent.click(screen.getByRole('combobox', { name: 'Anthropic' }))
-    fireEvent.click(await screen.findByText('Pi'))
-
-    fireEvent.click(screen.getByRole('combobox', { name: /Local/ }))
-    const blockedRow = screen.getByRole('option', { name: /kuba-vps/ })
-    expect(blockedRow).toHaveAttribute('aria-disabled', 'true')
-    // The reason sits in the row, not in a tooltip: a greyed row that says
-    // nothing is a mystery rather than an answer.
-    expect(blockedRow).toHaveTextContent(
-      'Pi has no counterpart on the agents daemon, so it can only run here.',
-    )
-
-    fireEvent.click(blockedRow)
-    expect(screen.getByRole('combobox', { name: /Local/ })).toBeInTheDocument()
-  })
-
-  it('restores the endpoint he picked when the provider that blocked it comes back, and sends there', async () => {
-    // The round trip, through the real container, because the promise lives in
-    // the composition and not in the clamp. `resolveExecutionBarView` leaves
-    // the raw pick alone so a provider swap demotes the send without erasing
-    // the machine he chose -- but a container that reset the pick inside its
-    // provider handler would keep the clamp correct about an input it had
-    // already destroyed, and both suites would stay green. This is the only
-    // test that can fail for that.
-    setEndpoints([
-      endpointFixture('daemon-a', 'kuba-vps', 0),
-      endpointFixture('daemon-b', 'backpack-automations', 1),
+    useSessionStore.setState({
+      providerCatalogs: localProviderCatalogs([
+        ...seededProviders(),
+        piProvider,
+      ]),
+    })
+    seedCatalog('daemon-a', [
+      {
+        descriptor: remoteProvider('claude-code', 'Claude Code', [
+          { id: 'sonnet', label: 'Daemon Sonnet' },
+        ]),
+        blockedReason: null,
+      },
     ])
-    useSessionStore.setState((state) => ({
-      providers: [...state.providers, piProvider],
-    }))
 
     render(
       <ComposerContainer
@@ -1128,56 +1210,66 @@ describe('ComposerContainer', () => {
       />,
     )
 
-    fireEvent.click(screen.getByRole('combobox', { name: /Local/ }))
-    fireEvent.click(screen.getByText('backpack-automations'))
     expect(
-      screen.getByRole('combobox', { name: /backpack-automations/ }),
+      screen.getByRole('combobox', { name: 'Anthropic' }),
     ).toBeInTheDocument()
-
-    fireEvent.click(screen.getByRole('combobox', { name: 'Anthropic' }))
-    fireEvent.click(await screen.findByText('Pi'))
-
-    // Demoted to this machine, and the row he picked is still listed with the
-    // reason it cannot be picked right now.
-    expect(screen.getByRole('combobox', { name: /Local/ })).toBeInTheDocument()
     fireEvent.click(screen.getByRole('combobox', { name: /Local/ }))
-    expect(
-      screen.getByRole('option', { name: /backpack-automations/ }),
-    ).toHaveTextContent(
-      'Pi has no counterpart on the agents daemon, so it can only run here.',
-    )
-    fireEvent.keyDown(document, { key: 'Escape' })
+    fireEvent.click(screen.getByText('kuba-vps'))
+
+    // The local-only provider is gone, and the model pill reads the daemon's.
     await waitFor(() => {
       expect(
-        screen.queryByRole('option', { name: /backpack-automations/ }),
-      ).toBeNull()
+        screen.getByRole('combobox', { name: 'Remote daemon' }),
+      ).toBeInTheDocument()
     })
-
-    fireEvent.click(screen.getByRole('combobox', { name: 'Pi' }))
-    fireEvent.click(await screen.findByText('Anthropic'))
-
     expect(
-      screen.getByRole('combobox', { name: /backpack-automations/ }),
+      screen.getByRole('combobox', { name: 'Daemon Sonnet' }),
     ).toBeInTheDocument()
-
-    const textbox = screen.getByRole('textbox')
-    fireEvent.change(textbox, { target: { value: 'Run it there after all' } })
-    fireEvent.keyDown(textbox, { key: 'Enter', metaKey: true })
-
-    // The load-bearing half. "It looks restored" and "it runs there" are two
-    // different claims, and only the second one is the one he asked the strip
-    // for -- so the assertion is on the id that left with the send, not on the
-    // label that came back to the trigger.
+    fireEvent.click(screen.getByRole('combobox', { name: 'Remote daemon' }))
     expect(
-      useSessionStore.getState().createAndStartSession,
-    ).toHaveBeenCalledWith(
-      expect.objectContaining({
-        providerId: 'claude-code',
-        executionHost: 'daemon-b',
-      }),
-    )
+      await screen.findByRole('option', { name: /Claude Code/ }),
+    ).toBeInTheDocument()
+    expect(screen.queryByRole('option', { name: /^Pi/ })).toBeNull()
   })
 
+  it('offers every endpoint whatever provider is selected, because nothing local knows', async () => {
+    // MAR-2682, "nothing local may assert a remote fact": the strip used to
+    // block rows from a local table of
+    // "remote-capable" providers that had never asked any daemon. That arrow is
+    // reversed -- the machine is picked first, and the row obeys -- so choosing
+    // Pi may not remove a machine he configured.
+    setEndpoints([endpointFixture('daemon-a', 'kuba-vps', 0)])
+    useSessionStore.setState({
+      providerCatalogs: localProviderCatalogs([
+        ...seededProviders(),
+        piProvider,
+      ]),
+    })
+
+    render(
+      <ComposerContainer
+        context={{
+          kind: 'project',
+          projectId: 'project-1',
+          workspaceId: null,
+          activeSessionId: null,
+        }}
+      />,
+    )
+
+    fireEvent.click(screen.getByRole('combobox', { name: 'Anthropic' }))
+    fireEvent.click(await screen.findByText('Pi'))
+
+    fireEvent.click(screen.getByRole('combobox', { name: /Local/ }))
+    const row = screen.getByRole('option', { name: /kuba-vps/ })
+    expect(row).not.toHaveAttribute('aria-disabled', 'true')
+    fireEvent.click(row)
+    await waitFor(() => {
+      expect(
+        screen.getByRole('combobox', { name: /kuba-vps/ }),
+      ).toBeInTheDocument()
+    })
+  })
   describe('the quiet type treatment, ruled "lets do quiet until i look" (Marcin, 2026-08-27, MAR-2642)', () => {
     // A deliberate absence of emphasis needs enforcing, not a note. Nothing
     // else in this file touches a type scale or a text tone, so a strip
@@ -1349,7 +1441,9 @@ describe('ComposerContainer', () => {
   })
 
   it('starts new Codex sessions with fast mode off by default', () => {
-    useSessionStore.setState({ providers: [codexProvider] })
+    useSessionStore.setState({
+      providerCatalogs: localProviderCatalogs([codexProvider]),
+    })
 
     render(
       <ComposerContainer
@@ -1394,7 +1488,9 @@ describe('ComposerContainer', () => {
   })
 
   it('can turn on fast mode for a new Codex session', () => {
-    useSessionStore.setState({ providers: [codexProvider] })
+    useSessionStore.setState({
+      providerCatalogs: localProviderCatalogs([codexProvider]),
+    })
 
     render(
       <ComposerContainer
@@ -1495,8 +1591,8 @@ describe('ComposerContainer', () => {
     expect(useSkillStore.getState().loadCatalog).not.toHaveBeenCalled()
   })
 
-  it('reloads providers when Pi model visibility changes while mounted', async () => {
-    const loadProviders = useSessionStore.getState().loadProviders
+  it('reloads the catalog when Pi model visibility changes while mounted', async () => {
+    const loadProviderCatalog = useSessionStore.getState().loadProviderCatalog
 
     render(
       <ComposerContainer
@@ -1507,7 +1603,7 @@ describe('ComposerContainer', () => {
       />,
     )
 
-    await waitFor(() => expect(loadProviders).toHaveBeenCalledTimes(1))
+    await waitFor(() => expect(loadProviderCatalog).toHaveBeenCalledTimes(1))
 
     act(() => {
       useAppSettingsStore.setState((state) => ({
@@ -1518,15 +1614,15 @@ describe('ComposerContainer', () => {
       }))
     })
 
-    await waitFor(() => expect(loadProviders).toHaveBeenCalledTimes(2))
+    await waitFor(() => expect(loadProviderCatalog).toHaveBeenCalledTimes(2))
   })
 
   it('shows Codex usage in the composer for Codex provider selections', async () => {
-    const baseProvider = useSessionStore.getState().providers[0]
+    const baseProvider = seededProviders()[0]
     if (!baseProvider) throw new Error('missing base test provider')
 
     useSessionStore.setState({
-      providers: [
+      providerCatalogs: localProviderCatalogs([
         {
           id: 'codex',
           name: 'Codex',
@@ -1548,7 +1644,7 @@ describe('ComposerContainer', () => {
           attachments: baseProvider.attachments,
           midRunInput: baseProvider.midRunInput,
         },
-      ],
+      ]),
     })
 
     render(
@@ -1574,11 +1670,11 @@ describe('ComposerContainer', () => {
   })
 
   it('hides Codex usage in the composer for Pi sessions on OpenAI models', async () => {
-    const baseProvider = useSessionStore.getState().providers[0]
+    const baseProvider = seededProviders()[0]
     if (!baseProvider) throw new Error('missing base test provider')
 
     useSessionStore.setState({
-      providers: [
+      providerCatalogs: localProviderCatalogs([
         {
           id: 'pi',
           name: 'Pi',
@@ -1600,7 +1696,7 @@ describe('ComposerContainer', () => {
           attachments: baseProvider.attachments,
           midRunInput: baseProvider.midRunInput,
         },
-      ],
+      ]),
     })
     useAppSettingsStore.setState((state) => ({
       settings: {
@@ -1712,22 +1808,22 @@ describe('ComposerContainer', () => {
           ? { ...session, status: 'running', attention: 'none' }
           : session,
       ),
-      providers: state.providers.map((provider) =>
-        provider.id === 'claude-code'
-          ? {
-              ...provider,
-              midRunInput: {
-                supportsAnswer: false,
-                supportsNativeFollowUp: false,
-                supportsAppQueuedFollowUp: false,
-                supportsSteer: false,
-                supportsInterrupt: false,
-                defaultRunningMode: null,
-              },
-            }
-          : provider,
-      ),
     }))
+    reseedProviders((provider) =>
+      provider.id === 'claude-code'
+        ? {
+            ...provider,
+            midRunInput: {
+              supportsAnswer: false,
+              supportsNativeFollowUp: false,
+              supportsAppQueuedFollowUp: false,
+              supportsSteer: false,
+              supportsInterrupt: false,
+              defaultRunningMode: null,
+            },
+          }
+        : provider,
+    )
 
     render(
       <ComposerContainer
@@ -1750,18 +1846,18 @@ describe('ComposerContainer', () => {
           ? { ...session, status: 'running', attention: 'needs-input' }
           : session,
       ),
-      providers: state.providers.map((provider) =>
-        provider.id === 'claude-code'
-          ? {
-              ...provider,
-              midRunInput: {
-                ...provider.midRunInput,
-                supportsAnswer: true,
-              },
-            }
-          : provider,
-      ),
     }))
+    reseedProviders((provider) =>
+      provider.id === 'claude-code'
+        ? {
+            ...provider,
+            midRunInput: {
+              ...provider.midRunInput,
+              supportsAnswer: true,
+            },
+          }
+        : provider,
+    )
 
     render(
       <ComposerContainer
@@ -1874,10 +1970,13 @@ describe('ComposerContainer', () => {
       })
     })
 
-    it('refuses to offer a local account to a remote session', async () => {
-      // Accounts are host-scoped (PA10). The remote host runs on its own
-      // credential, so offering a picker that silently did nothing would be
-      // worse than saying why there is none.
+    it('shows no account picker at all on a remote session', async () => {
+      // Accounts are host-scoped (PA10) and on a daemon the concept is absent,
+      // not merely locked: the wire protocol carries no account reference, so
+      // there is nothing to pick between. It is gone rather than explained --
+      // MAR-2682, "the account picker is gone on a remote" -- and gone
+      // because it is handed no accounts, which
+      // is the only way it can be gone for the right reason.
       providerAccountsMock = [
         buildAccount({ id: 'acct-b', email: 'b@example.com' }),
       ]
@@ -1888,6 +1987,14 @@ describe('ComposerContainer', () => {
             : session,
         ),
       }))
+      seedCatalog('daemon-a', [
+        {
+          descriptor: remoteProvider('claude-code', 'Claude Code', [
+            { id: 'sonnet', label: 'Daemon Sonnet' },
+          ]),
+          blockedReason: null,
+        },
+      ])
 
       render(
         <ComposerContainer
@@ -1900,10 +2007,13 @@ describe('ComposerContainer', () => {
         />,
       )
 
-      expect(
-        await screen.findByText('Default account · local only'),
-      ).toBeInTheDocument()
+      // The strip still says where it runs, so the composer has rendered.
+      expect(await screen.findByText('Runs on')).toBeInTheDocument()
       expect(screen.queryByText('b@example.com')).not.toBeInTheDocument()
+      expect(screen.queryByText(/Default account/)).toBeNull()
+      // And a Local session in the same file still has one — the control did
+      // not simply stop existing.
+      expect(screen.queryByRole('combobox', { name: /account/i })).toBeNull()
     })
 
     it('never sends a local account with a remote turn', async () => {
@@ -1917,6 +2027,14 @@ describe('ComposerContainer', () => {
             : session,
         ),
       }))
+      seedCatalog('daemon-a', [
+        {
+          descriptor: remoteProvider('claude-code', 'Claude Code', [
+            { id: 'sonnet', label: 'Daemon Sonnet' },
+          ]),
+          blockedReason: null,
+        },
+      ])
 
       render(
         <ComposerContainer
@@ -1929,7 +2047,7 @@ describe('ComposerContainer', () => {
         />,
       )
 
-      await screen.findByText('Default account · local only')
+      await screen.findByText('Runs on')
 
       const textbox = screen.getByPlaceholderText('Send a follow-up...')
       fireEvent.change(textbox, { target: { value: 'run this remotely' } })
@@ -2045,27 +2163,25 @@ describe('ComposerContainer', () => {
     }
 
     function addSecondModel() {
-      useSessionStore.setState((state) => ({
-        providers: state.providers.map((provider) =>
-          provider.id === 'claude-code'
-            ? {
-                ...provider,
-                modelOptions: [
-                  ...provider.modelOptions,
-                  {
-                    id: 'claude-opus',
-                    label: 'Claude Opus',
-                    defaultEffort: 'high' as const,
-                    effortOptions: [
-                      { id: 'low' as const, label: 'Low' },
-                      { id: 'high' as const, label: 'High' },
-                    ],
-                  },
-                ],
-              }
-            : provider,
-        ),
-      }))
+      reseedProviders((provider) =>
+        provider.id === 'claude-code'
+          ? {
+              ...provider,
+              modelOptions: [
+                ...provider.modelOptions,
+                {
+                  id: 'claude-opus',
+                  label: 'Claude Opus',
+                  defaultEffort: 'high' as const,
+                  effortOptions: [
+                    { id: 'low' as const, label: 'Low' },
+                    { id: 'high' as const, label: 'High' },
+                  ],
+                },
+              ],
+            }
+          : provider,
+      )
     }
 
     it('keeps the provider locked on an idle session while the model opens', () => {
@@ -2206,17 +2322,13 @@ describe('ComposerContainer', () => {
       // the pickers configure that -- they must not write to the row behind
       // them, and the provider is not fixed to anything.
       const setSessionModelSelection = vi.fn().mockResolvedValue(undefined)
-      useSessionStore.setState((state) => ({
-        setSessionModelSelection,
-        providers: [
-          {
-            ...state.providers[0]!,
-            id: 'shell',
-            name: 'Shell',
-            vendorLabel: 'Local',
-            supportsContinuation: false,
-          },
-        ],
+      useSessionStore.setState({ setSessionModelSelection })
+      reseedProviders((provider) => ({
+        ...provider,
+        id: 'shell',
+        name: 'Shell',
+        vendorLabel: 'Local',
+        supportsContinuation: false,
       }))
       setSessionState({
         status: 'completed',
@@ -2253,7 +2365,9 @@ describe('ComposerContainer', () => {
       function strandTheSession() {
         // Claude Code gone, Codex first in the catalog -- so an unscoped
         // resolve hands back "OpenAI" for a row that says claude-code.
-        useSessionStore.setState({ providers: [codexProvider] })
+        useSessionStore.setState({
+          providerCatalogs: localProviderCatalogs([codexProvider]),
+        })
       }
 
       it('locks the provider, the model and the effort together', () => {
@@ -2371,9 +2485,12 @@ describe('ComposerContainer', () => {
      */
     describe('the second door: the model dialog carries a provider too', () => {
       function addCodexProvider() {
-        useSessionStore.setState((state) => ({
-          providers: [...state.providers, codexProvider],
-        }))
+        useSessionStore.setState({
+          providerCatalogs: localProviderCatalogs([
+            ...seededProviders(),
+            codexProvider,
+          ]),
+        })
       }
 
       it('offers an active session no provider but its own, by any route', async () => {

@@ -1,7 +1,7 @@
 import { describe, expect, it, beforeEach, afterEach, vi } from 'vitest'
 import type { Mock } from 'vitest'
-import { mkdtempSync, mkdirSync, rmSync } from 'fs'
-import { join } from 'path'
+import { mkdtempSync, mkdirSync, rmSync, existsSync } from 'fs'
+import { basename, dirname, extname, join } from 'path'
 import { tmpdir } from 'os'
 import type Database from 'better-sqlite3'
 import { getDatabase, closeDatabase, resetDatabase } from '../database/database'
@@ -28,12 +28,15 @@ import type {
 } from '../provider/provider.types'
 import type { ProviderAttachmentCapability } from '../provider/provider.types'
 import { AttachmentsService } from '../attachments/attachments.service'
+import { DRAFT_SESSION_ID } from '../attachments/attachments.constants'
 import { ProjectContextService } from '../project-context/project-context.service'
 import { SessionContextInjectionService } from './context-injection/session-context-injection.service'
 import type {
   ConversationPatchEvent,
   SessionDelta,
 } from './conversation-item.types'
+import { RemoteExecutionHostError } from '../provider/execution-host/remote-execution-host.types'
+import type { RemoteExecutionHostRegistry } from '../provider/execution-host/remote-execution-host.types'
 import type { SessionSettledEvent } from './session.types'
 import { SessionService } from './session.service'
 
@@ -46,6 +49,12 @@ import { SessionService } from './session.service'
  * synthesize them for have no live handle -- nothing for this one to displace,
  * so the delta lands exactly as it did before.
  */
+/** The smallest thing the attachment ingest will accept as an image. */
+const ONE_PIXEL_PNG = new Uint8Array([
+  0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 13, 73, 72, 68, 82,
+  0, 0, 0, 1, 0, 0, 0, 1, 8, 6, 0, 0, 0, 31, 21, 196, 137,
+])
+
 const SYNTHETIC_HANDLE: SessionHandle = {
   onDelta: () => {},
   onStatusChange: () => {},
@@ -3445,16 +3454,45 @@ describe('SessionService — liveness clock', () => {
       seedExecutionHostEndpoint(getDatabase())
     })
 
-    function createFakeRemoteHost() {
+    function createFakeRemoteHost(
+      /**
+       * A provider this daemon lists and will not run -- the shape the
+       * permission question exists for. `capabilitiesFor` answers for it,
+       * because it is listed; `assertProviderRunnable` refuses it in the
+       * daemon's own words (MAR-2682).
+       */
+      blocked?: { providerId: string; reason: string },
+      /**
+       * Run at the moment the daemon is asked to start, before it answers with
+       * a handle. What the record looks like *here* is the only way to tell a
+       * write that preceded the start from one that followed it (MAR-2682).
+       */
+      onStart?: () => void,
+    ) {
       const startCalls: Array<{ providerId: string; config: unknown }> = []
+      // A holder rather than a bare `let`, so the listener the service
+      // registers is readable from the test without TypeScript narrowing it to
+      // the `null` it was declared with.
+      const delta: { deliver: ((delta: SessionDelta) => void) | null } = {
+        deliver: null,
+      }
+      // What the daemon's handle was actually told to send. A handle that has
+      // been released is still an object a stale reference can call, and the
+      // call is silent -- recording it is the only way to tell a message that
+      // reached the run from one that went nowhere (MAR-2682).
+      const handleSends: string[] = []
       const handle: SessionHandle = {
-        onDelta: () => {},
+        onDelta: (listener) => {
+          delta.deliver = listener
+        },
         onStatusChange: () => {},
         onAttentionChange: () => {},
         onContinuationToken: () => {},
         onContextWindowChange: () => {},
         onActivityChange: () => {},
-        sendMessage: () => {},
+        sendMessage: (text: string) => {
+          handleSends.push(text)
+        },
         approve: () => {},
         deny: () => {},
         stop: () => {},
@@ -3465,20 +3503,47 @@ describe('SessionService — liveness clock', () => {
         supportsContinuation: true,
         supportsOneShot: false,
       }
+      const listed = [
+        capabilities,
+        ...(blocked
+          ? [
+              {
+                providerId: blocked.providerId,
+                name: blocked.providerId,
+                supportsContinuation: true,
+                supportsOneShot: false,
+              },
+            ]
+          : []),
+      ]
       const host = {
-        capabilities: () => [capabilities],
+        capabilities: () => listed,
         capabilitiesFor: (providerId: string) =>
-          providerId === 'claude' ? capabilities : null,
+          listed.find((entry) => entry.providerId === providerId) ?? null,
         describe: async () => [],
+        assertProviderRunnable: (providerId: string) => {
+          if (blocked && providerId === blocked.providerId) {
+            throw new Error(blocked.reason)
+          }
+          if (providerId !== 'claude') {
+            throw new Error(`Provider not found: ${providerId}`)
+          }
+        },
         start: (providerId: string, config: unknown) => {
           startCalls.push({ providerId, config })
+          onStart?.()
           return handle
         },
         oneShot: async () => {
           throw new Error('one-shot is not supported')
         },
       }
-      return { host, startCalls }
+      return {
+        host,
+        startCalls,
+        handleSends,
+        emitDelta: (event: SessionDelta) => delta.deliver?.(event),
+      }
     }
 
     it('stores the execution host on create and defaults to local', () => {
@@ -3770,7 +3835,7 @@ describe('SessionService — liveness clock', () => {
       ).rejects.toThrow('Remote execution host is not configured')
     })
 
-    it('rejects remote sessions whose provider has no remote counterpart', async () => {
+    it("rejects a provider the daemon never listed, on the daemon's own word", async () => {
       const { host } = createFakeRemoteHost()
       service.setRemoteExecutionHosts(
         executionHostRegistryFor({
@@ -3786,10 +3851,1243 @@ describe('SessionService — liveness clock', () => {
         name: 'unsupported remote provider',
         executionHost: TEST_EXECUTION_HOST_ENDPOINT_ID,
       })
+      // The refusal comes from the host's own listing, not from a table here
+      // guessing which providers daemons run (MAR-2682, "nothing local may
+      // assert a remote fact"). Translation
+      // at the boundary is now namespace-only, so what a machine can run is
+      // only ever answered by that machine.
+      await expect(
+        service.sendMessage(session.id, { text: 'hello' }),
+      ).rejects.toThrow('Provider not found: test-provider')
+    })
+
+    it('leaves an archived session archived when the send is refused', async () => {
+      // A refused send must leave no mark (MAR-2682). Unarchiving is a
+      // consequence of sending, and `deliverMessage` used to do it at the top
+      // and refuse a blocked provider forty lines further down -- a rejected
+      // action with a permanent consequence, on a session the user never got
+      // to send to.
+      //
+      // Listed-and-refused rather than unknown, because that is the pair the
+      // gate exists to tell apart: `capabilitiesFor` answers for this provider
+      // and the daemon still will not run it.
+      //
+      // Mutation: move the `updateArchiveState` call back above the
+      // `assertProviderRunnable` gate, and this goes red.
+      const { host } = createFakeRemoteHost({
+        providerId: 'codex',
+        reason: 'The daemon reports Codex as unavailable: missing binary.',
+      })
+      service.setRemoteExecutionHosts(
+        executionHostRegistryFor({
+          [TEST_EXECUTION_HOST_ENDPOINT_ID]: host,
+        }),
+      )
+      const session = service.create({
+        projectId,
+        workspaceId: null,
+        providerId: 'codex',
+        model: 'gpt-5',
+        effort: null,
+        name: 'blocked remote provider',
+        executionHost: TEST_EXECUTION_HOST_ENDPOINT_ID,
+      })
+      service.archive(session.id)
+      const archivedAt = service.getById(session.id)?.archivedAt
+      expect(archivedAt).toBeTruthy()
+
       await expect(
         service.sendMessage(session.id, { text: 'hello' }),
       ).rejects.toThrow(
-        'Provider test-provider is not supported on the remote execution host',
+        'The daemon reports Codex as unavailable: missing binary.',
+      )
+
+      expect(service.getById(session.id)?.archivedAt).toBe(archivedAt)
+    })
+
+    it('leaves an archived session archived when the start is refused', async () => {
+      // The same ruling on the other entry point (MAR-2682). `openFirstTurn`
+      // had three writes above the permission question, and this is the first:
+      // a start the daemon refuses must not un-archive the session it refused.
+      //
+      // Two edits, because after round 8 the claim is held twice -- at the
+      // preflight, and again at `startHandle`'s own barrier with the unarchive
+      // below it. Either alone leaves this green, which is the point.
+      //
+      // Mutation: delete the `preflightTurnProvider` call in `openFirstTurn`
+      // *and* move the `updateArchiveState` block in `startHandle` above
+      // `assertTurnProviderRunnable`, and this goes red.
+      const { host, startCalls } = createFakeRemoteHost({
+        providerId: 'codex',
+        reason: 'The daemon reports Codex as unavailable: missing binary.',
+      })
+      service.setRemoteExecutionHosts(
+        executionHostRegistryFor({
+          [TEST_EXECUTION_HOST_ENDPOINT_ID]: host,
+        }),
+      )
+      const session = service.create({
+        projectId,
+        workspaceId: null,
+        providerId: 'codex',
+        model: 'gpt-5',
+        effort: null,
+        name: 'blocked remote start',
+        executionHost: TEST_EXECUTION_HOST_ENDPOINT_ID,
+      })
+      service.archive(session.id)
+      const archivedAt = service.getById(session.id)?.archivedAt
+      expect(archivedAt).toBeTruthy()
+
+      await expect(
+        service.start(session.id, { text: 'hello' }),
+      ).rejects.toThrow(
+        'The daemon reports Codex as unavailable: missing binary.',
+      )
+
+      expect(service.getById(session.id)?.archivedAt).toBe(archivedAt)
+      expect(startCalls).toEqual([])
+    })
+    it('leaves an archived session archived when the start is refused for naming a local account', async () => {
+      // Round 8 moved the account refusal above the unarchive, and round 9
+      // pins it (MAR-2682). The provider barrier is not the only refusal
+      // `startHandle` makes before it writes, and a canary that only watches
+      // the provider would let the other two drift back below the write --
+      // an archived session un-archived by a start that was rejected for a
+      // reason it never even reached the daemon with.
+      //
+      // Mutation: move the `assertLocalAccountSelection` call in `startHandle`
+      // below the `updateArchiveState` block, leaving the provider barrier
+      // where it is, and this goes red while every provider canary stays green.
+      const { host, startCalls } = createFakeRemoteHost()
+      service.setRemoteExecutionHosts(
+        executionHostRegistryFor({
+          [TEST_EXECUTION_HOST_ENDPOINT_ID]: host,
+        }),
+      )
+      service.setRemoteWorkspaceSourceResolver(() => ({
+        repository: 'git@github.com:acme/repo.git',
+      }))
+      const session = service.create({
+        projectId,
+        workspaceId: null,
+        providerId: 'claude-code',
+        model: 'sonnet',
+        effort: null,
+        name: 'archived start with a local account',
+        executionHost: TEST_EXECUTION_HOST_ENDPOINT_ID,
+      })
+      service.archive(session.id)
+      const archivedAt = service.getById(session.id)?.archivedAt
+      expect(archivedAt).toBeTruthy()
+
+      await expect(
+        service.start(session.id, {
+          text: 'hello',
+          providerAccountId: 'acct-a',
+        }),
+      ).rejects.toThrow(/local-only for now/)
+
+      expect(service.getById(session.id)?.archivedAt).toBe(archivedAt)
+      expect(startCalls).toEqual([])
+    })
+
+    it('leaves an archived session archived when the send is refused for naming a local account', async () => {
+      // The same claim on the other door (MAR-2682). `sendRemoteTurn` asks the
+      // account question first and un-archives second, and the order is what
+      // makes a refused send leave nothing behind.
+      //
+      // Mutation: move the `assertLocalAccountSelection` call in
+      // `sendRemoteTurn` below the `updateArchiveState` block, leaving its
+      // provider barrier where it is, and this goes red.
+      const { host, startCalls } = createFakeRemoteHost()
+      service.setRemoteExecutionHosts(
+        executionHostRegistryFor({
+          [TEST_EXECUTION_HOST_ENDPOINT_ID]: host,
+        }),
+      )
+      service.setRemoteWorkspaceSourceResolver(() => ({
+        repository: 'git@github.com:acme/repo.git',
+      }))
+      const session = service.create({
+        projectId,
+        workspaceId: null,
+        providerId: 'claude-code',
+        model: 'sonnet',
+        effort: null,
+        name: 'archived send with a local account',
+        executionHost: TEST_EXECUTION_HOST_ENDPOINT_ID,
+      })
+      service.archive(session.id)
+      const archivedAt = service.getById(session.id)?.archivedAt
+      expect(archivedAt).toBeTruthy()
+
+      await expect(
+        service.sendMessage(session.id, {
+          text: 'hello',
+          providerAccountId: 'acct-a',
+        }),
+      ).rejects.toThrow(/local-only for now/)
+
+      expect(service.getById(session.id)?.archivedAt).toBe(archivedAt)
+      expect(startCalls).toEqual([])
+    })
+
+    it('leaves an archived session archived when the start is refused for having no clonable repository', async () => {
+      // The third of `startHandle`'s synchronous preconditions (MAR-2682). A
+      // daemon that cannot be handed a repository to clone cannot be handed
+      // this turn either, and the session must be left exactly as the refusal
+      // found it.
+      //
+      // Mutation: move the `const workspace = ...` line in `startHandle` below
+      // the `updateArchiveState` block, leaving the provider barrier where it
+      // is, and this goes red.
+      const { host, startCalls } = createFakeRemoteHost()
+      service.setRemoteExecutionHosts(
+        executionHostRegistryFor({
+          [TEST_EXECUTION_HOST_ENDPOINT_ID]: host,
+        }),
+      )
+      service.setRemoteWorkspaceSourceResolver(() => null)
+      const session = service.create({
+        projectId,
+        workspaceId: null,
+        providerId: 'claude-code',
+        model: 'sonnet',
+        effort: null,
+        name: 'archived start without an origin',
+        executionHost: TEST_EXECUTION_HOST_ENDPOINT_ID,
+      })
+      service.archive(session.id)
+      const archivedAt = service.getById(session.id)?.archivedAt
+      expect(archivedAt).toBeTruthy()
+
+      await expect(
+        service.start(session.id, { text: 'hello' }),
+      ).rejects.toThrow(
+        'Remote sessions require a repository with an origin remote',
+      )
+
+      expect(service.getById(session.id)?.archivedAt).toBe(archivedAt)
+      expect(startCalls).toEqual([])
+    })
+
+    it('records nothing in the transcript when the start is refused', async () => {
+      // The write that made this finding the highest one of its round: the boot
+      // context note is a *conversation item*, added and announced to the
+      // renderer, for a turn the host then refused. Convergence owns the
+      // record, so a start that never happened must not be in it (MAR-2682).
+      //
+      // Two edits, for the same reason as the canary above it: the boot context
+      // is now computed inside `startHandle`, below its barrier, so removing
+      // the preflight alone still refuses before anything is written.
+      //
+      // Mutation: delete the `preflightTurnProvider` call in `openFirstTurn`
+      // *and* move the `const boot = ...` block in `startHandle` above
+      // `assertTurnProviderRunnable`, and this goes red -- the note is written,
+      // the patch fires, and the context row is attached.
+      const db = getDatabase()
+      const projectContext = new ProjectContextService(db)
+      service.setSessionContextInjectionService(
+        new SessionContextInjectionService(db, projectContext),
+      )
+      const item = projectContext.create({
+        projectId,
+        label: 'monorepo',
+        body: 'See ~/work/monorepo',
+        reinjectMode: 'boot',
+      })
+
+      const { host } = createFakeRemoteHost({
+        providerId: 'codex',
+        reason: 'The daemon reports Codex as signed out.',
+      })
+      service.setRemoteExecutionHosts(
+        executionHostRegistryFor({
+          [TEST_EXECUTION_HOST_ENDPOINT_ID]: host,
+        }),
+      )
+      const session = service.create({
+        projectId,
+        workspaceId: null,
+        providerId: 'codex',
+        model: 'gpt-5',
+        effort: null,
+        name: 'blocked remote boot',
+        executionHost: TEST_EXECUTION_HOST_ENDPOINT_ID,
+      })
+
+      const patches: ConversationPatchEvent[] = []
+      const summaries: string[] = []
+      service.setConversationPatchListener((event) => patches.push(event))
+      service.setSummaryUpdateListener((summary) => summaries.push(summary.id))
+
+      await expect(
+        service.start(session.id, {
+          text: 'hello',
+          contextItemIds: [item.id],
+        }),
+      ).rejects.toThrow('The daemon reports Codex as signed out.')
+
+      expect(service.getConversation(session.id)).toEqual([])
+      expect(patches).toEqual([])
+      expect(summaries).toEqual([])
+      // And the context item was never attached to the session either.
+      expect(projectContext.listForSession(session.id)).toEqual([])
+    })
+
+    /**
+     * A daemon that answers the preflight and refuses everything after it.
+     *
+     * The race codex measured: the verdict the preflight read is not the
+     * verdict the start acts on, because a listing can land in between. The
+     * repair is that "in between" no longer exists -- the barrier and the start
+     * are one synchronous beat -- so a daemon that changes its mind is caught
+     * at the barrier, above every write, rather than after them (MAR-2682).
+     */
+    function createFlippingRemoteHost(reason: string) {
+      const daemon = createFakeRemoteHost()
+      let asks = 0
+      return {
+        ...daemon,
+        host: {
+          ...daemon.host,
+          assertProviderRunnable: (providerId: string) => {
+            asks += 1
+            if (asks === 1) {
+              daemon.host.assertProviderRunnable(providerId)
+              return
+            }
+            throw new Error(reason)
+          },
+        },
+      }
+    }
+
+    const FLIPPED_VERDICT =
+      'The daemon reports Claude Code as unavailable: signed out.'
+
+    /**
+     * A daemon whose listing is refreshed on command rather than on a count.
+     *
+     * `createFlippingRemoteHost` refuses the second ask whenever that ask
+     * happens, so it cannot tell an ask made before a refresh from one made
+     * after it -- which is precisely the distinction the no-await-under-the-
+     * barrier invariant is about. This one refuses from the moment
+     * `refreshIntoRefusal` is called, so *when* the barrier asks is observable
+     * (MAR-2682).
+     */
+    function createRefreshableRemoteHost(reason: string) {
+      const daemon = createFakeRemoteHost()
+      const listing = { refuses: false }
+      return {
+        ...daemon,
+        refreshIntoRefusal: () => {
+          listing.refuses = true
+        },
+        host: {
+          ...daemon.host,
+          assertProviderRunnable: (providerId: string) => {
+            if (listing.refuses) throw new Error(reason)
+            daemon.host.assertProviderRunnable(providerId)
+          },
+          // A daemon that can be sent to. Without it the send path fails on the
+          // missing `attach` instead, which would let a mutation go red for the
+          // wrong reason -- and hide that the send really did leave.
+          attach: (providerId: string, config: { sessionId: string }) =>
+            daemon.host.start(providerId, config),
+        },
+      }
+    }
+
+    /**
+     * An attachments service that lets the world change while its rebind is in
+     * flight, and only then resolves.
+     *
+     * The fixture that pins the *no-await-under-the-barrier* invariant
+     * (MAR-2682): every other canary here moves the barrier below a write, and
+     * none of them notices an `await` returning *below* the barrier, which is
+     * the same window reached by another route. `rebindDraftAttachments` is the
+     * one await a future edit could plausibly move there, so the change is
+     * driven from inside it -- the daemon's listing, or the handle map, moves
+     * during the turn's last await, exactly as it would in production.
+     *
+     * The hook is a callback rather than a fixed refresh because three
+     * different things can change in that window and each is a separate claim:
+     * the listing refreshes into a refusal, a handle is installed, a handle is
+     * released.
+     *
+     * Real rows and real files, not a stub, because the claim being pinned is
+     * about what a refused turn leaves behind on disk and by id.
+     */
+    function attachmentsChangingTheWorldMidRebind(
+      root: string,
+      duringRebind: () => void | Promise<void>,
+    ): AttachmentsService {
+      mkdirSync(root, { recursive: true })
+      const attachments = new AttachmentsService(getDatabase(), root)
+      const rebind = attachments.rebindToSession.bind(attachments)
+      attachments.rebindToSession = async (
+        attachmentIds: string[],
+        sessionId: string,
+      ) => {
+        // A turn of the loop first, because a new listing cannot reach the host
+        // without one in production either.
+        await Promise.resolve()
+        await duringRebind()
+        await rebind(attachmentIds, sessionId)
+      }
+      return attachments
+    }
+
+    /**
+     * Who owns an attachment, in the three ways it can be answered: the
+     * directory its bytes live under, the name they live under, and whether
+     * they are actually there. A row that says one thing while the disk says
+     * another is exactly the half-done rebind these canaries refuse to accept.
+     */
+    function attachmentOwnership(
+      attachments: AttachmentsService,
+      root: string,
+      attachmentId: string,
+      ownerId: string,
+    ) {
+      const row = attachments.getById(attachmentId)
+      if (!row) return null
+      return {
+        ownedBy: dirname(row.storagePath) === join(root, ownerId),
+        namedById:
+          basename(row.storagePath) ===
+          `${attachmentId}${extname(row.storagePath)}`,
+        onDisk: existsSync(row.storagePath),
+      }
+    }
+
+    async function draftAttachmentIn(
+      attachments: AttachmentsService,
+    ): Promise<string> {
+      const result = await attachments.ingestFiles(DRAFT_SESSION_ID, [
+        { name: 'img.png', bytes: ONE_PIXEL_PNG },
+      ])
+      return result.attachments[0]!.id
+    }
+
+    it('leaves no mark when the host changes its verdict between the preflight and the start', async () => {
+      // The highest finding of round 5, and the whole of ADOPTED 1. The
+      // preflight said yes; by the time the start was reached the daemon said
+      // no. Under the old shape the refusal landed *after* the unarchive and
+      // after the boot-context note, so a start nobody was permitted to make
+      // had already un-archived a session and written to its transcript -- the
+      // exact marks the preflight exists to prevent (MAR-2682).
+      //
+      // Round 8 moved all three writes inside `startHandle`, below its own
+      // assert, so each half now names a mutation on that body.
+      //
+      // Mutation A: move the `updateArchiveState` block in `startHandle` above
+      // `assertTurnProviderRunnable`, and the archive half goes red.
+      // Mutation B: move the `const boot = ...` block in `startHandle` above
+      // `assertTurnProviderRunnable`, and the context-attachment half goes red
+      // -- the refused start has attached the item to the session. The note
+      // half rides with it: the draft that block returns is what
+      // `recordBootContextNote` later writes.
+      const db = getDatabase()
+      const projectContext = new ProjectContextService(db)
+      service.setSessionContextInjectionService(
+        new SessionContextInjectionService(db, projectContext),
+      )
+      const item = projectContext.create({
+        projectId,
+        label: 'monorepo',
+        body: 'See ~/work/monorepo',
+        reinjectMode: 'boot',
+      })
+
+      const flipping = createFlippingRemoteHost(FLIPPED_VERDICT)
+      service.setRemoteExecutionHosts(
+        executionHostRegistryFor({
+          [TEST_EXECUTION_HOST_ENDPOINT_ID]: flipping.host,
+        }),
+      )
+      const session = service.create({
+        projectId,
+        workspaceId: null,
+        providerId: 'claude-code',
+        model: 'sonnet',
+        effort: null,
+        name: 'verdict flips mid-start',
+        executionHost: TEST_EXECUTION_HOST_ENDPOINT_ID,
+      })
+      service.archive(session.id)
+      const archivedAt = service.getById(session.id)?.archivedAt
+      expect(archivedAt).toBeTruthy()
+
+      const patches: ConversationPatchEvent[] = []
+      service.setConversationPatchListener((event) => patches.push(event))
+
+      await expect(
+        service.start(session.id, {
+          text: 'hello',
+          contextItemIds: [item.id],
+        }),
+      ).rejects.toThrow(FLIPPED_VERDICT)
+
+      expect(service.getById(session.id)?.archivedAt).toBe(archivedAt)
+      expect(service.getConversation(session.id)).toEqual([])
+      expect(patches).toEqual([])
+      expect(flipping.startCalls).toEqual([])
+      // The third write of the beat, and the one a caller cannot be handed the
+      // result of without making it: `prepareBoot` attaches the chosen context
+      // items to the session before it can serialize them.
+      expect(projectContext.listForSession(session.id)).toEqual([])
+    })
+
+    it('leaves no mark when the host changes its verdict between the preflight and the send', async () => {
+      // The same beat on the other door (MAR-2682). `deliverMessage`'s writes
+      // are the unarchive and the rebind, and the unarchive is below the same
+      // synchronous barrier for the same reason.
+      //
+      // Mutation: move the `updateArchiveState` block in `sendRemoteTurn` above
+      // its `assertTurnProviderRunnable` call, and this goes red.
+      const flipping = createFlippingRemoteHost(FLIPPED_VERDICT)
+      service.setRemoteExecutionHosts(
+        executionHostRegistryFor({
+          [TEST_EXECUTION_HOST_ENDPOINT_ID]: flipping.host,
+        }),
+      )
+      const session = service.create({
+        projectId,
+        workspaceId: null,
+        providerId: 'claude-code',
+        model: 'sonnet',
+        effort: null,
+        name: 'verdict flips mid-send',
+        executionHost: TEST_EXECUTION_HOST_ENDPOINT_ID,
+      })
+      service.archive(session.id)
+      const archivedAt = service.getById(session.id)?.archivedAt
+      expect(archivedAt).toBeTruthy()
+
+      await expect(
+        service.sendMessage(session.id, { text: 'hello' }),
+      ).rejects.toThrow(FLIPPED_VERDICT)
+
+      expect(service.getById(session.id)?.archivedAt).toBe(archivedAt)
+    })
+
+    it('writes the boot-context note after the host has started, and ahead of the first delta', async () => {
+      // Where the note sits in the record, which is a claim about time
+      // (MAR-2682). It says a turn began with this project context, so it must
+      // not exist before the host has been asked to begin one -- and it must be
+      // in the transcript ahead of anything that turn produces, or the record
+      // reads as context arriving in the middle of an answer.
+      //
+      // One beat pins both halves: the note is recorded inside `startHandle`,
+      // after `host.start` and before that method returns, and `startHandle` is
+      // not async -- so a delta, which cannot be delivered without the loop
+      // turning, is always behind it.
+      //
+      // Mutation A: move the `recordBootContextNote` call in `startHandle`
+      // above `execution.host.start`, and the transcript is no longer empty
+      // when the daemon is asked to start -- red.
+      // Mutation B: make `startHandle` `async` and `await Promise.resolve()`
+      // before the record, and the delta queued during the start lands first --
+      // the final order goes red. It takes the `async` because round 8 put the
+      // record inside a body that cannot yield; that is the guard, and this is
+      // what removing it costs -- six other canaries here go red with it, since
+      // an async `startHandle` no longer hands its refusals back to the caller.
+      const db = getDatabase()
+      const projectContext = new ProjectContextService(db)
+      service.setSessionContextInjectionService(
+        new SessionContextInjectionService(db, projectContext),
+      )
+      const item = projectContext.create({
+        projectId,
+        label: 'monorepo',
+        body: 'See ~/work/monorepo',
+        reinjectMode: 'boot',
+      })
+
+      const asked: { kinds: string[] | null } = { kinds: null }
+      const session = service.create({
+        projectId,
+        workspaceId: null,
+        providerId: 'claude-code',
+        model: 'sonnet',
+        effort: null,
+        name: 'boot note ordering',
+        executionHost: TEST_EXECUTION_HOST_ENDPOINT_ID,
+      })
+
+      const fake: { emitDelta: (event: SessionDelta) => void } = {
+        emitDelta: () => {},
+      }
+      const running = createFakeRemoteHost(undefined, () => {
+        asked.kinds = service
+          .getConversation(session.id)
+          .map((entry) => entry.kind)
+        // The daemon answers as soon as it is running. A delta queued here
+        // reaches the transcript on the next turn of the loop, which is the
+        // earliest anything about this turn can.
+        queueMicrotask(() =>
+          fake.emitDelta({
+            kind: 'conversation.item.add',
+            item: {
+              id: 'assistant-first',
+              kind: 'message',
+              actor: 'assistant',
+              text: 'answering',
+              state: 'complete',
+              turnId: null,
+              createdAt: '2026-08-28T10:00:00.000Z',
+              updatedAt: '2026-08-28T10:00:00.000Z',
+              providerMeta: {
+                providerId: 'claude',
+                providerItemId: null,
+                providerEventType: null,
+              },
+            },
+          }),
+        )
+      })
+      fake.emitDelta = running.emitDelta
+      service.setRemoteExecutionHosts(
+        executionHostRegistryFor({
+          [TEST_EXECUTION_HOST_ENDPOINT_ID]: running.host,
+        }),
+      )
+      service.setRemoteWorkspaceSourceResolver(() => ({
+        repository: 'git@github.com:acme/repo.git',
+      }))
+
+      await service.start(session.id, {
+        text: 'hello',
+        contextItemIds: [item.id],
+      })
+      // Let the queued delta land.
+      await new Promise((resolve) => setTimeout(resolve, 0))
+
+      // Nothing was in the record when the daemon was asked to start.
+      expect(asked.kinds).toEqual([])
+      // And by the time the turn is running, the note is there and first.
+      expect(
+        service.getConversation(session.id).map((entry) => entry.kind),
+      ).toEqual(['note', 'message'])
+    })
+
+    it('leaves a refused start’s attachments untouched, and a later start owns them exactly as an unrefused one does', async () => {
+      // The draft-attachment rebind is the one write that sits above the
+      // barrier, because it is the one write that is awaited and an `await`
+      // below the barrier would reopen the window the barrier closes
+      // (MAR-2682). It is allowed there only because it is inert, and inert
+      // means both of these:
+      //
+      //   - a refused start does not move anything: the id still resolves, to a
+      //     row still owned by the draft whose file is where the row says;
+      //   - a start that follows a refusal owns its attachment exactly as a
+      //     start that was never refused owns its own -- `rebindToSession`
+      //     re-parents rows by id and skips rows already parented, so running it
+      //     after a refusal is the same single move.
+      //
+      // Mutation: move the `rebindDraftAttachments` call in `openFirstTurn`
+      // above `preflightTurnProvider`, and the refused half goes red -- the
+      // refused start has already moved the file into the session whose start it
+      // refused.
+      const attachmentsRoot = join(tempDir, 'refused-start-attachments')
+      mkdirSync(attachmentsRoot, { recursive: true })
+      const attachments = new AttachmentsService(getDatabase(), attachmentsRoot)
+      service.setAttachmentsService(attachments)
+      service.setRemoteWorkspaceSourceResolver(() => ({
+        repository: 'git@github.com:acme/repo.git',
+      }))
+
+      const draftAttachment = () => draftAttachmentIn(attachments)
+
+      const ownership = (attachmentId: string, ownerId: string) =>
+        attachmentOwnership(attachments, attachmentsRoot, attachmentId, ownerId)
+
+      const refusedSession = service.create({
+        projectId,
+        workspaceId: null,
+        providerId: 'claude-code',
+        model: 'sonnet',
+        effort: null,
+        name: 'refused, then started',
+        executionHost: TEST_EXECUTION_HOST_ENDPOINT_ID,
+      })
+      const controlSession = service.create({
+        projectId,
+        workspaceId: null,
+        providerId: 'claude-code',
+        model: 'sonnet',
+        effort: null,
+        name: 'never refused',
+        executionHost: TEST_EXECUTION_HOST_ENDPOINT_ID,
+      })
+      const refusedAttachment = await draftAttachment()
+      const controlAttachment = await draftAttachment()
+
+      const blocked = createFakeRemoteHost({
+        providerId: 'claude',
+        reason:
+          'The daemon reports Claude Code as unavailable: missing binary.',
+      })
+      service.setRemoteExecutionHosts(
+        executionHostRegistryFor({
+          [TEST_EXECUTION_HOST_ENDPOINT_ID]: blocked.host,
+        }),
+      )
+      await expect(
+        service.start(refusedSession.id, {
+          text: 'hello',
+          attachmentIds: [refusedAttachment],
+        }),
+      ).rejects.toThrow(
+        'The daemon reports Claude Code as unavailable: missing binary.',
+      )
+
+      expect(ownership(refusedAttachment, DRAFT_SESSION_ID)).toEqual({
+        ownedBy: true,
+        namedById: true,
+        onDisk: true,
+      })
+
+      const open = createFakeRemoteHost()
+      service.setRemoteExecutionHosts(
+        executionHostRegistryFor({
+          [TEST_EXECUTION_HOST_ENDPOINT_ID]: open.host,
+        }),
+      )
+      await service.start(refusedSession.id, {
+        text: 'hello',
+        attachmentIds: [refusedAttachment],
+      })
+      await service.start(controlSession.id, {
+        text: 'hello',
+        attachmentIds: [controlAttachment],
+      })
+
+      expect(ownership(refusedAttachment, refusedSession.id)).toEqual({
+        ownedBy: true,
+        namedById: true,
+        onDisk: true,
+      })
+      // Identical, and asked of each session's own id: the refusal left no
+      // difference between the two to find.
+      expect(ownership(refusedAttachment, refusedSession.id)).toEqual(
+        ownership(controlAttachment, controlSession.id),
+      )
+    })
+
+    const REFRESHED_VERDICT =
+      'The daemon reports Claude Code as unavailable: the listing was refreshed.'
+
+    it('refuses a start when the listing is refreshed under the awaited rebind — the no-await-under-the-barrier invariant', async () => {
+      // What the repair actually rests on, and the one thing nothing pinned
+      // (MAR-2682): `rebindDraftAttachments` is the *last* await of the turn,
+      // and everything from the barrier to `host.start` is one synchronous
+      // beat. Move that await below the barrier and the window is open again --
+      // the barrier reads a permit, the refreshed refusal lands while the
+      // rebind is in flight, and the turn is already underway when it arrives.
+      // Every other canary here survives that move, because they refuse on the
+      // second *ask* rather than after a refresh.
+      //
+      // Mutation: move the `await this.rebindDraftAttachments(...)` call in
+      // `openFirstTurn` below the `startHandle(...)` call, and this goes red --
+      // the barrier inside `startHandle` sees the permit that has not been
+      // refreshed yet, and the start succeeds outright.
+      const db = getDatabase()
+      const projectContext = new ProjectContextService(db)
+      service.setSessionContextInjectionService(
+        new SessionContextInjectionService(db, projectContext),
+      )
+      const item = projectContext.create({
+        projectId,
+        label: 'monorepo',
+        body: 'See ~/work/monorepo',
+        reinjectMode: 'boot',
+      })
+
+      const daemon = createRefreshableRemoteHost(REFRESHED_VERDICT)
+      service.setRemoteExecutionHosts(
+        executionHostRegistryFor({
+          [TEST_EXECUTION_HOST_ENDPOINT_ID]: daemon.host,
+        }),
+      )
+      service.setRemoteWorkspaceSourceResolver(() => ({
+        repository: 'git@github.com:acme/repo.git',
+      }))
+      const attachments = attachmentsChangingTheWorldMidRebind(
+        join(tempDir, 'rebind-window-start'),
+        daemon.refreshIntoRefusal,
+      )
+      service.setAttachmentsService(attachments)
+      const attachmentId = await draftAttachmentIn(attachments)
+
+      const session = service.create({
+        projectId,
+        workspaceId: null,
+        providerId: 'claude-code',
+        model: 'sonnet',
+        effort: null,
+        name: 'listing refreshed under the rebind',
+        executionHost: TEST_EXECUTION_HOST_ENDPOINT_ID,
+      })
+      service.archive(session.id)
+      const archivedAt = service.getById(session.id)?.archivedAt
+      expect(archivedAt).toBeTruthy()
+
+      const patches: ConversationPatchEvent[] = []
+      const summaries: string[] = []
+      service.setConversationPatchListener((event) => patches.push(event))
+      service.setSummaryUpdateListener((summary) => summaries.push(summary.id))
+
+      await expect(
+        service.start(session.id, {
+          text: 'hello',
+          contextItemIds: [item.id],
+          attachmentIds: [attachmentId],
+        }),
+      ).rejects.toThrow(REFRESHED_VERDICT)
+
+      // The daemon was never asked to start, and the record says a turn was
+      // never begun: still archived, nothing in the transcript, nothing
+      // announced to the renderer.
+      expect(daemon.startCalls).toEqual([])
+      expect(service.getById(session.id)?.archivedAt).toBe(archivedAt)
+      expect(service.getConversation(session.id)).toEqual([])
+      expect(patches).toEqual([])
+      expect(summaries).toEqual([])
+      // The rebind did run -- it is above the barrier and it is a write. What
+      // it left is resolvable by the id the caller still holds.
+      expect(attachments.getMany([attachmentId]).map((row) => row.id)).toEqual([
+        attachmentId,
+      ])
+    })
+
+    it('refuses a send when the listing is refreshed under the awaited rebind — the no-await-under-the-barrier invariant', async () => {
+      // The same invariant on the other door (MAR-2682). `deliverMessage` has
+      // the same shape and the same last await, and `sendRemoteTurn` is where
+      // that door's barrier lives: it asks, unarchives, attaches and sends in
+      // one synchronous body, so an await above it that returns with a changed
+      // verdict is the only way the send can act on an expired permit.
+      //
+      // Mutation: move the `await this.rebindDraftAttachments(...)` call in
+      // `deliverMessage` below the `sendRemoteTurn(...)` call, and this goes
+      // red -- `sendRemoteTurn` asks before the refresh has landed, and the
+      // send goes out on the stale permit.
+      const daemon = createRefreshableRemoteHost(REFRESHED_VERDICT)
+      service.setRemoteExecutionHosts(
+        executionHostRegistryFor({
+          [TEST_EXECUTION_HOST_ENDPOINT_ID]: daemon.host,
+        }),
+      )
+      service.setRemoteWorkspaceSourceResolver(() => ({
+        repository: 'git@github.com:acme/repo.git',
+      }))
+      const attachments = attachmentsChangingTheWorldMidRebind(
+        join(tempDir, 'rebind-window-send'),
+        daemon.refreshIntoRefusal,
+      )
+      service.setAttachmentsService(attachments)
+      const attachmentId = await draftAttachmentIn(attachments)
+
+      const session = service.create({
+        projectId,
+        workspaceId: null,
+        providerId: 'claude-code',
+        model: 'sonnet',
+        effort: null,
+        name: 'listing refreshed under the rebind, on the send',
+        executionHost: TEST_EXECUTION_HOST_ENDPOINT_ID,
+      })
+      service.archive(session.id)
+      const archivedAt = service.getById(session.id)?.archivedAt
+      expect(archivedAt).toBeTruthy()
+
+      const patches: ConversationPatchEvent[] = []
+      const summaries: string[] = []
+      service.setConversationPatchListener((event) => patches.push(event))
+      service.setSummaryUpdateListener((summary) => summaries.push(summary.id))
+
+      await expect(
+        service.sendMessage(session.id, {
+          text: 'hello',
+          attachmentIds: [attachmentId],
+        }),
+      ).rejects.toThrow(REFRESHED_VERDICT)
+
+      expect(daemon.startCalls).toEqual([])
+      expect(service.getById(session.id)?.archivedAt).toBe(archivedAt)
+      expect(service.getConversation(session.id)).toEqual([])
+      expect(patches).toEqual([])
+      expect(summaries).toEqual([])
+      expect(attachments.getMany([attachmentId]).map((row) => row.id)).toEqual([
+        attachmentId,
+      ])
+    })
+    it('sends to a handle that landed under the awaited rebind, instead of refusing on the snapshot taken before it', async () => {
+      // The first half of the window this method reopened (MAR-2682). The
+      // handle map is read before the verdict and the rebind are awaited, and
+      // for four rounds the branch below was chosen from that read. A live
+      // handle is exempt from the host's permission -- refusing mid-run would
+      // strand a turn on a decision made when it started -- so a handle that
+      // lands *during* those awaits is a send that must not be refused, and a
+      // snapshot taken before them cannot see it.
+      //
+      // Both halves of the failure are staged here: a second dispatch installs
+      // the live handle, and the daemon then withdraws the provider. Deciding
+      // from the snapshot means missing the exemption and meeting the
+      // withdrawal at `sendRemoteTurn`'s barrier -- a running turn refused a
+      // message because of a listing that landed after it began.
+      //
+      // Mutation: branch on `handleWhenAsked` instead of the re-read `handle`
+      // in `deliverMessage`, and this goes red -- the send is rejected with the
+      // refreshed refusal and the live handle is told nothing.
+      const daemon = createRefreshableRemoteHost(REFRESHED_VERDICT)
+      service.setRemoteExecutionHosts(
+        executionHostRegistryFor({
+          [TEST_EXECUTION_HOST_ENDPOINT_ID]: daemon.host,
+        }),
+      )
+      service.setRemoteWorkspaceSourceResolver(() => ({
+        repository: 'git@github.com:acme/repo.git',
+      }))
+
+      const session = service.create({
+        projectId,
+        workspaceId: null,
+        providerId: 'claude-code',
+        model: 'sonnet',
+        effort: null,
+        name: 'a handle lands under the rebind',
+        executionHost: TEST_EXECUTION_HOST_ENDPOINT_ID,
+      })
+
+      const attachments = attachmentsChangingTheWorldMidRebind(
+        join(tempDir, 'handle-lands-under-the-rebind'),
+        async () => {
+          // The second dispatch, run to completion inside this one's rebind.
+          // It carries no attachment ids, so `rebindDraftAttachments` returns
+          // before this hook and there is no re-entry.
+          await service.start(session.id, { text: 'the other dispatch' })
+          daemon.refreshIntoRefusal()
+        },
+      )
+      service.setAttachmentsService(attachments)
+      const attachmentId = await draftAttachmentIn(attachments)
+
+      await expect(
+        service.sendMessage(session.id, {
+          text: 'hello',
+          attachmentIds: [attachmentId],
+        }),
+      ).resolves.toBeUndefined()
+
+      // The message reached the run that is actually live, and nothing was
+      // started a second time for it.
+      expect(daemon.handleSends).toEqual(['hello'])
+      expect(daemon.startCalls).toHaveLength(1)
+    })
+
+    it('takes the inactive path when the live handle is released under the awaited rebind, instead of sending to a disposed one', async () => {
+      // The inverse, and the worse of the two (MAR-2682): the snapshot says
+      // there is a handle, the run settles while the rebind is in flight, and
+      // the send is handed a handle the service has already released. A
+      // released handle is still an object -- `handle.sendMessage` returns
+      // quietly -- so the send resolves like a success while the message goes
+      // nowhere. Nothing downstream can contradict it.
+      //
+      // Decided from the map as it is now, the release is visible: no handle,
+      // so the inactive path is taken and the door asks the host, which by then
+      // has withdrawn the provider and says so.
+      //
+      // Mutation: branch on `handleWhenAsked` instead of the re-read `handle`
+      // in `deliverMessage`, and this goes red twice -- the send resolves
+      // instead of refusing, and the disposed handle has been told 'second
+      // turn'.
+      const daemon = createRefreshableRemoteHost(REFRESHED_VERDICT)
+      service.setRemoteExecutionHosts(
+        executionHostRegistryFor({
+          [TEST_EXECUTION_HOST_ENDPOINT_ID]: daemon.host,
+        }),
+      )
+      service.setRemoteWorkspaceSourceResolver(() => ({
+        repository: 'git@github.com:acme/repo.git',
+      }))
+
+      const session = service.create({
+        projectId,
+        workspaceId: null,
+        providerId: 'claude-code',
+        model: 'sonnet',
+        effort: null,
+        name: 'the handle is released under the rebind',
+        executionHost: TEST_EXECUTION_HOST_ENDPOINT_ID,
+      })
+      await service.start(session.id, { text: 'first turn' })
+      expect(daemon.startCalls).toHaveLength(1)
+
+      const attachments = attachmentsChangingTheWorldMidRebind(
+        join(tempDir, 'handle-released-under-the-rebind'),
+        () => {
+          // The run this handle carried settles: the service releases and
+          // disposes it, exactly as it does for any failed turn.
+          daemon.emitDelta({
+            kind: 'session.patch',
+            patch: { status: 'failed' },
+          })
+          daemon.refreshIntoRefusal()
+        },
+      )
+      service.setAttachmentsService(attachments)
+      const attachmentId = await draftAttachmentIn(attachments)
+
+      await expect(
+        service.sendMessage(session.id, {
+          text: 'second turn',
+          attachmentIds: [attachmentId],
+        }),
+      ).rejects.toThrow(REFRESHED_VERDICT)
+
+      // The released handle was told nothing, and the refusal is the door's --
+      // asked after the release, not carried over from before it.
+      expect(daemon.handleSends).toEqual([])
+      expect(daemon.startCalls).toHaveLength(1)
+    })
+
+    /**
+     * A daemon that permits this session's provider and can be sent to, paired
+     * with a registry whose Endpoint stops being able to produce a listing on
+     * command (MAR-2682).
+     *
+     * `whenReady` delegates to `ensureListed`, which is specified to throw when
+     * the configuration in force cannot produce a listing -- an Endpoint edited
+     * mid-run, or one that kept moving while it was being listed. The failure
+     * has to arrive *late*: the live handle the exemption is about can only
+     * exist because the run was allowed to start, so a registry that refused
+     * from the first call could never reach the case.
+     *
+     * The failure is the host's own error object, kept so a canary can prove
+     * the refusal that surfaces is that object and not a new `Error` remade
+     * from its message.
+     */
+    function createDaemonWhoseEndpointStopsListing() {
+      const daemon = createFakeRemoteHost()
+      const listingFailure = new RemoteExecutionHostError(
+        'The execution host endpoint kept changing while its providers were ' +
+          'being listed, so nothing could be read from the address it points ' +
+          'at now.',
+        'configuration',
+      )
+      const host = {
+        ...daemon.host,
+        // A daemon that can be sent to. Without it a send that reaches the door
+        // fails on the missing `attach` instead, which would let a mutation go
+        // red for the wrong reason -- and hide that the send really did leave.
+        attach: (providerId: string, config: { sessionId: string }) =>
+          daemon.host.start(providerId, config),
+      }
+      const base = executionHostRegistryFor({
+        [TEST_EXECUTION_HOST_ENDPOINT_ID]: host,
+      })
+      const listing = { fails: false }
+      const registry: RemoteExecutionHostRegistry = {
+        hostFor: base.hostFor,
+        whenReady: async (endpointId: string) => {
+          await base.whenReady(endpointId)
+          if (listing.fails) throw listingFailure
+        },
+      }
+      return {
+        ...daemon,
+        host,
+        registry,
+        listingFailure,
+        stopListing: () => {
+          listing.fails = true
+        },
+      }
+    }
+
+    it('sends to a live handle when the Endpoint can no longer be listed, instead of refusing a run already in flight', async () => {
+      // The question is asked for every send now, live handle or not, and the
+      // sequence that answers it can fail rather than answer (MAR-2682). A
+      // listing that throws must reach the caller as a refusal it is free to
+      // ignore, not as a rejection out of the query: an Endpoint whose address
+      // or credentials changed under a run would otherwise strand the turn the
+      // exemption exists to protect, and the handle would be told nothing.
+      //
+      // Mutation: move `await this.awaitEndpointListing(session)` back above
+      // the `try` in `queryTurnProviderVerdict`, and this goes red -- the send
+      // rejects with the listing error and the live handle receives nothing.
+      const daemon = createDaemonWhoseEndpointStopsListing()
+      service.setRemoteExecutionHosts(daemon.registry)
+      service.setRemoteWorkspaceSourceResolver(() => ({
+        repository: 'git@github.com:acme/repo.git',
+      }))
+
+      const session = service.create({
+        projectId,
+        workspaceId: null,
+        providerId: 'claude-code',
+        model: 'sonnet',
+        effort: null,
+        name: 'the Endpoint stops listing under a live run',
+        executionHost: TEST_EXECUTION_HOST_ENDPOINT_ID,
+      })
+      await service.start(session.id, { text: 'first turn' })
+      expect(daemon.startCalls).toHaveLength(1)
+
+      // The Endpoint moves under the run that is already on it.
+      daemon.stopListing()
+
+      await expect(
+        service.sendMessage(session.id, { text: 'second turn' }),
+      ).resolves.toBeUndefined()
+
+      // The message reached the run, and nothing was started a second time.
+      expect(daemon.handleSends).toEqual(['second turn'])
+      expect(daemon.startCalls).toHaveLength(1)
+    })
+
+    it('refuses a send with no live handle in the listing failure’s own words', async () => {
+      // The other half of the same change, and the reason the failure is
+      // carried rather than swallowed (MAR-2682): a session with no run to
+      // strand has nothing to be exempt from, so a listing that cannot be had
+      // is still the refusal the user must see -- as the host raised it, not
+      // remade here.
+      //
+      // Mutation: make the `catch` in `queryTurnProviderVerdict` return
+      // `{ permitted: true }`, and this goes red -- the listing failure is
+      // swallowed, the door is reached, and the send leaves on a permit nobody
+      // gave.
+      const daemon = createDaemonWhoseEndpointStopsListing()
+      service.setRemoteExecutionHosts(daemon.registry)
+      service.setRemoteWorkspaceSourceResolver(() => ({
+        repository: 'git@github.com:acme/repo.git',
+      }))
+
+      const session = service.create({
+        projectId,
+        workspaceId: null,
+        providerId: 'claude-code',
+        model: 'sonnet',
+        effort: null,
+        name: 'the Endpoint stops listing with no run on it',
+        executionHost: TEST_EXECUTION_HOST_ENDPOINT_ID,
+      })
+      daemon.stopListing()
+
+      const refusal = await service
+        .sendMessage(session.id, { text: 'hello' })
+        .then(() => null)
+        .catch((error: unknown) => error)
+
+      expect(refusal).toBe(daemon.listingFailure)
+      expect((refusal as Error).message).toContain('kept changing')
+      // Nothing was attached and nothing was sent: the refusal is above the
+      // door, not a message that left and then failed.
+      expect(daemon.startCalls).toEqual([])
+      expect(daemon.handleSends).toEqual([])
+    })
+
+    it('leaves a barrier-refused start’s rebind inert, and a later start owns its attachment exactly as an unrefused one does', async () => {
+      // The accepted exception, proven rather than asserted (MAR-2682). The
+      // canary above it refuses at the *preflight*, so no rebind ever happens
+      // there; this is the case Fable accepted -- the preflight passes, the
+      // rebind runs, and the barrier refuses afterwards. The rebind is
+      // therefore a write that a refused turn really did make, and the ruling
+      // is that it leaves no visible or semantic consequence.
+      //
+      // Mutation: make `rebindToSession` refuse rows that are no longer
+      // draft-owned -- throw when
+      // `rows.some((row) => row.session_id !== DRAFT_SESSION_ID)` -- and this
+      // goes red on the retry, because the refused turn's mark has become a
+      // consequence. The canary above it stays green under that mutation: its
+      // refusal is early, so its retry rebinds from the draft like any other.
+      // The window itself is pinned above rather than here: this test is about
+      // what a refusal leaves, not about where the await sits.
+      const attachmentsRoot = join(tempDir, 'barrier-refused-attachments')
+      const daemon = createRefreshableRemoteHost(REFRESHED_VERDICT)
+      const attachments = attachmentsChangingTheWorldMidRebind(
+        attachmentsRoot,
+        daemon.refreshIntoRefusal,
+      )
+      service.setAttachmentsService(attachments)
+      service.setRemoteWorkspaceSourceResolver(() => ({
+        repository: 'git@github.com:acme/repo.git',
+      }))
+      const ownership = (attachmentId: string, ownerId: string) =>
+        attachmentOwnership(attachments, attachmentsRoot, attachmentId, ownerId)
+
+      const refusedSession = service.create({
+        projectId,
+        workspaceId: null,
+        providerId: 'claude-code',
+        model: 'sonnet',
+        effort: null,
+        name: 'refused at the barrier, then started',
+        executionHost: TEST_EXECUTION_HOST_ENDPOINT_ID,
+      })
+      const controlSession = service.create({
+        projectId,
+        workspaceId: null,
+        providerId: 'claude-code',
+        model: 'sonnet',
+        effort: null,
+        name: 'never refused',
+        executionHost: TEST_EXECUTION_HOST_ENDPOINT_ID,
+      })
+      const refusedAttachment = await draftAttachmentIn(attachments)
+      const controlAttachment = await draftAttachmentIn(attachments)
+
+      service.setRemoteExecutionHosts(
+        executionHostRegistryFor({
+          [TEST_EXECUTION_HOST_ENDPOINT_ID]: daemon.host,
+        }),
+      )
+      await expect(
+        service.start(refusedSession.id, {
+          text: 'hello',
+          attachmentIds: [refusedAttachment],
+        }),
+      ).rejects.toThrow(REFRESHED_VERDICT)
+
+      // The mark the refusal left: the row moved, and it is whole -- named by
+      // its id, on disk where the row says.
+      expect(ownership(refusedAttachment, refusedSession.id)).toEqual({
+        ownedBy: true,
+        namedById: true,
+        onDisk: true,
+      })
+
+      // A daemon that permits. The refreshed refusal belongs to the one above,
+      // which is no longer registered, so the rebind's refresh is now a call on
+      // a host nothing asks.
+      const open = createFakeRemoteHost()
+      service.setRemoteExecutionHosts(
+        executionHostRegistryFor({
+          [TEST_EXECUTION_HOST_ENDPOINT_ID]: open.host,
+        }),
+      )
+      await service.start(refusedSession.id, {
+        text: 'hello',
+        attachmentIds: [refusedAttachment],
+      })
+      await service.start(controlSession.id, {
+        text: 'hello',
+        attachmentIds: [controlAttachment],
+      })
+
+      expect(ownership(refusedAttachment, refusedSession.id)).toEqual({
+        ownedBy: true,
+        namedById: true,
+        onDisk: true,
+      })
+      // And identical to a turn that was never refused: the second rebind is
+      // the same single move, whether or not a refused one came first.
+      expect(ownership(refusedAttachment, refusedSession.id)).toEqual(
+        ownership(controlAttachment, controlSession.id),
       )
     })
 
@@ -4432,6 +5730,11 @@ describe('SessionService relay mute', () => {
       capabilitiesFor: (providerId: string) =>
         providerId === 'claude' ? capabilities : null,
       describe: async () => [],
+      assertProviderRunnable: (providerId: string) => {
+        if (providerId !== 'claude') {
+          throw new Error(`Provider not found: ${providerId}`)
+        }
+      },
       start: () => remoteHandle,
       attach: () => remoteHandle,
       oneShot: async () => {

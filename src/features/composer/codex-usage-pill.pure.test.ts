@@ -5,7 +5,7 @@ import {
   getCodexUsageTone,
   getCodexWindow,
   getPrimaryCodexWindow,
-  shouldShowCodexUsagePill,
+  shouldShowCodexBillingControls,
 } from './codex-usage-pill.pure'
 
 const snapshot: ProviderQuotaSnapshot = {
@@ -42,11 +42,50 @@ describe('Codex usage pill helpers', () => {
   // through Pi's credentials even when the model happens to be an OpenAI one,
   // so showing Codex's numbers there is simply wrong.
   it('shows only for Codex sessions', () => {
-    expect(shouldShowCodexUsagePill({ providerId: 'codex' })).toBe(true)
+    expect(
+      shouldShowCodexBillingControls({
+        providerId: 'codex',
+        executionHostId: 'local',
+      }),
+    ).toBe(true)
     // Pi no longer qualifies at all, whatever model it runs — the signature
     // does not even take a model id any more.
-    expect(shouldShowCodexUsagePill({ providerId: 'pi' })).toBe(false)
-    expect(shouldShowCodexUsagePill({ providerId: 'claude-code' })).toBe(false)
+    for (const providerId of ['pi', 'claude-code']) {
+      expect(
+        shouldShowCodexBillingControls({
+          providerId,
+          executionHostId: 'local',
+        }),
+      ).toBe(false)
+    }
+  })
+
+  // Absent and blank mean this machine everywhere else in the tree, and they
+  // have to mean it here too, or a composer that has never heard of Endpoints
+  // loses controls it has always had (MAR-2682, "a Local row does not
+  // change").
+  it('reads absent, blank and local as this machine', () => {
+    for (const executionHostId of [undefined, null, '', '   ', 'local']) {
+      expect(
+        shouldShowCodexBillingControls({
+          providerId: 'codex',
+          executionHostId,
+        }),
+      ).toBe(true)
+    }
+  })
+
+  // The correction (MAR-2682). `serviceTier` is on
+  // EXECUTION_HOST_UNMAPPED_START_CONFIG_FIELDS and the quota is read off the
+  // Codex CLI installed *here*, so on a daemon both controls could only
+  // pretend. Derived from the host, not from the provider id alone.
+  it('does not claim the local Codex CLI’s billing on a daemon', () => {
+    expect(
+      shouldShowCodexBillingControls({
+        providerId: 'codex',
+        executionHostId: 'daemon-a',
+      }),
+    ).toBe(false)
   })
 
   it('uses the five-hour window as the primary composer value', () => {

@@ -1,5 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { useSessionStore } from './session.model'
+import { selectLocalProviders, useSessionStore } from './session.model'
+import {
+  localProviderCatalogs,
+  providerCatalogSourceForHost,
+} from './provider-catalog.pure'
 
 const mockElectronAPI = {
   session: {
@@ -31,7 +35,11 @@ const mockElectronAPI = {
     forkSummary: vi.fn(),
   },
   provider: {
-    getAll: vi.fn().mockResolvedValue([]),
+    getAll: vi.fn().mockResolvedValue({
+      executionHostId: 'local',
+      providers: [],
+      unreachableReason: null,
+    }),
   },
 }
 
@@ -139,7 +147,7 @@ describe('useSessionStore', () => {
       activeProjectSessionId: null,
       activeGlobalSessionId: null,
       draftWorkspaceId: null,
-      providers: [],
+      providerCatalogs: {},
       error: null,
     })
   })
@@ -152,7 +160,7 @@ describe('useSessionStore', () => {
       currentProjectId: 'project-1',
       activeSessionId: 'session-1',
       draftWorkspaceId: 'workspace-1',
-      providers: [],
+      providerCatalogs: {},
       error: null,
     })
 
@@ -173,7 +181,7 @@ describe('useSessionStore', () => {
       currentProjectId: 'project-1',
       activeSessionId: null,
       draftWorkspaceId: null,
-      providers: [],
+      providerCatalogs: {},
       error: null,
     })
 
@@ -423,7 +431,7 @@ describe('useSessionStore', () => {
       currentProjectId: 'project-1',
       activeSessionId: null,
       draftWorkspaceId: null,
-      providers: [],
+      providerCatalogs: {},
       error: null,
     })
 
@@ -475,7 +483,7 @@ describe('useSessionStore', () => {
       currentProjectId: 'project-2',
       activeSessionId: null,
       draftWorkspaceId: null,
-      providers: [],
+      providerCatalogs: {},
       error: null,
     })
 
@@ -516,7 +524,7 @@ describe('useSessionStore', () => {
       currentProjectId: 'project-2',
       activeSessionId: null,
       draftWorkspaceId: null,
-      providers: [],
+      providerCatalogs: {},
       error: null,
     })
 
@@ -836,5 +844,177 @@ describe('useSessionStore', () => {
         }),
       ).rejects.toThrow('nope')
     })
+  })
+})
+
+describe('loadProviderCatalog (MAR-2682)', () => {
+  const source = providerCatalogSourceForHost('daemon-a', [
+    {
+      id: 'daemon-a',
+      label: 'kuba-vps',
+      baseUrl: 'https://a.test',
+      position: 0,
+      createdAt: '2026-01-01',
+      updatedAt: '2026-01-01',
+    },
+  ])
+
+  function descriptor(id: string, kind: 'conversation' | 'shell') {
+    return {
+      id,
+      name: id,
+      vendorLabel: id,
+      kind,
+      supportsContinuation: true,
+      defaultModelId: '',
+      modelOptions: [],
+      attachments: {
+        supportsImage: false,
+        supportsPdf: false,
+        supportsText: false,
+        maxImageBytes: 0,
+        maxPdfBytes: 0,
+        maxTextBytes: 0,
+        maxTotalBytes: 0,
+      },
+      midRunInput: {
+        supportsAnswer: false,
+        supportsNativeFollowUp: true,
+        supportsAppQueuedFollowUp: false,
+        supportsSteer: false,
+        supportsInterrupt: true,
+        defaultRunningMode: 'follow-up' as const,
+      },
+    }
+  }
+
+  beforeEach(() => {
+    useSessionStore.setState({ providerCatalogs: {} })
+  })
+
+  it('asks the machine it was given, and files the answer under that machine', async () => {
+    mockElectronAPI.provider.getAll.mockResolvedValueOnce({
+      executionHostId: 'daemon-a',
+      providers: [
+        {
+          descriptor: descriptor('claude-code', 'conversation'),
+          blockedReason: null,
+        },
+      ],
+      unreachableReason: null,
+    })
+
+    await useSessionStore.getState().loadProviderCatalog(source)
+
+    expect(mockElectronAPI.provider.getAll).toHaveBeenCalledWith('daemon-a')
+    const filed = useSessionStore.getState().providerCatalogs['daemon-a']
+    expect(filed?.status).toBe('landed')
+    // The source travels with it, which is what makes it refusable later.
+    expect(filed?.source).toEqual(source)
+  })
+
+  it('keeps the shell provider out, so no conversation surface can pick it', () => {
+    mockElectronAPI.provider.getAll.mockResolvedValueOnce({
+      executionHostId: 'daemon-a',
+      providers: [
+        {
+          descriptor: descriptor('claude-code', 'conversation'),
+          blockedReason: null,
+        },
+        { descriptor: descriptor('shell', 'shell'), blockedReason: null },
+      ],
+      unreachableReason: null,
+    })
+
+    return useSessionStore
+      .getState()
+      .loadProviderCatalog(source)
+      .then(() => {
+        const filed = useSessionStore.getState().providerCatalogs['daemon-a']
+        expect(
+          filed?.status === 'landed' &&
+            filed.providers.map((entry) => entry.descriptor.id),
+        ).toEqual(['claude-code'])
+      })
+  })
+
+  it('records a failure as a failure, with the source it failed about', async () => {
+    // A machine that could not be asked is not a machine with no providers.
+    mockElectronAPI.provider.getAll.mockRejectedValueOnce(new Error('no ipc'))
+
+    await useSessionStore.getState().loadProviderCatalog(source)
+
+    const filed = useSessionStore.getState().providerCatalogs['daemon-a']
+    expect(filed).toEqual({ status: 'failed', source, reason: 'no ipc' })
+  })
+
+  it('marks the catalog pending against its own source before the round trip', async () => {
+    let release: (value: unknown) => void = () => {}
+    mockElectronAPI.provider.getAll.mockReturnValueOnce(
+      new Promise((resolve) => {
+        release = resolve
+      }),
+    )
+
+    const inFlight = useSessionStore.getState().loadProviderCatalog(source)
+    expect(useSessionStore.getState().providerCatalogs['daemon-a']).toEqual({
+      status: 'pending',
+      source,
+    })
+
+    release({
+      executionHostId: 'daemon-a',
+      providers: [],
+      unreachableReason: null,
+    })
+    await inFlight
+  })
+})
+
+describe('selectLocalProviders (MAR-2682)', () => {
+  it('returns the same array until a catalog actually lands', () => {
+    // A zustand selector runs on every store write and its result is compared
+    // by identity, so a fresh `.map()` here re-renders every provider-reading
+    // surface on every unrelated session update. Run 16 spun the app on exactly
+    // this shape, which is why the projection is cached rather than rebuilt.
+    useSessionStore.setState({
+      providerCatalogs: localProviderCatalogs([
+        {
+          id: 'claude-code',
+          name: 'Claude Code',
+          vendorLabel: 'Anthropic',
+          kind: 'conversation',
+          supportsContinuation: true,
+          defaultModelId: 'sonnet',
+          modelOptions: [],
+          attachments: {
+            supportsImage: false,
+            supportsPdf: false,
+            supportsText: false,
+            maxImageBytes: 0,
+            maxPdfBytes: 0,
+            maxTextBytes: 0,
+            maxTotalBytes: 0,
+          },
+          midRunInput: {
+            supportsAnswer: false,
+            supportsNativeFollowUp: true,
+            supportsAppQueuedFollowUp: false,
+            supportsSteer: false,
+            supportsInterrupt: true,
+            defaultRunningMode: 'follow-up',
+          },
+        },
+      ]),
+    })
+
+    const first = selectLocalProviders(useSessionStore.getState())
+    useSessionStore.setState({ error: 'something unrelated' })
+    expect(selectLocalProviders(useSessionStore.getState())).toBe(first)
+
+    // And an empty catalog is one array too, not a new `[]` each call.
+    useSessionStore.setState({ providerCatalogs: {} })
+    const empty = selectLocalProviders(useSessionStore.getState())
+    expect(selectLocalProviders(useSessionStore.getState())).toBe(empty)
   })
 })

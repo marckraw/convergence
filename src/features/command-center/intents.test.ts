@@ -158,7 +158,7 @@ describe('command-center intents', () => {
       currentProjectId: 'p1',
       activeSessionId: null,
       draftWorkspaceId: null,
-      providers: [],
+      providerCatalogs: {},
       error: null,
       prepareForProject,
       setActiveSession,

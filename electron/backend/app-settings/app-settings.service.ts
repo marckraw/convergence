@@ -87,6 +87,22 @@ export class AppSettingsService {
     }
   }
 
+  /**
+   * Whether an Endpoint with this id is configured at this instant
+   * (MAR-2682).
+   *
+   * Synchronous because the caller is. The Remote Execution Host registry
+   * builds a host inside `hostFor`, which has no await in it -- and an await
+   * there would *be* the window this closes: a removal landing between an
+   * asynchronous check and the mint would leave a cached host, and a primed
+   * request, for a machine nobody is configured for. Endpoints already live in
+   * their own rows and `list()` reads them synchronously, so nothing new is
+   * being promised here.
+   */
+  hasExecutionHostEndpoint(endpointId: string): boolean {
+    return this.executionHostEndpoints.getById(endpointId) !== null
+  }
+
   getNotificationPrefsSync(): NotificationPrefs {
     return parseAppSettings(this.stateService.get(APP_SETTINGS_KEY))
       .notifications

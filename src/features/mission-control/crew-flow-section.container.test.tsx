@@ -4,7 +4,7 @@ import { useProjectStore } from '@/entities/project'
 import type { SessionCrew } from '@/entities/session-crew'
 import { useSessionRelayStore } from '@/entities/session-relay'
 import type { SessionRelay } from '@/entities/session-relay'
-import { useSessionStore } from '@/entities/session'
+import { localProviderCatalogs, useSessionStore } from '@/entities/session'
 import type { SessionSummary } from '@/entities/session'
 import { CrewFlowSection } from './crew-flow-section.container'
 
@@ -132,17 +132,32 @@ describe('CrewFlowSection', () => {
         makeSession('review', 'Reviewer'),
         makeSession('scribe', 'Scribe'),
       ],
-      providers: [
+      providerCatalogs: localProviderCatalogs([
         {
           id: 'codex',
           name: 'Codex',
           vendorLabel: 'OpenAI',
-          kind: 'conversation',
+          kind: 'conversation' as const,
           supportsContinuation: true,
           defaultModelId: 'gpt-5.6',
           modelOptions: [],
-          attachments: {},
-          midRunInput: {},
+          attachments: {
+            supportsImage: false,
+            supportsPdf: false,
+            supportsText: false,
+            maxImageBytes: 0,
+            maxPdfBytes: 0,
+            maxTextBytes: 0,
+            maxTotalBytes: 0,
+          },
+          midRunInput: {
+            supportsAnswer: false,
+            supportsNativeFollowUp: false,
+            supportsAppQueuedFollowUp: true,
+            supportsSteer: false,
+            supportsInterrupt: true,
+            defaultRunningMode: 'follow-up' as const,
+          },
         },
         // A second conversational provider, so switching provider can be
         // exercised -- account ids belong to one provider only.
@@ -150,27 +165,59 @@ describe('CrewFlowSection', () => {
           id: 'claude-code',
           name: 'Claude Code',
           vendorLabel: 'Anthropic',
-          kind: 'conversation',
+          kind: 'conversation' as const,
           supportsContinuation: true,
           defaultModelId: 'claude-opus-5',
           modelOptions: [],
-          attachments: {},
-          midRunInput: {},
+          attachments: {
+            supportsImage: false,
+            supportsPdf: false,
+            supportsText: false,
+            maxImageBytes: 0,
+            maxPdfBytes: 0,
+            maxTextBytes: 0,
+            maxTotalBytes: 0,
+          },
+          midRunInput: {
+            supportsAnswer: false,
+            supportsNativeFollowUp: false,
+            supportsAppQueuedFollowUp: true,
+            supportsSteer: false,
+            supportsInterrupt: true,
+            defaultRunningMode: 'follow-up' as const,
+          },
         },
-        // A shell provider has nothing to hand a payload to, so the form
-        // must never offer it.
+        // A shell provider has nothing to hand a payload to, so the form must
+        // never offer it. It is filtered out by the catalog itself now, which
+        // is why it is still written down here: the fixture goes through the
+        // product's own narrowing rather than around it (MAR-2682).
         {
           id: 'shell',
           name: 'Shell',
           vendorLabel: 'Local',
-          kind: 'terminal',
+          kind: 'shell' as const,
           supportsContinuation: false,
           defaultModelId: '',
           modelOptions: [],
-          attachments: {},
-          midRunInput: {},
+          attachments: {
+            supportsImage: false,
+            supportsPdf: false,
+            supportsText: false,
+            maxImageBytes: 0,
+            maxPdfBytes: 0,
+            maxTextBytes: 0,
+            maxTotalBytes: 0,
+          },
+          midRunInput: {
+            supportsAnswer: false,
+            supportsNativeFollowUp: false,
+            supportsAppQueuedFollowUp: true,
+            supportsSteer: false,
+            supportsInterrupt: true,
+            defaultRunningMode: 'follow-up' as const,
+          },
         },
-      ],
+      ]),
     } as never)
 
     useProjectStore.setState({

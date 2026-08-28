@@ -1,7 +1,11 @@
 import { useMemo } from 'react'
 import type { FC } from 'react'
 import { useProjectStore } from '@/entities/project'
-import { selectGlobalStatus, useSessionStore } from '@/entities/session'
+import {
+  selectGlobalStatus,
+  selectLocalProviders,
+  useSessionStore,
+} from '@/entities/session'
 import { LocalModelTunnelStatusContainer } from '@/features/local-model-tunnel'
 import { GlobalStatusBar } from './global-status-bar.presentational'
 
@@ -14,7 +18,7 @@ export const GlobalStatusBarContainer: FC<GlobalStatusBarContainerProps> = ({
 }) => {
   const globalSessions = useSessionStore((state) => state.globalSessions)
   const dismissals = useSessionStore((state) => state.needsYouDismissals)
-  const providers = useSessionStore((state) => state.providers)
+  const providers = useSessionStore(selectLocalProviders)
   const prepareForProject = useSessionStore((state) => state.prepareForProject)
   const projects = useProjectStore((state) => state.projects)
   const activeProject = useProjectStore((state) => state.activeProject)

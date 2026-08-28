@@ -18,8 +18,14 @@ import {
   withCodexSandbox,
 } from '@/entities/session'
 import {
+  providerCatalogHostLabel,
+  providerCatalogInForce,
+  providerCatalogSourceForHost,
   resolveMidRunInputPolicy,
+  resolveOptionRowCatalog,
+  selectableProviderDescriptors,
   selectLatestAgentMessageId,
+  type ProviderCatalogEntry,
 } from '@/entities/session'
 import {
   compileAnnotationsIntoPrompt,
@@ -32,9 +38,8 @@ import { LOCAL_EXECUTION_HOST_ID } from '@/entities/execution-host'
 import { useSessionRelayStore } from '@/entities/session-relay'
 import { useDialogStore } from '@/entities/dialog'
 import {
-  describeProviderAccountSelectionBlock,
   isProviderAccountSelectionLocked,
-  providerAccountsForProvider,
+  providerAccountsForHost,
   providerAccountApi,
   resolveInitialProviderAccountSelection,
   type ProviderAccount,
@@ -85,7 +90,7 @@ import {
   resolveExecutionBarView,
 } from './execution-bar.pure'
 import { CodexUsagePillContainer } from './codex-usage-pill.container'
-import { shouldShowCodexUsagePill } from './codex-usage-pill.pure'
+import { shouldShowCodexBillingControls } from './codex-usage-pill.pure'
 import { ContextWindowDot } from './context-window-dot.container'
 import { Button } from '@/shared/ui/button'
 import { X } from 'lucide-react'
@@ -110,6 +115,14 @@ interface ComposerContainerProps {
 
 const DRAFT_KEY_NEW = '__new__'
 const EMPTY_QUEUED_INPUTS: SessionQueuedInput[] = []
+
+/**
+ * The catalog of a machine that has not answered. A module constant so the
+ * `providers` memo below keeps one identity across renders while the row is
+ * still a notice — a fresh `[]` there would rebuild the selection on every
+ * keystroke.
+ */
+const NO_CATALOG_ENTRIES: readonly ProviderCatalogEntry[] = []
 const EMPTY_PROJECT_CONTEXT_ITEMS: ProjectContextItem[] = []
 
 const QUEUED_INPUT_STATE_LABELS: Record<SessionQueuedInput['state'], string> = {
@@ -195,9 +208,9 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
   const [codexUsageSnapshot, setCodexUsageSnapshot] =
     useState<ProviderQuotaSnapshot | null>(null)
   const [codexUsageLoading, setCodexUsageLoading] = useState(false)
-  const providers = useSessionStore((s) => s.providers)
+  const providerCatalogs = useSessionStore((s) => s.providerCatalogs)
   const openDialog = useDialogStore((s) => s.open)
-  const loadProviders = useSessionStore((s) => s.loadProviders)
+  const loadProviderCatalog = useSessionStore((s) => s.loadProviderCatalog)
   const createAndStartSession = useSessionStore((s) => s.createAndStartSession)
   const createAndStartGlobalSession = useSessionStore(
     (s) => s.createAndStartGlobalSession,
@@ -276,6 +289,66 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
       markPendingAnnotationsAsSent(activeSessionId)
     }
   }, [activeSessionId, markPendingAnnotationsAsSent, pendingAnnotations.length])
+  const appSettings = useAppSettingsStore((s) => s.settings)
+  const piModelVisibilityKey =
+    appSettings.piModelVisibility.additionalModelIds.join('\u0000')
+  /**
+   * The one value the strip renders and the send obeys (MAR-2642). Resolved on
+   * every render rather than mirrored into state, so a machine removed in
+   * Settings cannot be shown as selected for even one frame.
+   *
+   * Resolved before anything the row reads, because that is the direction of
+   * this whole era: the machine is chosen, and the options obey it (MAR-2619).
+   * Until S3 the arrow ran backwards -- the strip asked which provider was
+   * selected so it could block machines that could not run it -- and a row
+   * that now comes *from* the machine cannot also be an input to choosing one
+   * without the two chasing each other. The order is load-bearing rather than
+   * tidy: written the other way round these are const declarations reading
+   * each other before they exist, which is a compile error, not a subtle bug.
+   */
+  const executionBar = resolveExecutionBarView({
+    endpoints: appSettings.executionHostEndpoints,
+    liveSessionHostId: activeSession
+      ? (activeSession.executionHost ?? LOCAL_EXECUTION_HOST_ID)
+      : null,
+    contextKind: context.kind,
+    selectedHostId: selectedExecutionHostId,
+  })
+  /**
+   * Which machine's catalog this row is about, and everything the renderer can
+   * check about it. Recomputed every render from the Endpoints as they stand,
+   * so an Endpoint repointed in Settings stops matching the catalog read from
+   * its old address on the very render that shows the change.
+   */
+  const catalogSource = useMemo(
+    () =>
+      providerCatalogSourceForHost(
+        executionBar.hostId,
+        appSettings.executionHostEndpoints,
+      ),
+    [executionBar.hostId, appSettings.executionHostEndpoints],
+  )
+  const optionRow = resolveOptionRowCatalog({
+    source: catalogSource,
+    hostLabel: providerCatalogHostLabel(
+      catalogSource.executionHostId,
+      appSettings.executionHostEndpoints,
+    ),
+    state: providerCatalogInForce(providerCatalogs, catalogSource),
+  })
+  const catalogEntries =
+    optionRow.status === 'listed' ? optionRow.entries : NO_CATALOG_ENTRIES
+  /**
+   * What a session can actually be started on here. Blocked entries stay in
+   * `optionRow` so the select can list them and say why the daemon will not
+   * run them, and are kept out of this list so no selection can resolve onto
+   * one (MAR-2682, "a blocked provider is listed and disabled, never
+   * dropped").
+   */
+  const providers = useMemo(
+    () => selectableProviderDescriptors(catalogEntries),
+    [catalogEntries],
+  )
   const activeProvider = providers.find(
     (p) => p.id === activeSession?.providerId,
   )
@@ -497,9 +570,6 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
     setMentionDismissedRange({ ...contextInjectionTrigger.range })
   }, [contextInjectionTrigger])
 
-  const appSettings = useAppSettingsStore((s) => s.settings)
-  const piModelVisibilityKey =
-    appSettings.piModelVisibility.additionalModelIds.join('\u0000')
   const storedDefaults = useMemo(
     () => ({
       providerId: appSettings.defaultProviderId,
@@ -529,19 +599,15 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
             : effortId || null,
           selectionLocks.canContinue ? undefined : storedDefaults,
         )
-  const showCodexUsagePill = shouldShowCodexUsagePill(selection)
-  // The one value the strip renders and the send obeys (MAR-2642). Resolved on
-  // every render rather than mirrored into state, so a machine removed in
-  // Settings cannot be shown as selected for even one frame.
-  const executionBar = resolveExecutionBarView({
-    endpoints: appSettings.executionHostEndpoints,
-    liveSessionHostId: activeSession
-      ? (activeSession.executionHost ?? LOCAL_EXECUTION_HOST_ID)
-      : null,
+  /**
+   * The local Codex CLI's own billing: the quota pill and the Fast switch
+   * (MAR-2682). Keyed on the machine as well as the provider — neither reaches
+   * a daemon, and a control that cannot act on the machine the strip names does
+   * not render.
+   */
+  const showCodexBillingControls = shouldShowCodexBillingControls({
     providerId: selection.providerId,
-    providerLabel: selection.providerLabel,
-    contextKind: context.kind,
-    selectedHostId: selectedExecutionHostId,
+    executionHostId: executionBar.hostId,
   })
   /**
    * What the send records, derived beside the strip that shows it.
@@ -557,12 +623,13 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
     () => countArmedOutgoingRelays(relays, activeSessionId),
     [relays, activeSessionId],
   )
-  const serviceTier =
-    selection.providerId === 'codex'
-      ? codexFastMode
-        ? 'fast'
-        : 'default'
-      : null
+  // Null on a daemon, and null is the honest value: the session record would
+  // otherwise claim a service tier for a run this app never chose one for.
+  const serviceTier = showCodexBillingControls
+    ? codexFastMode
+      ? 'fast'
+      : 'default'
+    : null
   const midRunPolicy = useMemo(
     () =>
       resolveMidRunInputPolicy({
@@ -684,9 +751,18 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
     if (projectId) void loadPromptCatalog(projectId)
   }, [context.kind, loadGlobalPromptCatalog, loadPromptCatalog, projectId])
 
+  /**
+   * Asks the machine the strip names what it runs (MAR-2682).
+   *
+   * Keyed on the configuration and not just the id, so repointing an Endpoint
+   * in Settings re-asks rather than keeping the answer the old address gave.
+   * `piModelVisibilityKey` stays in the list for the same reason it was always
+   * there: this machine's catalog is filtered by that setting, so changing it
+   * changes the answer.
+   */
   useEffect(() => {
-    loadProviders()
-  }, [loadProviders, piModelVisibilityKey])
+    void loadProviderCatalog(catalogSource)
+  }, [loadProviderCatalog, catalogSource, piModelVisibilityKey])
 
   useEffect(() => {
     setSelectedSkills([])
@@ -771,8 +847,13 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
    * the current provider's accounts (PA9).
    */
   const providerAccountsForSession = useMemo(
-    () => providerAccountsForProvider(providerAccounts, providerId),
-    [providerAccounts, providerId],
+    () =>
+      providerAccountsForHost(
+        providerAccounts,
+        executionBar.hostId,
+        providerId,
+      ),
+    [providerAccounts, executionBar.hostId, providerId],
   )
 
   // Enrolled accounts, refreshed whenever the composer switches session so a
@@ -844,15 +925,15 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
   }, [activeSessionId, providerAccountsForSession])
 
   /**
-   * Accounts are host-scoped (ADR 0007, PA10). A remote session runs on the
-   * remote host's own credential, so the selection is neither offered nor sent
-   * — the backend refuses it too, and the two must not disagree.
+   * Accounts are host-scoped (ADR 0007, PA10; MAR-2682). A remote session runs
+   * on the daemon's own credential, so there is no account to offer and none to
+   * send. Both halves read the one host-scoped list above rather than a second
+   * predicate: the picker renders nothing when handed nothing, so it disappears
+   * because there are no accounts here and not because something remembered to
+   * hide it.
    */
-  const providerAccountSelectionBlockedReason =
-    describeProviderAccountSelectionBlock(executionBar.hostId)
-  const effectiveProviderAccountId = providerAccountSelectionBlockedReason
-    ? null
-    : selectedProviderAccountId
+  const effectiveProviderAccountId =
+    providerAccountsForSession.length === 0 ? null : selectedProviderAccountId
 
   const providerAccountSelectionLocked = isProviderAccountSelectionLocked(
     activeSession
@@ -888,7 +969,7 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
 
   const loadCodexUsage = useCallback(
     async (forceRefresh = false) => {
-      if (!showCodexUsagePill) return
+      if (!showCodexBillingControls) return
       setCodexUsageLoading(true)
       try {
         setCodexUsageSnapshot(
@@ -903,11 +984,11 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
         setCodexUsageLoading(false)
       }
     },
-    [showCodexUsagePill],
+    [showCodexBillingControls],
   )
 
   useEffect(() => {
-    if (!showCodexUsagePill) {
+    if (!showCodexBillingControls) {
       setCodexUsageSnapshot(null)
       setCodexUsageLoading(false)
       return undefined
@@ -918,7 +999,7 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
       void loadCodexUsage(false)
     }, 120_000)
     return () => window.clearInterval(intervalId)
-  }, [loadCodexUsage, showCodexUsagePill])
+  }, [loadCodexUsage, showCodexBillingControls])
 
   const isSessionDone =
     !activeSession ||
@@ -1276,7 +1357,7 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
         value={value}
         onChange={setValue}
         onSubmit={handleSubmit}
-        providers={providers}
+        optionRow={optionRow}
         selection={selection}
         onProviderChange={handleProviderChange}
         onModelChange={handleModelChange}
@@ -1285,11 +1366,9 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
         selectedProviderAccountId={selectedProviderAccountId}
         onProviderAccountChange={setSelectedProviderAccountId}
         providerAccountSelectionLocked={providerAccountSelectionLocked}
-        providerAccountSelectionBlockedReason={
-          providerAccountSelectionBlockedReason
-        }
         codexFastMode={codexFastMode}
         onCodexFastModeChange={setCodexFastMode}
+        codexBillingControlsAvailable={showCodexBillingControls}
         armedOutgoingRelays={armedOutgoingRelays}
         relaysMuted={relaysMuted}
         onRelaysMutedChange={setRelaysMuted}
@@ -1313,7 +1392,7 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
           )
         }
         usagePill={
-          showCodexUsagePill ? (
+          showCodexBillingControls ? (
             <CodexUsagePillContainer
               snapshot={codexUsageSnapshot}
               isLoading={codexUsageLoading}

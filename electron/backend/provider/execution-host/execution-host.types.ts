@@ -46,11 +46,19 @@ export interface RemoteSessionWorkspaceInfo {
  * Remote Execution Host runs them on another machine behind the same
  * interface.
  *
+ * Three words, and they are not interchangeable: a Provider is *listed* when
+ * this host knows about it, *runnable* when this host will actually start it,
+ * and *blocked* when it is listed and not runnable — a daemon that has the CLI
+ * and refuses to run it. `capabilities`, `capabilitiesFor` and `describe`
+ * answer the listing question; `assertProviderRunnable` is the only one that
+ * answers permission. The word "available" said both at once, and a caller
+ * read a descriptive method as a gate because of it (MAR-2682).
+ *
  * Invariants every adapter must uphold:
  *
- * - Provider availability is evaluated at call time. Providers may be
- *   registered after the host is constructed; `capabilities()` and all other
- *   methods reflect the set of Providers available at the moment of the call.
+ * - What a host lists is evaluated at call time. Providers may be registered
+ *   after the host is constructed; `capabilities()` and all other methods
+ *   reflect the set of Providers listed at the moment of the call.
  * - `start` and `oneShot` throw/reject with an `Error` whose message is
  *   exactly `Provider not found: <providerId>` when the Provider is unknown.
  *   That sentence is a claim about what the host knows, so an adapter whose
@@ -68,18 +76,41 @@ export interface RemoteSessionWorkspaceInfo {
  *   attention events, not as thrown errors.
  */
 export interface ProviderExecutionHost {
-  /** Capability summaries for every Provider currently available. */
+  /** Capability summaries for every Provider this host currently lists. */
   capabilities(): ExecutionHostProviderCapabilities[]
 
   /**
-   * Capability summary for one Provider, or null when the Provider is not
-   * available. This is the existence check callers should use before
-   * branching on capabilities.
+   * Capability summary for one Provider, or null when this host does not list
+   * it. This is the existence check callers should use before branching on
+   * capabilities — it says whether a Provider is listed, never whether it is
+   * runnable.
    */
   capabilitiesFor(providerId: string): ExecutionHostProviderCapabilities | null
 
-  /** Full descriptors for every Provider currently available. */
+  /** Full descriptors for every Provider this host currently lists. */
   describe(): Promise<ProviderDescriptor[]>
+
+  /**
+   * Refuses this Provider, in this host's own words, or returns for one this
+   * host will actually run (MAR-2682).
+   *
+   * The permission question, and the only method that answers it. Everything
+   * else here is descriptive: `capabilitiesFor` says what a Provider is *like*,
+   * and callers used it as a gate -- `if (!capabilitiesFor(id)) throw 'Provider
+   * not found'` -- which reads a listed-but-refused Provider as an absent one
+   * and tells the human the wrong thing about their own machine. A host that
+   * lists a Provider its daemon will not run (deliberately: the option row
+   * shows it disabled, with the reason) has to be able to say *why* here, and
+   * a null-or-not answer has nowhere to put the reason.
+   *
+   * Throws rather than returning a verdict, because every caller's next line is
+   * to start something, and the message is the product: it is the same sentence
+   * the disabled row upstairs already showed. Unknown Providers get the
+   * canonical `Provider not found: <providerId>` that `start` and `oneShot`
+   * throw, and an adapter whose Provider set arrives over a wire may only make
+   * that claim once the set has arrived -- see the invariant above.
+   */
+  assertProviderRunnable(providerId: string): void
 
   /**
    * Start a Session run on the named Provider. Throws `Provider not found:
@@ -105,9 +136,16 @@ export interface ProviderExecutionHost {
   /**
    * Reattach to a run that is already executing on this host, resuming the
    * event stream after `afterSeq`. Only hosts whose runs outlive the app
-   * process implement this; the Local Execution Host does not. Follows the
-   * same invariants as `start`: synchronous, throws the canonical error for
-   * unknown Providers, and surfaces post-attach failures through the handle.
+   * process implement this; the Local Execution Host does not. Synchronous like
+   * `start`, and post-attach failures surface through the handle rather than as
+   * thrown errors.
+   *
+   * It deliberately asks no provider question -- neither the listing one nor
+   * `assertProviderRunnable` (MAR-2682). An attach can happen at boot before
+   * the listing has arrived, and the run it rejoins was already validated when
+   * it started; refusing here would strand a turn the daemon is running on a
+   * verdict about whether a *new* one could be started. `RemoteExecutionHost
+   * .attach` says the same thing at the code.
    */
   attach?(
     providerId: string,
