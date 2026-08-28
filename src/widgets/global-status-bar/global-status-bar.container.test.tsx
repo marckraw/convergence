@@ -1,7 +1,7 @@
 import { fireEvent, render, screen } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { DEFAULT_PROJECT_SETTINGS, useProjectStore } from '@/entities/project'
-import { useSessionStore } from '@/entities/session'
+import { localProviderCatalogs, useSessionStore } from '@/entities/session'
 import type { Project } from '@/entities/project'
 import type { ProviderInfo, Session } from '@/entities/session'
 import { TooltipProvider } from '@/shared/ui/tooltip'
@@ -122,7 +122,7 @@ describe('GlobalStatusBar container', () => {
       currentProjectId: null,
       activeSessionId: null,
       draftWorkspaceId: null,
-      providers,
+      providerCatalogs: localProviderCatalogs(providers),
       error: null,
     })
     useProjectStore.setState({

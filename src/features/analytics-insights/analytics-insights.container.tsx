@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import type { FC } from 'react'
-import { useSessionStore } from '@/entities/session'
+import { selectLocalProviders, useSessionStore } from '@/entities/session'
 import {
   useAnalyticsStore,
   type AnalyticsRangePreset,
@@ -25,7 +25,7 @@ export const AnalyticsInsightsContainer: FC = () => {
   const deleteWorkProfileSnapshot = useAnalyticsStore(
     (s) => s.deleteWorkProfileSnapshot,
   )
-  const providers = useSessionStore((s) => s.providers)
+  const providers = useSessionStore(selectLocalProviders)
   const loadProviders = useSessionStore((s) => s.loadProviders)
 
   useEffect(() => {

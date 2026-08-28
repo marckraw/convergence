@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { fireEvent, render, screen, within } from '@testing-library/react'
-import { useSessionStore } from '@/entities/session'
+import { localProviderCatalogs, useSessionStore } from '@/entities/session'
 import { useResponseAnnotationStore } from '@/entities/response-annotation'
 import { useAppSettingsStore } from '@/entities/app-settings'
 import { useSkillStore } from '@/entities/skill'
@@ -175,7 +175,7 @@ describe('response annotations, end to end', () => {
         agentMessage(EARLIER_MESSAGE_ID, EARLIER_TEXT),
         agentMessage(LATEST_MESSAGE_ID, LATEST_TEXT),
       ],
-      providers: [
+      providerCatalogs: localProviderCatalogs([
         {
           id: 'claude-code',
           name: 'Claude Code',
@@ -209,9 +209,10 @@ describe('response annotations, end to end', () => {
             defaultRunningMode: 'follow-up',
           },
         },
-      ],
+      ]),
       queuedInputsBySessionId: {},
       loadProviders: vi.fn(),
+      loadProviderCatalog: vi.fn(),
       createAndStartSession: vi.fn(),
       createAndStartGlobalSession: vi.fn(),
       sendMessageToSession,

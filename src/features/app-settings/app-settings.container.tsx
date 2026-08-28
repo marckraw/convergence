@@ -3,6 +3,7 @@ import type { FC, ReactNode } from 'react'
 import {
   resolveProviderSelection,
   providerApi,
+  selectLocalProviders,
   useSessionStore,
   type ReasoningEffort,
   type ProviderInfo,
@@ -119,7 +120,7 @@ export const AppSettingsDialogContainer: FC<AppSettingsContainerProps> = ({
   const [activeSection, setActiveSection] =
     useState<AppSettingsSectionId>(DEFAULT_SECTION)
 
-  const providers = useSessionStore((s) => s.providers)
+  const providers = useSessionStore(selectLocalProviders)
   const loadProviders = useSessionStore((s) => s.loadProviders)
   const settings = useAppSettingsStore((s) => s.settings)
   const isLoaded = useAppSettingsStore((s) => s.isLoaded)

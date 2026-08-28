@@ -151,7 +151,7 @@ describe('CommandCenterContainer', () => {
       currentProjectId: 'p1',
       activeSessionId: null,
       draftWorkspaceId: null,
-      providers: [],
+      providerCatalogs: {},
       error: null,
     })
   })

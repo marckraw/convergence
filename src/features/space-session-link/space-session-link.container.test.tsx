@@ -105,7 +105,7 @@ describe('SpaceSessionLinkDialogContainer', () => {
       currentProjectId: 'p1',
       activeSessionId: 's1',
       draftWorkspaceId: null,
-      providers: [],
+      providerCatalogs: {},
       error: null,
     })
     useSpaceStore.setState({

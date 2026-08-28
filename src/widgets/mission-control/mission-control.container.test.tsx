@@ -8,7 +8,7 @@ import type {
   CreateSessionCrewInput,
   SessionCrew,
 } from '@/entities/session-crew'
-import { useSessionStore } from '@/entities/session'
+import { localProviderCatalogs, useSessionStore } from '@/entities/session'
 import type {
   ProviderInfo,
   SessionStore,
@@ -123,10 +123,11 @@ function seed(sessions: SessionSummary[], providers: ProviderInfo[] = []) {
     globalSessions: sessions,
     globalChatSessions: [],
     sessions: [],
-    providers,
+    providerCatalogs: localProviderCatalogs(providers),
     needsYouDismissals: {},
     error: null,
     loadProviders: vi.fn(async () => undefined),
+    loadProviderCatalog: vi.fn(async () => undefined),
     sendMessageToSession,
   })
   useProjectStore.setState({

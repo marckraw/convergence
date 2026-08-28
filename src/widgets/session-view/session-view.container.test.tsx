@@ -138,7 +138,7 @@ describe('SessionView', () => {
       activeConversationSessionId: 'session-1',
       activeSessionId: 'session-1',
       draftWorkspaceId: null,
-      providers: [],
+      providerCatalogs: {},
       error: null,
       loadSessions: vi.fn(),
       loadProviders: vi.fn(),

@@ -15,7 +15,7 @@ import {
   resolveInitialProviderAccountSelection,
 } from '@/entities/provider-account'
 import type { ProviderAccount } from '@/entities/provider-account'
-import { useSessionStore } from '@/entities/session'
+import { selectLocalProviders, useSessionStore } from '@/entities/session'
 import { Button } from '@/shared/ui/button'
 import {
   GLOBAL_PROJECT_OPTION_ID,
@@ -59,7 +59,7 @@ export const CrewFlowSection: FC<CrewFlowSectionProps> = ({ crew }) => {
   const error = useSessionRelayStore((state) => state.error)
   const clearError = useSessionRelayStore((state) => state.clearError)
   const sessions = useSessionStore((state) => state.globalSessions)
-  const providers = useSessionStore((state) => state.providers)
+  const providers = useSessionStore(selectLocalProviders)
   const [accounts, setAccounts] = useState<ProviderAccount[]>([])
 
   // Enrolled accounts are read once for the section rather than per wire: the
