@@ -166,6 +166,7 @@ describe('RemoteExecutionHost', () => {
       ctx = {
         host,
         fullProviderId: 'claude',
+        describedProviderId: 'claude-code',
         noOneShotProviderId: 'codex',
         unknownProviderId: 'missing-provider',
         hostSupportsOneShot: false,
@@ -200,10 +201,109 @@ describe('RemoteExecutionHost', () => {
     })
   })
 
+  describe('the catalog the option row reads (MAR-2682)', () => {
+    it('describes the daemon’s providers in the local namespace', async () => {
+      const catalog = await host.describeCatalog()
+      expect(catalog.providers.map((entry) => entry.descriptor.id)).toEqual([
+        'claude-code',
+        'codex',
+      ])
+      // A session records the local id, so a catalog handing out daemon ids
+      // would offer rows `resolveExecution` translates again and cannot find.
+      expect(catalog.unreachableReason).toBeNull()
+    })
+
+    it('blocks a provider the daemon will not run, in the daemon’s own words', async () => {
+      stub.setMeta({
+        providers: [
+          {
+            id: 'claude',
+            label: 'Claude Code',
+            available: true,
+            authenticated: true,
+            models: [{ slug: 'sonnet', label: 'Claude Sonnet' }],
+            features: { resume: true },
+          },
+          {
+            id: 'cursor',
+            label: 'Cursor',
+            available: false,
+            authenticated: false,
+            details: 'missing binary',
+            models: [],
+            features: {},
+          },
+        ],
+      })
+
+      const catalog = await host.describeCatalog()
+
+      // Listed, not dropped: a disabled row teaches what the machine cannot do
+      // while an absent one is a mystery (MAR-2682, "a blocked provider is
+      // listed and disabled, never dropped").
+      expect(catalog.providers.map((entry) => entry.descriptor.id)).toEqual([
+        'claude-code',
+        'cursor',
+      ])
+      expect(catalog.providers[0]?.blockedReason).toBeNull()
+      expect(catalog.providers[1]?.blockedReason).toBe(
+        'The daemon reports Cursor as unavailable: missing binary.',
+      )
+    })
+
+    it('says why a daemon could not be asked, rather than reporting no providers', async () => {
+      stub.setMetaStatus(500)
+      const catalog = await host.describeCatalog()
+      // The previous listing survives a blip -- a row correct a second ago must
+      // not empty -- and the failure is still reported beside it.
+      expect(catalog.providers).not.toHaveLength(0)
+      expect(catalog.unreachableReason).toMatch(/HTTP 500/)
+    })
+
+    it('names the provider, not the machine, on every row', async () => {
+      // `vendorLabel: 'Remote daemon'` made every provider on every daemon read
+      // the same word where its own name belonged, because the option row
+      // renders `vendorLabel || name` as the primary label. Three providers,
+      // three labels (MAR-2682, "the row names the provider, not the
+      // machine"). Naming the machine is the strip's
+      // job, one tier below.
+      stub.setMeta({
+        providers: ['claude', 'codex', 'cursor'].map((id) => ({
+          id,
+          label: `${id} on the daemon`,
+          available: true,
+          authenticated: true,
+          models: [],
+          features: {},
+        })),
+      })
+
+      const catalog = await host.describeCatalog()
+      const labels = catalog.providers.map(
+        (entry) => entry.descriptor.vendorLabel || entry.descriptor.name,
+      )
+
+      expect(labels).toEqual([
+        'claude on the daemon',
+        'codex on the daemon',
+        'cursor on the daemon',
+      ])
+      expect(new Set(labels).size).toBe(3)
+    })
+
+    it('derives describe() from the same catalog, so the two cannot disagree', async () => {
+      const catalog = await host.describeCatalog()
+      const descriptors = await host.describe()
+      expect(descriptors).toEqual(
+        catalog.providers.map((entry) => entry.descriptor),
+      )
+    })
+  })
+
   it('keeps the previous provider cache when describe cannot reach the daemon', async () => {
     stub.setMetaStatus(500)
     const descriptors = await host.describe()
-    expect(descriptors.map((d) => d.id)).toEqual(['claude', 'codex'])
+    expect(descriptors.map((d) => d.id)).toEqual(['claude-code', 'codex'])
   })
 
   describe('/health handshake', () => {
@@ -878,6 +978,69 @@ describe('RemoteExecutionHost', () => {
     expect(() => failing.start('claude', startConfig('s-dark'))).not.toThrow(
       /Provider not found/,
     )
+  })
+
+  it('refuses a provider the daemon listed but will not run', async () => {
+    // The block existed only in the renderer, as an entry kept out of
+    // `selectableProviderDescriptors`. That is the right place for *picking*
+    // and it is not a boundary: a resumed session, a relay, or any surface that
+    // never rendered the option row reaches `start()` directly (MAR-2682, "a
+    // blocked provider is refused at the host boundary"). Refused here, in
+    // the daemon's own words.
+    stub.setMeta({
+      providers: [
+        {
+          id: 'cursor',
+          label: 'Cursor',
+          available: false,
+          authenticated: false,
+          details: 'missing binary',
+          models: [],
+          features: {},
+        },
+      ],
+    })
+    await host.refreshProviders()
+
+    expect(() => host.start('cursor', startConfig('s-blocked'))).toThrow(
+      'Cannot start cursor: The daemon reports Cursor as unavailable: missing binary.',
+    )
+    // Not the refusal for a provider that was never listed: it *was* listed,
+    // and saying "not found" would send a reader hunting the wrong problem.
+    expect(() => host.start('cursor', startConfig('s-blocked'))).not.toThrow(
+      /Provider not found/,
+    )
+    await expect(
+      host.oneShot('cursor', {
+        prompt: 'p',
+        modelId: 'm',
+        workingDirectory: '/tmp',
+      }),
+    ).rejects.toThrow(/missing binary/)
+  })
+
+  it('lets an attach through a block, because the session already started', async () => {
+    // A daemon that has since lost its binary must not strand a live run: the
+    // provider was validated when the session started and the daemon owns it
+    // now. The documented exemption stays exempt.
+    stub.setMeta({
+      providers: [
+        {
+          id: 'cursor',
+          label: 'Cursor',
+          available: false,
+          authenticated: false,
+          details: 'missing binary',
+          models: [],
+          features: {},
+        },
+      ],
+    })
+    await host.refreshProviders()
+
+    const handle = host.attach('cursor', startConfig('s-attached'), 3)
+    expect(handle).toBeTruthy()
+    handle.stop()
   })
 
   it('goes back to the canonical refusal once a listing lands', async () => {

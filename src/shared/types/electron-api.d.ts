@@ -936,6 +936,22 @@ interface ProviderInfo {
   settings?: ProviderSettingsInfo
 }
 
+/**
+ * One provider on one machine, and whether that machine will run it
+ * (MAR-2682). Mirrors `electron/backend/provider/provider-catalog.types.ts`.
+ */
+interface ProviderCatalogEntryData {
+  descriptor: ProviderInfo
+  blockedReason: string | null
+}
+
+/** Every provider one machine offers, carrying which machine that is. */
+interface ProviderCatalogData {
+  executionHostId: string
+  providers: ProviderCatalogEntryData[]
+  unreachableReason: string | null
+}
+
 interface ProviderStatusInfo {
   id: string
   name: string
@@ -1608,7 +1624,7 @@ interface ElectronAPI {
     onTurnDelta: (callback: (payload: TurnDeltaData) => void) => () => void
   }
   provider: {
-    getAll: () => Promise<ProviderInfo[]>
+    getAll: (executionHostId?: string | null) => Promise<ProviderCatalogData>
     getAllAvailable: () => Promise<ProviderInfo[]>
     getStatuses: () => Promise<ProviderStatusInfo[]>
     getRuntimeInfo: () => Promise<ProviderRuntimeInfo>

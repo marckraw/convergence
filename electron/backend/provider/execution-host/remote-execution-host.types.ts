@@ -54,6 +54,16 @@ export interface RemoteExecutionHostProviderInfo {
   name: string
   available: boolean
   authenticated: boolean
+  /**
+   * What the daemon says about this provider's state in its own words --
+   * `'ready'`, `'missing binary'` -- or null when it says nothing readable
+   * (MAR-2682).
+   *
+   * The reason a refusal quotes. Rendering "not available" from the boolean
+   * alone would throw away the only half of the answer that says *why*, and a
+   * reader looking at a disabled row needs exactly that half.
+   */
+  details: string | null
   supportsContinuation: boolean
   models: { id: string; label: string }[]
 }

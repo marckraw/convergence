@@ -43,11 +43,13 @@ import type {
   ProviderExecutionHost,
 } from './execution-host.types'
 import {
+  blockedProviderError,
   daemonConfigurationFingerprint,
   describeRemoteExecutionHostFailure,
   capabilitiesForRemoteProvider,
   createSseParser,
-  descriptorForRemoteProvider,
+  catalogEntryForRemoteProvider,
+  describeRemoteProviderBlock,
   parseRemoteExecutionHostMeta,
   parseRemoteExecutionHostStartResponse,
   parseRemoteSessionWorkspaceInfo,
@@ -56,6 +58,7 @@ import {
   unavailableProviderError,
   UNRESOLVED_DAEMON_CONFIGURATION,
 } from './remote-execution-host.pure'
+import type { ProviderCatalog } from '../provider-catalog.types'
 import {
   RemoteExecutionHostError,
   type RemoteExecutionHostConnection,
@@ -440,7 +443,7 @@ export class RemoteExecutionHost implements ProviderExecutionHost {
   /**
    * The providers of the configuration in force -- none while none is known,
    * which is not the same claim as a daemon that listed none. See
-   * `assertProviderListed` for the difference and who needs it.
+   * `assertProviderRunnable` for the difference and who needs it.
    */
   private listedProviders(): RemoteExecutionHostProviderInfo[] {
     return this.inForce(this.listing)?.providers ?? []
@@ -485,44 +488,101 @@ export class RemoteExecutionHost implements ProviderExecutionHost {
     return this.listedProviders().map(capabilitiesForRemoteProvider)
   }
 
+  /** One lookup for the listing, so a caller cannot invent a second reading. */
+  private listedProvider(
+    providerId: string,
+  ): RemoteExecutionHostProviderInfo | null {
+    return (
+      this.listedProviders().find((p) => p.providerId === providerId) ?? null
+    )
+  }
+
   capabilitiesFor(
     providerId: string,
   ): ExecutionHostProviderCapabilities | null {
-    const info = this.listedProviders().find((p) => p.providerId === providerId)
+    const info = this.listedProvider(providerId)
     return info ? capabilitiesForRemoteProvider(info) : null
   }
 
   /**
-   * Refuses a provider this host will not run, saying which of the two things
-   * is wrong (MAR-2620).
+   * Refuses a provider this host will not run, saying which of the three
+   * things is wrong (MAR-2620, MAR-2682).
    *
    * Every entry point that needs a provider asks here rather than reading the
    * cache itself. Three sites each writing `if (!capabilitiesFor(id)) throw`
    * is three places to relearn that an empty cache is not an answer -- and
    * `start()` had already learned it wrong, telling a reader "Provider not
    * found: claude-code" about a daemon that had simply not been asked yet.
+   *
+   * Listed is not the same as runnable, which is the third thing. The daemon
+   * reports `available` and `authenticated` per provider, and until MAR-2682
+   * this asked only whether the id appeared at all -- so a CLI the daemon had
+   * already said it cannot run started anyway and failed on the far side. The
+   * option row does keep such a row out of its selectable list, and that is
+   * the right place for *picking*; it is not a boundary. A resumed session, a
+   * relay, or any surface that never rendered the row reaches this method
+   * directly.
+   *
+   * Public, and on the interface, because the callers who most need it are not
+   * in this file: `SessionService` gated turns on `capabilitiesFor` returning
+   * something, which is a descriptive method answering a permission question --
+   * so a provider this daemon lists and refuses came back to the human as
+   * "Provider not found" instead of the daemon's own sentence (MAR-2682).
    */
-  private assertProviderListed(providerId: string): void {
-    if (this.capabilitiesFor(providerId)) return
-    throw unavailableProviderError({
-      providerId,
-      listed: this.inForce(this.listing) !== null,
-      listingFailure: this.inForce(this.listingFailure),
-    })
+  assertProviderRunnable(providerId: string): void {
+    const info = this.listedProvider(providerId)
+    if (!info) {
+      throw unavailableProviderError({
+        providerId,
+        listed: this.inForce(this.listing) !== null,
+        listingFailure: this.inForce(this.listingFailure),
+      })
+    }
+
+    // The daemon's own verdict and the daemon's own words -- the same sentence
+    // the disabled row upstairs shows, from the same derivation, so a refusal
+    // can never explain itself differently from the control that predicted it.
+    const blockedReason = describeRemoteProviderBlock(info)
+    if (blockedReason) throw blockedProviderError(providerId, blockedReason)
   }
 
-  async describe(): Promise<ProviderDescriptor[]> {
+  /**
+   * This daemon's catalog: what it offers, what it will refuse and why, and
+   * whether it could be asked at all (MAR-2682).
+   *
+   * The option row reads this. A failure is reported rather than thrown
+   * because the row has to render either way, and the three outcomes look
+   * different to a reader: a machine that answered, a machine that answered
+   * about a provider it will not run, and a machine that never answered. The
+   * last one keeps the previous listing when there is one -- a blip must not
+   * empty a row that was correct a second ago -- but says so, so an empty row
+   * is never mistaken for a daemon with nothing on it.
+   */
+  async describeCatalog(): Promise<Omit<ProviderCatalog, 'executionHostId'>> {
+    let unreachableReason: string | null = null
     try {
       await this.refreshProviders()
-    } catch {
-      // Describe reflects the last known listing when the daemon is
-      // unreachable; live failures surface through session flows instead.
+    } catch (error) {
+      unreachableReason = describeRemoteExecutionHostFailure(error)
     }
-    return this.listedProviders().map(descriptorForRemoteProvider)
+    return {
+      providers: this.listedProviders().map(catalogEntryForRemoteProvider),
+      unreachableReason,
+    }
+  }
+
+  /**
+   * The ProviderExecutionHost contract's view of the catalog: the descriptors
+   * alone. Derived from `describeCatalog` rather than built beside it, so the
+   * two can never come to describe different providers.
+   */
+  async describe(): Promise<ProviderDescriptor[]> {
+    const catalog = await this.describeCatalog()
+    return catalog.providers.map((entry) => entry.descriptor)
   }
 
   start(providerId: string, config: SessionStartConfig): SessionHandle {
-    this.assertProviderListed(providerId)
+    this.assertProviderRunnable(providerId)
 
     const session = new RemoteSessionRun({
       providerId,
@@ -544,9 +604,13 @@ export class RemoteExecutionHost implements ProviderExecutionHost {
     // (`session.service.ts`, `sendRemoteTurn`). A second start is refused by
     // the daemon with 409 `Session already exists`.
     //
-    // No capability check: an attach can happen at boot before the provider
-    // cache is primed, and the provider was already validated when the
-    // session originally started. Failures surface through the handle.
+    // No provider check of any kind -- not the listing one, not
+    // `assertProviderRunnable`: an attach can happen at boot before the
+    // provider cache is primed, and the provider was already validated when the
+    // session originally started. Refusing here would strand a turn the daemon
+    // is already running. Failures surface through the handle. The interface
+    // doc on `attach` states this exemption rather than claiming `start`'s
+    // checks (MAR-2682).
     const session = new RemoteSessionRun({
       providerId,
       config,
@@ -588,7 +652,7 @@ export class RemoteExecutionHost implements ProviderExecutionHost {
     providerId: string,
     _input: OneShotInput,
   ): Promise<OneShotResult> {
-    this.assertProviderListed(providerId)
+    this.assertProviderRunnable(providerId)
     throw new Error(
       `Provider ${providerId} does not support one-shot execution`,
     )
@@ -599,7 +663,7 @@ export class RemoteExecutionHost implements ProviderExecutionHost {
     _config: SessionStartConfig,
     _input: ProviderContextManagementInput,
   ): Promise<ProviderContextManagementResult> {
-    this.assertProviderListed(providerId)
+    this.assertProviderRunnable(providerId)
     throw new Error(
       'Manual context management is not supported on remote execution hosts yet',
     )

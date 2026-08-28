@@ -366,7 +366,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
     },
   },
   provider: {
-    getAll: () => ipcRenderer.invoke('provider:getAll'),
+    getAll: (executionHostId?: string | null) =>
+      ipcRenderer.invoke('provider:getAll', executionHostId ?? null),
     getAllAvailable: () => ipcRenderer.invoke('provider:getAllAvailable'),
     getStatuses: () => ipcRenderer.invoke('provider:getStatuses'),
     getRuntimeInfo: () => ipcRenderer.invoke('provider:getRuntimeInfo'),

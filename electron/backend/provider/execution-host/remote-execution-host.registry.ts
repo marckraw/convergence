@@ -3,10 +3,16 @@ import type { ExecutionHostDaemonCredentialsService } from '../../credentials/ex
 import type { ProviderDebugSink } from '../../provider-debug/provider-debug-sink'
 import { AppSettingsRemoteExecutionHostConnectionResolver } from './remote-execution-host-connection'
 import { RemoteExecutionHost } from './remote-execution-host'
-import type { RemoteExecutionHostRegistry } from './remote-execution-host.types'
+import {
+  RemoteExecutionHostError,
+  type RemoteExecutionHostRegistry,
+} from './remote-execution-host.types'
 
 interface RemoteExecutionHostRegistryDeps {
-  appSettings: Pick<AppSettingsService, 'getAppSettings'>
+  appSettings: Pick<
+    AppSettingsService,
+    'getAppSettings' | 'hasExecutionHostEndpoint'
+  >
   credentials: Pick<ExecutionHostDaemonCredentialsService, 'resolveToken'>
   fetch?: typeof fetch
   /** Forwarded to every host: the stream cursor each run persists. */
@@ -47,9 +53,32 @@ export class AppSettingsRemoteExecutionHostRegistry implements RemoteExecutionHo
 
   constructor(private readonly deps: RemoteExecutionHostRegistryDeps) {}
 
+  /**
+   * The host for one Endpoint, built on first use -- and never for an Endpoint
+   * that is not configured (MAR-2682).
+   *
+   * The check is here rather than at each door because minting is what has to
+   * be refused, and only this method mints. A caller that checked membership
+   * itself would still be checking across an await: `ProviderCatalogService`
+   * lists the configured ids and then asks for a host, and a removal landing in
+   * that gap would not merely answer stale -- it would cache a host for a
+   * machine that is gone and `prime` would dial it. Read at the moment of the
+   * mint, synchronously, there is no gap to land in.
+   *
+   * An already-built host is handed back without the check: it is the same
+   * instance a session in flight is streaming through, and its own connection
+   * resolver refuses the next call once the Endpoint's row is gone.
+   */
   hostFor(endpointId: string): RemoteExecutionHost {
     const existing = this.hosts.get(endpointId)
     if (existing) return existing
+
+    if (!this.deps.appSettings.hasExecutionHostEndpoint(endpointId)) {
+      throw new RemoteExecutionHostError(
+        `Execution host endpoint "${endpointId}" is not configured.`,
+        'configuration',
+      )
+    }
 
     const host = new RemoteExecutionHost({
       connection: this.resolverFor(endpointId),

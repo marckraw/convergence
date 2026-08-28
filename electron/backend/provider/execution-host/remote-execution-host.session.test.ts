@@ -64,6 +64,8 @@ function createLingeringHandleHost(inner: RemoteExecutionHost): {
       capabilities: () => inner.capabilities(),
       capabilitiesFor: (providerId) => inner.capabilitiesFor(providerId),
       describe: () => inner.describe(),
+      assertProviderRunnable: (providerId) =>
+        inner.assertProviderRunnable(providerId),
       start: (providerId, config) => wrap(inner.start(providerId, config)),
       attach: (providerId, config, afterSeq) =>
         wrap(inner.attach(providerId, config, afterSeq)),

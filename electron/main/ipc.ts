@@ -28,6 +28,7 @@ import { createDefaultProviderQuotaSources } from '../backend/provider-quota/pro
 import type { ExecutionHostDaemonCredentialsService } from '../backend/credentials/execution-host-daemon-credentials.service'
 import { testRemoteExecutionHostConnection } from '../backend/provider/execution-host/remote-execution-host-connection'
 import type { AppSettingsRemoteExecutionHostRegistry } from '../backend/provider/execution-host/remote-execution-host.registry'
+import { ProviderCatalogService } from '../backend/provider/provider-catalog.service'
 import { describeRemoteExecutionHostFailure } from '../backend/provider/execution-host/remote-execution-host.pure'
 import { OpenRouterCredentialsService } from '../backend/credentials/openrouter-credentials.service'
 import type { AnalyticsService } from '../backend/analytics/analytics.service'
@@ -686,7 +687,7 @@ export function registerIpcHandlers(
         const endpointId = requireEndpointId(input?.endpointId)
         return testRemoteExecutionHostConnection({
           resolver: executionHostRemote.registry.resolverFor(endpointId),
-          host: executionHostRemote.registry.hostFor(endpointId),
+          host: () => executionHostRemote.registry.hostFor(endpointId),
         })
       },
     )
@@ -921,6 +922,25 @@ export function registerIpcHandlers(
     return Promise.all(providerRegistry.getAll().map((p) => p.describe()))
   }
 
+  /**
+   * The catalog source for `provider:getAll` (MAR-2682). Built here rather
+   * than taken as an argument so the handler keeps working in the tests and
+   * runtimes that construct IPC without remote execution -- those get this
+   * machine's catalog, which is what they had before catalogs named a machine.
+   */
+  const providerCatalogService = new ProviderCatalogService({
+    local: { describe: loadProviderDescriptors },
+    filterLocalDescriptors: (descriptors) =>
+      appSettingsService.filterProviderDescriptors(descriptors),
+    remote: executionHostRemote && {
+      listEndpointIds: async () =>
+        (await appSettingsService.getAppSettings()).executionHostEndpoints.map(
+          (endpoint) => endpoint.id,
+        ),
+      hostFor: (endpointId) => executionHostRemote.registry.hostFor(endpointId),
+    },
+  })
+
   function broadcastProviderStatuses(statuses: unknown): void {
     for (const win of BrowserWindow.getAllWindows()) {
       if (!win.isDestroyed()) {
@@ -937,10 +957,15 @@ export function registerIpcHandlers(
     return statuses
   }
 
-  ipcMain.handle('provider:getAll', async () =>
-    appSettingsService.filterProviderDescriptors(
-      await loadProviderDescriptors(),
-    ),
+  // The machine the caller is asking about, defaulting to this one: every
+  // surface but the composer only ever means local, and says so by not asking
+  // (MAR-2682).
+  //
+  // `unknown`, because that is what an IPC argument is. Declaring it a string
+  // here would be this process asserting something about the renderer that
+  // nothing checks, and the service's door is where the check lives.
+  ipcMain.handle('provider:getAll', (_event, executionHostId?: unknown) =>
+    providerCatalogService.get(executionHostId),
   )
 
   ipcMain.handle('provider:getAllAvailable', loadProviderDescriptors)

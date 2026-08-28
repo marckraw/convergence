@@ -56,17 +56,24 @@ function resolverWith(input: {
   })
 }
 
+/** One entry of a daemon `/v0/meta` listing, runnable unless said otherwise. */
+function provider(
+  id: string,
+  label: string,
+  overrides: { available?: boolean; authenticated?: boolean } = {},
+): Record<string, unknown> {
+  return {
+    id,
+    label,
+    available: overrides.available ?? true,
+    authenticated: overrides.authenticated ?? true,
+    models: [{ slug: 'sonnet', label: 'Claude Sonnet' }],
+    features: { resume: true },
+  }
+}
+
 const META_RESPONSE = {
-  providers: [
-    {
-      id: 'claude',
-      label: 'Claude Code',
-      available: true,
-      authenticated: true,
-      models: [{ slug: 'sonnet', label: 'Claude Sonnet' }],
-      features: { resume: true },
-    },
-  ],
+  providers: [provider('claude', 'Claude Code')],
 }
 
 function hostWith(
@@ -163,9 +170,10 @@ describe('testRemoteExecutionHostConnection', () => {
     const resolver = resolverWith({ baseUrl: null, token: null })
     const result = await testRemoteExecutionHostConnection({
       resolver,
-      host: hostWith(resolver, (async () => {
-        throw new Error('must not be called')
-      }) as typeof fetch),
+      host: () =>
+        hostWith(resolver, (async () => {
+          throw new Error('must not be called')
+        }) as typeof fetch),
     })
     expect(result).toMatchObject({ ok: false, state: 'missing-base-url' })
   })
@@ -177,9 +185,10 @@ describe('testRemoteExecutionHostConnection', () => {
     })
     const result = await testRemoteExecutionHostConnection({
       resolver,
-      host: hostWith(resolver, (async () => {
-        throw new Error('must not be called')
-      }) as typeof fetch),
+      host: () =>
+        hostWith(resolver, (async () => {
+          throw new Error('must not be called')
+        }) as typeof fetch),
     })
     expect(result).toMatchObject({
       ok: false,
@@ -195,11 +204,46 @@ describe('testRemoteExecutionHostConnection', () => {
     })
     const result = await testRemoteExecutionHostConnection({
       resolver,
-      host: hostWith(resolver, okFetch),
+      host: () => hostWith(resolver, okFetch),
     })
     expect(result.ok).toBe(true)
     expect(result.state).toBe('connected')
     expect(result.providers?.map((p) => p.providerId)).toEqual(['claude'])
+  })
+
+  it('counts the providers this daemon will run, not the ones it listed', async () => {
+    // "Available" has to mean one thing in one app. Settings counted the whole
+    // listing while the composer offered only the runnable ones, so the same
+    // daemon was 5 upstairs and 3 downstairs (MAR-2682). Mutation: count
+    // `providers.length` here again, and this goes red on the 3.
+    const resolver = resolverWith({
+      baseUrl: 'https://daemon.test',
+      token: 'tok',
+    })
+    const mixedFetch = (async () =>
+      new Response(
+        JSON.stringify({
+          providers: [
+            provider('claude', 'Claude Code'),
+            provider('codex', 'Codex'),
+            provider('pi', 'Pi'),
+            provider('cursor', 'Cursor', { available: false }),
+            provider('gemini', 'Gemini', { authenticated: false }),
+          ],
+        }),
+        { status: 200 },
+      )) as typeof fetch
+
+    const result = await testRemoteExecutionHostConnection({
+      resolver,
+      host: () => hostWith(resolver, mixedFetch),
+    })
+
+    expect(result.message).toBe(
+      'Connected. 3 providers available, 2 blocked: Cursor, Gemini.',
+    )
+    // The blocked two are still carried, so the row that lists them can.
+    expect(result.providers).toHaveLength(5)
   })
 
   it('reports the daemon version and capabilities it shook hands with', async () => {
@@ -209,7 +253,7 @@ describe('testRemoteExecutionHostConnection', () => {
     })
     const result = await testRemoteExecutionHostConnection({
       resolver,
-      host: hostWith(resolver, daemonFetch(DAEMON_HEALTH_FIXTURE_0_26_1)),
+      host: () => hostWith(resolver, daemonFetch(DAEMON_HEALTH_FIXTURE_0_26_1)),
     })
 
     expect(result.ok).toBe(true)
@@ -225,7 +269,7 @@ describe('testRemoteExecutionHostConnection', () => {
     })
     const result = await testRemoteExecutionHostConnection({
       resolver,
-      host: hostWith(resolver, daemonFetch(null)),
+      host: () => hostWith(resolver, daemonFetch(null)),
     })
 
     expect(result).toMatchObject({
@@ -242,14 +286,15 @@ describe('testRemoteExecutionHostConnection', () => {
     })
     const result = await testRemoteExecutionHostConnection({
       resolver,
-      host: hostWith(
-        resolver,
-        daemonFetch(
-          healthWith({
-            executionProtocol: { version: 2, capabilities: [] },
-          }),
+      host: () =>
+        hostWith(
+          resolver,
+          daemonFetch(
+            healthWith({
+              executionProtocol: { version: 2, capabilities: [] },
+            }),
+          ),
         ),
-      ),
     })
 
     expect(result.ok).toBe(false)
@@ -266,33 +311,36 @@ describe('testRemoteExecutionHostConnection', () => {
 
     const unauthorized = await testRemoteExecutionHostConnection({
       resolver,
-      host: hostWith(
-        resolver,
-        (async () =>
-          new Response(JSON.stringify({ error: 'nope' }), {
-            status: 401,
-          })) as typeof fetch,
-      ),
+      host: () =>
+        hostWith(
+          resolver,
+          (async () =>
+            new Response(JSON.stringify({ error: 'nope' }), {
+              status: 401,
+            })) as typeof fetch,
+        ),
     })
     expect(unauthorized).toMatchObject({ ok: false, state: 'auth-failed' })
 
     const offline = await testRemoteExecutionHostConnection({
       resolver,
-      host: hostWith(resolver, (async () => {
-        throw new Error('ECONNREFUSED')
-      }) as typeof fetch),
+      host: () =>
+        hostWith(resolver, (async () => {
+          throw new Error('ECONNREFUSED')
+        }) as typeof fetch),
     })
     expect(offline).toMatchObject({ ok: false, state: 'unreachable' })
 
     const malformed = await testRemoteExecutionHostConnection({
       resolver,
-      host: hostWith(
-        resolver,
-        (async () =>
-          new Response(JSON.stringify({ nonsense: true }), {
-            status: 200,
-          })) as typeof fetch,
-      ),
+      host: () =>
+        hostWith(
+          resolver,
+          (async () =>
+            new Response(JSON.stringify({ nonsense: true }), {
+              status: 200,
+            })) as typeof fetch,
+        ),
     })
     expect(malformed).toMatchObject({ ok: false, state: 'invalid-response' })
   })
