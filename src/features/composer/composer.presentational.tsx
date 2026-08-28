@@ -8,13 +8,14 @@ import type {
 } from 'react'
 import type {
   MidRunInputMode,
-  ProviderInfo,
   ReasoningEffort,
   ResolvedProviderSelection,
   SessionPermissionConfig,
   CodexApprovalPolicy,
   CodexSandboxMode,
   ClaudeCodePermissionMode,
+  OptionRowCatalog,
+  ProviderCatalogEntry,
 } from '@/entities/session'
 import {
   CLAUDE_CODE_PERMISSION_MODE_OPTIONS,
@@ -23,6 +24,7 @@ import {
   getProviderLifecycleBadge,
   getSimplePermissionPreset,
   scopeModelCatalogToProvider,
+  selectableProviderDescriptors,
 } from '@/entities/session'
 import { AttachmentsRow, type Attachment } from '@/entities/attachment'
 import type { ProjectContextItem } from '@/entities/project-context'
@@ -46,6 +48,7 @@ import {
   X,
   Zap,
 } from 'lucide-react'
+import { CatalogNotice } from './catalog-notice.presentational'
 import { ComposerSelect } from './composer-select.presentational'
 import { ExecutionBar } from './execution-bar.presentational'
 import type { ExecutionBarView } from './execution-bar.pure'
@@ -65,7 +68,18 @@ interface ComposerProps {
   value: string
   onChange: (value: string) => void
   onSubmit: () => void
-  providers: ProviderInfo[]
+  /**
+   * The whole option row as one value (MAR-2682): the machine's own catalog
+   * with its blocked entries still in it, or the sentence that stands in its
+   * place, and in either case whatever the machine could not confirm.
+   *
+   * One prop and not a list beside a loose sentence. "Replace the controls" and
+   * "stand beside them" are different renders, and deriving which from an entry
+   * count would be a proxy for the question rather than the question — a
+   * surviving listing the daemon could not re-confirm is exactly the case where
+   * the count says list and the honest answer is *list, and say so*.
+   */
+  optionRow: OptionRowCatalog
   selection: ResolvedProviderSelection
   onProviderChange: (id: string) => void
   onModelChange: (id: string, providerId?: string) => void
@@ -74,9 +88,15 @@ interface ComposerProps {
   selectedProviderAccountId: string | null
   onProviderAccountChange: (accountId: string | null) => void
   providerAccountSelectionLocked: boolean
-  providerAccountSelectionBlockedReason: string | null
   codexFastMode: boolean
   onCodexFastModeChange: (enabled: boolean) => void
+  /**
+   * Whether this composer governs the local Codex CLI's own billing (MAR-2682).
+   * Derived from the machine as well as the provider, because `serviceTier`
+   * never crosses the execution-host wire: on a daemon the switch could only
+   * pretend.
+   */
+  codexBillingControlsAvailable: boolean
   executionBar: ExecutionBarView
   onExecutionHostChange: (hostId: string) => void
   /**
@@ -190,11 +210,13 @@ interface ComposerProps {
   onSelectionChange?: (cursor: number) => void
 }
 
+const NO_CATALOG_ENTRIES: readonly ProviderCatalogEntry[] = []
+
 export const Composer: FC<ComposerProps> = ({
   value,
   onChange,
   onSubmit,
-  providers,
+  optionRow,
   selection,
   onProviderChange,
   onModelChange,
@@ -203,9 +225,9 @@ export const Composer: FC<ComposerProps> = ({
   selectedProviderAccountId,
   onProviderAccountChange,
   providerAccountSelectionLocked,
-  providerAccountSelectionBlockedReason,
   codexFastMode,
   onCodexFastModeChange,
+  codexBillingControlsAvailable,
   executionBar,
   onExecutionHostChange,
   armedOutgoingRelays,
@@ -428,15 +450,30 @@ export const Composer: FC<ComposerProps> = ({
     target.style.height = `${Math.min(target.scrollHeight, 200)}px`
   }
 
-  const providerItems = providers.map((provider) => ({
-    id: provider.id,
-    label: provider.vendorLabel || provider.name,
-    description:
-      provider.vendorLabel && provider.vendorLabel !== provider.name
-        ? provider.name
-        : undefined,
-    badge: getProviderLifecycleBadge(provider) ?? undefined,
-  }))
+  // What the row has to fill its controls from. A `notice` row has none, which
+  // is why it renders a sentence instead of an emptied cluster.
+  const providerCatalog =
+    optionRow.status === 'listed' ? optionRow.entries : NO_CATALOG_ENTRIES
+  // Listed and disabled, never dropped: a machine that will not run a provider
+  // teaches more by saying so than by having no row at all (MAR-2682, "a
+  // blocked provider is listed and disabled, never dropped" -- the same
+  // treatment the strip beneath already gives).
+  const providerItems = providerCatalog.map(
+    ({ descriptor, blockedReason }) => ({
+      id: descriptor.id,
+      label: descriptor.vendorLabel || descriptor.name,
+      description:
+        blockedReason ??
+        (descriptor.vendorLabel && descriptor.vendorLabel !== descriptor.name
+          ? descriptor.name
+          : undefined),
+      badge: getProviderLifecycleBadge(descriptor) ?? undefined,
+      disabled: blockedReason !== null,
+    }),
+  )
+  // The same derivation the container resolves selections through, so the model
+  // dialog can never offer a provider the select refuses to hand out.
+  const providers = selectableProviderDescriptors(providerCatalog)
   // An existing session may move between its own provider's models and no
   // further (MAR-2550). A draft keeps the whole catalog.
   const modelCatalogProviders = scopeModelCatalogToProvider(
@@ -481,6 +518,13 @@ export const Composer: FC<ComposerProps> = ({
 
   const canSend =
     !disabled &&
+    // Nothing to send *to* until the machine says what it runs. Never true for
+    // this machine, so a Local composer's send button is what it always was.
+    // Keyed on the row having no options at all, not on there being a sentence:
+    // a listing the daemon could not re-confirm carries one and is still a row
+    // a session can be started from (MAR-2682, "a dead daemon must not look
+    // alive").
+    optionRow.status !== 'notice' &&
     !hasAttachmentErrors &&
     !attachmentsIngestInFlight &&
     (value.trim().length > 0 || attachments.length > 0 || hasPendingAnnotations)
@@ -719,72 +763,167 @@ export const Composer: FC<ComposerProps> = ({
                   ) : null}
                 </PopoverContent>
               </Popover>
-              <ComposerSelect
-                selectedId={selection.providerId}
-                value={selection.providerLabel || 'Select provider'}
-                items={providerItems}
-                onChange={onProviderChange}
-                disabled={selectionDisabled}
-                className="gap-1.5 px-2 text-xs text-muted-foreground hover:text-foreground"
-              />
-              <ModelPickerDialog
-                providers={modelCatalogProviders}
-                selectedProviderId={selection.providerId}
-                selectedModelId={selection.modelId}
-                value={
-                  selection.model?.label || selection.modelId || 'Select model'
-                }
-                onChange={(providerId, modelId) =>
-                  onModelChange(modelId, providerId)
-                }
-                disabled={modelSelectionDisabled || !selection.provider}
-                triggerVariant="ghost"
-                triggerSize="sm"
-                triggerClassName="px-2 text-xs text-muted-foreground hover:text-foreground"
-              />
-              {effortItems.length > 0 && (
-                <ComposerSelect
-                  selectedId={selection.effortId}
-                  value={selection.effort?.label ?? 'Select effort'}
-                  items={effortItems}
-                  onChange={(id) => onEffortChange(id as ReasoningEffort)}
-                  disabled={modelSelectionDisabled || !selection.model}
-                  className="px-2 text-xs text-muted-foreground hover:text-foreground"
-                />
-              )}
-              {selection.providerId === 'claude-code' && (
-                <ProviderAccountPicker
-                  accounts={providerAccounts}
-                  selectedAccountId={selectedProviderAccountId}
-                  onChange={onProviderAccountChange}
-                  disabled={disabled || providerAccountSelectionLocked}
-                  unavailableReason={providerAccountSelectionBlockedReason}
-                />
-              )}
-              {selection.providerId === 'codex' ? (
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="ghost"
-                  role="switch"
-                  aria-checked={codexFastMode}
-                  aria-label="Fast mode"
-                  title={
-                    codexFastMode
-                      ? 'Fast mode is on'
-                      : 'Fast mode is off; Codex will use the default service tier.'
-                  }
-                  onClick={() => onCodexFastModeChange(!codexFastMode)}
-                  disabled={disabled || selectionDisabled}
-                  className={cn(
-                    'h-7 gap-1.5 px-2 text-xs text-muted-foreground hover:text-foreground',
-                    codexFastMode && 'bg-secondary text-foreground',
+              {/*
+                Provider, model, effort, account, the provider-specific toggles
+                and the permission preset are one cluster because they are one
+                thing: what the machine named beneath this row can be asked to
+                do, and how freely (MAR-2682).
+                While a remote machine has not answered there is nothing honest
+                to put here, so the cluster is not disabled — it is not
+                rendered, and a sentence naming the machine stands in its place.
+                "Not yet known" and "local" have to look different, and the
+                surest way for them to look different is for one of them to have
+                no controls at all.
+              */}
+              {optionRow.status === 'notice' ? (
+                <CatalogNotice notice={optionRow.notice} />
+              ) : (
+                <>
+                  {/*
+                    A listing the machine could not re-confirm is shown — a blip
+                    must not empty a row that was right a second ago — but never
+                    without saying so, and it says so *first*, before the
+                    controls it qualifies (MAR-2682, "a dead daemon must not
+                    look alive").
+                  */}
+                  {optionRow.notice ? (
+                    <CatalogNotice notice={optionRow.notice} />
+                  ) : null}
+                  <ComposerSelect
+                    selectedId={selection.providerId}
+                    value={selection.providerLabel || 'Select provider'}
+                    items={providerItems}
+                    onChange={onProviderChange}
+                    disabled={selectionDisabled}
+                    className="gap-1.5 px-2 text-xs text-muted-foreground hover:text-foreground"
+                  />
+                  <ModelPickerDialog
+                    providers={modelCatalogProviders}
+                    selectedProviderId={selection.providerId}
+                    selectedModelId={selection.modelId}
+                    value={
+                      selection.model?.label ||
+                      selection.modelId ||
+                      'Select model'
+                    }
+                    onChange={(providerId, modelId) =>
+                      onModelChange(modelId, providerId)
+                    }
+                    disabled={modelSelectionDisabled || !selection.provider}
+                    triggerVariant="ghost"
+                    triggerSize="sm"
+                    triggerClassName="px-2 text-xs text-muted-foreground hover:text-foreground"
+                  />
+                  {effortItems.length > 0 && (
+                    <ComposerSelect
+                      selectedId={selection.effortId}
+                      value={selection.effort?.label ?? 'Select effort'}
+                      items={effortItems}
+                      onChange={(id) => onEffortChange(id as ReasoningEffort)}
+                      disabled={modelSelectionDisabled || !selection.model}
+                      className="px-2 text-xs text-muted-foreground hover:text-foreground"
+                    />
                   )}
-                >
-                  <Zap className="h-3.5 w-3.5" />
-                  Fast
-                </Button>
-              ) : null}
+                  {selection.providerId === 'claude-code' && (
+                    <ProviderAccountPicker
+                      accounts={providerAccounts}
+                      selectedAccountId={selectedProviderAccountId}
+                      onChange={onProviderAccountChange}
+                      disabled={disabled || providerAccountSelectionLocked}
+                    />
+                  )}
+                  {/*
+                    Gone on a daemon, not disabled: Fast mode writes
+                    `serviceTier`, which has no home on the wire, so the switch
+                    there would set a field the machine below never receives
+                    (MAR-2682).
+                  */}
+                  {codexBillingControlsAvailable ? (
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="ghost"
+                      role="switch"
+                      aria-checked={codexFastMode}
+                      aria-label="Fast mode"
+                      title={
+                        codexFastMode
+                          ? 'Fast mode is on'
+                          : 'Fast mode is off; Codex will use the default service tier.'
+                      }
+                      onClick={() => onCodexFastModeChange(!codexFastMode)}
+                      disabled={disabled || selectionDisabled}
+                      className={cn(
+                        'h-7 gap-1.5 px-2 text-xs text-muted-foreground hover:text-foreground',
+                        codexFastMode && 'bg-secondary text-foreground',
+                      )}
+                    >
+                      <Zap className="h-3.5 w-3.5" />
+                      Fast
+                    </Button>
+                  ) : null}
+                  {/*
+                    Ask/Yolo lives in the cluster because it is the same kind of
+                    claim: what the provider on the machine below may do without
+                    asking. It used to hang off `selectionDisabled` alone, so
+                    while a daemon had not answered the row emptied of provider,
+                    model, effort and account and left a permission preset
+                    standing over nothing -- two comboboxes where only the strip
+                    belongs (MAR-2682). Inside the branch rather than beside it
+                    with a second condition: one gate for the whole cluster is
+                    one place to be wrong, and the wrong form is no longer
+                    available to write.
+                  */}
+                  {!selectionDisabled ? (
+                    <>
+                      <ComposerSelect
+                        selectedId={simplePermissionPreset}
+                        value={
+                          permissionConfig.preset === 'custom'
+                            ? 'Custom'
+                            : simplePermissionPreset === 'yolo'
+                              ? 'Yolo'
+                              : 'Ask'
+                        }
+                        items={permissionItems}
+                        onChange={(id) =>
+                          onPermissionPresetChange(
+                            id === 'yolo' ? 'yolo' : 'ask',
+                          )
+                        }
+                        disabled={disabled || !selection.provider}
+                        className="px-2 text-xs text-muted-foreground hover:text-foreground"
+                      />
+                      {canCustomizePermissions ? (
+                        <Button
+                          type="button"
+                          size="icon"
+                          variant="ghost"
+                          className={cn(
+                            'h-7 w-7 text-muted-foreground hover:text-foreground',
+                            permissionAdvancedOpen &&
+                              'bg-secondary text-foreground',
+                          )}
+                          aria-label="Advanced permission controls"
+                          aria-pressed={permissionAdvancedOpen}
+                          onClick={() =>
+                            onPermissionAdvancedOpenChange(
+                              !permissionAdvancedOpen,
+                            )
+                          }
+                          disabled={disabled || !selection.provider}
+                        >
+                          <SlidersHorizontal className="h-3.5 w-3.5" />
+                        </Button>
+                      ) : selection.providerId === 'pi' ? (
+                        <span className="rounded-md border border-border px-2 py-1 text-[11px] font-medium text-muted-foreground">
+                          Provider-managed
+                        </span>
+                      ) : null}
+                    </>
+                  ) : null}
+                </>
+              )}
               {armedOutgoingRelays > 0 ? (
                 <Button
                   type="button"
@@ -808,50 +947,6 @@ export const Composer: FC<ComposerProps> = ({
                   )}
                   Quiet
                 </Button>
-              ) : null}
-              {!selectionDisabled ? (
-                <>
-                  <ComposerSelect
-                    selectedId={simplePermissionPreset}
-                    value={
-                      permissionConfig.preset === 'custom'
-                        ? 'Custom'
-                        : simplePermissionPreset === 'yolo'
-                          ? 'Yolo'
-                          : 'Ask'
-                    }
-                    items={permissionItems}
-                    onChange={(id) =>
-                      onPermissionPresetChange(id === 'yolo' ? 'yolo' : 'ask')
-                    }
-                    disabled={disabled || !selection.provider}
-                    className="px-2 text-xs text-muted-foreground hover:text-foreground"
-                  />
-                  {canCustomizePermissions ? (
-                    <Button
-                      type="button"
-                      size="icon"
-                      variant="ghost"
-                      className={cn(
-                        'h-7 w-7 text-muted-foreground hover:text-foreground',
-                        permissionAdvancedOpen &&
-                          'bg-secondary text-foreground',
-                      )}
-                      aria-label="Advanced permission controls"
-                      aria-pressed={permissionAdvancedOpen}
-                      onClick={() =>
-                        onPermissionAdvancedOpenChange(!permissionAdvancedOpen)
-                      }
-                      disabled={disabled || !selection.provider}
-                    >
-                      <SlidersHorizontal className="h-3.5 w-3.5" />
-                    </Button>
-                  ) : selection.providerId === 'pi' ? (
-                    <span className="rounded-md border border-border px-2 py-1 text-[11px] font-medium text-muted-foreground">
-                      Provider-managed
-                    </span>
-                  ) : null}
-                </>
               ) : null}
               {usagePill}
               {contextWindowDot}
@@ -892,6 +987,7 @@ export const Composer: FC<ComposerProps> = ({
             <Button
               type="button"
               size="icon"
+              aria-label="Send message"
               className="h-8 w-8 rounded-full"
               disabled={!canSend}
               onClick={onSubmit}
@@ -899,7 +995,18 @@ export const Composer: FC<ComposerProps> = ({
               <ArrowUp className="h-4 w-4" />
             </Button>
           </div>
-          {permissionAdvancedOpen && canCustomizePermissions ? (
+          {/*
+            The panel the advanced button opens, held to the same rule as the
+            button: a row with no answer from its machine shows no local control
+            (MAR-2682). It is not enough that the button is gone. This panel is
+            open/closed component state, and a session born from a draft that
+            had it open keeps it open -- so a stranded session on a machine
+            still being asked would render a Codex approval policy and sandbox
+            beneath a sentence saying the daemon has not answered.
+          */}
+          {optionRow.status !== 'notice' &&
+          permissionAdvancedOpen &&
+          canCustomizePermissions ? (
             <div className="mt-2 flex flex-wrap items-center gap-1 border-t border-border/60 pt-2">
               {selection.providerId === 'codex' ? (
                 <>

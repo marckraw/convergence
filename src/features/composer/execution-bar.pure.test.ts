@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import type { ExecutionHostEndpoint } from '@/entities/execution-host'
+import { LOCAL_EXECUTION_HOST_ID } from '@/entities/execution-host'
+import { parseExecutionHostId } from '../../../electron/backend/execution-host-endpoint/execution-host-endpoint.pure'
 import {
-  describeRemoteExecutionBlock,
   executionHostForNewSession,
   LOCAL_EXECUTION_HOST_LABEL,
   resolveExecutionBarView,
@@ -28,31 +29,11 @@ function view(overrides: Partial<ExecutionBarInput> = {}): ExecutionBarView {
   return resolveExecutionBarView({
     endpoints: [endpoint('kuba', 'kuba-vps')],
     liveSessionHostId: null,
-    providerId: 'claude-code',
-    providerLabel: 'Claude Code',
     contextKind: 'project',
     selectedHostId: 'local',
     ...overrides,
   })
 }
-
-describe('describeRemoteExecutionBlock', () => {
-  it('lets every provider with a daemon counterpart leave this machine', () => {
-    for (const providerId of ['claude-code', 'codex', 'cursor']) {
-      expect(
-        describeRemoteExecutionBlock({ providerId, providerLabel: 'X' }),
-      ).toBeNull()
-    }
-  })
-
-  it('names the provider that has no daemon counterpart', () => {
-    expect(
-      describeRemoteExecutionBlock({ providerId: 'pi', providerLabel: 'Pi' }),
-    ).toBe(
-      'Pi has no counterpart on the agents daemon, so it can only run here.',
-    )
-  })
-})
 
 describe('the strip while a session is being born', () => {
   it('is hidden with no Endpoint, so the composer looks exactly as before', () => {
@@ -75,9 +56,9 @@ describe('the strip while a session is being born', () => {
     })
     expect(resolved).toMatchObject({ mode: 'choosing', hostId: 'local' })
     expect(resolved.mode === 'choosing' && resolved.choices).toEqual([
-      { id: 'local', label: LOCAL_EXECUTION_HOST_LABEL, blockedReason: null },
-      { id: 'kuba', label: 'kuba-vps', blockedReason: null },
-      { id: 'bp', label: 'Unnamed endpoint', blockedReason: null },
+      { id: 'local', label: LOCAL_EXECUTION_HOST_LABEL },
+      { id: 'kuba', label: 'kuba-vps' },
+      { id: 'bp', label: 'Unnamed endpoint' },
     ])
   })
 
@@ -111,37 +92,22 @@ describe('a pick that has stopped being reachable', () => {
     expect(executionHostForNewSession(resolved)).toBeUndefined()
   })
 
-  it('lists a daemon-incapable provider blocked, with the reason, not gone', () => {
-    const resolved = view({ providerId: 'pi', providerLabel: 'Pi' })
+  it('offers every configured Endpoint, whatever provider is selected', () => {
+    // MAR-2682, "nothing local may assert a remote fact". Until S3 a local
+    // table decided which providers could
+    // leave this machine, and it had never asked any daemon; the row is now
+    // filled from the machine that is picked, so nothing local blocks a pick.
+    const resolved = view()
     expect(resolved.mode === 'choosing' && resolved.choices).toEqual([
-      { id: 'local', label: LOCAL_EXECUTION_HOST_LABEL, blockedReason: null },
-      {
-        id: 'kuba',
-        label: 'kuba-vps',
-        blockedReason:
-          'Pi has no counterpart on the agents daemon, so it can only run here.',
-      },
+      { id: 'local', label: LOCAL_EXECUTION_HOST_LABEL },
+      { id: 'kuba', label: 'kuba-vps' },
     ])
   })
 
-  it('sends a blocked pick here, so the strip and the send never disagree', () => {
-    const resolved = view({
-      providerId: 'pi',
-      providerLabel: 'Pi',
-      selectedHostId: 'kuba',
-    })
-    expect(resolved.hostId).toBe('local')
-    expect(executionHostForNewSession(resolved)).toBeUndefined()
-  })
-
-  it('restores his pick when the provider can reach the daemon again', () => {
-    // Clamped at the read, never written back: demoting the stored pick would
-    // cost him the machine permanently for one glance at another provider.
-    const input = { selectedHostId: 'kuba' } as const
-    expect(
-      view({ ...input, providerId: 'pi', providerLabel: 'Pi' }).hostId,
-    ).toBe('local')
-    expect(view({ ...input }).hostId).toBe('kuba')
+  it('honours his pick of an Endpoint, and sends there', () => {
+    const resolved = view({ selectedHostId: 'kuba' })
+    expect(resolved.hostId).toBe('kuba')
+    expect(executionHostForNewSession(resolved)).toBe('kuba')
   })
 })
 
@@ -240,5 +206,49 @@ describe('every variant carries the machine', () => {
       }),
     )
     expect(modes).toEqual(new Set(['hidden', 'choosing', 'settled']))
+  })
+})
+
+describe('the strip and the backend read one record', () => {
+  // The strip's live value is a session *record*, and the backend reads that
+  // same record when it resolves where the session runs. If the two disagree,
+  // the strip is lying about where the run goes -- the one thing this era
+  // forbids -- so the rule is read from one place and the agreement is asserted
+  // here rather than assumed (MAR-2682).
+  //
+  // Importing the backend's own reader is the point: a mirror of it in this
+  // suite would agree with itself forever. Precedent for a `src` test reaching
+  // into a DOM-free backend pure module: `relay-payload.render.test.tsx`.
+
+  it('renders Local for exactly the records the backend resolves local', () => {
+    // Mutation: give the strip its own reading again -- `live === '' ? 'local'
+    // : live`, which is the narrower rule it is tempting to write -- and the
+    // whitespace and padded-local rows go red while the backend still resolves
+    // both of them local.
+    for (const record of ['', '   ', '\t\n', ' local ', 'local']) {
+      // The backend half: this session runs here.
+      expect(parseExecutionHostId(record)).toBe(LOCAL_EXECUTION_HOST_ID)
+      // The strip half: and the strip says so, in the same word.
+      expect(view({ liveSessionHostId: record })).toEqual({
+        mode: 'settled',
+        hostId: LOCAL_EXECUTION_HOST_ID,
+        label: LOCAL_EXECUTION_HOST_LABEL,
+        warning: null,
+      })
+    }
+  })
+
+  it('agrees that a record naming a machine names a machine', () => {
+    // The other direction, and the reason the strip does not simply trim: a
+    // padded id names no configured Endpoint. The two sides need not produce the
+    // same string here -- the backend trims a record, the strip repeats it back
+    // so the warning can name what the session actually recorded -- but they
+    // must never disagree about whether it is this machine.
+    for (const record of ['kuba', ' kuba ', 'bp']) {
+      expect(parseExecutionHostId(record)).not.toBe(LOCAL_EXECUTION_HOST_ID)
+      const resolved = view({ liveSessionHostId: record })
+      expect(resolved.hostId).toBe(record)
+      expect(resolved.mode).toBe('settled')
+    }
   })
 })

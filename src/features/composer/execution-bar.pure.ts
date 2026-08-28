@@ -5,20 +5,6 @@ import {
   type ExecutionHostEndpoint,
 } from '@/entities/execution-host'
 
-/**
- * Providers the remote agents daemon can run — a placeholder, and knowingly
- * fallible (MAR-2642).
- *
- * This is a local table asserting a remote fact. It mirrors the mapping in
- * electron/backend/provider/execution-host/remote-execution-host.pure.ts, and
- * both are guesses about a machine neither of them asked: the first daemon
- * that gains a provider this set does not know will be told it cannot run it,
- * and nothing here will notice. S3 of the Execution Bar constitution
- * (MAR-2619) asks the daemon for its own advertised providers and deletes this
- * set. Until it lands, keep the two lists in sync.
- */
-const REMOTE_CAPABLE_PROVIDER_IDS = new Set(['claude-code', 'codex', 'cursor'])
-
 /** What this machine is called in the strip. */
 export const LOCAL_EXECUTION_HOST_LABEL = 'Local'
 
@@ -43,13 +29,20 @@ function removedEndpointWarning(endpointId: string): string {
   )
 }
 
-/** One machine the strip offers, and whether it can be picked right now. */
+/**
+ * One machine the strip offers (MAR-2642).
+ *
+ * Every configured Endpoint is offered, unconditionally. Until S3 a choice
+ * could be blocked by the provider selected above it, from a local table that
+ * had never asked any daemon what it runs; that arrow now points the other way
+ * -- the machine is picked, and the option row is filled from what *it* says
+ * (MAR-2682, "nothing local may assert a remote fact"). So nothing local
+ * decides here.
+ */
 export interface ExecutionHostChoice {
   /** `'local'`, or an Endpoint id. Never a boolean and never `'remote'`. */
   id: string
   label: string
-  /** Why this machine cannot be picked right now, or null when it can. */
-  blockedReason: string | null
 }
 
 /**
@@ -72,31 +65,12 @@ export type ExecutionBarView =
     }
   | { mode: 'settled'; hostId: string; label: string; warning: string | null }
 
-/**
- * Why a session on this provider cannot leave this machine, or null.
- *
- * The daemon runs a fixed set of provider CLIs. Picking a machine that cannot
- * run the selected provider would be a strip promising something the backend
- * refuses, so those rows are listed and blocked rather than silently dropped —
- * the row vanishing as he changes provider would leave him hunting for a
- * machine he configured, with no statement of why it went.
- */
-export function describeRemoteExecutionBlock(input: {
-  providerId: string
-  providerLabel: string
-}): string | null {
-  if (REMOTE_CAPABLE_PROVIDER_IDS.has(input.providerId)) return null
-  return `${input.providerLabel} has no counterpart on the agents daemon, so it can only run here.`
-}
-
 export interface ExecutionBarInput {
   endpoints: readonly ExecutionHostEndpoint[]
   /** The live session's own host, or null while a session is being born. */
   liveSessionHostId: string | null | undefined
-  providerId: string
-  providerLabel: string
   contextKind: 'project' | 'global'
-  /** The last machine he picked. Honoured only while it is still pickable. */
+  /** The last machine he picked. Honoured only while it is still configured. */
   selectedHostId: string
 }
 
@@ -109,19 +83,30 @@ export interface ExecutionBarInput {
  * the run and the machine cannot change under it.
  *
  * The pick is clamped here at the read rather than corrected by an effect. An
- * Endpoint can be removed in Settings, and a provider swap can make a
- * perfectly good Endpoint unable to run the session, while a stale pick sits
- * in component state; resolving on every render means the change that
- * invalidates the pick and the render that would have shown it are the same
- * beat. The raw pick is left alone, so switching back to a daemon-capable
- * provider restores the machine he chose instead of quietly demoting him to
- * local for the rest of the session.
+ * Endpoint can be removed in Settings while a stale pick sits in component
+ * state; resolving on every render means the change that invalidates the pick
+ * and the render that would have shown it are the same beat. The raw pick is
+ * left alone, so adding the Endpoint back restores the machine he chose
+ * instead of quietly demoting him to local for the rest of the session.
  */
 export function resolveExecutionBarView(
   input: ExecutionBarInput,
 ): ExecutionBarView {
   const live = input.liveSessionHostId ?? null
-  const liveHostId = live === null ? null : normalizeHostId(live)
+  // A *record*, read the way the backend reads the same record. Blank and
+  // whitespace mean this machine, the way every pre-Endpoint row does, and
+  // `isLocalExecutionHost` is where that rule lives -- the strip used to keep a
+  // private copy of it, which is a rule in two places and therefore a rule that
+  // can drift. It must not: the strip that said "not Local" for a session the
+  // backend runs locally would be the strip lying about where the run goes
+  // (MAR-2682). A value that names no machine here (` kuba `) is left exactly
+  // as recorded, and says so below in the words for a machine that is gone.
+  const liveHostId =
+    live === null
+      ? null
+      : isLocalExecutionHost(live)
+        ? LOCAL_EXECUTION_HOST_ID
+        : live
 
   // A global session has no repository to materialize, so it has only ever run
   // here and can only ever run here. A tier that can neither choose nor report
@@ -138,27 +123,22 @@ export function resolveExecutionBarView(
     return { mode: 'hidden', hostId: LOCAL_EXECUTION_HOST_ID }
   }
 
-  const blockedReason = describeRemoteExecutionBlock(input)
   const choices: ExecutionHostChoice[] = [
-    {
-      id: LOCAL_EXECUTION_HOST_ID,
-      label: LOCAL_EXECUTION_HOST_LABEL,
-      blockedReason: null,
-    },
+    { id: LOCAL_EXECUTION_HOST_ID, label: LOCAL_EXECUTION_HOST_LABEL },
     ...input.endpoints.map((endpoint) => ({
       id: endpoint.id,
       label: executionHostEndpointDisplayName(endpoint),
-      blockedReason,
     })),
   ]
 
-  const picked = choices.find(
-    (choice) => choice.id === normalizeHostId(input.selectedHostId),
-  )
+  // The pick is a chooser id, never a record: it is one of the ids offered
+  // above, or a stale one that no longer is. So it is compared as it stands,
+  // and anything that matches no choice falls back to this machine on the line
+  // below -- which is where a blank pick ended up anyway.
+  const picked = choices.find((choice) => choice.id === input.selectedHostId)
   return {
     mode: 'choosing',
-    hostId:
-      picked && !picked.blockedReason ? picked.id : LOCAL_EXECUTION_HOST_ID,
+    hostId: picked ? picked.id : LOCAL_EXECUTION_HOST_ID,
     choices,
   }
 }
@@ -202,11 +182,6 @@ function settledView(
     label: executionHostEndpointDisplayName(endpoint),
     warning: null,
   }
-}
-
-/** Blank and whitespace mean this machine, the way every pre-remote row did. */
-function normalizeHostId(hostId: string): string {
-  return hostId.trim() || LOCAL_EXECUTION_HOST_ID
 }
 
 /**

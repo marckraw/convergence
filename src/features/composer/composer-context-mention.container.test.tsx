@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { ComposerContainer } from './composer.container'
-import { useSessionStore } from '@/entities/session'
+import { localProviderCatalogs, useSessionStore } from '@/entities/session'
 import {
   useSkillStore,
   type ProjectSkillCatalog,
@@ -164,7 +164,7 @@ function seedStores() {
   useSessionStore.setState({
     sessions: [],
     globalChatSessions: [],
-    providers: [
+    providerCatalogs: localProviderCatalogs([
       {
         id: 'claude-code',
         name: 'Claude Code',
@@ -198,9 +198,10 @@ function seedStores() {
           defaultRunningMode: 'follow-up',
         },
       },
-    ],
+    ]),
     queuedInputsBySessionId: {},
     loadProviders: vi.fn(),
+    loadProviderCatalog: vi.fn(),
     createAndStartSession: vi.fn(),
     createAndStartGlobalSession: vi.fn(),
     sendMessageToSession: vi.fn(),
