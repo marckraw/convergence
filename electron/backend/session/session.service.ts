@@ -6,6 +6,7 @@ import type {
   SessionRow,
 } from '../database/database.types'
 import type {
+  ExecutionHostProviderCapabilities,
   ProviderExecutionHost,
   RemoteSessionWorkspaceInfo,
 } from '../provider/execution-host/execution-host.types'
@@ -169,6 +170,20 @@ interface PendingConversationPatch {
   itemId: string
   patch: Partial<ConversationItem>
 }
+
+/**
+ * The host's answer to "may this turn run?", carried instead of thrown
+ * (MAR-2682).
+ *
+ * A caller that has to decide *after* an `await` whether the answer even
+ * applies cannot ask a question that throws: the throw would settle the turn
+ * before the state the decision depends on has been read. The refusal is kept
+ * exactly as the host raised it -- not remade into a new `Error` -- so the
+ * message the user sees is the daemon's own, whichever caller rethrows it.
+ */
+type TurnProviderVerdict =
+  | { permitted: true }
+  | { permitted: false; refusal: unknown }
 
 /**
  * Facade and orchestrator for session use cases.
@@ -354,17 +369,13 @@ export class SessionService {
     if (!this.remoteExecutionHosts) {
       throw new Error('Remote execution host is not configured')
     }
-    const remoteProviderId = remoteProviderIdForLocalProvider(
-      session.providerId,
-    )
-    if (!remoteProviderId) {
-      throw new Error(
-        `Provider ${session.providerId} is not supported on the remote execution host`,
-      )
-    }
+    // Namespace translation only. Whether that daemon runs this provider is
+    // that daemon's answer, given by the host when it checks its own listing --
+    // a table here saying "unsupported" would be this process guessing about a
+    // machine it never asked (MAR-2682).
     return {
       host: this.remoteExecutionHosts.hostFor(endpoint.id),
-      providerId: remoteProviderId,
+      providerId: remoteProviderIdForLocalProvider(session.providerId),
     }
   }
 
@@ -391,6 +402,135 @@ export class SessionService {
     const endpoint = this.executionHostEndpoints.getById(session.executionHost)
     if (!endpoint) return
     await this.remoteExecutionHosts.whenReady(endpoint.id)
+  }
+
+  /**
+   * The host's permission to run this session's provider, asked before the turn
+   * it belongs to writes anything (MAR-2682).
+   *
+   * One preflight sequence for both entry points -- this method for
+   * `openFirstTurn`, and `queryTurnProviderVerdict` below it for
+   * `deliverMessage`, which must hold the answer rather than be thrown out of
+   * it -- rather than the sequence written twice. It is a sequence, not a call:
+   * the question is only answerable once the Endpoint's provider listing has
+   * landed, so the await comes first and the refusal reads the listing it
+   * waited for. Written out at each door, one of them had the writes above the
+   * gate and the other below, which is exactly how a start the daemon refused
+   * still un-archived its session and put a note in its transcript. Being one
+   * method makes the beat easy for a third entry point to include; it does not
+   * make it impossible to omit, and one caller does omit it deliberately --
+   * `dispatchNextQueuedInput` reaches `startHandle` and `sendRemoteTurn`
+   * without asking here, because it dispatches a turn that was permitted when
+   * it was queued and it runs synchronously, with no window to reopen. What
+   * covers every caller, this one included, is the barrier the two doors ask
+   * for themselves.
+   *
+   * Not the last word, and deliberately not the barrier either. This one
+   * refuses *early* -- before the turn spends anything, including the draft
+   * rebind below it -- while the doors that reach the wire, `startHandle` and
+   * `sendRemoteTurn`, ask again on their own first lines. Making this call the
+   * whole invariant is what the earlier shape got wrong: the answer it read
+   * could change during the awaits that followed, and every write between here
+   * and the start would already have happened by the time it did.
+   *
+   * The permission question is asked by its own name. It used to read
+   * `capabilitiesFor` -- a descriptive method -- and rewrite whatever it found
+   * into "Provider not found", so a daemon that lists a CLI and refuses to run
+   * it came back as a provider that does not exist. The descriptive answer has
+   * its own reader, `turnProviderCapabilities`, so neither question can be
+   * mistaken for the other.
+   *
+   * Provider permission only. `startHandle`'s account refusal
+   * (`assertLocalAccountSelection`) is a different question and stays where it
+   * is; this method does not promise that every refusal leaves no mark, it
+   * promises that this one does not.
+   */
+  private async preflightTurnProvider(
+    session: Pick<SessionSummary, 'executionHost' | 'providerId'>,
+  ): Promise<void> {
+    const verdict = await this.queryTurnProviderVerdict(session)
+    if (!verdict.permitted) throw verdict.refusal
+  }
+
+  /**
+   * The same preflight sequence, with the answer returned rather than thrown
+   * (MAR-2682).
+   *
+   * `deliverMessage` cannot use the throwing form. Whether the answer applies
+   * at all depends on something only readable after this await has returned --
+   * whether the session has a live handle by then, since a live handle is
+   * exempt from the question. Throwing here would settle the turn on a
+   * condition read one or two awaits too early: a handle installed under those
+   * awaits by a second send or a boot reattach would be refused a message it
+   * must be able to receive.
+   *
+   * Asked for every session, live handle or not -- which is what lets the
+   * caller hold the answer and decide afterwards whether it applies at all. A
+   * host already carrying a run usually answers from the listing it holds, but
+   * not always: `ensureListed` re-observes the Endpoint's configuration, so one
+   * whose address or credentials changed under the run lists again, and one
+   * that cannot be listed at all throws.
+   *
+   * Which is why the listing await is inside the `try`. Every failure of the
+   * sequence is an answer this method carries, not a rejection it escapes
+   * through: a listing that cannot be had is a refusal like any other, and a
+   * session with a live handle is exempt from it for the same reason it is
+   * exempt from the host's verdict -- refusing mid-run would strand a turn on a
+   * machine that was willing when it started.
+   */
+  private async queryTurnProviderVerdict(
+    session: Pick<SessionSummary, 'executionHost' | 'providerId'>,
+  ): Promise<TurnProviderVerdict> {
+    try {
+      await this.awaitEndpointListing(session)
+      this.assertTurnProviderRunnable(session)
+      return { permitted: true }
+    } catch (refusal) {
+      return { permitted: false, refusal }
+    }
+  }
+
+  /**
+   * The host's permission to run this provider, asked in the host's own words
+   * (MAR-2682).
+   *
+   * Three callers, and they are not interchangeable. `queryTurnProviderVerdict`
+   * asks early and cheaply, for both entry points' preflight, before the turn
+   * spends anything. The two doors that actually reach the wire --
+   * `startHandle` and `sendRemoteTurn` -- ask again on their own first lines,
+   * above their own writes.
+   *
+   * There is deliberately no fourth caller sitting between them. The doors
+   * used to be guarded from the *caller's* body, with the turn's consequence
+   * writes on the caller's lines below the question; anything that yielded in
+   * that gap reopened the window the guard exists to close, and no test can
+   * forbid every `await` a later edit might put there. Asking from inside the
+   * synchronous method that starts is what makes that shape unavailable rather
+   * than merely discouraged: the verdict and the writes are the same body, and
+   * a caller has no line between them to write on.
+   */
+  private assertTurnProviderRunnable(
+    session: Pick<SessionSummary, 'executionHost' | 'providerId'>,
+  ): void {
+    const execution = this.resolveExecution(session)
+    execution.host.assertProviderRunnable(execution.providerId)
+  }
+
+  /**
+   * What this provider can do on this host: a description, not a permission
+   * (MAR-2682).
+   *
+   * `deliverMessage` has to know whether the provider resumes in order to pick
+   * its branch, and it reads that here rather than as the return value of a
+   * refusal. Asking a describing question is not asking to be let in, and
+   * conflating the two is how a daemon that lists a CLI and refuses to run it
+   * once came back as a provider that does not exist.
+   */
+  private turnProviderCapabilities(
+    session: Pick<SessionSummary, 'executionHost' | 'providerId'>,
+  ): ExecutionHostProviderCapabilities | null {
+    const execution = this.resolveExecution(session)
+    return execution.host.capabilitiesFor(execution.providerId)
   }
 
   /**
@@ -989,48 +1129,66 @@ export class SessionService {
     const session = this.getById(id)
     if (!session) throw new Error(`Session not found: ${id}`)
 
-    if (session.archivedAt) {
-      this.updateArchiveState(id, null)
-    }
+    // Refuse before the turn spends anything (MAR-2682). Convergence owns the
+    // record, so a start the host refuses must not appear in it.
+    await this.preflightTurnProvider(session)
 
+    // The last `await` of this method, and it stays above the start because the
+    // line below reads the rows it moves. It is a write, and a turn refused
+    // below has already made it; what it leaves is no visible or semantic
+    // consequence -- a refused turn leaves attachments resolvable by their
+    // ids, and a later successful turn owns them exactly as a turn that was
+    // never refused would. That is behaviour and it is pinned by behaviour:
+    // the canaries "refuses a start when the listing is refreshed under the
+    // awaited rebind" and "leaves a barrier-refused start's rebind inert" in
+    // `session.service.test.ts` are what make it true, and the second is what
+    // would go red if `rebindToSession` stopped being idempotent.
     await this.rebindDraftAttachments(id, input.attachmentIds)
+
+    // This method writes nothing else. The barrier and every consequence of
+    // the turn -- the unarchive, the boot context, the note -- are
+    // `startHandle`'s own lines, so no edit here can put an `await` between
+    // the host's verdict and the writes it authorises.
     const attachments = this.resolveAttachments(input.attachmentIds)
-
-    const bootContext = this.prepareBootContext(session, input)
-
-    await this.awaitEndpointListing(session)
 
     this.startHandle(
       session,
-      bootContext.augmentedText,
+      input.text,
       this.getContinuationToken(id),
       attachments,
       input.attachmentIds,
       input.skillSelections,
       input.providerAccountId,
-      { muteRelays: input.muteRelays },
+      {
+        muteRelays: input.muteRelays,
+        bootContext: { contextItemIds: input.contextItemIds },
+      },
     )
   }
 
-  private prepareBootContext(
+  /**
+   * The boot context, computed and not yet announced (MAR-2682).
+   *
+   * Split from the recording because the two belong on opposite sides of the
+   * start: the augmented text has to exist before `host.start` can be handed
+   * it, and the transcript note must not exist until `host.start` has been
+   * called. Written as one step, the note was in the transcript of turns that
+   * never started.
+   */
+  private computeBootContext(
     session: Session,
-    input: SendMessageInput,
-  ): { augmentedText: string } {
+    originalText: string,
+    contextItemIds: string[] | undefined,
+  ): { augmentedText: string; noteDraft: ConversationItemDraft | null } {
     if (!this.contextInjection) {
-      return { augmentedText: input.text }
+      return { augmentedText: originalText, noteDraft: null }
     }
 
-    const result = this.contextInjection.prepareBoot({
+    return this.contextInjection.prepareBoot({
       session,
-      originalText: input.text,
-      contextItemIds: input.contextItemIds,
+      originalText,
+      contextItemIds,
     })
-
-    if (result.noteDraft) {
-      this.recordBootContextNote(session.id, result.noteDraft)
-    }
-
-    return { augmentedText: result.augmentedText }
   }
 
   private prepareUserTurnText(
@@ -1073,15 +1231,18 @@ export class SessionService {
       )
     }
 
-    if (session.archivedAt) {
-      this.updateArchiveState(id, null)
-    }
-
-    await this.rebindDraftAttachments(id, input.attachmentIds)
-    const attachments = this.resolveAttachments(input.attachmentIds)
-
-    const handle = this.activeHandles.get(id)
-    if (!handle && session.status === 'running') {
+    // A snapshot, and named as one: two awaits follow it, and what it says
+    // about the map is only true of the moment it was taken (MAR-2682). The
+    // send's own branch is chosen from a second read below, after the last of
+    // those awaits.
+    const handleWhenAsked = this.activeHandles.get(id)
+    if (!handleWhenAsked && session.status === 'running') {
+      // An observation, not a consequence: the provider process is genuinely
+      // gone, and that is true whether or not this send is allowed to proceed.
+      // It therefore stays above the refusal below, where the two writes that
+      // *are* consequences of the send no longer do. It is also the one thing
+      // here the snapshot may still drive: it is a statement about the moment
+      // the snapshot was taken, not a decision about where this send goes.
       session = this.markStaleRunningSessionFailed(
         session,
         'Session marked failed because Convergence no longer has an active provider process for this run.',
@@ -1091,7 +1252,58 @@ export class SessionService {
 
     const deliveryMode = this.resolveDeliveryMode(session, input.deliveryMode)
 
+    // Refuse before this send leaves a mark (MAR-2682). Unarchiving the session
+    // is a consequence of sending, and a refused send must not leave one -- a
+    // blocked provider used to be caught *after* the unarchive, so the rejected
+    // action still un-archived the session it rejected.
+    //
+    // The draft rebind below is a write, and a send this verdict refuses has
+    // already made it -- the refusal is raised below the rebind now, because
+    // the decision it belongs to cannot be taken above it. What it leaves is no
+    // visible or semantic consequence: "refuses a send when the listing is
+    // refreshed under the awaited rebind" pins that the ids still resolve after
+    // this door refuses, and its start-door sibling ("leaves a barrier-refused
+    // start's rebind inert") pins that the turn after the refusal owns them
+    // exactly as an unrefused one does -- the same `rebindToSession` call, so
+    // the same answer here. Behaviour is held by those canaries, not by this
+    // comment.
+    //
+    // A session with a live handle is exempt: it is already running on this
+    // provider, and refusing mid-run would strand a turn on a decision that was
+    // made when it started. The question is still asked for it -- one read of a
+    // listing its host usually already holds -- but the answer is never acted
+    // on, here or at the door it reaches, and that includes the case where the
+    // sequence could not answer at all: an Endpoint that cannot be listed any
+    // more is exactly the mid-run refusal the exemption forbids. Which is why
+    // it is *carried* rather than thrown: whether this send is one of the
+    // exempt ones is not knowable until the read below, and a throw here would
+    // decide it from the snapshot above.
+    const verdict = await this.queryTurnProviderVerdict(session)
+
+    // The last `await` of this method, for the same reason as in
+    // `openFirstTurn`.
+    await this.rebindDraftAttachments(id, input.attachmentIds)
+
+    // -- One decision, taken from the map as it is now (MAR-2682). Both awaits
+    // are above this line, so nothing can install or release a handle between
+    // the read and the branch it chooses. A handle landing under those awaits
+    // (a second send, a boot reattach) must reach the exempt path, and a handle
+    // released under them (its run settled) must not be sent to: it is
+    // disposed, and the send would resolve while the message went nowhere. --
+    const handle = this.activeHandles.get(id)
+    if (!handle && !verdict.permitted) throw verdict.refusal
+
+    const attachments = this.resolveAttachments(input.attachmentIds)
+
     if (handle) {
+      // The exempt path, and the only unarchive still written from this body.
+      // A live handle asks the host nothing -- refusing mid-run would strand a
+      // turn on a decision made when it started -- so the verdict above is not
+      // consulted, and there is no verdict here for this write to be separated
+      // from.
+      if (session.archivedAt) {
+        this.updateArchiveState(id, null)
+      }
       this.dispatchToActiveHandle({
         session,
         handle,
@@ -1102,13 +1314,11 @@ export class SessionService {
       return
     }
 
-    await this.awaitEndpointListing(session)
-
-    const execution = this.resolveExecution(session)
-    const capabilities = execution.host.capabilitiesFor(execution.providerId)
-    if (!capabilities) {
-      throw new Error(`Provider not found: ${session.providerId}`)
-    }
+    // Descriptive only: which branch below can carry this turn. The permission
+    // to take it is asked inside the branch that takes it -- `sendRemoteTurn`
+    // and `startHandle` each ask above their own writes -- so nothing this
+    // method does can land above a refusal.
+    const capabilities = this.turnProviderCapabilities(session)
 
     const continuationToken = this.getContinuationToken(id)
     if (
@@ -1144,7 +1354,7 @@ export class SessionService {
       return
     }
 
-    if (capabilities.supportsContinuation && continuationToken) {
+    if (capabilities?.supportsContinuation && continuationToken) {
       const augmentedText = this.prepareUserTurnText(
         session,
         input.text,
@@ -1163,7 +1373,7 @@ export class SessionService {
       return
     }
 
-    if (capabilities.supportsContinuation) {
+    if (capabilities?.supportsContinuation) {
       throw new Error(
         `Session cannot be resumed: missing continuation state. Start a new session.`,
       )
@@ -2178,6 +2388,34 @@ export class SessionService {
     return this.getRowById(id)?.continuation_token ?? null
   }
 
+  /**
+   * Starts a provider run, and owns everything the record says about it having
+   * started (MAR-2682).
+   *
+   * Not async, and that is the design. Three synchronous preconditions come
+   * first -- the account (`assertLocalAccountSelection`), the host's permission
+   * (`assertTurnProviderRunnable`), the remote workspace
+   * (`requireRemoteWorkspace`) -- and every consequence of the turn comes
+   * after: the unarchive, the boot context (whose `attachToSession` is itself a
+   * write), `host.start`, and the note that says a turn began with that
+   * context. They used to be the caller's lines, with the caller's barrier
+   * above them, so a caller could put an `await` between the verdict and the
+   * writes and no test could see it. Here there is no line to put it on.
+   *
+   * Ordering, not atomicity. Those three are the refusals this method can make
+   * before it writes; they are not every way this start can fail. Both
+   * `computeBootContext` and `host.start` run below the writes and can throw --
+   * `host.start` is specified to, for a start the host refuses at the wire --
+   * and nothing here rolls the unarchive or the context attachment back. What
+   * this shape guarantees is that the three questions above are answered before
+   * anything is recorded, not that a failed start leaves no trace.
+   *
+   * The note is last for the same reason it was last before: it must not exist
+   * until the host has been asked to begin, and it must be in the transcript
+   * ahead of anything that turn produces. Recorded here, before this method
+   * returns, it is still ahead of every delta -- a delta cannot be delivered
+   * without the loop turning, and this body never yields.
+   */
   private startHandle(
     session: Session,
     initialMessage: string,
@@ -2187,12 +2425,20 @@ export class SessionService {
     initialSkillSelections?: SkillSelection[],
     providerAccountId?: string | null,
     /**
-     * What the human asked for when they sent this, rather than how the handle
-     * should be built. An object so the flag names itself at the call site: a
-     * bare eighth positional boolean here would be unreadable at all three of
-     * them.
+     * What this turn is, rather than how the handle should be built: what the
+     * human asked for (`muteRelays`), and -- for the door that opens a session
+     * -- the project context this start is to be given. An object so each one
+     * names itself at the call site: bare positionals here would be unreadable
+     * at all three of them.
+     *
+     * `bootContext` present means "augment `initialMessage` with the session's
+     * project context and record the note for it". Absent means the caller has
+     * already prepared its text, which is true of both resuming callers.
      */
-    turnFlags?: { muteRelays?: boolean },
+    turn?: {
+      muteRelays?: boolean
+      bootContext?: { contextItemIds?: string[] }
+    },
   ): void {
     // Accounts are host-scoped (ADR 0007, PA10). Refuse before anything is
     // spawned or recorded: a remote host runs on its own credential whatever is
@@ -2203,13 +2449,31 @@ export class SessionService {
       accountId: providerAccountId,
     })
 
+    // The barrier. Refuse before anything is spawned or recorded, and refuse in
+    // the host's words (MAR-2682).
+    this.assertTurnProviderRunnable(session)
+
     const execution = this.resolveExecution(session)
-    if (!execution.host.capabilitiesFor(execution.providerId)) {
-      throw new Error(`Provider not found: ${session.providerId}`)
-    }
     const workspace = isRemoteExecutionHost(session.executionHost)
       ? this.requireRemoteWorkspace(session)
       : null
+
+    // -- Past the three synchronous preconditions. Everything below is a
+    // consequence of this turn having been permitted, and none of it can be
+    // reached without passing the lines above. Below is still fallible --
+    // `host.start` refuses at the wire -- and nothing here undoes these
+    // writes. --
+    if (session.archivedAt) {
+      this.updateArchiveState(session.id, null)
+    }
+
+    const boot = turn?.bootContext
+      ? this.computeBootContext(
+          session,
+          initialMessage,
+          turn.bootContext.contextItemIds,
+        )
+      : { augmentedText: initialMessage, noteDraft: null }
 
     if (initialAttachmentIds && initialAttachmentIds.length > 0) {
       this.pendingUserAttachmentIds.set(session.id, initialAttachmentIds)
@@ -2221,7 +2485,7 @@ export class SessionService {
     const handle = execution.host.start(execution.providerId, {
       sessionId: session.id,
       workingDirectory: session.workingDirectory,
-      initialMessage,
+      initialMessage: boot.augmentedText,
       initialSkillSelections,
       previousAssistantTexts: this.getPreviousAssistantMessageTexts(session.id),
       model: session.model,
@@ -2235,7 +2499,7 @@ export class SessionService {
     })
 
     this.pendingTurnAccountIds.set(session.id, providerAccountId ?? null)
-    this.requestRelayMute(session.id, turnFlags?.muteRelays)
+    this.requestRelayMute(session.id, turn?.muteRelays)
     this.activeHandles.set(session.id, handle)
     handle.onDelta((delta: SessionDelta) => {
       this.applyDelta(session.id, delta, handle)
@@ -2243,6 +2507,10 @@ export class SessionService {
     handle.onActivityHeartbeat?.(() => {
       this.liveness.bump(session.id)
     })
+
+    if (boot.noteDraft) {
+      this.recordBootContextNote(session.id, boot.noteDraft)
+    }
   }
 
   private getPreviousAssistantMessageTexts(sessionId: string): string[] {
@@ -2556,6 +2824,17 @@ export class SessionService {
       executionHost: session.executionHost,
       accountId: input.providerAccountId,
     })
+    // The other door's barrier, in the same shape and for the same reason
+    // (MAR-2682). Nothing after this send asks the host's permission again --
+    // the attach and the wire call are all there is -- so the question is asked
+    // here, on this method's own line, above the write it authorises.
+    this.assertTurnProviderRunnable(session)
+
+    // Past the refusal: unarchiving is a consequence of sending, and a send
+    // this method refuses must not leave one.
+    if (session.archivedAt) {
+      this.updateArchiveState(session.id, null)
+    }
 
     this.pendingUserAttachmentIds.set(session.id, input.attachmentIds ?? [])
     this.pendingUserSkillSelections.set(session.id, input.skillSelections ?? [])
