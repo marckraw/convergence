@@ -17,6 +17,8 @@ import type {
   StartSessionRequest,
 } from './session.types'
 import type { ProviderCatalog } from './provider-catalog.pure'
+import type { RemoteProjectCatalog } from './remote-project-catalog.pure'
+import type { SessionWorkAddress } from '@/shared/lib/work-address.pure'
 
 export const sessionApi = {
   create: (input: {
@@ -31,6 +33,7 @@ export const sessionApi = {
     name: string
     primarySurface?: 'conversation' | 'terminal'
     executionHost?: SessionExecutionHostId
+    workAddress?: SessionWorkAddress | null
   }): Promise<SessionSummary> => window.electronAPI.session.create(input),
 
   getSummariesByProjectId: (projectId: string): Promise<SessionSummary[]> =>
@@ -167,4 +170,24 @@ export const providerApi = {
     window.electronAPI.provider.getRuntimeInfo(),
   update: (providerId: string): Promise<ProviderUpdateResult> =>
     window.electronAPI.provider.update(providerId),
+}
+
+export const remoteProjectApi = {
+  /**
+   * Where one machine can work. The argument is the machine: omitted means this
+   * one, which has no Projects and says so without asking anybody (MAR-2689).
+   */
+  getAll: (executionHostId?: string | null): Promise<RemoteProjectCatalog> =>
+    window.electronAPI.executionHost.getProjects(executionHostId ?? undefined),
+}
+
+export const repositoryOriginApi = {
+  /**
+   * What a daemon would clone for a local checkout, or null when there is
+   * nothing it could clone. The same derivation the start path uses, so the
+   * repository the strip states and the repository the wire carries are one
+   * value (MAR-2689).
+   */
+  cloneableUrl: (repositoryPath: string): Promise<string | null> =>
+    window.electronAPI.git.getCloneableRepositoryUrl(repositoryPath),
 }

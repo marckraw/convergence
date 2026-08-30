@@ -3,6 +3,8 @@ import { AlertTriangle } from 'lucide-react'
 import type { SearchableSelectItem } from '@/shared/ui/searchable-select.presentational'
 import { ComposerSelect } from './composer-select.presentational'
 import type { ExecutionBarView } from './execution-bar.pure'
+import { WorkAddressSlot } from './work-address-slot.presentational'
+import type { WorkAddressSlotView } from './work-address-slot.pure'
 import {
   stripClass,
   stripFactClass,
@@ -14,8 +16,11 @@ import {
 
 interface ExecutionBarProps {
   view: ExecutionBarView
+  /** Where on that machine the session works. Renders nothing on Local. */
+  workAddress: WorkAddressSlotView
   disabled: boolean
   onChange: (hostId: string) => void
+  onWorkAddressChange: (choiceId: string) => void
 }
 
 /**
@@ -32,13 +37,17 @@ interface ExecutionBarProps {
  * back inside the card and it collapses into a divided row again — the canary
  * in `composer.container.test.tsx` goes red when it does.
  *
- * The strip is a wrapping flex with a gap and exactly one element in it. The
- * Project picker joins it later; nothing stands empty waiting for it.
+ * The strip is a wrapping flex with a gap. It held exactly one element until
+ * the Project picker MAR-2619 reserved a place for arrived beside it
+ * (MAR-2689); the second slot renders nothing on Local, so the strip is still
+ * one element there and nothing stands empty.
  */
 export const ExecutionBar: FC<ExecutionBarProps> = ({
   view,
+  workAddress,
   disabled,
   onChange,
+  onWorkAddressChange,
 }) => {
   if (view.mode === 'hidden') return null
 
@@ -73,6 +82,11 @@ export const ExecutionBar: FC<ExecutionBarProps> = ({
           ) : null}
         </>
       )}
+      <WorkAddressSlot
+        view={workAddress}
+        disabled={disabled}
+        onChange={onWorkAddressChange}
+      />
     </div>
   )
 }

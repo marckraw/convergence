@@ -20,6 +20,7 @@ function endpoint(
   id: string,
   baseUrl: string,
   label = 'kuba-vps',
+  configurationEpoch = 0,
 ): ExecutionHostEndpoint {
   return {
     id,
@@ -28,6 +29,7 @@ function endpoint(
     position: 0,
     createdAt: '2026-01-01',
     updatedAt: '2026-01-01',
+    configurationEpoch,
   }
 }
 
@@ -114,6 +116,41 @@ describe('providerCatalogSourceForHost', () => {
     const paddedLocal = providerCatalogSourceForHost(' local ', [])
     expect(paddedLocal).not.toEqual(LOCAL_PROVIDER_CATALOG_SOURCE)
     expect(paddedLocal.executionHostId).toBe(' local ')
+  })
+
+  it('is a different configuration once the machine’s credential has changed', () => {
+    // The hole a token rotation left open, and the one this side of the wire
+    // could not see (MAR-2689 round 6). A daemon token never crosses the
+    // preload boundary, so a source of `id + baseUrl` compared *equal* across
+    // a rotation: a provider listing and a Projects listing read under the old
+    // credential stayed in force, were shown, and could be recorded and sent.
+    // The epoch is main's answer to that -- an integer that moves when the
+    // configuration does and says nothing else about it.
+    //
+    // Mutation: drop `endpoint.configurationEpoch` from the joined
+    // configuration in `providerCatalogSourceForHost`, and this goes red. The
+    // same mutation reddens the S3 provider row's own canary in
+    // `option-row.container.test.tsx`: one derivation feeds both catalogs, so
+    // one mutation is what takes both down.
+    const underTokenA = providerCatalogSourceForHost('daemon-a', [
+      endpoint('daemon-a', 'https://a.test', 'kuba-vps', 0),
+    ])
+    const underTokenB = providerCatalogSourceForHost('daemon-a', [
+      endpoint('daemon-a', 'https://a.test', 'kuba-vps', 1),
+    ])
+    expect(underTokenA.executionHostId).toBe(underTokenB.executionHostId)
+    expect(underTokenA.configuration).not.toBe(underTokenB.configuration)
+  })
+
+  it('leaves this machine byte-identical, epoch or no epoch', () => {
+    // Local pays for nothing this era adds (MAR-2689 ruling 2). There is no
+    // Endpoint behind it, so there is no configuration to have an epoch, and
+    // the value the local composer keys everything by must be the one it
+    // always was.
+    expect(providerCatalogSourceForHost('local', [])).toEqual(
+      LOCAL_PROVIDER_CATALOG_SOURCE,
+    )
+    expect(LOCAL_PROVIDER_CATALOG_SOURCE.configuration).toBe('local')
   })
 
   it('gives an unconfigured endpoint a configuration no machine can have', () => {

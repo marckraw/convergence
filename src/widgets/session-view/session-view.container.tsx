@@ -49,6 +49,10 @@ import {
 } from 'lucide-react'
 import { formatConversationTotalDuration } from './conversation-total-duration.pure'
 import {
+  describeCloneableRepository,
+  describeWorkAddress,
+} from '@/shared/lib/work-address.pure'
+import {
   SpaceContextPanel,
   type SpaceContextAttemptView,
 } from './space-context-panel.presentational'
@@ -56,12 +60,6 @@ import { PullRequestPanel } from './pull-request-panel.presentational'
 import { SessionHeaderDetailRow } from './session-header-detail-row.presentational'
 import { SessionWiresContainer } from './session-wires.container'
 import { SessionConversationSurface } from './session-conversation-surface.container'
-
-function formatRemoteRepositoryLabel(repository: string): string {
-  return repository
-    .replace(/^https:\/\/github\.com\//, '')
-    .replace(/\.git$/, '')
-}
 
 export const SessionView: FC = () => {
   const activeProject = useProjectStore((s) => s.activeProject)
@@ -413,12 +411,23 @@ export const SessionView: FC = () => {
                         label="Execution host"
                         value="Remote daemon"
                       />
+                      {/*
+                        What this session was told, above what the daemon says
+                        it did (MAR-2689). A row written before the work address
+                        existed reads "Unknown" rather than a repository
+                        re-derived from a local checkout it may never have
+                        matched.
+                      */}
+                      <SessionHeaderDetailRow
+                        label="Works in"
+                        value={describeWorkAddress(session.workAddress)}
+                      />
                       {remoteWorkspace?.ok &&
                         remoteWorkspace.info.workspace && (
                           <>
                             <SessionHeaderDetailRow
                               label="Remote repository"
-                              value={formatRemoteRepositoryLabel(
+                              value={describeCloneableRepository(
                                 remoteWorkspace.info.workspace.repository,
                               )}
                             />

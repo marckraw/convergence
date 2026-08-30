@@ -72,6 +72,18 @@ export type {
   ProviderCatalogSource,
   ProviderCatalogState,
 } from './provider-catalog.pure'
+export { catalogInForce } from './provider-catalog.pure'
+export {
+  landedRemoteProjectCatalog,
+  remoteProjectMatchingOrigin,
+} from './remote-project-catalog.pure'
+export type {
+  RemoteProject,
+  RemoteProjectCatalog,
+  RemoteProjectCatalogs,
+  RemoteProjectCatalogState,
+} from './remote-project-catalog.pure'
+export { repositoryOriginApi } from './session.api'
 export {
   describeUnavailableProviderSelection,
   getProviderDisplayLabel,

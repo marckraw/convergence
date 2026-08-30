@@ -38,8 +38,17 @@ export interface ProviderCatalog {
  * The daemon token is deliberately not in here, and not because it does not
  * matter: it matters, which is exactly why it stays in the main process. It
  * never crosses the preload boundary, so the renderer cannot fingerprint it and
- * must not try. A token change does not change *which machine* a catalog is
- * about, and the host on the far side already refuses a listing across one.
+ * must not try.
+ *
+ * `configurationEpoch` is how it counts anyway (MAR-2689 round 6). Leaving the
+ * token out used to mean leaving a *rotation* out, and a rotation is a change
+ * of configuration like any other: a catalog read under the old credential
+ * stayed in force here, was shown, and could be recorded and sent -- the far
+ * side refusing it was a claim this docblock made and nothing enforced. The
+ * epoch is an integer main bumps when the base URL or the token stops being
+ * the one it last resolved under, so the renderer can tell "not the
+ * configuration you asked under" from "the same machine" without being able to
+ * tell anything else.
  */
 export interface ProviderCatalogSource {
   /** `'local'`, or the Endpoint id. */
@@ -55,12 +64,13 @@ export interface ProviderCatalogSource {
 const UNCONFIGURED_ENDPOINT_CONFIGURATION = '\u0000unconfigured'
 
 /**
- * Joins the halves of a configuration.
+ * Joins the parts of a configuration.
  *
- * A character neither half can carry, so two different pairs cannot flatten to
- * one string. That is not a hope: an Endpoint id is `[A-Za-z0-9_-]{1,64}` by
- * `isExecutionHostEndpointId`, and a base URL has been through
- * `normalizeExecutionHostBaseUrl`, so neither can contain a NUL.
+ * A character none of them can carry, so two different triples cannot flatten
+ * to one string. That is not a hope: an Endpoint id is `[A-Za-z0-9_-]{1,64}`
+ * by `isExecutionHostEndpointId`, a base URL has been through
+ * `normalizeExecutionHostBaseUrl`, and an epoch is an integer -- so none of
+ * them can contain a NUL.
  */
 const CONFIGURATION_SEPARATOR = '\u0000'
 
@@ -100,7 +110,9 @@ export function providerCatalogSourceForHost(
   return {
     executionHostId: id,
     configuration: endpoint
-      ? `${endpoint.id}${CONFIGURATION_SEPARATOR}${endpoint.baseUrl}`
+      ? [endpoint.id, endpoint.baseUrl, endpoint.configurationEpoch].join(
+          CONFIGURATION_SEPARATOR,
+        )
       : UNCONFIGURED_ENDPOINT_CONFIGURATION,
   }
 }
@@ -127,22 +139,37 @@ export type ProviderCatalogState =
 export type ProviderCatalogs = Record<string, ProviderCatalogState>
 
 /**
- * A catalog this store holds, handed back only while the configuration it was
- * read from is still the one that Endpoint points at (MAR-2682).
+ * A per-machine value this store holds, handed back only while the
+ * configuration it was read from is still the one that Endpoint points at
+ * (MAR-2682, MAR-2689).
  *
- * The single read of the map, and the line that makes a stale pairing
+ * The single read of every such map, and the line that makes a stale pairing
  * unrepresentable rather than tidied up afterwards. Nothing has to notice that
- * a base URL changed; a catalog read from the old one simply cannot be obtained
+ * a base URL changed; a value read from the old one simply cannot be obtained
  * here.
+ *
+ * Generic over what is held because the renderer now keeps two of these maps --
+ * what a machine runs, and where it can work -- and the guard is the *rule*,
+ * not a fact about providers. Written out twice it would be a rule in two
+ * places, which in this codebase is a rule that drifts: the same id already
+ * came to be read two different ways at two doors, three times running.
  */
-export function providerCatalogInForce(
-  catalogs: ProviderCatalogs,
+export function catalogInForce<T extends { source: ProviderCatalogSource }>(
+  catalogs: Record<string, T>,
   source: ProviderCatalogSource,
-): ProviderCatalogState | null {
+): T | null {
   const known = ownRecordValue(catalogs, source.executionHostId)
   return known && known.source.configuration === source.configuration
     ? known
     : null
+}
+
+/** The provider catalog in force for one machine. */
+export function providerCatalogInForce(
+  catalogs: ProviderCatalogs,
+  source: ProviderCatalogSource,
+): ProviderCatalogState | null {
+  return catalogInForce(catalogs, source)
 }
 
 /**
