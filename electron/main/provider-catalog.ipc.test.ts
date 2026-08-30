@@ -151,6 +151,9 @@ describe('the per-machine ipc doors', () => {
       appSettings,
       credentials: { resolveToken: async (id: string) => `token-${id}` },
       fetch: routedFetch(),
+      // Not this suite's subject: named so the composition root cannot
+      // quietly lose the real one (MAR-2694 round 2).
+      onWorkspaceReported: () => {},
     })
 
     await registry.primeConfiguredEndpoints()

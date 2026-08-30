@@ -17,6 +17,7 @@ import { SessionService } from '../../session/session.service'
 import { ProviderRegistry } from '../provider-registry'
 import {
   createStubDaemon,
+  waitUntil,
   type StubDaemon,
 } from './execution-host-daemon.fixture'
 import {
@@ -25,9 +26,15 @@ import {
 } from './execution-host-health.fixture'
 import { LocalExecutionHost } from './local-execution-host'
 import { RemoteExecutionHost } from './remote-execution-host'
+import { AppSettingsRemoteExecutionHostRegistry } from './remote-execution-host.registry'
+import { AppSettingsService } from '../../app-settings/app-settings.service'
+import { StateService } from '../../state/state.service'
+import { ExecutionHostEndpointRepository } from '../../execution-host-endpoint/execution-host-endpoint.repository'
+import { recordingExecutionHostCredentials } from '../../credentials/execution-host-daemon-credentials.fixture'
 import { EXECUTION_HOST_NEVER_SENT_START_REQUEST_FIELDS } from './execution-host-wire-mapping.pure'
 import type { SessionStartConfig } from '../provider.types'
 import { makeSessionPreEraRemote } from '../../session/session-work-address.fixture'
+import { ProviderDebugService } from '../../provider-debug/provider-debug.service'
 
 const PROJECT_ID = 'project-work-address'
 
@@ -87,6 +94,10 @@ describe('a remote start carries the place the session recorded', () => {
       },
       fetch: stub.fetchFn,
       reconnect: { maxAttempts: 1, wait: async () => {} },
+      // The wire `main/index.ts` builds for real: the daemon's echo becomes
+      // the record, in the same beat the start is accepted (MAR-2694).
+      onWorkspaceReported: (sessionId, workspace) =>
+        service.recordReportedWorkspace(sessionId, workspace),
     })
     await host.refreshProviders()
     service.setRemoteExecutionHosts(
@@ -137,6 +148,15 @@ describe('a remote start carries the place the session recorded', () => {
     return id
   }
 
+  /**
+   * Lets the start's own continuation run. The POST body is captured by the
+   * stub synchronously, so the wire assertions need no wait; the *response* is
+   * read one microtask later, so anything about what the daemon answered does.
+   */
+  async function settleScheduledWork(): Promise<void> {
+    await new Promise((resolve) => setTimeout(resolve, 0))
+  }
+
   function countSessions(): number {
     return (
       db.prepare('SELECT COUNT(*) AS count FROM sessions').get() as {
@@ -177,6 +197,7 @@ describe('a remote start carries the place the session recorded', () => {
     const id = createRemoteSession({
       mode: 'repository',
       repository: 'https://github.com/marckraw/new-blok.git',
+      branchName: null,
       label: 'marckraw/new-blok',
     })
     await service.start(id, { text: 'hello' })
@@ -192,6 +213,7 @@ describe('a remote start carries the place the session recorded', () => {
     const id = createRemoteSession({
       mode: 'repository',
       repository: 'https://github.com/marckraw/new-blok.git',
+      branchName: null,
       label: 'marckraw/new-blok',
     })
     await service.start(id, { text: 'hello' })
@@ -213,10 +235,570 @@ describe('a remote start carries the place the session recorded', () => {
     })
   })
 
+  /**
+   * The errand's whole point: a branch written down at dispatch reaches the
+   * daemon exactly as typed (MAR-2694). Asserted on the body the stub daemon
+   * received, because the claim is about the wire and nothing else -- a wire
+   * mapping fixture would pass on a shape the far side never sees.
+   *
+   * Mutation: trim the draft, or send `branchName: ''` for an empty field, and
+   * the pair below goes red.
+   */
+  it('sends the branch that was written down, verbatim', async () => {
+    const id = createRemoteSession({
+      mode: 'repository',
+      repository: 'https://github.com/marckraw/new-blok.git',
+      branchName: 'agent/mar-2694',
+      label: 'marckraw/new-blok',
+    })
+    await service.start(id, { text: 'hello' })
+
+    expect(startBody().workspace).toEqual({
+      repository: 'https://github.com/marckraw/new-blok.git',
+      branchName: 'agent/mar-2694',
+    })
+  })
+
+  /**
+   * The other half: nothing written down sends no `branchName` KEY at all, and
+   * the daemon names the branch itself. A `branchName: null` or `''` on the
+   * wire would ask it to materialise a branch with no name instead of asking it
+   * for one of its own choosing.
+   *
+   * Mutation: emit the key unconditionally in `requireRemoteWorkPlace` (or in
+   * `buildWireWorkspaceSource`) and this goes red.
+   */
+  it('sends no branch key at all when none was written down', async () => {
+    const id = createRemoteSession({
+      mode: 'repository',
+      repository: 'https://github.com/marckraw/new-blok.git',
+      branchName: null,
+      label: 'marckraw/new-blok',
+    })
+    await service.start(id, { text: 'hello' })
+
+    const workspace = startBody().workspace as Record<string, unknown>
+    expect(workspace).toEqual({
+      repository: 'https://github.com/marckraw/new-blok.git',
+    })
+    expect(Object.hasOwn(workspace, 'branchName')).toBe(false)
+  })
+
+  /**
+   * A residency names no branch on the wire either: a Project runs on the
+   * checkout's own HEAD, and the daemon reports which (MAR-2694).
+   */
+  it('sends no branch in Project mode', async () => {
+    const id = createRemoteSession({
+      mode: 'project',
+      projectId: 'new-blok',
+      workingDirectory: '/srv/projects/new-blok',
+      label: 'Project new-blok',
+    })
+    await service.start(id, { text: 'hello' })
+
+    expect('workspace' in startBody()).toBe(false)
+  })
+
+  /**
+   * The record learns where the session works in the same beat the daemon
+   * accepts it (MAR-2694) -- no fetch, no panel, no waiting. The daemon's
+   * snapshot route is left unstubbed here on purpose: it answers 404, so
+   * anything this row sees came from the start response alone.
+   *
+   * Mutation: skip the `notifyWorkspaceReported` call in `RemoteSessionRun`,
+   * and this goes red -- the record stays silent and the details panel has
+   * nothing to show until a fetch that, on this daemon, fails.
+   */
+  it('records the workspace the start response echoed', async () => {
+    stub.setStartWorkspace({
+      mode: 'repository',
+      repository: 'https://github.com/marckraw/new-blok.git',
+      branchName: 'agent/34372e47',
+      baseRef: 'master',
+      workspacePath: '/srv/worktrees/s-1',
+      environment: null,
+    })
+    const id = createRemoteSession({
+      mode: 'repository',
+      repository: 'https://github.com/marckraw/new-blok.git',
+      branchName: 'agent/mar-2694',
+      label: 'marckraw/new-blok',
+    })
+    await service.start(id, { text: 'hello' })
+    await settleScheduledWork()
+
+    // The daemon's branch, not the one that was typed: the record holds what
+    // exists, and what was asked for stays in the work address beside it.
+    expect(service.getById(id)?.reportedWorkspace).toEqual({
+      mode: 'repository',
+      repository: 'https://github.com/marckraw/new-blok.git',
+      branchName: 'agent/34372e47',
+      baseRef: 'master',
+      workspacePath: '/srv/worktrees/s-1',
+      environment: null,
+    })
+    expect(service.getById(id)?.workAddress).toHaveProperty(
+      'branchName',
+      'agent/mar-2694',
+    )
+  })
+
+  /**
+   * The record is only ever written from an answer about the session it belongs
+   * to (MAR-2694 round 2). The echoed id used to be read and thrown away, and
+   * the workspace written under the id we had asked for whatever the daemon
+   * said -- so a crossed answer put another run's worktree on this row, and a
+   * row that describes someone else's branch looks exactly like a right one.
+   *
+   * The refusal is a failed start and not a degrade: a daemon answering about a
+   * run we did not ask for is not one we can attach to either.
+   *
+   * Mutation: drop the comparison in `requireEchoedSessionId` and this goes red
+   * with the snapshot door's row below.
+   */
+  it('refuses a start answered for another session, and records nothing', async () => {
+    stub.setStartResponseSessionId('s-somebody-else')
+    stub.setStartWorkspace({
+      mode: 'repository',
+      repository: 'https://github.com/marckraw/other.git',
+      branchName: 'agent/somebody-else',
+      baseRef: 'master',
+      workspacePath: '/srv/worktrees/s-somebody-else',
+      environment: null,
+    })
+    const id = createRemoteSession({
+      mode: 'repository',
+      repository: 'https://github.com/marckraw/new-blok.git',
+      branchName: 'agent/mar-2694',
+      label: 'marckraw/new-blok',
+    })
+    await service.start(id, { text: 'hello' })
+    await settleScheduledWork()
+
+    expect(service.getById(id)?.reportedWorkspace).toBeNull()
+    expect(service.getById(id)?.status).toBe('failed')
+  })
+
+  /**
+   * The same law at the fetch door, and the record already holds an answer here
+   * so "unchanged" is a thing that can be seen: a crossed GET must not be able
+   * to durably rewrite this row with another run's branch.
+   *
+   * Mutation: drop the comparison in `requireEchoedSessionId` and this goes red
+   * with the start door's row above.
+   */
+  it('refuses a snapshot answered for another session, and leaves the record standing', async () => {
+    stub.setStartWorkspace({
+      mode: 'repository',
+      repository: 'https://github.com/marckraw/new-blok.git',
+      branchName: 'agent/34372e47',
+      baseRef: 'master',
+      workspacePath: '/srv/worktrees/s-1',
+      environment: null,
+    })
+    const id = createRemoteSession({
+      mode: 'repository',
+      repository: 'https://github.com/marckraw/new-blok.git',
+      branchName: 'agent/mar-2694',
+      label: 'marckraw/new-blok',
+    })
+    await service.start(id, { text: 'hello' })
+    await settleScheduledWork()
+
+    stub.setSnapshotResponseSessionId('s-somebody-else')
+    stub.setSessionSnapshot(id, {
+      workspace: {
+        repository: 'https://github.com/marckraw/other.git',
+        branchName: 'agent/somebody-else',
+        baseRef: 'master',
+      },
+      prUrl: null,
+    })
+    await expect(service.fetchRemoteSessionWorkspaceInfo(id)).rejects.toThrow(
+      /not /,
+    )
+
+    expect(service.getById(id)?.reportedWorkspace).toHaveProperty(
+      'branchName',
+      'agent/34372e47',
+    )
+  })
+
+  /**
+   * Acceptance is the daemon's answer; recording it is our consequence, and a
+   * consequence must not be able to retract the answer (MAR-2694 round 2).
+   *
+   * The callback used to be invoked inside the start's own `try`, whose `catch`
+   * logs "remote session start refused", fails the handle and returns before
+   * the event stream is opened. So a database write that threw -- or the
+   * renderer broadcast behind it -- stranded a run the daemon was already
+   * holding: nothing streaming, a handle saying failed, and a retry that would
+   * meet the daemon's 409 for a session id it had accepted.
+   *
+   * Mutation: move the `consumeStartEcho` call back inside the try and this
+   * goes red on all three counts.
+   */
+  it('keeps a start the daemon accepted when the record write throws', async () => {
+    const throwingRecord = new RemoteExecutionHost({
+      connection: {
+        resolveConnection: async () => ({
+          baseUrl: 'http://daemon.test',
+          token: 'test-token',
+        }),
+      },
+      fetch: stub.fetchFn,
+      reconnect: { maxAttempts: 1, wait: async () => {} },
+      onWorkspaceReported: () => {
+        throw new Error('record write failed')
+      },
+    })
+    await throwingRecord.refreshProviders()
+    service.setRemoteExecutionHosts(
+      executionHostRegistryFor({
+        [TEST_EXECUTION_HOST_ENDPOINT_ID]: throwingRecord,
+      }),
+    )
+    stub.setStartWorkspace({
+      mode: 'repository',
+      repository: 'https://github.com/marckraw/new-blok.git',
+      branchName: 'agent/34372e47',
+      baseRef: 'master',
+      workspacePath: '/srv/worktrees/s-1',
+      environment: null,
+    })
+
+    const id = createRemoteSession({
+      mode: 'repository',
+      repository: 'https://github.com/marckraw/new-blok.git',
+      branchName: 'agent/mar-2694',
+      label: 'marckraw/new-blok',
+    })
+    await service.start(id, { text: 'hello' })
+    await waitUntil(
+      () => stub.eventStreamLastEventIds.length > 0,
+      'the event stream to open',
+    )
+
+    // One start, the one the daemon accepted -- a second would meet its 409.
+    expect(stub.startRequests).toHaveLength(1)
+    expect(service.getById(id)?.status).not.toBe('failed')
+  })
+
+  /**
+   * The other consequence in the same window, and the one that sat one
+   * statement *earlier* than the guarded callback (MAR-2694 round 2).
+   *
+   * `run()` records a `start accepted by the daemon` lifecycle entry between
+   * the POST returning 201 and `started`/`consumeEventStream()`. That entry
+   * goes to the production `ProviderDebugService`, which broadcasts to the
+   * renderer and appends JSONL inline; a renderer that died between
+   * `isDestroyed()` and `send`, or a full disk, made it throw. `run()` is
+   * fire-and-forget, so the throw became an unhandled rejection: one start
+   * posted, the daemon holding the run, and no event stream ever opened --
+   * the same stranded live session round 1 closed for the record write.
+   *
+   * Round 1 guarded that one consequence; this one names the class instead.
+   * The sink is where the rule belongs, so the canary uses the real
+   * `ProviderDebugService` -- a test double that cannot throw would prove
+   * nothing about the object `main/index.ts` builds.
+   *
+   * Mutation: remove the guards in `ProviderDebugService.record` and this goes
+   * red on the stream, the status, and the captured rejection.
+   */
+  it('keeps a start the daemon accepted when the debug sink throws', async () => {
+    const rejections: unknown[] = []
+    const captureRejection = (reason: unknown): void => {
+      rejections.push(reason)
+    }
+    process.on('unhandledRejection', captureRejection)
+    try {
+      const debugSink = new ProviderDebugService({
+        broadcast: (_channel, payload) => {
+          const note = (payload as { note?: unknown } | null)?.note
+          if (
+            typeof note === 'string' &&
+            note.includes('start accepted by the daemon')
+          ) {
+            throw new Error('renderer went away')
+          }
+        },
+      })
+      const noisyHost = new RemoteExecutionHost({
+        connection: {
+          resolveConnection: async () => ({
+            baseUrl: 'http://daemon.test',
+            token: 'test-token',
+          }),
+        },
+        fetch: stub.fetchFn,
+        reconnect: { maxAttempts: 1, wait: async () => {} },
+        debugSink,
+        onWorkspaceReported: (sessionId, workspace) =>
+          service.recordReportedWorkspace(sessionId, workspace),
+      })
+      await noisyHost.refreshProviders()
+      service.setRemoteExecutionHosts(
+        executionHostRegistryFor({
+          [TEST_EXECUTION_HOST_ENDPOINT_ID]: noisyHost,
+        }),
+      )
+
+      const id = createRemoteSession({
+        mode: 'repository',
+        repository: 'https://github.com/marckraw/new-blok.git',
+        branchName: 'agent/mar-2694',
+        label: 'marckraw/new-blok',
+      })
+      await service.start(id, { text: 'hello' })
+      await waitUntil(
+        () => stub.eventStreamLastEventIds.length > 0,
+        'the event stream to open',
+      )
+      // A rejection is reported at the end of a turn of the event loop, so it
+      // needs one to have passed before the list can be believed.
+      await settleScheduledWork()
+
+      expect(stub.startRequests).toHaveLength(1)
+      expect(service.getById(id)?.status).not.toBe('failed')
+      expect(rejections).toEqual([])
+    } finally {
+      process.off('unhandledRejection', captureRejection)
+    }
+  })
+
+  /**
+   * A daemon that echoes nothing leaves the record honestly silent rather than
+   * filling it with the branch that was asked for. What was requested is
+   * already on the address; a record that repeated it there would make a
+   * request indistinguishable from an answer.
+   */
+  it('records nothing when the daemon echoes no workspace', async () => {
+    const id = createRemoteSession({
+      mode: 'repository',
+      repository: 'https://github.com/marckraw/new-blok.git',
+      branchName: 'agent/mar-2694',
+      label: 'marckraw/new-blok',
+    })
+    await service.start(id, { text: 'hello' })
+    await settleScheduledWork()
+
+    expect(service.getById(id)?.reportedWorkspace).toBeNull()
+  })
+
+  /**
+   * The second door onto the same fact (MAR-2694): a daemon that predates the
+   * start-response echo, or a session born before this shipped, fills its
+   * record from the first workspace fetch a panel makes. The record is what
+   * every surface reads, so an answer that arrives through a panel belongs in
+   * it too -- otherwise the panel knows something the strip does not.
+   *
+   * Mutation: drop the `recordReportedWorkspace` call in
+   * `fetchRemoteSessionWorkspaceInfo` and this goes red.
+   */
+  it('records the workspace a panel fetch came back with', async () => {
+    const id = createRemoteSession({
+      mode: 'repository',
+      repository: 'https://github.com/marckraw/new-blok.git',
+      branchName: null,
+      label: 'marckraw/new-blok',
+    })
+    await service.start(id, { text: 'hello' })
+    await settleScheduledWork()
+    expect(service.getById(id)?.reportedWorkspace).toBeNull()
+
+    stub.setSessionSnapshot(id, {
+      sessionId: id,
+      workspace: {
+        repository: 'https://github.com/marckraw/new-blok.git',
+        branchName: 'agent/34372e47',
+        baseRef: 'master',
+      },
+      prUrl: null,
+    })
+    await service.fetchRemoteSessionWorkspaceInfo(id)
+
+    expect(service.getById(id)?.reportedWorkspace).toEqual({
+      mode: 'repository',
+      repository: 'https://github.com/marckraw/new-blok.git',
+      branchName: 'agent/34372e47',
+      baseRef: 'master',
+      workspacePath: null,
+      environment: null,
+    })
+  })
+
+  /**
+   * Record beats fetch, and by precedence rather than by timing (MAR-2694
+   * round 2). Both doors used to write blind under the rule "the newest answer
+   * wins", so a snapshot fetch -- one that began before the start landed, or
+   * came back with an older view -- durably replaced the authoritative answer,
+   * and the read-side `recorded ?? fetched` guard could not help because the
+   * record itself had been overwritten.
+   *
+   * Both orders, with distinguishable branches, because a rule about authority
+   * has to hold whichever answer arrives second.
+   *
+   * Mutation: give the fetch door the blind `UPDATE` back (call
+   * `setReportedWorkspace` from `fillReportedWorkspaceFromFetch`, or drop the
+   * `AND reported_workspace IS NULL`) and the first row goes red.
+   */
+  it('keeps the start response when a later fetch answers differently', async () => {
+    stub.setStartWorkspace({
+      mode: 'repository',
+      repository: 'https://github.com/marckraw/new-blok.git',
+      branchName: 'agent/from-start',
+      baseRef: 'master',
+      workspacePath: '/srv/worktrees/s-1',
+      environment: null,
+    })
+    const id = createRemoteSession({
+      mode: 'repository',
+      repository: 'https://github.com/marckraw/new-blok.git',
+      branchName: null,
+      label: 'marckraw/new-blok',
+    })
+    await service.start(id, { text: 'hello' })
+    await settleScheduledWork()
+    expect(service.getById(id)?.reportedWorkspace).toHaveProperty(
+      'branchName',
+      'agent/from-start',
+    )
+
+    stub.setSessionSnapshot(id, {
+      workspace: {
+        repository: 'https://github.com/marckraw/new-blok.git',
+        branchName: 'agent/from-later-fetch',
+        baseRef: 'master',
+      },
+      prUrl: null,
+    })
+    await service.fetchRemoteSessionWorkspaceInfo(id)
+
+    expect(service.getById(id)?.reportedWorkspace).toHaveProperty(
+      'branchName',
+      'agent/from-start',
+    )
+  })
+
+  /**
+   * The other order, and the same ending: a fetch that landed first fills an
+   * empty record, and the start's own answer then takes the record because it
+   * is the authoritative one -- not because it spoke last.
+   */
+  it('ends on the start response when the fetch answered first', async () => {
+    const id = createRemoteSession({
+      mode: 'repository',
+      repository: 'https://github.com/marckraw/new-blok.git',
+      branchName: null,
+      label: 'marckraw/new-blok',
+    })
+    stub.setSessionSnapshot(id, {
+      workspace: {
+        repository: 'https://github.com/marckraw/new-blok.git',
+        branchName: 'agent/from-earlier-fetch',
+        baseRef: 'master',
+      },
+      prUrl: null,
+    })
+    await service.fetchRemoteSessionWorkspaceInfo(id)
+    expect(service.getById(id)?.reportedWorkspace).toHaveProperty(
+      'branchName',
+      'agent/from-earlier-fetch',
+    )
+
+    stub.setStartWorkspace({
+      mode: 'repository',
+      repository: 'https://github.com/marckraw/new-blok.git',
+      branchName: 'agent/from-start',
+      baseRef: 'master',
+      workspacePath: '/srv/worktrees/s-1',
+      environment: null,
+    })
+    await service.start(id, { text: 'hello' })
+    await settleScheduledWork()
+
+    expect(service.getById(id)?.reportedWorkspace).toHaveProperty(
+      'branchName',
+      'agent/from-start',
+    )
+  })
+
+  /**
+   * The carrier the app actually builds, pinned end to end (MAR-2694 round 2).
+   *
+   * Every other row in this file hands `RemoteExecutionHost` a callback of its
+   * own, which is the shape `main/index.ts` is *supposed* to produce -- so
+   * deleting the composition root's two lines, or the registry's forwarding
+   * line, left all of them green while the shipped app quietly stopped
+   * recording start echoes: the strip would sit on the requested place until
+   * some panel happened to fetch one. A wire whose removal costs nothing is not
+   * shipped.
+   *
+   * So this one composes the way the app does: a real
+   * `AppSettingsRemoteExecutionHostRegistry` over the real Endpoint rows, the
+   * real `SessionService` as the only recorder, and the record read at the end.
+   * The type makes the composition root pass the callback; this makes the
+   * registry hand it on.
+   *
+   * Mutation: delete `onWorkspaceReported: this.deps.onWorkspaceReported` from
+   * `AppSettingsRemoteExecutionHostRegistry.hostFor` and this goes red.
+   */
+  it('carries the daemon echo from the registry the app builds to the record', async () => {
+    const appSettings = new AppSettingsService(
+      db,
+      new StateService(db),
+      async () => [],
+      new ExecutionHostEndpointRepository(db),
+      recordingExecutionHostCredentials(),
+    )
+    const registry = new AppSettingsRemoteExecutionHostRegistry({
+      appSettings,
+      credentials: { resolveToken: async (id: string) => `token-${id}` },
+      fetch: stub.fetchFn,
+      onWorkspaceReported: (sessionId, workspace) =>
+        service.recordReportedWorkspace(sessionId, workspace),
+    })
+    service.setRemoteExecutionHosts(registry)
+    await registry.primeConfiguredEndpoints()
+    await waitUntil(
+      () =>
+        registry.hostFor(TEST_EXECUTION_HOST_ENDPOINT_ID).capabilities()
+          .length > 0,
+      'the daemon to be listed through the registry',
+    )
+
+    stub.setStartWorkspace({
+      mode: 'repository',
+      repository: 'https://github.com/marckraw/new-blok.git',
+      branchName: 'agent/34372e47',
+      baseRef: 'master',
+      workspacePath: '/srv/worktrees/s-1',
+      environment: null,
+    })
+    const id = createRemoteSession({
+      mode: 'repository',
+      repository: 'https://github.com/marckraw/new-blok.git',
+      branchName: 'agent/mar-2694',
+      label: 'marckraw/new-blok',
+    })
+    await service.start(id, { text: 'hello' })
+    await waitUntil(
+      () => service.getById(id)?.reportedWorkspace != null,
+      'the start echo to reach the record',
+    )
+
+    expect(service.getById(id)?.reportedWorkspace).toHaveProperty(
+      'branchName',
+      'agent/34372e47',
+    )
+  })
+
   it('builds no automation block on any remote start', async () => {
     const id = createRemoteSession({
       mode: 'repository',
       repository: 'https://github.com/marckraw/new-blok.git',
+      branchName: null,
       label: 'marckraw/new-blok',
     })
     await service.start(id, { text: 'hello' })
@@ -271,11 +853,22 @@ describe('a remote start carries the place the session recorded', () => {
     // every row here goes red -- together with the decoder's.
     const before = countSessions()
     for (const address of [
-      { mode: 'repository' as const, repository: '', label: 'marckraw/repo' },
-      { mode: 'repository' as const, repository: '  ', label: 'marckraw/repo' },
+      {
+        mode: 'repository' as const,
+        repository: '',
+        branchName: null,
+        label: 'marckraw/repo',
+      },
+      {
+        mode: 'repository' as const,
+        repository: '  ',
+        branchName: null,
+        label: 'marckraw/repo',
+      },
       {
         mode: 'repository' as const,
         repository: 'https://github.com/marckraw/new-blok.git',
+        branchName: null,
         label: ' ',
       },
       {

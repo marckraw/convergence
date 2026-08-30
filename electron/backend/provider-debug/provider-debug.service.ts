@@ -8,7 +8,7 @@ import type {
   ProviderDebugEntry,
   ProviderDebugRingState,
 } from './provider-debug.types'
-import type { ProviderDebugSink } from './provider-debug-sink'
+import { recordSafely, type ProviderDebugSink } from './provider-debug-sink'
 import type { JsonlWriter } from './provider-debug-jsonl'
 
 export const PROVIDER_DEBUG_CHANNEL = 'provider:debug:event'
@@ -41,7 +41,32 @@ export class ProviderDebugService implements ProviderDebugSink {
     )
   }
 
+  /**
+   * Records one entry into the ring, the renderer, and the JSONL trail.
+   *
+   * Never throws — the `ProviderDebugSink` contract, and here is the line that
+   * makes it true. Each of the three consequences is guarded on its own, so a
+   * renderer that died between `isDestroyed()` and `send` cannot cost the disk
+   * its line, and neither of them can reach a caller that was only describing
+   * work it had already done (MAR-2694 round 2).
+   */
   record(entry: ProviderDebugEntry): void {
+    // The bounded entry is what the ring holds, so it is what the other two
+    // consequences describe. An append that failed leaves nothing to describe.
+    const recorded = recordSafely('ring append', () => this.appendToRing(entry))
+    if (!recorded) return
+
+    recordSafely('broadcast', () => {
+      this.broadcast(PROVIDER_DEBUG_CHANNEL, recorded)
+    })
+    recordSafely('jsonl write', () => {
+      if (this.jsonl && this.isLoggingEnabled()) {
+        this.jsonl.writeLine(recorded.sessionId, serializeEntry(recorded))
+      }
+    })
+  }
+
+  private appendToRing(entry: ProviderDebugEntry): ProviderDebugEntry {
     const boundedEntry = boundEntryPayload(entry)
     const sessionId = boundedEntry.sessionId
     const existing = this.rings.get(sessionId) ?? emptyRingState()
@@ -55,10 +80,7 @@ export class ProviderDebugService implements ProviderDebugSink {
       if (oldestSessionId) this.rings.delete(oldestSessionId)
     }
     this.rings.set(sessionId, next)
-    this.broadcast(PROVIDER_DEBUG_CHANNEL, boundedEntry)
-    if (this.jsonl && this.isLoggingEnabled()) {
-      this.jsonl.writeLine(sessionId, serializeEntry(boundedEntry))
-    }
+    return boundedEntry
   }
 
   list(sessionId: string): ProviderDebugEntry[] {

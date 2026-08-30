@@ -58,6 +58,20 @@ export interface StubDaemon {
   setHealthHangs: (hangs: boolean) => void
   healthRequests: Array<{ authorization: string | null }>
   setStartStatus: (status: number) => void
+  /**
+   * The workspace the start response echoes back (MAR-2694, protocol 0.14).
+   * `null` answers without the field, as a pre-0.14 daemon does.
+   */
+  setStartWorkspace: (workspace: unknown) => void
+  /**
+   * Makes the start response name a session other than the one it was asked
+   * about, or none at all (`undefined`).
+   *
+   * A crossed answer cannot be produced any other way: this daemon echoes the
+   * id it was given, so a client that ignores the echo looks identical to one
+   * that checks it until something crosses (MAR-2694 round 2).
+   */
+  setStartResponseSessionId: (sessionId: string | undefined | null) => void
   setCommandStatus: (status: number) => void
   setEventsStatus: (status: number) => void
   /**
@@ -67,6 +81,11 @@ export interface StubDaemon {
    * something".
    */
   setSessionSnapshot: (sessionId: string, snapshot: unknown) => void
+  /**
+   * Makes every snapshot answer name this session instead of the one the URL
+   * addressed -- the GET half of a crossed answer (MAR-2694 round 2).
+   */
+  setSnapshotResponseSessionId: (sessionId: string | undefined | null) => void
   /** Session ids whose snapshot this daemon was asked for, in order. */
   snapshotRequests: string[]
   /**
@@ -118,6 +137,11 @@ export function createStubDaemon(): StubDaemon {
   let projectsBody: unknown = { projects: [] }
   let projectsStatus = 200
   let projectsResponder: ((call: number) => Promise<unknown>) | null = null
+  let startWorkspace: unknown = null
+  let startResponseSessionId: string | undefined | null
+  let startResponseSessionIdCrossed = false
+  let snapshotResponseSessionId: string | undefined | null
+  let snapshotResponseSessionIdCrossed = false
   const eventStreamLastEventIds: Array<string | null> = []
   const healthRequests: Array<{ authorization: string | null }> = []
   const snapshotRequests: string[] = []
@@ -215,8 +239,17 @@ export function createStubDaemon(): StubDaemon {
         )
       }
       startedSessionIds.add(config.sessionId)
+      const echoedSessionId = startResponseSessionIdCrossed
+        ? startResponseSessionId
+        : config.sessionId
       return jsonResponse(
-        { protocolVersion: 1, sessionId: config.sessionId },
+        {
+          protocolVersion: 1,
+          ...(echoedSessionId === undefined
+            ? {}
+            : { sessionId: echoedSessionId }),
+          ...(startWorkspace === null ? {} : { workspace: startWorkspace }),
+        },
         201,
       )
     }
@@ -228,7 +261,16 @@ export function createStubDaemon(): StubDaemon {
       if (snapshot === undefined) {
         return jsonResponse({ error: `Unknown session: ${sessionId}` }, 404)
       }
-      return jsonResponse(snapshot)
+      // The real daemon's snapshot names its own session
+      // (`docs/architecture/execution-host-wire-protocol.md`), so this one does
+      // too, and a test that wants a crossed answer says which name to use.
+      const named = snapshotResponseSessionIdCrossed
+        ? snapshotResponseSessionId
+        : sessionId
+      return jsonResponse({
+        ...(named === undefined ? {} : { sessionId: named }),
+        ...(snapshot as Record<string, unknown>),
+      })
     }
 
     if (method === 'POST' && url.includes('/commands')) {
@@ -325,6 +367,17 @@ export function createStubDaemon(): StubDaemon {
     },
     setStartStatus(status) {
       startStatus = status
+    },
+    setStartWorkspace(workspace) {
+      startWorkspace = workspace
+    },
+    setStartResponseSessionId(sessionId) {
+      startResponseSessionId = sessionId
+      startResponseSessionIdCrossed = true
+    },
+    setSnapshotResponseSessionId(sessionId) {
+      snapshotResponseSessionId = sessionId
+      snapshotResponseSessionIdCrossed = true
     },
     setCommandStatus(status) {
       commandStatus = status

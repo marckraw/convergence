@@ -1,3 +1,4 @@
+import type { ExecutionSessionWorkspace } from '@mrck-labs/execution-host-protocol'
 import type { AppSettingsService } from '../../app-settings/app-settings.service'
 import type { ExecutionHostDaemonCredentialsService } from '../../credentials/execution-host-daemon-credentials.service'
 import type { ProviderDebugSink } from '../../provider-debug/provider-debug-sink'
@@ -26,6 +27,20 @@ interface RemoteExecutionHostRegistryDeps {
   fetch?: typeof fetch
   /** Forwarded to every host: the stream cursor each run persists. */
   onEventSeq?: (sessionId: string, seq: number) => void
+  /**
+   * Forwarded to every host: the workspace each daemon says it made.
+   *
+   * Required, unlike its neighbour above, because the type is the only thing
+   * that can hold this wire in place. Deleting the composition root's line in
+   * `main/index.ts`, or the forwarding below, left every suite green while the
+   * app silently stopped recording start echoes -- a wire whose removal costs
+   * nothing is not shipped (MAR-2694 round 2). A caller with nothing to do with
+   * it says so out loud with a no-op; it cannot forget.
+   */
+  onWorkspaceReported: (
+    sessionId: string,
+    workspace: ExecutionSessionWorkspace,
+  ) => void
   debugSink?: ProviderDebugSink
 }
 
@@ -98,6 +113,7 @@ export class AppSettingsRemoteExecutionHostRegistry implements RemoteExecutionHo
         ),
       fetch: this.deps.fetch,
       onEventSeq: this.deps.onEventSeq,
+      onWorkspaceReported: this.deps.onWorkspaceReported,
       debugSink: this.deps.debugSink,
     })
     this.hosts.set(endpointId, host)

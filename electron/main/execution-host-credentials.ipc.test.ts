@@ -189,6 +189,9 @@ describe('the execution host daemon ipc handlers', () => {
       appSettings,
       credentials,
       fetch: routedFetch(),
+      // Not this suite's subject: named so the composition root cannot
+      // quietly lose the real one (MAR-2694 round 2).
+      onWorkspaceReported: () => {},
     })
 
     await registry.primeConfiguredEndpoints()

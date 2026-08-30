@@ -319,14 +319,120 @@ describe('start request and response', () => {
 
   it('parses the echoed session id and rejects malformed responses', () => {
     expect(
-      parseRemoteExecutionHostStartResponse({
-        protocolVersion: 1,
-        sessionId: 's-1',
-      }),
-    ).toEqual({ sessionId: 's-1' })
-    expect(() => parseRemoteExecutionHostStartResponse({})).toThrow(
+      parseRemoteExecutionHostStartResponse(
+        {
+          protocolVersion: 1,
+          sessionId: 's-1',
+        },
+        's-1',
+      ),
+    ).toEqual({
+      sessionId: 's-1',
+      workspace: null,
+      unreadableWorkspaceReason: null,
+    })
+    expect(() => parseRemoteExecutionHostStartResponse({}, 's-1')).toThrow(
       RemoteExecutionHostError,
     )
+  })
+
+  /**
+   * The echo the record is built from (MAR-2694). Protocol 0.14 returns the
+   * materialised workspace from the start itself, so a session knows where it
+   * works from the first second instead of after a panel happens to fetch one.
+   *
+   * Mutation: drop the workspace from the returned object and the first two
+   * rows go red -- the record would then never be written at start, and the
+   * session details would say "asking" until something fetched.
+   */
+  it('carries the workspace the daemon says it materialised', () => {
+    expect(
+      parseRemoteExecutionHostStartResponse(
+        {
+          sessionId: 's-1',
+          workspace: {
+            mode: 'repository',
+            repository: 'https://github.com/acme/repo.git',
+            branchName: 'agent/2694',
+            baseRef: 'main',
+            workspacePath: '/srv/worktrees/s-1',
+            environment: null,
+          },
+        },
+        's-1',
+      ).workspace,
+    ).toEqual({
+      mode: 'repository',
+      repository: 'https://github.com/acme/repo.git',
+      branchName: 'agent/2694',
+      baseRef: 'main',
+      workspacePath: '/srv/worktrees/s-1',
+      environment: null,
+    })
+  })
+
+  /**
+   * Exact or refused (MAR-2694 round 2). The echoed id used to be returned and
+   * ignored while the caller wrote the workspace under the id it had asked
+   * for, so a crossed response put another run's place on this row's durable
+   * record -- and a record that describes someone else's worktree is
+   * indistinguishable, on the panel, from one that is right.
+   *
+   * Mutation: drop the comparison in `requireEchoedSessionId` and every row
+   * here goes red, together with the snapshot door's pair.
+   */
+  it('refuses a start response that answers about another session', () => {
+    expect(() =>
+      parseRemoteExecutionHostStartResponse(
+        {
+          sessionId: 's-other',
+          workspace: {
+            mode: 'repository',
+            repository: 'https://github.com/acme/repo.git',
+            branchName: 'agent/other',
+            baseRef: 'main',
+            workspacePath: null,
+            environment: null,
+          },
+        },
+        's-requested',
+      ),
+    ).toThrow(/for session s-other, not s-requested/)
+
+    // Naming no session is refused as firmly: an answer that says nothing
+    // about which run it describes is not evidence that it describes this one.
+    for (const sessionId of [undefined, null, '', '   ', 7]) {
+      expect(() =>
+        parseRemoteExecutionHostStartResponse(
+          { sessionId, workspace: null },
+          's-requested',
+        ),
+      ).toThrow(/naming no session/)
+    }
+  })
+
+  /**
+   * A workspace this build cannot read does not fail a session the daemon has
+   * already created -- but it does not vanish either. The reason comes back so
+   * the caller can record it; a drop nobody can see is its own defect.
+   *
+   * Mutation: return `unreadableWorkspaceReason: null` unconditionally and this
+   * goes red.
+   */
+  it('degrades an unreadable workspace instead of failing the start', () => {
+    expect(
+      parseRemoteExecutionHostStartResponse(
+        {
+          sessionId: 's-1',
+          workspace: { mode: 'somewhere-new', repository: 'x' },
+        },
+        's-1',
+      ),
+    ).toEqual({
+      sessionId: 's-1',
+      workspace: null,
+      unreadableWorkspaceReason: 'unknown-kind',
+    })
   })
 })
 
@@ -404,35 +510,237 @@ describe('describeRemoteExecutionHostFailure', () => {
 })
 
 describe('parseRemoteSessionWorkspaceInfo', () => {
-  it('extracts the workspace and pull request from a snapshot', () => {
+  /**
+   * A pre-0.14 daemon's echo: no `mode`, three fields. The protocol reads it as
+   * Repository mode, which is what it always was, so a machine that has not
+   * been upgraded still reports where it works.
+   *
+   * Mutation: delete the protocol's legacy branch (`raw.mode !== undefined` ->
+   * `raw.mode === undefined` in `decodeExecutionSessionWorkspace`) and this
+   * goes red. Locally: replace this call with a decoder that requires `mode`.
+   */
+  it('reads a pre-0.14 echo as Repository mode', () => {
     expect(
-      parseRemoteSessionWorkspaceInfo({
+      parseRemoteSessionWorkspaceInfo(
+        {
+          sessionId: 's-1',
+          workspace: {
+            repository: 'https://github.com/acme/repo.git',
+            branchName: 'agent/12345678',
+            baseRef: 'main',
+          },
+          prUrl: 'https://github.com/acme/repo/pull/7',
+        },
+        's-1',
+      ),
+    ).toEqual({
+      workspace: {
+        mode: 'repository',
+        repository: 'https://github.com/acme/repo.git',
+        branchName: 'agent/12345678',
+        baseRef: 'main',
+        workspacePath: null,
+        environment: null,
+      },
+      pullRequest: {
+        kind: 'url',
+        url: 'https://github.com/acme/repo/pull/7',
+      },
+    })
+  })
+
+  /**
+   * Project mode, which the hand-rolled parser this replaced could not see at
+   * all: it looked for `repository` and `branchName` as strings and returned
+   * `null` for anything else, so a residency's origin, its join key and its
+   * actual HEAD would have arrived and been discarded (MAR-2694).
+   *
+   * Mutation: go back to requiring `repository` on every workspace and this
+   * goes red.
+   */
+  it('reads a Project-mode echo with its origin and its actual HEAD', () => {
+    expect(
+      parseRemoteSessionWorkspaceInfo(
+        {
+          sessionId: 's-1',
+          workspace: {
+            mode: 'project',
+            projectId: 'new-blok',
+            workingDirectory: '/srv/projects/new-blok',
+            origin: 'https://github.com/marckraw/new-blok.git',
+            originKey: 'github.com/marckraw/new-blok',
+            branchName: 'master',
+            requestedBranchName: 'agent/2694',
+            environment: null,
+          },
+        },
+        's-1',
+      ).workspace,
+    ).toEqual({
+      mode: 'project',
+      projectId: 'new-blok',
+      workingDirectory: '/srv/projects/new-blok',
+      origin: 'https://github.com/marckraw/new-blok.git',
+      originKey: 'github.com/marckraw/new-blok',
+      branchName: 'master',
+      requestedBranchName: 'agent/2694',
+      environment: null,
+    })
+  })
+
+  /**
+   * The `null`-as-success guard. A workspace the daemon sent and this build
+   * could not read must never come back as "no workspace": the panel would say
+   * the session has none while the machine is telling us something we failed to
+   * parse, which is the shape MAR-2619 exists to end.
+   *
+   * Mutation: return `{ workspace: null }` for an undecodable payload instead
+   * of throwing, and this goes red.
+   */
+  it('refuses an unreadable workspace rather than reporting none', () => {
+    expect(() =>
+      parseRemoteSessionWorkspaceInfo(
+        {
+          sessionId: 's-1',
+          workspace: { mode: 'repository', repository: 42 },
+        },
+        's-1',
+      ),
+    ).toThrow(/workspace this build cannot read/)
+  })
+
+  /**
+   * The same law at the second door (MAR-2694 round 2). The snapshot names its
+   * own session and this decoder never looked, while
+   * `fetchRemoteSessionWorkspaceInfo` wrote the returned workspace under the id
+   * it had requested -- so a crossed GET durably rewrote this row with another
+   * run's branch and pull request.
+   *
+   * Mutation: drop the comparison in `requireEchoedSessionId` and this goes red
+   * with the start door's pair.
+   */
+  it('refuses a session snapshot that answers about another session', () => {
+    expect(() =>
+      parseRemoteSessionWorkspaceInfo(
+        {
+          sessionId: 's-other',
+          workspace: {
+            repository: 'https://github.com/acme/repo.git',
+            branchName: 'agent/other',
+            baseRef: 'main',
+          },
+        },
+        's-requested',
+      ),
+    ).toThrow(/for session s-other, not s-requested/)
+
+    for (const sessionId of [undefined, null, '', '   ', 7]) {
+      expect(() =>
+        parseRemoteSessionWorkspaceInfo({ sessionId }, 's-requested'),
+      ).toThrow(/naming no session/)
+    }
+  })
+
+  it('handles snapshots without workspace or pull request', () => {
+    expect(
+      parseRemoteSessionWorkspaceInfo({ sessionId: 's-1' }, 's-1'),
+    ).toEqual({
+      workspace: null,
+      // The snapshot said nothing about a pull request, and this used to be
+      // read as `prUrl: null` -- the same value an explicit `null` produces,
+      // which is the daemon's own negative. The panel is allowed to say `None
+      // yet` for that negative, so the collapse let silence be printed as an
+      // answer (MAR-2718 round 2).
+      pullRequest: { kind: 'unreadable', reason: expect.any(String) },
+    })
+    // An explicit `null` is the daemon saying it has not materialised one,
+    // which is an answer and not a failure.
+    expect(
+      parseRemoteSessionWorkspaceInfo(
+        { sessionId: 's-1', workspace: null },
+        's-1',
+      ),
+    ).toEqual({
+      workspace: null,
+      pullRequest: { kind: 'unreadable', reason: expect.any(String) },
+    })
+    expect(() => parseRemoteSessionWorkspaceInfo('nope', 's-1')).toThrow(
+      RemoteExecutionHostError,
+    )
+  })
+
+  /**
+   * The pull request is decoded at the door that reads the bytes, into the
+   * three answers that actually exist (MAR-2718 round 2).
+   *
+   * `typeof value.prUrl === 'string' ? value.prUrl : null` made a missing key,
+   * a number, `false`, a blank string and `ftp://x` all into the one value the
+   * renderer is now allowed to call `None yet` -- a claim that the daemon
+   * looked and opened none. The daemon always emits the field explicitly
+   * (`agents-daemon/src/sessions/session-manager.ts`, `prUrl: session.prUrl ??
+   * null`), so its own explicit `null` is the negative and nothing else is.
+   *
+   * Exact or refused, and refused *narrowly*: the snapshot is not thrown out
+   * over it, because the workspace half is still the daemon's truth and the
+   * branch has to stay visible.
+   *
+   * Mutation: restore the non-string-to-`null` fallback and every row here goes
+   * red.
+   */
+  it('decodes the pull request instead of collapsing it to none', () => {
+    const read = (snapshot: Record<string, unknown>) =>
+      parseRemoteSessionWorkspaceInfo({ sessionId: 's-1', ...snapshot }, 's-1')
+        .pullRequest
+
+    // The daemon's own negative, and the only thing that may become `None yet`.
+    expect(read({ prUrl: null })).toEqual({ kind: 'none' })
+
+    expect(read({ prUrl: 'https://github.com/acme/repo/pull/7' })).toEqual({
+      kind: 'url',
+      url: 'https://github.com/acme/repo/pull/7',
+    })
+    expect(read({ prUrl: 'http://internal.test/pr/1' })).toEqual({
+      kind: 'url',
+      url: 'http://internal.test/pr/1',
+    })
+
+    // Everything that is neither: silence, and four shapes no reader can turn
+    // into a pull request. `''` and `'ftp://x'` are strings, which is exactly
+    // why a `typeof` test could not tell them from an answer.
+    for (const snapshot of [
+      {},
+      { prUrl: 42 },
+      { prUrl: false },
+      { prUrl: '' },
+      { prUrl: '   ' },
+      { prUrl: 'ftp://x' },
+      { prUrl: { url: 'https://github.com/acme/repo/pull/7' } },
+    ]) {
+      expect(read(snapshot)).toMatchObject({ kind: 'unreadable' })
+    }
+  })
+
+  /**
+   * An unreadable pull request may not cost the caller the workspace. The
+   * branch is what the strip and the panel are for, and a snapshot refused
+   * whole over the field beside it would take the branch down with it.
+   */
+  it('keeps the workspace when only the pull request is unreadable', () => {
+    const info = parseRemoteSessionWorkspaceInfo(
+      {
         sessionId: 's-1',
         workspace: {
           repository: 'https://github.com/acme/repo.git',
           branchName: 'agent/12345678',
           baseRef: 'main',
         },
-        prUrl: 'https://github.com/acme/repo/pull/7',
-      }),
-    ).toEqual({
-      workspace: {
-        repository: 'https://github.com/acme/repo.git',
-        branchName: 'agent/12345678',
-        baseRef: 'main',
+        prUrl: 42,
       },
-      prUrl: 'https://github.com/acme/repo/pull/7',
-    })
-  })
-
-  it('handles snapshots without workspace or pull request', () => {
-    expect(parseRemoteSessionWorkspaceInfo({ sessionId: 's-1' })).toEqual({
-      workspace: null,
-      prUrl: null,
-    })
-    expect(() => parseRemoteSessionWorkspaceInfo('nope')).toThrow(
-      RemoteExecutionHostError,
+      's-1',
     )
+
+    expect(info.workspace).toHaveProperty('branchName', 'agent/12345678')
+    expect(info.pullRequest).toMatchObject({ kind: 'unreadable' })
   })
 })
 

@@ -82,6 +82,9 @@ describe('the configuration epoch', () => {
       // holding this machine's listing.
       credentials: { resolveToken: async (id: string) => tokens[id] ?? null },
       fetch: stub.fetchFn,
+      // Not this suite's subject: named so the composition root cannot
+      // quietly lose the real one (MAR-2694 round 2).
+      onWorkspaceReported: () => {},
     })
   })
 
