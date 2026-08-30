@@ -216,6 +216,15 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
     string | null
   >(null)
   /**
+   * The branch he wrote down for a session being born (MAR-2694).
+   *
+   * Raw text and nothing more. The branch is never derived — not from a Linear
+   * id, not from the project, not from git — because a dispatch may come from
+   * any tracker or none, so the only source that is true everywhere is what
+   * was typed. An empty field is a real instruction: the daemon names it.
+   */
+  const [branchDraft, setBranchDraft] = useState('')
+  /**
    * What a daemon could clone for this project, read from the main process by
    * the same derivation the start path uses (MAR-2689).
    *
@@ -404,7 +413,9 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
     projects: catalogInForce(remoteProjectCatalogs, catalogSource),
     localRepository,
     selectedId: selectedWorkAddressId,
+    branchDraft,
     recordedAddress: activeSession?.workAddress,
+    reportedWorkspace: activeSession?.reportedWorkspace,
   })
   const catalogEntries =
     optionRow.status === 'listed' ? optionRow.entries : NO_CATALOG_ENTRIES
@@ -958,6 +969,7 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
     // the last one names a Project that may not exist for this one, and the
     // preset he touched there was a decision about that session (MAR-2689).
     setSelectedWorkAddressId(null)
+    setBranchDraft('')
     setPermissionTouched(false)
   }, [contextKey, activeSessionId])
 
@@ -1581,6 +1593,7 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
         onExecutionHostChange={setSelectedExecutionHostId}
         workAddress={workAddressSlot}
         onWorkAddressChange={setSelectedWorkAddressId}
+        onWorkAddressBranchChange={setBranchDraft}
         permissionConfig={permissionConfig}
         permissionAdvancedOpen={permissionAdvancedOpen}
         onPermissionPresetChange={handlePermissionPresetChange}

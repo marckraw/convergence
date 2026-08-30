@@ -83,7 +83,9 @@ function slot(
     projects: landed([project()]),
     localRepository: known,
     selectedId: null,
+    branchDraft: '',
     recordedAddress: null,
+    reportedWorkspace: null,
     ...overrides,
   })
 }
@@ -212,6 +214,7 @@ describe('what is preselected', () => {
     expect(view.mode === 'choosing' && view.address).toEqual({
       mode: 'repository',
       repository: LOCAL_REPOSITORY,
+      branchName: null,
       label: 'marckraw/new-blok',
     })
   })
@@ -269,7 +272,11 @@ describe('a live session', () => {
           label: 'Project new-blok',
         },
       }),
-    ).toEqual({ mode: 'settled', label: 'Project new-blok' })
+    ).toEqual({
+      mode: 'settled',
+      label: 'Project new-blok',
+      requestedBranch: null,
+    })
   })
 
   it('says Unknown for a row written before places were recorded', () => {
@@ -278,7 +285,7 @@ describe('a live session', () => {
         executionBar: liveBar(ENDPOINT.id),
         recordedAddress: { mode: 'unknown' },
       }),
-    ).toEqual({ mode: 'settled', label: 'Unknown' })
+    ).toEqual({ mode: 'settled', label: 'Unknown', requestedBranch: null })
   })
 
   it('records nothing further on a later turn', () => {
@@ -352,5 +359,120 @@ describe('whether a send may leave', () => {
         slot({ executionBar: liveBar(ENDPOINT.id), recordedAddress: null }),
       ),
     ).toBe(true)
+  })
+})
+
+describe('the branch field (MAR-2694)', () => {
+  /**
+   * The field belongs to Repository mode alone: an errand cuts a branch, a
+   * residency runs on the checkout's own HEAD.
+   *
+   * Mutation: key the field on the choice id instead of the address mode, or
+   * render it for every mode, and this goes red.
+   */
+  it('exists for the repository and not for a Project', () => {
+    const errand = slot({
+      projects: landed([project({ id: 'other', name: 'other', origin: null })]),
+    })
+    expect(errand.mode === 'choosing' && errand.branch).toEqual({
+      value: '',
+      statement: 'branch: daemon-named',
+    })
+
+    const residency = slot()
+    expect(residency.mode === 'choosing' && residency.branch).toBeNull()
+  })
+
+  /**
+   * What was typed reaches the address the send carries, untouched. Emptiness
+   * is decided by trimming and the value is never trimmed -- the same split
+   * `namesAConcreteWorkPlace` already makes.
+   *
+   * Mutation: trim the draft in `branchNameFromDraft` and the second row goes
+   * red; treat a whitespace draft as written down and the third does.
+   */
+  it('carries what was typed onto the address, verbatim', () => {
+    const withBranch = slot({
+      projects: landed([project({ id: 'other', name: 'other', origin: null })]),
+      branchDraft: ' agent/mar-2694 ',
+    })
+    expect(withBranch.mode === 'choosing' && withBranch.address).toEqual({
+      mode: 'repository',
+      repository: LOCAL_REPOSITORY,
+      branchName: ' agent/mar-2694 ',
+      label: 'marckraw/new-blok',
+    })
+
+    const blank = slot({
+      projects: landed([project({ id: 'other', name: 'other', origin: null })]),
+      branchDraft: '   ',
+    })
+    expect(
+      blank.mode === 'choosing' && blank.address?.mode === 'repository'
+        ? blank.address.branchName
+        : 'not repository mode',
+    ).toBeNull()
+  })
+
+  it('is the same value the send carries, not a second derivation', () => {
+    const view = slot({
+      projects: landed([project({ id: 'other', name: 'other', origin: null })]),
+      branchDraft: 'agent/mar-2694',
+    })
+    expect(workAddressForNewSession(view)).toHaveProperty(
+      'branchName',
+      'agent/mar-2694',
+    )
+  })
+
+  /**
+   * A live session reads the daemon's branch, and says what was asked for when
+   * the daemon cut a different one.
+   *
+   * Mutation: drop `requestedBranch` from the settled view and the second row
+   * goes red.
+   */
+  it('states the daemon branch once the echo has landed', () => {
+    expect(
+      slot({
+        executionBar: liveBar(ENDPOINT.id),
+        recordedAddress: {
+          mode: 'repository',
+          repository: LOCAL_REPOSITORY,
+          branchName: 'agent/mar-2694',
+          label: 'marckraw/new-blok',
+        },
+        reportedWorkspace: {
+          mode: 'repository',
+          repository: LOCAL_REPOSITORY,
+          branchName: 'agent/34372e47',
+          baseRef: 'master',
+          workspacePath: null,
+          environment: null,
+        },
+      }),
+    ).toEqual({
+      mode: 'settled',
+      label: 'marckraw/new-blok @ agent/34372e47',
+      requestedBranch: 'agent/mar-2694',
+    })
+  })
+
+  it('says daemon-named on a live errand the machine has not described yet', () => {
+    expect(
+      slot({
+        executionBar: liveBar(ENDPOINT.id),
+        recordedAddress: {
+          mode: 'repository',
+          repository: LOCAL_REPOSITORY,
+          branchName: null,
+          label: 'marckraw/new-blok',
+        },
+      }),
+    ).toEqual({
+      mode: 'settled',
+      label: 'marckraw/new-blok @ daemon-named',
+      requestedBranch: null,
+    })
   })
 })

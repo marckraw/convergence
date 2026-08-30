@@ -1397,6 +1397,9 @@ describe('ComposerContainer', () => {
       expect(await screen.findByText('Runs on')).toBeInTheDocument()
       expect(screen.queryByText('Works in')).toBeNull()
       expect(screen.queryByTestId('work-address-notice')).toBeNull()
+      // The branch field is part of the second slot and shares its absence
+      // (MAR-2694). Mutation: render it outside the slot and this goes red.
+      expect(screen.queryByTestId('work-address-branch-input')).toBeNull()
     })
 
     it('lists the machine Projects and preselects the one holding this repository', async () => {
@@ -1570,6 +1573,172 @@ describe('ComposerContainer', () => {
       expect(
         window.electronAPI.git.getCloneableRepositoryUrl,
       ).not.toHaveBeenCalled()
+    })
+
+    /**
+     * The branch, written and never derived (MAR-2694). The strip has to say
+     * which of the two things is about to happen, and they are different
+     * things: an empty field means the daemon names the branch, and a typed one
+     * means this branch and no other.
+     *
+     * Mutation: swap the two labels in `describeBranchToBeCut` and this goes
+     * red on both rows -- a strip that says a branch was chosen when nothing
+     * was written is the kind of quiet lie MAR-2619 forbids.
+     */
+    it('says the daemon names the branch until one is written down', async () => {
+      setEndpoints([endpointFixture('daemon-a', 'little-monster', 0)])
+      seedCatalog('daemon-a', [
+        {
+          descriptor: remoteProvider('claude-code', 'Claude Code', [
+            { id: 'sonnet', label: 'Claude Sonnet' },
+          ]),
+          blockedReason: null,
+        },
+      ])
+      seedRemoteProjects('daemon-a', [], { supported: false })
+      renderNewSession()
+      await pickMachine('little-monster')
+
+      const field = await screen.findByTestId('work-address-branch-input')
+      expect(
+        screen.getByTestId('work-address-branch-statement'),
+      ).toHaveTextContent('branch: daemon-named')
+
+      fireEvent.change(field, { target: { value: 'agent/mar-2694' } })
+      expect(
+        await screen.findByTestId('work-address-branch-statement'),
+      ).toHaveTextContent('@ agent/mar-2694')
+    })
+
+    /**
+     * A residency runs on the checkout's own HEAD, so there is nothing to
+     * write and no field to write it in.
+     *
+     * Mutation: render the field for every mode and this goes red.
+     */
+    it('offers no branch field for a Project on the machine', async () => {
+      setEndpoints([endpointFixture('daemon-a', 'little-monster', 0)])
+      seedCatalog('daemon-a', [
+        {
+          descriptor: remoteProvider('claude-code', 'Claude Code', [
+            { id: 'sonnet', label: 'Claude Sonnet' },
+          ]),
+          blockedReason: null,
+        },
+      ])
+      seedRemoteProjects('daemon-a', [REMOTE_PROJECT])
+      renderNewSession()
+      await pickMachine('little-monster')
+
+      expect(
+        await screen.findByRole('combobox', { name: /Project new-blok/ }),
+      ).toBeInTheDocument()
+      expect(screen.queryByTestId('work-address-branch-input')).toBeNull()
+    })
+
+    /**
+     * The branch reaches the record exactly as typed, through the real send
+     * path -- not trimmed, not slugified, not derived from anything.
+     *
+     * Mutation: trim the draft in `branchNameFromDraft` and this goes red.
+     */
+    it('sends the branch verbatim with the place', async () => {
+      setEndpoints([endpointFixture('daemon-a', 'little-monster', 0)])
+      seedCatalog('daemon-a', [
+        {
+          descriptor: remoteProvider('claude-code', 'Claude Code', [
+            { id: 'sonnet', label: 'Claude Sonnet' },
+          ]),
+          blockedReason: null,
+        },
+      ])
+      seedRemoteProjects('daemon-a', [], { supported: false })
+      renderNewSession()
+      await pickMachine('little-monster')
+
+      fireEvent.change(await screen.findByTestId('work-address-branch-input'), {
+        target: { value: 'agent/mar-2694 ' },
+      })
+      const textbox = screen.getByRole('textbox', { name: 'Message' })
+      fireEvent.change(textbox, { target: { value: 'An errand' } })
+      fireEvent.keyDown(textbox, { key: 'Enter', metaKey: true })
+
+      await waitFor(() =>
+        expect(
+          useSessionStore.getState().createAndStartSession,
+        ).toHaveBeenCalledWith(
+          expect.objectContaining({
+            workAddress: {
+              mode: 'repository',
+              repository: 'https://github.com/marckraw/new-blok.git',
+              branchName: 'agent/mar-2694 ',
+              label: 'marckraw/new-blok',
+            },
+          }),
+        ),
+      )
+    })
+
+    /**
+     * Once the daemon has answered, the strip reads its branch and not the one
+     * that was asked for -- and when the two differ it says so rather than
+     * quietly showing one (MAR-2694).
+     *
+     * Mutation: prefer the address's `branchName` over the reported one in
+     * `statedWorkPlace` and this goes red on both assertions.
+     */
+    it('states the branch the daemon cut, and what was asked for when they differ', async () => {
+      setEndpoints([endpointFixture('daemon-a', 'little-monster', 0)])
+      useSessionStore.setState((state) => ({
+        sessions: state.sessions.map((session) =>
+          session.id === 'session-1'
+            ? {
+                ...session,
+                executionHost: 'daemon-a',
+                workAddress: {
+                  mode: 'repository' as const,
+                  repository: 'https://github.com/marckraw/new-blok.git',
+                  branchName: 'agent/mar-2694',
+                  label: 'marckraw/new-blok',
+                },
+                reportedWorkspace: {
+                  mode: 'repository' as const,
+                  repository: 'https://github.com/marckraw/new-blok.git',
+                  branchName: 'agent/34372e47',
+                  baseRef: 'master',
+                  workspacePath: '/srv/worktrees/s-1',
+                  environment: null,
+                },
+              }
+            : session,
+        ),
+      }))
+      seedCatalog('daemon-a', [
+        {
+          descriptor: remoteProvider('claude-code', 'Claude Code', [
+            { id: 'sonnet', label: 'Claude Sonnet' },
+          ]),
+          blockedReason: null,
+        },
+      ])
+
+      render(
+        <ComposerContainer
+          context={{
+            kind: 'project',
+            projectId: 'project-1',
+            workspaceId: null,
+            activeSessionId: 'session-1',
+          }}
+        />,
+      )
+
+      expect(await screen.findByTestId('work-address-fact')).toHaveTextContent(
+        'marckraw/new-blok @ agent/34372e47',
+      )
+      expect(
+        screen.getByTestId('work-address-requested-branch'),
+      ).toHaveTextContent('requested agent/mar-2694')
     })
 
     it('states a live remote session place from its record', async () => {
