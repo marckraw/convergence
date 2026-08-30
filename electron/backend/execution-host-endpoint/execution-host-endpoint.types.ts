@@ -23,6 +23,32 @@ export interface ExecutionHostEndpoint {
 }
 
 /**
+ * An Endpoint as App Settings hands it out: the stored row, plus the epoch of
+ * the configuration in force for it (MAR-2689 round 6).
+ *
+ * Two types rather than one field on the row, because the epoch is not stored
+ * and never will be: it counts what has been *observed* about a machine, which
+ * is a fact of this launch and of the credential store, not of the database.
+ * `ExecutionHostEndpointRepository` therefore cannot produce it and is not
+ * asked to; `AppSettingsService` splices it on at the one door every reader of
+ * the Endpoint list already goes through.
+ *
+ * Read-only downstream, and structurally so: `ExecutionHostEndpointInput` has
+ * no such field and `normalizeExecutionHostEndpoints` names the four it
+ * writes, so a renderer that hands the value back is handing back something
+ * the write path cannot see.
+ */
+export interface ConfiguredExecutionHostEndpoint extends ExecutionHostEndpoint {
+  /**
+   * Bumped whenever this Endpoint's base URL or token stops being the one it
+   * was last resolved under. An integer, deliberately: the renderer needs to
+   * know that the configuration changed and must not be able to learn what it
+   * changed to (`ExecutionHostConfigurationEpochs`).
+   */
+  configurationEpoch: number
+}
+
+/**
  * An Endpoint as the settings surface supplies it: identity plus the facts.
  *
  * `id` is required, and required for the same reason it must never be

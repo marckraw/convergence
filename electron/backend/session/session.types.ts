@@ -1,5 +1,9 @@
 import type { SessionRow } from '../database/database.types'
 import { parseExecutionHostId } from '../execution-host-endpoint/execution-host-endpoint.pure'
+import {
+  parseSessionWorkAddress,
+  type SessionWorkAddress,
+} from '../../../src/shared/lib/work-address.pure'
 import type {
   SessionStatus,
   AttentionState,
@@ -116,6 +120,12 @@ export interface SessionSummary {
   forkStrategy: ForkStrategy | null
   primarySurface: PrimarySurface
   executionHost: SessionExecutionHostId
+  /**
+   * Where a remote session works, as it was stated on the strip before send
+   * (MAR-2689). Null on a local session: it works in `workingDirectory`, which
+   * the record already names.
+   */
+  workAddress: SessionWorkAddress | null
   continuationToken: string | null
   lastSequence: number
   createdAt: string
@@ -147,6 +157,13 @@ interface CreateSessionBaseInput {
   forkStrategy?: ForkStrategy | null
   primarySurface?: PrimarySurface
   executionHost?: SessionExecutionHostId
+  /**
+   * The place the strip stated for a remote session. Absent on a local one,
+   * and absent on a remote one only when the strip could name no place at all —
+   * which the record then says in so many words rather than leaving blank
+   * (MAR-2689).
+   */
+  workAddress?: SessionWorkAddress | null
 }
 
 export type CreateSessionInput =
@@ -242,6 +259,7 @@ export function sessionSummaryFromRow(row: SessionRow): SessionSummary {
     forkStrategy: parseForkStrategy(row.fork_strategy),
     primarySurface: parsePrimarySurface(row.primary_surface),
     executionHost: parseExecutionHostId(row.execution_host),
+    workAddress: parseSessionWorkAddress(row.work_address),
     continuationToken: row.continuation_token,
     lastSequence: row.last_sequence ?? 0,
     createdAt: row.created_at,

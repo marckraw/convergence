@@ -6,6 +6,7 @@ import { useAppSettingsStore } from '@/entities/app-settings'
 import { useSessionRelayStore } from '@/entities/session-relay'
 import { useSkillStore } from '@/entities/skill'
 import { useProjectContextStore } from '@/entities/project-context'
+import { normalizeProjectSettings, useProjectStore } from '@/entities/project'
 
 /**
  * The option row obeys the strip (MAR-2682, S3 of MAR-2619).
@@ -164,7 +165,13 @@ let hangingHosts = new Set<string>()
 let deferredHosts = new Set<string>()
 let deferred: Array<{ hostId: string; settle: (catalog: unknown) => void }> = []
 
-function endpoint(id: string, label: string, baseUrl: string, position = 0) {
+function endpoint(
+  id: string,
+  label: string,
+  baseUrl: string,
+  position = 0,
+  configurationEpoch = 0,
+) {
   return {
     id,
     label,
@@ -172,6 +179,7 @@ function endpoint(id: string, label: string, baseUrl: string, position = 0) {
     position,
     createdAt: '2026-01-01',
     updatedAt: '2026-01-01',
+    configurationEpoch,
   }
 }
 
@@ -314,6 +322,32 @@ describe('the option row obeys the strip (MAR-2682)', () => {
       },
       turns: { listForSession: vi.fn(async () => []) },
       providerQuota: { list: vi.fn(async () => []) },
+      // The tier below the option row. A machine that cannot say where a
+      // session would work holds the send, so a fake daemon that answered
+      // about providers and nothing else would make every remote composer in
+      // this suite unsendable for a reason none of these tests are about
+      // (MAR-2689). It answers about the machine it was asked about, like the
+      // door above it.
+      executionHost: {
+        getProjects: vi.fn(async (executionHostId?: string | null) => ({
+          executionHostId: executionHostId ?? 'local',
+          supported: true,
+          projects: [
+            {
+              id: 'new-blok',
+              name: 'new-blok',
+              workingDirectory: '/srv/projects/new-blok',
+              origin: null,
+            },
+          ],
+          unreachableReason: null,
+        })),
+      },
+      git: {
+        getCloneableRepositoryUrl: vi.fn(
+          async () => 'https://github.com/marckraw/new-blok.git',
+        ),
+      },
     }
 
     useSessionStore.setState({
@@ -331,6 +365,23 @@ describe('the option row obeys the strip (MAR-2682)', () => {
     useAppSettingsStore.setState((state) => ({
       settings: { ...state.settings, executionHostEndpoints: [] },
     }))
+    // The composer this suite renders names `project-1`, and the tier below the
+    // option row asks that project what a daemon could clone. Without the row
+    // there is no origin, so a remote composer could state no place and every
+    // send would be held for a reason none of these tests are about
+    // (MAR-2689).
+    useProjectStore.setState({
+      projects: [
+        {
+          id: 'project-1',
+          name: 'Project',
+          repositoryPath: '/tmp/project-1',
+          settings: normalizeProjectSettings(undefined),
+          createdAt: '2026-01-01T00:00:00.000Z',
+          updatedAt: '2026-01-01T00:00:00.000Z',
+        },
+      ],
+    })
     useSessionRelayStore.setState({ relays: [] })
     useSkillStore.setState({
       catalog: null,
@@ -479,6 +530,68 @@ describe('the option row obeys the strip (MAR-2682)', () => {
       await screen.findByRole('combobox', { name: 'New Machine GPT' }),
     ).toBeInTheDocument()
   })
+  it('refuses a catalog that lands under a credential its endpoint has replaced', async () => {
+    // The same defect through the one door S3 could not see: rotating a daemon
+    // token in Settings changes neither the id nor the base URL, so the row's
+    // source compared equal across it and the listing read under the old
+    // credential stayed in force -- shown, and pickable (MAR-2689 round 6,
+    // closing the S3 hole in the provider row). The token itself never crosses
+    // the preload boundary and must not; the configuration epoch is what
+    // crosses instead.
+    //
+    // Mutation: drop `endpoint.configurationEpoch` from the joined
+    // configuration in `providerCatalogSourceForHost`, and this goes red --
+    // the old machine's model is still on the row.
+    setEndpoints([endpoint('daemon-a', 'kuba-vps', 'https://a.test', 0, 0)])
+    deferredHosts.add('daemon-a')
+
+    renderComposer()
+    await screen.findByRole('combobox', { name: 'Anthropic' })
+    await chooseHost(/Local/, 'kuba-vps')
+    await waitFor(() => expect(deferred).toHaveLength(1))
+
+    // The credential moves while that first request is still out. Same id,
+    // same address: only the epoch says anything happened.
+    setEndpoints([endpoint('daemon-a', 'kuba-vps', 'https://a.test', 0, 1)])
+    await waitFor(() => expect(deferred).toHaveLength(2))
+
+    // The old credential's answer arrives, last. Nothing may come of it.
+    await act(async () => {
+      deferred[0]!.settle({
+        executionHostId: 'daemon-a',
+        providers: entries([
+          daemonProvider('claude-code', 'Claude Code', [
+            { id: 'sonnet', label: 'Old Credential Sonnet' },
+          ]),
+        ]),
+        unreachableReason: null,
+      })
+    })
+
+    expect(
+      screen.queryByRole('combobox', { name: 'Old Credential Sonnet' }),
+    ).toBeNull()
+    expect(screen.getByTestId('composer-catalog-notice')).toHaveTextContent(
+      'Asking kuba-vps which providers it runs',
+    )
+
+    // And the machine as it is configured now answers, and that one is the row.
+    await act(async () => {
+      deferred[1]!.settle({
+        executionHostId: 'daemon-a',
+        providers: entries([
+          daemonProvider('codex', 'Codex', [
+            { id: 'gpt-new', label: 'New Credential GPT' },
+          ]),
+        ]),
+        unreachableReason: null,
+      })
+    })
+    expect(
+      await screen.findByRole('combobox', { name: 'New Credential GPT' }),
+    ).toBeInTheDocument()
+  })
+
   it('says it is asking while a remote catalog is in flight, and shows nothing local', async () => {
     setEndpoints([endpoint('daemon-a', 'kuba-vps', 'https://a.test')])
     hangingHosts.add('daemon-a')
@@ -807,10 +920,14 @@ describe('the option row obeys the strip (MAR-2682)', () => {
     await chooseHost(/Local/, 'kuba-vps')
     await screen.findByTestId('composer-catalog-notice')
 
-    // Exactly one combobox in the whole composer, and it is the strip.
+    // Every combobox left in the composer belongs to the strip: the machine,
+    // and beneath it where on that machine the session works. The place tier
+    // reads the daemon's Projects, not its providers, so a silent provider
+    // listing is no reason for it to disappear (MAR-2689).
     const comboboxes = screen.getAllByRole('combobox')
-    expect(comboboxes).toHaveLength(1)
+    expect(comboboxes).toHaveLength(2)
     expect(comboboxes[0]).toHaveAccessibleName(/kuba-vps/)
+    expect(comboboxes[1]).toHaveAccessibleName(/marckraw\/new-blok/)
     // The permission preset and both doors to its advanced panel, gone with the
     // cluster they belong to.
     expect(screen.queryByRole('combobox', { name: 'Ask' })).toBeNull()

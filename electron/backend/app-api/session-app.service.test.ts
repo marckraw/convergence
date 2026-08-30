@@ -24,6 +24,7 @@ const sessionFixture: Session = {
   forkStrategy: null,
   primarySurface: 'conversation',
   executionHost: 'local',
+  workAddress: null,
   continuationToken: null,
   lastSequence: 0,
   createdAt: '2026-05-28T00:00:00.000Z',

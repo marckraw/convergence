@@ -2,7 +2,10 @@ import type { AppSettingsService } from '../../app-settings/app-settings.service
 import type { ExecutionHostDaemonCredentialsService } from '../../credentials/execution-host-daemon-credentials.service'
 import type { EndpointHandshakeResult } from './execution-host-handshake.types'
 import type { RemoteExecutionHost } from './remote-execution-host'
-import { describeRemoteProviderListing } from './remote-execution-host.pure'
+import {
+  daemonConfigurationFingerprint,
+  describeRemoteProviderListing,
+} from './remote-execution-host.pure'
 import {
   RemoteExecutionHostError,
   type RemoteExecutionHostConnection,
@@ -42,7 +45,10 @@ export interface RemoteExecutionHostConnectionResult {
 }
 
 interface AppSettingsConnectionResolverDeps {
-  appSettings: Pick<AppSettingsService, 'getAppSettings'>
+  appSettings: Pick<
+    AppSettingsService,
+    'getAppSettings' | 'observeExecutionHostConfiguration'
+  >
   credentials: Pick<ExecutionHostDaemonCredentialsService, 'resolveToken'>
   /** The Endpoint this resolver speaks for. Never optional: see the class. */
   endpointId: string
@@ -69,21 +75,36 @@ export class AppSettingsRemoteExecutionHostConnectionResolver implements RemoteE
     return this.deps.endpointId
   }
 
+  /**
+   * The base URL and token this Endpoint is configured with right now, and the
+   * one place either is learned (MAR-2620).
+   *
+   * Every resolution is also an *observation*: the configuration epoch the
+   * renderer keys its catalogs by moves here and nowhere else (MAR-2689 round
+   * 6). The refusals observe too, and deliberately — an Endpoint whose token
+   * has just been deleted is not configured the way the catalog on screen was
+   * read under, and a resolver that only reported successes would leave that
+   * catalog in force.
+   */
   async resolveConnection(): Promise<RemoteExecutionHostConnection> {
     const inspected = await this.inspect()
-    if (inspected.state === 'missing-base-url') {
+    const connection =
+      inspected.state === 'ok'
+        ? { baseUrl: inspected.baseUrl!, token: inspected.token! }
+        : null
+    this.deps.appSettings.observeExecutionHostConfiguration(
+      this.deps.endpointId,
+      daemonConfigurationFingerprint(connection),
+    )
+    if (!connection) {
       throw new RemoteExecutionHostError(
-        'Remote execution host base URL is not configured.',
+        inspected.state === 'missing-token'
+          ? 'Remote execution host API token is not configured.'
+          : 'Remote execution host base URL is not configured.',
         'configuration',
       )
     }
-    if (inspected.state === 'missing-token') {
-      throw new RemoteExecutionHostError(
-        'Remote execution host API token is not configured.',
-        'configuration',
-      )
-    }
-    return { baseUrl: inspected.baseUrl!, token: inspected.token! }
+    return connection
   }
 
   /**

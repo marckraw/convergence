@@ -3,6 +3,7 @@ import type { ExecutionHostEndpoint } from '@/entities/execution-host'
 import { LOCAL_EXECUTION_HOST_ID } from '@/entities/execution-host'
 import { parseExecutionHostId } from '../../../electron/backend/execution-host-endpoint/execution-host-endpoint.pure'
 import {
+  defaultPermissionPresetForHost,
   executionHostForNewSession,
   LOCAL_EXECUTION_HOST_LABEL,
   resolveExecutionBarView,
@@ -22,6 +23,7 @@ function endpoint(
     position,
     createdAt: '2026-01-01',
     updatedAt: '2026-01-01',
+    configurationEpoch: 0,
   }
 }
 
@@ -250,5 +252,24 @@ describe('the strip and the backend read one record', () => {
       expect(resolved.hostId).toBe(record)
       expect(resolved.mode).toBe('settled')
     }
+  })
+})
+
+describe('defaultPermissionPresetForHost', () => {
+  it('opens a remote run at yolo, because he is not there to click allow', () => {
+    expect(defaultPermissionPresetForHost('little-monster')).toBe('yolo')
+    expect(defaultPermissionPresetForHost('legacy-remote')).toBe('yolo')
+  })
+
+  it('leaves this machine exactly as it opened before Endpoints existed', () => {
+    expect(defaultPermissionPresetForHost(LOCAL_EXECUTION_HOST_ID)).toBe('ask')
+  })
+
+  it('reads a machine the way every other reader of a host id does', () => {
+    // The strip resolves `hostId` through `isLocalExecutionHost` before this
+    // ever sees it, so both halves answer the same question the same way. A
+    // second reading here would be the second place the rule could drift.
+    expect(defaultPermissionPresetForHost(' local ')).toBe('ask')
+    expect(defaultPermissionPresetForHost('')).toBe('ask')
   })
 })

@@ -11,7 +11,16 @@ import {
 interface RemoteExecutionHostRegistryDeps {
   appSettings: Pick<
     AppSettingsService,
-    'getAppSettings' | 'hasExecutionHostEndpoint'
+    | 'getAppSettings'
+    | 'hasExecutionHostEndpoint'
+    // Handed straight through to every resolver this registry builds: the
+    // configuration epoch moves where a connection is minted (MAR-2689 round
+    // 6), and the registry is what puts the two together.
+    | 'observeExecutionHostConfiguration'
+    // The epoch's other input, bound to each host the same way (MAR-2689 round
+    // 8). A host knows what the machine advertised; only the registry knows
+    // which Endpoint it speaks for, so the binding happens here.
+    | 'observeExecutionHostCapabilities'
   >
   credentials: Pick<ExecutionHostDaemonCredentialsService, 'resolveToken'>
   fetch?: typeof fetch
@@ -82,6 +91,11 @@ export class AppSettingsRemoteExecutionHostRegistry implements RemoteExecutionHo
 
     const host = new RemoteExecutionHost({
       connection: this.resolverFor(endpointId),
+      observeCapabilities: (capabilitiesFingerprint) =>
+        this.deps.appSettings.observeExecutionHostCapabilities(
+          endpointId,
+          capabilitiesFingerprint,
+        ),
       fetch: this.deps.fetch,
       onEventSeq: this.deps.onEventSeq,
       debugSink: this.deps.debugSink,
@@ -134,6 +148,31 @@ export class AppSettingsRemoteExecutionHostRegistry implements RemoteExecutionHo
       credentials: this.deps.credentials,
       endpointId,
     })
+  }
+
+  /**
+   * Re-reads one Endpoint's base URL and token, so a change to either is
+   * *observed* (MAR-2689 round 6).
+   *
+   * The configuration epoch moves at a resolve and nowhere else, which is what
+   * keeps it a fact about the machine rather than a second opinion about the
+   * settings table. Most changes are observed by the wire call that follows
+   * them; a token saved into the Keychain is the one that is not, because no
+   * wire call has to happen for it and the renderer would go on showing --
+   * and offering -- what the previous credential answered. This is the beat
+   * that closes that, and it settles rather than being fired and forgotten so
+   * a caller can broadcast the new Endpoint list after it.
+   *
+   * A refusal is an observation too, so it is swallowed: an Endpoint whose
+   * token was just deleted resolves to nothing, and that is precisely the
+   * change worth recording.
+   */
+  async observeEndpointConfiguration(endpointId: string): Promise<void> {
+    try {
+      await this.resolverFor(endpointId).resolveConnection()
+    } catch {
+      // Deliberately nothing: the resolve recorded what it found either way.
+    }
   }
 
   /**

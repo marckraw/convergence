@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { selectLocalProviders, useSessionStore } from './session.model'
 import {
+  catalogInForce,
   localProviderCatalogs,
   providerCatalogSourceForHost,
 } from './provider-catalog.pure'
@@ -38,6 +39,14 @@ const mockElectronAPI = {
     getAll: vi.fn().mockResolvedValue({
       executionHostId: 'local',
       providers: [],
+      unreachableReason: null,
+    }),
+  },
+  executionHost: {
+    getProjects: vi.fn().mockResolvedValue({
+      executionHostId: 'local',
+      supported: false,
+      projects: [],
       unreachableReason: null,
     }),
   },
@@ -856,6 +865,7 @@ describe('loadProviderCatalog (MAR-2682)', () => {
       position: 0,
       createdAt: '2026-01-01',
       updatedAt: '2026-01-01',
+      configurationEpoch: 0,
     },
   ])
 
@@ -968,6 +978,151 @@ describe('loadProviderCatalog (MAR-2682)', () => {
       unreachableReason: null,
     })
     await inFlight
+  })
+})
+
+describe('a credential rotation on one machine (MAR-2689 round 6)', () => {
+  /**
+   * The Endpoint as the renderer receives it, at one configuration epoch.
+   *
+   * The id and the base URL do not move: rotating a daemon token in Settings
+   * changes neither, which is exactly why the renderer could not see it. Only
+   * the epoch moves, and it is the whole difference the store has to act on.
+   */
+  function endpointAtEpoch(configurationEpoch: number) {
+    return {
+      id: 'daemon-a',
+      label: 'kuba-vps',
+      baseUrl: 'https://a.test',
+      position: 0,
+      createdAt: '2026-01-01',
+      updatedAt: '2026-01-01',
+      configurationEpoch,
+    }
+  }
+
+  const underTokenA = providerCatalogSourceForHost('daemon-a', [
+    endpointAtEpoch(0),
+  ])
+  const underTokenB = providerCatalogSourceForHost('daemon-a', [
+    endpointAtEpoch(1),
+  ])
+
+  beforeEach(() => {
+    useSessionStore.setState({
+      providerCatalogs: {},
+      remoteProjectCatalogs: {},
+    })
+    mockElectronAPI.provider.getAll.mockReset()
+    mockElectronAPI.executionHost.getProjects.mockReset()
+  })
+
+  it('never lands one credential’s provider listing under the next one', async () => {
+    // The S3 hole, closing (MAR-2682 shipped the option row against a source
+    // that could not see a token). A listing read under token A arrives after
+    // the rotation; the row must be showing B's, and A's must land nowhere.
+    //
+    // Mutation: drop `endpoint.configurationEpoch` from the joined
+    // configuration in `providerCatalogSourceForHost`, and this goes red --
+    // the two sources compare equal and A's listing overwrites B's.
+    let releaseA: (value: unknown) => void = () => {}
+    mockElectronAPI.provider.getAll
+      .mockReturnValueOnce(
+        new Promise((resolve) => {
+          releaseA = resolve
+        }),
+      )
+      .mockResolvedValueOnce({
+        executionHostId: 'daemon-a',
+        providers: [],
+        unreachableReason: 'token B answered',
+      })
+
+    const readingA = useSessionStore.getState().loadProviderCatalog(underTokenA)
+    await useSessionStore.getState().loadProviderCatalog(underTokenB)
+
+    releaseA({
+      executionHostId: 'daemon-a',
+      providers: [],
+      unreachableReason: 'token A answered',
+    })
+    await readingA
+
+    const filed = useSessionStore.getState().providerCatalogs['daemon-a']
+    expect(filed?.source).toEqual(underTokenB)
+    expect(filed?.status === 'landed' && filed.unreachableReason).toBe(
+      'token B answered',
+    )
+    // And nothing about token A is readable for the machine in force.
+    expect(
+      catalogInForce(useSessionStore.getState().providerCatalogs, underTokenA),
+    ).toBeNull()
+  })
+
+  it('never lands one credential’s Projects under the next one', async () => {
+    // codex's round-5 finding, at the end the strip reads: a `/v0/projects`
+    // answer read under token A must not become the list of places the
+    // composer can mint a session in on token B. `/srv/private-to-a` is a
+    // directory only the first credential could see.
+    //
+    // Mutation: drop `endpoint.configurationEpoch` from the joined
+    // configuration in `providerCatalogSourceForHost`, and this goes red --
+    // `/srv/private-to-a` lands under token B's source and the slot offers it.
+    let releaseA: (value: unknown) => void = () => {}
+    mockElectronAPI.executionHost.getProjects
+      .mockReturnValueOnce(
+        new Promise((resolve) => {
+          releaseA = resolve
+        }),
+      )
+      .mockResolvedValueOnce({
+        executionHostId: 'daemon-a',
+        supported: true,
+        projects: [
+          {
+            id: 'shared',
+            name: 'shared',
+            workingDirectory: '/srv/shared',
+            origin: null,
+          },
+        ],
+        unreachableReason: null,
+      })
+
+    const readingA = useSessionStore
+      .getState()
+      .loadRemoteProjectCatalog(underTokenA)
+    await useSessionStore.getState().loadRemoteProjectCatalog(underTokenB)
+
+    releaseA({
+      executionHostId: 'daemon-a',
+      supported: true,
+      projects: [
+        {
+          id: 'private-to-a',
+          name: 'private-to-a',
+          workingDirectory: '/srv/private-to-a',
+          origin: null,
+        },
+      ],
+      unreachableReason: null,
+    })
+    await readingA
+
+    const inForce = catalogInForce(
+      useSessionStore.getState().remoteProjectCatalogs,
+      underTokenB,
+    )
+    expect(
+      inForce?.status === 'landed' &&
+        inForce.projects.map((project) => project.workingDirectory),
+    ).toEqual(['/srv/shared'])
+    expect(
+      catalogInForce(
+        useSessionStore.getState().remoteProjectCatalogs,
+        underTokenA,
+      ),
+    ).toBeNull()
   })
 })
 

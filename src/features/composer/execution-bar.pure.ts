@@ -185,6 +185,28 @@ function settledView(
 }
 
 /**
+ * The permission preset a session being born on this machine starts with
+ * (MAR-2689).
+ *
+ * `yolo` on a remote, ruled by Marcin: *"he is not there to click allow."* A
+ * run on a daemon is unattended by definition — the composer that would show
+ * the approval is on a laptop that may be shut, and a session parked on an
+ * approval nobody sees is a run that quietly does nothing for hours.
+ *
+ * Local keeps `ask`, unchanged and not merely equal: this is the default a
+ * local composer has always opened with, and the machine tier must not change
+ * anything about a Local session (MAR-2682).
+ *
+ * A default, never an override. The composer applies it only while he has not
+ * touched the preset himself; his touch survives every machine switch after it,
+ * because a default that undid a deliberate choice would be the control below
+ * the strip disagreeing with the human above it.
+ */
+export function defaultPermissionPresetForHost(hostId: string): 'ask' | 'yolo' {
+  return isLocalExecutionHost(hostId) ? 'ask' : 'yolo'
+}
+
+/**
  * The Endpoint id a new session records, or undefined for this machine.
  *
  * Local stays absent on the wire rather than becoming the literal `'local'`:

@@ -1,10 +1,5 @@
-import { namesThisMachine } from '../../../src/shared/lib/execution-host-id.pure'
-import { describeNonStringExecutionHostId } from './provider-catalog.pure'
-import {
-  describeInvalidExecutionHostEndpointId,
-  isExecutionHostEndpointId,
-  LOCAL_EXECUTION_HOST_ID,
-} from '../execution-host-endpoint/execution-host-endpoint.pure'
+import { readExecutionHostIdAtDoor } from './execution-host-id-door.pure'
+import { LOCAL_EXECUTION_HOST_ID } from '../execution-host-endpoint/execution-host-endpoint.pure'
 import type { RemoteExecutionHost } from './execution-host/remote-execution-host'
 import type { ProviderDescriptor } from './provider.types'
 import type {
@@ -52,60 +47,29 @@ export class ProviderCatalogService {
    * The catalog for one machine, and the door an execution host id arrives at
    * from the renderer (MAR-2682).
    *
-   * Which values mean this machine is `namesThisMachine`'s answer, not this
-   * door's: exactly `undefined`, `null`, the empty string and the literal
-   * `'local'`, by the one predicate the renderer door calls as well. A caller
-   * that has not been taught about Endpoints says nothing and keeps getting
-   * exactly what it got before they existed.
-   *
-   * Every other value is one the caller *means*, and is taken exactly as it was
-   * sent or refused by name. It used to go through `isLocalExecutionHost`,
-   * which trims -- so ` local ` was answered as this machine, reinstating at a
-   * new door precisely what S2 killed at the old one: "it used to be trimmed,
-   * which is a quiet rewrite of the one value that must not be rewritten"
-   * (`normalizeExecutionHostEndpoints`). Padded local gets no gentler a reading
-   * than padded ` kuba `: neither names a machine, and answering either would
-   * answer, for a machine, a question asked about a different string.
+   * Which values mean this machine, which are Endpoint ids and which name no
+   * machine at all is `readExecutionHostIdAtDoor`'s answer, not this door's --
+   * the same ladder the Projects catalog climbs, so the two cannot come to read
+   * one id differently (MAR-2689). Its docblock is where the reasoning lives;
+   * restating it here is how a second reading gets written.
    *
    * `parseExecutionHostId` still reads absent *or blank* as local, and that is
    * right where it is used -- reading a session row written before Endpoints
    * existed, where blank is the absence of a value. This is not that. This is a
    * live request naming a machine, and whitespace is a value.
-   *
-   * The parameter is `unknown` because that is what comes off IPC. A declared
-   * `string` here is a claim about the renderer, not a fact about the wire, and
-   * the `String(...)` that used to stand in for the check turned a non-string
-   * into a catalog about a machine named after its own coercion.
    */
   async get(executionHostId?: unknown): Promise<ProviderCatalog> {
-    // The four values that mean this machine, asked of the one predicate the
-    // renderer door calls too. Read here for itself, this door and that one
-    // drifted three times running (MAR-2682).
-    if (namesThisMachine(executionHostId)) {
-      return this.localCatalog()
+    // The one ladder both per-machine doors climb (MAR-2689). Reported rather
+    // than thrown: `get` answers every other bad id with a catalog that says
+    // why, and an id that is not one is not a worse case than an id nobody
+    // configured.
+    const named = readExecutionHostIdAtDoor(executionHostId)
+    if (named.kind === 'local') return this.localCatalog()
+    if (named.kind === 'unusable') {
+      return unreachable(named.named, named.reason)
     }
 
-    if (typeof executionHostId !== 'string') {
-      const named = describeNonStringExecutionHostId(executionHostId)
-      return unreachable(
-        named,
-        `Execution host id ${named} is not usable: an id is a string, and a ` +
-          'value that is not one names no machine. Reading it as this machine ' +
-          'would answer for a laptop about a request that meant a daemon.',
-      )
-    }
-
-    // A real value the caller means. Reported rather than thrown: `get` answers
-    // every other bad id with a catalog that says why, and an id that is not
-    // one is not a worse case than an id nobody configured.
-    const endpointId = executionHostId
-    if (!isExecutionHostEndpointId(endpointId)) {
-      return unreachable(
-        endpointId,
-        describeInvalidExecutionHostEndpointId(endpointId),
-      )
-    }
-
+    const endpointId = named.endpointId
     const remote = this.deps.remote
     if (!remote) {
       return unreachable(

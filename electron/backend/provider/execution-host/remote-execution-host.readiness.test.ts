@@ -25,6 +25,7 @@ import {
   waitUntil,
   type StubDaemon,
 } from './execution-host-daemon.fixture'
+import { TEST_REMOTE_WORK_ADDRESS } from '../../session/session-work-address.fixture'
 
 const DAEMON = { id: 'daemon-b', baseUrl: 'https://daemon-b.test' }
 
@@ -86,6 +87,7 @@ describe('a turn on an endpoint whose listing has not landed', () => {
       effort: null,
       name,
       executionHost: DAEMON.id,
+      workAddress: TEST_REMOTE_WORK_ADDRESS,
     }).id
   }
 

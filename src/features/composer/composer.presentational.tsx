@@ -52,6 +52,10 @@ import { CatalogNotice } from './catalog-notice.presentational'
 import { ComposerSelect } from './composer-select.presentational'
 import { ExecutionBar } from './execution-bar.presentational'
 import type { ExecutionBarView } from './execution-bar.pure'
+import {
+  workAddressReadyForSend,
+  type WorkAddressSlotView,
+} from './work-address-slot.pure'
 import { composerCardDepthClassByMode } from './execution-bar.styles'
 import { relayMuteTitle } from './relay-mute.pure'
 import { ProviderAccountPicker } from '@/entities/provider-account'
@@ -99,6 +103,8 @@ interface ComposerProps {
   codexBillingControlsAvailable: boolean
   executionBar: ExecutionBarView
   onExecutionHostChange: (hostId: string) => void
+  workAddress: WorkAddressSlotView
+  onWorkAddressChange: (choiceId: string) => void
   /**
    * Armed wires leaving this session (F10). Zero renders no control at all --
    * a switch that silences nothing is noise on every other composer.
@@ -230,6 +236,8 @@ export const Composer: FC<ComposerProps> = ({
   codexBillingControlsAvailable,
   executionBar,
   onExecutionHostChange,
+  workAddress,
+  onWorkAddressChange,
   armedOutgoingRelays,
   relaysMuted,
   onRelaysMutedChange,
@@ -312,6 +320,38 @@ export const Composer: FC<ComposerProps> = ({
   onMentionDismiss,
   onSelectionChange,
 }) => {
+  /**
+   * Whether this composer may send at all — one derivation, read by both ways
+   * of sending.
+   *
+   * The button and ⌘↵ each used to spell their own version out, and they had
+   * already drifted: the keyboard path knew nothing of the option row or the
+   * attachment ingest, so every guard added to the button was a guard the
+   * keyboard did not have. That is how a send could leave while the strip was
+   * still asking where the session works — through the shortcut he actually
+   * uses (MAR-2689). Two encodings of one fact need one derivation, applied at
+   * both.
+   */
+  const canSend =
+    !disabled &&
+    // Nothing to send *to* until the machine says what it runs. Never true for
+    // this machine, so a Local composer's send button is what it always was.
+    // Keyed on the row having no options at all, not on there being a sentence:
+    // a listing the daemon could not re-confirm carries one and is still a row
+    // a session can be started from (MAR-2682, "a dead daemon must not look
+    // alive").
+    optionRow.status !== 'notice' &&
+    // And nothing to send *to* until the strip can say where on that machine
+    // the session will work. Keyed on the slot the same way the line above is
+    // keyed on the option row, and for the same reason: a session born while
+    // the place is still being asked about records no place at all, and the
+    // start then falls back to the silent derivation this slice replaced
+    // (MAR-2689). Always true on Local, whose slot does not exist.
+    workAddressReadyForSend(workAddress) &&
+    !hasAttachmentErrors &&
+    !attachmentsIngestInFlight &&
+    (value.trim().length > 0 || attachments.length > 0 || hasPendingAnnotations)
+
   const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
     if (rootInjectionPickerOpen && rootInjectionItems.length > 0) {
       if (e.key === 'ArrowDown') {
@@ -434,13 +474,7 @@ export const Composer: FC<ComposerProps> = ({
     }
     if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
       e.preventDefault()
-      if (
-        (value.trim() || attachments.length > 0 || hasPendingAnnotations) &&
-        !disabled &&
-        !hasAttachmentErrors
-      ) {
-        onSubmit()
-      }
+      if (canSend) onSubmit()
     }
   }
 
@@ -515,19 +549,6 @@ export const Composer: FC<ComposerProps> = ({
     selection.providerId === 'codex' || selection.providerId === 'claude-code'
   const resourceCount =
     attachments.length + selectedSkills.length + selectedContextItems.length
-
-  const canSend =
-    !disabled &&
-    // Nothing to send *to* until the machine says what it runs. Never true for
-    // this machine, so a Local composer's send button is what it always was.
-    // Keyed on the row having no options at all, not on there being a sentence:
-    // a listing the daemon could not re-confirm carries one and is still a row
-    // a session can be started from (MAR-2682, "a dead daemon must not look
-    // alive").
-    optionRow.status !== 'notice' &&
-    !hasAttachmentErrors &&
-    !attachmentsIngestInFlight &&
-    (value.trim().length > 0 || attachments.length > 0 || hasPendingAnnotations)
 
   const modeLabels: Partial<Record<MidRunInputMode, string>> = {
     answer: 'Answer',
@@ -1062,8 +1083,10 @@ export const Composer: FC<ComposerProps> = ({
         </div>
         <ExecutionBar
           view={executionBar}
+          workAddress={workAddress}
           disabled={disabled || selectionDisabled}
           onChange={onExecutionHostChange}
+          onWorkAddressChange={onWorkAddressChange}
         />
       </div>
       <p className="mt-1.5 text-center text-[10px] text-muted-foreground">

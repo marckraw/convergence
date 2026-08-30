@@ -61,6 +61,7 @@ function saved(
     position: 1,
     createdAt: '2026-08-01T00:00:00.000Z',
     updatedAt: '2026-08-01T00:00:00.000Z',
+    configurationEpoch: 0,
     ...overrides,
   }
 }

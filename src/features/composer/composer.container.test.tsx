@@ -3,6 +3,7 @@ import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { ComposerContainer } from './composer.container'
 import {
   landedProviderCatalog,
+  landedRemoteProjectCatalog,
   localProviderCatalogs,
   providerCatalogOf,
   providerCatalogSourceForHost,
@@ -10,7 +11,9 @@ import {
   useSessionStore,
   type ProviderCatalogEntry,
   type ProviderInfo,
+  type RemoteProject,
 } from '@/entities/session'
+import { normalizeProjectSettings, useProjectStore } from '@/entities/project'
 import { useAppSettingsStore } from '@/entities/app-settings'
 import { useSessionRelayStore } from '@/entities/session-relay'
 import { useAttachmentStore } from '@/entities/attachment'
@@ -44,7 +47,12 @@ function buildAccount(overrides: Record<string, unknown> = {}) {
   }
 }
 
-function endpointFixture(id: string, label: string, position: number) {
+function endpointFixture(
+  id: string,
+  label: string,
+  position: number,
+  configurationEpoch = 0,
+) {
   return {
     id,
     label,
@@ -52,6 +60,7 @@ function endpointFixture(id: string, label: string, position: number) {
     position,
     createdAt: '2026-01-01',
     updatedAt: '2026-01-01',
+    configurationEpoch,
   }
 }
 
@@ -133,6 +142,44 @@ function seedCatalog(
       },
     }))
   })
+}
+
+/**
+ * Files a landed Projects catalog for one machine, through the product's own
+ * derivation (MAR-2689). The source is resolved exactly as the container
+ * resolves it, so a fixture cannot file a catalog under a pairing the app could
+ * never produce.
+ */
+function seedRemoteProjects(
+  hostId: string,
+  projects: RemoteProject[],
+  overrides: { supported?: boolean; unreachableReason?: string | null } = {},
+): void {
+  const source = providerCatalogSourceForHost(
+    hostId,
+    useAppSettingsStore.getState().settings.executionHostEndpoints,
+  )
+  act(() => {
+    useSessionStore.setState((state) => ({
+      remoteProjectCatalogs: {
+        ...state.remoteProjectCatalogs,
+        [source.executionHostId]: landedRemoteProjectCatalog(source, {
+          executionHostId: hostId,
+          supported: overrides.supported ?? true,
+          projects,
+          unreachableReason: overrides.unreachableReason ?? null,
+        }),
+      },
+    }))
+  })
+}
+
+/** The Project on a daemon that holds this project's repository. */
+const REMOTE_PROJECT: RemoteProject = {
+  id: 'new-blok',
+  name: 'new-blok',
+  workingDirectory: '/srv/projects/new-blok',
+  origin: 'https://github.com/marckraw/new-blok.git',
 }
 
 /**
@@ -373,6 +420,21 @@ describe('ComposerContainer', () => {
       turns: {
         listForSession: vi.fn(() => Promise.resolve(sessionTurnsMock)),
       },
+      git: {
+        getCloneableRepositoryUrl: vi.fn(() =>
+          Promise.resolve('https://github.com/marckraw/new-blok.git'),
+        ),
+      },
+      executionHost: {
+        getProjects: vi.fn(() =>
+          Promise.resolve({
+            executionHostId: 'local',
+            supported: false,
+            projects: [],
+            unreachableReason: null,
+          }),
+        ),
+      },
       providerQuota: {
         list: vi.fn().mockResolvedValue([
           {
@@ -418,6 +480,7 @@ describe('ComposerContainer', () => {
 
     const loadProviders = vi.fn()
     const loadProviderCatalog = vi.fn()
+    const loadRemoteProjectCatalog = vi.fn()
     const createAndStartSession = vi.fn()
     const createAndStartGlobalSession = vi.fn()
     const sendMessageToSession = vi.fn()
@@ -526,6 +589,8 @@ describe('ComposerContainer', () => {
       queuedInputsBySessionId: {},
       loadProviders,
       loadProviderCatalog,
+      loadRemoteProjectCatalog,
+      remoteProjectCatalogs: {},
       createAndStartSession,
       createAndStartGlobalSession,
       sendMessageToSession,
@@ -547,6 +612,21 @@ describe('ComposerContainer', () => {
         projectId: 'global',
         projectName: 'Global chat',
       }),
+    })
+
+    // The project the composer is aimed at, so the strip can say what a daemon
+    // would clone for it (MAR-2689).
+    useProjectStore.setState({
+      projects: [
+        {
+          id: 'project-1',
+          name: 'Project',
+          repositoryPath: '/tmp/project-1',
+          settings: normalizeProjectSettings(undefined),
+          createdAt: '2026-01-01T00:00:00.000Z',
+          updatedAt: '2026-01-01T00:00:00.000Z',
+        },
+      ],
     })
 
     useSessionRelayStore.setState({ relays: [], isLoaded: true })
@@ -864,6 +944,9 @@ describe('ComposerContainer', () => {
       permissionConfig: { preset: 'ask' },
       serviceTier: null,
       executionHost: undefined,
+      // A Local session works in the directory the record already names, so it
+      // states no place and records none (MAR-2689).
+      workAddress: null,
       providerAccountId: null,
     })
   })
@@ -998,7 +1081,7 @@ describe('ComposerContainer', () => {
     ])
   })
 
-  it('starts the session on the endpoint he picked in the strip', () => {
+  it('starts the session on the endpoint he picked in the strip', async () => {
     // Two endpoints on purpose: the killed boolean resolved to whichever came
     // first, so a green single-endpoint test would prove nothing about which
     // machine the strip actually names.
@@ -1017,6 +1100,7 @@ describe('ComposerContainer', () => {
         blockedReason: null,
       },
     ])
+    seedRemoteProjects('daemon-b', [REMOTE_PROJECT])
 
     render(
       <ComposerContainer
@@ -1032,6 +1116,11 @@ describe('ComposerContainer', () => {
     expect(screen.getByText('Runs on')).toBeInTheDocument()
     fireEvent.click(screen.getByRole('combobox', { name: /Local/ }))
     fireEvent.click(screen.getByText('backpack-automations'))
+
+    // The place is stated before the send, and this is that statement: until
+    // the strip can say where the session works, there is nothing for the send
+    // to carry (MAR-2689).
+    expect(await screen.findByText('Works in')).toBeInTheDocument()
 
     const textbox = screen.getByRole('textbox')
     fireEvent.change(textbox, { target: { value: 'Run remotely' } })
@@ -1051,10 +1140,20 @@ describe('ComposerContainer', () => {
       attachmentIds: undefined,
       skillSelections: undefined,
       contextItemIds: undefined,
-      permissionConfig: { preset: 'ask' },
+      // A session born on a daemon is unattended by definition: he is not
+      // there to click allow (MAR-2689).
+      permissionConfig: { preset: 'yolo' },
       serviceTier: null,
       // Which machine, not whether, and not merely "the first one".
       executionHost: 'daemon-b',
+      // And where *on* that machine: the Project holding this project's own
+      // repository, matched by origin and stated on the strip before send.
+      workAddress: {
+        mode: 'project',
+        projectId: 'new-blok',
+        workingDirectory: '/srv/projects/new-blok',
+        label: 'Project new-blok',
+      },
       providerAccountId: null,
     })
   })
@@ -1270,6 +1369,379 @@ describe('ComposerContainer', () => {
       ).toBeInTheDocument()
     })
   })
+  describe("the strip's second slot: where the session works (MAR-2689)", () => {
+    function renderNewSession() {
+      render(
+        <ComposerContainer
+          context={{
+            kind: 'project',
+            projectId: 'project-1',
+            workspaceId: null,
+            activeSessionId: null,
+          }}
+        />,
+      )
+    }
+
+    async function pickMachine(label: string): Promise<void> {
+      fireEvent.click(await screen.findByRole('combobox', { name: /Local/ }))
+      fireEvent.click(screen.getByText(label))
+    }
+
+    it('does not exist on Local, so a Local composer is unchanged', async () => {
+      setEndpoints([endpointFixture('daemon-a', 'kuba-vps', 0)])
+      renderNewSession()
+
+      // The machine tier is there, and only it. Anything else on this strip
+      // would be a change to a composer that must not change (MAR-2682).
+      expect(await screen.findByText('Runs on')).toBeInTheDocument()
+      expect(screen.queryByText('Works in')).toBeNull()
+      expect(screen.queryByTestId('work-address-notice')).toBeNull()
+    })
+
+    it('lists the machine Projects and preselects the one holding this repository', async () => {
+      setEndpoints([endpointFixture('daemon-a', 'little-monster', 0)])
+      seedCatalog('daemon-a', [
+        {
+          descriptor: remoteProvider('claude-code', 'Claude Code', [
+            { id: 'sonnet', label: 'Claude Sonnet' },
+          ]),
+          blockedReason: null,
+        },
+      ])
+      seedRemoteProjects('daemon-a', [
+        { ...REMOTE_PROJECT, id: 'segmemo', name: 'segmemo', origin: null },
+        REMOTE_PROJECT,
+      ])
+      renderNewSession()
+      await pickMachine('little-monster')
+
+      const slot = await screen.findByRole('combobox', {
+        name: /Project new-blok/,
+      })
+      expect(slot).toBeInTheDocument()
+
+      fireEvent.click(slot)
+      expect(screen.getByText('Project segmemo')).toBeInTheDocument()
+      expect(screen.getByText('marckraw/new-blok')).toBeInTheDocument()
+    })
+
+    it('offers only the repository on a machine that does no Projects', async () => {
+      setEndpoints([endpointFixture('daemon-a', 'little-monster', 0)])
+      seedCatalog('daemon-a', [
+        {
+          descriptor: remoteProvider('claude-code', 'Claude Code', [
+            { id: 'sonnet', label: 'Claude Sonnet' },
+          ]),
+          blockedReason: null,
+        },
+      ])
+      seedRemoteProjects('daemon-a', [], { supported: false })
+      renderNewSession()
+      await pickMachine('little-monster')
+
+      expect(
+        await screen.findByRole('combobox', { name: /marckraw\/new-blok/ }),
+      ).toBeInTheDocument()
+      // No Projects is a listing, not a fault, so nothing is explained away.
+      expect(screen.queryByTestId('work-address-notice')).toBeNull()
+    })
+
+    it('survives a bridge that cannot answer what a daemon would clone', async () => {
+      // A door this composer merely reads from must never be able to take it
+      // down. A method that is not there throws where it is *called* --
+      // synchronously, out of the effect -- so a trailing `.catch` would not
+      // see it and the whole composer would unmount (MAR-2689).
+      const electronAPI = (
+        window as unknown as { electronAPI: { git: Record<string, unknown> } }
+      ).electronAPI
+      delete electronAPI.git.getCloneableRepositoryUrl
+
+      setEndpoints([endpointFixture('daemon-a', 'little-monster', 0)])
+      seedCatalog('daemon-a', [
+        {
+          descriptor: remoteProvider('claude-code', 'Claude Code', [
+            { id: 'sonnet', label: 'Claude Sonnet' },
+          ]),
+          blockedReason: null,
+        },
+      ])
+      seedRemoteProjects('daemon-a', [], { supported: false })
+      renderNewSession()
+      await pickMachine('little-monster')
+
+      // The strip is still there, and it says it has nothing to offer rather
+      // than offering a place derived from nothing.
+      expect(
+        await screen.findByTestId('work-address-notice'),
+      ).toHaveTextContent(/no GitHub origin/)
+      expect(screen.getByText('Runs on')).toBeInTheDocument()
+    })
+
+    it('says it is asking while the machine has not answered', async () => {
+      setEndpoints([endpointFixture('daemon-a', 'little-monster', 0)])
+      seedCatalog('daemon-a', [
+        {
+          descriptor: remoteProvider('claude-code', 'Claude Code', [
+            { id: 'sonnet', label: 'Claude Sonnet' },
+          ]),
+          blockedReason: null,
+        },
+      ])
+      renderNewSession()
+      await pickMachine('little-monster')
+
+      expect(
+        await screen.findByTestId('work-address-notice'),
+      ).toHaveTextContent(/Asking little-monster where it can work/)
+    })
+
+    it('will not start a session while the machine has not said where it can work', async () => {
+      // The incident, reached through the new control: pick a daemon, press
+      // ⌘↵ while the strip still says "Asking…", and the session was created
+      // with `unknown` on the record — after which the start fell back to the
+      // silent derivation and cloned whatever the session's own project points
+      // at (MAR-2689). ⌘↵ and not the button, because the shortcut is the path
+      // he actually uses and the one that had its own copy of the rule.
+      //
+      // Mutation: drop `workAddressReadyForSend(workAddress)` from `canSend`
+      // in the presentational, and both assertions go red.
+      const electronAPI = (
+        window as unknown as {
+          electronAPI: { executionHost: Record<string, unknown> }
+        }
+      ).electronAPI
+      // A read that never lands: the machine has been asked and has not
+      // answered, which is exactly the window the send used to slip through.
+      electronAPI.executionHost.getProjects = vi.fn(() => new Promise(() => {}))
+
+      setEndpoints([endpointFixture('daemon-a', 'little-monster', 0)])
+      seedCatalog('daemon-a', [
+        {
+          descriptor: remoteProvider('claude-code', 'Claude Code', [
+            { id: 'sonnet', label: 'Claude Sonnet' },
+          ]),
+          blockedReason: null,
+        },
+      ])
+      renderNewSession()
+      await pickMachine('little-monster')
+
+      expect(
+        await screen.findByTestId('work-address-notice'),
+      ).toHaveTextContent(/Asking little-monster where it can work/)
+
+      const textbox = screen.getByRole('textbox')
+      fireEvent.change(textbox, { target: { value: 'Run remotely' } })
+      fireEvent.keyDown(textbox, { key: 'Enter', metaKey: true })
+
+      expect(
+        useSessionStore.getState().createAndStartSession,
+      ).not.toHaveBeenCalled()
+      expect(
+        screen.getByRole('button', { name: 'Send message' }),
+      ).toBeDisabled()
+    })
+
+    it('asks git nothing at all for a Local composer', async () => {
+      // Ruling 2 says the slot does not exist on Local; the cost must not
+      // exist either. The origin read used to run for every composer with a
+      // project, spawning `git config` in the main process for a session that
+      // has no slot to fill — so "Local is byte-identical" was true of the
+      // rendered DOM and of nothing else (MAR-2682).
+      //
+      // Mutation: drop the `needsCloneableRepository` guard on the origin
+      // effect, and this goes red.
+      setEndpoints([endpointFixture('daemon-a', 'little-monster', 0)])
+      renderNewSession()
+
+      expect(await screen.findByText('Runs on')).toBeInTheDocument()
+      const textbox = screen.getByRole('textbox')
+      fireEvent.change(textbox, { target: { value: 'A local run' } })
+      fireEvent.keyDown(textbox, { key: 'Enter', metaKey: true })
+
+      await waitFor(() =>
+        expect(
+          useSessionStore.getState().createAndStartSession,
+        ).toHaveBeenCalled(),
+      )
+      // The real renderer seam, not the module: a spy on the api wrapper would
+      // stay green if the container started calling the bridge directly.
+      expect(
+        window.electronAPI.git.getCloneableRepositoryUrl,
+      ).not.toHaveBeenCalled()
+    })
+
+    it('states a live remote session place from its record', async () => {
+      setEndpoints([endpointFixture('daemon-a', 'little-monster', 0)])
+      useSessionStore.setState((state) => ({
+        sessions: state.sessions.map((session) =>
+          session.id === 'session-1'
+            ? {
+                ...session,
+                executionHost: 'daemon-a',
+                workAddress: {
+                  mode: 'project' as const,
+                  projectId: 'new-blok',
+                  workingDirectory: '/srv/projects/new-blok',
+                  label: 'Project new-blok',
+                },
+              }
+            : session,
+        ),
+      }))
+      seedCatalog('daemon-a', [
+        {
+          descriptor: remoteProvider('claude-code', 'Claude Code', [
+            { id: 'sonnet', label: 'Claude Sonnet' },
+          ]),
+          blockedReason: null,
+        },
+      ])
+
+      render(
+        <ComposerContainer
+          context={{
+            kind: 'project',
+            projectId: 'project-1',
+            workspaceId: null,
+            activeSessionId: 'session-1',
+          }}
+        />,
+      )
+
+      // A statement of fact, not a control: the daemon owns a running session
+      // and its place cannot change under it.
+      expect(await screen.findByTestId('work-address-fact')).toHaveTextContent(
+        'Project new-blok',
+      )
+      expect(
+        screen.queryByRole('combobox', { name: /Project new-blok/ }),
+      ).toBeNull()
+    })
+
+    it('says Unknown for a remote session started before places were recorded', async () => {
+      setEndpoints([endpointFixture('daemon-a', 'little-monster', 0)])
+      useSessionStore.setState((state) => ({
+        sessions: state.sessions.map((session) =>
+          session.id === 'session-1'
+            ? {
+                ...session,
+                executionHost: 'daemon-a',
+                workAddress: { mode: 'unknown' as const },
+              }
+            : session,
+        ),
+      }))
+      seedCatalog('daemon-a', [
+        {
+          descriptor: remoteProvider('claude-code', 'Claude Code', [
+            { id: 'sonnet', label: 'Claude Sonnet' },
+          ]),
+          blockedReason: null,
+        },
+      ])
+
+      render(
+        <ComposerContainer
+          context={{
+            kind: 'project',
+            projectId: 'project-1',
+            workspaceId: null,
+            activeSessionId: 'session-1',
+          }}
+        />,
+      )
+
+      expect(await screen.findByTestId('work-address-fact')).toHaveTextContent(
+        'Unknown',
+      )
+    })
+  })
+
+  describe('the permission preset a machine implies (MAR-2689)', () => {
+    function renderNewSession() {
+      render(
+        <ComposerContainer
+          context={{
+            kind: 'project',
+            projectId: 'project-1',
+            workspaceId: null,
+            activeSessionId: null,
+          }}
+        />,
+      )
+    }
+
+    /** The preset control names its own value, so the value is what is read. */
+    function presetShows(label: 'Ask' | 'Yolo'): boolean {
+      return screen.queryByRole('combobox', { name: label }) !== null
+    }
+
+    it('opens Ask on Local and Yolo once a daemon is named', async () => {
+      setEndpoints([endpointFixture('daemon-a', 'little-monster', 0)])
+      seedCatalog('daemon-a', [
+        {
+          descriptor: remoteProvider('claude-code', 'Claude Code', [
+            { id: 'sonnet', label: 'Claude Sonnet' },
+          ]),
+          blockedReason: null,
+        },
+      ])
+      seedRemoteProjects('daemon-a', [REMOTE_PROJECT])
+      renderNewSession()
+
+      expect(presetShows('Ask')).toBe(true)
+
+      fireEvent.click(await screen.findByRole('combobox', { name: /Local/ }))
+      fireEvent.click(screen.getByText('little-monster'))
+
+      await waitFor(() => expect(presetShows('Yolo')).toBe(true))
+      expect(presetShows('Ask')).toBe(false)
+    })
+
+    it('leaves a preset he touched alone across a machine switch', async () => {
+      // Two daemons, because the discriminating switch is remote -> remote: a
+      // machine the default would answer `yolo` for. Switching from Local would
+      // land on `yolo` whether his touch was honoured or not.
+      setEndpoints([
+        endpointFixture('daemon-a', 'little-monster', 0),
+        endpointFixture('daemon-b', 'kuba-vps', 1),
+      ])
+      for (const id of ['daemon-a', 'daemon-b']) {
+        seedCatalog(id, [
+          {
+            descriptor: remoteProvider('claude-code', 'Claude Code', [
+              { id: 'sonnet', label: 'Claude Sonnet' },
+            ]),
+            blockedReason: null,
+          },
+        ])
+        seedRemoteProjects(id, [REMOTE_PROJECT])
+      }
+      renderNewSession()
+
+      fireEvent.click(await screen.findByRole('combobox', { name: /Local/ }))
+      fireEvent.click(screen.getByText('little-monster'))
+      await waitFor(() => expect(presetShows('Yolo')).toBe(true))
+
+      // He decides for himself that this run should ask.
+      fireEvent.click(screen.getByRole('combobox', { name: 'Yolo' }))
+      fireEvent.click(screen.getByText('Ask'))
+      expect(presetShows('Ask')).toBe(true)
+
+      fireEvent.click(screen.getByRole('combobox', { name: /little-monster/ }))
+      fireEvent.click(screen.getByText('kuba-vps'))
+
+      // A default that undid a deliberate choice would be the control below
+      // the strip disagreeing with the human above it.
+      await waitFor(() =>
+        expect(screen.getByText('Works in')).toBeInTheDocument(),
+      )
+      expect(presetShows('Ask')).toBe(true)
+    })
+  })
+
   describe('the quiet type treatment, ruled "lets do quiet until i look" (Marcin, 2026-08-27, MAR-2642)', () => {
     // A deliberate absence of emphasis needs enforcing, not a note. Nothing
     // else in this file touches a type scale or a text tone, so a strip
@@ -1483,6 +1955,9 @@ describe('ComposerContainer', () => {
       permissionConfig: { preset: 'ask' },
       serviceTier: 'default',
       executionHost: undefined,
+      // A Local session works in the directory the record already names, so it
+      // states no place and records none (MAR-2689).
+      workAddress: null,
       providerAccountId: null,
     })
   })
@@ -1527,6 +2002,9 @@ describe('ComposerContainer', () => {
       permissionConfig: { preset: 'ask' },
       serviceTier: 'fast',
       executionHost: undefined,
+      // A Local session works in the directory the record already names, so it
+      // states no place and records none (MAR-2689).
+      workAddress: null,
       providerAccountId: null,
     })
   })
@@ -1568,6 +2046,9 @@ describe('ComposerContainer', () => {
       permissionConfig: { preset: 'yolo' },
       serviceTier: null,
       executionHost: undefined,
+      // A Local session works in the directory the record already names, so it
+      // states no place and records none (MAR-2689).
+      workAddress: null,
       providerAccountId: null,
     })
   })

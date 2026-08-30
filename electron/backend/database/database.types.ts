@@ -44,6 +44,8 @@ export interface SessionRow {
   execution_host: string
   execution_host_last_seq: number
   execution_host_settled_seq: number
+  /** Serialized `SessionWorkAddress`; null on a local row (MAR-2689). */
+  work_address: string | null
   created_at: string
   updated_at: string
 }

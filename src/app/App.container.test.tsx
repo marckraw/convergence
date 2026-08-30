@@ -150,6 +150,7 @@ const mockElectronAPI = {
   git: {
     getBranches: vi.fn().mockResolvedValue([]),
     getCurrentBranch: vi.fn().mockResolvedValue('main'),
+    getCloneableRepositoryUrl: vi.fn().mockResolvedValue(null),
   },
   session: {
     create: vi.fn(),

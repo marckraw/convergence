@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import { EXECUTION_PROTOCOL_VERSION } from '@mrck-labs/execution-host-protocol'
 import { buildWireStartRequest } from './execution-host-wire-mapping.pure'
+import type { EndpointHandshakeResult } from './execution-host-handshake.types'
 import {
+  daemonCapabilitiesFingerprint,
   describeRemoteExecutionHostFailure,
   capabilitiesForRemoteProvider,
   createSseParser,
@@ -16,6 +18,7 @@ import {
   parseRemoteSessionWorkspaceInfo,
   remoteExecutionHostReconnectDelayMs,
   unavailableProviderError,
+  UNKNOWN_DAEMON_CAPABILITIES,
 } from './remote-execution-host.pure'
 import { RemoteExecutionHostError } from './remote-execution-host.types'
 
@@ -487,5 +490,112 @@ describe('unavailableProviderError', () => {
 
     expect(error.message).toContain('has not listed its providers yet')
     expect(error.message).not.toContain('Provider not found')
+  })
+})
+
+describe('daemonCapabilitiesFingerprint (MAR-2689 round 8)', () => {
+  const handshakeAdvertising = (
+    capabilities: string[],
+  ): EndpointHandshakeResult => ({
+    status: 'connected',
+    daemonVersion: '0.26.1',
+    daemonGitSha: null,
+    daemonBuildTime: null,
+    apiVersion: 'v0',
+    uptimeSeconds: null,
+    providers: {},
+    providerReadiness: {},
+    executionProtocolCapabilities: capabilities,
+    sessionDirectorySearch: false,
+    transcriptSearch: false,
+    detail: null,
+  })
+
+  it('tells a machine that said nothing from one that said it offers nothing', () => {
+    // The two facts a boolean lost, kept apart here for the same reason
+    // `remoteProjectsCapability` keeps three states: a daemon whose /health is
+    // unreadable is *unknown*, and an answer read while it was withheld is not
+    // true of a machine that has since stopped answering at all.
+    //
+    // Mutation: fingerprint a null handshake as the empty set (`?? []`), and
+    // this goes red -- a machine going dark stops moving its Endpoint's epoch.
+    expect(daemonCapabilitiesFingerprint(null)).not.toBe(
+      daemonCapabilitiesFingerprint(handshakeAdvertising([])),
+    )
+  })
+
+  it('reads a capability list as a set, not as an order', () => {
+    // A daemon is free to serialise its capabilities in any order, and a
+    // reordering is not a change in what it can do. Counting it as one would
+    // throw away every catalog on this machine for nothing.
+    //
+    // Mutation: join the capabilities as given instead of sorting a copy, and
+    // this goes red.
+    expect(
+      daemonCapabilitiesFingerprint(
+        handshakeAdvertising(['projects.v1', 'rooms.v1']),
+      ),
+    ).toBe(
+      daemonCapabilitiesFingerprint(
+        handshakeAdvertising(['rooms.v1', 'projects.v1']),
+      ),
+    )
+  })
+
+  it('moves when a capability is withdrawn', () => {
+    // The fact round 8 exists for: the same machine, at the same address and
+    // credential, offering one capability fewer than it did.
+    //
+    // Mutation: return a constant, and this goes red.
+    expect(
+      daemonCapabilitiesFingerprint(
+        handshakeAdvertising(['projects.v1', 'rooms.v1']),
+      ),
+    ).not.toBe(
+      daemonCapabilitiesFingerprint(handshakeAdvertising(['rooms.v1'])),
+    )
+  })
+
+  it('tells two sets apart when one id holds the separator the other is joined on', () => {
+    // Round 9's finding, and the rule behind it: never fingerprint a list by
+    // joining it on a character its elements may contain. The protocol decoder
+    // accepts any non-empty string as a capability id, so a daemon is free to
+    // advertise one holding a NUL — and under a NUL join these two sets are the
+    // same bytes while meaning opposite things. `remoteProjectsCapability` asks
+    // for exact membership of `projects.v1`: the first set offers Projects, the
+    // second withholds them. Collide them and a crafted /health keeps a stale
+    // Projects catalog in force through the very mechanism that exists to stop
+    // the strip and the start door disagreeing.
+    //
+    // Mutation: join the sorted ids on '\u0000' instead of encoding them, and
+    // this goes red.
+    expect(
+      daemonCapabilitiesFingerprint(handshakeAdvertising(['projects.v1', 'x'])),
+    ).not.toBe(
+      daemonCapabilitiesFingerprint(
+        handshakeAdvertising(['projects.v1\u0000x']),
+      ),
+    )
+  })
+
+  it('keeps the never-answered sentinel out of reach of any advertised set', () => {
+    // The same defect one layer up, and why the sentinel is not a string a
+    // capability id could equal. It used to be `'\u0000unknown'`, which is
+    // exactly what a machine advertising the single id `\u0000unknown`
+    // fingerprinted to — so "went dark" and "answered, oddly" were one value,
+    // and the distinction the sentinel exists to make was unmade by an
+    // attacker-chosen id. Written against the constant rather than a literal:
+    // whatever the sentinel is, no advertised set may be able to produce it.
+    //
+    // Mutation: join the sorted ids on '\u0000' instead of encoding them, and
+    // this goes red — with any join, the sentinel is whatever a one-id set
+    // fingerprints to, whichever string it is. Restoring the round-8 sentinel
+    // alone does not redden it, and cannot: an encoded set cannot equal a
+    // scalar.
+    expect(daemonCapabilitiesFingerprint(null)).not.toBe(
+      daemonCapabilitiesFingerprint(
+        handshakeAdvertising([UNKNOWN_DAEMON_CAPABILITIES]),
+      ),
+    )
   })
 })

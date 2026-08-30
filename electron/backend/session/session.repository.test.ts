@@ -33,6 +33,7 @@ function createSessionInput(
     forkStrategy: null,
     primarySurface: 'conversation',
     executionHost: 'local',
+    workAddress: null,
     ...overrides,
   }
 }

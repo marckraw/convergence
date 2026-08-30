@@ -27,6 +27,7 @@ import type { ProviderExecutionHost } from './execution-host.types'
 import type { SessionHandle } from '../provider.types'
 import type { SessionDelta } from '../../session/conversation-item.types'
 import type { ProviderDebugEntry } from '../../provider-debug/provider-debug.types'
+import { TEST_REMOTE_WORK_ADDRESS } from '../../session/session-work-address.fixture'
 
 /**
  * The real remote host, wrapped so a handle the service has released can still
@@ -162,6 +163,7 @@ describe('remote wire events reaching the session record', () => {
       effort: null,
       name: 'remote session',
       executionHost: TEST_EXECUTION_HOST_ENDPOINT_ID,
+      workAddress: TEST_REMOTE_WORK_ADDRESS,
     }).id
     return id
   }

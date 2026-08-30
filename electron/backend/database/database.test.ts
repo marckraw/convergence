@@ -1123,9 +1123,10 @@ describe('database', () => {
     // either list silently takes a default. That is the class of bug this
     // guards, and every column below is a member of it.
     //
-    // `execution_host` and `execution_host_last_seq` are deliberately absent:
-    // the projection does not carry them today, so asserting them here would
-    // claim a guarantee this code does not make.
+    // The columns a later migration adds are here too, at the defaults those
+    // migrations give a legacy row. They used to be deliberately absent because
+    // the hand-written projection dropped them; it is derived now, so the
+    // guarantee is every column of the destination table (MAR-2689).
     const dir = mkdtempSync(join(tmpdir(), 'convergence-sessions-rebuild-'))
     const dbPath = join(dir, 'legacy-shape.sqlite')
 
@@ -1226,7 +1227,9 @@ describe('database', () => {
                   name, status, attention, working_directory, context_window,
                   activity, relays_muted, archived_at, last_sequence,
                   conversation_version, name_auto_generated, parent_session_id,
-                  fork_strategy, primary_surface, created_at, updated_at
+                  fork_strategy, primary_surface, execution_host,
+                  execution_host_last_seq, execution_host_settled_seq,
+                  work_address, created_at, updated_at
            FROM sessions WHERE id = 's-rt'`,
         )
         .get()
@@ -1256,9 +1259,197 @@ describe('database', () => {
         parent_session_id: 's-parent',
         fork_strategy: 'full',
         primary_surface: 'terminal',
+        execution_host: 'local',
+        execution_host_last_seq: 0,
+        execution_host_settled_seq: 0,
+        work_address: null,
         created_at: '2026-01-01',
         updated_at: '2026-01-02',
       })
+    } finally {
+      closeDatabase()
+      resetDatabase()
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('keeps a remote session remote, and its place its place, across a rebuild', () => {
+    // The two real migration seams, composed: a database that still owes the
+    // sessions rebuild AND has not been given `work_address` yet. On one boot
+    // the backfill marks its remote rows unknown and the rebuild then threw
+    // that away, along with the Endpoint the row named -- every remote session
+    // came back as a local one with no place (MAR-2689).
+    //
+    // Mutation: hand-list the projection again, minus `work_address` (or minus
+    // `execution_host`), and this goes red. That is the class: a list nobody
+    // re-reads, not the four names it happened to be missing.
+    const dir = mkdtempSync(join(tmpdir(), 'convergence-rebuild-address-'))
+    const dbPath = join(dir, 'legacy-remote.sqlite')
+
+    try {
+      const legacy = new Database(dbPath)
+      // No context-kind CHECK, which is what leaves the rebuild owed.
+      legacy.exec(`
+        CREATE TABLE projects (
+          id TEXT PRIMARY KEY,
+          name TEXT NOT NULL,
+          repository_path TEXT NOT NULL UNIQUE,
+          settings TEXT NOT NULL DEFAULT '{}',
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL
+        );
+
+        CREATE TABLE sessions (
+          id TEXT PRIMARY KEY,
+          context_kind TEXT NOT NULL DEFAULT 'project',
+          project_id TEXT,
+          workspace_id TEXT,
+          provider_id TEXT NOT NULL,
+          model TEXT,
+          effort TEXT,
+          permission_config TEXT NOT NULL DEFAULT '{"preset":"ask"}',
+          continuation_token TEXT,
+          name TEXT NOT NULL,
+          status TEXT NOT NULL DEFAULT 'idle',
+          attention TEXT NOT NULL DEFAULT 'none',
+          working_directory TEXT NOT NULL,
+          context_window TEXT,
+          activity TEXT,
+          archived_at TEXT,
+          last_sequence INTEGER NOT NULL DEFAULT 0,
+          conversation_version INTEGER NOT NULL DEFAULT 2,
+          name_auto_generated INTEGER NOT NULL DEFAULT 0,
+          parent_session_id TEXT,
+          fork_strategy TEXT,
+          primary_surface TEXT NOT NULL DEFAULT 'conversation',
+          execution_host TEXT NOT NULL DEFAULT 'local',
+          execution_host_last_seq INTEGER NOT NULL DEFAULT 0,
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL
+        );
+
+        INSERT INTO projects (id, name, repository_path, settings, created_at, updated_at)
+        VALUES ('p1', 'p', '/tmp/p1', '{}', '2026-01-01', '2026-01-01');
+
+        INSERT INTO sessions (
+          id, context_kind, project_id, provider_id, name, working_directory,
+          execution_host, execution_host_last_seq, created_at, updated_at
+        ) VALUES
+          ('s-remote', 'project', 'p1', 'claude-code', 'on a daemon', '/tmp/p1',
+           'little-monster', 42, '2026-01-01', '2026-01-02'),
+          ('s-local', 'project', 'p1', 'claude-code', 'here', '/tmp/p1',
+           'local', 0, '2026-01-01', '2026-01-02');
+      `)
+      legacy.close()
+
+      const db = getDatabase(dbPath)
+      const rows = db
+        .prepare(
+          `SELECT id, execution_host, execution_host_last_seq, work_address
+             FROM sessions ORDER BY id`,
+        )
+        .all()
+
+      expect(rows).toEqual([
+        {
+          id: 's-local',
+          execution_host: 'local',
+          execution_host_last_seq: 0,
+          work_address: null,
+        },
+        {
+          id: 's-remote',
+          execution_host: 'little-monster',
+          execution_host_last_seq: 42,
+          work_address: '{"mode":"unknown"}',
+        },
+      ])
+    } finally {
+      closeDatabase()
+      resetDatabase()
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('carries a place already on record through the rebuild unchanged', () => {
+    // The other half: a database that took the work-address migration on an
+    // earlier boot and still owes the shape rebuild. A concrete address must
+    // arrive on the far side exactly as written -- re-deriving it or dropping
+    // it to unknown would both be the record losing what he chose.
+    //
+    // Mutation: drop `work_address` from the projection, and this goes red.
+    const dir = mkdtempSync(join(tmpdir(), 'convergence-rebuild-place-'))
+    const dbPath = join(dir, 'legacy-place.sqlite')
+    const address = JSON.stringify({
+      mode: 'project',
+      projectId: 'new-blok',
+      workingDirectory: '/srv/projects/new-blok',
+      label: 'Project new-blok',
+    })
+
+    try {
+      const legacy = new Database(dbPath)
+      legacy.exec(`
+        CREATE TABLE projects (
+          id TEXT PRIMARY KEY,
+          name TEXT NOT NULL,
+          repository_path TEXT NOT NULL UNIQUE,
+          settings TEXT NOT NULL DEFAULT '{}',
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL
+        );
+
+        CREATE TABLE sessions (
+          id TEXT PRIMARY KEY,
+          context_kind TEXT NOT NULL DEFAULT 'project',
+          project_id TEXT,
+          workspace_id TEXT,
+          provider_id TEXT NOT NULL,
+          model TEXT,
+          effort TEXT,
+          permission_config TEXT NOT NULL DEFAULT '{"preset":"ask"}',
+          continuation_token TEXT,
+          name TEXT NOT NULL,
+          status TEXT NOT NULL DEFAULT 'idle',
+          attention TEXT NOT NULL DEFAULT 'none',
+          working_directory TEXT NOT NULL,
+          context_window TEXT,
+          activity TEXT,
+          archived_at TEXT,
+          last_sequence INTEGER NOT NULL DEFAULT 0,
+          conversation_version INTEGER NOT NULL DEFAULT 2,
+          name_auto_generated INTEGER NOT NULL DEFAULT 0,
+          parent_session_id TEXT,
+          fork_strategy TEXT,
+          primary_surface TEXT NOT NULL DEFAULT 'conversation',
+          execution_host TEXT NOT NULL DEFAULT 'local',
+          work_address TEXT,
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL
+        );
+
+        INSERT INTO projects (id, name, repository_path, settings, created_at, updated_at)
+        VALUES ('p1', 'p', '/tmp/p1', '{}', '2026-01-01', '2026-01-01');
+      `)
+      legacy
+        .prepare(
+          `INSERT INTO sessions (
+             id, context_kind, project_id, provider_id, name, working_directory,
+             execution_host, work_address, created_at, updated_at
+           ) VALUES ('s-placed', 'project', 'p1', 'claude-code', 'placed',
+                     '/tmp/p1', 'little-monster', ?, '2026-01-01', '2026-01-02')`,
+        )
+        .run(address)
+      legacy.close()
+
+      const db = getDatabase(dbPath)
+      expect(
+        db
+          .prepare(
+            `SELECT execution_host, work_address FROM sessions WHERE id = 's-placed'`,
+          )
+          .get(),
+      ).toEqual({ execution_host: 'little-monster', work_address: address })
     } finally {
       closeDatabase()
       resetDatabase()
@@ -2507,100 +2698,199 @@ describe('database', () => {
 })
 // MAR-2620: the single remote daemon becomes the first Endpoint, and the two
 // sessions that ran on it stop saying `'remote'` and start saying which.
-describe('execution host endpoints migration', () => {
-  const LEGACY_SCHEMA = `
-      CREATE TABLE projects (
-        id TEXT PRIMARY KEY,
-        name TEXT NOT NULL,
-        repository_path TEXT NOT NULL UNIQUE,
-        settings TEXT NOT NULL DEFAULT '{}',
-        created_at TEXT NOT NULL,
-        updated_at TEXT NOT NULL
-      );
+const LEGACY_SCHEMA = `
+  CREATE TABLE projects (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    repository_path TEXT NOT NULL UNIQUE,
+    settings TEXT NOT NULL DEFAULT '{}',
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+  );
 
-      CREATE TABLE app_state (
-        key TEXT PRIMARY KEY,
-        value TEXT NOT NULL
-      );
+  CREATE TABLE app_state (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL
+  );
 
-      CREATE TABLE sessions (
-        id TEXT PRIMARY KEY,
-        context_kind TEXT NOT NULL DEFAULT 'project'
-          CHECK (context_kind IN ('project', 'global')),
-        project_id TEXT,
-        workspace_id TEXT,
-        provider_id TEXT NOT NULL,
-        model TEXT,
-        effort TEXT,
-        service_tier TEXT,
-        permission_config TEXT NOT NULL DEFAULT '{"preset":"ask"}',
-        continuation_token TEXT,
-        name TEXT NOT NULL,
-        status TEXT NOT NULL DEFAULT 'idle',
-        attention TEXT NOT NULL DEFAULT 'none',
-        working_directory TEXT NOT NULL,
-        context_window TEXT,
-        activity TEXT,
-        relays_muted INTEGER NOT NULL DEFAULT 0,
-        archived_at TEXT,
-        last_sequence INTEGER NOT NULL DEFAULT 0,
-        conversation_version INTEGER NOT NULL DEFAULT 2,
-        name_auto_generated INTEGER NOT NULL DEFAULT 0,
-        parent_session_id TEXT,
-        fork_strategy TEXT,
-        primary_surface TEXT NOT NULL DEFAULT 'conversation',
-        execution_host TEXT NOT NULL DEFAULT 'local',
-        execution_host_last_seq INTEGER NOT NULL DEFAULT 0,
-        execution_host_settled_seq INTEGER NOT NULL DEFAULT 0,
-        created_at TEXT NOT NULL,
-        updated_at TEXT NOT NULL,
-        FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
-        FOREIGN KEY (parent_session_id) REFERENCES sessions(id) ON DELETE SET NULL,
-        CHECK (
-          (context_kind = 'project' AND project_id IS NOT NULL)
-          OR
-          (context_kind = 'global' AND project_id IS NULL AND workspace_id IS NULL)
-        )
-      );
+  CREATE TABLE sessions (
+    id TEXT PRIMARY KEY,
+    context_kind TEXT NOT NULL DEFAULT 'project'
+      CHECK (context_kind IN ('project', 'global')),
+    project_id TEXT,
+    workspace_id TEXT,
+    provider_id TEXT NOT NULL,
+    model TEXT,
+    effort TEXT,
+    service_tier TEXT,
+    permission_config TEXT NOT NULL DEFAULT '{"preset":"ask"}',
+    continuation_token TEXT,
+    name TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'idle',
+    attention TEXT NOT NULL DEFAULT 'none',
+    working_directory TEXT NOT NULL,
+    context_window TEXT,
+    activity TEXT,
+    relays_muted INTEGER NOT NULL DEFAULT 0,
+    archived_at TEXT,
+    last_sequence INTEGER NOT NULL DEFAULT 0,
+    conversation_version INTEGER NOT NULL DEFAULT 2,
+    name_auto_generated INTEGER NOT NULL DEFAULT 0,
+    parent_session_id TEXT,
+    fork_strategy TEXT,
+    primary_surface TEXT NOT NULL DEFAULT 'conversation',
+    execution_host TEXT NOT NULL DEFAULT 'local',
+    execution_host_last_seq INTEGER NOT NULL DEFAULT 0,
+    execution_host_settled_seq INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
+    FOREIGN KEY (parent_session_id) REFERENCES sessions(id) ON DELETE SET NULL,
+    CHECK (
+      (context_kind = 'project' AND project_id IS NOT NULL)
+      OR
+      (context_kind = 'global' AND project_id IS NULL AND workspace_id IS NULL)
+    )
+  );
 
-      INSERT INTO projects (id, name, repository_path, created_at, updated_at)
-      VALUES ('p1', 'p', '/tmp/p1', '2026-01-01', '2026-01-01');
+  INSERT INTO projects (id, name, repository_path, created_at, updated_at)
+  VALUES ('p1', 'p', '/tmp/p1', '2026-01-01', '2026-01-01');
 
-      INSERT INTO sessions (
-        id, project_id, provider_id, name, status, working_directory,
-        execution_host, created_at, updated_at
-      ) VALUES
-        ('s-remote-a', 'p1', 'claude-code', 's', 'completed', '/tmp/p1', 'remote', '2026-01-01', '2026-01-01'),
-        ('s-remote-b', 'p1', 'claude-code', 's', 'failed', '/tmp/p1', 'remote', '2026-01-01', '2026-01-01'),
-        ('s-local', 'p1', 'claude-code', 's', 'completed', '/tmp/p1', 'local', '2026-01-01', '2026-01-01');
+  INSERT INTO sessions (
+    id, project_id, provider_id, name, status, working_directory,
+    execution_host, created_at, updated_at
+  ) VALUES
+    ('s-remote-a', 'p1', 'claude-code', 's', 'completed', '/tmp/p1', 'remote', '2026-01-01', '2026-01-01'),
+    ('s-remote-b', 'p1', 'claude-code', 's', 'failed', '/tmp/p1', 'remote', '2026-01-01', '2026-01-01'),
+    ('s-local', 'p1', 'claude-code', 's', 'completed', '/tmp/p1', 'local', '2026-01-01', '2026-01-01');
 `
 
+function seedLegacy(dbPath: string, settingsJson: string | null): void {
+  const legacy = new Database(dbPath)
+  legacy.exec(LEGACY_SCHEMA)
+  if (settingsJson !== null) {
+    legacy
+      .prepare('INSERT INTO app_state (key, value) VALUES (?, ?)')
+      .run('app_settings', settingsJson)
+  }
+  legacy.close()
+}
+
+/** Seeds the pre-Endpoint schema and hands the path back, for chaining. */
+function seedLegacyAt(dbPath: string): string {
+  seedLegacy(dbPath, null)
+  return dbPath
+}
+
+function withTempDb(name: string, run: (dbPath: string) => void): void {
+  const dir = mkdtempSync(join(tmpdir(), `convergence-${name}-`))
+  try {
+    run(join(dir, `${name}.sqlite`))
+  } finally {
+    closeDatabase()
+    resetDatabase()
+    rmSync(dir, { recursive: true, force: true })
+  }
+}
+
+/**
+ * A remote session says where it worked, and a pre-era one says it does not
+ * know (MAR-2689).
+ *
+ * The column is additive, so the interesting claims are all about the backfill:
+ * that it happens, that it invents nothing, that it leaves local rows alone,
+ * and that it cannot be half-done. The last one is the reason the column and
+ * the `UPDATE` share a transaction — the column's presence is itself the flag
+ * that says the backfill is still owed, so an interrupt in the gap would be
+ * permanent.
+ */
+describe('session work address migration', () => {
   afterEach(() => {
     closeDatabase()
     resetDatabase()
   })
 
-  function seedLegacy(dbPath: string, settingsJson: string | null): void {
-    const legacy = new Database(dbPath)
-    legacy.exec(LEGACY_SCHEMA)
-    if (settingsJson !== null) {
-      legacy
-        .prepare('INSERT INTO app_state (key, value) VALUES (?, ?)')
-        .run('app_settings', settingsJson)
-    }
-    legacy.close()
-  }
+  it('marks every pre-era remote row unknown and leaves local rows blank', () => {
+    withTempDb('work-address-migration', (dbPath) => {
+      const db = getDatabase(seedLegacyAt(dbPath))
 
-  function withTempDb(name: string, run: (dbPath: string) => void): void {
-    const dir = mkdtempSync(join(tmpdir(), `convergence-${name}-`))
-    try {
-      run(join(dir, `${name}.sqlite`))
-    } finally {
+      expect(
+        db
+          .prepare('SELECT id, work_address FROM sessions ORDER BY id ASC')
+          .all(),
+      ).toEqual([
+        { id: 's-local', work_address: null },
+        { id: 's-remote-a', work_address: '{"mode":"unknown"}' },
+        { id: 's-remote-b', work_address: '{"mode":"unknown"}' },
+      ])
+    })
+  })
+
+  it('never guesses a repository for a row whose place was not recorded', () => {
+    withTempDb('work-address-no-guess', (dbPath) => {
+      const db = getDatabase(seedLegacyAt(dbPath))
+
+      // The rows have a working directory and the app could still read its
+      // origin -- and that origin is wherever the checkout points *today*, not
+      // where the session was told to work. A default is not a known value.
+      const addresses = db
+        .prepare(
+          "SELECT work_address FROM sessions WHERE execution_host != 'local'",
+        )
+        .all() as { work_address: string }[]
+      for (const row of addresses) {
+        expect(row.work_address).not.toContain('repository')
+        expect(row.work_address).not.toContain('/tmp/p1')
+      }
+    })
+  })
+
+  it('leaves the column absent when the backfill is interrupted, and completes it on the next boot', () => {
+    withTempDb('work-address-interrupt', (dbPath) => {
+      seedLegacyAt(dbPath)
+
+      // The real seam: the `ALTER TABLE` succeeds and the `UPDATE` that owes
+      // the backfill does not. A trigger is the only way to make SQLite refuse
+      // the write from outside the code under test, and it refuses exactly the
+      // statement the transaction exists to protect.
+      const armed = new Database(dbPath)
+      armed.exec(`
+        CREATE TRIGGER refuse_backfill BEFORE UPDATE ON sessions
+        BEGIN SELECT RAISE(ABORT, 'interrupted'); END;
+      `)
+      armed.close()
+
+      expect(() => getDatabase(dbPath)).toThrow()
       closeDatabase()
       resetDatabase()
-      rmSync(dir, { recursive: true, force: true })
-    }
-  }
+
+      // Nothing landed. The column is the flag, so a column present with no
+      // backfill behind it would make the next boot skip the work for good.
+      const after = new Database(dbPath)
+      const columns = (
+        after.pragma('table_info(sessions)') as { name: string }[]
+      ).map((column) => column.name)
+      expect(columns).not.toContain('work_address')
+      after.exec('DROP TRIGGER refuse_backfill')
+      after.close()
+
+      const db = getDatabase(dbPath)
+      expect(
+        db
+          .prepare(
+            'SELECT COUNT(*) AS n FROM sessions WHERE work_address = \'{"mode":"unknown"}\'',
+          )
+          .get(),
+      ).toEqual({ n: 2 })
+    })
+  })
+})
+
+describe('execution host endpoints migration', () => {
+  afterEach(() => {
+    closeDatabase()
+    resetDatabase()
+  })
 
   it('makes the configured daemon the first endpoint and lands legacy remote rows on it', () => {
     withTempDb('endpoint-migration', (dbPath) => {
@@ -2697,9 +2987,23 @@ describe('execution host endpoints migration', () => {
       before.close()
 
       const db = getDatabase(dbPath)
-      expect(
-        db.prepare("SELECT * FROM sessions WHERE id = 's-local'").get(),
-      ).toEqual(localBefore)
+      const localAfter = db
+        .prepare("SELECT * FROM sessions WHERE id = 's-local'")
+        .get() as Record<string, unknown>
+
+      // Every column this row already had, unchanged. Compared field by field
+      // against the row as it stood rather than whole, because boot also adds
+      // the columns later releases introduced -- `work_address` below is one
+      // (MAR-2689). Additive columns are exactly what a migration is allowed to
+      // do to a local row; changing a value it already held is not.
+      for (const [column, value] of Object.entries(
+        localBefore as Record<string, unknown>,
+      )) {
+        expect(localAfter[column]).toEqual(value)
+      }
+      // And the additive one says nothing: a local session works in the
+      // directory this row already names, so it has no work address at all.
+      expect(localAfter.work_address).toBeNull()
       expect(db.prepare('SELECT COUNT(*) AS n FROM sessions').get()).toEqual(
         totalBefore,
       )

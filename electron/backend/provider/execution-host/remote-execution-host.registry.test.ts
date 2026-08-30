@@ -24,6 +24,7 @@ import {
   type StubDaemon,
 } from './execution-host-daemon.fixture'
 import { DAEMON_HEALTH_FIXTURE_0_26_1 } from './execution-host-health.fixture'
+import { TEST_REMOTE_WORK_ADDRESS } from '../../session/session-work-address.fixture'
 
 const DAEMON_A = { id: 'daemon-a', baseUrl: 'https://daemon-a.test' }
 const DAEMON_B = { id: 'daemon-b', baseUrl: 'https://daemon-b.test' }
@@ -98,6 +99,7 @@ describe('remote execution hosts, one per endpoint', () => {
       effort: null,
       name,
       executionHost: endpointId,
+      workAddress: TEST_REMOTE_WORK_ADDRESS,
     }).id
   }
 
@@ -306,6 +308,7 @@ describe('remote execution hosts, one per endpoint', () => {
       effort: null,
       name: 'blocked on daemon b',
       executionHost: DAEMON_B.id,
+      workAddress: TEST_REMOTE_WORK_ADDRESS,
     }).id
 
     // Something else about this session is wrong too, and it is wrong *later*:
@@ -352,6 +355,7 @@ describe('remote execution hosts, one per endpoint', () => {
       effort: null,
       name: 'blocked quiet send',
       executionHost: DAEMON_B.id,
+      workAddress: TEST_REMOTE_WORK_ADDRESS,
     }).id
 
     await expect(

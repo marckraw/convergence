@@ -19,6 +19,10 @@ import {
   parseExecutionHostId,
 } from '../execution-host-endpoint/execution-host-endpoint.pure'
 import { ExecutionHostEndpointRepository } from '../execution-host-endpoint/execution-host-endpoint.repository'
+import {
+  namesAConcreteWorkPlace,
+  type SessionWorkAddress,
+} from '../../../src/shared/lib/work-address.pure'
 import { assertLocalAccountSelection } from '../provider-account/provider-account-resolution.pure'
 import { remoteProviderIdForLocalProvider } from '../provider/execution-host/remote-execution-host.pure'
 import type {
@@ -184,6 +188,39 @@ interface PendingConversationPatch {
 type TurnProviderVerdict =
   | { permitted: true }
   | { permitted: false; refusal: unknown }
+
+/**
+ * The place a remote session is being born with, or a refusal (MAR-2689).
+ *
+ * The third of three doors, and the innermost: the composer will not let a send
+ * leave without a place and the IPC handler will not let a malformed one
+ * through, but this is the one every caller of `create` passes, so this is
+ * where the rule actually lives. A remote session is born with a concrete place
+ * or not at all.
+ *
+ * `unknown` is refused here as firmly as absence, and that is the point of the
+ * value: it belongs to rows the migration backfilled, written before any of
+ * this existed. Nothing in this app may mint one. That is what makes the legacy
+ * branch of `requireRemoteWorkPlace` -- deriving a repository from the session's
+ * own project, silently, which is how a daemon came to clone Convergence itself
+ * -- unreachable for anything born from here.
+ *
+ * *Concrete* is asked of `namesAConcreteWorkPlace` and not spelled out here,
+ * because the IPC door asks the identical question of the identical value. Two
+ * spellings of one rule drift, and the half that drifted would be the half that
+ * writes a place into the record: this door once accepted an empty clone URL
+ * and a blank label because it only checked the mode (MAR-2689 round 2).
+ */
+function requireStatedWorkAddress(
+  address: SessionWorkAddress | null | undefined,
+): SessionWorkAddress {
+  if (address && namesAConcreteWorkPlace(address)) return address
+  throw new Error(
+    'A session on a remote execution host has to be told where it works. ' +
+      'Pick a Project or a repository in the composer before starting it — ' +
+      'starting it without one would run it somewhere nobody named.',
+  )
+}
 
 /**
  * Facade and orchestrator for session use cases.
@@ -574,13 +611,45 @@ export class SessionService {
   }
 
   /**
-   * Workspace source a remote session start must carry: the local working
-   * directory does not exist on the remote host, so the daemon clones the
-   * session repository instead.
+   * Where a remote start says it works, in the daemon's own two shapes
+   * (MAR-2689).
+   *
+   * One function because the daemon accepts exactly one place per session and
+   * refuses the two named together with an HTTP 400: a `workingDirectory` it
+   * resolves as one of its Projects, or a `workspace` it clones into a fresh
+   * per-session worktree. Reasoning about that exclusivity in two places is how
+   * a start comes to carry both, which is what every remote session start did
+   * until MAR-2576 -- so both modes are derived here, from the one field the
+   * record holds, and the caller only spreads the answer.
+   *
+   * The record is the source, not the local checkout. The strip stated the
+   * place before send and the session wrote down what it stated, so reading it
+   * back is what makes "what the strip said" and "what the wire carries" the
+   * same value rather than two derivations that agree until one of them is
+   * edited.
+   *
+   * The legacy branch is for a row that predates the column, and for nothing
+   * else: it worked somewhere, the record does not say where, and this
+   * derivation -- the session project's origin -- is exactly what it ran under.
+   * `create` refuses to mint an `unknown` address (`requireStatedWorkAddress`),
+   * so the only rows that can reach it are the ones the migration backfilled.
+   * It is reachable only in theory even for those: a remote session is started
+   * once and every later turn attaches to the run the daemon already has
+   * (`sendRemoteTurn`), so a row written before this shipped has already taken
+   * its one start. It stays because deleting it would replace a known-correct
+   * fallback with a refusal on a path nothing has proved unreachable.
    */
-  private requireRemoteWorkspace(
-    session: Pick<SessionSummary, 'workingDirectory'>,
-  ): { repository: string } {
+  private requireRemoteWorkPlace(
+    session: Pick<SessionSummary, 'workingDirectory' | 'workAddress'>,
+  ): { workspace?: { repository: string }; workingDirectory?: string } {
+    const address = session.workAddress
+    if (address?.mode === 'project') {
+      return { workingDirectory: address.workingDirectory }
+    }
+    if (address?.mode === 'repository') {
+      return { workspace: { repository: address.repository } }
+    }
+
     const workspace =
       this.remoteWorkspaceSourceResolver?.(session.workingDirectory) ?? null
     if (!workspace) {
@@ -588,7 +657,7 @@ export class SessionService {
         'Remote sessions require a repository with an origin remote the daemon can clone',
       )
     }
-    return workspace
+    return { workspace }
   }
 
   setSessionTerminatedListener(listener: (sessionId: string) => void): void {
@@ -832,12 +901,28 @@ export class SessionService {
         ? LOCAL_EXECUTION_HOST_ID
         : (input.executionHost ?? LOCAL_EXECUTION_HOST_ID)
 
+    // A local session has no work address: it works in `workingDirectory`,
+    // which this row already names. A remote one is born with a *concrete*
+    // place or is not born at all -- the last of the three doors that make the
+    // original incident unreachable (MAR-2689).
+    //
+    // The refusal is here and not only in the composer because this is the
+    // door every caller passes through, and the composer is one caller. It also
+    // says out loud what `unknown` is for: a pre-era row, backfilled by the
+    // migration, never something this app can mint. Defaulting to it here is
+    // what let a session start with no place and fall through to the silent
+    // derivation of its own project's origin -- a default is not a known value.
+    const workAddress = isRemoteExecutionHost(executionHost)
+      ? requireStatedWorkAddress(input.workAddress)
+      : null
+
     this.sessionRepository.create({
       id,
       contextKind: input.contextKind ?? 'project',
       projectId,
       workspaceId,
       executionHost,
+      workAddress,
       providerId: input.providerId,
       model: input.model,
       effort: input.effort,
@@ -2395,7 +2480,7 @@ export class SessionService {
    * Not async, and that is the design. Three synchronous preconditions come
    * first -- the account (`assertLocalAccountSelection`), the host's permission
    * (`assertTurnProviderRunnable`), the remote workspace
-   * (`requireRemoteWorkspace`) -- and every consequence of the turn comes
+   * (`requireRemoteWorkPlace`) -- and every consequence of the turn comes
    * after: the unarchive, the boot context (whose `attachToSession` is itself a
    * write), `host.start`, and the note that says a turn began with that
    * context. They used to be the caller's lines, with the caller's barrier
@@ -2454,8 +2539,8 @@ export class SessionService {
     this.assertTurnProviderRunnable(session)
 
     const execution = this.resolveExecution(session)
-    const workspace = isRemoteExecutionHost(session.executionHost)
-      ? this.requireRemoteWorkspace(session)
+    const place = isRemoteExecutionHost(session.executionHost)
+      ? this.requireRemoteWorkPlace(session)
       : null
 
     // -- Past the three synchronous preconditions. Everything below is a
@@ -2484,7 +2569,10 @@ export class SessionService {
 
     const handle = execution.host.start(execution.providerId, {
       sessionId: session.id,
-      workingDirectory: session.workingDirectory,
+      // A Project-mode remote start names a directory on the *daemon's*
+      // machine; every other start names this one. The wire mapping drops
+      // whichever of the pair the other mode makes meaningless.
+      workingDirectory: place?.workingDirectory ?? session.workingDirectory,
       initialMessage: boot.augmentedText,
       initialSkillSelections,
       previousAssistantTexts: this.getPreviousAssistantMessageTexts(session.id),
@@ -2495,7 +2583,7 @@ export class SessionService {
       permissionConfig: session.permissionConfig,
       providerAccountId: providerAccountId ?? null,
       initialAttachments,
-      ...(workspace ? { workspace } : {}),
+      ...(place?.workspace ? { workspace: place.workspace } : {}),
     })
 
     this.pendingTurnAccountIds.set(session.id, providerAccountId ?? null)

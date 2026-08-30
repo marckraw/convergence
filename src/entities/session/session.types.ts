@@ -4,6 +4,7 @@ import type {
   SkillInvocationSupport,
   SkillSelection,
 } from '@/shared/types/skill.types'
+import type { SessionWorkAddress } from '@/shared/lib/work-address.pure'
 
 export type SessionStatus = 'idle' | 'running' | 'completed' | 'failed'
 export type AttentionState =
@@ -350,6 +351,12 @@ export interface SessionSummary {
   forkStrategy: ForkStrategy | null
   primarySurface: PrimarySurface
   executionHost?: SessionExecutionHostId
+  /**
+   * Where a remote session works, as the strip stated it before send
+   * (MAR-2689). Null on a local session, and absent on a record served by a
+   * main process that predates the column.
+   */
+  workAddress?: SessionWorkAddress | null
   continuationToken: string | null
   lastSequence: number
   createdAt: string
@@ -620,6 +627,8 @@ export interface CreateAndStartSessionRequest {
   permissionConfig?: SessionPermissionConfig
   serviceTier?: string | null
   executionHost?: SessionExecutionHostId
+  /** The place the strip stated; absent on a local session (MAR-2689). */
+  workAddress?: SessionWorkAddress | null
   providerAccountId?: string | null
 }
 

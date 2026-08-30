@@ -26,6 +26,7 @@ import {
   waitUntil,
   type StubDaemon,
 } from './execution-host-daemon.fixture'
+import { TEST_REMOTE_WORK_ADDRESS } from '../../session/session-work-address.fixture'
 
 const ENDPOINT_ID = 'the-machine'
 const OLD_URL = 'https://old-machine.test'
@@ -178,6 +179,7 @@ describe('an endpoint whose base url moves under a live host', () => {
       effort: null,
       name,
       executionHost: ENDPOINT_ID,
+      workAddress: TEST_REMOTE_WORK_ADDRESS,
     }).id
   }
 

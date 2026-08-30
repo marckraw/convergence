@@ -12,9 +12,10 @@ import type {
   SessionQueuedInput,
   SessionSummary,
 } from './session.types'
-import { sessionApi, providerApi } from './session.api'
+import { sessionApi, providerApi, remoteProjectApi } from './session.api'
 import type { ProviderInfo } from './session.types'
 import {
+  catalogInForce,
   landedProviderCatalog,
   LOCAL_PROVIDER_CATALOG_SOURCE,
   providerCatalogInForce,
@@ -24,6 +25,11 @@ import {
   type ProviderCatalogSource,
   type ProviderCatalogState,
 } from './provider-catalog.pure'
+import {
+  landedRemoteProjectCatalog,
+  type RemoteProjectCatalogs,
+  type RemoteProjectCatalogState,
+} from './remote-project-catalog.pure'
 import { sessionForkApi } from './session-fork.api'
 import type {
   ForkFullInput,
@@ -61,6 +67,17 @@ interface SessionState {
    * directly -- the key alone does not prove the pairing still holds.
    */
   providerCatalogs: ProviderCatalogs
+  /**
+   * Every machine's Projects, keyed by the machine they were read from
+   * (MAR-2689).
+   *
+   * A second map beside the provider catalogs rather than a field inside them:
+   * they answer different questions at different cadences, and a machine that
+   * offers no Projects is a perfectly normal machine whose providers still
+   * matter. Read through `catalogInForce` for the same reason that one is --
+   * the key alone does not prove the pairing still holds.
+   */
+  remoteProjectCatalogs: RemoteProjectCatalogs
   error: string | null
 }
 
@@ -72,6 +89,7 @@ interface SessionActions {
   recordRecentSession: (id: string) => void
   loadProviders: () => Promise<void>
   loadProviderCatalog: (source: ProviderCatalogSource) => Promise<void>
+  loadRemoteProjectCatalog: (source: ProviderCatalogSource) => Promise<void>
   dismissNeedsYouSession: (id: string) => Promise<void>
   createAndStartSession: (
     request: CreateAndStartSessionRequest,
@@ -266,6 +284,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
   activeGlobalSessionId: null,
   draftWorkspaceId: null,
   providerCatalogs: {},
+  remoteProjectCatalogs: {},
   error: null,
 
   loadSessions: async (projectId: string) => {
@@ -455,6 +474,53 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     }
   },
 
+  /**
+   * Asks one machine where it can work, and files the answer under that machine
+   * (MAR-2689).
+   *
+   * The same shape as `loadProviderCatalog`, deliberately and line for line:
+   * every state carries the source it is about, `pending` is written only when
+   * nothing about this machine is in force, and the source is re-checked *after*
+   * the await so a reply about the address an Endpoint has just been edited
+   * away from lands nowhere instead of landing wrong.
+   */
+  loadRemoteProjectCatalog: async (source: ProviderCatalogSource) => {
+    set((state) =>
+      catalogInForce(state.remoteProjectCatalogs, source)
+        ? state
+        : {
+            remoteProjectCatalogs: {
+              ...state.remoteProjectCatalogs,
+              [source.executionHostId]: { status: 'pending', source },
+            },
+          },
+    )
+
+    const commit = (next: RemoteProjectCatalogState) => {
+      set((state) =>
+        catalogInForce(state.remoteProjectCatalogs, source)
+          ? {
+              remoteProjectCatalogs: {
+                ...state.remoteProjectCatalogs,
+                [source.executionHostId]: next,
+              },
+            }
+          : state,
+      )
+    }
+
+    try {
+      const catalog = await remoteProjectApi.getAll(source.executionHostId)
+      commit(landedRemoteProjectCatalog(source, catalog))
+    } catch (error) {
+      commit({
+        status: 'failed',
+        source,
+        reason: error instanceof Error ? error.message : String(error),
+      })
+    }
+  },
+
   dismissNeedsYouSession: async (id: string) => {
     const session = get().globalSessions.find((entry) => entry.id === id)
     if (!session) {
@@ -501,6 +567,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
         permissionConfig: request.permissionConfig,
         name: request.name,
         executionHost: request.executionHost,
+        workAddress: request.workAddress,
       })
       await sessionApi.start({
         sessionId: session.id,

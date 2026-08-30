@@ -39,6 +39,10 @@ import { RemoteExecutionHostError } from '../provider/execution-host/remote-exec
 import type { RemoteExecutionHostRegistry } from '../provider/execution-host/remote-execution-host.types'
 import type { SessionSettledEvent } from './session.types'
 import { SessionService } from './session.service'
+import {
+  makeSessionPreEraRemote,
+  TEST_REMOTE_WORK_ADDRESS,
+} from './session-work-address.fixture'
 
 /**
  * A stand-in for the handle a delta came from.
@@ -3565,6 +3569,7 @@ describe('SessionService — liveness clock', () => {
         effort: null,
         name: 'remote session',
         executionHost: TEST_EXECUTION_HOST_ENDPOINT_ID,
+        workAddress: TEST_REMOTE_WORK_ADDRESS,
       })
       expect(remote.executionHost).toBe(TEST_EXECUTION_HOST_ENDPOINT_ID)
       expect(service.getSummaryById(remote.id)?.executionHost).toBe(
@@ -3580,6 +3585,7 @@ describe('SessionService — liveness clock', () => {
         effort: null,
         name: 'global session',
         executionHost: TEST_EXECUTION_HOST_ENDPOINT_ID,
+        workAddress: TEST_REMOTE_WORK_ADDRESS,
       })
       expect(session.executionHost).toBe('local')
     })
@@ -3603,6 +3609,7 @@ describe('SessionService — liveness clock', () => {
         effort: null,
         name: 'remote run',
         executionHost: TEST_EXECUTION_HOST_ENDPOINT_ID,
+        workAddress: TEST_REMOTE_WORK_ADDRESS,
       })
       await service.start(session.id, { text: 'hello' })
 
@@ -3640,6 +3647,7 @@ describe('SessionService — liveness clock', () => {
         effort: null,
         name: 'remote with account',
         executionHost: TEST_EXECUTION_HOST_ENDPOINT_ID,
+        workAddress: TEST_REMOTE_WORK_ADDRESS,
       })
 
       await expect(
@@ -3675,6 +3683,7 @@ describe('SessionService — liveness clock', () => {
         effort: null,
         name: 'session on a vanished endpoint',
         executionHost: 'daemon-b',
+        workAddress: TEST_REMOTE_WORK_ADDRESS,
       })
       expect(session.executionHost).toBe('daemon-b')
 
@@ -3712,6 +3721,7 @@ describe('SessionService — liveness clock', () => {
         effort: null,
         name: 'second endpoint',
         executionHost: 'daemon-b',
+        workAddress: TEST_REMOTE_WORK_ADDRESS,
       })
       await service.start(session.id, { text: 'hello' })
 
@@ -3742,6 +3752,7 @@ describe('SessionService — liveness clock', () => {
         effort: null,
         name: 'on a',
         executionHost: TEST_EXECUTION_HOST_ENDPOINT_ID,
+        workAddress: TEST_REMOTE_WORK_ADDRESS,
       })
       const onB = service.create({
         projectId,
@@ -3751,6 +3762,7 @@ describe('SessionService — liveness clock', () => {
         effort: null,
         name: 'on b',
         executionHost: 'daemon-b',
+        workAddress: TEST_REMOTE_WORK_ADDRESS,
       })
 
       await service.start(onA.id, { text: 'hello a' })
@@ -3787,6 +3799,7 @@ describe('SessionService — liveness clock', () => {
         effort: null,
         name: 'remote ambient',
         executionHost: TEST_EXECUTION_HOST_ENDPOINT_ID,
+        workAddress: TEST_REMOTE_WORK_ADDRESS,
       })
 
       await service.start(session.id, {
@@ -3829,6 +3842,7 @@ describe('SessionService — liveness clock', () => {
         effort: null,
         name: 'unconfigured remote',
         executionHost: TEST_EXECUTION_HOST_ENDPOINT_ID,
+        workAddress: TEST_REMOTE_WORK_ADDRESS,
       })
       await expect(
         service.sendMessage(session.id, { text: 'hello' }),
@@ -3850,6 +3864,7 @@ describe('SessionService — liveness clock', () => {
         effort: null,
         name: 'unsupported remote provider',
         executionHost: TEST_EXECUTION_HOST_ENDPOINT_ID,
+        workAddress: TEST_REMOTE_WORK_ADDRESS,
       })
       // The refusal comes from the host's own listing, not from a table here
       // guessing which providers daemons run (MAR-2682, "nothing local may
@@ -3891,6 +3906,7 @@ describe('SessionService — liveness clock', () => {
         effort: null,
         name: 'blocked remote provider',
         executionHost: TEST_EXECUTION_HOST_ENDPOINT_ID,
+        workAddress: TEST_REMOTE_WORK_ADDRESS,
       })
       service.archive(session.id)
       const archivedAt = service.getById(session.id)?.archivedAt
@@ -3934,6 +3950,7 @@ describe('SessionService — liveness clock', () => {
         effort: null,
         name: 'blocked remote start',
         executionHost: TEST_EXECUTION_HOST_ENDPOINT_ID,
+        workAddress: TEST_REMOTE_WORK_ADDRESS,
       })
       service.archive(session.id)
       const archivedAt = service.getById(session.id)?.archivedAt
@@ -3976,6 +3993,7 @@ describe('SessionService — liveness clock', () => {
         effort: null,
         name: 'archived start with a local account',
         executionHost: TEST_EXECUTION_HOST_ENDPOINT_ID,
+        workAddress: TEST_REMOTE_WORK_ADDRESS,
       })
       service.archive(session.id)
       const archivedAt = service.getById(session.id)?.archivedAt
@@ -4017,6 +4035,7 @@ describe('SessionService — liveness clock', () => {
         effort: null,
         name: 'archived send with a local account',
         executionHost: TEST_EXECUTION_HOST_ENDPOINT_ID,
+        workAddress: TEST_REMOTE_WORK_ADDRESS,
       })
       service.archive(session.id)
       const archivedAt = service.getById(session.id)?.archivedAt
@@ -4049,6 +4068,9 @@ describe('SessionService — liveness clock', () => {
         }),
       )
       service.setRemoteWorkspaceSourceResolver(() => null)
+      // A pre-era row: the legacy derivation is the only path that consults the
+      // resolver at all, and `create` will not mint a session without a place
+      // (MAR-2689).
       const session = service.create({
         projectId,
         workspaceId: null,
@@ -4056,8 +4078,12 @@ describe('SessionService — liveness clock', () => {
         model: 'sonnet',
         effort: null,
         name: 'archived start without an origin',
-        executionHost: TEST_EXECUTION_HOST_ENDPOINT_ID,
       })
+      makeSessionPreEraRemote(
+        getDatabase(),
+        session.id,
+        TEST_EXECUTION_HOST_ENDPOINT_ID,
+      )
       service.archive(session.id)
       const archivedAt = service.getById(session.id)?.archivedAt
       expect(archivedAt).toBeTruthy()
@@ -4115,6 +4141,7 @@ describe('SessionService — liveness clock', () => {
         effort: null,
         name: 'blocked remote boot',
         executionHost: TEST_EXECUTION_HOST_ENDPOINT_ID,
+        workAddress: TEST_REMOTE_WORK_ADDRESS,
       })
 
       const patches: ConversationPatchEvent[] = []
@@ -4316,6 +4343,7 @@ describe('SessionService — liveness clock', () => {
         effort: null,
         name: 'verdict flips mid-start',
         executionHost: TEST_EXECUTION_HOST_ENDPOINT_ID,
+        workAddress: TEST_REMOTE_WORK_ADDRESS,
       })
       service.archive(session.id)
       const archivedAt = service.getById(session.id)?.archivedAt
@@ -4362,6 +4390,7 @@ describe('SessionService — liveness clock', () => {
         effort: null,
         name: 'verdict flips mid-send',
         executionHost: TEST_EXECUTION_HOST_ENDPOINT_ID,
+        workAddress: TEST_REMOTE_WORK_ADDRESS,
       })
       service.archive(session.id)
       const archivedAt = service.getById(session.id)?.archivedAt
@@ -4416,6 +4445,7 @@ describe('SessionService — liveness clock', () => {
         effort: null,
         name: 'boot note ordering',
         executionHost: TEST_EXECUTION_HOST_ENDPOINT_ID,
+        workAddress: TEST_REMOTE_WORK_ADDRESS,
       })
 
       const fake: { emitDelta: (event: SessionDelta) => void } = {
@@ -4513,6 +4543,7 @@ describe('SessionService — liveness clock', () => {
         effort: null,
         name: 'refused, then started',
         executionHost: TEST_EXECUTION_HOST_ENDPOINT_ID,
+        workAddress: TEST_REMOTE_WORK_ADDRESS,
       })
       const controlSession = service.create({
         projectId,
@@ -4522,6 +4553,7 @@ describe('SessionService — liveness clock', () => {
         effort: null,
         name: 'never refused',
         executionHost: TEST_EXECUTION_HOST_ENDPOINT_ID,
+        workAddress: TEST_REMOTE_WORK_ADDRESS,
       })
       const refusedAttachment = await draftAttachment()
       const controlAttachment = await draftAttachment()
@@ -4631,6 +4663,7 @@ describe('SessionService — liveness clock', () => {
         effort: null,
         name: 'listing refreshed under the rebind',
         executionHost: TEST_EXECUTION_HOST_ENDPOINT_ID,
+        workAddress: TEST_REMOTE_WORK_ADDRESS,
       })
       service.archive(session.id)
       const archivedAt = service.getById(session.id)?.archivedAt
@@ -4699,6 +4732,7 @@ describe('SessionService — liveness clock', () => {
         effort: null,
         name: 'listing refreshed under the rebind, on the send',
         executionHost: TEST_EXECUTION_HOST_ENDPOINT_ID,
+        workAddress: TEST_REMOTE_WORK_ADDRESS,
       })
       service.archive(session.id)
       const archivedAt = service.getById(session.id)?.archivedAt
@@ -4761,6 +4795,7 @@ describe('SessionService — liveness clock', () => {
         effort: null,
         name: 'a handle lands under the rebind',
         executionHost: TEST_EXECUTION_HOST_ENDPOINT_ID,
+        workAddress: TEST_REMOTE_WORK_ADDRESS,
       })
 
       const attachments = attachmentsChangingTheWorldMidRebind(
@@ -4823,6 +4858,7 @@ describe('SessionService — liveness clock', () => {
         effort: null,
         name: 'the handle is released under the rebind',
         executionHost: TEST_EXECUTION_HOST_ENDPOINT_ID,
+        workAddress: TEST_REMOTE_WORK_ADDRESS,
       })
       await service.start(session.id, { text: 'first turn' })
       expect(daemon.startCalls).toHaveLength(1)
@@ -4934,6 +4970,7 @@ describe('SessionService — liveness clock', () => {
         effort: null,
         name: 'the Endpoint stops listing under a live run',
         executionHost: TEST_EXECUTION_HOST_ENDPOINT_ID,
+        workAddress: TEST_REMOTE_WORK_ADDRESS,
       })
       await service.start(session.id, { text: 'first turn' })
       expect(daemon.startCalls).toHaveLength(1)
@@ -4975,6 +5012,7 @@ describe('SessionService — liveness clock', () => {
         effort: null,
         name: 'the Endpoint stops listing with no run on it',
         executionHost: TEST_EXECUTION_HOST_ENDPOINT_ID,
+        workAddress: TEST_REMOTE_WORK_ADDRESS,
       })
       daemon.stopListing()
 
@@ -5028,6 +5066,7 @@ describe('SessionService — liveness clock', () => {
         effort: null,
         name: 'refused at the barrier, then started',
         executionHost: TEST_EXECUTION_HOST_ENDPOINT_ID,
+        workAddress: TEST_REMOTE_WORK_ADDRESS,
       })
       const controlSession = service.create({
         projectId,
@@ -5037,6 +5076,7 @@ describe('SessionService — liveness clock', () => {
         effort: null,
         name: 'never refused',
         executionHost: TEST_EXECUTION_HOST_ENDPOINT_ID,
+        workAddress: TEST_REMOTE_WORK_ADDRESS,
       })
       const refusedAttachment = await draftAttachmentIn(attachments)
       const controlAttachment = await draftAttachmentIn(attachments)
@@ -5100,6 +5140,7 @@ describe('SessionService — liveness clock', () => {
         effort: null,
         name: 'remote survivor',
         executionHost: TEST_EXECUTION_HOST_ENDPOINT_ID,
+        workAddress: TEST_REMOTE_WORK_ADDRESS,
       })
       service['applyDelta'](
         session.id,
@@ -5171,6 +5212,7 @@ describe('SessionService — liveness clock', () => {
         effort: null,
         name: 'unmappable remote survivor',
         executionHost: TEST_EXECUTION_HOST_ENDPOINT_ID,
+        workAddress: TEST_REMOTE_WORK_ADDRESS,
       })
       service['applyDelta'](
         session.id,
@@ -5211,6 +5253,7 @@ describe('SessionService — liveness clock', () => {
         effort: null,
         name: 'replay dedupe',
         executionHost: TEST_EXECUTION_HOST_ENDPOINT_ID,
+        workAddress: TEST_REMOTE_WORK_ADDRESS,
       })
       const item = {
         id: 'replayed-item-1',
@@ -5255,6 +5298,8 @@ describe('SessionService — liveness clock', () => {
         }),
       )
       service.setRemoteWorkspaceSourceResolver(() => null)
+      // A pre-era row, for the same reason as above: nothing born today can
+      // reach the legacy derivation this refusal belongs to (MAR-2689).
       const session = service.create({
         projectId,
         workspaceId: null,
@@ -5262,8 +5307,12 @@ describe('SessionService — liveness clock', () => {
         model: 'sonnet',
         effort: null,
         name: 'remote without origin',
-        executionHost: TEST_EXECUTION_HOST_ENDPOINT_ID,
       })
+      makeSessionPreEraRemote(
+        getDatabase(),
+        session.id,
+        TEST_EXECUTION_HOST_ENDPOINT_ID,
+      )
       await expect(
         service.start(session.id, { text: 'hello' }),
       ).rejects.toThrow(
@@ -5759,6 +5808,7 @@ describe('SessionService relay mute', () => {
       effort: null,
       name: 'remote quiet',
       executionHost: TEST_EXECUTION_HOST_ENDPOINT_ID,
+      workAddress: TEST_REMOTE_WORK_ADDRESS,
     }).id
 
     await service.start(remoteId, { text: '/compact', muteRelays: true })

@@ -82,6 +82,34 @@ describe('normalizeExecutionHostBaseUrl', () => {
     expect(normalizeExecutionHostBaseUrl('')).toBeNull()
     expect(normalizeExecutionHostBaseUrl(null)).toBeNull()
   })
+
+  // The two canaries below guard the line `daemonConfigurationFingerprint`
+  // rests on (MAR-2689 round 10). That fingerprint joins the base URL and the
+  // token with a NUL, and only the FIRST half has to be NUL-free for the join
+  // to stay injective — the token's bytes are never inspected (MAR-2642 stores
+  // them as hex so that anything a daemon issues, past `setToken`'s trim and
+  // empty-value refusal, stays storable). The base URL is NUL-free because this
+  // normalizer returns the WHATWG parser's serialization rather than the text
+  // it was handed, so the guarantee lives here and nowhere else.
+  it('serializes a NUL in the path, so a stored base URL never carries one', () => {
+    // Mutation: `return trimmed` instead of `parsed.href.replace(...)` — the
+    // parser still validates, but its serialization is thrown away and the raw
+    // NUL survives into storage → red on the first assert.
+    const normalized = normalizeExecutionHostBaseUrl(
+      'https://daemon.test/x\u0000y',
+    )
+
+    expect(normalized).toBe('https://daemon.test/x%00y')
+    expect(normalized?.includes('\u0000')).toBe(false)
+  })
+
+  it('refuses a host that carries a NUL rather than storing it', () => {
+    // Mutation: `catch { return trimmed }` instead of `catch { return null }`
+    // — the parser's refusal is swallowed and the raw NUL is stored → red.
+    expect(
+      normalizeExecutionHostBaseUrl('https://dae\u0000mon.test/'),
+    ).toBeNull()
+  })
 })
 
 describe('normalizeExecutionHostEndpoints', () => {

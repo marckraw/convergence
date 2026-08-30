@@ -18,9 +18,11 @@ import {
   withCodexSandbox,
 } from '@/entities/session'
 import {
+  catalogInForce,
   providerCatalogHostLabel,
   providerCatalogInForce,
   providerCatalogSourceForHost,
+  repositoryOriginApi,
   resolveMidRunInputPolicy,
   resolveOptionRowCatalog,
   selectableProviderDescriptors,
@@ -34,7 +36,11 @@ import {
   useSessionAnnotations,
 } from '@/entities/response-annotation'
 import { useAppSettingsStore } from '@/entities/app-settings'
-import { LOCAL_EXECUTION_HOST_ID } from '@/entities/execution-host'
+import {
+  isLocalExecutionHost,
+  LOCAL_EXECUTION_HOST_ID,
+} from '@/entities/execution-host'
+import { useProjectStore } from '@/entities/project'
 import { useSessionRelayStore } from '@/entities/session-relay'
 import { useDialogStore } from '@/entities/dialog'
 import {
@@ -86,9 +92,15 @@ import {
 import { countArmedOutgoingRelays } from './relay-mute.pure'
 import { filterComposerPrompts } from './composer-prompt-injection.pure'
 import {
+  defaultPermissionPresetForHost,
   executionHostForNewSession,
   resolveExecutionBarView,
 } from './execution-bar.pure'
+import {
+  resolveWorkAddressSlot,
+  workAddressForNewSession,
+  type LocalRepositoryState,
+} from './work-address-slot.pure'
 import { CodexUsagePillContainer } from './codex-usage-pill.container'
 import { shouldShowCodexBillingControls } from './codex-usage-pill.pure'
 import { ContextWindowDot } from './context-window-dot.container'
@@ -124,6 +136,11 @@ const EMPTY_QUEUED_INPUTS: SessionQueuedInput[] = []
  */
 const NO_CATALOG_ENTRIES: readonly ProviderCatalogEntry[] = []
 const EMPTY_PROJECT_CONTEXT_ITEMS: ProjectContextItem[] = []
+/**
+ * "Nobody has read this project's origin." One value, so a composer that never
+ * asks re-renders no more than a composer that has not answered yet.
+ */
+const NOT_LOOKED_FOR_REPOSITORY: LocalRepositoryState = { status: 'asking' }
 
 const QUEUED_INPUT_STATE_LABELS: Record<SessionQueuedInput['state'], string> = {
   queued: 'Queued',
@@ -188,6 +205,37 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
     LOCAL_EXECUTION_HOST_ID,
   )
   /**
+   * The place on that machine he last picked (MAR-2689).
+   *
+   * A choice id, held raw and clamped at the read by `resolveWorkAddressSlot`
+   * exactly as the machine above it is: switching to a machine that does not
+   * have his Project falls back to the default there, and switching back
+   * restores it rather than having quietly forgotten it.
+   */
+  const [selectedWorkAddressId, setSelectedWorkAddressId] = useState<
+    string | null
+  >(null)
+  /**
+   * What a daemon could clone for this project, read from the main process by
+   * the same derivation the start path uses (MAR-2689).
+   *
+   * `asking` until it answers, because "no repository" and "not looked yet"
+   * lead to opposite renders and a bare null cannot tell them apart.
+   */
+  const [localRepository, setLocalRepository] = useState<LocalRepositoryState>(
+    NOT_LOOKED_FOR_REPOSITORY,
+  )
+  /**
+   * Whether he has touched the permission preset for this composer (MAR-2689).
+   *
+   * The remote default is a default, not an override: switching the strip to a
+   * daemon flips an untouched preset to `yolo`, and never flips one he set. A
+   * flag rather than comparing the config to the default, because "he chose
+   * `ask` on a remote" and "nobody has chosen anything" are the same value and
+   * opposite instructions.
+   */
+  const [permissionTouched, setPermissionTouched] = useState(false)
+  /**
    * The quiet send (F10). Per send and never sticky: it is switched back off
    * the moment the message leaves, because a session bound to a flow is meant
    * to fire and the exception is the gesture.
@@ -209,8 +257,13 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
     useState<ProviderQuotaSnapshot | null>(null)
   const [codexUsageLoading, setCodexUsageLoading] = useState(false)
   const providerCatalogs = useSessionStore((s) => s.providerCatalogs)
+  const remoteProjectCatalogs = useSessionStore((s) => s.remoteProjectCatalogs)
+  const projects = useProjectStore((s) => s.projects)
   const openDialog = useDialogStore((s) => s.open)
   const loadProviderCatalog = useSessionStore((s) => s.loadProviderCatalog)
+  const loadRemoteProjectCatalog = useSessionStore(
+    (s) => s.loadRemoteProjectCatalog,
+  )
   const createAndStartSession = useSessionStore((s) => s.createAndStartSession)
   const createAndStartGlobalSession = useSessionStore(
     (s) => s.createAndStartGlobalSession,
@@ -328,13 +381,30 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
       ),
     [executionBar.hostId, appSettings.executionHostEndpoints],
   )
+  const hostLabel = providerCatalogHostLabel(
+    catalogSource.executionHostId,
+    appSettings.executionHostEndpoints,
+  )
   const optionRow = resolveOptionRowCatalog({
     source: catalogSource,
-    hostLabel: providerCatalogHostLabel(
-      catalogSource.executionHostId,
-      appSettings.executionHostEndpoints,
-    ),
+    hostLabel,
     state: providerCatalogInForce(providerCatalogs, catalogSource),
+  })
+  /**
+   * Where the session will work on the machine the strip names (MAR-2689).
+   *
+   * Resolved after the machine and from the same source value, so the two tiers
+   * cannot name different machines: a Projects catalog is only true of the
+   * daemon it was read from, and `catalogInForce` is what refuses one read from
+   * an address this Endpoint has since been edited away from.
+   */
+  const workAddressSlot = resolveWorkAddressSlot({
+    executionBar,
+    hostLabel,
+    projects: catalogInForce(remoteProjectCatalogs, catalogSource),
+    localRepository,
+    selectedId: selectedWorkAddressId,
+    recordedAddress: activeSession?.workAddress,
   })
   const catalogEntries =
     optionRow.status === 'listed' ? optionRow.entries : NO_CATALOG_ENTRIES
@@ -619,6 +689,16 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
    * era exists to prevent.
    */
   const executionHostForSend = executionHostForNewSession(executionBar)
+  /**
+   * The place the send records, derived from the very slot that states it.
+   *
+   * A value and not the view, for the reason its sibling above is: it changes
+   * exactly when the send would go somewhere else, and the send closing over
+   * the view would depend on fields its dependency list does not cover. The
+   * strip states a place; this is that place, and there is no second derivation
+   * between the two (MAR-2689).
+   */
+  const workAddressForSend = workAddressForNewSession(workAddressSlot)
   const armedOutgoingRelays = useMemo(
     () => countArmedOutgoingRelays(relays, activeSessionId),
     [relays, activeSessionId],
@@ -764,6 +844,108 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
     void loadProviderCatalog(catalogSource)
   }, [loadProviderCatalog, catalogSource, piModelVisibilityKey])
 
+  /**
+   * Asks the machine the strip names where it can work (MAR-2689).
+   *
+   * Keyed on the configuration for the same reason the provider catalog is:
+   * repointing an Endpoint in Settings re-asks rather than keeping the answer
+   * the old address gave. This machine is never asked — a local session works
+   * in the directory the record already names, and an IPC round trip to be told
+   * "no Projects" is a round trip that changes nothing on the one composer that
+   * must stay byte-identical.
+   */
+  useEffect(() => {
+    if (isLocalExecutionHost(catalogSource.executionHostId)) return
+    void loadRemoteProjectCatalog(catalogSource)
+  }, [loadRemoteProjectCatalog, catalogSource])
+
+  /**
+   * Whether this composer needs to know what a daemon could clone (MAR-2689).
+   *
+   * Exactly the condition under which the slot reads the answer — a composer
+   * still choosing, on a machine that is not this one — derived from the same
+   * view the slot resolves from, so the question and the need for it cannot
+   * drift apart.
+   *
+   * Ruling 2 says the slot does not exist on Local, and the cost must not
+   * exist either. Without this the effect ran on every composer with a project,
+   * spawning git in the main process for a Local session that has no slot to
+   * fill: the one composer that must stay byte-identical was paying for a tier
+   * it never renders (MAR-2682).
+   */
+  const needsCloneableRepository =
+    executionBar.mode === 'choosing' &&
+    !isLocalExecutionHost(executionBar.hostId)
+
+  /**
+   * Reads what a daemon could clone for this project (MAR-2689).
+   *
+   * Asked of the project's repository rather than the session's working
+   * directory: a worktree shares its parent's `origin`, so the answer is the
+   * same, and this is the value that exists before a session does. A composer
+   * with no project — a global chat — has no repository to offer, which is a
+   * known answer and not a pending one.
+   */
+  useEffect(() => {
+    // Back to "not looked yet" rather than leaving the last machine's answer
+    // standing: switching from a daemon to Local and back must not show the
+    // previous project's repository for the frame before the read lands.
+    if (!needsCloneableRepository) {
+      setLocalRepository(NOT_LOOKED_FOR_REPOSITORY)
+      return
+    }
+    const repositoryPath = projects.find(
+      (project) => project.id === projectId,
+    )?.repositoryPath
+    if (!repositoryPath) {
+      setLocalRepository({ status: 'known', repository: null })
+      return
+    }
+    let cancelled = false
+    setLocalRepository({ status: 'asking' })
+    void (async () => {
+      try {
+        const repository =
+          await repositoryOriginApi.cloneableUrl(repositoryPath)
+        if (!cancelled) setLocalRepository({ status: 'known', repository })
+      } catch {
+        // A read that failed is a repository nothing can be said about, and
+        // `null` is exactly that claim: Repository mode is not offered and the
+        // slot says so, rather than offering a place derived from nothing.
+        //
+        // Inside the async body rather than as a trailing `.catch`, because a
+        // bridge method that is not there at all throws where it is *called* —
+        // synchronously, out of the effect, taking the whole composer down
+        // with it. A door this composer merely reads from must never be able
+        // to do that.
+        if (!cancelled) {
+          setLocalRepository({ status: 'known', repository: null })
+        }
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [needsCloneableRepository, projects, projectId])
+
+  /**
+   * The remote default: a session born on a daemon starts `yolo` (MAR-2689).
+   *
+   * Only while a session is being born, and only while he has not touched the
+   * preset. A live session's preset comes from its record — the effect above
+   * writes it — and his own choice outlives every machine switch after it.
+   */
+  useEffect(() => {
+    if (activeSession) return
+    if (permissionTouched) return
+    setPermissionAdvancedOpen(false)
+    setPermissionConfig(
+      resolveSimplePermissionConfig(
+        defaultPermissionPresetForHost(executionBar.hostId),
+      ),
+    )
+  }, [activeSession, permissionTouched, executionBar.hostId])
+
   useEffect(() => {
     setSelectedSkills([])
     setSelectedContextIds([])
@@ -772,6 +954,11 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
     setContextPickerOpen(false)
     setSkillInjectionDismissedRange(null)
     setPromptInjectionDismissedRange(null)
+    // A different composer is a fresh set of choices: the place he picked on
+    // the last one names a Project that may not exist for this one, and the
+    // preset he touched there was a decision about that session (MAR-2689).
+    setSelectedWorkAddressId(null)
+    setPermissionTouched(false)
   }, [contextKey, activeSessionId])
 
   useEffect(() => {
@@ -1105,6 +1292,7 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
         permissionConfig,
         serviceTier,
         executionHost: executionHostForSend,
+        workAddress: workAddressForSend,
         providerAccountId: effectiveProviderAccountId,
       })
       markAnnotationsSent()
@@ -1143,6 +1331,9 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
     // boolean, which never covered *which* Endpoint -- removing the picked one
     // in Settings left this callback still sending its id.
     executionHostForSend,
+    // The resolved place, not the slot: it changes exactly when the send would
+    // work somewhere else (MAR-2689).
+    workAddressForSend,
     effectiveProviderAccountId,
     // Load-bearing. Without it the toggle and the send disagree whenever
     // `attachments` happens to be stable -- which is exactly when the composer
@@ -1176,7 +1367,20 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
     }
   }
 
+  /**
+   * Every way he can change the preset goes through here first (MAR-2689).
+   *
+   * One place that records the touch, because the remote default must stop
+   * applying the moment he decides for himself — and a touch recorded at only
+   * some of the four controls is a default that reappears from whichever one
+   * was forgotten.
+   */
+  const rememberPermissionTouch = useCallback(() => {
+    setPermissionTouched(true)
+  }, [])
+
   const handlePermissionPresetChange = (preset: 'ask' | 'yolo') => {
+    rememberPermissionTouch()
     setPermissionAdvancedOpen(false)
     setPermissionConfig(resolveSimplePermissionConfig(preset))
   }
@@ -1184,6 +1388,7 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
   const handlePermissionAdvancedOpenChange = (open: boolean) => {
     setPermissionAdvancedOpen(open)
     if (open && permissionConfig.preset !== 'custom') {
+      rememberPermissionTouch()
       setPermissionConfig(
         defaultCustomPermissionConfigForProvider(selection.providerId),
       )
@@ -1374,23 +1579,28 @@ export const ComposerContainer: FC<ComposerContainerProps> = ({
         onRelaysMutedChange={setRelaysMuted}
         executionBar={executionBar}
         onExecutionHostChange={setSelectedExecutionHostId}
+        workAddress={workAddressSlot}
+        onWorkAddressChange={setSelectedWorkAddressId}
         permissionConfig={permissionConfig}
         permissionAdvancedOpen={permissionAdvancedOpen}
         onPermissionPresetChange={handlePermissionPresetChange}
         onPermissionAdvancedOpenChange={handlePermissionAdvancedOpenChange}
-        onCodexApprovalPolicyChange={(approvalPolicy) =>
+        onCodexApprovalPolicyChange={(approvalPolicy) => {
+          rememberPermissionTouch()
           setPermissionConfig((current) =>
             withCodexApprovalPolicy(current, approvalPolicy),
           )
-        }
-        onCodexSandboxChange={(sandbox) =>
+        }}
+        onCodexSandboxChange={(sandbox) => {
+          rememberPermissionTouch()
           setPermissionConfig((current) => withCodexSandbox(current, sandbox))
-        }
-        onClaudeCodePermissionModeChange={(permissionMode) =>
+        }}
+        onClaudeCodePermissionModeChange={(permissionMode) => {
+          rememberPermissionTouch()
           setPermissionConfig((current) =>
             withClaudeCodePermissionMode(current, permissionMode),
           )
-        }
+        }}
         usagePill={
           showCodexBillingControls ? (
             <CodexUsagePillContainer

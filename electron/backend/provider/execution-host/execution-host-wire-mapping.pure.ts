@@ -92,6 +92,25 @@ export const EXECUTION_HOST_WORKSPACE_EXCLUSIVE_START_CONFIG_FIELDS = [
 ] as const satisfies readonly (keyof SessionStartConfig)[]
 
 /**
+ * Start-request fields Convergence never builds, pinned by name (MAR-2689).
+ *
+ * `automation` carries the daemon's `autoCreatePr`, which runs `git add -A`
+ * with a generated message whenever the tree is dirty — the opposite of every
+ * commit law this project works under, and a thing no session here has ever
+ * asked for. It has always been absent, and that is the trouble: a silent
+ * absence is this codebase's most repeated defect class, and an absence nothing
+ * asserts is one field-spread away from becoming a present.
+ *
+ * So it gets a canary rather than code. `buildWireStartRequest` names every key
+ * it emits, so adding `automation: { autoCreatePr: true }` there is what turns
+ * the assertion red — which is precisely the change that would need a ruling
+ * and not a commit.
+ */
+export const EXECUTION_HOST_NEVER_SENT_START_REQUEST_FIELDS = [
+  'automation',
+] as const satisfies readonly (keyof ExecutionStartRequest)[]
+
+/**
  * Wire delta kinds Convergence receives but has no local delta for, so the
  * mapping returns null and the session never sees them.
  *

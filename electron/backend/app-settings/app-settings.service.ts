@@ -2,6 +2,7 @@ import type Database from 'better-sqlite3'
 import type { ExecutionHostEndpointRepository } from '../execution-host-endpoint/execution-host-endpoint.repository'
 import type { ExecutionHostEndpoint } from '../execution-host-endpoint/execution-host-endpoint.types'
 import { removedExecutionHostEndpointIds } from '../execution-host-endpoint/execution-host-endpoint.pure'
+import { ExecutionHostConfigurationEpochs } from '../execution-host-endpoint/execution-host-configuration-epoch'
 import type { NotificationPrefs } from '../notifications/notifications.types'
 import type { StateService } from '../state/state.service'
 import type { ProviderDescriptor } from '../provider/provider.types'
@@ -57,6 +58,21 @@ export interface ExecutionHostEndpointCredentials {
 }
 
 export class AppSettingsService {
+  /**
+   * Which configuration each Endpoint is currently understood to have
+   * (MAR-2689 round 6).
+   *
+   * Owned here rather than by the registry or the host because the epoch is
+   * only ever *read* as part of the Endpoint list, and this service is the one
+   * door that list comes out of. Owned by a host, it would have to be gathered
+   * back up per Endpoint at the splice; owned by the registry, the settings
+   * door would depend on the thing that depends on it. One owner, two inputs --
+   * `observeExecutionHostConfiguration`, called by the resolver that mints a
+   * connection for a named Endpoint, and `observeExecutionHostCapabilities`,
+   * called where a handshake lands (MAR-2689 round 8) -- and nothing else.
+   */
+  private readonly configurationEpochs = new ExecutionHostConfigurationEpochs()
+
   constructor(
     private readonly db: Database.Database,
     private readonly stateService: StateService,
@@ -83,8 +99,69 @@ export class AppSettingsService {
   private withExecutionHostEndpoints(settings: StoredAppSettings): AppSettings {
     return {
       ...settings,
-      executionHostEndpoints: this.executionHostEndpoints.list(),
+      // The epoch rides the list rather than travelling on a channel of its
+      // own, so a reader cannot hold an Endpoint and its configuration epoch
+      // from two different moments (MAR-2689 round 6). Spliced at the single
+      // door, so `appSettings:get` and the `appSettings:updated` broadcast
+      // cannot come to carry different answers.
+      executionHostEndpoints: this.executionHostEndpoints
+        .list()
+        .map((endpoint) => ({
+          ...endpoint,
+          configurationEpoch: this.configurationEpochs.epochFor(endpoint.id),
+        })),
     }
+  }
+
+  /**
+   * Records the daemon configuration an Endpoint was just resolved under
+   * (MAR-2689 round 6).
+   *
+   * Called by `AppSettingsRemoteExecutionHostConnectionResolver`, which is the
+   * only place a base URL and a token are put together for a named Endpoint.
+   * The fingerprint arrives already computed and is never stored: what is kept
+   * is an integer that moves when it changes, so the renderer learns *that*
+   * this machine is configured differently without learning anything about
+   * how.
+   */
+  observeExecutionHostConfiguration(
+    endpointId: string,
+    configurationFingerprint: string,
+  ): void {
+    this.configurationEpochs.observe(
+      endpointId,
+      'configuration',
+      configurationFingerprint,
+    )
+  }
+
+  /**
+   * Records what an Endpoint's daemon advertised in the handshake that just
+   * landed (MAR-2689 round 8).
+   *
+   * The epoch's second input, on the same ledger and reaching the renderer on
+   * the same Endpoint list, because an answer derived from a machine depends on
+   * what that machine says it can do as much as on which machine it is. A
+   * daemon upgraded at the same address and under the same credential moves no
+   * fingerprint at all; without this the Projects catalog it can no longer
+   * serve stayed in force in the renderer while main's own provenance had
+   * already stopped accepting it, and the strip went on offering a place the
+   * start door refused.
+   *
+   * Called by `RemoteExecutionHost` through the registry, at the one place a
+   * handshake lands, for the same reason the configuration is observed where a
+   * connection is resolved: a change between two reads is invisible to anything
+   * that only looks at read time.
+   */
+  observeExecutionHostCapabilities(
+    endpointId: string,
+    capabilitiesFingerprint: string,
+  ): void {
+    this.configurationEpochs.observe(
+      endpointId,
+      'capabilities',
+      capabilitiesFingerprint,
+    )
   }
 
   /**

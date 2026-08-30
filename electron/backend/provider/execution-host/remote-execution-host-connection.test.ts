@@ -18,6 +18,7 @@ function endpoint(
     position: 0,
     createdAt: '2026-01-01',
     updatedAt: '2026-01-01',
+    configurationEpoch: 0,
   }
 }
 
@@ -31,11 +32,18 @@ function resolverOver(input: {
   endpointId: string
   endpoints: AppSettings['executionHostEndpoints']
   tokens: Record<string, string | null>
+  observed?: Array<{ endpointId: string; fingerprint: string }>
 }): AppSettingsRemoteExecutionHostConnectionResolver {
   return new AppSettingsRemoteExecutionHostConnectionResolver({
     appSettings: {
       getAppSettings: async () =>
         ({ executionHostEndpoints: input.endpoints }) as AppSettings,
+      observeExecutionHostConfiguration: (
+        endpointId: string,
+        fingerprint: string,
+      ) => {
+        input.observed?.push({ endpointId, fingerprint })
+      },
     },
     credentials: {
       resolveToken: async (endpointId: string) =>

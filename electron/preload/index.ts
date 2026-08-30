@@ -224,6 +224,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.invoke('git:getStatus', repoPath),
     getDiff: (repoPath: string, filePath?: string) =>
       ipcRenderer.invoke('git:getDiff', repoPath, filePath),
+    getCloneableRepositoryUrl: (repoPath: string) =>
+      ipcRenderer.invoke('git:getCloneableRepositoryUrl', repoPath),
   },
   session: {
     create: (input: {
@@ -236,6 +238,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
       serviceTier?: string | null
       permissionConfig?: unknown
       name: string
+      executionHost?: string
+      // Where a remote session works, chosen in the strip. `unknown` because
+      // the main process decodes it; this bridge only carries it (MAR-2689).
+      workAddress?: unknown
     }) => ipcRenderer.invoke('session:create', input),
     getSummariesByProjectId: (projectId: string) =>
       ipcRenderer.invoke('session:getSummariesByProjectId', projectId),
@@ -544,6 +550,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.invoke('executionHost:sessionCountsByEndpoint'),
     getSessionWorkspace: (sessionId: string) =>
       ipcRenderer.invoke('executionHost:getSessionWorkspace', sessionId),
+    getProjects: (executionHostId?: string) =>
+      ipcRenderer.invoke('executionHost:getProjects', executionHostId),
   },
   analytics: {
     getOverview: (rangePreset: '7d' | '30d' | '90d' | 'all') =>

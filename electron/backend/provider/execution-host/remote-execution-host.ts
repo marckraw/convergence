@@ -44,6 +44,7 @@ import type {
 } from './execution-host.types'
 import {
   blockedProviderError,
+  daemonCapabilitiesFingerprint,
   daemonConfigurationFingerprint,
   describeRemoteExecutionHostFailure,
   capabilitiesForRemoteProvider,
@@ -59,6 +60,17 @@ import {
   UNRESOLVED_DAEMON_CONFIGURATION,
 } from './remote-execution-host.pure'
 import type { ProviderCatalog } from '../provider-catalog.types'
+import {
+  advertisesRemoteProjects,
+  decodeRemoteProjects,
+  remoteProjectCatalogFromOutcome,
+  remoteProjectsCapability,
+  type RemoteProjectsCapability,
+} from './remote-project.pure'
+import type {
+  RemoteProjectCatalog,
+  RemoteProjectsOutcome,
+} from './remote-project.types'
 import {
   RemoteExecutionHostError,
   type RemoteExecutionHostConnection,
@@ -115,6 +127,20 @@ export const MAX_LISTING_ATTEMPTS = 5
 
 export interface RemoteExecutionHostDeps {
   connection: RemoteExecutionHostConnectionResolver
+  /**
+   * Reports what the machine advertised in the handshake that just landed, so
+   * this Endpoint's configuration epoch moves when it changes (MAR-2689 round
+   * 8).
+   *
+   * A host knows *what* was advertised and nothing about which Endpoint it
+   * speaks for, so the binding is the registry's -- the same shape as
+   * `onEventSeq`. Optional because a host built without one still holds its own
+   * per-attempt provenance and refuses on its own behalf; what is missing then
+   * is only the carrier to the renderer, which a host with no Endpoint list
+   * behind it has nobody to carry to. The wire is pinned end to end by `the
+   * configuration epoch` suite, which builds its hosts through the registry.
+   */
+  observeCapabilities?: (capabilitiesFingerprint: string) => void
   fetch?: FetchFn
   reconnect?: {
     maxAttempts?: number
@@ -159,6 +185,126 @@ export interface RemoteExecutionHostDeps {
 interface DerivedFromConfiguration<T> {
   configuration: string
   value: T
+}
+
+/**
+ * The one beat both of this host's refreshes keep (MAR-2689, MAR-2620).
+ *
+ * A refresh is an attempt opened *before* the request and committed only if
+ * nothing newer opened in the meantime, so a slow read cannot land on top of a
+ * newer one's answer. The provider listing spelled that rule out by hand; the
+ * Projects listing did not spell it out at all, and overlapping reads -- which
+ * StrictMode's double-run and any Settings edit make routine -- let the older
+ * answer win. One helper rather than a second hand-written counter, so the two
+ * refreshes cannot drift again.
+ *
+ * The counters stay per fact and are deliberately not shared between them: a
+ * Projects read opening an attempt must not cancel a provider refresh that is
+ * already in flight, which is a different fact about the same machine. Order
+ * is all this answers: whether one fact's answer is still *true* is asked
+ * elsewhere, of the provenance the answer carries -- see `ProjectsProvenance`
+ * (MAR-2689 round 7). Rounds 4 and 5 kept a void floor here, which was an
+ * event standing in for that provenance, and it is gone.
+ */
+class RefreshGeneration {
+  private current = 0
+
+  /** Opens an attempt. Only the newest one may commit. */
+  begin(): number {
+    return ++this.current
+  }
+
+  /** Runs `commit` while -- and only while -- this attempt is still newest. */
+  ifCurrent(attempt: number, commit: () => void): void {
+    if (attempt !== this.current) return
+    commit()
+  }
+}
+
+/**
+ * A Projects outcome and the attempt that produced it (MAR-2689).
+ *
+ * The attempt number rides *with* the value rather than living in the
+ * generation guard, because the question an overtaken read has to ask is not
+ * "has anything landed since?" but "is what landed newer than me?". A counter
+ * beside the cache answers the first; only the number stored with the value
+ * answers the second, and the two differ at exactly the case that kept coming
+ * back -- an overtaken failure while the newer attempt is still on the wire.
+ */
+interface LandedProjectsOutcome {
+  attempt: number
+  outcome: RemoteProjectsOutcome
+}
+
+/**
+ * What a Projects answer was read under: the machine, and what that machine
+ * said it could do (MAR-2689 round 7).
+ *
+ * The Projects outcome has always had two dependencies -- identity and
+ * capability -- and until this existed it carried one. The Endpoint
+ * configuration answers identity. It cannot answer capability: a machine that
+ * changes its mind about `projects.v1` does so at the same base URL with the
+ * same token, so its fingerprint never moves and no epoch is bumped, and an
+ * answer read under the advertisement it has withdrawn was in force by every
+ * test identity alone can run. Rounds 4 and 5 caught that with a pair of
+ * events -- a cache clear and a void floor fired from the listing commit --
+ * and an event only catches what is in flight while it fires. Provenance
+ * catches it at every read, of the attempt and of the cache alike, which is
+ * why one yardstick can now measure both.
+ *
+ * The capability rides as its epoch rather than as the tri-state itself, for
+ * the same reason the configuration rides as one: equality of *values* cannot
+ * tell "it never changed" from "it changed and came back". A machine that
+ * withdraws `projects.v1` and offers it again has not been asked since the
+ * listing on record was read, and a value comparison would put that listing
+ * back in force -- pinned by `never refuses a Project in the name of a listing
+ * read before the machine changed its mind`
+ * (`remote-execution-host.work-address.test.ts`). The tri-state is what the
+ * epoch is computed from, `unknown` included: a machine whose `/health` has
+ * stopped being readable has become unknown about its Projects, which
+ * supersedes both answers it could have given before.
+ */
+interface ProjectsProvenance {
+  configuration: string
+  capabilityEpoch: number
+}
+
+/**
+ * What a Projects read whose handshake was replaced under it knows: nothing
+ * (MAR-2689 round 4).
+ *
+ * Neither of the two answers it could otherwise give is available to it. Its
+ * listing describes a machine that has since said it does no Projects, and
+ * "this machine has none" would be that same replaced handshake talking. A
+ * failure is the one outcome of the three that claims nothing and lets nothing
+ * be refused in its name, and the sentence says what actually happened rather
+ * than blaming the daemon for it.
+ */
+const PROJECTS_READ_UNDER_A_REPLACED_HANDSHAKE: RemoteProjectsOutcome = {
+  kind: 'failed',
+  reason:
+    'it changed what it offers while its Projects were being read, so the ' +
+    'answer that came back is no longer known to be true of it.',
+}
+
+/**
+ * What a Projects read whose configuration was superseded under it knows:
+ * nothing either (MAR-2689 round 6).
+ *
+ * The sibling of the sentence above, and the one that closes a token
+ * rotation. An attempt dials the machine its Endpoint pointed at when it
+ * opened; by the time the answer arrives that Endpoint may point somewhere
+ * else, or hold a credential the old answer was never read under. What came
+ * back is a true statement about a machine nobody is asking about, so it is
+ * neither committed nor handed over -- and saying so is not blaming the
+ * daemon, which answered perfectly well.
+ */
+const PROJECTS_READ_UNDER_A_SUPERSEDED_CONFIGURATION: RemoteProjectsOutcome = {
+  kind: 'failed',
+  reason:
+    'its configuration changed while its Projects were being read, so the ' +
+    'answer that came back is not about the machine this endpoint points at ' +
+    'now. Asking again reads the machine in force.',
 }
 
 /** A provider listing and the handshake read in the same round trip. */
@@ -235,11 +381,65 @@ export class RemoteExecutionHost implements ProviderExecutionHost {
     Promise<Error | null>
   > | null = null
   /**
-   * Bumped by every refresh so a slow one that finishes last cannot overwrite
-   * a newer one's answer. Same reason Emergence's handshake service keeps one
-   * per endpoint (`endpoint-handshake.service.ts:36-40`).
+   * What this daemon last said about its Projects, the attempt that heard it,
+   * and the configuration it was heard from (MAR-2689).
+   *
+   * Kept the same way as the provider listing and read the same way -- through
+   * `inForce` -- because it is the same kind of fact: a list of directories is
+   * only true of the machine it was read from, and an Endpoint repointed in
+   * Settings keeps its id. Null means nothing has been read for the machine in
+   * force, which is not the same claim as a machine that listed none; `start`
+   * depends on that difference to know when it may refuse.
+   *
+   * It is derived from the handshake as well as from the configuration, so it
+   * carries both -- see `ProjectsProvenance`, and `projectsInForce`, which is
+   * the only way in. It can still lag the handshake by one beat, which is why
+   * `assertWorkPlaceRunnable` asks the handshake before it asks this: a cache
+   * is never the authority on whether the machine does Projects at all.
+   *
+   * One field for all three outcomes, and the attempt number stored beside
+   * them. Two fields -- a listing and a failure -- meant every reader had to
+   * decide which of them spoke, and each round of review found one more reader
+   * deciding it wrongly. With one value the only question left is *whose*
+   * answer this is, and that is a comparison of two integers: an outcome that
+   * landed from an attempt at least as new as mine is the one on record, of
+   * whatever kind, and nothing else can outrank my own.
    */
-  private refreshGeneration = 0
+  private projectsOutcome: {
+    provenance: ProjectsProvenance
+    value: LandedProjectsOutcome
+  } | null = null
+  /**
+   * How many times this machine has changed what it says about its Projects
+   * (MAR-2689 round 7).
+   *
+   * The capability half of `ProjectsProvenance`, kept as a count rather than
+   * as the answer itself so that a machine returning to a capability it once
+   * had does not put an answer read before the round trip back in force.
+   * Observed where the fact changes -- the listing commit, which is where a
+   * handshake lands -- for the same reason the configuration epoch is observed
+   * where a connection is resolved: a change between two reads is invisible to
+   * anything that only looks at read time.
+   */
+  private projectsCapabilityEpoch = 0
+  /**
+   * The capability the last observation saw, so the epoch counts changes and
+   * not observations. `unknown` is the honest starting value: a host that has
+   * never listed has no handshake, and that is exactly what
+   * `remoteProjectsCapability(null)` says.
+   */
+  private observedProjectsCapability: RemoteProjectsCapability = 'unknown'
+  /**
+   * Bumped by every provider refresh so a slow one that finishes last cannot
+   * overwrite a newer one's answer. Same reason Emergence's handshake service
+   * keeps one per endpoint (`endpoint-handshake.service.ts:36-40`).
+   *
+   * It guards `listing` and `listingFailure` together, because they are two
+   * states of one fact and exactly one refresh writes either.
+   */
+  private readonly listingRefresh = new RefreshGeneration()
+  /** The same guard for the Projects outcome, which is its own fact. */
+  private readonly projectsRefresh = new RefreshGeneration()
 
   constructor(private readonly deps: RemoteExecutionHostDeps) {
     this.fetchFn = deps.fetch ?? fetch
@@ -267,13 +467,14 @@ export class RemoteExecutionHost implements ProviderExecutionHost {
    * for the same reason -- what it read is not about the machine in force.
    */
   async refreshProviders(): Promise<RemoteExecutionHostProviderInfo[]> {
-    const generation = ++this.refreshGeneration
-    // The configuration this attempt is against, recorded before anything can
-    // fail so even a failure knows which machine it is a failure of.
-    let configuration = UNRESOLVED_DAEMON_CONFIGURATION
+    // The configuration this attempt is against, captured before the attempt
+    // is opened so even a failure knows which machine it is a failure of --
+    // and so the attempt's number and its machine are the same fact
+    // (`openAttempt`).
+    const { attempt, configuration, connection, failure } =
+      await this.openAttempt(this.listingRefresh)
     try {
-      const connection = await this.resolveConnection()
-      configuration = daemonConfigurationFingerprint(connection)
+      if (!connection) throw failure
       // Started before the listing rather than after it: /health is
       // unauthenticated and independent, so it runs concurrently and usually
       // adds no wall-clock at all. When health is the slower half the refresh
@@ -296,23 +497,73 @@ export class RemoteExecutionHost implements ProviderExecutionHost {
       // has started. Settings changes make two refreshes overlap routinely; a
       // write on either side of an await pairs one daemon's providers with
       // another daemon's name.
-      if (generation === this.refreshGeneration) {
+      this.listingRefresh.ifCurrent(attempt, () => {
         this.listing = { configuration, value: { providers, handshake } }
         this.listingFailure = null
-      }
+        // The one place a handshake lands, so the one place the capability it
+        // carries can be seen to change. Anything derived from the previous
+        // answer goes out of force here, without being told to.
+        this.observeProjectsCapability(handshake)
+        // The same change, told to the one thing that can carry it across the
+        // wire: this Endpoint's epoch, which the renderer already keys both its
+        // catalogs by (MAR-2689 round 8). Two observations rather than one
+        // because they are two facts -- this host's provenance is about
+        // Projects, and the epoch is about everything derived from the machine
+        // -- and the ledger, not this line, decides whether either moved.
+        this.deps.observeCapabilities?.(
+          daemonCapabilitiesFingerprint(handshake),
+        )
+      })
       return this.listedProviders()
     } catch (error) {
       // Same generation guard as the success path, for the same reason: an
       // overtaken refresh must not report its failure over a newer one's
       // answer.
-      if (generation === this.refreshGeneration) {
+      this.listingRefresh.ifCurrent(attempt, () => {
         this.listingFailure = {
           configuration,
           value: error instanceof Error ? error : new Error(String(error)),
         }
-      }
+      })
       throw error
     }
+  }
+
+  /**
+   * Notices that this machine has changed what it says about its Projects
+   * (MAR-2689 round 7).
+   *
+   * The whole of the capability half of `ProjectsProvenance`: the epoch it
+   * carries moves here and nowhere else, and every answer measured against it
+   * -- an attempt still on the wire, an outcome on record -- goes out of force
+   * the moment it moves. Nothing is cleared and nothing is cancelled; the
+   * answers simply stop being obtainable, which is the same discipline the
+   * configuration half already keeps.
+   *
+   * It reads the handshake that just landed rather than `handshake()`, because
+   * this is the landing: the fact to compare is the one being committed, not
+   * whatever a reader could get at afterwards.
+   *
+   * The comparison is the tri-state, not the boolean. A machine whose
+   * `/health` has stopped being readable has become *unknown* about its
+   * Projects, which supersedes both of the answers it could have given before;
+   * reading that as "still not advertising" left an `unsupported` on record
+   * that nobody could ask again (MAR-2689 round 5).
+   *
+   * A listing that says what the last one said moves nothing, which is what
+   * keeps the ordinary case ordinary: a composer asks one machine for its
+   * providers and its Projects in the same beat, so a refresh landing while
+   * `/v0/projects` is on the wire is routine, and moving the epoch there would
+   * turn a machine that answered perfectly well into one whose Projects "could
+   * not be read" -- an outage invented out of a refresh (MAR-2689 round 4).
+   */
+  private observeProjectsCapability(
+    handshake: EndpointHandshakeResult | null,
+  ): void {
+    const capability = remoteProjectsCapability(handshake)
+    if (capability === this.observedProjectsCapability) return
+    this.observedProjectsCapability = capability
+    this.projectsCapabilityEpoch += 1
   }
 
   /**
@@ -435,9 +686,94 @@ export class RemoteExecutionHost implements ProviderExecutionHost {
    * the old one simply cannot be obtained here.
    */
   private inForce<T>(known: DerivedFromConfiguration<T> | null): T | null {
-    return known && known.configuration === this.configuration
+    return known && this.configurationInForce(known.configuration)
       ? known.value
       : null
+  }
+
+  /**
+   * Whether something read under this daemon configuration is still about the
+   * machine in force (MAR-2689 round 6).
+   *
+   * The comparison `inForce` is built on, named on its own because an attempt
+   * carries its configuration without carrying a value yet: it is opened
+   * against a machine and has to be measured against the same yardstick as
+   * everything already learned from one. Written out a second time it would be
+   * the same rule in two places, which in this file is a rule that drifts.
+   */
+  private configurationInForce(configuration: string): boolean {
+    return configuration === this.configuration
+  }
+
+  /**
+   * The two facts a Projects answer is read under, taken together (MAR-2689
+   * round 7).
+   *
+   * One place the pair is built, so a caller cannot come to take one of them
+   * from one beat and the other from another -- which is the shape of every
+   * defect this seam has produced.
+   */
+  private projectsProvenance(configuration: string): ProjectsProvenance {
+    return { configuration, capabilityEpoch: this.projectsCapabilityEpoch }
+  }
+
+  /**
+   * Whether a Projects answer read under this provenance is still an answer
+   * (MAR-2689 round 7).
+   *
+   * The one yardstick, used by the attempt that is about to commit and by the
+   * outcome already on record -- `landedProjectsOutcome` is `inForce` for a
+   * value with two facts in its provenance instead of one. Two readings of one
+   * rule is how this seam drifted six times; there is one reading now.
+   */
+  private projectsInForce(provenance: ProjectsProvenance): boolean {
+    return (
+      this.configurationInForce(provenance.configuration) &&
+      provenance.capabilityEpoch === this.projectsCapabilityEpoch
+    )
+  }
+
+  /**
+   * What this machine last said about its Projects, handed back only while
+   * both facts it was read under still hold (MAR-2689 round 7).
+   */
+  private landedProjectsOutcome(): LandedProjectsOutcome | null {
+    const known = this.projectsOutcome
+    return known && this.projectsInForce(known.provenance) ? known.value : null
+  }
+
+  /**
+   * Opens one refresh attempt against the configuration it is an attempt on
+   * (MAR-2689 round 6).
+   *
+   * The resolve comes first and the attempt number second, in one synchronous
+   * beat, so an attempt's number and its configuration are one fact rather
+   * than two that can disagree: a number that outranks another's must not be
+   * able to carry an older machine's address or credential, which is how a
+   * read opened under one token came to speak for the machine behind the next
+   * one. Nothing awaits between the fingerprint and the `begin()`.
+   *
+   * A resolve that fails is carried rather than thrown, because the attempt
+   * still has to exist: a failure is an answer about a machine too, and one
+   * that never opened an attempt could not be ordered against the reads it
+   * overtook. Its configuration is the unresolved one, which is exactly what
+   * `resolveConnection` has just made current, so it commits normally.
+   */
+  private async openAttempt(refresh: RefreshGeneration): Promise<{
+    attempt: number
+    configuration: string
+    connection: RemoteExecutionHostConnection | null
+    failure: unknown
+  }> {
+    let connection: RemoteExecutionHostConnection | null = null
+    let failure: unknown = null
+    try {
+      connection = await this.resolveConnection()
+    } catch (error) {
+      failure = error
+    }
+    const configuration = daemonConfigurationFingerprint(connection)
+    return { attempt: refresh.begin(), configuration, connection, failure }
   }
 
   /**
@@ -572,6 +908,225 @@ export class RemoteExecutionHost implements ProviderExecutionHost {
   }
 
   /**
+   * This daemon's Projects: the places a session can be given to work in that
+   * already exist on that machine (MAR-2689).
+   *
+   * The strip's second slot reads this. Reported rather than thrown for the
+   * same reason `describeCatalog` is: the slot has to render either way, and
+   * the three outcomes look different to a reader — a machine that offers
+   * Projects, a machine that does not do Projects at all, and a machine that
+   * could not be asked.
+   *
+   * `/v0/projects` is read only where the machine advertises `projects.v1`,
+   * and the advertisement arrives with the provider listing, so this ensures
+   * that listing first. A listing failure is reported and the read is not
+   * attempted: without a handshake there is no advertisement, and asking a
+   * machine we have not heard from would be guessing at its protocol.
+   *
+   * The whole invocation is one attempt, opened on the first line. Every path
+   * out of it — a listing, a machine that does not do Projects, an unreadable
+   * body, a failed request — computes an outcome and falls through to the one
+   * `commitProjectsOutcome` below, which is the method's only `return`. Three
+   * rounds of review found three exits that had slipped outside the beat, each
+   * one an answer that could land on top of a newer one; a shape with a single
+   * exit is what makes a fourth impossible rather than merely absent.
+   *
+   * The outcome is cached with the configuration it was read from, so `start`
+   * can refuse a Project this machine no longer offers without a round trip
+   * and without ever measuring one daemon's answer against another's address
+   * (MAR-2620, "every derived value carries the configuration it was derived
+   * from").
+   */
+  async describeProjectCatalog(): Promise<
+    Omit<RemoteProjectCatalog, 'executionHostId'>
+  > {
+    // Opened against the machine it is an attempt on, before anything else --
+    // including the provider listing this needs. Two things ride on that
+    // order. An attempt that starts later than it claims cannot supersede the
+    // reads it overtook, which is how a machine that had stopped advertising
+    // Projects still had an older listing land on top of it (round 3); and an
+    // attempt whose configuration is learned later than its number can outrank
+    // a newer read while speaking for an older machine (round 6).
+    const { attempt, configuration, connection, failure } =
+      await this.openAttempt(this.projectsRefresh)
+    // The identity half is known here; the capability half is not, and cannot
+    // be. Before `ensureListed` this host may have no handshake at all -- on a
+    // machine's first read it never does, and on an Endpoint just repointed
+    // the only handshake it has belongs to the machine it was moved away
+    // from. Captured here it would be `unknown` on exactly the reads that go
+    // on to succeed, and every one of them would be refused its own answer.
+    // So the pair is completed at the beat the capability is read, which is
+    // also the beat that authorises the request (MAR-2689 round 7).
+    let provenance = this.projectsProvenance(configuration)
+    let outcome: RemoteProjectsOutcome
+    try {
+      if (!connection) throw failure
+      await this.ensureListed()
+      provenance = this.projectsProvenance(configuration)
+      if (!advertisesRemoteProjects(this.handshake())) {
+        outcome = { kind: 'unsupported' }
+      } else {
+        // The connection this attempt opened against, not one resolved again
+        // here: the machine an attempt dials must be the machine it is
+        // measured against, or the two can be different daemons and neither
+        // the answer nor the refusal is about the one that was asked.
+        const body = await this.requestJson(connection, '/v0/projects', {
+          method: 'GET',
+        })
+        const decoded = decodeRemoteProjects(body)
+        outcome =
+          decoded.status === 'malformed'
+            ? // Asked, and answered with something that is not a listing. That
+              // is not "this machine has none": the strip must say the Projects
+              // could not be read, or it states an absence the daemon never
+              // claimed.
+              { kind: 'failed', reason: decoded.reason }
+            : { kind: 'listed', projects: decoded.projects }
+      }
+    } catch (error) {
+      outcome = {
+        kind: 'failed',
+        reason: describeRemoteExecutionHostFailure(error),
+      }
+    }
+    return this.commitProjectsOutcome(attempt, provenance, outcome)
+  }
+
+  /**
+   * Puts one attempt's outcome on record and answers with whichever outcome is
+   * the newest to have landed (MAR-2689).
+   *
+   * The commit and the return are one decision, and both are decided by
+   * attempt number. `ifCurrent` keeps an overtaken answer out of the cache; the
+   * comparison below keeps it out of the caller's hands too, which is the half
+   * that kept being missed. The renderer commits by *source* rather than by
+   * request order, so an overtaken read returning its own answer lands last and
+   * the strip offers a Project the cache no longer holds -- which `start` then
+   * refuses, naming the place the strip has just shown.
+   *
+   * Two integers rather than a precedence between fields, because precedence
+   * cannot tell the two overtaken cases apart: "something newer landed and it
+   * simply has no failure to report" and "nothing newer has answered yet" look
+   * identical to any rule that reads a cached failure first. An outcome that
+   * landed from an attempt at least as new as this one is the state of the
+   * machine and is handed back whatever kind it is, `unsupported` included;
+   * otherwise this attempt is still the freshest thing known and speaks for
+   * itself, and staying silent would state an absence the daemon never claimed.
+   *
+   * Unless what it read under is gone rather than merely older -- the two cases
+   * where an attempt with nothing newer behind it must still not speak. Its
+   * configuration may have been superseded, so it is describing a machine this
+   * Endpoint no longer points at (round 6); or the capability that authorised
+   * the read may have been withdrawn, so the machine has changed its mind
+   * about having Projects at all (round 7). Both are the provenance it
+   * carries, asked once; neither is a fresher answer to the question asked, so
+   * neither is committed and neither is handed back -- the caller gets a
+   * failure that says which, and nothing is ever reported as gone.
+   */
+  private commitProjectsOutcome(
+    attempt: number,
+    provenance: ProjectsProvenance,
+    outcome: RemoteProjectsOutcome,
+  ): Omit<RemoteProjectCatalog, 'executionHostId'> {
+    // Two conditions on the commit, not one: newest, and still true. Being
+    // newest is a fact about order and says nothing about whether the machine
+    // still answers this question the way it did -- a capability withdrawn
+    // under an attempt with nothing behind it leaves it both newest and wrong.
+    // The invariant belongs to this line: "what is on record was read under
+    // the machine in force, saying what it says now" should be readable from
+    // the write.
+    this.projectsRefresh.ifCurrent(attempt, () => {
+      if (!this.projectsInForce(provenance)) return
+      this.projectsOutcome = { provenance, value: { attempt, outcome } }
+    })
+    const landed = this.landedProjectsOutcome()
+    if (landed && landed.attempt >= attempt) {
+      return remoteProjectCatalogFromOutcome(landed.outcome)
+    }
+    const superseded = !this.configurationInForce(provenance.configuration)
+      ? PROJECTS_READ_UNDER_A_SUPERSEDED_CONFIGURATION
+      : !this.projectsInForce(provenance)
+        ? PROJECTS_READ_UNDER_A_REPLACED_HANDSHAKE
+        : null
+    return remoteProjectCatalogFromOutcome(superseded ?? outcome)
+  }
+
+  /**
+   * Refuses a Project this machine does not offer, by name (MAR-2689).
+   *
+   * The same shape as the missing-Endpoint refusal a session gets when the
+   * machine it named is gone: a synchronous read of what is on record, refusing
+   * before anything is spawned, and never falling back to some other place. A
+   * remote start that names a working directory and no workspace is Project
+   * mode — the daemon resolves that directory as one of its Projects — so a
+   * directory this machine has stopped offering would otherwise be sent,
+   * refused at the wire, and reported as a workspace error with no hint that
+   * the *place* is what went stale.
+   *
+   * Two questions in order, and the order is the ruling of round 5: **the
+   * current handshake first, the cached listing second.** The cache is derived
+   * from a handshake and can only ever lag it, so at the last synchronous beat
+   * before a session is spawned the authoritative fact about whether this
+   * machine does Projects at all is what the machine is saying now. Five rounds
+   * of review each found one more way a cache could outlive its source; this
+   * asks the source.
+   *
+   * 1. The handshake is unknown — no readable `/health` — and nothing may be
+   *    refused. "Unknown" is never reported as "gone": the daemon stays the
+   *    final authority, exactly as it is for a provider that was never listed.
+   * 2. It answered and withheld `projects.v1`. Project mode is not a thing this
+   *    daemon has, whatever is on record and whether or not anything was ever
+   *    read — the strip offers Repository instead, and a directory sent as a
+   *    Project would be refused at the wire with no hint that the *place* is
+   *    what is wrong.
+   * 3. It advertises them, so the listing decides — the same outcome the strip
+   *    is drawn from, so the slot and this refusal can never disagree about
+   *    which places exist. Only a listing that does not hold this directory
+   *    refuses. A failure answers nothing, an empty cache answers nothing, one
+   *    read from an address the Endpoint has since left is not handed over at
+   *    all, and neither is one read under a capability this machine has since
+   *    withdrawn or regained — none of them may refuse.
+   */
+  private assertWorkPlaceRunnable(config: SessionStartConfig): void {
+    if (config.workspace) return
+    const capability = remoteProjectsCapability(this.handshake())
+    if (capability === 'unknown') return
+    if (capability === 'withheld') {
+      throw this.unrunnableWorkPlaceError(
+        config.workingDirectory,
+        'execution host lists no Projects to hold. ',
+      )
+    }
+    const outcome = this.landedProjectsOutcome()?.outcome
+    if (!outcome || outcome.kind !== 'listed') return
+    if (
+      outcome.projects.some(
+        (project) => project.workingDirectory === config.workingDirectory,
+      )
+    ) {
+      return
+    }
+    throw this.unrunnableWorkPlaceError(
+      config.workingDirectory,
+      'execution host no longer lists as a Project. ',
+    )
+  }
+
+  /** One sentence for both refusals, so they cannot drift into two shapes. */
+  private unrunnableWorkPlaceError(
+    workingDirectory: string,
+    middle: string,
+  ): RemoteExecutionHostError {
+    return new RemoteExecutionHostError(
+      `This session works in "${workingDirectory}", which this ` +
+        middle +
+        'Pick another place for it in the composer — starting it somewhere ' +
+        'else would run it in a directory the session never named.',
+      'configuration',
+    )
+  }
+
+  /**
    * The ProviderExecutionHost contract's view of the catalog: the descriptors
    * alone. Derived from `describeCatalog` rather than built beside it, so the
    * two can never come to describe different providers.
@@ -583,6 +1138,7 @@ export class RemoteExecutionHost implements ProviderExecutionHost {
 
   start(providerId: string, config: SessionStartConfig): SessionHandle {
     this.assertProviderRunnable(providerId)
+    this.assertWorkPlaceRunnable(config)
 
     const session = new RemoteSessionRun({
       providerId,

@@ -126,6 +126,16 @@ export const stripSelectClass =
 export const stripFactClass =
   'rounded-md border border-border/60 px-1.5 py-0.5 text-[11px] font-medium text-foreground'
 
+/**
+ * A sentence in the strip rather than a control: the machine being asked where
+ * it can work, or the reason nothing can be offered (MAR-2689).
+ *
+ * The same size and tone as the label beside it, because it stands in the same
+ * tier and reads as context, not as an alarm. The one loud thing on this strip
+ * is still the removed-endpoint warning below, and it stays the only one.
+ */
+export const stripNoticeClass = 'text-[11px] text-muted-foreground'
+
 /** A live session whose machine is gone. */
 export const stripWarningClass =
   'flex min-w-0 items-center gap-1 text-[11px] text-warning-foreground'

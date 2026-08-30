@@ -93,8 +93,7 @@ import { loadEnvFile } from '../backend/environment/env-file.service'
 import { hydrateProcessPathFromShell } from '../backend/environment/shell-path.service'
 import { ExecutionHostDaemonCredentialsService } from '../backend/credentials/execution-host-daemon-credentials.service'
 import { AppSettingsRemoteExecutionHostRegistry } from '../backend/provider/execution-host/remote-execution-host.registry'
-import { readGitOriginUrl } from '../backend/git/git-origin'
-import { normalizeGitHubRemoteUrl } from '../backend/git/git-origin.pure'
+import { readCloneableRepositoryUrl } from '../backend/git/git-origin'
 import { OpenRouterCredentialsService } from '../backend/credentials/openrouter-credentials.service'
 import { ProjectOpenService } from '../backend/project-open/project-open.service'
 import { registerProjectOpenIpcHandlers } from '../backend/project-open/project-open.ipc'
@@ -468,8 +467,7 @@ async function startApp(): Promise<void> {
   void remoteExecutionHosts.primeConfiguredEndpoints().catch(() => {})
   sessionService.setRemoteExecutionHosts(remoteExecutionHosts)
   sessionService.setRemoteWorkspaceSourceResolver((workingDirectory) => {
-    const origin = readGitOriginUrl(workingDirectory)
-    const repository = origin ? normalizeGitHubRemoteUrl(origin) : null
+    const repository = readCloneableRepositoryUrl(workingDirectory)
     return repository ? { repository } : null
   })
   const analyticsService = new AnalyticsService(db, {

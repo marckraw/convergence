@@ -26,6 +26,7 @@ function baseSession(overrides: Partial<SessionSummary> = {}): SessionSummary {
     forkStrategy: null,
     primarySurface: 'conversation',
     executionHost: 'local',
+    workAddress: null,
     continuationToken: null,
     lastSequence: 0,
     createdAt: 'now',
