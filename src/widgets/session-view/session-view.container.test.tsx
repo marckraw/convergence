@@ -249,6 +249,13 @@ describe('SessionView', () => {
           ]),
           open: vi.fn().mockResolvedValue(undefined),
         },
+        executionHost: {
+          // A daemon that cannot be reached, on purpose: the remote rows below
+          // must come from the record alone (MAR-2694).
+          getSessionWorkspace: vi
+            .fn()
+            .mockResolvedValue({ ok: false, message: 'daemon unreachable' }),
+        },
       },
       configurable: true,
       writable: true,
@@ -286,6 +293,295 @@ describe('SessionView', () => {
    * the feature is simply gone, and only somebody who remembers it existed
    * would ever notice. That silent absence is what this pins.
    */
+  /**
+   * Session details is the strip's own drawer, and nothing that names where a
+   * session runs may lie (MAR-2619, MAR-2718).
+   *
+   * On a remote session the panel used to print the LOCAL checkout's branch and
+   * the LOCAL worktree's pull request underneath the daemon's rows: `Branch —
+   * master` for a session running on another machine, and `Pull request — No
+   * workspace` two rows beneath a daemon-reported workspace. Both described a
+   * checkout the session never touched.
+   *
+   * Mutation: drop the remote branch from `resolveRemoteSessionDetails` (or
+   * render the local rows unconditionally again) and this goes red.
+   */
+  it("shows a remote session the daemon's branch and pull request, never the local ones", async () => {
+    useSessionStore.setState((state) => ({
+      ...state,
+      sessions: state.sessions.map((session) =>
+        session.id === 'session-1'
+          ? {
+              ...session,
+              executionHost: 'daemon-a',
+              workAddress: {
+                mode: 'repository' as const,
+                repository: 'https://github.com/marckraw/convergence.git',
+                branchName: null,
+                label: 'marckraw/convergence',
+              },
+              reportedWorkspace: {
+                mode: 'repository' as const,
+                repository: 'https://github.com/marckraw/convergence.git',
+                branchName: 'agent/34372e47',
+                baseRef: 'master',
+                workspacePath: '/srv/worktrees/s-1',
+                environment: null,
+              },
+            }
+          : session,
+      ),
+    }))
+
+    render(
+      <TooltipProvider>
+        <SessionView />
+      </TooltipProvider>,
+    )
+    fireEvent.pointerDown(
+      screen.getByRole('button', { name: 'Session details' }),
+    )
+
+    const panel = await screen.findByText('Works in')
+    const rows = panel.closest('div')?.parentElement
+    expect(rows).toBeTruthy()
+    expect(rows?.textContent).toContain('agent/34372e47')
+    // The two local rows, gone: this session runs on another machine and has
+    // no worktree here to have a branch or a pull request on.
+    expect(rows?.textContent).not.toContain('No workspace')
+    expect(rows?.textContent).not.toContain('master')
+    // The daemon could not be reached, so it never said whether it had opened
+    // a pull request -- and `None yet` would be that claim (MAR-2718 round 2).
+    // The branch stays: the record already knew it.
+    expect(rows?.textContent).toContain('Could not read: daemon unreachable')
+    expect(rows?.textContent).not.toContain('None yet')
+  })
+
+  /**
+   * The pending half of the same law, on the rendered surface (MAR-2280): while
+   * the fetch is in flight nobody has looked yet, so the row says it is asking.
+   *
+   * Mutation: collapse `asking` (or `unavailable`) to
+   * `NO_REMOTE_PULL_REQUEST_LABEL` in `describeRemotePullRequest` and this row
+   * and the one above go red together.
+   */
+  it('says it is asking while the daemon has not answered about the pull request', async () => {
+    // A fetch that never settles: the panel must render the honest interim
+    // state rather than a negative answer nobody gave.
+    ;(
+      window as unknown as {
+        electronAPI: { executionHost: { getSessionWorkspace: unknown } }
+      }
+    ).electronAPI.executionHost.getSessionWorkspace = vi
+      .fn()
+      .mockReturnValue(new Promise(() => {}))
+
+    useSessionStore.setState((state) => ({
+      ...state,
+      sessions: state.sessions.map((session) =>
+        session.id === 'session-1'
+          ? {
+              ...session,
+              executionHost: 'daemon-a',
+              workAddress: {
+                mode: 'repository' as const,
+                repository: 'https://github.com/marckraw/convergence.git',
+                branchName: null,
+                label: 'marckraw/convergence',
+              },
+              reportedWorkspace: {
+                mode: 'repository' as const,
+                repository: 'https://github.com/marckraw/convergence.git',
+                branchName: 'agent/34372e47',
+                baseRef: 'master',
+                workspacePath: '/srv/worktrees/s-1',
+                environment: null,
+              },
+            }
+          : session,
+      ),
+    }))
+
+    render(
+      <TooltipProvider>
+        <SessionView />
+      </TooltipProvider>,
+    )
+    fireEvent.pointerDown(
+      screen.getByRole('button', { name: 'Session details' }),
+    )
+
+    const panel = await screen.findByText('Works in')
+    const rows = panel.closest('div')?.parentElement
+    expect(rows?.textContent).toContain('Asking')
+    expect(rows?.textContent).not.toContain('None yet')
+  })
+
+  /**
+   * The daemon answered and the field it sent was not a pull request, on the
+   * rendered surface (MAR-2280 law, MAR-2718 round 2).
+   *
+   * This is the reading the old wire door could not produce at all: `typeof
+   * value.prUrl === 'string' ? value.prUrl : null` turned a missing key, `42`,
+   * `false`, `''` and `'ftp://x'` into the daemon's own negative, so the panel
+   * printed `None yet` about a snapshot nobody could read. A successful fetch
+   * is not the same thing as a legible answer.
+   *
+   * Mutation: map `unreadable` to `{ state: 'none' }` in
+   * `readRemotePullRequest`, or collapse it in `describeRemotePullRequest`, and
+   * this goes red.
+   */
+  it('says the read failed when the daemon sent an unreadable pull request', async () => {
+    ;(
+      window as unknown as {
+        electronAPI: { executionHost: { getSessionWorkspace: unknown } }
+      }
+    ).electronAPI.executionHost.getSessionWorkspace = vi
+      .fn()
+      .mockResolvedValue({
+        ok: true,
+        info: {
+          workspace: {
+            mode: 'repository',
+            repository: 'https://github.com/marckraw/convergence.git',
+            branchName: 'agent/34372e47',
+            baseRef: 'master',
+            workspacePath: '/srv/worktrees/s-1',
+            environment: null,
+          },
+          pullRequest: {
+            kind: 'unreadable',
+            reason: 'the daemon sent no pull request field',
+          },
+        },
+      })
+
+    useSessionStore.setState((state) => ({
+      ...state,
+      sessions: state.sessions.map((session) =>
+        session.id === 'session-1'
+          ? {
+              ...session,
+              executionHost: 'daemon-a',
+              workAddress: {
+                mode: 'repository' as const,
+                repository: 'https://github.com/marckraw/convergence.git',
+                branchName: null,
+                label: 'marckraw/convergence',
+              },
+              reportedWorkspace: null,
+            }
+          : session,
+      ),
+    }))
+
+    render(
+      <TooltipProvider>
+        <SessionView />
+      </TooltipProvider>,
+    )
+    fireEvent.pointerDown(
+      screen.getByRole('button', { name: 'Session details' }),
+    )
+
+    const panel = await screen.findByText('Works in')
+    const rows = panel.closest('div')?.parentElement
+    await waitFor(() =>
+      expect(rows?.textContent).toContain(
+        'Could not read: the daemon sent no pull request field',
+      ),
+    )
+    expect(rows?.textContent).not.toContain('None yet')
+    // The workspace half of the same answer survives it.
+    expect(rows?.textContent).toContain('agent/34372e47')
+  })
+
+  /**
+   * And the one answer that IS a pull request, rendered as the link it is
+   * (MAR-2280 law). The `url` arm has to survive the decode that closed the
+   * others, or the row would trade one lie for a blank.
+   *
+   * Mutation: return `{ state: 'none' }` for the `url` arm of
+   * `readRemotePullRequest` and this goes red.
+   */
+  it('renders the pull request the daemon actually opened', async () => {
+    ;(
+      window as unknown as {
+        electronAPI: { executionHost: { getSessionWorkspace: unknown } }
+      }
+    ).electronAPI.executionHost.getSessionWorkspace = vi
+      .fn()
+      .mockResolvedValue({
+        ok: true,
+        info: {
+          workspace: null,
+          pullRequest: {
+            kind: 'url',
+            url: 'https://github.com/marckraw/convergence/pull/544',
+          },
+        },
+      })
+
+    useSessionStore.setState((state) => ({
+      ...state,
+      sessions: state.sessions.map((session) =>
+        session.id === 'session-1'
+          ? {
+              ...session,
+              executionHost: 'daemon-a',
+              workAddress: {
+                mode: 'repository' as const,
+                repository: 'https://github.com/marckraw/convergence.git',
+                branchName: null,
+                label: 'marckraw/convergence',
+              },
+              reportedWorkspace: null,
+            }
+          : session,
+      ),
+    }))
+
+    render(
+      <TooltipProvider>
+        <SessionView />
+      </TooltipProvider>,
+    )
+    fireEvent.pointerDown(
+      screen.getByRole('button', { name: 'Session details' }),
+    )
+
+    const panel = await screen.findByText('Works in')
+    const rows = panel.closest('div')?.parentElement
+    await waitFor(() =>
+      expect(rows?.textContent).toContain(
+        'https://github.com/marckraw/convergence/pull/544',
+      ),
+    )
+    expect(rows?.textContent).not.toContain('None yet')
+  })
+
+  /**
+   * The other half, unchanged: a local session still reads its own checkout.
+   *
+   * Mutation: treat every session as remote in the container and this goes red.
+   */
+  it('leaves a local session showing its own branch and pull request', async () => {
+    render(
+      <TooltipProvider>
+        <SessionView />
+      </TooltipProvider>,
+    )
+    fireEvent.pointerDown(
+      screen.getByRole('button', { name: 'Session details' }),
+    )
+
+    const branchRow = await screen.findByText('Branch')
+    const rows = branchRow.closest('div')?.parentElement
+    expect(rows?.textContent).toContain('master')
+    expect(rows?.textContent).toContain('Pull request')
+    expect(rows?.textContent).not.toContain('Works in')
+  })
+
   it('shows the wires leaving this session in the header', async () => {
     useSessionStore.setState((state) => ({
       ...state,
