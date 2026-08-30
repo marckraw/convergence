@@ -4,7 +4,10 @@ import type {
   SkillInvocationSupport,
   SkillSelection,
 } from '@/shared/types/skill.types'
-import type { SessionWorkAddress } from '@/shared/lib/work-address.pure'
+import type {
+  ReportedWorkspace,
+  SessionWorkAddress,
+} from '@/shared/lib/work-address.pure'
 
 export type SessionStatus = 'idle' | 'running' | 'completed' | 'failed'
 export type AttentionState =
@@ -357,6 +360,12 @@ export interface SessionSummary {
    * main process that predates the column.
    */
   workAddress?: SessionWorkAddress | null
+  /**
+   * What the daemon said it actually did (MAR-2694). Null on a local session
+   * and on a remote one that has not answered yet; absent on a record served
+   * by a main process that predates the column.
+   */
+  reportedWorkspace?: ReportedWorkspace | null
   continuationToken: string | null
   lastSequence: number
   createdAt: string

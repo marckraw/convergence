@@ -1,3 +1,4 @@
+import type { ExecutionSessionWorkspace } from '@mrck-labs/execution-host-protocol'
 import type {
   ExecutionHostEndpoint,
   ExecutionHostEndpointInput,
@@ -194,12 +195,24 @@ export type RemoteSessionWorkspaceResult =
   | {
       ok: true
       info: {
-        workspace: {
-          repository: string
-          branchName: string
-          baseRef: string | null
-        } | null
-        prUrl: string | null
+        /** The protocol's own union, verbatim (MAR-2694). */
+        workspace: ExecutionSessionWorkspace | null
+        /** Decoded at the wire door, never collapsed (MAR-2718 round 2). */
+        pullRequest: RemoteSessionPullRequest
       }
     }
   | { ok: false; message: string }
+
+/**
+ * What the daemon's snapshot said about the pull request, as the main process
+ * decoded it (MAR-2718 round 2).
+ *
+ * `none` is the daemon's own explicit negative -- the only answer the panel may
+ * render as `None yet`. A missing field, a number, a blank string or anything
+ * that is not an `http(s)` URL is `unreadable`, because a successful fetch is
+ * not the same thing as a legible answer.
+ */
+export type RemoteSessionPullRequest =
+  | { kind: 'none' }
+  | { kind: 'url'; url: string }
+  | { kind: 'unreadable'; reason: string }

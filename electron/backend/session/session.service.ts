@@ -1,6 +1,7 @@
 import { randomUUID } from 'crypto'
 import { mkdirSync } from 'fs'
 import type Database from 'better-sqlite3'
+import type { ExecutionSessionWorkspace } from '@mrck-labs/execution-host-protocol'
 import type {
   ConversationItemRow,
   SessionRow,
@@ -588,7 +589,62 @@ export class SessionService {
         'This session runs on a host that does not report workspace information.',
       )
     }
-    return execution.host.fetchSessionWorkspaceInfo(sessionId)
+    const info = await execution.host.fetchSessionWorkspaceInfo(sessionId)
+    // The second door onto the same fact, for the sessions the first one did
+    // not fill: a daemon predating the start-response echo, or a session born
+    // before this shipped (MAR-2694). The record is what the surfaces read, so
+    // an answer that arrives through a panel belongs in it too -- but only
+    // where there is nothing already, because this door does not outrank the
+    // start's (see `fillReportedWorkspaceFromFetch`).
+    if (info.workspace) {
+      this.fillReportedWorkspaceFromFetch(sessionId, info.workspace)
+    }
+    return info
+  }
+
+  /**
+   * Writes what the daemon echoed with its acceptance onto the session's record
+   * (MAR-2694). The authoritative door.
+   *
+   * A session that has since been deleted is not an error: the write is a
+   * consequence of a run the daemon is holding, and it can arrive after the
+   * row is gone.
+   */
+  recordReportedWorkspace(
+    sessionId: string,
+    workspace: ExecutionSessionWorkspace,
+  ): void {
+    if (!this.sessionRepository.findById(sessionId)) return
+    this.sessionRepository.setReportedWorkspace(sessionId, workspace)
+    this.notifySessionChange(sessionId)
+  }
+
+  /**
+   * Writes a workspace read from a panel's snapshot fetch, onto a record that
+   * has none (MAR-2694 round 2).
+   *
+   * Record beats fetch, and by precedence rather than by timing: the start
+   * response is the daemon describing what it materialised for this session,
+   * and a snapshot fetch is a later question that may have been asked before
+   * the start landed or answered from an older view. Both doors used to write
+   * blind, so whichever spoke last won -- which meant opening Session details
+   * could durably replace the authoritative answer with a stale one, invisibly,
+   * on a surface whose whole promise is that it does not lie (MAR-2619).
+   *
+   * The surfaces are told only when this actually filled something. A fetch
+   * that changed nothing is not news.
+   */
+  private fillReportedWorkspaceFromFetch(
+    sessionId: string,
+    workspace: ExecutionSessionWorkspace,
+  ): void {
+    if (!this.sessionRepository.findById(sessionId)) return
+    if (
+      !this.sessionRepository.fillMissingReportedWorkspace(sessionId, workspace)
+    ) {
+      return
+    }
+    this.notifySessionChange(sessionId)
   }
 
   /**
@@ -641,13 +697,28 @@ export class SessionService {
    */
   private requireRemoteWorkPlace(
     session: Pick<SessionSummary, 'workingDirectory' | 'workAddress'>,
-  ): { workspace?: { repository: string }; workingDirectory?: string } {
+  ): {
+    workspace?: { repository: string; branchName?: string }
+    workingDirectory?: string
+  } {
     const address = session.workAddress
     if (address?.mode === 'project') {
       return { workingDirectory: address.workingDirectory }
     }
     if (address?.mode === 'repository') {
-      return { workspace: { repository: address.repository } }
+      // The branch key exists only when a branch was written down. An empty
+      // field means "the daemon names it", and the daemon names it by being
+      // told nothing -- so a `branchName: null` on the wire would be this app
+      // asking for a branch called nothing instead of asking for none
+      // (MAR-2694).
+      return {
+        workspace: {
+          repository: address.repository,
+          ...(address.branchName === null
+            ? {}
+            : { branchName: address.branchName }),
+        },
+      }
     }
 
     const workspace =

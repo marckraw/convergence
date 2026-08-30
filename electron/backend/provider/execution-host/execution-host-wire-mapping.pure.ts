@@ -8,6 +8,7 @@ import {
   type ExecutionStartConfig,
   type ExecutionStartRequest,
   type ExecutionTurnFileChange,
+  type ExecutionWorkspaceSource,
 } from '@mrck-labs/execution-host-protocol'
 import type {
   ConversationItem,
@@ -105,9 +106,18 @@ export const EXECUTION_HOST_WORKSPACE_EXCLUSIVE_START_CONFIG_FIELDS = [
  * it emits, so adding `automation: { autoCreatePr: true }` there is what turns
  * the assertion red — which is precisely the change that would need a ruling
  * and not a commit.
+ *
+ * `environment` joins it at protocol 0.14 (MAR-2694). The daemon can prepare a
+ * session with a named Environment's variables, and Convergence names none:
+ * which environment a Project or an errand should get is MAR-2688's question
+ * and is not this slice's to answer. Sending `null` would not be neutral
+ * either — on a residency that is "the Project's default", on an errand "the
+ * base set alone" — so the field stays off the wire entirely and the daemon
+ * keeps deciding, which is what it does for a client that predates the field.
  */
 export const EXECUTION_HOST_NEVER_SENT_START_REQUEST_FIELDS = [
   'automation',
+  'environment',
 ] as const satisfies readonly (keyof ExecutionStartRequest)[]
 
 /**
@@ -351,7 +361,34 @@ export function buildWireStartRequest(
     protocolVersion: EXECUTION_PROTOCOL_VERSION,
     providerId,
     config: wireConfig,
-    ...(config.workspace ? { workspace: config.workspace } : {}),
+    ...(config.workspace
+      ? { workspace: buildWireWorkspaceSource(config.workspace) }
+      : {}),
+  }
+}
+
+/**
+ * The workspace source, built field by field (MAR-2694).
+ *
+ * By allowlist for the reason the config above it is: a runtime object can
+ * carry more than its type admits, and the start request is not the place to
+ * find that out. It used to travel by reference, which was harmless only while
+ * the local shape and the wire shape happened to be the same three fields.
+ *
+ * An absent optional is an absent *key*, never a null. `ref` and `branchName`
+ * are both "the daemon decides" when omitted, and the daemon decides by not
+ * being told -- a `branchName: null` on the wire asks it to materialise a
+ * branch with no name instead of asking it for one of its own choosing.
+ */
+function buildWireWorkspaceSource(
+  workspace: NonNullable<SessionStartConfig['workspace']>,
+): ExecutionWorkspaceSource {
+  return {
+    repository: workspace.repository,
+    ...(workspace.ref == null ? {} : { ref: workspace.ref }),
+    ...(workspace.branchName == null
+      ? {}
+      : { branchName: workspace.branchName }),
   }
 }
 

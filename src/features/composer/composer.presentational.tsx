@@ -105,6 +105,7 @@ interface ComposerProps {
   onExecutionHostChange: (hostId: string) => void
   workAddress: WorkAddressSlotView
   onWorkAddressChange: (choiceId: string) => void
+  onWorkAddressBranchChange: (branch: string) => void
   /**
    * Armed wires leaving this session (F10). Zero renders no control at all --
    * a switch that silences nothing is noise on every other composer.
@@ -238,6 +239,7 @@ export const Composer: FC<ComposerProps> = ({
   onExecutionHostChange,
   workAddress,
   onWorkAddressChange,
+  onWorkAddressBranchChange,
   armedOutgoingRelays,
   relaysMuted,
   onRelaysMutedChange,
@@ -701,6 +703,11 @@ export const Composer: FC<ComposerProps> = ({
               onInput={handleInput}
               onPaste={onPaste}
               placeholder={placeholder}
+              // Named, because the strip below now has a text field of its own
+              // (the branch, MAR-2694) and "the textbox" stopped being one
+              // thing. An input a reader cannot name is also an accessibility
+              // defect on its own terms.
+              aria-label="Message"
               disabled={disabled}
               rows={1}
               className="min-h-0 resize-none border-0 px-0 py-0 text-foreground shadow-none focus-visible:ring-0"
@@ -1087,6 +1094,7 @@ export const Composer: FC<ComposerProps> = ({
           disabled={disabled || selectionDisabled}
           onChange={onExecutionHostChange}
           onWorkAddressChange={onWorkAddressChange}
+          onWorkAddressBranchChange={onWorkAddressBranchChange}
         />
       </div>
       <p className="mt-1.5 text-center text-[10px] text-muted-foreground">

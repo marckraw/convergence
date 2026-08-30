@@ -14,6 +14,7 @@ export type {
   OpenRouterCredentialStatus,
   PiModelVisibilityPrefs,
   RemoteExecutionHostConnectionResult,
+  RemoteSessionPullRequest,
   RemoteSessionWorkspaceResult,
   RemoteExecutionHostConnectionState,
   RemoteExecutionHostProviderSummary,

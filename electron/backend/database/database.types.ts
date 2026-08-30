@@ -46,6 +46,11 @@ export interface SessionRow {
   execution_host_settled_seq: number
   /** Serialized `SessionWorkAddress`; null on a local row (MAR-2689). */
   work_address: string | null
+  /**
+   * The daemon's own `ExecutionSessionWorkspace`, encoded; null until it
+   * answers, and on every local row (MAR-2694).
+   */
+  reported_workspace: string | null
   created_at: string
   updated_at: string
 }

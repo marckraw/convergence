@@ -152,6 +152,9 @@ describe('an endpoint whose base url moves under a live host', () => {
       appSettings,
       credentials: { resolveToken: async (id: string) => `token-${id}` },
       fetch: routedFetch(),
+      // Not this suite's subject: named so the composition root cannot
+      // quietly lose the real one (MAR-2694 round 2).
+      onWorkspaceReported: () => {},
     })
   }
 
@@ -215,6 +218,9 @@ describe('an endpoint whose base url moves under a live host', () => {
       // edit is the address — the half the bug was about.
       credentials: { resolveToken: async (id: string) => `token-${id}` },
       fetch: routedFetch(),
+      // Not this suite's subject: named so the composition root cannot
+      // quietly lose the real one (MAR-2694 round 2).
+      onWorkspaceReported: () => {},
     })
 
     service = new SessionService(

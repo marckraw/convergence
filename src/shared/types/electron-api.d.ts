@@ -1,3 +1,4 @@
+import type { ExecutionSessionWorkspace } from '@mrck-labs/execution-host-protocol'
 import type { ProjectMcpVisibility } from './mcp.types'
 import type {
   CreatePromptLibraryInput,
@@ -898,6 +899,13 @@ interface SessionSummaryData {
   executionHost?: string
   /** Where a remote session works; null on a local one (MAR-2689). */
   workAddress?: SessionWorkAddressData | null
+  /**
+   * What the daemon said it actually did; null until it says anything
+   * (MAR-2694). The protocol's own type, not a mirror of it: this is the wire
+   * value the record stores verbatim, and a second local transcription of it
+   * would be a second opinion about what the machine said.
+   */
+  reportedWorkspace?: ExecutionSessionWorkspace | null
   continuationToken: string | null
   lastSequence: number
   createdAt: string
@@ -929,7 +937,13 @@ type SessionWorkAddressData =
       workingDirectory: string
       label: string
     }
-  | { mode: 'repository'; repository: string; label: string }
+  | {
+      mode: 'repository'
+      repository: string
+      /** Written at dispatch; null means the daemon names it (MAR-2694). */
+      branchName: string | null
+      label: string
+    }
   | { mode: 'unknown' }
 
 /** Mirrors the main process `RemoteProjectCatalog` (MAR-2689). */
@@ -2250,15 +2264,24 @@ type RemoteSessionWorkspaceResultData =
   | {
       ok: true
       info: {
-        workspace: {
-          repository: string
-          branchName: string
-          baseRef: string | null
-        } | null
-        prUrl: string | null
+        /** The protocol's own union, verbatim (MAR-2694). */
+        workspace: ExecutionSessionWorkspace | null
+        /** Decoded at the wire door, never collapsed (MAR-2718 round 2). */
+        pullRequest: RemoteSessionPullRequestData
       }
     }
   | { ok: false; message: string }
+
+/**
+ * The three answers a daemon snapshot can give about a pull request. `none` is
+ * the daemon's own explicit negative and the only one the panel may render as
+ * `None yet`; a missing field or an unusable shape is `unreadable` and says so
+ * (MAR-2718 round 2).
+ */
+type RemoteSessionPullRequestData =
+  | { kind: 'none' }
+  | { kind: 'url'; url: string }
+  | { kind: 'unreadable'; reason: string }
 
 interface RemoteExecutionHostConnectionResultData {
   ok: boolean

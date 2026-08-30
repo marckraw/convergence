@@ -1377,7 +1377,8 @@ describe('database', () => {
     // arrive on the far side exactly as written -- re-deriving it or dropping
     // it to unknown would both be the record losing what he chose.
     //
-    // Mutation: drop `work_address` from the projection, and this goes red.
+    // Mutation: drop `work_address` (or `reported_workspace`) from the
+    // projection, and this goes red.
     const dir = mkdtempSync(join(tmpdir(), 'convergence-rebuild-place-'))
     const dbPath = join(dir, 'legacy-place.sqlite')
     const address = JSON.stringify({
@@ -1385,6 +1386,18 @@ describe('database', () => {
       projectId: 'new-blok',
       workingDirectory: '/srv/projects/new-blok',
       label: 'Project new-blok',
+    })
+    // The daemon's own answer travels with it: two columns, two facts, and the
+    // derived projection has to carry a column added after it was written
+    // without anyone remembering to (MAR-2694).
+    const reported = JSON.stringify({
+      mode: 'project',
+      projectId: 'new-blok',
+      workingDirectory: '/srv/projects/new-blok',
+      origin: 'https://github.com/marckraw/new-blok.git',
+      originKey: 'github.com/marckraw/new-blok',
+      branchName: 'master',
+      environment: null,
     })
 
     try {
@@ -1424,6 +1437,7 @@ describe('database', () => {
           primary_surface TEXT NOT NULL DEFAULT 'conversation',
           execution_host TEXT NOT NULL DEFAULT 'local',
           work_address TEXT,
+          reported_workspace TEXT,
           created_at TEXT NOT NULL,
           updated_at TEXT NOT NULL
         );
@@ -1435,21 +1449,117 @@ describe('database', () => {
         .prepare(
           `INSERT INTO sessions (
              id, context_kind, project_id, provider_id, name, working_directory,
-             execution_host, work_address, created_at, updated_at
+             execution_host, work_address, reported_workspace, created_at, updated_at
            ) VALUES ('s-placed', 'project', 'p1', 'claude-code', 'placed',
-                     '/tmp/p1', 'little-monster', ?, '2026-01-01', '2026-01-02')`,
+                     '/tmp/p1', 'little-monster', ?, ?, '2026-01-01', '2026-01-02')`,
         )
-        .run(address)
+        .run(address, reported)
       legacy.close()
 
       const db = getDatabase(dbPath)
       expect(
         db
           .prepare(
-            `SELECT execution_host, work_address FROM sessions WHERE id = 's-placed'`,
+            `SELECT execution_host, work_address, reported_workspace
+               FROM sessions WHERE id = 's-placed'`,
           )
           .get(),
-      ).toEqual({ execution_host: 'little-monster', work_address: address })
+      ).toEqual({
+        execution_host: 'little-monster',
+        work_address: address,
+        reported_workspace: reported,
+      })
+    } finally {
+      closeDatabase()
+      resetDatabase()
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  it("adds the daemon's reported workspace to a database that predates it", () => {
+    // The additive migration, on a database in the modern shape so the rebuild
+    // is NOT owed -- otherwise the rebuild's own destination DDL would supply
+    // the column and this would pin nothing.
+    //
+    // Mutation: delete the `ensureSessionReportedWorkspaceColumn(database)`
+    // call in `getDatabase` and this goes red. Nothing is backfilled: the app
+    // never had the daemon's answer for these rows, and a default is not a
+    // known value (MAR-2694).
+    const dir = mkdtempSync(join(tmpdir(), 'convergence-reported-workspace-'))
+    const dbPath = join(dir, 'pre-reported-workspace.sqlite')
+
+    try {
+      const legacy = new Database(dbPath)
+      legacy.exec(`
+        CREATE TABLE projects (
+          id TEXT PRIMARY KEY,
+          name TEXT NOT NULL,
+          repository_path TEXT NOT NULL UNIQUE,
+          settings TEXT NOT NULL DEFAULT '{}',
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL
+        );
+
+        CREATE TABLE sessions (
+          id TEXT PRIMARY KEY,
+          context_kind TEXT NOT NULL DEFAULT 'project'
+            CHECK (context_kind IN ('project', 'global')),
+          project_id TEXT,
+          workspace_id TEXT,
+          provider_id TEXT NOT NULL,
+          model TEXT,
+          effort TEXT,
+          permission_config TEXT NOT NULL DEFAULT '{"preset":"ask"}',
+          continuation_token TEXT,
+          name TEXT NOT NULL,
+          status TEXT NOT NULL DEFAULT 'idle',
+          attention TEXT NOT NULL DEFAULT 'none',
+          working_directory TEXT NOT NULL,
+          context_window TEXT,
+          activity TEXT,
+          archived_at TEXT,
+          last_sequence INTEGER NOT NULL DEFAULT 0,
+          conversation_version INTEGER NOT NULL DEFAULT 2,
+          name_auto_generated INTEGER NOT NULL DEFAULT 0,
+          parent_session_id TEXT,
+          fork_strategy TEXT,
+          primary_surface TEXT NOT NULL DEFAULT 'conversation',
+          execution_host TEXT NOT NULL DEFAULT 'local',
+          work_address TEXT,
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL
+        );
+
+        INSERT INTO projects (id, name, repository_path, settings, created_at, updated_at)
+        VALUES ('p1', 'p', '/tmp/p1', '{}', '2026-01-01', '2026-01-01');
+
+        INSERT INTO sessions (
+          id, context_kind, project_id, provider_id, name, working_directory,
+          execution_host, created_at, updated_at
+        ) VALUES
+          ('s-remote', 'project', 'p1', 'claude-code', 'on a daemon', '/tmp/p1',
+           'little-monster', '2026-01-01', '2026-01-02'),
+          ('s-local', 'project', 'p1', 'claude-code', 'here', '/tmp/p1',
+           'local', '2026-01-01', '2026-01-02');
+      `)
+      legacy.close()
+
+      const db = getDatabase(dbPath)
+      expect(
+        (db.pragma('table_info(sessions)') as { name: string }[]).map(
+          (column) => column.name,
+        ),
+      ).toContain('reported_workspace')
+      expect(
+        db
+          .prepare(
+            'SELECT id, reported_workspace FROM sessions ORDER BY id ASC',
+          )
+          .all(),
+      ).toEqual([
+        { id: 's-local', reported_workspace: null },
+        { id: 's-remote', reported_workspace: null },
+      ])
     } finally {
       closeDatabase()
       resetDatabase()

@@ -49,9 +49,9 @@ import {
 } from 'lucide-react'
 import { formatConversationTotalDuration } from './conversation-total-duration.pure'
 import {
-  describeCloneableRepository,
-  describeWorkAddress,
-} from '@/shared/lib/work-address.pure'
+  describeRemotePullRequest,
+  resolveRemoteSessionDetails,
+} from './remote-session-details.pure'
 import {
   SpaceContextPanel,
   type SpaceContextAttemptView,
@@ -149,6 +149,29 @@ export const SessionView: FC = () => {
   const pullRequestError = session?.workspaceId
     ? (pullRequestErrorsByWorkspaceId[session.workspaceId] ?? null)
     : null
+  /**
+   * The remote rows, or null on a local session (MAR-2718).
+   *
+   * Null is what tells the panel to render its local `Branch` and `Pull
+   * request` rows, so the two readings are exclusive by construction rather
+   * than by two conditions that have to keep agreeing.
+   */
+  const remoteDetails =
+    session && isRemoteExecutionHost(session.executionHost)
+      ? resolveRemoteSessionDetails({
+          workAddress: session.workAddress,
+          recordedWorkspace: session.reportedWorkspace,
+          fetched: remoteWorkspace
+            ? remoteWorkspace.ok
+              ? {
+                  ok: true,
+                  workspace: remoteWorkspace.info.workspace,
+                  pullRequest: remoteWorkspace.info.pullRequest,
+                }
+              : { ok: false, message: remoteWorkspace.message }
+            : null,
+        })
+      : null
   const activityLabel = formatActivityLabel(session?.activity)
   const totalDurationLabel = useMemo(
     () => formatConversationTotalDuration(activeConversation),
@@ -404,7 +427,7 @@ export const SessionView: FC = () => {
                       )?.name ?? 'parent'}
                     </Button>
                   )}
-                  {isRemoteExecutionHost(session.executionHost) && (
+                  {remoteDetails ? (
                     <>
                       <SessionHeaderDetailRow
                         icon={<Cloud className="h-3.5 w-3.5" />}
@@ -420,56 +443,62 @@ export const SessionView: FC = () => {
                       */}
                       <SessionHeaderDetailRow
                         label="Works in"
-                        value={describeWorkAddress(session.workAddress)}
+                        value={remoteDetails.worksIn}
                       />
-                      {remoteWorkspace?.ok &&
-                        remoteWorkspace.info.workspace && (
-                          <>
-                            <SessionHeaderDetailRow
-                              label="Remote repository"
-                              value={describeCloneableRepository(
-                                remoteWorkspace.info.workspace.repository,
-                              )}
-                            />
-                            <SessionHeaderDetailRow
-                              icon={<GitBranch className="h-3.5 w-3.5" />}
-                              label="Remote branch"
-                              value={remoteWorkspace.info.workspace.branchName}
-                            />
-                          </>
-                        )}
-                      {remoteWorkspace?.ok && remoteWorkspace.info.prUrl && (
+                      {remoteDetails.remoteRepository && (
                         <SessionHeaderDetailRow
-                          icon={<GitPullRequest className="h-3.5 w-3.5" />}
-                          label="Remote pull request"
-                          value={remoteWorkspace.info.prUrl}
+                          label="Remote repository"
+                          value={remoteDetails.remoteRepository}
                         />
                       )}
-                      {remoteWorkspace && !remoteWorkspace.ok && (
+                      {remoteDetails.branch && (
+                        <SessionHeaderDetailRow
+                          icon={<GitBranch className="h-3.5 w-3.5" />}
+                          label="Branch"
+                          value={remoteDetails.branch}
+                        />
+                      )}
+                      {remoteDetails.requestedBranch && (
+                        <SessionHeaderDetailRow
+                          label="Branch requested"
+                          value={remoteDetails.requestedBranch}
+                        />
+                      )}
+                      <SessionHeaderDetailRow
+                        icon={<GitPullRequest className="h-3.5 w-3.5" />}
+                        label="Pull request"
+                        value={describeRemotePullRequest(
+                          remoteDetails.pullRequest,
+                        )}
+                      />
+                      {remoteDetails.unreadable && (
                         <SessionHeaderDetailRow
                           label="Remote workspace"
-                          value={remoteWorkspace.message}
+                          value={remoteDetails.unreadable}
                         />
                       )}
                     </>
+                  ) : (
+                    <>
+                      <SessionHeaderDetailRow
+                        icon={<GitBranch className="h-3.5 w-3.5" />}
+                        label="Branch"
+                        value={branchName ?? 'Unknown'}
+                      />
+                      <SessionHeaderDetailRow
+                        icon={<GitPullRequest className="h-3.5 w-3.5" />}
+                        label="Pull request"
+                        value={
+                          session.workspaceId
+                            ? formatPullRequestHeaderLabel(
+                                workspacePullRequest,
+                                pullRequestLoading,
+                              )
+                            : 'No workspace'
+                        }
+                      />
+                    </>
                   )}
-                  <SessionHeaderDetailRow
-                    icon={<GitBranch className="h-3.5 w-3.5" />}
-                    label="Branch"
-                    value={branchName ?? 'Unknown'}
-                  />
-                  <SessionHeaderDetailRow
-                    icon={<GitPullRequest className="h-3.5 w-3.5" />}
-                    label="Pull request"
-                    value={
-                      session.workspaceId
-                        ? formatPullRequestHeaderLabel(
-                            workspacePullRequest,
-                            pullRequestLoading,
-                          )
-                        : 'No workspace'
-                    }
-                  />
                   {activityLabel && (
                     <SessionHeaderDetailRow
                       label="Activity"

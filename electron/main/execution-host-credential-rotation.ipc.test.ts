@@ -170,6 +170,9 @@ describe('a daemon changing behind the settings dialog', () => {
       appSettings,
       credentials: { resolveToken: async (id: string) => tokens[id] ?? null },
       fetch: stub.fetchFn,
+      // Not this suite's subject: named so the composition root cannot
+      // quietly lose the real one (MAR-2694 round 2).
+      onWorkspaceReported: () => {},
     })
 
     // The real credentials service, with only the one method that reaches

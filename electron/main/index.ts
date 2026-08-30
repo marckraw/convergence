@@ -459,6 +459,8 @@ async function startApp(): Promise<void> {
     credentials: executionHostDaemonCredentials,
     onEventSeq: (sessionId, seq) =>
       sessionService.recordRemoteEventSeq(sessionId, seq),
+    onWorkspaceReported: (sessionId, workspace) =>
+      sessionService.recordReportedWorkspace(sessionId, workspace),
     debugSink,
   })
   // Build a host for every configured Endpoint, which primes each one's

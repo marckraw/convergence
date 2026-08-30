@@ -1,3 +1,4 @@
+import type { ExecutionSessionWorkspace } from '@mrck-labs/execution-host-protocol'
 import type { SessionDelta } from '../../session/conversation-item.types'
 import { ProviderSessionEmitter } from '../provider-session.emitter'
 import type {
@@ -55,6 +56,7 @@ import {
   parseRemoteExecutionHostStartResponse,
   parseRemoteSessionWorkspaceInfo,
   type RemoteSessionWorkspaceInfo,
+  type RemoteStartEcho,
   remoteExecutionHostReconnectDelayMs,
   unavailableProviderError,
   UNRESOLVED_DAEMON_CONFIGURATION,
@@ -154,6 +156,20 @@ export interface RemoteExecutionHostDeps {
    * Callers persist this to resume the stream after an app restart.
    */
   onEventSeq?: (sessionId: string, seq: number) => void
+  /**
+   * Called with the workspace the daemon says it materialised, the moment it
+   * says it (MAR-2694).
+   *
+   * The start response carries it from protocol 0.14 onward, so the record can
+   * hold the daemon's own answer from the first second rather than after a
+   * panel happens to open and fetch one. A host knows the workspace and nothing
+   * about records, so the write is the caller's -- the same shape as
+   * `onEventSeq`.
+   */
+  onWorkspaceReported?: (
+    sessionId: string,
+    workspace: ExecutionSessionWorkspace,
+  ) => void
   /**
    * Receives a redacted description of every wire event, as the local provider
    * adapters do for their own transports. Tracing is unconditional, as it is in
@@ -1183,6 +1199,14 @@ export class RemoteExecutionHost implements ProviderExecutionHost {
   }
 
   /** @internal Shared by RemoteSessionRun. */
+  notifyWorkspaceReported(
+    sessionId: string,
+    workspace: ExecutionSessionWorkspace,
+  ): void {
+    this.deps.onWorkspaceReported?.(sessionId, workspace)
+  }
+
+  /** @internal Shared by RemoteSessionRun. */
   recordDebug(entry: ProviderDebugEntry): void {
     this.debugSink.record(entry)
   }
@@ -1201,7 +1225,7 @@ export class RemoteExecutionHost implements ProviderExecutionHost {
       `/v0/execution/sessions/${encodeURIComponent(sessionId)}`,
       { method: 'GET' },
     )
-    return parseRemoteSessionWorkspaceInfo(snapshot)
+    return parseRemoteSessionWorkspaceInfo(snapshot, sessionId)
   }
 
   async oneShot(
@@ -1439,6 +1463,10 @@ class RemoteSessionRun {
     // wire that permits exactly one. A message that misdescribes its own cause
     // is read under pressure and believed (MAR-2582).
     let step: 'connection' | 'start' = 'connection'
+    // Held until the daemon's acceptance is settled, and consumed after it.
+    // What the daemon echoed is news about a run it is already holding, not
+    // part of deciding whether it took one (MAR-2694 round 2).
+    let echoed: RemoteStartEcho | null = null
     try {
       this.connection = await this.params.host.resolveConnection()
       if (!this.params.resume) {
@@ -1463,7 +1491,10 @@ class RemoteSessionRun {
             ),
           },
         )
-        parseRemoteExecutionHostStartResponse(response)
+        echoed = parseRemoteExecutionHostStartResponse(
+          response,
+          this.params.config.sessionId,
+        )
       }
     } catch (error) {
       const reason = describeRemoteExecutionHostFailure(error)
@@ -1492,9 +1523,55 @@ class RemoteSessionRun {
         ? `reattached to remote session after seq ${this.lastSeq}`
         : 'remote session start accepted by the daemon',
     })
+    if (echoed) this.consumeStartEcho(echoed)
     this.started = true
     await this.flushPendingCommands()
     await this.consumeEventStream()
+  }
+
+  /**
+   * What the daemon echoed with its acceptance, written onto the record
+   * (MAR-2694) -- outside the boundary that decides whether the start was
+   * refused.
+   *
+   * The call used to sit inside the start's own `try`, whose `catch` logs
+   * "remote session start refused", fails the session and returns before the
+   * event stream is opened. So a database write that threw, or a renderer
+   * broadcast behind it, stranded a run the daemon was already holding: the
+   * handle said failed, no stream was ever opened, and a retry would meet the
+   * daemon's 409 for a session id it had accepted. Acceptance is the daemon's
+   * answer; recording it is our consequence, and a consequence must not be
+   * able to retract the answer (MAR-2694 round 2).
+   *
+   * A throw here becomes a lifecycle entry and nothing else. Not swallowed:
+   * this is the record failing to learn where the session works, and a drop
+   * nobody can see is its own defect.
+   */
+  private consumeStartEcho(echoed: RemoteStartEcho): void {
+    if (echoed.workspace) {
+      try {
+        this.params.host.notifyWorkspaceReported(
+          this.params.config.sessionId,
+          echoed.workspace,
+        )
+      } catch (error) {
+        this.recordDebug('lifecycle', {
+          direction: 'in',
+          note: `workspace echo could not be recorded: ${describeRemoteExecutionHostFailure(error)}`,
+        })
+      }
+      return
+    }
+    if (echoed.unreadableWorkspaceReason) {
+      // Not a failure and not a silence: the session is running, and the one
+      // thing that must not happen is this passing unrecorded.
+      this.recordDebug('lifecycle', {
+        direction: 'in',
+        note:
+          'remote session start echoed a workspace this build cannot ' +
+          `read: ${echoed.unreadableWorkspaceReason}`,
+      })
+    }
   }
 
   private async consumeEventStream(): Promise<void> {

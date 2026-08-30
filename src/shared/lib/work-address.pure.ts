@@ -1,3 +1,5 @@
+import type { ExecutionSessionWorkspace } from '@mrck-labs/execution-host-protocol'
+
 /**
  * Where a remote session works, as the session records it (MAR-2689).
  *
@@ -35,6 +37,20 @@ export type SessionWorkAddress =
       mode: 'repository'
       /** The clone URL, already through `normalizeGitHubRemoteUrl`. */
       repository: string
+      /**
+       * The branch written down at dispatch, verbatim, or `null` for "let the
+       * daemon name it" (MAR-2694).
+       *
+       * Never derived. A branch name may come from a Linear ticket, a Jira
+       * one, or from nothing at all, so the only honest source is what was
+       * typed into the field -- and `null` is a real answer, not a missing
+       * one: it says the daemon picks, and the strip says so out loud rather
+       * than showing a name nobody chose.
+       *
+       * Absent on a row written before this shipped, which decodes to `null`
+       * and means the same thing those sessions got: the daemon named it.
+       */
+      branchName: string | null
       label: string
     }
   | { mode: 'unknown' }
@@ -193,13 +209,45 @@ function candidateWorkAddress(
     typeof value.repository === 'string' &&
     typeof value.label === 'string'
   ) {
+    const branchName = candidateBranchName(value.branchName)
+    if (branchName === REFUSED_BRANCH_NAME) return null
     return {
       mode: 'repository',
       repository: value.repository,
+      branchName,
       label: value.label,
     }
   }
   return null
+}
+
+/** What a `branchName` field that is neither absent nor a branch comes back as. */
+const REFUSED_BRANCH_NAME = Symbol('refused branch name')
+
+/**
+ * The branch a candidate repository address carries, or a refusal (MAR-2694).
+ *
+ * Three inputs are the same fact and all mean `null`: the field is missing,
+ * the field is `null`, and -- for a value this app itself wrote -- nothing
+ * else. Everything else is refused rather than repaired, `''` and `'   '`
+ * included, for the reason `namesAConcreteWorkPlace` refuses a blank
+ * repository: a blank branch reaching the wire would ask the daemon to
+ * materialise a branch with no name, and trimming one here would send a value
+ * the caller never typed. Exact or refused, never repaired.
+ *
+ * Blankness is refused rather than folded into `null` on purpose. `null` is
+ * the strip's *"branch: daemon-named"*, a statement the human can read and
+ * check; silently turning a caller's `'  '` into that statement would put a
+ * claim on screen that nobody made.
+ */
+function candidateBranchName(
+  value: unknown,
+): string | null | typeof REFUSED_BRANCH_NAME {
+  if (value === undefined || value === null) return null
+  if (typeof value !== 'string' || !statesSomething(value)) {
+    return REFUSED_BRANCH_NAME
+  }
+  return value
 }
 
 /** What an IPC argument claiming to be a work address turned out to be. */
@@ -239,8 +287,9 @@ export function decodeSessionWorkAddress(
     status: 'malformed',
     reason:
       'a work address is { mode: "project", projectId, workingDirectory, ' +
-      'label }, { mode: "repository", repository, label } with non-blank ' +
-      'strings throughout, or { mode: "unknown" }',
+      'label }, { mode: "repository", repository, label, branchName } with ' +
+      'non-blank strings throughout -- branchName may also be absent or null ' +
+      'for a daemon-named branch, but never blank -- or { mode: "unknown" }',
   }
 }
 
@@ -267,9 +316,137 @@ export function serializeSessionWorkAddress(
       return JSON.stringify({
         mode: 'repository',
         repository: address.repository,
+        branchName: address.branchName,
         label: address.label,
       })
     case 'unknown':
       return JSON.stringify({ mode: 'unknown' })
   }
+}
+
+/** What the strip says when nothing names a branch and the daemon will. */
+export const DAEMON_NAMED_BRANCH_LABEL = 'daemon-named'
+
+/**
+ * What the strip says about the branch a session being born is about to get
+ * (MAR-2694).
+ *
+ * Two readings, because an empty field and a filled one are two different facts
+ * and only one of them was chosen by a human. A written branch is shown in the
+ * form the live strip will read it back in -- `@ agent/2694` -- so the sentence
+ * before send and the sentence after are the same sentence. An empty field gets
+ * a claim about what will happen instead, in words: the daemon names it. Never
+ * a placeholder branch, never a guess dressed as a pick.
+ */
+export function describeBranchToBeCut(branchName: string | null): string {
+  return branchName === null
+    ? `branch: ${DAEMON_NAMED_BRANCH_LABEL}`
+    : describeBranchPhrase(branchName)
+}
+
+/** How a branch reads after a place: `marckraw/convergence @ agent/2694`. */
+export function describeBranchPhrase(branchName: string): string {
+  return `@ ${branchName}`
+}
+
+/**
+ * The workspace a daemon reported, in the daemon's own vocabulary.
+ *
+ * Aliased rather than restated so the strip, the session details and the record
+ * all read the one shape the daemon encodes -- a second local copy of this
+ * union is a second opinion about what the machine said.
+ */
+export type ReportedWorkspace = ExecutionSessionWorkspace
+
+/**
+ * Where a session works, as one statement built from both halves of the record
+ * (MAR-2694).
+ *
+ * The stated place and the daemon's answer are two facts and the statement
+ * carries both: what the strip said before send never changes, and what the
+ * machine did is only knowable after it says so. Reconciling them into one
+ * value would be this app deciding which of two true things to show; carrying
+ * the mismatch is the constitution's rule -- nothing that names where a session
+ * runs may lie, and a branch that was asked for and not granted is exactly the
+ * kind of thing a single line hides.
+ *
+ * Names, not sentences. The strip wants `marckraw/convergence @ agent/2694` and
+ * the details panel wants a `Branch` row reading `agent/2694`; one derivation
+ * of the facts with two formatters beats two derivations that agree until one
+ * is edited.
+ */
+export interface WorkPlaceStatement {
+  /** `marckraw/convergence`, `Project new-blok`, or `Unknown`. */
+  place: string
+  /** The branch that exists, or was asked for, or null when neither does. */
+  branchName: string | null
+  /** The branch that was asked for, when the daemon cut a different one. */
+  requestedBranchName: string | null
+  /**
+   * Whether this place has a branch to speak of at all, whoever named it.
+   *
+   * True for an errand with nothing written down and nothing reported yet: the
+   * honest thing to say is that the daemon will name one. False for a residency
+   * that has not reported its HEAD -- there is no branch fact yet and inventing
+   * "daemon-named" for it would claim a materialisation that never happens.
+   */
+  namesABranch: boolean
+}
+
+export function statedWorkPlace(
+  address: SessionWorkAddress | null | undefined,
+  reported: ReportedWorkspace | null | undefined,
+): WorkPlaceStatement {
+  const requested = requestedBranchName(address, reported)
+  // The daemon's answer wins over the request, always: it is the branch that
+  // exists. What was asked for survives beside it only when the two differ,
+  // because "asked for main, got main" is one fact said twice.
+  const reportedBranch = reported?.branchName ?? null
+
+  return {
+    place: describeWorkAddress(address),
+    branchName: reportedBranch ?? requested,
+    requestedBranchName:
+      reportedBranch !== null &&
+      requested !== null &&
+      requested !== reportedBranch
+        ? requested
+        : null,
+    namesABranch:
+      reportedBranch !== null ||
+      requested !== null ||
+      address?.mode === 'repository',
+  }
+}
+
+/**
+ * The branch a residency was asked for but did not get, or the one an errand
+ * wrote down (MAR-2694).
+ *
+ * The protocol reports a residency's `requestedBranchName` for exactly this
+ * reason; an errand has no such field, and does not need one -- what was asked
+ * is on our own record, in the address. Either way it is the same question, so
+ * it is asked once, here, and the two sources feed it.
+ */
+function requestedBranchName(
+  address: SessionWorkAddress | null | undefined,
+  reported: ReportedWorkspace | null | undefined,
+): string | null {
+  if (reported?.mode === 'project') return reported.requestedBranchName ?? null
+  if (address?.mode === 'repository') return address.branchName
+  return null
+}
+
+/**
+ * The branch phrase a live session's strip and detail rows read (MAR-2694).
+ *
+ * `null` when the place names no branch at all -- a residency whose HEAD the
+ * daemon has not reported -- so a surface can leave the row out rather than
+ * print a word for a fact nobody has.
+ */
+export function describeStatedBranch(
+  statement: WorkPlaceStatement,
+): string | null {
+  if (!statement.namesABranch) return null
+  return statement.branchName ?? DAEMON_NAMED_BRANCH_LABEL
 }

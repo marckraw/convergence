@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { createConsoleDebugSink, noopDebugSink } from './provider-debug-sink'
 import type { ProviderDebugEntry } from './provider-debug.types'
 
@@ -25,5 +25,26 @@ describe('provider-debug sinks', () => {
     const parsed = JSON.parse(lines[0]!)
     expect(parsed.method).toBe('item/started')
     expect(parsed.providerId).toBe('codex')
+  })
+
+  /**
+   * The no-throw contract belongs to the interface, so it holds for every sink
+   * and not only for the one the app happens to build (MAR-2694 round 2). This
+   * one's default writer is `process.stderr.write`, which throws on a closed or
+   * broken pipe -- and its callers are the same fire-and-forget paths, where a
+   * throw skips the work being described.
+   *
+   * Mutation: call `writeLine(serializeEntry(entry))` directly in
+   * `createConsoleDebugSink` and this goes red.
+   */
+  it('consoleDebugSink does not throw when its writer does', () => {
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const sink = createConsoleDebugSink(() => {
+      throw new Error('broken pipe')
+    })
+
+    expect(() => sink.record(ENTRY)).not.toThrow()
+    expect(consoleError).toHaveBeenCalledTimes(1)
+    consoleError.mockRestore()
   })
 })

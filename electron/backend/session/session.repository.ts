@@ -1,5 +1,7 @@
 import type Database from 'better-sqlite3'
+import type { ExecutionSessionWorkspace } from '@mrck-labs/execution-host-protocol'
 import type { SessionRow } from '../database/database.types'
+import { serializeReportedWorkspace } from './reported-workspace.pure'
 import { serializeSessionPermissionConfig } from '../provider/session-permissions.pure'
 import {
   serializeSessionWorkAddress,
@@ -208,5 +210,55 @@ export class SessionRepository {
          WHERE id = ? AND execution_host_last_seq < ?`,
       )
       .run(seq, id, seq)
+  }
+
+  /**
+   * Records what the daemon said it actually did, from the start response
+   * (MAR-2694).
+   *
+   * Unconditional, because this door is the authoritative one: the start
+   * response is the daemon describing the workspace it materialised for this
+   * session, in the beat it accepted it. `updated_at` is deliberately left
+   * alone -- this is the record learning a fact that was already true, not the
+   * session changing.
+   *
+   * Its pair below fills only an absence. The two used to be one blind
+   * `UPDATE` whose rule was "the newest answer wins", which is a rule about
+   * arrival order and not about authority: a snapshot fetch that began before
+   * the start landed, or came back with an older view, durably overwrote what
+   * the start had recorded, and no read-side guard can undo that because the
+   * record itself is what got replaced. Precedence belongs in the write
+   * (MAR-2694 round 2).
+   */
+  setReportedWorkspace(id: string, workspace: ExecutionSessionWorkspace): void {
+    this.db
+      .prepare('UPDATE sessions SET reported_workspace = ? WHERE id = ?')
+      .run(serializeReportedWorkspace(workspace), id)
+  }
+
+  /**
+   * Records a workspace read from a session snapshot, and only onto a record
+   * that has none (MAR-2694 round 2).
+   *
+   * The fetch door exists for the sessions the start door could not fill: a
+   * daemon predating the start-response echo, or a session born before this
+   * shipped. It is a filler, never a corrector, and `WHERE reported_workspace
+   * IS NULL` is that sentence in SQL -- the ordering of two answers cannot
+   * change which one the record ends on.
+   *
+   * @returns whether this fetch was the one that filled the record.
+   */
+  fillMissingReportedWorkspace(
+    id: string,
+    workspace: ExecutionSessionWorkspace,
+  ): boolean {
+    const result = this.db
+      .prepare(
+        `UPDATE sessions
+         SET reported_workspace = ?
+         WHERE id = ? AND reported_workspace IS NULL`,
+      )
+      .run(serializeReportedWorkspace(workspace), id)
+    return result.changes > 0
   }
 }

@@ -137,6 +137,9 @@ describe('remote execution hosts, one per endpoint', () => {
       // machine's would present a token the other daemon issued.
       credentials: { resolveToken: async (id: string) => `token-${id}` },
       fetch: routedFetch(),
+      // Not this suite's subject: named so the composition root cannot
+      // quietly lose the real one (MAR-2694 round 2).
+      onWorkspaceReported: () => {},
     })
 
     service = new SessionService(
@@ -256,7 +259,10 @@ describe('remote execution hosts, one per endpoint', () => {
     ])
     expect(daemonA.snapshotRequests).toEqual([])
     expect(info.workspace?.branchName).toBe('convergence/b')
-    expect(info.prUrl).toBe('https://github.com/acme/repo/pull/2')
+    expect(info.pullRequest).toEqual({
+      kind: 'url',
+      url: 'https://github.com/acme/repo/pull/2',
+    })
   })
 
   it('refuses a workspace read for an endpoint that is gone rather than asking anywhere', async () => {

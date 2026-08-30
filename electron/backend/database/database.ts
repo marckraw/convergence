@@ -56,6 +56,7 @@ function buildSessionsTableSql(
       execution_host_last_seq INTEGER NOT NULL DEFAULT 0,
       execution_host_settled_seq INTEGER NOT NULL DEFAULT 0,
       work_address TEXT,
+      reported_workspace TEXT,
       created_at TEXT NOT NULL DEFAULT (datetime('now')),
       updated_at TEXT NOT NULL DEFAULT (datetime('now')),
       FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
@@ -1412,6 +1413,38 @@ function ensureSessionWorkAddressColumn(database: Database.Database): void {
 }
 
 /**
+ * The daemon's own answer about where a session worked (MAR-2694).
+ *
+ * `work_address` beside it holds what the strip *stated* before send; this
+ * holds what the machine reported back after: the branch it actually cut, the
+ * worktree it made, the checkout's HEAD for a residency, and the branch that
+ * was asked for when it differs from the one it got. Two columns because they
+ * are two facts and either can be true without the other -- a session can be
+ * born with a place and never materialise one, and a pre-era row reports a
+ * workspace while its address stays honestly unknown.
+ *
+ * Additive and NOT backfilled, which is the whole of what can be said here. A
+ * default is not a known value: the app never had the daemon's answer for the
+ * rows that predate this column, and re-asking every past session's daemon at
+ * migration time would put today's answer -- or today's silence -- on a row
+ * that described something else. The rows that can still be filled fill
+ * themselves, from the first workspace fetch a live session makes.
+ *
+ * One statement, so there is no gap for an interrupt to fall into: unlike
+ * `work_address` there is no second half owed, so the `ALTER TABLE` is the
+ * whole migration and a boot that dies mid-way leaves either the old shape or
+ * the new one.
+ */
+function ensureSessionReportedWorkspaceColumn(
+  database: Database.Database,
+): void {
+  if (getTableColumnNames(database, 'sessions').has('reported_workspace')) {
+    return
+  }
+  database.exec('ALTER TABLE sessions ADD COLUMN reported_workspace TEXT')
+}
+
+/**
  * Endpoints become plural, and the sessions that ran on one say which
  * (MAR-2620).
  *
@@ -1837,6 +1870,7 @@ export function getDatabase(dbPath?: string): Database.Database {
     // After the session columns, never before: the backfill reads
     // `execution_host` to tell a remote row from a local one.
     ensureSessionWorkAddressColumn(database)
+    ensureSessionReportedWorkspaceColumn(database)
     // After the session columns, never before: the backfill rewrites
     // `execution_host`, which a database older than the remote era lacks.
     ensureExecutionHostEndpoints(database)

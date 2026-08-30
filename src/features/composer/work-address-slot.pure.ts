@@ -5,9 +5,13 @@ import {
   type RemoteProjectCatalogState,
 } from '@/entities/session'
 import {
+  describeBranchPhrase,
+  describeBranchToBeCut,
   describeCloneableRepository,
   describeRemoteProjectPlace,
-  describeWorkAddress,
+  describeStatedBranch,
+  statedWorkPlace,
+  type ReportedWorkspace,
   type SessionWorkAddress,
 } from '@/shared/lib/work-address.pure'
 import type { ExecutionBarView } from './execution-bar.pure'
@@ -70,9 +74,35 @@ export type WorkAddressSlotView =
       /** Null when nothing could be preselected and he has picked nothing. */
       selectedId: string | null
       address: SessionWorkAddress | null
+      /**
+       * The branch field, present only for the one mode that has a branch to
+       * write (MAR-2694). Null in Project mode: a residency runs on the
+       * checkout's own HEAD, so a field there would be a control with nothing
+       * to control.
+       */
+      branch: BranchFieldView | null
       notice: string | null
     }
-  | { mode: 'settled'; label: string }
+  | {
+      mode: 'settled'
+      /** The place and the branch it works on: `marckraw/repo @ agent/2694`. */
+      label: string
+      /** The branch that was asked for, when the daemon cut another one. */
+      requestedBranch: string | null
+    }
+
+/**
+ * The branch field and the sentence beside it (MAR-2694).
+ *
+ * `value` is what he typed, untouched -- the field is a controlled input and
+ * the view is what it renders. `statement` is what the strip says will happen,
+ * which is a different thing from the field's text: an empty field is not an
+ * empty branch, it is the daemon naming one, and the strip says so in words.
+ */
+export interface BranchFieldView {
+  value: string
+  statement: string
+}
 
 export interface WorkAddressSlotInput {
   /** The machine, resolved first: the place is a fact *about* that machine. */
@@ -82,8 +112,31 @@ export interface WorkAddressSlotInput {
   localRepository: LocalRepositoryState
   /** The last place he picked, honoured only while it is still offered. */
   selectedId: string | null
+  /**
+   * What he typed into the branch field, verbatim (MAR-2694). Read only in
+   * Repository mode; a draft left behind by a mode switch never reaches the
+   * wire, because the address that carries it is only built there.
+   */
+  branchDraft: string
   /** What a live session recorded, for the settled reading. */
   recordedAddress: SessionWorkAddress | null | undefined
+  /** What the daemon reported back for a live session, when it has (MAR-2694). */
+  reportedWorkspace: ReportedWorkspace | null | undefined
+}
+
+/**
+ * The branch a typed field names, or `null` for "the daemon names it"
+ * (MAR-2694).
+ *
+ * Emptiness is decided by trimming and the value is never trimmed, which is the
+ * same split `namesAConcreteWorkPlace` already makes: a field holding only
+ * spaces has nothing written in it, and a field holding `' agent/x '` has
+ * something written in it that this app has no business editing. Exact or
+ * refused, never repaired -- and the decoder at the main-process door refuses
+ * a blank one by name, so the two ends agree about what "written down" means.
+ */
+export function branchNameFromDraft(draft: string): string | null {
+  return draft.trim().length > 0 ? draft : null
 }
 
 /**
@@ -109,9 +162,17 @@ export function resolveWorkAddressSlot(
   if (isLocalExecutionHost(bar.hostId)) return { mode: 'hidden' }
 
   if (bar.mode === 'settled') {
+    const statement = statedWorkPlace(
+      input.recordedAddress,
+      input.reportedWorkspace,
+    )
+    const branch = describeStatedBranch(statement)
     return {
       mode: 'settled',
-      label: describeWorkAddress(input.recordedAddress),
+      label: branch
+        ? `${statement.place} ${describeBranchPhrase(branch)}`
+        : statement.place,
+      requestedBranch: statement.requestedBranchName,
     }
   }
 
@@ -142,6 +203,7 @@ export function resolveWorkAddressSlot(
       },
     }),
   )
+  const branchName = branchNameFromDraft(input.branchDraft)
   if (localRepository) {
     choices.push({
       id: REPOSITORY_WORK_ADDRESS_CHOICE_ID,
@@ -149,6 +211,7 @@ export function resolveWorkAddressSlot(
       address: {
         mode: 'repository',
         repository: localRepository,
+        branchName,
         label: describeCloneableRepository(localRepository),
       },
     })
@@ -190,6 +253,15 @@ export function resolveWorkAddressSlot(
     choices,
     selectedId: preselected?.id ?? null,
     address: preselected?.address ?? null,
+    // Read off the preselected address rather than off the choice id, so the
+    // field appears for exactly the mode whose address can carry a branch.
+    branch:
+      preselected?.address.mode === 'repository'
+        ? {
+            value: input.branchDraft,
+            statement: describeBranchToBeCut(branchName),
+          }
+        : null,
     notice,
   }
 }

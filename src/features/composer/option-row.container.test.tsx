@@ -791,7 +791,7 @@ describe('the option row obeys the strip (MAR-2682)', () => {
     // "is there a sentence" rather than "are there options" would have made
     // this fix silently take the composer away.
     expect(screen.getByRole('button', { name: 'Send message' })).toBeDisabled()
-    fireEvent.change(screen.getByRole('textbox'), {
+    fireEvent.change(screen.getByRole('textbox', { name: 'Message' }), {
       target: { value: 'go' },
     })
     expect(

@@ -21,6 +21,8 @@ interface ExecutionBarProps {
   disabled: boolean
   onChange: (hostId: string) => void
   onWorkAddressChange: (choiceId: string) => void
+  /** What he typed into the branch field, verbatim (MAR-2694). */
+  onWorkAddressBranchChange: (branch: string) => void
 }
 
 /**
@@ -48,6 +50,7 @@ export const ExecutionBar: FC<ExecutionBarProps> = ({
   disabled,
   onChange,
   onWorkAddressChange,
+  onWorkAddressBranchChange,
 }) => {
   if (view.mode === 'hidden') return null
 
@@ -86,6 +89,7 @@ export const ExecutionBar: FC<ExecutionBarProps> = ({
         view={workAddress}
         disabled={disabled}
         onChange={onWorkAddressChange}
+        onBranchChange={onWorkAddressBranchChange}
       />
     </div>
   )

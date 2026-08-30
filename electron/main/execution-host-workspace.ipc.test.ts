@@ -139,6 +139,9 @@ describe('the executionHost:getSessionWorkspace ipc handler', () => {
       appSettings,
       credentials: { resolveToken: async (id: string) => `token-${id}` },
       fetch: routedFetch(),
+      // The wire `main/index.ts` builds, built the same way here (MAR-2694).
+      onWorkspaceReported: (sessionId, workspace) =>
+        service.recordReportedWorkspace(sessionId, workspace),
     })
 
     service = new SessionService(
@@ -195,7 +198,10 @@ describe('the executionHost:getSessionWorkspace ipc handler', () => {
 
     const result = (await handler?.({}, sessionId)) as {
       ok: boolean
-      info?: { workspace: { branchName: string } | null; prUrl: string | null }
+      info?: {
+        workspace: { branchName: string } | null
+        pullRequest: { kind: string; url?: string; reason?: string }
+      }
       message?: string
     }
 
@@ -207,7 +213,50 @@ describe('the executionHost:getSessionWorkspace ipc handler', () => {
     expect(daemonA.snapshotRequests).toEqual([])
     expect(result.ok).toBe(true)
     expect(result.info?.workspace?.branchName).toBe('convergence/b')
-    expect(result.info?.prUrl).toBe('https://github.com/acme/repo/pull/2')
+    expect(result.info?.pullRequest).toEqual({
+      kind: 'url',
+      url: 'https://github.com/acme/repo/pull/2',
+    })
+  })
+
+  /**
+   * The decoded reading crosses the IPC boundary as a reading (MAR-2718 round
+   * 2). The renderer is the surface that may say `None yet`, so what it
+   * receives has to be able to tell the daemon's negative from silence -- and
+   * this handler is the only thing between the two.
+   *
+   * A snapshot with no `prUrl` at all, which is the shape a `typeof` test
+   * turned into the negative.
+   *
+   * Mutation: restore the non-string-to-`null` fallback in
+   * `parseRemoteSessionWorkspaceInfo` and this goes red.
+   */
+  it('hands the renderer a reading it can tell from the daemon’s own negative', async () => {
+    const sessionId = createSessionOn(DAEMON_B.id, 'on daemon b')
+    daemonB.setSessionSnapshot(sessionId, {
+      workspace: {
+        repository: 'git@github.com:acme/repo.git',
+        branchName: 'convergence/b',
+        baseRef: 'main',
+      },
+    })
+
+    const result = (await handlers.get('executionHost:getSessionWorkspace')?.(
+      {},
+      sessionId,
+    )) as {
+      ok: boolean
+      info?: {
+        workspace: { branchName: string } | null
+        pullRequest: { kind: string; reason?: string }
+      }
+    }
+
+    expect(result.ok).toBe(true)
+    expect(result.info?.pullRequest.kind).toBe('unreadable')
+    expect(result.info?.pullRequest.reason).toBeTruthy()
+    // The workspace half of the same snapshot is untouched by it.
+    expect(result.info?.workspace?.branchName).toBe('convergence/b')
   })
 
   it('reports the missing endpoint rather than asking the first one', async () => {
