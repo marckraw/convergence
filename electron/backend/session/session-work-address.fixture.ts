@@ -21,6 +21,9 @@ import {
 export const TEST_REMOTE_WORK_ADDRESS: SessionWorkAddress = {
   mode: 'repository',
   repository: 'git@github.com:acme/repo.git',
+  // No branch written down, so no `branchName` key reaches the wire and the
+  // bytes stay exactly what they were before C2 (MAR-2694).
+  branchName: null,
   label: 'acme/repo',
 }
 

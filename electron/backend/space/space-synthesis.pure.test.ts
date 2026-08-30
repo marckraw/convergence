@@ -47,6 +47,7 @@ const promptInput: SpaceSynthesisPromptInput = {
         primarySurface: 'conversation',
         executionHost: 'local',
         workAddress: null,
+        reportedWorkspace: null,
         continuationToken: null,
         lastSequence: 1,
         createdAt: '2026-01-01T00:00:00.000Z',

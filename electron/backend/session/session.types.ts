@@ -1,5 +1,7 @@
+import type { ExecutionSessionWorkspace } from '@mrck-labs/execution-host-protocol'
 import type { SessionRow } from '../database/database.types'
 import { parseExecutionHostId } from '../execution-host-endpoint/execution-host-endpoint.pure'
+import { parseReportedWorkspace } from './reported-workspace.pure'
 import {
   parseSessionWorkAddress,
   type SessionWorkAddress,
@@ -126,6 +128,12 @@ export interface SessionSummary {
    * the record already names.
    */
   workAddress: SessionWorkAddress | null
+  /**
+   * What the daemon said it actually did, once it has said anything
+   * (MAR-2694). Null on a local session, and on a remote one until the machine
+   * answers -- the record's silence, never a guess standing in for it.
+   */
+  reportedWorkspace: ExecutionSessionWorkspace | null
   continuationToken: string | null
   lastSequence: number
   createdAt: string
@@ -260,6 +268,7 @@ export function sessionSummaryFromRow(row: SessionRow): SessionSummary {
     primarySurface: parsePrimarySurface(row.primary_surface),
     executionHost: parseExecutionHostId(row.execution_host),
     workAddress: parseSessionWorkAddress(row.work_address),
+    reportedWorkspace: parseReportedWorkspace(row.reported_workspace),
     continuationToken: row.continuation_token,
     lastSequence: row.last_sequence ?? 0,
     createdAt: row.created_at,
