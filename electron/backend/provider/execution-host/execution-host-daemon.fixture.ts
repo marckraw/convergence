@@ -69,6 +69,27 @@ export interface StubDaemon {
   setSessionSnapshot: (sessionId: string, snapshot: unknown) => void
   /** Session ids whose snapshot this daemon was asked for, in order. */
   snapshotRequests: string[]
+  /**
+   * The body `GET /v0/projects` answers with (MAR-2689). Two daemons in one
+   * test must offer different Projects, or "the slot asked the machine the
+   * strip names" cannot be told from "the slot asked something".
+   */
+  setProjects: (body: unknown) => void
+  /** Makes `/v0/projects` fail, the way a daemon behind a bad proxy does. */
+  setProjectsStatus: (status: number) => void
+  /**
+   * Answers `/v0/projects` from this function instead of the fixed body, so a
+   * test can decide when each read lands (MAR-2689).
+   *
+   * Two reads overlapping is the only way to prove a slow answer cannot
+   * overwrite a newer one's, and which of them finishes first cannot be left to
+   * a sleep. The responder is handed the call number, one-based.
+   */
+  setProjectsResponder: (
+    responder: ((call: number) => Promise<unknown>) | null,
+  ) => void
+  /** How many times this daemon was asked where it can work. */
+  projectsRequests: number
 }
 
 /**
@@ -93,6 +114,10 @@ export function createStubDaemon(): StubDaemon {
     envelope: Record<string, unknown>
   }> = []
   const startedSessionIds = new Set<string>()
+  const projectsRequests: { count: number } = { count: 0 }
+  let projectsBody: unknown = { projects: [] }
+  let projectsStatus = 200
+  let projectsResponder: ((call: number) => Promise<unknown>) | null = null
   const eventStreamLastEventIds: Array<string | null> = []
   const healthRequests: Array<{ authorization: string | null }> = []
   const snapshotRequests: string[] = []
@@ -150,6 +175,17 @@ export function createStubDaemon(): StubDaemon {
         status: 200,
         headers: { 'Content-Type': 'application/json' },
       })
+    }
+
+    if (method === 'GET' && url.endsWith('/v0/projects')) {
+      projectsRequests.count += 1
+      if (projectsStatus !== 200) {
+        return jsonResponse({ error: 'projects unavailable' }, projectsStatus)
+      }
+      if (projectsResponder) {
+        return jsonResponse(await projectsResponder(projectsRequests.count))
+      }
+      return jsonResponse(projectsBody)
     }
 
     if (url.endsWith('/v0/meta')) {
@@ -295,6 +331,18 @@ export function createStubDaemon(): StubDaemon {
     },
     setEventsStatus(status) {
       eventsStatus = status
+    },
+    setProjects(body) {
+      projectsBody = body
+    },
+    setProjectsStatus(status) {
+      projectsStatus = status
+    },
+    setProjectsResponder(responder) {
+      projectsResponder = responder
+    },
+    get projectsRequests() {
+      return projectsRequests.count
     },
   }
 }
