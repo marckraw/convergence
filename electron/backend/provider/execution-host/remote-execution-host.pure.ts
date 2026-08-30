@@ -1,4 +1,5 @@
 import type { ProviderDescriptor } from '../provider.types'
+import type { EndpointHandshakeResult } from './execution-host-handshake.types'
 import type { ProviderCatalogEntry } from '../provider-catalog.types'
 import type {
   ExecutionHostProviderCapabilities,
@@ -26,12 +27,85 @@ export const UNRESOLVED_DAEMON_CONFIGURATION = '\u0000unresolved'
  * since stopped honouring is not true of that daemon either -- so two
  * configurations are the same one only when both halves match. Anything left
  * out here is a way for an answer to outlive the machine it describes.
+ *
+ * A NUL join is safe *here* and nowhere else in this file (MAR-2689 round 10),
+ * and it is safe on a one-sided rule: only the FIRST component of a NUL join
+ * has to be NUL-free, because the first NUL in the result is then always the
+ * separator and every byte after it belongs to the second component. The base
+ * URL is that first component and it earns the rule by normalisation --
+ * `normalizeExecutionHostBaseUrl` returns `new URL(...).href`, and the WHATWG
+ * parser percent-encodes a NUL in the path, query or fragment and refuses a
+ * host that carries one -- so a stored base URL is NUL-free and non-empty.
+ * That alone makes the fingerprint injective, and it keeps
+ * `UNRESOLVED_DAEMON_CONFIGURATION` out of reach: a real fingerprint starts
+ * with a non-empty base URL, so it never begins with a NUL.
+ *
+ * The token's bytes are not constrained here and must not be: past the trim
+ * and the empty-value refusal at `setToken`, a daemon may issue whatever bytes
+ * it likes, and MAR-2642 stores the token as hex precisely so that whatever it
+ * contains -- control characters and NUL included -- stays storable and is
+ * never inspected. The argument above needs no NUL-free guarantee from the
+ * token at all. The capability set below is a list whose elements have no such
+ * guarantee on either side, which is why it is encoded instead of joined.
  */
 export function daemonConfigurationFingerprint(
   connection: RemoteExecutionHostConnection | null,
 ): string {
   if (!connection) return UNRESOLVED_DAEMON_CONFIGURATION
   return `${connection.baseUrl}\u0000${connection.token}`
+}
+
+/**
+ * The capability set of a daemon that never answered its handshake, so that a
+ * machine that has gone quiet can never be mistaken for one that answered and
+ * offers nothing.
+ *
+ * JSON's encoding of "no answer", and not a capability-shaped string, because
+ * no advertised set can produce it: a set is encoded as an array and an array's
+ * encoding begins with `[`. The round-8 sentinel was `'\u0000unknown'`, which
+ * is exactly what a machine advertising the single capability id
+ * `\u0000unknown` fingerprinted to -- and the protocol accepts any non-empty
+ * string as an id, so that machine is one a daemon could actually be
+ * (MAR-2689 round 9).
+ */
+export const UNKNOWN_DAEMON_CAPABILITIES = JSON.stringify(null)
+
+/**
+ * What a machine says it can do, as one comparable value (MAR-2689 round 8).
+ *
+ * The sibling of `daemonConfigurationFingerprint`, and the second input to an
+ * Endpoint's configuration epoch. Identity is not the only thing an answer
+ * derived from a daemon depends on: a machine upgraded at the same address and
+ * under the same credential can stop advertising `projects.v1`, and a listing
+ * read while it did is not true of the machine that is there now. The
+ * configuration fingerprint cannot see that -- neither half of it moved -- so
+ * this is the half that can.
+ *
+ * A *set*, not a list: the order a daemon serialises its capabilities in says
+ * nothing about what it can do, and counting a reordering as a change would put
+ * every catalog on that machine out of force for nothing. Order is handled by
+ * the sort here; duplicates cannot arrive at all, because the protocol decoder
+ * hands back `[...new Set(raw.capabilities)]`.
+ *
+ * Encoded, never joined (MAR-2689 round 9). A capability id is an external
+ * string the protocol constrains only to being non-empty, so joining the sorted
+ * ids on a separator is joining them on a character an id may contain:
+ * `['projects.v1', 'x']` and `['projects.v1\u0000x']` would be one value while
+ * meaning opposite things, and a crafted `/health` could cross the line
+ * `remoteProjectsCapability` draws without moving this Endpoint's epoch --
+ * leaving the strip offering a place the start door had already begun refusing.
+ * `JSON.stringify` of the sorted array escapes what a separator cannot, so
+ * different sets are different values.
+ *
+ * Nothing here is secret -- `/health` is unauthenticated -- but the value never
+ * leaves the main process either: what crosses to the renderer is the integer
+ * the epoch ledger counts from it.
+ */
+export function daemonCapabilitiesFingerprint(
+  handshake: EndpointHandshakeResult | null,
+): string {
+  if (!handshake) return UNKNOWN_DAEMON_CAPABILITIES
+  return JSON.stringify([...handshake.executionProtocolCapabilities].sort())
 }
 
 /**

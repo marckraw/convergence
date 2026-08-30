@@ -74,7 +74,7 @@ function metaFor(providers: unknown[]): unknown {
   return { providers }
 }
 
-describe('the provider:getAll ipc handler', () => {
+describe('the per-machine ipc doors', () => {
   let db: Database.Database
   let tempDir: string
   let daemonA: StubDaemon
@@ -192,6 +192,168 @@ describe('the provider:getAll ipc handler', () => {
     expect(handler).toBeTypeOf('function')
     return (await handler?.({}, executionHostId)) as ProviderCatalog
   }
+
+  /**
+   * Where one machine can work (MAR-2689). Mounted beside `provider:getAll`
+   * and pinned the same way: the service suite proves the routing and stays
+   * green if this handler stops passing the argument along, and the renderer
+   * suites stub the bridge entirely -- so a door that answered about the wrong
+   * daemon, or was never mounted at all, would leave every other gate passing
+   * while the strip offered one machine's Projects under another's name.
+   */
+  async function getProjects(executionHostId?: unknown): Promise<{
+    executionHostId: string
+    supported: boolean
+    projects: { id: string }[]
+    unreachableReason: string | null
+  }> {
+    const handler = handlers.get('executionHost:getProjects')
+    expect(handler).toBeTypeOf('function')
+    return (await handler?.({}, executionHostId)) as {
+      executionHostId: string
+      supported: boolean
+      projects: { id: string }[]
+      unreachableReason: string | null
+    }
+  }
+
+  it('asks the endpoint it was given where it can work', async () => {
+    daemonB.setProjects({
+      projects: [
+        {
+          id: 'new-blok',
+          name: 'new-blok',
+          workingDirectory: '/srv/projects/new-blok',
+        },
+      ],
+    })
+    daemonA.setProjects({
+      projects: [
+        { id: 'wrong', name: 'wrong', workingDirectory: '/srv/wrong' },
+      ],
+    })
+
+    const catalog = await getProjects(DAEMON_B.id)
+
+    expect(catalog.executionHostId).toBe(DAEMON_B.id)
+    expect(catalog.projects.map((project) => project.id)).toEqual(['new-blok'])
+    // The other daemon was not asked at all: a door that answered from
+    // whichever host was configured first would list `wrong` here.
+    expect(daemonA.projectsRequests).toBe(0)
+  })
+
+  it('answers for this machine without asking any daemon', async () => {
+    const catalog = await getProjects('local')
+
+    expect(catalog).toEqual({
+      executionHostId: 'local',
+      supported: false,
+      projects: [],
+      unreachableReason: null,
+    })
+    expect(daemonA.projectsRequests + daemonB.projectsRequests).toBe(0)
+  })
+
+  /**
+   * The real `session:create` handler, which is the only place a work address
+   * arriving over IPC is decoded (MAR-2689).
+   *
+   * The preload bridge types the field `unknown` and says main decodes it; for
+   * one run it did not, and a probe's `{mode:'repository', repository:42}` was
+   * persisted verbatim and read back as no place at all. The service suite
+   * cannot see this: it is handed a typed object. Only the handler can.
+   */
+  async function createSession(input: Record<string, unknown>): Promise<{
+    id: string
+    workAddress: unknown
+  }> {
+    const handler = handlers.get('session:create')
+    expect(handler).toBeTypeOf('function')
+    return (await handler?.({}, input)) as { id: string; workAddress: unknown }
+  }
+
+  function newSessionInput(
+    overrides: Record<string, unknown> = {},
+  ): Record<string, unknown> {
+    return {
+      contextKind: 'project',
+      projectId: 'p-create',
+      workspaceId: null,
+      providerId: 'claude-code',
+      model: 'sonnet',
+      effort: null,
+      name: 'a remote session',
+      executionHost: DAEMON_B.id,
+      ...overrides,
+    }
+  }
+
+  it('decodes the place a new session states, and refuses one it cannot read', async () => {
+    // Mutation: forward `input` to `createSession` unchanged (restore the
+    // cast-through), and the malformed row goes red -- the session is created
+    // and its record holds no place.
+    db.prepare(
+      "INSERT INTO projects (id, name, repository_path) VALUES ('p-create', 'p', ?)",
+    ).run(join(tempDir, 'create-repo'))
+
+    const valid = await createSession(
+      newSessionInput({
+        workAddress: {
+          mode: 'project',
+          projectId: 'new-blok',
+          workingDirectory: '/srv/projects/new-blok',
+          label: 'Project new-blok',
+        },
+      }),
+    )
+    expect(valid.workAddress).toEqual({
+      mode: 'project',
+      projectId: 'new-blok',
+      workingDirectory: '/srv/projects/new-blok',
+      label: 'Project new-blok',
+    })
+
+    // Malformed: refused by name, and nothing reaches the record.
+    await expect(
+      createSession(
+        newSessionInput({
+          workAddress: { mode: 'repository', repository: 42, label: 'shown' },
+        }),
+      ),
+    ).rejects.toThrow(/work address/)
+
+    // Missing: refused too, because a remote session is born with a place or
+    // not at all. The message is the service's, which is the door that knows
+    // the session is going to a daemon.
+    await expect(createSession(newSessionInput())).rejects.toThrow(
+      /where it works/,
+    )
+
+    const rows = db.prepare('SELECT id FROM sessions').all() as Array<{
+      id: string
+    }>
+    expect(rows.map((row) => row.id)).toEqual([valid.id])
+  })
+
+  it('leaves a local session stating no place, and records none', async () => {
+    db.prepare(
+      "INSERT INTO projects (id, name, repository_path) VALUES ('p-create', 'p', ?)",
+    ).run(join(tempDir, 'create-repo'))
+
+    const local = await createSession(
+      newSessionInput({ executionHost: undefined }),
+    )
+    expect(local.workAddress).toBeNull()
+  })
+
+  it('reads what a daemon would clone for a checkout, and null when there is nothing to clone', async () => {
+    const handler = handlers.get('git:getCloneableRepositoryUrl')
+    expect(handler).toBeTypeOf('function')
+    // A directory that is not a repository has no origin, so there is nothing
+    // a daemon could clone -- and the strip says so rather than offering a
+    // place derived from nothing.
+    expect(await handler?.({}, tempDir)).toBeNull()
+  })
 
   it('asks the endpoint it was given, at that endpoint’s base URL', async () => {
     metaUrls = []

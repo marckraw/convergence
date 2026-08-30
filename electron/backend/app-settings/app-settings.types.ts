@@ -1,5 +1,5 @@
 import type {
-  ExecutionHostEndpoint,
+  ConfiguredExecutionHostEndpoint,
   ExecutionHostEndpointInput,
 } from '../execution-host-endpoint/execution-host-endpoint.types'
 import type { NotificationPrefs } from '../notifications/notifications.types'
@@ -70,7 +70,7 @@ export interface AppSettings {
    * The list is the whole fact: there is no separate "the" base URL any more,
    * because there is no longer a single daemon for "the" to refer to.
    */
-  executionHostEndpoints: ExecutionHostEndpoint[]
+  executionHostEndpoints: ConfiguredExecutionHostEndpoint[]
   notifications: NotificationPrefs
   onboarding: OnboardingPrefs
   updates: UpdatePrefs
