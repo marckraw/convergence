@@ -29,13 +29,19 @@ import type { ExecutionHostDaemonCredentialsService } from '../backend/credentia
 import { testRemoteExecutionHostConnection } from '../backend/provider/execution-host/remote-execution-host-connection'
 import type { AppSettingsRemoteExecutionHostRegistry } from '../backend/provider/execution-host/remote-execution-host.registry'
 import { ProviderCatalogService } from '../backend/provider/provider-catalog.service'
+import { RemoteProjectCatalogService } from '../backend/provider/remote-project-catalog.service'
+import { readCloneableRepositoryUrlAsync } from '../backend/git/git-origin'
+import { decodeSessionWorkAddress } from '../../src/shared/lib/work-address.pure'
 import { describeRemoteExecutionHostFailure } from '../backend/provider/execution-host/remote-execution-host.pure'
 import { OpenRouterCredentialsService } from '../backend/credentials/openrouter-credentials.service'
 import type { AnalyticsService } from '../backend/analytics/analytics.service'
 import type { AnalyticsRangePreset } from '../backend/analytics/analytics.types'
 import type { AttachmentsService } from '../backend/attachments/attachments.service'
 import type { IngestFileInput } from '../backend/attachments/attachments.types'
-import type { AppSettingsInput } from '../backend/app-settings/app-settings.types'
+import type {
+  AppSettings,
+  AppSettingsInput,
+} from '../backend/app-settings/app-settings.types'
 import type {
   CloneProjectInput,
   CreateProjectInput,
@@ -490,6 +496,24 @@ export function registerIpcHandlers(
     gitService.getStatus(repoPath),
   )
 
+  /**
+   * What a daemon would clone for this checkout (MAR-2689).
+   *
+   * The strip has to *show* the repository a remote session will work in
+   * before send, and the send has to carry that same value. Both go through
+   * `normalizeGitHubRemoteUrl`, so the sentence on the strip and the string on
+   * the wire are one derivation rather than two that happen to agree today.
+   *
+   * Asynchronous, unlike the start path's reader: nothing is waiting on this
+   * answer, and a door that spawned git synchronously would stop the whole main
+   * process while it ran.
+   */
+  ipcMain.handle(
+    'git:getCloneableRepositoryUrl',
+    async (_event, repoPath: string) =>
+      readCloneableRepositoryUrlAsync(repoPath),
+  )
+
   ipcMain.handle(
     'git:getDiff',
     async (_event, repoPath: string, filePath?: string) =>
@@ -535,11 +559,27 @@ export function registerIpcHandlers(
     appSettingsService.sweepOrphanedExecutionHostCredentials(),
   )
 
-  ipcMain.handle('appSettings:set', async (_event, input: AppSettingsInput) => {
-    const stored = await appSettingsService.setAppSettings(input)
+  /**
+   * Hands every open window the settings as they now stand.
+   *
+   * One encoding of "the renderer's copy is stale", because there are two
+   * gestures that make it so: a Save, and a credential change that moves an
+   * Endpoint's configuration epoch (MAR-2689 round 6). Written out twice they
+   * would agree until one of them changed.
+   */
+  const broadcastAppSettings = (settings: AppSettings): void => {
     for (const win of BrowserWindow.getAllWindows()) {
       if (!win.isDestroyed()) {
-        win.webContents.send('appSettings:updated', stored)
+        win.webContents.send('appSettings:updated', settings)
+      }
+    }
+  }
+
+  ipcMain.handle('appSettings:set', async (_event, input: AppSettingsInput) => {
+    const stored = await appSettingsService.setAppSettings(input)
+    broadcastAppSettings(stored)
+    for (const win of BrowserWindow.getAllWindows()) {
+      if (!win.isDestroyed()) {
         win.webContents.send(
           'notifications:prefs-updated',
           stored.notifications,
@@ -642,6 +682,47 @@ export function registerIpcHandlers(
         ),
     )
 
+    /**
+     * Tells the renderer that this machine is not the one it asked about
+     * (MAR-2689 rounds 6 and 8).
+     *
+     * A base URL edit is a settings Save, so the renderer already learns about
+     * it and every catalog read from the old address goes out of force at the
+     * next read. The gestures below are not Saves. A token change goes to the
+     * Keychain and the Endpoint row does not move. A connection test can land a
+     * handshake in which the machine, at the same address and under the same
+     * credential, no longer advertises what it did -- and until this existed
+     * the composer went on showing, and offering, what the previous
+     * configuration answered, with no gesture anywhere that would make it ask
+     * again.
+     *
+     * Two beats, in this order. The resolve is what *observes* the current
+     * configuration and moves the Endpoint's epoch when it changed; the
+     * broadcast is what carries that epoch to the renderer, on the Endpoint
+     * list it already reads. Broadcasting first would send the epoch the
+     * previous configuration had. The capability half is observed by the
+     * listing itself, inside the call being awaited here, so by this line both
+     * inputs have been seen.
+     *
+     * One helper for all three, so a fourth gesture that changes what a machine
+     * is has one place to be added rather than a rule to remember.
+     *
+     * Chained after the change rather than awaited before it: every credential
+     * method claims its Endpoint's queue slot synchronously, and an `await`
+     * above that claim is a window a removal can land in (MAR-2642).
+     */
+    const republishAfterConfigurationChange = async <T>(
+      endpointId: string,
+      change: Promise<T>,
+    ): Promise<T> => {
+      const result = await change
+      await executionHostRemote.registry.observeEndpointConfiguration(
+        endpointId,
+      )
+      broadcastAppSettings(await appSettingsService.getAppSettings())
+      return result
+    }
+
     ipcMain.handle(
       'credentials:executionHostDaemon:setToken',
       (_event, input: { endpointId?: unknown; token?: unknown }) => {
@@ -649,19 +730,25 @@ export function registerIpcHandlers(
         if (!input || typeof input.token !== 'string') {
           throw new Error('Daemon API token is required.')
         }
-        return executionHostRemote.credentials.setToken(
-          { token: input.token },
+        return republishAfterConfigurationChange(
           endpointId,
+          executionHostRemote.credentials.setToken(
+            { token: input.token },
+            endpointId,
+          ),
         )
       },
     )
 
     ipcMain.handle(
       'credentials:executionHostDaemon:deleteToken',
-      (_event, input: { endpointId?: unknown }) =>
-        executionHostRemote.credentials.deleteToken(
-          requireEndpointId(input?.endpointId),
-        ),
+      (_event, input: { endpointId?: unknown }) => {
+        const endpointId = requireEndpointId(input?.endpointId)
+        return republishAfterConfigurationChange(
+          endpointId,
+          executionHostRemote.credentials.deleteToken(endpointId),
+        )
+      },
     )
 
     /**
@@ -685,10 +772,19 @@ export function registerIpcHandlers(
       'executionHost:testRemoteConnection',
       async (_event, input: { endpointId?: unknown }) => {
         const endpointId = requireEndpointId(input?.endpointId)
-        return testRemoteExecutionHostConnection({
-          resolver: executionHostRemote.registry.resolverFor(endpointId),
-          host: () => executionHostRemote.registry.hostFor(endpointId),
-        })
+        // The one production beat that lands a fresh handshake on demand, so
+        // the one that can see a machine stop advertising what it did
+        // (MAR-2689 round 8). Republished for the same reason a credential
+        // change is: nothing in the Endpoint row moved, so without this the
+        // strip keeps offering a Project the start door has already begun
+        // refusing.
+        return republishAfterConfigurationChange(
+          endpointId,
+          testRemoteExecutionHostConnection({
+            resolver: executionHostRemote.registry.resolverFor(endpointId),
+            host: () => executionHostRemote.registry.hostFor(endpointId),
+          }),
+        )
       },
     )
 
@@ -737,9 +833,29 @@ export function registerIpcHandlers(
       }),
   )
 
-  // Session handlers
-  ipcMain.handle('session:create', async (_event, input: CreateSessionInput) =>
-    sessionApp.createSession(input),
+  /**
+   * The main-process door for a new session, and the one place the work
+   * address arriving from the renderer is decoded (MAR-2689).
+   *
+   * The preload bridge carries `workAddress` as `unknown` on purpose and says
+   * this handler decodes it; until this line it forwarded the object untouched,
+   * so a malformed one reached the record verbatim and read back as no place at
+   * all. Refused by name rather than repaired, exactly as `provider:getAll`
+   * refuses an endpoint id that is not a string: a value the caller got wrong
+   * must not become a place nobody chose (MAR-2682).
+   */
+  ipcMain.handle(
+    'session:create',
+    async (_event, input: CreateSessionInput & { workAddress?: unknown }) => {
+      const decoded = decodeSessionWorkAddress(input.workAddress)
+      if (decoded.status === 'malformed') {
+        throw new Error(`This session could not be created: ${decoded.reason}.`)
+      }
+      return sessionApp.createSession({
+        ...input,
+        workAddress: decoded.status === 'decoded' ? decoded.address : undefined,
+      })
+    },
   )
 
   ipcMain.handle(
@@ -966,6 +1082,27 @@ export function registerIpcHandlers(
   // nothing checks, and the service's door is where the check lives.
   ipcMain.handle('provider:getAll', (_event, executionHostId?: unknown) =>
     providerCatalogService.get(executionHostId),
+  )
+
+  /**
+   * Where one machine can work (MAR-2689). Built beside the provider catalog
+   * and asked the same way -- the id arrives as `unknown` because that is what
+   * an IPC argument is, and the service's door is where it is read.
+   */
+  const remoteProjectCatalogService = new RemoteProjectCatalogService({
+    remote: executionHostRemote && {
+      listEndpointIds: async () =>
+        (await appSettingsService.getAppSettings()).executionHostEndpoints.map(
+          (endpoint) => endpoint.id,
+        ),
+      hostFor: (endpointId) => executionHostRemote.registry.hostFor(endpointId),
+    },
+  })
+
+  ipcMain.handle(
+    'executionHost:getProjects',
+    (_event, executionHostId?: unknown) =>
+      remoteProjectCatalogService.get(executionHostId),
   )
 
   ipcMain.handle('provider:getAllAvailable', loadProviderDescriptors)

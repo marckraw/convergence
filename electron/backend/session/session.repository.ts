@@ -1,6 +1,10 @@
 import type Database from 'better-sqlite3'
 import type { SessionRow } from '../database/database.types'
 import { serializeSessionPermissionConfig } from '../provider/session-permissions.pure'
+import {
+  serializeSessionWorkAddress,
+  type SessionWorkAddress,
+} from '../../../src/shared/lib/work-address.pure'
 import type {
   CreateSessionInput,
   PrimarySurface,
@@ -25,6 +29,8 @@ export interface CreateSessionRecordInput {
   forkStrategy: CreateSessionInput['forkStrategy']
   primarySurface: PrimarySurface
   executionHost: SessionExecutionHostId
+  /** Where a remote session works; null on a local one (MAR-2689). */
+  workAddress: SessionWorkAddress | null
 }
 
 export class SessionRepository {
@@ -48,9 +54,10 @@ export class SessionRepository {
            parent_session_id,
            fork_strategy,
            primary_surface,
-           execution_host
+           execution_host,
+           work_address
          )
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
       .run(
         input.id,
@@ -68,6 +75,9 @@ export class SessionRepository {
         input.forkStrategy ?? null,
         input.primarySurface,
         input.executionHost,
+        input.workAddress
+          ? serializeSessionWorkAddress(input.workAddress)
+          : null,
       )
   }
 

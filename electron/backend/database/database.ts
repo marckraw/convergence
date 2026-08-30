@@ -9,6 +9,10 @@ import {
 import type { TranscriptEntry } from '../provider/provider.types'
 import { conversationItemToInsertRow } from '../session/conversation-item.pure'
 import { migrateTranscriptToConversationItems } from '../session/conversation-item.pure'
+import {
+  serializeSessionWorkAddress,
+  UNKNOWN_WORK_ADDRESS,
+} from '../../../src/shared/lib/work-address.pure'
 import { isBinaryDiff } from '../session/turn/turn.pure'
 import {
   TURN_BINARY_DIFF_MARKER,
@@ -51,6 +55,7 @@ function buildSessionsTableSql(
       execution_host TEXT NOT NULL DEFAULT 'local',
       execution_host_last_seq INTEGER NOT NULL DEFAULT 0,
       execution_host_settled_seq INTEGER NOT NULL DEFAULT 0,
+      work_address TEXT,
       created_at TEXT NOT NULL DEFAULT (datetime('now')),
       updated_at TEXT NOT NULL DEFAULT (datetime('now')),
       FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
@@ -1364,6 +1369,49 @@ function ensureSessionSettledSeqColumn(database: Database.Database): void {
 }
 
 /**
+ * A remote session says where it worked (MAR-2689).
+ *
+ * Until this column, a remote start derived its place silently from the
+ * session's own project — it read that project's git origin and told the daemon
+ * to clone it, with nothing shown and nothing recorded. So a session dispatched
+ * from inside the Convergence project cloned Convergence, whatever the human
+ * meant. The strip now states the place before send; this is where the session
+ * keeps it.
+ *
+ * The column's absence is the flag that says the backfill is still owed, so the
+ * `ALTER TABLE` and the `UPDATE` go in as ONE transaction. Split them and an
+ * interrupt in the gap is permanent: the next boot sees the column, skips the
+ * backfill for good, and every pre-era remote row keeps a NULL that reads as a
+ * local session with no place to state. SQLite's DDL is transactional, so the
+ * `ALTER TABLE` rolls back with the rest.
+ *
+ * What the backfill records: that a remote row's place is *unknown*, in so many
+ * words. That is the whole of what can honestly be recovered. The origin those
+ * rows were started from is not in the record, and re-deriving it from the
+ * local checkout today would answer with wherever that checkout points *now* —
+ * a repository the session may never have touched. A default is not a known
+ * value, and a guess here is the very failure the column exists to prevent.
+ *
+ * Local rows stay NULL, which is not "unknown": a local session works in the
+ * directory the record already names, so it has no work address to state and
+ * the slot does not render for it at all.
+ */
+function ensureSessionWorkAddressColumn(database: Database.Database): void {
+  const migrate = database.transaction(() => {
+    if (getTableColumnNames(database, 'sessions').has('work_address')) return
+    database.exec('ALTER TABLE sessions ADD COLUMN work_address TEXT')
+    database
+      .prepare(
+        `UPDATE sessions
+            SET work_address = ?
+          WHERE execution_host != 'local'`,
+      )
+      .run(serializeSessionWorkAddress(UNKNOWN_WORK_ADDRESS))
+  })
+  migrate()
+}
+
+/**
  * Endpoints become plural, and the sessions that ran on one say which
  * (MAR-2620).
  *
@@ -1634,6 +1682,85 @@ function ensureLegacyTranscriptCoverage(database: Database.Database): void {
   }
 }
 
+/**
+ * How a rebuild carries a column across, when the plain column name will not do.
+ *
+ * Three of them, and each is a repair the rebuild is the only chance to make:
+ * a `context_kind` that has to agree with the CHECK constraint on the new
+ * table, a `permission_config` that must not arrive NULL or blank into a NOT
+ * NULL column, and a `parent_session_id` that would fail the foreign key check
+ * if the parent is already gone. Everything else copies across by name, and
+ * everything the source does not have is simply not mentioned so the new
+ * table's own DEFAULT applies.
+ */
+function sessionRebuildOverrides(
+  sourceColumnNames: Set<string>,
+): Record<string, string> {
+  const overrides: Record<string, string> = {}
+  if (sourceColumnNames.has('context_kind')) {
+    overrides.context_kind = `CASE
+            WHEN context_kind = 'global'
+              AND project_id IS NULL
+              AND workspace_id IS NULL
+              THEN 'global'
+            ELSE 'project'
+          END`
+  }
+  if (sourceColumnNames.has('permission_config')) {
+    overrides.permission_config = `CASE
+            WHEN permission_config IS NOT NULL AND permission_config != ''
+              THEN permission_config
+            ELSE '{"preset":"ask"}'
+          END`
+  }
+  if (sourceColumnNames.has('parent_session_id')) {
+    overrides.parent_session_id = `CASE
+            WHEN parent_session_id IN (SELECT id FROM sessions)
+              THEN parent_session_id
+            ELSE NULL
+          END`
+  }
+  return overrides
+}
+
+/**
+ * The columns a table rebuild copies, derived from both tables rather than
+ * written out by hand (MAR-2689).
+ *
+ * A hand-written projection is a list nobody re-reads. The sessions rebuild
+ * carried one, and every column added after it was written -- `execution_host`,
+ * its two sequence counters, and `work_address` -- was silently dropped by it:
+ * a database still owing the rebuild would have every remote session come back
+ * as a local one with no place. The defect is the hand-written list, not the
+ * four names it happened to be missing, so the fix is to stop writing one.
+ *
+ * The intersection of the two `PRAGMA table_info` readings is what a rebuild
+ * can honestly carry. A destination column the source lacks is left out of the
+ * statement entirely so the new table's DEFAULT fills it -- which is what a
+ * column added by a later migration means -- and a source column the
+ * destination dropped is left behind, which is what a rebuild is usually for.
+ */
+function buildTableRebuildProjection(
+  sourceColumnNames: Set<string>,
+  destinationColumnNames: Set<string>,
+  overrides: Record<string, string>,
+): { columns: string[]; expressions: string[] } {
+  const columns: string[] = []
+  const expressions: string[] = []
+  for (const column of destinationColumnNames) {
+    const override = overrides[column]
+    if (override) {
+      columns.push(column)
+      expressions.push(override)
+      continue
+    }
+    if (!sourceColumnNames.has(column)) continue
+    columns.push(column)
+    expressions.push(column)
+  }
+  return { columns, expressions }
+}
+
 function ensureSessionsTableShape(database: Database.Database): void {
   const sourceColumnNames = getTableColumnNames(database, 'sessions')
   const hasTranscriptColumn = sourceColumnNames.has('transcript')
@@ -1656,82 +1783,19 @@ function ensureSessionsTableShape(database: Database.Database): void {
     database.transaction(() => {
       database.exec('DROP TABLE IF EXISTS sessions_next')
       database.exec(buildSessionsTableSql('sessions_next', false))
-      const contextKindSelect = sourceColumnNames.has('context_kind')
-        ? `CASE
-            WHEN context_kind = 'global'
-              AND project_id IS NULL
-              AND workspace_id IS NULL
-              THEN 'global'
-            ELSE 'project'
-          END`
-        : "'project'"
-      const permissionConfigSelect = sourceColumnNames.has('permission_config')
-        ? `CASE
-            WHEN permission_config IS NOT NULL AND permission_config != ''
-              THEN permission_config
-            ELSE '{"preset":"ask"}'
-          END`
-        : `'{"preset":"ask"}'`
+      // Read off the table that was just created, so the projection follows
+      // `buildSessionsTableSql` wherever it goes next.
+      const { columns, expressions } = buildTableRebuildProjection(
+        sourceColumnNames,
+        getTableColumnNames(database, 'sessions_next'),
+        sessionRebuildOverrides(sourceColumnNames),
+      )
       database.exec(`
         INSERT INTO sessions_next (
-          id,
-          context_kind,
-          project_id,
-          workspace_id,
-          provider_id,
-          model,
-          effort,
-          service_tier,
-          permission_config,
-          continuation_token,
-          name,
-          status,
-          attention,
-          working_directory,
-          context_window,
-          activity,
-          relays_muted,
-          archived_at,
-          last_sequence,
-          conversation_version,
-          name_auto_generated,
-          parent_session_id,
-          fork_strategy,
-          primary_surface,
-          created_at,
-          updated_at
+          ${columns.join(',\n          ')}
         )
         SELECT
-          id,
-          ${contextKindSelect},
-          project_id,
-          workspace_id,
-          provider_id,
-          model,
-          effort,
-          ${sourceColumnNames.has('service_tier') ? 'service_tier' : 'NULL'},
-          ${permissionConfigSelect},
-          continuation_token,
-          name,
-          status,
-          attention,
-          working_directory,
-          context_window,
-          activity,
-          ${sourceColumnNames.has('relays_muted') ? 'relays_muted' : '0'},
-          archived_at,
-          last_sequence,
-          conversation_version,
-          name_auto_generated,
-          CASE
-            WHEN parent_session_id IN (SELECT id FROM sessions)
-              THEN parent_session_id
-            ELSE NULL
-          END,
-          fork_strategy,
-          primary_surface,
-          created_at,
-          updated_at
+          ${expressions.join(',\n          ')}
         FROM sessions;
         DROP TABLE sessions;
         ALTER TABLE sessions_next RENAME TO sessions;
@@ -1770,6 +1834,9 @@ export function getDatabase(dbPath?: string): Database.Database {
     ensureWorkspaceColumns(database)
     ensureSessionColumns(database)
     ensureSessionSettledSeqColumn(database)
+    // After the session columns, never before: the backfill reads
+    // `execution_host` to tell a remote row from a local one.
+    ensureSessionWorkAddressColumn(database)
     // After the session columns, never before: the backfill rewrites
     // `execution_host`, which a database older than the remote era lacks.
     ensureExecutionHostEndpoints(database)

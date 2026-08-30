@@ -24,6 +24,7 @@ import {
   type StubDaemon,
 } from '../backend/provider/execution-host/execution-host-daemon.fixture'
 import { ExecutionHostDaemonCredentialsService } from '../backend/credentials/execution-host-daemon-credentials.service'
+import { TEST_REMOTE_WORK_ADDRESS } from '../backend/session/session-work-address.fixture'
 
 /**
  * The main half of `executionHost:getSessionWorkspace` (MAR-2620).
@@ -180,6 +181,7 @@ describe('the executionHost:getSessionWorkspace ipc handler', () => {
       effort: null,
       name,
       executionHost: endpointId,
+      workAddress: TEST_REMOTE_WORK_ADDRESS,
     }).id
   }
 

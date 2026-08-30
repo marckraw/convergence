@@ -896,6 +896,8 @@ interface SessionSummaryData {
   primarySurface: 'conversation' | 'terminal'
   /** `'local'`, or an execution host endpoint id (MAR-2620). */
   executionHost?: string
+  /** Where a remote session works; null on a local one (MAR-2689). */
+  workAddress?: SessionWorkAddressData | null
   continuationToken: string | null
   lastSequence: number
   createdAt: string
@@ -915,6 +917,32 @@ interface CreateSessionInput {
   primarySurface?: 'conversation' | 'terminal'
   /** `'local'`, or an execution host endpoint id (MAR-2620). */
   executionHost?: string
+  /** Where a remote session works; absent on a local one (MAR-2689). */
+  workAddress?: SessionWorkAddressData | null
+}
+
+/** Mirrors `SessionWorkAddress` in `src/shared/lib/work-address.pure.ts`. */
+type SessionWorkAddressData =
+  | {
+      mode: 'project'
+      projectId: string
+      workingDirectory: string
+      label: string
+    }
+  | { mode: 'repository'; repository: string; label: string }
+  | { mode: 'unknown' }
+
+/** Mirrors the main process `RemoteProjectCatalog` (MAR-2689). */
+interface RemoteProjectCatalogData {
+  executionHostId: string
+  supported: boolean
+  projects: {
+    id: string
+    name: string
+    workingDirectory: string
+    origin: string | null
+  }[]
+  unreachableReason: string | null
 }
 
 interface ProviderInfo {
@@ -1548,6 +1576,8 @@ interface ElectronAPI {
     getBranchOutputFacts: (repoPath: string) => Promise<BranchOutputFactsData>
     getStatus: (repoPath: string) => Promise<GitStatusEntryData[]>
     getDiff: (repoPath: string, filePath?: string) => Promise<string>
+    /** What a daemon would clone for this checkout, or null (MAR-2689). */
+    getCloneableRepositoryUrl: (repoPath: string) => Promise<string | null>
   }
   session: {
     create: (input: CreateSessionInput) => Promise<SessionSummaryData>
@@ -1750,6 +1780,8 @@ interface ElectronAPI {
     getSessionWorkspace: (
       sessionId: string,
     ) => Promise<RemoteSessionWorkspaceResultData>
+    /** Where one machine can work: its Projects, or why it has none. */
+    getProjects: (executionHostId?: string) => Promise<RemoteProjectCatalogData>
   }
   analytics: {
     getOverview: (
@@ -2004,6 +2036,11 @@ interface ExecutionHostEndpointData {
   position: number
   createdAt: string
   updatedAt: string
+  /**
+   * The epoch of the configuration this Endpoint is currently resolved under
+   * (MAR-2689 round 6). Main computes it; nothing here writes it back.
+   */
+  configurationEpoch: number
 }
 
 interface ExecutionHostEndpointInputData {
