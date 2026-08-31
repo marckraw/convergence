@@ -12,7 +12,7 @@ marks running local sessions as failed ("Convergence restarted before the
 provider process finished"). Two instances sharing a database therefore kill
 each other's live sessions. The sandbox exists so this can never happen: it
 gets its own userData via the `CONVERGENCE_USER_DATA_DIR` override
-(`electron/main/index.ts`, `resolveUserDataPath`).
+(`apps/convergence/electron/main/index.ts`, `resolveUserDataPath`).
 
 Note that the dev build (`convergence`) and the packaged app (`Convergence`)
 resolve to the _same_ userData folder on macOS's case-insensitive
@@ -34,6 +34,10 @@ npm run dev:sandbox   # start a dev instance on the sandbox userData
   open (checked with `lsof`); quit the sandbox or pass `--force`.
 - The sandbox userData defaults to `~/.convergence-dev-sandbox`; both
   commands honor `CONVERGENCE_USER_DATA_DIR` to relocate it.
+- The dev `.env` lives at `apps/convergence/.env` — both load candidates
+  (`app.getAppPath()` and `process.cwd()`) resolve there under `npm run dev`,
+  so a `.env` left at the repo root from before the monorepo move is never
+  read.
 
 ## What the sandbox shares with the real app
 
@@ -54,8 +58,8 @@ send paths deliberately.
    there and are never at risk.
 2. `npm run dev:seed`, then `npm run dev:sandbox` in a terminal.
 3. Agents edit the working tree from their sessions in the stable app.
-   Renderer changes hot-reload the sandbox in ~1s; `electron/` changes
-   auto-restart **only the sandbox**.
+   Renderer changes hot-reload the sandbox in ~1s;
+   `apps/convergence/electron/` changes auto-restart **only the sandbox**.
 4. Shipping still ends the classic way: gates, ship-it PR, review, merge.
 
 Agents never run `npm run dev`, `dev:sandbox`, or `dev:clean` — launching

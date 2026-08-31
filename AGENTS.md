@@ -24,7 +24,8 @@ Codewalk (MAR-2609).
 Electron app with a provider-neutral session model: one transcript, one
 composer, capability advertisement instead of provider-id branching.
 First-class providers are Claude Code, Codex, and Pi, integrated as
-external CLIs adapted in `electron/backend/provider/`. Lineage: Divergence
+external CLIs adapted in `apps/convergence/electron/backend/provider/`.
+Lineage: Divergence
 (Rust) is the ancestor, reference-only; Emergence is the descendant.
 Working-relationship charter: `FABLE.md` (local, gitignored).
 
@@ -114,10 +115,10 @@ prior branch. When that happens:
 - Never commit code that fails `chaperone check` (no `--fix`). Run the
   non-fix variant before opening a PR if you suspect drift.
 
-When modifying `electron-builder.yml`, any `package:mac*` script, or
-`.github/workflows/publish-mac-release.yml`, also run
-`npm run package:mac:unsigned` locally and confirm that
-`release/latest-mac.yml` still lists both the x64 and arm64 ZIPs under
+When modifying `apps/convergence/electron-builder.yml`, any `package:mac*`
+script, or `.github/workflows/publish-mac-release.yml`, also run
+`npm run package:mac:unsigned` locally (from the repo root) and confirm that
+`apps/convergence/release/latest-mac.yml` still lists both the x64 and arm64 ZIPs under
 `files[]`. Missing or incorrect entries break auto-update silently for
 everyone on that arch — see `docs/specs/auto-updates.md` and
 `docs/runbook/auto-updates.md`.
@@ -141,7 +142,8 @@ This repo follows FSD-lite for renderer code:
 
 ### Required folder strategy
 
-Organize renderer TypeScript code using these layers:
+The app lives in the `apps/convergence` workspace; every path below is
+relative to it. Organize renderer TypeScript code using these layers:
 
 - `src/app`
 - `src/shared`

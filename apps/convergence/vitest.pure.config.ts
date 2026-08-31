@@ -12,7 +12,7 @@ export default defineConfig({
       'src/**/*.pure.test.ts',
       'electron/**/*.test.ts',
       // The lint config's canary lives beside the config it pins.
-      'eslint.config.test.ts',
+      '../../eslint.config.test.ts',
     ],
     environment: 'node',
   },

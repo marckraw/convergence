@@ -7,9 +7,9 @@
         "severity": "error",
         "command": "node",
         "args": [
-          "tools/chaperone/check-single-react-component-per-file.mjs",
+          "apps/convergence/tools/chaperone/check-single-react-component-per-file.mjs",
           "--scope",
-          "src",
+          "apps/convergence/src",
           "--exclude-dir",
           "ui"
         ],

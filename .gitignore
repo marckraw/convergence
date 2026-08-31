@@ -5,8 +5,15 @@ release/
 .fallow/
 
 # Build artifacts generated on demand (dev/build/typecheck/test all run
-# `npm run prepare:release-notes` first)
-src/shared/generated/
+# `npm run prepare:release-notes` first).
+#
+# Depth-agnostic on purpose (MAR-2706). Git cannot follow an ignored file
+# through the move to `apps/convergence/`, so a checkout that ran a gate before
+# the move keeps its generated file at the old root path. Anchored at the new
+# path alone, that leftover stops being ignored the moment the move lands and
+# surfaces as `?? src/` — apparent legacy source in a tree that has none. One
+# line covers both eras.
+**/src/shared/generated/
 
 .env
 .env.*

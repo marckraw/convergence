@@ -102,7 +102,7 @@ jobs:
 
       - name: Verify tag matches package version
         run: |
-          VERSION=$(node -p "require('./package.json').version")
+          VERSION=$(node -p "require('./apps/convergence/package.json').version")
           if [ "v$VERSION" != "${{ steps.release.outputs.tag }}" ]; then
             echo "Tag ${{ steps.release.outputs.tag }} does not match package version v$VERSION"
             exit 1
@@ -126,7 +126,7 @@ jobs:
             if [ -n "$CONVERGENCE_CLOUD_BASE_URL" ]; then
               echo "CONVERGENCE_CLOUD_BASE_URL=$CONVERGENCE_CLOUD_BASE_URL"
             fi
-          } > .env
+          } > apps/convergence/.env
 
       - name: Build macOS artifacts
         run: npm run package:mac
@@ -142,21 +142,21 @@ jobs:
         run: |
           if gh release view "${{ steps.release.outputs.tag }}" >/dev/null 2>&1; then
             gh release upload "${{ steps.release.outputs.tag }}" \
-              release/Convergence-*.dmg \
-              release/Convergence-*.zip \
-              release/*.blockmap \
-              release/latest-mac.yml \
+              apps/convergence/release/Convergence-*.dmg \
+              apps/convergence/release/Convergence-*.zip \
+              apps/convergence/release/*.blockmap \
+              apps/convergence/release/latest-mac.yml \
               --clobber
             gh release edit "${{ steps.release.outputs.tag }}" \
               --title "${{ steps.release.outputs.tag }}" \
-              --notes-file release-notes.md
+              --notes-file apps/convergence/release-notes.md
           else
             gh release create "${{ steps.release.outputs.tag }}" \
-              release/Convergence-*.dmg \
-              release/Convergence-*.zip \
-              release/*.blockmap \
-              release/latest-mac.yml \
+              apps/convergence/release/Convergence-*.dmg \
+              apps/convergence/release/Convergence-*.zip \
+              apps/convergence/release/*.blockmap \
+              apps/convergence/release/latest-mac.yml \
               --title "${{ steps.release.outputs.tag }}" \
-              --notes-file release-notes.md \
+              --notes-file apps/convergence/release-notes.md \
               --verify-tag
           fi

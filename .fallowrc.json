@@ -1,11 +1,11 @@
 {
   "$schema": "https://raw.githubusercontent.com/fallow-rs/fallow/main/schema.json",
   "entry": [
-    "electron/main/index.ts",
-    "electron/preload/index.ts",
-    "src/index.html",
-    "tools/chaperone/check-single-react-component-per-file.mjs",
-    "tools/generate-notification-sounds.mjs"
+    "apps/convergence/electron/main/index.ts",
+    "apps/convergence/electron/preload/index.ts",
+    "apps/convergence/src/index.html",
+    "apps/convergence/tools/chaperone/check-single-react-component-per-file.mjs",
+    "apps/convergence/tools/generate-notification-sounds.mjs"
   ],
   "usedClassMembers": [
     {

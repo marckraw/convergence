@@ -9,17 +9,17 @@
         "id": "renderer-preload-access-through-api-files",
         "type": "forbidden-import",
         "severity": "error",
-        "files": "src/**/*.{ts,tsx}",
+        "files": "apps/convergence/src/**/*.{ts,tsx}",
         "restrictions": [],
         "checkPatterns": [
           {
             "pattern": "\\bwindow\\.electronAPI\\b",
             "allowedIn": [
-              "src/**/*.api.ts",
-              "src/**/*.test.ts",
-              "src/**/*.test.tsx",
-              "src/test-setup.ts",
-              "src/shared/types/electron-api.d.ts"
+              "apps/convergence/src/**/*.api.ts",
+              "apps/convergence/src/**/*.test.ts",
+              "apps/convergence/src/**/*.test.tsx",
+              "apps/convergence/src/test-setup.ts",
+              "apps/convergence/src/shared/types/electron-api.d.ts"
             ],
             "message": "Renderer preload access must stay behind *.api.ts wrappers."
           }
@@ -30,7 +30,7 @@
         "id": "renderer-fsd-public-api-alias-imports",
         "type": "forbidden-import",
         "severity": "error",
-        "files": "src/**/*.{ts,tsx}",
+        "files": "apps/convergence/src/**/*.{ts,tsx}",
         "restrictions": [
           {
             "source": "^@/(entities|features|widgets)/[^/]+/.+",
@@ -44,7 +44,7 @@
         "id": "renderer-no-default-exports",
         "type": "regex",
         "severity": "error",
-        "files": "src/**/*.{ts,tsx}",
+        "files": "apps/convergence/src/**/*.{ts,tsx}",
         "pattern": "^\\s*export\\s+default\\b",
         "message": "Use named exports only in renderer code."
       },
@@ -54,9 +54,9 @@
         "severity": "error",
         "paths": [
           {
-            "pattern": "src/components/**/*",
+            "pattern": "apps/convergence/src/components/**/*",
             "reason": "Use FSD-lite layers and shared design-system ownership",
-            "migratedTo": "src/shared/ui/ or FSD slices"
+            "migratedTo": "apps/convergence/src/shared/ui/ or FSD slices"
           }
         ]
       },
@@ -66,9 +66,9 @@
         "severity": "error",
         "paths": [
           {
-            "pattern": "src/hooks/**/*",
+            "pattern": "apps/convergence/src/hooks/**/*",
             "reason": "Use FSD-lite layers for hooks",
-            "migratedTo": "src/shared/hooks/ or FSD slice hooks"
+            "migratedTo": "apps/convergence/src/shared/hooks/ or FSD slice hooks"
           }
         ]
       },
@@ -78,9 +78,9 @@
         "severity": "error",
         "paths": [
           {
-            "pattern": "src/lib/**/*",
+            "pattern": "apps/convergence/src/lib/**/*",
             "reason": "Use shared lib folder",
-            "migratedTo": "src/shared/lib/"
+            "migratedTo": "apps/convergence/src/shared/lib/"
           }
         ]
       },
@@ -90,23 +90,23 @@
         "severity": "error",
         "layers": {
           "shared": {
-            "files": "src/shared/**/*.{ts,tsx}",
+            "files": "apps/convergence/src/shared/**/*.{ts,tsx}",
             "allowImportsFrom": []
           },
           "entities": {
-            "files": "src/entities/**/*.{ts,tsx}",
+            "files": "apps/convergence/src/entities/**/*.{ts,tsx}",
             "allowImportsFrom": ["shared", "entities"]
           },
           "features": {
-            "files": "src/features/**/*.{ts,tsx}",
+            "files": "apps/convergence/src/features/**/*.{ts,tsx}",
             "allowImportsFrom": ["shared", "entities"]
           },
           "widgets": {
-            "files": "src/widgets/**/*.{ts,tsx}",
+            "files": "apps/convergence/src/widgets/**/*.{ts,tsx}",
             "allowImportsFrom": ["shared", "entities", "features"]
           },
           "app": {
-            "files": "src/app/**/*.{ts,tsx}",
+            "files": "apps/convergence/src/app/**/*.{ts,tsx}",
             "allowImportsFrom": ["shared", "entities", "features", "widgets"]
           }
         }
@@ -115,7 +115,7 @@
         "id": "presentational-no-effects",
         "type": "regex",
         "severity": "error",
-        "files": "src/**/*.presentational.tsx",
+        "files": "apps/convergence/src/**/*.presentational.tsx",
         "pattern": "\\buse(Effect|LayoutEffect|InsertionEffect)\\b",
         "forbidden": true,
         "message": "Presentational components must not use useEffect/useLayoutEffect/useInsertionEffect. Move effects to *.container.tsx."
@@ -124,7 +124,7 @@
         "id": "presentational-no-electron",
         "type": "regex",
         "severity": "error",
-        "files": "src/**/*.presentational.tsx",
+        "files": "apps/convergence/src/**/*.presentational.tsx",
         "pattern": "from\\s+['\"]electron['\"]",
         "forbidden": true,
         "message": "Presentational components must not import electron."
@@ -133,7 +133,7 @@
         "id": "renderer-no-direct-electron",
         "type": "regex",
         "severity": "error",
-        "files": "src/**/*.{ts,tsx}",
+        "files": "apps/convergence/src/**/*.{ts,tsx}",
         "pattern": "from\\s+['\"]electron['\"]",
         "forbidden": true,
         "message": "Renderer code must not import electron directly. Use preload-exposed APIs via *.api.ts wrappers."
@@ -143,7 +143,7 @@
         "type": "relationship",
         "severity": "error",
         "when": {
-          "files": "src/**/*.pure.ts"
+          "files": "apps/convergence/src/**/*.pure.ts"
         },
         "then": [
           {
@@ -160,8 +160,8 @@
         "id": "pure-functions-tested",
         "type": "symbol-reference",
         "severity": "error",
-        "sourceFiles": "src/**/*.pure.ts",
-        "targetFiles": "src/**/*.pure.test.ts",
+        "sourceFiles": "apps/convergence/src/**/*.pure.ts",
+        "targetFiles": "apps/convergence/src/**/*.pure.test.ts",
         "targetPair": {
           "from": "\\.pure\\.ts$",
           "to": ".pure.test.ts"
@@ -173,7 +173,7 @@
         "id": "no-raw-button-outside-shared",
         "type": "regex",
         "severity": "warning",
-        "files": "src/{app,widgets,features,entities}/**/*.container.tsx",
+        "files": "apps/convergence/src/{app,widgets,features,entities}/**/*.container.tsx",
         "pattern": "<button[\\s>]",
         "message": "Use Button from src/shared/ui/ instead of raw <button>"
       },
@@ -181,7 +181,7 @@
         "id": "no-raw-button-in-presentational-outside-shared",
         "type": "regex",
         "severity": "warning",
-        "files": "src/{app,widgets,features,entities}/**/*.presentational.tsx",
+        "files": "apps/convergence/src/{app,widgets,features,entities}/**/*.presentational.tsx",
         "pattern": "<button[\\s>]",
         "message": "Use Button from src/shared/ui/ instead of raw <button>"
       },
@@ -189,7 +189,7 @@
         "id": "no-raw-input-outside-shared",
         "type": "regex",
         "severity": "warning",
-        "files": "src/{app,widgets,features,entities}/**/*.container.tsx",
+        "files": "apps/convergence/src/{app,widgets,features,entities}/**/*.container.tsx",
         "pattern": "<input[\\s>]",
         "message": "Use Input from src/shared/ui/ instead of raw <input>"
       },
@@ -197,7 +197,7 @@
         "id": "no-raw-input-in-presentational-outside-shared",
         "type": "regex",
         "severity": "warning",
-        "files": "src/{app,widgets,features,entities}/**/*.presentational.tsx",
+        "files": "apps/convergence/src/{app,widgets,features,entities}/**/*.presentational.tsx",
         "pattern": "<input[\\s>]",
         "message": "Use Input from src/shared/ui/ instead of raw <input>"
       }
