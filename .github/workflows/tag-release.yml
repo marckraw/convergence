@@ -29,15 +29,20 @@ jobs:
       - name: Resolve release tag state
         id: release
         run: |
-          VERSION=$(node -p "require('./package.json').version")
+          VERSION=$(node -p "require('./apps/convergence/package.json').version")
           TAG="v$VERSION"
 
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
 
-          if git rev-parse HEAD^ >/dev/null 2>&1; then
+          # The second condition covers the commit that introduced apps/convergence:
+          # at HEAD^ the app package.json does not exist yet, and an unguarded
+          # `git show` there pipes nothing into node, which exits non-zero and
+          # fails the whole step under the runner's default `bash -e`.
+          if git rev-parse HEAD^ >/dev/null 2>&1 \
+            && git cat-file -e "HEAD^:apps/convergence/package.json" 2>/dev/null; then
             PREVIOUS_VERSION=$(
-              git show HEAD^:package.json | node -e "let s='';process.stdin.on('data',d=>s+=d);process.stdin.on('end',()=>console.log(JSON.parse(s).version))"
+              git show HEAD^:apps/convergence/package.json | node -e "let s='';process.stdin.on('data',d=>s+=d);process.stdin.on('end',()=>console.log(JSON.parse(s).version))"
             )
           else
             PREVIOUS_VERSION=''

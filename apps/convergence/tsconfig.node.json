@@ -18,7 +18,7 @@
     "src/shared/lib/execution-host-id.pure.ts",
     "src/shared/lib/execution-host-id.fixture.ts",
     "electron.vite.config.ts",
-    "eslint.config.test.ts",
+    "../../eslint.config.test.ts",
     "vitest.config.ts",
     "vitest.pure.config.ts",
     "vitest.unit.config.ts"

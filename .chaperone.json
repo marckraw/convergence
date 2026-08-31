@@ -1,7 +1,8 @@
 {
   "version": "1.0.0",
   "extends": [
-    "./tools/chaperone/presets/convergence-renderer-architecture.json",
-    "./tools/chaperone/presets/single-react-component-per-file.json"
-  ]
+    "./apps/convergence/tools/chaperone/presets/convergence-renderer-architecture.json",
+    "./apps/convergence/tools/chaperone/presets/single-react-component-per-file.json"
+  ],
+  "include": ["apps/convergence/src/**/*"]
 }

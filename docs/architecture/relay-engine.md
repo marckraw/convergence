@@ -6,6 +6,9 @@ document "Flows — constitution & staged map"; this file is the code-facing
 half: the laws the implementation must not break, and the seams a new trigger,
 action or transform actually lands on.
 
+Every code path in this document is relative to the `apps/convergence`
+workspace (MAR-2706), not the repository root.
+
 Code: `electron/backend/relay/` (engine, service, pure, types, ipc),
 `src/entities/session-relay/` (renderer mirror), `src/features/mission-control/`
 (sentence, row, editor, hop trail), `src/widgets/mission-control/` (canvas).

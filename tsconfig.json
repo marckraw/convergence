@@ -1,21 +1,20 @@
 {
-  "compilerOptions": {
-    "target": "ES2022",
-    "lib": ["ES2022", "DOM", "DOM.Iterable"],
-    "module": "ESNext",
-    "moduleResolution": "bundler",
-    "jsx": "react-jsx",
-    "strict": true,
-    "noEmit": true,
-    "esModuleInterop": true,
-    "skipLibCheck": true,
-    "forceConsistentCasingInFileNames": true,
-    "resolveJsonModule": true,
-    "isolatedModules": true,
-    "paths": {
-      "@/*": ["./src/*"]
-    }
-  },
-  "include": ["src/**/*"],
-  "exclude": ["node_modules"]
+  // Chaperone's TypeScript tier discovers its entry point at `tsconfig.json` in
+  // the repo root and nowhere else (`isAvailable` is a bare `existsSync`). When
+  // the app moved to `apps/convergence/` (MAR-2706) the tsconfigs moved with it,
+  // and that tier began reporting `skipped` — `chaperone check` answered PASSED,
+  // 0 errors on a tree containing `export const impossible: string = 1`, while
+  // `npm run typecheck` failed with TS2322. `agent:pre-push` runs chaperone
+  // alone, so the green answer was the only answer anyone saw.
+  //
+  // This file restores exactly the coverage chaperone had before the move — the
+  // renderer `src/` tree, nothing more — by extending the app's own config
+  // rather than restating it. The relative `paths` in that base config resolve
+  // against the base file, so `@/*` still points at `apps/convergence/src/*`.
+  // The deeper `npm run typecheck` gate is unchanged and still a strict
+  // superset: it runs both app tsconfigs explicitly with `-p`.
+  //
+  // RUN38 revisits this when a second app's `src/` exists.
+  "extends": "./apps/convergence/tsconfig.json",
+  "include": ["apps/convergence/src"]
 }

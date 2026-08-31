@@ -23,10 +23,10 @@ This skill is only for the Convergence repository. It preserves the workflow for
 Start with:
 
 ```bash
-rg -n "buildFallbackCodexDescriptor|buildClaudeDescriptor|preferredGuidedReviewModelId|gpt-|claude-|sonnet|opus|haiku" electron src
+rg -n "buildFallbackCodexDescriptor|buildClaudeDescriptor|preferredGuidedReviewModelId|gpt-|claude-|sonnet|opus|haiku" apps/convergence/electron apps/convergence/src
 ```
 
-Primary files:
+Primary files (relative to the `apps/convergence` workspace):
 
 - `electron/backend/provider/provider-descriptor.pure.ts`
   - `buildFallbackCodexDescriptor()` owns Codex/OpenAI fallback model options.
@@ -43,7 +43,7 @@ Primary files:
 Also check nearby focused tests with `rg` before editing:
 
 ```bash
-rg -n "gpt-|claude-|guided review|defaultModelId|fastModelId" electron/backend src/features src/entities
+rg -n "gpt-|claude-|guided review|defaultModelId|fastModelId" apps/convergence/electron/backend apps/convergence/src/features apps/convergence/src/entities
 ```
 
 ## OpenAI / Codex Workflow

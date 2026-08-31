@@ -2,7 +2,7 @@
 
 Wire form of the SessionHandle interaction between Convergence and a remote
 Provider Execution Host. Transport decision and rationale: ADR 0006. Message
-shapes: `electron/backend/provider/execution-host/execution-host-protocol.types.ts`.
+shapes: `apps/convergence/electron/backend/provider/execution-host/execution-host-protocol.types.ts`.
 Codecs: `execution-host-protocol.pure.ts` (no transport I/O).
 
 ## Versioning

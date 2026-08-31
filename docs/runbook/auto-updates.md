@@ -12,7 +12,7 @@ bits for auto-updates:
 
 1. Land a changeset on `master`.
 2. The Changesets GitHub Action opens a release PR that bumps
-   `package.json` and `CHANGELOG.md`.
+   `apps/convergence/package.json` and `apps/convergence/CHANGELOG.md`.
 3. Merging the release PR triggers `tag-release.yml`, which pushes a
    `v{version}` tag.
 4. The tag fires `publish-mac-release.yml`:
@@ -29,7 +29,8 @@ missing, auto-update is broken for that release.
 You have two options.
 
 **A. Local packaged build against the public repo.** Bump
-`package.json` to a version lower than the latest published release,
+`apps/convergence/package.json` to a version lower than the latest
+published release,
 build locally with `npm run package:mac:unsigned`, install the DMG
 into `/Applications`, then launch. The updater reads
 `dev-app-update.yml` to locate the public releases (`marckraw/convergence`,
@@ -37,7 +38,8 @@ stable channel) and will offer the newer version. Useful for exercising
 the full flow without cutting a new release.
 
 **B. Prerelease via a temporary tag.** Push a `v0.X.Y-test.1` tag. The
-publish workflow has `releaseType: release` in `electron-builder.yml`,
+publish workflow has `releaseType: release` in
+`apps/convergence/electron-builder.yml`,
 so electron-updater will skip prereleases. To exercise the flow
 end-to-end, either edit the publish config temporarily or promote the
 prerelease to a non-prerelease on GitHub after it publishes.
@@ -59,7 +61,7 @@ published:
 2. **Confirm the release isn't a draft or prerelease.** Our
    `electron-updater` config is `releaseType: release`, so drafts and
    prereleases are ignored.
-3. **Confirm the tag matches `package.json`.** The publish workflow
+3. **Confirm the tag matches `apps/convergence/package.json`.** The publish workflow
    enforces this at build time — if the user installed an artifact
    whose embedded version doesn't match the tag name, they won't get
    updates until they reinstall.

@@ -40,7 +40,7 @@ Convergence will use:
 - `@tanstack/router-plugin` for file-based route generation
 - hash history for packaged Electron builds
 
-Route files live under `src/app/routes`. They are thin app-layer adapters that
+Route files live under `apps/convergence/src/app/routes`. They are thin app-layer adapters that
 compose widgets and features from the existing FSD-lite layers. Product logic
 must stay in widgets, features, entities, and shared modules.
 

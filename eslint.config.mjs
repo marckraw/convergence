@@ -3,7 +3,19 @@ import reactHooks from 'eslint-plugin-react-hooks'
 import tseslint from 'typescript-eslint'
 
 export default tseslint.config(
-  { ignores: ['out/', 'dist/', 'node_modules/', 'tools/'] },
+  /**
+   * Depth-agnostic on purpose (MAR-2706). These patterns are resolved against
+   * this config's own directory, so the bare `out/` form only ever matched a
+   * repo root that was also the app root. Once the app moved to
+   * `apps/convergence/`, `tools/` stopped matching and sixty-three `no-undef`
+   * errors from the Node scripts landed in `chaperone check`; a built `out/`
+   * would have followed. The globstar-prefixed form says what was always
+   * meant: these directory kinds are never linted, wherever a workspace
+   * puts them.
+   */
+  {
+    ignores: ['**/out/', '**/dist/', '**/node_modules/', '**/tools/'],
+  },
   js.configs.recommended,
   ...tseslint.configs.recommended,
   {

@@ -1,5 +1,8 @@
 # Convergence Architecture Quick Reference
 
+Every code path in this document is relative to the `apps/convergence`
+workspace (MAR-2706), not the repository root.
+
 ## Product direction
 
 Convergence is a UI-first desktop app for managing agent work across local codebases.
