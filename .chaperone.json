@@ -4,5 +4,9 @@
     "./apps/convergence/tools/chaperone/presets/convergence-renderer-architecture.json",
     "./apps/convergence/tools/chaperone/presets/single-react-component-per-file.json"
   ],
-  "include": ["apps/convergence/src/**/*"]
+  "include": [
+    "apps/convergence/src/**/*",
+    "apps/backpack-studio/src/**/*",
+    "packages/execution-host-client/src/**/*"
+  ]
 }
