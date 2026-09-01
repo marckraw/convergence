@@ -1,0 +1,24 @@
+# Backpack Studio packages, and deliberately does not publish (MAR-2737).
+#
+# `package:mac:unsigned` must produce both arches so the monorepo floor is
+# proved able to hold a second shippable app -- but there is no `publish`
+# block, no tag namespace and no release workflow, and there must not be one
+# until Studio's constitution (MAR-2705) rules its identity and signing.
+# Convergence owns `v*`; a second app publishing into that space would put an
+# unrelated build in front of every installed Convergence's auto-updater.
+appId: com.marckraw.backpack-studio
+productName: Backpack Studio
+directories:
+  output: release
+artifactName: ${productName}-${version}-${arch}.${ext}
+asar: true
+npmRebuild: false
+files:
+  - package.json
+  - out/**/*
+mac:
+  category: public.app-category.developer-tools
+  darkModeSupport: true
+  target:
+    - target: dmg
+    - target: zip
