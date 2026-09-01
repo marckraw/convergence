@@ -283,7 +283,8 @@ export function buildClaudeDescriptor(): ProviderDescriptor {
       {
         id: 'best',
         label: 'Claude Best',
-        description: 'Uses Fable 5 when available, otherwise the latest Opus.',
+        description:
+          'Uses Fable 5.1 when available, otherwise the latest Opus.',
         contextWindowTokens: 1_000_000,
         defaultEffort: 'high',
         effortOptions: buildEffortOptions([
@@ -296,10 +297,10 @@ export function buildClaudeDescriptor(): ProviderDescriptor {
       },
       {
         // Alias, like `opus` / `sonnet` / `haiku`: unversioned label, so it
-        // never collides with the pinned `claude-fable-5` row below.
+        // never collides with the pinned `claude-fable-5-1` row below.
         id: 'fable',
         label: 'Claude Fable',
-        description: 'Alias for the latest Fable (currently Fable 5).',
+        description: 'Alias for the latest Fable (currently Fable 5.1).',
         contextWindowTokens: 1_000_000,
         defaultEffort: 'high',
         effortOptions: buildEffortOptions([
@@ -334,6 +335,19 @@ export function buildClaudeDescriptor(): ProviderDescriptor {
         label: 'Claude Haiku',
         defaultEffort: 'medium',
         effortOptions: buildEffortOptions(['low', 'medium', 'high']),
+      },
+      {
+        id: 'claude-fable-5-1',
+        label: 'Claude Fable 5.1',
+        contextWindowTokens: 1_000_000,
+        defaultEffort: 'high',
+        effortOptions: buildEffortOptions([
+          'low',
+          'medium',
+          'high',
+          'xhigh',
+          'max',
+        ]),
       },
       {
         id: 'claude-fable-5',
