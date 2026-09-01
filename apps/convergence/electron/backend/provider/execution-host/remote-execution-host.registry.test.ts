@@ -22,8 +22,8 @@ import {
   createStubDaemon,
   waitUntil,
   type StubDaemon,
-} from './execution-host-daemon.fixture'
-import { DAEMON_HEALTH_FIXTURE_0_26_1 } from './execution-host-health.fixture'
+} from '@convergence/execution-host-client'
+import { DAEMON_HEALTH_FIXTURE_0_26_1 } from '@convergence/execution-host-client'
 import { TEST_REMOTE_WORK_ADDRESS } from '../../session/session-work-address.fixture'
 
 const DAEMON_A = { id: 'daemon-a', baseUrl: 'https://daemon-a.test' }

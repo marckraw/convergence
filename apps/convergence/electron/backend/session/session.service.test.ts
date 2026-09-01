@@ -35,7 +35,7 @@ import type {
   ConversationPatchEvent,
   SessionDelta,
 } from './conversation-item.types'
-import { RemoteExecutionHostError } from '../provider/execution-host/remote-execution-host.types'
+import { RemoteExecutionHostError } from '@convergence/execution-host-client'
 import type { RemoteExecutionHostRegistry } from '../provider/execution-host/remote-execution-host.types'
 import type { SessionSettledEvent } from './session.types'
 import { SessionService } from './session.service'

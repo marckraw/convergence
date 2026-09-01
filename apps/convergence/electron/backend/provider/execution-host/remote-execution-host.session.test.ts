@@ -20,7 +20,7 @@ import {
   envelope,
   waitUntil,
   type StubDaemon,
-} from './execution-host-daemon.fixture'
+} from '@convergence/execution-host-client'
 import { LocalExecutionHost } from './local-execution-host'
 import { RemoteExecutionHost } from './remote-execution-host'
 import type { ProviderExecutionHost } from './execution-host.types'

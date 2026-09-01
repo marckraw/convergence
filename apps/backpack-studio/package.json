@@ -1,0 +1,34 @@
+{
+  "name": "backpack-studio",
+  "version": "0.0.0",
+  "private": true,
+  "description": "The second body: a remote-only creation app for the EF disciplines, named after the design system its users already live in",
+  "main": "out/main/index.js",
+  "scripts": {
+    "dev": "electron-vite dev",
+    "build": "electron-vite build",
+    "package:mac:unsigned": "npm run build && CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --mac dmg zip --x64 --arm64 --publish never",
+    "test": "vitest run --config vitest.pure.config.ts",
+    "test:pure": "vitest run --config vitest.pure.config.ts",
+    "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.node.json"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "react": "^19.2.5",
+    "react-dom": "^19.2.5"
+  },
+  "devDependencies": {
+    "@convergence/execution-host-client": "*",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^5.2.0",
+    "electron": "41.2.0",
+    "electron-builder": "^26.8.1",
+    "electron-vite": "^5.0.0",
+    "typescript": "^6.0.2",
+    "vite": "^7.3.2",
+    "vitest": "^4.1.4"
+  }
+}

@@ -25,7 +25,7 @@ import {
   track,
   waitUntil,
   type StubDaemon,
-} from './execution-host-daemon.fixture'
+} from '@convergence/execution-host-client'
 import { TEST_REMOTE_WORK_ADDRESS } from '../../session/session-work-address.fixture'
 
 const ENDPOINT_ID = 'the-machine'

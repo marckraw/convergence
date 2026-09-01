@@ -2,8 +2,13 @@ import { normalizeGitHubRemoteUrl } from '@/shared/lib/git-origin.pure'
 import type { ProviderCatalogSource } from './provider-catalog.pure'
 
 /**
- * One Project on one machine (MAR-2689). Mirrors
- * `electron/backend/provider/execution-host/remote-project.types.ts`.
+ * One Project on one machine (MAR-2689). Mirrors `RemoteProject` in
+ * `@convergence/execution-host-client` (MAR-2737).
+ *
+ * Still a mirror rather than an import, and for the reason it always was: the
+ * renderer learns about a remote Project over IPC, so what it declares is the
+ * shape of the message it receives. Importing the client core here would put a
+ * main-process module in the renderer's graph to save a seven-line interface.
  */
 export interface RemoteProject {
   id: string

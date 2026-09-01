@@ -2,12 +2,12 @@ import type { ExecutionSessionWorkspace } from '@mrck-labs/execution-host-protoc
 import type { AppSettingsService } from '../../app-settings/app-settings.service'
 import type { ExecutionHostDaemonCredentialsService } from '../../credentials/execution-host-daemon-credentials.service'
 import type { ProviderDebugSink } from '../../provider-debug/provider-debug-sink'
-import { AppSettingsRemoteExecutionHostConnectionResolver } from './remote-execution-host-connection'
 import { RemoteExecutionHost } from './remote-execution-host'
 import {
+  AppSettingsRemoteExecutionHostConnectionResolver,
   RemoteExecutionHostError,
-  type RemoteExecutionHostRegistry,
-} from './remote-execution-host.types'
+} from '@convergence/execution-host-client'
+import type { RemoteExecutionHostRegistry } from './remote-execution-host.types'
 
 interface RemoteExecutionHostRegistryDeps {
   appSettings: Pick<

@@ -73,3 +73,15 @@ jobs:
 
       - name: Run typecheck
         run: npm run typecheck
+
+      # The second app and the shared package build on every PR, cheaply
+      # (MAR-2737). Convergence's own build is deliberately still absent here:
+      # it needs `electron-rebuild` of better-sqlite3 and node-pty, which is why
+      # it has never been a CI step. Backpack Studio has no native module, so its
+      # build is seconds -- and it is the one thing that proves the extraction is
+      # consumable from a second app rather than merely typecheckable.
+      #
+      # No mac packaging in CI, and no publish for Studio: its identity and
+      # signing are its constitution's to rule (MAR-2705).
+      - name: Build Backpack Studio
+        run: npm run build -w backpack-studio

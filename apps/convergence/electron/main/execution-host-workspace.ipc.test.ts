@@ -22,7 +22,7 @@ import {
   createStubDaemon,
   waitUntil,
   type StubDaemon,
-} from '../backend/provider/execution-host/execution-host-daemon.fixture'
+} from '@convergence/execution-host-client'
 import { ExecutionHostDaemonCredentialsService } from '../backend/credentials/execution-host-daemon-credentials.service'
 import { TEST_REMOTE_WORK_ADDRESS } from '../backend/session/session-work-address.fixture'
 

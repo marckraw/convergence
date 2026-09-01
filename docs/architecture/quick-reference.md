@@ -1,7 +1,10 @@
 # Convergence Architecture Quick Reference
 
 Every code path in this document is relative to the `apps/convergence`
-workspace (MAR-2706), not the repository root.
+workspace (MAR-2706), not the repository root — with one exception, stated
+where it applies: **"Workspace layout" below is repository-relative**, because
+paths that name a sibling workspace have no meaning read from inside one
+(MAR-2737).
 
 ## Product direction
 
@@ -21,6 +24,127 @@ Later product focus:
 - remotely reachable clients, cloud control plane, and execution-host
   boundaries as described in `docs/specs/convergence-v2-boundaries.md`
 - broader provider support if needed
+
+## Workspace layout (MAR-2706, MAR-2737)
+
+**Every path in this section is relative to the repository root**, not to
+`apps/convergence`. The rest of the document resumes the workspace-relative
+base at "Core architectural choices".
+
+The repository is an npm-workspaces monorepo:
+
+- `apps/convergence` — the app this document is otherwise about.
+- `apps/backpack-studio` — Backpack Studio, the second body: a remote-only
+  creation app for the EF disciplines. At this stage a shell that boots and
+  consumes the shared client core; its constitution is MAR-2705.
+- `packages/execution-host-client` — the daemon client core, shared.
+
+### The client-core boundary
+
+`@convergence/execution-host-client` owns everything that reads an
+agents-daemon's own bytes: the `/health` handshake, the Projects listing, the
+configuration and capability fingerprints an answer is only true under, the
+`/v0/meta`, start-response and session-snapshot parsers, the SSE reader, and
+the wire trace. It depends on `@mrck-labs/execution-host-protocol` and on
+nothing else.
+
+It owns none of Convergence's vocabulary. The `ProviderExecutionHost` adapter,
+its registry, `execution-host-wire-mapping.pure.ts` and every
+`ProviderDescriptor` or `ProviderCatalogEntry` derived from a listing stay in
+`apps/convergence` and import the package — because they name the session
+record, and the package must stay usable by an app that has none.
+
+Three rules follow, and all three are load-bearing:
+
+- **The package may never import an app.** Where it would have had to, it
+  declares a structural port instead: `EndpointConfigurationSource` and
+  `TokenSource`, satisfied by Convergence's own services with no adapter class.
+  A `ProviderDescriptor` import appearing in this package is the signal that a
+  function is on the wrong side of the line. It is enforced, not merely written
+  down — see "The enforcing organ" below — and it is enforced one step tighter
+  here than in the apps: a _production_ file may reach only the package's
+  `dependencies`, today exactly `@mrck-labs/execution-host-protocol`, so a test
+  runner or a compiler cannot quietly become client-core vocabulary.
+  `devDependencies` are legal in `*.test.ts` **and nowhere else**: a
+  `*.fixture.ts` here is re-exported from `index.ts`, which makes it public
+  surface by construction, so `Mock` reaching one of them stands in the
+  package's own types exactly like a compiler type would. The rule exists
+  because a used, type-only app import into this package once passed typecheck,
+  both builds and chaperone with nothing to say, and the fixture spelling of the
+  same leak passed a tripwire written to catch it (MAR-2737).
+- **Apps import it by package name**, never by a relative path into
+  `packages/`, never through `node_modules/…/src/…`, and never by a subpath its
+  `exports` map does not open. Declaring a workspace buys the right to depend on
+  it, not the right to reach past its front door; every other spelling lands on
+  a private file that disappears the day the package builds to `dist` or
+  publishes. This is enforced, not a convention — see "The enforcing organ".
+  It also publishes TypeScript source through `exports`, so every consumer must
+  _bundle_ it: both electron-vite configs list it in
+  `BUNDLED_WORKSPACE_PACKAGES` and exclude it from `externalizeDepsPlugin`.
+  Externalizing it would emit a `require` the packaged app cannot resolve — a
+  failure that reaches a user's machine and no gate.
+- **No app may import another app**, by any spelling — the workspace name
+  (`convergence/…`), a relative climb (`../../../convergence/src/…`), a path
+  through `node_modules/` or `apps/`, and every normalized variant of those.
+  This is a separate question from the FSD layer map, which asks about
+  _layers_: with both apps' layers in one map, Backpack Studio importing
+  Convergence's `DialogKind` read as a legal `app → entities` direction and
+  passed every gate. Direction rules are about layers; identity rules are about
+  workspaces (MAR-2737).
+
+Extraction is by demand. More moves when a second app actually needs it, not
+before.
+
+### The enforcing organ
+
+All three rules above are enforced by one thing, and it is a test, not a
+chaperone rule: `workspace-import-ownership.ts` at the repository root, driven
+by a `workspace-import-ownership.test.ts` in each workspace's pure tier. It
+walks that workspace's own trees — `src/**` **and** `electron/**` for an app,
+`src/**` for a package — resolves every import specifier with
+`ts.resolveModuleName` under that tree's real tsconfig, and judges the
+**resolved absolute path**: it must lie inside the owning workspace, or inside
+a `node_modules/<name>` whose `<name>` that workspace declares in its own
+manifest, or inside a sibling workspace that is both declared **and spelled as
+its package name**. Anything else fails by resolved path, printed with the
+offending specifier, its file, and — for a reach-through — the legal spelling to
+write instead; a specifier the resolver cannot place fails loud rather than
+being skipped.
+
+The sweep is proved end to end, not just the judgement. Each driver builds a
+miniature monorepo in a temporary directory, plants real forbidden imports in
+every tree its own configuration scans, and asserts they come back out of
+`violations()` with the right reason
+(`workspace-import-ownership.fixture.ts`). Without it, replacing `violations()`
+with `() => []` left every ownership suite green: the spelling matrices call the
+classifier directly, and an inert sweep reads exactly like a clean tree. One of
+the planted imports in every tree is written `import type`, and the reader that
+finds it is pinned form by form — static, re-export, `import type`, dynamic
+`import()`, `import()` types, import-equals, `require()` — in
+`workspace-import-ownership.syntax.test.ts`. Both exist for the same reason:
+with every plant written as a value import, dropping type-only declarations
+from the reader left all three suites green while the type-only reach that
+opened MAR-2737 passed every gate. And that form is read back off the emitted
+file's own AST before the temporary tree is removed, never taken from the
+metadata that asked for it: an assertion must read the artifact, not the intent
+that produced it — a fixture whose writer stopped honouring the request kept
+every metadata-shaped assertion green over value-import files.
+
+It is a test because the question is a resolution question and chaperone's rule
+kinds are textual. Three rounds of MAR-2737 tried to answer it with patterns —
+no rule, then a spelling blocklist, then an allowlist — and each lost to the
+next spelling: `../../.././convergence/src/…` reaches the same file as
+`../../../convergence/src/…`, and no pattern that must see `../` and a
+workspace name adjacent can tell. Spelling is irrelevant to a resolved path,
+including a spelling nobody has written yet. One fact, one organ.
+
+One question it deliberately does not answer: whether a renderer may import
+Electron, or reach across FSD layers, belongs to chaperone's renderer rules
+below. "Import the package by its name" used to be the second — round 4 left it
+a convention on the grounds that a relative path into a **declared** package
+still resolves to a declared dependency — and round 5 made it a rule, because
+ownership and the `exports` contract are two different questions and only the
+first was being asked.
 
 ## Core architectural choices
 
@@ -48,6 +172,23 @@ Renderer code stays close to Divergence:
 - `src/shared`
 
 Keep slice public APIs in `index.ts` files. Avoid deep imports across slices.
+
+These renderer laws bind **every app's renderer**, not only Convergence's:
+chaperone's renderer rules glob `apps/*/src`, so Backpack Studio inherits the
+direct-Electron ban, the presentational boundaries, the FSD public-API rule and
+the `.pure.ts` test pairing on the day it is created. The public-API rule
+rejects both the alias spelling (`@/features/x/y`) and the relative one
+(`../features/x/y`), because an app without a `@/` alias of its own would
+otherwise be unbound. Rules that name Convergence's own design system — the
+raw-`<button>`/`<input>` warnings — stay scoped to `apps/convergence` and say so
+in their message (MAR-2737).
+
+Because the layer map is shared, every app's layers live in one logical set, and
+these rules answer only "may this layer import that layer?" — never "whose app
+is that?". The second question belongs to the workspace-ownership test ("The
+enforcing organ" above), and it needs its own organ: a Studio import of
+Convergence's `entities` is a legal `app → entities` direction and passes all of
+the above (MAR-2737).
 
 ### 3. UI-first agent runtime
 

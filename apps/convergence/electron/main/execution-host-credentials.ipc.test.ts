@@ -23,7 +23,7 @@ import {
   createStubDaemon,
   waitUntil,
   type StubDaemon,
-} from '../backend/provider/execution-host/execution-host-daemon.fixture'
+} from '@convergence/execution-host-client'
 
 /**
  * The four daemon handlers, each acting on the Endpoint the caller named

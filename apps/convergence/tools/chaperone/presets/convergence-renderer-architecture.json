@@ -9,17 +9,17 @@
         "id": "renderer-preload-access-through-api-files",
         "type": "forbidden-import",
         "severity": "error",
-        "files": "apps/convergence/src/**/*.{ts,tsx}",
+        "files": "apps/*/src/**/*.{ts,tsx}",
         "restrictions": [],
         "checkPatterns": [
           {
             "pattern": "\\bwindow\\.electronAPI\\b",
             "allowedIn": [
-              "apps/convergence/src/**/*.api.ts",
-              "apps/convergence/src/**/*.test.ts",
-              "apps/convergence/src/**/*.test.tsx",
-              "apps/convergence/src/test-setup.ts",
-              "apps/convergence/src/shared/types/electron-api.d.ts"
+              "apps/*/src/**/*.api.ts",
+              "apps/*/src/**/*.test.ts",
+              "apps/*/src/**/*.test.tsx",
+              "apps/*/src/test-setup.ts",
+              "apps/*/src/shared/types/electron-api.d.ts"
             ],
             "message": "Renderer preload access must stay behind *.api.ts wrappers."
           }
@@ -27,15 +27,20 @@
         "message": "Renderer preload access must stay behind *.api.ts wrappers."
       },
       {
-        "id": "renderer-fsd-public-api-alias-imports",
+        "id": "renderer-fsd-public-api-imports",
         "type": "forbidden-import",
         "severity": "error",
-        "files": "apps/convergence/src/**/*.{ts,tsx}",
+        "files": "apps/*/src/**/*.{ts,tsx}",
         "restrictions": [
           {
             "source": "^@/(entities|features|widgets)/[^/]+/.+",
             "allowedIn": [],
             "message": "Alias imports into FSD slices must stop at the slice public API index.ts."
+          },
+          {
+            "source": "^(\\.\\./)+(entities|features|widgets)/[^/]+/.+",
+            "allowedIn": [],
+            "message": "Relative imports into another FSD slice must stop at the slice public API index.ts. An app with no @/ alias of its own (Backpack Studio) reaches its slices this way, and the law is the same one."
           }
         ],
         "includeTypeImports": true
@@ -44,7 +49,7 @@
         "id": "renderer-no-default-exports",
         "type": "regex",
         "severity": "error",
-        "files": "apps/convergence/src/**/*.{ts,tsx}",
+        "files": "apps/*/src/**/*.{ts,tsx}",
         "pattern": "^\\s*export\\s+default\\b",
         "message": "Use named exports only in renderer code."
       },
@@ -54,9 +59,9 @@
         "severity": "error",
         "paths": [
           {
-            "pattern": "apps/convergence/src/components/**/*",
+            "pattern": "apps/*/src/components/**/*",
             "reason": "Use FSD-lite layers and shared design-system ownership",
-            "migratedTo": "apps/convergence/src/shared/ui/ or FSD slices"
+            "migratedTo": "the app's src/shared/ui/ or an FSD slice"
           }
         ]
       },
@@ -66,9 +71,9 @@
         "severity": "error",
         "paths": [
           {
-            "pattern": "apps/convergence/src/hooks/**/*",
+            "pattern": "apps/*/src/hooks/**/*",
             "reason": "Use FSD-lite layers for hooks",
-            "migratedTo": "apps/convergence/src/shared/hooks/ or FSD slice hooks"
+            "migratedTo": "the app's src/shared/hooks/ or an FSD slice hook"
           }
         ]
       },
@@ -78,9 +83,9 @@
         "severity": "error",
         "paths": [
           {
-            "pattern": "apps/convergence/src/lib/**/*",
+            "pattern": "apps/*/src/lib/**/*",
             "reason": "Use shared lib folder",
-            "migratedTo": "apps/convergence/src/shared/lib/"
+            "migratedTo": "the app's src/shared/lib/"
           }
         ]
       },
@@ -90,23 +95,23 @@
         "severity": "error",
         "layers": {
           "shared": {
-            "files": "apps/convergence/src/shared/**/*.{ts,tsx}",
+            "files": "apps/*/src/shared/**/*.{ts,tsx}",
             "allowImportsFrom": []
           },
           "entities": {
-            "files": "apps/convergence/src/entities/**/*.{ts,tsx}",
+            "files": "apps/*/src/entities/**/*.{ts,tsx}",
             "allowImportsFrom": ["shared", "entities"]
           },
           "features": {
-            "files": "apps/convergence/src/features/**/*.{ts,tsx}",
+            "files": "apps/*/src/features/**/*.{ts,tsx}",
             "allowImportsFrom": ["shared", "entities"]
           },
           "widgets": {
-            "files": "apps/convergence/src/widgets/**/*.{ts,tsx}",
+            "files": "apps/*/src/widgets/**/*.{ts,tsx}",
             "allowImportsFrom": ["shared", "entities", "features"]
           },
           "app": {
-            "files": "apps/convergence/src/app/**/*.{ts,tsx}",
+            "files": "apps/*/src/app/**/*.{ts,tsx}",
             "allowImportsFrom": ["shared", "entities", "features", "widgets"]
           }
         }
@@ -115,7 +120,7 @@
         "id": "presentational-no-effects",
         "type": "regex",
         "severity": "error",
-        "files": "apps/convergence/src/**/*.presentational.tsx",
+        "files": "apps/*/src/**/*.presentational.tsx",
         "pattern": "\\buse(Effect|LayoutEffect|InsertionEffect)\\b",
         "forbidden": true,
         "message": "Presentational components must not use useEffect/useLayoutEffect/useInsertionEffect. Move effects to *.container.tsx."
@@ -124,7 +129,7 @@
         "id": "presentational-no-electron",
         "type": "regex",
         "severity": "error",
-        "files": "apps/convergence/src/**/*.presentational.tsx",
+        "files": "apps/*/src/**/*.presentational.tsx",
         "pattern": "from\\s+['\"]electron['\"]",
         "forbidden": true,
         "message": "Presentational components must not import electron."
@@ -133,17 +138,17 @@
         "id": "renderer-no-direct-electron",
         "type": "regex",
         "severity": "error",
-        "files": "apps/convergence/src/**/*.{ts,tsx}",
+        "files": "apps/*/src/**/*.{ts,tsx}",
         "pattern": "from\\s+['\"]electron['\"]",
         "forbidden": true,
-        "message": "Renderer code must not import electron directly. Use preload-exposed APIs via *.api.ts wrappers."
+        "message": "Renderer code must not import electron directly. Use preload-exposed APIs via *.api.ts wrappers. Vite bundles such an import into the browser chunk with only a warning, so nothing but this rule stands between it and a runtime failure on a user's machine."
       },
       {
         "id": "pure-files-need-sibling-tests",
         "type": "relationship",
         "severity": "error",
         "when": {
-          "files": "apps/convergence/src/**/*.pure.ts"
+          "files": "apps/*/src/**/*.pure.ts"
         },
         "then": [
           {
@@ -160,8 +165,8 @@
         "id": "pure-functions-tested",
         "type": "symbol-reference",
         "severity": "error",
-        "sourceFiles": "apps/convergence/src/**/*.pure.ts",
-        "targetFiles": "apps/convergence/src/**/*.pure.test.ts",
+        "sourceFiles": "apps/*/src/**/*.pure.ts",
+        "targetFiles": "apps/*/src/**/*.pure.test.ts",
         "targetPair": {
           "from": "\\.pure\\.ts$",
           "to": ".pure.test.ts"
@@ -175,7 +180,7 @@
         "severity": "warning",
         "files": "apps/convergence/src/{app,widgets,features,entities}/**/*.container.tsx",
         "pattern": "<button[\\s>]",
-        "message": "Use Button from src/shared/ui/ instead of raw <button>"
+        "message": "Use Button from src/shared/ui/ instead of raw <button>. Scoped to apps/convergence deliberately: it names Convergence's own design system, and Backpack Studio's is Backpack (MAR-2705)."
       },
       {
         "id": "no-raw-button-in-presentational-outside-shared",
@@ -183,7 +188,7 @@
         "severity": "warning",
         "files": "apps/convergence/src/{app,widgets,features,entities}/**/*.presentational.tsx",
         "pattern": "<button[\\s>]",
-        "message": "Use Button from src/shared/ui/ instead of raw <button>"
+        "message": "Use Button from src/shared/ui/ instead of raw <button>. Scoped to apps/convergence deliberately: it names Convergence's own design system, and Backpack Studio's is Backpack (MAR-2705)."
       },
       {
         "id": "no-raw-input-outside-shared",
@@ -191,7 +196,7 @@
         "severity": "warning",
         "files": "apps/convergence/src/{app,widgets,features,entities}/**/*.container.tsx",
         "pattern": "<input[\\s>]",
-        "message": "Use Input from src/shared/ui/ instead of raw <input>"
+        "message": "Use Input from src/shared/ui/ instead of raw <input>. Scoped to apps/convergence deliberately: it names Convergence's own design system, and Backpack Studio's is Backpack (MAR-2705)."
       },
       {
         "id": "no-raw-input-in-presentational-outside-shared",
@@ -199,7 +204,7 @@
         "severity": "warning",
         "files": "apps/convergence/src/{app,widgets,features,entities}/**/*.presentational.tsx",
         "pattern": "<input[\\s>]",
-        "message": "Use Input from src/shared/ui/ instead of raw <input>"
+        "message": "Use Input from src/shared/ui/ instead of raw <input>. Scoped to apps/convergence deliberately: it names Convergence's own design system, and Backpack Studio's is Backpack (MAR-2705)."
       }
     ]
   }

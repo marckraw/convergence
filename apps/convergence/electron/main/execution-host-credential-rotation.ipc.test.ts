@@ -18,8 +18,8 @@ import { AppSettingsRemoteExecutionHostRegistry } from '../backend/provider/exec
 import {
   createStubDaemon,
   type StubDaemon,
-} from '../backend/provider/execution-host/execution-host-daemon.fixture'
-import { daemonHealthFixtureWithoutDescriptor } from '../backend/provider/execution-host/execution-host-health.fixture'
+} from '@convergence/execution-host-client'
+import { daemonHealthFixtureWithoutDescriptor } from '@convergence/execution-host-client'
 import { ExecutionHostDaemonCredentialsService } from '../backend/credentials/execution-host-daemon-credentials.service'
 import { ProviderRegistry } from '../backend/provider/provider-registry'
 import { SessionService } from '../backend/session/session.service'

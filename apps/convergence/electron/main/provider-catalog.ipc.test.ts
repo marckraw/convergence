@@ -19,7 +19,7 @@ import {
   createStubDaemon,
   waitUntil,
   type StubDaemon,
-} from '../backend/provider/execution-host/execution-host-daemon.fixture'
+} from '@convergence/execution-host-client'
 import { ExecutionHostDaemonCredentialsService } from '../backend/credentials/execution-host-daemon-credentials.service'
 import { ProviderRegistry } from '../backend/provider/provider-registry'
 import { SessionService } from '../backend/session/session.service'

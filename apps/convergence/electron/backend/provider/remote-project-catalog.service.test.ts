@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { EXECUTION_HOST_REQUEST_CASES } from '../../../src/shared/lib/execution-host-id.fixture'
 import { RemoteProjectCatalogService } from './remote-project-catalog.service'
-import type { RemoteProjectCatalog } from './execution-host/remote-project.types'
+import type { RemoteProjectCatalog } from '@convergence/execution-host-client'
 
 const PROJECTS = [
   {

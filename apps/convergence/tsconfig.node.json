@@ -19,6 +19,9 @@
     "src/shared/lib/execution-host-id.fixture.ts",
     "electron.vite.config.ts",
     "../../eslint.config.test.ts",
+    "workspace-manifest.test.ts",
+    "workspace-import-ownership.test.ts",
+    "../../workspace-import-ownership.syntax.test.ts",
     "vitest.config.ts",
     "vitest.pure.config.ts",
     "vitest.unit.config.ts"
