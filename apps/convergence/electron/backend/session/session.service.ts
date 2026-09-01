@@ -6,10 +6,10 @@ import type {
   ConversationItemRow,
   SessionRow,
 } from '../database/database.types'
+import type { RemoteSessionWorkspaceInfo } from '@convergence/execution-host-client'
 import type {
   ExecutionHostProviderCapabilities,
   ProviderExecutionHost,
-  RemoteSessionWorkspaceInfo,
 } from '../provider/execution-host/execution-host.types'
 import type { RemoteExecutionHostRegistry } from '../provider/execution-host/remote-execution-host.types'
 import {

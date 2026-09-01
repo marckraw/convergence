@@ -1,17 +1,23 @@
-import type { AppSettingsService } from '../../app-settings/app-settings.service'
-import type { ExecutionHostDaemonCredentialsService } from '../../credentials/execution-host-daemon-credentials.service'
-import type { EndpointHandshakeResult } from './execution-host-handshake.types'
-import type { RemoteExecutionHost } from './remote-execution-host'
+/**
+ * The Settings "Test connection" answer, which is Convergence's question and
+ * not the client core's (MAR-2737).
+ *
+ * `AppSettingsRemoteExecutionHostConnectionResolver` — the other half this file
+ * used to hold — moved to `@convergence/execution-host-client`, because
+ * resolving one Endpoint's base URL and token through two small ports is what
+ * any app talking to a daemon does. What is left takes a `RemoteExecutionHost`
+ * and renders a sentence for a settings row, so it belongs on this side of the
+ * line: the package may not import the host, and a function that takes one is a
+ * function the package cannot own.
+ */
 import {
-  daemonConfigurationFingerprint,
-  describeRemoteProviderListing,
-} from './remote-execution-host.pure'
-import {
+  AppSettingsRemoteExecutionHostConnectionResolver,
   RemoteExecutionHostError,
-  type RemoteExecutionHostConnection,
-  type RemoteExecutionHostConnectionResolver,
+  type EndpointHandshakeResult,
   type RemoteExecutionHostProviderInfo,
-} from './remote-execution-host.types'
+} from '@convergence/execution-host-client'
+import type { RemoteExecutionHost } from './remote-execution-host'
+import { describeRemoteProviderListing } from './remote-execution-host.pure'
 
 export type RemoteExecutionHostConnectionState =
   | 'connected'
@@ -42,97 +48,6 @@ export interface RemoteExecutionHostConnectionResult {
   message: string
   providers: RemoteExecutionHostProviderInfo[] | null
   daemon: RemoteExecutionHostDaemonSummary | null
-}
-
-interface AppSettingsConnectionResolverDeps {
-  appSettings: Pick<
-    AppSettingsService,
-    'getAppSettings' | 'observeExecutionHostConfiguration'
-  >
-  credentials: Pick<ExecutionHostDaemonCredentialsService, 'resolveToken'>
-  /** The Endpoint this resolver speaks for. Never optional: see the class. */
-  endpointId: string
-}
-
-/**
- * Resolves one named Endpoint's base URL and token from App Settings and the
- * daemon credentials store at call time, so settings changes apply without
- * rebuilding the host. Throws RemoteExecutionHostError('configuration') when
- * the base URL or token is missing.
- *
- * The Endpoint is fixed at construction and looked up by id, never by
- * position (MAR-2620). Reading whichever Endpoint happens to be first would
- * make the id a fact that is checked upstream and then thrown away: a session
- * recording Endpoint B would validate, and post to Endpoint A. One resolver
- * serves exactly one machine, and `AppSettingsRemoteExecutionHostRegistry`
- * builds one per Endpoint.
- */
-export class AppSettingsRemoteExecutionHostConnectionResolver implements RemoteExecutionHostConnectionResolver {
-  constructor(private readonly deps: AppSettingsConnectionResolverDeps) {}
-
-  /** Which machine this resolver answers for. */
-  get endpointId(): string {
-    return this.deps.endpointId
-  }
-
-  /**
-   * The base URL and token this Endpoint is configured with right now, and the
-   * one place either is learned (MAR-2620).
-   *
-   * Every resolution is also an *observation*: the configuration epoch the
-   * renderer keys its catalogs by moves here and nowhere else (MAR-2689 round
-   * 6). The refusals observe too, and deliberately — an Endpoint whose token
-   * has just been deleted is not configured the way the catalog on screen was
-   * read under, and a resolver that only reported successes would leave that
-   * catalog in force.
-   */
-  async resolveConnection(): Promise<RemoteExecutionHostConnection> {
-    const inspected = await this.inspect()
-    const connection =
-      inspected.state === 'ok'
-        ? { baseUrl: inspected.baseUrl!, token: inspected.token! }
-        : null
-    this.deps.appSettings.observeExecutionHostConfiguration(
-      this.deps.endpointId,
-      daemonConfigurationFingerprint(connection),
-    )
-    if (!connection) {
-      throw new RemoteExecutionHostError(
-        inspected.state === 'missing-token'
-          ? 'Remote execution host API token is not configured.'
-          : 'Remote execution host base URL is not configured.',
-        'configuration',
-      )
-    }
-    return connection
-  }
-
-  /**
-   * Non-throwing configuration check used by the connection test to report
-   * which piece of configuration is missing.
-   */
-  async inspect(): Promise<{
-    state: 'ok' | 'missing-base-url' | 'missing-token'
-    baseUrl: string | null
-    token: string | null
-  }> {
-    const settings = await this.deps.appSettings.getAppSettings()
-    const endpoint =
-      settings.executionHostEndpoints.find(
-        (candidate) => candidate.id === this.deps.endpointId,
-      ) ?? null
-    if (!endpoint) {
-      return { state: 'missing-base-url', baseUrl: null, token: null }
-    }
-
-    const token =
-      (await this.deps.credentials.resolveToken(endpoint.id))?.trim() ?? ''
-    if (!token) {
-      return { state: 'missing-token', baseUrl: endpoint.baseUrl, token: null }
-    }
-
-    return { state: 'ok', baseUrl: endpoint.baseUrl, token }
-  }
 }
 
 /**

@@ -31,55 +31,47 @@ import {
   toLocalSessionDelta,
   withSettledAttention,
 } from './execution-host-wire-mapping.pure'
-import {
-  evaluateHandshake,
-  parseDaemonHealth,
-} from './execution-host-handshake.pure'
-import type {
-  DaemonHealthInfo,
-  EndpointHandshakeResult,
-} from './execution-host-handshake.types'
 import type {
   ExecutionHostProviderCapabilities,
   ProviderExecutionHost,
 } from './execution-host.types'
 import {
   blockedProviderError,
-  daemonCapabilitiesFingerprint,
-  daemonConfigurationFingerprint,
   describeRemoteExecutionHostFailure,
   capabilitiesForRemoteProvider,
-  createSseParser,
   catalogEntryForRemoteProvider,
   describeRemoteProviderBlock,
-  parseRemoteExecutionHostMeta,
-  parseRemoteExecutionHostStartResponse,
-  parseRemoteSessionWorkspaceInfo,
-  type RemoteSessionWorkspaceInfo,
-  type RemoteStartEcho,
   remoteExecutionHostReconnectDelayMs,
   unavailableProviderError,
-  UNRESOLVED_DAEMON_CONFIGURATION,
 } from './remote-execution-host.pure'
 import type { ProviderCatalog } from '../provider-catalog.types'
 import {
   advertisesRemoteProjects,
+  createSseParser,
+  daemonCapabilitiesFingerprint,
+  daemonConfigurationFingerprint,
   decodeRemoteProjects,
+  evaluateHandshake,
+  parseDaemonHealth,
+  parseRemoteExecutionHostMeta,
+  parseRemoteExecutionHostStartResponse,
+  parseRemoteSessionWorkspaceInfo,
+  RemoteExecutionHostError,
   remoteProjectCatalogFromOutcome,
   remoteProjectsCapability,
-  type RemoteProjectsCapability,
-} from './remote-project.pure'
-import type {
-  RemoteProjectCatalog,
-  RemoteProjectsOutcome,
-} from './remote-project.types'
-import {
-  RemoteExecutionHostError,
+  describeWireEventShape,
+  UNRESOLVED_DAEMON_CONFIGURATION,
+  type DaemonHealthInfo,
+  type EndpointHandshakeResult,
   type RemoteExecutionHostConnection,
   type RemoteExecutionHostConnectionResolver,
   type RemoteExecutionHostProviderInfo,
-} from './remote-execution-host.types'
-import { describeWireEventShape } from './execution-host-wire-trace.pure'
+  type RemoteProjectCatalog,
+  type RemoteProjectsCapability,
+  type RemoteProjectsOutcome,
+  type RemoteSessionWorkspaceInfo,
+  type RemoteStartEcho,
+} from '@convergence/execution-host-client'
 import {
   noopDebugSink,
   type ProviderDebugSink,

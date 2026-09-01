@@ -1,7 +1,7 @@
 import { readExecutionHostIdAtDoor } from './execution-host-id-door.pure'
 import { LOCAL_EXECUTION_HOST_ID } from '../execution-host-endpoint/execution-host-endpoint.pure'
 import type { RemoteExecutionHost } from './execution-host/remote-execution-host'
-import type { RemoteProjectCatalog } from './execution-host/remote-project.types'
+import type { RemoteProjectCatalog } from '@convergence/execution-host-client'
 
 export interface RemoteProjectCatalogServiceDeps {
   /**

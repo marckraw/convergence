@@ -7,14 +7,28 @@
   // `npm run typecheck` failed with TS2322. `agent:pre-push` runs chaperone
   // alone, so the green answer was the only answer anyone saw.
   //
-  // This file restores exactly the coverage chaperone had before the move — the
-  // renderer `src/` tree, nothing more — by extending the app's own config
-  // rather than restating it. The relative `paths` in that base config resolve
-  // against the base file, so `@/*` still points at `apps/convergence/src/*`.
-  // The deeper `npm run typecheck` gate is unchanged and still a strict
-  // superset: it runs both app tsconfigs explicitly with `-p`.
+  // WHAT THIS FILE COVERS, exactly, and what it does not (MAR-2737):
   //
-  // RUN38 revisits this when a second app's `src/` exists.
+  //   covered — `apps/convergence/src`, `apps/backpack-studio/src`, and
+  //   `packages/execution-host-client/src`: every renderer tree plus the shared
+  //   client core.
+  //
+  //   NOT covered — every `electron/` tree. Those compile under a *different*
+  //   config (`tsconfig.node.json`: no DOM lib, no JSX, no `@/*`), and folding
+  //   them in here would typecheck them against a renderer program that lies
+  //   about their environment. `npm run typecheck` is the gate that reaches
+  //   them, and it remains a strict superset of this one: it runs each
+  //   workspace's own configs explicitly with `-p`.
+  //
+  // The relative `paths` in the base config resolve against the base file, so
+  // `@/*` still points at `apps/convergence/src/*` — which is why Backpack
+  // Studio deliberately uses relative imports and claims no alias of its own.
+  // A second `@/*` owner would need a second program, not a second entry in
+  // this list.
   "extends": "./apps/convergence/tsconfig.json",
-  "include": ["apps/convergence/src"]
+  "include": [
+    "apps/convergence/src",
+    "apps/backpack-studio/src",
+    "packages/execution-host-client/src"
+  ]
 }

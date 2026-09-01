@@ -3,7 +3,7 @@ import {
   MAX_LISTING_ATTEMPTS,
   RemoteExecutionHost,
 } from './remote-execution-host'
-import { RemoteExecutionHostError } from './remote-execution-host.types'
+import { RemoteExecutionHostError } from '@convergence/execution-host-client'
 
 /** The address of the nth machine one Endpoint has pointed at. */
 const machineUrl = (machine: number): string =>

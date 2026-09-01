@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import type { AppSettings } from '../../app-settings/app-settings.types'
-import { DAEMON_HEALTH_FIXTURE_0_26_1 } from './execution-host-health.fixture'
-import { RemoteExecutionHost } from './remote-execution-host'
 import {
   AppSettingsRemoteExecutionHostConnectionResolver,
-  testRemoteExecutionHostConnection,
-} from './remote-execution-host-connection'
+  DAEMON_HEALTH_FIXTURE_0_26_1,
+} from '@convergence/execution-host-client'
+import { RemoteExecutionHost } from './remote-execution-host'
+import { testRemoteExecutionHostConnection } from './remote-execution-host-connection'
 
 function endpoint(
   id: string,
@@ -115,63 +115,6 @@ function healthWith(overrides: Record<string, unknown>): string {
     ...overrides,
   })
 }
-
-describe('AppSettingsRemoteExecutionHostConnectionResolver', () => {
-  it('resolves the configured base URL and token', async () => {
-    const resolver = resolverWith({
-      baseUrl: 'https://daemon.test',
-      token: 'tok',
-    })
-    await expect(resolver.resolveConnection()).resolves.toEqual({
-      baseUrl: 'https://daemon.test',
-      token: 'tok',
-    })
-  })
-
-  it('resolves the Endpoint it names, not whichever one is configured first', async () => {
-    // The defect this resolver exists to make impossible: endpoint A is first
-    // in the list, and a resolver bound to B must still address B. Reading by
-    // position validated the id upstream and then discarded it, so a session
-    // on B posted to A (MAR-2620).
-    const resolver = resolverOver({
-      endpointId: 'daemon-b',
-      endpoints: [
-        endpoint('daemon-a', 'https://daemon-a.test'),
-        endpoint('daemon-b', 'https://daemon-b.test'),
-      ],
-      tokens: { 'daemon-a': 'token-a', 'daemon-b': 'token-b' },
-    })
-
-    await expect(resolver.resolveConnection()).resolves.toEqual({
-      baseUrl: 'https://daemon-b.test',
-      token: 'token-b',
-    })
-  })
-
-  it('refuses when its own Endpoint is gone, even with others configured', async () => {
-    const resolver = resolverOver({
-      endpointId: 'daemon-b',
-      endpoints: [endpoint('daemon-a', 'https://daemon-a.test')],
-      tokens: { 'daemon-a': 'token-a' },
-    })
-
-    await expect(resolver.resolveConnection()).rejects.toMatchObject({
-      kind: 'configuration',
-    })
-  })
-
-  it('throws configuration errors for missing base URL and token', async () => {
-    await expect(
-      resolverWith({ baseUrl: null, token: 'tok' }).resolveConnection(),
-    ).rejects.toMatchObject({ kind: 'configuration' })
-    await expect(
-      resolverWith({
-        baseUrl: 'https://daemon.test',
-        token: '  ',
-      }).resolveConnection(),
-    ).rejects.toMatchObject({ kind: 'configuration' })
-  })
-})
 
 describe('testRemoteExecutionHostConnection', () => {
   it('reports missing configuration without touching the network', async () => {

@@ -39,7 +39,7 @@ import {
   DAEMON_HEALTH_FIXTURE_0_26_1,
   DAEMON_HEALTH_FIXTURE_GIT_SHA,
   DAEMON_HEALTH_FIXTURE_VERSION,
-} from './execution-host-health.fixture'
+} from '@convergence/execution-host-client'
 
 function eventEnvelope(event: ExecutionHostEvent): ExecutionHostEventEnvelope {
   return {

@@ -12,15 +12,15 @@ import {
 import {
   DAEMON_HEALTH_FIXTURE_0_26_1,
   daemonHealthFixtureWithoutDescriptor,
-} from './execution-host-health.fixture'
+} from '@convergence/execution-host-client'
 import {
   createStubDaemon,
   envelope,
   waitUntil,
   type StubDaemon,
-} from './execution-host-daemon.fixture'
+} from '@convergence/execution-host-client'
 import { RemoteExecutionHost } from './remote-execution-host'
-import { RemoteExecutionHostError } from './remote-execution-host.types'
+import { RemoteExecutionHostError } from '@convergence/execution-host-client'
 import type { ProviderDebugSink } from '../../provider-debug/provider-debug-sink'
 import type { ProviderDebugEntry } from '../../provider-debug/provider-debug.types'
 

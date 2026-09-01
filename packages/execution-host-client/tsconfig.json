@@ -13,18 +13,9 @@
     "isolatedModules": true
   },
   "include": [
-    "electron/**/*",
-    "src/shared/lib/keyboard-shortcut.pure.ts",
-    "src/shared/lib/execution-host-id.pure.ts",
-    "src/shared/lib/execution-host-id.fixture.ts",
-    "electron.vite.config.ts",
-    "../../eslint.config.test.ts",
-    "workspace-manifest.test.ts",
-    "workspace-import-ownership.test.ts",
-    "../../workspace-import-ownership.syntax.test.ts",
-    "vitest.config.ts",
+    "src/**/*",
     "vitest.pure.config.ts",
-    "vitest.unit.config.ts"
+    "workspace-import-ownership.test.ts"
   ],
   "exclude": ["node_modules"]
 }

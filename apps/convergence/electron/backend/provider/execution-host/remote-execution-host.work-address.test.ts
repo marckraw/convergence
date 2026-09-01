@@ -19,11 +19,11 @@ import {
   createStubDaemon,
   waitUntil,
   type StubDaemon,
-} from './execution-host-daemon.fixture'
+} from '@convergence/execution-host-client'
 import {
   DAEMON_HEALTH_FIXTURE_0_26_1,
   daemonHealthFixtureWithoutDescriptor,
-} from './execution-host-health.fixture'
+} from '@convergence/execution-host-client'
 import { LocalExecutionHost } from './local-execution-host'
 import { RemoteExecutionHost } from './remote-execution-host'
 import { AppSettingsRemoteExecutionHostRegistry } from './remote-execution-host.registry'

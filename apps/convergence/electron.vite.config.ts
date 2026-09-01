@@ -4,9 +4,23 @@ import { tanstackRouter } from '@tanstack/router-plugin/vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 
+/**
+ * The workspace packages this build compiles from source rather than requiring
+ * at runtime (MAR-2737).
+ *
+ * `@convergence/execution-host-client` publishes TypeScript through its
+ * `exports`, so it can only ever be *bundled*: externalizing it would emit a
+ * bare `require('@convergence/execution-host-client')` into `out/main`, and the
+ * packaged app would resolve that to a `.ts` entry point Electron cannot load —
+ * at runtime, on a user's machine, long after every gate went green. It is a
+ * devDependency for the same reason, and this list is the pin that keeps the
+ * answer right even if someone later moves it into `dependencies`.
+ */
+const BUNDLED_WORKSPACE_PACKAGES = ['@convergence/execution-host-client']
+
 export default defineConfig({
   main: {
-    plugins: [externalizeDepsPlugin()],
+    plugins: [externalizeDepsPlugin({ exclude: BUNDLED_WORKSPACE_PACKAGES })],
     build: {
       rollupOptions: {
         input: {
