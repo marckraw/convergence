@@ -19,6 +19,8 @@ function hop(overrides: Partial<RelayHop> & { id: string }): RelayHop {
     spawnedSessionId: null,
     triggerStatus: 'completed',
     payloadPreview: 'Done.',
+    baton: null,
+    roundNumber: null,
     outcome: 'delivered',
     error: null,
     ...overrides,

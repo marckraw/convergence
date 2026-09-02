@@ -41,6 +41,9 @@ function makeCrew(sessionIds: string[]): SessionCrew {
     emoji: null,
     accentColor: null,
     position: 0,
+    roundCap: null,
+    stallMinutes: null,
+    members: [],
     createdAt: '2026-08-15T10:00:00.000Z',
     updatedAt: '2026-08-15T10:00:00.000Z',
     sessionIds,
@@ -59,6 +62,7 @@ function makeRelay(
     spawnSpec: null,
     instruction: null,
     opener: null,
+    conditionToken: null,
     armed: true,
     createdAt: '2026-08-15T10:00:00.000Z',
     updatedAt: '2026-08-15T10:00:00.000Z',
@@ -289,6 +293,7 @@ describe('CrewFlowSection', () => {
         targetSessionId: 'review',
         instruction: null,
         opener: null,
+        conditionToken: null,
         spawnSpec: null,
       })
     })
@@ -383,6 +388,7 @@ describe('CrewFlowSection', () => {
         targetSessionId: 'scribe',
         instruction: null,
         opener: null,
+        conditionToken: null,
         spawnSpec: null,
       })
     })
@@ -623,6 +629,7 @@ describe('CrewFlowSection', () => {
           targetSessionId: null,
           instruction: null,
           opener: null,
+          conditionToken: null,
           spawnSpec: {
             projectId: 'project-1',
             providerId: 'codex',

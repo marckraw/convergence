@@ -38,6 +38,8 @@ function hop(overrides: Partial<RelayHop> = {}): RelayHop {
     spawnedSessionId: null,
     triggerStatus: 'completed',
     payloadPreview: 'Done. Ready for review.',
+    baton: null,
+    roundNumber: null,
     outcome: 'delivered',
     error: null,
     ...overrides,
@@ -49,9 +51,14 @@ describe('alarming outcomes', () => {
     expect([...ALARMING_RELAY_OUTCOMES].sort()).toEqual([
       'error',
       'skipped-budget',
+      'skipped-round-budget',
     ])
     expect(isAlarmingHop({ outcome: 'error' })).toBe(true)
     expect(isAlarmingHop({ outcome: 'skipped-budget' })).toBe(true)
+    expect(isAlarmingHop({ outcome: 'skipped-round-budget' })).toBe(true)
+    // The line between loud and quiet is whether anything is owed: a wire
+    // held by its own condition did what it was drawn to do, so it stays grey.
+    expect(isAlarmingHop({ outcome: 'skipped-baton' })).toBe(false)
   })
 
   it('leaves ordinary work and ordinary skips quiet', () => {
@@ -192,6 +199,8 @@ describe('buildRelayHopLine', () => {
       rawOutcome: null,
       tone: 'delivered',
       timeLabel: 'just now',
+      roundLabel: null,
+      batonLabel: null,
       payloadPreview: 'Done. Ready for review.',
       error: null,
     })

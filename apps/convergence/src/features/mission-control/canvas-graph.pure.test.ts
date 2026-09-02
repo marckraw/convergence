@@ -1,11 +1,15 @@
 import { describe, expect, it } from 'vitest'
 import type { SessionRelay } from '@/entities/session-relay'
 import type { SessionCrew } from '@/entities/session-crew'
+import type { CrewHail } from '@/entities/crew-hail'
 import {
   ARMED_WIRE_FALLBACK_COLOR,
+  SAFETY_EDGE_LABEL,
+  TERMINAL_EDGE_LABEL,
   assignFlowColumns,
   buildCanvasGraph,
   CANVAS_NODE_WIDTH,
+  chairNodeId,
   DISARMED_WIRE_COLOR,
   formatSpawnNodeSpec,
   resolveWireColor,
@@ -37,6 +41,9 @@ function crew(id: string, overrides: Partial<SessionCrew> = {}): SessionCrew {
     emoji: null,
     accentColor: null,
     position: 0,
+    roundCap: null,
+    stallMinutes: null,
+    members: [],
     sessionIds: [],
     createdAt: '2026-08-16T00:00:00.000Z',
     updatedAt: '2026-08-16T00:00:00.000Z',
@@ -60,6 +67,7 @@ function wire(
     spawnSpec: null,
     instruction: null,
     opener: null,
+    conditionToken: null,
     armed,
     createdAt: '2026-08-16T00:00:00.000Z',
     updatedAt: '2026-08-16T00:00:00.000Z',
@@ -87,6 +95,7 @@ function spawnWire(
     },
     instruction: null,
     opener: null,
+    conditionToken: null,
     armed: true,
     createdAt: '2026-08-16T00:00:00.000Z',
     updatedAt: '2026-08-16T00:00:00.000Z',
@@ -460,5 +469,153 @@ describe('formatSpawnNodeSpec', () => {
     expect(formatSpawnNodeSpec({ providerId: null, model: null })).toBe(
       'spec unreadable',
     )
+  })
+})
+
+function hail(crewId: string, overrides: Partial<CrewHail> = {}): CrewHail {
+  return {
+    id: `hail-${crewId}`,
+    crewId,
+    flowRunId: 'run-1',
+    reason: 'terminal',
+    sessionId: 's1',
+    baton: 'marcin',
+    message: 'This one is a judgement call.',
+    detail: 'handed the work to you',
+    raisedAt: '2026-09-01T12:00:00.000Z',
+    acknowledgedAt: null,
+    ...overrides,
+  }
+}
+
+/**
+ * The chair, drawn (MAR-2759).
+ *
+ * Marcin's ruling: a glance at the diagram must show what can happen after
+ * each station. So a terminal route is a real arrow to a real node rather than
+ * an absence, and the three safety nets share one visible edge instead of
+ * being invisible policy.
+ */
+describe('Marcin chair on the canvas', () => {
+  const batonWire = (
+    source: string,
+    target: string,
+    conditionToken: string,
+  ): SessionRelay => ({
+    ...wire(source, target),
+    id: `${source}->${target}`,
+    conditionToken,
+  })
+
+  it('draws no chair for a crew whose wires wait for nothing', () => {
+    const graph = buildCanvasGraph(
+      [group(crew('c1'), ['s1', 's2'])],
+      [wire('s1', 's2')],
+    )
+
+    expect(graph.chairs).toHaveLength(0)
+    expect(graph.edges.every((edge) => edge.kind === 'relay')).toBe(true)
+  })
+
+  it('draws one the moment a single wire waits for a route', () => {
+    const graph = buildCanvasGraph(
+      [group(crew('c1'), ['s1', 's2'])],
+      [batonWire('s1', 's2', 'BATON: reviewer')],
+    )
+
+    expect(graph.chairs.map((chair) => chair.crewId)).toEqual(['c1'])
+    // Dark until something parks there: present is not the same as asking.
+    expect(graph.chairs[0].lit).toBe(false)
+    expect(graph.clusters[0].parked).toBe(false)
+  })
+
+  it('draws a terminal arrow from every station that can declare a route', () => {
+    const graph = buildCanvasGraph(
+      [group(crew('c1'), ['s1', 's2'])],
+      [
+        batonWire('s1', 's2', 'BATON: reviewer'),
+        batonWire('s2', 's1', 'BATON: impl'),
+      ],
+    )
+
+    const terminals = graph.edges.filter((edge) => edge.kind === 'terminal')
+    expect(terminals.map((edge) => edge.source).sort()).toEqual(['s1', 's2'])
+    expect(terminals.every((edge) => edge.target === chairNodeId('c1'))).toBe(
+      true,
+    )
+    expect(terminals.every((edge) => edge.label === TERMINAL_EDGE_LABEL)).toBe(
+      true,
+    )
+    // Nothing stored behind them, so nothing to open.
+    expect(terminals.every((edge) => edge.relayId === null)).toBe(true)
+  })
+
+  it('draws one arrow per station however many conditioned wires it has', () => {
+    const graph = buildCanvasGraph(
+      [group(crew('c1'), ['s1', 's2', 's3'])],
+      [
+        batonWire('s1', 's2', 'BATON: reviewer'),
+        batonWire('s1', 's3', 'BATON: scribe'),
+      ],
+    )
+
+    expect(graph.edges.filter((edge) => edge.kind === 'terminal')).toHaveLength(
+      1,
+    )
+  })
+
+  it('gives the three safety nets exactly one shared edge, from the frame', () => {
+    const graph = buildCanvasGraph(
+      [group(crew('c1'), ['s1', 's2'])],
+      [batonWire('s1', 's2', 'BATON: reviewer')],
+    )
+
+    const safety = graph.edges.filter((edge) => edge.kind === 'safety')
+    expect(safety).toHaveLength(1)
+    expect(safety[0].source).toBe('crew:c1')
+    expect(safety[0].target).toBe(chairNodeId('c1'))
+    expect(safety[0].label).toBe(SAFETY_EDGE_LABEL)
+  })
+
+  it('lights the chair and ambers the frame when the crew is asking', () => {
+    const graph = buildCanvasGraph(
+      [group(crew('c1'), ['s1', 's2'])],
+      [batonWire('s1', 's2', 'BATON: reviewer')],
+      [hail('c1')],
+    )
+
+    expect(graph.chairs[0].lit).toBe(true)
+    expect(graph.chairs[0].detail).toBe('handed the work to you')
+    expect(graph.clusters[0].parked).toBe(true)
+  })
+
+  it('leaves another crew dark when it is not the one asking', () => {
+    const graph = buildCanvasGraph(
+      [group(crew('c1'), ['s1', 's2'])],
+      [batonWire('s1', 's2', 'BATON: reviewer')],
+      [hail('c2')],
+    )
+
+    expect(graph.chairs[0].lit).toBe(false)
+    expect(graph.clusters[0].parked).toBe(false)
+  })
+
+  it('labels a conditioned wire with the route it waits for', () => {
+    const graph = buildCanvasGraph(
+      [group(crew('c1'), ['s1', 's2'])],
+      [batonWire('s1', 's2', 'BATON: reviewer')],
+    )
+
+    const relayEdge = graph.edges.find((edge) => edge.kind === 'relay')
+    expect(relayEdge?.label).toBe('BATON: reviewer')
+  })
+
+  it('leaves an unconditioned wire unlabelled rather than inventing one', () => {
+    const graph = buildCanvasGraph(
+      [group(crew('c1'), ['s1', 's2'])],
+      [wire('s1', 's2')],
+    )
+
+    expect(graph.edges[0].label).toBeNull()
   })
 })

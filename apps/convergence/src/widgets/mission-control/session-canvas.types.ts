@@ -1,4 +1,5 @@
 import type {
+  CanvasChairNode,
   CanvasCrewCluster,
   CanvasSpawnNode,
   SessionCard,
@@ -34,3 +35,8 @@ export interface CanvasSessionNodeData {
 export type CanvasCrewClusterData = Omit<CanvasCrewCluster, 'x' | 'y'>
 
 export type CanvasSpawnNodeData = Omit<CanvasSpawnNode, 'x' | 'y'>
+
+export type CanvasChairNodeData = Omit<CanvasChairNode, 'x' | 'y'> & {
+  /** Answers every call this crew is making. Absent while it is making none. */
+  onAcknowledge: (crewId: string) => void
+}

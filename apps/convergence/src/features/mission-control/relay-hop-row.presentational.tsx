@@ -79,13 +79,37 @@ export const RelayHopRow: FC<RelayHopRowProps> = ({
             <span className="truncate text-foreground">{line.targetName}</span>
           </>
         ) : null}
+        {/* The route and the round sit before the outcome, in the order the
+            beat happened: the message declared a baton, the loop was N rounds
+            deep, and then the wire did something about it. Both are absent on
+            every row written before batons existed, which is the honest answer
+            rather than a zero nobody recorded. */}
+        {line.batonLabel ? (
+          <span className="ml-auto shrink-0 text-muted-foreground">
+            {line.batonLabel}
+          </span>
+        ) : null}
+        {line.roundLabel ? (
+          <span
+            className={cn(
+              'shrink-0 tabular-nums text-muted-foreground',
+              line.batonLabel ? '' : 'ml-auto',
+            )}
+          >
+            {line.roundLabel}
+          </span>
+        ) : null}
         <span
           title={
             line.rawOutcome
               ? `Recorded by another version as "${line.rawOutcome}"`
               : undefined
           }
-          className={cn('ml-auto shrink-0 font-medium', TONE_TEXT[line.tone])}
+          className={cn(
+            'shrink-0 font-medium',
+            !line.batonLabel && !line.roundLabel && 'ml-auto',
+            TONE_TEXT[line.tone],
+          )}
         >
           {line.outcomeLabel}
         </span>
