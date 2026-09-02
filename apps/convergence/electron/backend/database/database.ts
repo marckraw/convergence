@@ -178,6 +178,12 @@ const SCHEMA = `
     skill_selections_json TEXT NOT NULL DEFAULT '[]',
     provider_request_id TEXT,
     skip_context_injection INTEGER NOT NULL DEFAULT 0,
+    -- The delivery receipt (MAR-2759): the dispatch id minted when this input
+    -- was handed to the session layer. Durable here because the queue is the
+    -- durable half of a dispatch -- an id that survives a restart still names
+    -- the turn its input eventually starts, so the relay ledger can stamp the
+    -- right hop. Null for input people typed: only the relay engine holds ids.
+    dispatch_id TEXT,
     error TEXT,
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL,
@@ -275,6 +281,11 @@ const SCHEMA = `
     emoji TEXT,
     accent_color TEXT,
     position INTEGER NOT NULL DEFAULT 0,
+    -- Both null by default, and null means "the default": a crew that never
+    -- touched these knobs must keep behaving like every crew did before they
+    -- existed, and a stored 0 would be a cap nobody could have meant.
+    round_cap INTEGER,
+    stall_minutes INTEGER,
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
     updated_at TEXT NOT NULL DEFAULT (datetime('now'))
   );
@@ -285,6 +296,10 @@ const SCHEMA = `
   CREATE TABLE IF NOT EXISTS session_crew_members (
     crew_id TEXT NOT NULL,
     session_id TEXT NOT NULL,
+    -- The short name a baton addresses this member by. Membership still
+    -- carries no behaviour: this is a label the wire editor reads to pre-fill
+    -- a condition, never something the engine routes on.
+    baton_name TEXT,
     added_at TEXT NOT NULL DEFAULT (datetime('now')),
     UNIQUE (crew_id, session_id)
   );
@@ -310,6 +325,7 @@ const SCHEMA = `
     spawn_spec_json TEXT,
     instruction TEXT,
     opener TEXT,
+    condition_token TEXT,
     armed INTEGER NOT NULL DEFAULT 1,
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
     updated_at TEXT NOT NULL DEFAULT (datetime('now'))
@@ -336,6 +352,23 @@ const SCHEMA = `
     trigger_status TEXT NOT NULL,
     payload_preview TEXT,
     outcome TEXT NOT NULL,
+    baton TEXT,
+    round_number INTEGER,
+    -- When the station this hop landed work in came back, and how it came
+    -- back. The stall clock's second input: "is this hop still owed" is a
+    -- question about the station's fate, not about the clock, and the answer
+    -- has to survive a restart. Null means it has not come back -- which is
+    -- also, honestly, what every row written before this column says.
+    settled_at TEXT,
+    settled_status TEXT,
+    -- The delivery receipt (MAR-2759): the dispatch id the session layer
+    -- minted for the input this hop carried. The stamp above answers a CAUSAL
+    -- question -- which settle was the settle of this hop's work -- and the
+    -- id is the causal answer stated by the one layer that knows: a settle
+    -- names the ids its turn consumed, and only the hop whose id it names is
+    -- stamped. Null on rows written before receipts existed; those keep the
+    -- old first-answer reading.
+    dispatch_id TEXT,
     error TEXT
   );
 
@@ -344,6 +377,34 @@ const SCHEMA = `
 
   CREATE INDEX IF NOT EXISTS idx_relay_hops_flow_run
     ON relay_hops(flow_run_id);
+
+  -- One call for Marcin. A loop that parks, caps, or goes quiet must be LOUD:
+  -- a silent drop is its own defect. Beside the ledger rather than in it,
+  -- because a hail has a lifecycle a hop row does not (raised, then
+  -- acknowledged) and can exist with no wire behind it -- a station whose
+  -- baton nothing routes may have no outgoing wire to attribute a hop to.
+  -- No foreign keys, for the same reason the rest of this neighbourhood has
+  -- none: a hail about a deleted session must still be readable.
+  CREATE TABLE IF NOT EXISTS crew_hails (
+    id TEXT PRIMARY KEY,
+    crew_id TEXT NOT NULL,
+    flow_run_id TEXT,
+    reason TEXT NOT NULL,
+    session_id TEXT NOT NULL,
+    baton TEXT,
+    message TEXT,
+    detail TEXT NOT NULL,
+    -- The hop the stall clock accused, when the hail is about one. The debt's
+    -- identity: an acknowledged stall stays silent for as long as this hop is
+    -- the accusation, and only a NEW hop -- a new id -- re-arms the alarm
+    -- (MAR-2759, "re-arms after the next hop").
+    hop_id TEXT,
+    raised_at TEXT NOT NULL DEFAULT (datetime('now')),
+    acknowledged_at TEXT
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_crew_hails_crew
+    ON crew_hails(crew_id, raised_at);
 
   CREATE TABLE IF NOT EXISTS workspaces (
     id TEXT PRIMARY KEY,
@@ -732,11 +793,16 @@ function ensureProjectScriptColumns(database: Database.Database): void {
 }
 
 /**
- * The two texts a wire carries besides the message: the standing instruction it
- * prepends (F7) and the opener it sends ahead of the payload (F9). Both are
- * additive and nullable, because every wire drawn before they existed carries
- * the bare message with nothing in front of it -- which is exactly what null
- * means for either column.
+ * Everything the relay neighbourhood learned after its tables were first cut,
+ * added idempotently: the two texts a wire carries besides the message (the
+ * standing instruction F7 prepends and the opener F9 sends ahead of it), the
+ * baton condition a wire waits for, what the trail records about a baton and a
+ * round, and the two knobs a crew may turn on its own loop.
+ *
+ * Every one of them is additive and nullable, and null always means the
+ * behaviour that existed before the column did -- no instruction, no opener,
+ * fire unconditionally, nothing recorded, take the default. A NOT NULL default
+ * here would claim old rows knew something they never recorded.
  */
 function ensureRelayColumns(database: Database.Database): void {
   const columns = getTableColumnNames(database, 'session_relays')
@@ -745,6 +811,66 @@ function ensureRelayColumns(database: Database.Database): void {
   }
   if (!columns.has('opener')) {
     database.exec('ALTER TABLE session_relays ADD COLUMN opener TEXT')
+  }
+  // The baton condition. Additive and nullable for the same reason: a wire
+  // drawn before conditions existed fires whenever its source finishes, and
+  // null is exactly that.
+  if (!columns.has('condition_token')) {
+    database.exec('ALTER TABLE session_relays ADD COLUMN condition_token TEXT')
+  }
+
+  const hopColumns = getTableColumnNames(database, 'relay_hops')
+  // What the trail could not say before: which baton the finishing message
+  // handed on, and which round of the loop the hop belonged to. Null on every
+  // row written before the baton existed, which is the honest answer -- a
+  // default would claim the old rows knew something they never recorded.
+  if (!hopColumns.has('baton')) {
+    database.exec('ALTER TABLE relay_hops ADD COLUMN baton TEXT')
+  }
+  if (!hopColumns.has('round_number')) {
+    database.exec('ALTER TABLE relay_hops ADD COLUMN round_number INTEGER')
+  }
+  // Whether the station this hop landed work in ever came back. Null on every
+  // older row, and null is the honest reading for them too -- nothing recorded
+  // the station's return before this, so the stall clock treats them exactly
+  // as it treated them yesterday.
+  if (!hopColumns.has('settled_at')) {
+    database.exec('ALTER TABLE relay_hops ADD COLUMN settled_at TEXT')
+  }
+  if (!hopColumns.has('settled_status')) {
+    database.exec('ALTER TABLE relay_hops ADD COLUMN settled_status TEXT')
+  }
+  // The delivery receipt (MAR-2759). Null on every older row, and null is
+  // the honest reading: nothing minted an id for them, so they keep the old
+  // first-answer stamp.
+  if (!hopColumns.has('dispatch_id')) {
+    database.exec('ALTER TABLE relay_hops ADD COLUMN dispatch_id TEXT')
+  }
+  // `settles_owed` was a target-status guess at the causal question the
+  // dispatch id now answers by identity; a count nobody reads would only
+  // invite a reader. Dropped rather than left dead -- nothing else indexes
+  // or references it, so SQLite lets it go cleanly.
+  if (hopColumns.has('settles_owed')) {
+    database.exec('ALTER TABLE relay_hops DROP COLUMN settles_owed')
+  }
+  // The stall hail's debt identity, additive for a hail book written by the
+  // build that created `crew_hails` without it. Null reads as "no accused
+  // hop", which keeps old rows deduping exactly as they did.
+  if (!getTableColumnNames(database, 'crew_hails').has('hop_id')) {
+    database.exec('ALTER TABLE crew_hails ADD COLUMN hop_id TEXT')
+  }
+
+  const crewColumns = getTableColumnNames(database, 'session_crews')
+  if (!crewColumns.has('round_cap')) {
+    database.exec('ALTER TABLE session_crews ADD COLUMN round_cap INTEGER')
+  }
+  if (!crewColumns.has('stall_minutes')) {
+    database.exec('ALTER TABLE session_crews ADD COLUMN stall_minutes INTEGER')
+  }
+
+  const memberColumns = getTableColumnNames(database, 'session_crew_members')
+  if (!memberColumns.has('baton_name')) {
+    database.exec('ALTER TABLE session_crew_members ADD COLUMN baton_name TEXT')
   }
 }
 
@@ -892,6 +1018,17 @@ function ensureQueuedInputColumns(database: Database.Database): void {
   ) {
     database.exec(
       'ALTER TABLE session_queued_inputs ADD COLUMN relays_muted INTEGER NOT NULL DEFAULT 0',
+    )
+  }
+
+  // The delivery receipt (MAR-2759). Nullable with no backfill: input queued
+  // before receipts existed was never anything the relay ledger tracked, and
+  // null is exactly "no engine holds an id for this".
+  if (
+    !getTableColumnNames(database, 'session_queued_inputs').has('dispatch_id')
+  ) {
+    database.exec(
+      'ALTER TABLE session_queued_inputs ADD COLUMN dispatch_id TEXT',
     )
   }
 }
