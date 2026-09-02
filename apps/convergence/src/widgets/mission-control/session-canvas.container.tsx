@@ -10,6 +10,7 @@ import {
 import type { Edge, Node } from '@xyflow/react'
 import { Waypoints } from 'lucide-react'
 import {
+  CANVAS_CHAIR_NODE_HEIGHT,
   CANVAS_NODE_HEIGHT,
   CANVAS_NODE_WIDTH,
   CANVAS_SPAWN_NODE_HEIGHT,
@@ -33,6 +34,8 @@ import {
   selectHopsForCrew,
   useSessionRelayStore,
 } from '@/entities/session-relay'
+import { useCrewHailStore } from '@/entities/crew-hail'
+import { CanvasChairNode } from './canvas-chair-node.presentational'
 import { CanvasCrewCluster } from './canvas-crew-cluster.presentational'
 import { CanvasSessionNode } from './canvas-session-node.presentational'
 import { CanvasSpawnNode } from './canvas-spawn-node.presentational'
@@ -51,6 +54,7 @@ const NODE_TYPES = {
   crewCluster: CanvasCrewCluster,
   session: CanvasSessionNode,
   spawn: CanvasSpawnNode,
+  chair: CanvasChairNode,
 }
 
 /** Matches the popover's own `w-80`, plus room to breathe at the edges. */
@@ -91,12 +95,14 @@ export const SessionCanvas: FC<SessionCanvasProps> = ({ groups, onOpen }) => {
   const relays = useSessionRelayStore((state) => state.relays)
   const hopsByCrewId = useSessionRelayStore((state) => state.hopsByCrewId)
   const loadHops = useSessionRelayStore((state) => state.loadHops)
+  const hails = useCrewHailStore((state) => state.hails)
+  const acknowledgeCrew = useCrewHailStore((state) => state.acknowledgeCrew)
   const canvasRef = useRef<HTMLDivElement>(null)
   const colorMode = useCanvasColorMode()
 
   const graph = useMemo(
-    () => buildCanvasGraph(groups, relays),
-    [groups, relays],
+    () => buildCanvasGraph(groups, relays, hails),
+    [groups, relays, hails],
   )
 
   const crewIds = useMemo(
@@ -205,20 +211,45 @@ export const SessionCanvas: FC<SessionCanvasProps> = ({ groups, onOpen }) => {
       zIndex: 1,
     }))
 
-    return [...clusterNodes, ...sessionNodes, ...spawnChips]
-  }, [graph, onOpen])
+    const chairNodes: Node[] = graph.chairs.map((chair) => ({
+      id: chair.id,
+      type: 'chair',
+      position: { x: chair.x, y: chair.y },
+      data: {
+        ...chair,
+        onAcknowledge: (crewId: string) => {
+          void acknowledgeCrew(crewId)
+        },
+      },
+      width: CANVAS_NODE_WIDTH,
+      height: CANVAS_CHAIR_NODE_HEIGHT,
+      draggable: false,
+      selectable: false,
+      zIndex: 1,
+    }))
+
+    return [...clusterNodes, ...sessionNodes, ...spawnChips, ...chairNodes]
+  }, [graph, onOpen, acknowledgeCrew])
 
   const edges = useMemo<Edge[]>(
     () =>
       graph.edges.map((edge) => {
-        const pulse = pulses[edge.relayId]
+        // Only a stored wire can pulse: a hop names the relay it fired on, and
+        // the drawn consequences have no relay to be named by.
+        const pulse = edge.relayId === null ? undefined : pulses[edge.relayId]
         const base = resolveWireColor(edge, graph.clusters)
         const color = pulse ? pulseWireColor(pulse.tone, base) : base
+
+        // A safety net is a consequence, not a wire somebody drew, so it is
+        // drawn as one: dashed, dim, never pulsing, and unopenable.
+        const isSafety = edge.kind === 'safety'
 
         return {
           id: edge.id,
           source: edge.source,
           target: edge.target,
+          label: edge.label ?? undefined,
+          labelShowBg: true,
           // Back wires leave and arrive underneath, so the returning half of a
           // loop cannot hide beneath the wire it answers.
           sourceHandle: edge.back ? CANVAS_HANDLE.loopOut : CANVAS_HANDLE.out,
@@ -232,11 +263,19 @@ export const SessionCanvas: FC<SessionCanvasProps> = ({ groups, onOpen }) => {
             stroke: color,
             strokeWidth: pulse
               ? pulseWireWidth(pulse.tone)
-              : edge.armed
-                ? 2
-                : 1.5,
+              : isSafety
+                ? 1.5
+                : edge.armed
+                  ? 2
+                  : 1.5,
+            // Dashed for two different reasons that read the same on purpose:
+            // a switched-off wire and a safety net are both "this is not the
+            // ordinary path".
             strokeDasharray:
-              edge.armed || pulse !== undefined ? undefined : '5 4',
+              isSafety || (!edge.armed && pulse === undefined)
+                ? '5 4'
+                : undefined,
+            opacity: isSafety ? 0.55 : undefined,
           },
           markerEnd: {
             type: MarkerType.ArrowClosed,
@@ -271,19 +310,36 @@ export const SessionCanvas: FC<SessionCanvasProps> = ({ groups, onOpen }) => {
     y: number
   } | null>(null)
 
-  const handleEdgeClick = useCallback((event: MouseEvent, edge: Edge) => {
-    const bounds = canvasRef.current?.getBoundingClientRect()
-    const localX = event.clientX - (bounds?.left ?? 0)
-    const localY = event.clientY - (bounds?.top ?? 0)
+  const relayEdgeIds = useMemo(
+    () =>
+      new Set(
+        graph.edges
+          .filter((edge) => edge.kind === 'relay')
+          .map((edge) => edge.id),
+      ),
+    [graph],
+  )
 
-    // Kept inside the canvas: a popover opened on a wire near the right edge
-    // would otherwise hang off the side where it cannot be read.
-    setOpenWire({
-      relayId: edge.id,
-      x: clamp(localX, POPOVER_EDGE_GAP, bounds?.width, POPOVER_WIDTH),
-      y: clamp(localY, POPOVER_EDGE_GAP, bounds?.height, POPOVER_MAX_HEIGHT),
-    })
-  }, [])
+  const handleEdgeClick = useCallback(
+    (event: MouseEvent, edge: Edge) => {
+      // Only a stored wire has anything to open. A terminal route and the safety
+      // net are drawn consequences with no row behind them, and a popover that
+      // hunted for a relay by their id would find nothing and open blank.
+      if (!relayEdgeIds.has(edge.id)) return
+      const bounds = canvasRef.current?.getBoundingClientRect()
+      const localX = event.clientX - (bounds?.left ?? 0)
+      const localY = event.clientY - (bounds?.top ?? 0)
+
+      // Kept inside the canvas: a popover opened on a wire near the right edge
+      // would otherwise hang off the side where it cannot be read.
+      setOpenWire({
+        relayId: edge.id,
+        x: clamp(localX, POPOVER_EDGE_GAP, bounds?.width, POPOVER_WIDTH),
+        y: clamp(localY, POPOVER_EDGE_GAP, bounds?.height, POPOVER_MAX_HEIGHT),
+      })
+    },
+    [relayEdgeIds],
+  )
 
   const closeWire = useCallback(() => setOpenWire(null), [])
 

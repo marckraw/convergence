@@ -40,6 +40,14 @@ export interface SessionRelay {
    * same wire wipes it and re-briefs it every lap.
    */
   opener: string | null
+  /**
+   * The line the source's final assistant message must end with for this wire
+   * to fire, or null to fire whenever the source finishes.
+   *
+   * Stored as the user wrote it — `BATON: horse` by convention — so the wire's
+   * switch and the agent's own words are the same text.
+   */
+  conditionToken: string | null
   armed: boolean
   createdAt: string
   updatedAt: string
@@ -51,10 +59,14 @@ export type RelayHopOutcome =
   | 'spawned'
   | 'skipped-failed'
   | 'skipped-budget'
+  /** The loop reached its round cap without reaching a terminal (MAR-2759). */
+  | 'skipped-round-budget'
   /** The loop law working: a wire fires at most once per flow run. */
   | 'skipped-already-fired'
   /** The human working: they sent that turn quiet, so the wire held (F10). */
   | 'skipped-muted'
+  /** The wire working as drawn: the message named another route, or none. */
+  | 'skipped-baton'
   | 'error'
 
 /** One firing, recorded whether or not anything was carried. */
@@ -69,6 +81,10 @@ export interface RelayHop {
   spawnedSessionId: string | null
   triggerStatus: string
   payloadPreview: string | null
+  /** The baton the finishing message handed on, when it declared one. */
+  baton: string | null
+  /** Which round of the loop this hop was, or null if it spent none. */
+  roundNumber: number | null
   /**
    * Wider than `RelayHopOutcome` on purpose: that union is what this build
    * writes, while a stored row may carry a word an older or newer build used.
@@ -93,6 +109,7 @@ export interface CreateSessionRelayInput {
   spawnSpec?: RelaySpawnSpec | null
   instruction?: string | null
   opener?: string | null
+  conditionToken?: string | null
   armed?: boolean
 }
 
@@ -103,5 +120,6 @@ export interface UpdateSessionRelayInput {
   spawnSpec?: RelaySpawnSpec | null
   instruction?: string | null
   opener?: string | null
+  conditionToken?: string | null
   armed?: boolean
 }

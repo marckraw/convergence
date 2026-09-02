@@ -38,9 +38,13 @@ function leafHolding(container: HTMLElement, text: string): Element {
   return match
 }
 
-function renderPayload(instruction: string | null, message: string) {
+function renderPayload(
+  instruction: string | null,
+  message: string,
+  round?: number,
+) {
   return render(
-    <Markdown content={compileRelayPayload(instruction, message)} />,
+    <Markdown content={compileRelayPayload(instruction, message, round)} />,
   )
 }
 
@@ -90,5 +94,54 @@ describe('the compiled relay payload, rendered', () => {
 
     expect(container.textContent).toContain(MESSAGE)
     expect(container.textContent).not.toContain(BRIEF)
+  })
+})
+
+/**
+ * The round stamp, rendered (the same law applied to MAR-2759).
+ *
+ * `round 3` is the one thing in the payload the receiving station reads to
+ * know how deep the loop has gone, and it is a bare line — exactly the shape
+ * markdown is happiest to swallow. A brief that ends inside a list or a quote
+ * would absorb it, and the station would be told nothing while the string test
+ * stayed green.
+ */
+describe('the round stamp, rendered', () => {
+  const ROUND = 'round 3'
+
+  it('lands in its own block, between the brief and the message', () => {
+    const { container } = renderPayload(BRIEF, MESSAGE, 3)
+
+    const stamp = leafHolding(container, ROUND)
+    expect(stamp).not.toBe(leafHolding(container, BRIEF))
+    expect(stamp).not.toBe(leafHolding(container, MESSAGE))
+  })
+
+  it('is not swallowed by a brief that ends inside a quote', () => {
+    const { container } = renderPayload(
+      'Compare against:\n> the old plan',
+      MESSAGE,
+      3,
+    )
+
+    expect(leafHolding(container, ROUND).closest('blockquote')).toBeNull()
+  })
+
+  it('is not swallowed by a brief that ends inside a list', () => {
+    const { container } = renderPayload(
+      'Do these:\n- read the diff',
+      MESSAGE,
+      3,
+    )
+
+    expect(leafHolding(container, ROUND).closest('li')).toBeNull()
+  })
+
+  it('leaves an unbriefed wire carrying the message and nothing else', () => {
+    // The byte-for-byte promise: a wire nobody briefed carries exactly what it
+    // always carried, so the stamp has no brief to ride in and does not appear.
+    const { container } = renderPayload(null, MESSAGE, 3)
+
+    expect(container.textContent).toBe(MESSAGE)
   })
 })

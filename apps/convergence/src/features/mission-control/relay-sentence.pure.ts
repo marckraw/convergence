@@ -56,12 +56,29 @@ export interface RelaySentence {
    * that decides whether the target gets wiped.
    */
   opener: string | null
+  /**
+   * The route this wire waits for, verbatim, or null when it fires on any
+   * finish. Quoted rather than summarised: the token IS the line the agent
+   * writes, and paraphrasing it would hide the one string that has to match.
+   */
+  condition: string | null
   /** The whole sentence as plain text, for titles and accessible names. */
   text: string
 }
 
 /** The quiet marker a briefed wire wears in its sentence. */
 export const RELAY_INSTRUCTION_MARKER = 'with instructions'
+
+/**
+ * How the sentence opens for a wire that waits for a declared route.
+ *
+ * In front of the trigger rather than trailing behind it, because it changes
+ * WHEN the wire fires, and a condition read after "send its last message to"
+ * would be read as a condition on the delivery.
+ */
+export function relayConditionMarker(conditionToken: string): string {
+  return `Only if it ends with "${conditionToken.trim()}", `
+}
 
 /**
  * How much of the opener the sentence quotes. A row is scanned, and an opener
@@ -112,6 +129,7 @@ export function buildRelaySentence(
     | 'spawnSpec'
     | 'instruction'
     | 'opener'
+    | 'conditionToken'
   >,
   resolveName: ResolveSessionName,
   resolveProjectName?: (projectId: string | null) => string,
@@ -125,7 +143,10 @@ export function buildRelaySentence(
 ): RelaySentence {
   const source = endpoint(relay.sourceSessionId, resolveName)
   const trigger = RELAY_TRIGGER_CLAUSES[relay.trigger]
-  const opening = `${trigger.prefix} ${source.name} ${trigger.suffix}`
+  const condition = relay.conditionToken?.trim() ? relay.conditionToken : null
+  const opening = condition
+    ? `${relayConditionMarker(condition)}${trigger.prefix.toLowerCase()} ${source.name} ${trigger.suffix}`
+    : `${trigger.prefix} ${source.name} ${trigger.suffix}`
   const instruction = relay.instruction?.trim() ? relay.instruction : null
   // Only a hail can open with a first send: a spawn's far end is a session
   // that did not exist a moment ago, so there is nothing to clear.
@@ -155,6 +176,7 @@ export function buildRelaySentence(
         detail: null,
         instruction,
         opener,
+        condition,
         text: `${opening}, ${connector} ${target.name}${marker}`,
       }
     }
@@ -181,6 +203,7 @@ export function buildRelaySentence(
       detail,
       instruction,
       opener,
+      condition,
       text: `${opening}, ${connector} ${target.name} — ${detail}${marker}`,
     }
   }
@@ -195,6 +218,7 @@ export function buildRelaySentence(
     detail: null,
     instruction,
     opener,
+    condition,
     text: `${opening}, ${connector} ${target.name}${marker}`,
   }
 }
@@ -246,6 +270,8 @@ export interface RelayDraft {
   instruction: string
   /** Raw field text; empty means the payload is delivered straight away. */
   opener: string
+  /** Raw field text; empty means the wire fires on any finish. */
+  conditionToken: string
   spawn: RelaySpawnDraft
 }
 
@@ -264,6 +290,7 @@ export const EMPTY_RELAY_DRAFT: RelayDraft = {
   targetSessionId: null,
   instruction: '',
   opener: '',
+  conditionToken: '',
   spawn: EMPTY_SPAWN_DRAFT,
 }
 

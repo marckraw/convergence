@@ -137,15 +137,24 @@ export function normalizeRelayInstruction(
  * thing it is about".
  *
  * No instruction means the payload is returned untouched, byte for byte. A
- * wire nobody briefed must carry exactly what it always carried.
+ * wire nobody briefed must carry exactly what it always carried -- which is
+ * also why the round marker rides inside the brief rather than on its own: a
+ * bare wire stays byte-identical to what it was before rounds existed.
+ *
+ * The round is its own block for the same MAR-2280 reason the brief is: an
+ * instruction that ends inside a list or a quote would otherwise swallow
+ * `round 3` into itself, and the receiving station would never see it.
  */
 export function compileRelayPayload(
   instruction: string | null,
   message: string,
+  round?: number | null,
 ): string {
   const brief = instruction?.trim() ?? ''
   if (brief.length === 0) return message
-  return `${brief}\n\n${message}`
+  const stamp =
+    round === undefined || round === null ? '' : `round ${round}\n\n`
+  return `${brief}\n\n${stamp}${message}`
 }
 
 /**
@@ -304,3 +313,209 @@ export const MUTED_MESSAGE =
  */
 export const ALREADY_FIRED_MESSAGE =
   'This wire already fired in this run; a wire fires once per run.'
+
+/**
+ * The word a station writes to say where its work goes next.
+ *
+ * Declared, never inferred. Routing by reading intent out of prose is a text
+ * proxy for a question only the author can answer, so the finishing station
+ * states its route on a line of its own and the relay does one string compare.
+ */
+export const BATON_KEYWORD = 'baton'
+
+/** The one baton no wire may claim: it is Marcin's chair, and always terminal. */
+export const TERMINAL_BATON = 'marcin'
+
+/**
+ * The sentence the ledger shows when the reserved terminal held a wire.
+ *
+ * "Always terminal" has to outrank routing, not merely conditions: an
+ * unconditional wire answers every message, so a build where the terminal only
+ * beat conditioned wires would deliver the one route guaranteed to reach a
+ * human onward and leave the chair dark.
+ */
+export const TERMINAL_BATON_MESSAGE = `This message handed the work to the chair (BATON: ${TERMINAL_BATON}), which is reserved and no wire may carry, so this one held.`
+
+/**
+ * A condition is a line, not a paragraph. Long enough for `BATON: <name>` with
+ * room to spare, short enough that nobody pastes a sentence into a switch.
+ */
+export const MAX_RELAY_CONDITION_TOKEN_LENGTH = 120
+
+/**
+ * The last line of a message that actually says something.
+ *
+ * Trailing blank lines are how a model ends a paragraph, not a retraction of
+ * the line above them, so they are stepped over rather than read as "nothing
+ * was declared".
+ */
+function lastNonEmptyLine(message: string): string | null {
+  const lines = message.split('\n')
+  for (let index = lines.length - 1; index >= 0; index -= 1) {
+    const line = lines[index].trim()
+    if (line.length > 0) return line
+  }
+  return null
+}
+
+/**
+ * One line, in the one spelling everything here compares.
+ *
+ * Case folds and internal whitespace collapses because both are invisible: a
+ * station that wrote `BATON:  Horse` declared the same route as one that wrote
+ * `baton: horse`, and a loop that stalled on a double space would be a loop
+ * nobody could debug. Normalising cannot make two DIFFERENT declarations equal
+ * -- it is applied identically to both sides of every comparison -- so this
+ * stays a string compare, not prose parsing.
+ */
+function normalizeBatonLine(line: string): string {
+  return line.trim().replace(/\s+/g, ' ').toLowerCase()
+}
+
+/**
+ * The baton a line declares, or null when the line is not a declaration.
+ *
+ * Anchored at the start of the line on purpose: a sentence that mentions the
+ * word in passing has not routed anything, and a relay that thought otherwise
+ * would be sniffing prose.
+ */
+function readBatonFromLine(line: string | null): string | null {
+  if (line === null) return null
+  const normalized = normalizeBatonLine(line)
+  const prefix = `${BATON_KEYWORD}:`
+  if (!normalized.startsWith(prefix)) return null
+  const name = normalized.slice(prefix.length).trim()
+  return name.length > 0 ? name : null
+}
+
+/**
+ * The baton a finished message hands on, read from its last non-empty line.
+ *
+ * Used for two different questions, and only these two: whether a baton was
+ * declared at all -- an emitted baton nobody routed is a silent drop, and
+ * silent drops are forbidden -- and whether it is the reserved terminal. Wire
+ * matching does not go through here, because a wire's condition need not be a
+ * baton at all.
+ */
+export function readEmittedBaton(message: string): string | null {
+  return readBatonFromLine(lastNonEmptyLine(message))
+}
+
+/** The convention a wire's condition field is pre-filled with. */
+export function batonConditionToken(batonName: string): string {
+  return `${BATON_KEYWORD.toUpperCase()}: ${batonName.trim()}`
+}
+
+/**
+ * Whether this wire's condition is satisfied by the message that just
+ * finished.
+ *
+ * One string compare against the last non-empty line, and nothing else. A wire
+ * with no token is unconditional -- exactly what every wire drawn before
+ * conditions existed was, and still is.
+ */
+export function relayConditionMatches(
+  conditionToken: string | null,
+  message: string,
+): boolean {
+  if (conditionToken === null) return true
+  const line = lastNonEmptyLine(message)
+  if (line === null) return false
+  return normalizeBatonLine(line) === normalizeBatonLine(conditionToken)
+}
+
+/**
+ * Validates the condition a wire fires on.
+ *
+ * Blank stores as null, the shape every optional relay text uses: an empty box
+ * means "fire whenever the source finishes", which is what a wire without a
+ * condition has always done.
+ *
+ * The terminal baton is refused rather than accepted and ignored. `BATON:
+ * marcin` is the one route guaranteed to reach a human, and a wire that
+ * claimed it would quietly turn Marcin's chair into just another station.
+ */
+export function normalizeRelayConditionToken(
+  value: string | null | undefined,
+): string | null {
+  if (value === null || value === undefined) return null
+
+  const trimmed = value.trim()
+  if (trimmed.length === 0) return null
+  if (trimmed.includes('\n')) {
+    throw new Error('A relay condition is one line, not a paragraph')
+  }
+  if (trimmed.length > MAX_RELAY_CONDITION_TOKEN_LENGTH) {
+    throw new Error(
+      `A relay condition cannot be longer than ${MAX_RELAY_CONDITION_TOKEN_LENGTH} characters`,
+    )
+  }
+  if (readBatonFromLine(trimmed) === TERMINAL_BATON) {
+    throw new Error(
+      `BATON: ${TERMINAL_BATON} is reserved — it always parks the loop and hails Marcin, so no wire may claim it`,
+    )
+  }
+  return trimmed
+}
+
+/**
+ * How many hops one crew's loop may spend before the round guard trips.
+ *
+ * Twelve because our own runs historically close in two to eleven rounds, so a
+ * loop that reaches the cap is one nobody is watching rather than one that is
+ * merely thorough.
+ */
+export const DEFAULT_CREW_ROUND_CAP = 12
+
+/**
+ * The cap this crew actually uses.
+ *
+ * A stored cap that could not have been meant -- zero, negative, fractional,
+ * or a number an older build never wrote -- falls back to the default rather
+ * than disabling the guard. A budget that a bad row can switch off is not a
+ * budget.
+ */
+export function resolveRoundCap(storedCap: number | null | undefined): number {
+  if (typeof storedCap !== 'number') return DEFAULT_CREW_ROUND_CAP
+  if (!Number.isInteger(storedCap) || storedCap < 1) {
+    return DEFAULT_CREW_ROUND_CAP
+  }
+  return storedCap
+}
+
+/** Which round a hop about to be spent belongs to: the first one is round 1. */
+export function roundNumber(spentHops: number): number {
+  return spentHops + 1
+}
+
+/** Whether this loop may spend another round. */
+export function hasRoundBudget(spentHops: number, cap: number): boolean {
+  return spentHops < cap
+}
+
+/**
+ * The sentence the ledger shows when the round guard trips. It names the cap
+ * so the refusal never looks arbitrary, and says the wire is still armed --
+ * unlike the hop budget, a long loop is a loop that needs a human, not a
+ * runaway that needs switching off.
+ */
+export function roundBudgetMessage(cap: number): string {
+  return `This loop reached its ${cap}-round cap without reaching a terminal, so the wire held and Marcin was hailed. It is still armed for the next run.`
+}
+
+/**
+ * The sentence the ledger shows when a wire's baton condition did not match.
+ *
+ * The refusal is the wire working exactly as drawn -- default-closed is the
+ * point of a condition -- so it reads grey and says which baton it was waiting
+ * for.
+ */
+export function batonMismatchMessage(
+  conditionToken: string,
+  emittedBaton: string | null,
+): string {
+  const seen = emittedBaton
+    ? `handed on "${emittedBaton}"`
+    : 'handed on nothing'
+  return `This wire waits for "${conditionToken}"; the message ${seen}, so it held.`
+}

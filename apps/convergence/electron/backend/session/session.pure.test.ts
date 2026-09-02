@@ -62,6 +62,7 @@ describe('session pure helpers', () => {
         provider_request_id: null,
         skip_context_injection: 0,
         relays_muted: 0,
+        dispatch_id: null,
         error: null,
         created_at: '2026-01-01T00:00:00.000Z',
         updated_at: '2026-01-01T00:00:01.000Z',
@@ -94,6 +95,7 @@ describe('session pure helpers', () => {
       provider_request_id: null,
       skip_context_injection: 1,
       relays_muted: 0,
+      dispatch_id: null,
       error: null,
       created_at: '2026-01-01T00:00:00.000Z',
       updated_at: '2026-01-01T00:00:01.000Z',
@@ -124,6 +126,7 @@ describe('session pure helpers', () => {
       provider_request_id: null,
       skip_context_injection: 0,
       relays_muted: 1,
+      dispatch_id: null,
       error: null,
       created_at: '2026-01-01T00:00:00.000Z',
       updated_at: '2026-01-01T00:00:01.000Z',
@@ -135,6 +138,37 @@ describe('session pure helpers', () => {
     )
     expect(queuedInputFromRow({ ...row, relays_muted: null }).relaysMuted).toBe(
       false,
+    )
+  })
+
+  /**
+   * The delivery receipt (MAR-2759). Input people typed has none, and a row
+   * written before receipts existed reads the same way; a relay's input must
+   * carry its id through the queue byte for byte, because the settle that
+   * eventually names it is how the relay ledger stamps the right hop.
+   */
+  it('reads the dispatch id off a queued input, defaulting to none', () => {
+    const row = {
+      id: 'queued-4',
+      session_id: 'session-1',
+      delivery_mode: 'follow-up' as const,
+      provider_account_id: null,
+      state: 'queued',
+      text: 'carried work',
+      attachment_ids_json: '[]',
+      skill_selections_json: '[]',
+      provider_request_id: null,
+      skip_context_injection: 0,
+      relays_muted: 0,
+      dispatch_id: 'dispatch-9',
+      error: null,
+      created_at: '2026-01-01T00:00:00.000Z',
+      updated_at: '2026-01-01T00:00:01.000Z',
+    }
+
+    expect(queuedInputFromRow(row).dispatchId).toBe('dispatch-9')
+    expect(queuedInputFromRow({ ...row, dispatch_id: null }).dispatchId).toBe(
+      null,
     )
   })
 })

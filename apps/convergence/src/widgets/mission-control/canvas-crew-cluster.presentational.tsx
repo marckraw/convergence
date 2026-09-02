@@ -14,16 +14,24 @@ import type { CanvasCrewClusterData } from './session-canvas.types'
  */
 export const CanvasCrewCluster: FC<NodeProps> = ({ data }) => {
   const cluster = data as unknown as CanvasCrewClusterData
-  const accentStyle: CSSProperties | undefined = cluster.accentColor
-    ? { borderColor: cluster.accentColor }
-    : undefined
+  // The amber outranks the crew's own accent, deliberately: a parked loop is
+  // the one thing on this frame that needs a human, and a colour the user
+  // chose for decoration must not be able to hide it.
+  const accentStyle: CSSProperties | undefined =
+    cluster.accentColor && !cluster.parked
+      ? { borderColor: cluster.accentColor }
+      : undefined
 
   return (
     <div
       data-canvas-crew={cluster.crewId}
+      data-crew-parked={cluster.parked ? 'true' : 'false'}
       style={{ width: cluster.width, height: cluster.height, ...accentStyle }}
       className={cn(
-        'rounded-xl border border-border bg-foreground/[0.03]',
+        'rounded-xl border bg-foreground/[0.03]',
+        cluster.parked
+          ? 'border-amber-400/70 bg-amber-400/[0.04]'
+          : 'border-border',
         'pointer-events-none',
       )}
     >

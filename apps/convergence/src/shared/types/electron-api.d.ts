@@ -287,15 +287,40 @@ interface WorkspacePullRequestData {
   updatedAt: string
 }
 
+interface SessionCrewMemberData {
+  sessionId: string
+  /** The short name a baton addresses this member by; null when unnamed. */
+  batonName: string | null
+}
+
 interface SessionCrewData {
   id: string
   name: string
   emoji: string | null
   accentColor: string | null
   position: number
+  /** How many rounds this crew's loop may spend; null takes the default. */
+  roundCap: number | null
+  /** How long a station may hold the loop before it hails; null is default. */
+  stallMinutes: number | null
   createdAt: string
   updatedAt: string
   sessionIds: string[]
+  members: SessionCrewMemberData[]
+}
+
+interface CrewHailData {
+  id: string
+  crewId: string
+  flowRunId: string | null
+  /** Wider than the written vocabulary: stored rows may predate this build. */
+  reason: string
+  sessionId: string
+  baton: string | null
+  message: string | null
+  detail: string
+  raisedAt: string
+  acknowledgedAt: string | null
 }
 
 interface CreateSessionCrewInputData {
@@ -310,6 +335,8 @@ interface UpdateSessionCrewInputData {
   emoji?: string | null
   accentColor?: string | null
   position?: number
+  roundCap?: number | null
+  stallMinutes?: number | null
 }
 
 interface RelaySpawnSpecData {
@@ -334,6 +361,8 @@ interface SessionRelayData {
   instruction: string | null
   /** Sent on its own before the payload; null delivers the payload straight. */
   opener: string | null
+  /** The line the source's last message must end with; null fires always. */
+  conditionToken: string | null
   armed: boolean
   createdAt: string
   updatedAt: string
@@ -350,6 +379,10 @@ interface RelayHopData {
   spawnedSessionId: string | null
   triggerStatus: string
   payloadPreview: string | null
+  /** The baton the finishing message handed on, when it declared one. */
+  baton: string | null
+  /** Which round of the loop this hop was, or null if it spent none. */
+  roundNumber: number | null
   /** Wider than the written vocabulary: stored rows may predate this build. */
   outcome: string
   error: string | null
@@ -370,6 +403,7 @@ interface CreateSessionRelayInputData {
   spawnSpec?: RelaySpawnSpecData | null
   instruction?: string | null
   opener?: string | null
+  conditionToken?: string | null
   armed?: boolean
 }
 
@@ -380,6 +414,7 @@ interface UpdateSessionRelayInputData {
   spawnSpec?: RelaySpawnSpecData | null
   instruction?: string | null
   opener?: string | null
+  conditionToken?: string | null
   armed?: boolean
 }
 
@@ -1561,6 +1596,11 @@ interface ElectronAPI {
       crewId: string,
       sessionId: string,
     ) => Promise<SessionCrewData>
+    setMemberBatonName: (
+      crewId: string,
+      sessionId: string,
+      batonName: string | null,
+    ) => Promise<SessionCrewData>
     onUpdated: (callback: (crews: SessionCrewData[]) => void) => () => void
   }
   relay: {
@@ -1582,6 +1622,12 @@ interface ElectronAPI {
     onUpdated: (callback: (relays: SessionRelayData[]) => void) => () => void
     onHopAppended: (callback: (hop: RelayHopData) => void) => () => void
     onHopsCleared: (callback: (crewId: string) => void) => () => void
+  }
+  crewHail: {
+    listOpen: () => Promise<CrewHailData[]>
+    acknowledge: (id: string) => Promise<void>
+    acknowledgeCrew: (crewId: string) => Promise<number>
+    onUpdated: (callback: (hails: CrewHailData[]) => void) => () => void
   }
   git: {
     getBranches: (repoPath: string) => Promise<string[]>

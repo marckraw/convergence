@@ -28,6 +28,14 @@ export { SessionCrewChips } from './session-crew-chips.presentational'
 export { CrewDecorationPicker } from './crew-decoration-picker.presentational'
 export { CrewHeaderMenu } from './crew-header-menu.container'
 export { CrewFlowSection } from './crew-flow-section.container'
+export { CrewHailBanner } from './crew-hail-banner.presentational'
+export { CrewLoopPanel } from './crew-loop-panel.presentational'
+export {
+  DEFAULT_CREW_ROUND_CAP,
+  DEFAULT_CREW_STALL_MINUTES,
+  batonConditionToken,
+  formatCrewLoopDefault,
+} from './crew-loop.pure'
 export { RelayHopTrail } from './relay-hop-trail.container'
 export { RelayHopRow } from './relay-hop-row.presentational'
 export {
@@ -60,6 +68,7 @@ export {
   EMPTY_RELAY_DRAFT,
   EMPTY_SPAWN_DRAFT,
   MISSING_SESSION_LABEL,
+  relayConditionMarker,
   buildRelayEndpointOptions,
   buildRelaySentence,
   formatArmedLabel,
@@ -132,21 +141,29 @@ export type {
 export { formatSessionCardActivity } from './session-card-activity.pure'
 export { CARD_ATTENTION_STYLES, STATUS_DOT_STYLES } from './session-card.styles'
 export {
+  CANVAS_CHAIR_NODE_HEIGHT,
   CANVAS_NODE_HEIGHT,
   CANVAS_NODE_WIDTH,
   CANVAS_SPAWN_NODE_HEIGHT,
   ARMED_WIRE_FALLBACK_COLOR,
+  CHAIR_NODE_EMOJI,
+  CHAIR_NODE_LABEL,
   DISARMED_WIRE_COLOR,
   EMPTY_CANVAS_MESSAGE,
+  SAFETY_EDGE_LABEL,
+  TERMINAL_EDGE_LABEL,
   assignFlowColumns,
   buildCanvasGraph,
+  chairNodeId,
   formatSpawnNodeSpec,
   resolveWireColor,
   spawnNodeId,
 } from './canvas-graph.pure'
 export type {
+  CanvasChairNode,
   CanvasCrewCluster,
   CanvasEdge,
+  CanvasEdgeKind,
   CanvasGraph,
   CanvasSessionNode,
   CanvasSpawnNode,

@@ -88,9 +88,60 @@ export interface SessionSettledEvent {
    * path has to answer the question instead of quietly defaulting.
    */
   relaysMuted: boolean
+  /**
+   * The delivery receipt (MAR-2759): the dispatch ids the settling turn
+   * consumed. The session layer is the only party that knows which turn
+   * carried which input -- it owns the queue and decides native-vs-queued per
+   * capability -- so it says so here instead of leaving subscribers to guess
+   * from status snapshots. Every send gets a receipt, human-typed included;
+   * a subscriber only recognises the ids it is holding, so naming the rest
+   * costs nothing. Empty when no tracked dispatch entered the turn (a settle
+   * replayed after a restart, a remote turn started elsewhere). Required for
+   * the same reason `relaysMuted` is: a new settle path must answer the
+   * question.
+   */
+  dispatchIds: string[]
 }
 
 export type SessionSettledListener = (event: SessionSettledEvent) => void
+
+/**
+ * Why a dispatch reached its end without a settle (MAR-2759, design P).
+ *
+ * **The receipt lifecycle invariant: every dispatched receipt reaches exactly
+ * one terminal.** Four endings, and only four: `settled` (its turn ended --
+ * the settle event names it, not this), or one of these three words:
+ *
+ * - `cancelled` -- the user withdrew that one queued input. Quiet.
+ * - `abandoned` -- the user deleted the session that held it. Quiet.
+ * - `failed` -- the system could not run it: the send it queued behind was
+ *   refused at the provider, the run it waited on was found stale, the turn
+ *   ahead of it failed, or the queue itself could not be drained. LOUD: the
+ *   work did not happen and nobody chose that, so the stall clock calls it
+ *   without waiting for the window.
+ */
+export type DispatchTerminalReason = 'cancelled' | 'abandoned' | 'failed'
+
+/**
+ * A dispatch that will never be named by a settle (MAR-2759).
+ *
+ * The delivery receipt's other ending. A settle names the ids its turn
+ * consumed; an input that ends short of a turn consumes nothing and settles
+ * never -- so the parties holding those receipts (the relay engine's batons,
+ * the hop's stamp) would wait for the rest of the process's life. The
+ * session layer owns the rows and the in-flight set, so it says exactly
+ * which ids ended, on EVERY transition out of carrying a turn -- not only
+ * the ones a user asked for. Exact ids, never a session: a sibling receipt
+ * in the same session is still owed.
+ */
+export interface DispatchTerminalEvent {
+  sessionId: string
+  reason: DispatchTerminalReason
+  dispatchIds: string[]
+  at: string
+}
+
+export type DispatchTerminalListener = (event: DispatchTerminalEvent) => void
 
 export type AttentionRequestKind =
   | 'approval'
@@ -216,6 +267,13 @@ export interface SessionQueuedInput {
    * belongs to the message rather than to whatever the composer shows later.
    */
   relaysMuted: boolean
+  /**
+   * The dispatch id minted when this input was handed over (MAR-2759), or
+   * null for input people typed. It rides the durable queue row so a restart
+   * cannot orphan it: whichever turn this input eventually starts settles
+   * carrying this id, and the relay ledger stamps the right hop.
+   */
+  dispatchId: string | null
   error: string | null
   createdAt: string
   updatedAt: string

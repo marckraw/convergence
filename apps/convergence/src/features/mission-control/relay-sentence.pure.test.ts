@@ -7,6 +7,7 @@ import {
   RELAY_INSTRUCTION_MARKER,
   RELAY_OPENER_MARKER_LENGTH,
   RELAY_TRIGGER_CLAUSES,
+  relayConditionMarker,
   buildRelayEndpointOptions,
   buildRelaySentence,
   formatArmedLabel,
@@ -37,6 +38,7 @@ function relay(
     spawnSpec: null,
     instruction: null,
     opener: null,
+    conditionToken: null,
     armed: true,
     createdAt: '2026-08-15T10:00:00Z',
     updatedAt: '2026-08-15T10:00:00Z',
@@ -56,10 +58,12 @@ function hailWire(
   | 'spawnSpec'
   | 'instruction'
   | 'opener'
+  | 'conditionToken'
 > {
   return {
     trigger: 'settled',
     action: 'hail',
+    conditionToken: null,
     sourceSessionId,
     targetSessionId,
     spawnSpec: null,
@@ -125,6 +129,7 @@ describe('buildRelaySentence', () => {
         targetSessionId: null,
         instruction: null,
         opener: null,
+        conditionToken: null,
         spawnSpec: {
           projectId: 'p1',
           providerId: 'codex',
@@ -159,6 +164,7 @@ describe('buildRelaySentence', () => {
         targetSessionId: null,
         instruction: null,
         opener: null,
+        conditionToken: null,
         spawnSpec: {
           projectId: 'p1',
           providerId: 'codex',
@@ -189,6 +195,7 @@ describe('buildRelaySentence', () => {
         targetSessionId: null,
         instruction: null,
         opener: null,
+        conditionToken: null,
         spawnSpec: {
           projectId: 'p1',
           providerId: 'codex',
@@ -215,6 +222,7 @@ describe('buildRelaySentence', () => {
         targetSessionId: null,
         instruction: null,
         opener: null,
+        conditionToken: null,
         spawnSpec: {
           projectId: 'p1',
           providerId: 'codex',
@@ -241,6 +249,7 @@ describe('buildRelaySentence', () => {
         targetSessionId: null,
         instruction: null,
         opener: null,
+        conditionToken: null,
         spawnSpec: null,
       },
       resolveName,
@@ -303,6 +312,7 @@ describe('the instruction marker', () => {
         targetSessionId: null,
         instruction: 'Start from the branch diff.',
         opener: null,
+        conditionToken: null,
         spawnSpec: {
           projectId: 'p1',
           providerId: 'codex',
@@ -392,6 +402,7 @@ describe('the opener marker', () => {
         targetSessionId: null,
         instruction: null,
         opener: '/clear',
+        conditionToken: null,
         spawnSpec: null,
       },
       resolveName,
@@ -488,6 +499,7 @@ describe('relayDraftProblem', () => {
       ...relay({ id: 'r-spawn' }),
       action: 'spawn',
       targetSessionId: null,
+      conditionToken: null,
       spawnSpec: {
         projectId: null,
         providerId: 'codex',
@@ -529,5 +541,68 @@ describe('labels', () => {
   it('names the two states of the switch', () => {
     expect(formatArmedLabel(true)).toBe('Armed')
     expect(formatArmedLabel(false)).toBe('Disarmed')
+  })
+})
+
+describe('the baton condition in a wire sentence (MAR-2759)', () => {
+  it('says what the wire waits for, before it says when it fires', () => {
+    const sentence = buildRelaySentence(
+      relay({ id: 'r1', conditionToken: 'BATON: horse' }),
+      resolveName,
+    )
+
+    expect(sentence.condition).toBe('BATON: horse')
+    expect(sentence.text).toBe(
+      'Only if it ends with "BATON: horse", when Implementor finishes, send its last message to Reviewer',
+    )
+  })
+
+  it('reads exactly as it always did when the wire waits for nothing', () => {
+    const sentence = buildRelaySentence(relay({ id: 'r1' }), resolveName)
+
+    expect(sentence.condition).toBeNull()
+    expect(sentence.text).toBe(
+      'When Implementor finishes, send its last message to Reviewer',
+    )
+  })
+
+  it('says it on a spawn too, because a spawn waits the same way', () => {
+    const sentence = buildRelaySentence(
+      relay({
+        id: 'r1',
+        action: 'spawn',
+        targetSessionId: null,
+        conditionToken: 'BATON: reviewer',
+        spawnSpec: {
+          projectId: 'p1',
+          providerId: 'codex',
+          model: null,
+          effort: null,
+          name: 'Reviewer',
+          providerAccountId: null,
+        },
+      }),
+      resolveName,
+    )
+
+    expect(sentence.condition).toBe('BATON: reviewer')
+    expect(sentence.text).toContain('Only if it ends with "BATON: reviewer"')
+  })
+
+  it('treats a whitespace-only token as no condition at all', () => {
+    expect(
+      buildRelaySentence(
+        relay({ id: 'r1', conditionToken: '   ' }),
+        resolveName,
+      ).condition,
+    ).toBeNull()
+  })
+
+  it('writes the marker with the token quoted exactly as stored', () => {
+    // The token IS the line the agent writes. Paraphrasing it in the sentence
+    // would hide the one string that actually has to match.
+    expect(relayConditionMarker('  BATON: horse  ')).toBe(
+      'Only if it ends with "BATON: horse", ',
+    )
   })
 })

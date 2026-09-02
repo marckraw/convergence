@@ -9,6 +9,11 @@ import { MISSING_SESSION_LABEL } from './relay-sentence.pure'
 export const ALARMING_RELAY_OUTCOMES: readonly RelayHopOutcome[] = [
   'error',
   'skipped-budget',
+  // The round cap is alarming while `skipped-baton` is not, and the difference
+  // is whether anything is owed: a wire that held because the message named
+  // another route did exactly what it was drawn to do, while a loop that ran
+  // out of rounds is waiting on a human and has hailed for one.
+  'skipped-round-budget',
 ]
 
 export type RelayHopTone = 'delivered' | 'skipped' | 'alarm' | 'unknown'
@@ -41,11 +46,16 @@ export function relayHopTone(outcome: string): RelayHopTone {
     // `skipped-muted` is grey for the same reason `skipped-already-fired` is:
     // the wire did exactly what it was told. Red here would train the user to
     // fear their own quiet send.
+    // `skipped-baton` is grey for the same reason the other two are: the wire
+    // is default-closed by design, and red here would train the user to fear
+    // a condition doing its job on every settle that names another route.
     case 'skipped-failed':
     case 'skipped-already-fired':
     case 'skipped-muted':
+    case 'skipped-baton':
       return 'skipped'
     case 'skipped-budget':
+    case 'skipped-round-budget':
     case 'error':
       return 'alarm'
     default:
@@ -78,6 +88,10 @@ export function formatRelayHopOutcome(outcome: string): string {
       return 'already fired this run'
     case 'skipped-muted':
       return 'held — sent quiet'
+    case 'skipped-baton':
+      return 'held — another baton'
+    case 'skipped-round-budget':
+      return 'stopped — round cap'
     case 'error':
       return 'error'
     default:
@@ -120,6 +134,15 @@ export interface RelayHopLine {
   rawOutcome: string | null
   tone: RelayHopTone
   timeLabel: string
+  /**
+   * Which round of the loop this was, in words. Null on the rows that belong
+   * to the settle rather than the loop (a quiet send, a failed source) — and
+   * on every row written before rounds existed, which is the same honest
+   * answer.
+   */
+  roundLabel: string | null
+  /** The route the finishing message declared, or null when it declared none. */
+  batonLabel: string | null
   /** Shown only when the hop actually carried something. */
   payloadPreview: string | null
   error: string | null
@@ -149,6 +172,8 @@ export function buildRelayHopLine(
     rawOutcome: tone === 'unknown' ? hop.outcome : null,
     tone,
     timeLabel: formatHopTime(hop.firedAt, now),
+    roundLabel: hop.roundNumber === null ? null : `round ${hop.roundNumber}`,
+    batonLabel: hop.baton === null ? null : `⚡ ${hop.baton}`,
     payloadPreview: hop.payloadPreview,
     error: hop.error,
   }

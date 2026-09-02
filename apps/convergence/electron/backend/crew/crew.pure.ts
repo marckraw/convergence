@@ -73,3 +73,53 @@ export function nextCrewPosition(positions: readonly number[]): number {
   }
   return highest + 1
 }
+
+/**
+ * A baton name is one word-ish label, not a sentence: it is typed into a
+ * condition line and read at a glance on a canvas arrow.
+ */
+const MAX_CREW_BATON_NAME_LENGTH = 32
+
+/**
+ * The short name a baton addresses a crew member by.
+ *
+ * Lowercased and whitespace-collapsed on the way in, because that is the one
+ * spelling the relay compares -- storing `Horse` and matching `horse` would
+ * mean the pre-filled condition and the stored name disagreed about a wire the
+ * user never edited. Blank stores as null: an unnamed member is simply one no
+ * baton can address yet.
+ */
+export function normalizeCrewBatonName(
+  value: string | null | undefined,
+): string | null {
+  if (value === undefined || value === null) return null
+  const collapsed = value.trim().replace(/\s+/g, ' ').toLowerCase()
+  if (collapsed.length === 0) return null
+  if (collapsed.length > MAX_CREW_BATON_NAME_LENGTH) {
+    throw new Error(
+      `A baton name cannot be longer than ${MAX_CREW_BATON_NAME_LENGTH} characters`,
+    )
+  }
+  if (collapsed.includes(':')) {
+    throw new Error('A baton name cannot contain a colon')
+  }
+  return collapsed
+}
+
+/**
+ * A crew knob: a whole number of rounds or minutes, or null for the default.
+ *
+ * Refused rather than clamped when it is not a number a human could have
+ * meant. A silently corrected 0 would read back as a cap the user never set,
+ * and they would have no way to tell it apart from one they did.
+ */
+export function normalizeCrewLimit(
+  value: number | null | undefined,
+  label: string,
+): number | null {
+  if (value === undefined || value === null) return null
+  if (!Number.isInteger(value) || value < 1) {
+    throw new Error(`${label} must be a whole number of at least 1`)
+  }
+  return value
+}
