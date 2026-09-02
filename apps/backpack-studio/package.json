@@ -8,14 +8,16 @@
     "dev": "electron-vite dev",
     "build": "electron-vite build",
     "package:mac:unsigned": "npm run build && CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --mac dmg zip --x64 --arm64 --publish never",
-    "test": "vitest run --config vitest.pure.config.ts",
+    "test": "npm run test:pure && npm run test:unit",
     "test:pure": "vitest run --config vitest.pure.config.ts",
-    "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.node.json"
+    "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.node.json",
+    "test:unit": "vitest run --config vitest.unit.config.ts"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "@mrck-labs/execution-host-protocol": "^0.14.0",
     "react": "^19.2.5",
     "react-dom": "^19.2.5"
   },

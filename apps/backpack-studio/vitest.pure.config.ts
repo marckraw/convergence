@@ -1,18 +1,23 @@
 import { defineConfig } from 'vitest/config'
 
 /**
- * Studio's only test tier: node-environment pure tests. It has no jsdom tier
- * yet because it has no stateful component to render — the root's `test:unit`
- * skips it through `--if-present` rather than reporting a zero.
+ * Studio's pure tier: deterministic logic with no IO, in a node environment.
  *
- * `workspace-manifest.test.ts` is listed by name because it sits beside the
- * manifest it pins rather than under `src` — the same shape Convergence uses
- * for the lint config's canary (MAR-2737).
+ * It spans both trees — the renderer's readings of a snapshot and the backend's
+ * wire, config and fold modules are the same kind of thing, and splitting them
+ * by directory would only hide half of them from a reader looking for "what is
+ * proven without a daemon".
+ *
+ * `workspace-manifest.test.ts` and `workspace-import-ownership.test.ts` are
+ * listed by name because they sit beside what they pin rather than under a
+ * source tree — the same shape Convergence uses for the lint config's canary
+ * (MAR-2737).
  */
 export default defineConfig({
   test: {
     include: [
       'src/**/*.pure.test.ts',
+      'electron/**/*.pure.test.ts',
       'workspace-manifest.test.ts',
       'workspace-import-ownership.test.ts',
     ],
