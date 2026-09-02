@@ -63,4 +63,10 @@ export function registerCrewIpcHandlers(deps: {
     (_event, crewId: string, sessionId: string) =>
       mutate(() => service.removeMember(crewId, sessionId)),
   )
+
+  ipcMain.handle(
+    'crew:setMemberBatonName',
+    (_event, crewId: string, sessionId: string, batonName: string | null) =>
+      mutate(() => service.setMemberBatonName(crewId, sessionId, batonName)),
+  )
 }
