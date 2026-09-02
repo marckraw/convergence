@@ -117,6 +117,12 @@ import {
 } from '../backend/crew/crew.ipc'
 import { RelayService } from '../backend/relay/relay.service'
 import { RelayEngine } from '../backend/relay/relay.engine'
+import { CrewHailService } from '../backend/relay/crew-hail.service'
+import { startRelayStallClock } from './relay-stall-clock'
+import {
+  broadcastCrewHails,
+  registerCrewHailIpcHandlers,
+} from '../backend/relay/crew-hail.ipc'
 import {
   broadcastRelayHop,
   broadcastRelays,
@@ -645,10 +651,26 @@ async function startApp(): Promise<void> {
   })
   registerFeedbackIpcHandlers(feedbackService)
   registerCrewIpcHandlers({ service: crewService })
+  const crewHailService = new CrewHailService(db)
   const relayEngine = new RelayEngine({
     relays: relayService,
     sessions: sessionService,
-    crews: crewService,
+    crews: {
+      addMember: (crewId, sessionId) =>
+        crewService.addMember(crewId, sessionId),
+      crewIdsForSession: (sessionId) =>
+        crewService.crewIdsForSession(sessionId),
+      // Read through the crew rather than copied onto the engine: the knobs
+      // belong to the crew, and an engine holding its own copy would keep
+      // firing yesterday's cap after the user changed it.
+      getLoopLimits: (crewId) => {
+        const crew = crewService.getById(crewId)
+        return crew
+          ? { roundCap: crew.roundCap, stallMinutes: crew.stallMinutes }
+          : null
+      },
+    },
+    hails: crewHailService,
     // The first thing in the backend to read the enrolled default. Until now
     // the flag was set here and only ever honoured by the renderer composer,
     // so every turn Convergence started by itself ran on the ambient
@@ -658,9 +680,11 @@ async function startApp(): Promise<void> {
         providerAccountRepository.listByProvider(providerId),
     },
     onHopAppended: broadcastRelayHop,
+    onHailsChanged: () => broadcastCrewHails(crewHailService.listOpen()),
     onRelaysChanged: () => broadcastRelays(relayService.list()),
     onCrewsChanged: () => broadcastCrews(crewService.list()),
   })
+  registerCrewHailIpcHandlers({ service: crewHailService })
   // Registered after the engine exists rather than before: clearing a trail
   // has to ask the engine which runs are still moving, and a handler that
   // could not ask would be free to empty the ledger the loop law reads.
@@ -673,6 +697,16 @@ async function startApp(): Promise<void> {
   sessionService.onSessionSettled((event) => {
     void relayEngine.handleSettle(event)
   })
+  // The receipt's other ending: a cancelled or abandoned dispatch releases
+  // exactly what the engine was holding for it (MAR-2759).
+  sessionService.onDispatchTerminal((event) => {
+    relayEngine.handleDispatchTerminal(event)
+  })
+  // The stall hail's clock. A station that hangs produces no settle, so the
+  // one event that would notice never arrives -- the check has to be driven by
+  // time or not at all. Its own module so the timer is testable rather than an
+  // untested `setInterval` in the bootstrap.
+  startRelayStallClock(relayEngine)
 
   registerIpcHandlers(
     projectService,

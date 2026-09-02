@@ -169,6 +169,17 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.invoke('crew:addMember', crewId, sessionId),
     removeMember: (crewId: string, sessionId: string) =>
       ipcRenderer.invoke('crew:removeMember', crewId, sessionId),
+    setMemberBatonName: (
+      crewId: string,
+      sessionId: string,
+      batonName: string | null,
+    ) =>
+      ipcRenderer.invoke(
+        'crew:setMemberBatonName',
+        crewId,
+        sessionId,
+        batonName,
+      ),
     onUpdated: (callback: (crews: unknown) => void) => {
       const handler = (_: unknown, crews: unknown) => callback(crews)
       ipcRenderer.on('crew:updated', handler)
@@ -208,6 +219,20 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.on('relayHop:cleared', handler)
       return () => {
         ipcRenderer.removeListener('relayHop:cleared', handler)
+      }
+    },
+  },
+  crewHail: {
+    listOpen: () => ipcRenderer.invoke('crewHails:listOpen'),
+    acknowledge: (id: string) =>
+      ipcRenderer.invoke('crewHails:acknowledge', id),
+    acknowledgeCrew: (crewId: string) =>
+      ipcRenderer.invoke('crewHails:acknowledgeCrew', crewId),
+    onUpdated: (callback: (hails: unknown) => void) => {
+      const handler = (_: unknown, hails: unknown) => callback(hails)
+      ipcRenderer.on('crewHails:updated', handler)
+      return () => {
+        ipcRenderer.removeListener('crewHails:updated', handler)
       }
     },
   },

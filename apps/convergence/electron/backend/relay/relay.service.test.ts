@@ -4,9 +4,10 @@ import { RelayService } from './relay.service'
 
 describe('RelayService', () => {
   let service: RelayService
+  let db: ReturnType<typeof getDatabase>
 
   beforeEach(() => {
-    const db = getDatabase()
+    db = getDatabase()
     service = new RelayService(db)
     db.prepare(
       "INSERT INTO projects (id, name, repository_path) VALUES ('p1', 'p1', '/tmp/p1')",
@@ -824,6 +825,331 @@ describe('RelayService', () => {
 
       expect(service.countBudgetedHops('run-1')).toBe(2)
       expect(service.countBudgetedHops('run-unknown')).toBe(0)
+    })
+
+    it('meters each crew hops separately from the run they share', () => {
+      // The round meter belongs to the crew that owns the cap. One session
+      // can be in two crews, and one crew spending the other's rounds is a
+      // cap that trips before its own loop has carried anything.
+      const relay = createRelay()
+      for (const crewId of ['c1', 'c1', 'c2']) {
+        service.appendHop({
+          relayId: relay.id,
+          crewId,
+          flowRunId: 'run-1',
+          sourceSessionId: 's1',
+          triggerStatus: 'completed',
+          outcome: 'delivered',
+        })
+      }
+
+      expect(service.countBudgetedHopsInCrew('c1', 'run-1')).toBe(2)
+      expect(service.countBudgetedHopsInCrew('c2', 'run-1')).toBe(1)
+      // The backstop still counts the whole run, which is the question it asks.
+      expect(service.countBudgetedHops('run-1')).toBe(3)
+    })
+  })
+
+  describe('the station coming back', () => {
+    it('stamps the hop whose dispatch id the settle names', () => {
+      const relay = createRelay()
+      const landed = service.appendHop({
+        relayId: relay.id,
+        crewId: 'c1',
+        flowRunId: 'run-1',
+        sourceSessionId: 's1',
+        targetSessionId: 's2',
+        triggerStatus: 'completed',
+        outcome: 'delivered',
+        dispatchId: 'd1',
+      })
+
+      expect(service.markStationSettled('s2', 'completed', 'T1', ['d1'])).toBe(
+        1,
+      )
+
+      const stamped = service.listHops('c1')[0]
+      expect(stamped.id).toBe(landed.id)
+      expect(stamped.settledAt).toBe('T1')
+      expect(stamped.settledStatus).toBe('completed')
+    })
+
+    it('leaves a receipted hop standing when the settle names no receipt', () => {
+      // The causal question, answered by identity (MAR-2759): a settle that
+      // consumed none of ours -- a user-typed turn, an opener's plumbing beat
+      // -- must not stamp delivered work still owed, however much later it is.
+      const relay = createRelay()
+      service.appendHop({
+        relayId: relay.id,
+        crewId: 'c1',
+        flowRunId: 'run-1',
+        sourceSessionId: 's1',
+        targetSessionId: 's2',
+        triggerStatus: 'completed',
+        outcome: 'queued',
+        dispatchId: 'd1',
+      })
+
+      expect(service.markStationSettled('s2', 'completed', 'T1', [])).toBe(0)
+      expect(
+        service.markStationSettled('s2', 'completed', 'T2', ['someone-else']),
+      ).toBe(0)
+      expect(service.listHops('c1')[0].settledAt).toBeNull()
+      // The payload's own settle, whenever it comes, is the one that stamps.
+      expect(service.markStationSettled('s2', 'failed', 'T3', ['d1'])).toBe(1)
+      expect(service.listHops('c1')[0]).toMatchObject({
+        settledAt: 'T3',
+        settledStatus: 'failed',
+      })
+    })
+
+    it('stamps each queued payload only by its own settle', () => {
+      // The queue-depth corner: two relays behind one running target used to
+      // be stamped together by whichever settle came first, and the second
+      // could hang silently. Identity keeps the debts apart.
+      const relay = createRelay()
+      const first = service.appendHop({
+        relayId: relay.id,
+        crewId: 'c1',
+        flowRunId: 'run-1',
+        sourceSessionId: 's1',
+        targetSessionId: 's2',
+        triggerStatus: 'completed',
+        outcome: 'queued',
+        dispatchId: 'd1',
+      })
+      const second = service.appendHop({
+        relayId: relay.id,
+        crewId: 'c1',
+        flowRunId: 'run-2',
+        sourceSessionId: 's3',
+        targetSessionId: 's2',
+        triggerStatus: 'completed',
+        outcome: 'queued',
+        dispatchId: 'd2',
+      })
+
+      expect(service.markStationSettled('s2', 'completed', 'T1', ['d1'])).toBe(
+        1,
+      )
+
+      const byId = new Map(service.listHops('c1').map((hop) => [hop.id, hop]))
+      expect(byId.get(first.id)?.settledAt).toBe('T1')
+      expect(byId.get(second.id)?.settledAt).toBeNull()
+    })
+
+    it('stamps a terminated receipt cancelled, and only that one', () => {
+      // The receipt's terminal (MAR-2759): a cancelled or abandoned dispatch
+      // is answered by the session layer's word rather than by a settle that
+      // will never come. Identity again -- a sibling in the same station
+      // stays owed.
+      const relay = createRelay()
+      const ended = service.appendHop({
+        relayId: relay.id,
+        crewId: 'c1',
+        flowRunId: 'run-1',
+        sourceSessionId: 's1',
+        targetSessionId: 's2',
+        triggerStatus: 'completed',
+        outcome: 'queued',
+        dispatchId: 'd1',
+      })
+      const kept = service.appendHop({
+        relayId: relay.id,
+        crewId: 'c1',
+        flowRunId: 'run-2',
+        sourceSessionId: 's3',
+        targetSessionId: 's2',
+        triggerStatus: 'completed',
+        outcome: 'queued',
+        dispatchId: 'd2',
+      })
+
+      expect(
+        service.markDispatchesTerminated(['d1', 'unknown'], 'T1', 'cancelled'),
+      ).toBe(1)
+
+      const byId = new Map(service.listHops('c1').map((hop) => [hop.id, hop]))
+      expect(byId.get(ended.id)).toMatchObject({
+        settledAt: 'T1',
+        settledStatus: 'cancelled',
+      })
+      expect(byId.get(kept.id)?.settledAt).toBeNull()
+      // First answer kept: a terminal after a settle rewrites nothing.
+      expect(service.markDispatchesTerminated(['d1'], 'T2', 'cancelled')).toBe(
+        0,
+      )
+      expect(byId.get(ended.id)?.settledAt).toBe('T1')
+    })
+
+    it("stamps a terminated receipt with the terminal's own word", () => {
+      // Four terminals, four words (MAR-2759, design P): the stamp says
+      // which ending it was, because the stall clock reads `failed` as loud
+      // and the other two as quiet, and a fixed word would erase that.
+      const relay = createRelay()
+      const abandoned = service.appendHop({
+        relayId: relay.id,
+        crewId: 'c1',
+        flowRunId: 'run-1',
+        sourceSessionId: 's1',
+        targetSessionId: 's2',
+        triggerStatus: 'completed',
+        outcome: 'queued',
+        dispatchId: 'd1',
+      })
+      const failed = service.appendHop({
+        relayId: relay.id,
+        crewId: 'c1',
+        flowRunId: 'run-2',
+        sourceSessionId: 's3',
+        targetSessionId: 's2',
+        triggerStatus: 'completed',
+        outcome: 'queued',
+        dispatchId: 'd2',
+      })
+
+      expect(service.markDispatchesTerminated(['d1'], 'T1', 'abandoned')).toBe(
+        1,
+      )
+      expect(service.markDispatchesTerminated(['d2'], 'T2', 'failed')).toBe(1)
+
+      const byId = new Map(service.listHops('c1').map((hop) => [hop.id, hop]))
+      expect(byId.get(abandoned.id)).toMatchObject({
+        settledAt: 'T1',
+        settledStatus: 'abandoned',
+      })
+      expect(byId.get(failed.id)).toMatchObject({
+        settledAt: 'T2',
+        settledStatus: 'failed',
+      })
+    })
+
+    it('leaves a hop that spent no turn alone', () => {
+      // A refusal landed nothing, so there is nothing for the station to owe
+      // and nothing its settle answers.
+      const relay = createRelay()
+      service.appendHop({
+        relayId: relay.id,
+        crewId: 'c1',
+        flowRunId: 'run-1',
+        sourceSessionId: 's1',
+        targetSessionId: 's2',
+        triggerStatus: 'completed',
+        outcome: 'skipped-baton',
+      })
+
+      expect(service.markStationSettled('s2', 'completed', 'T1', [])).toBe(0)
+      expect(service.listHops('c1')[0].settledAt).toBeNull()
+    })
+
+    it('keeps the first answer rather than the newest one', () => {
+      // The stamp records the settle that ended the station's silence. A
+      // replayed or later settle naming the same receipt must not rewrite it.
+      const relay = createRelay()
+      service.appendHop({
+        relayId: relay.id,
+        crewId: 'c1',
+        flowRunId: 'run-1',
+        sourceSessionId: 's1',
+        targetSessionId: 's2',
+        triggerStatus: 'completed',
+        outcome: 'delivered',
+        dispatchId: 'd1',
+      })
+
+      service.markStationSettled('s2', 'failed', 'T1', ['d1'])
+      expect(service.markStationSettled('s2', 'completed', 'T2', ['d1'])).toBe(
+        0,
+      )
+
+      expect(service.listHops('c1')[0]).toMatchObject({
+        settledAt: 'T1',
+        settledStatus: 'failed',
+      })
+    })
+
+    it('stamps a spawned session by the session it opened', () => {
+      const relay = createRelay()
+      service.appendHop({
+        relayId: relay.id,
+        crewId: 'c1',
+        flowRunId: 'run-1',
+        sourceSessionId: 's1',
+        spawnedSessionId: 's3',
+        triggerStatus: 'completed',
+        outcome: 'spawned',
+        dispatchId: 'd1',
+      })
+
+      expect(service.markStationSettled('s3', 'completed', 'T1', ['d1'])).toBe(
+        1,
+      )
+    })
+
+    it('keeps the first-answer reading for a row written before receipts', () => {
+      // A pre-receipt row carries no id, so identity cannot judge it; the old
+      // rule stays for exactly those rows -- the first settle after the
+      // firing stamps, and a settle from before the work was even sent is
+      // refused, because it cannot be the settle of that work.
+      const relay = createRelay()
+      service.appendHop({
+        relayId: relay.id,
+        crewId: 'c1',
+        flowRunId: 'run-1',
+        sourceSessionId: 's1',
+        targetSessionId: 's2',
+        triggerStatus: 'completed',
+        outcome: 'delivered',
+      })
+
+      expect(
+        service.markStationSettled(
+          's2',
+          'completed',
+          '2020-01-01T00:00:00.000Z',
+          [],
+        ),
+      ).toBe(0)
+      expect(service.listHops('c1')[0].settledAt).toBeNull()
+      expect(
+        service.markStationSettled(
+          's2',
+          'completed',
+          '2999-01-01T00:00:00.000Z',
+          [],
+        ),
+      ).toBe(1)
+    })
+  })
+
+  describe('the stall clock trail read', () => {
+    it('answers the crew trail newest first, bounded by the cutoff', () => {
+      const relay = createRelay()
+      const old = service.appendHop({
+        relayId: relay.id,
+        crewId: 'c1',
+        flowRunId: 'run-1',
+        sourceSessionId: 's1',
+        targetSessionId: 's2',
+        triggerStatus: 'completed',
+        outcome: 'delivered',
+      })
+      db.prepare('UPDATE relay_hops SET fired_at = ? WHERE id = ?').run(
+        '2000-01-01T00:00:00.000Z',
+        old.id,
+      )
+      const recent = service.appendHop({
+        relayId: relay.id,
+        crewId: 'c1',
+        flowRunId: 'run-1',
+        sourceSessionId: 's1',
+        targetSessionId: 's3',
+        triggerStatus: 'completed',
+        outcome: 'delivered',
+      })
+
+      const hops = service.listRecentHops('c1', '2001-01-01T00:00:00.000Z')
+      expect(hops.map((hop) => hop.id)).toEqual([recent.id])
     })
   })
 })
