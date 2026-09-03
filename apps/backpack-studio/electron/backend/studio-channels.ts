@@ -17,4 +17,5 @@ export const STUDIO_CHANNELS = {
   sendMessage: 'studio:send-message',
   getTranscript: 'studio:get-transcript',
   conversationEvent: 'studio:conversation-event',
+  daemonStatus: 'studio:daemon-status',
 } as const

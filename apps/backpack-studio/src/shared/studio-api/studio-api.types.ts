@@ -27,7 +27,22 @@ export type ConversationStatus = 'running' | 'idle' | 'failed'
  */
 export type StudioStartup =
   | { kind: 'misconfigured'; missing: string[] }
-  | { kind: 'ready'; providerId: string; daemon: DaemonStatusView }
+  | {
+      kind: 'ready'
+      providerId: string
+      /**
+       * What the handshake made of the daemon, or null while it is still
+       * asking.
+       *
+       * Nullable on purpose: startup resolves as soon as the RECORD is
+       * readable, because the conversations already on disk are what the
+       * window is for and they do not depend on a machine answering. A
+       * black-holed host used to hold the whole window shut for half a minute.
+       * `null` means "not yet", never "fine" — the banner says nothing until
+       * there is something true to say, and the answer arrives by push.
+       */
+      daemon: DaemonStatusView | null
+    }
 
 /**
  * What the startup handshake made of the daemon, in the window's vocabulary.
@@ -137,4 +152,6 @@ export interface StudioApi {
   getTranscript(conversationId: string): Promise<ConversationSnapshot | null>
   /** Subscribes to snapshot pushes. Returns the unsubscribe. */
   onConversationEvent(listener: (event: ConversationEvent) => void): () => void
+  /** Subscribes to the daemon handshake landing. Returns the unsubscribe. */
+  onDaemonStatus(listener: (daemon: DaemonStatusView) => void): () => void
 }

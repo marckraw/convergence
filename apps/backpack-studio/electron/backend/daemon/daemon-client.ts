@@ -14,7 +14,6 @@ import {
 } from '@mrck-labs/execution-host-protocol'
 import {
   buildSendMessageEnvelope,
-  buildStopEnvelope,
   buildStudioStartRequest,
   daemonUrl,
   describeDaemonFailure,
@@ -35,9 +34,11 @@ import {
  * WHAT THIS DELIBERATELY DOES NOT DO, so nobody has to read the code to find
  * out: approvals (`approve` / `deny` are never sent, and an
  * `approval-request` item is shown as a row and answered by nobody),
- * attachments of any kind, steering, queued input, workspace materialisation,
- * Projects, Rooms, Environments, model and effort selection. Every one of them
- * is a beat of its own; none is silently half-built.
+ * stopping a running session, attachments of any kind, steering, queued input,
+ * workspace materialisation, Projects, Rooms, Environments, model and effort
+ * selection. Every one of them is a beat of its own; none is silently
+ * half-built — and a `stopSession` nothing calls would be exactly that, a
+ * capability the app appears to have and no surface can reach.
  *
  * The token lives in this object and leaves it only inside an `Authorization`
  * header. It is never logged, never returned and never part of an error
@@ -155,11 +156,6 @@ export class DaemonClient {
     await this.postCommand(buildSendMessageEnvelope(sessionId, text))
   }
 
-  /** Asks the daemon to stop a running session. */
-  async stopSession(sessionId: string): Promise<void> {
-    await this.postCommand(buildStopEnvelope(sessionId))
-  }
-
   /**
    * Follows a session's event stream until it is aborted, reconnecting from the
    * last sequence it saw.
@@ -187,7 +183,6 @@ export class DaemonClient {
       let response: Response
       try {
         response = await this.openEventStream(sessionId, lastSeq, signal)
-        attempt = 0
       } catch (error) {
         if (signal.aborted) return
         attempt += 1
@@ -197,12 +192,26 @@ export class DaemonClient {
             error instanceof RemoteExecutionHostError ? error.kind : 'network',
           )
         }
-        await this.wait(reconnectDelayMs(attempt))
+        await this.waitForRetry(reconnectDelayMs(attempt), signal)
         continue
       }
 
-      lastSeq = await this.readStream(response, sessionId, lastSeq, handlers)
+      const reading = await this.readStream(
+        response,
+        sessionId,
+        lastSeq,
+        handlers,
+      )
+      lastSeq = reading.lastSeq
       if (signal.aborted) return
+
+      // The budget is spent by ATTEMPTS, and an attempt only counts as having
+      // worked once the host said something. Resetting on a successful open
+      // alone gave a host that answers 200-and-closes an unlimited budget: the
+      // loop re-opened forever at one second apart, a publish storm against a
+      // machine that is plainly not serving this session. Delivering an
+      // envelope is the difference between a stream and a socket.
+      if (reading.envelopes > 0) attempt = 0
 
       attempt += 1
       if (attempt >= this.maxStreamAttempts) {
@@ -211,31 +220,60 @@ export class DaemonClient {
           'network',
         )
       }
-      await this.wait(reconnectDelayMs(attempt))
+      await this.waitForRetry(reconnectDelayMs(attempt), signal)
     }
   }
 
   /**
-   * Reads one open stream to its end and returns the last sequence it saw, so
-   * the reconnect resumes from there rather than from where the stream began.
+   * The backoff, given up the moment the caller aborts.
+   *
+   * A plain wait is not abortable, and the cap is thirty seconds: quitting
+   * during one made the app hang for up to half a minute with nothing on
+   * screen, because shutdown waits for the writes each follow still owes. The
+   * timer is still allowed to finish — it holds nothing — but nobody waits for
+   * it.
+   */
+  private waitForRetry(ms: number, signal: AbortSignal): Promise<void> {
+    if (signal.aborted) return Promise.resolve()
+    return new Promise<void>((resolve) => {
+      const onAbort = (): void => resolve()
+      signal.addEventListener('abort', onAbort, { once: true })
+      void this.wait(ms).then(() => {
+        signal.removeEventListener('abort', onAbort)
+        resolve()
+      })
+    })
+  }
+
+  /**
+   * Reads one open stream to its end.
+   *
+   * Returns the last sequence it saw, so the reconnect resumes from there
+   * rather than from where the stream began, and how many envelopes it handed
+   * on, which is what says whether this attempt was a stream at all.
+   *
+   * `envelopes` counts only what the handler ACCEPTED. An envelope the handler
+   * threw on — the record refusing a write — has not been kept, and counting it
+   * would hand a dead disk a budget that never runs out.
    */
   private async readStream(
     response: Response,
     sessionId: string,
     fromSeq: number,
     handlers: StreamHandlers,
-  ): Promise<number> {
+  ): Promise<{ lastSeq: number; envelopes: number }> {
     const body = response.body
-    if (!body) return fromSeq
+    if (!body) return { lastSeq: fromSeq, envelopes: 0 }
     const reader = body.getReader()
     const decoder = new TextDecoder()
     const parser = createSseParser()
     let lastSeq = fromSeq
+    let envelopes = 0
 
     try {
       for (;;) {
         const { done, value } = await reader.read()
-        if (done) return lastSeq
+        if (done) return { lastSeq, envelopes }
         // One read delivers a batch: a daemon replay writes its frames back to
         // back and they arrive coalesced.
         for (const frame of parser.feed(
@@ -248,16 +286,23 @@ export class DaemonClient {
           }
           // A replay can re-deliver what this conversation already holds; the
           // record is append-only, so anything at or below the high-water mark
-          // is dropped here rather than written twice.
-          if (reading.envelope.seq <= lastSeq) continue
+          // is dropped here rather than written twice. It still counts: the
+          // host answered with this session's own events.
+          if (reading.envelope.seq <= lastSeq) {
+            envelopes += 1
+            continue
+          }
           await handlers.onEnvelope(reading.envelope)
+          envelopes += 1
           lastSeq = reading.envelope.seq
         }
       }
     } catch {
-      // A read error — an abort included — ends this stream and is handled by
-      // the reconnect loop above, which can tell the two apart by the signal.
-      return lastSeq
+      // A read error — an abort, or a handler that refused an envelope — ends
+      // this stream and is handled by the reconnect loop above. `lastSeq` is
+      // the last sequence actually kept, so a refused envelope is re-requested
+      // rather than skipped over.
+      return { lastSeq, envelopes }
     } finally {
       reader.releaseLock()
     }

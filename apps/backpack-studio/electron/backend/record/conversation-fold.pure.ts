@@ -7,21 +7,25 @@ import type {
   ConversationStatus,
   TranscriptItem,
 } from '../../../src/shared/studio-api/studio-api.types'
+import type { ConversationLogEntry } from './conversation-store.types'
 
 /**
  * The event log, folded into the conversation a person sees (MAR-2770).
  *
- * ONE function does it, and it is the same one for both readings. A live
- * envelope arriving from the stream and an envelope replayed off disk after a
- * restart go through `applyEnvelope`; `foldEnvelopes` is that function reduced
- * over a log. Two folds — one for live, one for replay — is how a transcript
- * comes back from a restart looking subtly different from the one that was on
- * screen when the window closed, and there is no way to notice until somebody
- * does.
+ * ONE function does it, and it is the same one for both readings. An entry
+ * arriving live and an entry replayed off disk after a restart go through
+ * `applyEntry`; `foldEntries` is that function reduced over a log. Two folds —
+ * one for live, one for replay — is how a transcript comes back from a restart
+ * looking subtly different from the one that was on screen when the window
+ * closed, and there is no way to notice until somebody does.
  *
  * The log is the truth and this is the only derivation of it. Nothing here is
- * stored: status, items and `updatedAt` are all read out of the envelopes, so
- * there is no second copy of any of them to drift.
+ * stored: status, items and `updatedAt` are all read out of the log, so there
+ * is no second copy of any of them to drift. That includes the facts the wire
+ * never carries — a turn we posted, a turn the daemon refused, a stream we gave
+ * up on — which is exactly why they are log entries and not fields somewhere:
+ * a status kept in memory alone cannot survive the restart that has to
+ * reproduce it.
  */
 export interface ConversationFold {
   status: ConversationStatus
@@ -33,13 +37,21 @@ export interface ConversationFold {
   orphanPatches: number
 }
 
-/** The fold of a conversation that has no events yet. */
+/**
+ * The fold of a conversation whose log says nothing at all.
+ *
+ * `idle` rather than `running`, and the difference is the whole of H2. An empty
+ * log means the record exists and no turn was ever recorded against it, which
+ * is a conversation nobody is waiting on. Seeding `running` here made every
+ * silence look like work in progress: a start the daemon refused came back from
+ * a restart as a permanent "Working" with the composer locked against it, and
+ * nothing in the log would ever contradict that, because the reason it failed
+ * had never been written down. A turn now says so itself — `sent` is a line in
+ * the log before the daemon is asked — so the fold no longer has to guess.
+ */
 export function emptyFold(createdAt: string): ConversationFold {
   return {
-    // A conversation is running from the moment it is created: the start has
-    // been posted and the daemon has not said anything yet. Calling it `idle`
-    // would invite a follow-up into a session that is about to answer.
-    status: 'running',
+    status: 'idle',
     items: [],
     lastSeq: 0,
     updatedAt: createdAt,
@@ -47,11 +59,49 @@ export function emptyFold(createdAt: string): ConversationFold {
   }
 }
 
-export function foldEnvelopes(
+export function foldEntries(
   seed: ConversationFold,
-  envelopes: readonly ExecutionHostEventEnvelope[],
+  entries: readonly ConversationLogEntry[],
 ): ConversationFold {
-  return envelopes.reduce(applyEnvelope, seed)
+  return entries.reduce(applyEntry, seed)
+}
+
+/**
+ * One log entry onto a fold, whichever kind it is.
+ *
+ * The single door both readings go through — live and replay — so a local fact
+ * and a wire envelope can never be ordered differently by the two paths.
+ */
+export function applyEntry(
+  fold: ConversationFold,
+  entry: ConversationLogEntry,
+): ConversationFold {
+  return entry.kind === 'local'
+    ? applyLocalFact(fold, entry.fact, entry.at)
+    : applyEnvelope(fold, entry.envelope, entry.at)
+}
+
+/**
+ * A fact Studio recorded about itself.
+ *
+ * Each one moves the status to something a person can act on, and `refused` and
+ * `stream-exhausted` both land on `failed` deliberately: a conversation the
+ * daemon would not take and one whose stream we could not rebuild are both
+ * broken, both honest to show as broken, and both sendable again — `send`
+ * refuses only what is running.
+ */
+function applyLocalFact(
+  fold: ConversationFold,
+  fact: Extract<ConversationLogEntry, { kind: 'local' }>['fact'],
+  at: string,
+): ConversationFold {
+  switch (fact) {
+    case 'sent':
+      return { ...fold, status: 'running', updatedAt: at }
+    case 'refused':
+    case 'stream-exhausted':
+      return { ...fold, status: 'failed', updatedAt: at }
+  }
 }
 
 /**
@@ -60,10 +110,14 @@ export function foldEnvelopes(
  * Envelopes at or below the fold's high-water mark are ignored: a daemon replay
  * re-delivers what a resume already holds, and applying an add twice would
  * double a row of the transcript.
+ *
+ * `recordedAt` is when the log line was written, which is the only clock this
+ * wire has: the protocol's envelope carries no timestamp.
  */
 export function applyEnvelope(
   fold: ConversationFold,
   envelope: ExecutionHostEventEnvelope,
+  recordedAt: string | null = null,
 ): ConversationFold {
   if (envelope.seq <= fold.lastSeq) return fold
   const next: ConversationFold = { ...fold, lastSeq: envelope.seq }
@@ -71,7 +125,15 @@ export function applyEnvelope(
 
   switch (event.kind) {
     case 'status':
-      return { ...next, status: conversationStatusFrom(event.status) }
+      // A status event changes what the list row says, so it changes when the
+      // row was last updated. The protocol's envelope carries no time of its
+      // own, so the log line's own is used; a line written before entries had
+      // one leaves the time where it was rather than inventing a new one.
+      return {
+        ...next,
+        status: conversationStatusFrom(event.status),
+        updatedAt: recordedAt ?? next.updatedAt,
+      }
     case 'delta':
       return applyDelta(next, event.delta)
     // Everything else is a signal this beat has no reader for. `attention`,

@@ -74,17 +74,6 @@ export function buildSendMessageEnvelope(
   }
 }
 
-/** The stop a person asks for by closing a conversation Studio still follows. */
-export function buildStopEnvelope(
-  sessionId: string,
-): ExecutionHostCommandEnvelope {
-  return {
-    protocolVersion: EXECUTION_PROTOCOL_VERSION,
-    sessionId,
-    command: { kind: 'stop' },
-  }
-}
-
 export type EnvelopeReading =
   | { ok: true; envelope: ExecutionHostEventEnvelope }
   | { ok: false; reason: string }

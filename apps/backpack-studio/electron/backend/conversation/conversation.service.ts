@@ -8,15 +8,17 @@ import type {
 import type { DaemonClient } from '../daemon/daemon-client'
 import { describeDaemonFailure } from '../daemon/daemon-wire.pure'
 import {
-  applyEnvelope,
+  applyEntry,
   conversationTitleFrom,
   emptyFold,
-  foldEnvelopes,
+  foldEntries,
   type ConversationFold,
 } from '../record/conversation-fold.pure'
 import type {
+  ConversationLogEntry,
   ConversationRecord,
   ConversationStore,
+  LocalConversationFact,
 } from '../record/conversation-store.types'
 
 /**
@@ -52,6 +54,15 @@ interface LiveConversation {
   fold: ConversationFold
   unreadableTailLines: number
   streamError: string | null
+  /**
+   * Why the record last refused a write, while it is still refusing.
+   *
+   * A refused append ends the stream, and the reconnect meets the same disk and
+   * ends the same way until the budget runs out — so the sentence the person is
+   * finally left with would be "the stream dropped", which is true and useless.
+   * The cause is kept so the last word names the disk that caused it.
+   */
+  recordFailure: string | null
   abort: AbortController | null
   /** The follow, so shutdown can wait for the writes it still owes. */
   following: Promise<void> | null
@@ -61,6 +72,8 @@ export class ConversationService {
   private readonly conversations = new Map<string, LiveConversation>()
   private readonly now: () => string
   private readonly newId: () => string
+  /** Set once, by `dispose`, so a shutting-down app never re-attaches. */
+  private disposing = false
 
   constructor(private readonly deps: ConversationServiceDeps) {
     this.now = deps.now ?? (() => new Date().toISOString())
@@ -79,14 +92,15 @@ export class ConversationService {
    */
   async hydrate(): Promise<void> {
     for (const record of await this.deps.store.list()) {
-      const { envelopes, unreadableTailLines } = await this.deps.store.readLog(
+      const { entries, unreadableTailLines } = await this.deps.store.readLog(
         record.id,
       )
       const live: LiveConversation = {
         record,
-        fold: foldEnvelopes(emptyFold(record.createdAt), envelopes),
+        fold: foldEntries(emptyFold(record.createdAt), entries),
         unreadableTailLines,
         streamError: null,
+        recordFailure: null,
         abort: null,
         following: null,
       }
@@ -137,10 +151,25 @@ export class ConversationService {
       fold: emptyFold(record.createdAt),
       unreadableTailLines: 0,
       streamError: null,
+      recordFailure: null,
       abort: null,
       following: null,
     }
     this.conversations.set(id, live)
+
+    // The turn is recorded before the daemon is asked, for the same reason the
+    // record is: a process that dies between the post and the writing of it
+    // leaves a session running on the VPS that this app comes back believing
+    // never happened.
+    try {
+      await this.recordLocal(live, 'sent')
+    } catch (error) {
+      return {
+        kind: 'refused',
+        conversationId: id,
+        reason: this.reportDiskFailure(live, error),
+      }
+    }
     this.publish(live)
 
     try {
@@ -152,8 +181,8 @@ export class ConversationService {
       })
     } catch (error) {
       const reason = describeDaemonFailure(error)
-      live.fold = { ...live.fold, status: 'failed' }
       live.streamError = reason
+      await this.recordRefusal(live, reason)
       this.publish(live)
       return { kind: 'refused', conversationId: id, reason }
     }
@@ -176,18 +205,30 @@ export class ConversationService {
     if (!live) return { kind: 'refused', reason: 'That conversation is gone.' }
     if (live.fold.status === 'running') return { kind: 'busy' }
 
+    // Recorded before the wire, exactly as a start is: a restart between the
+    // two comes back running and re-attaches, rather than showing a
+    // conversation that quietly swallowed the sentence someone typed.
+    try {
+      await this.recordLocal(live, 'sent')
+    } catch (error) {
+      return { kind: 'refused', reason: this.reportDiskFailure(live, error) }
+    }
+    live.streamError = null
+    this.publish(live)
+
     try {
       await this.deps.client.sendMessage(id, text)
     } catch (error) {
-      return { kind: 'refused', reason: describeDaemonFailure(error) }
+      const reason = describeDaemonFailure(error)
+      live.streamError = reason
+      await this.recordRefusal(live, reason)
+      this.publish(live)
+      return { kind: 'refused', reason }
     }
 
     // The daemon answers a follow-up by running again and by echoing the
     // person's own words back as a conversation item, so nothing is invented
     // here: the transcript grows from the stream, as it does for a start.
-    live.fold = { ...live.fold, status: 'running' }
-    live.streamError = null
-    this.publish(live)
     if (!live.abort) this.follow(live)
     return { kind: 'sent' }
   }
@@ -199,6 +240,7 @@ export class ConversationService {
    * leave the log missing what the snapshot on screen had already shown.
    */
   async dispose(): Promise<void> {
+    this.disposing = true
     const following: Promise<void>[] = []
     for (const live of this.conversations.values()) {
       live.abort?.abort()
@@ -233,16 +275,54 @@ export class ConversationService {
         },
         abort.signal,
       )
-      .catch((error: unknown) => {
+      .catch(async (error: unknown) => {
         if (abort.signal.aborted) return
         // A stream that died is not a conversation that finished, and the dot
-        // alone cannot say which happened.
-        live.streamError = describeDaemonFailure(error)
+        // alone cannot say which happened. The giving-up is written down as
+        // well as shown: a conversation whose stream we abandoned must not
+        // come back from the next restart looking like one still at work.
+        // A record that would not take the writes is why this stream kept
+        // ending; saying "the stream dropped" would name the symptom and bury
+        // the cause the person can actually do something about.
+        const reason = live.recordFailure ?? describeDaemonFailure(error)
+        live.streamError = reason
+        await this.recordExhaustion(live, reason)
         this.publish(live)
       })
       .finally(() => {
         if (live.abort === abort) live.abort = null
+        // One read can carry a whole conversation: after a torn log the resume
+        // asks from an earlier sequence and the daemon replays several turns
+        // coalesced, so the `completed` that ended the follow can sit in the
+        // MIDDLE of the batch. The settled fold is the only honest reading, and
+        // it is only settled once the stream has drained — a conversation still
+        // running here has nothing streaming it, which is the zombie in a
+        // different costume.
+        // Only after an abort WE took. A stream that ended by failing must not
+        // be re-opened from here — the budget it just spent is the decision,
+        // and re-following on the strength of a `running` fold would reconnect
+        // forever against a host that is not answering.
+        if (
+          abort.signal.aborted &&
+          !this.disposing &&
+          live.abort === null &&
+          live.fold.status === 'running'
+        ) {
+          this.follow(live)
+        }
       })
+  }
+
+  /** Ends the follow now, rather than when the aborted stream notices. */
+  private stopFollowing(live: LiveConversation): void {
+    live.abort?.abort()
+    // Cleared eagerly as well as in the follow's `finally`, which runs a turn
+    // later. `send` decides whether to re-attach by reading this, so a caller
+    // arriving inside that turn would find an aborted controller and start no
+    // stream. Nothing in the app is that caller today — a follow-up crosses
+    // IPC, which is always a turn away — so this narrows a window the suite
+    // cannot observe rather than fixing a reachable defect.
+    live.abort = null
   }
 
   /**
@@ -256,15 +336,89 @@ export class ConversationService {
     live: LiveConversation,
     envelope: ExecutionHostEventEnvelope,
   ): Promise<void> {
-    try {
-      await this.deps.store.appendEnvelope(live.record.id, envelope)
-    } catch (error) {
-      live.streamError = `The conversation could not be written to disk: ${describeDaemonFailure(error)}`
-      this.publish(live)
-      return
+    const entry: ConversationLogEntry = {
+      kind: 'wire',
+      at: this.now(),
+      envelope,
     }
-    live.fold = applyEnvelope(live.fold, envelope)
+    try {
+      await this.deps.store.appendEntry(live.record.id, entry)
+    } catch (error) {
+      this.reportDiskFailure(live, error)
+      // Thrown rather than swallowed: returning here would let the stream carry
+      // on past an envelope that reached no disk, and the reader's high-water
+      // mark would advance over it — a hole in the log that no resume ever asks
+      // for again. The throw ends this stream at the last sequence actually
+      // written, so the reconnect re-requests exactly what was lost.
+      throw error
+    }
+    live.recordFailure = null
+    live.fold = applyEntry(live.fold, entry)
+    // A conversation that has stopped running has nothing left to stream. The
+    // follow is ended here rather than left open for the app's lifetime — one
+    // idle SSE per conversation is a connection the daemon holds for nobody.
+    if (live.fold.status !== 'running') this.stopFollowing(live)
     this.publish(live)
+  }
+
+  /**
+   * A local fact onto the record and then onto the fold, in that order.
+   *
+   * Disk first, exactly as a wire envelope: a fold that has run ahead of the
+   * log is a status the next launch cannot reproduce. Throws when the record
+   * would not take it, and the callers decide what that means for them.
+   */
+  private async recordLocal(
+    live: LiveConversation,
+    fact: LocalConversationFact,
+  ): Promise<void> {
+    const entry: ConversationLogEntry = {
+      kind: 'local',
+      at: this.now(),
+      fact,
+    }
+    await this.deps.store.appendEntry(live.record.id, entry)
+    live.fold = applyEntry(live.fold, entry)
+  }
+
+  /**
+   * Records that the daemon would not take a turn already written as `sent`.
+   *
+   * A disk that cannot take the refusal is reported rather than swallowed: the
+   * conversation would otherwise be left reading `running` in memory with
+   * nothing on disk to correct it, and the person deserves the sentence that
+   * says why the window and the record disagree.
+   */
+  private async recordRefusal(
+    live: LiveConversation,
+    reason: string,
+  ): Promise<void> {
+    try {
+      await this.recordLocal(live, 'refused')
+    } catch (error) {
+      live.streamError = `${reason} (and that could not be written to the record: ${describeDaemonFailure(error)})`
+    }
+  }
+
+  /** The same, for a stream this app gave up re-establishing. */
+  private async recordExhaustion(
+    live: LiveConversation,
+    reason: string,
+  ): Promise<void> {
+    try {
+      await this.recordLocal(live, 'stream-exhausted')
+    } catch (error) {
+      live.streamError = `${reason} (and that could not be written to the record: ${describeDaemonFailure(error)})`
+    }
+  }
+
+  /** One sentence for a record that would not take a write, said out loud. */
+  private reportDiskFailure(live: LiveConversation, error: unknown): string {
+    const sentence = `The conversation could not be written to disk: ${describeDaemonFailure(error)}`
+    live.streamError = sentence
+    live.recordFailure = sentence
+    this.publish(live)
+    return sentence
   }
 
   private publish(live: LiveConversation): void {

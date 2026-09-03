@@ -2,6 +2,7 @@ import type {
   ConversationEvent,
   ConversationSnapshot,
   ConversationSummary,
+  DaemonStatusView,
   SendMessageOutcome,
   StartConversationOutcome,
   StudioApi,
@@ -58,4 +59,10 @@ export function onConversationEvent(
   listener: (event: ConversationEvent) => void,
 ): () => void {
   return bridge().onConversationEvent(listener)
+}
+
+export function onDaemonStatus(
+  listener: (daemon: DaemonStatusView) => void,
+): () => void {
+  return bridge().onDaemonStatus(listener)
 }

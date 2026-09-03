@@ -9,7 +9,6 @@ import {
 import type { EndpointHandshakeResult } from '@convergence/execution-host-client'
 import {
   buildSendMessageEnvelope,
-  buildStopEnvelope,
   buildStudioStartRequest,
   daemonUrl,
   describeDaemonFailure,
@@ -89,14 +88,6 @@ describe('command envelopes', () => {
       protocolVersion: EXECUTION_PROTOCOL_VERSION,
       sessionId: 'c-1',
       command: { kind: 'send-message', text: 'and make it blue' },
-    })
-  })
-
-  it('builds a stop', () => {
-    expect(buildStopEnvelope('c-1')).toEqual({
-      protocolVersion: EXECUTION_PROTOCOL_VERSION,
-      sessionId: 'c-1',
-      command: { kind: 'stop' },
     })
   })
 })

@@ -7,6 +7,7 @@ import {
   composerState,
   conversationTimestamp,
   daemonHeadline,
+  snapshotForSelection,
   statusBadge,
   transcriptWarnings,
 } from './conversation.pure'
@@ -147,5 +148,52 @@ describe('composerState', () => {
 
   it('lets a failed conversation be talked to again', () => {
     expect(composerState(snapshot({ status: 'failed' })).canSend).toBe(true)
+  })
+})
+
+/**
+ * L1: the window holds one snapshot and one selection, updated by different
+ * beats. Between a click and the fetch that answers it, the held snapshot is
+ * the PREVIOUS conversation's — and everything read off it was therefore about
+ * the wrong conversation, the composer included.
+ */
+describe('snapshotForSelection', () => {
+  /**
+   * Mutation: `return snapshot` (ignore the id) and the previous
+   * conversation's snapshot is handed to the transcript AND to the composer,
+   * which addresses its follow-up to whichever conversation answered last ->
+   * red.
+   */
+  it("refuses a snapshot that is not the selection's", () => {
+    expect(snapshotForSelection('c-2', snapshot({ id: 'c-1' }))).toBeNull()
+  })
+
+  it("passes the selection's own snapshot through", () => {
+    const held = snapshot({ id: 'c-2' })
+    expect(snapshotForSelection('c-2', held)).toBe(held)
+  })
+
+  /**
+   * A new conversation has no selection and no snapshot, and must not be
+   * handed a leftover one: `send` reads the SELECTION to decide between
+   * starting and continuing, and the composer's own state reads this.
+   *
+   * Mutation: `selectedId === null ? snapshot : …` -> red.
+   */
+  it('has nothing to offer when nothing is selected', () => {
+    expect(snapshotForSelection(null, snapshot({ id: 'c-1' }))).toBeNull()
+    expect(snapshotForSelection('c-1', null)).toBeNull()
+  })
+
+  /**
+   * The reading that made this worth extracting: a composer given the previous
+   * conversation's snapshot invites a message into a session that is working.
+   *
+   * Mutation: the same `return snapshot` above and this reads `canSend: false`
+   * about a conversation nobody selected -> red.
+   */
+  it('leaves the composer describing the selection, not the leftover', () => {
+    const stale = snapshot({ id: 'c-1', status: 'running' })
+    expect(composerState(snapshotForSelection('c-2', stale)).canSend).toBe(true)
   })
 })

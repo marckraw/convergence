@@ -104,6 +104,29 @@ export function daemonHeadline(
 }
 
 /**
+ * The snapshot the window may treat as the selection's — or null while it loads.
+ *
+ * The window holds one snapshot and one selection, and they are updated by
+ * different beats: the selection changes the instant a row is clicked, the
+ * snapshot only when the fetch for it comes back. In between, the held snapshot
+ * belongs to the PREVIOUS conversation, and everything read off it was
+ * therefore about the wrong one — a transcript still showing the old
+ * conversation, and worse, a composer addressed to it.
+ *
+ * The mismatch is refused at the READ rather than repaired by clearing state on
+ * every selection change, because there is no ordering of two `useState` calls
+ * that makes a stale pairing impossible; there is only a derivation that cannot
+ * express one.
+ */
+export function snapshotForSelection(
+  selectedId: string | null,
+  snapshot: ConversationSnapshot | null,
+): ConversationSnapshot | null {
+  if (selectedId === null || snapshot === null) return null
+  return snapshot.id === selectedId ? snapshot : null
+}
+
+/**
  * Whether the composer may send right now, and what to say when it may not.
  *
  * The refusal is honest rather than hopeful: Studio does not queue input yet,

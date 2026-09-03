@@ -4,6 +4,7 @@ export {
   getTranscript,
   listConversations,
   onConversationEvent,
+  onDaemonStatus,
   sendMessage,
   startConversation,
 } from './studio-api.api'

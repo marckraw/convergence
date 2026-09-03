@@ -4,6 +4,7 @@ import type {
   ConversationEvent,
   ConversationSnapshot,
   ConversationSummary,
+  DaemonStatusView,
   SendMessageOutcome,
   StartConversationOutcome,
   StudioApi,
@@ -61,6 +62,15 @@ const api: StudioApi = {
     // one of them delivers every snapshot twice.
     return () => {
       ipcRenderer.off(STUDIO_CHANNELS.conversationEvent, forward)
+    }
+  },
+  onDaemonStatus: (listener) => {
+    const forward = (_event: IpcRendererEvent, payload: DaemonStatusView) => {
+      listener(payload)
+    }
+    ipcRenderer.on(STUDIO_CHANNELS.daemonStatus, forward)
+    return () => {
+      ipcRenderer.off(STUDIO_CHANNELS.daemonStatus, forward)
     }
   },
 }

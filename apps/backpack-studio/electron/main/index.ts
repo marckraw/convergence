@@ -1,7 +1,10 @@
 import { app, BrowserWindow } from 'electron'
 import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
-import type { StudioStartup } from '../../src/shared/studio-api/studio-api.types'
+import type {
+  DaemonStatusView,
+  StudioStartup,
+} from '../../src/shared/studio-api/studio-api.types'
 import {
   mergeEnv,
   parseDotEnv,
@@ -14,6 +17,7 @@ import { describeDaemonStatus } from '../backend/daemon/daemon-wire.pure'
 import { JsonFileConversationStore } from '../backend/record/conversation-store'
 import {
   broadcastConversationEvent,
+  broadcastDaemonStatus,
   registerStudioIpc,
 } from '../backend/studio-ipc'
 
@@ -30,7 +34,9 @@ import {
  */
 
 let service: ConversationService | null = null
-let startup: Promise<StudioStartup> | null = null
+let recordReady: Promise<void> = Promise.resolve()
+let readStartup: () => Promise<StudioStartup> = () =>
+  Promise.resolve({ kind: 'misconfigured', missing: [] })
 
 function createWindow(): void {
   const window = new BrowserWindow({
@@ -84,12 +90,17 @@ async function readEnvironment(): Promise<Record<string, string | undefined>> {
 /**
  * Builds the working parts, once, for a configuration that is complete.
  *
- * The handshake is deliberately NOT awaited here. It is a network round trip
- * with a fifteen-second cap, and blocking the window on it would make a slow
- * daemon look like an app that will not open. `getStartup` awaits it instead —
- * memoised, so a second window costs no second probe.
+ * THE RECORD IS NOT GATED ON THE DAEMON. Startup resolves as soon as the log
+ * on disk has been read back; the handshake — two probes, fifteen seconds
+ * capped each — runs beside it and is pushed to the window when it lands.
+ * Waiting for it made a black-holed host look like an app that would not open,
+ * and the conversations a person already has are the first thing the window is
+ * for (constitution law 5).
+ *
+ * The handshake is probed once, not once per window: the result is kept here so
+ * a second window is told what the first was told, without a second probe.
  */
-function build(config: StudioConfig): Promise<StudioStartup> {
+function build(config: StudioConfig): void {
   const client = new DaemonClient({
     baseUrl: config.daemonBaseUrl,
     token: config.daemonToken,
@@ -108,30 +119,34 @@ function build(config: StudioConfig): Promise<StudioStartup> {
       }),
   })
 
-  const hydrated = service.hydrate()
-  return (async () => {
-    const handshake = await client.handshake()
+  let daemon: DaemonStatusView | null = null
+  recordReady = service.hydrate()
+  void client.handshake().then((handshake) => {
+    daemon = describeDaemonStatus(handshake, config.providerId)
+    broadcastDaemonStatus(daemon)
+  })
+
+  readStartup = async () => {
     // Re-attaching to what was already running is part of being ready: a window
     // that asked for the conversation list before the record had been read
     // would be told there were none.
-    await hydrated
-    return {
-      kind: 'ready',
-      providerId: config.providerId,
-      daemon: describeDaemonStatus(handshake, config.providerId),
-    }
-  })()
+    await recordReady
+    return { kind: 'ready', providerId: config.providerId, daemon }
+  }
 }
 
 app.whenReady().then(async () => {
   const reading = readStudioConfig(await readEnvironment())
-  startup = reading.ok
-    ? build(reading.config)
-    : Promise.resolve({ kind: 'misconfigured', missing: reading.missing })
+  if (reading.ok) {
+    build(reading.config)
+  } else {
+    readStartup = () =>
+      Promise.resolve({ kind: 'misconfigured', missing: reading.missing })
+  }
 
   registerStudioIpc({
-    getStartup: () =>
-      startup ?? Promise.resolve({ kind: 'misconfigured', missing: [] }),
+    getStartup: () => readStartup(),
+    whenRecordReady: () => recordReady,
     get service() {
       return service
     },

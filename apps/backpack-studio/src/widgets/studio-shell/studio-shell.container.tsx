@@ -4,13 +4,19 @@ import {
   getTranscript,
   listConversations,
   onConversationEvent,
+  onDaemonStatus,
   sendMessage,
   startConversation,
   type ConversationSnapshot,
   type ConversationSummary,
+  type DaemonStatusView,
   type StudioStartup,
 } from '../../shared/studio-api'
-import { composerState, daemonHeadline } from '../../entities/conversation'
+import {
+  composerState,
+  daemonHeadline,
+  snapshotForSelection,
+} from '../../entities/conversation'
 import { ConversationList } from '../../features/conversation-list'
 import { Composer } from '../../features/composer'
 import { StartupNotice } from '../../features/startup-notice'
@@ -32,6 +38,7 @@ import { studioTheme } from '../../shared/ui'
  */
 export function StudioShell(): React.JSX.Element {
   const [startup, setStartup] = useState<StudioStartup | null>(null)
+  const [daemon, setDaemon] = useState<DaemonStatusView | null>(null)
   const [conversations, setConversations] = useState<ConversationSummary[]>([])
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [snapshot, setSnapshot] = useState<ConversationSnapshot | null>(null)
@@ -48,6 +55,11 @@ export function StudioShell(): React.JSX.Element {
       ])
       if (!live) return
       setStartup(reading)
+      // A window opened after the handshake already landed is told about it
+      // here; one opened before it hears about it on the push below.
+      if (reading.kind === 'ready' && reading.daemon !== null) {
+        setDaemon(reading.daemon)
+      }
       setConversations(rows)
       // The most recent conversation is the one a person left off in, and the
       // list is newest first.
@@ -79,6 +91,8 @@ export function StudioShell(): React.JSX.Element {
     }
   }, [selectedId])
 
+  useEffect(() => onDaemonStatus(setDaemon), [])
+
   useEffect(
     () =>
       onConversationEvent((event) => {
@@ -94,7 +108,9 @@ export function StudioShell(): React.JSX.Element {
     [selectedId],
   )
 
-  const composer = composerState(snapshot)
+  // Everything below reads the SELECTION's snapshot, never merely the held one.
+  const selected = snapshotForSelection(selectedId, snapshot)
+  const composer = composerState(selected)
 
   const send = useCallback(async () => {
     const text = draft.trim()
@@ -102,7 +118,11 @@ export function StudioShell(): React.JSX.Element {
     setSending(true)
     setRefusal(null)
     try {
-      if (snapshot === null) {
+      // Addressed by the SELECTION rather than by the loaded snapshot: the
+      // snapshot can still be the previous conversation's while its own fetch
+      // is in flight, and a sentence is not a thing to send to whichever
+      // conversation happened to answer last.
+      if (selectedId === null) {
         const outcome = await startConversation(text)
         setDraft('')
         setSelectedId(outcome.conversationId)
@@ -110,7 +130,7 @@ export function StudioShell(): React.JSX.Element {
         if (outcome.kind === 'refused') setRefusal(outcome.reason)
         return
       }
-      const outcome = await sendMessage(snapshot.id, text)
+      const outcome = await sendMessage(selectedId, text)
       if (outcome.kind === 'sent') {
         setDraft('')
         return
@@ -123,7 +143,7 @@ export function StudioShell(): React.JSX.Element {
     } finally {
       setSending(false)
     }
-  }, [draft, snapshot])
+  }, [draft, selectedId])
 
   if (startup === null) {
     return <main style={shellStyle} />
@@ -142,9 +162,13 @@ export function StudioShell(): React.JSX.Element {
     )
   }
 
-  const daemonSentence = daemonHeadline(startup.daemon, startup.providerId)
+  // Nothing is said about the daemon until it has answered. A banner while the
+  // handshake is still out would be a claim nobody has made yet.
+  const daemonSentence =
+    daemon === null ? null : daemonHeadline(daemon, startup.providerId)
   const daemonHealthy =
-    startup.daemon.status === 'connected' && !startup.daemon.providerMissing
+    daemon === null ||
+    (daemon.status === 'connected' && !daemon.providerMissing)
 
   return (
     <main style={shellStyle}>
@@ -181,10 +205,12 @@ export function StudioShell(): React.JSX.Element {
             }}
           >
             {daemonSentence}
-            {startup.daemon.detail === null ? '' : ` ${startup.daemon.detail}`}
+            {daemon === null || daemon.detail === null
+              ? ''
+              : ` ${daemon.detail}`}
           </p>
         )}
-        <Transcript snapshot={snapshot} />
+        <Transcript snapshot={selected} />
         {refusal === null ? null : (
           <p
             role="status"

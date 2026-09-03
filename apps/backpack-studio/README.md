@@ -32,15 +32,30 @@ name and never by value — it lives in the main process, is sent only as an
 `Authorization` header, and crosses neither the preload boundary nor the log on
 disk.
 
+The window does not wait for the handshake. It opens as soon as the record on
+disk has been read back, and the daemon's answer is pushed in when it arrives —
+a host that black-holes the probes would otherwise hold the whole window shut
+for half a minute, with the conversations a person already has behind it.
+
 ## Where the record lives
 
 `<userData>/conversations/<id>/` — one directory per conversation:
 
 - `conversation.json`: the facts that never change (id, title, createdAt,
   provider). Written through a temporary file and renamed.
-- `events.jsonl`: the wire event log, appended to and never rewritten. This is
-  the truth. Status, timestamps and the transcript are all folded out of it, so
-  there is no second copy of any of them to drift.
+- `events.jsonl`: the log, appended to and never rewritten. This is the truth.
+  Status, timestamps and the transcript are all folded out of it, so there is no
+  second copy of any of them to drift. Two kinds of line live here: envelopes off
+  the wire, and the lifecycle facts the wire never carries — a turn we posted, a
+  turn the daemon refused, a stream we gave up re-establishing. They share the
+  log because they share the fold: a status kept anywhere else could not survive
+  the restart that has to reproduce it.
+
+A crash mid-append is the one failure an append-only file has, so the first
+append of each process heals the tail first — a whole entry missing only its
+newline gets one, and bytes that say nothing complete are dropped. Without that,
+the next append fuses with the tear and the reader stops there for every launch
+that follows.
 
 The store sits behind a `ConversationStore` interface. Files are the skeleton;
 SQLite arrives with the extraction run.

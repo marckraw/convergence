@@ -6,13 +6,16 @@ import {
   type ExecutionSessionDelta,
 } from '@mrck-labs/execution-host-protocol'
 import {
+  applyEntry,
   applyEnvelope,
   conversationStatusFrom,
   conversationTitleFrom,
   emptyFold,
-  foldEnvelopes,
+  foldEntries,
   projectItem,
+  type ConversationFold,
 } from './conversation-fold.pure'
+import type { ConversationLogEntry } from './conversation-store.types'
 
 const CREATED = '2026-09-02T09:00:00.000Z'
 
@@ -27,6 +30,18 @@ const wire = (
 })
 const delta = (value: ExecutionSessionDelta): ExecutionHostEventEnvelope =>
   wire({ kind: 'delta', delta: value })
+
+const RECORDED = '2026-09-02T09:05:00.000Z'
+
+const entry = (
+  envelope: ExecutionHostEventEnvelope,
+  at: string | null = RECORDED,
+): ConversationLogEntry => ({ kind: 'wire', at, envelope })
+
+const local = (
+  fact: 'sent' | 'refused' | 'stream-exhausted',
+  at = RECORDED,
+): ConversationLogEntry => ({ kind: 'local', at, fact })
 
 const item = (
   over: Partial<ExecutionConversationItem> & { id: string },
@@ -48,20 +63,101 @@ const item = (
 
 describe('emptyFold', () => {
   /**
-   * A conversation is running from the moment it is created — the start has
-   * been posted and the daemon has not spoken yet. Calling it idle would invite
-   * a follow-up into a session about to answer.
+   * A log that says nothing describes a conversation nobody is waiting on.
    *
-   * Mutation: seed `status: 'idle'` -> red.
+   * Seeding `running` here was H2's engine: a start the daemon refused left an
+   * empty log, and every launch afterwards folded that silence into "Working" —
+   * a composer locked forever against a session that never existed.
+   *
+   * Mutation: seed `status: 'running'` -> red here and in the refused-start
+   * replay below.
    */
-  it('starts running, not idle', () => {
+  it('starts idle, because an empty log says nothing happened', () => {
     expect(emptyFold(CREATED)).toEqual({
-      status: 'running',
+      status: 'idle',
       items: [],
       lastSeq: 0,
       updatedAt: CREATED,
       orphanPatches: 0,
     })
+  })
+})
+
+/**
+ * The facts the wire never carries, folded by the same function as the wire's
+ * own (MAR-2770 H2).
+ */
+describe('local lifecycle facts', () => {
+  /**
+   * Mutation: fold `sent` to anything but `running` and a conversation whose
+   * turn was posted comes back sendable, with the composer inviting a second
+   * message into a session already working -> red.
+   */
+  it('makes a posted turn read as working, and dates it', () => {
+    const fold = applyEntry(emptyFold(CREATED), local('sent'))
+    expect(fold.status).toBe('running')
+    expect(fold.updatedAt).toBe(RECORDED)
+  })
+
+  /**
+   * The zombie, replayed exactly as a restart replays it: a turn posted, a
+   * daemon that would not take it, and nothing else in the log.
+   *
+   * Mutation: fold `refused` to `running` (or drop the arm so it falls through
+   * unchanged) and the restart shows Working with a locked composer, which is
+   * the whole defect -> red on both halves.
+   */
+  it('replays a refused start as failed, and sendable', () => {
+    const fold = foldEntries(emptyFold(CREATED), [
+      local('sent'),
+      local('refused'),
+    ])
+    expect(fold.status).toBe('failed')
+    expect(fold.updatedAt).toBe(RECORDED)
+  })
+
+  /**
+   * Mutation: fold `stream-exhausted` to `running` and a conversation whose
+   * daemon vanished stays Working across every restart, refusing every
+   * follow-up -> red.
+   */
+  it('replays an abandoned stream as failed, and sendable', () => {
+    const fold = foldEntries(emptyFold(CREATED), [
+      local('sent'),
+      local('stream-exhausted'),
+    ])
+    expect(fold.status).toBe('failed')
+  })
+
+  /**
+   * A local fact is not an envelope and must not touch the resume point: it
+   * has no sequence, and moving the high-water mark for one would ask the
+   * daemon to skip an event it never sent.
+   *
+   * Mutation: give the local arm `lastSeq: fold.lastSeq + 1` -> red.
+   */
+  it('never moves the high-water mark', () => {
+    const seeded = applyEntry(
+      emptyFold(CREATED),
+      entry(wire({ kind: 'heartbeat' })),
+    )
+    const after = applyEntry(seeded, local('sent'))
+    expect(after.lastSeq).toBe(seeded.lastSeq)
+  })
+
+  /**
+   * The wire still wins where it speaks: a daemon that says `completed` after
+   * we said `sent` is the answer, and the fold takes the LAST word rather than
+   * preferring its own.
+   *
+   * Mutation: apply local facts after wire entries (sort the reduce) -> red.
+   */
+  it('lets the daemon overrule a local fact that came before it', () => {
+    const fold = foldEntries(emptyFold(CREATED), [
+      local('sent'),
+      entry(wire({ kind: 'status', status: 'completed' })),
+    ])
+    expect(fold.status).toBe('idle')
   })
 })
 
@@ -73,6 +169,37 @@ describe('applyEnvelope', () => {
     )
     expect(fold.status).toBe('idle')
     expect(fold.lastSeq).toBeGreaterThan(0)
+  })
+
+  /**
+   * A status event changes what the list row says, so it changes when that row
+   * was last updated. The protocol's envelope carries no time of its own, so
+   * the log line's own is the only clock there is.
+   *
+   * Mutation: drop `updatedAt: recordedAt ?? next.updatedAt` from the status
+   * arm and a conversation that just finished still shows the time of whatever
+   * last happened to carry one -> red.
+   */
+  it('dates a status event by the line that recorded it', () => {
+    const fold = applyEntry(
+      emptyFold(CREATED),
+      entry(wire({ kind: 'status', status: 'completed' })),
+    )
+    expect(fold.updatedAt).toBe(RECORDED)
+  })
+
+  /**
+   * A line written before entries carried a time has none, and inventing one
+   * would date a conversation by when it was read back.
+   *
+   * Mutation: `updatedAt: recordedAt ?? new Date().toISOString()` -> red.
+   */
+  it('leaves the time alone for a line that never recorded one', () => {
+    const fold = applyEntry(
+      emptyFold(CREATED),
+      entry(wire({ kind: 'status', status: 'completed' }), null),
+    )
+    expect(fold.updatedAt).toBe(CREATED)
   })
 
   it('reads the session status off a session patch', () => {
@@ -283,12 +410,18 @@ describe('foldEnvelopes', () => {
   /**
    * The load-bearing claim of the whole record: replaying a log produces the
    * conversation that was on screen. One function does both, so this drives the
-   * live path envelope by envelope and the replay path in one call, and the two
+   * live path entry by entry and the replay path in one call, and the two
    * results must be identical.
    *
-   * Mutation: any divergence between `applyEnvelope` and the reduce — say,
-   * seeding the reduce with `emptyFold` instead of the caller's seed — turns
-   * this red.
+   * The seed is deliberately NOT `emptyFold`. The earlier form of this test
+   * seeded both sides with `emptyFold(CREATED)`, which made its own stated
+   * mutation — seeding the reduce with `emptyFold` instead of the caller's seed
+   * — a rewrite of one expression into an identical one: the test compared a
+   * value with itself and could not fail. A seed carrying items, a status and a
+   * high-water mark of its own is the only shape that can tell the two apart.
+   *
+   * Mutation: `entries.reduce(applyEntry, emptyFold(''))` in `foldEntries` ->
+   * red. Mutation: any divergence between `applyEntry` and the reduce -> red.
    */
   it('replays a log into exactly the fold the live path built', () => {
     const log = [
@@ -315,12 +448,38 @@ describe('foldEnvelopes', () => {
       wire({ kind: 'status', status: 'completed' }),
     ]
 
-    const live = log.reduce(applyEnvelope, emptyFold(CREATED))
-    const replayed = foldEnvelopes(emptyFold(CREATED), log)
+    const entries = [local('sent'), ...log.map((envelope) => entry(envelope))]
+
+    // A seed with a history of its own: a row already held, a status that is
+    // not the empty fold's, and a high-water mark a replay must respect.
+    const seed: ConversationFold = {
+      status: 'failed',
+      items: [
+        {
+          id: 'earlier',
+          kind: 'message',
+          actor: 'assistant',
+          label: 'Assistant',
+          text: 'from an earlier turn',
+          state: 'complete',
+        },
+      ],
+      lastSeq: 0,
+      updatedAt: CREATED,
+      orphanPatches: 3,
+    }
+
+    let live = seed
+    for (const one of entries) live = applyEntry(live, one)
+    const replayed = foldEntries(seed, entries)
 
     expect(replayed).toEqual(live)
     expect(replayed.status).toBe('idle')
+    // The seed's own history survived the replay — the half that a reduce
+    // starting from `emptyFold` would silently destroy.
+    expect(replayed.orphanPatches).toBe(3)
     expect(replayed.items.map((row) => [row.label, row.text])).toEqual([
+      ['Assistant', 'from an earlier turn'],
       ['You', 'hi'],
       ['Assistant', 'Hello'],
     ])
