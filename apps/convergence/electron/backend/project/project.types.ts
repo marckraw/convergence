@@ -11,6 +11,14 @@ export interface Project {
   settings: ProjectSettings
   createdAt: string
   updatedAt: string
+  /**
+   * The root project this one is a lane of, or null for a root (MAR-2783,
+   * ruling 1). A lane IS a project: everything keyed by project id works in it
+   * unchanged; these two fields are only the visible tie back to its root.
+   */
+  laneOf: string | null
+  /** The lane's name under its root; null for a root. */
+  laneName: string | null
 }
 
 export interface CreateProjectInput {
@@ -33,5 +41,7 @@ export function projectFromRow(row: ProjectRow): Project {
     settings: normalizeProjectSettings(JSON.parse(row.settings) as unknown),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
+    laneOf: row.lane_of ?? null,
+    laneName: row.lane_name ?? null,
   }
 }

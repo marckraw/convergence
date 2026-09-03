@@ -1,6 +1,11 @@
 import { create } from 'zustand'
-import type { CloneProjectInput, Project } from './project.types'
-import { projectApi, dialogApi } from './project.api'
+import type {
+  CloneProjectInput,
+  CreateLaneInput,
+  LaneCreateResult,
+  Project,
+} from './project.types'
+import { projectApi, dialogApi, laneApi } from './project.api'
 import type { ProjectSettings } from './project-settings.pure'
 
 interface ProjectState {
@@ -15,6 +20,12 @@ interface ProjectActions {
   loadActiveProject: () => Promise<void>
   createProject: () => Promise<Project | null>
   cloneProject: (input: CloneProjectInput) => Promise<Project | null>
+  /**
+   * Makes a lane and refreshes the list so it shows nested under its root
+   * (MAR-2783). Rejects rather than parking the message in `error`: the lane
+   * dialog owns its own error line and stays open to show it.
+   */
+  createLane: (input: CreateLaneInput) => Promise<LaneCreateResult>
   deleteProject: (id: string) => Promise<void>
   setActiveProject: (id: string) => Promise<void>
   updateProjectSettings: (
@@ -91,6 +102,13 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
       })
       return null
     }
+  },
+
+  createLane: async (input: CreateLaneInput) => {
+    const result = await laneApi.create(input)
+    const projects = await projectApi.getAll()
+    set({ projects })
+    return result
   },
 
   deleteProject: async (id: string) => {

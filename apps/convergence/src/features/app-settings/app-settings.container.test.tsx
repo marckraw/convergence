@@ -9,6 +9,7 @@ import {
 } from '@/entities/session'
 import {
   DEFAULT_DEBUG_LOGGING_PREFS,
+  DEFAULT_LANES_PREFS,
   DEFAULT_FAVORITE_MODELS_PREFS,
   DEFAULT_NOTIFICATION_PREFS,
   DEFAULT_ONBOARDING_PREFS,
@@ -217,6 +218,7 @@ function primeStores(
       onboarding: DEFAULT_ONBOARDING_PREFS,
       updates: DEFAULT_UPDATE_PREFS,
       debugLogging: DEFAULT_DEBUG_LOGGING_PREFS,
+      lanes: DEFAULT_LANES_PREFS,
       piModelVisibility: DEFAULT_PI_MODEL_VISIBILITY_PREFS,
       favoriteModels: DEFAULT_FAVORITE_MODELS_PREFS,
     },

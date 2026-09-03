@@ -5,6 +5,10 @@ export interface ProjectRow {
   settings: string
   created_at: string
   updated_at: string
+  /** The root this lane was copied from; NULL on a root (MAR-2783). */
+  lane_of: string | null
+  /** The lane's name under its root; NULL on a root (MAR-2783). */
+  lane_name: string | null
 }
 
 export interface AppStateRow {

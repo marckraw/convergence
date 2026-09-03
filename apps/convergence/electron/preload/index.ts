@@ -133,6 +133,36 @@ contextBridge.exposeInMainWorld('electronAPI', {
     open: (input: { appId: string; path: string }) =>
       ipcRenderer.invoke('projectOpen:open', input),
   },
+  lane: {
+    create: (input: {
+      rootProjectId: string
+      laneName: string
+      branchName: string
+    }) => ipcRenderer.invoke('lane:create', input),
+    list: (rootProjectId: string) =>
+      ipcRenderer.invoke('lane:list', rootProjectId),
+    reveal: (projectId: string) => ipcRenderer.invoke('lane:reveal', projectId),
+    onProgress: (
+      callback: (progress: {
+        rootProjectId: string
+        laneName: string
+        phase: 'copying' | 'preparing-branch' | 'recording' | 'done'
+      }) => void,
+    ) => {
+      const handler = (
+        _event: Electron.IpcRendererEvent,
+        progress: {
+          rootProjectId: string
+          laneName: string
+          phase: 'copying' | 'preparing-branch' | 'recording' | 'done'
+        },
+      ) => callback(progress)
+      ipcRenderer.on('lane:progress', handler)
+      return () => {
+        ipcRenderer.removeListener('lane:progress', handler)
+      }
+    },
+  },
   workspace: {
     create: (input: {
       projectId: string

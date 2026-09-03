@@ -122,3 +122,86 @@ describe('ProjectService', () => {
     })
   })
 })
+
+describe('ProjectService lanes (MAR-2783)', () => {
+  let service: ProjectService
+  let tempDir: string
+  let rootPath: string
+
+  function insertLane(id: string, rootId: string, laneName: string): void {
+    getDatabase()
+      .prepare(
+        `INSERT INTO projects (id, name, repository_path, settings, lane_of, lane_name)
+         VALUES (?, ?, ?, '{}', ?, ?)`,
+      )
+      .run(id, `root · lane: ${laneName}`, join(tempDir, id), rootId, laneName)
+  }
+
+  beforeEach(() => {
+    service = new ProjectService(getDatabase())
+    tempDir = mkdtempSync(join(tmpdir(), 'convergence-lanes-'))
+    rootPath = join(tempDir, 'root')
+    mkdirSync(join(rootPath, '.git'), { recursive: true })
+  })
+
+  afterEach(() => {
+    closeDatabase()
+    resetDatabase()
+    rmSync(tempDir, { recursive: true, force: true })
+  })
+
+  it('reads a root as its own root, with both lane fields null', () => {
+    const root = service.create({ repositoryPath: rootPath })
+    expect(root.laneOf).toBeNull()
+    expect(root.laneName).toBeNull()
+    expect(service.getRoot(root)).toEqual(root)
+    expect(service.listLanes(root.id)).toEqual([])
+  })
+
+  it('lists the lanes of a root oldest first, and resolves a lane to its root', () => {
+    const root = service.create({ repositoryPath: rootPath })
+    insertLane('lane-b', root.id, 'beta')
+    insertLane('lane-a', root.id, 'alpha')
+
+    const lanes = service.listLanes(root.id)
+    expect(lanes.map((lane) => lane.laneName)).toEqual(['beta', 'alpha'])
+    expect(lanes[0]!.laneOf).toBe(root.id)
+    expect(service.getRoot(lanes[0]!)).toEqual(root)
+    // A lane shows up in the flat list too: it IS a project.
+    expect(
+      service
+        .getAll()
+        .map((p) => p.id)
+        .sort(),
+    ).toEqual([root.id, 'lane-a', 'lane-b'].sort())
+  })
+
+  // M4 (round 2): the self-FK cascade would take the lane rows, their
+  // sessions and workspace rows, while the lane folders stayed on disk with
+  // no record. L1 refuses; L2's delete-lane owns the rest.
+  it('refuses to delete a root that still has lanes, and deletes it once they are gone', async () => {
+    const root = service.create({ repositoryPath: rootPath })
+    insertLane('lane-a', root.id, 'alpha')
+    insertLane('lane-b', root.id, 'beta')
+
+    await expect(service.delete(root.id)).rejects.toThrow(
+      'Delete or move its 2 lanes first',
+    )
+    expect(service.getById(root.id)).not.toBeNull()
+    expect(service.listLanes(root.id)).toHaveLength(2)
+
+    getDatabase().prepare('DELETE FROM projects WHERE lane_of = ?').run(root.id)
+    await service.delete(root.id)
+    expect(service.getById(root.id)).toBeNull()
+  })
+
+  it('answers null for a lane whose root row is gone', () => {
+    const root = service.create({ repositoryPath: rootPath })
+    insertLane('lane-a', root.id, 'alpha')
+    const lane = service.getById('lane-a')!
+    getDatabase().prepare('DELETE FROM projects WHERE id = ?').run(root.id)
+    expect(service.getRoot(lane)).toBeNull()
+    // And the cascade took the lane row with it.
+    expect(service.getById('lane-a')).toBeNull()
+  })
+})

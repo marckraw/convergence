@@ -18,6 +18,7 @@ import {} from '../provider/provider-descriptor.pure'
 import {
   DEFAULT_DEBUG_LOGGING_PREFS,
   DEFAULT_FAVORITE_MODELS_PREFS,
+  DEFAULT_LANES_PREFS,
   DEFAULT_ONBOARDING_PREFS,
   DEFAULT_PI_MODEL_VISIBILITY_PREFS,
 } from './app-settings.types'
@@ -121,6 +122,7 @@ describe('app-settings pure helpers', () => {
       debugLogging: DEFAULT_DEBUG_LOGGING_PREFS,
       piModelVisibility: DEFAULT_PI_MODEL_VISIBILITY_PREFS,
       favoriteModels: DEFAULT_FAVORITE_MODELS_PREFS,
+      lanes: DEFAULT_LANES_PREFS,
     })
   })
 

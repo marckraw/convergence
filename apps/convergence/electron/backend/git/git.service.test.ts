@@ -164,6 +164,36 @@ describe('GitService', { timeout: GIT_INTEGRATION_TEST_TIMEOUT_MS }, () => {
     })
   })
 
+  // MAR-2783 round 4, M2: the question a caller with two tips of one branch
+  // asks -- and git's exit 1 is an answer, not a failure.
+  describe('refContains', () => {
+    it('answers yes down the history, no up it, and no between two divergent tips', async () => {
+      const base = await service.getCurrentBranch(repoPath)
+      execFileSync('git', ['commit', '--allow-empty', '-m', 'ahead'], {
+        cwd: repoPath,
+      })
+      // A second tip off the shared commit: neither contains the other.
+      execFileSync('git', ['checkout', '-b', 'sibling', 'HEAD~1'], {
+        cwd: repoPath,
+      })
+      execFileSync('git', ['commit', '--allow-empty', '-m', 'sibling'], {
+        cwd: repoPath,
+      })
+      execFileSync('git', ['checkout', base], { cwd: repoPath })
+
+      expect(await service.refContains(repoPath, base, 'HEAD~1')).toBe(true)
+      expect(await service.refContains(repoPath, 'HEAD~1', base)).toBe(false)
+      expect(await service.refContains(repoPath, 'sibling', base)).toBe(false)
+      expect(await service.refContains(repoPath, base, 'sibling')).toBe(false)
+    })
+
+    it('throws on a ref that does not exist, rather than calling it "no"', async () => {
+      await expect(
+        service.refContains(repoPath, 'HEAD', 'no-such-ref'),
+      ).rejects.toThrow(/no-such-ref/)
+    })
+  })
+
   describe('addWorktree', () => {
     it('creates a worktree with a new branch', async () => {
       const wtPath = join(tempDir, 'wt-new')
@@ -283,5 +313,24 @@ describe('GitService', { timeout: GIT_INTEGRATION_TEST_TIMEOUT_MS }, () => {
       ).rejects.toThrow(/unsafe branch name/)
       expect(existsSync(markerPath)).toBe(false)
     })
+  })
+
+  // L6 (MAR-2783 round 2): a token in a URL must never reach the renderer
+  // through a git error. git 2.50 scrubs the userinfo from its own "unable to
+  // access" lines, but it still echoes a start point verbatim -- that is the
+  // vector this pins: whatever git says, the runner strips `user:token@`.
+  it('never lets user:token@ in git stderr into an error message', async () => {
+    const error = await service
+      .checkoutBranch(
+        repoPath,
+        'feat/x',
+        'https://marcin:s3cret-t0ken@127.0.0.1/x.git',
+      )
+      .catch((e: unknown) => e)
+    expect(error).toBeInstanceOf(Error)
+    const message = (error as Error).message
+    expect(message).not.toContain('s3cret-t0ken')
+    expect(message).not.toContain('marcin:')
+    expect(message).toContain("'https://127.0.0.1/x.git' is not a commit")
   })
 })

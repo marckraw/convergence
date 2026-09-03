@@ -21,6 +21,7 @@ import { SpaceSynthesisService } from '../backend/space/space-synthesis.service'
 import { ProjectContextService } from '../backend/project-context/project-context.service'
 import { StateService } from '../backend/state/state.service'
 import { WorkspaceService } from '../backend/workspace/workspace.service'
+import { LaneService } from '../backend/lane/lane.service'
 import { GitService } from '../backend/git/git.service'
 import { PullRequestService } from '../backend/pull-request/pull-request.service'
 import { SessionService } from '../backend/session/session.service'
@@ -460,6 +461,15 @@ async function startApp(): Promise<void> {
     new ExecutionHostEndpointRepository(db),
     executionHostDaemonCredentials,
   )
+  // Lanes live under the data folder unless Settings says otherwise
+  // (MAR-2783, ruling 2). The root is read per creation, never captured.
+  const laneService = new LaneService(
+    db,
+    gitService,
+    () =>
+      appSettingsService.getLanesPrefsSync().root ??
+      join(app.getPath('userData'), 'lanes'),
+  )
   const remoteExecutionHosts = new AppSettingsRemoteExecutionHostRegistry({
     appSettings: appSettingsService,
     credentials: executionHostDaemonCredentials,
@@ -713,6 +723,7 @@ async function startApp(): Promise<void> {
     spaceService,
     stateService,
     workspaceService,
+    laneService,
     gitService,
     pullRequestService,
     sessionService,

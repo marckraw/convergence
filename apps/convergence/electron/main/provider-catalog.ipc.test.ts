@@ -64,11 +64,11 @@ const DAEMON_B = { id: 'daemon-b', baseUrl: 'https://daemon-b.test' }
  * remote bundle that makes any of the daemons reachable. A signature change
  * that moves one fails loudly below rather than quietly proving nothing.
  */
-const SESSION_SERVICE_ARGUMENT = 6
-const PROVIDER_REGISTRY_ARGUMENT = 7
-const APP_SETTINGS_ARGUMENT = 11
-const EXECUTION_HOST_REMOTE_ARGUMENT = 21
-const ARGUMENT_COUNT = 22
+const SESSION_SERVICE_ARGUMENT = 7
+const PROVIDER_REGISTRY_ARGUMENT = 8
+const APP_SETTINGS_ARGUMENT = 12
+const EXECUTION_HOST_REMOTE_ARGUMENT = 22
+const ARGUMENT_COUNT = 23
 
 function metaFor(providers: unknown[]): unknown {
   return { providers }

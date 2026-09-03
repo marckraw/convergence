@@ -133,11 +133,11 @@ const DAEMON = { id: 'daemon-a', baseUrl: 'https://daemon-a.test' }
  * here. A signature change that moves one fails loudly below rather than
  * quietly proving nothing.
  */
-const SESSION_SERVICE_ARGUMENT = 6
-const PROVIDER_REGISTRY_ARGUMENT = 7
-const APP_SETTINGS_ARGUMENT = 11
-const EXECUTION_HOST_REMOTE_ARGUMENT = 21
-const ARGUMENT_COUNT = 22
+const SESSION_SERVICE_ARGUMENT = 7
+const PROVIDER_REGISTRY_ARGUMENT = 8
+const APP_SETTINGS_ARGUMENT = 12
+const EXECUTION_HOST_REMOTE_ARGUMENT = 22
+const ARGUMENT_COUNT = 23
 
 describe('a daemon changing behind the settings dialog', () => {
   let db: Database.Database

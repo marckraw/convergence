@@ -139,7 +139,12 @@ const SCHEMA = `
     repository_path TEXT NOT NULL UNIQUE,
     settings TEXT NOT NULL DEFAULT '{}',
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
-    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+    -- A lane is a project with a parent (MAR-2783, ruling 1): the root it was
+    -- copied from, and the name it goes by under that root. Both NULL on a
+    -- root. The pair is unique per root; see \`ensureProjectLaneColumns\`.
+    lane_of TEXT REFERENCES projects(id) ON DELETE CASCADE,
+    lane_name TEXT
   );
 
   CREATE TABLE IF NOT EXISTS app_state (
@@ -766,6 +771,47 @@ function ensureWorkspaceColumns(database: Database.Database): void {
   if (!columnNames.has('worktree_removed_at')) {
     database.exec('ALTER TABLE workspaces ADD COLUMN worktree_removed_at TEXT')
   }
+}
+
+/**
+ * A project can spawn lanes (MAR-2783, slice L1).
+ *
+ * Two additive columns on `projects`: `lane_of` names the root a lane was
+ * copied from and `lane_name` the name it goes by under that root. Both are
+ * NULL on every project that predates lanes, which is exactly what a root is,
+ * so there is no backfill to owe and the `ALTER TABLE`s are the whole
+ * migration -- a boot that dies mid-way leaves either the old shape or the
+ * new one, and the next boot finishes.
+ *
+ * The uniqueness of `(lane_of, lane_name)` cannot ride the `ALTER TABLE` (SQLite
+ * adds columns, never table constraints), so it lives in a partial unique index
+ * that only roots' children participate in. Created here rather than in the
+ * schema block because on an older database the columns it names do not exist
+ * until the statements above it have run.
+ *
+ * The foreign key cascades: deleting a root deletes its lanes' rows. Their
+ * folders are the lane lifecycle's business (L2), not the record's.
+ */
+const PROJECT_LANE_UNIQUE_INDEX = 'idx_projects_lane_of_lane_name'
+
+function ensureProjectLaneColumns(database: Database.Database): void {
+  const columnNames = getTableColumnNames(database, 'projects')
+
+  if (!columnNames.has('lane_of')) {
+    database.exec(
+      'ALTER TABLE projects ADD COLUMN lane_of TEXT REFERENCES projects(id) ON DELETE CASCADE',
+    )
+  }
+
+  if (!columnNames.has('lane_name')) {
+    database.exec('ALTER TABLE projects ADD COLUMN lane_name TEXT')
+  }
+
+  database.exec(`
+    CREATE UNIQUE INDEX IF NOT EXISTS ${PROJECT_LANE_UNIQUE_INDEX}
+      ON projects(lane_of, lane_name)
+      WHERE lane_of IS NOT NULL
+  `)
 }
 
 function ensureSpaceColumns(database: Database.Database): void {
@@ -2002,6 +2048,7 @@ export function getDatabase(dbPath?: string): Database.Database {
     ensureProjectScriptColumns(database)
     ensureCodeReviewGuideTable(database)
     ensureWorkspaceColumns(database)
+    ensureProjectLaneColumns(database)
     ensureSessionColumns(database)
     ensureSessionSettledSeqColumn(database)
     // After the session columns, never before: the backfill reads
@@ -2034,6 +2081,7 @@ export function getDatabase(dbPath?: string): Database.Database {
 export {
   ensureAttachmentsTableNoFk,
   ensureTurnFileChangeIdentity,
+  PROJECT_LANE_UNIQUE_INDEX,
   TURN_FILE_CHANGE_IDENTITY_INDEX,
 }
 

@@ -11,6 +11,8 @@ import { cn } from '@/shared/lib/cn.pure'
 import {
   ChevronDown,
   ChevronRight,
+  FolderOpen,
+  GitFork,
   Pencil,
   Plus,
   RotateCcw,
@@ -27,6 +29,10 @@ interface ProjectActionsMenuPresentationalProps {
   outputByRunId: Record<string, ProjectScriptRunOutput[]>
   expandedRunIds: Set<string>
   error: string | null
+  /** Whether the project this menu belongs to is itself a lane (MAR-2783). */
+  isLane: boolean
+  onCreateLane: () => void
+  onRevealLane: () => void
   onRun: (item: ProjectActionItem) => void
   onStop: (run: ProjectScriptRun) => void
   onAdd: () => void
@@ -43,6 +49,9 @@ export const ProjectActionsMenuPresentational: FC<
   outputByRunId,
   expandedRunIds,
   error,
+  isLane,
+  onCreateLane,
+  onRevealLane,
   onRun,
   onStop,
   onAdd,
@@ -194,6 +203,48 @@ export const ProjectActionsMenuPresentational: FC<
           </span>
         </span>
       </Button>
+
+      <div className="mt-2 border-t border-border/70 pt-2">
+        <div className="px-2 pb-1 text-[11px] text-muted-foreground">Lanes</div>
+        <Button
+          type="button"
+          variant="ghost"
+          onClick={onCreateLane}
+          className="grid h-auto w-full grid-cols-[2.25rem_minmax(0,1fr)] items-center gap-2 rounded-md px-3 py-2 text-left"
+        >
+          <span className="flex h-8 w-8 items-center justify-center rounded-md border border-border bg-background text-muted-foreground">
+            <GitFork className="h-4 w-4" />
+          </span>
+          <span className="min-w-0">
+            <span className="block text-sm font-medium">Create lane…</span>
+            <span className="block truncate font-mono text-[11px] text-muted-foreground">
+              {isLane
+                ? 'A sibling lane, made from the root project'
+                : 'A copy with its own git and sessions'}
+            </span>
+          </span>
+        </Button>
+        {isLane ? (
+          <Button
+            type="button"
+            variant="ghost"
+            onClick={onRevealLane}
+            className="grid h-auto w-full grid-cols-[2.25rem_minmax(0,1fr)] items-center gap-2 rounded-md px-3 py-2 text-left"
+          >
+            <span className="flex h-8 w-8 items-center justify-center rounded-md border border-border bg-background text-muted-foreground">
+              <FolderOpen className="h-4 w-4" />
+            </span>
+            <span className="min-w-0">
+              <span className="block text-sm font-medium">
+                Reveal lane in Finder
+              </span>
+              <span className="block truncate font-mono text-[11px] text-muted-foreground">
+                This project is a lane
+              </span>
+            </span>
+          </Button>
+        ) : null}
+      </div>
     </div>
   </DropdownMenuContent>
 )

@@ -224,6 +224,7 @@ const mockElectronAPI = {
       onboarding: { notificationsCardDismissed: false },
       updates: { backgroundCheckEnabled: true },
       debugLogging: { enabled: false },
+      lanes: { root: null },
       piModelVisibility: { additionalModelIds: [] },
       favoriteModels: { items: [] },
     }),

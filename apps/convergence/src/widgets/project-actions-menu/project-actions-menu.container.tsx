@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { FC } from 'react'
-import type { Project } from '@/entities/project'
+import { toast } from 'sonner'
+import { useDialogStore } from '@/entities/dialog'
+import { laneApi, type Project } from '@/entities/project'
 import {
   selectLatestRunsByScriptId,
   useProjectScriptStore,
@@ -43,6 +45,7 @@ export const ProjectActionsMenu: FC<ProjectActionsMenuProps> = ({
   const runScript = useProjectScriptStore((state) => state.runScript)
   const stopRun = useProjectScriptStore((state) => state.stopRun)
   const error = useProjectScriptStore((state) => state.error)
+  const openDialog = useDialogStore((state) => state.open)
   const [menuOpen, setMenuOpen] = useState(false)
   const [editorOpen, setEditorOpen] = useState(false)
   const [editingScript, setEditingScript] = useState<ProjectScript | null>(null)
@@ -95,6 +98,19 @@ export const ProjectActionsMenu: FC<ProjectActionsMenuProps> = ({
           outputByRunId={outputByRunId}
           expandedRunIds={expandedRunIds}
           error={error}
+          isLane={project.laneOf !== null}
+          onCreateLane={() => {
+            setMenuOpen(false)
+            openDialog('lane-create')
+          }}
+          onRevealLane={() => {
+            setMenuOpen(false)
+            void laneApi.reveal(project.id).catch((err: unknown) => {
+              toast.error(
+                err instanceof Error ? err.message : 'Failed to reveal lane',
+              )
+            })
+          }}
           onRun={(item) => {
             setSelectedScriptId(item.script.id)
             if (item.running && item.latestRun) {

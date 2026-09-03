@@ -18,6 +18,7 @@ import { AppSettingsService } from './app-settings.service'
 import {
   DEFAULT_DEBUG_LOGGING_PREFS,
   DEFAULT_FAVORITE_MODELS_PREFS,
+  DEFAULT_LANES_PREFS,
   DEFAULT_ONBOARDING_PREFS,
   DEFAULT_PI_MODEL_VISIBILITY_PREFS,
 } from './app-settings.types'
@@ -215,6 +216,7 @@ describe('AppSettingsService', () => {
         onboarding: DEFAULT_ONBOARDING_PREFS,
         updates: DEFAULT_UPDATE_PREFS,
         debugLogging: DEFAULT_DEBUG_LOGGING_PREFS,
+        lanes: DEFAULT_LANES_PREFS,
         piModelVisibility: DEFAULT_PI_MODEL_VISIBILITY_PREFS,
         favoriteModels: DEFAULT_FAVORITE_MODELS_PREFS,
       })
@@ -233,6 +235,7 @@ describe('AppSettingsService', () => {
         onboarding: DEFAULT_ONBOARDING_PREFS,
         updates: DEFAULT_UPDATE_PREFS,
         debugLogging: DEFAULT_DEBUG_LOGGING_PREFS,
+        lanes: DEFAULT_LANES_PREFS,
         piModelVisibility: DEFAULT_PI_MODEL_VISIBILITY_PREFS,
         favoriteModels: DEFAULT_FAVORITE_MODELS_PREFS,
       })
@@ -249,6 +252,7 @@ describe('AppSettingsService', () => {
         onboarding: DEFAULT_ONBOARDING_PREFS,
         updates: DEFAULT_UPDATE_PREFS,
         debugLogging: DEFAULT_DEBUG_LOGGING_PREFS,
+        lanes: DEFAULT_LANES_PREFS,
         piModelVisibility: DEFAULT_PI_MODEL_VISIBILITY_PREFS,
         favoriteModels: DEFAULT_FAVORITE_MODELS_PREFS,
       })
@@ -276,6 +280,7 @@ describe('AppSettingsService', () => {
         onboarding: DEFAULT_ONBOARDING_PREFS,
         updates: DEFAULT_UPDATE_PREFS,
         debugLogging: DEFAULT_DEBUG_LOGGING_PREFS,
+        lanes: DEFAULT_LANES_PREFS,
         piModelVisibility: DEFAULT_PI_MODEL_VISIBILITY_PREFS,
         favoriteModels: DEFAULT_FAVORITE_MODELS_PREFS,
       })
@@ -303,6 +308,7 @@ describe('AppSettingsService', () => {
         onboarding: DEFAULT_ONBOARDING_PREFS,
         updates: DEFAULT_UPDATE_PREFS,
         debugLogging: DEFAULT_DEBUG_LOGGING_PREFS,
+        lanes: DEFAULT_LANES_PREFS,
         piModelVisibility: DEFAULT_PI_MODEL_VISIBILITY_PREFS,
         favoriteModels: DEFAULT_FAVORITE_MODELS_PREFS,
       })
@@ -330,6 +336,7 @@ describe('AppSettingsService', () => {
         onboarding: DEFAULT_ONBOARDING_PREFS,
         updates: DEFAULT_UPDATE_PREFS,
         debugLogging: DEFAULT_DEBUG_LOGGING_PREFS,
+        lanes: DEFAULT_LANES_PREFS,
         piModelVisibility: DEFAULT_PI_MODEL_VISIBILITY_PREFS,
         favoriteModels: DEFAULT_FAVORITE_MODELS_PREFS,
       })
@@ -350,6 +357,7 @@ describe('AppSettingsService', () => {
         onboarding: DEFAULT_ONBOARDING_PREFS,
         updates: DEFAULT_UPDATE_PREFS,
         debugLogging: DEFAULT_DEBUG_LOGGING_PREFS,
+        lanes: DEFAULT_LANES_PREFS,
         piModelVisibility: DEFAULT_PI_MODEL_VISIBILITY_PREFS,
         favoriteModels: DEFAULT_FAVORITE_MODELS_PREFS,
       })
@@ -486,6 +494,7 @@ describe('AppSettingsService', () => {
         onboarding: DEFAULT_ONBOARDING_PREFS,
         updates: DEFAULT_UPDATE_PREFS,
         debugLogging: DEFAULT_DEBUG_LOGGING_PREFS,
+        lanes: DEFAULT_LANES_PREFS,
         piModelVisibility: DEFAULT_PI_MODEL_VISIBILITY_PREFS,
         favoriteModels: DEFAULT_FAVORITE_MODELS_PREFS,
       })
@@ -1268,6 +1277,57 @@ describe('AppSettingsService', () => {
         defaultEffortId: 'medium',
       })
       expect(stored.updates).toEqual({ backgroundCheckEnabled: false })
+    })
+  })
+
+  describe('lanes (MAR-2783)', () => {
+    it('defaults to no root when nothing is stored, meaning the data folder', async () => {
+      const settings = await service.getAppSettings()
+      expect(settings.lanes).toEqual(DEFAULT_LANES_PREFS)
+      expect(service.getLanesPrefsSync()).toEqual({ root: null })
+    })
+
+    it('round-trips an absolute lanes root, and reads it synchronously', async () => {
+      const stored = await service.setAppSettings({
+        defaultProviderId: null,
+        defaultModelId: null,
+        defaultEffortId: null,
+        lanes: { root: '/Volumes/Work/lanes' },
+      })
+      expect(stored.lanes).toEqual({ root: '/Volumes/Work/lanes' })
+      const reloaded = await service.getAppSettings()
+      expect(reloaded.lanes).toEqual({ root: '/Volumes/Work/lanes' })
+      expect(service.getLanesPrefsSync()).toEqual({
+        root: '/Volumes/Work/lanes',
+      })
+    })
+
+    it('reads a relative or blank root as the default, never as a place', async () => {
+      stateService.set(
+        APP_SETTINGS_KEY,
+        JSON.stringify({ lanes: { root: 'lanes' } }),
+      )
+      expect(service.getLanesPrefsSync()).toEqual({ root: null })
+      stateService.set(
+        APP_SETTINGS_KEY,
+        JSON.stringify({ lanes: { root: '  ' } }),
+      )
+      expect(service.getLanesPrefsSync()).toEqual({ root: null })
+    })
+
+    it('preserves the stored root when input omits the field', async () => {
+      await service.setAppSettings({
+        defaultProviderId: null,
+        defaultModelId: null,
+        defaultEffortId: null,
+        lanes: { root: '/Volumes/Work/lanes' },
+      })
+      const stored = await service.setAppSettings({
+        defaultProviderId: 'claude-code',
+        defaultModelId: 'sonnet',
+        defaultEffortId: 'medium',
+      })
+      expect(stored.lanes).toEqual({ root: '/Volumes/Work/lanes' })
     })
   })
 
