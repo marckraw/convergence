@@ -3,19 +3,13 @@ import { existsSync, realpathSync, statSync } from 'fs'
 import { isAbsolute, relative, resolve } from 'path'
 import {
   deriveDefaultCloneDirectoryName,
+  isContainedPath,
   normalizeCloneRemoteUrl,
   resolveCloneDestination,
 } from './git-clone.pure'
+import { redactUrlCredentials } from './git-redact.pure'
 
 const EXPANDABLE_DIFF_CONTEXT_LINES = 80
-
-function isContainedPath(parentPath: string, candidatePath: string): boolean {
-  const relativePath = relative(parentPath, candidatePath)
-  return (
-    relativePath === '' ||
-    (!relativePath.startsWith('..') && !isAbsolute(relativePath))
-  )
-}
 
 function resolveRepoFilePath(
   repoPath: string,
@@ -74,10 +68,33 @@ function exec(command: string, args: string[], cwd: string): Promise<string> {
   return new Promise((resolve, reject) => {
     execFile(command, args, { cwd }, (error, stdout, stderr) => {
       if (error) {
-        reject(new Error(stderr.trim() || error.message))
+        reject(new Error(redactUrlCredentials(stderr.trim() || error.message)))
       } else {
         resolve(stdout.trimEnd())
       }
+    })
+  })
+}
+
+/**
+ * The exit CODE of a command whose non-zero codes are answers rather than
+ * failures (`merge-base --is-ancestor` says "no" with 1). A code outside the
+ * allowed set is still an error, with git's own words.
+ */
+function execExitCode(
+  command: string,
+  args: string[],
+  cwd: string,
+  allowedExitCodes: number[],
+): Promise<number> {
+  return new Promise((resolve, reject) => {
+    execFile(command, args, { cwd }, (error, _stdout, stderr) => {
+      const code = error && 'code' in error ? Number(error.code) : 0
+      if (error && !allowedExitCodes.includes(code)) {
+        reject(new Error(redactUrlCredentials(stderr.trim() || error.message)))
+        return
+      }
+      resolve(code)
     })
   })
 }
@@ -92,7 +109,7 @@ function execAllowExitCodes(
     execFile(command, args, { cwd }, (error, stdout, stderr) => {
       const code = error && 'code' in error ? Number(error.code) : 0
       if (error && !allowedExitCodes.includes(code)) {
-        reject(new Error(stderr.trim() || error.message))
+        reject(new Error(redactUrlCredentials(stderr.trim() || error.message)))
         return
       }
       resolve(stdout.trimEnd())
@@ -215,9 +232,19 @@ export class GitService {
       .catch(() => null)
   }
 
+  /**
+   * The branch name git itself would accept (`check-ref-format --branch`),
+   * trimmed; throws with git's own words otherwise. Public so a caller can
+   * refuse a bad name BEFORE doing expensive work in its name.
+   */
+  validateBranchName(repoPath: string, branchName: string): Promise<string> {
+    return validateBranchName(repoPath, branchName)
+  }
+
   async resolveBaseBranchStartPoint(
     repoPath: string,
     preferredBaseBranchName: string | null,
+    options: { fetch?: boolean } = {},
   ): Promise<string> {
     const baseBranchName = await validateBranchName(
       repoPath,
@@ -230,9 +257,13 @@ export class GitService {
       .catch(() => false)
 
     if (hasOrigin) {
-      await exec('git', ['fetch', 'origin', baseBranchName], repoPath).catch(
-        () => {},
-      )
+      // A caller that has just fetched the whole remote passes `fetch: false`
+      // so an unreachable origin is asked once, not twice.
+      if (options.fetch !== false) {
+        await exec('git', ['fetch', 'origin', baseBranchName], repoPath).catch(
+          () => {},
+        )
+      }
 
       if (
         await this.refExists(repoPath, `refs/remotes/origin/${baseBranchName}`)
@@ -246,6 +277,83 @@ export class GitService {
     }
 
     throw new Error(`Base branch not found: ${baseBranchName}`)
+  }
+
+  /** `git fetch <remote>`, every ref. Rejects when the remote cannot be reached. */
+  async fetchRemote(repoPath: string, remoteName = 'origin'): Promise<void> {
+    await exec('git', ['fetch', remoteName], repoPath)
+  }
+
+  async remoteBranchExists(
+    repoPath: string,
+    branchName: string,
+    remoteName = 'origin',
+  ): Promise<boolean> {
+    return this.refExists(repoPath, `refs/remotes/${remoteName}/${branchName}`)
+  }
+
+  /**
+   * `git checkout -B <branch> <startPoint>`: creates the branch at the start
+   * point, or resets it there if a local branch of that name already exists.
+   * The name goes through `check-ref-format` first, so a name git would refuse
+   * is refused here with the same words rather than half-way through a
+   * checkout.
+   */
+  async checkoutBranch(
+    repoPath: string,
+    branchName: string,
+    startPoint: string,
+  ): Promise<void> {
+    const validated = await validateBranchName(repoPath, branchName)
+    await exec('git', ['checkout', '-B', validated, startPoint], repoPath)
+  }
+
+  /**
+   * `git merge-base --is-ancestor <contained> <container>`: whether the first
+   * ref's commit is already in the second's history -- so a caller with two
+   * tips of one branch can adopt the one that CONTAINS the other, and tell a
+   * divergence (neither contains the other) from a fast-forward (MAR-2783
+   * round 4, M2). Exit 1 is git's honest "no", not a failure; anything else
+   * (an unknown ref) still throws.
+   */
+  async refContains(
+    repoPath: string,
+    containerRef: string,
+    containedRef: string,
+  ): Promise<boolean> {
+    return (
+      (await execExitCode(
+        'git',
+        ['merge-base', '--is-ancestor', containedRef, containerRef],
+        repoPath,
+        [0, 1],
+      )) === 0
+    )
+  }
+
+  /**
+   * `git checkout <branch>`, plain: the branch must already exist locally and
+   * is taken as it stands. The lane uses it to adopt a root-only branch at
+   * its own tip, where `-B` would silently reset it to the base (MAR-2783
+   * round 3, M2).
+   */
+  async checkoutExistingBranch(
+    repoPath: string,
+    branchName: string,
+  ): Promise<void> {
+    const validated = await validateBranchName(repoPath, branchName)
+    await exec('git', ['checkout', validated], repoPath)
+  }
+
+  /**
+   * `git reset --hard HEAD` then `git clean -fd`: tracked files back to HEAD,
+   * staged additions and untracked files gone, IGNORED files untouched. Used
+   * on a lane's fresh copy so the root's uncommitted edits stay the root's
+   * (MAR-2783 round 2, L4).
+   */
+  async resetWorkingTreeToHead(repoPath: string): Promise<void> {
+    await exec('git', ['reset', '--hard', 'HEAD'], repoPath)
+    await exec('git', ['clean', '-fd'], repoPath)
   }
 
   async addWorktree(
