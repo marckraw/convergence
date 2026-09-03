@@ -20,6 +20,11 @@ export interface SearchableSelectItem {
     title?: string
   }
   /**
+   * Nesting level, for an item that belongs under the one before it -- a lane
+   * under its root project (MAR-2783). 0 or absent is top level.
+   */
+  depth?: number
+  /**
    * Listed but not choosable. For options that exist and matter to the user —
    * a provider account attestation disabled, say — where hiding them would be
    * more confusing than showing why they cannot be picked.
@@ -169,6 +174,12 @@ export function SearchableSelectPresentational({
                     if (item.disabled) return
                     onSelect(item.id)
                   }}
+                  data-depth={item.depth ?? 0}
+                  style={
+                    item.depth
+                      ? { paddingLeft: `${0.5 + item.depth * 1.25}rem` }
+                      : undefined
+                  }
                   className={cn(
                     'flex gap-2 rounded-md px-2 py-2 text-sm aria-selected:bg-accent aria-selected:text-accent-foreground',
                     item.disabled

@@ -13,6 +13,7 @@ export type DialogKind =
   | 'session-fork'
   | 'session-intent'
   | 'workspace-create'
+  | 'lane-create'
 
 export type AppSettingsDialogSection =
   | 'session-defaults'

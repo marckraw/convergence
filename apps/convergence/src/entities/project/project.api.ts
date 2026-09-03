@@ -1,4 +1,10 @@
-import type { CloneProjectInput, Project } from './project.types'
+import type {
+  CloneProjectInput,
+  CreateLaneInput,
+  LaneCreateProgress,
+  LaneCreateResult,
+  Project,
+} from './project.types'
 import type { ProjectSettings } from './project-settings.pure'
 
 export const projectApi = {
@@ -25,6 +31,21 @@ export const projectApi = {
 
   updateSettings: (id: string, settings: ProjectSettings): Promise<Project> =>
     window.electronAPI.project.updateSettings(id, settings),
+}
+
+export const laneApi = {
+  create: (input: CreateLaneInput): Promise<LaneCreateResult> =>
+    window.electronAPI.lane.create(input),
+
+  list: (rootProjectId: string): Promise<Project[]> =>
+    window.electronAPI.lane.list(rootProjectId),
+
+  reveal: (projectId: string): Promise<void> =>
+    window.electronAPI.lane.reveal(projectId),
+
+  onProgress: (
+    callback: (progress: LaneCreateProgress) => void,
+  ): (() => void) => window.electronAPI.lane.onProgress(callback),
 }
 
 export const dialogApi = {
