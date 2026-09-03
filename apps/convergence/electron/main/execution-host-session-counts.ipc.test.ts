@@ -53,8 +53,8 @@ vi.mock('electron', () => ({
   shell: {},
 }))
 
-const SESSION_SERVICE_ARGUMENT = 6
-const ARGUMENT_COUNT = 22
+const SESSION_SERVICE_ARGUMENT = 7
+const ARGUMENT_COUNT = 23
 
 const COUNTS_CHANNEL = 'executionHost:sessionCountsByEndpoint'
 

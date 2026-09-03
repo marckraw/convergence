@@ -31,6 +31,36 @@ interface ProjectData {
   settings: ProjectSettings
   createdAt: string
   updatedAt: string
+  /** The root this project is a lane of; null for a root (MAR-2783). */
+  laneOf: string | null
+  /** The lane's name under its root; null for a root (MAR-2783). */
+  laneName: string | null
+}
+
+interface CreateLaneInputData {
+  rootProjectId: string
+  laneName: string
+  branchName: string
+}
+
+type LaneCreateProgressPhaseData =
+  | 'copying'
+  | 'preparing-branch'
+  | 'recording'
+  | 'done'
+
+interface LaneCreateProgressData {
+  rootProjectId: string
+  laneName: string
+  phase: LaneCreateProgressPhaseData
+}
+
+interface LaneCreateResultData {
+  lane: ProjectData
+  /** How the bytes got there: a clone, or a byte copy the volume forced. */
+  copyMethod: 'clonefile' | 'bytes'
+  /** What did not go to plan but did not stop the lane (an unreachable origin). */
+  warnings: string[]
 }
 
 type WorkspaceStartStrategy = 'base-branch' | 'current-head'
@@ -1564,6 +1594,14 @@ interface ElectronAPI {
     listApps: () => Promise<ProjectOpenAppData[]>
     open: (input: ProjectOpenRequestData) => Promise<void>
   }
+  lane: {
+    create: (input: CreateLaneInputData) => Promise<LaneCreateResultData>
+    list: (rootProjectId: string) => Promise<ProjectData[]>
+    reveal: (projectId: string) => Promise<void>
+    onProgress: (
+      callback: (progress: LaneCreateProgressData) => void,
+    ) => () => void
+  }
   workspace: {
     create: (input: CreateWorkspaceInput) => Promise<WorkspaceData>
     getByProjectId: (projectId: string) => Promise<WorkspaceData[]>
@@ -2077,6 +2115,11 @@ interface DebugLoggingPrefsData {
   enabled: boolean
 }
 
+/** Where lanes live (MAR-2783); `root` null = `<userData>/lanes`. */
+interface LanesPrefsData {
+  root: string | null
+}
+
 interface FavoriteModelRefData {
   providerId: string
   modelId: string
@@ -2127,6 +2170,7 @@ interface AppSettingsData {
   favoriteModels: {
     items: FavoriteModelRefData[]
   }
+  lanes: LanesPrefsData
 }
 
 type AppSettingsInputData = Omit<
@@ -2141,6 +2185,7 @@ type AppSettingsInputData = Omit<
   | 'debugLogging'
   | 'piModelVisibility'
   | 'favoriteModels'
+  | 'lanes'
 > & {
   namingModelByProvider?: Record<string, string>
   extractionModelByProvider?: Record<string, string>
@@ -2156,6 +2201,7 @@ type AppSettingsInputData = Omit<
   favoriteModels?: {
     items: FavoriteModelRefData[]
   }
+  lanes?: LanesPrefsData
 }
 
 type LocalModelTunnelStateData =

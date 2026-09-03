@@ -4,6 +4,9 @@ import { SpaceService } from '../backend/space/space.service'
 import type { SpaceSynthesisService } from '../backend/space/space-synthesis.service'
 import { StateService } from '../backend/state/state.service'
 import { WorkspaceService } from '../backend/workspace/workspace.service'
+import type { LaneService } from '../backend/lane/lane.service'
+import { parseCreateLaneInput } from '../backend/lane/lane.pure'
+import type { LaneCreateProgress } from '../backend/lane/lane.types'
 import { GitService } from '../backend/git/git.service'
 import { PullRequestService } from '../backend/pull-request/pull-request.service'
 import { SessionAppService } from '../backend/app-api/session-app.service'
@@ -150,6 +153,7 @@ export function registerIpcHandlers(
   spaceService: SpaceService,
   stateService: StateService,
   workspaceService: WorkspaceService,
+  laneService: LaneService,
   gitService: GitService,
   pullRequestService: PullRequestService,
   sessionService: SessionService,
@@ -239,6 +243,38 @@ export function registerIpcHandlers(
     (_event, id: string, settings: ProjectSettings) =>
       projectService.updateSettings(id, settings),
   )
+
+  // Lane handlers (MAR-2783): a lane is a project with a parent, so it comes
+  // back as a Project and is selected like one; only its making is special.
+  const broadcastLaneProgress = (progress: LaneCreateProgress): void => {
+    for (const win of BrowserWindow.getAllWindows()) {
+      if (!win.isDestroyed()) {
+        win.webContents.send('lane:progress', progress)
+      }
+    }
+  }
+
+  ipcMain.handle('lane:create', async (_event, raw: unknown) => {
+    // L2: the shape is read at the door; the service only ever sees strings.
+    const input = parseCreateLaneInput(raw)
+    return laneService.create(input, (phase) =>
+      broadcastLaneProgress({
+        rootProjectId: input.rootProjectId,
+        laneName: input.laneName,
+        phase,
+      }),
+    )
+  })
+
+  ipcMain.handle('lane:list', (_event, rootProjectId: string) =>
+    projectService.listLanes(rootProjectId),
+  )
+
+  ipcMain.handle('lane:reveal', (_event, projectId: string) => {
+    const project = projectService.getById(projectId)
+    if (!project) throw new Error(`Project not found: ${projectId}`)
+    shell.showItemInFolder(project.repositoryPath)
+  })
 
   // Project context handlers
   ipcMain.handle('projectContext:list', (_event, projectId: string) =>
