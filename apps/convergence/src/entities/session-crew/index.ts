@@ -1,6 +1,7 @@
 export type {
   CreateSessionCrewInput,
   SessionCrew,
+  SessionCrewMember,
   UpdateSessionCrewInput,
 } from './session-crew.types'
 export { sessionCrewApi } from './session-crew.api'

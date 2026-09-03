@@ -1,3 +1,4 @@
+import type { CrewHail } from '@/entities/crew-hail'
 import type { RelayAction, SessionRelay } from '@/entities/session-relay'
 import type { SessionCrewGroup } from './session-crew-groups.pure'
 import type { SessionCard } from './mission-control.types'
@@ -30,6 +31,31 @@ export function spawnNodeId(relayId: string): string {
   return `${SPAWN_NODE_ID_PREFIX}${relayId}`
 }
 
+/**
+ * Marcin's chair: the one terminal a baton crew always has.
+ *
+ * Auto-present rather than drawn by hand, and not a session. Every route that
+ * ends at a human ends here, so `BATON: marcin` is a REAL arrow on the diagram
+ * instead of an absence, and the three safety nets have somewhere visible to
+ * point. A glance at a crew must show what can happen after each station --
+ * including "it stops and waits for you".
+ */
+const CHAIR_NODE_ID_PREFIX = 'chair:'
+
+export function chairNodeId(crewId: string): string {
+  return `${CHAIR_NODE_ID_PREFIX}${crewId}`
+}
+
+export const CHAIR_NODE_LABEL = 'Marcin'
+export const CHAIR_NODE_EMOJI = '🪑'
+export const CANVAS_CHAIR_NODE_HEIGHT = 64
+
+/** What the one dashed edge from a crew's frame to its chair is called. */
+export const SAFETY_EDGE_LABEL = 'otherwise · budget · stall'
+
+/** The label a drawn terminal route wears. */
+export const TERMINAL_EDGE_LABEL = '⚡ marcin'
+
 export interface CanvasSessionNode {
   /** The session id: node identity on the canvas is session identity. */
   id: string
@@ -55,15 +81,31 @@ export interface CanvasSpawnNode {
   y: number
 }
 
+/**
+ * What a drawn edge IS, which decides how it may be read and clicked.
+ *
+ * `relay` is a wire the user drew and can open. `terminal` and `safety` are
+ * drawn consequences of the crew's shape -- there is no stored row behind
+ * either, so neither has a relay to open, and `relayId` is null on both. The
+ * kind is carried rather than inferred from a null id, because "this edge has
+ * no relay" and "this edge is a safety net" are different facts and only one
+ * of them decides how it is drawn.
+ */
+export type CanvasEdgeKind = 'relay' | 'terminal' | 'safety'
+
 export interface CanvasEdge {
   id: string
-  relayId: string
+  kind: CanvasEdgeKind
+  /** Null on every edge that is not a stored wire. */
+  relayId: string | null
   crewId: string
   source: string
-  /** A session id, or the id of the spawn chip this wire opens. */
+  /** A session id, a spawn chip's id, or the crew's chair. */
   target: string
   armed: boolean
   action: RelayAction
+  /** The condition or consequence this edge carries, in words, or null. */
+  label: string | null
   /**
    * True when the wire points at a column at or left of its own: the loop.
    * Drawn along the underside so it cannot be mistaken for a forward wire.
@@ -71,11 +113,25 @@ export interface CanvasEdge {
   back: boolean
 }
 
+/** The chair: a crew's one terminal, drawn rather than owned by anybody. */
+export interface CanvasChairNode {
+  id: string
+  crewId: string
+  /** Lit when this crew is asking for him. */
+  lit: boolean
+  /** What it is asking, in one sentence, or null when it is not. */
+  detail: string | null
+  x: number
+  y: number
+}
+
 export interface CanvasCrewCluster {
   crewId: string
   name: string
   emoji: string | null
   accentColor: string | null
+  /** This crew's loop is stopped and asking for him: the frame goes amber. */
+  parked: boolean
   x: number
   y: number
   width: number
@@ -86,6 +142,7 @@ export interface CanvasGraph {
   clusters: CanvasCrewCluster[]
   nodes: CanvasSessionNode[]
   spawnNodes: CanvasSpawnNode[]
+  chairs: CanvasChairNode[]
   edges: CanvasEdge[]
 }
 
@@ -170,10 +227,17 @@ export function assignFlowColumns(
 export function buildCanvasGraph(
   groups: readonly SessionCrewGroup[],
   relays: readonly SessionRelay[],
+  /**
+   * The calls still open, so a parked crew can say so on the diagram. Optional
+   * because every existing caller drew a room that had no hails in it, and a
+   * room with none looks exactly as it always did.
+   */
+  hails: readonly CrewHail[] = [],
 ): CanvasGraph {
   const clusters: CanvasCrewCluster[] = []
   const nodes: CanvasSessionNode[] = []
   const spawnNodes: CanvasSpawnNode[] = []
+  const chairs: CanvasChairNode[] = []
   const edges: CanvasEdge[] = []
   let clusterTop = 0
 
@@ -198,10 +262,31 @@ export function buildCanvasGraph(
         drawnSessions.has(relay.targetSessionId),
     )
 
+    // A crew with at least one conditioned wire is a baton crew, and a baton
+    // crew always has a chair: `BATON: marcin` can be declared by any station
+    // in it, so the terminal must be on the diagram whether or not anybody has
+    // used it yet.
+    const batonSources = crewRelays.filter(
+      (relay) => relay.conditionToken !== null,
+    )
+    const hasChair = batonSources.length > 0
+    const chairId = chairNodeId(crew.id)
+    const openHails = hails.filter((hail) => hail.crewId === crew.id)
+
     const unitIds = [
       ...group.cards.map((card) => card.session.id),
       ...spawnRelays.map((relay) => spawnNodeId(relay.id)),
+      ...(hasChair ? [chairId] : []),
     ]
+    // Every station that can declare a route can declare the reserved one, so
+    // each gets one drawn arrow to the chair. Deduped: two conditioned wires
+    // leaving one station are still one way of reaching him.
+    const terminalSourceIds = hasChair
+      ? [...new Set(batonSources.map((relay) => relay.sourceSessionId))].filter(
+          (sessionId) => drawnSessions.has(sessionId),
+        )
+      : []
+
     const wires: FlowWire[] = [
       ...hailRelays.map((relay) => ({
         from: relay.sourceSessionId,
@@ -210,6 +295,13 @@ export function buildCanvasGraph(
       ...spawnRelays.map((relay) => ({
         from: relay.sourceSessionId,
         to: spawnNodeId(relay.id),
+      })),
+      // The chair is laid out by the same walk as everything else, so it lands
+      // to the right of the stations that can reach it rather than in a corner
+      // somebody has to hunt for.
+      ...terminalSourceIds.map((sessionId) => ({
+        from: sessionId,
+        to: chairId,
       })),
     ]
 
@@ -258,6 +350,18 @@ export function buildCanvasGraph(
       })
     }
 
+    if (hasChair) {
+      chairs.push({
+        id: chairId,
+        crewId: crew.id,
+        lit: openHails.length > 0,
+        // The newest call is the one the chair speaks for; the rest are in the
+        // crew's own list. A node that tried to say four things says none.
+        detail: openHails[0]?.detail ?? null,
+        ...place(chairId),
+      })
+    }
+
     for (const relay of [...hailRelays, ...spawnRelays]) {
       const target =
         relay.action === 'spawn'
@@ -268,12 +372,36 @@ export function buildCanvasGraph(
 
       edges.push({
         id: relay.id,
+        kind: 'relay',
         relayId: relay.id,
         crewId: crew.id,
         source: relay.sourceSessionId,
         target,
         armed: relay.armed,
         action: relay.action,
+        // The condition IS the label: one wire, one arrow, one route. A
+        // diagram that showed the wires but not what they wait for would make
+        // every conditioned crew look like it fires on everything.
+        label: relay.conditionToken,
+        back: targetColumn <= sourceColumn,
+      })
+    }
+
+    for (const sessionId of terminalSourceIds) {
+      const sourceColumn = columns.get(sessionId) ?? 0
+      const targetColumn = columns.get(chairId) ?? 0
+      edges.push({
+        id: `terminal:${crew.id}:${sessionId}`,
+        kind: 'terminal',
+        relayId: null,
+        crewId: crew.id,
+        source: sessionId,
+        target: chairId,
+        // A terminal route is always live: it is the one hand-off no switch
+        // can disarm, which is precisely why it is the safe default.
+        armed: true,
+        action: 'hail',
+        label: TERMINAL_EDGE_LABEL,
         back: targetColumn <= sourceColumn,
       })
     }
@@ -293,16 +421,36 @@ export function buildCanvasGraph(
       name: crew.name,
       emoji: crew.emoji,
       accentColor: crew.accentColor,
+      parked: openHails.length > 0,
       x: 0,
       y: clusterTop,
       width,
       height,
     })
 
+    // ONE dashed edge for all three safety nets, from the frame rather than
+    // from any station: unrouted, the round cap and a stall are things that
+    // happen to the CREW, and three separate arrows out of three separate
+    // sessions would draw a machine nobody built.
+    if (hasChair) {
+      edges.push({
+        id: `safety:${crew.id}`,
+        kind: 'safety',
+        relayId: null,
+        crewId: crew.id,
+        source: `crew:${crew.id}`,
+        target: chairId,
+        armed: true,
+        action: 'hail',
+        label: SAFETY_EDGE_LABEL,
+        back: false,
+      })
+    }
+
     clusterTop += height + CLUSTER_GAP
   }
 
-  return { clusters, nodes, spawnNodes, edges }
+  return { clusters, nodes, spawnNodes, chairs, edges }
 }
 
 /**

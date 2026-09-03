@@ -21,6 +21,13 @@ export const sessionCrewApi = {
   removeMember: (crewId: string, sessionId: string): Promise<SessionCrew> =>
     window.electronAPI.crew.removeMember(crewId, sessionId),
 
+  setMemberBatonName: (
+    crewId: string,
+    sessionId: string,
+    batonName: string | null,
+  ): Promise<SessionCrew> =>
+    window.electronAPI.crew.setMemberBatonName(crewId, sessionId, batonName),
+
   onUpdated: (callback: (crews: SessionCrew[]) => void): (() => void) =>
     window.electronAPI.crew.onUpdated(callback),
 }

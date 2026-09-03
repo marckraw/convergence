@@ -10,6 +10,7 @@ import {
   ensureTurnFileChangeIdentity,
   TURN_FILE_CHANGE_IDENTITY_INDEX,
 } from './database'
+import { RelayService } from '../relay/relay.service'
 
 describe('database', () => {
   afterEach(() => {
@@ -292,6 +293,7 @@ describe('database', () => {
         'provider_account_id',
         'skip_context_injection',
         'relays_muted',
+        'dispatch_id',
         'error',
         'created_at',
         'updated_at',
@@ -945,6 +947,8 @@ describe('database', () => {
         'emoji',
         'accent_color',
         'position',
+        'round_cap',
+        'stall_minutes',
         'created_at',
         'updated_at',
       ].sort(),
@@ -954,7 +958,7 @@ describe('database', () => {
       .prepare("PRAGMA table_info('session_crew_members')")
       .all() as Array<{ name: string }>
     expect(memberColumns.map((c) => c.name).sort()).toEqual(
-      ['crew_id', 'session_id', 'added_at'].sort(),
+      ['crew_id', 'session_id', 'baton_name', 'added_at'].sort(),
     )
 
     // Membership must never cascade in either direction: a crew is a label,
@@ -995,6 +999,7 @@ describe('database', () => {
         'spawn_spec_json',
         'instruction',
         'opener',
+        'condition_token',
         'armed',
         'created_at',
         'updated_at',
@@ -1016,6 +1021,11 @@ describe('database', () => {
         'spawned_session_id',
         'trigger_status',
         'payload_preview',
+        'baton',
+        'round_number',
+        'settled_at',
+        'settled_status',
+        'dispatch_id',
         'outcome',
         'error',
       ].sort(),
@@ -1866,11 +1876,18 @@ describe('database', () => {
       const db = getDatabase(dbPath)
       const row = db
         .prepare("SELECT * FROM session_queued_inputs WHERE id = 'q-pre-mute'")
-        .get() as { relays_muted: number; text: string }
+        .get() as {
+        relays_muted: number
+        dispatch_id: string | null
+        text: string
+      }
 
       // Every message queued before the quiet send existed fired its wires,
-      // which is exactly what a zero means -- nothing to backfill.
+      // which is exactly what a zero means -- nothing to backfill. And no
+      // receipt: nothing minted ids before the delivery receipt existed
+      // (MAR-2759), so null is the honest reading, not a value to invent.
       expect(row.relays_muted).toBe(0)
+      expect(row.dispatch_id).toBeNull()
       expect(row.text).toBe('carry on')
     } finally {
       closeDatabase()
@@ -1927,6 +1944,201 @@ describe('database', () => {
       expect(relay.instruction).toBeNull()
       expect(relay.opener).toBeNull()
       expect(relay.target_session_id).toBe('s2')
+    } finally {
+      closeDatabase()
+      resetDatabase()
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('adds the settle ledger columns to a relay trail that predates them', () => {
+    // The exact relay_hops v0.46.7 shipped: no baton, no round, no settle
+    // stamp, no settle debt. The idempotent ALTERs are the ONLY thing
+    // standing between an installed database and `no such column:
+    // settled_at` on the very first settle -- where `handleSettle`'s outer
+    // catch would silently kill every relay of every settle -- and a test
+    // that builds its relay_hops from the fresh SCHEMA never exercises them.
+    // Deleting any one of those ALTERs must turn this red; the fresh schema
+    // line is NOT the canary, because the ALTER heals its absence.
+    const dir = mkdtempSync(join(tmpdir(), 'convergence-settle-migration-'))
+    const dbPath = join(dir, 'pre-settle.sqlite')
+
+    try {
+      const legacy = new Database(dbPath)
+      legacy.exec(`
+        CREATE TABLE relay_hops (
+          id TEXT PRIMARY KEY,
+          relay_id TEXT NOT NULL,
+          crew_id TEXT NOT NULL,
+          flow_run_id TEXT NOT NULL,
+          fired_at TEXT NOT NULL DEFAULT (datetime('now')),
+          source_session_id TEXT NOT NULL,
+          target_session_id TEXT,
+          spawned_session_id TEXT,
+          trigger_status TEXT NOT NULL,
+          payload_preview TEXT,
+          outcome TEXT NOT NULL,
+          error TEXT
+        );
+
+        INSERT INTO relay_hops (
+          id, relay_id, crew_id, flow_run_id, fired_at, source_session_id,
+          target_session_id, trigger_status, outcome
+        )
+        VALUES ('hop-old', 'r1', 'c1', 'run-1', '2026-08-30T10:00:00.000Z',
+                's1', 's2', 'completed', 'delivered');
+      `)
+      legacy.close()
+
+      const db = getDatabase(dbPath)
+      const columns = (
+        db.prepare("PRAGMA table_info('relay_hops')").all() as Array<{
+          name: string
+        }>
+      ).map((column) => column.name)
+      expect(columns).toContain('settled_at')
+      expect(columns).toContain('settled_status')
+      expect(columns).toContain('dispatch_id')
+
+      const hop = db
+        .prepare("SELECT * FROM relay_hops WHERE id = 'hop-old'")
+        .get() as {
+        settled_at: string | null
+        settled_status: string | null
+        dispatch_id: string | null
+        outcome: string
+      }
+      // Null is the honest reading -- nothing recorded a station's return
+      // or minted a receipt before these columns -- and a null receipt is
+      // exactly what keeps the old first-answer stamp for these rows.
+      expect(hop.settled_at).toBeNull()
+      expect(hop.settled_status).toBeNull()
+      expect(hop.dispatch_id).toBeNull()
+      expect(hop.outcome).toBe('delivered')
+
+      // The write path itself, against the migrated table: the first settle
+      // of the installed build must stamp, not throw.
+      const service = new RelayService(db)
+      expect(
+        service.markStationSettled(
+          's2',
+          'completed',
+          '2026-08-30T10:05:00.000Z',
+          [],
+        ),
+      ).toBe(1)
+      expect(
+        db
+          .prepare("SELECT settled_status FROM relay_hops WHERE id = 'hop-old'")
+          .get(),
+      ).toEqual({ settled_status: 'completed' })
+    } finally {
+      closeDatabase()
+      resetDatabase()
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('drops the settle debt from a trail that carried it, keeping the rows', () => {
+    // The dev-era shape between v0.46.7 and the delivery receipt: a trail
+    // with a `settles_owed` count. The count was a target-status guess at
+    // the causal question the dispatch id answers by identity (MAR-2759),
+    // and a column nobody reads would only invite a reader -- so opening
+    // such a database must remove it WITHOUT losing a single hop. Deleting
+    // the DROP ALTER turns this red; the fresh schema cannot, because it
+    // never had the column.
+    const dir = mkdtempSync(join(tmpdir(), 'convergence-debt-drop-'))
+    const dbPath = join(dir, 'pre-receipt.sqlite')
+
+    try {
+      const legacy = new Database(dbPath)
+      legacy.exec(`
+        CREATE TABLE relay_hops (
+          id TEXT PRIMARY KEY,
+          relay_id TEXT NOT NULL,
+          crew_id TEXT NOT NULL,
+          flow_run_id TEXT NOT NULL,
+          fired_at TEXT NOT NULL DEFAULT (datetime('now')),
+          source_session_id TEXT NOT NULL,
+          target_session_id TEXT,
+          spawned_session_id TEXT,
+          trigger_status TEXT NOT NULL,
+          payload_preview TEXT,
+          outcome TEXT NOT NULL,
+          baton TEXT,
+          round_number INTEGER,
+          settled_at TEXT,
+          settled_status TEXT,
+          settles_owed INTEGER NOT NULL DEFAULT 0,
+          error TEXT
+        );
+
+        INSERT INTO relay_hops (
+          id, relay_id, crew_id, flow_run_id, fired_at, source_session_id,
+          target_session_id, trigger_status, outcome, settles_owed
+        )
+        VALUES ('hop-debt', 'r1', 'c1', 'run-1', '2026-08-31T10:00:00.000Z',
+                's1', 's2', 'completed', 'queued', 1);
+      `)
+      legacy.close()
+
+      const db = getDatabase(dbPath)
+      const columns = (
+        db.prepare("PRAGMA table_info('relay_hops')").all() as Array<{
+          name: string
+        }>
+      ).map((column) => column.name)
+      expect(columns).not.toContain('settles_owed')
+      expect(columns).toContain('dispatch_id')
+
+      const hop = db
+        .prepare("SELECT * FROM relay_hops WHERE id = 'hop-debt'")
+        .get() as { dispatch_id: string | null; outcome: string }
+      expect(hop.outcome).toBe('queued')
+      expect(hop.dispatch_id).toBeNull()
+    } finally {
+      closeDatabase()
+      resetDatabase()
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('adds the debt identity to a hail book that predates it', () => {
+    // The dev-era `crew_hails` without `hop_id`. The idempotent ALTER is the
+    // only thing between that book and `no such column: hop_id` on the very
+    // next stall tick -- the fresh CREATE cannot exercise it, because it
+    // ships the column. Null on old rows is honest: nothing recorded which
+    // hop they accused.
+    const dir = mkdtempSync(join(tmpdir(), 'convergence-hail-identity-'))
+    const dbPath = join(dir, 'pre-identity.sqlite')
+
+    try {
+      const legacy = new Database(dbPath)
+      legacy.exec(`
+        CREATE TABLE crew_hails (
+          id TEXT PRIMARY KEY,
+          crew_id TEXT NOT NULL,
+          flow_run_id TEXT,
+          reason TEXT NOT NULL,
+          session_id TEXT NOT NULL,
+          baton TEXT,
+          message TEXT,
+          detail TEXT NOT NULL,
+          raised_at TEXT NOT NULL DEFAULT (datetime('now')),
+          acknowledged_at TEXT
+        );
+
+        INSERT INTO crew_hails (id, crew_id, reason, session_id, detail)
+        VALUES ('hail-old', 'c1', 'stall', 's2', 'quiet for 30 minutes');
+      `)
+      legacy.close()
+
+      const db = getDatabase(dbPath)
+      const row = db
+        .prepare("SELECT * FROM crew_hails WHERE id = 'hail-old'")
+        .get() as { hop_id: string | null; reason: string }
+      expect(row.hop_id).toBeNull()
+      expect(row.reason).toBe('stall')
     } finally {
       closeDatabase()
       resetDatabase()
@@ -3206,3 +3418,95 @@ function hasLegacyTwoColumnUnique(database: Database.Database): boolean {
     )
   })
 }
+
+/**
+ * A project can spawn lanes (MAR-2783, slice L1).
+ *
+ * File-backed on purpose: the in-memory database is born with the columns, so
+ * a test against it cannot tell the schema block from the migration. Against
+ * the shipped `projects` shape, every assertion here reds if the `ALTER TABLE`
+ * in `ensureProjectLaneColumns` is deleted — the `CREATE TABLE IF NOT EXISTS`
+ * above it is a no-op on an old file and adds nothing.
+ */
+describe('project lanes migration', () => {
+  afterEach(() => {
+    closeDatabase()
+    resetDatabase()
+  })
+
+  it('adds the lane columns to a projects table that predates them', () => {
+    withTempDb('lanes-migration', (dbPath) => {
+      const db = getDatabase(seedLegacyAt(dbPath))
+
+      const columns = (
+        db.pragma('table_info(projects)') as { name: string }[]
+      ).map((column) => column.name)
+      expect(columns).toContain('lane_of')
+      expect(columns).toContain('lane_name')
+
+      // Pre-era rows are roots, in so many words: both NULL.
+      expect(
+        db
+          .prepare('SELECT id, lane_of, lane_name FROM projects ORDER BY id')
+          .all(),
+      ).toEqual([{ id: 'p1', lane_of: null, lane_name: null }])
+    })
+  })
+
+  it('holds one lane name per root and cascades the lanes when the root goes', () => {
+    withTempDb('lanes-cascade', (dbPath) => {
+      const db = getDatabase(seedLegacyAt(dbPath))
+      db.prepare(
+        `INSERT INTO projects (id, name, repository_path, settings, created_at, updated_at)
+         VALUES ('p2', 'q', '/tmp/p2', '{}', 'now', 'now')`,
+      ).run()
+      const insertLane = db.prepare(
+        `INSERT INTO projects (id, name, repository_path, settings, created_at, updated_at, lane_of, lane_name)
+         VALUES (?, ?, ?, '{}', 'now', 'now', ?, ?)`,
+      )
+
+      insertLane.run(
+        'lane-a',
+        'p1 · lane: studio',
+        '/tmp/lanes/p1/studio',
+        'p1',
+        'studio',
+      )
+      // The same name under the OTHER root is a different lane.
+      insertLane.run(
+        'lane-b',
+        'p2 · lane: studio',
+        '/tmp/lanes/p2/studio',
+        'p2',
+        'studio',
+      )
+      // The same name under the SAME root is refused by the partial index.
+      expect(() =>
+        insertLane.run(
+          'lane-c',
+          'again',
+          '/tmp/lanes/p1/studio-2',
+          'p1',
+          'studio',
+        ),
+      ).toThrow(/UNIQUE/)
+      // A lane of nothing is refused by the foreign key.
+      expect(() =>
+        insertLane.run(
+          'lane-d',
+          'orphan',
+          '/tmp/lanes/x/studio',
+          'no-such-root',
+          'studio',
+        ),
+      ).toThrow(/FOREIGN KEY/)
+
+      db.prepare('DELETE FROM projects WHERE id = ?').run('p1')
+
+      expect(db.prepare('SELECT id FROM projects ORDER BY id').all()).toEqual([
+        { id: 'lane-b' },
+        { id: 'p2' },
+      ])
+    })
+  })
+})

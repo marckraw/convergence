@@ -4,7 +4,17 @@ import {
   DEFAULT_SPAWN_NAME,
   MAX_AUTOMATIC_HOPS_PER_FLOW_RUN,
   MAX_RELAY_INSTRUCTION_LENGTH,
+  MAX_RELAY_CONDITION_TOKEN_LENGTH,
   MAX_RELAY_OPENER_LENGTH,
+  DEFAULT_CREW_ROUND_CAP,
+  batonConditionToken,
+  hasRoundBudget,
+  normalizeRelayConditionToken,
+  readEmittedBaton,
+  relayConditionMatches,
+  resolveRoundCap,
+  roundBudgetMessage,
+  roundNumber,
   RELAY_OPENER_PREVIEW_LENGTH,
   RELAY_PAYLOAD_PREVIEW_LENGTH,
   assertRelayEndpoints,
@@ -386,5 +396,160 @@ describe('buildRelayHopPreview', () => {
 
   it('still names the opener when there is nothing to carry', () => {
     expect(buildRelayHopPreview('/clear', '   ')).toBe('First send: /clear')
+  })
+})
+
+describe('readEmittedBaton', () => {
+  it('reads the declaration on the last non-empty line', () => {
+    expect(readEmittedBaton('Round 3 looks good.\n\nBATON: horse\n')).toBe(
+      'horse',
+    )
+  })
+
+  it('is case-insensitive on both the keyword and the name', () => {
+    expect(readEmittedBaton('baton: Horse')).toBe('horse')
+  })
+
+  it('collapses the whitespace inside a declaration', () => {
+    expect(readEmittedBaton('BATON:   the   horse')).toBe('the horse')
+  })
+
+  it('reads nothing when the baton is not on the last line', () => {
+    expect(readEmittedBaton('BATON: horse\n\nand one more thought')).toBeNull()
+  })
+
+  it('never searches prose for a baton', () => {
+    expect(readEmittedBaton('I would hand the BATON: horse next.')).toBeNull()
+  })
+
+  it('reads nothing from a message that declares nothing', () => {
+    expect(readEmittedBaton('All green, nothing to add.')).toBeNull()
+  })
+
+  it('reads nothing from a keyword with no name after it', () => {
+    expect(readEmittedBaton('BATON:   ')).toBeNull()
+  })
+})
+
+describe('relayConditionMatches', () => {
+  it('fires unconditionally when the wire carries no token', () => {
+    expect(relayConditionMatches(null, 'anything at all')).toBe(true)
+  })
+
+  it('matches the last non-empty line exactly, ignoring case and spacing', () => {
+    expect(
+      relayConditionMatches('BATON: horse', 'Done.\n\n  baton:  HORSE  \n\n'),
+    ).toBe(true)
+  })
+
+  it('refuses a message whose last line is a different baton', () => {
+    expect(relayConditionMatches('BATON: horse', 'Done.\n\nBATON: codex')).toBe(
+      false,
+    )
+  })
+
+  it('refuses a message that declares nothing', () => {
+    expect(relayConditionMatches('BATON: horse', 'Done.')).toBe(false)
+  })
+
+  it('refuses a baton mentioned anywhere but the last line', () => {
+    expect(
+      relayConditionMatches('BATON: horse', 'BATON: horse\n\nOne more thing.'),
+    ).toBe(false)
+  })
+
+  it('compares whole lines, never prefixes', () => {
+    expect(
+      relayConditionMatches('BATON: horse', 'Done.\n\nBATON: horseman'),
+    ).toBe(false)
+  })
+
+  it('matches a token that is not a baton declaration at all', () => {
+    expect(relayConditionMatches('DONE', 'Finished.\n\ndone')).toBe(true)
+  })
+})
+
+describe('normalizeRelayConditionToken', () => {
+  it('stores a blank box as no condition', () => {
+    expect(normalizeRelayConditionToken('   ')).toBeNull()
+    expect(normalizeRelayConditionToken(null)).toBeNull()
+    expect(normalizeRelayConditionToken(undefined)).toBeNull()
+  })
+
+  it('keeps the token as the user wrote it, trimmed', () => {
+    expect(normalizeRelayConditionToken('  BATON: horse  ')).toBe(
+      'BATON: horse',
+    )
+  })
+
+  it('refuses a token that spans more than one line', () => {
+    expect(() =>
+      normalizeRelayConditionToken('BATON: horse\nBATON: codex'),
+    ).toThrow('A relay condition is one line')
+  })
+
+  it('refuses the reserved terminal baton, whatever its spelling', () => {
+    expect(() => normalizeRelayConditionToken('baton:   MARCIN')).toThrow(
+      'BATON: marcin is reserved',
+    )
+  })
+
+  it('refuses a token longer than the limit', () => {
+    expect(() =>
+      normalizeRelayConditionToken(
+        'x'.repeat(MAX_RELAY_CONDITION_TOKEN_LENGTH + 1),
+      ),
+    ).toThrow('cannot be longer than')
+  })
+})
+
+describe('batonConditionToken', () => {
+  it('writes the convention a wire is pre-filled with', () => {
+    expect(batonConditionToken('horse')).toBe('BATON: horse')
+  })
+})
+
+describe('the round budget', () => {
+  it('defaults to twelve rounds when a crew names no cap', () => {
+    expect(resolveRoundCap(null)).toBe(DEFAULT_CREW_ROUND_CAP)
+    expect(DEFAULT_CREW_ROUND_CAP).toBe(12)
+  })
+
+  it('takes the crew own cap when it named one', () => {
+    expect(resolveRoundCap(2)).toBe(2)
+  })
+
+  it('falls back for a cap no crew could have meant', () => {
+    expect(resolveRoundCap(0)).toBe(DEFAULT_CREW_ROUND_CAP)
+    expect(resolveRoundCap(-3)).toBe(DEFAULT_CREW_ROUND_CAP)
+    expect(resolveRoundCap(1.5)).toBe(DEFAULT_CREW_ROUND_CAP)
+  })
+
+  it('numbers the round after the hops already spent', () => {
+    expect(roundNumber(0)).toBe(1)
+    expect(roundNumber(11)).toBe(12)
+  })
+
+  it('lets a run spend rounds up to and including the cap', () => {
+    expect(hasRoundBudget(11, 12)).toBe(true)
+    expect(hasRoundBudget(12, 12)).toBe(false)
+  })
+
+  it('names the number in the sentence it writes', () => {
+    expect(roundBudgetMessage(12)).toContain('12')
+  })
+})
+
+describe('compileRelayPayload with a round', () => {
+  it('stamps the round into the brief, above the message', () => {
+    expect(
+      compileRelayPayload('Fix the findings.', 'Round 2 verdict.', 3),
+    ).toBe('Fix the findings.\n\nround 3\n\nRound 2 verdict.')
+  })
+
+  it('leaves an unbriefed wire carrying the message byte for byte', () => {
+    expect(compileRelayPayload(null, 'Round 2 verdict.', 3)).toBe(
+      'Round 2 verdict.',
+    )
   })
 })

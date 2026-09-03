@@ -55,6 +55,7 @@ describe('crew IPC', () => {
       'crew:delete',
       'crew:list',
       'crew:removeMember',
+      'crew:setMemberBatonName',
       'crew:update',
     ])
   })

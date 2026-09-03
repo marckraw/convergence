@@ -33,6 +33,12 @@ export interface SessionQueuedInputDraft {
    * the queue finally drains.
    */
   muteRelays?: boolean
+  /**
+   * The delivery receipt (MAR-2759). Persisted with the input because the
+   * queue is the durable half of a dispatch: the id must still name this
+   * input's turn after a restart. Absent for input people typed.
+   */
+  dispatchId?: string | null
 }
 
 export type QueuedInputDeliveryMode = Extract<
@@ -76,7 +82,7 @@ export class SessionQueuedInputService {
          FROM session_queued_inputs
          WHERE session_id = ?
            AND state IN ('queued', 'dispatching', 'failed')
-         ORDER BY created_at ASC`,
+         ORDER BY created_at ASC, rowid ASC`,
       )
       .all(sessionId) as SessionQueuedInputRow[]
 
@@ -101,6 +107,7 @@ export class SessionQueuedInputService {
       providerAccountId: input.providerAccountId ?? null,
       skipContextInjection: input.skipContextInjection === true,
       relaysMuted: input.muteRelays === true,
+      dispatchId: input.dispatchId ?? null,
       error: null,
       createdAt: timestamp,
       updatedAt: timestamp,
@@ -120,10 +127,11 @@ export class SessionQueuedInputService {
            provider_account_id,
            skip_context_injection,
            relays_muted,
+           dispatch_id,
            error,
            created_at,
            updated_at
-         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
       .run(
         item.id,
@@ -137,6 +145,7 @@ export class SessionQueuedInputService {
         item.providerAccountId,
         item.skipContextInjection ? 1 : 0,
         item.relaysMuted ? 1 : 0,
+        item.dispatchId,
         item.error,
         item.createdAt,
         item.updatedAt,
@@ -146,23 +155,31 @@ export class SessionQueuedInputService {
     return item
   }
 
-  cancel(id: string): void {
+  /** Returns the cancelled row, receipt included, so its ending can be told. */
+  cancel(id: string): SessionQueuedInput {
     const row = this.getRowById(id)
     if (!row) throw new Error(`Queued input not found: ${id}`)
     if (row.state !== 'queued') {
       throw new Error(`Queued input cannot be cancelled from ${row.state}`)
     }
 
-    this.patch(id, 'cancelled')
+    const cancelled = this.patch(id, 'cancelled')
+    if (!cancelled) throw new Error(`Queued input not found: ${id}`)
+    return cancelled
   }
 
+  /**
+   * The oldest waiting input. `rowid` breaks a same-millisecond tie, because
+   * an opener and its payload are enqueued in one beat and the opener must
+   * go first (MAR-2759).
+   */
   nextQueued(sessionId: string): SessionQueuedInput | null {
     const row = this.db
       .prepare(
         `SELECT *
          FROM session_queued_inputs
          WHERE session_id = ? AND state = 'queued'
-         ORDER BY created_at ASC
+         ORDER BY created_at ASC, rowid ASC
          LIMIT 1`,
       )
       .get(sessionId) as SessionQueuedInputRow | undefined
@@ -214,19 +231,31 @@ export class SessionQueuedInputService {
     }
   }
 
-  failPendingForSession(sessionId: string, reason: string): void {
+  /**
+   * Fails every input still waiting on this session and returns them, receipts
+   * included, so their ending can be told (MAR-2759, design P): a row that
+   * ends short of a turn owes a terminal, and the caller emits it.
+   */
+  failPendingForSession(
+    sessionId: string,
+    reason: string,
+  ): SessionQueuedInput[] {
     const rows = this.db
       .prepare(
         `SELECT id
          FROM session_queued_inputs
          WHERE session_id = ?
-           AND state IN ('queued', 'dispatching')`,
+           AND state IN ('queued', 'dispatching')
+         ORDER BY created_at ASC, rowid ASC`,
       )
       .all(sessionId) as Array<{ id: string }>
 
+    const failed: SessionQueuedInput[] = []
     for (const row of rows) {
-      this.patch(row.id, 'failed', reason)
+      const item = this.patch(row.id, 'failed', reason)
+      if (item) failed.push(item)
     }
+    return failed
   }
 
   private getRowById(id: string): SessionQueuedInputRow | undefined {

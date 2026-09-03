@@ -22,6 +22,17 @@ interface RelayEditorProps {
   instruction: string
   /** The first send, ahead of the payload; empty delivers straight away. */
   opener: string
+  /**
+   * The line the source's last message must end with; empty fires on any
+   * finish, which is what every wire drawn before conditions did.
+   */
+  conditionToken: string
+  /**
+   * The convention this wire's condition would be pre-filled with, or null
+   * when nothing here has a baton name yet. Offered as a button rather than
+   * typed in for the user: the pre-fill is the whole point of naming members.
+   */
+  suggestedConditionToken: string | null
   spawn: RelaySpawnDraft
   /** Projects a spawned session can open in; the global option is added here. */
   projectOptions: RelayEndpointOption[]
@@ -39,6 +50,7 @@ interface RelayEditorProps {
   onTargetChange: (sessionId: string) => void
   onInstructionChange: (instruction: string) => void
   onOpenerChange: (opener: string) => void
+  onConditionTokenChange: (conditionToken: string) => void
   onSpawnChange: (patch: Partial<RelaySpawnDraft>) => void
   onSave: () => void
   onCancel: () => void
@@ -75,6 +87,8 @@ export const RelayEditor: FC<RelayEditorProps> = ({
   targetSessionId,
   instruction,
   opener,
+  conditionToken,
+  suggestedConditionToken,
   spawn,
   projectOptions,
   providerOptions,
@@ -89,6 +103,7 @@ export const RelayEditor: FC<RelayEditorProps> = ({
   onTargetChange,
   onInstructionChange,
   onOpenerChange,
+  onConditionTokenChange,
   onSpawnChange,
   onSave,
   onCancel,
@@ -226,6 +241,46 @@ export const RelayEditor: FC<RelayEditorProps> = ({
         />
       </div>
     ) : null}
+
+    {/* Offered for both actions and placed above everything the wire carries,
+        because it answers a different question: not what is sent, but whether
+        anything is. Empty is the honest default -- a wire with no condition
+        fires on any finish, exactly as every wire did before batons. */}
+    <div className="flex flex-col gap-1 pl-3">
+      <label
+        htmlFor="relay-condition"
+        className="text-[11px] text-muted-foreground"
+      >
+        Only when the last message ends with (optional)
+      </label>
+      <div className="flex items-center gap-1.5">
+        <Input
+          id="relay-condition"
+          value={conditionToken}
+          placeholder="fires on any finish"
+          disabled={busy}
+          onChange={(event) => onConditionTokenChange(event.target.value)}
+          className="h-7 text-xs"
+        />
+        {suggestedConditionToken &&
+        suggestedConditionToken !== conditionToken ? (
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            disabled={busy}
+            onClick={() => onConditionTokenChange(suggestedConditionToken)}
+            className="h-7 shrink-0 px-2 text-[11px] text-muted-foreground hover:text-foreground"
+          >
+            Use {suggestedConditionToken}
+          </Button>
+        ) : null}
+      </div>
+      <p className="text-[10px] text-muted-foreground/70">
+        The finishing station declares its own route on the last line. Leave
+        this empty and the wire fires whenever the source finishes.
+      </p>
+    </div>
 
     {/* Hail only. A spawn opens a session that has never been used, so there
         is nothing for a first send to reset -- offering the box there would

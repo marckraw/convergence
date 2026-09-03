@@ -102,6 +102,7 @@ export function queuedInputFromRow(
     providerAccountId: row.provider_account_id ?? null,
     skipContextInjection: row.skip_context_injection === 1,
     relaysMuted: row.relays_muted === 1,
+    dispatchId: row.dispatch_id ?? null,
     error: row.error,
     createdAt: row.created_at,
     updatedAt: row.updated_at,

@@ -31,14 +31,22 @@ import { AttachmentsService } from '../attachments/attachments.service'
 import { DRAFT_SESSION_ID } from '../attachments/attachments.constants'
 import { ProjectContextService } from '../project-context/project-context.service'
 import { SessionContextInjectionService } from './context-injection/session-context-injection.service'
+import { SessionQueuedInputService } from './session-queued-input.service'
 import type {
   ConversationPatchEvent,
   SessionDelta,
 } from './conversation-item.types'
 import { RemoteExecutionHostError } from '@convergence/execution-host-client'
 import type { RemoteExecutionHostRegistry } from '../provider/execution-host/remote-execution-host.types'
-import type { SessionSettledEvent } from './session.types'
+import type {
+  DispatchTerminalEvent,
+  SessionSettledEvent,
+} from './session.types'
 import { SessionService } from './session.service'
+import { SessionRepository } from './session.repository'
+import { RelayEngine } from '../relay/relay.engine'
+import { RelayService } from '../relay/relay.service'
+import { CrewHailService } from '../relay/crew-hail.service'
 import {
   makeSessionPreEraRemote,
   TEST_REMOTE_WORK_ADDRESS,
@@ -1624,7 +1632,10 @@ describe('SessionService', () => {
     const emitDelta = deltaListener as (delta: SessionDelta) => void
     emitDelta({ kind: 'session.patch', patch: { status: 'running' } })
 
-    await queueService.sendMessage(session.id, {
+    const settles: SessionSettledEvent[] = []
+    queueService.onSessionSettled((event) => settles.push(event))
+
+    const dispatchId = await queueService.sendMessage(session.id, {
       text: 'Do this after',
       deliveryMode: 'follow-up',
     })
@@ -1636,6 +1647,8 @@ describe('SessionService', () => {
         deliveryMode: 'follow-up',
         state: 'queued',
         text: 'Do this after',
+        // The delivery receipt rides the durable queue row (MAR-2759).
+        dispatchId,
       },
     ])
 
@@ -1651,6 +1664,46 @@ describe('SessionService', () => {
       }),
     )
     expect(queueService.getQueuedInputs(session.id)).toEqual([])
+
+    // The running turn's settle does not name the queued receipt -- that
+    // turn never consumed it; the turn the queue drained into does.
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(settles).toHaveLength(1)
+    expect(settles[0].dispatchIds).not.toContain(dispatchId)
+
+    emitDelta({ kind: 'session.patch', patch: { status: 'running' } })
+    emitDelta({ kind: 'session.patch', patch: { status: 'completed' } })
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(settles).toHaveLength(2)
+    expect(settles[1].dispatchIds).toEqual([dispatchId])
+  })
+
+  it('keeps a queued dispatch id across a restart of the queue store (MAR-2759)', () => {
+    // The durable half of the receipt: an app that dies with input still
+    // queued must wake up knowing which receipt that input carries, or the
+    // relay hop it belongs to could never be stamped by the turn it starts.
+    const db = getDatabase()
+    const session = service.create({
+      projectId,
+      workspaceId: null,
+      providerId: 'test-provider',
+      model: 'test-model',
+      effort: null,
+      name: 'restart receipt test',
+    })
+
+    const before = new SessionQueuedInputService(db)
+    before.enqueue(
+      session.id,
+      { text: 'carry on', dispatchId: 'receipt-x' },
+      'follow-up',
+    )
+
+    const afterRestart = new SessionQueuedInputService(db)
+    afterRestart.recoverDispatching()
+    expect(afterRestart.nextQueued(session.id)?.dispatchId).toBe('receipt-x')
   })
 
   it('cancels queued input only while it is still queued', () => {
@@ -1700,6 +1753,403 @@ describe('SessionService', () => {
         .prepare('SELECT state FROM session_queued_inputs WHERE id = ?')
         .get('queued-1'),
     ).toEqual({ state: 'cancelled' })
+  })
+
+  /**
+   * A claude-code session mid-turn: follow-ups wait in Convergence's own
+   * queue, each with a receipt, and the start's receipt is in flight.
+   */
+  async function startRunningQueueingSession(): Promise<{
+    service: SessionService
+    sessionId: string
+    startDispatchId: string
+    handle: SessionHandle
+    emit: (delta: SessionDelta) => void
+  }> {
+    const registry = new ProviderRegistry()
+    let deltaListener: ((delta: SessionDelta) => void) | null = null
+    const handle: SessionHandle = {
+      onDelta: (listener) => {
+        deltaListener = listener
+      },
+      onStatusChange: () => {},
+      onAttentionChange: () => {},
+      onContextWindowChange: () => {},
+      onActivityChange: () => {},
+      onContinuationToken: () => {},
+      sendMessage: () => {},
+      approve: () => {},
+      deny: () => {},
+      stop: () => {},
+    }
+    registry.register({
+      id: 'claude-code',
+      name: 'Claude Code',
+      supportsContinuation: true,
+      describe: async () => ({
+        id: 'claude-code',
+        name: 'Claude Code',
+        vendorLabel: 'Anthropic',
+        kind: 'conversation',
+        supportsContinuation: true,
+        defaultModelId: 'sonnet',
+        modelOptions: [
+          {
+            id: 'sonnet',
+            label: 'Sonnet',
+            defaultEffort: null,
+            effortOptions: [],
+          },
+        ],
+        attachments: TEST_ATTACHMENT_CAPABILITY,
+        midRunInput: CLAUDE_CODE_MID_RUN_INPUT_CAPABILITY,
+      }),
+      start: () => handle,
+    })
+    const queueService = new SessionService(
+      getDatabase(),
+      new LocalExecutionHost(registry),
+    )
+    const session = queueService.create({
+      projectId,
+      workspaceId: null,
+      providerId: 'claude-code',
+      model: 'sonnet',
+      effort: null,
+      name: 'terminal receipts',
+    })
+    const startDispatchId = await queueService.start(session.id, {
+      text: 'Start here',
+    })
+    if (!deltaListener) throw new Error('delta listener was not registered')
+    ;(deltaListener as (delta: SessionDelta) => void)({
+      kind: 'session.patch',
+      patch: { status: 'running' },
+    })
+    return {
+      service: queueService,
+      sessionId: session.id,
+      startDispatchId,
+      handle,
+      emit: (delta) =>
+        (deltaListener as unknown as (delta: SessionDelta) => void)(delta),
+    }
+  }
+
+  it('names the cancelled receipt on a dispatch-terminal event (MAR-2759)', async () => {
+    // A cancelled input's receipt can never be named by a settle, so the
+    // party holding it -- the relay engine's baton, the hop's stamp -- would
+    // wait forever. The session layer owns the row and its id, so it says so.
+    const { service: queueService, sessionId } =
+      await startRunningQueueingSession()
+    const terminals: DispatchTerminalEvent[] = []
+    queueService.onDispatchTerminal((event) => terminals.push(event))
+    const dispatchId = await queueService.sendMessage(sessionId, {
+      text: 'later',
+      deliveryMode: 'follow-up',
+    })
+    const [queued] = queueService.getQueuedInputs(sessionId)
+
+    queueService.cancelQueuedInput(queued.id)
+
+    expect(terminals).toEqual([
+      {
+        sessionId,
+        reason: 'cancelled',
+        dispatchIds: [dispatchId],
+        at: expect.any(String),
+      },
+    ])
+  })
+
+  it('raises no terminal for a cancelled input that carried no receipt', () => {
+    const db = getDatabase()
+    const session = service.create({
+      projectId,
+      workspaceId: null,
+      providerId: 'test-provider',
+      model: 'test-model',
+      effort: null,
+      name: 'typed queue test',
+    })
+    const timestamp = '2026-04-26T12:00:00.000Z'
+    db.prepare(
+      `INSERT INTO session_queued_inputs (
+         id, session_id, delivery_mode, state, text, attachment_ids_json,
+         skill_selections_json, provider_request_id, error, created_at,
+         updated_at
+       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    ).run(
+      'typed-1',
+      session.id,
+      'follow-up',
+      'queued',
+      'later',
+      '[]',
+      '[]',
+      null,
+      null,
+      timestamp,
+      timestamp,
+    )
+    const terminals: DispatchTerminalEvent[] = []
+    service.onDispatchTerminal((event) => terminals.push(event))
+
+    service.cancelQueuedInput('typed-1')
+
+    expect(terminals).toEqual([])
+  })
+
+  it('names every receipt a deleted session still owed, queued and in flight (MAR-2759)', async () => {
+    // Deleting a session ends every dispatch it held: the queued ones, whose
+    // rows go with it, and the turn in flight, whose settle will never come.
+    const {
+      service: queueService,
+      sessionId,
+      startDispatchId,
+    } = await startRunningQueueingSession()
+    const terminals: DispatchTerminalEvent[] = []
+    queueService.onDispatchTerminal((event) => terminals.push(event))
+    const queuedDispatchId = await queueService.sendMessage(sessionId, {
+      text: 'later',
+      deliveryMode: 'follow-up',
+    })
+
+    queueService.delete(sessionId)
+
+    expect(terminals).toHaveLength(1)
+    expect(terminals[0]).toMatchObject({ sessionId, reason: 'abandoned' })
+    expect([...terminals[0].dispatchIds].sort()).toEqual(
+      [queuedDispatchId, startDispatchId].sort(),
+    )
+  })
+
+  it('says nothing on deleting a session that owed no receipt', () => {
+    const session = service.create({
+      projectId,
+      workspaceId: null,
+      providerId: 'test-provider',
+      model: 'test-model',
+      effort: null,
+      name: 'idle delete',
+    })
+    const terminals: DispatchTerminalEvent[] = []
+    service.onDispatchTerminal((event) => terminals.push(event))
+
+    service.delete(session.id)
+
+    expect(terminals).toEqual([])
+  })
+
+  it('names the queued receipts failed when the turn they waited behind fails (design P)', async () => {
+    // A turn that fails drains nothing: `dispatchNextQueuedInput` runs only
+    // on `completed`. The rows behind it would wait for a settle that is not
+    // coming, so the transition out of carrying a turn terminates them --
+    // `failed`, the loud word, because nobody chose this.
+    const {
+      service: queueService,
+      sessionId,
+      startDispatchId,
+      emit,
+    } = await startRunningQueueingSession()
+    const terminals: DispatchTerminalEvent[] = []
+    const settles: SessionSettledEvent[] = []
+    queueService.onDispatchTerminal((event) => terminals.push(event))
+    queueService.onSessionSettled((event) => settles.push(event))
+    const queuedDispatchId = await queueService.sendMessage(sessionId, {
+      text: 'later',
+      deliveryMode: 'follow-up',
+    })
+
+    emit({ kind: 'session.patch', patch: { status: 'failed' } })
+    await Promise.resolve()
+    await Promise.resolve()
+
+    expect(terminals).toEqual([
+      {
+        sessionId,
+        reason: 'failed',
+        dispatchIds: [queuedDispatchId],
+        at: expect.any(String),
+      },
+    ])
+    expect(settles.map((event) => event.dispatchIds)).toEqual([
+      [startDispatchId],
+    ])
+    expect(queueService.getQueuedInputs(sessionId)).toMatchObject([
+      { dispatchId: queuedDispatchId, state: 'failed' },
+    ])
+  })
+
+  it('names the failed row and every row behind it when the queue cannot be drained (design P)', async () => {
+    // The drain itself is a dispatch attempt. When it fails, the row it was
+    // sending is `failed` -- and the session is idle with the rest still
+    // queued and no settle ahead of them, so they end with it, in one event.
+    const {
+      service: queueService,
+      sessionId,
+      handle,
+      emit,
+    } = await startRunningQueueingSession()
+    const terminals: DispatchTerminalEvent[] = []
+    queueService.onDispatchTerminal((event) => terminals.push(event))
+    const first = await queueService.sendMessage(sessionId, {
+      text: 'first',
+      deliveryMode: 'follow-up',
+    })
+    const second = await queueService.sendMessage(sessionId, {
+      text: 'second',
+      deliveryMode: 'follow-up',
+    })
+    handle.sendMessage = () => {
+      throw new Error('the provider went away')
+    }
+
+    emit({ kind: 'session.patch', patch: { status: 'completed' } })
+
+    expect(terminals).toEqual([
+      {
+        sessionId,
+        reason: 'failed',
+        dispatchIds: [first, second],
+        at: expect.any(String),
+      },
+    ])
+    expect(queueService.getQueuedInputs(sessionId)).toMatchObject([
+      { dispatchId: first, state: 'failed', error: 'the provider went away' },
+      { dispatchId: second, state: 'failed' },
+    ])
+  })
+
+  it('names the queued receipts failed when a stale run is failed at the send door (design P)', async () => {
+    // `markStaleRunningSessionFailed` fails the pending rows; their receipts
+    // used to end there, silently. The failure is a terminal like any other.
+    const db = getDatabase()
+    const session = service.create({
+      projectId,
+      workspaceId: null,
+      providerId: 'test-provider',
+      model: 'test-model',
+      effort: null,
+      name: 'stale queue',
+    })
+    const timestamp = '2026-09-01T12:00:00.000Z'
+    db.prepare(
+      `INSERT INTO session_queued_inputs (
+         id, session_id, delivery_mode, state, text, attachment_ids_json,
+         skill_selections_json, provider_request_id, dispatch_id, error,
+         created_at, updated_at
+       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    ).run(
+      'stale-1',
+      session.id,
+      'follow-up',
+      'queued',
+      'later',
+      '[]',
+      '[]',
+      null,
+      'receipt-stale',
+      null,
+      timestamp,
+      timestamp,
+    )
+    db.prepare("UPDATE sessions SET status = 'running' WHERE id = ?").run(
+      session.id,
+    )
+    const terminals: DispatchTerminalEvent[] = []
+    service.onDispatchTerminal((event) => terminals.push(event))
+
+    await service
+      .sendMessage(session.id, { text: 'hello?' })
+      .catch(() => undefined)
+
+    expect(terminals).toEqual([
+      {
+        sessionId: session.id,
+        reason: 'failed',
+        dispatchIds: ['receipt-stale'],
+        at: expect.any(String),
+      },
+    ])
+    expect(service.getQueuedInputs(session.id)).toMatchObject([
+      { id: 'stale-1', state: 'failed' },
+    ])
+  })
+
+  it('still deletes the session, and ends its receipts, when the handle refuses to stop (design P)', async () => {
+    // Handle cleanup is best-effort: a provider that will not stop cannot
+    // hold a deletion hostage, and the receipts still end -- after the row is
+    // gone, never before.
+    const {
+      service: queueService,
+      sessionId,
+      startDispatchId,
+      handle,
+    } = await startRunningQueueingSession()
+    const terminals: DispatchTerminalEvent[] = []
+    queueService.onDispatchTerminal((event) => terminals.push(event))
+    const queuedDispatchId = await queueService.sendMessage(sessionId, {
+      text: 'later',
+      deliveryMode: 'follow-up',
+    })
+    handle.stop = () => {
+      throw new Error('stop refused')
+    }
+    const consoleError = vi
+      .spyOn(console, 'error')
+      .mockImplementation(() => undefined)
+
+    queueService.delete(sessionId)
+
+    consoleError.mockRestore()
+    expect(queueService.getById(sessionId)).toBeNull()
+    expect(terminals).toHaveLength(1)
+    expect(terminals[0]).toMatchObject({ sessionId, reason: 'abandoned' })
+    expect([...terminals[0].dispatchIds].sort()).toEqual(
+      [queuedDispatchId, startDispatchId].sort(),
+    )
+  })
+
+  it('keeps every receipt, and says nothing, when the delete itself fails (design P)', async () => {
+    // Commit-last: ownership is consumed only past the irreversible step. A
+    // delete that fails leaves a session that still owes its receipts, and
+    // its settle still names them.
+    const {
+      service: queueService,
+      sessionId,
+      startDispatchId,
+      emit,
+    } = await startRunningQueueingSession()
+    const terminals: DispatchTerminalEvent[] = []
+    const settles: SessionSettledEvent[] = []
+    queueService.onDispatchTerminal((event) => terminals.push(event))
+    queueService.onSessionSettled((event) => settles.push(event))
+    const queuedDispatchId = await queueService.sendMessage(sessionId, {
+      text: 'later',
+      deliveryMode: 'follow-up',
+    })
+    const failingDelete = vi
+      .spyOn(SessionRepository.prototype, 'delete')
+      .mockImplementationOnce(() => {
+        throw new Error('database is locked')
+      })
+
+    expect(() => queueService.delete(sessionId)).toThrow('database is locked')
+
+    failingDelete.mockRestore()
+    expect(queueService.getById(sessionId)).not.toBeNull()
+    expect(terminals).toEqual([])
+    expect(queueService.getQueuedInputs(sessionId)).toMatchObject([
+      { dispatchId: queuedDispatchId, state: 'queued' },
+    ])
+    // The in-flight half survived too: the turn's own settle still names it.
+    emit({ kind: 'session.patch', patch: { status: 'completed' } })
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(settles.map((event) => event.dispatchIds)).toEqual([
+      [startDispatchId],
+    ])
   })
 
   it('marks stale dispatching queued input failed on startup', () => {
@@ -4816,7 +5266,10 @@ describe('SessionService — liveness clock', () => {
           text: 'hello',
           attachmentIds: [attachmentId],
         }),
-      ).resolves.toBeUndefined()
+        // The send resolves with its delivery receipt (MAR-2759) -- resolving
+        // at all is what this pin is about: the live handle wins over the
+        // refusal the stale read would have raised.
+      ).resolves.toEqual(expect.any(String))
 
       // The message reached the run that is actually live, and nothing was
       // started a second time for it.
@@ -4980,7 +5433,10 @@ describe('SessionService — liveness clock', () => {
 
       await expect(
         service.sendMessage(session.id, { text: 'second turn' }),
-      ).resolves.toBeUndefined()
+        // The send resolves with its delivery receipt (MAR-2759) -- resolving
+        // at all is what this pin is about: the live handle wins over the
+        // refusal the stale read would have raised.
+      ).resolves.toEqual(expect.any(String))
 
       // The message reached the run, and nothing was started a second time.
       expect(daemon.handleSends).toEqual(['second turn'])
@@ -5459,6 +5915,68 @@ describe('SessionService opener sends (F9)', () => {
     )
   })
 
+  it('names the receipt of a send on the settle that consumed it (MAR-2759)', async () => {
+    // The delivery receipt: the session layer is the only party that knows
+    // which turn carried which input, and this is where it says so. The
+    // second settle proves the receipt is drained, not remembered -- a later
+    // turn must never inherit it.
+    const settles: SessionSettledEvent[] = []
+    service.onSessionSettled((event) => settles.push(event))
+
+    const dispatchId = await service.sendMessage(sessionId, { text: 'work' })
+    emitDelta({ kind: 'session.patch', patch: { status: 'running' } })
+    emitDelta({ kind: 'session.patch', patch: { status: 'completed' } })
+    await Promise.resolve()
+    await Promise.resolve()
+
+    expect(settles.map((event) => event.dispatchIds)).toEqual([[dispatchId]])
+
+    emitDelta({ kind: 'session.patch', patch: { status: 'running' } })
+    emitDelta({ kind: 'session.patch', patch: { status: 'completed' } })
+    await Promise.resolve()
+    await Promise.resolve()
+
+    expect(settles).toHaveLength(2)
+    expect(settles[1].dispatchIds).toEqual([])
+  })
+
+  it('splits the opener and payload receipts across their own settles (MAR-2759)', async () => {
+    // The two beats of the recycled worker, told apart by identity: the
+    // opener's turn settles naming the opener's receipt -- the plumbing beat
+    // the relay engine skips -- and the payload's turn settles naming its
+    // own. Nothing here is counted or inferred from status.
+    const settles: SessionSettledEvent[] = []
+    service.onSessionSettled((event) => settles.push(event))
+
+    const receipt = await service.sendMessageWithOpener(sessionId, {
+      opener: '/clear',
+      text: 'next lap',
+    })
+    expect(receipt.openerDispatchId).not.toBe(receipt.payloadDispatchId)
+    // The receipt rides the durable queue row until its turn starts.
+    expect(
+      service.getQueuedInputs(sessionId).map((item) => item.dispatchId),
+    ).toEqual([receipt.payloadDispatchId])
+
+    emitDelta({ kind: 'session.patch', patch: { status: 'running' } })
+    emitDelta({ kind: 'session.patch', patch: { status: 'completed' } })
+    await Promise.resolve()
+    await Promise.resolve()
+    emitDelta({ kind: 'session.patch', patch: { status: 'running' } })
+    emitDelta({ kind: 'session.patch', patch: { status: 'completed' } })
+    await Promise.resolve()
+    await Promise.resolve()
+
+    expect(sent.mock.calls.map((call) => call[0])).toEqual([
+      '/clear',
+      expect.stringContaining('next lap'),
+    ])
+    expect(settles.map((event) => event.dispatchIds)).toEqual([
+      [receipt.openerDispatchId],
+      [receipt.payloadDispatchId],
+    ])
+  })
+
   it('injects context into the payload when it dispatches, as it would for anyone', async () => {
     // The bypass is the opener's alone: the target was just wiped, so the
     // payload is exactly the turn that needs its project context re-stated.
@@ -5473,6 +5991,79 @@ describe('SessionService opener sends (F9)', () => {
     expect(sent).toHaveBeenCalledTimes(1)
     expect(sent.mock.calls[0][0]).toContain('always run npm test')
     expect(sent.mock.calls[0][0].endsWith('next lap')).toBe(true)
+  })
+
+  it('queues the opener behind a running target instead of starting a turn on it (MAR-2759, design X)', async () => {
+    // An opener is always its own turn. Sent at a target mid-turn it would
+    // either be refused or -- on a provider with native follow-up -- JOIN
+    // that turn, and a settle naming the opener's receipt beside somebody's
+    // real work is the shape that erased that work as plumbing after a
+    // restart. So it waits in the durable queue, ahead of the payload, and
+    // runs on its own once the current turn ends.
+    emitDelta({ kind: 'session.patch', patch: { status: 'running' } })
+
+    const receipt = await service.sendMessageWithOpener(sessionId, {
+      opener: '/clear',
+      text: 'next lap',
+    })
+
+    expect(sent).not.toHaveBeenCalled()
+    expect(service.getQueuedInputs(sessionId)).toMatchObject([
+      {
+        text: '/clear',
+        skipContextInjection: true,
+        relaysMuted: true,
+        dispatchId: receipt.openerDispatchId,
+      },
+      {
+        text: 'next lap',
+        skipContextInjection: false,
+        relaysMuted: false,
+        dispatchId: receipt.payloadDispatchId,
+      },
+    ])
+  })
+
+  it('runs a queued opener as its own turn and the payload as its own after it (MAR-2759, design X)', async () => {
+    const settles: SessionSettledEvent[] = []
+    service.onSessionSettled((event) => settles.push(event))
+    emitDelta({ kind: 'session.patch', patch: { status: 'running' } })
+    const receipt = await service.sendMessageWithOpener(sessionId, {
+      opener: '/clear',
+      text: 'next lap',
+    })
+
+    // The turn that was already running ends: it consumed nothing of ours,
+    // and the opener is the next thing the queue hands the session.
+    emitDelta({ kind: 'session.patch', patch: { status: 'completed' } })
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(sent.mock.calls.map((call) => call[0])).toEqual(['/clear'])
+
+    // The opener's own turn; then the payload's, with its context re-stated.
+    emitDelta({ kind: 'session.patch', patch: { status: 'running' } })
+    emitDelta({ kind: 'session.patch', patch: { status: 'completed' } })
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(sent).toHaveBeenCalledTimes(2)
+    expect(sent.mock.calls[1][0]).toContain('always run npm test')
+    expect(sent.mock.calls[1][0].endsWith('next lap')).toBe(true)
+    emitDelta({ kind: 'session.patch', patch: { status: 'running' } })
+    emitDelta({ kind: 'session.patch', patch: { status: 'completed' } })
+    await Promise.resolve()
+    await Promise.resolve()
+
+    expect(settles.map((event) => event.dispatchIds)).toEqual([
+      [],
+      [receipt.openerDispatchId],
+      [receipt.payloadDispatchId],
+    ])
+    // The mute the opener carries is its own turn's, not the running one's.
+    expect(settles.map((event) => event.relaysMuted)).toEqual([
+      false,
+      true,
+      false,
+    ])
   })
 })
 
@@ -5679,6 +6270,37 @@ describe('SessionService relay mute', () => {
     await drainSettles()
 
     expect(settles.map((event) => event.relaysMuted)).toEqual([true])
+  })
+
+  it('sends a relay opener quiet, and the payload behind it loud', async () => {
+    // The cascade this closes (MAR-2759): an opener finishes nothing -- it
+    // wipes the target and the real work is still queued behind it -- so a
+    // wire leaving that target which treated the opener's settle as a finish
+    // would answer itself into the next station. The engine's in-memory
+    // plumbing counter cannot cover a settle that arrives after a restart;
+    // this mark is in the database, so it can.
+    //
+    // Structural, not a caller's choice: there is no flag to make an opener
+    // loud, which is why this asserts the SERVICE rather than a call site.
+    await service.start(sessionId, { text: 'first' })
+    openTurn('first')
+    complete()
+    await drainSettles()
+    settles.length = 0
+
+    await service.sendMessageWithOpener(sessionId, {
+      opener: '/clear',
+      text: 'next lap',
+    })
+    openTurn('/clear')
+    complete()
+    await drainSettles()
+
+    openTurn('next lap')
+    complete()
+    await drainSettles()
+
+    expect(settles.map((event) => event.relaysMuted)).toEqual([true, false])
   })
 
   it('arms again for the next message, because the mute is one settle only', async () => {
@@ -6317,5 +6939,887 @@ describe('SessionService model selection (MAR-2550)', () => {
         effort: null,
       }),
     ).toMatchObject({ model: 'opus', providerId: 'switchable' })
+  })
+})
+
+/**
+ * Design X at the production composition (MAR-2759, RUN39 round 6).
+ *
+ * The round-5 review's exact path: a remote Pi turn survives a restart and is
+ * reattached by a FRESH SessionService whose in-flight receipts are gone; a
+ * wire then fires an opener at that still-running target. Before this ruling
+ * the opener joined the reattached turn natively, the turn's settle named the
+ * opener's receipt and nothing else, and the engine -- correct for a complete
+ * set -- erased somebody's real work as plumbing. An opener is now always its
+ * own turn, so a reattach-lost set can only err loud.
+ */
+describe('SessionService + RelayEngine: an opener is always its own turn (MAR-2759, design X)', () => {
+  let db: Database.Database
+  let tempDir: string
+
+  beforeEach(() => {
+    db = getDatabase()
+    seedExecutionHostEndpoint(db)
+    tempDir = mkdtempSync(join(tmpdir(), 'convergence-design-x-test-'))
+    const repoPath = join(tempDir, 'repo')
+    mkdirSync(repoPath, { recursive: true })
+    db.prepare(
+      'INSERT INTO projects (id, name, repository_path) VALUES (?, ?, ?)',
+    ).run('loop-project', 'Loop Project', repoPath)
+    db.prepare(
+      "INSERT INTO session_crews (id, name) VALUES ('c1', 'Review loop')",
+    ).run()
+  })
+
+  afterEach(() => {
+    closeDatabase()
+    resetDatabase()
+    rmSync(tempDir, { recursive: true, force: true })
+  })
+
+  async function drainSettles(): Promise<void> {
+    await Promise.resolve()
+    await Promise.resolve()
+  }
+
+  it("queues an opener behind a reattached Pi turn, so that turn journals as somebody else's work", async () => {
+    // One handle per station, so each station's deltas and sends are its own
+    // -- a reattach hands back a new handle for the same session id.
+    const deltas = new Map<string, (delta: SessionDelta) => void>()
+    const sends = new Map<string, string[]>()
+    const handleFor = (sessionId: string): SessionHandle => ({
+      onDelta: (listener) => {
+        deltas.set(sessionId, listener)
+      },
+      onStatusChange: () => {},
+      onAttentionChange: () => {},
+      onContextWindowChange: () => {},
+      onActivityChange: () => {},
+      onContinuationToken: () => {},
+      sendMessage: (text) => {
+        sends.set(sessionId, [...(sends.get(sessionId) ?? []), text])
+      },
+      approve: () => {},
+      deny: () => {},
+      stop: () => {},
+    })
+    const emit = (sessionId: string, delta: SessionDelta): void => {
+      const listener = deltas.get(sessionId)
+      if (!listener) throw new Error(`no delta listener for ${sessionId}`)
+      listener(delta)
+    }
+    // Pi: the one first-class provider with native follow-up, so a message
+    // sent at a running target JOINS its turn rather than queueing.
+    const capabilities = {
+      providerId: 'pi',
+      name: 'Pi',
+      supportsContinuation: true,
+      supportsOneShot: false,
+    }
+    const remoteHost = {
+      capabilities: () => [capabilities],
+      capabilitiesFor: (providerId: string) =>
+        providerId === 'pi' ? capabilities : null,
+      describe: async () => [],
+      assertProviderRunnable: (providerId: string) => {
+        if (providerId !== 'pi') {
+          throw new Error(`Provider not found: ${providerId}`)
+        }
+      },
+      start: (_providerId: string, config: { sessionId: string }) =>
+        handleFor(config.sessionId),
+      attach: (_providerId: string, config: { sessionId: string }) =>
+        handleFor(config.sessionId),
+      oneShot: async () => {
+        throw new Error('one-shot is not supported')
+      },
+    }
+    const hosts = executionHostRegistryFor({
+      [TEST_EXECUTION_HOST_ENDPOINT_ID]: remoteHost,
+    })
+    const wireService = (service: SessionService): SessionService => {
+      service.setRemoteWorkspaceSourceResolver(() => ({
+        repository: 'git@github.com:acme/repo.git',
+      }))
+      service.setRemoteExecutionHosts(hosts)
+      return service
+    }
+    const createStation = (service: SessionService, name: string): string =>
+      service.create({
+        projectId: 'loop-project',
+        workspaceId: null,
+        providerId: 'pi',
+        model: 'pi-model',
+        effort: null,
+        name,
+        executionHost: TEST_EXECUTION_HOST_ENDPOINT_ID,
+        workAddress: TEST_REMOTE_WORK_ADDRESS,
+      }).id
+
+    // Before the restart: the reviewer is mid-turn on real work, and the
+    // horse has a finished lap to hand on.
+    const before = wireService(
+      new SessionService(db, new LocalExecutionHost(new ProviderRegistry())),
+    )
+    const horse = createStation(before, 'horse')
+    const reviewer = createStation(before, 'reviewer')
+    await before.start(reviewer, { text: 'review the branch' })
+    emit(reviewer, { kind: 'session.patch', patch: { status: 'running' } })
+    await before.start(horse, { text: 'ride' })
+    emit(horse, { kind: 'session.patch', patch: { status: 'running' } })
+    new ProviderSessionEmitter({
+      providerId: 'pi',
+      emitDelta: (delta) => emit(horse, delta),
+      now,
+    }).addAssistantMessage({ text: 'Lap done.' })
+    emit(horse, { kind: 'session.patch', patch: { status: 'completed' } })
+    await drainSettles()
+    expect(before.getById(reviewer)?.status).toBe('running')
+
+    // The restart: a fresh SessionService over the same database, with the
+    // production engine listening to its settles. Its in-flight receipts are
+    // empty -- the reviewer's running turn is known only by its status row.
+    const revived = new SessionService(
+      db,
+      new LocalExecutionHost(new ProviderRegistry()),
+    )
+    const relays = new RelayService(db)
+    const hails = new CrewHailService(db)
+    const engine = new RelayEngine({
+      relays,
+      sessions: revived,
+      crews: {
+        addMember: () => undefined,
+        crewIdsForSession: (sessionId) =>
+          (
+            db
+              .prepare(
+                'SELECT crew_id FROM session_crew_members WHERE session_id = ?',
+              )
+              .all(sessionId) as { crew_id: string }[]
+          ).map((row) => row.crew_id),
+        getLoopLimits: () => null,
+      },
+      accounts: { listByProvider: () => [] },
+      hails,
+    })
+    const settling: Promise<void>[] = []
+    const settles: SessionSettledEvent[] = []
+    revived.onSessionSettled((event) => {
+      settles.push(event)
+      settling.push(engine.handleSettle(event))
+    })
+    wireService(revived)
+    for (const sessionId of [horse, reviewer]) {
+      db.prepare(
+        'INSERT INTO session_crew_members (crew_id, session_id) VALUES (?, ?)',
+      ).run('c1', sessionId)
+    }
+    const there = relays.create({
+      crewId: 'c1',
+      sourceSessionId: horse,
+      action: 'hail',
+      targetSessionId: reviewer,
+      opener: '/clear',
+    })
+    const back = relays.create({
+      crewId: 'c1',
+      sourceSessionId: reviewer,
+      action: 'hail',
+      targetSessionId: horse,
+    })
+    const rowsFor = (relayId: string) =>
+      relays
+        .listHops('c1', 100)
+        .filter((hop) => hop.relayId === relayId)
+        .reverse()
+
+    // The horse settles again after the restart, and the wire fires its
+    // opener at the still-running reviewer.
+    await revived.sendMessage(horse, { text: 'ride again' })
+    emit(horse, { kind: 'session.patch', patch: { status: 'running' } })
+    emit(horse, { kind: 'session.patch', patch: { status: 'completed' } })
+    await drainSettles()
+    await Promise.all(settling)
+
+    // The opener did NOT join the reattached turn: nothing reached the
+    // reviewer's handle, and both beats wait in the durable queue.
+    expect(sends.get(reviewer) ?? []).toEqual([])
+    expect(revived.getQueuedInputs(reviewer)).toMatchObject([
+      { text: '/clear', skipContextInjection: true, relaysMuted: true },
+      { text: expect.stringContaining('Lap done.') },
+    ])
+    const openerDispatchId = revived.getQueuedInputs(reviewer)[0].dispatchId
+    const [queuedHop] = rowsFor(there.id)
+    expect(queuedHop.outcome).toBe('queued')
+    const run = queuedHop.flowRunId
+
+    // The pre-restart turn comes to rest with real work to show. Its
+    // receipts are lost, so the settle names none of ours: it is somebody's
+    // work, and the armed wire leaving the reviewer carries it -- in a fresh
+    // run, since no held baton was named -- instead of vanishing as plumbing.
+    new ProviderSessionEmitter({
+      providerId: 'pi',
+      emitDelta: (delta) => emit(reviewer, delta),
+      now,
+    }).addAssistantMessage({ text: 'Review done.' })
+    emit(reviewer, { kind: 'session.patch', patch: { status: 'completed' } })
+    await drainSettles()
+    await Promise.all(settling)
+    expect(settles.at(-1)).toMatchObject({
+      sessionId: reviewer,
+      dispatchIds: [],
+      relaysMuted: false,
+    })
+    expect(rowsFor(back.id)).toHaveLength(1)
+    expect(rowsFor(back.id)[0].outcome).toBe('delivered')
+    expect(rowsFor(back.id)[0].flowRunId).not.toBe(run)
+    // ...and the queue handed the reviewer its opener, as a turn of its own.
+    expect(sends.get(reviewer)).toEqual(['/clear'])
+
+    // The opener's own turn: names only its receipt, so it is plumbing --
+    // no row, the payload's baton preserved -- and the payload follows.
+    emit(reviewer, { kind: 'session.patch', patch: { status: 'running' } })
+    emit(reviewer, { kind: 'session.patch', patch: { status: 'completed' } })
+    await drainSettles()
+    await Promise.all(settling)
+    expect(settles.at(-1)?.dispatchIds).toEqual([openerDispatchId])
+    expect(rowsFor(back.id)).toHaveLength(1)
+    expect(sends.get(reviewer)).toHaveLength(2)
+    expect(sends.get(reviewer)?.[1]).toContain('Lap done.')
+
+    // The payload's own settle continues the run the hop began.
+    emit(reviewer, { kind: 'session.patch', patch: { status: 'running' } })
+    emit(reviewer, { kind: 'session.patch', patch: { status: 'completed' } })
+    await drainSettles()
+    await Promise.all(settling)
+    expect(settles.at(-1)?.dispatchIds).toEqual([queuedHop.dispatchId])
+    expect(rowsFor(back.id)).toHaveLength(2)
+    expect(rowsFor(back.id)[1]).toMatchObject({
+      outcome: 'delivered',
+      flowRunId: run,
+    })
+
+    // Exactly one /clear, ever.
+    expect(
+      (sends.get(reviewer) ?? []).filter((text) => text === '/clear'),
+    ).toHaveLength(1)
+  })
+
+  /**
+   * A Pi station on a remote host whose provider listing can be held, and
+   * whose barrier can be told to refuse: the MAR-2550 window, with both of
+   * its exits.
+   */
+  function parkedSendRig(): {
+    service: SessionService
+    station: string
+    sent: string[]
+    releaseListing: () => void
+    barrier: { refuse: boolean }
+    emit: (delta: SessionDelta) => void
+  } {
+    let deltaListener: ((delta: SessionDelta) => void) | null = null
+    const sent: string[] = []
+    const handle: SessionHandle = {
+      onDelta: (listener) => {
+        deltaListener = listener
+      },
+      onStatusChange: () => {},
+      onAttentionChange: () => {},
+      onContextWindowChange: () => {},
+      onActivityChange: () => {},
+      onContinuationToken: () => {},
+      sendMessage: (text) => {
+        sent.push(text)
+      },
+      approve: () => {},
+      deny: () => {},
+      stop: () => {},
+    }
+    const capabilities = {
+      providerId: 'pi',
+      name: 'Pi',
+      supportsContinuation: true,
+      supportsOneShot: false,
+    }
+    const barrier = { refuse: false }
+    const remoteHost = {
+      capabilities: () => [capabilities],
+      capabilitiesFor: (providerId: string) =>
+        providerId === 'pi' ? capabilities : null,
+      describe: async () => [],
+      assertProviderRunnable: () => {
+        if (barrier.refuse) {
+          throw new Error('Provider pi is not runnable on this host')
+        }
+      },
+      start: () => handle,
+      attach: () => handle,
+      oneShot: async () => {
+        throw new Error('one-shot is not supported')
+      },
+    }
+    let releaseListing: () => void = () => undefined
+    const listing = new Promise<void>((resolve) => {
+      releaseListing = resolve
+    })
+    const service = new SessionService(
+      db,
+      new LocalExecutionHost(new ProviderRegistry()),
+    )
+    service.setRemoteWorkspaceSourceResolver(() => ({
+      repository: 'git@github.com:acme/repo.git',
+    }))
+    service.setRemoteExecutionHosts({
+      ...executionHostRegistryFor({
+        [TEST_EXECUTION_HOST_ENDPOINT_ID]: remoteHost,
+      }),
+      whenReady: () => listing,
+    })
+    const station = service.create({
+      projectId: 'loop-project',
+      workspaceId: null,
+      providerId: 'pi',
+      model: 'pi-model',
+      effort: null,
+      name: 'station',
+      executionHost: TEST_EXECUTION_HOST_ENDPOINT_ID,
+      workAddress: TEST_REMOTE_WORK_ADDRESS,
+    }).id
+    return {
+      service,
+      station,
+      sent,
+      releaseListing,
+      barrier,
+      emit: (delta) =>
+        (deltaListener as unknown as (delta: SessionDelta) => void)(delta),
+    }
+  }
+
+  it('queues the opener behind a send that has not reached the provider yet', async () => {
+    // The MAR-2550 window: a send has begun and is awaiting the Endpoint's
+    // listing, so the target is neither `running` nor holding a handle --
+    // and an opener judged by those two alone would go straight in, landing
+    // inside the turn about to start. The dispatch registry is the signal.
+    const { service, station, sent, releaseListing, emit } = parkedSendRig()
+
+    // A send on its way to the provider, parked at the listing.
+    const inFlight = service.sendMessage(station, { text: 'real work' })
+    await Promise.resolve()
+    expect(sent).toEqual([])
+
+    const receipt = await service.sendMessageWithOpener(station, {
+      opener: '/clear',
+      text: 'next lap',
+    })
+
+    expect(sent).toEqual([])
+    expect(service.getQueuedInputs(station)).toMatchObject([
+      { text: '/clear', dispatchId: receipt.openerDispatchId },
+      { text: 'next lap', dispatchId: receipt.payloadDispatchId },
+    ])
+
+    // The held send lands as the turn it always was; the opener follows it
+    // as a turn of its own once that turn ends.
+    releaseListing()
+    await inFlight
+    expect(sent).toEqual(['real work'])
+    emit({ kind: 'session.patch', patch: { status: 'running' } })
+    emit({ kind: 'session.patch', patch: { status: 'completed' } })
+    expect(sent).toEqual(['real work', '/clear'])
+  })
+
+  it('terminates the opener and payload failed when the send they queued behind is refused (design P)', async () => {
+    // The window's other exit. A dispatch in flight proves an attempt, not a
+    // turn: when the attempt is refused at the provider barrier, no settle
+    // ever comes and nothing drains the queue -- so the transition out of
+    // carrying a turn terminates it, loud, with both receipts named.
+    const { service, station, sent, releaseListing, barrier } = parkedSendRig()
+    const terminals: DispatchTerminalEvent[] = []
+    service.onDispatchTerminal((event) => terminals.push(event))
+    const inFlight = service.sendMessage(station, { text: 'real work' })
+    await Promise.resolve()
+    const receipt = await service.sendMessageWithOpener(station, {
+      opener: '/clear',
+      text: 'next lap',
+    })
+    expect(service.getQueuedInputs(station)).toHaveLength(2)
+
+    barrier.refuse = true
+    releaseListing()
+    await expect(inFlight).rejects.toThrow('not runnable')
+
+    expect(sent).toEqual([])
+    expect(terminals).toEqual([
+      {
+        sessionId: station,
+        reason: 'failed',
+        dispatchIds: [receipt.openerDispatchId, receipt.payloadDispatchId],
+        at: expect.any(String),
+      },
+    ])
+    expect(service.getQueuedInputs(station)).toMatchObject([
+      { dispatchId: receipt.openerDispatchId, state: 'failed' },
+      { dispatchId: receipt.payloadDispatchId, state: 'failed' },
+    ])
+  })
+})
+
+describe('THE SWEEP: every dispatched receipt reaches exactly one terminal (MAR-2759, design P)', () => {
+  let tempDir: string
+
+  beforeEach(() => {
+    tempDir = mkdtempSync(join(tmpdir(), 'convergence-sweep-test-'))
+  })
+
+  afterEach(() => {
+    closeDatabase()
+    resetDatabase()
+    rmSync(tempDir, { recursive: true, force: true })
+  })
+
+  /** A fresh world per exit path: database, project, crew, endpoint. */
+  function freshWorld(name: string): Database.Database {
+    closeDatabase()
+    resetDatabase()
+    const db = getDatabase()
+    seedExecutionHostEndpoint(db)
+    const repoPath = join(tempDir, name.replace(/\W+/g, '-'))
+    mkdirSync(repoPath, { recursive: true })
+    db.prepare(
+      'INSERT INTO projects (id, name, repository_path) VALUES (?, ?, ?)',
+    ).run('loop-project', 'Loop Project', repoPath)
+    db.prepare(
+      "INSERT INTO session_crews (id, name) VALUES ('c1', 'Sweep')",
+    ).run()
+    return db
+  }
+
+  interface Rig {
+    service: SessionService
+    engine: RelayEngine
+    relays: RelayService
+    settles: SessionSettledEvent[]
+    terminals: DispatchTerminalEvent[]
+    /** Every receipt the relay layer was handed for an opener + payload. */
+    minted: string[]
+    sends: Map<string, string[]>
+    hold: { listing: Promise<void> | null; refuse: boolean }
+    createStation: (name: string) => string
+    emit: (sessionId: string, delta: SessionDelta) => void
+    drain: () => Promise<void>
+  }
+
+  /**
+   * The production composition over one database: a SessionService with the
+   * real RelayEngine, RelayService and CrewHailService listening to both of
+   * its seams. `hosts: false` is the restart that never reattached.
+   */
+  function buildRig(db: Database.Database, hosts: boolean): Rig {
+    const deltas = new Map<string, (delta: SessionDelta) => void>()
+    const sends = new Map<string, string[]>()
+    const handleFor = (sessionId: string): SessionHandle => ({
+      onDelta: (listener) => {
+        deltas.set(sessionId, listener)
+      },
+      onStatusChange: () => {},
+      onAttentionChange: () => {},
+      onContextWindowChange: () => {},
+      onActivityChange: () => {},
+      onContinuationToken: () => {},
+      sendMessage: (text) => {
+        sends.set(sessionId, [...(sends.get(sessionId) ?? []), text])
+      },
+      approve: () => {},
+      deny: () => {},
+      stop: () => {},
+    })
+    const capabilities = {
+      providerId: 'pi',
+      name: 'Pi',
+      supportsContinuation: true,
+      supportsOneShot: false,
+    }
+    const hold: Rig['hold'] = { listing: null, refuse: false }
+    const remoteHost = {
+      capabilities: () => [capabilities],
+      capabilitiesFor: (providerId: string) =>
+        providerId === 'pi' ? capabilities : null,
+      describe: async () => [],
+      assertProviderRunnable: () => {
+        if (hold.refuse) {
+          throw new Error('Provider pi is not runnable on this host')
+        }
+      },
+      start: (_providerId: string, config: { sessionId: string }) =>
+        handleFor(config.sessionId),
+      attach: (_providerId: string, config: { sessionId: string }) =>
+        handleFor(config.sessionId),
+      oneShot: async () => {
+        throw new Error('one-shot is not supported')
+      },
+    }
+    const service = new SessionService(
+      db,
+      new LocalExecutionHost(new ProviderRegistry()),
+    )
+    const relays = new RelayService(db)
+    const hails = new CrewHailService(db)
+    const engine = new RelayEngine({
+      relays,
+      sessions: service,
+      crews: {
+        addMember: () => undefined,
+        crewIdsForSession: (sessionId) =>
+          (
+            db
+              .prepare(
+                'SELECT crew_id FROM session_crew_members WHERE session_id = ?',
+              )
+              .all(sessionId) as { crew_id: string }[]
+          ).map((row) => row.crew_id),
+        getLoopLimits: () => null,
+      },
+      accounts: { listByProvider: () => [] },
+      hails,
+    })
+    const settling: Promise<void>[] = []
+    const settles: SessionSettledEvent[] = []
+    const terminals: DispatchTerminalEvent[] = []
+    service.onSessionSettled((event) => {
+      settles.push(event)
+      settling.push(engine.handleSettle(event))
+    })
+    service.onDispatchTerminal((event) => {
+      terminals.push(event)
+      engine.handleDispatchTerminal(event)
+    })
+    const minted: string[] = []
+    const sendWithOpener = service.sendMessageWithOpener.bind(service)
+    vi.spyOn(service, 'sendMessageWithOpener').mockImplementation(
+      async (id, input) => {
+        const receipt = await sendWithOpener(id, input)
+        minted.push(receipt.openerDispatchId, receipt.payloadDispatchId)
+        return receipt
+      },
+    )
+    if (hosts) {
+      service.setRemoteWorkspaceSourceResolver(() => ({
+        repository: 'git@github.com:acme/repo.git',
+      }))
+      service.setRemoteExecutionHosts({
+        ...executionHostRegistryFor({
+          [TEST_EXECUTION_HOST_ENDPOINT_ID]: remoteHost,
+        }),
+        whenReady: () => hold.listing ?? Promise.resolve(),
+      })
+    }
+    return {
+      service,
+      engine,
+      relays,
+      settles,
+      terminals,
+      minted,
+      sends,
+      hold,
+      createStation: (name) => {
+        const id = service.create({
+          projectId: 'loop-project',
+          workspaceId: null,
+          providerId: 'pi',
+          model: 'pi-model',
+          effort: null,
+          name,
+          executionHost: TEST_EXECUTION_HOST_ENDPOINT_ID,
+          workAddress: TEST_REMOTE_WORK_ADDRESS,
+        }).id
+        db.prepare(
+          'INSERT INTO session_crew_members (crew_id, session_id) VALUES (?, ?)',
+        ).run('c1', id)
+        return id
+      },
+      emit: (sessionId, delta) => {
+        const listener = deltas.get(sessionId)
+        if (!listener) {
+          throw new Error(
+            `no delta listener for ${service.getById(sessionId)?.name ?? sessionId}; known: ${[...deltas.keys()].map((id) => service.getById(id)?.name ?? id).join(', ')}`,
+          )
+        }
+        listener(delta)
+      },
+      drain: async () => {
+        await Promise.resolve()
+        await Promise.resolve()
+        await Promise.all(settling)
+      },
+    }
+  }
+
+  const running: SessionDelta = {
+    kind: 'session.patch',
+    patch: { status: 'running' },
+  }
+  const completed: SessionDelta = {
+    kind: 'session.patch',
+    patch: { status: 'completed' },
+  }
+  const failed: SessionDelta = {
+    kind: 'session.patch',
+    patch: { status: 'failed' },
+  }
+
+  /**
+   * The horse hands its lap to the station over one wire with an opener:
+   * one settle, two receipts into the station. `beforeSettle` runs with the
+   * horse mid-turn, for a path that needs the station arranged first.
+   */
+  async function fireInto(
+    rig: Rig,
+    station: string,
+    beforeSettle: () => Promise<void> = async () => undefined,
+  ): Promise<string> {
+    const horse = rig.createStation('horse')
+    rig.relays.create({
+      crewId: 'c1',
+      sourceSessionId: horse,
+      action: 'hail',
+      targetSessionId: station,
+      opener: '/clear',
+    })
+    const horseReceipt = await rig.service.start(horse, { text: 'ride' })
+    rig.emit(horse, running)
+    await beforeSettle()
+    new ProviderSessionEmitter({
+      providerId: 'pi',
+      emitDelta: (delta) => rig.emit(horse, delta),
+      now,
+    }).addAssistantMessage({ text: 'Lap done.' })
+    rig.emit(horse, completed)
+    await rig.drain()
+    return horseReceipt
+  }
+
+  interface Exit {
+    rig: Rig
+    station: string
+    /** The receipts whose ending this path claims. */
+    receipts: string[]
+    /** The terminal words the path must have emitted, in order. */
+    terminals: string[]
+  }
+
+  const exits: Array<{ name: string; run: () => Promise<Exit> }> = [
+    {
+      name: 'turn completed',
+      run: async () => {
+        const rig = buildRig(freshWorld('completed'), true)
+        const station = rig.createStation('station')
+        const horseReceipt = await fireInto(rig, station)
+        // The idle station took the opener as a turn of its own; finish it,
+        // then the payload's turn behind it.
+        rig.emit(station, running)
+        rig.emit(station, completed)
+        await rig.drain()
+        rig.emit(station, running)
+        rig.emit(station, completed)
+        await rig.drain()
+        return {
+          rig,
+          station,
+          receipts: [horseReceipt, ...rig.minted],
+          terminals: [],
+        }
+      },
+    },
+    {
+      name: 'queued input cancelled',
+      run: async () => {
+        const rig = buildRig(freshWorld('cancelled'), true)
+        const station = rig.createStation('station')
+        const busy = await rig.service.start(station, { text: 'busy' })
+        rig.emit(station, running)
+        const horseReceipt = await fireInto(rig, station)
+        for (const row of rig.service.getQueuedInputs(station)) {
+          rig.service.cancelQueuedInput(row.id)
+        }
+        rig.emit(station, completed)
+        await rig.drain()
+        return {
+          rig,
+          station,
+          receipts: [horseReceipt, busy, ...rig.minted],
+          terminals: ['cancelled', 'cancelled'],
+        }
+      },
+    },
+    {
+      name: 'session deleted',
+      run: async () => {
+        const rig = buildRig(freshWorld('deleted'), true)
+        const station = rig.createStation('station')
+        const busy = await rig.service.start(station, { text: 'busy' })
+        rig.emit(station, running)
+        const horseReceipt = await fireInto(rig, station)
+        rig.service.delete(station)
+        await rig.drain()
+        return {
+          rig,
+          station,
+          receipts: [horseReceipt, busy, ...rig.minted],
+          terminals: ['abandoned'],
+        }
+      },
+    },
+    {
+      name: 'dispatch attempt failed',
+      run: async () => {
+        const rig = buildRig(freshWorld('dispatch-failed'), true)
+        const station = rig.createStation('station')
+        let release: () => void = () => undefined
+        let parked: Promise<string> = Promise.resolve('')
+        const horseReceipt = await fireInto(rig, station, async () => {
+          // A send on its way to the provider, parked at the listing: the
+          // opener and payload queue behind an attempt, not a turn.
+          rig.hold.listing = new Promise<void>((resolve) => {
+            release = resolve
+          })
+          parked = rig.service.sendMessage(station, { text: 'real work' })
+          await Promise.resolve()
+        })
+        expect(rig.service.getQueuedInputs(station)).toHaveLength(2)
+        rig.hold.refuse = true
+        release()
+        await expect(parked).rejects.toThrow('not runnable')
+        rig.hold.refuse = false
+        rig.hold.listing = null
+        await rig.drain()
+        return {
+          rig,
+          station,
+          receipts: [horseReceipt, ...rig.minted],
+          terminals: ['failed'],
+        }
+      },
+    },
+    {
+      name: 'stale run failed at the send door',
+      run: async () => {
+        const db = freshWorld('stale')
+        const before = buildRig(db, true)
+        const station = before.createStation('station')
+        await before.service.start(station, { text: 'busy' })
+        before.emit(station, running)
+        await fireInto(before, station)
+        expect(before.service.getQueuedInputs(station)).toHaveLength(2)
+        // The restart that never reattached: the row says `running`, no
+        // handle carries it, and the next send finds the run stale.
+        const revived = buildRig(db, false)
+        await revived.service
+          .sendMessage(station, { text: 'anyone there?' })
+          .catch(() => undefined)
+        await revived.drain()
+        return {
+          rig: revived,
+          station,
+          receipts: [...before.minted],
+          terminals: ['failed'],
+        }
+      },
+    },
+    {
+      name: 'turn failed with rows queued',
+      run: async () => {
+        const rig = buildRig(freshWorld('turn-failed'), true)
+        const station = rig.createStation('station')
+        const busy = await rig.service.start(station, { text: 'busy' })
+        rig.emit(station, running)
+        const horseReceipt = await fireInto(rig, station)
+        rig.emit(station, failed)
+        await rig.drain()
+        return {
+          rig,
+          station,
+          receipts: [horseReceipt, busy, ...rig.minted],
+          terminals: ['failed'],
+        }
+      },
+    },
+  ]
+
+  it('leaves no receipt without exactly one ending, no held baton, and no hop without a fate, on every exit path', async () => {
+    // The invariant, not the sites (MAR-2759, design P): after each way a
+    // session can stop carrying a turn, every dispatched receipt has been
+    // named by exactly one settle or one terminal, the engine holds nothing
+    // for it, and the hop that carried it reads its fate. Removing any one
+    // terminal emission -- cancel, delete, dispatch-failed, stale-failed,
+    // turn-failed -- reds this test at the path that lost it.
+    for (const exit of exits) {
+      const { rig, station, receipts, terminals } = await exit.run()
+      const path = exit.name
+      expect(receipts.length).toBeGreaterThanOrEqual(2)
+
+      const settledIds = rig.settles.flatMap((event) => event.dispatchIds)
+      const terminatedIds = rig.terminals.flatMap((event) => event.dispatchIds)
+      for (const receipt of receipts) {
+        const endings =
+          settledIds.filter((id) => id === receipt).length +
+          terminatedIds.filter((id) => id === receipt).length
+        expect({ path, receipt, endings }).toEqual({
+          path,
+          receipt,
+          endings: 1,
+        })
+      }
+      expect({
+        path,
+        words: rig.terminals.map((event) => event.reason),
+      }).toEqual({ path, words: terminals })
+
+      // No row still waiting for a turn that is not coming, and every row
+      // that ended short of a turn has its terminal.
+      const rows = getDatabase()
+        .prepare(
+          'SELECT state, dispatch_id FROM session_queued_inputs WHERE session_id = ?',
+        )
+        .all(station) as Array<{ state: string; dispatch_id: string | null }>
+      expect({
+        path,
+        waiting: rows.filter(
+          (row) => row.state === 'queued' || row.state === 'dispatching',
+        ),
+      }).toEqual({ path, waiting: [] })
+      for (const row of rows) {
+        if (row.dispatch_id === null || row.state === 'sent') continue
+        expect({
+          path,
+          row,
+          ended: terminatedIds.includes(row.dispatch_id),
+        }).toEqual({ path, row, ended: true })
+      }
+
+      // Nothing held for a receipt that ended.
+      expect({ path, live: rig.engine.liveFlowRunIds() }).toEqual({
+        path,
+        live: [],
+      })
+
+      // Every budgeted hop that carried one of these receipts reads a fate.
+      const hops = rig.relays
+        .listHops('c1', 100)
+        .filter(
+          (hop) => hop.dispatchId !== null && receipts.includes(hop.dispatchId),
+        )
+      expect({ path, hops: hops.length }).toEqual({ path, hops: 1 })
+      for (const hop of hops) {
+        expect({ path, hop: hop.id, fate: hop.settledStatus }).not.toEqual({
+          path,
+          hop: hop.id,
+          fate: null,
+        })
+      }
+    }
   })
 })

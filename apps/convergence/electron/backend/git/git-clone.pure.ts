@@ -1,6 +1,10 @@
 import { isAbsolute, relative, resolve } from 'path'
 
-function isContainedPath(parentPath: string, candidatePath: string): boolean {
+/** Whether `candidatePath` is `parentPath` itself or lies somewhere under it. */
+export function isContainedPath(
+  parentPath: string,
+  candidatePath: string,
+): boolean {
   const relativePath = relative(parentPath, candidatePath)
   return (
     relativePath === '' ||

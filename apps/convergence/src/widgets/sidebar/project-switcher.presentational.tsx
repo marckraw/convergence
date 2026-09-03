@@ -1,5 +1,5 @@
 import type { FC } from 'react'
-import type { Project } from '@/entities/project'
+import { orderProjectsWithLanes, type Project } from '@/entities/project'
 import { SearchableSelect } from '@/shared/ui/searchable-select.container'
 import { FolderGit2, Plus } from 'lucide-react'
 
@@ -18,11 +18,23 @@ export const ProjectSwitcher: FC<ProjectSwitcherProps> = ({
 }) => {
   const activeProject =
     projects.find((project) => project.id === activeProjectId) ?? null
-  const items = projects.map((project) => ({
-    id: project.id,
-    label: project.name,
-    description: project.repositoryPath,
-  }))
+  // Lanes sit under their root with a badge (MAR-2783, ruling 5); a lane is
+  // listed by its own name because the root's name is the line above it.
+  const items = orderProjectsWithLanes(projects).map(({ project, depth }) =>
+    depth > 0 && project.laneName !== null
+      ? {
+          id: project.id,
+          label: project.laneName,
+          description: project.repositoryPath,
+          depth,
+          badge: { label: 'lane', title: `A lane of ${project.name}` },
+        }
+      : {
+          id: project.id,
+          label: project.name,
+          description: project.repositoryPath,
+        },
+  )
 
   return (
     <div className="px-3 pb-3">

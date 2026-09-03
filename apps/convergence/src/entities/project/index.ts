@@ -1,7 +1,21 @@
-export type { CloneProjectInput, Project } from './project.types'
+export type {
+  CloneProjectInput,
+  CreateLaneInput,
+  LaneCopyMethod,
+  LaneCreateProgress,
+  LaneCreateProgressPhase,
+  LaneCreateResult,
+  Project,
+} from './project.types'
 export { useProjectStore } from './project.model'
 export type { ProjectStore } from './project.model'
-export { dialogApi } from './project.api'
+export { dialogApi, laneApi } from './project.api'
+export {
+  laneBaseBranchLabel,
+  laneProgressLabel,
+  orderProjectsWithLanes,
+  type ProjectListEntry,
+} from './project-lanes.pure'
 export { deriveCloneFolderName } from './project-clone.pure'
 export {
   DEFAULT_PROJECT_SETTINGS,

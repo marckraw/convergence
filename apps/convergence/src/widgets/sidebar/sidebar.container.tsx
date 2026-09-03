@@ -26,6 +26,7 @@ import {
   SpaceCreateDialogContainer,
   ThemeToggleButton,
   WorkspaceCreateDialogContainer,
+  LaneCreateDialogContainer,
 } from '@/features'
 import { switchToSession } from '@/features/command-center'
 import { useDialogStore } from '@/entities/dialog'
@@ -686,6 +687,7 @@ export const Sidebar: FC<SidebarProps> = ({
       <PromptLibraryBrowserDialogContainer trigger={hiddenDialogTrigger()} />
       <ReleaseNotesDialogContainer trigger={hiddenDialogTrigger()} />
       <ProjectCreateDialogContainer />
+      <LaneCreateDialogContainer />
     </>
   )
 

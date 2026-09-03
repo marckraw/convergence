@@ -48,6 +48,8 @@ import {
   type Session,
   type SessionSummary,
   type CreateSessionInput,
+  type DispatchTerminalEvent,
+  type DispatchTerminalListener,
   type QueuedInputPatchEvent,
   type SessionQueuedInput,
   type SessionSettledEvent,
@@ -274,6 +276,8 @@ export class SessionService {
   private contextInjection: SessionContextInjectionService | null = null
   private onSessionTerminated: ((sessionId: string) => void) | null = null
   private readonly sessionSettledListeners = new Set<SessionSettledListener>()
+  private readonly dispatchTerminalListeners =
+    new Set<DispatchTerminalListener>()
   private pendingSettleEvents: SessionSettledEvent[] = []
   private settleFlushScheduled = false
   /**
@@ -745,6 +749,94 @@ export class SessionService {
    * debug logging. This seam is a list handing back an unsubscribe precisely so
    * a second observer (relays) can watch settles without displacing the first.
    */
+  /**
+   * The receipt's other ending (MAR-2759): a dispatch that will never be
+   * named by a settle. Delivered inline -- the listener only releases what
+   * it was holding for those ids, and nothing here is mid-lifecycle.
+   *
+   * **The receipt lifecycle invariant (design P): every dispatched receipt
+   * reaches exactly one terminal** -- `settled`, `cancelled`, `abandoned`
+   * or `failed`. The first is the settle event's; the other three come
+   * through here, and `failed` is emitted by `terminateQueuedInputs` on
+   * every transition out of carrying a turn that does not drain the queue:
+   * a dispatch attempt that failed, a stale run failed at the send door, a
+   * turn that failed with rows behind it, a drain that could not send.
+   * Pinned by the sweep in `session.service.test.ts`.
+   */
+  onDispatchTerminal(listener: DispatchTerminalListener): () => void {
+    this.dispatchTerminalListeners.add(listener)
+    return () => {
+      this.dispatchTerminalListeners.delete(listener)
+    }
+  }
+
+  private emitDispatchTerminal(
+    sessionId: string,
+    reason: DispatchTerminalEvent['reason'],
+    dispatchIds: string[],
+  ): void {
+    // Nothing ended that anybody could be holding: input people typed, a
+    // session that owed no receipt. An empty event would be a listener's
+    // no-op dressed as news.
+    if (dispatchIds.length === 0) return
+    const event: DispatchTerminalEvent = {
+      sessionId,
+      reason,
+      dispatchIds,
+      at: new Date().toISOString(),
+    }
+    for (const listener of [...this.dispatchTerminalListeners]) {
+      try {
+        listener(event)
+      } catch (error) {
+        console.error(
+          `[session] dispatch-terminal listener failed for ${sessionId}`,
+          error,
+        )
+      }
+    }
+  }
+
+  /**
+   * The loud terminal (MAR-2759, design P): fails every input still waiting
+   * on this session and emits `failed` for their receipts, in one event.
+   *
+   * Called from every transition out of carrying a turn that does not drain
+   * the queue. The queue drains only on `completed`; any other way out
+   * leaves rows waiting for a settle that is not coming, and a row nobody
+   * owns is exactly the stranded work this invariant exists to remove.
+   * Termination over a retry, by ruling: the failure that got here was not
+   * transient as far as this process can tell, and a quiet retry would be
+   * a guess.
+   */
+  private terminateQueuedInputs(sessionId: string, reason: string): void {
+    const ended = this.queuedInputs.failPendingForSession(sessionId, reason)
+    this.emitDispatchTerminal(
+      sessionId,
+      'failed',
+      ended
+        .map((item) => item.dispatchId)
+        .filter((dispatchId): dispatchId is string => dispatchId !== null),
+    )
+  }
+
+  /**
+   * A dispatch attempt failed: whether the queue behind it still has an
+   * owner is the question, and `isCarryingATurn` answers it. Another send
+   * still in flight, or a live turn, will drain or terminate the rows on
+   * its own way out; a session left idle by this failure will not, so the
+   * rows end here. A session deleted under the attempt already emitted
+   * `abandoned` for them.
+   */
+  private terminateQueueUnlessCarryingATurn(
+    sessionId: string,
+    reason: string,
+  ): void {
+    const session = this.getById(sessionId)
+    if (!session || this.isCarryingATurn(session)) return
+    this.terminateQueuedInputs(sessionId, reason)
+  }
+
   onSessionSettled(listener: SessionSettledListener): () => void {
     this.sessionSettledListeners.add(listener)
     return () => {
@@ -1223,17 +1315,54 @@ export class SessionService {
   }
 
   cancelQueuedInput(id: string): void {
-    this.queuedInputs.cancel(id)
+    const cancelled = this.queuedInputs.cancel(id)
+    // That one receipt and no other: the row's siblings are still waiting.
+    if (cancelled.dispatchId) {
+      this.emitDispatchTerminal(cancelled.sessionId, 'cancelled', [
+        cancelled.dispatchId,
+      ])
+    }
   }
 
+  /**
+   * Commit-last terminals (MAR-2759, design P). The receipts are READ before
+   * the rows go and CONSUMED only after the delete is committed: a delete
+   * that fails leaves a session that still owes its receipts, with the
+   * in-flight set intact for the settle that is still coming, and emits
+   * nothing. Handle cleanup is best-effort -- a provider that refuses to
+   * stop cannot hold the deletion hostage -- so the one thing that can fail
+   * this method is the repository delete itself, and that is the line every
+   * irreversible consequence sits below.
+   */
   delete(id: string): void {
     this.clearPendingConversationPatchesForSession(id)
+    // Every receipt this session still owes, read non-destructively: the
+    // queued ones (waiting, dispatching, or failed on the way) and the ids
+    // of the turn in flight.
+    const queuedReceipts = this.queuedInputs
+      .list(id)
+      .map((item) => item.dispatchId)
+      .filter((dispatchId): dispatchId is string => dispatchId !== null)
     const handle = this.activeHandles.get(id)
     if (handle) {
-      handle.stop()
+      try {
+        handle.stop()
+      } catch (error) {
+        console.error(
+          `[session] provider handle refused to stop while deleting ${id}`,
+          error,
+        )
+      }
       this.releaseHandle(id)
     }
     this.sessionRepository.delete(id)
+    // Committed. Only now is ownership consumed and the ending told: the
+    // turn's settle is never coming, and its receipts end here with the
+    // queued ones.
+    this.emitDispatchTerminal(id, 'abandoned', [
+      ...queuedReceipts,
+      ...this.takeTurnDispatchIds(id),
+    ])
     if (this.attachments) {
       void this.attachments.deleteForSession(id)
     }
@@ -1249,8 +1378,18 @@ export class SessionService {
     this.updateArchiveState(id, null)
   }
 
-  async start(id: string, input: SendMessageInput): Promise<void> {
-    return this.withDispatchInFlight(id, () => this.openFirstTurn(id, input))
+  /**
+   * Returns the turn's dispatch id (MAR-2759): the delivery receipt for this
+   * input. Callers that hand work over on someone's behalf -- the relay
+   * engine -- hold it to recognise the settle that consumed the input; a
+   * caller relaying what a person typed may simply drop it.
+   */
+  async start(id: string, input: SendMessageInput): Promise<string> {
+    const dispatchId = randomUUID()
+    await this.withDispatchInFlight(id, () =>
+      this.openFirstTurn(id, input, dispatchId),
+    )
+    return dispatchId
   }
 
   /**
@@ -1265,6 +1404,15 @@ export class SessionService {
    * running status and no handle, accept a new model, write it to the row and
    * announce the boundary in the transcript, while the turn already in flight
    * ran on the old one.
+   *
+   * The marker is also what `isCarryingATurn` reads to queue an opener behind
+   * a send that has not reached the provider yet -- and a send is an ATTEMPT,
+   * not a turn (MAR-2759, design P). When the attempt fails, no settle will
+   * ever drain what queued behind it, so the failure branch here is the
+   * transition out of carrying a turn that owns those rows: the marker is
+   * cleared first, so the question is asked of the session as it now is, and
+   * the rows are terminated unless another send or a live turn still carries
+   * them.
    */
   private async withDispatchInFlight<T>(
     sessionId: string,
@@ -1273,6 +1421,13 @@ export class SessionService {
     const inFlight = this.dispatches.begin(sessionId)
     try {
       return await dispatch(inFlight)
+    } catch (error) {
+      this.dispatches.settle(inFlight)
+      this.terminateQueueUnlessCarryingATurn(
+        sessionId,
+        error instanceof Error ? error.message : String(error),
+      )
+      throw error
     } finally {
       this.dispatches.settle(inFlight)
     }
@@ -1281,6 +1436,7 @@ export class SessionService {
   private async openFirstTurn(
     id: string,
     input: SendMessageInput,
+    dispatchId: string,
   ): Promise<void> {
     const session = this.getById(id)
     if (!session) throw new Error(`Session not found: ${id}`)
@@ -1320,6 +1476,9 @@ export class SessionService {
         bootContext: { contextItemIds: input.contextItemIds },
       },
     )
+    // Attached only once the start was permitted and spawned: a refused turn
+    // consumed nothing, so its receipt must never ride a later settle.
+    this.attachDispatchToTurn(id, dispatchId)
   }
 
   /**
@@ -1370,13 +1529,19 @@ export class SessionService {
     })
   }
 
-  async sendMessage(id: string, input: SendMessageInput): Promise<void> {
-    return this.withDispatchInFlight(id, () => this.deliverMessage(id, input))
+  /** Returns the input's dispatch id -- the delivery receipt (MAR-2759). */
+  async sendMessage(id: string, input: SendMessageInput): Promise<string> {
+    const dispatchId = randomUUID()
+    await this.withDispatchInFlight(id, () =>
+      this.deliverMessage(id, input, dispatchId),
+    )
+    return dispatchId
   }
 
   private async deliverMessage(
     id: string,
     input: SendMessageInput,
+    dispatchId: string,
   ): Promise<void> {
     let session = this.getById(id)
     if (!session) throw new Error(`Session not found: ${id}`)
@@ -1466,6 +1631,7 @@ export class SessionService {
         input,
         attachments,
         deliveryMode,
+        dispatchId,
       })
       return
     }
@@ -1483,7 +1649,11 @@ export class SessionService {
       getMidRunInputCapabilityForProviderId(session.providerId)
         .supportsAppQueuedFollowUp
     ) {
-      this.queuedInputs.enqueue(session.id, input, 'follow-up')
+      this.queuedInputs.enqueue(
+        session.id,
+        { ...input, dispatchId },
+        'follow-up',
+      )
       return
     }
 
@@ -1507,6 +1677,7 @@ export class SessionService {
         providerAccountId: input.providerAccountId,
         muteRelays: input.muteRelays,
       })
+      this.attachDispatchToTurn(id, dispatchId)
       return
     }
 
@@ -1526,6 +1697,7 @@ export class SessionService {
         input.providerAccountId,
         { muteRelays: input.muteRelays },
       )
+      this.attachDispatchToTurn(id, dispatchId)
       return
     }
 
@@ -1553,6 +1725,31 @@ export class SessionService {
    * payload does not, because it is an ordinary message and the target may
    * well need its project context re-stated after being wiped.
    *
+   * **The opener is always quiet, and that is structural rather than a choice
+   * a caller makes** (MAR-2759). An opener is the loop's own plumbing: the
+   * turn it produces finishes nothing, so a wire leaving the target that
+   * treated it as a finish would cascade -- a `/clear` answering itself into
+   * the next station. There is deliberately no flag to turn this off, because
+   * a loud opener is never what anybody wanted, and the engine's in-memory
+   * plumbing claim cannot cover a settle that arrives after a restart. This
+   * mark is in the database, so it can.
+   *
+   * The payload behind it stays an ordinary triggering send: it IS the work.
+   *
+   * **An opener is always its own turn** (MAR-2759, design X). Decided here,
+   * at dispatch: an idle target takes the opener as a turn of its own; a
+   * target that is carrying a turn -- running with a live handle, a remote
+   * turn reattached after a restart, or a send still on its way to the
+   * provider -- gets the opener QUEUED durably as a follow-up with its own
+   * receipt, ahead of the payload, so it runs on its own once the current
+   * turn ends. On every provider, including the ones with native follow-up:
+   * a `/clear` joining somebody's running turn was never what anybody meant,
+   * and it made that turn's settle name the opener's receipt beside real
+   * work -- which, after a restart had lost the work's own receipts, read as
+   * plumbing and erased it without a row. A queued opener means "every id
+   * this settle names is an opener's" is true by construction: nothing else
+   * can finish in an opener's turn.
+   *
    * The queue is Convergence's, not the provider's: `dispatchNextQueuedInput`
    * runs when the session settles, so this works on any provider rather than
    * only the ones with native mid-run input.
@@ -1560,21 +1757,44 @@ export class SessionService {
   async sendMessageWithOpener(
     id: string,
     input: SendMessageInput & { opener: string },
-  ): Promise<void> {
-    await this.sendMessage(id, {
-      text: input.opener,
-      providerAccountId: input.providerAccountId,
-      skipContextInjection: true,
-    })
+  ): Promise<{ openerDispatchId: string; payloadDispatchId: string }> {
+    const session = this.getById(id)
+    if (!session) throw new Error(`Session not found: ${id}`)
 
+    let openerDispatchId: string
+    if (this.isCarryingATurn(session)) {
+      openerDispatchId = randomUUID()
+      this.queuedInputs.enqueue(
+        id,
+        {
+          text: input.opener,
+          providerAccountId: input.providerAccountId ?? null,
+          skipContextInjection: true,
+          muteRelays: true,
+          dispatchId: openerDispatchId,
+        },
+        'follow-up',
+      )
+    } else {
+      openerDispatchId = await this.sendMessage(id, {
+        text: input.opener,
+        providerAccountId: input.providerAccountId,
+        skipContextInjection: true,
+        muteRelays: true,
+      })
+    }
+
+    const payloadDispatchId = randomUUID()
     this.queuedInputs.enqueue(
       id,
       {
         text: input.text,
         providerAccountId: input.providerAccountId ?? null,
+        dispatchId: payloadDispatchId,
       },
       'follow-up',
     )
+    return { openerDispatchId, payloadDispatchId }
   }
 
   async compactContext(
@@ -1692,6 +1912,7 @@ export class SessionService {
     input: SendMessageInput
     attachments: Attachment[] | undefined
     deliveryMode: MidRunInputMode
+    dispatchId: string
   }): void {
     const { session, handle, attachments, deliveryMode } = input
     const capability = getMidRunInputCapabilityForProviderId(session.providerId)
@@ -1714,7 +1935,11 @@ export class SessionService {
 
     if (deliveryMode === 'follow-up' && session.status === 'running') {
       if (!capability.supportsNativeFollowUp) {
-        this.queuedInputs.enqueue(session.id, input.input, 'follow-up')
+        this.queuedInputs.enqueue(
+          session.id,
+          { ...input.input, dispatchId: input.dispatchId },
+          'follow-up',
+        )
         return
       }
     }
@@ -1758,6 +1983,28 @@ export class SessionService {
         providerAccountId: input.input.providerAccountId,
       },
     )
+    // Whatever the mode, the input just went INTO the turn this handle is
+    // running (a native follow-up joins it; a normal send starts it), so that
+    // turn's settle is the one that consumed this dispatch (MAR-2759).
+    this.attachDispatchToTurn(session.id, input.dispatchId)
+  }
+
+  /**
+   * Whether a turn is under way on this session, as far as this process can
+   * tell: `running` with a live handle to carry it (a reattached remote turn
+   * has one too), or a send that has begun and not yet reached a provider
+   * (MAR-2550) -- for the width of that await the status is not `running`
+   * yet, and an opener sent then could land inside the turn about to start.
+   * A `running` row with neither is a process that is gone; the ordinary
+   * send path fails it and starts afresh.
+   *
+   * The in-flight half proves an attempt, not a turn -- safe to queue behind
+   * only because its failure has an owner: `withDispatchInFlight` terminates
+   * the rows when the attempt fails and nothing else carries them (design P).
+   */
+  private isCarryingATurn(session: Session): boolean {
+    if (this.dispatches.isDispatching(session.id)) return true
+    return session.status === 'running' && this.activeHandles.has(session.id)
   }
 
   private resolveDeliveryMode(
@@ -1782,6 +2029,42 @@ export class SessionService {
 
   private pendingUserAttachmentIds = new Map<string, string[]>()
   private pendingUserSkillSelections = new Map<string, SkillSelection[]>()
+
+  /**
+   * The delivery receipt's in-flight half (MAR-2759): session id -> the
+   * dispatch ids the turn currently running (or just dispatched) has consumed.
+   *
+   * Attached only after a send actually entered a turn -- a refused or failed
+   * send attaches nothing -- and drained whole into the settle event by the
+   * one statement that writes a terminal status, so a settle names exactly
+   * the inputs its turn carried and a later turn can never inherit them.
+   *
+   * In memory, like the relay engine's batons, and erring the same direction:
+   * a restart loses the ids of a turn already in flight, its hop goes
+   * unstamped, and the stall hail asks a human -- one alarm too loud, never a
+   * false "completed". The QUEUED half of a dispatch is the durable half: an
+   * id on a queue row survives the restart and attaches to the turn it later
+   * starts.
+   */
+  private readonly turnDispatchIds = new Map<string, Set<string>>()
+
+  private attachDispatchToTurn(
+    sessionId: string,
+    dispatchId: string | null | undefined,
+  ): void {
+    if (!dispatchId) return
+    const held = this.turnDispatchIds.get(sessionId)
+    if (held) held.add(dispatchId)
+    else this.turnDispatchIds.set(sessionId, new Set([dispatchId]))
+  }
+
+  /** Drains every id the settling turn consumed; the settle owns them now. */
+  private takeTurnDispatchIds(sessionId: string): string[] {
+    const held = this.turnDispatchIds.get(sessionId)
+    if (!held) return []
+    this.turnDispatchIds.delete(sessionId)
+    return [...held]
+  }
 
   private async rebindDraftAttachments(
     sessionId: string,
@@ -2403,6 +2686,10 @@ export class SessionService {
         status: nextStatus,
         settledAt: updatedAt,
         relaysMuted,
+        // Drained here, in the same beat that commits the terminal status, so
+        // the receipt and the settle can never disagree about which turn
+        // consumed which input (MAR-2759).
+        dispatchIds: this.takeTurnDispatchIds(sessionId),
       })
     }
   }
@@ -2754,6 +3041,12 @@ export class SessionService {
     if (status === 'failed') {
       this.releaseHandle(sessionId)
       this.closeActiveTurn(sessionId, 'errored')
+      // A failed turn drains nothing, and the rows behind it would wait for
+      // a `completed` that is not coming (MAR-2759, design P).
+      this.terminateQueuedInputs(
+        sessionId,
+        'The turn this input was waiting behind failed.',
+      )
     } else if (status === 'completed') {
       const summary = this.getSummaryById(sessionId)
       if (
@@ -2814,6 +3107,9 @@ export class SessionService {
           queuedInputId: item.id,
           providerAccountId: item.providerAccountId,
         })
+        // The receipt moves from the durable queue row to the turn it just
+        // started (MAR-2759): this turn's settle names it.
+        this.attachDispatchToTurn(sessionId, item.dispatchId)
         this.queuedInputs.patch(item.id, 'sent')
         return
       }
@@ -2829,6 +3125,7 @@ export class SessionService {
           muteRelays: item.relaysMuted,
           queuedInputId: item.id,
         })
+        this.attachDispatchToTurn(sessionId, item.dispatchId)
         this.queuedInputs.patch(item.id, 'sent')
         return
       }
@@ -2850,11 +3147,14 @@ export class SessionService {
         item.providerAccountId,
         { muteRelays: item.relaysMuted },
       )
+      this.attachDispatchToTurn(sessionId, item.dispatchId)
       this.queuedInputs.patch(item.id, 'sent')
     } catch (err) {
-      this.queuedInputs.patch(
-        item.id,
-        'failed',
+      // The drain is itself a dispatch attempt, and it left the session idle
+      // with this row and every row behind it waiting on nothing: they end
+      // together, in one event (MAR-2759, design P).
+      this.terminateQueuedInputs(
+        sessionId,
         err instanceof Error ? err.message : String(err),
       )
     }
@@ -3089,7 +3389,8 @@ export class SessionService {
       activity: null,
       updatedAt: timestamp,
     })
-    this.queuedInputs.failPendingForSession(session.id, reason)
+    // The stale run's queue ends with it, and says so (MAR-2759, design P).
+    this.terminateQueuedInputs(session.id, reason)
     this.releaseHandle(session.id)
     this.closeActiveTurn(session.id, 'errored')
 

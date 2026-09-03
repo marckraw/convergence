@@ -113,10 +113,10 @@ interface PreloadBridge {
   }
 }
 
-const SESSION_SERVICE_ARGUMENT = 6
-const APP_SETTINGS_ARGUMENT = 11
-const EXECUTION_HOST_REMOTE_ARGUMENT = 21
-const ARGUMENT_COUNT = 22
+const SESSION_SERVICE_ARGUMENT = 7
+const APP_SETTINGS_ARGUMENT = 12
+const EXECUTION_HOST_REMOTE_ARGUMENT = 22
+const ARGUMENT_COUNT = 23
 
 describe('the execution host daemon ipc handlers', () => {
   const previousEnvToken = process.env[EXECUTION_HOST_DAEMON_TOKEN_ENV_KEY]

@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { FC } from 'react'
-import { Plus, Radio } from 'lucide-react'
+import { Plus, Radio, Waypoints } from 'lucide-react'
+import { selectHailsForCrew, useCrewHailStore } from '@/entities/crew-hail'
+import { sessionCrewApi, useSessionCrewStore } from '@/entities/session-crew'
 import type { SessionCrew } from '@/entities/session-crew'
 import {
   selectRelaysForCrew,
@@ -21,6 +23,13 @@ import {
   GLOBAL_PROJECT_OPTION_ID,
   RelayEditor,
 } from './relay-editor.presentational'
+import { CrewHailBanner } from './crew-hail-banner.presentational'
+import { CrewLoopPanel } from './crew-loop-panel.presentational'
+import {
+  DEFAULT_CREW_ROUND_CAP,
+  DEFAULT_CREW_STALL_MINUTES,
+  batonConditionToken,
+} from './crew-loop.pure'
 import { RelayHopTrail } from './relay-hop-trail.container'
 import { RelayRow } from './relay-row.presentational'
 import {
@@ -92,6 +101,15 @@ export const CrewFlowSection: FC<CrewFlowSectionProps> = ({ crew }) => {
     null,
   )
   const [busy, setBusy] = useState(false)
+  const [loopPanelOpen, setLoopPanelOpen] = useState(false)
+
+  const allHails = useCrewHailStore((state) => state.hails)
+  const acknowledgeHail = useCrewHailStore((state) => state.acknowledge)
+  const loadCrews = useSessionCrewStore((state) => state.load)
+  const hails = useMemo(
+    () => selectHailsForCrew({ hails: allHails }, crew.id),
+    [allHails, crew.id],
+  )
 
   const relays = useMemo(
     () => selectRelaysForCrew({ relays: allRelays }, crew.id),
@@ -184,6 +202,24 @@ export const CrewFlowSection: FC<CrewFlowSectionProps> = ({ crew }) => {
     [selectedProvider, draft.spawn.model],
   )
 
+  /**
+   * The condition this wire would be pre-filled with: `BATON: <the target's
+   * baton name>`.
+   *
+   * Derived from the crew's own roster rather than typed by hand, because the
+   * convention only works if the name the wire waits for and the name the
+   * station is told to declare are one string. Null when the far end has no
+   * baton name yet — offering `BATON: ` with nothing after it would be a
+   * condition that can never match.
+   */
+  const suggestedConditionToken = useMemo(() => {
+    if (draft.action === 'spawn') return null
+    const target = crew.members.find(
+      (member) => member.sessionId === draft.targetSessionId,
+    )
+    return target?.batonName ? batonConditionToken(target.batonName) : null
+  }, [crew.members, draft.action, draft.targetSessionId])
+
   const problem = relayDraftProblem(
     draft,
     relays,
@@ -218,6 +254,7 @@ export const CrewFlowSection: FC<CrewFlowSectionProps> = ({ crew }) => {
         targetSessionId: relay.targetSessionId,
         instruction: relay.instruction ?? '',
         opener: relay.opener ?? '',
+        conditionToken: relay.conditionToken ?? '',
         spawn: relay.spawnSpec
           ? {
               projectId: relay.spawnSpec.projectId,
@@ -269,6 +306,11 @@ export const CrewFlowSection: FC<CrewFlowSectionProps> = ({ crew }) => {
     // ago has nothing to clear, so the field is not offered there and must not
     // survive a wire that switched actions.
     const opener = !spawning && draft.opener.trim() ? draft.opener : null
+    // Same explicit null, and kept across an action switch: a condition is
+    // about WHEN the wire fires, which both actions ask the same way.
+    const conditionToken = draft.conditionToken.trim()
+      ? draft.conditionToken
+      : null
 
     setBusy(true)
     const saved =
@@ -278,12 +320,14 @@ export const CrewFlowSection: FC<CrewFlowSectionProps> = ({ crew }) => {
             sourceSessionId: draft.sourceSessionId,
             instruction,
             opener,
+            conditionToken,
             ...shape,
           })
         : await updateRelay(editor.relayId, {
             sourceSessionId: draft.sourceSessionId,
             instruction,
             opener,
+            conditionToken,
             ...shape,
           })
     setBusy(false)
@@ -300,6 +344,50 @@ export const CrewFlowSection: FC<CrewFlowSectionProps> = ({ crew }) => {
       setBusy(false)
     },
     [setArmed],
+  )
+
+  /**
+   * Names a member's baton, or renames it.
+   *
+   * Goes through the API and reloads the roster rather than mutating in place:
+   * the backend lowercases and collapses what was typed, and the field the
+   * user is about to pre-fill a condition from must show the stored spelling,
+   * not the one they happened to press.
+   */
+  const setBatonName = useCallback(
+    async (sessionId: string, batonName: string) => {
+      setBusy(true)
+      try {
+        await sessionCrewApi.setMemberBatonName(
+          crew.id,
+          sessionId,
+          batonName.trim() ? batonName : null,
+        )
+        await loadCrews()
+      } catch {
+        // The roster stays as it was; the broadcast is the authority and it
+        // never fired. A failed rename must not blank the field.
+      }
+      setBusy(false)
+    },
+    [crew.id, loadCrews],
+  )
+
+  const setLoopLimit = useCallback(
+    async (patch: {
+      roundCap?: number | null
+      stallMinutes?: number | null
+    }) => {
+      setBusy(true)
+      try {
+        await sessionCrewApi.update(crew.id, patch)
+        await loadCrews()
+      } catch {
+        // Same as above: an unchanged crew is the honest fallback.
+      }
+      setBusy(false)
+    },
+    [crew.id, loadCrews],
   )
 
   const confirmDelete = useCallback(
@@ -331,6 +419,18 @@ export const CrewFlowSection: FC<CrewFlowSectionProps> = ({ crew }) => {
           {formatRelayCount(relays.length)}
         </span>
 
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          aria-pressed={loopPanelOpen}
+          onClick={() => setLoopPanelOpen((open) => !open)}
+          className="ml-auto h-6 gap-1 px-2 text-[11px] text-muted-foreground hover:text-foreground"
+        >
+          <Waypoints className="size-3" />
+          Loop
+        </Button>
+
         {editor.kind === 'closed' ? (
           <Button
             type="button"
@@ -343,13 +443,42 @@ export const CrewFlowSection: FC<CrewFlowSectionProps> = ({ crew }) => {
                 : undefined
             }
             onClick={openCreate}
-            className="ml-auto h-6 gap-1 px-2 text-[11px] text-muted-foreground hover:text-foreground"
+            className="h-6 gap-1 px-2 text-[11px] text-muted-foreground hover:text-foreground"
           >
             <Plus className="size-3" />
             Add relay
           </Button>
         ) : null}
       </div>
+
+      <CrewHailBanner
+        hails={hails}
+        resolveName={resolveName}
+        onAcknowledge={(id) => {
+          void acknowledgeHail(id)
+        }}
+      />
+
+      {loopPanelOpen ? (
+        <CrewLoopPanel
+          members={crew.members}
+          resolveName={resolveName}
+          roundCap={crew.roundCap}
+          stallMinutes={crew.stallMinutes}
+          defaultRoundCap={DEFAULT_CREW_ROUND_CAP}
+          defaultStallMinutes={DEFAULT_CREW_STALL_MINUTES}
+          busy={busy}
+          onBatonNameChange={(sessionId, batonName) => {
+            void setBatonName(sessionId, batonName)
+          }}
+          onRoundCapChange={(roundCap) => {
+            void setLoopLimit({ roundCap })
+          }}
+          onStallMinutesChange={(stallMinutes) => {
+            void setLoopLimit({ stallMinutes })
+          }}
+        />
+      ) : null}
 
       {relays.length === 0 && editor.kind === 'closed' ? (
         <p className="text-[11px] text-muted-foreground">
@@ -392,6 +521,8 @@ export const CrewFlowSection: FC<CrewFlowSectionProps> = ({ crew }) => {
           targetSessionId={draft.targetSessionId}
           instruction={draft.instruction}
           opener={draft.opener}
+          conditionToken={draft.conditionToken}
+          suggestedConditionToken={suggestedConditionToken}
           spawn={draft.spawn}
           projectOptions={projectOptions}
           providerOptions={providerOptions}
@@ -415,6 +546,9 @@ export const CrewFlowSection: FC<CrewFlowSectionProps> = ({ crew }) => {
           }
           onOpenerChange={(opener) =>
             setDraft((current) => ({ ...current, opener }))
+          }
+          onConditionTokenChange={(conditionToken) =>
+            setDraft((current) => ({ ...current, conditionToken }))
           }
           onSpawnChange={(patch: Partial<RelaySpawnDraft>) =>
             setDraft((current) => ({

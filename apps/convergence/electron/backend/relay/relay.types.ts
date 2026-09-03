@@ -52,6 +52,14 @@ export interface RelaySpawnSpec {
  * the wire declined and stays armed for the next one. It writes a row for the
  * same reason every other skip does -- "my wire did not fire" must always have
  * a visible answer, and "because you asked me not to" is one.
+ *
+ * `skipped-baton` is the wire working as drawn: it waits for one declared
+ * route and the finishing message named another, or named none. Default-closed
+ * is the whole point of a condition, so this is the quietest outcome there is.
+ *
+ * `skipped-round-budget` is the loop having gone too far without reaching a
+ * human. Unlike `skipped-budget` it disarms nothing: a long loop needs eyes,
+ * not a switch thrown, and Marcin is hailed in the same breath.
  */
 export type RelayHopOutcome =
   | 'delivered'
@@ -59,8 +67,10 @@ export type RelayHopOutcome =
   | 'spawned'
   | 'skipped-failed'
   | 'skipped-budget'
+  | 'skipped-round-budget'
   | 'skipped-already-fired'
   | 'skipped-muted'
+  | 'skipped-baton'
   | 'error'
 
 /**
@@ -94,6 +104,16 @@ export interface SessionRelay {
    * nothing to clear.
    */
   opener: string | null
+  /**
+   * The line the source's final assistant message must end with for this wire
+   * to fire, or null to fire whenever the source finishes.
+   *
+   * A declaration, never an inference: the finishing station says where its
+   * work goes next and this is one string compare against that line. Stored as
+   * the user wrote it -- `BATON: horse` by convention -- so the wire's switch
+   * and the agent's own words are the same text.
+   */
+  conditionToken: string | null
   armed: boolean
   createdAt: string
   updatedAt: string
@@ -112,6 +132,44 @@ export interface RelayHop {
   triggerStatus: string
   payloadPreview: string | null
   /**
+   * The baton the finishing message handed on, or null when it declared none.
+   * Recorded on every row, fired or refused: "what did it say, and what did my
+   * wire do about it" must be answerable from the trail alone.
+   */
+  baton: string | null
+  /**
+   * Which round of this crew's loop the hop belonged to.
+   *
+   * On every row the loop wrote -- delivered, refused by a baton, held by the
+   * loop law or a budget -- because a refusal without its number is a trail
+   * that cannot be read back. Null on the two rows that are facts about the
+   * SETTLE rather than beats of the loop (a quiet send, a failed source), and
+   * on every row written before rounds existed.
+   */
+  roundNumber: number | null
+  /**
+   * When the station this hop landed work in came to rest, or null while it
+   * still owes the hop.
+   *
+   * Written after the fact, by the station's own settle, because the stall
+   * clock has to answer "does this station still owe me" rather than "how long
+   * has it been" -- a terminal station's hop stays the newest row on the trail
+   * forever, so the clock alone accuses every healthy loop.
+   */
+  settledAt: string | null
+  /** How it came back (`completed` / `failed`), read as a plain string. */
+  settledStatus: string | null
+  /**
+   * The delivery receipt (MAR-2759): the dispatch id the session layer minted
+   * for the input this hop carried, or null on rows written before receipts
+   * existed. `markStationSettled` stamps a hop only when a settle NAMES this
+   * id -- the causal fact stated by the one layer that knows which turn
+   * consumed which input, instead of counted or guessed from status
+   * snapshots. Durable beside the stamp it governs, so a restart cannot split
+   * the two.
+   */
+  dispatchId: string | null
+  /**
    * Deliberately wider than `RelayHopOutcome`, which is the vocabulary this
    * build may WRITE. The ledger is a historical record, and a row written by
    * an older or newer Convergence must still read rather than render blank --
@@ -129,6 +187,7 @@ export interface CreateSessionRelayInput {
   spawnSpec?: RelaySpawnSpec | null
   instruction?: string | null
   opener?: string | null
+  conditionToken?: string | null
   armed?: boolean
 }
 
@@ -139,6 +198,7 @@ export interface UpdateSessionRelayInput {
   spawnSpec?: RelaySpawnSpec | null
   instruction?: string | null
   opener?: string | null
+  conditionToken?: string | null
   armed?: boolean
 }
 
@@ -189,6 +249,9 @@ export function sessionRelayFromRow(row: SessionRelayRow): SessionRelay {
     // Same defensive read as the instruction above, for the same reason: a row
     // written before openers existed has no first send to make.
     opener: row.opener ?? null,
+    // And again: a wire drawn before conditions existed waits for nothing,
+    // which is what null means everywhere this value is read.
+    conditionToken: row.condition_token ?? null,
     armed: row.armed !== 0,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -207,6 +270,14 @@ export function relayHopFromRow(row: RelayHopRow): RelayHop {
     spawnedSessionId: row.spawned_session_id,
     triggerStatus: row.trigger_status,
     payloadPreview: row.payload_preview,
+    baton: row.baton ?? null,
+    roundNumber: row.round_number ?? null,
+    settledAt: row.settled_at ?? null,
+    settledStatus: row.settled_status ?? null,
+    // Null is the honest reading for a row written before receipts existed:
+    // no id was ever minted for it, and the stamp falls back to the old
+    // first-answer behaviour for exactly those rows.
+    dispatchId: row.dispatch_id ?? null,
     outcome: row.outcome,
     error: row.error,
   }

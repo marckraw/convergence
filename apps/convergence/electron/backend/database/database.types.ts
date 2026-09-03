@@ -5,6 +5,10 @@ export interface ProjectRow {
   settings: string
   created_at: string
   updated_at: string
+  /** The root this lane was copied from; NULL on a root (MAR-2783). */
+  lane_of: string | null
+  /** The lane's name under its root; NULL on a root (MAR-2783). */
+  lane_name: string | null
 }
 
 export interface AppStateRow {
@@ -84,6 +88,8 @@ export interface SessionQueuedInputRow {
   skip_context_injection: number | null
   /** 1 when the human silenced this message's wires (F10); see ensureQueuedInputColumns. */
   relays_muted: number | null
+  /** The dispatch id minted when this input was handed over (MAR-2759). */
+  dispatch_id: string | null
   error: string | null
   created_at: string
   updated_at: string
@@ -205,6 +211,10 @@ export interface SessionCrewRow {
   emoji: string | null
   accent_color: string | null
   position: number
+  /** How many rounds this crew's loop may spend; null takes the default. */
+  round_cap: number | null
+  /** How long a station may hold the loop before it hails; null is default. */
+  stall_minutes: number | null
   created_at: string
   updated_at: string
 }
@@ -212,6 +222,8 @@ export interface SessionCrewRow {
 export interface SessionCrewMemberRow {
   crew_id: string
   session_id: string
+  /** The short name a baton addresses this member by, or null if unnamed. */
+  baton_name: string | null
   added_at: string
 }
 
@@ -227,6 +239,8 @@ export interface SessionRelayRow {
   instruction: string | null
   /** The first message the wire sends, ahead of the payload (F9). */
   opener: string | null
+  /** The line this wire waits for on the source's last message; null fires always. */
+  condition_token: string | null
   armed: number
   created_at: string
   updated_at: string
@@ -244,7 +258,45 @@ export interface RelayHopRow {
   trigger_status: string
   payload_preview: string | null
   outcome: string
+  /** The baton the finishing message handed on, when it declared one. */
+  baton: string | null
+  /** Which round of this crew's loop the hop belonged to. */
+  round_number: number | null
+  /** When the station this hop landed work in came back, or null if it has not. */
+  settled_at: string | null
+  /** How it came back: the settle's own status word. */
+  settled_status: string | null
+  /** The dispatch id of the input this hop carried; null before receipts. */
+  dispatch_id: string | null
   error: string | null
+}
+
+/**
+ * One call for Marcin: a loop that parked, capped, or went quiet.
+ *
+ * Beside the ledger rather than inside it. A hop row records a wire firing; a
+ * hail records a crew waiting on a human, has a lifecycle nobody else has
+ * (raised, then acknowledged), and can exist with no wire behind it at all --
+ * a station with no outgoing wires that declares a baton is exactly the silent
+ * drop this table exists to make loud.
+ */
+export interface CrewHailRow {
+  id: string
+  crew_id: string
+  /** Null for a hail no flow run produced. */
+  flow_run_id: string | null
+  reason: string
+  /** The station the hail is about. */
+  session_id: string
+  /** The baton the message handed on, when there was one. */
+  baton: string | null
+  /** The finishing message, attached so the hail can be read without hunting. */
+  message: string | null
+  detail: string
+  /** The hop the stall clock accused, when the hail is about one. */
+  hop_id: string | null
+  raised_at: string
+  acknowledged_at: string | null
 }
 
 export interface SpaceArtifactRow {

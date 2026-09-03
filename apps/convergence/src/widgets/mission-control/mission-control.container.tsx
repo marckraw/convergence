@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { FC } from 'react'
+import { useCrewHailStore } from '@/entities/crew-hail'
 import { useSessionCrewStore } from '@/entities/session-crew'
 import {
   selectHopsForCrew,
@@ -53,11 +54,13 @@ export const MissionControl: FC<MissionControlProps> = ({ onOpenSession }) => {
   const loadCrews = useSessionCrewStore((state) => state.load)
   const loadRelays = useSessionRelayStore((state) => state.load)
   const hopsByCrewId = useSessionRelayStore((state) => state.hopsByCrewId)
+  const loadHails = useCrewHailStore((state) => state.load)
 
   useEffect(() => {
     void loadCrews()
     void loadRelays()
-  }, [loadCrews, loadRelays])
+    void loadHails()
+  }, [loadCrews, loadRelays, loadHails])
 
   const {
     cards,

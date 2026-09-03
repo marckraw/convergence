@@ -4,7 +4,9 @@ import type { SessionCrewRow } from '../database/database.types'
 import {
   nextCrewPosition,
   normalizeCrewAccentColor,
+  normalizeCrewBatonName,
   normalizeCrewEmoji,
+  normalizeCrewLimit,
   normalizeCrewName,
   normalizeCrewSessionIds,
 } from './crew.pure'
@@ -12,6 +14,7 @@ import {
   sessionCrewFromRow,
   type CreateSessionCrewInput,
   type SessionCrew,
+  type SessionCrewMember,
   type UpdateSessionCrewInput,
 } from './crew.types'
 
@@ -77,6 +80,43 @@ export class CrewService {
     return this.requireById(id)
   }
 
+  /**
+   * Every crew this session belongs to.
+   *
+   * The engine asks so it knows whose loop a settling session is part of: a
+   * baton nobody routed has to hail the crew that was waiting on it, and that
+   * crew may own no wire leaving this station at all.
+   */
+  crewIdsForSession(sessionId: string): string[] {
+    const rows = this.db
+      .prepare(
+        'SELECT crew_id FROM session_crew_members WHERE session_id = ? ORDER BY added_at ASC, rowid ASC',
+      )
+      .all(sessionId) as { crew_id: string }[]
+    return rows.map((row) => row.crew_id)
+  }
+
+  /**
+   * Names one member's baton, or clears it.
+   *
+   * Its own method rather than a field on `update`, for the same reason arming
+   * is: it belongs to a member, not to the crew, and burying it in the crew
+   * form would mean editing a colour could rename a route.
+   */
+  setMemberBatonName(
+    crewId: string,
+    sessionId: string,
+    batonName: string | null,
+  ): SessionCrew {
+    this.requireRow(crewId)
+    this.db
+      .prepare(
+        'UPDATE session_crew_members SET baton_name = ? WHERE crew_id = ? AND session_id = ?',
+      )
+      .run(normalizeCrewBatonName(batonName), crewId, sessionId)
+    return this.requireById(crewId)
+  }
+
   update(id: string, patch: UpdateSessionCrewInput): SessionCrew {
     const existing = this.requireRow(id)
 
@@ -92,6 +132,17 @@ export class CrewService {
         : normalizeCrewAccentColor(patch.accentColor)
     const position =
       patch.position === undefined ? existing.position : patch.position
+    // An untouched knob survives an edit that was about something else;
+    // clearing one back to the default is an explicit null, the same shape
+    // every other optional field here uses.
+    const roundCap =
+      patch.roundCap === undefined
+        ? existing.round_cap
+        : normalizeCrewLimit(patch.roundCap, 'A round cap')
+    const stallMinutes =
+      patch.stallMinutes === undefined
+        ? existing.stall_minutes
+        : normalizeCrewLimit(patch.stallMinutes, 'A stall window')
 
     this.db
       .prepare(
@@ -100,10 +151,12 @@ export class CrewService {
              emoji = ?,
              accent_color = ?,
              position = ?,
+             round_cap = ?,
+             stall_minutes = ?,
              updated_at = datetime('now')
          WHERE id = ?`,
       )
-      .run(name, emoji, accentColor, position, id)
+      .run(name, emoji, accentColor, position, roundCap, stallMinutes, id)
 
     return this.requireById(id)
   }
@@ -146,12 +199,12 @@ export class CrewService {
       .run(crewId, sessionId)
   }
 
-  private readMembers(crewId?: string): Map<string, string[]> {
+  private readMembers(crewId?: string): Map<string, SessionCrewMember[]> {
     const rows = (
       crewId === undefined
         ? this.db
             .prepare(
-              `SELECT members.crew_id, members.session_id
+              `SELECT members.crew_id, members.session_id, members.baton_name
                FROM session_crew_members members
                JOIN sessions ON sessions.id = members.session_id
                ORDER BY members.added_at ASC, members.rowid ASC`,
@@ -159,22 +212,28 @@ export class CrewService {
             .all()
         : this.db
             .prepare(
-              `SELECT members.crew_id, members.session_id
+              `SELECT members.crew_id, members.session_id, members.baton_name
                FROM session_crew_members members
                JOIN sessions ON sessions.id = members.session_id
                WHERE members.crew_id = ?
                ORDER BY members.added_at ASC, members.rowid ASC`,
             )
             .all(crewId)
-    ) as { crew_id: string; session_id: string }[]
+    ) as { crew_id: string; session_id: string; baton_name: string | null }[]
 
-    const membersByCrewId = new Map<string, string[]>()
+    const membersByCrewId = new Map<string, SessionCrewMember[]>()
     for (const row of rows) {
+      const member: SessionCrewMember = {
+        sessionId: row.session_id,
+        // Defensive read for the same reason every other added column gets
+        // one: a row written before baton names existed has none.
+        batonName: row.baton_name ?? null,
+      }
       const existing = membersByCrewId.get(row.crew_id)
       if (existing) {
-        existing.push(row.session_id)
+        existing.push(member)
       } else {
-        membersByCrewId.set(row.crew_id, [row.session_id])
+        membersByCrewId.set(row.crew_id, [member])
       }
     }
     return membersByCrewId

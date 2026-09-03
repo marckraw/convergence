@@ -94,13 +94,54 @@ export class ProjectService {
     return projectFromRow(updated)
   }
 
+  /**
+   * The lanes spawned from one root, oldest first (MAR-2783).
+   *
+   * Keyed by `lane_of` rather than by walking `getAll()`, because the sidebar
+   * asks this per root and the answer must not depend on how the flat list
+   * happens to be ordered.
+   */
+  listLanes(rootId: string): Project[] {
+    const rows = this.db
+      .prepare(
+        'SELECT * FROM projects WHERE lane_of = ? ORDER BY created_at ASC, rowid ASC',
+      )
+      .all(rootId) as ProjectRow[]
+
+    return rows.map(projectFromRow)
+  }
+
+  /**
+   * The root a project belongs to: itself for a root, its parent for a lane.
+   *
+   * Null only when a lane's root row is gone, which the cascade makes
+   * unreachable through the record; it is kept as a real answer rather than a
+   * throw because a caller holding a stale `Project` value can still ask.
+   */
+  getRoot(project: Project): Project | null {
+    if (project.laneOf === null) return project
+    return this.getById(project.laneOf)
+  }
+
   getByRepositoryPath(repositoryPath: string): Project | null {
     const resolvedPath = resolve(repositoryPath)
     const row = this.findRowByRepositoryPath(resolvedPath)
     return row ? projectFromRow(row) : null
   }
 
+  /**
+   * Refuses a root that still has lanes (MAR-2783 round 2, M4): the record's
+   * cascade would take the lane rows, their sessions and their workspaces,
+   * while the lane folders stayed on disk with nothing pointing at them.
+   * Lanes go first, one by one (L2's delete-lane); then the root.
+   */
   async delete(id: string): Promise<void> {
+    const laneCount = this.listLanes(id).length
+    if (laneCount > 0) {
+      throw new Error(
+        `This project has ${laneCount} lane${laneCount === 1 ? '' : 's'}. Delete or move its ${laneCount} lane${laneCount === 1 ? '' : 's'} first.`,
+      )
+    }
     if (this.workspaceService) {
       await this.workspaceService.deleteAllForProject(id)
     }
