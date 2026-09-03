@@ -57,6 +57,15 @@ export const DEFAULT_FAVORITE_MODELS_PREFS: FavoriteModelsPrefs = {
   items: [],
 }
 
+/** Where lanes live (MAR-2783); `root` null = the app's default folder. */
+export interface LanesPrefs {
+  root: string | null
+}
+
+export const DEFAULT_LANES_PREFS: LanesPrefs = {
+  root: null,
+}
+
 export interface AppSettings {
   defaultProviderId: string | null
   defaultModelId: string | null
@@ -76,6 +85,7 @@ export interface AppSettings {
   debugLogging: DebugLoggingPrefs
   piModelVisibility: PiModelVisibilityPrefs
   favoriteModels: FavoriteModelsPrefs
+  lanes: LanesPrefs
 }
 
 export type AppSettingsInput = Omit<
@@ -90,6 +100,7 @@ export type AppSettingsInput = Omit<
   | 'debugLogging'
   | 'piModelVisibility'
   | 'favoriteModels'
+  | 'lanes'
 > & {
   namingModelByProvider?: Record<string, string>
   extractionModelByProvider?: Record<string, string>
@@ -101,6 +112,7 @@ export type AppSettingsInput = Omit<
   debugLogging?: DebugLoggingPrefs
   piModelVisibility?: PiModelVisibilityPrefs
   favoriteModels?: FavoriteModelsPrefs
+  lanes?: LanesPrefs
 }
 
 export interface OpenRouterCredentialStatus {

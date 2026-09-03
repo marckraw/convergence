@@ -3418,3 +3418,95 @@ function hasLegacyTwoColumnUnique(database: Database.Database): boolean {
     )
   })
 }
+
+/**
+ * A project can spawn lanes (MAR-2783, slice L1).
+ *
+ * File-backed on purpose: the in-memory database is born with the columns, so
+ * a test against it cannot tell the schema block from the migration. Against
+ * the shipped `projects` shape, every assertion here reds if the `ALTER TABLE`
+ * in `ensureProjectLaneColumns` is deleted — the `CREATE TABLE IF NOT EXISTS`
+ * above it is a no-op on an old file and adds nothing.
+ */
+describe('project lanes migration', () => {
+  afterEach(() => {
+    closeDatabase()
+    resetDatabase()
+  })
+
+  it('adds the lane columns to a projects table that predates them', () => {
+    withTempDb('lanes-migration', (dbPath) => {
+      const db = getDatabase(seedLegacyAt(dbPath))
+
+      const columns = (
+        db.pragma('table_info(projects)') as { name: string }[]
+      ).map((column) => column.name)
+      expect(columns).toContain('lane_of')
+      expect(columns).toContain('lane_name')
+
+      // Pre-era rows are roots, in so many words: both NULL.
+      expect(
+        db
+          .prepare('SELECT id, lane_of, lane_name FROM projects ORDER BY id')
+          .all(),
+      ).toEqual([{ id: 'p1', lane_of: null, lane_name: null }])
+    })
+  })
+
+  it('holds one lane name per root and cascades the lanes when the root goes', () => {
+    withTempDb('lanes-cascade', (dbPath) => {
+      const db = getDatabase(seedLegacyAt(dbPath))
+      db.prepare(
+        `INSERT INTO projects (id, name, repository_path, settings, created_at, updated_at)
+         VALUES ('p2', 'q', '/tmp/p2', '{}', 'now', 'now')`,
+      ).run()
+      const insertLane = db.prepare(
+        `INSERT INTO projects (id, name, repository_path, settings, created_at, updated_at, lane_of, lane_name)
+         VALUES (?, ?, ?, '{}', 'now', 'now', ?, ?)`,
+      )
+
+      insertLane.run(
+        'lane-a',
+        'p1 · lane: studio',
+        '/tmp/lanes/p1/studio',
+        'p1',
+        'studio',
+      )
+      // The same name under the OTHER root is a different lane.
+      insertLane.run(
+        'lane-b',
+        'p2 · lane: studio',
+        '/tmp/lanes/p2/studio',
+        'p2',
+        'studio',
+      )
+      // The same name under the SAME root is refused by the partial index.
+      expect(() =>
+        insertLane.run(
+          'lane-c',
+          'again',
+          '/tmp/lanes/p1/studio-2',
+          'p1',
+          'studio',
+        ),
+      ).toThrow(/UNIQUE/)
+      // A lane of nothing is refused by the foreign key.
+      expect(() =>
+        insertLane.run(
+          'lane-d',
+          'orphan',
+          '/tmp/lanes/x/studio',
+          'no-such-root',
+          'studio',
+        ),
+      ).toThrow(/FOREIGN KEY/)
+
+      db.prepare('DELETE FROM projects WHERE id = ?').run('p1')
+
+      expect(db.prepare('SELECT id FROM projects ORDER BY id').all()).toEqual([
+        { id: 'lane-b' },
+        { id: 'p2' },
+      ])
+    })
+  })
+})

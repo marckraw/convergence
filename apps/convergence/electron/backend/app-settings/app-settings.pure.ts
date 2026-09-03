@@ -10,11 +10,13 @@ import type { UpdatePrefs } from '../updates/updates.types'
 import {
   DEFAULT_DEBUG_LOGGING_PREFS,
   DEFAULT_FAVORITE_MODELS_PREFS,
+  DEFAULT_LANES_PREFS,
   DEFAULT_ONBOARDING_PREFS,
   DEFAULT_PI_MODEL_VISIBILITY_PREFS,
   type StoredAppSettings,
   type DebugLoggingPrefs,
   type FavoriteModelsPrefs,
+  type LanesPrefs,
   type OnboardingPrefs,
   type PiModelVisibilityPrefs,
   type ResolvedSessionDefaults,
@@ -118,6 +120,21 @@ export function parseDebugLoggingPrefs(value: unknown): DebugLoggingPrefs {
   }
 }
 
+/**
+ * A lanes root is an absolute path or nothing. A relative one would resolve
+ * against whatever the process's cwd happens to be at read time, which is not
+ * a place anyone chose, so it reads as the default rather than as a guess.
+ */
+export function parseLanesPrefs(value: unknown): LanesPrefs {
+  if (!value || typeof value !== 'object') return DEFAULT_LANES_PREFS
+  const raw = value as Partial<LanesPrefs>
+  const root =
+    typeof raw.root === 'string' && raw.root.trim().startsWith('/')
+      ? raw.root.trim()
+      : null
+  return { root }
+}
+
 function parseStringArray(value: unknown): string[] {
   if (!Array.isArray(value)) return []
   return [...new Set(value.filter((item): item is string => !!item))]
@@ -186,6 +203,7 @@ function emptyAppSettings(): StoredAppSettings {
     debugLogging: DEFAULT_DEBUG_LOGGING_PREFS,
     piModelVisibility: DEFAULT_PI_MODEL_VISIBILITY_PREFS,
     favoriteModels: DEFAULT_FAVORITE_MODELS_PREFS,
+    lanes: DEFAULT_LANES_PREFS,
   }
 }
 
@@ -221,6 +239,7 @@ export function parseAppSettings(raw: string | null): StoredAppSettings {
       debugLogging: parseDebugLoggingPrefs(parsed.debugLogging),
       piModelVisibility: parsePiModelVisibilityPrefs(parsed.piModelVisibility),
       favoriteModels: parseFavoriteModelsPrefs(parsed.favoriteModels),
+      lanes: parseLanesPrefs(parsed.lanes),
     }
   } catch {
     return empty
@@ -286,6 +305,7 @@ export function validateAppSettings(
         descriptors,
       ),
       favoriteModels,
+      lanes: settings.lanes,
     }
   }
 
@@ -309,6 +329,7 @@ export function validateAppSettings(
         descriptors,
       ),
       favoriteModels,
+      lanes: settings.lanes,
     }
   }
 
@@ -331,6 +352,7 @@ export function validateAppSettings(
       descriptors,
     ),
     favoriteModels,
+    lanes: settings.lanes,
   }
 }
 

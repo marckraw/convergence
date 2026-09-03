@@ -55,6 +55,20 @@ export const DEFAULT_COMMAND_CENTER_SHORTCUT: CommandCenterShortcutPrefs = {
   altKey: false,
 }
 
+/**
+ * Where lanes live (MAR-2783, ruling 2). `root` null means the default,
+ * `<userData>/lanes`, which only the main process can name -- so the default
+ * is resolved where it is read, never stored, and a stored null keeps
+ * following the data folder if it ever moves.
+ */
+export interface LanesPrefs {
+  root: string | null
+}
+
+export const DEFAULT_LANES_PREFS: LanesPrefs = {
+  root: null,
+}
+
 export interface AppSettings {
   defaultProviderId: string | null
   defaultModelId: string | null
@@ -77,6 +91,7 @@ export interface AppSettings {
   debugLogging: DebugLoggingPrefs
   piModelVisibility: PiModelVisibilityPrefs
   favoriteModels: FavoriteModelsPrefs
+  lanes: LanesPrefs
 }
 
 /**
@@ -100,6 +115,7 @@ export type AppSettingsInput = Omit<
   | 'debugLogging'
   | 'piModelVisibility'
   | 'favoriteModels'
+  | 'lanes'
 > & {
   namingModelByProvider?: Record<string, string>
   extractionModelByProvider?: Record<string, string>
@@ -111,6 +127,7 @@ export type AppSettingsInput = Omit<
   debugLogging?: DebugLoggingPrefs
   piModelVisibility?: PiModelVisibilityPrefs
   favoriteModels?: FavoriteModelsPrefs
+  lanes?: LanesPrefs
 }
 
 export interface ResolvedSessionDefaults {

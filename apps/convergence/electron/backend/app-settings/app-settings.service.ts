@@ -11,6 +11,7 @@ import {
   type AppSettings,
   type AppSettingsInput,
   type DebugLoggingPrefs,
+  type LanesPrefs,
   type ResolvedSessionDefaults,
   type StoredAppSettings,
 } from './app-settings.types'
@@ -21,6 +22,7 @@ import {
   parseCommandCenterShortcut,
   parseDebugLoggingPrefs,
   parseFavoriteModelsPrefs,
+  parseLanesPrefs,
   parseNotificationPrefs,
   parseOnboardingPrefs,
   parsePiModelVisibilityPrefs,
@@ -194,6 +196,11 @@ export class AppSettingsService {
       .debugLogging
   }
 
+  /** Where lanes are created (MAR-2783); `root` null = the app's default. */
+  getLanesPrefsSync(): LanesPrefs {
+    return parseAppSettings(this.stateService.get(APP_SETTINGS_KEY)).lanes
+  }
+
   filterProviderDescriptors(
     descriptors: ProviderDescriptor[],
   ): ProviderDescriptor[] {
@@ -280,6 +287,8 @@ export class AppSettingsService {
             parseFavoriteModelsPrefs(input.favoriteModels),
             descriptors,
           )
+    const lanes =
+      input.lanes === undefined ? existing.lanes : parseLanesPrefs(input.lanes)
     const commandCenterShortcut =
       input.commandCenterShortcut === undefined
         ? existing.commandCenterShortcut
@@ -310,6 +319,7 @@ export class AppSettingsService {
       debugLogging,
       piModelVisibility,
       favoriteModels,
+      lanes,
     }
 
     // A credential lives and dies with its Endpoint (MAR-2642), and removal is
