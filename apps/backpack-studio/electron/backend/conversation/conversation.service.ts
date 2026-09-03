@@ -66,6 +66,16 @@ interface LiveConversation {
   abort: AbortController | null
   /** The follow, so shutdown can wait for the writes it still owes. */
   following: Promise<void> | null
+  /**
+   * A send that has been let through and has not finished yet.
+   *
+   * Set in the same turn the guard reads it, which is the whole of it. The
+   * fold cannot do this job: it only turns `running` after `sent` has been
+   * written, and the write is an await — so two sends arriving inside that
+   * window both read an idle fold, both post a command, and the person's two
+   * sentences race each other into one turn the daemon never agreed to take.
+   */
+  sending: boolean
 }
 
 export class ConversationService {
@@ -103,6 +113,7 @@ export class ConversationService {
         recordFailure: null,
         abort: null,
         following: null,
+        sending: false,
       }
       this.conversations.set(record.id, live)
       if (live.fold.status === 'running') this.follow(live)
@@ -144,8 +155,6 @@ export class ConversationService {
       createdAt: this.now(),
       providerId: this.deps.providerId,
     }
-    await this.deps.store.create(record)
-
     const live: LiveConversation = {
       record,
       fold: emptyFold(record.createdAt),
@@ -154,8 +163,22 @@ export class ConversationService {
       recordFailure: null,
       abort: null,
       following: null,
+      sending: false,
     }
     this.conversations.set(id, live)
+
+    // The record's own write goes through the same door as every other one it
+    // owes: a disk that will not take it is a sentence, not a bare rejection
+    // escaping into the window with nothing on screen to explain it.
+    try {
+      await this.deps.store.create(record)
+    } catch (error) {
+      return {
+        kind: 'refused',
+        conversationId: id,
+        reason: this.reportDiskFailure(live, error),
+      }
+    }
 
     // The turn is recorded before the daemon is asked, for the same reason the
     // record is: a process that dies between the post and the writing of it
@@ -199,11 +222,42 @@ export class ConversationService {
    * surface that shows a queued message, no way to cancel one, and nothing that
    * says where it went. Half a queue is worse than none, so this beat says
    * `busy` and the composer says so too.
+   *
+   * The busy answer is decided and taken in ONE turn. Reading the fold and then
+   * awaiting the write that moves it is check-then-act: a second send arriving
+   * inside that await reads the same idle fold and is let through as well. The
+   * renderer's own `sending` flag covers one window, and IPC already broadcasts
+   * to as many windows as are open. `start` needs no such guard — every start
+   * makes its own id, so two of them are two conversations rather than two
+   * turns in one.
    */
   async send(id: string, text: string): Promise<SendMessageOutcome> {
     const live = this.conversations.get(id)
     if (!live) return { kind: 'refused', reason: 'That conversation is gone.' }
-    if (live.fold.status === 'running') return { kind: 'busy' }
+    if (live.fold.status === 'running' || live.sending) return { kind: 'busy' }
+    live.sending = true
+    try {
+      return await this.sendInto(live, text)
+    } finally {
+      live.sending = false
+    }
+  }
+
+  /** The send itself, once this conversation is known to be free to take it. */
+  private async sendInto(
+    live: LiveConversation,
+    text: string,
+  ): Promise<SendMessageOutcome> {
+    const id = live.record.id
+    // A start the daemon refused created nothing on the far side, so a command
+    // addressed to this id can only 404 and the conversation would be a
+    // headstone: Failed, sendable, and unable to go anywhere. Read BEFORE the
+    // `sent` fact is written, because writing it is what moves `lastFact` on.
+    // An exhausted stream is the opposite case and must not take this door — a
+    // session the daemon DID create is continued with a command, and starting
+    // it a second time is answered with a 409.
+    const neverBegan =
+      live.fold.lastSeq === 0 && live.fold.lastFact === 'refused'
 
     // Recorded before the wire, exactly as a start is: a restart between the
     // two comes back running and re-attaches, rather than showing a
@@ -217,7 +271,16 @@ export class ConversationService {
     this.publish(live)
 
     try {
-      await this.deps.client.sendMessage(id, text)
+      if (neverBegan) {
+        await this.deps.client.startSession({
+          sessionId: id,
+          providerId: this.deps.providerId,
+          workingDirectory: this.deps.workingDirectory,
+          initialMessage: text,
+        })
+      } else {
+        await this.deps.client.sendMessage(id, text)
+      }
     } catch (error) {
       const reason = describeDaemonFailure(error)
       live.streamError = reason
@@ -336,13 +399,21 @@ export class ConversationService {
     live: LiveConversation,
     envelope: ExecutionHostEventEnvelope,
   ): Promise<void> {
+    // The fold's own high-water mark, asked BEFORE the write rather than after
+    // it. Two follows can be open over one conversation for a turn — the
+    // settling follow clears its controller eagerly, and a follow-up arriving
+    // in that turn opens a second stream from a mark the first has not caught
+    // up to yet — and the daemon replays the overlap to both. The fold ignores
+    // anything at or below its mark, so the transcript stayed right; the log
+    // did not, and it is the log that a restart reads.
+    if (envelope.seq <= live.fold.lastSeq) return
     const entry: ConversationLogEntry = {
       kind: 'wire',
       at: this.now(),
       envelope,
     }
     try {
-      await this.deps.store.appendEntry(live.record.id, entry)
+      await this.appendAndFold(live, entry)
     } catch (error) {
       this.reportDiskFailure(live, error)
       // Thrown rather than swallowed: returning here would let the stream carry
@@ -353,7 +424,6 @@ export class ConversationService {
       throw error
     }
     live.recordFailure = null
-    live.fold = applyEntry(live.fold, entry)
     // A conversation that has stopped running has nothing left to stream. The
     // follow is ended here rather than left open for the app's lifetime — one
     // idle SSE per conversation is a connection the daemon holds for nobody.
@@ -372,12 +442,23 @@ export class ConversationService {
     live: LiveConversation,
     fact: LocalConversationFact,
   ): Promise<void> {
-    const entry: ConversationLogEntry = {
-      kind: 'local',
-      at: this.now(),
-      fact,
-    }
+    await this.appendAndFold(live, { kind: 'local', at: this.now(), fact })
+  }
+
+  /**
+   * The one door every entry goes through: the disk, then the fold.
+   *
+   * It is also where the warning about unreadable lines is retired. That count
+   * is taken once, at hydrate, and the FIRST append of a process heals the log
+   * it describes — so leaving it alone made the window warn for the rest of the
+   * session about bytes that are no longer on disk.
+   */
+  private async appendAndFold(
+    live: LiveConversation,
+    entry: ConversationLogEntry,
+  ): Promise<void> {
     await this.deps.store.appendEntry(live.record.id, entry)
+    live.unreadableTailLines = 0
     live.fold = applyEntry(live.fold, entry)
   }
 

@@ -4,6 +4,7 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import {
   createStubDaemon,
+  deferred,
   envelope,
   waitUntil,
   type StubDaemon,
@@ -555,6 +556,187 @@ describe('the walking skeleton, end to end', () => {
   })
 
   /**
+   * M1: the busy answer has to be decided and taken in ONE turn.
+   *
+   * The guard used to read the fold and then await the write that moves it, so
+   * a second send arriving inside that await read the same idle fold and was
+   * let through as well: two commands at the daemon for one turn, and two
+   * `sent` lines in a log that is supposed to be the truth. One window is
+   * covered by the renderer's own flag, and IPC broadcasts to as many windows
+   * as are open.
+   *
+   * Mutation: guard on `live.fold.status === 'running'` alone (drop the
+   * in-flight flag) and both sends go through -> red on all three halves.
+   */
+  it('lets one of two simultaneous sends through, and calls the other busy', async () => {
+    const { service } = buildService()
+    await service.start('first')
+    await waitUntil(
+      () => daemon.eventStreamLastEventIds.length > 0,
+      'the stream to open',
+    )
+    daemon.emit(status(1, 'completed'))
+    await waitUntil(
+      () => latest(CONVERSATION_ID)?.status === 'idle',
+      'the conversation to settle',
+    )
+
+    const outcomes = await Promise.all([
+      service.send(CONVERSATION_ID, 'and blue'),
+      service.send(CONVERSATION_ID, 'and green'),
+    ])
+
+    expect(outcomes.map((outcome) => outcome.kind).sort()).toEqual([
+      'busy',
+      'sent',
+    ])
+    expect(daemon.commandRequests).toHaveLength(1)
+    // Two `sent` lines in the whole log: the start's own, and this one turn.
+    const log = await readFile(
+      join(root, CONVERSATION_ID, 'events.jsonl'),
+      'utf-8',
+    )
+    expect(
+      log.split('\n').filter((row) => row.includes('"fact":"sent"')),
+    ).toHaveLength(2)
+    await service.dispose()
+  })
+
+  /**
+   * L1: the record's own write is the one disk failure `start` did not catch.
+   * It sat outside every `try`, so a disk that refused it left the window with
+   * an unhandled rejection and no sentence at all — the exact class the IPC
+   * door was hardened against in round 2.
+   *
+   * Mutation: drop the `try`/`catch` around `store.create` and `start` rejects
+   * -> red.
+   */
+  it('says why when the record itself will not be written', async () => {
+    const { service } = buildService({ store: storeThatRefusesCreate() })
+    const outcome = await service.start('hello')
+
+    expect(outcome.kind).toBe('refused')
+    expect(outcome.kind === 'refused' && outcome.reason).toContain(
+      'could not be written',
+    )
+    // Nothing was asked of the daemon: a session it accepted would have no
+    // record here to re-attach to.
+    expect(daemon.startRequests).toEqual([])
+    expect(latest(CONVERSATION_ID)?.streamError).toContain(
+      'could not be written',
+    )
+    await service.dispose()
+  })
+
+  /**
+   * L2: the count of unreadable lines is taken once, at hydrate, and the FIRST
+   * append of the process heals the log it describes. Left alone, the window
+   * warned for the rest of the session about bytes that are no longer on disk.
+   *
+   * Mutation: drop `live.unreadableTailLines = 0` from `appendAndFold` and the
+   * warning outlives the tear -> red.
+   */
+  it('stops warning about lines the first append healed away', async () => {
+    const { store } = buildService()
+    await store.create({
+      id: CONVERSATION_ID,
+      title: 'earlier',
+      createdAt: '2026-09-02T09:00:00.000Z',
+      providerId: 'claude',
+    })
+    await writeFile(
+      join(root, CONVERSATION_ID, 'events.jsonl'),
+      `${JSON.stringify(status(1, 'completed'))}\n{"at":"2026-09-02T09`,
+      'utf-8',
+    )
+
+    published = []
+    const restarted = buildService({
+      store: new JsonFileConversationStore(root),
+    })
+    await restarted.service.hydrate()
+    expect(
+      restarted.service.snapshot(CONVERSATION_ID)?.unreadableTailLines,
+    ).toBe(1)
+
+    expect(await restarted.service.send(CONVERSATION_ID, 'again')).toEqual({
+      kind: 'sent',
+    })
+    expect(
+      restarted.service.snapshot(CONVERSATION_ID)?.unreadableTailLines,
+    ).toBe(0)
+    await restarted.service.dispose()
+  })
+
+  /**
+   * L4: a start the daemon refused made nothing on the far side, so the id is
+   * a name it has never heard. Posting a command to it can only 404, which
+   * left the conversation a headstone — Failed, composer open, and no sentence
+   * able to go anywhere. The next one STARTS the session instead, carrying the
+   * person's words as the initial message.
+   *
+   * This is what makes QA step 5 mean something: relaunch, Failed, composer
+   * enabled — and typing into it actually works.
+   *
+   * Mutation: always `sendMessage` and the retry posts a command to a session
+   * that does not exist -> red on both halves.
+   */
+  it('starts the session on the next sentence when the first start was refused', async () => {
+    daemon.setStartStatus(400)
+    const { service } = buildService()
+    await service.start('hello')
+    await service.dispose()
+
+    published = []
+    daemon.setStartStatus(201)
+    const restarted = buildService({
+      store: new JsonFileConversationStore(root),
+    })
+    await restarted.service.hydrate()
+    expect(restarted.service.snapshot(CONVERSATION_ID)?.status).toBe('failed')
+
+    expect(await restarted.service.send(CONVERSATION_ID, 'try again')).toEqual({
+      kind: 'sent',
+    })
+    expect(daemon.startRequests).toHaveLength(2)
+    expect(daemon.startRequests[1]).toMatchObject({
+      config: {
+        sessionId: CONVERSATION_ID,
+        initialMessage: 'try again',
+      },
+    })
+    expect(daemon.commandRequests).toEqual([])
+    await restarted.service.dispose()
+  })
+
+  /**
+   * The other half of the same door: a stream this app gave up rebuilding
+   * folds to the SAME `failed` status, but the daemon did create that session.
+   * Starting it a second time is answered with a 409, and the turn would be
+   * lost.
+   *
+   * Mutation: read `status === 'failed'` instead of the last fact and this
+   * retry posts a start -> red.
+   */
+  it('continues a session whose stream was abandoned, rather than restarting it', async () => {
+    daemon.setEventsStatus(500)
+    const { service } = buildService()
+    await service.start('hello')
+    await waitUntil(
+      () => latest(CONVERSATION_ID)?.status === 'failed',
+      'the stream to be given up on',
+    )
+    daemon.setEventsStatus(200)
+
+    expect(await service.send(CONVERSATION_ID, 'still there?')).toEqual({
+      kind: 'sent',
+    })
+    expect(daemon.startRequests).toHaveLength(1)
+    expect(daemon.commandRequests).toHaveLength(1)
+    await service.dispose()
+  })
+
+  /**
    * The token is the one value that must never leave the main process. It is
    * carried in an Authorization header and nowhere else: not in a snapshot, not
    * in a summary, not in the file on disk.
@@ -801,6 +983,115 @@ describe('the follow', () => {
     expect(daemon.eventStreamLastEventIds.at(-1)).toBe('3')
     await service.dispose()
   })
+
+  /**
+   * L3: one line per sequence, however many follows are open.
+   *
+   * Two follows over one conversation are reachable, and this drives the real
+   * path: the envelope that settles a conversation clears its controller
+   * eagerly while the batch it arrived in is still being drained one disk write
+   * at a time, and a follow-up landing in that turn opens a SECOND stream from
+   * a mark the first has not caught up to. The daemon replays the overlap to
+   * both.
+   *
+   * The fold ignores anything at or below its mark, so the transcript looked
+   * right — and the log, which is the thing a restart actually reads, carried
+   * the line twice.
+   *
+   * Mutation: append before asking the fold (drop the `envelope.seq <=
+   * live.fold.lastSeq` guard at the top of `record`) and the log holds two
+   * lines for sequence 2 -> red.
+   */
+  it('writes one line per sequence when two follows overlap', async () => {
+    const secondStream = deferred()
+    const heldAppend = deferred()
+    let eventRequests = 0
+    let holdingSecondEnvelope = false
+
+    const real = new JsonFileConversationStore(root)
+    const store: ConversationStore = {
+      list: () => real.list(),
+      read: (id) => real.read(id),
+      create: (value) => real.create(value),
+      readLog: (id) => real.readLog(id),
+      appendEntry: async (id, entry) => {
+        // The first follow is held INSIDE the batch, one envelope in: the fold
+        // is at sequence 1 and the settling envelope has already cleared the
+        // controller. That is the window a follow-up opens a second stream in.
+        if (
+          entry.kind === 'wire' &&
+          entry.envelope.seq === 2 &&
+          !holdingSecondEnvelope
+        ) {
+          holdingSecondEnvelope = true
+          await heldAppend.promise
+        }
+        await real.appendEntry(id, entry)
+      },
+    }
+
+    const { service } = buildService({
+      store,
+      fetchFn: (async (
+        input: Parameters<typeof fetch>[0],
+        init?: RequestInit,
+      ) => {
+        if (String(input).includes('/events')) {
+          eventRequests += 1
+          // The second stream's request already carries its `Last-Event-ID` —
+          // the mark the fold had when the follow was created — and is let
+          // through only once the first has caught up past it.
+          if (eventRequests === 2) await secondStream.promise
+        }
+        return daemon.fetchFn(input, init)
+      }) as typeof fetch,
+    })
+
+    await service.start('hello')
+    await waitUntil(() => eventRequests > 0, 'the first stream to open')
+
+    daemon.emitBatch([
+      status(1, 'completed'),
+      add(2, item({ id: 'a-1', text: 'and then more', state: 'complete' })),
+    ])
+    await waitUntil(
+      () => holdingSecondEnvelope,
+      'the first follow to reach the second envelope of the batch',
+    )
+
+    expect(await service.send(CONVERSATION_ID, 'again')).toEqual({
+      kind: 'sent',
+    })
+
+    heldAppend.release()
+    await waitUntil(
+      () => (latest(CONVERSATION_ID)?.items.length ?? 0) === 1,
+      'the first follow to land the envelope it was holding',
+    )
+    secondStream.release()
+    await waitUntil(
+      () => daemon.eventStreamLastEventIds.length > 1,
+      'the second stream to open',
+    )
+    expect(daemon.eventStreamLastEventIds.at(-1)).toBe('1')
+
+    // A sentinel behind the replay: once sequence 3 has landed, the replayed
+    // sequence 2 has been through `record` and made up its mind.
+    daemon.emit(status(3, 'completed'))
+    await waitUntil(
+      () => latest(CONVERSATION_ID)?.status === 'idle',
+      'the second stream to reach the end of its replay',
+    )
+
+    const log = await readFile(
+      join(root, CONVERSATION_ID, 'events.jsonl'),
+      'utf-8',
+    )
+    expect(
+      log.split('\n').filter((row) => row.includes('"seq":2')),
+    ).toHaveLength(1)
+    await service.dispose()
+  })
 })
 
 /**
@@ -830,5 +1121,23 @@ function storeThatRefusesWireEntries(refusals = 10): ConversationStore {
       refused += 1
       return Promise.reject(new Error('disk is full'))
     },
+  }
+}
+
+/**
+ * A store whose record file cannot be written at all.
+ *
+ * The log still works, so the conversation can still say what went wrong —
+ * which is the point of the finding: the failure has a sentence rather than a
+ * rejection nobody catches.
+ */
+function storeThatRefusesCreate(): ConversationStore {
+  const real = new JsonFileConversationStore(root)
+  return {
+    list: () => real.list(),
+    read: (id) => real.read(id),
+    create: () => Promise.reject(new Error('disk is full')),
+    readLog: (id) => real.readLog(id),
+    appendEntry: (id, entry) => real.appendEntry(id, entry),
   }
 }

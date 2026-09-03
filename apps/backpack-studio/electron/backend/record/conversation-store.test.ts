@@ -407,6 +407,42 @@ describe('a torn log tail', () => {
   })
 
   /**
+   * The log a crash left behind in the FIRST build, which had no heal at all:
+   * the torn line was already fused with the entry appended after it, and it
+   * sits in the middle with readable lines behind it.
+   *
+   * The reader stops at the first line it cannot read wherever that line is, so
+   * a heal bounded by the file's end could never reach this one. The log stayed
+   * truncated at the fusion for every launch, the fold never reached the
+   * `completed` behind it, `hydrate` re-followed a conversation that had
+   * finished, and the replay was appended behind the dead line again — the file
+   * growing on every launch while showing less than it holds.
+   *
+   * Mutation: heal only the bytes after the last newline (the tail-only form)
+   * and the reading stops at the fused line while the file keeps growing ->
+   * red on both halves.
+   */
+  it('drops the first line it cannot read, wherever in the log it sits', async () => {
+    const fused = `{"at":"2026-09-02T09${line(wire(envelope(1, 'one')))}`
+    await tear(`${fused}\n${line(wire(envelope(2, 'two')))}\n`)
+
+    await store.appendEntry('c-1', wire(envelope(3, 'three')))
+    expect(await store.readLog('c-1')).toEqual({
+      entries: [wire(envelope(3, 'three'))],
+      unreadableTailLines: 0,
+    })
+
+    // The next launch: a second store over the same file, with no memory of
+    // the heal. It adds one line and nothing else.
+    const relaunched = new JsonFileConversationStore(root)
+    await relaunched.appendEntry('c-1', wire(envelope(4, 'four')))
+    expect((await relaunched.readLog('c-1')).entries).toEqual([
+      wire(envelope(3, 'three')),
+      wire(envelope(4, 'four')),
+    ])
+  })
+
+  /**
    * Healing reads the log once per conversation per process, not once per
    * append: only a crash can tear a tail and a crash ends a process, so the
    * alternative is the quadratic cost the append-only log exists to avoid.

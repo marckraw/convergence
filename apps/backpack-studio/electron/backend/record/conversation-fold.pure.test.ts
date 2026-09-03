@@ -79,6 +79,7 @@ describe('emptyFold', () => {
       lastSeq: 0,
       updatedAt: CREATED,
       orphanPatches: 0,
+      lastFact: null,
     })
   })
 })
@@ -114,6 +115,31 @@ describe('local lifecycle facts', () => {
     ])
     expect(fold.status).toBe('failed')
     expect(fold.updatedAt).toBe(RECORDED)
+  })
+
+  /**
+   * `refused` and `stream-exhausted` are the same STATUS and opposite facts:
+   * one says the daemon never made this session, the other says it did and the
+   * stream to it could not be rebuilt. `send` reads which, because a command
+   * posted to a session that was never created can only 404 — so the fold has
+   * to carry the fact and not merely what it did to the status.
+   *
+   * Mutation: leave `lastFact` alone in `applyLocalFact` (or set it from
+   * `sent` only) and the two become indistinguishable -> red.
+   */
+  it('remembers which fact it was, not only what it did to the status', () => {
+    const refused = foldEntries(emptyFold(CREATED), [
+      local('sent'),
+      local('refused'),
+    ])
+    const exhausted = foldEntries(emptyFold(CREATED), [
+      local('sent'),
+      local('stream-exhausted'),
+    ])
+    expect(refused.status).toBe(exhausted.status)
+    expect(refused.lastFact).toBe('refused')
+    expect(exhausted.lastFact).toBe('stream-exhausted')
+    expect(applyEntry(refused, local('sent')).lastFact).toBe('sent')
   })
 
   /**
@@ -467,6 +493,7 @@ describe('foldEnvelopes', () => {
       lastSeq: 0,
       updatedAt: CREATED,
       orphanPatches: 3,
+      lastFact: null,
     }
 
     let live = seed

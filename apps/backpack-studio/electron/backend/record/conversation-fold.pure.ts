@@ -7,7 +7,10 @@ import type {
   ConversationStatus,
   TranscriptItem,
 } from '../../../src/shared/studio-api/studio-api.types'
-import type { ConversationLogEntry } from './conversation-store.types'
+import type {
+  ConversationLogEntry,
+  LocalConversationFact,
+} from './conversation-store.types'
 
 /**
  * The event log, folded into the conversation a person sees (MAR-2770).
@@ -35,6 +38,16 @@ export interface ConversationFold {
   updatedAt: string
   /** Patches naming an item no add ever introduced. Zero in a healthy log. */
   orphanPatches: number
+  /**
+   * The last lifecycle fact Studio recorded, or null when it has recorded none.
+   *
+   * Kept because `refused` and `stream-exhausted` fold to the same `failed`
+   * status while meaning opposite things about the daemon: a refused start
+   * means no session was ever created there, and an exhausted stream means one
+   * was. `send` has to tell them apart — a command posted to a session the
+   * daemon never made can only 404 — and the status alone cannot.
+   */
+  lastFact: LocalConversationFact | null
 }
 
 /**
@@ -56,6 +69,7 @@ export function emptyFold(createdAt: string): ConversationFold {
     lastSeq: 0,
     updatedAt: createdAt,
     orphanPatches: 0,
+    lastFact: null,
   }
 }
 
@@ -97,10 +111,10 @@ function applyLocalFact(
 ): ConversationFold {
   switch (fact) {
     case 'sent':
-      return { ...fold, status: 'running', updatedAt: at }
+      return { ...fold, status: 'running', updatedAt: at, lastFact: fact }
     case 'refused':
     case 'stream-exhausted':
-      return { ...fold, status: 'failed', updatedAt: at }
+      return { ...fold, status: 'failed', updatedAt: at, lastFact: fact }
   }
 }
 

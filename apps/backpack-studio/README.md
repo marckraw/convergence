@@ -52,10 +52,13 @@ for half a minute, with the conversations a person already has behind it.
   the restart that has to reproduce it.
 
 A crash mid-append is the one failure an append-only file has, so the first
-append of each process heals the tail first — a whole entry missing only its
-newline gets one, and bytes that say nothing complete are dropped. Without that,
-the next append fuses with the tear and the reader stops there for every launch
-that follows.
+append of each process heals the log first. The reader and the healer share one
+boundary — the first line that cannot be parsed — and the healer truncates the
+file there, wherever it sits. The one exception is a whole entry missing only
+its newline: it says everything it says, so it gets the byte and stands.
+Without the heal, the next append fuses with the tear into a line that parses
+as neither, and the reader stops there for every launch that follows while the
+log keeps growing behind it.
 
 The store sits behind a `ConversationStore` interface. Files are the skeleton;
 SQLite arrives with the extraction run.

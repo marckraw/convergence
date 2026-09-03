@@ -36,13 +36,17 @@ import type {
  * The record is written through a temporary file and renamed, so a crash mid
  * write leaves either the old bytes or the new ones and never half of each.
  * The log cannot be written that way — appending is the point — so the tear is
- * handled at both ends instead: the first append of a process HEALS the tail
- * (below), and the reader stops at the first line it cannot parse and says how
- * many it refused to guess at.
+ * repaired instead, and the READER and the HEALER share one boundary: the
+ * first line that cannot be parsed. The reader stops there and says how many
+ * lines it refused to guess at; the first append of a process truncates the
+ * file there (below). Two different boundaries — a healer that looked only at
+ * the tail while the reader stopped wherever the damage was — is how a log
+ * already fused by an earlier build stayed unreadable past its middle forever,
+ * growing on every launch behind a line nothing would ever pass.
  */
 export class JsonFileConversationStore implements ConversationStore {
   /**
-   * Conversations whose log tail this process has already inspected.
+   * Conversations whose log this process has already inspected.
    *
    * Only a crash can tear a tail, and a crash ends a process, so one look per
    * conversation per process is exactly enough — and the alternative, reading
@@ -98,7 +102,7 @@ export class JsonFileConversationStore implements ConversationStore {
   async appendEntry(id: string, entry: ConversationLogEntry): Promise<void> {
     await mkdir(this.conversationDir(id), { recursive: true })
     if (!this.healedLogs.has(id)) {
-      await this.healLogTail(id)
+      await this.healLog(id)
       this.healedLogs.add(id)
     }
     // `JSON.stringify` escapes every newline it encounters, so one entry is
@@ -130,45 +134,53 @@ export class JsonFileConversationStore implements ConversationStore {
   }
 
   /**
-   * Makes the log end on a line boundary before anything is appended to it.
+   * Makes the log readable end to end before anything is appended to it.
    *
    * A crash mid-append leaves bytes with no newline after them. Appending
    * straight onto those bytes FUSES the tear with the next entry, producing one
    * line that parses as neither — and because the reader stops at the first
-   * line it cannot read, that single fused line truncates the conversation for
-   * every launch that follows, forever, while the tail keeps being re-requested
-   * and re-appended behind it.
+   * line it cannot read, that single line truncates the conversation for every
+   * launch that follows, forever, while the tail keeps being re-requested and
+   * re-appended behind it.
    *
-   * Which repair depends on what the tail actually is, because the two failures
-   * are not the same failure:
+   * The repair is bounded by the READER'S OWN boundary, not by the file's end:
+   * the log is truncated at the first line that cannot be parsed, wherever it
+   * sits. Those bytes cost nothing to drop — the reader never got past them, so
+   * the fold never advanced over them and the resume asks the daemon for that
+   * sequence again — and the lines behind them were never reachable either. A
+   * heal that only ever looked at the tail could not repair a log a previous
+   * build had already fused, which is exactly the log some machines are
+   * carrying.
    *
-   *   - a WHOLE entry whose newline never landed keeps everything it says; the
-   *     missing byte is written and the entry stands;
-   *   - a PARTIAL entry says nothing complete, and the bytes are dropped. They
-   *     cost nothing: the fold never advanced past them, so the resume asks the
-   *     daemon for that sequence again.
-   *
-   * Merely writing a newline in both cases would look like healing and be the
-   * same disease — the partial line would sit there unreadable, and the reader
-   * would still stop at it for good.
+   * One case is not a truncation: a WHOLE entry whose newline never landed says
+   * everything it says, so it gets its missing byte and stands. Writing a
+   * newline in BOTH cases would look like healing and be the same disease — the
+   * partial line would sit there unreadable, and the reader would still stop at
+   * it for good.
    */
-  private async healLogTail(id: string): Promise<void> {
+  private async healLog(id: string): Promise<void> {
     let text: string
     try {
       text = await readFile(this.logPath(id), 'utf-8')
     } catch {
       return
     }
-    if (text === '' || text.endsWith('\n')) return
+    if (text === '') return
 
-    const lastBreak = text.lastIndexOf('\n')
-    const tail = text.slice(lastBreak + 1)
-    if (readEntryLine(tail) !== null) {
-      await appendFile(this.logPath(id), '\n', 'utf-8')
-      return
+    const endsOnBoundary = text.endsWith('\n')
+    const lines = text.split('\n')
+    // A trailing newline after the last complete entry is not a line.
+    if (endsOnBoundary) lines.pop()
+
+    let offset = 0
+    for (const line of lines) {
+      if (readEntryLine(line) === null) {
+        await truncate(this.logPath(id), offset)
+        return
+      }
+      offset += Buffer.byteLength(line, 'utf-8') + 1
     }
-    const keep = text.slice(0, lastBreak + 1)
-    await truncate(this.logPath(id), Buffer.byteLength(keep, 'utf-8'))
+    if (!endsOnBoundary) await appendFile(this.logPath(id), '\n', 'utf-8')
   }
 
   private async directoryNames(): Promise<string[]> {
